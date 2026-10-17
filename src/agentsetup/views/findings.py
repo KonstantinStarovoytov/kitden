@@ -50,7 +50,7 @@ def _finding(
     )
 
 
-def _base_name(item: Item) -> str:
+def base_name(item: Item) -> str:
     # The same plugin can come from different marketplaces: "x@a" and "x@b" are both "x".
     return item.name.split("@", 1)[0] if item.kind is ItemKind.PLUGIN else item.name
 
@@ -66,7 +66,7 @@ def find_findings(inventory, project: str | None = None) -> list[Finding]:
         groups: dict[tuple[ItemKind, str], list[Item]] = defaultdict(list)
         for item in view.items:
             if item.kind in DUPLICATE_KINDS:
-                groups[(item.kind, _base_name(item))].append(item)
+                groups[(item.kind, base_name(item))].append(item)
         for (kind, name), same in groups.items():
             if len(same) > 1:
                 places = "; ".join(_where(i) for i in same)
@@ -190,7 +190,7 @@ def mark_gateways(inventory, gateways: list[Gateway]) -> None:
             inventory.items[index] = replace(item, via_gateway=gateway.id, actions=actions)
 
 
-def _bypass_kind(item: Item) -> str:
+def bypass_kind(item: Item) -> str:
     if item.scope is Scope.PLUGIN or item.source.kind is SourceKind.PLUGIN:
         return "comes from a plugin"
     if "command" in dict(item.summary):
@@ -206,7 +206,7 @@ def find_bypasses(inventory, project: str | None = None) -> list[Finding]:
             if item.kind is not ItemKind.MCP_SERVER or item.via_gateway or item.client != client:
                 continue
             text = (
-                f"{client}: {item.name} {_bypass_kind(item)} and does not go through the "
+                f"{client}: {item.name} {bypass_kind(item)} and does not go through the "
                 f"gateway. Source: {_where(item)}."
             )
             findings.append(
