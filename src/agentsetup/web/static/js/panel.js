@@ -264,11 +264,12 @@ function changeWords(change) {
   }[change.action] || change.action;
   const verb = DONE_WORDS[change.action] || change.action;
   const what = ["gateway.connect", "setup_server.register"].includes(change.action)
-    ? `${verb} in ${clients}`
+    ? `${verb} to ${clients}`
     : `${verb} ${short} ${change.action === "mcp.remove_direct" ? "from" : "in"} ${clients}`;
   const notes = [...new Set(change.steps.map((s) => s.restart_note).filter(Boolean))]
     .map((note) => note.replace(/,? for this to take effect\.?$/, ""));
-  return { title, done: [what, ...notes].join(" · ") };
+  const after = notes.length > 1 ? [`Restart or reload ${clients}`] : notes;
+  return { title, done: [what, ...after].join(" · ") };
 }
 
 // Ask the server for a preview and show it. Used by the Load map, Gateway and Agents places.
@@ -414,7 +415,7 @@ async function applyChange(change, { apply, cancel, label, body }) {
   toast(changeWords(after).done, () => undoChange(after));
 }
 
-async function undoChange(change) {
+export async function undoChange(change) {
   hideToast();
   busy.change = true;
   try {

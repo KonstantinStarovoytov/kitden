@@ -1,9 +1,12 @@
 // Entry point: the shell (rail, top bar), routing, theme, rescan and live updates.
 import { postJson } from "./api.js";
-import { $, $$, el, reportError, shortPath } from "./dom.js";
+import { $, $$, reportError, shortPath } from "./dom.js";
 import { rollTo, transition } from "./motion.js";
-import { renderOverview } from "./overview.js";
+import { renderAgents } from "./agents.js";
+import { renderChanges } from "./changes.js";
+import { renderGateway } from "./gateway.js";
 import { renderMap } from "./map.js";
+import { renderOverview } from "./overview.js";
 import { closePanel, initPanel, isPanelOpen } from "./panel.js";
 import { latestChanges } from "./parts.js";
 import { busy, data, go, loadShared, parseHash, reload, setRenderer, setState, state } from "./store.js";
@@ -11,19 +14,10 @@ import { busy, data, go, loadShared, parseHash, reload, setRenderer, setState, s
 const PLACES = {
   overview: { title: "Overview", render: renderOverview },
   map: { title: "Load map", render: renderMap },
-  gateway: { title: "Gateway", render: placeholder("Gateway") },
-  changes: { title: "Changes", render: placeholder("Changes") },
-  agents: { title: "Agents", render: placeholder("Let agents see this setup") },
+  gateway: { title: "Gateway", render: renderGateway },
+  changes: { title: "Changes", render: renderChanges },
+  agents: { title: "Agents", render: renderAgents },
 };
-
-// Places can be registered by later modules (load map, gateway, changes, agents).
-export function registerPlace(view, title, render) {
-  PLACES[view] = { title, render };
-}
-
-function placeholder(title) {
-  return (main) => { main.append(el("h1", null, title), el("p", "lede", "This place is being rebuilt.")); };
-}
 
 let shownView = null;
 
@@ -49,7 +43,8 @@ function renderShell() {
   $("#nav-items").textContent = data.map ? String(data.map.rows.length) : "";
   const gateway = overview && overview.gateway;
   $("#nav-around").textContent = gateway && gateway.total > gateway.through ? `${gateway.total - gateway.through} around` : "";
-  const changes = latestChanges(data.changes || []).length;
+  // Changes still in effect, the ones Undo can take back.
+  const changes = latestChanges(data.changes || []).filter((e) => e.state === "verified").length;
   rollTo($("#nav-changes"), changes || "");
 
   const where = $("#where");
