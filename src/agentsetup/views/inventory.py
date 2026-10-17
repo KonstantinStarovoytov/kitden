@@ -60,7 +60,7 @@ def build_inventory(
             continue
         inventory.clients.append(client)
         inventory.clients += adapter.extra_clients()
-        inventory.items += scan.items
+        inventory.items += [replace(i, actions=adapter.item_actions(i)) for i in scan.items]
         inventory.problems += scan.problems
         for found in scan.projects:
             known = projects.get(found.path)

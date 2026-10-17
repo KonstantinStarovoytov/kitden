@@ -1,21 +1,26 @@
-"""Findings: duplicates, cross-loading, overrides, unknown state, unsupported versions.
+"""Findings: duplicates, cross-loading, overrides, unknown state, unsupported versions, and MCP
+servers that bypass the gateway.
 
-FR-011 to FR-014. Built on the per-project effective views, so "loads twice" means it really
-loads twice in that client and project.
+FR-011 to FR-014, FR-034, FR-039. Built on the per-project effective views, so "loads twice"
+means it really loads twice in that client and project.
 """
 
 from collections import defaultdict
 from collections.abc import Iterable
+from dataclasses import replace
 
 from agentsetup.model import (
     ClientStatus,
     Enabled,
     Finding,
     FindingType,
+    Gateway,
     Item,
     ItemKind,
+    Scope,
     Severity,
     SourceKind,
+    normalize_url,
 )
 from agentsetup.views.effective import DESKTOP, effective_view
 
@@ -157,4 +162,42 @@ def find_findings(inventory, project: str | None = None) -> list[Finding]:
                         client.id,
                     )
                 )
+    return findings
+
+
+def mark_gateways(inventory, gateways: list[Gateway]) -> None:
+    """Mark MCP entries that point to a registered gateway (FR-034). They are not direct."""
+    by_url = {g.url: g for g in gateways}
+    for index, item in enumerate(inventory.items):
+        url = dict(item.summary).get("url")
+        gateway = (
+            by_url.get(normalize_url(url)) if item.kind is ItemKind.MCP_SERVER and url else None
+        )
+        if gateway:
+            actions = tuple(a for a in item.actions if a != "mcp.remove_direct")
+            inventory.items[index] = replace(item, via_gateway=gateway.id, actions=actions)
+
+
+def _bypass_kind(item: Item) -> str:
+    if item.scope is Scope.PLUGIN or item.source.kind is SourceKind.PLUGIN:
+        return "comes from a plugin"
+    if "command" in dict(item.summary):
+        return "is a local server (runs on this computer)"
+    return "is a direct entry"
+
+
+def find_bypasses(inventory, project: str | None = None) -> list[Finding]:
+    """Every MCP server that loads without going through a registered gateway (FR-039)."""
+    findings = []
+    for client in sorted({i.client for i in inventory.items}):
+        for item in effective_view(inventory, client, project).items:
+            if item.kind is not ItemKind.MCP_SERVER or item.via_gateway or item.client != client:
+                continue
+            text = (
+                f"{client}: {item.name} {_bypass_kind(item)} and does not go through the "
+                f"gateway. Source: {_where(item)}."
+            )
+            findings.append(
+                _finding(FindingType.BYPASSES_GATEWAY, Severity.INFO, [item], text, client)
+            )
     return findings

@@ -1,13 +1,22 @@
-"""Claude Code (CLI and the Claude Desktop Code tab). Read-only. Research R3."""
+"""Claude Code (CLI and the Claude Desktop Code tab). Research R3, write-matrix.md.
 
+Writes go through `claude mcp add-json` and `claude mcp remove` (FR-021). Claude Code rewrites
+`~/.claude.json` during normal use, so changes to that file compare only the edited entry.
+"""
+
+import json
 from pathlib import Path
 from typing import Any
 
+from agentsetup.changes.json_splice import ABSENT
 from agentsetup.clients.base import (
+    REMOVE_DIRECT,
     ClientAdapter,
     Reader,
     Scan,
+    bearer_header,
     file_source,
+    is_direct_entry,
     mcp_item,
     project,
     skill_items,
@@ -17,16 +26,22 @@ from agentsetup.model import (
     Client,
     ClientStatus,
     Enabled,
+    FileEdit,
+    Gateway,
+    GatewayAuth,
     Item,
     ItemKind,
     ReadStatus,
     Scope,
     Source,
     SourceKind,
+    Step,
     UnknownReason,
 )
 
 CLIENT = "claude_code"
+WRITABLE_SCOPES = {Scope.USER, Scope.LOCAL, Scope.PROJECT}
+NEW_SESSION = "Start a new Claude Code session (or a new Code tab chat) for this to take effect."
 DESKTOP = "claude_desktop_code_tab"
 DESKTOP_CONFIG = "Library/Application Support/Claude/claude_desktop_config.json"
 DESKTOP_BUNDLED = "Library/Application Support/Claude/claude-code"
@@ -62,6 +77,62 @@ class ClaudeCodeAdapter(ClientAdapter):
                 config_roots=(str(config.parent),),
             )
         ]
+
+    def item_actions(self, item: Item) -> tuple[str, ...]:
+        return (REMOVE_DIRECT,) if is_direct_entry(item, CLIENT, WRITABLE_SCOPES) else ()
+
+    def gateway_step(self, gateway: Gateway, name: str) -> Step:
+        value: dict[str, Any] = {"type": "http", "url": gateway.url}
+        headers = bearer_header(gateway, "${{{}}}")
+        if headers:
+            value["headers"] = headers
+        edit = FileEdit(
+            path=str(self.home / ".claude.json"),
+            fmt="json",
+            key=("mcpServers", name),
+            after=value,
+            check="entry",
+        )
+        login = None
+        if gateway.auth is GatewayAuth.OAUTH:
+            login = f"In Claude Code, run /mcp, choose {name}, then choose Authenticate."
+        return Step(
+            client=CLIENT,
+            scope=Scope.USER,
+            name=name,
+            edit=edit,
+            mechanism="client_cli",
+            command=["claude", "mcp", "add-json", "-s", "user", name, json.dumps(value)],
+            restart_note=NEW_SESSION,
+            login_note=login,
+        )
+
+    def remove_step(self, item: Item) -> Step:
+        if REMOVE_DIRECT not in self.item_actions(item):
+            raise ValueError(f"{item.name} cannot be removed here")
+        key: tuple[str, ...] = ("mcpServers", item.name)
+        if item.scope is Scope.LOCAL:
+            key = ("projects", str(item.project), "mcpServers", item.name)
+        if item.scope is not Scope.USER and not Path(str(item.project)).is_dir():
+            raise ValueError(f"the project folder {item.project} is missing")
+        edit = FileEdit(
+            path=str(item.source.path),
+            fmt="json",
+            key=key,
+            after=ABSENT,
+            check="file" if item.scope is Scope.PROJECT else "entry",
+        )
+        return Step(
+            client=CLIENT,
+            scope=item.scope,
+            name=item.name,
+            edit=edit,
+            mechanism="client_cli",
+            command=["claude", "mcp", "remove", "-s", str(item.scope), item.name],
+            cwd=None if item.scope is Scope.USER else item.project,
+            restart_note=NEW_SESSION,
+            shared_file=item.scope is Scope.PROJECT,
+        )
 
     def scan(self) -> Scan:
         read = Reader(CLIENT)

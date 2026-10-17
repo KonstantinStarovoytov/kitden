@@ -1,31 +1,43 @@
-"""Codex (CLI and the ChatGPT desktop app share ~/.codex). Read-only. Research R3."""
+"""Codex (CLI and the ChatGPT desktop app share ~/.codex). Research R3, write-matrix.md.
+
+Writes are format-preserving TOML edits of `config.toml` (not `codex mcp add`, which drops
+comments). Spike S4: the running app keeps outside edits.
+"""
 
 import os
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from agentsetup.changes.json_splice import ABSENT
 from agentsetup.clients.base import (
+    REMOVE_DIRECT,
     ClientAdapter,
     Reader,
     Scan,
     file_source,
+    is_direct_entry,
     mcp_item,
     project,
     skill_items,
 )
 from agentsetup.model import (
     Enabled,
+    FileEdit,
+    Gateway,
+    GatewayAuth,
     Item,
     ItemKind,
     ReadStatus,
     Scope,
     Source,
     SourceKind,
+    Step,
     UnknownReason,
 )
 
 CLIENT = "codex"
+RESTART = "Restart Codex (the app and any open CLI sessions) for this to take effect."
 REMOTE_INSTALL_RECORD = ".codex-remote-plugin-install.json"
 
 
@@ -46,6 +58,48 @@ class CodexAdapter(ClientAdapter):
         super().__init__(home, read_version)
         env_home = os.environ.get("CODEX_HOME")
         self.codex_home = codex_home or (Path(env_home) if env_home else home / ".codex")
+
+    def item_actions(self, item: Item) -> tuple[str, ...]:
+        direct = is_direct_entry(item, CLIENT, {Scope.USER, Scope.PROJECT})
+        return (REMOVE_DIRECT,) if direct else ()
+
+    def gateway_step(self, gateway: Gateway, name: str) -> Step:
+        value = {"url": gateway.url}
+        if gateway.auth is GatewayAuth.ENV_KEY and gateway.key_env_var:
+            value["bearer_token_env_var"] = gateway.key_env_var
+        edit = FileEdit(
+            path=str(self.codex_home / "config.toml"),
+            fmt="toml",
+            key=("mcp_servers", name),
+            after=value,
+        )
+        login = f"Run: codex mcp login {name}" if gateway.auth is GatewayAuth.OAUTH else None
+        return Step(
+            client=CLIENT,
+            scope=Scope.USER,
+            name=name,
+            edit=edit,
+            restart_note=RESTART,
+            login_note=login,
+        )
+
+    def remove_step(self, item: Item) -> Step:
+        if REMOVE_DIRECT not in self.item_actions(item):
+            raise ValueError(f"{item.name} cannot be removed here")
+        edit = FileEdit(
+            path=str(item.source.path),
+            fmt="toml",
+            key=("mcp_servers", item.name),
+            after=ABSENT,
+        )
+        return Step(
+            client=CLIENT,
+            scope=item.scope,
+            name=item.name,
+            edit=edit,
+            restart_note=RESTART,
+            shared_file=item.scope is Scope.PROJECT,
+        )
 
     def scan(self) -> Scan:
         read = Reader(CLIENT)

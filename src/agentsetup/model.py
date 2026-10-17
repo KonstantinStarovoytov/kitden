@@ -6,6 +6,7 @@ import secrets
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 
@@ -189,21 +190,63 @@ def _new_change_id() -> str:
 
 
 @dataclass
+class FileEdit:
+    """One entry changed in one file. `before` and `after` may hold secrets: never show them."""
+
+    path: str
+    fmt: str  # "json" or "toml"
+    key: tuple[str, ...]
+    after: Any  # json_splice.ABSENT removes the entry
+    before: Any = None  # read at preview
+    check: str = "file"  # "file": the whole file must be unchanged; "entry": only this entry
+    before_hash: str | None = None  # None when the file did not exist
+    after_hash: str | None = None
+    backup_path: str | None = None
+    masked_diff: str = ""
+
+
+@dataclass
+class Step:
+    """One target of a change: one client, scope and entry, written by one mechanism."""
+
+    client: str
+    scope: Scope
+    name: str
+    edit: FileEdit
+    mechanism: str = "format_preserving_edit"  # or "client_cli"
+    command: list[str] | None = None
+    cwd: str | None = None
+    restart_note: str | None = None
+    login_note: str | None = None
+    shared_file: bool = False
+
+
+@dataclass
 class Change:
     action: str
     state: ChangeState = ChangeState.PREVIEWED
     id: str = field(default_factory=_new_change_id)
+    steps: list[Step] = field(default_factory=list)
+    error: str | None = None
 
     def move_to(self, new: ChangeState) -> None:
         if new not in _TRANSITIONS.get(self.state, set()):
             raise ValueError(f"cannot move from {self.state} to {new}")
         self.state = new
 
+    @property
+    def restart_needed(self) -> dict[str, bool]:
+        return {step.client: bool(step.restart_note) for step in self.steps}
+
+    @property
+    def shared_file_warning(self) -> bool:
+        return any(step.shared_file for step in self.steps)
+
 
 _ENV_NAME = re.compile(r"[A-Z_][A-Z0-9_]*")
 
 
-def _normalize_url(url: str) -> str:
+def normalize_url(url: str) -> str:
     parts = urlsplit(url.strip())
     return urlunsplit(
         (parts.scheme.lower(), parts.netloc.lower(), parts.path.rstrip("/"), parts.query, "")
@@ -218,7 +261,7 @@ class Gateway:
     key_env_var: str | None = None
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "url", _normalize_url(self.url))
+        object.__setattr__(self, "url", normalize_url(self.url))
         if self.auth is GatewayAuth.ENV_KEY and not (
             self.key_env_var and _ENV_NAME.fullmatch(self.key_env_var)
         ):

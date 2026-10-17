@@ -17,6 +17,8 @@ from agentsetup.model import (
     Client,
     ClientStatus,
     Enabled,
+    Gateway,
+    GatewayAuth,
     Item,
     ItemKind,
     Project,
@@ -24,6 +26,7 @@ from agentsetup.model import (
     Scope,
     Source,
     SourceKind,
+    Step,
     UnknownReason,
 )
 from agentsetup.redact import redact
@@ -234,3 +237,40 @@ class ClientAdapter(ABC):
     @abstractmethod
     def scan(self) -> Scan:
         """Read MCP servers, skills, plugins, hooks, marketplaces and known projects."""
+
+    # Changes (write-matrix.md). Clients without writes keep these defaults.
+
+    def item_actions(self, item: Item) -> tuple[str, ...]:
+        """Actions the page may offer for this item."""
+        return ()
+
+    def gateway_step(self, gateway: Gateway, name: str) -> Step:
+        """The edit that adds the gateway entry for this client (user scope)."""
+        raise ValueError(f"{self.id} cannot be connected to a gateway")
+
+    def remove_step(self, item: Item) -> Step:
+        """The edit that removes one direct MCP entry."""
+        raise ValueError(f"{item.name} cannot be removed here")
+
+
+REMOVE_DIRECT = "mcp.remove_direct"
+
+
+def is_direct_entry(item: Item, client: str, scopes: set[Scope]) -> bool:
+    """An MCP server written in a client file we can read, in a scope we may edit."""
+    return (
+        item.kind is ItemKind.MCP_SERVER
+        and item.client == client
+        and item.source.kind is SourceKind.FILE
+        and item.source.read_status is ReadStatus.OK
+        and item.scope in scopes
+        and item.source.path is not None
+        and item.via_gateway is None
+    )
+
+
+def bearer_header(gateway: Gateway, reference: str) -> dict[str, str]:
+    """Authorization header that names the key's variable, never its value (FR-035)."""
+    if gateway.auth is not GatewayAuth.ENV_KEY:
+        return {}
+    return {"Authorization": "Bearer " + reference.format(gateway.key_env_var)}

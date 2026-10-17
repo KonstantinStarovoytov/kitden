@@ -10,7 +10,7 @@
 <body>
   <header>
     <h1>Agent setup</h1>
-    <p class="hint">What Claude Code, Codex and Cursor load on this computer. Read-only.</p>
+    <p class="hint">What Claude Code, Codex and Cursor load on this computer. Nothing changes until you press Apply.</p>
     <button id="rescan" type="button">Rescan</button>
     <span id="status" class="hint" aria-live="polite"></span>
   </header>
@@ -35,6 +35,58 @@
       <ul id="findings" class="findings"></ul>
     </section>
 
+    <section aria-labelledby="gateway-title">
+      <h2 id="gateway-title">MCP gateway</h2>
+      <p class="hint">Manage MCP tools in your gateway (for example Obot or MetaMCP). Here you add
+        the gateway to your clients and see which MCP servers still go around it.</p>
+      <ul id="gateways" class="gateways"></ul>
+
+      <details id="gateway-add">
+        <summary>Add a gateway</summary>
+        <form id="gateway-form" class="form">
+          <label>MCP address <input id="gw-url" type="url" required placeholder="http://127.0.0.1:12008/metamcp/dev/mcp"></label>
+          <label>Interface link (optional) <input id="gw-ui" type="url" placeholder="http://127.0.0.1:12008"></label>
+          <label>Login
+            <select id="gw-auth">
+              <option value="none">None</option>
+              <option value="env_key">Key in an environment variable</option>
+              <option value="oauth">OAuth login</option>
+            </select>
+          </label>
+          <label id="gw-key-label" hidden>Variable name (not the key) <input id="gw-key" pattern="[A-Z_][A-Z0-9_]*" placeholder="GATEWAY_KEY"></label>
+          <button type="submit">Save gateway</button>
+          <span id="gw-message" class="hint" aria-live="polite"></span>
+        </form>
+      </details>
+
+      <form id="connect-form" class="form" hidden>
+        <label>Gateway <select id="connect-gateway"></select></label>
+        <label>Entry name <input id="connect-name" value="gateway" pattern="[A-Za-z0-9][A-Za-z0-9_-]*"></label>
+        <fieldset id="connect-clients" class="checks"><legend>Add to</legend></fieldset>
+        <button type="submit">Preview</button>
+      </form>
+
+      <h3>Going around the gateway</h3>
+      <ul id="bypasses" class="findings"></ul>
+    </section>
+
+    <section id="change-section" aria-labelledby="change-title" hidden>
+      <h2 id="change-title">Change</h2>
+      <p id="change-state" aria-live="polite"></p>
+      <p id="change-warning" class="warn" hidden>This edits a project file that is usually shared through git.</p>
+      <div id="change-steps"></div>
+      <div class="buttons">
+        <button id="change-apply" type="button">Apply</button>
+        <button id="change-cancel" type="button">Cancel</button>
+        <button id="change-undo" type="button" hidden>Undo</button>
+      </div>
+    </section>
+
+    <section aria-labelledby="log-title">
+      <h2 id="log-title">Change log</h2>
+      <ul id="change-log" class="findings"></ul>
+    </section>
+
     <section id="problems-section" aria-labelledby="problems-title" hidden>
       <h2 id="problems-title">Could not read</h2>
       <ul id="problems"></ul>
@@ -52,7 +104,7 @@
         <thead>
           <tr>
             <th>Client</th><th>Kind</th><th>Name</th><th>Scope</th><th>Project</th>
-            <th>State</th><th>Source</th>
+            <th>State</th><th>Source</th><th></th>
           </tr>
         </thead>
         <tbody id="items"></tbody>

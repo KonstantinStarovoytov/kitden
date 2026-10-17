@@ -54,6 +54,7 @@ def _start(args: argparse.Namespace) -> int:
         port=port,
         watch_folders=[root / name for name in WATCHED],
         flat_folders=[root],
+        home=root,
     )
     url = f"http://{HOST}:{port}/?token={token}"
     print(f"agentsetup is running. Open: {url}", flush=True)

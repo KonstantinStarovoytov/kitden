@@ -33,6 +33,9 @@ Rules for every **write**:
   stale check, backup, atomic write, verify, undo.
 - Verify with the client's own listing where it exists (`claude plugin list --json`,
   `codex mcp list --json`, `codex plugin list --json`), redacting its output.
+- Undo writes the saved bytes back when the file is unchanged since apply. For `~/.claude.json`,
+  which Claude Code rewrites during normal use, only the edited entry is compared before apply
+  and undo, and undo restores just that entry if other parts changed.
 - Gateway keys are written as references: Claude `${VAR}`, Codex `bearer_token_env_var` /
   `env_http_headers`, Cursor `${env:NAME}` (FR-035).
 - Codex uses our own format-preserving edit, not `codex mcp add`, because that command drops

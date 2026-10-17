@@ -1,7 +1,8 @@
-"""Cursor (IDE and the `agent` CLI). Read-only. Research R3, R5; spikes S1, S5.
+"""Cursor (IDE and the `agent` CLI). Research R3, R5; spikes S1, S5; write-matrix.md.
 
 Cursor keeps plugin installs and some switches in internal SQLite databases. We read them in
-read-only mode and only through an allowlist of non-secret keys.
+read-only mode and only through an allowlist of non-secret keys, and never write them. The only
+writes are minimal JSON edits of `mcp.json`.
 """
 
 import json
@@ -11,27 +12,36 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlsplit
 
+from agentsetup.changes.json_splice import ABSENT
 from agentsetup.clients.base import (
+    REMOVE_DIRECT,
     ClientAdapter,
     Reader,
     Scan,
+    bearer_header,
     file_source,
+    is_direct_entry,
     mcp_item,
     project,
     skill_items,
 )
 from agentsetup.model import (
     Enabled,
+    FileEdit,
+    Gateway,
+    GatewayAuth,
     Item,
     ItemKind,
     ReadStatus,
     Scope,
     Source,
     SourceKind,
+    Step,
     UnknownReason,
 )
 
 CLIENT = "cursor"
+RESTART = "Restart Cursor for this to take effect."
 STATE_DB = "Library/Application Support/Cursor/User/globalStorage/state.vscdb"
 WORKSPACE_STATE = "Library/Application Support/Cursor/User/workspaceStorage"
 SNAPSHOT_PREFIX = "workbench.customize.primitiveSourceSnapshot."
@@ -58,6 +68,51 @@ class CursorAdapter(ClientAdapter):
     id = CLIENT
     display_name = "Cursor"
     config_root = ".cursor"
+
+    def item_actions(self, item: Item) -> tuple[str, ...]:
+        direct = is_direct_entry(item, CLIENT, {Scope.USER, Scope.PROJECT})
+        return (REMOVE_DIRECT,) if direct else ()
+
+    def gateway_step(self, gateway: Gateway, name: str) -> Step:
+        value: dict[str, Any] = {"url": gateway.url}
+        headers = bearer_header(gateway, "${{env:{}}}")
+        if headers:
+            value["headers"] = headers
+        edit = FileEdit(
+            path=str(self.home / ".cursor/mcp.json"),
+            fmt="json",
+            key=("mcpServers", name),
+            after=value,
+        )
+        login = None
+        if gateway.auth is GatewayAuth.OAUTH:
+            login = f"In Cursor, open Settings → MCP, find {name} and choose Connect to log in."
+        return Step(
+            client=CLIENT,
+            scope=Scope.USER,
+            name=name,
+            edit=edit,
+            restart_note=RESTART,
+            login_note=login,
+        )
+
+    def remove_step(self, item: Item) -> Step:
+        if REMOVE_DIRECT not in self.item_actions(item):
+            raise ValueError(f"{item.name} cannot be removed here")
+        edit = FileEdit(
+            path=str(item.source.path),
+            fmt="json",
+            key=("mcpServers", item.name),
+            after=ABSENT,
+        )
+        return Step(
+            client=CLIENT,
+            scope=item.scope,
+            name=item.name,
+            edit=edit,
+            restart_note=RESTART,
+            shared_file=item.scope is Scope.PROJECT,
+        )
 
     def scan(self) -> Scan:
         read = Reader(CLIENT)

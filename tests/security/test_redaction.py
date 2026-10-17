@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from agentsetup.redact import SECRET, redact
+from agentsetup.redact import SECRET, redact, redact_text
 
 GITHUB_LIKE = "ghp_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8"
 
@@ -99,3 +99,34 @@ def test_no_sentinel_survives_a_realistic_entry():
     redacted, found = redact(entry)
     assert found is True
     assert "SENTINEL_SECRET" not in json.dumps(redacted)
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["Bearer ${GW_KEY}", "Bearer ${env:GW_KEY}", "Basic ${AUTH}", "${A}:${B}"],
+)
+def test_header_values_made_of_references_stay(value):
+    assert redact({"headers": {"Authorization": value}}) == (
+        {"headers": {"Authorization": value}},
+        False,
+    )
+
+
+def test_header_value_with_a_reference_and_a_secret_is_hidden():
+    assert redact({"headers": {"Authorization": "${A} SENTINEL_SECRET_X"}})[0] == {
+        "headers": {"Authorization": SECRET}
+    }
+
+
+def test_redact_text_hides_tokens_inside_free_text():
+    text = f"error: bad token {GITHUB_LIKE} for Bearer abcdefgh12345 at url"
+    assert redact_text(text) == f"error: bad {SECRET} for {SECRET} at url"
+
+
+def test_redact_text_keeps_references_and_json_punctuation():
+    text = '{"headers": {"Authorization": "Bearer ${GW_KEY}"}}'
+    assert redact_text(text) == text
+    assert (
+        redact_text('{"Authorization": "Bearer abcdefgh12345"}')
+        == f'{{"Authorization": "{SECRET}"}}'
+    )

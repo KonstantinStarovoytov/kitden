@@ -27,12 +27,19 @@ _TOKEN_SHAPES = (
         r"(sk-|sk_|ghp_|gho_|ghu_|ghs_|github_pat_|xox[baprs]-|glpat-|AKIA)[A-Za-z0-9_\-]{16,}"
     ),
     re.compile(r"eyJ[\w-]+\.[\w-]+\.[\w-]+"),
-    re.compile(r"(?i)(bearer|basic|token)\s+\S{8,}"),
+    re.compile(r"(?i)(bearer|basic|token)\s+(?!\$\{)[^\s\"']{8,}"),
 )
 
 
+_AUTH_SCHEME = re.compile(r"(?i)\s*((bearer|basic|token)\s+)?")
+
+
 def _is_reference(value: Any) -> bool:
-    return isinstance(value, str) and bool(_REFERENCE.fullmatch(value))
+    """`${VAR}`, or a value built only from references, like `Bearer ${VAR}`."""
+    if not isinstance(value, str) or not _REFERENCE.search(value):
+        return False
+    rest = _REFERENCE.sub("", value)
+    return bool(_AUTH_SCHEME.fullmatch(rest.replace(":", " ")))
 
 
 class _Redactor:
@@ -103,3 +110,10 @@ def redact(value: Any) -> tuple[Any, bool]:
     redactor = _Redactor()
     result = redactor.walk(value)
     return result, redactor.found
+
+
+def redact_text(text: str) -> str:
+    """Hide token-shaped parts of free text, such as a client command's output."""
+    for shape in _TOKEN_SHAPES:
+        text = shape.sub(SECRET, text)
+    return text

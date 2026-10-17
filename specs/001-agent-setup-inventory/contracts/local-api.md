@@ -24,7 +24,7 @@ can reuse the component (constitution VI).
 | `GET /api/findings?project=` | Findings with severity and explanation |
 | `GET /api/changes` | Change log entries (redacted), newest first |
 | `GET /api/gateways` | Registered gateways |
-| `GET /api/commands?item=&action=` | The client's own command to show for actions the tool does not perform (FR-029) |
+| `GET /api/commands?item=&action=` | The client's own command to show for actions the tool does not perform (FR-029). US3: `action=gateway.login` for an OAuth gateway entry |
 
 ## Change endpoints
 

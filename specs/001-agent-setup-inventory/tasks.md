@@ -75,19 +75,19 @@ files, no open dependency). **[US1]**…**[US5]** = user story from the spec.
 **Goal**: connect one gateway to all clients, flag MCP servers that bypass it, remove old direct entries; every change has preview, apply, verify and undo.
 **Test**: quickstart scenario 3 in a sandbox home.
 
-- [ ] T037 [P] [US3] Property tests for TOML and JSON edits: no-op keeps bytes, apply then undo restores bytes, only the target span changes, in `tests/property/test_edits.py`
-- [ ] T038 [P] [US3] Format-preserving TOML edits with tomlkit in `src/agentsetup/changes/toml_edit.py`
-- [ ] T039 [P] [US3] Minimal-span edits for strict JSON in `src/agentsetup/changes/json_splice.py`
-- [ ] T040 [P] [US3] Runner for client commands (`claude mcp add-json/remove`, list `--json`) with redacted output in `src/agentsetup/changes/client_cli.py`
-- [ ] T041 [P] [US3] Backups and redacted change log: folders 0700, files 0600, keep the larger of 30 days or 100 changes, in `src/agentsetup/changes/backup.py`
-- [ ] T042 [US3] Change engine following the state diagram in [data-model.md](data-model.md): preview with masked diff, stale check, apply, verify, restore on failure, undo; default to user or local scope, warn on files usually in git, note when a restart is needed, refuse writes to files with an unrecognized format; in `src/agentsetup/changes/engine.py`
-- [ ] T043 [P] [US3] Tests: changed file blocks apply, failed verify restores, undo blocked after outside edit, unknown format blocks writes, no item offers MCP add or on/off (FR-025), in `tests/unit/test_engine.py` and `tests/unit/test_actions.py`
-- [ ] T044 [US3] Gateway registry (URL, interface link, auth type, key variable name only; file mode 0600) in `src/agentsetup/gateways.py`
-- [ ] T045 [US3] Actions `gateway.connect` and `mcp.remove_direct` per [write-matrix.md](contracts/write-matrix.md) in `src/agentsetup/clients/claude_code.py`, `codex.py`, `cursor.py`
-- [ ] T046 [US3] Mark MCP entries that go through a registered gateway, and add the finding `bypasses_gateway` (plugin, local or direct entry) for the rest, in `src/agentsetup/views/findings.py`
-- [ ] T047 [US3] Endpoints for changes and gateways (`preview`, `apply`, `cancel`, `undo`, `/api/changes`, `/api/gateways`, `/api/commands`) in `src/agentsetup/web/app.py`
-- [ ] T048 [US3] Gateway page: connect, bypass list, link to gateway interface, login commands, restart notes, in `src/agentsetup/web/static/`
-- [ ] T049 [US3] Real-client test in a sandbox home: connect gateway, check client listings, remove a direct entry, undo both, bytes match the originals, in `tests/contract/test_gateway.py`
+- [x] T037 [P] [US3] Property tests for TOML and JSON edits: no-op keeps bytes, apply then undo restores bytes, only the target span changes, in `tests/property/test_edits.py`
+- [x] T038 [P] [US3] Format-preserving TOML edits with tomlkit in `src/agentsetup/changes/toml_edit.py`
+- [x] T039 [P] [US3] Minimal-span edits for strict JSON in `src/agentsetup/changes/json_splice.py`
+- [x] T040 [P] [US3] Runner for client commands (`claude mcp add-json/remove`, list `--json`) with redacted output in `src/agentsetup/changes/client_cli.py`
+- [x] T041 [P] [US3] Backups and redacted change log: folders 0700, files 0600, keep the larger of 30 days or 100 changes, in `src/agentsetup/changes/backup.py`
+- [x] T042 [US3] Change engine following the state diagram in [data-model.md](data-model.md): preview with masked diff, stale check, apply, verify, restore on failure, undo; default to user or local scope, warn on files usually in git, note when a restart is needed, refuse writes to files with an unrecognized format; in `src/agentsetup/changes/engine.py`
+- [x] T043 [P] [US3] Tests: changed file blocks apply, failed verify restores, undo blocked after outside edit, unknown format blocks writes, no item offers MCP add or on/off (FR-025), in `tests/unit/test_engine.py` and `tests/unit/test_actions.py`
+- [x] T044 [US3] Gateway registry (URL, interface link, auth type, key variable name only; file mode 0600) in `src/agentsetup/gateways.py`
+- [x] T045 [US3] Actions `gateway.connect` and `mcp.remove_direct` per [write-matrix.md](contracts/write-matrix.md) in `src/agentsetup/clients/claude_code.py`, `codex.py`, `cursor.py`
+- [x] T046 [US3] Mark MCP entries that go through a registered gateway, and add the finding `bypasses_gateway` (plugin, local or direct entry) for the rest, in `src/agentsetup/views/findings.py`
+- [x] T047 [US3] Endpoints for changes and gateways (`preview`, `apply`, `cancel`, `undo`, `/api/changes`, `/api/gateways`, `/api/commands`) in `src/agentsetup/web/app.py`
+- [x] T048 [US3] Gateway page: connect, bypass list, link to gateway interface, login commands, restart notes, in `src/agentsetup/web/static/`
+- [x] T049 [US3] Real-client test in a sandbox home: connect gateway, check client listings, remove a direct entry, undo both, bytes match the originals, in `tests/contract/test_gateway.py`
 
 ## Phase 6: US4 — Turn plugins on and off (P4)
 

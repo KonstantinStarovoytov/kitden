@@ -58,3 +58,15 @@ th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background
 .view li, .findings li { padding: 3px 0; border-bottom: 1px solid var(--line); }
 .findings li.warning { color: var(--fg); }
 select { max-width: 100%; }
+
+.gateways { list-style: none; padding: 0; margin: 0 0 8px; }
+.gateways li { padding: 4px 0; }
+.form { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin: 8px 0; }
+.form label { display: flex; flex-direction: column; gap: 2px; }
+.checks { display: flex; gap: 12px; border: 1px solid var(--line); border-radius: 6px; }
+.checks label { flex-direction: row; }
+.tag.on { color: var(--on); border-color: var(--on); }
+pre.diff { font-family: ui-monospace, Menlo, monospace; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; background: color-mix(in srgb, var(--line) 35%, transparent); padding: 8px; border-radius: 6px; }
+.buttons { display: flex; gap: 8px; margin-top: 8px; }
+p.warn { border: 1px solid var(--warn); border-radius: 6px; padding: 6px 8px; }
+a { color: var(--accent); }
