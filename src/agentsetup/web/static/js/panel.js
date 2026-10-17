@@ -149,6 +149,7 @@ function layer(def) {
   let look = "off";
   let badge = "Not loaded";
   if (def.loads) { look = def.via_gateway ? "gw" : "on"; badge = "Loads"; }
+  else if (def.overridden) { look = "over"; badge = "Overridden"; }
   else if (def.enabled === "off") badge = "Off";
   else if (def.enabled === "unknown") { look = "unk"; badge = "Unknown"; }
   const row = el("div", def.loads ? "layer wins" : "layer");

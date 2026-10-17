@@ -42,14 +42,15 @@ This starts the page on `127.0.0.1` and opens it in the browser. Stop it with Ct
 
 | I want to | On the page | What changes |
 | --- | --- | --- |
-| See what each client loads in a project | **Project** | Nothing |
-| Add my MCP gateway to all clients | **MCP gateway** → Add a gateway → Preview → Apply | One user-level entry per client; a key is stored only as a variable name |
-| See MCP servers that go around the gateway | **MCP gateway** → Going around the gateway | Nothing |
-| Remove an old direct MCP entry | **Items** → Remove… → Apply | That entry |
-| Turn a plugin on or off (Claude Code, Codex) | **Items** → Turn off… / Turn on… → Apply | The plugin's on/off flag |
-| Install or move a plugin, add a marketplace | **Items** → Commands… | Nothing: the page shows the command, you run it |
-| Let agents see this setup | **"Show my setup" for agents** → Preview → Apply | One entry per client for `agentsetup mcp` |
-| Undo a change | **Change log** → Undo | The previous file content comes back |
+| See what needs attention | **Overview** | Nothing |
+| See what each client loads, here or in one project | **Load map** (pick a project in **Where**) → click a row for where it comes from | Nothing |
+| Add my MCP gateway to all clients | **Gateway** → Add a gateway → Connect clients → Preview → Apply | One user-level entry per client; a key is stored only as a variable name |
+| See MCP servers that go around the gateway | **Gateway** → the three groups below the diagram | Nothing |
+| Remove an old direct MCP entry | **Load map** → row → Remove from … → Apply, or **Gateway** → Remove… | That entry |
+| Turn a plugin on or off (Claude Code, Codex) | **Load map** → Plugins → row → Turn off in … / Turn on in … → Apply | The plugin's on/off flag |
+| Install or move a plugin, add a marketplace | **Load map** → row → Commands… | Nothing: the page shows the command, you run it |
+| Let agents see this setup | **show my setup** (bottom of the left rail) → Add… → Apply | One entry per client for `agentsetup mcp` |
+| Undo a change | Undo in the note after Apply, or **Changes** → Undo | The previous file content comes back |
 
 Other commands: `agentsetup scan --json` prints the same inventory and exits; `agentsetup mcp`
 is the read-only server that clients start.

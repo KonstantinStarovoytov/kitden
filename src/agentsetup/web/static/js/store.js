@@ -69,7 +69,10 @@ export async function loadShared() {
     guarded("projects", "/api/projects", (v) => { data.projects = v; }),
     guarded("changes", "/api/changes", (v) => { data.changes = v; }),
   ]);
-  if (state.project && !(data.projects || []).some((p) => p.id === state.project)) state.project = "";
+  if (state.project && !(data.projects || []).some((p) => p.id === state.project)) {
+    state.project = "";
+    writeHash();
+  }
 }
 
 export async function loadOverview() {

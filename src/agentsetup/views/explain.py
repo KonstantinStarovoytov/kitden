@@ -52,7 +52,7 @@ def _matches(item: Item, name: str) -> bool:
 
 
 def explain(inventory, name: str, kind: str | None, project: str | None) -> list[dict]:
-    """All definitions of `name` (plugins also by base name) with `loads` and `why`."""
+    """All definitions of `name` (plugins also by base name) with `loads`, `overridden`, `why`."""
     definitions = []
     views: dict[str, Any] = {}
     for item in inventory.items:
@@ -64,7 +64,13 @@ def explain(inventory, name: str, kind: str | None, project: str | None) -> list
             views[item.client] = effective_view(inventory, item.client, project)
         view = views[item.client]
         loaded = {i.id for i in view.items}
+        beaten = {lo.id for _, lo, _ in view.shadowed}
         definitions.append(
-            {**brief(item), "loads": item.id in loaded, "why": why(item, view, loaded)}
+            {
+                **brief(item),
+                "loads": item.id in loaded,
+                "overridden": item.id in beaten,
+                "why": why(item, view, loaded),
+            }
         )
     return definitions

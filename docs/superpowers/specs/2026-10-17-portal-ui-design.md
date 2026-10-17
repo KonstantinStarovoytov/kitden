@@ -40,9 +40,9 @@ Two controls are always at the top: **Where** (everywhere, or one project) and *
 ## Key components
 
 - **Socket** (the signature): every client cell shows state three ways at once: a shape (filled =
-  loads, hollow = off, slashed = overridden, square = via gateway, dashed = unknown), a colour,
+  loads, hollow = off, square = via gateway, dashed = unknown, faint = not installed), a colour,
   and a word, plus a short scope ("everywhere", "this project", "via Claude Code"). Never colour
-  alone.
+  alone. Slashed = overridden appears only in the detail panel, where each definition is shown.
 - **Detail panel** (right side, opens on row click): the item, where it loads, and a **layer
   stack** per client: every definition in order, which one wins and why. Actions live in the
   panel footer: Turn off…, Remove…, Commands….

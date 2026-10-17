@@ -8,7 +8,7 @@
   --inset: #f0f2f5;
   --ink: #161a21;
   --ink-2: #464d5b;
-  --ink-3: #6f7685;
+  --ink-3: #646b79;
   --ink-4: #a2a8b4;
   --wire: rgba(22, 30, 46, 0.10);
   --wire-soft: rgba(22, 30, 46, 0.06);
@@ -16,8 +16,8 @@
   --route: #2b62e3;
   --route-soft: rgba(43, 98, 227, 0.10);
   --lamp-on: #1c8a4c;
-  --lamp-warn: #a8640b;
-  --lamp-warn-soft: rgba(168, 100, 11, 0.10);
+  --lamp-warn: #97590a;
+  --lamp-warn-soft: rgba(151, 89, 10, 0.10);
   --lamp-off: #9aa1ad;
   --danger: #c23b3b;
   --focus: rgba(43, 98, 227, 0.45);

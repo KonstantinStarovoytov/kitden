@@ -50,3 +50,11 @@ def test_actions_and_hints_are_included(home):
 def test_exact_names_still_match_for_other_kinds(home):
     found = explain(build_inventory(home), "neon", "mcp_server", str(home / "work/api"))
     assert {(d["client"], d["scope"]) for d in found} == {("codex", "user"), ("codex", "project")}
+
+
+def test_overridden_definitions_are_marked(home):
+    found = explain(build_inventory(home), "superpowers", "plugin", str(home / "work/website"))
+    marks = {
+        (d["client"], d["scope"]): d["overridden"] for d in found if d["client"] == "claude_code"
+    }
+    assert marks == {("claude_code", "user"): True, ("claude_code", "project"): False}

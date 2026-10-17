@@ -10,7 +10,7 @@ clients, pressing Apply on the page (see "Real clients" below).
 
 | Check | Result |
 | --- | --- |
-| `uv run pytest` (unit, property, security, including the secret and network sweep) | 244 passed |
+| `uv run pytest` (unit, property, security, including the secret and network sweep) | 285 passed (after the page redesign, 2026-10-18) |
 | `uv run pytest -m contract` (real `claude` and `codex` commands, sandbox homes) | 5 passed |
 | `ruff check`, `ruff format --check` | Clean |
 
@@ -63,6 +63,27 @@ Gateway: MetaMCP 2.4.22 on `http://localhost:12008/metamcp/local/mcp`, auth off,
 These real changes stay in place and can be undone from the change log: `metamcp` in Claude Code
 and Cursor, and `agentsetup` in Codex.
 
+## Page redesign (2026-10-18)
+
+The page was rebuilt from the [design](../../docs/superpowers/specs/2026-10-17-portal-ui-design.md)
+as five places: Overview, Load map, Gateway, Changes and Agents. Checked in the browser on a
+sandbox home at 1280×800 and 390×844, light and dark.
+
+| Check | Result |
+| --- | --- |
+| Every place loads, no console errors | Pass |
+| Sideways scroll | None at 1280 or 390; the map table scrolls inside its box on narrow screens |
+| Load map: tabs, filters, search, Where, keyboard (`/`, arrows, Enter, Esc) | Pass |
+| Names with markup or 90+ characters | Shown as text, cut with the full name on hover |
+| Side panel: layers, Overridden, secret note, Cursor hint, Commands | Pass |
+| Apply: Applying… → Applied, cells change in place, counters roll, note with Undo | Pass (plugin off, MCP remove, gateway connect, show my setup) |
+| File changed after preview | Panel shows the reason and Preview again; no note, counters do not move |
+| Undo from the note and from Changes | Pass; files come back |
+| Unknown project in the address or API | Page falls back to Everywhere; API returns 404 "Unknown project." |
+| Text contrast (muted text, flags, sockets) | 4.6:1 or more in both themes (AA for small text) after darkening two light-theme colours |
+| Reduced motion | Not emulated in the test browser; the CSS reduced-motion rule and the motion helper turn movement off |
+| A client that is not installed | Covered by a unit test; Cursor detection reads the installed app, so a sandbox cannot hide it |
+
 ## Found and fixed during validation
 
 - **Secret in MCP arguments.** A Cursor entry passed a key as `docker run -e N8N_API_KEY=<token>`.
@@ -82,4 +103,3 @@ and Cursor, and `agentsetup` in Codex.
   tool's own process makes no network connections (sweep test); the README says this.
 - A tool call through the gateway from inside an agent session (the connection and tool list
   were checked).
-- The page scrolls sideways on narrow windows (part of the separate design task).
