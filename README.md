@@ -74,6 +74,7 @@ chatgpt.com for your installed plugins.
 | [Brief review](docs/research/brief-review-2026-10-17.md) | Independent review by two models: scores, missed competitors, recommended cuts, experiments |
 | [Gateway trial](docs/research/gateway-trial-2026-10-16.md) | MetaMCP and Obot tested with Codex and agent-docs; cross-client setup research |
 | [Gateway research](docs/research/mcp-gateway-landscape.md) | Existing MCP gateways, security practices, and reading list |
+| [Design skills and tools](docs/research/design-skills-and-tools-2026-10-17.md) | Agent skills and tools for UI design and review, with risks and a proposed way of working |
 | [Architecture proposal](docs/architecture/overview.md) | Gateway architecture from the earlier idea; superseded for the first release |
 | [Constitution](.specify/memory/constitution.md) | Project principles, version 2.1.0 (amended 2026-10-17) |
 | [Spec Kit workflow](docs/spec-kit-workflow.md) | Installed tooling and next development steps |
