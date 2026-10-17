@@ -12,7 +12,9 @@ from starlette.responses import FileResponse, JSONResponse, StreamingResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
-from agentsetup.views.inventory import Inventory, inventory_dict
+from agentsetup.views.effective import effective_view
+from agentsetup.views.findings import find_findings
+from agentsetup.views.inventory import Inventory, inventory_dict, item_dict
 from agentsetup.watch import Watcher
 from agentsetup.web.security import SecurityMiddleware
 
@@ -60,13 +62,15 @@ class State:
     def __init__(self, build: Callable[[], Inventory], events: Broadcaster) -> None:
         self.build = build
         self.events = events
-        self.data = inventory_dict(build())
+        self.inventory = build()
+        self.data = inventory_dict(self.inventory)
         self.lock = asyncio.Lock()
 
     async def rescan(self) -> dict:
         async with self.lock:
             self.events.publish("rescan_started")
-            self.data = inventory_dict(await asyncio.to_thread(self.build))
+            self.inventory = await asyncio.to_thread(self.build)
+            self.data = inventory_dict(self.inventory)
             self.events.publish("rescan_finished")
         return self.data
 
@@ -121,6 +125,44 @@ def create_app(
     async def problems(request: Request) -> JSONResponse:
         return JSONResponse(state.data["problems"])
 
+    async def project_view(request: Request) -> JSONResponse:
+        wanted = request.path_params["project_id"]
+        found = next((p for p in state.data["projects"] if p["id"] == wanted), None)
+        if found is None:
+            return JSONResponse({"detail": "Unknown project."}, status_code=404)
+        clients = [c["id"] for c in state.data["clients"] if c["status"] == "found"]
+        views = []
+        for client in clients:
+            view = effective_view(state.inventory, client, found["path"])
+            views.append(
+                {
+                    "client": client,
+                    "items": [item_dict(i) for i in view.items],
+                    "shadowed": [
+                        {"winner": w.id, "loser": lo.id, "mode": m, "name": w.name}
+                        for w, lo, m in view.shadowed
+                    ],
+                }
+            )
+        return JSONResponse({"project": found, "views": views})
+
+    async def findings(request: Request) -> JSONResponse:
+        project = request.query_params.get("project") or None
+        return JSONResponse(
+            [
+                {
+                    "id": f.id,
+                    "type": str(f.type),
+                    "severity": str(f.severity),
+                    "items": list(f.items),
+                    "names": list(f.names),
+                    "client": f.client,
+                    "explanation": f.explanation,
+                }
+                for f in find_findings(state.inventory, project)
+            ]
+        )
+
     async def rescan(request: Request) -> JSONResponse:
         data = await state.rescan()
         return JSONResponse({"items": len(data["items"]), "problems": len(data["problems"])})
@@ -144,6 +186,8 @@ def create_app(
             Route("/api/items", items),
             Route("/api/projects", projects),
             Route("/api/problems", problems),
+            Route("/api/projects/{project_id}/effective", project_view),
+            Route("/api/findings", findings),
             Route("/api/rescan", rescan, methods=["POST"]),
             Route("/api/events", stream),
             Mount("/static", StaticFiles(directory=STATIC), name="static"),

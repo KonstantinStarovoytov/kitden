@@ -2,7 +2,7 @@
 // it is only ever set with textContent, never as HTML.
 "use strict";
 
-const state = { clients: [], items: [], problems: [] };
+const state = { clients: [], items: [], problems: [], projects: [] };
 const $ = (id) => document.getElementById(id);
 
 function el(tag, text, className) {
@@ -25,14 +25,17 @@ async function getJson(url) {
 
 async function load() {
   $("status").textContent = "Loading…";
-  const [clients, items, problems] = await Promise.all([
+  const [clients, items, problems, projects] = await Promise.all([
     getJson("/api/clients"), getJson("/api/items"), getJson("/api/problems"),
+    getJson("/api/projects"),
   ]);
-  Object.assign(state, { clients, items, problems });
+  Object.assign(state, { clients, items, problems, projects });
   renderClients();
   renderProblems();
   fillFilters();
   renderItems();
+  fillProjects();
+  await renderProject();
   $("status").textContent = `Updated ${new Date().toLocaleTimeString()}`;
 }
 
@@ -115,6 +118,71 @@ function renderItems() {
   $("count").textContent = `${rows.length} of ${state.items.length}`;
 }
 
+function fillProjects() {
+  const select = $("project");
+  const current = select.value;
+  select.replaceChildren(el("option", "Outside any project"));
+  select.firstChild.value = "";
+  for (const project of state.projects) {
+    const label = `${shortPath(project.path)}${project.exists ? "" : " (folder missing)"}`;
+    const option = el("option", label);
+    option.value = project.id;
+    select.append(option);
+  }
+  select.value = state.projects.some((p) => p.id === current) ? current : "";
+}
+
+async function renderProject() {
+  const id = $("project").value;
+  const project = state.projects.find((p) => p.id === id);
+  const views = $("project-views");
+  views.replaceChildren();
+  $("project-note").textContent = project
+    ? `Known by ${project.known_by.join(", ")}`
+    : "Choose a project to see what each client loads there.";
+  const query = project ? `?project=${encodeURIComponent(project.path)}` : "";
+  const [effective, findings] = await Promise.all([
+    project ? getJson(`/api/projects/${id}/effective`) : Promise.resolve(null),
+    getJson(`/api/findings${query}`),
+  ]);
+  for (const view of effective ? effective.views : []) {
+    const box = el("div", null, "view");
+    box.append(el("h3", `${view.client}: ${view.items.length} loaded`));
+    const shadowed = new Set(view.shadowed.map((s) => s.name));
+    const list = el("ul");
+    for (const item of view.items) {
+      const li = el("li");
+      li.append(el("span", item.kind.replace("_", " "), "tag"));
+      li.append(el("span", ` ${item.name}`, "name"));
+      li.append(el("span", item.scope, "tag"));
+      if (item.enabled === "unknown") li.append(el("span", "state unknown", "tag warn"));
+      if (shadowed.has(item.name)) li.append(el("span", "overrides another definition", "tag"));
+      if (item.source.kind === "other_client_folder") {
+        li.append(el("span", `from ${item.source.owner_client}`, "tag"));
+      }
+      list.append(li);
+    }
+    box.append(list);
+    views.append(box);
+  }
+  renderFindings(findings);
+}
+
+function renderFindings(findings) {
+  const list = $("findings");
+  list.replaceChildren();
+  const order = { warning: 0, info: 1 };
+  findings.sort((a, b) => order[a.severity] - order[b.severity] || a.type.localeCompare(b.type));
+  for (const finding of findings) {
+    const li = el("li", null, finding.severity);
+    li.append(el("span", finding.severity, `tag ${finding.severity === "warning" ? "warn" : ""}`));
+    li.append(el("span", ` ${finding.type.replaceAll("_", " ")}: `, "name"));
+    li.append(el("span", finding.explanation));
+    list.append(li);
+  }
+  if (findings.length === 0) list.append(el("li", "Nothing to report.", "hint"));
+}
+
 async function rescan() {
   $("rescan").disabled = true;
   try {
@@ -144,6 +212,7 @@ document.addEventListener("DOMContentLoaded", () => {
   for (const id of ["filter-client", "filter-kind", "filter-text"]) {
     $(id).addEventListener("input", renderItems);
   }
+  $("project").addEventListener("change", () => renderProject().catch(showError));
   load().catch(showError);
   listen();
 });

@@ -63,12 +63,12 @@ files, no open dependency). **[US1]**…**[US5]** = user story from the spec.
 **Goal**: per project, show what each client really loads, duplicates, cross-loading and overrides.
 **Test**: fixture project with a skill in two folders Cursor reads and an MCP server in two scopes.
 
-- [ ] T031 [P] [US2] Tests for project views: Claude whole entry wins, Codex merges fields, Cursor project wins, in `tests/unit/test_effective.py`
-- [ ] T032 [P] [US2] Tests for findings: same item twice in one client = warning, in two clients = info, cross-loaded, scope override, in `tests/unit/test_findings.py`
-- [ ] T033 [US2] Project view builder in `src/agentsetup/views/effective.py`
-- [ ] T034 [US2] Findings builder, including `version_unsupported` (uses spike S5 for Cursor imports), in `src/agentsetup/views/findings.py`
-- [ ] T035 [US2] Endpoints `/api/projects/{id}/effective` and `/api/findings` in `src/agentsetup/web/app.py`
-- [ ] T036 [US2] Project view page in `src/agentsetup/web/static/`
+- [x] T031 [P] [US2] Tests for project views: Claude whole entry wins, Codex merges fields, Cursor project wins, in `tests/unit/test_effective.py`
+- [x] T032 [P] [US2] Tests for findings: same item twice in one client = warning, in two clients = info, cross-loaded, scope override, in `tests/unit/test_findings.py`
+- [x] T033 [US2] Project view builder in `src/agentsetup/views/effective.py`
+- [x] T034 [US2] Findings builder, including `version_unsupported` (uses spike S5 for Cursor imports), in `src/agentsetup/views/findings.py`
+- [x] T035 [US2] Endpoints `/api/projects/{id}/effective` and `/api/findings` in `src/agentsetup/web/app.py`
+- [x] T036 [US2] Project view page in `src/agentsetup/web/static/`
 
 ## Phase 5: US3 — Bring MCP tools under the gateway (P3)
 

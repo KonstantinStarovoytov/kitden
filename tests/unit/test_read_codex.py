@@ -9,6 +9,7 @@ EXPECTED = {
     ("codex", "mcp_server", "langfuse-data", "user", "on", None),
     ("codex", "mcp_server", "aseprite", "user", "off", None),
     ("codex", "mcp_server", "api-docs", "project", "on", "work/api"),
+    ("codex", "mcp_server", "neon", "project", "on", "work/api"),
     ("codex", "mcp_server", "evil", "project", "off", "work/untrusted"),  # untrusted: not loaded
     ("codex", "plugin", "browser@openai-bundled", "user", "on", None),
     ("codex", "plugin", "pdf@openai-primary-runtime", "user", "off", None),

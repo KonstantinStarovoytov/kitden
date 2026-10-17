@@ -1,2 +1,5 @@
 [mcp_servers.api-docs]
 url = "http://localhost:9000/mcp"
+
+[mcp_servers.neon]
+enabled_tools = ["search"]

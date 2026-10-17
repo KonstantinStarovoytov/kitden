@@ -50,3 +50,11 @@ th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background
 .state.on { color: var(--on); }
 .state.off { color: var(--off); }
 .state.unknown { color: var(--warn); }
+
+.views { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.view { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+.view h3 { font-size: 14px; margin: 4px 0 8px; }
+.view ul, .findings { list-style: none; padding: 0; margin: 0; }
+.view li, .findings li { padding: 3px 0; border-bottom: 1px solid var(--line); }
+.findings li.warning { color: var(--fg); }
+select { max-width: 100%; }

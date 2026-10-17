@@ -17,7 +17,15 @@ OWN = {
     ("cursor", "mcp_server", "site-db", "project", "on", "work/site"),
     ("cursor", "skill", "docker-expert", "user", "on", None),
     ("cursor", "plugin", "langfuse@cursor-public", "user", "unknown", None),
-    ("cursor", "plugin", "langfuse@cursor-public", "project", "unknown", "work/site"),
+    ("cursor", "plugin", "superpowers@cursor-public", "user", "unknown", None),
+    (
+        "cursor",
+        "plugin",
+        "1 plugin installed (name not stored locally)",
+        "project",
+        "unknown",
+        "work/site",
+    ),
     ("cursor", "marketplace", "team-mkt", "user", "on", None),
     ("cursor", "hook", "afterFileEdit", "user", "on", None),
 }

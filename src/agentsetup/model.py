@@ -165,10 +165,16 @@ class Finding:
     severity: Severity
     items: tuple[str, ...]
     explanation: str
+    names: tuple[str, ...] = ()
+    client: str | None = None
 
     def __post_init__(self) -> None:
         if not self.items:
             raise ValueError("a finding needs at least one item")
+
+    @property
+    def id(self) -> str:
+        return _hash(self.type, *sorted(self.items))
 
 
 _TRANSITIONS: dict[ChangeState, set[ChangeState]] = {

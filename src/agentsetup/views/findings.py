@@ -1,0 +1,160 @@
+"""Findings: duplicates, cross-loading, overrides, unknown state, unsupported versions.
+
+FR-011 to FR-014. Built on the per-project effective views, so "loads twice" means it really
+loads twice in that client and project.
+"""
+
+from collections import defaultdict
+from collections.abc import Iterable
+
+from agentsetup.model import (
+    ClientStatus,
+    Enabled,
+    Finding,
+    FindingType,
+    Item,
+    ItemKind,
+    Severity,
+    SourceKind,
+)
+from agentsetup.views.effective import DESKTOP, effective_view
+
+# Kinds where two copies are a problem. Hooks all run by design; marketplaces are just sources.
+DUPLICATE_KINDS = {ItemKind.MCP_SERVER, ItemKind.SKILL, ItemKind.PLUGIN}
+
+
+def _where(item: Item) -> str:
+    return item.source.path or f"{item.source.owner_client} account"
+
+
+def _finding(
+    kind: FindingType,
+    severity: Severity,
+    items: Iterable[Item],
+    text: str,
+    client: str | None = None,
+) -> Finding:
+    items = list(items)
+    return Finding(
+        type=kind,
+        severity=severity,
+        items=tuple(i.id for i in items),
+        names=tuple(i.name for i in items),
+        explanation=text,
+        client=client,
+    )
+
+
+def _base_name(item: Item) -> str:
+    # The same plugin can come from different marketplaces: "x@a" and "x@b" are both "x".
+    return item.name.split("@", 1)[0] if item.kind is ItemKind.PLUGIN else item.name
+
+
+def find_findings(inventory, project: str | None = None) -> list[Finding]:
+    findings: list[Finding] = []
+    clients = sorted({i.client for i in inventory.items} - {DESKTOP})
+    own: dict[tuple[ItemKind, str], dict[str, Item]] = defaultdict(dict)
+
+    for client in clients:
+        view = effective_view(inventory, client, project)
+
+        groups: dict[tuple[ItemKind, str], list[Item]] = defaultdict(list)
+        for item in view.items:
+            if item.kind in DUPLICATE_KINDS:
+                groups[(item.kind, _base_name(item))].append(item)
+        for (kind, name), same in groups.items():
+            if len(same) > 1:
+                places = "; ".join(_where(i) for i in same)
+                findings.append(
+                    _finding(
+                        FindingType.DUPLICATE_IN_CLIENT,
+                        Severity.WARNING,
+                        same,
+                        f"{client} loads {kind.replace('_', ' ')} '{name}' {len(same)} times: "
+                        f"{places}",
+                        client,
+                    )
+                )
+
+        for winner, loser, mode in view.shadowed:
+            findings.append(
+                _finding(
+                    FindingType.SCOPE_OVERRIDE,
+                    Severity.INFO,
+                    [winner, loser],
+                    f"In {client}, '{winner.name}' from {winner.scope} ({_where(winner)}) "
+                    f"{'is merged over' if mode == 'merged' else 'replaces'} the {loser.scope} "
+                    f"definition ({_where(loser)})",
+                    client,
+                )
+            )
+
+        for item in view.items:
+            if item.source.kind is SourceKind.OTHER_CLIENT_FOLDER:
+                findings.append(
+                    _finding(
+                        FindingType.CROSS_LOADED,
+                        Severity.INFO,
+                        [item],
+                        f"{client} loads '{item.name}' from {item.source.owner_client}: "
+                        f"{_where(item)}",
+                        client,
+                    )
+                )
+            elif item.source.owner_client == client:
+                own[(item.kind, item.name)][client] = item
+
+        unknown = [i for i in view.items if i.enabled is Enabled.UNKNOWN]
+        if unknown:
+            findings.append(
+                _finding(
+                    FindingType.UNKNOWN_STATE,
+                    Severity.INFO,
+                    unknown,
+                    f"{client}: on/off state of {len(unknown)} items "
+                    "cannot be read from local files",
+                    client,
+                )
+            )
+
+    if any(i.client == DESKTOP for i in inventory.items):
+        for winner, loser, _mode in effective_view(inventory, DESKTOP, project).shadowed:
+            if winner.client == DESKTOP:
+                findings.append(
+                    _finding(
+                        FindingType.SCOPE_OVERRIDE,
+                        Severity.INFO,
+                        [winner, loser],
+                        f"In the Claude Desktop Code tab, '{winner.name}' from {_where(winner)} "
+                        f"replaces the Claude Code definition ({_where(loser)})",
+                        DESKTOP,
+                    )
+                )
+
+    for (kind, name), by_client in own.items():
+        if len(by_client) > 1:
+            findings.append(
+                _finding(
+                    FindingType.SAME_IN_OTHER_CLIENTS,
+                    Severity.INFO,
+                    by_client.values(),
+                    f"{kind.replace('_', ' ')} '{name}' is set up separately in "
+                    f"{', '.join(sorted(by_client))}",
+                )
+            )
+
+    for client in inventory.clients:
+        if client.status is ClientStatus.FOUND and client.version and not client.version_supported:
+            items = [i for i in inventory.items if i.client == client.id]
+            if items:
+                findings.append(
+                    _finding(
+                        FindingType.VERSION_UNSUPPORTED,
+                        Severity.WARNING,
+                        items,
+                        f"{client.display_name} {client.version} is older than the tested "
+                        "versions; results may be incomplete",
+                        client.id,
+                    )
+                )
+    return findings

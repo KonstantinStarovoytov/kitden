@@ -29,7 +29,10 @@ def test_items_can_be_filtered_by_client_and_kind(client):
 def test_items_can_be_filtered_by_project(client):
     site = str(client.home / "work/site")
     found = {(i["client"], i["name"]) for i in client.get(f"/api/items?project={site}").json()}
-    assert found == {("cursor", "site-db"), ("cursor", "langfuse@cursor-public")}
+    assert found == {
+        ("cursor", "site-db"),
+        ("cursor", "1 plugin installed (name not stored locally)"),
+    }
 
 
 def test_clients_and_projects_are_listed(client):

@@ -1,17 +1,23 @@
 {
   "cursor.plugins.installedIds.123|no-workspace": [
     {
-      "id": "langfuse@cursor-public",
+      "id": "648",
       "sources": [
-        "marketplace"
+        "user"
+      ]
+    },
+    {
+      "id": "684",
+      "sources": [
+        "user"
       ]
     }
   ],
   "cursor.plugins.installedIds.123|file://{HOME}/work/site": [
     {
-      "id": "langfuse@cursor-public",
+      "id": "648",
       "sources": [
-        "marketplace"
+        "user"
       ]
     }
   ],

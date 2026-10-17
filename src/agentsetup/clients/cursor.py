@@ -146,23 +146,28 @@ class CursorAdapter(ClientAdapter):
         return installed, flags
 
     def _plugins(self, installed: dict[str, list[str | None]]) -> list[Item]:
-        if not installed:  # no readable database: fall back to the local cache
-            cache = self.home / ".cursor/plugins/cache"
-            for marketplace in sorted(cache.iterdir()) if cache.is_dir() else []:
-                for plugin in sorted(marketplace.iterdir()) if marketplace.is_dir() else []:
-                    if plugin.is_dir() and not plugin.name.startswith("."):
-                        installed[f"{plugin.name}@{marketplace.name}"] = [None]
+        """Installed plugins.
+
+        Cursor stores numeric marketplace ids whose names live in the Cursor account. Names
+        then come from the local cache, and per-project numeric installs are shown as a count
+        (FR-005).
+        """
         db = str(self.home / STATE_DB)
+        unknown = {
+            "read_status": ReadStatus.UNKNOWN,
+            "unknown_reason": UnknownReason.NOT_DOCUMENTED,
+        }
         items = []
-        for plugin_id, places in sorted(installed.items()):
+        named = {pid: places for pid, places in installed.items() if "@" in pid}
+        numeric = {pid: places for pid, places in installed.items() if "@" not in pid}
+        for plugin_id, places in sorted(named.items()):
             for place in dict.fromkeys(places):
                 source = Source(
                     kind=SourceKind.STATE_DATABASE,
                     path=db,
                     owner_client=CLIENT,
                     key_path=INSTALLED_PREFIX,
-                    read_status=ReadStatus.UNKNOWN,
-                    unknown_reason=UnknownReason.NOT_DOCUMENTED,
+                    **unknown,
                 )
                 items.append(
                     Item(
@@ -175,6 +180,58 @@ class CursorAdapter(ClientAdapter):
                         enabled=Enabled.UNKNOWN,
                     )
                 )
+        if not installed or any(None in places for places in numeric.values()):
+            items += self._cached_plugins(set(named), unknown)
+        per_project: dict[str, int] = {}
+        for places in numeric.values():
+            for place in {p for p in places if p}:
+                per_project[place] = per_project.get(place, 0) + 1
+        for place, count in sorted(per_project.items()):
+            label = (
+                f"{count} plugin installed (name not stored locally)"
+                if count == 1
+                else f"{count} plugins installed (names not stored locally)"
+            )
+            source = Source(
+                kind=SourceKind.STATE_DATABASE,
+                path=db,
+                owner_client=CLIENT,
+                key_path=INSTALLED_PREFIX,
+                **unknown,
+            )
+            items.append(
+                Item(
+                    client=CLIENT,
+                    kind=ItemKind.PLUGIN,
+                    name=label,
+                    source=source,
+                    scope=Scope.PROJECT,
+                    project=place,
+                    enabled=Enabled.UNKNOWN,
+                )
+            )
+        return items
+
+    def _cached_plugins(self, skip: set[str], unknown: dict) -> list[Item]:
+        cache = self.home / ".cursor/plugins/cache"
+        items = []
+        for marketplace in sorted(cache.iterdir()) if cache.is_dir() else []:
+            for plugin in sorted(marketplace.iterdir()) if marketplace.is_dir() else []:
+                plugin_id = f"{plugin.name}@{marketplace.name}"
+                if plugin.is_dir() and not plugin.name.startswith(".") and plugin_id not in skip:
+                    source = Source(
+                        kind=SourceKind.PLUGIN, path=str(plugin), owner_client=CLIENT, **unknown
+                    )
+                    items.append(
+                        Item(
+                            client=CLIENT,
+                            kind=ItemKind.PLUGIN,
+                            name=plugin_id,
+                            source=source,
+                            scope=Scope.USER,
+                            enabled=Enabled.UNKNOWN,
+                        )
+                    )
         return items
 
     def _skills(
