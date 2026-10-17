@@ -10,9 +10,10 @@ guide. `<tool>` is a placeholder until the product name is chosen.
 - macOS with `uv` installed (`brew install uv`); `uv` provides Python 3.14.
 - Claude Code, Codex (CLI or ChatGPT desktop app) and Cursor installed, versions per
   [research R11](research.md#r11-supported-client-versions-first-release).
-- For write scenarios: a **sandbox home** so real settings are never touched:
-  copy the fixtures in `tests/fixtures/sandbox-home/` to a temporary folder and start the tool with
-  `HOME=<sandbox>` and `CODEX_HOME=<sandbox>/.codex`. Real-machine checks are read-only.
+- For write scenarios: a **sandbox home** so real settings are never touched: copy the fixture
+  homes in `tests/fixtures/<client>/<version>/home/` into one temporary folder and start the tool
+  with `agentsetup --home <sandbox>` (client commands then run with `HOME=<sandbox>`). The contract
+  tests (`uv run pytest -m contract`) do this automatically. Real-machine checks are read-only.
 
 ## Scenario 1 — Inventory in one place (User Story 1, SC-002, SC-006)
 
@@ -28,8 +29,8 @@ guide. `<tool>` is a placeholder until the product name is chosen.
 
 ## Scenario 2 — Project view, duplicates and cross-loading (User Story 2, SC-001)
 
-Uses the sandbox fixture `cross-loading/`: one skill in `~/.claude/skills` and `~/.agents/skills`,
-one MCP server defined both user-wide and in `.cursor/mcp.json`.
+Uses the Cursor fixture (`tests/fixtures/cursor/3.21.16`): skills in `~/.claude/skills`,
+`~/.codex/skills` and `~/.agents/skills`, and Claude Code plugins that Cursor imports.
 
 1. Open the fixture project in the page.
 2. Expect within 30 seconds: Cursor's view shows the skill as cross-loaded with both folders;

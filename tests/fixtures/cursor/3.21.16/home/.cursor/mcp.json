@@ -6,7 +6,10 @@
     "n8n-mcp": {
       "command": "npx",
       "args": [
-        "n8n-mcp"
+        "n8n-mcp",
+        "-e",
+        "N8N_WEBHOOK_TOKEN=SENTINEL_SECRET_N8N_ARG",
+        "--config=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJTRU5USU5FTCJ9.U0VOVElORUxfU0lH"
       ],
       "env": {
         "N8N_API_KEY": "SENTINEL_SECRET_N8N"

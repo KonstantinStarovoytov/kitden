@@ -116,9 +116,9 @@ files, no open dependency). **[US1]**…**[US5]** = user story from the spec.
 
 ## Phase 8: Polish
 
-- [ ] T063 [P] Secret and network sweep: no sentinel in page responses, change log, `scan --json` or MCP output, and no outgoing network calls, in `tests/security/test_no_secrets.py`
-- [ ] T064 [P] Add usage to `README.md`: install, start, connect gateway, undo
-- [ ] T065 Run quickstart scenarios 1–5 and the speed checks (first results under 10 s, rescan under 2 s); write results in `specs/001-agent-setup-inventory/validation.md`
+- [x] T063 [P] Secret and network sweep: no sentinel in page responses, change log, `scan --json` or MCP output, and no outgoing network calls, in `tests/security/test_no_secrets.py`
+- [x] T064 [P] Add usage to `README.md`: install, start, connect gateway, undo
+- [x] T065 Run quickstart scenarios 1–5 and the speed checks (first results under 10 s, rescan under 2 s); write results in `specs/001-agent-setup-inventory/validation.md`
 
 ## Order
 

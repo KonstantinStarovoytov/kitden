@@ -19,6 +19,10 @@ _SECRET_WORD = r"(api[-_]?key|access[-_]?key|token|secret|password|passwd|auth|c
 _SECRET_FLAG = re.compile(rf"--?[A-Za-z0-9_-]*{_SECRET_WORD}[A-Za-z0-9_-]*", re.I)
 _SECRET_FLAG_VALUE = re.compile(rf"(--?[A-Za-z0-9_-]*{_SECRET_WORD}[A-Za-z0-9_-]*)=.+", re.I)
 _SECRET_PARAM = re.compile(rf".*{_SECRET_WORD}.*", re.I)
+# `NAME=value` arguments, for example `docker run -e API_KEY=...`.
+_SECRET_PAIR = re.compile(
+    rf"(?P<name>[A-Za-z0-9_.-]*{_SECRET_WORD}[A-Za-z0-9_.-]*)=(?P<value>.+)", re.I
+)
 _HEADER_ARG = re.compile(
     r"([A-Za-z0-9-]*(authorization|token|key|cookie|secret)[A-Za-z0-9-]*)\s*:\s*\S.*", re.I
 )
@@ -73,6 +77,13 @@ class _Redactor:
             elif isinstance(arg, str) and (m := _SECRET_FLAG_VALUE.fullmatch(arg)):
                 self.found = True
                 out.append(f"{m.group(1)}={SECRET}")
+            elif (
+                isinstance(arg, str)
+                and (m := _SECRET_PAIR.fullmatch(arg))
+                and not _is_reference(m.group("value"))
+            ):
+                self.found = True
+                out.append(f"{m.group('name')}={SECRET}")
             else:
                 out.append(self.walk(arg))
             hide_next = isinstance(arg, str) and bool(_SECRET_FLAG.fullmatch(arg))
@@ -88,6 +99,10 @@ class _Redactor:
             return f"{m.group(1)}: {SECRET}"
         if value.startswith(("http://", "https://")):
             return self._url(value)
+        for shape in _TOKEN_SHAPES:  # a token inside a longer string
+            value, count = shape.subn(SECRET, value)
+            if count:
+                self.found = True
         return value
 
     def _url(self, url: str) -> str:

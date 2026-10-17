@@ -130,3 +130,39 @@ def test_redact_text_keeps_references_and_json_punctuation():
         redact_text('{"Authorization": "Bearer abcdefgh12345"}')
         == f'{{"Authorization": "{SECRET}"}}'
     )
+
+
+def test_secret_env_pairs_in_args_are_hidden():
+    entry = {
+        "args": [
+            "run",
+            "-e",
+            "N8N_API_KEY=SENTINEL_SECRET_ARG",
+            "-e",
+            "LOG_LEVEL=error",
+            "-e",
+            "N8N_API_URL=http://host:5678",
+            "-e",
+            "TOKEN=${TOKEN}",
+        ]
+    }
+    redacted, found = redact(entry)
+    assert redacted["args"] == [
+        "run",
+        "-e",
+        f"N8N_API_KEY={SECRET}",
+        "-e",
+        "LOG_LEVEL=error",
+        "-e",
+        "N8N_API_URL=http://host:5678",
+        "-e",
+        "TOKEN=${TOKEN}",
+    ]
+    assert found
+
+
+def test_tokens_inside_longer_strings_are_hidden():
+    jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMifQ.c2lnbmF0dXJlLXZhbHVl"
+    redacted, found = redact({"args": [f"CONFIG={jwt}"], "command": f"run --x {GITHUB_LIKE}"})
+    assert redacted == {"args": [f"CONFIG={SECRET}"], "command": f"run --x {SECRET}"}
+    assert found

@@ -4,8 +4,9 @@
 and what loads twice, with safe on/off toggles.** Clients: Claude Code (including the Claude
 Desktop Code tab), Codex and Cursor.
 
-**Stage:** research and project setup. There is no implementation yet.
-The repository name comes from the earlier gateway idea; a new product name is an open question.
+**Stage:** first release built (feature 001, user stories 1–5); results in
+[validation](specs/001-agent-setup-inventory/validation.md). The command is `agentsetup`. The
+repository name comes from the earlier gateway idea; a product name is still an open question.
 
 ```mermaid
 flowchart LR
@@ -22,6 +23,47 @@ managed in an existing gateway (gateway first): the page connects it to every cl
 MCP servers that bypass it. Writes happen only after an explicit "Apply" and can be undone.
 A read-only "show my setup" MCP server gives agents the same answer. Team administration and
 Langfuse export come later.
+
+## Use it
+
+Needs macOS and [uv](https://docs.astral.sh/uv/).
+
+```bash
+uv tool install .
+```
+
+Run this in the repository folder; it gives you the `agentsetup` command.
+
+```bash
+agentsetup
+```
+
+This starts the page on `127.0.0.1` and opens it in the browser. Stop it with Ctrl+C.
+
+| I want to | On the page | What changes |
+| --- | --- | --- |
+| See what each client loads in a project | **Project** | Nothing |
+| Add my MCP gateway to all clients | **MCP gateway** → Add a gateway → Preview → Apply | One user-level entry per client; a key is stored only as a variable name |
+| See MCP servers that go around the gateway | **MCP gateway** → Going around the gateway | Nothing |
+| Remove an old direct MCP entry | **Items** → Remove… → Apply | That entry |
+| Turn a plugin on or off (Claude Code, Codex) | **Items** → Turn off… / Turn on… → Apply | The plugin's on/off flag |
+| Install or move a plugin, add a marketplace | **Items** → Commands… | Nothing: the page shows the command, you run it |
+| Let agents see this setup | **"Show my setup" for agents** → Preview → Apply | One entry per client for `agentsetup mcp` |
+| Undo a change | **Change log** → Undo | The previous file content comes back |
+
+Other commands: `agentsetup scan --json` prints the same inventory and exits; `agentsetup mcp`
+is the read-only server that clients start.
+
+**Safety.** Every change is shown first and written only after Apply. Before writing, the tool
+saves a private backup (`~/Library/Application Support/agentsetup/changes`, kept for 30 days or the
+last 100 changes). It stops if a file changed after the preview, reads the file again after
+writing, and puts the backup back if the result is wrong. Undo stops if the file changed after the
+change.
+
+**Privacy.** The page answers only on `127.0.0.1` and needs the start link. Secret values are never
+shown or logged, and the tool itself opens no network connections. One thing to know: to show the
+on/off state of Codex remote plugins, it runs `codex plugin list --json`, and Codex then asks
+chatgpt.com for your installed plugins.
 
 ## Start here
 
@@ -41,13 +83,13 @@ Langfuse export come later.
 Discuss work in simple Russian. Write code, UI text, and documentation in simple English.
 Use diagrams and tables where they make the idea easier to understand.
 
-## Current recommendation
+## Approach
 
-Do not build another MCP gateway: MetaMCP and Obot already cover tool access and blocking.
-Build the narrow, read-first page described in the [project brief](docs/project-brief.md).
-Its gap against [Cross-Code Organizer](https://github.com/mcpware/cross-code-organizer), the
-closest existing tool, is Cursor, plugins and marketplaces, and cross-client loading. Whether to
-build an own tool or contribute to Cross-Code Organizer is still open.
-No runtime, framework, or database is selected yet.
+Do not build another MCP gateway: MetaMCP and Obot already cover tool access and blocking. This
+tool is the narrow, read-first page from the [project brief](docs/project-brief.md). Its gap
+against [Cross-Code Organizer](https://github.com/mcpware/cross-code-organizer), the closest
+existing tool, is Cursor, plugins and marketplaces, and cross-client loading.
 
-Research reviewed on **2026-10-16 and 2026-10-17**.
+Built with Python 3.14, uv, Starlette and the official MCP SDK
+([plan](specs/001-agent-setup-inventory/plan.md)). Research reviewed on **2026-10-16 and
+2026-10-17**.
