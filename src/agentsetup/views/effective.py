@@ -112,3 +112,12 @@ def effective_view(inventory, client: str, project: str | None) -> EffectiveView
         )
     ]
     return view
+
+
+def found_clients(inventory) -> list[str]:
+    return [c.id for c in inventory.clients if str(c.status) == "found"]
+
+
+def project_views(inventory, project: str | None) -> list[EffectiveView]:
+    """What each found client loads in one project. The page and the MCP server both use this."""
+    return [effective_view(inventory, client, project) for client in found_clients(inventory)]

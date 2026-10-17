@@ -76,3 +76,30 @@ def test_start_link_is_visible_to_a_program_reading_the_output(tmp_path):
         process.terminate()
         process.wait(timeout=10)
     assert "http://127.0.0.1:" in first_line and "token=" in first_line
+
+
+def test_mcp_command_serves_the_read_only_server(monkeypatch, tmp_path):
+    import agentsetup.mcp_server as mcp_server
+
+    started = []
+    monkeypatch.setattr(mcp_server, "run", lambda home=None: started.append(home))
+    assert cli.main(["mcp", "--home", str(tmp_path)]) == 0
+    assert started == [tmp_path]
+
+
+def test_installed_command_is_an_absolute_path():
+    from agentsetup.mcp_server import installed_command
+
+    command = installed_command()
+    assert command is not None and command.startswith("/")
+    assert command.endswith("agentsetup")
+
+
+def test_server_stops_quickly_even_with_an_open_page(monkeypatch):
+    # An open page keeps an event stream; Ctrl+C must not wait for it forever.
+    import uvicorn
+
+    calls = []
+    monkeypatch.setattr(uvicorn, "run", lambda app, **kwargs: calls.append(kwargs))
+    cli.run_server(object(), "127.0.0.1", 47800)
+    assert calls[0]["timeout_graceful_shutdown"] <= 3

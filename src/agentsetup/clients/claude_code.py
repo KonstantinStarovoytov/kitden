@@ -11,6 +11,7 @@ from typing import Any
 from agentsetup.changes.json_splice import ABSENT
 from agentsetup.clients.base import (
     REMOVE_DIRECT,
+    SETUP_NAME,
     ClientAdapter,
     Reader,
     Scan,
@@ -134,6 +135,16 @@ class ClaudeCodeAdapter(ClientAdapter):
         headers = bearer_header(gateway, "${{{}}}")
         if headers:
             value["headers"] = headers
+        login = None
+        if gateway.auth is GatewayAuth.OAUTH:
+            login = f"In Claude Code, run /mcp, choose {name}, then choose Authenticate."
+        return self._add_entry(name, value, login)
+
+    def setup_server_step(self, command: str, args: list[str]) -> Step:
+        return self._add_entry(SETUP_NAME, {"type": "stdio", "command": command, "args": args})
+
+    def _add_entry(self, name: str, value: dict[str, Any], login: str | None = None) -> Step:
+        """A user-scope MCP entry, added with `claude mcp add-json` (FR-021, FR-024)."""
         edit = FileEdit(
             path=str(self.home / ".claude.json"),
             fmt="json",
@@ -141,9 +152,6 @@ class ClaudeCodeAdapter(ClientAdapter):
             after=value,
             check="entry",
         )
-        login = None
-        if gateway.auth is GatewayAuth.OAUTH:
-            login = f"In Claude Code, run /mcp, choose {name}, then choose Authenticate."
         return Step(
             client=CLIENT,
             scope=Scope.USER,

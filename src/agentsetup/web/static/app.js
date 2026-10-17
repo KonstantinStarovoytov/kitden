@@ -58,6 +58,7 @@ async function load() {
   renderItems();
   fillProjects();
   renderGateways();
+  fillClientChecks($("setup-clients"));
   renderChangeLog();
   await renderProject();
   $("status").textContent = `Updated ${new Date().toLocaleTimeString()}`;
@@ -288,7 +289,10 @@ function renderGateways() {
   }
   if (state.gateways.some((g) => g.id === current)) select.value = current;
 
-  const boxes = $("connect-clients");
+  fillClientChecks($("connect-clients"));
+}
+
+function fillClientChecks(boxes) {
   const checked = new Set([...boxes.querySelectorAll("input:checked")].map((i) => i.value));
   boxes.querySelectorAll("label").forEach((label) => label.remove());
   for (const client of state.clients) {
@@ -301,6 +305,15 @@ function renderGateways() {
     label.append(input, el("span", ` ${client.display_name}`));
     boxes.append(label);
   }
+}
+
+function checkedClients(boxes) {
+  return [...boxes.querySelectorAll("input:checked")].map((i) => ({ client: i.value }));
+}
+
+async function addSetupServer(event) {
+  event.preventDefault();
+  await preview({ action: "setup_server.register", targets: checkedClients($("setup-clients")), params: {} });
 }
 
 async function saveGateway(event) {
@@ -321,10 +334,9 @@ async function saveGateway(event) {
 
 async function connectGateway(event) {
   event.preventDefault();
-  const clients = [...$("connect-clients").querySelectorAll("input:checked")].map((i) => i.value);
   await preview({
     action: "gateway.connect",
-    targets: clients.map((client) => ({ client })),
+    targets: checkedClients($("connect-clients")),
     params: { gateway: $("connect-gateway").value, name: $("connect-name").value.trim() },
   });
 }
@@ -368,6 +380,7 @@ function showChange(change) {
     "mcp.remove_direct": "Remove a direct MCP entry",
     "plugin.disable": "Turn a plugin off",
     "plugin.enable": "Turn a plugin on",
+    "setup_server.register": "Add the \"show my setup\" server",
   };
   $("change-title").textContent = titles[change.action] || change.action;
   $("change-state").textContent = STATE_TEXT[change.state] + (change.error ? ` ${change.error}` : "");
@@ -447,6 +460,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("gw-auth").addEventListener("change", () => { $("gw-key-label").hidden = $("gw-auth").value !== "env_key"; });
   $("gateway-form").addEventListener("submit", (e) => saveGateway(e).catch(showError));
   $("connect-form").addEventListener("submit", (e) => connectGateway(e).catch(showError));
+  $("setup-form").addEventListener("submit", (e) => addSetupServer(e).catch(showError));
   $("change-apply").addEventListener("click", () => changeVerb("apply").catch(showError));
   $("change-cancel").addEventListener("click", () => changeVerb("cancel").catch(showError));
   $("change-undo").addEventListener("click", () => changeVerb("undo").catch(showError));

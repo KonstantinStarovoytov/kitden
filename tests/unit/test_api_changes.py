@@ -46,7 +46,12 @@ def client(tmp_path, monkeypatch):
     home = make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2", "cursor/3.21.16")
     write_cursor_fixture_state(home)
     app = create_app(
-        lambda: build_inventory(home), token="tok", port=47800, home=home, run=FakeClaude(home)
+        lambda: build_inventory(home),
+        token="tok",
+        port=47800,
+        home=home,
+        run=FakeClaude(home),
+        setup_command=lambda: "/opt/agentsetup/bin/agentsetup",
     )
     with TestClient(app, base_url=ORIGIN, follow_redirects=False) as c:
         c.get("/?token=tok")
@@ -228,3 +233,23 @@ def test_show_only_commands_for_a_plugin(client):
     assert labels["Install in Codex"]["command"].endswith(
         "codex plugin add superpowers@claude-plugins-official"
     )
+
+
+def test_adding_the_setup_server_and_undo(client):
+    original = _files(client.home)
+    body = {
+        "action": "setup_server.register",
+        "targets": [{"client": "codex"}, {"client": "cursor"}],
+        "params": {},
+    }
+    change = client.post("/api/changes/preview", json=body, headers=POST).json()
+    assert _files(client.home) == original
+    assert all("/opt/agentsetup/bin/agentsetup" in s["diff"] for s in change["steps"])
+    assert (
+        client.post(f"/api/changes/{change['id']}/apply", headers=POST).json()["state"]
+        == "verified"
+    )
+    names = {(i["client"], i["name"]) for i in client.get("/api/items?kind=mcp_server").json()}
+    assert {("codex", "agentsetup"), ("cursor", "agentsetup")} <= names
+    client.post(f"/api/changes/{change['id']}/undo", headers=POST)
+    assert _files(client.home) == original

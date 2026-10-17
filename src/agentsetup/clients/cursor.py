@@ -15,6 +15,7 @@ from urllib.parse import unquote, urlsplit
 from agentsetup.changes.json_splice import ABSENT
 from agentsetup.clients.base import (
     REMOVE_DIRECT,
+    SETUP_NAME,
     ClientAdapter,
     Reader,
     Scan,
@@ -86,15 +87,21 @@ class CursorAdapter(ClientAdapter):
         headers = bearer_header(gateway, "${{env:{}}}")
         if headers:
             value["headers"] = headers
+        login = None
+        if gateway.auth is GatewayAuth.OAUTH:
+            login = f"In Cursor, open Settings → MCP, find {name} and choose Connect to log in."
+        return self._add_entry(name, value, login)
+
+    def setup_server_step(self, command: str, args: list[str]) -> Step:
+        return self._add_entry(SETUP_NAME, {"command": command, "args": args})
+
+    def _add_entry(self, name: str, value: dict[str, Any], login: str | None = None) -> Step:
         edit = FileEdit(
             path=str(self.home / ".cursor/mcp.json"),
             fmt="json",
             key=("mcpServers", name),
             after=value,
         )
-        login = None
-        if gateway.auth is GatewayAuth.OAUTH:
-            login = f"In Cursor, open Settings → MCP, find {name} and choose Connect to log in."
         return Step(
             client=CLIENT,
             scope=Scope.USER,

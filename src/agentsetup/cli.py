@@ -35,7 +35,8 @@ def pick_port(start: int, tries: int = 20) -> int | None:
 def run_server(app, host: str, port: int) -> None:
     import uvicorn
 
-    uvicorn.run(app, host=host, port=port, log_level="warning")
+    # Open pages keep an event stream; do not wait for them when stopping.
+    uvicorn.run(app, host=host, port=port, log_level="warning", timeout_graceful_shutdown=2)
 
 
 def _start(args: argparse.Namespace) -> int:
@@ -96,6 +97,8 @@ def main(argv: list[str] | None = None) -> int:
     scan = commands.add_parser("scan", help="print what each client loads, then exit")
     scan.add_argument("--json", action="store_true", help="print JSON instead of a summary")
     scan.add_argument("--home", help="read clients under this home folder (for testing)")
+    mcp = commands.add_parser("mcp", help="run the read-only MCP server over stdio")
+    mcp.add_argument("--home", help="read clients under this home folder (for testing)")
     args = parser.parse_args(argv)
 
     if args.version:
@@ -103,6 +106,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "scan":
         return _scan(args)
+    if args.command == "mcp":
+        from agentsetup import mcp_server
+
+        mcp_server.run(Path(args.home).expanduser() if args.home else None)
+        return 0
     return _start(args)
 
 

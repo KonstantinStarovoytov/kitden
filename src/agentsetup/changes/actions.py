@@ -1,6 +1,7 @@
 """Turn a requested action into steps for the change engine (write-matrix.md)."""
 
 import re
+from pathlib import Path
 
 from agentsetup.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, REMOVE_DIRECT, ClientAdapter
 from agentsetup.model import Gateway, Item, Step
@@ -41,3 +42,23 @@ def plugin_steps(adapters: dict[str, ClientAdapter], item: Item, enable: bool) -
     if adapter is None or action not in item.actions:
         raise ValueError(f"{item.name} cannot be turned {'on' if enable else 'off'} here")
     return [adapter.plugin_step(item, enable)]
+
+
+def setup_server_steps(
+    adapters: dict[str, ClientAdapter], clients: list[str], command: str
+) -> list[Step]:
+    """Add the read-only setup server to the chosen clients (FR-032).
+
+    GUI clients may not see the shell PATH, so the entry uses an absolute path (research R9).
+    """
+    if not Path(command).is_absolute():
+        raise ValueError("The setup server needs the absolute path of the agentsetup command")
+    if not clients:
+        raise ValueError("Choose at least one client")
+    steps = []
+    for client in dict.fromkeys(clients):
+        adapter = adapters.get(client)
+        if adapter is None:
+            raise ValueError(f"The setup server cannot be added to {client}")
+        steps.append(adapter.setup_server_step(command, ["mcp"]))
+    return steps

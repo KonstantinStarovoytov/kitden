@@ -165,6 +165,18 @@ def find_findings(inventory, project: str | None = None) -> list[Finding]:
     return findings
 
 
+def finding_dict(f: Finding) -> dict:
+    return {
+        "id": f.id,
+        "type": str(f.type),
+        "severity": str(f.severity),
+        "items": list(f.items),
+        "names": list(f.names),
+        "client": f.client,
+        "explanation": f.explanation,
+    }
+
+
 def mark_gateways(inventory, gateways: list[Gateway]) -> None:
     """Mark MCP entries that point to a registered gateway (FR-034). They are not direct."""
     by_url = {g.url: g for g in gateways}

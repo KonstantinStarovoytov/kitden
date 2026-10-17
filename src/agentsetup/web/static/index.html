@@ -70,6 +70,16 @@
       <ul id="bypasses" class="findings"></ul>
     </section>
 
+    <section aria-labelledby="setup-title">
+      <h2 id="setup-title">"Show my setup" for agents</h2>
+      <p class="hint">A read-only MCP server that lets an agent see this same setup. It cannot
+        change anything. Add it to a client; nothing is written until you press Apply.</p>
+      <form id="setup-form" class="form">
+        <fieldset id="setup-clients" class="checks"><legend>Add to</legend></fieldset>
+        <button type="submit">Preview</button>
+      </form>
+    </section>
+
     <section id="change-section" aria-labelledby="change-title" hidden>
       <h2 id="change-title">Change</h2>
       <p id="change-state" aria-live="polite"></p>

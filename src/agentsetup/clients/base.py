@@ -256,6 +256,10 @@ class ClientAdapter(ABC):
         """The edit that turns one plugin on or off."""
         raise ValueError(f"{item.name} cannot be turned {'on' if enable else 'off'} here")
 
+    def setup_server_step(self, command: str, args: list[str]) -> Step:
+        """The edit that adds the read-only setup server (user scope, FR-032)."""
+        raise ValueError(f"the setup server cannot be added to {self.id}")
+
     def marketplace_sources(self) -> dict[str, str | None]:
         """Marketplace name -> a source other clients can add (None: built into this client)."""
         return {}
@@ -263,6 +267,8 @@ class ClientAdapter(ABC):
 
 REMOVE_DIRECT = "mcp.remove_direct"
 PLUGIN_ENABLE = "plugin.enable"
+SETUP_SERVER = "setup_server.register"
+SETUP_NAME = "agentsetup"
 PLUGIN_DISABLE = "plugin.disable"
 
 

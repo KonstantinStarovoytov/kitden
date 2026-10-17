@@ -17,17 +17,19 @@ from agentsetup.changes.actions import (
     connect_steps,
     plugin_steps,
     remove_steps,
+    setup_server_steps,
 )
 from agentsetup.changes.backup import ChangeStore
 from agentsetup.changes.client_cli import CommandRunner
 from agentsetup.changes.engine import ChangeRefusedError, Engine, Runner
-from agentsetup.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, REMOVE_DIRECT
+from agentsetup.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, REMOVE_DIRECT, SETUP_SERVER
 from agentsetup.gateways import add_gateway, data_dir, load_gateways
+from agentsetup.mcp_server import installed_command
 from agentsetup.model import Change, ChangeState, Gateway, GatewayAuth
 from agentsetup.redact import redact_text
 from agentsetup.views.commands import commands_for
-from agentsetup.views.effective import effective_view
-from agentsetup.views.findings import find_bypasses, find_findings, mark_gateways
+from agentsetup.views.effective import project_views
+from agentsetup.views.findings import find_bypasses, find_findings, finding_dict, mark_gateways
 from agentsetup.views.inventory import Inventory, default_adapters, inventory_dict, item_dict
 from agentsetup.watch import Watcher
 from agentsetup.web.security import SecurityMiddleware
@@ -107,18 +109,6 @@ def gateway_dict(gateway: Gateway) -> dict:
     }
 
 
-def _finding_dict(f) -> dict:
-    return {
-        "id": f.id,
-        "type": str(f.type),
-        "severity": str(f.severity),
-        "items": list(f.items),
-        "names": list(f.names),
-        "client": f.client,
-        "explanation": f.explanation,
-    }
-
-
 # HTTP status for each state a change can end in after apply or undo.
 STATUS = {
     ChangeState.VERIFIED: 200,
@@ -162,6 +152,7 @@ def create_app(
     debounce_ms: int = 800,
     home: Path | None = None,
     run: Runner | None = None,
+    setup_command: Callable[[], str | None] | None = None,
 ) -> Starlette:
     """The page. Changes are available only when `home` is given (the folder being shown)."""
     events = Broadcaster()
@@ -231,26 +222,23 @@ def create_app(
         found = next((p for p in state.data["projects"] if p["id"] == wanted), None)
         if found is None:
             return JSONResponse({"detail": "Unknown project."}, status_code=404)
-        clients = [c["id"] for c in state.data["clients"] if c["status"] == "found"]
-        views = []
-        for client in clients:
-            view = effective_view(state.inventory, client, found["path"])
-            views.append(
-                {
-                    "client": client,
-                    "items": [item_dict(i) for i in view.items],
-                    "shadowed": [
-                        {"winner": w.id, "loser": lo.id, "mode": m, "name": w.name}
-                        for w, lo, m in view.shadowed
-                    ],
-                }
-            )
+        views = [
+            {
+                "client": view.client,
+                "items": [item_dict(i) for i in view.items],
+                "shadowed": [
+                    {"winner": w.id, "loser": lo.id, "mode": m, "name": w.name}
+                    for w, lo, m in view.shadowed
+                ],
+            }
+            for view in project_views(state.inventory, found["path"])
+        ]
         return JSONResponse({"project": found, "views": views})
 
     async def findings(request: Request) -> JSONResponse:
         project = request.query_params.get("project") or None
         found = find_findings(state.inventory, project) + find_bypasses(state.inventory, project)
-        return JSONResponse([_finding_dict(f) for f in found])
+        return JSONResponse([finding_dict(f) for f in found])
 
     # Gateways and changes (US3) ---------------------------------------------------------
 
@@ -299,6 +287,12 @@ def create_app(
                     return _error("Register the gateway first.", 422)
                 clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
                 steps = connect_steps(adapters, clients, gateway, str(params.get("name", "")))
+            elif action == SETUP_SERVER:
+                command = (setup_command or installed_command)()
+                if command is None:
+                    return _error("Install the tool first: uv tool install <this folder>", 422)
+                clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+                steps = setup_server_steps(adapters, clients, command)
             elif action in (REMOVE_DIRECT, PLUGIN_ENABLE, PLUGIN_DISABLE):
                 ids = [t.get("item") for t in targets if isinstance(t, dict)]
                 item = _item(str(ids[0])) if len(ids) == 1 else None

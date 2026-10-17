@@ -15,6 +15,7 @@ from typing import Any
 from agentsetup.changes.json_splice import ABSENT
 from agentsetup.clients.base import (
     REMOVE_DIRECT,
+    SETUP_NAME,
     ClientAdapter,
     Reader,
     Scan,
@@ -154,13 +155,19 @@ class CodexAdapter(ClientAdapter):
         value = {"url": gateway.url}
         if gateway.auth is GatewayAuth.ENV_KEY and gateway.key_env_var:
             value["bearer_token_env_var"] = gateway.key_env_var
+        login = f"Run: codex mcp login {name}" if gateway.auth is GatewayAuth.OAUTH else None
+        return self._add_entry(name, value, login)
+
+    def setup_server_step(self, command: str, args: list[str]) -> Step:
+        return self._add_entry(SETUP_NAME, {"command": command, "args": args})
+
+    def _add_entry(self, name: str, value: dict[str, Any], login: str | None = None) -> Step:
         edit = FileEdit(
             path=str(self.codex_home / "config.toml"),
             fmt="toml",
             key=("mcp_servers", name),
             after=value,
         )
-        login = f"Run: codex mcp login {name}" if gateway.auth is GatewayAuth.OAUTH else None
         return Step(
             client=CLIENT,
             scope=Scope.USER,

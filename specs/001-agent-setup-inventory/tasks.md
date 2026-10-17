@@ -107,12 +107,12 @@ files, no open dependency). **[US1]**…**[US5]** = user story from the spec.
 **Goal**: a read-only MCP server gives agents the same answer as the page.
 **Test**: quickstart scenario 5 with Codex.
 
-- [ ] T057 [P] [US5] Tests: tools are read-only, output matches the page, no secrets, in `tests/unit/test_mcp_server.py`
-- [ ] T058 [US5] MCP server with `show_setup`, `list_findings`, `explain_item`, `list_projects` (all read-only) per [mcp-tools.md](contracts/mcp-tools.md) in `src/agentsetup/mcp_server.py`
-- [ ] T059 [US5] Command `agentsetup mcp` in `src/agentsetup/cli.py`
-- [ ] T060 [US5] Action `setup_server.register` for each client, using the absolute install path, after confirmation, in `src/agentsetup/clients/claude_code.py`, `codex.py`, `cursor.py`
-- [ ] T061 [US5] "Add to client" button on the page in `src/agentsetup/web/static/`
-- [ ] T062 [US5] Real-client test with Codex in a sandbox home: register the setup server, handshake, call `show_setup`, undo restores bytes, in `tests/contract/test_mcp_handshake.py`
+- [x] T057 [P] [US5] Tests: tools are read-only, output matches the page, no secrets, in `tests/unit/test_mcp_server.py`
+- [x] T058 [US5] MCP server with `show_setup`, `list_findings`, `explain_item`, `list_projects` (all read-only) per [mcp-tools.md](contracts/mcp-tools.md) in `src/agentsetup/mcp_server.py`
+- [x] T059 [US5] Command `agentsetup mcp` in `src/agentsetup/cli.py`
+- [x] T060 [US5] Action `setup_server.register` for each client, using the absolute install path, after confirmation, in `src/agentsetup/clients/claude_code.py`, `codex.py`, `cursor.py`
+- [x] T061 [US5] "Add to client" button on the page in `src/agentsetup/web/static/`
+- [x] T062 [US5] Real-client test with Codex in a sandbox home: register the setup server, handshake, call `show_setup`, undo restores bytes, in `tests/contract/test_mcp_handshake.py`
 
 ## Phase 8: Polish
 
