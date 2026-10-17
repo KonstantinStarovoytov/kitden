@@ -4,7 +4,10 @@ Writes are format-preserving TOML edits of `config.toml` (not `codex mcp add`, w
 comments). Spike S4: the running app keeps outside edits.
 """
 
+import json
 import os
+import subprocess  # noqa: S404 - runs the codex command without a shell
+from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -15,12 +18,15 @@ from agentsetup.clients.base import (
     ClientAdapter,
     Reader,
     Scan,
+    check_toggle,
     file_source,
     is_direct_entry,
     mcp_item,
     project,
     skill_items,
+    toggle_action,
 )
+from agentsetup.clients.versions import version_command
 from agentsetup.model import (
     Enabled,
     FileEdit,
@@ -38,6 +44,13 @@ from agentsetup.model import (
 
 CLIENT = "codex"
 RESTART = "Restart Codex (the app and any open CLI sessions) for this to take effect."
+REMOTE_HINT = "On/off is stored in your ChatGPT account. Change it in Codex: Plugins."
+# Built-in marketplaces live in folders Codex manages itself; other clients cannot add them.
+BUILT_IN_FOLDERS = (".codex/.tmp", ".cache/codex-runtimes")
+LIST_TIMEOUT_SECONDS = 15
+# `codex plugin list --json` results, reused until config.toml changes (the app rewrites it on
+# every plugin toggle, spike S4).
+_LIST_CACHE: dict[tuple, dict] = {}
 REMOTE_INSTALL_RECORD = ".codex-remote-plugin-install.json"
 
 
@@ -54,14 +67,88 @@ class CodexAdapter(ClientAdapter):
     display_name = "Codex"
     config_root = ".codex"
 
-    def __init__(self, home: Path, read_version=None, codex_home: Path | None = None) -> None:
+    def __init__(
+        self,
+        home: Path,
+        read_version=None,
+        codex_home: Path | None = None,
+        list_plugins: Callable[[], dict] | None = None,
+    ) -> None:
         super().__init__(home, read_version)
         env_home = os.environ.get("CODEX_HOME")
         self.codex_home = codex_home or (Path(env_home) if env_home else home / ".codex")
+        self._list_plugins = list_plugins or self._run_plugin_list
+
+    def _run_plugin_list(self) -> dict:
+        """`codex plugin list --json`, the only local view of remote plugins' on/off."""
+        command = version_command(CLIENT)
+        if command is None:
+            return {}
+        config = self.codex_home / "config.toml"
+        stat = config.stat() if config.exists() else None
+        key = (str(self.codex_home), stat.st_mtime_ns if stat else 0, stat.st_size if stat else 0)
+        if key not in _LIST_CACHE:
+            env = {**os.environ, "HOME": str(self.home), "CODEX_HOME": str(self.codex_home)}
+            done = subprocess.run(  # noqa: S603 - fixed client command, no shell
+                [command[0], "plugin", "list", "--json"],
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=LIST_TIMEOUT_SECONDS,
+                check=False,
+            )
+            _LIST_CACHE[key] = json.loads(done.stdout) if done.returncode == 0 else {}
+        return _LIST_CACHE[key]
+
+    def _plugin_states(self) -> dict[str, bool]:
+        if self._read_version() is None:
+            return {}
+        try:
+            listing = self._list_plugins()
+        except (OSError, ValueError, subprocess.SubprocessError):
+            return {}
+        installed = _dict(listing).get("installed")
+        plugins = installed if isinstance(installed, list) else []
+        return {
+            p["pluginId"]: bool(p.get("enabled"))
+            for p in plugins
+            if isinstance(p, dict) and isinstance(p.get("pluginId"), str)
+        }
 
     def item_actions(self, item: Item) -> tuple[str, ...]:
-        direct = is_direct_entry(item, CLIENT, {Scope.USER, Scope.PROJECT})
-        return (REMOVE_DIRECT,) if direct else ()
+        if is_direct_entry(item, CLIENT, {Scope.USER, Scope.PROJECT}):
+            return (REMOVE_DIRECT,)
+        if (
+            item.kind is ItemKind.PLUGIN
+            and item.client == CLIENT
+            and item.source.kind is SourceKind.FILE
+            and item.source.read_status is ReadStatus.OK
+        ):
+            return toggle_action(item)
+        return ()
+
+    def plugin_step(self, item: Item, enable: bool) -> Step:
+        check_toggle(self, item, enable)
+        edit = FileEdit(
+            path=str(item.source.path),
+            fmt="toml",
+            key=("plugins", item.name, "enabled"),
+            after=enable,
+        )
+        return Step(
+            client=CLIENT, scope=item.scope, name=item.name, edit=edit, restart_note=RESTART
+        )
+
+    def marketplace_sources(self) -> dict[str, str | None]:
+        config = _dict(Reader(CLIENT).toml(self.codex_home / "config.toml"))
+        sources: dict[str, str | None] = {}
+        for name, entry in _dict(config.get("marketplaces")).items():
+            source = _dict(entry).get("source")
+            built_in = name.startswith("openai-") or (
+                isinstance(source, str) and any(f in source for f in BUILT_IN_FOLDERS)
+            )
+            sources[name] = None if built_in or not isinstance(source, str) else source
+        return sources
 
     def gateway_step(self, gateway: Gateway, name: str) -> Step:
         value = {"url": gateway.url}
@@ -196,31 +283,36 @@ class CodexAdapter(ClientAdapter):
         (spike S4).
         """
         cache = self.codex_home / "plugins/cache"
+        folders = [
+            (f"{plugin.name}@{marketplace.name}", plugin)
+            for marketplace in (sorted(cache.iterdir()) if cache.is_dir() else [])
+            for plugin in (sorted(marketplace.iterdir()) if marketplace.is_dir() else [])
+            if plugin.is_dir() and not plugin.name.startswith(".")
+        ]
+        folders = [(plugin_id, path) for plugin_id, path in folders if plugin_id not in configured]
+        states = self._plugin_states() if folders else {}
         items = []
-        for marketplace in sorted(cache.iterdir()) if cache.is_dir() else []:
-            for plugin in sorted(marketplace.iterdir()) if marketplace.is_dir() else []:
-                plugin_id = f"{plugin.name}@{marketplace.name}"
-                if plugin.name.startswith(".") or not plugin.is_dir() or plugin_id in configured:
-                    continue
-                source = Source(
-                    kind=SourceKind.PLUGIN,
-                    path=str(plugin),
-                    owner_client=CLIENT,
-                    read_status=ReadStatus.UNKNOWN,
-                    unknown_reason=(
-                        UnknownReason.STORED_IN_ACCOUNT
-                        if (plugin / REMOTE_INSTALL_RECORD).is_file()
-                        else UnknownReason.NOT_DOCUMENTED
-                    ),
+        for plugin_id, plugin in folders:
+            remote = (plugin / REMOTE_INSTALL_RECORD).is_file()
+            known = plugin_id in states
+            source = Source(
+                kind=SourceKind.PLUGIN,
+                path=str(plugin),
+                owner_client=CLIENT,
+                read_status=ReadStatus.OK if known else ReadStatus.UNKNOWN,
+                unknown_reason=None
+                if known
+                else (UnknownReason.STORED_IN_ACCOUNT if remote else UnknownReason.NOT_DOCUMENTED),
+            )
+            items.append(
+                Item(
+                    client=CLIENT,
+                    kind=ItemKind.PLUGIN,
+                    name=plugin_id,
+                    source=source,
+                    scope=Scope.USER,
+                    enabled=_on(states[plugin_id]) if known else Enabled.UNKNOWN,
+                    change_hint=REMOTE_HINT if remote else None,
                 )
-                items.append(
-                    Item(
-                        client=CLIENT,
-                        kind=ItemKind.PLUGIN,
-                        name=plugin_id,
-                        source=source,
-                        scope=Scope.USER,
-                        enabled=Enabled.UNKNOWN,
-                    )
-                )
+            )
         return items

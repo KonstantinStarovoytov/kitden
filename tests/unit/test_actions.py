@@ -42,7 +42,13 @@ def _item(inventory, client, name, scope):
 
 def test_only_direct_entries_in_files_can_be_removed_and_nothing_adds_or_toggles_mcp(home):
     inventory = build_inventory(home)
-    assert {a for i in inventory.items for a in i.actions} == {"mcp.remove_direct"}
+    assert {a for i in inventory.items for a in i.actions} == {
+        "mcp.remove_direct",
+        "plugin.enable",
+        "plugin.disable",
+    }
+    mcp_actions = {a for i in inventory.items if str(i.kind) == "mcp_server" for a in i.actions}
+    assert mcp_actions == {"mcp.remove_direct"}
     removable = {
         (i.client, i.name, str(i.scope))
         for i in inventory.items

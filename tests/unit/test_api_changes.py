@@ -24,6 +24,13 @@ class FakeClaude:
         self.path = home / ".claude.json"
 
     def __call__(self, command, cwd):
+        if command[1] == "plugin":  # claude plugin enable|disable <id> -s user --json
+            settings = self.path.parent / ".claude/settings.json"
+            key = ("enabledPlugins", command[3])
+            settings.write_text(
+                json_splice.set_value(settings.read_text(), key, command[2] == "enable")
+            )
+            return CommandResult(0, "")
         text = self.path.read_text()
         if command[1:3] == ["mcp", "add-json"]:
             text = json_splice.set_value(text, ("mcpServers", command[-2]), json.loads(command[-1]))
@@ -182,3 +189,42 @@ def test_login_command_for_an_oauth_gateway_entry(client):
     )
     response = client.get(f"/api/commands?item={entry['id']}&action=gateway.login")
     assert response.json()["command"] == "Run: codex mcp login gateway"
+
+
+def test_turning_a_plugin_off_and_undo(client):
+    settings = client.home / ".claude/settings.json"
+    original = settings.read_bytes()
+    plugin = next(
+        i
+        for i in client.get("/api/items?client=claude_code&kind=plugin&scope=user").json()
+        if i["actions"] == ["plugin.disable"]
+    )
+    body = {"action": "plugin.disable", "targets": [{"item": plugin["id"]}], "params": {}}
+    change = client.post("/api/changes/preview", json=body, headers=POST).json()
+    assert "/reload-plugins" in change["steps"][0]["restart_note"]
+    applied = client.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
+    assert applied["state"] == "verified"
+    after = next(i for i in client.get("/api/items").json() if i["id"] == plugin["id"])
+    assert after["enabled"] == "off" and after["actions"] == ["plugin.enable"]
+    client.post(f"/api/changes/{change['id']}/undo", headers=POST)
+    assert settings.read_bytes() == original
+
+
+def test_cursor_plugins_cannot_be_turned_off(client):
+    cursor = next(i for i in client.get("/api/items?client=cursor&kind=plugin").json())
+    body = {"action": "plugin.disable", "targets": [{"item": cursor["id"]}], "params": {}}
+    assert client.post("/api/changes/preview", json=body, headers=POST).status_code == 422
+    assert "Customize" in cursor["change_hint"]
+
+
+def test_show_only_commands_for_a_plugin(client):
+    plugin = next(
+        i
+        for i in client.get("/api/items?client=claude_code&kind=plugin&scope=user").json()
+        if i["name"] == "superpowers@claude-plugins-official"
+    )
+    commands = client.get(f"/api/commands?item={plugin['id']}").json()["commands"]
+    labels = {c["label"]: c for c in commands}
+    assert labels["Install in Codex"]["command"].endswith(
+        "codex plugin add superpowers@claude-plugins-official"
+    )

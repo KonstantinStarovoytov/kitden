@@ -19,7 +19,7 @@ only the gateway entry, the read-only setup server entry, and removals of old di
 | Add, turn on or off individual MCP servers in client files | not offered (FR-025) | not offered | not offered |
 | MCP bundled in plugins, local MCP servers | read, flagged "bypasses the gateway" | read, flagged | read, flagged |
 | MCP from `claude_desktop_config.json` | read, flagged if direct | — | — |
-| Plugin on/off | write: `claude plugin enable|disable -s <scope> --json` | write: `plugins."<id>".enabled` for plugins with a `config.toml` entry; remote plugins: read, stored in the account ([spike S4](../spikes/s4-codex-app.md)) | read: Cursor has no on/off; the page says where to change it in Cursor ([spike S1](../spikes/s1-cursor-plugins.md)) |
+| Plugin on/off | write: `claude plugin enable|disable -s <scope> --json` | write: `plugins."<id>".enabled` for plugins with a `config.toml` entry; remote plugins: read from `codex plugin list --json`, stored in the account ([spike S4](../spikes/s4-codex-app.md)) | read: Cursor has no on/off; the page says where to change it in Cursor ([spike S1](../spikes/s1-cursor-plugins.md)) |
 | Plugin install, update, uninstall | show | show | show |
 | Move plugin to another client | show the target client's install command | show | show |
 | Marketplace add or remove | show | show | show |
@@ -31,8 +31,9 @@ Rules for every **write**:
 
 - Follow the safe write pattern ([research R7](../research.md#r7-safe-write-pattern)): preview,
   stale check, backup, atomic write, verify, undo.
-- Verify with the client's own listing where it exists (`claude plugin list --json`,
-  `codex mcp list --json`, `codex plugin list --json`), redacting its output.
+- Verify by reading the file again after every write. The clients' own listings
+  (`claude plugin list --json`, `claude mcp get`, `codex mcp list --json`) confirm the same
+  results in the sandbox contract tests (`tests/contract`).
 - Undo writes the saved bytes back when the file is unchanged since apply. For `~/.claude.json`,
   which Claude Code rewrites during normal use, only the edited entry is compared before apply
   and undo, and undo restores just that entry if other parts changed.

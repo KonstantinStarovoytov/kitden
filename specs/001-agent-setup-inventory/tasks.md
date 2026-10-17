@@ -94,13 +94,13 @@ files, no open dependency). **[US1]**…**[US5]** = user story from the spec.
 **Goal**: plugin on/off for Claude Code and Codex; Cursor only after spike S1; show commands for install, update, move.
 **Test**: disable a Claude Code plugin, restart, confirm, undo.
 
-- [ ] T050 [P] [US4] Round-trip tests for plugin on/off in Claude Code and Codex in `tests/unit/test_plugins.py`
-- [ ] T051 [US4] Claude Code plugin on/off with `claude plugin enable|disable --json`, verified by `claude plugin list --json`, in `src/agentsetup/clients/claude_code.py`
-- [ ] T052 [US4] Codex plugin on/off through `plugins."<id>".enabled`, verified by `codex plugin list --json`; read every plugin's real on/off from that list; remote plugins are read-only (spike S4), in `src/agentsetup/clients/codex.py`
-- [ ] T053 [US4] Cursor plugin control: unavailable, with the reason and where to change it in Cursor (spike S1), in `src/agentsetup/clients/cursor.py`
-- [ ] T054 [US4] Show-only commands for install, update, move and marketplace add in `src/agentsetup/views/commands.py`
-- [ ] T055 [US4] Plugin controls on the page in `src/agentsetup/web/static/`
-- [ ] T056 [US4] Real-client plugin test in a sandbox home in `tests/contract/test_plugins.py`
+- [x] T050 [P] [US4] Round-trip tests for plugin on/off in Claude Code and Codex in `tests/unit/test_plugins.py`
+- [x] T051 [US4] Claude Code plugin on/off with `claude plugin enable|disable --json`, verified by `claude plugin list --json`, in `src/agentsetup/clients/claude_code.py`
+- [x] T052 [US4] Codex plugin on/off through `plugins."<id>".enabled`, verified by `codex plugin list --json`; read every plugin's real on/off from that list; remote plugins are read-only (spike S4), in `src/agentsetup/clients/codex.py`
+- [x] T053 [US4] Cursor plugin control: unavailable, with the reason and where to change it in Cursor (spike S1), in `src/agentsetup/clients/cursor.py`
+- [x] T054 [US4] Show-only commands for install, update, move and marketplace add in `src/agentsetup/views/commands.py`
+- [x] T055 [US4] Plugin controls on the page in `src/agentsetup/web/static/`
+- [x] T056 [US4] Real-client plugin test in a sandbox home in `tests/contract/test_plugins.py`
 
 ## Phase 7: US5 — Ask the agent "show my setup" (P5)
 

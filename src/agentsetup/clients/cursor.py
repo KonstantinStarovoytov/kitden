@@ -42,6 +42,14 @@ from agentsetup.model import (
 
 CLIENT = "cursor"
 RESTART = "Restart Cursor for this to take effect."
+CURSOR_HINT = (
+    "Cursor has no plugin on/off. Change it in Cursor: Customize → Plugins → the plugin's menu "
+    "(Add for Myself / Add to Project)."
+)
+IMPORT_HINT = (
+    "Cursor loads this Claude Code plugin. Turn it off in Claude Code, or turn off "
+    "Include Third-Party Plugins in Cursor Settings."
+)
 STATE_DB = "Library/Application Support/Cursor/User/globalStorage/state.vscdb"
 WORKSPACE_STATE = "Library/Application Support/Cursor/User/workspaceStorage"
 SNAPSHOT_PREFIX = "workbench.customize.primitiveSourceSnapshot."
@@ -263,6 +271,7 @@ class CursorAdapter(ClientAdapter):
                     scope=Scope.PROJECT if place else Scope.USER,
                     project=place,
                     enabled=Enabled.ON,
+                    change_hint=CURSOR_HINT,
                 )
             )
         return items
@@ -321,6 +330,7 @@ class CursorAdapter(ClientAdapter):
                             source=source,
                             scope=Scope.USER,
                             enabled=Enabled.UNKNOWN,
+                            change_hint=CURSOR_HINT,
                         )
                     )
         return items
@@ -361,6 +371,7 @@ class CursorAdapter(ClientAdapter):
                     source=source,
                     scope=Scope.USER,
                     enabled=Enabled.ON if on else Enabled.OFF,
+                    change_hint=IMPORT_HINT,
                 )
             )
         return items

@@ -2,7 +2,7 @@
 
 import re
 
-from agentsetup.clients.base import REMOVE_DIRECT, ClientAdapter
+from agentsetup.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, REMOVE_DIRECT, ClientAdapter
 from agentsetup.model import Gateway, Item, Step
 
 GATEWAY_CONNECT = "gateway.connect"
@@ -32,3 +32,12 @@ def remove_steps(adapters: dict[str, ClientAdapter], item: Item) -> list[Step]:
     if adapter is None or REMOVE_DIRECT not in item.actions:
         raise ValueError(f"{item.name} cannot be removed here")
     return [adapter.remove_step(item)]
+
+
+def plugin_steps(adapters: dict[str, ClientAdapter], item: Item, enable: bool) -> list[Step]:
+    """Turn one plugin on or off (FR-027). Cursor and account plugins have no control."""
+    action = PLUGIN_ENABLE if enable else PLUGIN_DISABLE
+    adapter = adapters.get(item.client)
+    if adapter is None or action not in item.actions:
+        raise ValueError(f"{item.name} cannot be turned {'on' if enable else 'off'} here")
+    return [adapter.plugin_step(item, enable)]

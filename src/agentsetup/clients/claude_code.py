@@ -15,11 +15,13 @@ from agentsetup.clients.base import (
     Reader,
     Scan,
     bearer_header,
+    check_toggle,
     file_source,
     is_direct_entry,
     mcp_item,
     project,
     skill_items,
+    toggle_action,
 )
 from agentsetup.clients.versions import highest_version, is_supported
 from agentsetup.model import (
@@ -42,6 +44,8 @@ from agentsetup.model import (
 CLIENT = "claude_code"
 WRITABLE_SCOPES = {Scope.USER, Scope.LOCAL, Scope.PROJECT}
 NEW_SESSION = "Start a new Claude Code session (or a new Code tab chat) for this to take effect."
+RELOAD = "Run /reload-plugins in Claude Code, or start a new session, for this to take effect."
+ACCOUNT_HINT = "Stored in your Claude account. Change it in the Claude app or on claude.ai."
 DESKTOP = "claude_desktop_code_tab"
 DESKTOP_CONFIG = "Library/Application Support/Claude/claude_desktop_config.json"
 DESKTOP_BUNDLED = "Library/Application Support/Claude/claude-code"
@@ -79,7 +83,51 @@ class ClaudeCodeAdapter(ClientAdapter):
         ]
 
     def item_actions(self, item: Item) -> tuple[str, ...]:
-        return (REMOVE_DIRECT,) if is_direct_entry(item, CLIENT, WRITABLE_SCOPES) else ()
+        if is_direct_entry(item, CLIENT, WRITABLE_SCOPES):
+            return (REMOVE_DIRECT,)
+        if (
+            item.kind is ItemKind.PLUGIN
+            and item.client == CLIENT
+            and item.source.kind is SourceKind.FILE
+            and item.source.read_status is ReadStatus.OK
+            and item.scope in (Scope.USER, Scope.PROJECT)
+        ):
+            return toggle_action(item)
+        return ()
+
+    def plugin_step(self, item: Item, enable: bool) -> Step:
+        check_toggle(self, item, enable)
+        if item.scope is Scope.PROJECT and not Path(str(item.project)).is_dir():
+            raise ValueError(f"the project folder {item.project} is missing")
+        edit = FileEdit(
+            path=str(item.source.path),
+            fmt="json",
+            key=("enabledPlugins", item.name),
+            after=enable,
+        )
+        verb = "enable" if enable else "disable"
+        return Step(
+            client=CLIENT,
+            scope=item.scope,
+            name=item.name,
+            edit=edit,
+            mechanism="client_cli",
+            command=["claude", "plugin", verb, item.name, "-s", str(item.scope), "--json"],
+            cwd=item.project if item.scope is Scope.PROJECT else None,
+            restart_note=RELOAD,
+            shared_file=item.scope is Scope.PROJECT,
+        )
+
+    def marketplace_sources(self) -> dict[str, str | None]:
+        read = Reader(CLIENT)
+        settings = _dict(read.json(self.home / ".claude/settings.json"))
+        known = _dict(read.json(self.home / ".claude/plugins/known_marketplaces.json"))
+        sources: dict[str, str | None] = {}
+        for name, entry in {**_dict(settings.get("extraKnownMarketplaces")), **known}.items():
+            source = _dict(_dict(entry).get("source"))
+            value = source.get("repo") or source.get("url") or source.get("path")
+            sources[name] = value if isinstance(value, str) else None
+        return sources
 
     def gateway_step(self, gateway: Gateway, name: str) -> Step:
         value: dict[str, Any] = {"type": "http", "url": gateway.url}
@@ -212,6 +260,7 @@ class ClaudeCodeAdapter(ClientAdapter):
                         source=account,
                         scope=Scope.ACCOUNT,
                         enabled=_on(value),
+                        change_hint=ACCOUNT_HINT,
                     )
                 )
         scan.items.append(
@@ -228,6 +277,7 @@ class ClaudeCodeAdapter(ClientAdapter):
                 ),
                 scope=Scope.ACCOUNT,
                 enabled=Enabled.UNKNOWN,
+                change_hint=ACCOUNT_HINT,
             )
         )
 

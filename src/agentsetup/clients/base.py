@@ -252,8 +252,32 @@ class ClientAdapter(ABC):
         """The edit that removes one direct MCP entry."""
         raise ValueError(f"{item.name} cannot be removed here")
 
+    def plugin_step(self, item: Item, enable: bool) -> Step:
+        """The edit that turns one plugin on or off."""
+        raise ValueError(f"{item.name} cannot be turned {'on' if enable else 'off'} here")
+
+    def marketplace_sources(self) -> dict[str, str | None]:
+        """Marketplace name -> a source other clients can add (None: built into this client)."""
+        return {}
+
 
 REMOVE_DIRECT = "mcp.remove_direct"
+PLUGIN_ENABLE = "plugin.enable"
+PLUGIN_DISABLE = "plugin.disable"
+
+
+def toggle_action(item: Item) -> tuple[str, ...]:
+    """The opposite of a plugin's known state; nothing when the state is unknown."""
+    if item.enabled is Enabled.ON:
+        return (PLUGIN_DISABLE,)
+    if item.enabled is Enabled.OFF:
+        return (PLUGIN_ENABLE,)
+    return ()
+
+
+def check_toggle(adapter: "ClientAdapter", item: Item, enable: bool) -> None:
+    if (PLUGIN_ENABLE if enable else PLUGIN_DISABLE) not in adapter.item_actions(item):
+        raise ValueError(f"{item.name} cannot be turned {'on' if enable else 'off'} here")
 
 
 def is_direct_entry(item: Item, client: str, scopes: set[Scope]) -> bool:

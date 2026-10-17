@@ -12,14 +12,20 @@ from starlette.responses import FileResponse, JSONResponse, StreamingResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
-from agentsetup.changes.actions import GATEWAY_CONNECT, connect_steps, remove_steps
+from agentsetup.changes.actions import (
+    GATEWAY_CONNECT,
+    connect_steps,
+    plugin_steps,
+    remove_steps,
+)
 from agentsetup.changes.backup import ChangeStore
 from agentsetup.changes.client_cli import CommandRunner
 from agentsetup.changes.engine import ChangeRefusedError, Engine, Runner
-from agentsetup.clients.base import REMOVE_DIRECT
+from agentsetup.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, REMOVE_DIRECT
 from agentsetup.gateways import add_gateway, data_dir, load_gateways
 from agentsetup.model import Change, ChangeState, Gateway, GatewayAuth
 from agentsetup.redact import redact_text
+from agentsetup.views.commands import commands_for
 from agentsetup.views.effective import effective_view
 from agentsetup.views.findings import find_bypasses, find_findings, mark_gateways
 from agentsetup.views.inventory import Inventory, default_adapters, inventory_dict, item_dict
@@ -293,12 +299,15 @@ def create_app(
                     return _error("Register the gateway first.", 422)
                 clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
                 steps = connect_steps(adapters, clients, gateway, str(params.get("name", "")))
-            elif action == REMOVE_DIRECT:
+            elif action in (REMOVE_DIRECT, PLUGIN_ENABLE, PLUGIN_DISABLE):
                 ids = [t.get("item") for t in targets if isinstance(t, dict)]
                 item = _item(str(ids[0])) if len(ids) == 1 else None
                 if item is None:
                     return _error("Choose one known item.", 422)
-                steps = remove_steps(adapters, item)
+                if action == REMOVE_DIRECT:
+                    steps = remove_steps(adapters, item)
+                else:
+                    steps = plugin_steps(adapters, item, action == PLUGIN_ENABLE)
             else:
                 return _error("This action is not offered.", 422)
             change = await asyncio.to_thread(engine.preview, str(action), steps)
@@ -333,10 +342,15 @@ def create_app(
         return JSONResponse(engine.store.entries() if engine else [])
 
     async def commands(request: Request) -> JSONResponse:
-        """Steps the developer runs themselves (FR-029, FR-035). US3: gateway login."""
+        """Steps the developer runs themselves (FR-029, FR-035). Never run by the tool."""
         item = _item(request.query_params.get("item", ""))
         action = request.query_params.get("action")
-        if home is None or item is None or action != "gateway.login" or not item.via_gateway:
+        if item is None:
+            return _error("Unknown item.", 404)
+        if not action:
+            listed = commands_for(item, adapters)
+            return JSONResponse({"commands": [c.__dict__ for c in listed]})
+        if home is None or action != "gateway.login" or not item.via_gateway:
             return _error("No command for this item and action.", 404)
         gateway = next((g for g in load_gateways(home) if g.id == item.via_gateway), None)
         adapter = adapters.get(item.client)

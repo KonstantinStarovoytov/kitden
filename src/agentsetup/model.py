@@ -143,6 +143,7 @@ class Item:
     summary: tuple[tuple[str, str], ...] = ()
     via_gateway: str | None = None
     actions: tuple[str, ...] = ()
+    change_hint: str | None = None  # where to change it when the tool cannot (FR-028)
 
     @property
     def id(self) -> str:

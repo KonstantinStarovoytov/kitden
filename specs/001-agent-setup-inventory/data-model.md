@@ -66,6 +66,7 @@ names onto this list (for example Claude Code "local" means per-project private 
 | `summary` | redacted map | Transport, command or URL with secrets replaced by `[secret]` or `${VAR}` references |
 | `via_gateway` | Gateway id or null | Set when the URL matches a registered gateway |
 | `actions` | list of action ids | Allowed actions for this item (FR-026 to FR-029, FR-033), from the write matrix |
+| `change_hint` | text or null | Where to change the item when the tool cannot, for example Cursor plugins (FR-028) |
 
 **Validation**: an item with `enabled = unknown` must have a source with an `unknown_reason`, or a
 finding that explains it.

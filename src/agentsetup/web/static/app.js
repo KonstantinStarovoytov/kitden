@@ -118,14 +118,42 @@ function sourceCell(item) {
   return td;
 }
 
+const ACTION_LABELS = {
+  "mcp.remove_direct": "Remove…",
+  "plugin.disable": "Turn off…",
+  "plugin.enable": "Turn on…",
+};
+
 function actionCell(item) {
   const td = el("td");
-  if (item.actions.includes("mcp.remove_direct")) {
-    td.append(button("Remove…", () => preview({
-      action: "mcp.remove_direct", targets: [{ item: item.id }], params: {},
+  for (const action of item.actions) {
+    if (!ACTION_LABELS[action]) continue;
+    td.append(button(ACTION_LABELS[action], () => preview({
+      action, targets: [{ item: item.id }], params: {},
     })));
   }
+  if (item.kind === "plugin" || item.kind === "marketplace") {
+    td.append(button("Commands…", () => showCommands(item)));
+  }
+  if (item.change_hint && item.actions.length === 0) td.append(el("p", item.change_hint, "hint"));
   return td;
+}
+
+async function showCommands(item) {
+  const data = await getJson(`/api/commands?item=${encodeURIComponent(item.id)}`);
+  const list = $("commands");
+  list.replaceChildren();
+  $("commands-title").textContent = `Commands for ${item.name}`;
+  for (const command of data.commands) {
+    const li = el("li");
+    li.append(el("strong", command.label));
+    if (command.command) li.append(el("pre", command.command, "diff"));
+    if (command.note) li.append(el("p", command.note, "hint"));
+    list.append(li);
+  }
+  if (data.commands.length === 0) list.append(el("li", "No commands for this item.", "hint"));
+  $("commands-section").hidden = false;
+  $("commands-section").scrollIntoView({ behavior: "smooth" });
 }
 
 function renderItems() {
@@ -335,8 +363,13 @@ function showChangeError(text) {
 function showChange(change) {
   state.change = change;
   $("change-section").hidden = false;
-  const action = change.action === "gateway.connect" ? "Add the gateway" : "Remove a direct MCP entry";
-  $("change-title").textContent = action;
+  const titles = {
+    "gateway.connect": "Add the gateway",
+    "mcp.remove_direct": "Remove a direct MCP entry",
+    "plugin.disable": "Turn a plugin off",
+    "plugin.enable": "Turn a plugin on",
+  };
+  $("change-title").textContent = titles[change.action] || change.action;
   $("change-state").textContent = STATE_TEXT[change.state] + (change.error ? ` ${change.error}` : "");
   $("change-warning").hidden = !change.shared_file_warning;
   const steps = $("change-steps");
@@ -417,6 +450,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("change-apply").addEventListener("click", () => changeVerb("apply").catch(showError));
   $("change-cancel").addEventListener("click", () => changeVerb("cancel").catch(showError));
   $("change-undo").addEventListener("click", () => changeVerb("undo").catch(showError));
+  $("commands-close").addEventListener("click", () => { $("commands-section").hidden = true; });
   load().catch(showError);
   listen();
 });
