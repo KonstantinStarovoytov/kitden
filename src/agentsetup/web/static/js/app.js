@@ -4,8 +4,9 @@ import { $, $$, el, reportError, shortPath } from "./dom.js";
 import { rollTo, transition } from "./motion.js";
 import { renderOverview } from "./overview.js";
 import { renderMap } from "./map.js";
+import { closePanel, initPanel, isPanelOpen } from "./panel.js";
 import { latestChanges } from "./parts.js";
-import { data, go, loadShared, parseHash, reload, setRenderer, setState, state } from "./store.js";
+import { busy, data, go, loadShared, parseHash, reload, setRenderer, setState, state } from "./store.js";
 
 const PLACES = {
   overview: { title: "Overview", render: renderOverview },
@@ -24,7 +25,11 @@ function placeholder(title) {
   return (main) => { main.append(el("h1", null, title), el("p", "lede", "This place is being rebuilt.")); };
 }
 
+let shownView = null;
+
 function renderPlace() {
+  if (shownView !== state.view && isPanelOpen()) closePanel({ instant: true, keepSelection: true, focus: false });
+  shownView = state.view;
   const main = $("#main");
   main.replaceChildren();
   const place = PLACES[state.view] || PLACES.overview;
@@ -109,7 +114,7 @@ function listen() {
   events.addEventListener("rescan_started", () => $("#topbar").classList.add("scanning"));
   events.addEventListener("rescan_finished", () => {
     $("#topbar").classList.remove("scanning");
-    refresh().catch(reportError);
+    if (!busy.change) refresh().catch(reportError);
   });
 }
 
@@ -141,13 +146,14 @@ function start() {
   });
   document.addEventListener("keydown", (event) => {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
-    if (event.key === "/" && !typing) {
+    if (event.key === "/" && !typing && !isPanelOpen()) {
       event.preventDefault();
       $("#q").focus();
     }
   });
   $("#theme").addEventListener("click", switchTheme);
   $("#rescan").addEventListener("click", () => rescan().catch(reportError));
+  initPanel();
 
   renderPlace();
   loadShared()

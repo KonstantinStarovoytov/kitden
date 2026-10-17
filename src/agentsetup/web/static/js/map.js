@@ -166,7 +166,7 @@ function buildRow(columns, row) {
     if (changed) setTimeout(() => morphSocket(node, { state: cell.state, where: cellWhere(cell, cell) }), 260);
     tr.append(td);
   }
-  tr.addEventListener("click", () => openRow(row, tr));
+  tr.addEventListener("click", () => openRow(row, tr, "pointer"));
   tr.addEventListener("keydown", (event) => onRowKey(event, row, tr));
   return tr;
 }
@@ -176,17 +176,17 @@ function cellWhere(shown, cell) {
   return cell.count > 1 && shown === cell ? `${shown.where} ×${cell.count}` : shown.where;
 }
 
-function openRow(row, tr) {
+function openRow(row, tr, how) {
   state.selected = row.key;
   for (const other of tr.parentElement.querySelectorAll('tr[aria-selected="true"]')) other.setAttribute("aria-selected", "false");
   tr.setAttribute("aria-selected", "true");
-  if (opener) opener(row, tr);
+  if (opener) opener(row, tr, how);
 }
 
 function onRowKey(event, row, tr) {
   if (event.key === "Enter") {
     event.preventDefault();
-    openRow(row, tr);
+    openRow(row, tr, "keyboard");
   } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
     event.preventDefault();
     const next = event.key === "ArrowDown" ? tr.nextElementSibling : tr.previousElementSibling;

@@ -265,9 +265,13 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .layer.wins { background: var(--route-soft); }
 .layer .name { overflow-wrap: anywhere; }
 .layer .why { color: var(--ink-3); font-size: 12px; overflow-wrap: anywhere; }
+.drawer section { display: grid; gap: 8px; min-width: 0; }
+.drawer .chip h2 { margin: 0; }
+.drawer .skeleton.card { height: 120px; }
 .step { border: 1px solid var(--wire); border-radius: 8px; overflow: hidden; }
 .step-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; }
-.step-head .file { margin-left: auto; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.step-head strong { white-space: nowrap; }
+.step-head .file { margin-left: auto; min-width: 0; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 pre.diff { margin: 0; padding: 10px 12px; background: var(--inset); border-top: 1px solid var(--wire-soft); font: 12px/1.6 var(--mono); overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 pre.diff .add { color: var(--lamp-on); }
 pre.diff .del { color: var(--danger); }
@@ -283,7 +287,7 @@ pre.diff .del { color: var(--danger); }
 .toast .btn { background: transparent; color: var(--canvas); border-color: color-mix(in srgb, var(--canvas) 35%, transparent); }
 .toast .timer { position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: var(--route); transform-origin: left; }
 .toast.show .timer { animation: countdown 6s linear forwards; }
-.toast:hover .timer { animation-play-state: paused; }
+.toast:hover .timer, .toast:focus-within .timer { animation-play-state: paused; }
 @keyframes countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 
 .timeline .feed li { grid-template-columns: 120px minmax(0, 1fr) auto auto; padding: 10px 12px; }

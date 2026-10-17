@@ -5,6 +5,8 @@ import { transition } from "./motion.js";
 
 export const VIEWS = ["overview", "map", "gateway", "changes", "agents"];
 export const state = { view: "overview", kind: "mcp_server", only: "all", project: "", q: "", selected: null };
+// A change is being applied or undone: live rescans wait so the result can morph in.
+export const busy = { change: false };
 export const data = { clients: null, projects: null, overview: null, map: null, gateway: null, changes: null, errors: {} };
 
 let renderPlace = () => {};
