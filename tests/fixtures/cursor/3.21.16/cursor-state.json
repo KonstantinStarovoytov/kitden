@@ -1,13 +1,13 @@
 {
   "cursor.plugins.installedIds.123|no-workspace": [
     {
-      "id": "648",
+      "id": "684",
       "sources": [
         "user"
       ]
     },
     {
-      "id": "684",
+      "id": "4800",
       "sources": [
         "user"
       ]
@@ -18,6 +18,24 @@
       "id": "648",
       "sources": [
         "user"
+      ]
+    },
+    {
+      "id": "684",
+      "sources": [
+        "user"
+      ]
+    },
+    {
+      "id": "4800",
+      "sources": [
+        "user"
+      ]
+    },
+    {
+      "id": "738",
+      "sources": [
+        "project"
       ]
     }
   ],

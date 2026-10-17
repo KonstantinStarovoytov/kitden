@@ -1,4 +1,4 @@
-from agentsetup.clients.cursor import REACTIVE_KEY, CursorAdapter
+from agentsetup.clients.cursor import INSTALLED_PREFIX, REACTIVE_KEY, CursorAdapter
 from agentsetup.model import SourceKind, UnknownReason
 from tests.conftest import (
     CURSOR_DB,
@@ -6,26 +6,21 @@ from tests.conftest import (
     cursor_state_rows,
     make_home,
     rows,
+    write_cursor_fixture_state,
     write_cursor_state,
 )
 
 FIXTURE = "cursor/3.21.16"
 
+# Spike S1: Cursor has no plugin on/off switch, so an installed plugin is on.
 OWN = {
     ("cursor", "mcp_server", "Neon", "user", "on", None),
     ("cursor", "mcp_server", "n8n-mcp", "user", "on", None),
     ("cursor", "mcp_server", "site-db", "project", "on", "work/site"),
     ("cursor", "skill", "docker-expert", "user", "on", None),
-    ("cursor", "plugin", "langfuse@cursor-public", "user", "unknown", None),
-    ("cursor", "plugin", "superpowers@cursor-public", "user", "unknown", None),
-    (
-        "cursor",
-        "plugin",
-        "1 plugin installed (name not stored locally)",
-        "project",
-        "unknown",
-        "work/site",
-    ),
+    ("cursor", "plugin", "superpowers@cursor-public", "user", "on", None),
+    ("cursor", "plugin", "plugin 4800 (name not stored locally)", "user", "on", None),
+    ("cursor", "plugin", "langfuse@cursor-public", "project", "on", "work/site"),
     ("cursor", "marketplace", "team-mkt", "user", "on", None),
     ("cursor", "hook", "afterFileEdit", "user", "on", None),
 }
@@ -39,8 +34,75 @@ CROSS_LOADED = {
 
 def _scan(tmp_path, no_version, extra_rows=None):
     home = make_home(tmp_path, FIXTURE)
-    write_cursor_state(home, {**cursor_state_rows(home), **(extra_rows or {})})
+    write_cursor_fixture_state(home, extra_rows)
     return home, CursorAdapter(home, read_version=no_version).scan()
+
+
+def _plugins(scan, home):
+    return {r[2:] for r in rows(scan.items, home) if r[1] == "plugin" and "@claude" not in r[2]}
+
+
+def test_user_installs_come_from_the_no_workspace_row_not_stale_project_copies(
+    tmp_path, no_version
+):
+    # Project rows repeat the user's plugins as they were when Cursor last opened the
+    # project. Plugin 648 was removed for the user since then, so it must not show.
+    home, scan = _scan(tmp_path, no_version)
+    assert not any("648" in r[0] for r in _plugins(scan, home))
+    user_source = next(i.source for i in scan.items if i.name == "superpowers@cursor-public")
+    assert user_source.key_path == INSTALLED_PREFIX + "123|no-workspace"
+    assert user_source.unknown_reason is UnknownReason.NOT_DOCUMENTED
+
+
+def test_project_installs_may_be_stale(tmp_path, no_version):
+    _, scan = _scan(tmp_path, no_version)
+    source = next(i.source for i in scan.items if i.name == "langfuse@cursor-public")
+    assert source.unknown_reason is UnknownReason.MAY_BE_STALE
+
+
+def test_user_installs_fall_back_to_project_rows_without_a_no_workspace_row(tmp_path, no_version):
+    home = make_home(tmp_path, FIXTURE)
+    write_cursor_fixture_state(home)
+    (home / CURSOR_DB).unlink()
+    state = cursor_state_rows(home)
+    write_cursor_state(home, {k: v for k, v in state.items() if "no-workspace" not in k})
+    scan = CursorAdapter(home, read_version=no_version).scan()
+    assert {r for r in _plugins(scan, home) if r[1] == "user"} == {
+        ("plugin 648 (name not stored locally)", "user", "on", None),
+        ("superpowers@cursor-public", "user", "on", None),
+        ("plugin 4800 (name not stored locally)", "user", "on", None),
+    }
+
+
+def test_project_installs_in_a_multi_folder_window_go_to_folders_without_their_own_row(
+    tmp_path, no_version
+):
+    site = f"file://{tmp_path}/home/work/site"
+    other = f"file://{tmp_path}/home/work/other"
+    home, scan = _scan(
+        tmp_path,
+        no_version,
+        {INSTALLED_PREFIX + f"123|{site},{other}": [{"id": "739", "sources": ["project"]}]},
+    )
+    assert {r for r in _plugins(scan, home) if "739" in r[0]} == {
+        ("plugin 739 (name not stored locally)", "project", "on", "work/other")
+    }
+
+
+def test_multi_folder_window_does_not_spread_a_plugin_installed_in_one_of_its_folders(
+    tmp_path, no_version
+):
+    # langfuse (738) is installed in work/site; a window with work/site and work/other shows it.
+    site = f"file://{tmp_path}/home/work/site"
+    other = f"file://{tmp_path}/home/work/other"
+    home, scan = _scan(
+        tmp_path,
+        no_version,
+        {INSTALLED_PREFIX + f"123|{site},{other}": [{"id": "738", "sources": ["project"]}]},
+    )
+    assert {r for r in _plugins(scan, home) if r[0] == "langfuse@cursor-public"} == {
+        ("langfuse@cursor-public", "project", "on", "work/site")
+    }
 
 
 def test_scan_includes_items_cursor_reads_from_other_clients(tmp_path, no_version):

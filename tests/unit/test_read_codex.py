@@ -61,3 +61,11 @@ def test_codex_home_can_point_elsewhere(tmp_path, no_version):
     (home / ".codex").rename(moved)
     scan = CodexAdapter(home, read_version=no_version, codex_home=moved).scan()
     assert ("codex", "mcp_server", "neon", "user", "on", None) in rows(scan.items, home)
+
+
+def test_remote_plugins_say_their_state_is_in_the_account(tmp_path, no_version):
+    # Spike S4: on/off of a remote plugin is stored in the ChatGPT account, not config.toml.
+    home = make_home(tmp_path, FIXTURE)
+    scan = CodexAdapter(home, read_version=no_version).scan()
+    gmail = next(i for i in scan.items if i.name == "gmail@openai-curated-remote")
+    assert gmail.source.unknown_reason is UnknownReason.STORED_IN_ACCOUNT

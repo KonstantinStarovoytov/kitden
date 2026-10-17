@@ -58,8 +58,8 @@ one MCP server defined both user-wide and in `.cursor/mcp.json`.
 
 1. In the sandbox, disable a Claude Code plugin from the page. Expect `claude plugin list --json`
    (sandbox) to show it disabled; undo restores the original settings bytes.
-2. Open a Cursor plugin. Expect the on/off control to be unavailable with the reason "waiting for
-   verification (spike S1)" until the spike is recorded.
+2. Open a Cursor plugin. Expect no on/off control, and a note that Cursor has no plugin on/off
+   and where to change it in Cursor (spike S1).
 3. Choose "install in Codex" for a Claude plugin. Expect the page to show `codex plugin add …` and
    not run it.
 

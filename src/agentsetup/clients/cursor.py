@@ -1,12 +1,12 @@
-"""Cursor (IDE and the `agent` CLI). Read-only. Research R3, R5; spike S5.
+"""Cursor (IDE and the `agent` CLI). Read-only. Research R3, R5; spikes S1, S5.
 
-Cursor keeps plugin installs and some switches in an internal SQLite database. We read it in
-read-only mode and only through an allowlist of non-secret keys. Plugin on/off stays unknown
-until spike S1 shows where it is stored.
+Cursor keeps plugin installs and some switches in internal SQLite databases. We read them in
+read-only mode and only through an allowlist of non-secret keys.
 """
 
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlsplit
@@ -33,6 +33,8 @@ from agentsetup.model import (
 
 CLIENT = "cursor"
 STATE_DB = "Library/Application Support/Cursor/User/globalStorage/state.vscdb"
+WORKSPACE_STATE = "Library/Application Support/Cursor/User/workspaceStorage"
+SNAPSHOT_PREFIX = "workbench.customize.primitiveSourceSnapshot."
 REACTIVE_KEY = (
     "src.vs.platform.reactivestorage.browser.reactiveStorageServiceImpl"
     ".persistentStorage.applicationUser"
@@ -64,7 +66,7 @@ class CursorAdapter(ClientAdapter):
         third_party = flags.get("thirdPartyExtensibilityEnabled", True) is not False
         import_claude_plugins = flags.get("importPluginsFromClaudeOnBoot", True) is not False
 
-        workspaces = sorted({p for paths in installed.values() for p in paths if p})
+        workspaces = sorted({p for key in installed for p in _workspaces(key) if p})
         scan.projects = [project(path, CLIENT) for path in workspaces]
 
         user_mcp = self.home / ".cursor/mcp.json"
@@ -117,19 +119,19 @@ class CursorAdapter(ClientAdapter):
         scan.problems = read.problems
         return scan
 
-    def _state(self, read: Reader) -> tuple[dict[str, list[str | None]], dict]:
-        """Installed plugin ids per key, and the reactive-storage switches (S5)."""
+    def _state(self, read: Reader) -> tuple[dict[str, list], dict]:
+        """Installed-plugin rows by key, and the reactive-storage switches (S5)."""
         db = self.home / STATE_DB
         if not db.is_file():
             return {}, {}
         query = "SELECT key, value FROM ItemTable WHERE key LIKE ? OR key = ?"
         try:
-            with sqlite3.connect(f"file:{db}?mode=ro", uri=True) as con:
+            with closing(sqlite3.connect(f"file:{db}?mode=ro", uri=True)) as con:
                 rows = con.execute(query, (INSTALLED_PREFIX + "%", REACTIVE_KEY)).fetchall()
         except sqlite3.DatabaseError:
             read.problem(db, UnknownReason.UNRECOGNIZED_FORMAT)
             return {}, {}
-        installed: dict[str, list[str | None]] = {}
+        installed: dict[str, list] = {}
         flags: dict = {}
         for key, value in rows:
             try:
@@ -138,95 +140,129 @@ class CursorAdapter(ClientAdapter):
                 continue
             if key == REACTIVE_KEY:
                 flags = _dict(data)
-                continue
-            for entry in data if isinstance(data, list) else []:
-                plugin_id = _dict(entry).get("id")
-                if isinstance(plugin_id, str):
-                    installed.setdefault(plugin_id, []).extend(_workspaces(key))
+            else:
+                installed[key] = data if isinstance(data, list) else []
         return installed, flags
 
-    def _plugins(self, installed: dict[str, list[str | None]]) -> list[Item]:
-        """Installed plugins.
+    def _plugins(self, installed: dict[str, list]) -> list[Item]:
+        """Installed plugins (spike S1).
 
-        Cursor stores numeric marketplace ids whose names live in the Cursor account. Names
-        then come from the local cache, and per-project numeric installs are shown as a count
-        (FR-005).
+        Cursor has no plugin on/off switch: a plugin is installed for the user or for a project,
+        and installed means loaded. Each `installedIds.<team>|<workspace>` row lists the user's
+        plugins (`sources: ["user"]`) and that project's own (`["project"]`). Project rows are
+        updated only when Cursor opens the project, so user installs come from the
+        `no-workspace` row when there is one. A multi-folder window shows the project installs
+        of all its folders, so its rows only add plugins that none of its folders has already,
+        and only to folders without a row of their own.
         """
+        if not installed:
+            return self._cached_plugins()
+        places = {key: _workspaces(key) for key in installed}
+        has_user_row = [None] in places.values()
+        own_rows = {p[0] for p in places.values() if len(p) == 1 and p[0]}
+        found: dict[tuple[str, str | None], str] = {}
+        for key in sorted(installed, key=lambda k: len(places[k])):  # single folders first
+            for entry in installed[key]:
+                plugin_id = _dict(entry).get("id")
+                if not isinstance(plugin_id, str):
+                    continue
+                if "project" in (_dict(entry).get("sources") or []):
+                    folders = [p for p in places[key] if p]
+                    if len(folders) > 1:
+                        if any((plugin_id, p) in found for p in folders):
+                            continue
+                        folders = [p for p in folders if p not in own_rows]
+                    targets = folders
+                elif places[key] == [None] or not has_user_row:
+                    targets = [None]
+                else:
+                    continue  # an old copy of the user's installs
+                for place in targets:
+                    found.setdefault((plugin_id, place), key)
+
+        names = self._plugin_names()
         db = str(self.home / STATE_DB)
-        unknown = {
-            "read_status": ReadStatus.UNKNOWN,
-            "unknown_reason": UnknownReason.NOT_DOCUMENTED,
-        }
         items = []
-        named = {pid: places for pid, places in installed.items() if "@" in pid}
-        numeric = {pid: places for pid, places in installed.items() if "@" not in pid}
-        for plugin_id, places in sorted(named.items()):
-            for place in dict.fromkeys(places):
-                source = Source(
-                    kind=SourceKind.STATE_DATABASE,
-                    path=db,
-                    owner_client=CLIENT,
-                    key_path=INSTALLED_PREFIX,
-                    **unknown,
-                )
-                items.append(
-                    Item(
-                        client=CLIENT,
-                        kind=ItemKind.PLUGIN,
-                        name=plugin_id,
-                        source=source,
-                        scope=Scope.PROJECT if place else Scope.USER,
-                        project=place,
-                        enabled=Enabled.UNKNOWN,
-                    )
-                )
-        if not installed or any(None in places for places in numeric.values()):
-            items += self._cached_plugins(set(named), unknown)
-        per_project: dict[str, int] = {}
-        for places in numeric.values():
-            for place in {p for p in places if p}:
-                per_project[place] = per_project.get(place, 0) + 1
-        for place, count in sorted(per_project.items()):
-            label = (
-                f"{count} plugin installed (name not stored locally)"
-                if count == 1
-                else f"{count} plugins installed (names not stored locally)"
-            )
+        for (plugin_id, place), key in found.items():
+            if "@" in plugin_id:
+                name = plugin_id
+            else:
+                name = names.get(plugin_id, f"plugin {plugin_id} (name not stored locally)")
+            fresh = place is None and has_user_row
             source = Source(
                 kind=SourceKind.STATE_DATABASE,
                 path=db,
                 owner_client=CLIENT,
-                key_path=INSTALLED_PREFIX,
-                **unknown,
+                key_path=key,
+                read_status=ReadStatus.UNKNOWN,
+                unknown_reason=(
+                    UnknownReason.NOT_DOCUMENTED if fresh else UnknownReason.MAY_BE_STALE
+                ),
             )
             items.append(
                 Item(
                     client=CLIENT,
                     kind=ItemKind.PLUGIN,
-                    name=label,
+                    name=name,
                     source=source,
-                    scope=Scope.PROJECT,
+                    scope=Scope.PROJECT if place else Scope.USER,
                     project=place,
-                    enabled=Enabled.UNKNOWN,
+                    enabled=Enabled.ON,
                 )
             )
         return items
 
-    def _cached_plugins(self, skip: set[str], unknown: dict) -> list[Item]:
+    def _plugin_names(self) -> dict[str, str]:
+        """Plugin id -> 'name@marketplace', from Customize snapshots in workspace state (S1).
+
+        Best effort: an unreadable snapshot only means some plugins are shown by number.
+        """
+        cache = self.home / ".cursor/plugins/cache"
+        names: dict[str, str] = {}
+        for db in sorted((self.home / WORKSPACE_STATE).glob("*/state.vscdb")):
+            try:
+                with closing(sqlite3.connect(f"file:{db}?mode=ro", uri=True)) as con:
+                    query = "SELECT value FROM ItemTable WHERE key LIKE ?"
+                    values = [v for (v,) in con.execute(query, (SNAPSHOT_PREFIX + "%",))]
+            except sqlite3.DatabaseError:
+                continue
+            for value in values:
+                try:
+                    descriptors = _dict(json.loads(value)).get("descriptors")
+                except (TypeError, ValueError):
+                    continue
+                for descriptor in descriptors if isinstance(descriptors, list) else []:
+                    plugin_id = _dict(descriptor).get("pluginId")
+                    path = _dict(descriptor).get("filePath")
+                    if plugin_id is None or not isinstance(path, str):
+                        continue
+                    try:
+                        parts = Path(path).relative_to(cache).parts
+                    except ValueError:
+                        continue  # e.g. a Claude Code plugin that Cursor imports
+                    if len(parts) >= 2:
+                        names.setdefault(str(plugin_id), f"{parts[1]}@{parts[0]}")
+        return names
+
+    def _cached_plugins(self) -> list[Item]:
+        """Without install records, list downloaded plugins; a download may be uninstalled."""
         cache = self.home / ".cursor/plugins/cache"
         items = []
         for marketplace in sorted(cache.iterdir()) if cache.is_dir() else []:
             for plugin in sorted(marketplace.iterdir()) if marketplace.is_dir() else []:
-                plugin_id = f"{plugin.name}@{marketplace.name}"
-                if plugin.is_dir() and not plugin.name.startswith(".") and plugin_id not in skip:
+                if plugin.is_dir() and not plugin.name.startswith("."):
                     source = Source(
-                        kind=SourceKind.PLUGIN, path=str(plugin), owner_client=CLIENT, **unknown
+                        kind=SourceKind.PLUGIN,
+                        path=str(plugin),
+                        owner_client=CLIENT,
+                        read_status=ReadStatus.UNKNOWN,
+                        unknown_reason=UnknownReason.NOT_DOCUMENTED,
                     )
                     items.append(
                         Item(
                             client=CLIENT,
                             kind=ItemKind.PLUGIN,
-                            name=plugin_id,
+                            name=f"{plugin.name}@{marketplace.name}",
                             source=source,
                             scope=Scope.USER,
                             enabled=Enabled.UNKNOWN,

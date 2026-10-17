@@ -20,8 +20,8 @@ Technical approach (from [research.md](research.md)): an own tool (not a Cross-C
 contribution), one Python 3.14 package distributed with `uv`, a Starlette page bound to
 `127.0.0.1` with a per-start token, client adapters behind one interface, a change engine with
 atomic writes and hash-based stale checks, and a stdio MCP server built with the official SDK.
-Writes that depend on undocumented storage stay read-only until spikes S1, S4 and S5 pass
-(S2 and S3 are no longer needed after gateway first).
+Spikes S1, S4 and S5 are done: Cursor plugins stay read-only (no on/off to write), and Codex
+writes are safe while the app runs (S2 and S3 are no longer needed after gateway first).
 
 ## Technical Context
 
@@ -60,7 +60,7 @@ files; unknown formats block writes
 | --- | --- | --- | --- |
 | I. Clear communication | Docs in simple English with diagrams and tables; discussion in Russian | Pass | Pass: plan, research, data model and contracts use tables and diagrams |
 | II. Specify before building | Approved spec; dated, sourced research; existing tools checked before novelty claims | Pass: spec approved via brief; CCO and others reviewed | Pass: research.md has dated sources; R1 records the CCO decision |
-| III. Safe changes to client setups | Writes only after explicit action; client CLI preferred; no undocumented storage writes without a recorded spike; backup, verify, undo; preserve unknown settings | Pass by design intent | Pass with one justified deviation: Codex uses our format-preserving edit instead of `codex mcp add` (see Complexity Tracking). Undocumented storage (Cursor state database) stays read-only until spike S1. Gateway first reduces MCP writes to the gateway entry and removals |
+| III. Safe changes to client setups | Writes only after explicit action; client CLI preferred; no undocumented storage writes without a recorded spike; backup, verify, undo; preserve unknown settings | Pass by design intent | Pass with one justified deviation: Codex uses our format-preserving edit instead of `codex mcp add` (see Complexity Tracking). Undocumented storage (Cursor state database) stays read-only (spike S1). Gateway first reduces MCP writes to the gateway entry and removals |
 | IV. Honest and private inventory | Provenance for every item; "unknown" with a reason; secrets never shown or copied; no data leaves the machine | Pass | Pass: Source and Item models carry provenance and `unknown_reason`; redacted model shared by page, `scan --json` and MCP; Cursor database read through a key allowlist; file text shown only as plain text, CSP without inline scripts (FR-041) |
 | V. Verify against real clients | Pinned versions; fixtures; round-trip tests; fail safely on format changes | Pass | Pass: R10 and R11 define fixtures, property tests, sandbox contract tests and version ranges; unknown formats block writes (FR-042); every write path has a round-trip test |
 | VI. Keep it local and simple | No server, account or login; reuse existing tools; file-access component separate from UI | Pass | Pass: one package; the change engine and adapters sit behind the local API contract; gateways are reused, not built |
@@ -155,8 +155,8 @@ Same order as [tasks.md](tasks.md).
 | --- | --- |
 | Clients change file formats often | Version pinning, fixtures per version, unknown formats block writes |
 | Claude Code rewrites `~/.claude.json` while running | Use `claude mcp` commands for that file; stale checks; verify after write |
-| Codex desktop app may overwrite outside edits | Spike S4 before enabling Codex writes while the app runs; restart notice |
-| Cursor state is undocumented | Read-only through an allowlist; spikes S1 and S5 |
+| Codex desktop app may overwrite outside edits | Spike S4 passed: edits survive; keep stale checks by hash; restart notice |
+| Cursor state is undocumented | Read-only through an allowlist; spike S1 found no plugin on/off, so Cursor plugins stay read-only |
 | The product depends on a gateway for MCP control | Work with any MCP gateway URL (Obot or MetaMCP); without a gateway the page still shows everything and flags all MCP servers as bypassing |
 | Plugin MCP and local MCP servers cannot go through a remote gateway | Flag them with their source so the owner knows what is outside gateway control |
 | Installed Claude Code 2.1.283 may exit before a plugin write finishes | Always verify with `claude plugin list --json`; recommend 2.1.302 or later |

@@ -122,8 +122,8 @@ settings are exactly as before.
 ### User Story 4 - Turn plugins on and off (Priority: P4)
 
 The developer turns a plugin on or off in Claude Code or Codex from the page, with the same preview,
-apply, verify and undo flow as every other change. For Cursor, plugins are shown but cannot be changed until
-a recorded check has proved that writing Cursor's plugin state is reliable. For actions the tool does
+apply, verify and undo flow as every other change. For Cursor, plugins are shown but cannot be changed: Cursor
+has no plugin on/off, and installs are stored in the Cursor account (spike S1). For actions the tool does
 not perform (install, update, move between clients, add a marketplace), the page shows the exact
 command of the client that does it.
 
@@ -138,8 +138,8 @@ is disabled, undo, and confirm it is enabled again with settings identical to be
 1. **Given** an installed plugin in Claude Code or Codex, **When** the developer turns it off and
    applies, **Then** the client treats it as disabled after the change takes effect, and undo
    restores it.
-2. **Given** Cursor plugin writes are not yet verified, **When** the developer views a Cursor plugin,
-   **Then** the on/off control is unavailable and the page explains why.
+2. **Given** Cursor plugin writes are not verified, **When** the developer views a Cursor plugin,
+   **Then** the on/off control is unavailable and the page explains why and where to change it.
 3. **Given** the developer wants to install a plugin in another client, **When** they open that
    action, **Then** the page shows the client's own command to do it and does not run it.
 

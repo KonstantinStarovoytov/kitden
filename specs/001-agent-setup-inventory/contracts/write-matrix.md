@@ -19,7 +19,7 @@ only the gateway entry, the read-only setup server entry, and removals of old di
 | Add, turn on or off individual MCP servers in client files | not offered (FR-025) | not offered | not offered |
 | MCP bundled in plugins, local MCP servers | read, flagged "bypasses the gateway" | read, flagged | read, flagged |
 | MCP from `claude_desktop_config.json` | read, flagged if direct | — | — |
-| Plugin on/off | write: `claude plugin enable|disable -s <scope> --json` | write: `plugins."<id>".enabled` | spike S1 |
+| Plugin on/off | write: `claude plugin enable|disable -s <scope> --json` | write: `plugins."<id>".enabled` for plugins with a `config.toml` entry; remote plugins: read, stored in the account ([spike S4](../spikes/s4-codex-app.md)) | read: Cursor has no on/off; the page says where to change it in Cursor ([spike S1](../spikes/s1-cursor-plugins.md)) |
 | Plugin install, update, uninstall | show | show | show |
 | Move plugin to another client | show the target client's install command | show | show |
 | Marketplace add or remove | show | show | show |

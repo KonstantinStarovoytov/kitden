@@ -4,7 +4,7 @@ import agentsetup.clients.base as base
 from agentsetup.model import Enabled, Item, ItemKind, Scope, Source, SourceKind
 from agentsetup.views.effective import effective_view
 from agentsetup.views.inventory import Inventory, build_inventory
-from tests.conftest import cursor_state_rows, make_home, write_cursor_state
+from tests.conftest import make_home, write_cursor_fixture_state
 
 
 @pytest.fixture(autouse=True)
@@ -25,7 +25,7 @@ def shadows(view):
 def _home(tmp_path, fixture):
     home = make_home(tmp_path, fixture)
     if fixture.startswith("cursor"):
-        write_cursor_state(home, cursor_state_rows(home))
+        write_cursor_fixture_state(home)
     return home, build_inventory(home)
 
 
@@ -149,9 +149,9 @@ def test_cursor_project_wins_and_imported_items_load(tmp_path):
         ("skill", "docker-expert", "user"),
         ("skill", "brandkit", "user"),
         ("skill", "langfuse", "user"),
-        ("plugin", "langfuse@cursor-public", "user"),
         ("plugin", "superpowers@cursor-public", "user"),
-        ("plugin", "1 plugin installed (name not stored locally)", "project"),
+        ("plugin", "plugin 4800 (name not stored locally)", "user"),
+        ("plugin", "langfuse@cursor-public", "project"),
         ("plugin", "superpowers@claude-plugins-official", "user"),
         ("hook", "afterFileEdit", "user"),
         ("hook", "PreToolUse: Bash", "user"),

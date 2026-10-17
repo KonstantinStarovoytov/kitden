@@ -26,6 +26,7 @@ from agentsetup.model import (
 )
 
 CLIENT = "codex"
+REMOTE_INSTALL_RECORD = ".codex-remote-plugin-install.json"
 
 
 def _dict(value: Any) -> dict:
@@ -135,7 +136,11 @@ class CodexAdapter(ClientAdapter):
         return items
 
     def _cached_plugins(self, configured: set[str]) -> list[Item]:
-        """Plugins in the local cache without a config entry: their state is not local."""
+        """Plugins in the local cache without a config entry: their state is not local.
+
+        A remote plugin (with an install record) keeps its on/off in the ChatGPT account
+        (spike S4).
+        """
         cache = self.codex_home / "plugins/cache"
         items = []
         for marketplace in sorted(cache.iterdir()) if cache.is_dir() else []:
@@ -148,7 +153,11 @@ class CodexAdapter(ClientAdapter):
                     path=str(plugin),
                     owner_client=CLIENT,
                     read_status=ReadStatus.UNKNOWN,
-                    unknown_reason=UnknownReason.NOT_DOCUMENTED,
+                    unknown_reason=(
+                        UnknownReason.STORED_IN_ACCOUNT
+                        if (plugin / REMOTE_INSTALL_RECORD).is_file()
+                        else UnknownReason.NOT_DOCUMENTED
+                    ),
                 )
                 items.append(
                     Item(

@@ -90,10 +90,10 @@ agent CLI 2026.09.02 (latest 2026.10.08).
 | Claude Code | User or local MCP on/off | No CLI. Candidates: `deniedMcpServers` in `~/.claude/settings.json` (documented, hot-reloaded) or app-owned `disabledMcpServers` in `~/.claude.json` | — | **Spike S3** |
 | Claude Code | Plugin on/off | `claude plugin enable|disable <id> -s <scope> --json` | `claude plugin list --json` | v1 write. 2.1.283 can exit before its write finishes (fixed in 2.1.302): always verify |
 | Codex | MCP add/remove/on-off, plugin on-off | Own format-preserving edit of `~/.codex/config.toml` (`mcp_servers.<id>`, `.enabled`, `plugins."x@y".enabled`) | `codex mcp list --json` (redact), `codex plugin list --json` | v1 write; restart notice. Not `codex mcp add`: it drops comments in `[mcp_servers]` |
-| Codex | Desktop app overwriting outside edits while running | Unknown | — | **Spike S4** |
+| Codex | Desktop app overwriting outside edits while running | The app reads the file again before it writes and keeps outside edits; remote plugin on/off is in the account | `codex plugin list --json` | Writes allowed while the app runs ([spike S4](spikes/s4-codex-app.md)) |
 | Cursor | MCP add/remove (user, project) | Edit `~/.cursor/mcp.json` or `.cursor/mcp.json` (plain JSON); secrets as `${env:NAME}` | Re-read file | v1 write; restart notice |
 | Cursor | MCP on/off | IDE state database vs CLI `~/.cursor/projects/<slug>/mcp-disabled.json` | — | Read-only; **Spike S2** |
-| Cursor | Plugin on/off | IDE state database `cursor.plugins.installedIds.*`; CLI code uses `.cursor/settings.json` `plugins.<name>.enabled`; changelog says `enabled_plugins` | — | Read-only; **Spike S1** |
+| Cursor | Plugin on/off | No on/off: a plugin is installed for the user or a project, stored in the Cursor account; `cursor.plugins.installedIds.*` is a local copy. CLI `enabled_plugins` untested | — | Read-only ([spike S1](spikes/s1-cursor-plugins.md)) |
 | All | Install, update, move plugins; add marketplaces | Show only: `claude plugin install`, `codex plugin add`, `agent plugin marketplace add`, and similar | — | Show command (FR-029) |
 
 **Environment variable references for secrets**: Claude Code `${VAR}` and `${VAR:-default}` in
@@ -113,7 +113,8 @@ Cursor: restart after config edits.
 
 - **Decision**: read the Cursor IDE state database (SQLite) in read-only mode, querying only an
   allowlist of non-secret keys: `cursor.plugins.installedIds.*`, `cursor/approvedProjectMcpServers`,
-  `cursor/disabledMcpServers`, `workbench.customize.primitiveSourceSnapshot.{mcps,skills}.v3`.
+  `cursor/disabledMcpServers`, and in workspace databases
+  `workbench.customize.primitiveSourceSnapshot.*.v3` (plugin names, spike S1).
   Never query `mcpOAuth.*` or `secret://` keys. Label snapshot data as "may be stale".
 - **Rationale**: Cursor's plugin and MCP state is only in this database; FR-005 requires labeling
   rather than hiding it; an allowlist keeps FR-006.
@@ -195,10 +196,10 @@ case, constitution V).
 
 | Spike | Question | Unblocks |
 | --- | --- | --- |
-| S1 | Where Cursor stores plugin on/off; does a write survive restart and team sync? | Cursor plugin toggles (FR-028) |
+| S1 | Where Cursor stores plugin on/off; does a write survive restart and team sync? | Done: no on/off, state is in the account; Cursor plugins stay read-only (FR-028) |
 | S2 | Is Cursor IDE `disabledMcpServers` shared with the CLI's `mcp-disabled.json`; what restart is needed? | Not needed after R13 (MCP on/off moved to the gateway) |
 | S3 | Claude user/local MCP off: `deniedMcpServers` in settings vs app-owned `disabledMcpServers` | Not needed after R13 |
-| S4 | Does the running Codex desktop app overwrite outside edits to `config.toml`? | Safe Codex writes while the app runs |
+| S4 | Does the running Codex desktop app overwrite outside edits to `config.toml`? | Done: no, edits survive; Codex writes allowed while the app runs |
 | S5 | Where Cursor stores the Third-Party Imports switch | Cross-loading accuracy for Cursor (FR-012) |
 
 ## R13. Gateway first for MCP tools

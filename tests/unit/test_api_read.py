@@ -4,7 +4,7 @@ from starlette.testclient import TestClient
 import agentsetup.clients.base as base
 from agentsetup.views.inventory import build_inventory
 from agentsetup.web.app import create_app
-from tests.conftest import cursor_state_rows, make_home, write_cursor_state
+from tests.conftest import make_home, write_cursor_fixture_state
 
 ORIGIN = "http://127.0.0.1:47800"
 
@@ -13,7 +13,7 @@ ORIGIN = "http://127.0.0.1:47800"
 def client(tmp_path, monkeypatch):
     monkeypatch.setattr(base, "read_command_version", lambda client: None)
     home = make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2", "cursor/3.21.16")
-    write_cursor_state(home, cursor_state_rows(home))
+    write_cursor_fixture_state(home)
     app = create_app(lambda: build_inventory(home), token="tok", port=47800)
     with TestClient(app, base_url=ORIGIN, follow_redirects=False) as c:
         c.get("/?token=tok")
@@ -31,7 +31,7 @@ def test_items_can_be_filtered_by_project(client):
     found = {(i["client"], i["name"]) for i in client.get(f"/api/items?project={site}").json()}
     assert found == {
         ("cursor", "site-db"),
-        ("cursor", "1 plugin installed (name not stored locally)"),
+        ("cursor", "langfuse@cursor-public"),
     }
 
 

@@ -1,0 +1,43 @@
+{
+  "a1b2c3": {
+    "workbench.customize.primitiveSourceSnapshot.skills.v3": {
+      "lastWrittenAt": 1792224000000,
+      "descriptors": [
+        {
+          "id": "skill-1",
+          "kind": "skill",
+          "name": "brainstorming",
+          "scope": "plugin",
+          "pluginId": "684",
+          "marketplaceId": 34,
+          "filePath": "{HOME}/.cursor/plugins/cache/cursor-public/superpowers/1a2b3c4/skills/brainstorming/SKILL.md"
+        },
+        {
+          "id": "skill-2",
+          "kind": "skill",
+          "name": "brainstorming",
+          "scope": "plugin",
+          "pluginId": "684",
+          "marketplaceId": 34,
+          "filePath": "{HOME}/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.0/skills/brainstorming/SKILL.md"
+        },
+        {
+          "id": "skill-3",
+          "kind": "skill",
+          "name": "langfuse",
+          "scope": "plugin",
+          "pluginId": "738",
+          "marketplaceId": 34,
+          "filePath": "{HOME}/.cursor/plugins/cache/cursor-public/langfuse/8e6c2d0/skills/langfuse/SKILL.md"
+        },
+        {
+          "id": "skill-4",
+          "kind": "skill",
+          "name": "docker-expert",
+          "scope": "user",
+          "filePath": "{HOME}/.agents/skills/docker-expert/SKILL.md"
+        }
+      ]
+    }
+  }
+}

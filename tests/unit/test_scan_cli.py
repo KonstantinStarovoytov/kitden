@@ -5,7 +5,7 @@ import pytest
 
 import agentsetup.clients.base as base
 from agentsetup.cli import main
-from tests.conftest import cursor_state_rows, make_home, write_cursor_state
+from tests.conftest import make_home, write_cursor_fixture_state
 
 ALL = ("claude_code/2.1.283", "codex/0.159.2", "cursor/3.21.16")
 
@@ -14,7 +14,7 @@ ALL = ("claude_code/2.1.283", "codex/0.159.2", "cursor/3.21.16")
 def home(tmp_path, monkeypatch):
     monkeypatch.setattr(base, "read_command_version", lambda client: None)
     home = make_home(tmp_path, *ALL)
-    write_cursor_state(home, cursor_state_rows(home))
+    write_cursor_fixture_state(home)
     return home
 
 

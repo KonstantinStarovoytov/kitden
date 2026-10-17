@@ -21,8 +21,8 @@ files, no open dependency). **[US1]**…**[US5]** = user story from the spec.
 
 ## Phase 2: Foundation (blocks all stories)
 
-- [ ] T005 [P] Spike S1: find where Cursor stores plugin on/off; test that a write on a sandbox copy survives restart and team sync; write the result in `specs/001-agent-setup-inventory/spikes/s1-cursor-plugins.md`
-- [ ] T006 [P] Spike S4: check if the running Codex app overwrites outside edits to `config.toml`; write the result in `specs/001-agent-setup-inventory/spikes/s4-codex-app.md`
+- [x] T005 [P] Spike S1: find where Cursor stores plugin on/off; test that a write on a sandbox copy survives restart and team sync; write the result in `specs/001-agent-setup-inventory/spikes/s1-cursor-plugins.md`
+- [x] T006 [P] Spike S4: check if the running Codex app overwrites outside edits to `config.toml`; write the result in `specs/001-agent-setup-inventory/spikes/s4-codex-app.md`
 - [x] T007 [P] Spike S5: find where Cursor stores the "Third-Party Imports" switch; write the result in `specs/001-agent-setup-inventory/spikes/s5-cursor-imports.md`
 - [x] T008 [P] List supported client versions and version commands (research R11) in `src/agentsetup/clients/versions.py`
 - [x] T009 Create the types from [data-model.md](data-model.md) (Client, Source, Scope, Item, Project, Finding, Change, Gateway) with their enums in `src/agentsetup/model.py`
@@ -96,8 +96,8 @@ files, no open dependency). **[US1]**…**[US5]** = user story from the spec.
 
 - [ ] T050 [P] [US4] Round-trip tests for plugin on/off in Claude Code and Codex in `tests/unit/test_plugins.py`
 - [ ] T051 [US4] Claude Code plugin on/off with `claude plugin enable|disable --json`, verified by `claude plugin list --json`, in `src/agentsetup/clients/claude_code.py`
-- [ ] T052 [US4] Codex plugin on/off through `plugins."<id>".enabled`, verified by `codex plugin list --json`, in `src/agentsetup/clients/codex.py`
-- [ ] T053 [US4] Cursor plugin control: unavailable with a reason until spike S1 passes, in `src/agentsetup/clients/cursor.py`
+- [ ] T052 [US4] Codex plugin on/off through `plugins."<id>".enabled`, verified by `codex plugin list --json`; read every plugin's real on/off from that list; remote plugins are read-only (spike S4), in `src/agentsetup/clients/codex.py`
+- [ ] T053 [US4] Cursor plugin control: unavailable, with the reason and where to change it in Cursor (spike S1), in `src/agentsetup/clients/cursor.py`
 - [ ] T054 [US4] Show-only commands for install, update, move and marketplace add in `src/agentsetup/views/commands.py`
 - [ ] T055 [US4] Plugin controls on the page in `src/agentsetup/web/static/`
 - [ ] T056 [US4] Real-client plugin test in a sandbox home in `tests/contract/test_plugins.py`

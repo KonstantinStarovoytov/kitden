@@ -9,6 +9,7 @@ import pytest
 
 FIXTURES = Path(__file__).parent / "fixtures"
 CURSOR_DB = "Library/Application Support/Cursor/User/globalStorage/state.vscdb"
+CURSOR_WORKSPACES = "Library/Application Support/Cursor/User/workspaceStorage"
 
 
 def make_home(tmp_path: Path, *fixtures: str) -> Path:
@@ -24,9 +25,9 @@ def make_home(tmp_path: Path, *fixtures: str) -> Path:
     return home
 
 
-def write_cursor_state(home: Path, rows: dict) -> Path:
-    """Create Cursor's state database with the given key → value rows."""
-    db = home / CURSOR_DB
+def write_cursor_state(home: Path, rows: dict, db_path: str = CURSOR_DB) -> Path:
+    """Create a Cursor state database with the given key → value rows."""
+    db = home / db_path
     db.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(db) as con:
         con.execute("CREATE TABLE ItemTable (key TEXT UNIQUE ON CONFLICT REPLACE, value BLOB)")
@@ -38,9 +39,20 @@ def write_cursor_state(home: Path, rows: dict) -> Path:
     return db
 
 
-def cursor_state_rows(home: Path) -> dict:
-    text = (FIXTURES / "cursor/3.21.16/cursor-state.json").read_text()
+def _cursor_fixture(home: Path, name: str) -> dict:
+    text = (FIXTURES / "cursor/3.21.16" / name).read_text()
     return json.loads(text.replace("{HOME}", str(home)))
+
+
+def cursor_state_rows(home: Path) -> dict:
+    return _cursor_fixture(home, "cursor-state.json")
+
+
+def write_cursor_fixture_state(home: Path, extra_rows: dict | None = None) -> None:
+    """Write the fixture's global and per-workspace Cursor state databases."""
+    write_cursor_state(home, {**cursor_state_rows(home), **(extra_rows or {})})
+    for workspace, rows in _cursor_fixture(home, "cursor-workspace-state.json").items():
+        write_cursor_state(home, rows, f"{CURSOR_WORKSPACES}/{workspace}/state.vscdb")
 
 
 def rows(items, home: Path) -> set[tuple]:
