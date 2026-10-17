@@ -27,17 +27,23 @@ export function socket({ state, where, word }) {
   return node;
 }
 
-// Morph a socket to a new state: the fill drains or fills, the words blur across, one ping.
+// Morph a socket to a new state: the words blur out, the new socket blurs in, one ping.
+// The socket is rebuilt, so "not set up" (no dot) and the other states swap cleanly.
 export function morphSocket(node, { state, where }) {
   const texts = [...node.querySelectorAll(".word, .where")];
   texts.forEach((t) => t.classList.add("swap"));
   setTimeout(() => {
-    node.className = `socket s-${state} pulse`;
-    const word = node.querySelector(".word");
-    if (word) word.textContent = STATE_WORDS[state] || state;
-    let place = node.querySelector(".where");
-    if (where && !place) { place = el("span", "where swap"); node.append(place); }
-    if (place) place.textContent = where || "";
+    const fresh = socket({ state, where });
+    node.className = `${fresh.className} pulse`;
+    if (fresh.hasAttribute("aria-label")) node.setAttribute("aria-label", fresh.getAttribute("aria-label"));
+    else node.removeAttribute("aria-label");
+    // Keep the old dot when both have one, so its fill drains or fills instead of jumping.
+    const oldDot = node.querySelector(".dot");
+    const newDot = fresh.querySelector(".dot");
+    if (oldDot && newDot) newDot.replaceWith(oldDot);
+    const parts = [...fresh.childNodes];
+    parts.filter((p) => p.matches(".word, .where")).forEach((p) => p.classList.add("swap"));
+    node.replaceChildren(...parts);
     requestAnimationFrame(() => node.querySelectorAll(".swap").forEach((t) => t.classList.remove("swap")));
   }, 160);
 }

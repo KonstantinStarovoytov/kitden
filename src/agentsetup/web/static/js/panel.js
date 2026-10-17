@@ -3,7 +3,7 @@ import { getJson, postJson, query } from "./api.js";
 import { $, $$, button, el, shortPath, shortPaths } from "./dom.js";
 import { morphOnNextRender, onOpenItem } from "./map.js";
 import { CLIENT_NAMES, mark, socket } from "./parts.js";
-import { busy, data, reload, render, state } from "./store.js";
+import { busy, data, reload, render, setBusy, state } from "./store.js";
 
 const KIND_WORDS = {
   mcp_server: "MCP server", plugin: "Plugin", skill: "Skill", hook: "Hook", marketplace: "Marketplace",
@@ -28,11 +28,18 @@ export function isPanelOpen() {
   return $("#drawer").classList.contains("open");
 }
 
+// New content for an open panel; focus stays inside it (the old buttons are gone).
+function swapContent(content) {
+  const drawer = $("#drawer");
+  drawer.replaceChildren(...content);
+  if (isPanelOpen() && !drawer.contains(document.activeElement)) drawer.focus();
+}
+
 // Put content in the panel and slide it in. Keyboard opens are instant.
 export function openPanel(content, { instant = false } = {}) {
   const drawer = $("#drawer");
+  if (isPanelOpen()) { swapContent(content); return; }
   drawer.replaceChildren(...content);
-  if (isPanelOpen()) return;
   opener = document.activeElement;
   const row = opener && opener.closest ? opener.closest("tr[data-key]") : null;
   openerKey = row ? row.dataset.key : null;
@@ -43,8 +50,9 @@ export function openPanel(content, { instant = false } = {}) {
   drawer.focus();
 }
 
-export function closePanel({ instant = false, keepSelection = false, focus = true } = {}) {
-  if (!isPanelOpen()) return;
+// While a change is being applied the panel stays open: closing it could not stop the change.
+export function closePanel({ instant = false, keepSelection = false, focus = true, force = false } = {}) {
+  if (!isPanelOpen() || (busy.change && !force)) return;
   if (current && current.type === "review" && current.change && current.change.state === "previewed") {
     postJson(`/api/changes/${encodeURIComponent(current.change.id)}/cancel`).catch(() => {});
   }
@@ -109,6 +117,7 @@ export async function openItem(row, { instant = false } = {}) {
       const footer = el("footer");
       footer.append(button("Retry", () => openItem(row), "btn"));
       $("#drawer footer").replaceWith(footer);
+      if (!$("#drawer").contains(document.activeElement)) $("#drawer").focus();
     }
     return;
   }
@@ -145,14 +154,30 @@ function scopeWords(def) {
   return `${words}${via}`;
 }
 
+const UNKNOWN_WORDS = {
+  stored_in_account: "Its on/off state is kept in your Claude account, not on this Mac.",
+  no_access: "This page could not read where its state is kept.",
+  unrecognized_format: "Its state is kept in a format this page does not know.",
+  parse_error: "The file that holds its state could not be read.",
+  may_be_stale: "The saved state may be out of date.",
+  not_documented: "The client does not document where its state is kept.",
+};
+
 function layer(def) {
   let look = "off";
   let badge = "Not loaded";
-  if (def.loads) { look = def.via_gateway ? "gw" : "on"; badge = "Loads"; }
+  let why = def.why === "Loads." ? "" : def.why;
+  const unknown = def.enabled === "unknown";
+  if (unknown) {
+    look = "unk";
+    badge = "Unknown";
+    why = UNKNOWN_WORDS[def.unknown_reason] || "This page cannot tell whether it is on.";
+  } else if (def.loads) { look = def.via_gateway ? "gw" : "on"; badge = "Loads"; }
+  else if (def.merged) badge = "Merged";
   else if (def.overridden) { look = "over"; badge = "Overridden"; }
   else if (def.enabled === "off") badge = "Off";
-  else if (def.enabled === "unknown") { look = "unk"; badge = "Unknown"; }
-  const row = el("div", def.loads ? "layer wins" : "layer");
+  const wins = def.loads && !unknown;
+  const row = el("div", wins ? "layer wins" : "layer");
   const dot = socket({ state: look });
   dot.replaceChildren(dot.querySelector(".dot"));
   dot.setAttribute("aria-hidden", "true");
@@ -161,8 +186,8 @@ function layer(def) {
   const where = el("div", "why mono", shortPath(def.source));
   where.title = def.source || "";
   middle.append(where);
-  if (def.why && def.why !== "Loads.") middle.append(el("div", "why", def.why));
-  row.append(dot, middle, el("span", def.loads ? "badge win" : "badge", badge));
+  if (why) middle.append(el("div", "why", why));
+  row.append(dot, middle, el("span", wins ? "badge win" : "badge", badge));
   return row;
 }
 
@@ -205,8 +230,7 @@ function showDetails(row, definitions) {
     const label = ACTION_BUTTONS[action](`${clientName(def.client)}${where}`);
     footer.append(button(label, () => review({ action, targets: [{ item: def.id }], params: {} }), offers.length === 1 ? "btn primary" : "btn"));
   }
-  const drawer = $("#drawer");
-  drawer.replaceChildren(itemHeader(row), body, footer);
+  swapContent([itemHeader(row), body, footer]);
 }
 
 async function showCommands(row, definitions) {
@@ -214,7 +238,7 @@ async function showCommands(row, definitions) {
   body.append(el("p", "muted", "You run these yourself. This page never runs them."));
   const footer = el("footer");
   footer.append(button("Back", () => showDetails(row, current.definitions), "btn"));
-  $("#drawer").replaceChildren(header("Commands", row.name, null, "Close", true), body, footer);
+  swapContent([header("Commands", row.name, null, "Close", true), body, footer]);
   const seen = new Set();
   for (const def of definitions) {
     if (seen.has(def.id)) continue;
@@ -339,7 +363,7 @@ function showReview(change, previewBody) {
 function failed(apply, cancel, label, body) {
   return (error) => {
     console.error(error);
-    busy.change = false;
+    setBusy(false);
     resetApply(apply, cancel, label);
     body.prepend(callout("Could not reach the page server. Nothing was changed by this page.", "error"));
   };
@@ -350,12 +374,19 @@ function swapLabel(label, text) {
   setTimeout(() => { label.textContent = text; label.classList.remove("swap"); }, 120);
 }
 
+// The header's Cancel and the footer buttons are off while a change runs.
+function lockReview(locked, apply, cancel) {
+  apply.disabled = locked;
+  cancel.disabled = locked;
+  const close = $("#drawer header .top button");
+  if (close) close.disabled = locked;
+}
+
 function resetApply(apply, cancel, label) {
   for (const extra of apply.querySelectorAll(".spinner, .check")) extra.remove();
   label.textContent = "Apply";
   label.classList.remove("swap");
-  apply.disabled = false;
-  cancel.disabled = false;
+  lockReview(false, apply, cancel);
 }
 
 function checkMark() {
@@ -377,26 +408,25 @@ const STOPPED = {
 // page shows the effect where it happened.
 async function applyChange(change, { apply, cancel, label, body }) {
   if (busy.change || apply.disabled) return;
-  busy.change = true;
-  apply.disabled = true;
-  cancel.disabled = true;
+  const previewBody = current && current.previewBody;
+  setBusy(true);
+  lockReview(true, apply, cancel);
   swapLabel(label, "Applying…");
   apply.prepend(el("span", "spinner"));
   const started = performance.now();
   const result = await postJson(`/api/changes/${encodeURIComponent(change.id)}/apply`);
   const after = result.data && result.data.id ? result.data : null;
-  if (after) current.change = after;
+  if (after && current) current.change = after;
 
   if (!after || after.state !== "verified") {
-    busy.change = false;
+    setBusy(false);
     resetApply(apply, cancel, label);
     const reason = after ? STOPPED[after.state] || `The change stopped: ${after.state}.` : (result.data && result.data.detail) || `Apply failed (${result.status}).`;
     const detail = after && after.error ? ` (${shortPaths(after.error)})` : "";
     for (const old of body.querySelectorAll(".callout.error")) old.remove();
     body.prepend(callout(`${reason}${detail}`, "error"));
     if (after && after.state !== "previewed") {
-      const again = current.previewBody;
-      apply.replaceWith(button("Preview again", () => review(again), "btn primary"));
+      apply.replaceWith(button("Preview again", () => review(previewBody), "btn primary"));
     }
     reload().then(render).catch(() => {});
     return;
@@ -408,17 +438,18 @@ async function applyChange(change, { apply, cancel, label, body }) {
   label.textContent = "Applied";
   await Promise.all([wait(450), reload().catch(() => {})]);
   current = null;
-  closePanel({ keepSelection: true, focus: false });
+  closePanel({ keepSelection: true, focus: false, force: true });
   morphOnNextRender();
   render();
   restoreFocus();
-  busy.change = false;
+  setBusy(false);
   toast(changeWords(after).done, () => undoChange(after));
 }
 
 export async function undoChange(change) {
+  if (busy.change) return;
   hideToast();
-  busy.change = true;
+  setBusy(true);
   try {
     const result = await postJson(`/api/changes/${encodeURIComponent(change.id)}/undo`);
     await reload().catch(() => {});
@@ -429,7 +460,7 @@ export async function undoChange(change) {
     else if (after && after.state === "undo_blocked") toast("Undo stopped: the file changed after the change was applied.");
     else toast((after && after.detail) || `Undo failed (${result.status}).`);
   } finally {
-    busy.change = false;
+    setBusy(false);
   }
 }
 
@@ -480,7 +511,11 @@ function trapFocus(event) {
   if (event.key !== "Tab" || !isPanelOpen()) return;
   const drawer = $("#drawer");
   const stops = $$("button:not([disabled]), a[href], select, input, [tabindex]:not([tabindex='-1'])", drawer);
-  if (!stops.length) { event.preventDefault(); drawer.focus(); return; }
+  if (!stops.length || !drawer.contains(document.activeElement)) {
+    event.preventDefault();
+    (stops[0] || drawer).focus();
+    return;
+  }
   const first = stops[0];
   const last = stops[stops.length - 1];
   if (event.shiftKey && (document.activeElement === first || document.activeElement === drawer)) {
@@ -499,7 +534,7 @@ export function initPanel() {
   drawer.setAttribute("aria-labelledby", "panel-title");
   onOpenItem((row, tr, how) => openItem(row, { instant: how === "keyboard" }));
   $("#scrim").addEventListener("click", () => { if (!busy.change) closePanel(); });
-  drawer.addEventListener("keydown", trapFocus);
+  document.addEventListener("keydown", trapFocus);
   document.addEventListener("keydown", (event) => {
     if (!isPanelOpen()) return;
     // Keyboard closes are instant: an action done many times a day must not wait.

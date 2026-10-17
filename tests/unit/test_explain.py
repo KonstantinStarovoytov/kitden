@@ -58,3 +58,9 @@ def test_overridden_definitions_are_marked(home):
         (d["client"], d["scope"]): d["overridden"] for d in found if d["client"] == "claude_code"
     }
     assert marks == {("claude_code", "user"): True, ("claude_code", "project"): False}
+
+
+def test_merged_definitions_are_not_marked_overridden(home):
+    found = explain(build_inventory(home), "neon", "mcp_server", str(home / "work/api"))
+    user = next(d for d in found if d["scope"] == "user")
+    assert (user["merged"], user["overridden"]) == (True, False)

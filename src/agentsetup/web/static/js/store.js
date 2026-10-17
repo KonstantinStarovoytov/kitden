@@ -7,6 +7,14 @@ export const VIEWS = ["overview", "map", "gateway", "changes", "agents"];
 export const state = { view: "overview", kind: "mcp_server", only: "all", project: "", q: "", selected: null };
 // A change is being applied or undone: live rescans wait so the result can morph in.
 export const busy = { change: false };
+let idleListener = () => {};
+export function onIdle(fn) { idleListener = fn; }
+export function setBusy(value) {
+  busy.change = value;
+  if (!value) idleListener();
+}
+// When the last full reload started, so a skipped rescan can tell whether it was covered.
+export const freshness = { reloadStartedAt: 0 };
 export const data = { clients: null, projects: null, overview: null, map: null, gateway: null, changes: null, errors: {} };
 
 let renderPlace = () => {};
@@ -31,22 +39,40 @@ export function hashFor(s) {
   return `#${s.view}${query(params)}`;
 }
 
-function writeHash() {
-  try { history.replaceState(null, "", hashFor(state)); } catch { /* not a normal page */ }
+// A new place or project gets its own history entry, so Back returns to it; tabs, filters
+// and search only replace the current one.
+function writeHash(addEntry = false) {
+  try {
+    if (addEntry) history.pushState(null, "", hashFor(state));
+    else history.replaceState(null, "", hashFor(state));
+  } catch { /* not a normal page */ }
+}
+
+function show(moving) {
+  if (moving) transition(() => { renderPlace(); document.getElementById("content").scrollTop = 0; });
+  else renderPlace();
 }
 
 // Change place or filters. Place changes cross-fade; filter changes are instant.
 export function go(view, params = {}) {
   const moving = view !== state.view;
+  const newProject = params.project !== undefined && params.project !== state.project;
   Object.assign(state, { view }, params);
-  writeHash();
-  if (moving) transition(() => { renderPlace(); document.getElementById("content").scrollTop = 0; });
-  else renderPlace();
+  writeHash(moving || newProject);
+  show(moving);
 }
 
 export function setState(params) {
+  const newProject = params.project !== undefined && params.project !== state.project;
   Object.assign(state, params);
-  writeHash();
+  writeHash(newProject);
+}
+
+// Back, Forward or an edited address: take the state from the address without a new entry.
+export function followAddress(next) {
+  const moving = next.view !== state.view;
+  Object.assign(state, next, { selected: null });
+  show(moving);
 }
 
 export function projectPath() {
@@ -93,6 +119,7 @@ export async function loadChanges() {
 
 // Everything the current place shows, after a scan or a change.
 export async function reload() {
+  freshness.reloadStartedAt = performance.now();
   await loadShared();
   await Promise.all([loadOverview(), loadMap(), loadGateway()]);
 }

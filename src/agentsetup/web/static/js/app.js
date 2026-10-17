@@ -9,7 +9,9 @@ import { renderMap } from "./map.js";
 import { renderOverview } from "./overview.js";
 import { closePanel, initPanel, isPanelOpen } from "./panel.js";
 import { latestChanges } from "./parts.js";
-import { busy, data, go, loadShared, parseHash, reload, setRenderer, setState, state } from "./store.js";
+import {
+  busy, data, followAddress, freshness, go, loadShared, onIdle, parseHash, reload, setRenderer, setState, state, VIEWS,
+} from "./store.js";
 
 const PLACES = {
   overview: { title: "Overview", render: renderOverview },
@@ -23,11 +25,19 @@ let shownView = null;
 
 function renderPlace() {
   if (shownView !== state.view && isPanelOpen()) closePanel({ instant: true, keepSelection: true, focus: false });
+  const samePlace = shownView === state.view;
   shownView = state.view;
   const main = $("#main");
+  // A redraw of the same place keeps keyboard focus on the same row.
+  const focusedRow = samePlace && main.contains(document.activeElement) ? document.activeElement.closest("tr[data-key]") : null;
+  const rowKey = focusedRow ? focusedRow.dataset.key : null;
   main.replaceChildren();
   const place = PLACES[state.view] || PLACES.overview;
   place.render(main);
+  if (rowKey) {
+    const row = $$("tr[data-key]", main).find((tr) => tr.dataset.key === rowKey);
+    if (row) row.focus({ preventScroll: true });
+  }
   document.title = `${place.title} · Agent setup`;
   for (const link of $$(".nav a")) {
     if (link.dataset.view === state.view) link.setAttribute("aria-current", "page");
@@ -104,13 +114,49 @@ async function rescan() {
   }
 }
 
+// A live rescan redraws the page, except while a change runs or someone types in a form:
+// then it waits, and runs once they are done if nothing newer was loaded meanwhile.
+let missedAt = 0;
+
+function typing() {
+  const active = document.activeElement;
+  return Boolean(active && $("#main").contains(active) && /^(INPUT|SELECT|TEXTAREA)$/.test(active.tagName));
+}
+
+function liveRefresh() {
+  if (busy.change || typing()) {
+    missedAt = performance.now();
+    return;
+  }
+  missedAt = 0;
+  refresh().catch(reportError);
+}
+
+function catchUp() {
+  if (missedAt && missedAt > freshness.reloadStartedAt) liveRefresh();
+  else missedAt = 0;
+}
+
 function listen() {
   const events = new EventSource("/api/events");
   events.addEventListener("rescan_started", () => $("#topbar").classList.add("scanning"));
   events.addEventListener("rescan_finished", () => {
     $("#topbar").classList.remove("scanning");
-    if (!busy.change) refresh().catch(reportError);
+    liveRefresh();
   });
+  onIdle(() => setTimeout(catchUp, 800));
+  $("#main").addEventListener("focusout", () => setTimeout(() => { if (!typing()) catchUp(); }, 0));
+}
+
+// Back, Forward or an edited address. Unknown places (like the skip link's #main) are ignored.
+function fromAddress() {
+  const view = location.hash.replace(/^#/, "").split("?")[0];
+  if (!VIEWS.includes(view)) return;
+  const next = parseHash(location.hash);
+  if (["view", "project", "kind", "only", "q"].every((key) => next[key] === state[key])) return;
+  const newProject = next.project !== state.project;
+  followAddress(next);
+  if (newProject) refresh().catch(reportError);
 }
 
 function start() {
@@ -126,9 +172,11 @@ function start() {
     event.preventDefault();
     go(link.dataset.view);
   });
-  window.addEventListener("hashchange", () => {
-    const next = parseHash(location.hash);
-    if (next.view !== state.view || next.project !== state.project) go(next.view, next);
+  window.addEventListener("hashchange", fromAddress);
+  window.addEventListener("popstate", fromAddress);
+  $(".skip").addEventListener("click", (event) => {
+    event.preventDefault();
+    $("#main").focus();
   });
   $("#where").addEventListener("change", (event) => {
     setState({ project: event.target.value, selected: null });

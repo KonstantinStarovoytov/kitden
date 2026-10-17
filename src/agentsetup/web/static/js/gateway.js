@@ -14,7 +14,7 @@ const GROUPS = [
 ];
 
 // What the person typed survives a redraw (a rescan can redraw the page at any time).
-const draft = { add: { url: "", ui_url: "", auth: "none", key_env_var: "" }, connect: null, addOpen: false };
+const draft = { add: { url: "", ui_url: "", auth: "none", key_env_var: "" }, connect: null, addOpen: false, connectOpen: null };
 
 export function gatewayName(gateway) {
   if (/metamcp/i.test(gateway.url)) return "MetaMCP";
@@ -54,7 +54,7 @@ export function renderGateway(main) {
   }
 
   const [first, ...others] = model.gateways;
-  const card = gatewayCard(first, model.connections);
+  const card = gatewayCard(first, model.gateways, model.connections);
   main.append(card);
   blocks.push(card);
   for (const gateway of others) {
@@ -94,15 +94,16 @@ function gatewayHead(gateway) {
   return head;
 }
 
-function gatewayCard(gateway, connections) {
+function gatewayCard(gateway, gateways, connections) {
   const card = el("section", "card");
   card.append(gatewayHead(gateway), routes(gateway, connections));
   const found = foundClients();
   const waiting = found.filter((c) => !(connections[c] || []).length);
   const box = el("details", "connect");
-  box.open = waiting.length > 0;
+  box.open = draft.connectOpen === null ? waiting.length > 0 : draft.connectOpen;
+  box.addEventListener("toggle", () => { draft.connectOpen = box.open; });
   box.append(el("summary", null, waiting.length ? "Connect clients" : "Connect again with another entry name"));
-  box.append(connectForm(gateway, found, waiting));
+  box.append(connectForm(gateways, found, waiting));
   card.append(box);
   return card;
 }
@@ -171,12 +172,20 @@ function input(attrs, value, onInput) {
   return node;
 }
 
-function connectForm(gateway, found, waiting) {
-  if (!draft.connect || draft.connect.gateway !== gateway.id) {
-    draft.connect = { gateway: gateway.id, name: "gateway", clients: new Set(waiting.length ? waiting : found) };
+// Connect any registered gateway; the first one is chosen until the person picks another.
+function connectForm(gateways, found, waiting) {
+  if (!draft.connect || !gateways.some((g) => g.id === draft.connect.gateway)) {
+    draft.connect = { gateway: gateways[0].id, name: "gateway", clients: new Set(waiting.length ? waiting : found) };
   }
   const state = draft.connect;
   const form = el("form", "form");
+  if (gateways.length > 1) {
+    const pick = el("select");
+    for (const g of gateways) pick.append(new Option(`${gatewayName(g)} · ${g.url}`, g.id));
+    pick.value = state.gateway;
+    pick.addEventListener("change", () => { state.gateway = pick.value; });
+    form.append(field("Gateway", pick));
+  }
   const name = input({ required: true, pattern: "[A-Za-z0-9][A-Za-z0-9_\\-]*", autocomplete: "off" }, state.name, (v) => { state.name = v; });
   form.append(field("Entry name", name));
   const checks = el("fieldset", "checks");
@@ -207,7 +216,7 @@ function connectForm(gateway, found, waiting) {
       return;
     }
     message.textContent = "";
-    review({ action: "gateway.connect", targets, params: { gateway: gateway.id, name: state.name.trim() } });
+    review({ action: "gateway.connect", targets, params: { gateway: state.gateway, name: state.name.trim() } });
   });
   return form;
 }
