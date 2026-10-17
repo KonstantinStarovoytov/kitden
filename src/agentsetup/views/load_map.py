@@ -112,9 +112,8 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
             rows[key] = Row(key=key, kind=item.kind, name=base_name(item))
         return rows[key]
 
-    applies = [
-        i for i in inventory.items if i.project is None or project is None or i.project == project
-    ]
+    # Everywhere means user-level items only; a project adds its own items.
+    applies = [i for i in inventory.items if i.project is None or i.project == project]
     for item in applies:
         if item.client in COLUMNS or item.client == DESKTOP:
             row_for(item)

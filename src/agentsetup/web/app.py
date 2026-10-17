@@ -29,8 +29,12 @@ from agentsetup.model import Change, ChangeState, Gateway, GatewayAuth
 from agentsetup.redact import redact_text
 from agentsetup.views.commands import commands_for
 from agentsetup.views.effective import project_views
+from agentsetup.views.explain import explain
 from agentsetup.views.findings import find_bypasses, find_findings, finding_dict, mark_gateways
+from agentsetup.views.gateway_view import gateway_dict, gateway_view
 from agentsetup.views.inventory import Inventory, default_adapters, inventory_dict, item_dict
+from agentsetup.views.load_map import load_map, map_dict
+from agentsetup.views.overview import overview
 from agentsetup.watch import Watcher
 from agentsetup.web.security import SecurityMiddleware
 
@@ -96,16 +100,6 @@ def change_dict(change: Change) -> dict:
             }
             for s in change.steps
         ],
-    }
-
-
-def gateway_dict(gateway: Gateway) -> dict:
-    return {
-        "id": gateway.id,
-        "url": gateway.url,
-        "ui_url": gateway.ui_url,
-        "auth": str(gateway.auth),
-        "key_env_var": gateway.key_env_var,
     }
 
 
@@ -239,6 +233,52 @@ def create_app(
         project = request.query_params.get("project") or None
         found = find_findings(state.inventory, project) + find_bypasses(state.inventory, project)
         return JSONResponse([finding_dict(f) for f in found])
+
+    # Read models for the redesigned page ------------------------------------------------
+
+    class _UnknownProject(Exception):
+        pass
+
+    def _project(request: Request) -> dict | None:
+        """The project chosen with ?project=<id>; None means everywhere."""
+        wanted = request.query_params.get("project") or ""
+        if not wanted:
+            return None
+        found = next((p for p in state.data["projects"] if p["id"] == wanted), None)
+        if found is None:
+            raise _UnknownProject
+        return found
+
+    def _registered() -> list:
+        return load_gateways(home) if home is not None else []
+
+    def _read_model(make):
+        async def endpoint(request: Request) -> JSONResponse:
+            try:
+                project = _project(request)
+            except _UnknownProject:
+                return _error("Unknown project.", 404)
+            return make(request, project, project["path"] if project else None)
+
+        return endpoint
+
+    def _map(request, project, path):
+        gateways = _registered()
+        rows = load_map(state.inventory, path, gateway_registered=bool(gateways))
+        return JSONResponse({"project": project, **map_dict(state.inventory, rows)})
+
+    def _explain(request, project, path):
+        name = request.query_params.get("name")
+        if not name:
+            return _error("Say which item to explain.", 422)
+        kind = request.query_params.get("kind") or None
+        return JSONResponse({"definitions": explain(state.inventory, name, kind, path)})
+
+    def _overview(request, project, path):
+        return JSONResponse(overview(state.inventory, _registered(), path))
+
+    def _gateway_view(request, project, path):
+        return JSONResponse(gateway_view(state.inventory, _registered(), path))
 
     # Gateways and changes (US3) ---------------------------------------------------------
 
@@ -383,6 +423,10 @@ def create_app(
             Route("/api/changes/preview", preview, methods=["POST"]),
             Route("/api/changes/{change_id}/{verb}", change_action, methods=["POST"]),
             Route("/api/commands", commands),
+            Route("/api/map", _read_model(_map)),
+            Route("/api/explain", _read_model(_explain)),
+            Route("/api/overview", _read_model(_overview)),
+            Route("/api/gateway-view", _read_model(_gateway_view)),
             Route("/api/events", stream),
             Mount("/static", StaticFiles(directory=STATIC), name="static"),
         ],

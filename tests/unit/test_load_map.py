@@ -126,3 +126,10 @@ def test_raw_names_are_returned_unchanged(home):
     assert EVIL in names
     row = next(r for r in data["rows"] if r["name"] == EVIL)
     assert set(row["cells"]["claude_code"]) == {"state", "where", "items", "count"}
+
+
+def test_project_only_items_are_not_rows_everywhere(home):
+    everywhere = {r.name for r in load_map(build_inventory(home), None)}
+    assert "site-db" not in everywhere
+    site = {r.name for r in load_map(build_inventory(home), str(home / "work/site"))}
+    assert "site-db" in site
