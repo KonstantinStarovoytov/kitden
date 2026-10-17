@@ -1,6 +1,6 @@
 # Implementation Plan: Agent setup inventory and safe controls
 
-**Branch**: `001-agent-setup-inventory` (no git branch created; work is on `main`) | **Date**: 2026-10-17 | **Spec**: [spec.md](spec.md)
+**Branch**: `001-agent-setup-inventory` | **Date**: 2026-10-17 | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `/specs/001-agent-setup-inventory/spec.md`
 

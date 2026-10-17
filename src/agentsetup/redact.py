@@ -1,0 +1,105 @@
+"""The single place where secret values are removed (FR-006).
+
+Everything shown on the page, printed by `scan`, written to the change log, or returned by the
+MCP server passes through `redact` first.
+"""
+
+import re
+from typing import Any
+from urllib.parse import unquote_plus, urlsplit, urlunsplit
+
+SECRET = "[secret]"  # noqa: S105 - placeholder text, not a password
+
+# Maps whose values are secrets (env values, header values) in Claude Code, Codex and Cursor.
+# Codex `env_http_headers` holds variable names, not values, so it is not listed here.
+_SECRET_MAPS = {"env", "headers", "http_headers"}
+
+_REFERENCE = re.compile(r"\$\{(env:)?[A-Za-z_][A-Za-z0-9_]*(:-[^}]*)?\}")
+_SECRET_WORD = r"(api[-_]?key|access[-_]?key|token|secret|password|passwd|auth|credential|sig)"  # noqa: S105 - pattern of secret names
+_SECRET_FLAG = re.compile(rf"--?[A-Za-z0-9_-]*{_SECRET_WORD}[A-Za-z0-9_-]*", re.I)
+_SECRET_FLAG_VALUE = re.compile(rf"(--?[A-Za-z0-9_-]*{_SECRET_WORD}[A-Za-z0-9_-]*)=.+", re.I)
+_SECRET_PARAM = re.compile(rf".*{_SECRET_WORD}.*", re.I)
+_HEADER_ARG = re.compile(
+    r"([A-Za-z0-9-]*(authorization|token|key|cookie|secret)[A-Za-z0-9-]*)\s*:\s*\S.*", re.I
+)
+_TOKEN_SHAPES = (
+    re.compile(
+        r"(sk-|sk_|ghp_|gho_|ghu_|ghs_|github_pat_|xox[baprs]-|glpat-|AKIA)[A-Za-z0-9_\-]{16,}"
+    ),
+    re.compile(r"eyJ[\w-]+\.[\w-]+\.[\w-]+"),
+    re.compile(r"(?i)(bearer|basic|token)\s+\S{8,}"),
+)
+
+
+def _is_reference(value: Any) -> bool:
+    return isinstance(value, str) and bool(_REFERENCE.fullmatch(value))
+
+
+class _Redactor:
+    def __init__(self) -> None:
+        self.found = False
+
+    def secret(self) -> str:
+        self.found = True
+        return SECRET
+
+    def walk(self, value: Any, key: str | None = None) -> Any:
+        if isinstance(value, dict):
+            return {k: self._field(k, v) for k, v in value.items()}
+        if isinstance(value, list):
+            return self._args(value) if key == "args" else [self.walk(v) for v in value]
+        if isinstance(value, str):
+            return self._string(value)
+        return value
+
+    def _field(self, key: str, value: Any) -> Any:
+        if key in _SECRET_MAPS and isinstance(value, dict):
+            return {k: v if _is_reference(v) else self.secret() for k, v in value.items()}
+        return self.walk(value, key)
+
+    def _args(self, args: list[Any]) -> list[Any]:
+        out: list[Any] = []
+        hide_next = False
+        for arg in args:
+            if hide_next and not _is_reference(arg):
+                out.append(self.secret())
+            elif isinstance(arg, str) and (m := _SECRET_FLAG_VALUE.fullmatch(arg)):
+                self.found = True
+                out.append(f"{m.group(1)}={SECRET}")
+            else:
+                out.append(self.walk(arg))
+            hide_next = isinstance(arg, str) and bool(_SECRET_FLAG.fullmatch(arg))
+        return out
+
+    def _string(self, value: str) -> str:
+        if _is_reference(value):
+            return value
+        if any(shape.fullmatch(value) for shape in _TOKEN_SHAPES):
+            return self.secret()
+        if m := _HEADER_ARG.fullmatch(value):
+            self.found = True
+            return f"{m.group(1)}: {SECRET}"
+        if value.startswith(("http://", "https://")):
+            return self._url(value)
+        return value
+
+    def _url(self, url: str) -> str:
+        parts = urlsplit(url)
+        netloc = parts.netloc
+        if "@" in netloc:
+            self.found = True
+            netloc = f"{SECRET}@{netloc.rsplit('@', 1)[1]}"
+        query = []
+        for pair in parts.query.split("&") if parts.query else []:
+            name, sep, val = pair.partition("=")
+            if sep and _SECRET_PARAM.fullmatch(unquote_plus(name)) and not _is_reference(val):
+                pair = f"{name}={self.secret()}"
+            query.append(pair)
+        return urlunsplit((parts.scheme, netloc, parts.path, "&".join(query), parts.fragment))
+
+
+def redact(value: Any) -> tuple[Any, bool]:
+    """Return a redacted copy of `value` and whether any secret was removed."""
+    redactor = _Redactor()
+    result = redactor.walk(value)
+    return result, redactor.found

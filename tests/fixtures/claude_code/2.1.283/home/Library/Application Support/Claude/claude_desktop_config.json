@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "metamcp-local": {
+      "command": "uvx",
+      "args": [
+        "mcp-proxy",
+        "--transport",
+        "streamablehttp",
+        "http://localhost:12008/metamcp/local/mcp"
+      ]
+    }
+  },
+  "preferences": {}
+}

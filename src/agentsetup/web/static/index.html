@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent setup</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header>
+    <h1>Agent setup</h1>
+    <p class="hint">What Claude Code, Codex and Cursor load on this computer. Read-only.</p>
+    <button id="rescan" type="button">Rescan</button>
+    <span id="status" class="hint" aria-live="polite"></span>
+  </header>
+
+  <main>
+    <section aria-labelledby="clients-title">
+      <h2 id="clients-title">Clients</h2>
+      <ul id="clients" class="clients"></ul>
+    </section>
+
+    <section id="problems-section" aria-labelledby="problems-title" hidden>
+      <h2 id="problems-title">Could not read</h2>
+      <ul id="problems"></ul>
+    </section>
+
+    <section aria-labelledby="items-title">
+      <h2 id="items-title">Items</h2>
+      <div class="filters">
+        <label>Client <select id="filter-client"><option value="">All</option></select></label>
+        <label>Kind <select id="filter-kind"><option value="">All</option></select></label>
+        <label>Search <input id="filter-text" type="search" placeholder="Name or path"></label>
+        <span id="count" class="hint"></span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Client</th><th>Kind</th><th>Name</th><th>Scope</th><th>Project</th>
+            <th>State</th><th>Source</th>
+          </tr>
+        </thead>
+        <tbody id="items"></tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>

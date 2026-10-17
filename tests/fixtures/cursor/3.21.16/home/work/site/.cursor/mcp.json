@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "site-db": {
+      "command": "uvx",
+      "args": [
+        "db"
+      ]
+    }
+  }
+}

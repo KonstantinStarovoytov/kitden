@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "Neon": {
+      "url": "https://mcp.neon.tech/mcp"
+    },
+    "n8n-mcp": {
+      "command": "npx",
+      "args": [
+        "n8n-mcp"
+      ],
+      "env": {
+        "N8N_API_KEY": "SENTINEL_SECRET_N8N"
+      }
+    }
+  }
+}

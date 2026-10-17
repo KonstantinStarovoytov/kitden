@@ -1,0 +1,39 @@
+{
+  "numStartups": 3,
+  "oauthAccount": {
+    "emailAddress": "SENTINEL_SECRET_EMAIL"
+  },
+  "mcpServers": {
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer SENTINEL_SECRET_GITHUB"
+      }
+    }
+  },
+  "projects": {
+    "{HOME}/work/website": {
+      "mcpServers": {
+        "local-db": {
+          "command": "uvx",
+          "args": [
+            "mcp-db",
+            "--password",
+            "SENTINEL_SECRET_DB"
+          ]
+        }
+      },
+      "enabledMcpjsonServers": [
+        "docs"
+      ],
+      "disabledMcpjsonServers": [
+        "old-search"
+      ],
+      "hasTrustDialogAccepted": true
+    },
+    "{HOME}/work/deleted-project": {
+      "mcpServers": {}
+    }
+  }
+}

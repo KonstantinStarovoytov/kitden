@@ -1,0 +1,34 @@
+# Owner comment: keep me
+model = "gpt-6-astra"
+
+[mcp_servers.neon]
+url = "https://mcp.neon.tech/mcp"
+
+[mcp_servers.langfuse-data]
+url = "https://cloud.langfuse.com/api/public/mcp"
+http_headers = { Authorization = "Basic SENTINEL_SECRET_LANGFUSE" }
+
+[mcp_servers.aseprite]
+command = "uv"
+args = ["run", "aseprite-mcp"]
+enabled = false
+
+[plugins."browser@openai-bundled"]
+enabled = true
+
+[plugins."pdf@openai-primary-runtime"]
+enabled = false
+
+[marketplaces.openai-bundled]
+source_type = "local"
+source = "{HOME}/.codex/.tmp/bundled"
+
+[projects."{HOME}/work/api"]
+trust_level = "trusted"
+
+[projects."{HOME}/work/untrusted"]
+trust_level = "untrusted"
+
+[[skills.config]]
+path = "{HOME}/.agents/skills/pixel-art/SKILL.md"
+enabled = false

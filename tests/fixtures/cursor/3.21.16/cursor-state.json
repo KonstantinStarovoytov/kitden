@@ -1,0 +1,22 @@
+{
+  "cursor.plugins.installedIds.123|no-workspace": [
+    {
+      "id": "langfuse@cursor-public",
+      "sources": [
+        "marketplace"
+      ]
+    }
+  ],
+  "cursor.plugins.installedIds.123|file://{HOME}/work/site": [
+    {
+      "id": "langfuse@cursor-public",
+      "sources": [
+        "marketplace"
+      ]
+    }
+  ],
+  "mcpOAuth.neon": {
+    "access_token": "SENTINEL_SECRET_OAUTH"
+  },
+  "secret://cursor.token": "SENTINEL_SECRET_TOKEN"
+}

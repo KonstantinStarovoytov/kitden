@@ -1,6 +1,6 @@
 # Feature Specification: Agent setup inventory and safe controls
 
-**Feature Branch**: `001-agent-setup-inventory` (no git branch created; work is on `main`)
+**Feature Branch**: `001-agent-setup-inventory`
 
 **Created**: 2026-10-17
 

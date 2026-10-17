@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "docs": {
+      "type": "http",
+      "url": "http://localhost:9000/mcp"
+    },
+    "old-search": {
+      "command": "npx",
+      "args": [
+        "old-search-mcp"
+      ]
+    }
+  }
+}

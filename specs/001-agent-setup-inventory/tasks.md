@@ -14,23 +14,23 @@ files, no open dependency). **[US1]**…**[US5]** = user story from the spec.
 
 ## Phase 1: Setup
 
-- [ ] T001 Create `pyproject.toml` for uv: Python >=3.13, command `agentsetup` → `src/agentsetup/cli.py`, dependencies `mcp`, `starlette`, `uvicorn`, `tomlkit`, `watchfiles`; dev: `pytest`, `hypothesis`, `syrupy`
-- [ ] T002 Add ruff settings and the pytest marker `contract` in `pyproject.toml`
+- [x] T001 Create `pyproject.toml` for uv: Python >=3.13, command `agentsetup` → `src/agentsetup/cli.py`, dependencies `mcp`, `starlette`, `uvicorn`, `tomlkit`, `watchfiles`; dev: `pytest`, `hypothesis`, `syrupy`
+- [x] T002 Add ruff settings and the pytest marker `contract` in `pyproject.toml`
 - [x] T003 [P] Add `.idea/`, `.venv/`, `__pycache__/` to `.gitignore`
-- [ ] T004 [P] Create `tests/fixtures/README.md`: one folder per client and version; real configs with every secret replaced by a sentinel string
+- [x] T004 [P] Create `tests/fixtures/README.md`: one folder per client and version; real configs with every secret replaced by a sentinel string
 
 ## Phase 2: Foundation (blocks all stories)
 
 - [ ] T005 [P] Spike S1: find where Cursor stores plugin on/off; test that a write on a sandbox copy survives restart and team sync; write the result in `specs/001-agent-setup-inventory/spikes/s1-cursor-plugins.md`
 - [ ] T006 [P] Spike S4: check if the running Codex app overwrites outside edits to `config.toml`; write the result in `specs/001-agent-setup-inventory/spikes/s4-codex-app.md`
-- [ ] T007 [P] Spike S5: find where Cursor stores the "Third-Party Imports" switch; write the result in `specs/001-agent-setup-inventory/spikes/s5-cursor-imports.md`
-- [ ] T008 [P] List supported client versions and version commands (research R11) in `src/agentsetup/clients/versions.py`
-- [ ] T009 Create the types from [data-model.md](data-model.md) (Client, Source, Scope, Item, Project, Finding, Change, Gateway) with their enums in `src/agentsetup/model.py`
-- [ ] T010 [P] Write one redaction function: secret values become `[secret]`, `${VAR}` references stay, in `src/agentsetup/redact.py`
-- [ ] T011 [P] Test that no fixture sentinel survives redaction in `tests/security/test_redaction.py`
-- [ ] T012 Define the client adapter interface (detect, version, sources, items, allowed actions) in `src/agentsetup/clients/base.py`
-- [ ] T013 [P] Write the atomic file write: resolve real path, refuse hard-linked files, temp file in same folder, keep file mode, full fsync, `os.replace`, in `src/agentsetup/changes/atomic.py`
-- [ ] T014 [P] Test atomic write (mode kept, symlink target written, hard link refused) in `tests/unit/test_atomic.py`
+- [x] T007 [P] Spike S5: find where Cursor stores the "Third-Party Imports" switch; write the result in `specs/001-agent-setup-inventory/spikes/s5-cursor-imports.md`
+- [x] T008 [P] List supported client versions and version commands (research R11) in `src/agentsetup/clients/versions.py`
+- [x] T009 Create the types from [data-model.md](data-model.md) (Client, Source, Scope, Item, Project, Finding, Change, Gateway) with their enums in `src/agentsetup/model.py`
+- [x] T010 [P] Write one redaction function: secret values become `[secret]`, `${VAR}` references stay, in `src/agentsetup/redact.py`
+- [x] T011 [P] Test that no fixture sentinel survives redaction in `tests/security/test_redaction.py`
+- [x] T012 Define the client adapter interface (detect, version, sources, items, allowed actions) in `src/agentsetup/clients/base.py`
+- [x] T013 [P] Write the atomic file write: resolve real path, refuse hard-linked files, temp file in same folder, keep file mode, full fsync, `os.replace`, in `src/agentsetup/changes/atomic.py`
+- [x] T014 [P] Test atomic write (mode kept, symlink target written, hard link refused) in `tests/unit/test_atomic.py`
 
 **Checkpoint**: foundation ready.
 
@@ -39,22 +39,22 @@ files, no open dependency). **[US1]**…**[US5]** = user story from the spec.
 **Goal**: one page lists all MCP servers, skills, plugins, hooks and marketplaces of Claude Code, Codex and Cursor, with source, scope, on/off, and "unknown" plus reason.
 **Test**: compare the page with each client's own settings; no client file changes.
 
-- [ ] T015 [P] [US1] Fixture tests for reading Claude Code and the Desktop Code tab (also: missing project folder, unreadable file, symlinked folder) in `tests/unit/test_read_claude_code.py`
-- [ ] T016 [P] [US1] Fixture tests for reading Codex (also: untrusted project, unknown format) in `tests/unit/test_read_codex.py`
-- [ ] T017 [P] [US1] Fixture tests for reading Cursor (also: locked state database, stale snapshot) in `tests/unit/test_read_cursor.py`
-- [ ] T018 [P] [US1] Claude Code adapter: MCP (local, project, user, managed, plugin, `claude_desktop_config.json`), settings, plugins, skills, hooks, marketplaces, projects; account items as unknown "stored_in_account", in `src/agentsetup/clients/claude_code.py`
-- [ ] T019 [P] [US1] Codex adapter: config layers (project layers only when trusted), MCP, plugins, marketplaces, skills, hooks, projects, in `src/agentsetup/clients/codex.py`
-- [ ] T020 [P] [US1] Cursor adapter: `mcp.json` files, skill and plugin folders, hooks; state database read-only with the key allowlist from research R5, in `src/agentsetup/clients/cursor.py`
-- [ ] T021 [US1] Build the inventory from all adapters, with unknown reasons, in `src/agentsetup/views/inventory.py`
-- [ ] T022 [US1] Add `agentsetup scan --json` (redacted, read-only) in `src/agentsetup/cli.py`
-- [ ] T023 [US1] Test that a scan changes no client file (hashes before and after) in `tests/unit/test_scan_read_only.py`
-- [ ] T024 [P] [US1] Security tests: wrong Host → 403, token → cookie, POST needs same Origin and `X-Tool-Request`, `/api/events` needs cookie and Origin, no CORS headers, item text with HTML shows as text, CSP blocks inline scripts, in `tests/security/test_web_security.py`
-- [ ] T025 [US1] Security layer from research R6 in `src/agentsetup/web/security.py`
-- [ ] T026 [US1] Read endpoints `/api/clients`, `/api/items`, `/api/projects` per [local-api.md](contracts/local-api.md) in `src/agentsetup/web/app.py`
-- [ ] T027 [US1] Start command: bind `127.0.0.1`, port 47800 or next free, print the token URL, open the browser, in `src/agentsetup/cli.py`
-- [ ] T028 [P] [US1] Debounced folder watcher that triggers a rescan and ignores the tool's own writes in `src/agentsetup/watch.py`
-- [ ] T029 [US1] Endpoints `/api/rescan` and `/api/events` in `src/agentsetup/web/app.py`
-- [ ] T030 [US1] Inventory page (clients with versions, items, source, scope, on/off, unknown reason); show all file text as plain text, no `innerHTML`, no inline scripts, no CDN, in `src/agentsetup/web/static/`
+- [x] T015 [P] [US1] Fixture tests for reading Claude Code and the Desktop Code tab (also: missing project folder, unreadable file, symlinked folder) in `tests/unit/test_read_claude_code.py`
+- [x] T016 [P] [US1] Fixture tests for reading Codex (also: untrusted project, unknown format) in `tests/unit/test_read_codex.py`
+- [x] T017 [P] [US1] Fixture tests for reading Cursor (also: locked state database, stale snapshot) in `tests/unit/test_read_cursor.py`
+- [x] T018 [P] [US1] Claude Code adapter: MCP (local, project, user, managed, plugin, `claude_desktop_config.json`), settings, plugins, skills, hooks, marketplaces, projects; account items as unknown "stored_in_account", in `src/agentsetup/clients/claude_code.py`
+- [x] T019 [P] [US1] Codex adapter: config layers (project layers only when trusted), MCP, plugins, marketplaces, skills, hooks, projects, in `src/agentsetup/clients/codex.py`
+- [x] T020 [P] [US1] Cursor adapter: `mcp.json` files, skill and plugin folders, hooks; state database read-only with the key allowlist from research R5, in `src/agentsetup/clients/cursor.py`
+- [x] T021 [US1] Build the inventory from all adapters, with unknown reasons, in `src/agentsetup/views/inventory.py`
+- [x] T022 [US1] Add `agentsetup scan --json` (redacted, read-only) in `src/agentsetup/cli.py`
+- [x] T023 [US1] Test that a scan changes no client file (hashes before and after) in `tests/unit/test_scan_read_only.py`
+- [x] T024 [P] [US1] Security tests: wrong Host → 403, token → cookie, POST needs same Origin and `X-Tool-Request`, `/api/events` needs cookie and Origin, no CORS headers, item text with HTML shows as text, CSP blocks inline scripts, in `tests/security/test_web_security.py`
+- [x] T025 [US1] Security layer from research R6 in `src/agentsetup/web/security.py`
+- [x] T026 [US1] Read endpoints `/api/clients`, `/api/items`, `/api/projects` per [local-api.md](contracts/local-api.md) in `src/agentsetup/web/app.py`
+- [x] T027 [US1] Start command: bind `127.0.0.1`, port 47800 or next free, print the token URL, open the browser, in `src/agentsetup/cli.py`
+- [x] T028 [P] [US1] Debounced folder watcher that triggers a rescan and ignores the tool's own writes in `src/agentsetup/watch.py`
+- [x] T029 [US1] Endpoints `/api/rescan` and `/api/events` in `src/agentsetup/web/app.py`
+- [x] T030 [US1] Inventory page (clients with versions, items, source, scope, on/off, unknown reason); show all file text as plain text, no `innerHTML`, no inline scripts, no CDN, in `src/agentsetup/web/static/`
 
 **Checkpoint**: MVP works on its own.
 
