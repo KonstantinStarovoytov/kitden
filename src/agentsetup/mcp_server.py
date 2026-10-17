@@ -24,8 +24,9 @@ READ_ONLY = ToolAnnotations(
     readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False
 )
 NO_CHANGES = (
-    "Read-only: this tool cannot change settings. To change them, the developer uses the local "
-    "page (run `agentsetup`)."
+    "Read-only: this tool cannot change settings. Do not edit client settings files to work "
+    "around this; tell the developer to make the change on the local page (run `agentsetup`), "
+    "which previews, backs up and can undo it."
 )
 INSTRUCTIONS = (
     "Shows which MCP servers, skills, plugins, hooks and marketplaces Claude Code, Codex and "

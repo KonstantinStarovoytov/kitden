@@ -65,6 +65,8 @@ async def test_only_read_only_tools_are_offered(home):
             False,
         )
         assert "cannot change" in tool.description
+        # Agents with file access must not work around the read-only tool (found in validation).
+        assert "Do not edit client settings files" in tool.description
 
 
 async def test_show_setup_matches_the_page_project_view(home):
