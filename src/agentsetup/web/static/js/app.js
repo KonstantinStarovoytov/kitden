@@ -3,12 +3,13 @@ import { postJson } from "./api.js";
 import { $, $$, el, reportError, shortPath } from "./dom.js";
 import { rollTo, transition } from "./motion.js";
 import { renderOverview } from "./overview.js";
+import { renderMap } from "./map.js";
 import { latestChanges } from "./parts.js";
 import { data, go, loadShared, parseHash, reload, setRenderer, setState, state } from "./store.js";
 
 const PLACES = {
   overview: { title: "Overview", render: renderOverview },
-  map: { title: "Load map", render: placeholder("Load map") },
+  map: { title: "Load map", render: renderMap },
   gateway: { title: "Gateway", render: placeholder("Gateway") },
   changes: { title: "Changes", render: placeholder("Changes") },
   agents: { title: "Agents", render: placeholder("Let agents see this setup") },
