@@ -96,6 +96,26 @@ sandbox home at 1280×800 and 390×844, light and dark.
 - **Page did not stop with an open browser tab.** The event stream kept the server waiting; the
   stop now waits at most 2 seconds.
 
+## Design polish (2026-10-18, feature 004)
+
+Part A of the [design review](../../docs/research/design-and-install-review-2026-10-18.md)
+was applied on branch `004-design-polish` (spec in [specs/004-design-polish](../004-design-polish/spec.md)).
+Checked in the browser on a sandbox home built from the fixtures, dark and light, 1280 and 375 wide.
+
+| Check | Result |
+| --- | --- |
+| Overview: one card per item, one sentence, one primary button, no paths; "Keep one…" opens the item in the panel | Pass |
+| Panel: the warning names the fix, the matching button is primary, the rest under More; wins row neutral | Pass |
+| Review: "After:" line in sockets first, diff and command under "Show file change", one Cancel, ⌘ Enter applies | Pass |
+| Remove list: rail counters, pills, bar, Recent changes, legend, State unknown, ×2, diff headers, Entry name, paths, Details | Gone |
+| Gateway: wires only for connected clients, one row per server with client marks, "Remove direct entry…" | Pass |
+| Changes: the row opens details, Undo only on active rows, undone rows greyed | Pass (remove + undo on the sandbox) |
+| Load map: "Loads · everywhere", flag "Not via gateway" | Pass |
+| Tests | 369 unit pass, ruff clean; contract tests not run |
+
+Limits: with one gateway entry name (`gateway`), the page does not offer to connect a client to
+a second gateway; with two gateways the first says "Used" or "Not used". Phone layout unchanged.
+
 ## Open items
 
 - Decided (owner, 2026-10-17): keep running `codex plugin list --json` in the scan. It shows remote
