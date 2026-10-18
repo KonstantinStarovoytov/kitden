@@ -1,8 +1,8 @@
 // Side panel: item details, change review, the Apply motion, and the toast with Undo.
 import { getJson, postJson, query } from "./api.js";
-import { $, $$, button, el, shortPath, shortPaths } from "./dom.js";
+import { $, $$, button, el, reportError, shortPath, shortPaths } from "./dom.js";
 import { morphOnNextRender, onOpenItem } from "./map.js";
-import { finishTransition } from "./motion.js";
+import { animate, finishTransition } from "./motion.js";
 import { CLIENT_NAMES, mark, socket } from "./parts.js";
 import { busy, data, reload, render, setBusy, state } from "./store.js";
 
@@ -211,8 +211,24 @@ function layer(def) {
   middle.append(where);
   if (def.summary) middle.append(el("div", "why mono", def.summary));
   if (why) middle.append(el("div", "why", why));
-  row.append(dot, middle, el("span", wins ? "badge win" : "badge", badge));
+  const toggle = !unknown && def.kind === "plugin" && def.actions.find((a) => a === "plugin.disable" || a === "plugin.enable");
+  row.append(dot, middle, toggle ? pluginSwitch(def, toggle) : el("span", wins ? "badge win" : "badge", badge));
   return row;
+}
+
+// A switch that shows the plugin's real state. Pressing it opens the review; it flips only
+// when the change is written and checked, never before (the Load map then shows the new state).
+function pluginSwitch(def, action) {
+  const on = action === "plugin.disable";
+  const node = el("button", "switch");
+  node.type = "button";
+  node.setAttribute("role", "switch");
+  node.setAttribute("aria-checked", String(on));
+  node.setAttribute("aria-label", `${on ? "Turn off" : "Turn on"} in ${clientName(def.client)}…`);
+  node.title = on ? "On. Press to review turning it off." : "Off. Press to review turning it on.";
+  node.append(el("span", "thumb"));
+  node.addEventListener("click", () => review({ action, targets: [{ item: def.id }], params: {} }).catch(reportError));
+  return node;
 }
 
 function showDetails(row, definitions) {
@@ -364,14 +380,19 @@ function afterLine(entries) {
 }
 
 // Only the lines that change show; the diff's own header lines say nothing a person needs.
+// Each line is a block, so removed and added lines carry their own tint; they settle in one
+// after another when the file change is opened.
 function diffLines(text) {
   const pre = el("pre", "diff");
+  let index = 0;
   for (const line of String(text || "").split("\n")) {
     if (line === "--- before" || line === "+++ after" || /^@@ /.test(line)) continue;
-    let look = null;
-    if (line.startsWith("+")) look = "add";
-    else if (line.startsWith("-")) look = "del";
-    pre.append(el("span", look, `${line}\n`));
+    let look = "line";
+    if (line.startsWith("+")) look = "line add";
+    else if (line.startsWith("-")) look = "line del";
+    const node = el("span", look, line || " ");
+    node.style.setProperty("--i", String(Math.min(index++, 14)));
+    pre.append(node);
   }
   return pre;
 }
@@ -423,7 +444,13 @@ function failed(apply, cancel, label, body) {
     setBusy(false);
     resetApply(apply, cancel, label);
     body.prepend(callout("Could not reach the page server. Nothing was changed by this page.", "error"));
+    shake(apply);
   };
+}
+
+// A short "no" from the button that was pressed; the error itself stays in the callout.
+function shake(node) {
+  animate(node, [{ transform: "translateX(0)" }, { transform: "translateX(-10px)" }, { transform: "translateX(7px)" }, { transform: "translateX(-4px)" }, { transform: "translateX(0)" }], { duration: 360 });
 }
 
 function swapLabel(label, text) {
@@ -482,6 +509,7 @@ async function applyChange(change, { apply, cancel, label, body }) {
     const detail = after && after.error ? ` (${shortPaths(after.error)})` : "";
     for (const old of body.querySelectorAll(".callout.error")) old.remove();
     body.prepend(callout(`${reason}${detail}`, "error"));
+    shake(apply);
     if (after && after.state !== "previewed") {
       apply.replaceWith(button("Preview again", () => review(previewBody), "btn primary"));
     }

@@ -90,6 +90,12 @@ export function renderMap(main) {
 
   const selected = table.querySelector('tr[aria-selected="true"]');
   if (selected) requestAnimationFrame(() => selected.scrollIntoView({ block: "nearest" }));
+  // Arriving from a finding: the row glows once and the clients that load it ping, so the
+  // eye lands on the place the Overview talked about.
+  if (selected && wantOpen) {
+    selected.classList.add("arrive");
+    for (const s of selected.querySelectorAll(".socket.s-on, .socket.s-gw")) s.classList.add("pulse");
+  }
   const row = wantOpen && rows.find((r) => r.key === state.selected);
   if (row && selected) openRow(row, selected, "pointer");
 }

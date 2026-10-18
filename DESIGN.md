@@ -41,6 +41,29 @@ Preserve the compact information layout. Use restrained neutral panels, fine bor
 
 Keep existing system fonts and motion, keyboard focus, and reduced-motion support. Search and project controls show a visible focus outline. Preserve explicit Apply, backup and Undo semantics. Brand color must not imply success or a safe action.
 
+## Motion
+
+Motion explains a change to the person's setup; it never decorates. Research and audit:
+[motion design review](docs/research/motion-design-2026-10-18.md).
+
+| Token | Value | Use |
+| --- | --- | --- |
+| Press | 80 ms in, 260 ms `--spring` out | Buttons, switches, client marks |
+| `--t-fast` | 180 ms | Hover colour, label swaps |
+| `--t-panel` | 320 ms, `--ease-drawer` | Drawer, toast |
+| `--spring` | CSS `linear()` critically damped spring, no overshoot; falls back to `--ease-out` | Things the hand moves |
+| Stagger | 45 ms between blocks, 18 ms between diff lines (14 at most) | First visit, diff |
+
+Rules:
+
+- **Truth first.** A success look (check mark, switch flip, new state) appears only after the server says the write is verified. A switch shows the real state; pressing it opens the review and it flips only after Apply.
+- **No fake activity.** No looping animation that suggests traffic, scanning or work Kitden cannot see. A gateway wire draws once when its connection first appears, then stays still.
+- **Errors stay.** An error is a callout that stays until the next action; the button that failed gives one short shake (10 px, 360 ms).
+- **Calm, not bouncy.** No overshoot anywhere: press scales to 0.98, the switch thumb slides with ease-in-out.
+- **Point, don't move.** To show where something is, light it (row glow, socket ping, route focus) instead of moving the layout.
+- Animate `transform` and `opacity` only, except the client counts row, which opens with `grid-template-rows`.
+- `prefers-reduced-motion: reduce` turns all animation off; every end state is the resting style, so nothing is lost.
+
 ## Authority
 
 This file and `src/kitden/web/static/style.css` are the current identity. Earlier portal mockups and generated boards are historical explorations, not implementation references. Feature scope and verification live in `specs/005-den-brand/`.

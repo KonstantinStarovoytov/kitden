@@ -103,7 +103,7 @@ function gatewayHead(gateway, model) {
 
 function gatewayCard(gateway, model) {
   const card = el("section", "card");
-  card.append(gatewayHead(gateway, model), routes(gateway, model.connections));
+  card.append(gatewayHead(gateway, model), routes(gateway, model.connections, model.groups.move));
   // Only clients without a gateway entry are offered; the others are connected already.
   const waiting = foundClients().filter((c) => !(model.connections[c] || []).length);
   if (waiting.length) {
@@ -116,16 +116,30 @@ function gatewayCard(gateway, model) {
   return card;
 }
 
-// Three clients, one hub: a wire, with flowing dashes, only for a client that has a gateway
-// entry. A client without one stands apart.
-function routes(gateway, connections) {
+// Wires already drawn on this page. A wire draws itself once, when its connection first
+// appears; it never moves after that, because Kitden cannot see real traffic.
+const drawn = new Set();
+
+// Hovering a client or its wire lights that route and dims the rest. Hovering a server row
+// lights only the clients that load it: its own entry does not go through the gateway.
+export function focusRoutes(clients, { wires = true } = {}) {
+  for (const svg of document.querySelectorAll(".routes")) {
+    svg.classList.toggle("focusing", clients.length > 0);
+    svg.classList.toggle("nodes-only", !wires);
+    for (const group of svg.querySelectorAll(".route")) group.classList.toggle("focus", clients.includes(group.dataset.client));
+  }
+}
+
+// Three clients, one hub: a wire only for a client that has a gateway entry. A client
+// without one stands apart.
+function routes(gateway, connections, direct = []) {
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
-  const add = (tag, attrs, text) => {
+  const add = (tag, attrs, text, parent = svg) => {
     const node = document.createElementNS(ns, tag);
     for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
     if (text) node.textContent = text;
-    svg.append(node);
+    parent.append(node);
     return node;
   };
   const name = gatewayName(gateway);
@@ -137,24 +151,35 @@ function routes(gateway, connections) {
   const said = linked.length ? `${linked.map((c) => CLIENT_NAMES[c]).join(", ")} connect to ${name}` : `No client connects to ${name} yet`;
   svg.setAttribute("aria-label", apart.length && linked.length ? `${said}; ${apart.join(", ")} not yet.` : `${said}.`);
   const hub = { x: 470, y: 75 };
-  const speeds = ["", "mid", "slow"];
+  let order = 0;
   WRITABLE.forEach((client, i) => {
     const y = 25 + i * 50;
-    const d = `M 150 ${y} C 300 ${y}, 330 ${hub.y}, ${hub.x - 2} ${hub.y}`;
+    const d = `M 200 ${y} C 330 ${y}, 350 ${hub.y}, ${hub.x - 2} ${hub.y}`;
+    const group = add("g", { class: linked.includes(client) ? "route linked" : "route", "data-client": client });
+    group.addEventListener("pointerenter", () => focusRoutes([client]));
+    group.addEventListener("pointerleave", () => focusRoutes([]));
     if (linked.includes(client)) {
-      add("path", { d, class: "wire" });
-      add("path", { d, class: `flow ${speeds[i]}` });
+      const wire = add("path", { d, class: "wire", pathLength: "1" }, null, group);
+      const key = `${gateway.id}:${client}`;
+      if (!drawn.has(key)) {
+        drawn.add(key);
+        wire.classList.add("draw");
+        wire.style.animationDelay = `${order++ * 90}ms`;
+      }
     }
-    add("rect", { x: 8, y: y - 15, width: 142, height: 30, rx: 7, class: "node" });
+    add("rect", { x: 8, y: y - 15, width: 192, height: 30, rx: 7, class: "node" }, null, group);
     // The same tile as mark(): the Claude glyph sits inside it, the other icons fill it.
     const icon = CLIENT_ICONS[client];
     const pad = icon === "claude" ? 4 : 0;
-    add("rect", { x: 16, y: y - 12, width: 24, height: 24, rx: 6, class: "node-tile" });
+    add("rect", { x: 16, y: y - 12, width: 24, height: 24, rx: 6, class: "node-tile" }, null, group);
     const box = { x: 16 + pad, y: y - 12 + pad, width: 24 - 2 * pad, height: 24 - 2 * pad, "aria-hidden": "true" };
-    const tile = add("g", { class: DARK_ICONS.has(icon) ? "has-dark" : "" });
-    tile.append(add("image", { ...box, href: `/static/brand/clients/${icon}.png`, class: "node-icon icon-light" }));
-    if (DARK_ICONS.has(icon)) tile.append(add("image", { ...box, href: `/static/brand/clients/${icon}-dark.png`, class: "node-icon icon-dark" }));
-    add("text", { x: 50, y: y + 4, class: "sub" }, CLIENT_NAMES[client]);
+    const tile = add("g", { class: DARK_ICONS.has(icon) ? "has-dark" : "" }, null, group);
+    add("image", { ...box, href: `/static/brand/clients/${icon}.png`, class: "node-icon icon-light" }, null, tile);
+    if (DARK_ICONS.has(icon)) add("image", { ...box, href: `/static/brand/clients/${icon}-dark.png`, class: "node-icon icon-dark" }, null, tile);
+    add("text", { x: 50, y: y + 4, class: "sub" }, CLIENT_NAMES[client], group);
+    // Servers this client reaches directly, around the gateway: listed below the diagram.
+    const around = direct.filter((row) => row.clients.includes(client)).length;
+    if (around) add("text", { x: 190, y: y + 4, class: "bypass", "text-anchor": "end" }, `${around} direct`, group);
   });
   add("rect", { x: hub.x, y: hub.y - 22, width: 160, height: 44, rx: 9, class: "hub" });
   add("text", { x: hub.x + 14, y: hub.y - 2 }, name);
@@ -168,6 +193,8 @@ const GROUP_WORDS = { move: "Remote", local: "Local", plugin: "Plugin" };
 // commands stay behind Details (the same panel as on the Load map).
 function groupRow(row, group) {
   const node = el("div", "list-row");
+  node.addEventListener("pointerenter", () => focusRoutes(row.clients, { wires: false }));
+  node.addEventListener("pointerleave", () => focusRoutes([]));
   const marks = el("span", "chip");
   marks.setAttribute("aria-label", row.clients.map((c) => CLIENT_NAMES[c] || c).join(", "));
   for (const client of row.clients) marks.append(mark(client));

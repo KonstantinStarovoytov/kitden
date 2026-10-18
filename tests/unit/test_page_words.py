@@ -77,3 +77,16 @@ def test_gateway_rows_keep_addresses_behind_a_details_button():
 
 def test_gateway_says_its_lists_are_mcp_servers():
     assert "MCP servers not in the gateway" in script("gateway.js")
+
+
+def test_gateway_wires_do_not_fake_traffic():
+    # A wire draws once when its connection appears; nothing loops, Kitden cannot see traffic.
+    css = (STATIC / "style.css").read_text()
+    assert not any(".routes" in line and "infinite" in line for line in css.splitlines())
+    assert "flow" not in script("gateway.js")
+
+
+def test_plugin_switch_opens_a_review_and_does_not_flip_itself():
+    text = script("panel.js")
+    assert 'setAttribute("role", "switch")' in text
+    assert text.count('"aria-checked"') == 1

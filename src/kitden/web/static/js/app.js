@@ -5,7 +5,7 @@ import { rollTo, transition } from "./motion.js";
 import { renderAgents } from "./agents.js";
 import { renderChanges } from "./changes.js";
 import { renderGateway } from "./gateway.js";
-import { renderMap } from "./map.js";
+import { morphOnNextRender, renderMap } from "./map.js";
 import { renderOverview } from "./overview.js";
 import { closePanel, initPanel, isPanelOpen } from "./panel.js";
 import { latestChanges } from "./parts.js";
@@ -184,6 +184,8 @@ function start() {
   });
   $("#where").addEventListener("change", (event) => {
     setState({ project: event.target.value, selected: null });
+    // On the Load map, each cell turns into its state in the new scope instead of jumping.
+    if (state.view === "map") morphOnNextRender();
     refresh().catch(reportError);
   });
   $("#q").addEventListener("input", (event) => {

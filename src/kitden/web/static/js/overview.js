@@ -4,7 +4,7 @@ import { button, el, plural, shortPaths } from "./dom.js";
 import { openSelectedOnRender } from "./map.js";
 import { entrance } from "./motion.js";
 import { banner, mark, skeleton, socket } from "./parts.js";
-import { data, go, loadOverview, projectPath, render } from "./store.js";
+import { data, go, loadMap, loadOverview, projectPath, render } from "./store.js";
 
 let notesOpen = false;
 
@@ -82,9 +82,34 @@ function notesBlock(count) {
   return box;
 }
 
+// A found client opens to what it loads, counted from the Load map; each count goes there.
+const LOAD_KINDS = [
+  ["mcp_server", "MCP server", "MCP servers"], ["plugin", "plugin", "plugins"],
+  ["skill", "skill", "skills"], ["hook", "hook", "hooks"],
+];
+const openClients = new Set();
+
+function loadsLine(clientId) {
+  const line = el("div", "loads");
+  if (!data.map) {
+    line.append(el("span", "muted", "Counting…"));
+    const failed = () => line.replaceChildren(el("span", "muted", "Could not count."));
+    loadMap().then(() => (data.map ? line.replaceWith(loadsLine(clientId)) : failed())).catch(failed);
+    return line;
+  }
+  const counts = LOAD_KINDS.map(([kind, one, many]) => {
+    const n = data.map.rows.filter((r) => r.kind === kind && ["on", "gw"].includes(r.cells[clientId] && r.cells[clientId].state)).length;
+    return [kind, n, plural(n, one, many)];
+  }).filter(([, n]) => n);
+  if (!counts.length) line.append(el("span", "muted", "Loads nothing here."));
+  for (const [kind, , words] of counts) line.append(button(words, () => go("map", { kind, only: "all", q: "" }), "btn small ghost"));
+  return line;
+}
+
 function clientsCard(clients) {
   const card = el("section", "card");
   card.append(el("h2", null, "Clients"));
+  const columns = new Set((data.map ? data.map.columns : []).map((c) => c.id).concat(["claude_code", "codex", "cursor"]));
   for (const client of clients) {
     const row = el("div", "client-row");
     const info = el("div");
@@ -93,7 +118,35 @@ function clientsCard(clients) {
     // A status only when something is wrong: not installed, or a version Kitden has not tested.
     if (client.status !== "found") row.append(socket({ state: "missing" }));
     else if (client.version && !client.tested) row.append(socket({ state: "unk", word: "Not tested" }));
-    card.append(row);
+    if (client.status !== "found" || !columns.has(client.id)) {
+      card.append(row);
+      continue;
+    }
+    // The whole row is the switch; the counts slide open under it.
+    row.classList.add("expandable");
+    row.tabIndex = 0;
+    row.setAttribute("role", "button");
+    const more = el("div", "client-more");
+    const inner = el("div");
+    more.append(inner);
+    const sync = () => {
+      const open = openClients.has(client.id);
+      row.setAttribute("aria-expanded", String(open));
+      more.classList.toggle("open", open);
+      if (open && !inner.firstChild) inner.append(loadsLine(client.id));
+    };
+    const toggle = () => {
+      if (openClients.has(client.id)) openClients.delete(client.id);
+      else openClients.add(client.id);
+      sync();
+    };
+    row.addEventListener("click", toggle);
+    row.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggle(); }
+    });
+    row.append(el("span", "chevron"));
+    sync();
+    card.append(row, more);
   }
   return card;
 }
