@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from pathlib import Path
+from types import SimpleNamespace
 
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
@@ -58,6 +59,11 @@ class Broadcaster:
 
     def unsubscribe(self, queue: asyncio.Queue[str]) -> None:
         self._queues.discard(queue)
+
+    @property
+    def count(self) -> int:
+        """Open event streams, one per open tab."""
+        return len(self._queues)
 
     def publish(self, event: str) -> None:
         for queue in self._queues:
@@ -457,4 +463,6 @@ def create_app(
         lifespan=lifespan,
     )
     app.state.inventory = state
+    # What a background page checks before it stops by itself (feature 002, research R6).
+    app.state.activity = SimpleNamespace(tabs=lambda: events.count, busy=write_lock.locked)
     return app

@@ -67,3 +67,56 @@ def test_waiting_for_a_record_gives_up(tmp_path):
     started = time.monotonic()
     assert page.wait_for_record(tmp_path, seconds=0.3) is None
     assert time.monotonic() - started < 2
+
+
+# Stop when no tab is open (feature 002, FR-012, research R6) --------------------------------
+
+
+def test_no_tab_for_the_whole_wait_means_stop():
+    clock = page.IdleClock(wait=600, now=0)
+    assert not clock.tick(tabs=0, busy=False, now=599)
+    assert clock.tick(tabs=0, busy=False, now=600)
+
+
+def test_a_tab_within_the_wait_keeps_the_page():
+    clock = page.IdleClock(wait=600, now=0)
+    assert not clock.tick(tabs=1, busy=False, now=500)
+    assert not clock.tick(tabs=0, busy=False, now=1000)
+    assert clock.tick(tabs=0, busy=False, now=1100)
+
+
+def test_a_running_change_delays_the_stop():
+    clock = page.IdleClock(wait=600, now=0)
+    assert not clock.tick(tabs=0, busy=True, now=700)
+    assert not clock.tick(tabs=0, busy=False, now=1200)
+    assert clock.tick(tabs=0, busy=False, now=1300)
+
+
+def test_the_page_counts_open_tabs_and_running_changes():
+    # An endless event stream cannot be closed by the test client, so count streams directly.
+    from kitden.views.inventory import Inventory
+    from kitden.web.app import Broadcaster, create_app
+
+    events = Broadcaster()
+    queue = events.subscribe()
+    assert events.count == 1
+    events.unsubscribe(queue)
+    assert events.count == 0
+    activity = create_app(lambda: Inventory(), token="tok", port=47800).state.activity
+    assert (activity.tabs(), activity.busy()) == (0, False)
+
+
+def test_the_server_stops_when_asked(tmp_path):
+    import time
+
+    from kitden.cli import pick_port, run_server
+
+    async def app(scope, receive, send):
+        if scope["type"] == "lifespan":
+            while (await receive())["type"] != "lifespan.shutdown":
+                await send({"type": "lifespan.startup.complete"})
+            await send({"type": "lifespan.shutdown.complete"})
+
+    started = time.monotonic()
+    run_server(app, "127.0.0.1", pick_port(47900), stop_when=lambda: True)
+    assert time.monotonic() - started < 5

@@ -21,6 +21,7 @@ LOCK = "page.lock"
 RECORD = "page.json"
 LOG = "page.log"
 WAIT_SECONDS = 5.0
+IDLE_SECONDS = 600.0  # a background page stops after 10 minutes without an open tab
 
 
 def _folder(home: Path) -> Path:
@@ -105,6 +106,20 @@ def wait_for_record(home: Path, seconds: float = WAIT_SECONDS) -> dict | None:
             return record
         time.sleep(0.1)
     return None
+
+
+class IdleClock:
+    """Says when a background page has had no tab and no running change for `wait` seconds."""
+
+    def __init__(self, wait: float, now: float) -> None:
+        self.wait = wait
+        self.idle_since = now
+
+    def tick(self, tabs: int, busy: bool, now: float) -> bool:
+        if tabs or busy:
+            self.idle_since = now
+            return False
+        return now - self.idle_since >= self.wait
 
 
 def start_link(record: dict) -> str:

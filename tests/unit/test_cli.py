@@ -215,3 +215,16 @@ def test_serve_writes_the_record_once_started_and_removes_it(tmp_path, monkeypat
     assert seen["record"]["port"] == 47811 and seen["running"]
     assert page.read_record(tmp_path) is None
     assert not page.page_running(tmp_path)
+
+
+@pytest.mark.parametrize(("extra", "stops"), [([], False), (["--background"], True)])
+def test_only_a_background_page_stops_by_itself(tmp_path, monkeypatch, extra, stops):
+    seen = {}
+    monkeypatch.setattr(cli, "pick_port", lambda start, tries=20: 47813)
+    monkeypatch.setattr(
+        cli, "run_server", lambda app, host, port, stop_when=None, **kw: seen.update(s=stop_when)
+    )
+    main(["serve", "--no-browser", "--home", str(tmp_path), *extra])
+    assert (seen["s"] is not None) == stops
+    if stops:
+        assert seen["s"]() is False  # just started: no reason to stop yet

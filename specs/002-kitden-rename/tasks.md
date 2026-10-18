@@ -80,7 +80,7 @@ Format: `[ID] [P?] [Story] Description`. `[P]` = can run in parallel (different 
 **Goal**: background pages stop after 10 minutes without a tab, never during a change.
 **Independent test**: quickstart §5 (tests pass a short wait).
 
-- [ ] T013 [US4] Tests first in `tests/unit/test_page.py`: no event stream for the wait → stop;
+- [X] T013 [US4] Tests first in `tests/unit/test_page.py`: no event stream for the wait → stop;
   a tab within the wait → keeps running; a running change delays the stop; a page that never had a
   tab stops; `serve` in the foreground never stops by itself. Then idle tracking in `web/app.py`
   and the stop timer in `page.py` ([R6](research.md#r6-stopping-when-no-tab-is-open)).

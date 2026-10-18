@@ -5,6 +5,7 @@ import json
 import secrets
 import socket
 import sys
+import time
 import webbrowser
 from collections import Counter
 from collections.abc import Callable
@@ -34,8 +35,15 @@ def pick_port(start: int, tries: int = 20) -> int | None:
     return None
 
 
-def run_server(app, host: str, port: int, on_started: Callable[[], None] | None = None) -> None:
-    """Serve until stopped. `on_started` runs once the port listens."""
+def run_server(
+    app,
+    host: str,
+    port: int,
+    on_started: Callable[[], None] | None = None,
+    stop_when: Callable[[], bool] | None = None,
+) -> None:
+    """Serve until stopped. `on_started` runs once the port listens; `stop_when` is checked
+    on every server tick (about ten times a second) and stops the server when it says so."""
     import uvicorn
 
     class Server(uvicorn.Server):
@@ -43,6 +51,11 @@ def run_server(app, host: str, port: int, on_started: Callable[[], None] | None 
             await super().startup(sockets=sockets)
             if self.started and on_started:
                 on_started()
+
+        async def on_tick(self, counter: int) -> bool:
+            if await super().on_tick(counter):
+                return True
+            return bool(stop_when and stop_when())
 
     # Open pages keep an event stream; do not wait for them when stopping.
     config = uvicorn.Config(
@@ -106,7 +119,15 @@ def _serve(args: argparse.Namespace) -> int:
             if not args.no_browser:
                 webbrowser.open(url)
 
-        run_server(app, HOST, port, on_started=started)
+        stop_when = None
+        if args.background:
+            clock = page.IdleClock(page.IDLE_SECONDS, time.monotonic())
+            activity = app.state.activity
+
+            def stop_when() -> bool:
+                return clock.tick(activity.tabs(), activity.busy(), time.monotonic())
+
+        run_server(app, HOST, port, on_started=started, stop_when=stop_when)
         return 0
     finally:
         page.remove_record(root)
