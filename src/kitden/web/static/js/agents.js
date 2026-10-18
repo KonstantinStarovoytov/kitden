@@ -31,7 +31,7 @@ function cell(entry) {
 }
 
 export function renderAgents(main) {
-  main.append(el("h1", null, "Let agents see this setup"));
+  main.append(el("h1", null, "Let agents read this setup"));
   main.append(el("p", "lede", "Adds a read-only MCP server to a client. An agent can then answer “what do you load here?” without changing anything."));
   if (!data.setupServer) {
     if (data.errors.setupServer) main.append(banner("the clients", async () => { await loadSetupServer(); render(); }));

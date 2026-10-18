@@ -150,6 +150,7 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .s-none, .s-missing { color: var(--ink-4); }
 .socket .word { color: var(--ink-2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: filter var(--t-fast) ease, opacity var(--t-fast) ease; }
 .socket .where { color: var(--ink-3); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: filter var(--t-fast) ease, opacity var(--t-fast) ease; }
+.socket .where::before { content: "· "; }
 .socket .swap { filter: blur(2px); opacity: 0; }
 .socket.pulse .dot { animation: ping 900ms var(--ease-out) 1; }
 @keyframes ping { 0% { box-shadow: 0 0 0 0 currentColor; } 100% { box-shadow: 0 0 0 7px transparent; } }
@@ -223,7 +224,6 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .kicker { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); font-weight: 500; }
 .routes { width: 100%; max-width: 640px; height: auto; display: block; margin: 12px 0 4px; }
 .routes .wire { fill: none; stroke: var(--wire-strong); stroke-width: 1.5; }
-.routes .wire.idle { stroke: var(--wire); stroke-dasharray: 2 4; }
 .routes .flow { fill: none; stroke: var(--route); stroke-width: 1.5; stroke-dasharray: 3 9; stroke-linecap: round; animation: flow 1.6s linear infinite; }
 .routes .flow.mid { animation-duration: 1.8s; } .routes .flow.slow { animation-duration: 2.1s; }
 @keyframes flow { to { stroke-dashoffset: -24; } }
@@ -234,8 +234,9 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .group-title { margin: 24px 0 2px; }
 .group-note { margin: 0 0 10px; color: var(--ink-3); }
 .list { background: var(--panel); border: 1px solid var(--wire); border-radius: 8px; }
-.list-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 0 12px; min-height: 40px; border-top: 1px solid var(--wire-soft); }
+.list-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 0 12px; min-height: 40px; border-top: 1px solid var(--wire-soft); }
 .list-row:first-child { border-top: 0; }
+.list-row .chip { gap: 4px; min-width: 24px; }
 .list-row .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conn { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
 .conn .cell { border: 1px solid var(--wire-soft); border-radius: 6px; padding: 10px 12px; background: var(--canvas); display: grid; gap: 6px; justify-items: start; }
@@ -297,6 +298,7 @@ pre.diff .del { color: var(--danger); }
 .timeline .feed li:hover { background: var(--inset); }
 .timeline .feed li:focus-visible { outline-offset: -2px; }
 .timeline .row-actions { display: flex; gap: 4px; justify-content: flex-end; }
+.timeline .feed li.over, .timeline .feed li.over .muted { color: var(--ink-4); }
 .timeline .feed li.change-detail { display: block; padding: 0 12px 12px 144px; border-top: 0; cursor: default; }
 .timeline .feed li.change-detail:hover { background: transparent; }
 .change-detail ul { margin: 0 0 6px; padding-left: 18px; }

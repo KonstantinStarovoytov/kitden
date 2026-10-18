@@ -39,3 +39,22 @@ def test_gateway_has_no_entry_name_field_or_paths():
 
 def test_changes_rows_have_no_details_button():
     assert '"Details"' not in script("changes.js")
+
+
+def test_rail_says_let_agents_read_this_setup():
+    assert "Let agents read this setup" in INDEX
+    assert "Agents can ask" not in INDEX and "show my setup" not in INDEX
+
+
+def test_changes_say_why_a_change_stopped():
+    text = script("changes.js")
+    assert "Can't undo: the file changed after this" in text
+    assert "Not applied: the file changed before Apply" in text
+    assert "Stopped: file changed" not in text and "Undo stopped" not in text
+
+
+def test_gateway_names_the_remove_action_and_draws_no_idle_wire():
+    text = script("gateway.js")
+    assert "Remove direct entry…" in text
+    assert "wire idle" not in text
+    assert "goes around" not in text

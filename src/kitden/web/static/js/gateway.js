@@ -1,4 +1,4 @@
-// Gateway: which clients reach it, and what still goes around it.
+// Gateway: which clients reach it, and which servers are not connected to it.
 import { postJson } from "./api.js";
 import { button, el, plural, webLink } from "./dom.js";
 import { entrance } from "./motion.js";
@@ -8,7 +8,7 @@ import { data, loadGateway, reload, render } from "./store.js";
 
 const WRITABLE = ["claude_code", "codex", "cursor"];
 const GROUPS = [
-  ["move", "Can move into the gateway", "Direct entries for remote servers. Add them in the gateway, then remove them here."],
+  ["move", "Can move into the gateway", "Add the server in the gateway first, then remove its direct entry here."],
   ["local", "Must run on this Mac", "Local servers start a program here; a gateway cannot reach them. Nothing to do."],
   ["plugin", "Come with a plugin", "Turn the plugin off if you do not want them."],
 ];
@@ -30,7 +30,7 @@ function foundClients() {
 
 export function renderGateway(main) {
   main.append(el("h1", null, "Gateway"));
-  main.append(el("p", "lede", "Turn MCP tools on and off in the gateway, not in each client. Here you see which clients reach it and what still goes around it."));
+  main.append(el("p", "lede", "Turn MCP tools on and off in the gateway, not in each client. Here you see which clients reach it and which servers are not connected to it."));
   const model = data.gateway;
   if (!model) {
     if (data.errors.gateway) main.append(banner("the gateway", async () => { await loadGateway(); render(); }));
@@ -50,12 +50,12 @@ export function renderGateway(main) {
   }
 
   const [first, ...others] = model.gateways;
-  const card = gatewayCard(first, model.gateways, model.connections);
+  const card = gatewayCard(first, model);
   main.append(card);
   blocks.push(card);
   for (const gateway of others) {
     const more = el("section", "card");
-    more.append(gatewayHead(gateway));
+    more.append(gatewayHead(gateway, model));
     main.append(more);
     blocks.push(more);
   }
@@ -66,7 +66,7 @@ export function renderGateway(main) {
     const section = el("section");
     section.append(el("h2", "group-title", `${title} · ${rows.length}`), el("p", "group-note", note));
     const list = el("div", "list");
-    for (const entry of rows) list.append(groupRow(entry, key));
+    for (const row of rows) list.append(groupRow(row, key));
     section.append(list);
     main.append(section);
     blocks.push(section);
@@ -80,32 +80,35 @@ export function renderGateway(main) {
   entrance("gateway", blocks);
 }
 
-function gatewayHead(gateway) {
+function gatewayHead(gateway, model) {
   const head = el("div", "gw-head");
   const left = el("div");
-  left.append(el("div", "kicker", gatewayName(gateway)), el("div", "gw-url", gateway.url));
+  // With two gateways, say which one the clients use.
+  const used = model.gateways.length > 1 ? ` · ${model.used.includes(gateway.id) ? "Used" : "Not used"}` : "";
+  left.append(el("div", "kicker", `${gatewayName(gateway)}${used}`), el("div", "gw-url", gateway.url));
   const right = el("div");
   if (gateway.ui_url) right.append(webLink(gateway.ui_url, `Open ${gatewayName(gateway)} ↗`));
   head.append(left, right);
   return head;
 }
 
-function gatewayCard(gateway, gateways, connections) {
+function gatewayCard(gateway, model) {
   const card = el("section", "card");
-  card.append(gatewayHead(gateway), routes(gateway, connections));
+  card.append(gatewayHead(gateway, model), routes(gateway, model.connections));
   // Only clients without a gateway entry are offered; the others are connected already.
-  const waiting = foundClients().filter((c) => !(connections[c] || []).length);
+  const waiting = foundClients().filter((c) => !(model.connections[c] || []).length);
   if (waiting.length) {
     const box = el("details", "connect");
     box.open = draft.connectOpen === null ? true : draft.connectOpen;
     box.addEventListener("toggle", () => { draft.connectOpen = box.open; });
-    box.append(el("summary", null, "Connect clients"), connectForm(gateways, waiting));
+    box.append(el("summary", null, "Connect clients"), connectForm(model.gateways, waiting));
     card.append(box);
   }
   return card;
 }
 
-// Three clients, one hub: dashes flow along the wire of each client that has a gateway entry.
+// Three clients, one hub: a wire, with flowing dashes, only for a client that has a gateway
+// entry. A client without one stands apart.
 function routes(gateway, connections) {
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
@@ -129,8 +132,10 @@ function routes(gateway, connections) {
   WRITABLE.forEach((client, i) => {
     const y = 25 + i * 50;
     const d = `M 150 ${y} C 300 ${y}, 330 ${hub.y}, ${hub.x - 2} ${hub.y}`;
-    add("path", { d, class: linked.includes(client) ? "wire" : "wire idle" });
-    if (linked.includes(client)) add("path", { d, class: `flow ${speeds[i]}` });
+    if (linked.includes(client)) {
+      add("path", { d, class: "wire" });
+      add("path", { d, class: `flow ${speeds[i]}` });
+    }
     add("rect", { x: 8, y: y - 15, width: 142, height: 30, rx: 7, class: "node" });
     add("text", { x: 22, y: y + 4 }, { claude_code: "CC", codex: "CX", cursor: "CU" }[client]);
     add("text", { x: 50, y: y + 4, class: "sub" }, CLIENT_NAMES[client]);
@@ -141,16 +146,22 @@ function routes(gateway, connections) {
   return svg;
 }
 
-function groupRow(entry, group) {
-  const row = el("div", "list-row");
-  const name = el("span", "mono", entry.name);
-  name.title = entry.name;
+// One row per server: the clients that have it, its name, and one review that removes the
+// direct entry from every one of them.
+function groupRow(row, group) {
+  const node = el("div", "list-row");
+  const marks = el("span", "chip");
+  marks.setAttribute("aria-label", row.clients.map((c) => CLIENT_NAMES[c] || c).join(", "));
+  for (const client of row.clients) marks.append(mark(client));
+  const name = el("span", "mono", row.name);
+  name.title = row.name;
   const action = el("span");
-  if (group === "move" && entry.actions.includes("mcp.remove_direct")) {
-    action.append(button("Remove…", () => review({ action: "mcp.remove_direct", targets: [{ item: entry.item }], params: {} })));
+  if (group === "move" && row.items.length) {
+    const targets = row.items.map((item) => ({ item }));
+    action.append(button("Remove direct entry…", () => review({ action: "mcp.remove_direct", targets, params: {} })));
   }
-  row.append(mark(entry.client), name, action);
-  return row;
+  node.append(marks, name, action);
+  return node;
 }
 
 function field(label, control) {

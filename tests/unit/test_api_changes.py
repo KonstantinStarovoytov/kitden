@@ -164,6 +164,21 @@ def test_removing_a_direct_entry_and_undo(client):
     assert _files(client.home) == original
 
 
+def test_removing_a_server_from_two_clients_is_one_change(client):
+    items = client.get("/api/items?kind=mcp_server").json()
+    github = next(i for i in items if i["name"] == "github" and i["client"] == "claude_code")
+    langfuse = next(i for i in items if i["name"] == "langfuse-data")
+    body = {
+        "action": "mcp.remove_direct",
+        "targets": [{"item": github["id"]}, {"item": langfuse["id"]}],
+        "params": {},
+    }
+    change = client.post("/api/changes/preview", json=body, headers=POST).json()
+    assert [s["client"] for s in change["steps"]] == ["claude_code", "codex"]
+    assert [a["client"] for a in change["after"]] == ["claude_code", "codex"]
+    client.post(f"/api/changes/{change['id']}/cancel", headers=POST)
+
+
 def test_actions_an_item_does_not_offer_are_refused(client):
     desktop = next(
         i

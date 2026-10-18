@@ -83,10 +83,12 @@ const ACTION_WORDS = {
   "setup_server.update": "Updated show my setup to Kitden",
 };
 
-// One line for a change log entry: what, which entries, which clients.
+// One line for a change log entry: what, which entries, which clients. Plugins go by their
+// short name ("superpowers"); the review named the exact entry before Apply.
 export function changeTitle(entry) {
   const verb = ACTION_WORDS[entry.action] || entry.action;
-  const names = [...new Set(entry.steps.map((s) => s.name))];
+  const plugin = ["plugin.enable", "plugin.disable"].includes(entry.action);
+  const names = [...new Set(entry.steps.map((s) => (plugin ? s.name.split("@")[0] : s.name)))];
   const clients = [...new Set(entry.steps.map((s) => CLIENT_NAMES[s.client] || s.client))];
   const whole = ["gateway.connect", "setup_server.register", "setup_server.update"].includes(entry.action);
   const what = whole ? "" : ` ${names.join(", ")}`;

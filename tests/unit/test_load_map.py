@@ -86,7 +86,7 @@ def test_gateway_entries_are_state_gw(home):
     rows = load_map(inventory, None, gateway_registered=True)
     assert rows_by(rows, "mcp_server", "Neon").cells["cursor"].state == "gw"
     assert {
-        "text": "Around gateway",
+        "text": "Not via gateway",
         "level": "warning",
         "client": "codex",
         "fix": "Add it in the gateway, then remove this direct entry.",

@@ -111,7 +111,7 @@ def _flag(finding, item: Item, gateway_registered: bool) -> dict | None:
         if "local server" in kind:
             return {"text": "Local server", "level": "info"}
         if gateway_registered:
-            return _warning("Around gateway", item.client, GATEWAY_FIX, "mcp.remove_direct")
+            return _warning("Not via gateway", item.client, GATEWAY_FIX, "mcp.remove_direct")
         return {"text": "Direct", "level": "info"}
     return None
 

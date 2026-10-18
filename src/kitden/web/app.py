@@ -400,13 +400,15 @@ def create_app(
                 steps = update_steps(adapters, items, added, command)
             elif action in (REMOVE_DIRECT, PLUGIN_ENABLE, PLUGIN_DISABLE):
                 ids = [t.get("item") for t in targets if isinstance(t, dict)]
-                item = _item(str(ids[0])) if len(ids) == 1 else None
-                if item is None:
+                items = [_item(str(i)) for i in ids]
+                # A direct entry may go from several clients at once; a plugin is one item.
+                one = len(items) == 1 or action == REMOVE_DIRECT
+                if not items or any(i is None for i in items) or not one:
                     return _error("Choose one known item.", 422)
                 if action == REMOVE_DIRECT:
-                    steps = remove_steps(adapters, item)
+                    steps = [s for item in items for s in remove_steps(adapters, item)]
                 else:
-                    steps = plugin_steps(adapters, item, action == PLUGIN_ENABLE)
+                    steps = plugin_steps(adapters, items[0], action == PLUGIN_ENABLE)
             else:
                 return _error("This action is not offered.", 422)
             change = await asyncio.to_thread(engine.preview, str(action), steps)

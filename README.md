@@ -49,7 +49,7 @@ stop it with Ctrl+C (if a page already runs, `kitden serve` opens that one).
 | See what needs attention | **Overview** | Nothing |
 | See what each client loads, here or in one project | **Load map** (pick a project in **Where**) → click a row for where it comes from | Nothing |
 | Add my MCP gateway to all clients | **Gateway** → Add a gateway → Connect clients → Preview → Apply | One user-level entry per client; a key is stored only as a variable name |
-| See MCP servers that go around the gateway | **Gateway** → the three groups below the diagram | Nothing |
+| See MCP servers that are not connected to the gateway | **Gateway** → the three groups below the diagram | Nothing |
 | Remove an old direct MCP entry | **Load map** → row → Remove from … → Apply, or **Gateway** → Remove… | That entry |
 | Turn a plugin on or off (Claude Code, Codex) | **Load map** → Plugins → row → Turn off in … / Turn on in … → Apply | The plugin's on/off flag |
 | Install or move a plugin, add a marketplace | **Load map** → row → Commands… | Nothing: the page shows the command, you run it |

@@ -54,6 +54,4 @@ def test_one_entry_per_client_even_with_two_steps():
         action="setup_server.update",
         steps=[step("claude_code", "agentsetup"), step("claude_code", "kitden")],
     )
-    assert after_words(change, inv) == [
-        {"client": "claude_code", "state": "on", "word": "Updated"}
-    ]
+    assert after_words(change, inv) == [{"client": "claude_code", "state": "on", "word": "Updated"}]

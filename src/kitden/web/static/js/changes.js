@@ -5,15 +5,17 @@ import { undoChange } from "./panel.js";
 import { banner, CLIENT_NAMES, changeTitle, latestChanges, skeleton } from "./parts.js";
 import { data, loadChanges, render } from "./store.js";
 
+// The state in words. Rows that no longer change anything are plain grey text, not badges.
 const STATE_BADGES = {
   verified: ["Applied", "badge win"],
-  undone: ["Undone", "badge"],
-  stale: ["Stopped: file changed", "badge warn"],
+  undone: ["Undone", "faint"],
+  stale: ["Not applied: the file changed before Apply", "badge warn"],
   restored: ["Failed, put back", "badge warn"],
-  undo_blocked: ["Undo stopped", "badge warn"],
-  cancelled: ["Cancelled", "badge"],
+  undo_blocked: ["Can't undo: the file changed after this", "badge warn"],
+  cancelled: ["Cancelled", "faint"],
   previewed: ["Preview only", "badge"],
 };
+const OVER = ["undone", "cancelled"];
 
 const SCOPE_WORDS = { user: "everywhere", project: "project", local: "this Mac" };
 
@@ -51,7 +53,7 @@ export function renderChanges(main) {
 }
 
 function changeRow(entry) {
-  const li = el("li");
+  const li = el("li", OVER.includes(entry.state) ? "over" : null);
   const [word, look] = STATE_BADGES[entry.state] || [entry.state, "badge"];
   const actions = el("span", "row-actions");
   if (entry.state === "verified") actions.append(button("Undo", () => undoChange(entry)));

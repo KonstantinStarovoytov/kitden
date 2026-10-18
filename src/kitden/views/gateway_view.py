@@ -1,5 +1,6 @@
 """Gateway page model: which clients reach the gateway, and what still goes around it."""
 
+from kitden.clients.base import REMOVE_DIRECT
 from kitden.model import Gateway, Item, ItemKind
 from kitden.views.effective import DESKTOP, effective_view
 from kitden.views.findings import bypass_kind
@@ -42,21 +43,22 @@ def gateway_view(inventory, gateways: list[Gateway], project: str | None) -> dic
         column = "claude_code" if item.client == DESKTOP else item.client
         if item.via_gateway and column in connections and item.name not in connections[column]:
             connections[column].append(item.name)
-    groups: dict[str, list[dict]] = {"move": [], "local": [], "plugin": []}
+    # One row per server name, with the clients that have it and the entries that can go.
+    groups: dict[str, dict[str, dict]] = {"move": {}, "local": {}, "plugin": {}}
     for item in loaded_mcp(inventory, project):
         if item.via_gateway:
             continue
-        groups[group_of(item)].append(
-            {
-                "item": item.id,
-                "client": item.client,
-                "name": item.name,
-                "path": item.source.path,
-                "actions": list(item.actions),
-            }
-        )
+        rows = groups[group_of(item)]
+        row = rows.setdefault(item.name, {"name": item.name, "clients": [], "items": []})
+        if item.client not in row["clients"]:
+            row["clients"].append(item.client)
+        if REMOVE_DIRECT in item.actions:
+            row["items"].append(item.id)
     return {
         "gateways": [gateway_dict(g) for g in gateways],
         "connections": {c: sorted(names) for c, names in connections.items()},
-        "groups": groups,
+        "used": sorted({i.via_gateway for i in inventory.items if i.via_gateway}),
+        "groups": {
+            g: sorted(rows.values(), key=lambda r: r["name"].lower()) for g, rows in groups.items()
+        },
     }
