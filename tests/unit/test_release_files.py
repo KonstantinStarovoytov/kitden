@@ -12,8 +12,15 @@ def _project() -> dict:
     return tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
 
 
-def test_package_version_is_the_first_public_version():
-    assert _project()["version"] == kitden.__version__ == "0.1.0"
+def test_the_version_is_the_same_everywhere():
+    import json
+
+    version = _project()["version"]
+    assert kitden.__version__ == version
+    for manifest in ("plugins/kitden/plugin.json", "plugins/kitden/.claude-plugin/plugin.json"):
+        assert json.loads((ROOT / manifest).read_text())["version"] == version
+    assert f'KITDEN_REF="v{version}"' in (ROOT / "install.sh").read_text()
+    assert f'$KitdenRef = "v{version}"' in (ROOT / "install.ps1").read_text()
 
 
 def test_license_is_apache_2():
