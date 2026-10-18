@@ -18,6 +18,10 @@ export function morphOnNextRender() { morphNext = true; }
 let opener = null;
 export function onOpenItem(fn) { opener = fn; }
 
+// Another place (the Overview) asks for the selected row to open in the panel once drawn.
+let openNext = false;
+export function openSelectedOnRender() { openNext = true; }
+
 let inkFrom = null;
 
 const cellKey = (cell) => `${cell.state}|${cell.where || ""}`;
@@ -69,6 +73,8 @@ export function renderMap(main) {
   main.append(bar);
 
   const rows = found.filter((r) => r.kind === state.kind).filter(passesFilter);
+  const wantOpen = openNext;
+  openNext = false;
   if (!rows.length) {
     main.append(emptyState(counts));
     snapshot(model.rows);
@@ -84,6 +90,8 @@ export function renderMap(main) {
 
   const selected = table.querySelector('tr[aria-selected="true"]');
   if (selected) requestAnimationFrame(() => selected.scrollIntoView({ block: "nearest" }));
+  const row = wantOpen && rows.find((r) => r.key === state.selected);
+  if (row && selected) openRow(row, selected, "pointer");
 }
 
 function tabs(counts) {

@@ -1,6 +1,7 @@
 // Overview: what needs attention first, then clients, gateway and recent changes.
 import { getJson, query } from "./api.js";
 import { button, el, plural, shortPaths } from "./dom.js";
+import { openSelectedOnRender } from "./map.js";
 import { entrance } from "./motion.js";
 import { banner, changeTitle, heading, latestChanges, mark, skeleton, socket, timeOf } from "./parts.js";
 import { data, go, loadOverview, projectPath, render } from "./store.js";
@@ -27,14 +28,11 @@ export function renderOverview(main) {
   const left = el("section", "attention");
   left.setAttribute("aria-label", "Needs attention");
   const blocks = [];
+  // One card per problem: a short title, one sentence, one button that names the action.
   for (const card of model.attention) {
-    const article = el("article", "issue warn");
-    const icon = el("span", "ico", "!");
-    icon.setAttribute("aria-hidden", "true");
-    article.append(icon, el("h3", null, card.title));
-    const actions = el("div", "actions");
-    if (card.action && card.target) actions.append(button(card.action, () => follow(card.target)));
-    article.append(actions, el("p", null, shortPaths(card.text)));
+    const article = el("article", "issue");
+    article.append(el("h3", null, card.title), el("p", null, card.text));
+    if (card.action && card.target) article.append(button(card.action, () => follow(card.target), "btn primary"));
     left.append(article);
     blocks.push(article);
   }
@@ -53,9 +51,14 @@ export function renderOverview(main) {
   entrance("overview", [...blocks, ...side.children]);
 }
 
+// A card about an item opens that item in the side panel; paths and the fix live there.
 function follow(target) {
-  if (target.view === "map") go("map", { kind: target.kind, only: "all", q: "", selected: target.row });
-  else go(target.view);
+  if (target.view === "map") {
+    openSelectedOnRender();
+    go("map", { kind: target.kind, only: "all", q: "", selected: target.row });
+  } else {
+    go(target.view);
+  }
 }
 
 function notesBlock(count) {

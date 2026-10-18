@@ -42,7 +42,7 @@ export function openPanel(content, { instant = false } = {}) {
   drawer.replaceChildren(...content);
   opener = document.activeElement;
   const row = opener && opener.closest ? opener.closest("tr[data-key]") : null;
-  openerKey = row ? row.dataset.key : null;
+  openerKey = row ? row.dataset.key : state.selected;
   for (const node of [drawer, $("#scrim")]) {
     node.classList.toggle("instant", instant);
     node.classList.add("open");

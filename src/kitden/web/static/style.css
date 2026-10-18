@@ -176,12 +176,10 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 /* Overview */
 .overview { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; align-items: start; }
 .attention { display: grid; gap: 8px; }
-.issue { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 4px 12px; padding: 14px 16px; background: var(--panel); border: 1px solid var(--wire); border-radius: 8px; align-items: start; }
-.issue .ico { margin-top: 1px; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--lamp-warn); color: var(--lamp-warn); display: grid; place-items: center; font: 700 11px/1 var(--sans); }
+.issue { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 16px; padding: 14px 16px; background: var(--panel); border: 1px solid color-mix(in srgb, var(--lamp-warn) 35%, var(--wire)); border-radius: 8px; align-items: center; }
 .issue h3 { font-size: 14px; margin: 0; font-weight: 600; letter-spacing: -0.005em; overflow-wrap: anywhere; }
-.issue p { margin: 2px 0 0; color: var(--ink-2); grid-column: 2; overflow-wrap: anywhere; }
-.issue .actions { grid-row: 1 / span 2; grid-column: 3; display: flex; gap: 6px; }
-.issue.warn { border-color: color-mix(in srgb, var(--lamp-warn) 35%, var(--wire)); }
+.issue p { margin: 0; color: var(--ink-2); overflow-wrap: anywhere; text-wrap: pretty; }
+.issue .btn { grid-column: 2; grid-row: 1 / span 2; }
 .all-clear { padding: 18px 16px; background: var(--panel); border: 1px solid var(--wire); border-radius: 8px; color: var(--ink-2); }
 .notes-toggle { justify-self: start; margin-top: 4px; }
 .notes { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
