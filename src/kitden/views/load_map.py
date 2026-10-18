@@ -98,11 +98,34 @@ def _warning(text: str, client: str, fix: str, fix_action: str | None) -> dict:
     }
 
 
-def _flag(finding, item: Item, gateway_registered: bool) -> dict | None:
+def _cross_client_fix(client: str, via: str, kind: ItemKind) -> str:
+    """One copy is the client's own, the other is loaded from another client's folder."""
+    own, other = NAMES.get(client, client), NAMES.get(via, via)
+    if client == "cursor" and kind is ItemKind.PLUGIN:
+        return (
+            f"Two copies load in {own}: its own and {other}'s. To keep one: remove it in Cursor "
+            "(Customize → Plugins), or turn off Include Third-Party Plugins in Cursor Settings. "
+            f"Turning it off in {other} also turns it off for {other}."
+        )
+    return (
+        f"Two copies load in {own}: its own and {other}'s. Keep one; removing {other}'s copy "
+        f"also removes it for {other}."
+    )
+
+
+def _flag(finding, item: Item, gateway_registered: bool, copies: list[Item]) -> dict | None:
     """A short flag for the row; warnings also carry the fix in words and the action."""
     if finding.type is FindingType.DUPLICATE_IN_CLIENT:
-        fix, action = DUPLICATE_FIXES.get(item.kind, ("Remove one copy to keep the other.", None))
         text = f"{NAMES.get(finding.client, finding.client)} loads it twice"
+        others = sorted(
+            {c.source.owner_client for c in copies if c.source.owner_client != finding.client}
+        )
+        if others:
+            flag = _warning(
+                text, finding.client, _cross_client_fix(finding.client, others[0], item.kind), None
+            )
+            return {**flag, "via": others[0]}
+        fix, action = DUPLICATE_FIXES.get(item.kind, ("Remove one copy to keep the other.", None))
         return _warning(text, finding.client, fix, action)
     if finding.type is FindingType.BYPASSES_GATEWAY:
         kind = bypass_kind(item)
@@ -168,7 +191,8 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
     for finding in find_findings(inventory, project) + find_bypasses(inventory, project):
         for item_id in finding.items:
             row, item = item_rows.get(item_id), items_by_id.get(item_id)
-            flag = _flag(finding, item, gateway_registered) if row and item else None
+            copies = [items_by_id[i] for i in finding.items if i in items_by_id]
+            flag = _flag(finding, item, gateway_registered, copies) if row and item else None
             if flag and flag not in row.flags:
                 row.flags.append(flag)
     order = {ItemKind.MCP_SERVER: 0, ItemKind.PLUGIN: 1, ItemKind.SKILL: 2, ItemKind.HOOK: 3}

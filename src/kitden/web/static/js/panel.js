@@ -141,6 +141,16 @@ function warningText(flag) {
   return flag.fix ? `${flag.text}. ${flag.fix}` : flag.text;
 }
 
+// A change to a copy another client loads changes that client too; say so next to the button.
+const SIDE_EFFECTS = {
+  "plugin.disable": "also turns it off for", "plugin.enable": "also turns it on for", "mcp.remove_direct": "also removes it from",
+};
+function sideEffect({ def, action }, warnings) {
+  const via = warnings.filter((f) => f.via === def.client && f.client !== def.client).map((f) => clientName(f.client));
+  if (!via.length || !SIDE_EFFECTS[action]) return [];
+  return [el("span", "note side", `${SIDE_EFFECTS[action]} ${joinWords(via)}`)];
+}
+
 // The other actions wait behind one button, so the primary one stands alone.
 function moreButton(buttons) {
   const more = button("More", () => {
@@ -203,7 +213,11 @@ function layer(def) {
 
 function showDetails(row, definitions) {
   const body = el("div", "body");
-  for (const f of row.flags.filter((x) => x.level === "warning")) body.append(callout(warningText(f)));
+  const warnings = row.flags.filter((x) => x.level === "warning");
+  for (const f of warnings) body.append(callout(warningText(f)));
+  // A warning that already says where to change it (a copy loaded from another client)
+  // replaces the hints under that client, so the fact appears once.
+  const covered = new Set(warnings.filter((f) => f.via).map((f) => f.client));
   const byClient = new Map();
   for (const def of definitions) {
     if (!byClient.has(def.client)) byClient.set(def.client, []);
@@ -217,7 +231,7 @@ function showDetails(row, definitions) {
     const stack = el("div", "stack");
     for (const def of byClient.get(client)) stack.append(layer(def));
     section.append(title, stack);
-    const hints = new Set(byClient.get(client).filter((d) => d.change_hint && !d.actions.length).map((d) => d.change_hint));
+    const hints = covered.has(client) ? [] : new Set(byClient.get(client).filter((d) => d.change_hint && !d.actions.length).map((d) => d.change_hint));
     for (const hint of hints) section.append(el("p", "muted", hint));
     body.append(section);
   }
@@ -237,11 +251,11 @@ function showDetails(row, definitions) {
     const label = ACTION_BUTTONS[action](`${clientName(def.client)}${where}`);
     return button(label, () => review({ action, targets: [{ item: def.id }], params: {} }), look);
   };
-  // The action that fixes the warning is the primary button; the rest wait under More.
-  const fixes = row.flags.filter((f) => f.level === "warning" && f.fix_action);
-  let primary = offers.find((o) => fixes.some((f) => f.fix_action === o.action && f.client === o.def.client));
-  if (!primary && offers.length === 1) primary = offers[0];
-  const rest = offers.filter((o) => o !== primary).map((o) => buttonFor(o, "btn"));
+  // The action that fixes the warning is the primary button; the rest wait under More. With a
+  // warning no button fixes, every action stays plain.
+  let primary = offers.find((o) => warnings.some((f) => f.fix_action === o.action && f.client === o.def.client));
+  if (!primary && offers.length === 1 && !warnings.length) primary = offers[0];
+  const rest = offers.filter((o) => o !== primary).flatMap((o) => [...sideEffect(o, warnings), buttonFor(o, "btn")]);
   if (primary) {
     if (rest.length || commands.length) footer.append(moreButton([...rest, ...commands]));
     footer.append(buttonFor(primary, "btn primary"));

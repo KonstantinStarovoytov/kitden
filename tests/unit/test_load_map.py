@@ -57,13 +57,47 @@ def test_cursor_loading_a_plugin_twice_is_one_cell_with_count_2(home):
     row = rows_by(load_map(build_inventory(home), None), "plugin", "superpowers")
     assert row.cells["cursor"].count == 2
     assert row.cells["cursor"].where == "everywhere"  # Cursor's own copy comes first
-    assert {
-        "text": "Cursor loads it twice",
-        "level": "warning",
-        "client": "cursor",
-        "fix": "Turn one copy off to keep the other.",
-        "fix_action": "plugin.disable",
-    } in row.flags
+    assert [f["text"] for f in row.flags] == ["Cursor loads it twice"]
+
+
+def test_a_cursor_copy_of_a_claude_code_plugin_names_the_choice(home):
+    row = rows_by(load_map(build_inventory(home), None), "plugin", "superpowers")
+    flag = next(f for f in row.flags if f["client"] == "cursor")
+    assert flag["via"] == "claude_code"
+    assert flag["fix_action"] is None
+    assert flag["fix"] == (
+        "Two copies load in Cursor: its own and Claude Code's. To keep one: remove it in Cursor "
+        "(Customize → Plugins), or turn off Include Third-Party Plugins in Cursor Settings. "
+        "Turning it off in Claude Code also turns it off for Claude Code."
+    )
+
+
+def test_two_copies_of_a_plugin_in_one_client_offer_to_turn_one_off():
+    def plugin(name, path):
+        source = Source(kind=SourceKind.FILE, path=path, owner_client="claude_code")
+        return Item(
+            client="claude_code",
+            kind=ItemKind.PLUGIN,
+            name=name,
+            source=source,
+            scope=Scope.USER,
+            actions=("plugin.disable",),
+        )
+
+    clients = [Client(id="claude_code", display_name="Claude Code", status=ClientStatus.FOUND)]
+    inventory = Inventory(
+        clients=clients, items=[plugin("x@a", "/h/a.json"), plugin("x@b", "/h/b.json")]
+    )
+    row = rows_by(load_map(inventory, None), "plugin", "x")
+    assert row.flags == [
+        {
+            "text": "Claude Code loads it twice",
+            "level": "warning",
+            "client": "claude_code",
+            "fix": "Turn one copy off to keep the other.",
+            "fix_action": "plugin.disable",
+        }
+    ]
 
 
 def test_a_duplicate_skill_names_the_fix_without_an_action(home):

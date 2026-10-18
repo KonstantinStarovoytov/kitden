@@ -256,6 +256,7 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .drawer.open .body > *:nth-child(n+4) { animation-delay: 120ms; }
 .drawer footer { padding: 12px 20px; border-top: 1px solid var(--wire); display: flex; gap: 8px; justify-content: flex-end; align-items: center; flex-wrap: wrap; }
 .drawer footer .note { margin-right: auto; color: var(--ink-3); font-size: 12px; }
+.drawer footer .note.side { margin-right: 0; margin-left: auto; text-align: right; }
 .title-mono { font-family: var(--mono); font-size: 17px; font-weight: 600; letter-spacing: -0.01em; overflow-wrap: anywhere; }
 .stack { display: grid; border: 1px solid var(--wire); border-radius: 8px; overflow: hidden; }
 .layer { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 10px; padding: 9px 12px; border-top: 1px solid var(--wire-soft); align-items: start; }
