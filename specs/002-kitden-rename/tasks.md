@@ -47,7 +47,7 @@ Format: `[ID] [P?] [Story] Description`. `[P]` = can run in parallel (different 
   `command_exists` is false when the old command is gone; a project-level `agentsetup` entry
   is ignored. Then `views/setup_server.py` and
   `GET /api/setup-server` in `web/app.py` (test in `tests/unit/test_api_views.py`).
-- [ ] T007 [US2] Tests first: `setup_server.update` builds remove + add per client; only remove when
+- [X] T007 [US2] Tests first: `setup_server.update` builds remove + add per client; only remove when
   `kitden` already exists; 422 for a target that is not an old entry and when `kitden` is not
   installed. Then `changes/actions.py` and the preview branch in `web/app.py`. Depends on T004, T006.
 - [ ] T008 [US2] Contract test in `tests/contract/test_mcp_handshake.py`: real `claude` and `codex`

@@ -97,3 +97,102 @@ def test_the_page_api_returns_the_states(home):
         "cursor": "missing",
     }
     assert json.dumps(data)  # plain JSON, no secret values
+
+
+# The update action (T007) ------------------------------------------------------------------
+
+KITDEN_COMMAND = "/opt/kitden/bin/kitden"
+
+
+def _old_items(home):
+    from kitden.views.setup_server import is_old_entry
+
+    inventory = build_inventory(home)
+    return inventory, {i.client: i for i in inventory.items if is_old_entry(i)}
+
+
+def test_update_removes_the_old_entry_then_adds_kitden(home):
+    from kitden.changes.actions import update_steps
+    from kitden.changes.json_splice import ABSENT
+    from kitden.views.inventory import default_adapters
+
+    _, old = _old_items(home)
+    adapters = {a.id: a for a in default_adapters(home)}
+    steps = update_steps(adapters, [old["claude_code"], old["codex"]], set(), KITDEN_COMMAND)
+    assert [(s.client, s.name) for s in steps] == [
+        ("claude_code", "agentsetup"),
+        ("claude_code", "kitden"),
+        ("codex", "agentsetup"),
+        ("codex", "kitden"),
+    ]
+    assert steps[0].command == ["claude", "mcp", "remove", "-s", "user", "agentsetup"]
+    assert steps[2].edit.after is ABSENT
+    assert steps[3].edit.after == {"command": KITDEN_COMMAND, "args": ["mcp"]}
+    assert steps[1].edit.path == steps[0].edit.path
+
+
+def test_update_only_removes_when_kitden_is_already_there(home):
+    from kitden.changes.actions import update_steps
+    from kitden.views.inventory import default_adapters
+
+    _, old = _old_items(home)
+    adapters = {a.id: a for a in default_adapters(home)}
+    steps = update_steps(adapters, [old["codex"]], {"codex"}, KITDEN_COMMAND)
+    assert [(s.client, s.name) for s in steps] == [("codex", "agentsetup")]
+
+
+def _client(home, setup_command=lambda: KITDEN_COMMAND):
+    from starlette.testclient import TestClient
+
+    from kitden.web.app import create_app
+
+    app = create_app(
+        lambda: build_inventory(home),
+        token="tok",
+        port=47800,
+        home=home,
+        setup_command=setup_command,
+    )
+    return TestClient(app, base_url="http://127.0.0.1:47800", follow_redirects=False)
+
+
+POST = {"X-Tool-Request": "1", "Origin": "http://127.0.0.1:47800"}
+
+
+def test_update_from_the_page_applies_and_undoes_exactly(home):
+    config = home / ".codex/config.toml"
+    original = config.read_bytes()
+    with _client(home) as client:
+        client.get("/?token=tok")
+        states = {s["client"]: s for s in client.get("/api/setup-server").json()}
+        body = {"action": "setup_server.update", "targets": [{"item": states["codex"]["item"]}]}
+        change = client.post("/api/changes/preview", json=body, headers=POST).json()
+        assert len(change["steps"]) == 2
+        done = client.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
+        assert done["state"] == "verified"
+        text = config.read_text()
+        assert toml_edit.get_value(text, ("mcp_servers", "kitden"))["command"] == KITDEN_COMMAND
+        assert "agentsetup" not in text
+        client.post(f"/api/changes/{change['id']}/undo", headers=POST)
+    assert config.read_bytes() == original
+
+
+def test_update_refuses_an_entry_that_is_not_ours(home):
+    inventory = build_inventory(home)
+    stranger = next(i for i in inventory.items if i.client == "cursor" and i.name == "agentsetup")
+    body = {"action": "setup_server.update", "targets": [{"item": stranger.id}]}
+    with _client(home) as client:
+        client.get("/?token=tok")
+        response = client.post("/api/changes/preview", json=body, headers=POST)
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Choose an old Kitden entry."
+
+
+def test_update_needs_the_kitden_command_installed(home):
+    with _client(home, setup_command=lambda: None) as client:
+        client.get("/?token=tok")
+        states = {s["client"]: s for s in client.get("/api/setup-server").json()}
+        body = {"action": "setup_server.update", "targets": [{"item": states["codex"]["item"]}]}
+        response = client.post("/api/changes/preview", json=body, headers=POST)
+    assert response.status_code == 422
+    assert "Install the tool first" in response.json()["detail"]

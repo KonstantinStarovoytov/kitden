@@ -14,10 +14,12 @@ from starlette.staticfiles import StaticFiles
 
 from kitden.changes.actions import (
     GATEWAY_CONNECT,
+    SETUP_SERVER_UPDATE,
     connect_steps,
     plugin_steps,
     remove_steps,
     setup_server_steps,
+    update_steps,
 )
 from kitden.changes.backup import ChangeStore
 from kitden.changes.client_cli import CommandRunner
@@ -35,7 +37,7 @@ from kitden.views.gateway_view import gateway_dict, gateway_view
 from kitden.views.inventory import Inventory, default_adapters, inventory_dict, item_dict
 from kitden.views.load_map import load_map, map_dict
 from kitden.views.overview import overview
-from kitden.views.setup_server import setup_server_state
+from kitden.views.setup_server import is_old_entry, setup_server_state
 from kitden.watch import Watcher
 from kitden.web.security import SecurityMiddleware
 
@@ -337,6 +339,22 @@ def create_app(
                     return _error("Install the tool first: uv tool install <this folder>", 422)
                 clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
                 steps = setup_server_steps(adapters, clients, command)
+            elif action == SETUP_SERVER_UPDATE:
+                ids = [str(t.get("item")) for t in targets if isinstance(t, dict)]
+                items = [_item(i) for i in ids]
+                if not items or any(i is None or not is_old_entry(i) for i in items):
+                    return _error("Choose an old Kitden entry.", 422)
+                added = {
+                    s["client"]
+                    for s in setup_server_state(state.inventory)
+                    if s["state"] == "added"
+                }
+                command = None
+                if any(i.client not in added for i in items):
+                    command = (setup_command or installed_command)()
+                    if command is None:
+                        return _error("Install the tool first: uv tool install <this folder>", 422)
+                steps = update_steps(adapters, items, added, command)
             elif action in (REMOVE_DIRECT, PLUGIN_ENABLE, PLUGIN_DISABLE):
                 ids = [t.get("item") for t in targets if isinstance(t, dict)]
                 item = _item(str(ids[0])) if len(ids) == 1 else None
