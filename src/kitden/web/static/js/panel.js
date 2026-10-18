@@ -141,14 +141,15 @@ function warningText(flag) {
   return flag.fix ? `${flag.text}. ${flag.fix}` : flag.text;
 }
 
-// A change to a copy another client loads changes that client too; say so next to the button.
+// Seen from the client with the warning, a change to the copy it loads from another client
+// also changes that other client itself; say so next to the button.
 const SIDE_EFFECTS = {
   "plugin.disable": "also turns it off for", "plugin.enable": "also turns it on for", "mcp.remove_direct": "also removes it from",
 };
 function sideEffect({ def, action }, warnings) {
-  const via = warnings.filter((f) => f.via === def.client && f.client !== def.client).map((f) => clientName(f.client));
-  if (!via.length || !SIDE_EFFECTS[action]) return [];
-  return [el("span", "note side", `${SIDE_EFFECTS[action]} ${joinWords(via)}`)];
+  const reaches = warnings.some((f) => f.via === def.client && f.client !== def.client);
+  if (!reaches || !SIDE_EFFECTS[action]) return [];
+  return [el("span", "note side", `${SIDE_EFFECTS[action]} ${clientName(def.client)} itself`)];
 }
 
 // The other actions wait behind one button, so the primary one stands alone.
