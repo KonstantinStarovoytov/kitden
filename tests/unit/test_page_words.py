@@ -133,3 +133,9 @@ def test_gateway_routes_light_their_rows_and_take_keyboard_focus():
     text = script("gateway.js")
     assert "node.dataset.clients" in text and 'tabindex: "0"' in text and '"lit"' in text
     assert "fold(box)" in text and "fold(more)" in text
+
+
+def test_load_map_shows_one_flag_per_wording_and_resolved_flags_shrink_away():
+    text = script("map.js")
+    assert "findIndex((o) => o.text === f.text)" in text
+    assert 'classList.add("gone")' in text and ".flag.gone" in CSS

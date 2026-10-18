@@ -10,8 +10,10 @@ const KINDS = [
 ];
 const FILTERS = [["all", "All"], ["problems", "Needs attention"], ["diff", "Differs between clients"]];
 
-// What each cell showed last time, so a change can morph from the old state to the new one.
+// What each cell and flag showed last time, so a change can morph from the old state to the
+// new one and a resolved flag can shrink away instead of vanishing.
 export let previousCells = {};
+let previousFlags = {};
 let morphNext = false;
 export function morphOnNextRender() { morphNext = true; }
 
@@ -156,7 +158,18 @@ function buildRow(columns, row) {
   const name = el("span", "mono", row.name);
   name.title = row.name;
   box.append(name);
-  for (const f of row.flags) box.append(flag(f));
+  // One flag per wording: three clients with the same note make one flag, not three.
+  const shown = row.flags.filter((f, i) => row.flags.findIndex((o) => o.text === f.text) === i);
+  for (const f of shown) box.append(flag(f));
+  // A flag that a verified change resolved shrinks away instead of vanishing.
+  const oldFlags = morphNext ? previousFlags[row.key] || [] : [];
+  for (const f of oldFlags.filter((o) => !shown.some((n) => n.text === o.text))) {
+    const node = flag(f);
+    node.classList.add("gone");
+    node.setAttribute("aria-hidden", "true");
+    box.append(node);
+    setTimeout(() => node.remove(), 400);
+  }
   nameCell.append(box);
   tr.append(nameCell);
   for (const column of columns) {
@@ -195,6 +208,7 @@ function onRowKey(event, row, tr) {
 
 function snapshot(rows) {
   previousCells = Object.fromEntries(rows.map((r) => [r.key, Object.fromEntries(Object.entries(r.cells).map(([c, cell]) => [c, cellKey(cell)]))]));
+  previousFlags = Object.fromEntries(rows.map((r) => [r.key, r.flags.map((f) => ({ text: f.text, level: f.level }))]));
 }
 
 function emptyState(counts) {
