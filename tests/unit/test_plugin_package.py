@@ -53,3 +53,18 @@ def test_the_plugin_adds_nothing_that_runs_by_itself():
         assert not (PLUGIN / folder).exists()
     manifest = _json(PLUGIN / ".claude-plugin/plugin.json")
     assert not {"hooks", "commands", "mcpServers"} & manifest.keys()
+
+
+def test_the_readme_cursor_link_adds_the_same_server():
+    """FR-012: the "Add to Cursor" link carries the entry of .mcp.json, without the type field."""
+    import base64
+    import re
+
+    readme = (ROOT / "README.md").read_text()
+    configs = re.findall(r"install-mcp\?name=kitden&config=([A-Za-z0-9+/=]+)", readme)
+    deeplink = r"cursor://anysphere\.cursor-deeplink/mcp/install\?name=kitden&config=([A-Za-z0-9+/=]+)"
+    plain = re.findall(deeplink, readme)
+    assert configs and plain, "the README has the button link and the plain link"
+    for config in {*configs, *plain}:
+        decoded = json.loads(base64.b64decode(config))
+        assert decoded == {"command": ENTRY["command"], "args": ENTRY["args"]}

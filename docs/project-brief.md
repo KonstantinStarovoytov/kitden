@@ -119,6 +119,8 @@ MCP server applies; manages MCP servers from one interface; turns on logs to Lan
 
 ## Install and use (Proposed; replaces the earlier hook and plugin flow)
 
+Done in feature 003 (2026-10-18): the README's Install section is the current text.
+
 1. Run one command. It starts the local page and opens the browser.
 2. The page scans the clients and shows the inventory. Nothing is written.
 3. The owner enters the gateway address once; the page adds it to every client after "Apply".
