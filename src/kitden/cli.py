@@ -129,6 +129,7 @@ def _serve(args: argparse.Namespace) -> int:
             watch_folders=[root / name for name in WATCHED],
             flat_folders=[root],
             home=root,
+            first_scan_later=True,  # listen first; the page shows its skeleton while it scans
         )
         url = f"http://{HOST}:{port}/?token={token}"
         if not args.background:  # a background page writes to page.log; keep the token out

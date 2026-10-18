@@ -5,8 +5,6 @@ the same project view as the page, and it has no tools that change anything (FR-
 """
 
 import os
-import shutil
-import sys
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -14,6 +12,7 @@ from typing import Any
 from mcp.server.mcpserver import MCPServer
 from mcp_types import ToolAnnotations
 
+from kitden.command import installed_command
 from kitden.gateways import load_gateways
 from kitden.model import Project
 from kitden.views.effective import DESKTOP, found_clients, project_views
@@ -132,15 +131,6 @@ def create_server(build: Callable[[], Inventory], cwd: Callable[[], str] = os.ge
         return {"projects": [_project_dict(p) for p in build().projects]}
 
     return server
-
-
-def installed_command() -> str | None:
-    """Absolute path of the `kitden` command, for client configs (research R9)."""
-    beside_python = Path(sys.executable).parent / "kitden"
-    if beside_python.is_file():
-        return str(beside_python)
-    found = shutil.which("kitden")
-    return str(Path(found).absolute()) if found else None
 
 
 def run(home: Path | None = None) -> None:

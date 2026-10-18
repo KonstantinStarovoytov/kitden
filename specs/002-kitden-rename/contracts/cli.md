@@ -20,5 +20,6 @@ Rules:
 - No command writes client settings. Writes happen only through the page's Apply.
 - Every command copies the old data folder once when needed
   ([data model](../data-model.md#data-folder)).
-- Install: `uv tool install <repository path>` for now, which gives `~/.local/bin/kitden` for
-  client configs. After updating old entries: `uv tool uninstall agentsetup`.
+- Install: `uv tool install <repository path>` for now (`--reinstall` after new code), which gives
+  `~/.local/bin/kitden`. After updating old entries, remove the old tool if it was a uv tool.
+- A page listens before its first scan; API calls wait until the scan is done.

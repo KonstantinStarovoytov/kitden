@@ -311,3 +311,15 @@ def test_a_background_page_never_writes_its_link(tmp_path, monkeypatch, capsys):
 def test_open_waits_long_enough_for_a_slow_first_scan():
     # A large home took 4.2 s to scan (feature 001 validation): 5 s is a goal, not a limit.
     assert page.WAIT_SECONDS >= 15
+
+
+def test_serve_lets_the_page_listen_before_the_first_scan(tmp_path, monkeypatch):
+    import kitden.web.app as web
+
+    seen = {}
+    real = web.create_app
+    monkeypatch.setattr(web, "create_app", lambda *a, **kw: seen.update(kw) or real(*a, **kw))
+    monkeypatch.setattr(cli, "pick_port", lambda start, tries=20: 47815)
+    monkeypatch.setattr(cli, "run_server", lambda *a, **kw: None)
+    main(["serve", "--no-browser", "--home", str(tmp_path)])
+    assert seen["first_scan_later"] is True

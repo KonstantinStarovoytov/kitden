@@ -32,7 +32,8 @@ Needs macOS and [uv](https://docs.astral.sh/uv/).
 uv tool install .
 ```
 
-Run this in the repository folder; it gives you the `kitden` command.
+Run this in the repository folder; it gives you the `kitden` command. After pulling new code, run
+`uv tool install --reinstall .`: uv reuses its last build of this folder otherwise.
 
 ```bash
 kitden
@@ -60,12 +61,9 @@ read-only server that clients start.
 
 **Coming from `agentsetup`.** Kitden copies the old data folder once (gateways, history and Undo
 carry over) and leaves the old folder as it is. If you added "show my setup" with the old version,
-the page shows an "Old entry" card: use **Update to Kitden…** for each client. Then remove the old
-tool:
-
-```bash
-uv tool uninstall agentsetup
-```
+the page shows an "Old entry" card: use **Update to Kitden…** for each client. If you had installed
+the old version with `uv tool install`, remove it with `uv tool uninstall agentsetup`; if you ran it
+from the repository, there is nothing else to remove.
 
 **Safety.** Every change is shown first and written only after Apply. Before writing, the tool
 saves a private backup (`~/Library/Application Support/kitden/changes`, kept for 30 days or the

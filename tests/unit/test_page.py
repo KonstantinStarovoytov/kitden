@@ -190,3 +190,56 @@ def test_the_event_route_counts_a_tab_until_it_disconnects():
         return open_tabs, activity.tabs()
 
     assert asyncio.run(probe()) == (1, 0)
+
+
+# The page listens before its first scan (owner check: the first open took 10+ s) -----------
+
+
+def _slow_build(seconds, calls):
+    from kitden.views.inventory import Inventory
+
+    def build():
+        calls.append(1)
+        time.sleep(seconds)
+        return Inventory()
+
+    return build
+
+
+def test_a_page_can_listen_before_its_first_scan():
+    from starlette.testclient import TestClient
+
+    from kitden.web.app import create_app
+
+    calls = []
+    started = time.monotonic()
+    app = create_app(_slow_build(0.5, calls), token="tok", port=47800, first_scan_later=True)
+    assert time.monotonic() - started < 0.3 and calls == []
+    with TestClient(app, base_url="http://127.0.0.1:47800", follow_redirects=False) as client:
+        client.get("/?token=tok")
+        assert client.get("/api/clients").status_code == 200  # waits for the first scan
+    assert calls == [1]
+
+
+def test_a_failing_first_scan_still_lets_the_page_answer():
+    from starlette.testclient import TestClient
+
+    from kitden.web.app import create_app
+
+    def broken():
+        raise RuntimeError("cannot read")
+
+    app = create_app(broken, token="tok", port=47800, first_scan_later=True)
+    with TestClient(app, base_url="http://127.0.0.1:47800", follow_redirects=False) as client:
+        client.get("/?token=tok")
+        assert client.get("/api/clients").json() == []
+
+
+def test_the_page_does_not_load_the_mcp_sdk():
+    # The MCP SDK takes about half a second to import; only `kitden mcp` needs it.
+    import subprocess
+    import sys
+
+    code = "import sys, kitden.web.app, kitden.cli; print('mcp' in sys.modules)"
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)  # noqa: S603
+    assert out.stdout.strip() == "False"

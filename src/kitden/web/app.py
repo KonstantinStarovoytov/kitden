@@ -2,6 +2,7 @@
 
 import asyncio
 import contextlib
+import sys
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from pathlib import Path
 from types import SimpleNamespace
@@ -26,8 +27,8 @@ from kitden.changes.backup import ChangeStore
 from kitden.changes.client_cli import CommandRunner
 from kitden.changes.engine import ChangeRefusedError, Engine, Runner
 from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, REMOVE_DIRECT, SETUP_SERVER
+from kitden.command import installed_command
 from kitden.gateways import add_gateway, data_dir, load_gateways
-from kitden.mcp_server import installed_command
 from kitden.model import Change, ChangeState, Gateway, GatewayAuth
 from kitden.redact import redact_text
 from kitden.views.commands import commands_for
@@ -128,14 +129,31 @@ def _error(text: str, status: int) -> JSONResponse:
 
 
 class State:
-    """The current inventory, rebuilt on demand."""
+    """The current inventory, rebuilt on demand.
 
-    def __init__(self, build: Callable[[], Inventory], events: Broadcaster) -> None:
+    With `scan_now=False` the page starts empty and the first scan runs once the server is up,
+    so `kitden open` does not wait for it; API calls wait for `ready` instead.
+    """
+
+    def __init__(
+        self, build: Callable[[], Inventory], events: Broadcaster, scan_now: bool = True
+    ) -> None:
         self.build = build
         self.events = events
-        self.inventory = build()
+        self.ready = asyncio.Event()
+        self.inventory = build() if scan_now else Inventory()
         self.data = inventory_dict(self.inventory)
         self.lock = asyncio.Lock()
+        if scan_now:
+            self.ready.set()
+
+    async def first_scan(self) -> None:
+        try:
+            await self.rescan()
+        except Exception as error:  # noqa: BLE001 - the page must answer even if the scan fails
+            print(f"The first scan failed: {error}", file=sys.stderr, flush=True)
+        finally:
+            self.ready.set()
 
     async def rescan(self) -> dict:
         async with self.lock:
@@ -144,6 +162,20 @@ class State:
             self.data = inventory_dict(self.inventory)
             self.events.publish("rescan_finished")
         return self.data
+
+
+class WaitForFirstScan:
+    """API calls wait for the first scan; the page itself and its event stream do not."""
+
+    def __init__(self, app: Callable, state: State) -> None:
+        self.app = app
+        self.state = state
+
+    async def __call__(self, scope, receive, send) -> None:
+        path = scope.get("path", "")
+        if scope["type"] == "http" and path.startswith("/api/") and path != "/api/events":
+            await self.state.ready.wait()
+        await self.app(scope, receive, send)
 
 
 def create_app(
@@ -156,6 +188,7 @@ def create_app(
     home: Path | None = None,
     run: Runner | None = None,
     setup_command: Callable[[], str | None] | None = None,
+    first_scan_later: bool = False,
 ) -> Starlette:
     """The page. Changes are available only when `home` is given (the folder being shown)."""
     events = Broadcaster()
@@ -167,7 +200,7 @@ def create_app(
             mark_gateways(inventory, load_gateways(home))
         return inventory
 
-    state = State(build_marked, events)
+    state = State(build_marked, events, scan_now=not first_scan_later)
     engine = None
     adapters = {}
     if home is not None:
@@ -189,13 +222,16 @@ def create_app(
         watcher = Watcher(watch_folders, on_files_changed, debounce_ms, flat_folders)
         watcher_ref.append(watcher)
         task = asyncio.create_task(watcher.run())
+        scan = None if state.ready.is_set() else asyncio.create_task(state.first_scan())
         try:
             yield
         finally:
             watcher.stop()
-            task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await task
+            for running in (task, scan):
+                if running is not None:
+                    running.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await running
 
     async def index(request: Request) -> FileResponse:
         return FileResponse(STATIC / "index.html")
@@ -459,7 +495,10 @@ def create_app(
             Route("/api/events", stream),
             Mount("/static", StaticFiles(directory=STATIC), name="static"),
         ],
-        middleware=[Middleware(SecurityMiddleware, token=token, port=port)],
+        middleware=[
+            Middleware(SecurityMiddleware, token=token, port=port),
+            Middleware(WaitForFirstScan, state=state),
+        ],
         lifespan=lifespan,
     )
     app.state.inventory = state
