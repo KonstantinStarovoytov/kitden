@@ -1,7 +1,7 @@
 // Gateway: which clients reach it, and which servers are not connected to it.
 import { postJson } from "./api.js";
 import { button, el, plural, webLink } from "./dom.js";
-import { entrance, fold } from "./motion.js";
+import { entrance, fold, reducedMotion } from "./motion.js";
 import { openItem, review, toast } from "./panel.js";
 import { banner, CLIENT_ICONS, CLIENT_NAMES, DARK_ICONS, flag, mark, skeleton } from "./parts.js";
 import { data, loadGateway, loadMap, reload, render } from "./store.js";
@@ -120,14 +120,26 @@ function gatewayCard(gateway, model) {
 // appears; it never moves after that, because Kitden cannot see real traffic.
 const drawn = new Set();
 
-// Hovering a client or its wire lights that route and dims the rest. Hovering a server row
-// lights only the clients that load it: its own entry does not go through the gateway.
-export function focusRoutes(clients, { wires = true } = {}) {
+// Hovering a client or its wire lights that route, dims the rest and lights the rows below
+// that hold a direct entry of that client. Hovering a server row lights only the clients
+// that load it: its own entry does not go through the gateway.
+export function focusRoutes(clients, { wires = true, rows = true } = {}) {
   for (const svg of document.querySelectorAll(".routes")) {
     svg.classList.toggle("focusing", clients.length > 0);
     svg.classList.toggle("nodes-only", !wires);
     for (const group of svg.querySelectorAll(".route")) group.classList.toggle("focus", clients.includes(group.dataset.client));
   }
+  for (const row of document.querySelectorAll(".list-row[data-clients]")) {
+    const own = row.dataset.clients.split(" ");
+    row.classList.toggle("lit", rows && clients.some((c) => own.includes(c)));
+  }
+}
+
+// From a client in the diagram to its first direct entry in the lists below.
+function showDirect(client) {
+  focusRoutes([client]);
+  const row = document.querySelector(".list-row.lit");
+  if (row) row.scrollIntoView({ block: "center", behavior: reducedMotion.matches ? "auto" : "smooth" });
 }
 
 // Three clients, one hub: a wire only for a client that has a gateway entry. A client
@@ -147,7 +159,7 @@ function routes(gateway, connections, direct = []) {
   const apart = WRITABLE.filter((c) => !linked.includes(c)).map((c) => CLIENT_NAMES[c]);
   svg.setAttribute("viewBox", "0 0 640 150");
   svg.setAttribute("class", "routes");
-  svg.setAttribute("role", "img");
+  svg.setAttribute("role", "group");
   const said = linked.length ? `${linked.map((c) => CLIENT_NAMES[c]).join(", ")} connect to ${name}` : `No client connects to ${name} yet`;
   svg.setAttribute("aria-label", apart.length && linked.length ? `${said}; ${apart.join(", ")} not yet.` : `${said}.`);
   const hub = { x: 470, y: 75 };
@@ -155,9 +167,22 @@ function routes(gateway, connections, direct = []) {
   WRITABLE.forEach((client, i) => {
     const y = 25 + i * 50;
     const d = `M 200 ${y} C 330 ${y}, 350 ${hub.y}, ${hub.x - 2} ${hub.y}`;
-    const group = add("g", { class: linked.includes(client) ? "route linked" : "route", "data-client": client });
+    const around = direct.filter((row) => row.clients.includes(client)).length;
+    const group = add("g", { class: linked.includes(client) ? "route linked" : "route", "data-client": client, tabindex: "0", role: "img" });
+    const state = linked.includes(client) ? `connected to ${name}` : `not connected to ${name}`;
+    group.setAttribute("aria-label", around ? `${CLIENT_NAMES[client]}: ${state}, ${plural(around, "direct entry", "direct entries")}` : `${CLIENT_NAMES[client]}: ${state}`);
     group.addEventListener("pointerenter", () => focusRoutes([client]));
     group.addEventListener("pointerleave", () => focusRoutes([]));
+    group.addEventListener("focus", () => focusRoutes([client]));
+    group.addEventListener("blur", () => focusRoutes([]));
+    // A client with direct entries leads to them in the lists below.
+    if (around) {
+      group.classList.add("clickable");
+      group.addEventListener("click", () => showDirect(client));
+      group.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); showDirect(client); }
+      });
+    }
     if (linked.includes(client)) {
       const wire = add("path", { d, class: "wire", pathLength: "1" }, null, group);
       const key = `${gateway.id}:${client}`;
@@ -178,7 +203,6 @@ function routes(gateway, connections, direct = []) {
     if (DARK_ICONS.has(icon)) add("image", { ...box, href: `/static/brand/clients/${icon}-dark.png`, class: "node-icon icon-dark" }, null, tile);
     add("text", { x: 50, y: y + 4, class: "sub" }, CLIENT_NAMES[client], group);
     // Servers this client reaches directly, around the gateway: listed below the diagram.
-    const around = direct.filter((row) => row.clients.includes(client)).length;
     if (around) add("text", { x: 190, y: y + 4, class: "bypass", "text-anchor": "end" }, `${around} direct`, group);
   });
   add("rect", { x: hub.x, y: hub.y - 22, width: 160, height: 44, rx: 9, class: "hub" });
@@ -193,7 +217,8 @@ const GROUP_WORDS = { move: "Remote", local: "Local", plugin: "Plugin" };
 // commands stay behind Details (the same panel as on the Load map).
 function groupRow(row, group) {
   const node = el("div", "list-row");
-  node.addEventListener("pointerenter", () => focusRoutes(row.clients, { wires: false }));
+  node.dataset.clients = row.clients.join(" ");
+  node.addEventListener("pointerenter", () => focusRoutes(row.clients, { wires: false, rows: false }));
   node.addEventListener("pointerleave", () => focusRoutes([]));
   const marks = el("span", "chip");
   marks.setAttribute("aria-label", row.clients.map((c) => CLIENT_NAMES[c] || c).join(", "));

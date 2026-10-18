@@ -127,3 +127,9 @@ def test_one_mark_slides_between_the_choices_of_a_group():
     text = script("map.js")
     assert '"map-tabs"' in text and '"map-filter"' in text
     assert "tab-ink" not in CSS and "tab-ink" not in text
+
+
+def test_gateway_routes_light_their_rows_and_take_keyboard_focus():
+    text = script("gateway.js")
+    assert "node.dataset.clients" in text and 'tabindex: "0"' in text and '"lit"' in text
+    assert "fold(box)" in text and "fold(more)" in text

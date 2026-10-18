@@ -303,6 +303,9 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 @keyframes wire-draw { from { stroke-dashoffset: 1; } }
 .routes .route { transition: opacity 200ms ease; }
 .routes .route.linked { cursor: default; }
+.routes .route:focus { outline: none; }
+.routes .route:focus-visible .node { stroke: var(--focus); stroke-width: 2; }
+.routes .route.clickable { cursor: pointer; }
 .routes.focusing .route:not(.focus) { opacity: 0.35; }
 .routes .route.focus .node { stroke: var(--route); }
 .routes .route.focus .wire { stroke: var(--route); stroke-width: 2.25; }
@@ -321,7 +324,8 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .list-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 0 12px; min-height: 40px; border-top: 1px solid var(--wire-soft); }
 .list-row:first-child { border-top: 0; }
 .list-row { transition: background-color 120ms ease; }
-.list-row:hover { background: var(--inset); }
+.list-row:hover, .list-row.lit { background: var(--inset); }
+.list-row.lit { background: var(--route-soft); }
 .list:has(.list-row:hover) .list-row:first-child:hover { border-top-left-radius: 8px; border-top-right-radius: 8px; }
 .list-row .chip { gap: 4px; min-width: 24px; }
 .list-row .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -441,4 +445,7 @@ html.theme-switch::view-transition-old(root), html.theme-switch::view-transition
   .table-scroll { overflow-x: auto; }
   table.map { min-width: 600px; }
   .map th { position: static; }
+  /* A narrow row keeps its name: the buttons move under it. */
+  .list-row { grid-template-columns: auto minmax(0, 1fr); padding-bottom: 8px; }
+  .list-row .row-actions { grid-column: 1 / -1; flex-wrap: wrap; }
 }
