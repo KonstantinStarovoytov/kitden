@@ -7,15 +7,17 @@ import socket
 import sys
 import webbrowser
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
 
-from kitden import __version__
+from kitden import __version__, page
 from kitden.views.inventory import Inventory, build_inventory, inventory_dict
 
 HOST = "127.0.0.1"
 DEFAULT_PORT = 47800
 EXIT_NO_PORT = 2
 EXIT_UNREADABLE = 3
+EXIT_NOT_STARTED = 4
 # Folders whose setup files trigger a rescan; the home folder itself is watched without subfolders.
 WATCHED = (".claude", ".codex", ".cursor", ".agents", "Library/Application Support/Claude")
 
@@ -32,38 +34,83 @@ def pick_port(start: int, tries: int = 20) -> int | None:
     return None
 
 
-def run_server(app, host: str, port: int) -> None:
+def run_server(app, host: str, port: int, on_started: Callable[[], None] | None = None) -> None:
+    """Serve until stopped. `on_started` runs once the port listens."""
     import uvicorn
 
+    class Server(uvicorn.Server):
+        async def startup(self, sockets=None) -> None:
+            await super().startup(sockets=sockets)
+            if self.started and on_started:
+                on_started()
+
     # Open pages keep an event stream; do not wait for them when stopping.
-    uvicorn.run(app, host=host, port=port, log_level="warning", timeout_graceful_shutdown=2)
-
-
-def _start(args: argparse.Namespace) -> int:
-    from kitden.web.app import create_app
-
-    port = pick_port(DEFAULT_PORT)
-    if port is None:
-        print(f"No free port from {DEFAULT_PORT}.", file=sys.stderr)
-        return EXIT_NO_PORT
-    home = Path(args.home).expanduser() if args.home else None
-    root = home or Path.home()
-    token = secrets.token_urlsafe(32)
-    app = create_app(
-        lambda: build_inventory(home),
-        token=token,
-        port=port,
-        watch_folders=[root / name for name in WATCHED],
-        flat_folders=[root],
-        home=root,
+    config = uvicorn.Config(
+        app, host=host, port=port, log_level="warning", timeout_graceful_shutdown=2
     )
-    url = f"http://{HOST}:{port}/?token={token}"
-    print(f"Kitden is running. Open: {url}", flush=True)
-    print("Press Ctrl+C to stop.", flush=True)
+    Server(config).run()
+
+
+def _home(args: argparse.Namespace) -> Path | None:
+    return Path(args.home).expanduser() if args.home else None
+
+
+def _show(url: str, args: argparse.Namespace) -> None:
+    print(f"Kitden: {url}", flush=True)
     if not args.no_browser:
         webbrowser.open(url)
-    run_server(app, HOST, port)
+
+
+def _open(args: argparse.Namespace) -> int:
+    """Open the running page for this home folder, or start one in the background (FR-008)."""
+    root = _home(args) or Path.home()
+    if not page.page_running(root):
+        page.start_background(root, args.home)
+    record = page.wait_for_record(root, page.WAIT_SECONDS)
+    if record is None:
+        print(f"The page did not start. See {page.log_path(root)}.", file=sys.stderr)
+        return EXIT_NOT_STARTED
+    _show(page.start_link(record), args)
     return 0
+
+
+def _serve(args: argparse.Namespace) -> int:
+    """Run the page here until stopped; only one page runs per home folder (FR-009, FR-013)."""
+    from kitden.web.app import create_app
+
+    home = _home(args)
+    root = home or Path.home()
+    lock = page.PageLock(root)
+    if not lock.acquire():
+        return _open(args)
+    try:
+        port = pick_port(DEFAULT_PORT)
+        if port is None:
+            print(f"No free port from {DEFAULT_PORT}.", file=sys.stderr)
+            return EXIT_NO_PORT
+        token = secrets.token_urlsafe(32)
+        app = create_app(
+            lambda: build_inventory(home),
+            token=token,
+            port=port,
+            watch_folders=[root / name for name in WATCHED],
+            flat_folders=[root],
+            home=root,
+        )
+        url = f"http://{HOST}:{port}/?token={token}"
+        print(f"Kitden is running. Open: {url}", flush=True)
+        print("Press Ctrl+C to stop.", flush=True)
+
+        def started() -> None:
+            page.write_record(root, port, token, background=args.background)
+            if not args.no_browser:
+                webbrowser.open(url)
+
+        run_server(app, HOST, port, on_started=started)
+        return 0
+    finally:
+        page.remove_record(root)
+        lock.release()
 
 
 def _print_summary(inventory: Inventory) -> None:
@@ -94,12 +141,24 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-browser", action="store_true", help="do not open the browser")
     parser.add_argument("--home", help="read clients under this home folder (for testing)")
     commands = parser.add_subparsers(dest="command")
+    # SUPPRESS keeps an option given before the command (`kitden --home X open`).
+    keep = argparse.SUPPRESS
+    opener = commands.add_parser("open", help="open the page; start it in the background if needed")
+    serve = commands.add_parser("serve", help="run the page here until Ctrl+C")
+    serve.add_argument("--background", action="store_true", help=argparse.SUPPRESS)
     scan = commands.add_parser("scan", help="print what each client loads, then exit")
     scan.add_argument("--json", action="store_true", help="print JSON instead of a summary")
-    scan.add_argument("--home", help="read clients under this home folder (for testing)")
     mcp = commands.add_parser("mcp", help="run the read-only MCP server over stdio")
-    mcp.add_argument("--home", help="read clients under this home folder (for testing)")
+    for sub in (opener, serve):
+        sub.add_argument(
+            "--no-browser", action="store_true", default=keep, help="only print the link"
+        )
+    for sub in (opener, serve, scan, mcp):
+        sub.add_argument(
+            "--home", default=keep, help="read clients under this home folder (for testing)"
+        )
     args = parser.parse_args(argv)
+    args.background = getattr(args, "background", False)
 
     if args.version:
         print(f"kitden {__version__}")
@@ -115,9 +174,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "mcp":
         from kitden import mcp_server
 
-        mcp_server.run(Path(args.home).expanduser() if args.home else None)
+        mcp_server.run(_home(args))
         return 0
-    return _start(args)
+    if args.command == "serve":
+        return _serve(args)
+    return _open(args)
 
 
 if __name__ == "__main__":

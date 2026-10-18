@@ -29,35 +29,35 @@ def test_pick_port_skips_a_busy_port():
         busy.close()
 
 
-def test_start_serves_on_loopback_and_prints_a_token_link(monkeypatch, capsys):
+def test_serve_runs_on_loopback_and_prints_a_token_link(monkeypatch, capsys):
     calls = {}
     monkeypatch.setattr(cli, "pick_port", lambda start, tries=20: 47811)
     monkeypatch.setattr(
-        cli, "run_server", lambda app, host, port: calls.update(host=host, port=port)
+        cli, "run_server", lambda app, host, port, **kw: calls.update(host=host, port=port)
     )
     monkeypatch.setattr(cli.webbrowser, "open", lambda url: calls.update(opened=url))
     monkeypatch.setattr(cli, "build_inventory", lambda home=None: cli.Inventory())
 
-    assert main(["--no-browser"]) == 0
+    assert main(["serve", "--no-browser"]) == 0
 
     assert calls == {"host": "127.0.0.1", "port": 47811}
     out = capsys.readouterr().out
     assert re.search(r"http://127\.0\.0\.1:47811/\?token=[A-Za-z0-9_-]{40,}", out)
 
 
-def test_start_opens_the_browser_by_default(monkeypatch):
+def test_serve_opens_the_browser_once_started(monkeypatch):
     opened = []
     monkeypatch.setattr(cli, "pick_port", lambda start, tries=20: 47812)
-    monkeypatch.setattr(cli, "run_server", lambda app, host, port: None)
+    monkeypatch.setattr(cli, "run_server", lambda app, host, port, on_started, **kw: on_started())
     monkeypatch.setattr(cli.webbrowser, "open", opened.append)
     monkeypatch.setattr(cli, "build_inventory", lambda home=None: cli.Inventory())
-    main([])
+    main(["serve"])
     assert len(opened) == 1 and opened[0].startswith("http://127.0.0.1:47812/?token=")
 
 
-def test_start_exits_2_without_a_free_port(monkeypatch):
+def test_serve_exits_2_without_a_free_port(monkeypatch):
     monkeypatch.setattr(cli, "pick_port", lambda start, tries=20: None)
-    assert main(["--no-browser"]) == 2
+    assert main(["serve", "--no-browser"]) == 2
 
 
 def test_start_link_is_visible_to_a_program_reading_the_output(tmp_path):
@@ -66,7 +66,7 @@ def test_start_link_is_visible_to_a_program_reading_the_output(tmp_path):
     import sys
 
     process = subprocess.Popen(
-        [sys.executable, "-m", "kitden.cli", "--no-browser", "--home", str(tmp_path)],
+        [sys.executable, "-m", "kitden", "serve", "--no-browser", "--home", str(tmp_path)],
         stdout=subprocess.PIPE,
         text=True,
     )
@@ -100,9 +100,9 @@ def test_server_stops_quickly_even_with_an_open_page(monkeypatch):
     import uvicorn
 
     calls = []
-    monkeypatch.setattr(uvicorn, "run", lambda app, **kwargs: calls.append(kwargs))
+    monkeypatch.setattr(uvicorn.Server, "run", lambda self: calls.append(self.config))
     cli.run_server(object(), "127.0.0.1", 47800)
-    assert calls[0]["timeout_graceful_shutdown"] <= 3
+    assert calls[0].timeout_graceful_shutdown <= 3
 
 
 def test_every_command_copies_the_old_data_folder_once(tmp_path, capsys):
@@ -119,3 +119,99 @@ def test_tests_never_see_the_real_home():
     from pathlib import Path
 
     assert "real-home" in str(Path.home())
+
+
+# kitden open and one page per home folder (feature 002, T011) --------------------------------
+
+import pytest  # noqa: E402
+
+from kitden import page  # noqa: E402
+
+
+def _hold_page(home, port=47899, token="tok"):
+    lock = page.PageLock(home)
+    assert lock.acquire()
+    page.write_record(home, port=port, token=token, background=True)
+    return lock
+
+
+def test_open_with_a_running_page_opens_it_and_starts_nothing(tmp_path, monkeypatch, capsys):
+    lock = _hold_page(tmp_path)
+    opened = []
+    monkeypatch.setattr(cli.webbrowser, "open", opened.append)
+    monkeypatch.setattr(page, "start_background", lambda *a: pytest.fail("started a second page"))
+    try:
+        assert main(["open", "--home", str(tmp_path)]) == 0
+    finally:
+        lock.release()
+    assert opened == ["http://127.0.0.1:47899/?token=tok"]
+    assert "http://127.0.0.1:47899/?token=tok" in capsys.readouterr().out
+
+
+def test_open_starts_a_background_page_when_none_runs(tmp_path, monkeypatch):
+    locks = []
+
+    def fake_start(home, home_arg):
+        locks.append(_hold_page(home, port=47898, token="new"))
+
+    monkeypatch.setattr(page, "start_background", fake_start)
+    opened = []
+    monkeypatch.setattr(cli.webbrowser, "open", opened.append)
+    try:
+        assert main(["open", "--home", str(tmp_path)]) == 0
+    finally:
+        for lock in locks:
+            lock.release()
+    assert opened == ["http://127.0.0.1:47898/?token=new"]
+
+
+def test_open_gives_up_when_the_page_does_not_start(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(page, "start_background", lambda home, home_arg: None)
+    monkeypatch.setattr(page, "WAIT_SECONDS", 0.3)
+    assert main(["open", "--home", str(tmp_path)]) == 4
+    assert "page.log" in capsys.readouterr().err
+
+
+def test_open_without_a_browser_only_prints_the_link(tmp_path, monkeypatch, capsys):
+    lock = _hold_page(tmp_path)
+    monkeypatch.setattr(cli.webbrowser, "open", lambda url: pytest.fail("opened a browser"))
+    try:
+        assert main(["open", "--no-browser", "--home", str(tmp_path)]) == 0
+    finally:
+        lock.release()
+    assert "token=tok" in capsys.readouterr().out
+
+
+def test_no_command_means_open(tmp_path, monkeypatch):
+    lock = _hold_page(tmp_path)
+    opened = []
+    monkeypatch.setattr(cli.webbrowser, "open", opened.append)
+    try:
+        assert main(["--home", str(tmp_path)]) == 0
+    finally:
+        lock.release()
+    assert opened == ["http://127.0.0.1:47899/?token=tok"]
+
+
+def test_serve_opens_the_running_page_instead_of_a_second_one(tmp_path, monkeypatch):
+    lock = _hold_page(tmp_path)
+    monkeypatch.setattr(cli, "run_server", lambda *a, **kw: pytest.fail("started a second page"))
+    try:
+        assert main(["serve", "--no-browser", "--home", str(tmp_path)]) == 0
+    finally:
+        lock.release()
+
+
+def test_serve_writes_the_record_once_started_and_removes_it(tmp_path, monkeypatch):
+    seen = {}
+
+    def fake_run(app, host, port, on_started, **kw):
+        on_started()
+        seen.update(record=page.read_record(tmp_path), running=page.page_running(tmp_path))
+
+    monkeypatch.setattr(cli, "pick_port", lambda start, tries=20: 47811)
+    monkeypatch.setattr(cli, "run_server", fake_run)
+    assert main(["serve", "--no-browser", "--home", str(tmp_path)]) == 0
+    assert seen["record"]["port"] == 47811 and seen["running"]
+    assert page.read_record(tmp_path) is None
+    assert not page.page_running(tmp_path)
