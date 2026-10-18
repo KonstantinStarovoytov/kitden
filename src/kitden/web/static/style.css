@@ -262,7 +262,8 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .list-row:first-child { border-top: 0; }
 .list-row .chip { gap: 4px; min-width: 24px; }
 .list-row .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.list-row .what { display: grid; min-width: 0; padding: 7px 0; }
+.list-row .what { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 7px 0; }
+.list-row .row-actions { display: inline-flex; gap: 6px; }
 .list-row .sub { color: var(--ink-3); font-size: 11px; }
 .conn { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
 .conn .cell { border: 1px solid var(--wire-soft); border-radius: 6px; padding: 10px 12px; background: var(--canvas); display: grid; gap: 6px; justify-items: start; }

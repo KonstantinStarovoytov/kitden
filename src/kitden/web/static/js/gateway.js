@@ -2,9 +2,9 @@
 import { postJson } from "./api.js";
 import { button, el, plural, webLink } from "./dom.js";
 import { entrance } from "./motion.js";
-import { review, toast } from "./panel.js";
-import { banner, CLIENT_ICONS, CLIENT_NAMES, DARK_ICONS, mark, skeleton } from "./parts.js";
-import { data, loadGateway, reload, render } from "./store.js";
+import { openItem, review, toast } from "./panel.js";
+import { banner, CLIENT_ICONS, CLIENT_NAMES, DARK_ICONS, flag, mark, skeleton } from "./parts.js";
+import { data, loadGateway, loadMap, reload, render } from "./store.js";
 
 const WRITABLE = ["claude_code", "codex", "cursor"];
 const GROUPS = [
@@ -156,30 +156,34 @@ function routes(gateway, connections) {
   return svg;
 }
 
-// One row per server: the clients that have it, its name, and one review that removes the
-// direct entry from every one of them.
+const GROUP_WORDS = { move: "Remote", local: "Local", plugin: "Plugin" };
+
+// One row per server: the clients that have it, its name and what it is. Addresses and
+// commands stay behind Details (the same panel as on the Load map).
 function groupRow(row, group) {
   const node = el("div", "list-row");
   const marks = el("span", "chip");
   marks.setAttribute("aria-label", row.clients.map((c) => CLIENT_NAMES[c] || c).join(", "));
   for (const client of row.clients) marks.append(mark(client));
-  // The name, then what the server is: its address or its command (already redacted).
   const what = el("span", "what");
   const name = el("span", "mono", row.name);
   name.title = row.name;
-  what.append(name);
-  if (row.summary) {
-    const sub = el("span", "sub mono", row.summary);
-    sub.title = row.summary;
-    what.append(sub);
-  }
-  const action = el("span");
+  what.append(name, flag({ text: GROUP_WORDS[group], level: "info" }));
+  const actions = el("span", "row-actions");
+  actions.append(button("Details", () => showServer(row.name), "btn small ghost"));
   if (group === "move" && row.items.length) {
     const targets = row.items.map((item) => ({ item }));
-    action.append(button("Remove direct entry…", () => review({ action: "mcp.remove_direct", targets, params: {} })));
+    actions.append(button("Remove direct entry…", () => review({ action: "mcp.remove_direct", targets, params: {} })));
   }
-  node.append(marks, what, action);
+  node.append(marks, what, actions);
   return node;
+}
+
+async function showServer(name) {
+  if (!data.map) await loadMap();
+  const row = ((data.map && data.map.rows) || []).find((r) => r.kind === "mcp_server" && r.name === name);
+  if (row) await openItem(row);
+  else toast("Could not find this server on the Load map.");
 }
 
 function field(label, control) {

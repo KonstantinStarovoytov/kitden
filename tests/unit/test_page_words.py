@@ -67,3 +67,9 @@ def test_gateway_names_the_remove_action_and_draws_no_idle_wire():
     assert "Remove direct entry…" in text
     assert "wire idle" not in text
     assert "goes around" not in text
+
+
+def test_gateway_rows_keep_addresses_behind_a_details_button():
+    text = script("gateway.js")
+    assert '"Details"' in text
+    assert "row.summary" not in text
