@@ -1,5 +1,5 @@
 // Load map: items in rows, Claude Code, Codex and Cursor in columns.
-import { button, el, shortPath } from "./dom.js";
+import { button, el } from "./dom.js";
 import { animate, entrance, EASE_IN_OUT } from "./motion.js";
 import { banner, flag, mark, morphSocket, skeleton, socket } from "./parts.js";
 import { data, go, loadMap, projectPath, render, setState, state } from "./store.js";
@@ -41,9 +41,10 @@ function passesFilter(row) {
 
 export function renderMap(main) {
   main.append(el("h1", null, "Load map"));
-  const path = projectPath();
-  main.append(el("p", "lede", path
-    ? `What each client loads in ${shortPath(path)}.`
+  // The project goes by its folder name; the full path stays in the project picker's hover.
+  const folder = projectPath().split("/").filter(Boolean).pop();
+  main.append(el("p", "lede", folder
+    ? `What each client loads in the project ${folder}.`
     : "What each client loads in the global setup, with no project open."));
   const model = data.map;
   if (!model) {

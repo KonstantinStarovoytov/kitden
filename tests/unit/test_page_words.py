@@ -73,3 +73,10 @@ def test_gateway_rows_keep_addresses_behind_a_details_button():
     text = script("gateway.js")
     assert '"Details"' in text
     assert "row.summary" not in text
+
+
+def test_load_map_lede_names_the_project_folder_not_its_path():
+    text = script("map.js")
+    assert "in the project" in text
+    assert "shortPath" not in text
+
