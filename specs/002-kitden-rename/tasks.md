@@ -90,7 +90,7 @@ Format: `[ID] [P?] [Story] Description`. `[P]` = can run in parallel (different 
 - [X] T014 [P] Docs: README (install, `kitden open`, update old entries, `uv tool uninstall
   agentsetup`), constitution 2.1.1 (name decided, title), `AGENTS.md` title, brief and naming
   research links. Feature 001 documents stay as history.
-- [ ] T015 Full checks: `uv run pytest -q`, contract tests, ruff; quickstart §1–5 on a sandbox home;
+- [X] T015 Full checks: `uv run pytest -q`, contract tests, ruff; quickstart §1–5 on a sandbox home;
   browser check of Agents and Overview; `rg -i agentsetup src` shows only migration code (SC-006).
 - [ ] T016 Owner's real setup (quickstart §6): the owner stops the old page, installs Kitden, updates
   the Codex entry from Agents, and removes the old tool.
