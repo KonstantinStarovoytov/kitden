@@ -37,7 +37,8 @@ A narrow left rail with four places, plus one setting:
 
 The rail counts only what needs attention and the changes still in effect.
 
-Two controls are always at the top: **Where** (everywhere, or one project) and **search** (`/`).
+Two controls are always at the top: **Project** ("No project (global setup)", or one project by
+its folder name with the short parent path) and **search** (`/`).
 
 ## Key components
 
