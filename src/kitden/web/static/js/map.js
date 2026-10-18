@@ -44,7 +44,7 @@ export function renderMap(main) {
   const path = projectPath();
   main.append(el("p", "lede", path
     ? `What each client loads in ${shortPath(path)}.`
-    : "What each client loads outside any project."));
+    : "What each client loads in the global setup, with no project open."));
   const model = data.map;
   if (!model) {
     if (data.errors.map) main.append(banner("the load map", async () => { await loadMap(); render(); }));

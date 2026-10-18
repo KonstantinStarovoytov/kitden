@@ -53,6 +53,14 @@ def test_changes_say_why_a_change_stopped():
     assert "Stopped: file changed" not in text and "Undo stopped" not in text
 
 
+def test_project_picker_says_project_not_where():
+    assert "Project:" in INDEX and "Where:" not in INDEX
+    assert 'aria-label="Project"' in INDEX
+    app = script("app.js")
+    assert "No project (global setup)" in app and "Everywhere" not in app
+    assert "outside any project" not in script("map.js")
+
+
 def test_gateway_names_the_remove_action_and_draws_no_idle_wire():
     text = script("gateway.js")
     assert "Remove direct entry…" in text

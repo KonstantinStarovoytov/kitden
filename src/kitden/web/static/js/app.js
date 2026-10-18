@@ -54,12 +54,16 @@ function renderShell() {
   const changes = latestChanges(data.changes || []).filter((e) => e.state === "verified").length;
   rollTo($("#nav-changes"), changes || "");
 
+  // The project picker: the folder name first, then its parent folder, short.
   const where = $("#where");
   const projects = data.projects || [];
   if (where.options.length !== projects.length + 1) {
-    where.replaceChildren(new Option("Everywhere", ""));
+    where.replaceChildren(new Option("No project (global setup)", ""));
     for (const project of projects) {
-      const label = `${shortPath(project.path)}${project.exists ? "" : " (folder missing)"}`;
+      const parts = shortPath(project.path).split("/");
+      const name = parts.pop();
+      const parent = parts.join("/");
+      const label = `${name}${parent ? ` · ${parent}` : ""}${project.exists ? "" : " (folder missing)"}`;
       where.append(new Option(label, project.id));
     }
   }
