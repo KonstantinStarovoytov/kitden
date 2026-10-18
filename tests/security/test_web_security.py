@@ -84,3 +84,24 @@ def test_no_cors_headers_and_a_strict_csp(client):
     assert "default-src 'self'" in csp
     assert "frame-ancestors 'none'" in csp
     assert "unsafe-inline" not in csp
+
+
+def test_the_session_cookie_is_named_after_the_port(client):
+    # Browsers share cookies across ports of one host (RFC 6265, 8.5); feature 002, FR-011.
+    assert _login(client).headers["set-cookie"].startswith(f"kitden_session_{PORT}=")
+
+
+def test_a_page_on_another_port_keeps_its_own_login():
+    first = create_app(lambda: Inventory(), token=TOKEN, port=PORT)
+    second = create_app(lambda: Inventory(), token="s" * 43, port=PORT + 1)
+    other = f"http://127.0.0.1:{PORT + 1}"
+    with (
+        TestClient(first, base_url=ORIGIN, follow_redirects=False) as a,
+        TestClient(second, base_url=other, follow_redirects=False) as b,
+    ):
+        a.get(f"/?token={TOKEN}")
+        b.get(f"/?token={'s' * 43}")
+        # A browser sends both cookies to both ports; each page must find its own.
+        both = "; ".join(f"{k}={v}" for k, v in [*a.cookies.items(), *b.cookies.items()])
+        assert a.get("/api/clients", headers={"cookie": both}).status_code == 200
+        assert b.get("/api/clients", headers={"cookie": both}).status_code == 200

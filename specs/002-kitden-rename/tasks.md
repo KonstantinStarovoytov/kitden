@@ -71,7 +71,7 @@ Format: `[ID] [P?] [Story] Description`. `[P]` = can run in parallel (different 
   starts `serve --background`, waits for the record and opens it; exit 4 when the page does not
   start in 5 s; `--no-browser` only prints the link; `kitden` with no command equals `open`. Fake
   the starter and the browser. Then `cli.py` and `page.py` ([R5](research.md#r5-starting-in-the-background)).
-- [ ] T012 [P] [US3] Tests first in `tests/security/test_web_security.py`: the cookie is named
+- [X] T012 [P] [US3] Tests first in `tests/security/test_web_security.py`: the cookie is named
   `kitden_session_<port>`; a session for one port is refused by a page on another port. Then
   `web/security.py`.
 

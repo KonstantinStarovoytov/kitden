@@ -15,7 +15,8 @@ from starlette.datastructures import Headers, QueryParams
 from starlette.responses import PlainTextResponse, RedirectResponse, Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-COOKIE = "agentsetup_session"
+# Named per port: browsers share cookies across ports of one host (RFC 6265, section 8.5).
+COOKIE = "kitden_session"
 SAFE_METHODS = {"GET", "HEAD"}
 SECURITY_HEADERS = {
     "content-security-policy": (
@@ -34,6 +35,7 @@ class SecurityMiddleware:
     def __init__(self, app: ASGIApp, token: str, port: int) -> None:
         self.app = app
         self.token = token
+        self.cookie = f"{COOKIE}_{port}"
         self.session = secrets.token_urlsafe(32)
         self.hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
 
@@ -60,10 +62,12 @@ class SecurityMiddleware:
             if not secrets.compare_digest(given, self.token):
                 return PlainTextResponse("Wrong or expired link.", status_code=401)
             redirect = RedirectResponse("/", status_code=303)
-            redirect.set_cookie(COOKIE, self.session, httponly=True, samesite="strict", path="/")
+            redirect.set_cookie(
+                self.cookie, self.session, httponly=True, samesite="strict", path="/"
+            )
             return redirect
 
-        cookie = _cookie(headers.get("cookie", ""), COOKIE)
+        cookie = _cookie(headers.get("cookie", ""), self.cookie)
         if cookie is None or not secrets.compare_digest(cookie, self.session):
             return PlainTextResponse("Open the link printed in the terminal.", status_code=401)
 
