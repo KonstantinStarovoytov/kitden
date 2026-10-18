@@ -250,7 +250,7 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .routes .flow.mid { animation-duration: 1.8s; } .routes .flow.slow { animation-duration: 2.1s; }
 @keyframes flow { to { stroke-dashoffset: -24; } }
 .routes .node { fill: var(--panel); stroke: var(--wire-strong); }
-.routes .node-tile { fill: #ffffff; stroke: var(--wire-strong); }
+.routes .node-tile { fill: var(--panel-raised); stroke: var(--wire-strong); }
 .routes .node-icon { clip-path: inset(0 round 6px); }
 .routes .hub { fill: var(--route-soft); stroke: var(--route); }
 .routes text { fill: var(--ink); font: 600 11px var(--mono); }
