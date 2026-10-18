@@ -53,7 +53,9 @@ Nothing new is loaded at run time.
 
 ## Recommended tools and skills
 
-Reviewed 2026-10-18 from each project's GitHub page, API and raw files; nothing was installed.
+Reviewed 2026-10-18 from each project's GitHub page, API and raw files. The owner approved the
+LottieFiles skill; it is in `~/.claude/skills/motion-design/` (17 Markdown files and the MIT
+license, no scripts). Nothing else was installed.
 
 | Item | What it is | Fits Kitden | Decision |
 | --- | --- | --- | --- |
