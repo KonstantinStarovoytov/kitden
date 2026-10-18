@@ -35,6 +35,16 @@ def test_gateway_groups_have_one_row_per_server(home):
     assert all(r["name"] != "aseprite" for g in groups.values() for r in g)  # turned off
 
 
+def test_kitdens_own_server_is_not_listed(home):
+    from kitden.changes import toml_edit
+
+    config = home / ".codex/config.toml"
+    mine = {"command": "/opt/kitden/bin/kitden", "args": ["mcp"]}
+    config.write_text(toml_edit.set_value(config.read_text(), ("mcp_servers", "kitden"), mine))
+    groups = gateway_view(build_inventory(home), [], None)["groups"]
+    assert all(r["name"] != "kitden" for g in groups.values() for r in g)
+
+
 def test_a_server_in_two_clients_is_one_row_with_both_marks():
     def direct(client):
         source = Source(kind=SourceKind.FILE, path=f"/h/{client}.json", owner_client=client)

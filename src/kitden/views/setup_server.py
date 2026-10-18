@@ -24,6 +24,11 @@ def _user_entry(item: Item, client: str, name: str) -> bool:
     )
 
 
+def is_own_entry(item: Item) -> bool:
+    """Kitden's own read-only server: not a tool server, so not one to route or count."""
+    return _user_entry(item, item.client, SETUP_NAME)
+
+
 def is_old_entry(item: Item) -> bool:
     if item.client not in CLIENTS or not _user_entry(item, item.client, OLD_NAME):
         return False

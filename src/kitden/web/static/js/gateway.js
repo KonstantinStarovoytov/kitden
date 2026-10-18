@@ -63,8 +63,11 @@ export function renderGateway(main) {
   for (const [key, title, note] of GROUPS) {
     const rows = model.groups[key];
     if (!rows.length) continue;
+    // The heading counts entries, as the Overview does; a server in two clients is one row.
+    const entries = rows.reduce((n, row) => n + row.clients.length, 0);
+    const count = entries === rows.length ? String(entries) : `${entries} entries in ${plural(rows.length, "server", "servers")}`;
     const section = el("section");
-    section.append(el("h2", "group-title", `${title} · ${rows.length}`), el("p", "group-note", note));
+    section.append(el("h2", "group-title", `${title} · ${count}`), el("p", "group-note", note));
     const list = el("div", "list");
     for (const row of rows) list.append(groupRow(row, key));
     section.append(list);

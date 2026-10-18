@@ -5,6 +5,7 @@ from kitden.model import Gateway, Item, ItemKind
 from kitden.views.effective import DESKTOP, effective_view
 from kitden.views.findings import bypass_kind
 from kitden.views.load_map import COLUMNS
+from kitden.views.setup_server import is_own_entry
 
 
 def gateway_dict(gateway: Gateway) -> dict:
@@ -18,13 +19,20 @@ def gateway_dict(gateway: Gateway) -> dict:
 
 
 def loaded_mcp(inventory, project: str | None) -> list[Item]:
-    """MCP servers that load in the project, across the three clients and the Desktop Code tab."""
+    """MCP servers that load in the project, across the three clients and the Desktop Code tab.
+
+    Kitden's own read-only server is left out: it is not a tool server to route anywhere.
+    """
     found = {c.id for c in inventory.clients if str(c.status) == "found"}
     items: list[Item] = []
     for client in [*COLUMNS, DESKTOP]:
         if client in found:
             view = effective_view(inventory, client, project)
-            items += [i for i in view.items if i.client == client and i.kind is ItemKind.MCP_SERVER]
+            items += [
+                i
+                for i in view.items
+                if i.client == client and i.kind is ItemKind.MCP_SERVER and not is_own_entry(i)
+            ]
     return items
 
 

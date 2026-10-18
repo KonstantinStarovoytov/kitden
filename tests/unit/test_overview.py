@@ -97,12 +97,24 @@ def test_gateway_card_only_with_a_registered_gateway(home):
     data = overview(inventory, [gateway], None)
     card = data["attention"][-1]
     assert card["title"] == "4 MCP servers are not connected to the gateway"
-    assert card["text"] == (
-        "2 can move into the gateway: add them there, then remove the direct entries here."
-    )
+    assert card["text"] == "2 can move into the gateway, 2 must stay on this Mac."
     assert card["action"] == "Review"
     assert card["target"] == {"view": "gateway"}
     assert data["gateway"] == {"name": "mcp.neon.tech"}
+
+
+def test_kitdens_own_server_is_not_counted_as_not_connected(home):
+    from kitden.changes import toml_edit
+
+    config = home / ".codex/config.toml"
+    mine = {"command": "/opt/kitden/bin/kitden", "args": ["mcp"]}
+    config.write_text(toml_edit.set_value(config.read_text(), ("mcp_servers", "kitden"), mine))
+    inventory = build_inventory(home)
+    gateway = Gateway(url="https://mcp.neon.tech/mcp")
+    mark_gateways(inventory, [gateway])
+    card = overview(inventory, [gateway], None)["attention"][-1]
+    assert card["title"] == "4 MCP servers are not connected to the gateway"
+    assert card["text"] == "2 can move into the gateway, 2 must stay on this Mac."
 
 
 def test_servers_that_cannot_move_are_not_an_attention_card(home):

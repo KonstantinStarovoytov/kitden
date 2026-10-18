@@ -138,14 +138,19 @@ def overview(inventory, gateways: list[Gateway], project: str | None) -> dict:
         gateway = {"name": urlsplit(gateways[0].url).netloc or "Gateway"}
         # Local and plugin servers cannot move, so only remote direct entries need attention.
         if groups["move"]:
-            them, entries = ("it", "entry") if groups["move"] == 1 else ("them", "entries")
+            parts = [
+                f"{groups['move']} can move into the gateway",
+                f"{groups['local']} must stay on this Mac" if groups["local"] else "",
+                _count(groups["plugin"], "comes with a plugin", "come with plugins")
+                if groups["plugin"]
+                else "",
+            ]
             attention.append(
                 {
                     "id": _hash("gateway", project),
                     "title": f"{_count(len(around), 'MCP server is', 'MCP servers are')} "
                     "not connected to the gateway",
-                    "text": f"{groups['move']} can move into the gateway: add {them} there, "
-                    f"then remove the direct {entries} here.",
+                    "text": f"{', '.join(p for p in parts if p)}.",
                     "action": "Review",
                     "target": {"view": "gateway"},
                 }
