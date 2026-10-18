@@ -174,9 +174,11 @@ The product fails, even if it technically works, when it:
 
 ## Open questions
 
+The product name was decided on 2026-10-18: **Kitden** (see the
+[naming research](research/naming-and-licensing-2026-10-17.md)).
+
 | Question | Why it matters |
 | --- | --- |
-| Product name | "MCP Gateway" no longer describes the product |
 | Admin layer: build it or rely on vendor team features and Obot? | Only matters for the later team version |
 
 ## Effect on other project documents

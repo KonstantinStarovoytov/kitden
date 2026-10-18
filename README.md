@@ -1,12 +1,12 @@
-# MCP Gateway (working name)
+# Kitden
 
 **One local page that shows what each AI coding client actually loads, where each item comes from,
 and what loads twice, with safe on/off toggles.** Clients: Claude Code (including the Claude
 Desktop Code tab), Codex and Cursor.
 
 **Stage:** first release built (feature 001, user stories 1–5); results in
-[validation](specs/001-agent-setup-inventory/validation.md). The command is `agentsetup`. The
-repository name comes from the earlier gateway idea; a product name is still an open question.
+[validation](specs/001-agent-setup-inventory/validation.md). The command is still `agentsetup`;
+it becomes `kitden` in a later rename. The repository name comes from the earlier gateway idea.
 
 ```mermaid
 flowchart LR
