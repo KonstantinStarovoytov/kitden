@@ -37,7 +37,7 @@ Format: `[ID] [P?] [Story] Description`. `[P]` = can run in parallel (different 
 **Goal**: gateways, history and Undo survive; old MCP entries update in one reviewed change.
 **Independent test**: sandbox home with the old data folder and old entries (quickstart §2–3).
 
-- [ ] T005 [P] [US2] Tests first in `tests/unit/test_data_folder.py`: only old folder → copied with
+- [X] T005 [P] [US2] Tests first in `tests/unit/test_data_folder.py`: only old folder → copied with
   modes, backup paths rewritten, old folder unchanged; both → new used and one line printed; copy
   fails → no partial folder, old intact; Undo of an old change works after the old folder is
   deleted. Then `ensure_data_folder()` in `gateways.py`, called by every CLI command

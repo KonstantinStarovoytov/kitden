@@ -8,6 +8,14 @@ from pathlib import Path
 import pytest
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+
+@pytest.fixture(autouse=True)
+def _never_the_real_home(tmp_path_factory, monkeypatch):
+    """Tests never read or write the developer's real home folder, even by accident."""
+    monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("real-home")))
+
+
 CURSOR_DB = "Library/Application Support/Cursor/User/globalStorage/state.vscdb"
 CURSOR_WORKSPACES = "Library/Application Support/Cursor/User/workspaceStorage"
 

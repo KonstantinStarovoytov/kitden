@@ -103,3 +103,19 @@ def test_server_stops_quickly_even_with_an_open_page(monkeypatch):
     monkeypatch.setattr(uvicorn, "run", lambda app, **kwargs: calls.append(kwargs))
     cli.run_server(object(), "127.0.0.1", 47800)
     assert calls[0]["timeout_graceful_shutdown"] <= 3
+
+
+def test_every_command_copies_the_old_data_folder_once(tmp_path, capsys):
+    from kitden.gateways import OLD_DATA_DIR, data_dir
+
+    (tmp_path / OLD_DATA_DIR).mkdir(parents=True)
+    (tmp_path / OLD_DATA_DIR / "settings.json").write_text('{"gateways": []}')
+    cli.main(["scan", "--home", str(tmp_path)])
+    assert (data_dir(tmp_path) / "settings.json").is_file()
+    assert "Copied" in capsys.readouterr().err
+
+
+def test_tests_never_see_the_real_home():
+    from pathlib import Path
+
+    assert "real-home" in str(Path.home())

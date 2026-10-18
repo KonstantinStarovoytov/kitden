@@ -5,6 +5,7 @@ key's environment variable are kept; a key value or a URL with credentials is re
 """
 
 import json
+import shutil
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -12,12 +13,38 @@ from kitden.changes.atomic import write_atomic
 from kitden.model import Gateway, GatewayAuth
 from kitden.redact import redact
 
-DATA_DIR = "Library/Application Support/agentsetup"
+DATA_DIR = "Library/Application Support/kitden"
+OLD_DATA_DIR = "Library/Application Support/agentsetup"  # the working name, before feature 002
 SETTINGS = f"{DATA_DIR}/settings.json"
 
 
 def data_dir(home: Path) -> Path:
     return Path(home) / DATA_DIR
+
+
+def ensure_data_folder(home: Path) -> str | None:
+    """Copy the working version's data folder once (feature 002, research R7). Returns a note.
+
+    The old folder is never changed, so an old page that still runs keeps working. Backups are
+    referenced by absolute paths, so the copy points them at the new folder.
+    """
+    new, old = data_dir(home), Path(home) / OLD_DATA_DIR
+    if not old.is_dir():
+        return None
+    if new.exists():
+        return f"The old folder {old} is still there. Kitden does not use it; you can delete it."
+    temp = new.with_name(f"{new.name}.copying")
+    shutil.rmtree(temp, ignore_errors=True)
+    try:
+        shutil.copytree(old, temp, symlinks=True)
+        for record in temp.glob("changes/*/change.json"):
+            text = record.read_text()
+            record.write_text(text.replace(json.dumps(str(old))[1:-1], json.dumps(str(new))[1:-1]))
+        temp.rename(new)
+    except OSError as error:
+        shutil.rmtree(temp, ignore_errors=True)
+        return f"Could not copy {old} to {new}: {error}. Nothing was deleted."
+    return f"Copied {old} to {new}. The old folder was left as it is."
 
 
 def _check_web_address(url: str, what: str) -> None:

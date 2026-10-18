@@ -104,6 +104,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.version:
         print(f"kitden {__version__}")
         return 0
+    from kitden.gateways import ensure_data_folder
+
+    note = ensure_data_folder(Path(args.home).expanduser() if args.home else Path.home())
+    # The MCP server talks over stdio; keep its output clean.
+    if note and args.command != "mcp":
+        print(note, file=sys.stderr)
     if args.command == "scan":
         return _scan(args)
     if args.command == "mcp":
