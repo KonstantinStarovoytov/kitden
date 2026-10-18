@@ -73,3 +73,7 @@ def test_gateway_rows_keep_addresses_behind_a_details_button():
     text = script("gateway.js")
     assert '"Details"' in text
     assert "row.summary" not in text
+
+
+def test_gateway_says_its_lists_are_mcp_servers():
+    assert "MCP servers not in the gateway" in script("gateway.js")

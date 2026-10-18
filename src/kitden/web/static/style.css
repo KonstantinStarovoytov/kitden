@@ -255,7 +255,8 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .routes .hub { fill: var(--route-soft); stroke: var(--route); }
 .routes text { fill: var(--ink); font: 600 11px var(--mono); }
 .routes .sub { fill: var(--ink-3); font: 400 11px var(--sans); }
-.group-title { margin: 24px 0 2px; }
+.section-title { font-size: 15px; margin: 28px 0 0; letter-spacing: -0.01em; }
+.group-title { font-size: 13px; font-weight: 600; margin: 16px 0 2px; }
 .group-note { margin: 0 0 10px; color: var(--ink-3); }
 .list { background: var(--panel); border: 1px solid var(--wire); border-radius: 8px; }
 .list-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 0 12px; min-height: 40px; border-top: 1px solid var(--wire-soft); }
