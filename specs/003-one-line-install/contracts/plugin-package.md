@@ -11,7 +11,7 @@ the repository root. Cursor gets only the server entry, through a link.
 {
   "name": "kitden",
   "description": "See what your coding agents load. Change it with confidence.",
-  "owner": { "name": "<owner>" },
+  "owner": { "name": "Konstantin Starovoytov" },
   "plugins": [
     {
       "name": "kitden",
@@ -70,8 +70,8 @@ Under 200 words. Loads as `/kitden:setup` in Claude Code.
 
 | Client | Install | Update | Remove |
 | --- | --- | --- | --- |
-| Claude Code | `/plugin install kitden --marketplace <owner>/kitden` (2.1.275+); or `claude plugin marketplace add <owner>/kitden` then `claude plugin install kitden@kitden` | `claude plugin update kitden@kitden` | `claude plugin uninstall kitden@kitden` |
-| Codex | `codex plugin marketplace add <owner>/kitden` then `codex plugin add kitden@kitden` | `codex plugin marketplace upgrade` refreshes the marketplace; whether the installed plugin follows is checked in the quickstart | `codex plugin remove kitden@kitden` |
+| Claude Code | `/plugin install kitden --marketplace KonstantinStarovoytov/kitden` (2.1.275+); or `claude plugin marketplace add KonstantinStarovoytov/kitden` then `claude plugin install kitden@kitden` | `claude plugin update kitden@kitden` | `claude plugin uninstall kitden@kitden` |
+| Codex | `codex plugin marketplace add KonstantinStarovoytov/kitden` then `codex plugin add kitden@kitden` | `codex plugin marketplace upgrade` refreshes the marketplace; whether the installed plugin follows is checked in the quickstart | `codex plugin remove kitden@kitden` |
 | Cursor | the README button or link below | — | remove the `kitden` entry in Cursor's MCP settings, or on the Kitden page |
 
 ## The Cursor link

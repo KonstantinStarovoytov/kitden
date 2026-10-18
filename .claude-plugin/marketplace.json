@@ -1,7 +1,7 @@
 {
   "name": "kitden",
   "description": "See what your coding agents load. Change it with confidence.",
-  "owner": { "name": "<owner>" },
+  "owner": { "name": "Konstantin Starovoytov" },
   "plugins": [
     {
       "name": "kitden",

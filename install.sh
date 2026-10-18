@@ -1,13 +1,13 @@
 #!/bin/sh
 # Installs Kitden on macOS: uv when it is missing, then Kitden as a uv tool, then opens the page.
-# One line:  curl -LsSf https://raw.githubusercontent.com/<owner>/kitden/main/install.sh | sh
+# One line:  curl -LsSf https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/install.sh | sh
 # It never changes anything in Claude Code, Codex or Cursor. Running it again updates Kitden
 # when a newer release is named below. See specs/003-one-line-install/contracts/install-scripts.md.
 set -eu
 
 KITDEN_REF="v0.1.0"
-KITDEN_SOURCE="git+https://github.com/<owner>/kitden@$KITDEN_REF"
-FOLLOW_UP="https://github.com/<owner>/kitden#linux-and-windows"
+KITDEN_SOURCE="git+https://github.com/KonstantinStarovoytov/kitden@$KITDEN_REF"
+FOLLOW_UP="https://github.com/KonstantinStarovoytov/kitden#linux-and-windows"
 
 # 1. Only macOS for now.
 if [ "$(uname -s)" != "Darwin" ]; then

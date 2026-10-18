@@ -90,13 +90,13 @@ So today it is "two commands on a Mac with uv", not "click and use".
 | Route | What the person types or clicks | Prerequisite | Source (2026-10-18) |
 | --- | --- | --- | --- |
 | Run without installing | `uvx kitden` | uv; Kitden on PyPI | [uv tools](https://docs.astral.sh/uv/guides/tools/) |
-| Run from GitHub, before PyPI | `uvx --from git+https://github.com/<owner>/kitden kitden` | uv | same page, "Requesting different sources" |
+| Run from GitHub, before PyPI | `uvx --from git+https://github.com/KonstantinStarovoytov/kitden kitden` | uv | same page, "Requesting different sources" |
 | Install uv itself | one line: `curl -LsSf https://astral.sh/uv/install.sh \| sh` (macOS, Linux) or a PowerShell line (Windows); also Homebrew, winget, scoop | none; uv downloads Python when it is missing | [uv install](https://docs.astral.sh/uv/getting-started/installation/), [Python versions](https://docs.astral.sh/uv/concepts/python-versions/) |
-| From inside Claude Code | `/plugin install kitden --marketplace <owner>/kitden` (one command, Claude Code 2.1.275+) | a `.claude-plugin/marketplace.json` in the Kitden repository | [publish a plugin](https://code.claude.com/docs/en/plugins/publish) |
-| From inside Codex | `codex plugin marketplace add <owner>/kitden`, then `codex plugin add kitden@kitden` | a Codex plugin manifest | checked against `codex plugin --help` in feature 001 |
+| From inside Claude Code | `/plugin install kitden --marketplace KonstantinStarovoytov/kitden` (one command, Claude Code 2.1.275+) | a `.claude-plugin/marketplace.json` in the Kitden repository | [publish a plugin](https://code.claude.com/docs/en/plugins/publish) |
+| From inside Codex | `codex plugin marketplace add KonstantinStarovoytov/kitden`, then `codex plugin add kitden@kitden` | a Codex plugin manifest | checked against `codex plugin --help` in feature 001 |
 | From a web page into Cursor | an install button: `cursor://anysphere.cursor-deeplink/mcp/install?name=…&config=…` | Cursor; the link adds only the MCP entry | [Cursor install links](https://cursor.com/docs/mcp/install-links) |
 | Anthropic directory, OpenAI directory | listing for discovery | paid plan and review; OpenAI local MCP needs partner approval | [publish](https://code.claude.com/docs/en/plugins/publish), [release channels](release-channels-2026-10-18.md) |
-| Homebrew tap | `brew install <owner>/tap/kitden` | Homebrew | [release channels](release-channels-2026-10-18.md) |
+| Homebrew tap | `brew install KonstantinStarovoytov/tap/kitden` | Homebrew | [release channels](release-channels-2026-10-18.md) |
 | One file, no Python | download and run | signing and notarization on macOS | not tested; see [release channels](release-channels-2026-10-18.md) |
 
 Claude Code's "recommend my plugin from the CLI" hint works only for plugins in Anthropic's

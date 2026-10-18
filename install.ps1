@@ -1,12 +1,12 @@
 # Installs Kitden on Windows: uv when it is missing, then Kitden as a uv tool, then opens the page.
-# One line:  powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/<owner>/kitden/main/install.ps1 | iex"
+# One line:  powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/install.ps1 | iex"
 # It never changes anything in Claude Code, Codex or Cursor.
 # See specs/003-one-line-install/contracts/install-scripts.md.
 $ErrorActionPreference = "Stop"
 
 $KitdenRef = "v0.1.0"
-$KitdenSource = "git+https://github.com/<owner>/kitden@$KitdenRef"
-$FollowUp = "https://github.com/<owner>/kitden#linux-and-windows"
+$KitdenSource = "git+https://github.com/KonstantinStarovoytov/kitden@$KitdenRef"
+$FollowUp = "https://github.com/KonstantinStarovoytov/kitden#linux-and-windows"
 
 # 1. Windows support is a later feature. Steps 2 to 5 run once it lands.
 $WindowsSupported = $false

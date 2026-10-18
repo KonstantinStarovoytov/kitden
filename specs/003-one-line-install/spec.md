@@ -47,7 +47,7 @@ see the page.
 **Acceptance Scenarios**:
 
 1. **Given** uv is installed, **When** the developer runs
-   `uvx --from git+https://github.com/<owner>/kitden kitden`, **Then** the page opens in the
+   `uvx --from git+https://github.com/KonstantinStarovoytov/kitden kitden`, **Then** the page opens in the
    browser, the link is printed, and no client file changes.
 2. **Given** no Python 3.13 or newer is installed, **When** that command runs, **Then** uv fetches
    one and the page still opens.
@@ -106,7 +106,7 @@ Code, start a new session, and ask what loads in the current project.
 **Acceptance Scenarios**:
 
 1. **Given** Kitden is installed and Claude Code is 2.1.275 or newer, **When** the developer runs
-   `/plugin install kitden --marketplace <owner>/kitden` and accepts, **Then** in the next session
+   `/plugin install kitden --marketplace KonstantinStarovoytov/kitden` and accepts, **Then** in the next session
    the kitden tools answer and the skill `/kitden:setup` is listed.
 2. **Given** the plugin is installed, **When** the developer asks what loads in this project,
    **Then** the agent answers from the kitden tools and does not read or edit settings files by
@@ -139,7 +139,7 @@ Cursor button; ask each client what loads.
 **Acceptance Scenarios**:
 
 1. **Given** Kitden is installed, **When** the developer runs
-   `codex plugin marketplace add <owner>/kitden` and `codex plugin add kitden@kitden`, **Then** in
+   `codex plugin marketplace add KonstantinStarovoytov/kitden` and `codex plugin add kitden@kitden`, **Then** in
    the next Codex session the kitden tools answer and the skill is listed.
 2. **Given** the README is open, **When** the developer clicks "Add to Cursor" and confirms in
    Cursor, **Then** exactly one MCP entry named `kitden` is added, it starts `kitden mcp`, and the
@@ -178,7 +178,7 @@ Cursor button; ask each client what loads.
 - **FR-001**: Pushing a version tag MUST run the tests, build the package and create a GitHub
   release with the built files and notes. A failed test or build MUST publish nothing. Publishing
   to PyPI is a later step; when it comes, it MUST use no stored secret.
-- **FR-002**: The package MUST run the page with `uvx --from git+https://github.com/<owner>/kitden kitden`
+- **FR-002**: The package MUST run the page with `uvx --from git+https://github.com/KonstantinStarovoytov/kitden kitden`
   (and with `uvx kitden` once it is on PyPI), print its version with `--version`, and include
   every file the page needs.
 - **FR-003**: The README MUST show the git form of the `uvx` command (pinned to the release tag,
@@ -200,14 +200,14 @@ Cursor button; ask each client what loads.
   Cursor button) adds the read-only server, and the client asks first.
 - **FR-008**: The repository MUST contain a Claude Code marketplace and a plugin named `kitden`
   with a short skill and the read-only server entry that starts `kitden mcp`, installable with
-  `/plugin install kitden --marketplace <owner>/kitden`.
+  `/plugin install kitden --marketplace KonstantinStarovoytov/kitden`.
 - **FR-009**: The skill MUST tell the agent: open the page with `kitden open`; answer "what loads"
   questions with the kitden tools; never edit client settings files; when the tools are missing,
   show the install line.
 - **FR-010**: The plugin MUST add no hooks, no commands that run by themselves, and no
   executables. Uninstalling it in the client MUST leave every other setting untouched.
 - **FR-011**: The same plugin folder MUST be installable in Codex with
-  `codex plugin marketplace add <owner>/kitden` and `codex plugin add kitden@kitden`, and MUST
+  `codex plugin marketplace add KonstantinStarovoytov/kitden` and `codex plugin add kitden@kitden`, and MUST
   give Codex the same skill and server.
 - **FR-012**: The README MUST have an "Add to Cursor" button that adds only the kitden server
   entry, plus the plain link for pasting into a browser.
@@ -242,12 +242,12 @@ Cursor button; ask each client what loads.
 ### Measurable Outcomes
 
 - **SC-001**: On a clean macOS account with uv and no Python,
-  `uvx --from git+https://github.com/<owner>/kitden kitden` shows the page in under 2 minutes the
+  `uvx --from git+https://github.com/KonstantinStarovoytov/kitden kitden` shows the page in under 2 minutes the
   first time and under 10 seconds the second time.
 - **SC-002**: On a clean macOS account without uv, the one install line ends with the page open
   in under 3 minutes, and every client settings file has the same bytes as before.
 - **SC-003**: A release is one tag push. GitHub Releases shows the version within 15 minutes,
-  and `uvx --from git+https://github.com/<owner>/kitden@v<version> kitden --version` prints it
+  and `uvx --from git+https://github.com/KonstantinStarovoytov/kitden@v<version> kitden --version` prints it
   on another machine.
 - **SC-004**: In Claude Code, one install command and one new session are enough to get the
   answer to "what loads in this project" from the kitden tools, with no settings file changed.
@@ -266,7 +266,7 @@ Cursor button; ask each client what loads.
 | Decision | Decided | Effect |
 | --- | --- | --- |
 | License | Apache-2.0 | `LICENSE` file and the `license` field in the package and plugin manifests |
-| GitHub repository | A public repository `<owner>/kitden` in the owner's personal profile; the owner creates it. `<owner>` stays a placeholder until the owner gives the login | The plugin commands and the git form of `uvx` point at it; the local folder name stays |
+| GitHub repository | A public repository `KonstantinStarovoytov/kitden` in the owner's personal profile; the owner creates it (login given 2026-10-18) | The plugin commands and the git form of `uvx` point at it; the local folder name stays |
 | PyPI | Not now. The git route is the first install path; PyPI publishing is a later task. Register the name `kitden` at the first PyPI release to reserve it | No PyPI account or publisher is needed for this feature |
 | First version | 0.1.0, the first public version; 0.1 and 0.2 were working versions never published | `kitden --version` prints 0.1.0; the README says it is the first public version |
 | Order against feature 004 | 004 is merged into main; this branch builds on it | No constraint on timing |

@@ -56,7 +56,7 @@ feature, not runtime behaviour: the [quickstart](quickstart.md) checks the real 
 
 ## R3. Run without installing
 
-- **Decision**: document `uvx --from git+https://github.com/<owner>/kitden kitden` as the first
+- **Decision**: document `uvx --from git+https://github.com/KonstantinStarovoytov/kitden kitden` as the first
   path, pinned as `…/kitden@v0.1.0 kitden`. Later, with PyPI: `uvx kitden`, `uvx kitden@<version>`
   and `uvx kitden@latest` to refresh a cached one. uv downloads a Python that satisfies
   `requires-python` when none is installed (its default `python-downloads` is `automatic`).
@@ -71,14 +71,14 @@ feature, not runtime behaviour: the [quickstart](quickstart.md) checks the real 
 
 - **Decision**: two scripts in the repository root, served raw from GitHub (the website serves
   the same files later):
-  - macOS and Linux: `curl -LsSf https://raw.githubusercontent.com/<owner>/kitden/main/install.sh | sh`
-  - Windows: `powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/<owner>/kitden/main/install.ps1 | iex"`
+  - macOS and Linux: `curl -LsSf https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/install.sh | sh`
+  - Windows: `powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/install.ps1 | iex"`
 
   `install.sh` is POSIX `sh`, and does, in this order: (1) `uname -s` must be `Darwin`, otherwise
   print that Kitden does not support this system yet, name the follow-up, and exit 1 before
   anything else; (2) find uv: `command -v uv`, else `${XDG_BIN_HOME:-$HOME/.local/bin}/uv`; when
   missing, run uv's own documented line `curl -LsSf https://astral.sh/uv/install.sh | sh`;
-  (3) `uv tool install "git+https://github.com/<owner>/kitden@$KITDEN_REF"`, where `KITDEN_REF`
+  (3) `uv tool install "git+https://github.com/KonstantinStarovoytov/kitden@$KITDEN_REF"`, where `KITDEN_REF`
   is the latest release tag written in the script (bumped at each release); running the line
   again after a release updates Kitden, because uv replaces the tool when the ref changes
   (checked here with a `git+file://` source and two refs). With PyPI, later: `uv tool install
@@ -176,10 +176,10 @@ feature, not runtime behaviour: the [quickstart](quickstart.md) checks the real 
 
 | Client | Command | Verified how (2026-10-18) |
 | --- | --- | --- |
-| Claude Code, in a session | `/plugin install kitden --marketplace <owner>/kitden` — asks to confirm the marketplace, then opens the plugin's details to choose a scope. Needs 2.1.275 or newer | [install page](https://code.claude.com/docs/en/plugins/install#add-a-marketplace-and-install-in-one-command) |
-| Claude Code, shell | `claude plugin marketplace add <owner>/kitden`, then `claude plugin install kitden@kitden`. One command with `--marketplace` needs 2.1.292 or newer (the owner's 2.1.283 cannot) | [publish page](https://code.claude.com/docs/en/plugins/publish); `claude plugin --help` here |
+| Claude Code, in a session | `/plugin install kitden --marketplace KonstantinStarovoytov/kitden` — asks to confirm the marketplace, then opens the plugin's details to choose a scope. Needs 2.1.275 or newer | [install page](https://code.claude.com/docs/en/plugins/install#add-a-marketplace-and-install-in-one-command) |
+| Claude Code, shell | `claude plugin marketplace add KonstantinStarovoytov/kitden`, then `claude plugin install kitden@kitden`. One command with `--marketplace` needs 2.1.292 or newer (the owner's 2.1.283 cannot) | [publish page](https://code.claude.com/docs/en/plugins/publish); `claude plugin --help` here |
 | Claude Code, update | `claude plugin update kitden@kitden`; auto-update is off by default for a marketplace like ours | [loading page](https://code.claude.com/docs/en/plugins/loading#when-auto-update-runs) |
-| Codex | `codex plugin marketplace add <owner>/kitden` (also `owner/repo@ref`, `--sparse`), then `codex plugin add kitden@kitden` (or `codex plugin add kitden --marketplace kitden`); `codex plugin list`, `codex plugin remove` | `codex plugin --help`, `codex plugin add --help` of 0.163.0-alpha.10.2 (ChatGPT app); the [build page](https://developers.openai.com/plugins/build/plugins) shows the marketplace commands and leaves installing to the app's plugin browser |
+| Codex | `codex plugin marketplace add KonstantinStarovoytov/kitden` (also `owner/repo@ref`, `--sparse`), then `codex plugin add kitden@kitden` (or `codex plugin add kitden --marketplace kitden`); `codex plugin list`, `codex plugin remove` | `codex plugin --help`, `codex plugin add --help` of 0.163.0-alpha.10.2 (ChatGPT app); the [build page](https://developers.openai.com/plugins/build/plugins) shows the marketplace commands and leaves installing to the app's plugin browser |
 | Cursor | `cursor://anysphere.cursor-deeplink/mcp/install?name=kitden&config=<base64>` where `<base64>` encodes `{"command":"kitden","args":["mcp"]}`; Cursor asks before installing | [install links](https://cursor.com/docs/mcp/install-links) |
 | Cursor, README button | `[![Add to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=kitden&config=<base64>)`; the badge images come from the docs page; the `https://cursor.com/en/install-mcp` page shows "Installing MCP Server — Redirecting to Cursor…" (observed, not on the docs page). The README also shows the plain `cursor://` link as text | docs page source; the page itself |
 
@@ -247,12 +247,12 @@ the quickstart records it (expected `~/.cursor/mcp.json`).
 ## R11. Owner steps outside the code, once
 
 1. License: decided, Apache-2.0 (`LICENSE` file and the `license` field are in the code).
-2. Create the GitHub repository `<owner>/kitden`, public, in the personal profile, and push
-   `main`. Tell the builder the login so the `<owner>` placeholders can be replaced.
+2. Create the GitHub repository `KonstantinStarovoytov/kitden`, public, in the personal profile, and push
+   `main`. The login was given on 2026-10-18 and is in every link and manifest.
 3. First release: `git tag v0.1.0`, `git push origin main v0.1.0`. The workflow builds and creates
    the GitHub release.
 4. Later, for PyPI: an account; under "Publishing", a pending trusted publisher: project `kitden`,
-   owner `<owner>`, repository `kitden`, workflow `release.yml`, environment `pypi`; on GitHub,
+   owner `KonstantinStarovoytov`, repository `kitden`, workflow `release.yml`, environment `pypi`; on GitHub,
    Settings → Environments → `pypi`. Register the name `kitden` with that first publish.
 
 Sources: the PyPI pending publisher page and the uv GitHub guide ("create the environment … under

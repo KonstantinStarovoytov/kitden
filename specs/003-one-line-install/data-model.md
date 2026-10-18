@@ -21,7 +21,7 @@ fails without changing anything.
 | --- | --- | --- |
 | 1 System | `uname -s` is `Darwin` | exit 1, "Kitden does not support <system> yet" |
 | 2 uv | find `uv` on PATH or in uv's folder; else run uv's installer | exit 2, "could not install uv" |
-| 3 Kitden | git present (`xcode-select -p`), then `uv tool install "git+https://github.com/<owner>/kitden@<release tag>"` | exit 3, "needs git" or "could not install Kitden" |
+| 3 Kitden | git present (`xcode-select -p`), then `uv tool install "git+https://github.com/KonstantinStarovoytov/kitden@<release tag>"` | exit 3, "needs git" or "could not install Kitden" |
 | 4 Open | run `<tool folder>/kitden` | Kitden's own exit code 4, "the page did not start" |
 | 5 PATH | if the tool folder is not on PATH, print `uv tool update-shell` | — |
 

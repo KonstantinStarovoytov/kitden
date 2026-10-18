@@ -17,7 +17,7 @@ Expected: `sdist ok`, `wheel ok`, `kitden <version>`.
 
 ## 2. Run without installing (clean macOS user account, uv only)
 
-`uvx --from git+https://github.com/<owner>/kitden kitden` (later, with PyPI: `uvx kitden`).
+`uvx --from git+https://github.com/KonstantinStarovoytov/kitden kitden` (later, with PyPI: `uvx kitden`).
 Expected: the page opens, the link is printed, the first run takes under 2 minutes (SC-001),
 the second under 10 seconds. `shasum ~/.claude.json ~/.codex/config.toml ~/.cursor/mcp.json`
 before and after: unchanged (or the files do not exist).
@@ -38,7 +38,7 @@ before and after: unchanged (or the files do not exist).
 
 1. `claude plugin validate --strict ./plugins/kitden` and `claude plugin validate --strict .`
    → `Validation passed`.
-2. In a session: `/plugin install kitden --marketplace <owner>/kitden`, confirm the marketplace,
+2. In a session: `/plugin install kitden --marketplace KonstantinStarovoytov/kitden`, confirm the marketplace,
    choose "Install for you". Start a new session.
 3. `/mcp` shows `plugin:kitden:kitden` connected; `/` lists `/kitden:setup`.
 4. Ask: "What does Claude Code load in this project?" Expected: the answer comes from
@@ -55,7 +55,7 @@ before and after: unchanged (or the files do not exist).
 
 ## 5. Codex (the ChatGPT app and the CLI)
 
-1. `codex plugin marketplace add <owner>/kitden`, then `codex plugin add kitden@kitden`.
+1. `codex plugin marketplace add KonstantinStarovoytov/kitden`, then `codex plugin add kitden@kitden`.
 2. New session in the app: the kitden tools answer "what loads here"; the skill is listed.
    Repeat in the CLI (`codex`). Record whether the CLI starts the plugin's server (research R7).
 3. Kitden page → Agents: Codex shows "Provided by the kitden plugin".
@@ -75,7 +75,7 @@ before and after: unchanged (or the files do not exist).
 
 After research R11: `git tag v0.1.0`, `git push origin main v0.1.0`. Expected within
 15 minutes: the Actions run is green and the GitHub release holds the two files and notes. On
-another machine: `uvx --from git+https://github.com/<owner>/kitden@v0.1.0 kitden --version`
+another machine: `uvx --from git+https://github.com/KonstantinStarovoytov/kitden@v0.1.0 kitden --version`
 prints `kitden 0.1.0` (SC-003).
 
 ## Versions recorded

@@ -4,8 +4,8 @@ Two files in the repository root, served raw from GitHub and later from the webs
 
 | Line | Script | Shell |
 | --- | --- | --- |
-| `curl -LsSf https://raw.githubusercontent.com/<owner>/kitden/main/install.sh \| sh` | `install.sh` | POSIX `sh` |
-| `powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/<owner>/kitden/main/install.ps1 \| iex"` | `install.ps1` | PowerShell |
+| `curl -LsSf https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/install.sh \| sh` | `install.sh` | POSIX `sh` |
+| `powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/install.ps1 \| iex"` | `install.ps1` | PowerShell |
 
 ## Steps and messages (`install.sh`)
 
@@ -13,7 +13,7 @@ Two files in the repository root, served raw from GitHub and later from the webs
 | --- | --- | --- | --- |
 | 1 | System check | `uname -s` must be `Darwin` | `Kitden runs on macOS today. Linux and Windows are coming: <follow-up link>. Nothing was installed.`, exit 1 |
 | 2 | Find or install uv | `command -v uv`, else `${XDG_BIN_HOME:-$HOME/.local/bin}/uv`; when neither exists: `curl -LsSf https://astral.sh/uv/install.sh \| sh`, then use the second path | `Could not install uv. See https://docs.astral.sh/uv/getting-started/installation/`, exit 2 |
-| 3 | Install or update Kitden | first, `xcode-select -p` must succeed (git for the repository source): else `Kitden needs git until it is on PyPI. Run: xcode-select --install, then run this line again.`, exit 3; then `uv tool install "git+https://github.com/<owner>/kitden@$KITDEN_REF"`, where `KITDEN_REF` is the latest release tag written in the script; a newer script updates an older install | `Could not install Kitden. See the uv output above.`, exit 3 |
+| 3 | Install or update Kitden | first, `xcode-select -p` must succeed (git for the repository source): else `Kitden needs git until it is on PyPI. Run: xcode-select --install, then run this line again.`, exit 3; then `uv tool install "git+https://github.com/KonstantinStarovoytov/kitden@$KITDEN_REF"`, where `KITDEN_REF` is the latest release tag written in the script; a newer script updates an older install | `Could not install Kitden. See the uv output above.`, exit 3 |
 | 4 | Open the page | `"$(uv tool dir --bin)/kitden"` | Kitden's own message and exit 4 |
 | 5 | PATH hint | when `uv tool dir --bin` is not in `$PATH`: print `To use the kitden command from any terminal, run: uv tool update-shell, then open a new terminal.` | — |
 

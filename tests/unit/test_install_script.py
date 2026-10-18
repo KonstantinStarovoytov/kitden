@@ -83,7 +83,7 @@ def test_without_uv_it_installs_uv_then_kitden_and_opens_the_page(box):
     result, log = _run(box)
     assert result.returncode == 0, result.stderr
     assert "curl -LsSf https://astral.sh/uv/install.sh" in log
-    assert f"uv tool install git+https://github.com/<owner>/kitden@{_ref()}" in log
+    assert f"uv tool install git+https://github.com/KonstantinStarovoytov/kitden@{_ref()}" in log
     assert "kitden \n" in log  # ran with no arguments: open the page
     assert log.index("curl") < log.index("uv tool install") < log.index("kitden")
 

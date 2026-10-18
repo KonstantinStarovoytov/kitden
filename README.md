@@ -29,7 +29,7 @@ Langfuse export come later.
 Kitden runs on macOS. Paste one line into the Terminal:
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/<owner>/kitden/main/install.sh | sh
+curl -LsSf https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/install.sh | sh
 ```
 
 It installs [uv](https://docs.astral.sh/uv/) if you do not have it (uv's installer also puts its
@@ -37,12 +37,12 @@ folder on your shell's PATH), installs the `kitden` command in its own folder, a
 It changes nothing in Claude Code, Codex or Cursor. Run the same line later to update. Until Kitden
 is on PyPI, uv fetches it from this repository and needs git, which comes with the macOS command
 line tools; the line says so if they are missing. Windows gets the same with PowerShell once Windows is supported:
-`powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/<owner>/kitden/main/install.ps1 | iex"`.
+`powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/install.ps1 | iex"`.
 
 Already have uv? Run Kitden without installing it:
 
 ```bash
-uvx --from git+https://github.com/<owner>/kitden@v0.1.0 kitden
+uvx --from git+https://github.com/KonstantinStarovoytov/kitden@v0.1.0 kitden
 ```
 
 Without `@v0.1.0` it runs the latest code on `main`; this form needs git too. `uvx kitden` will work
@@ -55,8 +55,8 @@ Kitden itself still needs the line above.
 
 | Client | Do this | What it adds |
 | --- | --- | --- |
-| Claude Code (2.1.275 or newer) | In a session: `/plugin install kitden --marketplace <owner>/kitden`. From the shell: `claude plugin marketplace add <owner>/kitden`, then `claude plugin install kitden@kitden` | The `kitden` plugin: one skill and the server `kitden mcp` |
-| Codex | `codex plugin marketplace add <owner>/kitden`, then `codex plugin add kitden@kitden` | The same plugin |
+| Claude Code (2.1.275 or newer) | In a session: `/plugin install kitden --marketplace KonstantinStarovoytov/kitden`. From the shell: `claude plugin marketplace add KonstantinStarovoytov/kitden`, then `claude plugin install kitden@kitden` | The `kitden` plugin: one skill and the server `kitden mcp` |
+| Codex | `codex plugin marketplace add KonstantinStarovoytov/kitden`, then `codex plugin add kitden@kitden` | The same plugin |
 | Cursor | [![Add to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=kitden&config=eyJjb21tYW5kIjoia2l0ZGVuIiwiYXJncyI6WyJtY3AiXX0=) or paste `cursor://anysphere.cursor-deeplink/mcp/install?name=kitden&config=eyJjb21tYW5kIjoia2l0ZGVuIiwiYXJncyI6WyJtY3AiXX0=` into the browser | One MCP entry, `kitden mcp` |
 
 Then ask the agent: "show my setup". The skill tells it to answer with the kitden tools and to open

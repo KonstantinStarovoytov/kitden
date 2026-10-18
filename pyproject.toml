@@ -30,9 +30,9 @@ dependencies = [
 kitden = "kitden.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/<owner>/kitden"
-Repository = "https://github.com/<owner>/kitden"
-Releases = "https://github.com/<owner>/kitden/releases"
+Homepage = "https://github.com/KonstantinStarovoytov/kitden"
+Repository = "https://github.com/KonstantinStarovoytov/kitden"
+Releases = "https://github.com/KonstantinStarovoytov/kitden/releases"
 
 [dependency-groups]
 dev = [

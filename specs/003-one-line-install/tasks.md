@@ -32,14 +32,14 @@ Format: `[ID] [P?] [Story] Description`. `[P]` = can run in parallel (different 
 **Independent test**: quickstart §1 and §2.
 
 - [X] T003 [US1] README: a new "Install" section at the top with
-  `uvx --from git+https://github.com/<owner>/kitden kitden`, the pinned `@v0.1.0` form, and a
+  `uvx --from git+https://github.com/KonstantinStarovoytov/kitden kitden`, the pinned `@v0.1.0` form, and a
   line that this is the first public version; a "For maintainers" section with the release steps
   and the owner's one-time steps ([R3](research.md#r3-run-without-installing),
   [R11](research.md#r11-owner-steps-outside-the-code-once)). Replace the "Use it" clone
   instructions; keep `uv tool install .` as the developer path under "Develop".
-- [ ] T004 [US1] Owner, once: create the public repository `<owner>/kitden` in the personal
-  profile and give the login (R11). Builder, then: replace every `<owner>` placeholder in the
-  repository with it.
+- [X] T004 [US1] Owner, once: create the public repository `KonstantinStarovoytov/kitden` in the personal
+  profile and give the login (R11). Builder, then: put the login in every link and manifest
+  (done 2026-10-18; the repository itself is still to be created).
 
 **Checkpoint**: quickstart §2 passes from the git form on a clean account.
 
