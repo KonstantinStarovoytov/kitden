@@ -87,7 +87,7 @@ Format: `[ID] [P?] [Story] Description`. `[P]` = can run in parallel (different 
 
 ## Phase 6: Polish
 
-- [ ] T014 [P] Docs: README (install, `kitden open`, update old entries, `uv tool uninstall
+- [X] T014 [P] Docs: README (install, `kitden open`, update old entries, `uv tool uninstall
   agentsetup`), constitution 2.1.1 (name decided, title), `AGENTS.md` title, brief and naming
   research links. Feature 001 documents stay as history.
 - [ ] T015 Full checks: `uv run pytest -q`, contract tests, ruff; quickstart §1–5 on a sandbox home;

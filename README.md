@@ -4,9 +4,9 @@
 and what loads twice, with safe on/off toggles.** Clients: Claude Code (including the Claude
 Desktop Code tab), Codex and Cursor.
 
-**Stage:** first release built (feature 001, user stories 1–5); results in
-[validation](specs/001-agent-setup-inventory/validation.md). The command is still `agentsetup`;
-it becomes `kitden` in a later rename. The repository name comes from the earlier gateway idea.
+**Stage:** first release built (feature 001); results in
+[validation](specs/001-agent-setup-inventory/validation.md). Feature 002 renamed the working
+version, `agentsetup`, to Kitden. The repository name comes from the earlier gateway idea.
 
 ```mermaid
 flowchart LR
@@ -32,13 +32,16 @@ Needs macOS and [uv](https://docs.astral.sh/uv/).
 uv tool install .
 ```
 
-Run this in the repository folder; it gives you the `agentsetup` command.
+Run this in the repository folder; it gives you the `kitden` command.
 
 ```bash
-agentsetup
+kitden
 ```
 
-This starts the page on `127.0.0.1` and opens it in the browser. Stop it with Ctrl+C.
+This opens the page in the browser and returns at once. If the page already runs, the same page
+opens; only one runs at a time. A coding agent can run `kitden open` too. The page stops by itself
+10 minutes after its last tab closes. To run it in the terminal instead, use `kitden serve` and
+stop it with Ctrl+C.
 
 | I want to | On the page | What changes |
 | --- | --- | --- |
@@ -49,14 +52,23 @@ This starts the page on `127.0.0.1` and opens it in the browser. Stop it with Ct
 | Remove an old direct MCP entry | **Load map** → row → Remove from … → Apply, or **Gateway** → Remove… | That entry |
 | Turn a plugin on or off (Claude Code, Codex) | **Load map** → Plugins → row → Turn off in … / Turn on in … → Apply | The plugin's on/off flag |
 | Install or move a plugin, add a marketplace | **Load map** → row → Commands… | Nothing: the page shows the command, you run it |
-| Let agents see this setup | **show my setup** (bottom of the left rail) → Add… → Apply | One entry per client for `agentsetup mcp` |
+| Let agents see this setup | **show my setup** (bottom of the left rail) → Add… → Apply | One entry per client for `kitden mcp` |
 | Undo a change | Undo in the note after Apply, or **Changes** → Undo | The previous file content comes back |
 
-Other commands: `agentsetup scan --json` prints the same inventory and exits; `agentsetup mcp`
-is the read-only server that clients start.
+Other commands: `kitden scan --json` prints the same inventory and exits; `kitden mcp` is the
+read-only server that clients start.
+
+**Coming from `agentsetup`.** Kitden copies the old data folder once (gateways, history and Undo
+carry over) and leaves the old folder as it is. If you added "show my setup" with the old version,
+the page shows an "Old entry" card: use **Update to Kitden…** for each client. Then remove the old
+tool:
+
+```bash
+uv tool uninstall agentsetup
+```
 
 **Safety.** Every change is shown first and written only after Apply. Before writing, the tool
-saves a private backup (`~/Library/Application Support/agentsetup/changes`, kept for 30 days or the
+saves a private backup (`~/Library/Application Support/kitden/changes`, kept for 30 days or the
 last 100 changes). It stops if a file changed after the preview, reads the file again after
 writing, and puts the backup back if the result is wrong. Undo stops if the file changed after the
 change.
@@ -72,12 +84,14 @@ chatgpt.com for your installed plugins.
 | --- | --- |
 | [Project brief](docs/project-brief.md) | Product goal, users, success, first release scope, and open questions |
 | [Feature 001 spec](specs/001-agent-setup-inventory/spec.md) | First release specification: user stories, requirements, success criteria |
+| [Feature 002 spec](specs/002-kitden-rename/spec.md) | The Kitden name, `kitden open`, one page per computer |
+| [Naming and licensing](docs/research/naming-and-licensing-2026-10-17.md) | How the name Kitden was chosen; license options |
 | [Brief review](docs/research/brief-review-2026-10-17.md) | Independent review by two models: scores, missed competitors, recommended cuts, experiments |
 | [Gateway trial](docs/research/gateway-trial-2026-10-16.md) | MetaMCP and Obot tested with Codex and agent-docs; cross-client setup research |
 | [Gateway research](docs/research/mcp-gateway-landscape.md) | Existing MCP gateways, security practices, and reading list |
 | [Design skills and tools](docs/research/design-skills-and-tools-2026-10-17.md) | Agent skills and tools for UI design and review, with risks and a proposed way of working |
 | [Architecture proposal](docs/architecture/overview.md) | Gateway architecture from the earlier idea; superseded for the first release |
-| [Constitution](.specify/memory/constitution.md) | Project principles, version 2.1.0 (amended 2026-10-17) |
+| [Constitution](.specify/memory/constitution.md) | Project principles, version 2.1.1 (amended 2026-10-18) |
 | [Spec Kit workflow](docs/spec-kit-workflow.md) | Installed tooling and next development steps |
 
 ## Working language

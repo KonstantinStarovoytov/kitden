@@ -1,4 +1,4 @@
-# MCP Gateway Constitution
+# Kitden Constitution
 
 ## Core Principles
 
@@ -70,8 +70,9 @@ add or toggle individual MCP servers in client files.
 Not in scope: building or running an MCP gateway or proxy, carrying agent traffic, managing
 account-side state, public SaaS, and billing. A team server is a later option, not a requirement.
 
-The implementation language, framework, storage, product name, and the choice between an own tool
-and a contribution to an existing open-source tool remain open until specification and planning.
+The product name is Kitden (decided by the owner on 2026-10-18). The implementation language,
+framework, storage, and the choice between an own tool and a contribution to an existing
+open-source tool are settled per feature in specification and planning.
 The [project brief](../../docs/project-brief.md) holds the approved scope.
 
 ## Development workflow
@@ -94,4 +95,6 @@ date, and affected artifacts. Use a major version for incompatible principle cha
 a minor version for added principles, and a patch version for wording fixes.
 Plans and reviews must check compliance and explain any intentional exception.
 
-**Version**: 2.1.0 | **Ratified**: 2026-10-16 | **Last Amended**: 2026-10-17
+**Version**: 2.1.1 | **Ratified**: 2026-10-16 | **Last Amended**: 2026-10-18
+
+Amendment 2.1.1 (2026-10-18): the product name is Kitden (feature 002). Wording only.

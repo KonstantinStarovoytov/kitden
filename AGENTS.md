@@ -1,4 +1,4 @@
-# Working on MCP Gateway
+# Working on Kitden
 
 - Talk to the owner in simple Russian until asked otherwise.
 - Write code, comments, UI text, and documentation in simple English.
