@@ -150,3 +150,9 @@ def test_scope_switch_marks_the_project_picker_and_the_lede():
 def test_reduced_motion_turns_every_animation_off():
     assert "prefers-reduced-motion: reduce" in CSS
     assert "reducedMotion.matches" in script("motion.js")
+
+
+def test_a_plugin_the_page_cannot_change_shows_a_locked_switch():
+    text = script("panel.js")
+    assert "node.disabled = true" in text
+    assert "Not changed from here." in text

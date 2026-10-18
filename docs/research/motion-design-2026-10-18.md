@@ -117,3 +117,33 @@ flight (names set and cleared), route focus (14 rows lit, others at 0.35), no lo
 
 Left for later (P1/P2): per-finding focus from the Overview notes list; MCP introspection
 highlight; a client-level topology for projects.
+
+## Review with the motion-design skill (2026-10-19)
+
+Checked the branch against the installed LottieFiles skill: its archetype table, duration table,
+quality checklist and troubleshooting list.
+
+| Check | Result |
+| --- | --- |
+| One archetype, applied everywhere | **Corporate** (200–400 ms, 0–3% overshoot, `(0.2,0,0,1)`-class easing). Every duration on the page sits in 80–380 ms; the only longer ones are the 900 ms scan sweep and the 1.2 s skeleton shimmer, both loops on real waiting |
+| Signature easing for 80% of motion | `--spring` (critically damped `linear()`) for everything the hand moves; `--ease-out` for entrances; `--ease-drawer` for the drawer and the flying tile |
+| Duration palette of three | Press 80/260 ms, fast 180 ms, panel 320 ms (plus fold 280, flight 340) |
+| Entrance longer than exit | Drawer 320 ms both ways; diff lines enter 260 ms, no exit. Acceptable: the drawer is a heavy element, the skill allows equal timing there |
+| Never linear for spatial movement | Only the spinner and the shimmer are linear; both are loops, as the skill allows |
+| Never opacity-only for a state change | Applied: colour + check draw; resolved flag: scale + opacity; socket morph: dot fill + word blur; switch: thumb position + track colour |
+| 1/3 of elements at once; stagger under 500 ms | Entrance 45 ms × at most 6 blocks = 270 ms; diff 18 ms × 14 = 252 ms |
+| Error: 10–15 px shake, 300–400 ms, no overshoot | 10 px, 360 ms, `--ease-out` |
+| Three motion layers (primary, secondary, ambient) | **Not followed on purpose.** The ambient layer would be fake activity in a tool that edits files; see DESIGN.md → Motion |
+| Reduced motion keeps feedback | All animation off; every resting style is the true state; the error callout and the Applied colour stay |
+
+Fixed during the review:
+
+- Plugins whose on/off the page cannot change (Cursor plugins; Codex remote plugins kept in the
+  ChatGPT account) now show the same switch as the others, locked and with the reason in its
+  tooltip. Before, they showed a badge and the switch looked inconsistent from plugin to plugin.
+- Client tiles in the Load map header are 20 px (the header text is 12 px); 24 px looked heavy
+  next to it. Lists, chips and panel titles keep 24 / 28 px.
+
+Left as is: the Codex remote plugins are named `app-<id>@openai-curated-remote` because Codex
+stores no readable name locally (`codex plugin list --json` repeats the id in `name`).
+

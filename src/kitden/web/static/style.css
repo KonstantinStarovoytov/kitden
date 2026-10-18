@@ -212,9 +212,11 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .switch[aria-checked="true"] { background: var(--action); }
 .switch .thumb { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 8px; background: #ffffff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); transition: transform 160ms var(--ease-in-out), width 120ms var(--ease-out); }
 .switch[aria-checked="true"] .thumb { transform: translateX(14px); }
-.switch:hover { filter: brightness(1.06); }
-.switch:active .thumb { width: 20px; }
-.switch[aria-checked="true"]:active .thumb { transform: translateX(10px); }
+.switch:hover:not(:disabled) { filter: brightness(1.06); }
+.switch:disabled { cursor: not-allowed; opacity: 0.55; }
+.switch:disabled .thumb { width: 16px; }
+.switch:active:not(:disabled) .thumb { width: 20px; }
+.switch[aria-checked="true"]:active:not(:disabled) .thumb { transform: translateX(10px); }
 /* Waiting for the preview: the thumb rests half-way, neither on nor off, until the review opens. */
 .switch.pending { cursor: progress; }
 .switch.pending .thumb, .switch[aria-checked="true"].pending .thumb { transform: translateX(7px); width: 16px; }
@@ -285,6 +287,8 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 table.map { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--panel); border: 1px solid var(--wire); border-radius: 8px; table-layout: fixed; }
 .map th { text-align: left; font-weight: 500; color: var(--ink-3); font-size: 12px; padding: 0 12px; height: 34px; border-bottom: 1px solid var(--wire); background: var(--panel); position: sticky; top: 51px; z-index: 1; }
 .map th:first-child { border-top-left-radius: 8px; } .map th:last-child { border-top-right-radius: 8px; }
+.map th .client-mark, .map th .mono-mark { --tile: 20px; }
+.map th .client-mark[data-icon="claude"] img { padding: 3px; }
 .map td { padding: 0 12px; height: 34px; border-bottom: 1px solid var(--wire-soft); overflow: hidden; transition: background-color 120ms ease; }
 .map tr:last-child td { border-bottom: 0; }
 .map tbody tr { cursor: pointer; }

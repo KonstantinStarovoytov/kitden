@@ -211,22 +211,33 @@ function layer(def) {
   middle.append(where);
   if (def.summary) middle.append(el("div", "why mono", def.summary));
   if (why) middle.append(el("div", "why", why));
+  // Every plugin with a known state gets the same switch; one the page cannot change from
+  // here (its on/off lives in the client's account) is shown locked, with the reason.
   const toggle = !unknown && def.kind === "plugin" && def.actions.find((a) => a === "plugin.disable" || a === "plugin.enable");
-  row.append(dot, middle, toggle ? pluginSwitch(def, toggle) : el("span", wins ? "badge win" : "badge", badge));
+  const known = !unknown && def.kind === "plugin" && (def.enabled === "on" || def.enabled === "off");
+  const control = toggle ? pluginSwitch(def, toggle) : known ? pluginSwitch(def, null) : el("span", wins ? "badge win" : "badge", badge);
+  row.append(dot, middle, control);
   return row;
 }
 
 // A switch that shows the plugin's real state. Pressing it opens the review; it flips only
 // when the change is written and checked, never before (the Load map then shows the new state).
+// Without an action the switch is locked: it shows the state and says where to change it.
 function pluginSwitch(def, action) {
-  const on = action === "plugin.disable";
+  const on = action ? action === "plugin.disable" : def.enabled === "on";
   const node = el("button", "switch");
   node.type = "button";
   node.setAttribute("role", "switch");
   node.setAttribute("aria-checked", String(on));
+  node.append(el("span", "thumb"));
+  if (!action) {
+    node.disabled = true;
+    node.setAttribute("aria-label", `${on ? "On" : "Off"} in ${clientName(def.client)}; not changed from here`);
+    node.title = def.change_hint || "Not changed from here.";
+    return node;
+  }
   node.setAttribute("aria-label", `${on ? "Turn off" : "Turn on"} in ${clientName(def.client)}…`);
   node.title = on ? "On. Press to review turning it off." : "Off. Press to review turning it on.";
-  node.append(el("span", "thumb"));
   // While the preview is fetched the thumb rests half-way: pending, not flipped.
   node.addEventListener("click", async () => {
     if (node.classList.contains("pending")) return;
