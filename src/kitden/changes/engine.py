@@ -86,6 +86,30 @@ def _matches(step: Step, value: Any, expected: Any) -> bool:
     return value == expected
 
 
+def _undo_entries(steps: list[Step], data: bytes | None) -> bytes | None:
+    """Put back each entry of one file, last step first. None if any entry is no longer ours."""
+    try:
+        text = (data or b"").decode()
+    except UnicodeDecodeError:
+        return None
+    for step in reversed(steps):
+        edit = step.edit
+        if edit.check != "entry":
+            return None
+        editor = EDITORS[edit.fmt]
+        try:
+            ours = _matches(step, editor.get_value(text, edit.key), edit.after)
+        except UnrecognizedFormatError:
+            return None
+        if not ours:
+            return None
+        if edit.before is ABSENT:
+            text = editor.delete_value(text, edit.key)
+        else:
+            text = editor.set_value(text, edit.key, edit.before)
+    return text.encode()
+
+
 def _encode(value: Any) -> dict:
     return {"absent": True} if value is ABSENT else {"value": value}
 
@@ -192,14 +216,20 @@ class Engine:
     # Preview -----------------------------------------------------------------------------
 
     def preview(self, action: str, steps: list[Step]) -> Change:
-        """Read each target, fill in the before state and a masked diff. Writes nothing."""
-        paths: set[str] = set()
+        """Read each target, fill in the before state and a masked diff. Writes nothing.
+
+        Several steps may edit one file (research R2 of feature 002), but never the same entry
+        or an entry inside another one.
+        """
+        targets: list[tuple[str, tuple]] = []
         for step in steps:
             edit = step.edit
             edit.path = os.path.realpath(edit.path)
-            if edit.path in paths:
-                raise ChangeRefusedError(f"{edit.path} would be edited twice in one change")
-            paths.add(edit.path)
+            key = tuple(edit.key)
+            for path, other in targets:
+                if path == edit.path and (other[: len(key)] == key or key[: len(other)] == other):
+                    raise ChangeRefusedError(f"{edit.path} would be edited twice in one change")
+            targets.append((edit.path, key))
             data = _read(edit.path)
             if data is not None and os.stat(edit.path).st_nlink > 1:
                 raise ChangeRefusedError(f"{edit.path} has a hard link; it is not changed")
@@ -286,9 +316,14 @@ class Engine:
         self.store.prune()
         change.move_to(ChangeState.APPLYING)
         try:
-            expected = {
-                s.edit.path: self._apply_step(s, current[s.edit.path]) for s in change.steps
-            }
+            # Steps on one file run in order, each on the result of the one before.
+            working = dict(current)
+            expected: dict[str, bytes | None] = {}
+            for step in change.steps:
+                path = step.edit.path
+                result = self._apply_step(step, working[path])
+                working[path] = result if result is not None else _read(path)
+                expected[path] = result
             for step in change.steps:
                 self._verify(step, step.edit.after, expected[step.edit.path])
         except (_ApplyError, OSError, RefusedWriteError, UnrecognizedFormatError) as error:
@@ -312,39 +347,30 @@ class Engine:
         change = self.changes[change_id]
         if change.state is not ChangeState.VERIFIED:
             change.move_to(ChangeState.UNDONE)  # raises: only a verified change can be undone
-        plans: list[tuple[Step, bytes | None]] = []
+        by_path: dict[str, list[Step]] = {}
         for step in change.steps:
-            edit = step.edit
-            data = _read(edit.path)
-            if _sha(data) == edit.after_hash:
-                original = Path(edit.backup_path).read_bytes() if edit.backup_path else None
-                plans.append((step, original))
+            by_path.setdefault(step.edit.path, []).append(step)
+        plans: dict[str, bytes | None] = {}
+        for path, steps in by_path.items():
+            data = _read(path)
+            first = steps[0].edit
+            if _sha(data) == first.after_hash:
+                plans[path] = Path(first.backup_path).read_bytes() if first.backup_path else None
                 continue
-            if edit.check == "entry":
-                try:
-                    still_ours = _matches(step, _value(edit, data), edit.after)
-                except (UnrecognizedFormatError, UnicodeDecodeError):
-                    still_ours = False
-                if still_ours:
-                    editor = EDITORS[edit.fmt]
-                    text = (data or b"").decode()
-                    if edit.before is ABSENT:
-                        new = editor.delete_value(text, edit.key)
-                    else:
-                        new = editor.set_value(text, edit.key, edit.before)
-                    plans.append((step, new.encode()))
-                    continue
-            change.move_to(ChangeState.UNDO_BLOCKED)
-            change.error = (
-                f"{edit.path} changed after the change was applied; undo would overwrite that, "
-                "so nothing was changed"
-            )
-            self._finish(change)
-            return change
+            restored = _undo_entries(steps, data)
+            if restored is None:
+                change.move_to(ChangeState.UNDO_BLOCKED)
+                change.error = (
+                    f"{path} changed after the change was applied; undo would overwrite that, "
+                    "so nothing was changed"
+                )
+                self._finish(change)
+                return change
+            plans[path] = restored
 
-        for step, data in plans:
-            self._write(step.edit.path, data)
-        for step, _ in plans:
+        for path, data in plans.items():
+            self._write(path, data)
+        for step in change.steps:
             if _value(step.edit, _read(step.edit.path)) != step.edit.before:
                 raise RuntimeError(f"{step.edit.path}: undo did not read back as expected")
         change.move_to(ChangeState.UNDONE)

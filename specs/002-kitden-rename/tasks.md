@@ -26,7 +26,7 @@ Format: `[ID] [P?] [Story] Description`. `[P]` = can run in parallel (different 
 
 ## Phase 2: Foundation for US2 — several steps on one file
 
-- [ ] T004 [US2] Tests first in `tests/unit/test_engine.py` and `tests/property/test_edits.py`: two
+- [X] T004 [US2] Tests first in `tests/unit/test_engine.py` and `tests/property/test_edits.py`: two
   steps on one JSON file and one TOML file apply in order, verify, and Undo to the exact bytes;
   entry-level Undo still works after an outside edit elsewhere in the file; a failing second step
   restores the original bytes; two steps on the same key are refused. Then change

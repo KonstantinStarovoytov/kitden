@@ -248,3 +248,74 @@ def test_change_reports_restarts_and_shared_files(tmp_path, config):
     change = make_engine(tmp_path).preview("gateway.connect", [step])
     assert change.restart_needed == {"codex": True}
     assert change.shared_file_warning is True
+
+
+# Several steps on one file (feature 002, research R2) --------------------------------------
+
+KITDEN = {"type": "stdio", "command": "/Users/me/.local/bin/kitden", "args": ["mcp"]}
+
+
+def test_two_steps_on_one_toml_file_apply_in_order_and_undo_exactly(tmp_path, config):
+    engine = make_engine(tmp_path)
+    steps = [
+        toml_step(config, ("mcp_servers", "neon"), ABSENT),
+        toml_step(config, ("mcp_servers", "gw"), GATEWAY),
+    ]
+    change = engine.preview("setup_server.update", steps)
+    engine.apply(change.id)
+    assert change.state is ChangeState.VERIFIED
+    text = config.read_text()
+    assert toml_edit.get_value(text, ("mcp_servers", "neon")) is ABSENT
+    assert toml_edit.get_value(text, ("mcp_servers", "gw")) == GATEWAY
+    assert "# keep this comment" in text
+    engine.undo(change.id)
+    assert change.state is ChangeState.UNDONE
+    assert config.read_text() == CONFIG
+
+
+def test_two_cli_steps_on_one_json_file_undo_after_an_outside_edit(tmp_path, claude_json):
+    fake = FakeClaude(claude_json)
+    engine = make_engine(tmp_path, run=fake)
+    remove = ["claude", "mcp", "remove", "-s", "user", "old"]
+    add = ["claude", "mcp", "add-json", "-s", "user", "kitden", json.dumps(KITDEN)]
+    steps = [
+        claude_step(claude_json, "old", ABSENT, remove),
+        claude_step(claude_json, "kitden", KITDEN, add),
+    ]
+    change = engine.preview("setup_server.update", steps)
+    engine.apply(change.id)
+    assert change.state is ChangeState.VERIFIED
+    assert [call[0] for call in fake.calls] == [remove, add]
+    claude_json.write_text(json_splice.set_value(claude_json.read_text(), ("numStartups",), 3))
+    engine.undo(change.id)
+    assert change.state is ChangeState.UNDONE
+    text = claude_json.read_text()
+    assert json_splice.get_value(text, ("mcpServers", "old")) == {"command": "x"}
+    assert json_splice.get_value(text, ("mcpServers", "kitden")) is ABSENT
+    assert json_splice.get_value(text, ("numStartups",)) == 3
+
+
+def test_a_failed_second_step_restores_the_original_bytes(tmp_path, claude_json):
+    original = claude_json.read_bytes()
+    engine = make_engine(tmp_path, run=FakeClaude(claude_json, wrong_value=True))
+    remove = ["claude", "mcp", "remove", "-s", "user", "old"]
+    value = {"type": "http", "url": "http://127.0.0.1:12008/mcp"}
+    add = ["claude", "mcp", "add-json", "-s", "user", "gw", json.dumps(value)]
+    steps = [
+        claude_step(claude_json, "old", ABSENT, remove),
+        claude_step(claude_json, "gw", value, add),
+    ]
+    change = engine.preview("setup_server.update", steps)
+    engine.apply(change.id)
+    assert change.state is ChangeState.RESTORED
+    assert claude_json.read_bytes() == original
+
+
+def test_two_steps_on_the_same_entry_are_refused(tmp_path, config):
+    engine = make_engine(tmp_path)
+    steps = [
+        toml_step(config, ("mcp_servers", "gw"), GATEWAY),
+        toml_step(config, ("mcp_servers", "gw"), ABSENT),
+    ]
+    with pytest.raises(ChangeRefusedError, match="twice"):
+        engine.preview("gateway.connect", steps)

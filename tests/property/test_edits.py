@@ -87,3 +87,35 @@ def test_replacing_an_entry_changes_nothing_else(editor, make, root, data, new, 
     for name in data:
         if name != target:
             assert editor.get_value(edited, (root, name)) == data[name]
+
+
+@pytest.mark.parametrize(("editor", "make", "root"), EDITORS)
+@settings(max_examples=40, deadline=None)
+@given(data=servers, new=entries, indent=st.sampled_from([2, 4]))
+def test_two_steps_on_one_file_undo_to_the_exact_bytes(editor, make, root, data, new, indent):
+    # Feature 002, research R2: remove one entry and add another in the same file, then undo.
+    import tempfile
+    from pathlib import Path
+
+    from kitden.changes.backup import ChangeStore
+    from kitden.changes.engine import Engine
+    from kitden.model import FileEdit, Scope, Step
+
+    fmt = "json" if editor is json_splice else "toml"
+    with tempfile.TemporaryDirectory() as folder:
+        path = Path(folder) / f"settings.{fmt}"
+        text = make(data, indent)
+        path.write_text(text)
+        target = sorted(data)[0]
+        steps = [
+            Step("codex", Scope.USER, target, FileEdit(str(path), fmt, (root, target), ABSENT)),
+            Step(
+                "codex", Scope.USER, "added", FileEdit(str(path), fmt, (root, "Added-Entry"), new)
+            ),
+        ]
+        engine = Engine(ChangeStore(Path(folder) / "data"), run=None)
+        change = engine.preview("setup_server.update", steps)
+        engine.apply(change.id)
+        assert str(change.state) == "verified"
+        engine.undo(change.id)
+        assert path.read_text() == text
