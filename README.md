@@ -41,7 +41,7 @@ kitden
 This opens the page in the browser and returns at once. If the page already runs, the same page
 opens; only one runs at a time. A coding agent can run `kitden open` too. The page stops by itself
 10 minutes after its last tab closes. To run it in the terminal instead, use `kitden serve` and
-stop it with Ctrl+C.
+stop it with Ctrl+C (if a page already runs, `kitden serve` opens that one).
 
 | I want to | On the page | What changes |
 | --- | --- | --- |

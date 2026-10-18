@@ -4,8 +4,10 @@ Stored in the tool's settings file (mode 0600). Only addresses, the auth type an
 key's environment variable are kept; a key value or a URL with credentials is refused.
 """
 
+import contextlib
 import json
 import shutil
+import tempfile
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -22,29 +24,58 @@ def data_dir(home: Path) -> Path:
     return Path(home) / DATA_DIR
 
 
+COPIED = ".copied-from-agentsetup"  # written last; without it the copy is not finished
+
+
 def ensure_data_folder(home: Path) -> str | None:
     """Copy the working version's data folder once (feature 002, research R7). Returns a note.
 
-    The old folder is never changed, so an old page that still runs keeps working. Backups are
-    referenced by absolute paths, so the copy points them at the new folder.
+    The old folder is never changed, so an old page that still runs keeps working. Each copy goes
+    to its own temporary folder, so two commands starting at once cannot spoil each other; a copy
+    that failed or was cut short is tried again on the next start. Backups are referenced by
+    absolute paths, so the copy points them at the new folder.
     """
     new, old = data_dir(home), Path(home) / OLD_DATA_DIR
     if not old.is_dir():
         return None
-    if new.exists():
-        return f"The old folder {old} is still there. Kitden does not use it; you can delete it."
-    temp = new.with_name(f"{new.name}.copying")
-    shutil.rmtree(temp, ignore_errors=True)
+    if (new / COPIED).exists():
+        return f"Kitden uses {new}; the old folder {old} is not used."
+    new.parent.mkdir(parents=True, exist_ok=True)
+    temp = Path(tempfile.mkdtemp(dir=new.parent, prefix=f"{new.name}.copying-"))
     try:
-        shutil.copytree(old, temp, symlinks=True)
-        for record in temp.glob("changes/*/change.json"):
-            text = record.read_text()
-            record.write_text(text.replace(json.dumps(str(old))[1:-1], json.dumps(str(new))[1:-1]))
-        temp.rename(new)
-    except OSError as error:
+        copy = temp / "data"
+        shutil.copytree(old, copy, symlinks=True)
+        for record in copy.glob("changes/*/change.json"):
+            _point_backups_at(record, old, new)
+        new.mkdir(mode=0o700, exist_ok=True)
+        new.chmod(0o700)
+        for entry in copy.iterdir():  # whole entries move at once; ones already there stay
+            with contextlib.suppress(OSError):
+                entry.rename(new / entry.name)
+        (new / COPIED).write_text(f"{old}\n")
+    except (OSError, ValueError, shutil.Error) as error:
+        reason = error.args[0] if isinstance(error, shutil.Error) and error.args else error
+        if isinstance(reason, list):
+            reason = f"{len(reason)} files could not be read"
+        return f"Could not copy {old} to {new}: {reason}. Nothing was deleted."
+    finally:
         shutil.rmtree(temp, ignore_errors=True)
-        return f"Could not copy {old} to {new}: {error}. Nothing was deleted."
-    return f"Copied {old} to {new}. The old folder was left as it is."
+    return f"Copied {old} to {new}. The old folder was left as it is and is no longer used."
+
+
+def _point_backups_at(record: Path, old: Path, new: Path) -> None:
+    """Point one change record's backups at the new folder. Unreadable records stay as they are."""
+    try:
+        data = json.loads(record.read_bytes())
+        prefix = f"{old}/"
+        for step in data.get("steps", []):
+            edit = step.get("edit", {})
+            path = edit.get("backup_path")
+            if isinstance(path, str) and path.startswith(prefix):
+                edit["backup_path"] = f"{new}/{path[len(prefix) :]}"
+    except (ValueError, AttributeError):
+        return
+    record.write_text(json.dumps(data, indent=2))
 
 
 def _check_web_address(url: str, what: str) -> None:

@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 
 from kitden.clients.base import SETUP_NAME
-from kitden.model import Item, ItemKind, Scope
+from kitden.model import Enabled, Item, ItemKind, Scope
 
 CLIENTS = ("claude_code", "codex", "cursor")
 OLD_NAME = "agentsetup"
@@ -42,10 +42,17 @@ def setup_server_state(inventory) -> list[dict]:
     for client in CLIENTS:
         if client not in found:
             states.append(
-                {"client": client, "state": "not_installed", "item": None, "command_exists": None}
+                {
+                    "client": client,
+                    "state": "not_installed",
+                    "item": None,
+                    "command_exists": None,
+                    "enabled": None,
+                }
             )
             continue
-        added = any(_user_entry(i, client, SETUP_NAME) for i in inventory.items)
+        mine = next((i for i in inventory.items if _user_entry(i, client, SETUP_NAME)), None)
+        added = mine is not None
         old = next((i for i in inventory.items if i.client == client and is_old_entry(i)), None)
         state = "added" if added else "old" if old else "missing"
         exists = Path(dict(old.summary)["command"]).exists() if old else None
@@ -55,6 +62,7 @@ def setup_server_state(inventory) -> list[dict]:
                 "state": state,
                 "item": old.id if old else None,
                 "command_exists": exists,
+                "enabled": None if mine is None else mine.enabled is not Enabled.OFF,
             }
         )
     return states

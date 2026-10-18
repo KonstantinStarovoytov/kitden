@@ -24,10 +24,10 @@ without a held lock is stale and is replaced.
 
 | State at start | Action |
 | --- | --- |
-| Only the old folder (`.../agentsetup`) | Copy it once to the new folder; rewrite backup paths inside `changes/*/change.json`; leave the old folder unchanged |
-| Both folders | Use the new folder; print that the old one was left |
-| Only the new folder, or neither | Nothing to do |
-| Copy fails | Remove the partial copy, keep the old folder, explain, start with an empty new folder |
+| Old folder, copy not finished (no `.copied-from-agentsetup` in the new folder) | Copy into a private temporary folder; point backups in `changes/*/change.json` at the new folder; move each entry into the new folder (entries already there stay); write the marker last. The old folder is never changed |
+| Old folder, copy finished | Use the new folder; print that the old one is not used |
+| No old folder | Nothing to do |
+| Copy fails | Remove the temporary folder, keep the old folder, explain; the next start tries again |
 
 ## Setup server state (per client)
 

@@ -228,3 +228,86 @@ def test_only_a_background_page_stops_by_itself(tmp_path, monkeypatch, extra, st
     assert (seen["s"] is not None) == stops
     if stops:
         assert seen["s"]() is False  # just started: no reason to stop yet
+
+
+# Final review fixes (feature 002) ----------------------------------------------------------
+
+
+def test_open_ignores_a_record_left_by_a_page_that_ended(tmp_path, monkeypatch, capsys):
+    import threading
+
+    page.write_record(tmp_path, port=47999, token="STALE", background=True)  # no page holds it
+    locks = []
+
+    def slow_start(home, home_arg):
+        lock = page.PageLock(home)
+        assert lock.acquire()
+        locks.append(lock)
+        threading.Timer(0.3, page.write_record, (home, 47802, "NEW", True)).start()
+
+    monkeypatch.setattr(page, "start_background", slow_start)
+    try:
+        assert main(["open", "--no-browser", "--home", str(tmp_path)]) == 0
+    finally:
+        for lock in locks:
+            lock.release()
+    out = capsys.readouterr().out
+    assert "token=NEW" in out and "STALE" not in out
+
+
+def test_serve_removes_a_record_left_by_a_page_that_ended(tmp_path, monkeypatch):
+    page.write_record(tmp_path, port=47999, token="STALE", background=False)
+    seen = {}
+
+    def fake_run(app, host, port, on_started, **kw):
+        seen["before"] = page.read_record(tmp_path)
+
+    monkeypatch.setattr(cli, "pick_port", lambda start, tries=20: 47811)
+    monkeypatch.setattr(cli, "run_server", fake_run)
+    main(["serve", "--no-browser", "--home", str(tmp_path)])
+    assert seen["before"] is None
+
+
+@pytest.mark.parametrize("signal_name", ["SIGTERM", "SIGINT"])
+def test_a_stopped_page_exits_cleanly_and_removes_its_record(tmp_path, signal_name):
+    import signal
+    import subprocess
+    import sys
+    import time
+
+    process = subprocess.Popen(  # noqa: S603
+        [sys.executable, "-m", "kitden", "serve", "--no-browser", "--home", str(tmp_path)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        deadline = time.monotonic() + 20
+        while page.read_record(tmp_path) is None and time.monotonic() < deadline:
+            time.sleep(0.1)
+        assert page.read_record(tmp_path) is not None
+        process.send_signal(getattr(signal, signal_name))
+        _, err = process.communicate(timeout=15)
+    finally:
+        process.kill()
+    assert process.returncode == 0, err
+    assert "Traceback" not in err
+    assert page.read_record(tmp_path) is None
+
+
+def test_a_background_page_never_writes_its_link(tmp_path, monkeypatch, capsys):
+    # A background page's output goes to page.log; the start link holds the session token.
+    monkeypatch.setattr(cli, "pick_port", lambda start, tries=20: 47814)
+    monkeypatch.setattr(cli, "run_server", lambda app, host, port, on_started, **kw: on_started())
+    main(["serve", "--background", "--no-browser", "--home", str(tmp_path)])
+    lock = _hold_page(tmp_path)
+    try:
+        main(["serve", "--background", "--no-browser", "--home", str(tmp_path)])
+    finally:
+        lock.release()
+    assert "token=" not in capsys.readouterr().out
+
+
+def test_open_waits_long_enough_for_a_slow_first_scan():
+    # A large home took 4.2 s to scan (feature 001 validation): 5 s is a goal, not a limit.
+    assert page.WAIT_SECONDS >= 15

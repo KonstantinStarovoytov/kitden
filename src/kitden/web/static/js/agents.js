@@ -18,7 +18,7 @@ function cell(entry) {
   if (entry.state === "not_installed") {
     box.append(socket({ state: "missing" }));
   } else if (entry.state === "added") {
-    box.append(socket({ state: "on", word: "Added" }));
+    box.append(entry.enabled === false ? socket({ state: "off", word: "Added, off" }) : socket({ state: "on", word: "Added" }));
     if (entry.item) box.append(el("span", "muted", "An old entry is still there."), button("Remove old entry…", () => update(entry.item)));
   } else if (entry.state === "old") {
     box.append(socket({ state: "unk", word: "Old entry" }));

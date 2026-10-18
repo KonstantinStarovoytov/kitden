@@ -1,8 +1,10 @@
 """Command line entry point. See specs/001-agent-setup-inventory/contracts/cli.md."""
 
 import argparse
+import contextlib
 import json
 import secrets
+import signal
 import socket
 import sys
 import time
@@ -61,7 +63,22 @@ def run_server(
     config = uvicorn.Config(
         app, host=host, port=port, log_level="warning", timeout_graceful_shutdown=2
     )
-    Server(config).run()
+    # uvicorn shuts down on Ctrl+C or SIGTERM, then sends the signal again to the handler that was
+    # there before. Make that a clean exit, so the caller's cleanup runs and the exit code is 0.
+    previous = signal.getsignal(signal.SIGTERM)
+    with contextlib.suppress(ValueError):  # only the main thread may set handlers
+        signal.signal(signal.SIGTERM, _exit_cleanly)
+    try:
+        Server(config).run()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        with contextlib.suppress(ValueError):
+            signal.signal(signal.SIGTERM, previous)
+
+
+def _exit_cleanly(signum, frame) -> None:
+    raise SystemExit(0)
 
 
 def _home(args: argparse.Namespace) -> Path | None:
@@ -78,6 +95,7 @@ def _open(args: argparse.Namespace) -> int:
     """Open the running page for this home folder, or start one in the background (FR-008)."""
     root = _home(args) or Path.home()
     if not page.page_running(root):
+        page.remove_record(root)  # left by a page that ended without cleaning up
         page.start_background(root, args.home)
     record = page.wait_for_record(root, page.WAIT_SECONDS)
     if record is None:
@@ -95,8 +113,10 @@ def _serve(args: argparse.Namespace) -> int:
     root = home or Path.home()
     lock = page.PageLock(root)
     if not lock.acquire():
-        return _open(args)
+        # Another page runs. A background start just ends; a person gets that page opened.
+        return 0 if args.background else _open(args)
     try:
+        page.remove_record(root)  # left by a page that ended without cleaning up
         port = pick_port(DEFAULT_PORT)
         if port is None:
             print(f"No free port from {DEFAULT_PORT}.", file=sys.stderr)
@@ -111,8 +131,9 @@ def _serve(args: argparse.Namespace) -> int:
             home=root,
         )
         url = f"http://{HOST}:{port}/?token={token}"
-        print(f"Kitden is running. Open: {url}", flush=True)
-        print("Press Ctrl+C to stop.", flush=True)
+        if not args.background:  # a background page writes to page.log; keep the token out
+            print(f"Kitden is running. Open: {url}", flush=True)
+            print("Press Ctrl+C to stop.", flush=True)
 
         def started() -> None:
             page.write_record(root, port, token, background=args.background)

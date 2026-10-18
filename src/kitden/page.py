@@ -20,7 +20,9 @@ HOST = "127.0.0.1"
 LOCK = "page.lock"
 RECORD = "page.json"
 LOG = "page.log"
-WAIT_SECONDS = 5.0
+# How long `kitden open` waits for a new page. The goal is under 5 s, but the first scan of a large
+# home can take about that long (feature 001 validation: 4.2 s), so a slow start is not a failure.
+WAIT_SECONDS = 20.0
 IDLE_SECONDS = 600.0  # a background page stops after 10 minutes without an open tab
 
 
@@ -131,14 +133,20 @@ def log_path(home: Path) -> Path:
 
 
 def start_background(home: Path, home_arg: str | None) -> None:
-    """Start `kitden serve --background` detached from this terminal (research R5)."""
-    command = [sys.executable, "-m", "kitden", "serve", "--background", "--no-browser"]
+    """Start `kitden serve --background` detached from this terminal (research R5).
+
+    `-P` and the data folder as working folder keep the caller's folder off the import path:
+    a project's own `secrets.py` must never run inside the page.
+    """
+    folder = _folder(home)
+    command = [sys.executable, "-P", "-m", "kitden", "serve", "--background", "--no-browser"]
     if home_arg:
-        command += ["--home", home_arg]
-    fd = os.open(_folder(home) / LOG, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+        command += ["--home", str(Path(home).absolute())]
+    fd = os.open(folder / LOG, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
     try:
         subprocess.Popen(  # noqa: S603 - our own command with fixed arguments
             command,
+            cwd=str(folder),
             stdin=subprocess.DEVNULL,
             stdout=fd,
             stderr=fd,

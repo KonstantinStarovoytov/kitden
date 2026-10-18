@@ -120,3 +120,73 @@ def test_the_server_stops_when_asked(tmp_path):
     started = time.monotonic()
     run_server(app, "127.0.0.1", pick_port(47900), stop_when=lambda: True)
     assert time.monotonic() - started < 5
+
+
+def test_the_background_start_does_not_run_from_the_callers_folder(tmp_path, monkeypatch):
+    # `python -m` would put the caller's folder first on the import path (final review).
+    import os
+    import subprocess
+
+    seen = {}
+    monkeypatch.setattr(
+        subprocess, "Popen", lambda command, **kw: seen.update(command=command, cwd=kw.get("cwd"))
+    )
+    monkeypatch.chdir(tmp_path)
+    page.start_background(tmp_path / "home", "home")
+    command = seen["command"]
+    assert command[1:4] == ["-P", "-m", "kitden"]
+    assert seen["cwd"] == str(data_dir(tmp_path / "home"))
+    assert command[command.index("--home") + 1] == str(tmp_path / "home")
+    assert os.path.isabs(command[command.index("--home") + 1])
+
+
+def test_the_event_route_counts_a_tab_until_it_disconnects():
+    import asyncio
+
+    from starlette.testclient import TestClient
+
+    from kitden.views.inventory import Inventory
+    from kitden.web.app import create_app
+
+    app = create_app(lambda: Inventory(), token="tok", port=47800)
+    with TestClient(app, base_url="http://127.0.0.1:47800", follow_redirects=False) as client:
+        client.get("/?token=tok")
+        cookie = "; ".join(f"{k}={v}" for k, v in client.cookies.items())
+    activity = app.state.activity
+
+    async def probe():
+        gone = asyncio.Event()
+        sent = asyncio.Event()
+
+        async def receive():
+            if not hasattr(receive, "started"):
+                receive.started = True
+                return {"type": "http.request", "body": b"", "more_body": False}
+            await gone.wait()
+            return {"type": "http.disconnect"}
+
+        async def send(message):
+            if message["type"] == "http.response.body":
+                sent.set()
+
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": "/api/events",
+            "raw_path": b"/api/events",
+            "query_string": b"",
+            "headers": [(b"host", b"127.0.0.1:47800"), (b"cookie", cookie.encode())],
+            "scheme": "http",
+            "server": ("127.0.0.1", 47800),
+            "client": ("127.0.0.1", 50000),
+            "http_version": "1.1",
+            "root_path": "",
+        }
+        call = asyncio.create_task(app(scope, receive, send))
+        await asyncio.wait_for(sent.wait(), 5)
+        open_tabs = activity.tabs()
+        gone.set()
+        await asyncio.wait_for(call, 5)
+        return open_tabs, activity.tabs()
+
+    assert asyncio.run(probe()) == (1, 0)

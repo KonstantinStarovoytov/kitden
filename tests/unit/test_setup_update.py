@@ -58,6 +58,7 @@ def test_an_agentsetup_entry_running_another_program_is_ignored(home):
         "state": "missing",
         "item": None,
         "command_exists": None,
+        "enabled": None,
     }
 
 
@@ -196,3 +197,12 @@ def test_update_needs_the_kitden_command_installed(home):
         response = client.post("/api/changes/preview", json=body, headers=POST)
     assert response.status_code == 422
     assert "Install the tool first" in response.json()["detail"]
+
+
+def test_a_turned_off_kitden_entry_is_added_but_off(home):
+    config = home / ".codex/config.toml"
+    kitden = {"command": "/Users/me/.local/bin/kitden", "args": ["mcp"], "enabled": False}
+    config.write_text(toml_edit.set_value(config.read_text(), ("mcp_servers", "kitden"), kitden))
+    state = _states(home)["codex"]
+    assert (state["state"], state["enabled"]) == ("added", False)
+    assert _states(home)["claude_code"]["enabled"] is None  # not added: nothing to be off
