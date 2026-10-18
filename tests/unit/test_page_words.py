@@ -101,3 +101,8 @@ def test_controls_press_and_the_switch_waits_for_the_preview():
     assert ".seg button:active" in CSS and ".tabs button:active" in CSS
     text = script("panel.js")
     assert 'classList.add("pending")' in text and 'setAttribute("aria-busy", "true")' in text
+
+
+def test_client_tile_flies_to_its_load_map_column():
+    assert "fly(tile, `client-${clientId}`)" in script("overview.js")
+    assert "land(tile, `client-${column.id}`)" in script("map.js")

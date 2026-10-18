@@ -1,6 +1,6 @@
 // Load map: items in rows, Claude Code, Codex and Cursor in columns.
 import { button, el, shortPath } from "./dom.js";
-import { animate, entrance, EASE_IN_OUT } from "./motion.js";
+import { animate, entrance, EASE_IN_OUT, land } from "./motion.js";
 import { banner, flag, mark, morphSocket, skeleton, socket } from "./parts.js";
 import { data, go, loadMap, projectPath, render, setState, state } from "./store.js";
 
@@ -143,7 +143,10 @@ function buildTable(columns, rows) {
   for (const column of columns) {
     const th = el("th");
     const chip = el("span", "chip");
-    chip.append(mark(column.id), el("span", null, column.name));
+    const tile = mark(column.id);
+    // Coming from the Overview, the client's tile flies here from its row.
+    land(tile, `client-${column.id}`);
+    chip.append(tile, el("span", null, column.name));
     th.append(chip);
     headRow.append(th);
   }

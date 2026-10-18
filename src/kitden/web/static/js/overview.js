@@ -2,7 +2,7 @@
 import { getJson, query } from "./api.js";
 import { button, el, plural, shortPaths } from "./dom.js";
 import { openSelectedOnRender } from "./map.js";
-import { entrance } from "./motion.js";
+import { entrance, fly } from "./motion.js";
 import { banner, mark, skeleton, socket } from "./parts.js";
 import { data, go, loadMap, loadOverview, projectPath, render } from "./store.js";
 
@@ -89,12 +89,13 @@ const LOAD_KINDS = [
 ];
 const openClients = new Set();
 
-function loadsLine(clientId) {
+// A count opens that Load map tab; the client's tile flies to its column there.
+function loadsLine(clientId, tile) {
   const line = el("div", "loads");
   if (!data.map) {
     line.append(el("span", "muted", "Counting…"));
     const failed = () => line.replaceChildren(el("span", "muted", "Could not count."));
-    loadMap().then(() => (data.map ? line.replaceWith(loadsLine(clientId)) : failed())).catch(failed);
+    loadMap().then(() => (data.map ? line.replaceWith(loadsLine(clientId, tile)) : failed())).catch(failed);
     return line;
   }
   const counts = LOAD_KINDS.map(([kind, one, many]) => {
@@ -102,7 +103,12 @@ function loadsLine(clientId) {
     return [kind, n, plural(n, one, many)];
   }).filter(([, n]) => n);
   if (!counts.length) line.append(el("span", "muted", "Loads nothing here."));
-  for (const [kind, , words] of counts) line.append(button(words, () => go("map", { kind, only: "all", q: "" }), "btn small ghost"));
+  for (const [kind, , words] of counts) {
+    line.append(button(words, () => {
+      fly(tile, `client-${clientId}`);
+      go("map", { kind, only: "all", q: "" });
+    }, "btn small ghost"));
+  }
   return line;
 }
 
@@ -114,7 +120,8 @@ function clientsCard(clients) {
     const row = el("div", "client-row");
     const info = el("div");
     info.append(el("div", "name", client.name), el("div", "meta", client.version ? client.version : "version unknown"));
-    row.append(mark(client.id), info);
+    const tile = mark(client.id);
+    row.append(tile, info);
     // A status only when something is wrong: not installed, or a version Kitden has not tested.
     if (client.status !== "found") row.append(socket({ state: "missing" }));
     else if (client.version && !client.tested) row.append(socket({ state: "unk", word: "Not tested" }));
@@ -133,7 +140,7 @@ function clientsCard(clients) {
       const open = openClients.has(client.id);
       row.setAttribute("aria-expanded", String(open));
       more.classList.toggle("open", open);
-      if (open && !inner.firstChild) inner.append(loadsLine(client.id));
+      if (open && !inner.firstChild) inner.append(loadsLine(client.id, tile));
     };
     const toggle = () => {
       if (openClients.has(client.id)) openClients.delete(client.id);
