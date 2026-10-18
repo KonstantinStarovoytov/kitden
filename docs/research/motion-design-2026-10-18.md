@@ -1,6 +1,7 @@
 # Motion design review
 
-Date: 2026-10-18. Status: proposal implemented for the owner to look at; not committed yet.
+Date: 2026-10-18. Status: first pass committed (0d654b0); second pass below. Rules now live in
+[docs/MOTION_DESIGN.md](../MOTION_DESIGN.md).
 Input: the owner's design research note ("Kitden: a living developer control center") and its
 agent prompt. Rules that stay: [DESIGN.md → Motion](../../DESIGN.md#motion).
 
@@ -88,3 +89,29 @@ Rules taken from them and applied here:
   drawn, the diff lines' resting style is visible, so nothing depends on an animation finishing.
 - Performance: only `transform` and `opacity` animate, except the client counts row
   (`grid-template-rows`, one small row at a time).
+
+## Second pass (2026-10-18)
+
+Built on the owner's design brief, one commit per feature.
+
+| Feature | What changed |
+| --- | --- |
+| 1 Tactile controls | Tabs, filters and rail links press like buttons; fields and the project picker answer hover; the plugin switch shows a pending thumb (half-way) while the preview loads, so it is never on, off or flipped before the review opens |
+| 2 Client cards | The client's tile flies from its Overview row to its Load map column (View Transitions, `fly`/`land`); an open row keeps its tint |
+| 3 Diff | "Show file change · +2 −1" counts the lines before the diff is opened; the file change folds open and closed instead of popping |
+| 4 Apply / Undo | Applied turns the button green with the drawn check; verified and undone toasts carry a check, errors never; places other than the Load map cross-fade to the new state |
+| 5 Navigation | One mark slides between the rail links, the Load map tabs and the filters (`glide`); gateway forms fold |
+| 6 Topology | Hovering or focusing a client lights its route and the rows below with its direct entries; routes take keyboard focus and say their state; a click leads to the first such row |
+| 7 Cleanup | A flag that a verified change resolved shrinks away; one flag per wording (three clients with the same note made three flags) |
+| 9 Scopes | With a project open the picker wears the selection tint; the Load map lede rises in while the cells morph |
+
+Fixed on the way: a row with several flags lost its name (the name now keeps 9 characters);
+gateway rows on a phone lost their name (the buttons move under it).
+
+Checked in the browser on a sandbox home with 39 MCP servers, 6 plugins, 3 findings and a
+registered gateway: light and dark, 375 px, Apply → Undo from the toast and from Changes, the
+flight (names set and cleared), route focus (14 rows lit, others at 0.35), no long task over
+50 ms. Reduced motion: checked by reading the code paths, not by emulation.
+
+Left for later (P1/P2): per-finding focus from the Overview notes list; MCP introspection
+highlight; a client-level topology for projects.

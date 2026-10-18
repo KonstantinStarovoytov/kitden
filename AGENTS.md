@@ -4,6 +4,7 @@
 - Write code, comments, UI text, and documentation in simple English.
 - Prefer clear diagrams and comparison tables when they help explain a decision.
 - Follow the [project constitution](.specify/memory/constitution.md).
+- Animate the page only as [docs/MOTION_DESIGN.md](docs/MOTION_DESIGN.md) says.
 - Read the [project brief](docs/project-brief.md) before proposing scope changes.
 - Use the installed Spec Kit skills in `.agents/skills/` for feature development.
 - Keep research, proposed decisions, and confirmed requirements clearly labeled.

@@ -43,26 +43,10 @@ Keep existing system fonts and motion, keyboard focus, and reduced-motion suppor
 
 ## Motion
 
-Motion explains a change to the person's setup; it never decorates. Research and audit:
+Motion explains a change to the person's setup; it never decorates, and a success look appears
+only after the server verified the write. Tokens, patterns, rules and examples:
+[docs/MOTION_DESIGN.md](docs/MOTION_DESIGN.md). Audit and skills review:
 [motion design review](docs/research/motion-design-2026-10-18.md).
-
-| Token | Value | Use |
-| --- | --- | --- |
-| Press | 80 ms in, 260 ms `--spring` out | Buttons, switches, client marks |
-| `--t-fast` | 180 ms | Hover colour, label swaps |
-| `--t-panel` | 320 ms, `--ease-drawer` | Drawer, toast |
-| `--spring` | CSS `linear()` critically damped spring, no overshoot; falls back to `--ease-out` | Things the hand moves |
-| Stagger | 45 ms between blocks, 18 ms between diff lines (14 at most) | First visit, diff |
-
-Rules:
-
-- **Truth first.** A success look (check mark, switch flip, new state) appears only after the server says the write is verified. A switch shows the real state; pressing it opens the review and it flips only after Apply.
-- **No fake activity.** No looping animation that suggests traffic, scanning or work Kitden cannot see. A gateway wire draws once when its connection first appears, then stays still.
-- **Errors stay.** An error is a callout that stays until the next action; the button that failed gives one short shake (10 px, 360 ms).
-- **Calm, not bouncy.** No overshoot anywhere: press scales to 0.98, the switch thumb slides with ease-in-out.
-- **Point, don't move.** To show where something is, light it (row glow, socket ping, route focus) instead of moving the layout.
-- Animate `transform` and `opacity` only, except the client counts row, which opens with `grid-template-rows`.
-- `prefers-reduced-motion: reduce` turns all animation off; every end state is the resting style, so nothing is lost.
 
 ## Authority
 
