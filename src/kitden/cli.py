@@ -58,7 +58,7 @@ def _start(args: argparse.Namespace) -> int:
         home=root,
     )
     url = f"http://{HOST}:{port}/?token={token}"
-    print(f"agentsetup is running. Open: {url}", flush=True)
+    print(f"Kitden is running. Open: {url}", flush=True)
     print("Press Ctrl+C to stop.", flush=True)
     if not args.no_browser:
         webbrowser.open(url)
@@ -89,7 +89,7 @@ def _scan(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="agentsetup")
+    parser = argparse.ArgumentParser(prog="kitden")
     parser.add_argument("--version", action="store_true", help="print the version and exit")
     parser.add_argument("--no-browser", action="store_true", help="do not open the browser")
     parser.add_argument("--home", help="read clients under this home folder (for testing)")
@@ -102,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.version:
-        print(f"agentsetup {__version__}")
+        print(f"kitden {__version__}")
         return 0
     if args.command == "scan":
         return _scan(args)

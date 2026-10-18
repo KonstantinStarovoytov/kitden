@@ -7,7 +7,7 @@ from kitden.cli import main, pick_port
 
 def test_version_prints_name_and_version_and_exits_zero(capsys):
     assert main(["--version"]) == 0
-    assert capsys.readouterr().out.strip() == "agentsetup 0.1.0"
+    assert capsys.readouterr().out.strip() == "kitden 0.2.0"
 
 
 def _busy(port):
@@ -92,7 +92,7 @@ def test_installed_command_is_an_absolute_path():
 
     command = installed_command()
     assert command is not None and command.startswith("/")
-    assert command.endswith("agentsetup")
+    assert command.endswith("/kitden")
 
 
 def test_server_stops_quickly_even_with_an_open_page(monkeypatch):

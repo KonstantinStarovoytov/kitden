@@ -268,7 +268,7 @@ class ClientAdapter(ABC):
 REMOVE_DIRECT = "mcp.remove_direct"
 PLUGIN_ENABLE = "plugin.enable"
 SETUP_SERVER = "setup_server.register"
-SETUP_NAME = "agentsetup"
+SETUP_NAME = "kitden"
 PLUGIN_DISABLE = "plugin.disable"
 
 

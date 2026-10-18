@@ -52,7 +52,7 @@ def setup_server_steps(
     GUI clients may not see the shell PATH, so the entry uses an absolute path (research R9).
     """
     if not Path(command).is_absolute():
-        raise ValueError("The setup server needs the absolute path of the agentsetup command")
+        raise ValueError("The setup server needs the absolute path of the kitden command")
     if not clients:
         raise ValueError("Choose at least one client")
     steps = []

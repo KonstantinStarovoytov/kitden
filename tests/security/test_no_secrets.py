@@ -72,7 +72,7 @@ def _page_outputs(home) -> list[str]:
         port=47800,
         home=home,
         run=FakeClaude(home),
-        setup_command=lambda: "/opt/agentsetup/bin/agentsetup",
+        setup_command=lambda: "/opt/kitden/bin/kitden",
     )
     with TestClient(app, base_url=ORIGIN, follow_redirects=False) as page:
         page.get("/?token=tok")

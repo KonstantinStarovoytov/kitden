@@ -1,6 +1,6 @@
 [project]
 name = "kitden"
-version = "0.1.0"
+version = "0.2.0"
 description = "See and safely change what AI coding clients load on this computer."
 readme = "README.md"
 requires-python = ">=3.13"
@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.scripts]
-agentsetup = "kitden.cli:main"
+kitden = "kitden.cli:main"
 
 [dependency-groups]
 dev = [

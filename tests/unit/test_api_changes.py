@@ -51,7 +51,7 @@ def client(tmp_path, monkeypatch):
         port=47800,
         home=home,
         run=FakeClaude(home),
-        setup_command=lambda: "/opt/agentsetup/bin/agentsetup",
+        setup_command=lambda: "/opt/kitden/bin/kitden",
     )
     with TestClient(app, base_url=ORIGIN, follow_redirects=False) as c:
         c.get("/?token=tok")
@@ -244,12 +244,12 @@ def test_adding_the_setup_server_and_undo(client):
     }
     change = client.post("/api/changes/preview", json=body, headers=POST).json()
     assert _files(client.home) == original
-    assert all("/opt/agentsetup/bin/agentsetup" in s["diff"] for s in change["steps"])
+    assert all("/opt/kitden/bin/kitden" in s["diff"] for s in change["steps"])
     assert (
         client.post(f"/api/changes/{change['id']}/apply", headers=POST).json()["state"]
         == "verified"
     )
     names = {(i["client"], i["name"]) for i in client.get("/api/items?kind=mcp_server").json()}
-    assert {("codex", "agentsetup"), ("cursor", "agentsetup")} <= names
+    assert {("codex", "kitden"), ("cursor", "kitden")} <= names
     client.post(f"/api/changes/{change['id']}/undo", headers=POST)
     assert _files(client.home) == original

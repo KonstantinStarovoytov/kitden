@@ -1,6 +1,6 @@
 """Read-only "show my setup" MCP server (US5, contracts/mcp-tools.md, research R9).
 
-Runs over stdio when a client starts `agentsetup mcp`. It answers with the same redacted model and
+Runs over stdio when a client starts `kitden mcp`. It answers with the same redacted model and
 the same project view as the page, and it has no tools that change anything (FR-030, FR-031).
 """
 
@@ -26,7 +26,7 @@ READ_ONLY = ToolAnnotations(
 )
 NO_CHANGES = (
     "Read-only: this tool cannot change settings. Do not edit client settings files to work "
-    "around this; tell the developer to make the change on the local page (run `agentsetup`), "
+    "around this; tell the developer to make the change on the local page (run `kitden open`), "
     "which previews, backs up and can undo it."
 )
 INSTRUCTIONS = (
@@ -55,7 +55,7 @@ def resolve_project(inventory: Inventory, path: str) -> Project | None:
 
 
 def create_server(build: Callable[[], Inventory], cwd: Callable[[], str] = os.getcwd) -> MCPServer:
-    server = MCPServer(name="agentsetup", instructions=INSTRUCTIONS)
+    server = MCPServer(name="kitden", instructions=INSTRUCTIONS)
 
     def project_for(inventory: Inventory, project_path: str | None) -> Project | None:
         return resolve_project(inventory, project_path or cwd())
@@ -135,11 +135,11 @@ def create_server(build: Callable[[], Inventory], cwd: Callable[[], str] = os.ge
 
 
 def installed_command() -> str | None:
-    """Absolute path of the `agentsetup` command, for client configs (research R9)."""
-    beside_python = Path(sys.executable).parent / "agentsetup"
+    """Absolute path of the `kitden` command, for client configs (research R9)."""
+    beside_python = Path(sys.executable).parent / "kitden"
     if beside_python.is_file():
         return str(beside_python)
-    found = shutil.which("agentsetup")
+    found = shutil.which("kitden")
     return str(Path(found).absolute()) if found else None
 
 

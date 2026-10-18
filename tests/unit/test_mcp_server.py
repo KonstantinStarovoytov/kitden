@@ -141,3 +141,9 @@ async def test_unknown_client_is_an_error(home):
     async with Client(server_for(home)) as client:
         result = await client.call_tool("show_setup", {"client": "vim"})
     assert result.is_error
+
+
+def test_server_is_named_kitden_and_points_to_kitden_open(home):
+    server = server_for(home)
+    assert server.name == "kitden"
+    assert "kitden open" in server.instructions

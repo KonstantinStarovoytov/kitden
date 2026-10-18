@@ -1,6 +1,6 @@
 """The setup server with real clients in a sandbox home (T062, quickstart scenario 5).
 
-Adds `agentsetup mcp` to Codex and Claude Code, checks their own listings, starts the server over
+Adds `kitden mcp` to Codex and Claude Code, checks their own listings, starts the server over
 stdio the way a client does, calls `show_setup`, then undoes. Run with: pytest -m contract
 """
 
@@ -38,7 +38,7 @@ def _codex() -> str | None:
 @pytest.fixture
 def home(tmp_path, monkeypatch):
     if _codex() is None or find_command("claude", tmp_path) is None or installed_command() is None:
-        pytest.skip("needs codex, claude and the agentsetup command")
+        pytest.skip("needs codex, claude and the kitden command")
     for name in ("CLAUDE_CONFIG_DIR", "CODEX_HOME"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(base, "read_command_version", lambda client: None)
@@ -70,7 +70,7 @@ async def test_register_handshake_and_undo(home):
         check=True,
     ).stdout
     servers = {s["name"]: s for s in json.loads(listed)}
-    assert servers["agentsetup"]["transport"]["command"] == command
+    assert servers["kitden"]["transport"]["command"] == command
 
     # Start the server the way a client does, with the sandbox as home.
     params = StdioServerParameters(command=command, args=["mcp"], env=_env(home), cwd=str(home))
@@ -79,7 +79,7 @@ async def test_register_handshake_and_undo(home):
         result = await client.call_tool("show_setup", {"client": "codex"})
     assert tools == {"show_setup", "list_findings", "explain_item", "list_projects"}
     names = {i["name"] for i in result.structured_content["views"][0]["items"]}
-    assert {"neon", "agentsetup"} <= names
+    assert {"neon", "kitden"} <= names
     assert "SENTINEL" not in json.dumps(result.structured_content)
 
     engine.undo(change.id)
