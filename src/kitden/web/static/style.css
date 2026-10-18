@@ -152,7 +152,7 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .client-row .client-mark, .client-row .mono-mark, .chip:has(> h2) > .client-mark, .chip:has(> h2) > .mono-mark { --tile: 28px; }
 .chip { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
 .mono-mark { font: 600 10px/1 var(--mono); color: var(--ink-2); }
-.icon-dark { display: none; }
+.client-mark .icon-dark, .routes .icon-dark { display: none; }
 :root[data-theme="dark"] .has-dark .icon-light { display: none; }
 :root[data-theme="dark"] .has-dark .icon-dark { display: block; }
 @media (prefers-color-scheme: dark) {
