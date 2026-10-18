@@ -205,8 +205,8 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .issue .btn { grid-column: 2; grid-row: 1 / span 2; }
 .all-clear { padding: 18px 16px; background: var(--panel); border: 1px solid var(--wire); border-radius: 8px; color: var(--ink-2); }
 .notes-toggle { justify-self: start; margin-top: 4px; }
-.notes { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-.notes li { padding: 6px 10px; border-radius: 6px; background: var(--panel); border: 1px solid var(--wire-soft); color: var(--ink-2); overflow-wrap: anywhere; }
+.notes { margin-top: 6px; }
+.notes > p { margin: 0; padding: 8px 12px; }
 .side { display: grid; gap: 16px; }
 .card { background: var(--panel); border: 1px solid var(--wire); border-radius: 8px; padding: 12px 14px; }
 .card h2 { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }

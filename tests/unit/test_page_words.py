@@ -86,3 +86,8 @@ def test_changes_rows_open_the_panel_and_keep_paths_off_the_page():
     assert "openChange" in text
     assert "change-detail" not in text and "aria-expanded" not in text
 
+
+def test_overview_notes_are_rows_with_a_details_button():
+    text = script("overview.js")
+    assert '"Details"' in text
+    assert "shortPaths" not in text
