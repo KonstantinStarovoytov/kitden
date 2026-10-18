@@ -94,6 +94,8 @@ a { color: var(--route); }
 .nav a { display: flex; align-items: center; justify-content: space-between; height: 30px; padding: 0 8px; border-radius: 6px; color: var(--ink-2); text-decoration: none; transition: background-color var(--t-fast) ease, color var(--t-fast) ease; }
 .nav a:hover { background: var(--wire-soft); color: var(--ink); }
 .nav a[aria-current="page"] { background: var(--route-soft); color: var(--route); box-shadow: inset 3px 0 var(--brand); font-weight: 600; }
+/* One mark slides between the choices of a group (rail, tabs, filters); the choice itself is instant. */
+.ink { position: absolute; left: 0; top: 0; z-index: 0; border-radius: 6px; background: var(--route-soft); pointer-events: none; opacity: 0; transition: opacity var(--t-fast) ease; }
 .count { font-size: 11px; color: var(--ink-3); }
 .count.warn { color: var(--lamp-warn); font-weight: 600; }
 .rail-foot { margin-top: auto; padding: 8px; display: grid; gap: 8px; color: var(--ink-3); font-size: 12px; }
@@ -341,6 +343,10 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 details.file-change { min-width: 0; }
 details.file-change > summary { cursor: pointer; color: var(--ink-2); font-weight: 500; }
 details.file-change > .step, details.file-change > p { margin-top: 10px; }
+.fold { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 280ms var(--ease-out); }
+.fold > .fold-in { overflow: hidden; min-height: 0; display: grid; gap: 10px; align-content: start; opacity: 0; transform: translateY(-4px); transition: opacity 200ms ease, transform 280ms var(--spring); }
+.fold.open { grid-template-rows: 1fr; }
+.fold.open > .fold-in { opacity: 1; transform: none; transition-delay: 40ms; }
 .step { border: 1px solid var(--wire); border-radius: 8px; overflow: hidden; }
 .step-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; }
 .step-head strong { white-space: nowrap; }
@@ -379,6 +385,7 @@ details.connect, details.add-more { margin-top: 12px; }
 details.connect > summary, details.add-more > summary { cursor: pointer; color: var(--ink-2); font-weight: 500; }
 
 /* Page changes and the theme switch (View Transitions, where supported) */
+::view-transition-group(*) { animation-duration: 340ms; animation-timing-function: var(--ease-drawer); }
 ::view-transition-old(root) { animation: 140ms ease both fade-out; }
 ::view-transition-new(root) { animation: 180ms ease both fade-in; }
 @keyframes fade-in { from { opacity: 0; } }
