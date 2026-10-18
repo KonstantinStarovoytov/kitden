@@ -8,10 +8,11 @@ export const STATE_WORDS = {
 export const CLIENT_MARKS = {
   claude_code: "CC", codex: "CX", cursor: "CU", claude_desktop_code_tab: "CD",
 };
+// Icon file names under /static/brand/clients. Codex and Cursor also ship a "-dark" version.
 export const CLIENT_ICONS = {
-  claude_code: "claude.png", claude_desktop_code_tab: "claude.png",
-  codex: "codex.png", cursor: "cursor.png",
+  claude_code: "claude", claude_desktop_code_tab: "claude", codex: "codex", cursor: "cursor",
 };
+export const DARK_ICONS = new Set(["codex", "cursor"]);
 export const CLIENT_NAMES = {
   claude_code: "Claude Code", codex: "Codex", cursor: "Cursor",
   claude_desktop_code_tab: "Claude Desktop (Code tab)",
@@ -58,18 +59,26 @@ export function mark(clientId) {
   const icon = CLIENT_ICONS[clientId];
   if (icon) {
     // One rounded tile for every client; the vendor icon keeps its own colors.
+    // Where the vendor offers a dark version, both are in the tile and CSS shows one.
     node.className = "client-mark";
-    node.dataset.icon = icon.replace(".png", "");
-    const image = el("img");
-    image.src = `/static/brand/clients/${icon}`;
-    image.alt = "";
-    image.width = 24;
-    image.height = 24;
-    image.addEventListener("error", () => {
-      node.className = "mono-mark";
-      node.textContent = CLIENT_MARKS[clientId] || "?";
-    }, { once: true });
-    node.replaceChildren(image);
+    node.dataset.icon = icon;
+    const image = (suffix, kind) => {
+      const img = el("img", kind);
+      img.src = `/static/brand/clients/${icon}${suffix}.png`;
+      img.alt = "";
+      img.width = 24;
+      img.height = 24;
+      img.addEventListener("error", () => {
+        node.className = "mono-mark";
+        node.textContent = CLIENT_MARKS[clientId] || "?";
+      }, { once: true });
+      return img;
+    };
+    node.replaceChildren(image("", "icon-light"));
+    if (DARK_ICONS.has(icon)) {
+      node.classList.add("has-dark");
+      node.append(image("-dark", "icon-dark"));
+    }
   }
   node.setAttribute("aria-hidden", "true");
   return node;

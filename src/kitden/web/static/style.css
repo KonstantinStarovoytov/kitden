@@ -143,16 +143,22 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .form-message { color: var(--ink-3); font-size: 12px; }
 .form-message.error { color: var(--danger); }
 
-/* Client marks: one white rounded tile in both themes; the vendor icon inside keeps its colors.
-   The Claude glyph has no tile of its own, so it gets padding; the Codex and Cursor icons fill it. */
-.client-mark, .mono-mark { --tile: 24px; width: var(--tile); height: var(--tile); border-radius: 6px; display: inline-grid; place-items: center; flex: none; background: #ffffff; box-shadow: 0 0 0 1px var(--wire-strong); overflow: hidden; }
-.client-mark img { display: block; width: 100%; height: 100%; object-fit: contain; }
+/* Client marks: one rounded tile that follows the theme; the vendor icon inside keeps its colors.
+   The Claude glyph has no tile of its own, so it gets padding; the Codex and Cursor icons fill it
+   and switch to the vendor's dark version in the dark theme (img.light / img.dark). */
+.client-mark, .mono-mark { --tile: 24px; width: var(--tile); height: var(--tile); border-radius: 6px; display: inline-grid; place-items: center; flex: none; background: var(--panel-raised); box-shadow: 0 0 0 1px var(--wire-strong); overflow: hidden; }
+.client-mark img { display: block; width: 100%; height: 100%; object-fit: contain; grid-area: 1 / 1; }
 .client-mark[data-icon="claude"] img { box-sizing: border-box; padding: 4px; }
 .client-row .client-mark, .client-row .mono-mark, .chip:has(> h2) > .client-mark, .chip:has(> h2) > .mono-mark { --tile: 28px; }
 .chip { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
 .mono-mark { font: 600 10px/1 var(--mono); color: var(--ink-2); }
-:root[data-theme="dark"] .mono-mark { background: var(--panel-raised); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .mono-mark { background: var(--panel-raised); } }
+.icon-dark { display: none; }
+:root[data-theme="dark"] .has-dark .icon-light { display: none; }
+:root[data-theme="dark"] .has-dark .icon-dark { display: block; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .has-dark .icon-light { display: none; }
+  :root:not([data-theme="light"]) .has-dark .icon-dark { display: block; }
+}
 
 /* Sockets (the signature): shape, colour and a word carry the state. */
 .socket { display: inline-flex; align-items: center; gap: 6px; min-width: 0; transition: color 320ms ease; }

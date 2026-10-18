@@ -1,4 +1,4 @@
-<img src="src/kitden/web/static/brand/kitden.svg" width="48" height="48" alt="Kitden house">
+<img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/src/kitden/web/static/brand/kitden.svg" width="48" height="48" alt="Kitden house">
 
 # Kitden
 
@@ -9,13 +9,10 @@ their own files. Kitden shows all of them on one page and lets you change them s
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/overview-dark.jpg">
-    <img src="docs/images/overview.jpg" alt="The Kitden page: three things need attention, each with one button to fix it" width="800">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/overview-dark.jpg">
+    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/overview.jpg" alt="The Kitden page: three things need attention, each with one button to fix it" width="800">
   </picture>
 </p>
-
-The screenshots above show the previous release. The current interface uses the
-[Quiet Den + Graphite identity](DESIGN.md).
 
 ## The problem
 
@@ -41,8 +38,8 @@ Nobody wants to open six JSON and TOML files to find out.
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/how-it-works-dark.svg">
-    <img src="docs/images/how-it-works.svg" alt="Kitden reads the settings of Claude Code, Codex and Cursor, shows them on one local page, and writes a change back with a backup you can undo" width="860">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/how-it-works-dark.svg">
+    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/how-it-works.svg" alt="Kitden reads the settings of Claude Code, Codex and Cursor, shows them on one local page, and writes a change back with a backup you can undo" width="860">
   </picture>
 </p>
 
@@ -53,25 +50,23 @@ Nobody wants to open six JSON and TOML files to find out.
 
 ## Install
 
-macOS. Paste one line into the Terminal:
+macOS. If you have [uv](https://docs.astral.sh/uv/), nothing to install:
+
+```bash
+uvx kitden
+```
+
+No uv yet? Paste one line into the Terminal:
 
 ```bash
 curl -LsSf https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/install.sh | sh
 ```
 
-It installs [uv](https://docs.astral.sh/uv/) if you do not have it, then `kitden`, and opens the
-page. It changes nothing in your agents. Run the same line again to update.
-
-From then on:
+It installs uv, then `kitden`, and opens the page. It changes nothing in your agents. Run the same
+line again to update. From then on:
 
 ```bash
 kitden
-```
-
-Already have uv? Run it without installing:
-
-```bash
-uvx --from git+https://github.com/KonstantinStarovoytov/kitden@v0.1.1 kitden
 ```
 
 Linux and Windows are not supported yet.

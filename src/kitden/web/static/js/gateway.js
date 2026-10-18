@@ -3,7 +3,7 @@ import { postJson } from "./api.js";
 import { button, el, plural, webLink } from "./dom.js";
 import { entrance } from "./motion.js";
 import { review, toast } from "./panel.js";
-import { banner, CLIENT_ICONS, CLIENT_NAMES, mark, skeleton } from "./parts.js";
+import { banner, CLIENT_ICONS, CLIENT_NAMES, DARK_ICONS, mark, skeleton } from "./parts.js";
 import { data, loadGateway, reload, render } from "./store.js";
 
 const WRITABLE = ["claude_code", "codex", "cursor"];
@@ -141,9 +141,13 @@ function routes(gateway, connections) {
     }
     add("rect", { x: 8, y: y - 15, width: 142, height: 30, rx: 7, class: "node" });
     // The same tile as mark(): the Claude glyph sits inside it, the other icons fill it.
-    const pad = CLIENT_ICONS[client] === "claude.png" ? 4 : 0;
+    const icon = CLIENT_ICONS[client];
+    const pad = icon === "claude" ? 4 : 0;
     add("rect", { x: 16, y: y - 12, width: 24, height: 24, rx: 6, class: "node-tile" });
-    add("image", { x: 16 + pad, y: y - 12 + pad, width: 24 - 2 * pad, height: 24 - 2 * pad, href: `/static/brand/clients/${CLIENT_ICONS[client]}`, class: "node-icon", "aria-hidden": "true" });
+    const box = { x: 16 + pad, y: y - 12 + pad, width: 24 - 2 * pad, height: 24 - 2 * pad, "aria-hidden": "true" };
+    const tile = add("g", { class: DARK_ICONS.has(icon) ? "has-dark" : "" });
+    tile.append(add("image", { ...box, href: `/static/brand/clients/${icon}.png`, class: "node-icon icon-light" }));
+    if (DARK_ICONS.has(icon)) tile.append(add("image", { ...box, href: `/static/brand/clients/${icon}-dark.png`, class: "node-icon icon-dark" }));
     add("text", { x: 50, y: y + 4, class: "sub" }, CLIENT_NAMES[client]);
   });
   add("rect", { x: hub.x, y: hub.y - 22, width: 160, height: 44, rx: 9, class: "hub" });

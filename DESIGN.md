@@ -33,7 +33,7 @@ The brand mark is fixed; functional shades adapt for text contrast. Do not use t
 
 ## Client marks
 
-Every client mark is the same white rounded tile (24 px, radius 6, thin border) in both themes, so the row of clients reads as one family. The Codex and Cursor icons fill the tile; the Claude glyph sits inside it with 4 px padding. The tile grows to 28 px where the client is the headline: the Clients card on Overview and the title of a detail panel. The Gateway route diagram draws the same tile in SVG. Do not tint, recolor or shrink a vendor icon to show a state; state lives in the badge next to it.
+Every client mark is the same rounded tile (24 px, radius 6, raised-panel background, thin border), so the row of clients reads as one family. The Codex and Cursor icons fill the tile and switch to the vendor's own dark version in the dark theme; the Claude glyph sits inside it with 4 px padding and works on both. The tile grows to 28 px where the client is the headline: the Clients card on Overview and the title of a detail panel. The Gateway route diagram draws the same tile in SVG. Do not tint, recolor or shrink a vendor icon to show a state; state lives in the badge next to it.
 
 ## Components
 

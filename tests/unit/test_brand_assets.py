@@ -8,7 +8,7 @@ CLIENTS = STATIC / "brand" / "clients"
 
 def test_every_client_icon_is_small():
     # Icons draw at 24-28 px; a large file only slows the first paint.
-    for name in ("claude.png", "codex.png", "cursor.png"):
+    for name in ("claude.png", "codex.png", "codex-dark.png", "cursor.png", "cursor-dark.png"):
         assert (CLIENTS / name).stat().st_size < 24_000, name
 
 
