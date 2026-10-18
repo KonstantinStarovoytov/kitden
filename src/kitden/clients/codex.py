@@ -215,6 +215,7 @@ class CodexAdapter(ClientAdapter):
 
         configured = _dict(config.get("plugins"))
         for plugin_id, entry in configured.items():
+            enabled = _on(_dict(entry).get("enabled"))
             scan.items.append(
                 Item(
                     client=CLIENT,
@@ -222,9 +223,10 @@ class CodexAdapter(ClientAdapter):
                     name=plugin_id,
                     source=file_source(config_path, CLIENT, f"plugins.{plugin_id}"),
                     scope=Scope.USER,
-                    enabled=_on(_dict(entry).get("enabled")),
+                    enabled=enabled,
                 )
             )
+            scan.items += self._plugin_servers(read, self._plugin_folder(plugin_id), enabled)
         scan.items += self._cached_plugins(set(configured))
 
         for name in _dict(config.get("marketplaces")):
@@ -281,6 +283,26 @@ class CodexAdapter(ClientAdapter):
             items += skill_items(
                 CLIENT, root / ".agents/skills", Scope.PROJECT, CLIENT, project=str(root)
             )
+        return items
+
+    def _plugin_folder(self, plugin_id: str) -> Path:
+        name, _, marketplace = plugin_id.partition("@")
+        return self.codex_home / "plugins/cache" / marketplace / name
+
+    def _plugin_servers(self, read: Reader, folder: Path, enabled: Enabled) -> list[Item]:
+        """MCP servers a plugin bundles: `mcp.json` (the portable format) or `.mcp.json`, in the
+        plugin folder or in one of its version folders (feature 003, research R8)."""
+        items: list[Item] = []
+        if not folder.is_dir():
+            return items
+        for place in [folder, *sorted(p for p in folder.iterdir() if p.is_dir())]:
+            names = ("mcp.json", ".mcp.json")
+            mcp_path = next((place / n for n in names if (place / n).is_file()), None)
+            if mcp_path is None:
+                continue
+            for name, entry in _dict(_dict(read.json(mcp_path)).get("mcpServers")).items():
+                source = file_source(mcp_path, CLIENT, f"mcpServers.{name}", kind=SourceKind.PLUGIN)
+                items.append(mcp_item(CLIENT, name, entry, source, Scope.PLUGIN, enabled=enabled))
         return items
 
     def _cached_plugins(self, configured: set[str]) -> list[Item]:

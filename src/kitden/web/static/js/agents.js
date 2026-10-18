@@ -1,4 +1,5 @@
-// Agents: add the read-only "show my setup" MCP server to a client, or update an old entry.
+// Agents: add the read-only "show my setup" MCP server to a client, update an old entry, or show
+// that the kitden plugin already provides it (feature 003).
 import { button, el } from "./dom.js";
 import { entrance } from "./motion.js";
 import { review } from "./panel.js";
@@ -19,6 +20,10 @@ function cell(entry) {
     box.append(socket({ state: "missing" }));
   } else if (entry.state === "added") {
     box.append(entry.enabled === false ? socket({ state: "off", word: "Added, off" }) : socket({ state: "on", word: "Added" }));
+    if (entry.item) box.append(el("span", "muted", "An old entry is still there."), button("Remove old entry…", () => update(entry.item)));
+  } else if (entry.state === "plugin") {
+    box.append(entry.enabled === false ? socket({ state: "off", word: "Plugin, off" }) : socket({ state: "on", word: "Plugin" }));
+    box.append(el("span", "muted", "Provided by the kitden plugin."));
     if (entry.item) box.append(el("span", "muted", "An old entry is still there."), button("Remove old entry…", () => update(entry.item)));
   } else if (entry.state === "old") {
     box.append(socket({ state: "unk", word: "Old entry" }));

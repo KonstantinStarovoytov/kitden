@@ -196,3 +196,19 @@ def test_entries_that_point_to_a_registered_gateway_are_marked_and_not_flagged()
     assert marked.via_gateway == gateway.id
     assert "mcp.remove_direct" not in marked.actions
     assert [f.names for f in find_bypasses(inventory)] == [("neon",)]
+
+
+def test_a_user_entry_beside_the_plugin_server_is_reported():
+    """Feature 003, FR-014: Kitden's own server twice in one client. The effective view ranks
+    the user entry over the plugin one, so the pair shows as an override that names both."""
+    user = item("claude_code", ItemKind.MCP_SERVER, "kitden", "/h/.claude.json")
+    plugin = item(
+        "claude_code",
+        ItemKind.MCP_SERVER,
+        "kitden",
+        "/h/.claude/plugins/cache/kitden/kitden/0.1.0/.mcp.json",
+        scope=Scope.PLUGIN,
+        source_kind=SourceKind.PLUGIN,
+    )
+    found = summary(find_findings(Inventory(items=[user, plugin])))
+    assert ("scope_override", "info", ("kitden", "kitden")) in found

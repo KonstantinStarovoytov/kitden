@@ -179,6 +179,11 @@ class WaitForFirstScan:
         await self.app(scope, receive, send)
 
 
+def _states_in(inventory, *states: str) -> set[str]:
+    """Clients whose "show my setup" server is in one of the given states."""
+    return {s["client"] for s in setup_server_state(inventory) if s["state"] in states}
+
+
 def create_app(
     build: Callable[[], Inventory],
     token: str,
@@ -381,17 +386,16 @@ def create_app(
                 if command is None:
                     return _error("Install the tool first: uv tool install <this folder>", 422)
                 clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+                provided = _states_in(state.inventory, "plugin")
+                if any(c in provided for c in clients):
+                    return _error("The kitden plugin already provides this server there.", 422)
                 steps = setup_server_steps(adapters, clients, command)
             elif action == SETUP_SERVER_UPDATE:
                 ids = [str(t.get("item")) for t in targets if isinstance(t, dict)]
                 items = [_item(i) for i in ids]
                 if not items or any(i is None or not is_old_entry(i) for i in items):
                     return _error("Choose an old Kitden entry.", 422)
-                added = {
-                    s["client"]
-                    for s in setup_server_state(state.inventory)
-                    if s["state"] == "added"
-                }
+                added = _states_in(state.inventory, "added", "plugin")
                 command = None
                 if any(i.client not in added for i in items):
                     command = (setup_command or installed_command)()

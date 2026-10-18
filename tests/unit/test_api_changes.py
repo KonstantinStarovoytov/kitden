@@ -1,6 +1,8 @@
 """Change and gateway endpoints (T047, contracts/local-api.md)."""
 
 import json
+import shutil
+from pathlib import Path
 
 import pytest
 from starlette.testclient import TestClient
@@ -40,11 +42,7 @@ class FakeClaude:
         return CommandResult(0, "")
 
 
-@pytest.fixture
-def client(tmp_path, monkeypatch):
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
-    home = make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2", "cursor/3.21.16")
-    write_cursor_fixture_state(home)
+def _app_client(home):
     app = create_app(
         lambda: build_inventory(home),
         token="tok",
@@ -53,7 +51,43 @@ def client(tmp_path, monkeypatch):
         run=FakeClaude(home),
         setup_command=lambda: "/opt/kitden/bin/kitden",
     )
-    with TestClient(app, base_url=ORIGIN, follow_redirects=False) as c:
+    return TestClient(app, base_url=ORIGIN, follow_redirects=False)
+
+
+def _home(tmp_path, monkeypatch):
+    monkeypatch.setattr(base, "read_command_version", lambda client: None)
+    home = make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2", "cursor/3.21.16")
+    write_cursor_fixture_state(home)
+    return home
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    home = _home(tmp_path, monkeypatch)
+    with _app_client(home) as c:
+        c.get("/?token=tok")
+        c.home = home
+        yield c
+
+
+@pytest.fixture
+def plugin_client(tmp_path, monkeypatch):
+    """Claude Code has the kitden plugin installed and an old agentsetup entry (feature 003)."""
+    home = _home(tmp_path, monkeypatch)
+    cache = home / ".claude/plugins/cache/kitden/kitden/0.1.0"
+    shutil.copytree(Path(__file__).resolve().parents[2] / "plugins/kitden", cache)
+    (home / ".claude/plugins/installed_plugins.json").write_text(
+        json.dumps({"version": 2, "plugins": {"kitden@kitden": [{"installPath": str(cache)}]}})
+    )
+    old_command = home / ".local/bin/agentsetup"
+    old_command.parent.mkdir(parents=True)
+    old_command.write_text("#!/bin/sh\n")
+    settings = home / ".claude.json"
+    data = json.loads(settings.read_text())
+    old = {"type": "stdio", "command": str(old_command), "args": ["mcp"]}
+    data["mcpServers"]["agentsetup"] = old
+    settings.write_text(json.dumps(data))
+    with _app_client(home) as c:
         c.get("/?token=tok")
         c.home = home
         yield c
@@ -285,3 +319,18 @@ def test_adding_the_setup_server_and_undo(client):
     assert {("codex", "kitden"), ("cursor", "kitden")} <= names
     client.post(f"/api/changes/{change['id']}/undo", headers=POST)
     assert _files(client.home) == original
+
+
+def test_registering_is_refused_where_the_plugin_provides_the_server(plugin_client):
+    body = {"action": "setup_server.register", "targets": [{"client": "claude_code"}], "params": {}}
+    assert plugin_client.post("/api/changes/preview", json=body, headers=POST).status_code == 422
+
+
+def test_updating_an_old_entry_beside_the_plugin_only_removes_it(plugin_client):
+    states = {s["client"]: s for s in plugin_client.get("/api/setup-server").json()}
+    assert states["claude_code"]["state"] == "plugin"
+    body = {"action": "setup_server.update", "targets": [{"item": states["claude_code"]["item"]}]}
+    change = plugin_client.post("/api/changes/preview", json={**body, "params": {}}, headers=POST)
+    assert change.status_code == 200, change.text
+    steps = change.json()["steps"]
+    assert len(steps) == 1 and "agentsetup" in steps[0]["diff"]

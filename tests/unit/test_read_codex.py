@@ -1,3 +1,6 @@
+import shutil
+from pathlib import Path
+
 from kitden.clients.codex import CodexAdapter
 from kitden.model import UnknownReason
 from tests.conftest import all_text, make_home, rows
@@ -69,3 +72,30 @@ def test_remote_plugins_say_their_state_is_in_the_account(tmp_path, no_version):
     scan = CodexAdapter(home, read_version=no_version).scan()
     gmail = next(i for i in scan.items if i.name == "gmail@openai-curated-remote")
     assert gmail.source.unknown_reason is UnknownReason.STORED_IN_ACCOUNT
+
+
+# Feature 003, FR-014: MCP servers inside an installed plugin (research R8).
+PLUGIN_DIR = Path(__file__).resolve().parents[2] / "plugins/kitden"
+
+
+def _install_kitden_plugin(home: Path, enabled: str = "true") -> None:
+    shutil.copytree(PLUGIN_DIR, home / ".codex/plugins/cache/kitden/kitden/0.1.0")
+    config = home / ".codex/config.toml"
+    config.write_text(config.read_text() + f'\n[plugins."kitden@kitden"]\nenabled = {enabled}\n')
+
+
+def test_mcp_servers_inside_an_installed_plugin_are_read(tmp_path, no_version):
+    home = make_home(tmp_path, FIXTURE)
+    _install_kitden_plugin(home)
+    scan = CodexAdapter(home, read_version=no_version).scan()
+    assert ("codex", "mcp_server", "kitden", "plugin", "on", None) in rows(scan.items, home)
+    item = next(i for i in scan.items if i.name == "kitden" and str(i.kind) == "mcp_server")
+    assert str(item.source.kind) == "plugin"
+    assert item.source.path.endswith("kitden/0.1.0/mcp.json")
+
+
+def test_a_plugin_turned_off_turns_its_servers_off(tmp_path, no_version):
+    home = make_home(tmp_path, FIXTURE)
+    _install_kitden_plugin(home, enabled="false")
+    scan = CodexAdapter(home, read_version=no_version).scan()
+    assert ("codex", "mcp_server", "kitden", "plugin", "off", None) in rows(scan.items, home)
