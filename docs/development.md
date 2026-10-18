@@ -14,13 +14,11 @@ Built with Python 3.13+, uv, Starlette and the official MCP SDK
 A release is one tag push: set the version with `uv version X.Y.Z`, put the same number in
 `plugins/kitden/.claude-plugin/plugin.json` and `plugins/kitden/plugin.json`, name the tag in
 `KITDEN_REF` of `install.sh` and `install.ps1`, commit, then `git tag vX.Y.Z` and
-`git push origin main vX.Y.Z`. The workflow runs the checks, builds the package and creates the
-GitHub release with the built files. The one-time steps (the public repository, and later the
-PyPI publisher and the `pypi` environment) are in
+`git push origin main vX.Y.Z`. The workflow runs the checks, builds the package, publishes it to
+PyPI and creates the GitHub release with the built files
+([release contract](../specs/003-one-line-install/contracts/release.md)). The one-time steps (the
+public repository, the PyPI trusted publisher and the `pypi` environment) are in
 [research R11](../specs/003-one-line-install/research.md#r11-owner-steps-outside-the-code-once).
-Publishing to PyPI comes later (see the
-[release contract](../specs/003-one-line-install/contracts/release.md)); the name `kitden` should be
-registered with that first release.
 
 ## Other commands
 
