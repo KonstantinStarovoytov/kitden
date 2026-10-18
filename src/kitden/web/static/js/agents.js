@@ -6,7 +6,7 @@ import { CLIENT_NAMES, mark, skeleton, socket } from "./parts.js";
 import { data } from "./store.js";
 
 const CLIENTS = ["claude_code", "codex", "cursor"];
-const SETUP_NAME = "agentsetup";
+const SETUP_NAME = "kitden";
 
 export function renderAgents(main) {
   main.append(el("h1", null, "Let agents see this setup"));

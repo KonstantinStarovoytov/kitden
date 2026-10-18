@@ -38,7 +38,7 @@ function renderPlace() {
     const row = $$("tr[data-key]", main).find((tr) => tr.dataset.key === rowKey);
     if (row) row.focus({ preventScroll: true });
   }
-  document.title = `${place.title} · Agent setup`;
+  document.title = `${place.title} · Kitden`;
   for (const link of $$(".nav a")) {
     if (link.dataset.view === state.view) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
@@ -77,7 +77,8 @@ async function refresh() {
 }
 
 // Theme: follows the system until the switch is used; the new theme spreads in a circle.
-const THEME_KEY = "agentsetup-theme";
+const THEME_KEY = "kitden-theme";
+const OLD_THEME_KEY = "agentsetup-theme"; // the working name; read once so the choice carries over
 function currentTheme() {
   const set = document.documentElement.dataset.theme;
   if (set) return set;
@@ -161,7 +162,7 @@ function fromAddress() {
 
 function start() {
   let saved = null;
-  try { saved = localStorage.getItem(THEME_KEY); } catch { saved = null; }
+  try { saved = localStorage.getItem(THEME_KEY) || localStorage.getItem(OLD_THEME_KEY); } catch { saved = null; }
   applyTheme(saved);
   Object.assign(state, parseHash(location.hash));
   setRenderer(renderPlace);

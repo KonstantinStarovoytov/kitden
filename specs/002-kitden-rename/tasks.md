@@ -19,7 +19,7 @@ Format: `[ID] [P?] [Story] Description`. `[P]` = can run in parallel (different 
   `tests/unit/test_setup_server.py`: `--version` prints `kitden 0.2.0`; MCP server name `kitden`;
   the setup server entry is named `kitden` and runs `.../kitden mcp`. Then change `cli.py`,
   `mcp_server.py` (name, instructions say `kitden open`) and `SETUP_NAME` in `clients/base.py`.
-- [ ] T003 [P] [US1] Page: brand and titles say Kitden; theme key `kitden-theme` (read the old key
+- [X] T003 [P] [US1] Page: brand and titles say Kitden; theme key `kitden-theme` (read the old key
   once); `SETUP_NAME` in `web/static/js/agents.js`. Update `tests/security/test_static_files.py`.
 
 **Checkpoint**: a fresh install works end to end under the new name.
