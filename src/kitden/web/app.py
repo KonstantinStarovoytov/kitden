@@ -35,6 +35,7 @@ from kitden.views.gateway_view import gateway_dict, gateway_view
 from kitden.views.inventory import Inventory, default_adapters, inventory_dict, item_dict
 from kitden.views.load_map import load_map, map_dict
 from kitden.views.overview import overview
+from kitden.views.setup_server import setup_server_state
 from kitden.watch import Watcher
 from kitden.web.security import SecurityMiddleware
 
@@ -193,6 +194,9 @@ def create_app(
 
     async def clients(request: Request) -> JSONResponse:
         return JSONResponse(state.data["clients"])
+
+    async def setup_server(request: Request) -> JSONResponse:
+        return JSONResponse(setup_server_state(state.inventory))
 
     async def items(request: Request) -> JSONResponse:
         filters = {
@@ -412,6 +416,7 @@ def create_app(
         routes=[
             Route("/", index),
             Route("/api/clients", clients),
+            Route("/api/setup-server", setup_server),
             Route("/api/items", items),
             Route("/api/projects", projects),
             Route("/api/problems", problems),

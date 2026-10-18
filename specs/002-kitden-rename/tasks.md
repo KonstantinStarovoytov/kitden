@@ -42,7 +42,7 @@ Format: `[ID] [P?] [Story] Description`. `[P]` = can run in parallel (different 
   fails → no partial folder, old intact; Undo of an old change works after the old folder is
   deleted. Then `ensure_data_folder()` in `gateways.py`, called by every CLI command
   ([R7](research.md#r7-data-folder-copy)).
-- [ ] T006 [P] [US2] Tests first in `tests/unit/test_setup_update.py`: state per client (`added`,
+- [X] T006 [P] [US2] Tests first in `tests/unit/test_setup_update.py`: state per client (`added`,
   `old`, `missing`, `not_installed`); an `agentsetup` entry running another program is ignored;
   `command_exists` is false when the old command is gone; a project-level `agentsetup` entry
   is ignored. Then `views/setup_server.py` and
