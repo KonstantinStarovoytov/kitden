@@ -345,6 +345,15 @@ async function showCommands(row, definitions) {
   }
 }
 
+// A change from the Changes page: the Changes page builds the body (steps with their files,
+// history, error); the panel frames it. Undo stays with the row that opened it.
+export function openChange(title, body, onUndo) {
+  current = { type: "change" };
+  const footer = el("footer");
+  if (onUndo) footer.append(button("Undo", onUndo, "btn primary"));
+  openPanel([header("Change", title, null), body, footer]);
+}
+
 // Change review --------------------------------------------------------------------------
 
 const DONE_WORDS = {

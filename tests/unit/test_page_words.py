@@ -156,3 +156,21 @@ def test_a_plugin_the_page_cannot_change_shows_a_locked_switch():
     text = script("panel.js")
     assert "node.disabled = true" in text
     assert "Not changed from here." in text
+
+
+def test_load_map_lede_names_the_project_folder_not_its_path():
+    text = script("map.js")
+    assert "in the project" in text
+    assert "shortPath" not in text
+
+
+def test_changes_rows_open_the_panel_and_keep_paths_off_the_page():
+    text = script("changes.js")
+    assert "openChange" in text
+    assert "change-detail" not in text and "aria-expanded" not in text
+
+
+def test_overview_notes_are_rows_with_a_details_button():
+    text = script("overview.js")
+    assert '"Details"' in text
+    assert "shortPaths" not in text

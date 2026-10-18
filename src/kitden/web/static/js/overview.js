@@ -1,9 +1,10 @@
 // Overview: what needs attention first, then the clients and, without a gateway, how to get one.
 import { getJson, query } from "./api.js";
-import { button, el, plural, shortPaths } from "./dom.js";
+import { button, el, plural } from "./dom.js";
 import { openSelectedOnRender } from "./map.js";
 import { entrance, fly } from "./motion.js";
-import { banner, mark, skeleton, socket } from "./parts.js";
+import { toast } from "./panel.js";
+import { banner, flag, mark, skeleton, socket } from "./parts.js";
 import { data, go, loadMap, loadOverview, projectPath, render } from "./store.js";
 
 let notesOpen = false;
@@ -63,6 +64,15 @@ function follow(target) {
   }
 }
 
+// A note in short words; the full explanation, with its paths, is in the item's panel.
+const NOTE_WORDS = {
+  cross_loaded: "Loaded from another client",
+  same_in_other_clients: "Set up in more than one client",
+  scope_override: "One definition replaces another",
+  unknown_state: "On/off state not readable",
+  bypasses_gateway: "Not connected to the gateway",
+};
+
 function notesBlock(count) {
   const box = el("div");
   const toggle = button(notesOpen ? "Hide notes" : `Show ${plural(count, "note", "notes")} (nothing to fix)`, async () => {
@@ -71,13 +81,13 @@ function notesBlock(count) {
   }, "btn ghost small notes-toggle");
   box.append(toggle);
   if (notesOpen) {
-    const list = el("ul", "notes");
-    list.append(el("li", "muted", "Loading…"));
+    const list = el("div", "list notes");
+    list.append(el("p", "muted", "Loading…"));
     box.append(list);
     getJson(`/api/findings${query({ project: projectPath() })}`).then((findings) => {
       list.replaceChildren();
-      for (const f of findings.filter((x) => x.severity === "info")) list.append(el("li", null, shortPaths(f.explanation)));
-    }).catch(() => { list.replaceChildren(el("li", null, "Could not load the notes.")); });
+      for (const f of findings.filter((x) => x.severity === "info")) list.append(noteRow(f));
+    }).catch(() => { list.replaceChildren(el("p", "muted", "Could not load the notes.")); });
   }
   return box;
 }
@@ -110,6 +120,31 @@ function loadsLine(clientId, tile) {
     }, "btn small ghost"));
   }
   return line;
+}
+
+// One row per note: the client it is about, the item names, what kind of note, Details.
+function noteRow(finding) {
+  const node = el("div", "list-row");
+  const marks = el("span", "chip");
+  if (finding.client) marks.append(mark(finding.client));
+  const what = el("span", "what");
+  const names = [...new Set(finding.names)];
+  const name = el("span", "mono", names.join(", "));
+  name.title = names.join(", ");
+  what.append(name, flag({ text: NOTE_WORDS[finding.type] || finding.type.replaceAll("_", " "), level: "info" }));
+  const actions = el("span", "row-actions");
+  actions.append(button("Details", () => showNote(finding), "btn small ghost"));
+  node.append(marks, what, actions);
+  return node;
+}
+
+// The note is about items on the Load map; open the first one there, in the panel.
+async function showNote(finding) {
+  if (!data.map) await loadMap();
+  const rows = (data.map && data.map.rows) || [];
+  const row = rows.find((r) => Object.values(r.cells).some((cell) => (cell.items || []).some((id) => finding.items.includes(id))));
+  if (row) follow({ view: "map", kind: row.kind, row: row.key });
+  else toast("Could not find this item on the Load map.");
 }
 
 function clientsCard(clients) {

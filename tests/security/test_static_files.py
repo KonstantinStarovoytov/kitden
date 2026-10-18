@@ -1,7 +1,11 @@
 """The page's own files keep the strict CSP and never turn text into HTML (FR-041)."""
 
 import re
+import shutil
+import subprocess
 from pathlib import Path
+
+import pytest
 
 STATIC = Path(__file__).parents[2] / "src/kitden/web/static"
 SCRIPTS = sorted((STATIC / "js").glob("*.js"))
@@ -63,3 +67,15 @@ def test_page_is_named_kitden():
     assert "<title>Kitden</title>" in index and "</span>Kitden</div>" in index
     for path in [INDEX, *SCRIPTS]:
         assert "Agent setup" not in path.read_text(), path.name
+
+
+def test_every_script_parses_as_a_module(tmp_path):
+    # The browser is the only other parser; a merge once left a function unclosed.
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node is not installed")
+    for script in SCRIPTS:
+        copy = tmp_path / f"{script.stem}.mjs"
+        copy.write_text(script.read_text())
+        run = subprocess.run([node, "--check", str(copy)], capture_output=True, text=True)
+        assert run.returncode == 0, f"{script.name}: {run.stderr.strip().splitlines()[-1:]}"
