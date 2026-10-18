@@ -80,18 +80,41 @@ def _cell(column: str, loaded: list[Item], present: list[Item], winners: set[str
     return Cell("none")
 
 
-def _flag_text(finding, item: Item, gateway_registered: bool) -> tuple[str, str] | None:
+# What fixes a duplicate, and the action that does it where the page has one.
+DUPLICATE_FIXES = {
+    ItemKind.PLUGIN: ("Turn one copy off to keep the other.", "plugin.disable"),
+    ItemKind.MCP_SERVER: ("Remove one entry to keep the other.", "mcp.remove_direct"),
+}
+GATEWAY_FIX = "Add it in the gateway, then remove this direct entry."
+
+
+def _warning(text: str, client: str, fix: str, fix_action: str | None) -> dict:
+    return {
+        "text": text,
+        "level": "warning",
+        "client": client,
+        "fix": fix,
+        "fix_action": fix_action,
+    }
+
+
+def _flag(finding, item: Item, gateway_registered: bool) -> dict | None:
+    """A short flag for the row; warnings also carry the fix in words and the action."""
     if finding.type is FindingType.DUPLICATE_IN_CLIENT:
-        return f"{NAMES.get(finding.client, finding.client)} loads it twice", "warning"
+        fix, action = DUPLICATE_FIXES.get(item.kind, ("Remove one copy to keep the other.", None))
+        text = f"{NAMES.get(finding.client, finding.client)} loads it twice"
+        return _warning(text, finding.client, fix, action)
     if finding.type is FindingType.UNKNOWN_STATE:
-        return "State unknown", "info"
+        return {"text": "State unknown", "level": "info"}
     if finding.type is FindingType.BYPASSES_GATEWAY:
         kind = bypass_kind(item)
         if "plugin" in kind:
-            return "From plugin", "info"
+            return {"text": "From plugin", "level": "info"}
         if "local server" in kind:
-            return "Local server", "info"
-        return ("Around gateway", "warning") if gateway_registered else ("Direct", "info")
+            return {"text": "Local server", "level": "info"}
+        if gateway_registered:
+            return _warning("Around gateway", item.client, GATEWAY_FIX, "mcp.remove_direct")
+        return {"text": "Direct", "level": "info"}
     return None
 
 
@@ -147,9 +170,9 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
     for finding in find_findings(inventory, project) + find_bypasses(inventory, project):
         for item_id in finding.items:
             row, item = item_rows.get(item_id), items_by_id.get(item_id)
-            text = _flag_text(finding, item, gateway_registered) if row and item else None
-            if text and {"text": text[0], "level": text[1]} not in row.flags:
-                row.flags.append({"text": text[0], "level": text[1]})
+            flag = _flag(finding, item, gateway_registered) if row and item else None
+            if flag and flag not in row.flags:
+                row.flags.append(flag)
     order = {ItemKind.MCP_SERVER: 0, ItemKind.PLUGIN: 1, ItemKind.SKILL: 2, ItemKind.HOOK: 3}
     return sorted(rows.values(), key=lambda r: (order.get(r.kind, 4), r.name.lower()))
 

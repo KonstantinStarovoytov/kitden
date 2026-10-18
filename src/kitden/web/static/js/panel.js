@@ -134,10 +134,18 @@ function itemHeader(row) {
   return header(KIND_WORDS[row.kind] || row.kind, row.name, lede, "Close", true);
 }
 
-function warningText(text) {
-  if (/loads it twice$/.test(text)) return `${text}. Two copies load; turn one off or remove it.`;
-  if (text === "Around gateway") return "Around gateway: this server is set up directly, not through your gateway.";
-  return text;
+// The warning names the fix; the server sends both (load_map.py).
+function warningText(flag) {
+  return flag.fix ? `${flag.text}. ${flag.fix}` : flag.text;
+}
+
+// The other actions wait behind one button, so the primary one stands alone.
+function moreButton(buttons) {
+  const more = button("More", () => {
+    more.replaceWith(...buttons);
+    buttons[0].focus();
+  }, "btn");
+  return more;
 }
 
 function scopeWords(def) {
@@ -193,7 +201,7 @@ function layer(def) {
 
 function showDetails(row, definitions) {
   const body = el("div", "body");
-  for (const f of row.flags.filter((x) => x.level === "warning")) body.append(callout(warningText(f.text)));
+  for (const f of row.flags.filter((x) => x.level === "warning")) body.append(callout(warningText(f)));
   const byClient = new Map();
   for (const def of definitions) {
     if (!byClient.has(def.client)) byClient.set(def.client, []);
@@ -218,17 +226,26 @@ function showDetails(row, definitions) {
 
   const footer = el("footer");
   const withCommands = definitions.filter((d) => d.kind === "plugin" || d.kind === "marketplace");
-  if (withCommands.length) {
-    footer.append(el("span", "note", "Install, update or move to another client:"));
-    footer.append(button("Commands…", () => showCommands(row, withCommands), "btn"));
-  }
+  const commands = withCommands.length ? [button("Commands…", () => showCommands(row, withCommands), "btn")] : [];
   // Name the scope too when one client has more than one definition that can change.
   const offers = definitions.flatMap((def) => def.actions.filter((a) => ACTION_BUTTONS[a]).map((action) => ({ def, action })));
-  for (const { def, action } of offers) {
+  const buttonFor = ({ def, action }, look) => {
     const twins = offers.filter((o) => o.def.client === def.client).length > 1;
     const where = twins ? ` (${scopeWords(def).toLowerCase()})` : "";
     const label = ACTION_BUTTONS[action](`${clientName(def.client)}${where}`);
-    footer.append(button(label, () => review({ action, targets: [{ item: def.id }], params: {} }), offers.length === 1 ? "btn primary" : "btn"));
+    return button(label, () => review({ action, targets: [{ item: def.id }], params: {} }), look);
+  };
+  // The action that fixes the warning is the primary button; the rest wait under More.
+  const fixes = row.flags.filter((f) => f.level === "warning" && f.fix_action);
+  let primary = offers.find((o) => fixes.some((f) => f.fix_action === o.action && f.client === o.def.client));
+  if (!primary && offers.length === 1) primary = offers[0];
+  const rest = offers.filter((o) => o !== primary).map((o) => buttonFor(o, "btn"));
+  if (primary) {
+    if (rest.length || commands.length) footer.append(moreButton([...rest, ...commands]));
+    footer.append(buttonFor(primary, "btn primary"));
+  } else {
+    if (commands.length) footer.append(el("span", "note", "Install, update or move to another client:"), ...commands);
+    footer.append(...rest);
   }
   swapContent([itemHeader(row), body, footer]);
 }

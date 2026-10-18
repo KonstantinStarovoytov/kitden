@@ -156,7 +156,7 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .flag { flex: none; font-size: 11px; padding: 0 6px; border-radius: 10px; line-height: 18px; background: var(--lamp-warn-soft); color: var(--lamp-warn); font-weight: 500; white-space: nowrap; }
 .flag.info { background: var(--wire-soft); color: var(--ink-3); font-weight: 400; }
 .badge { font-size: 11px; padding: 0 6px; line-height: 18px; border-radius: 4px; border: 1px solid var(--wire); color: var(--ink-2); white-space: nowrap; }
-.badge.win { border-color: var(--route); color: var(--route); }
+.badge.win { border-color: var(--ink-3); color: var(--ink); font-weight: 500; }
 .badge.warn { border-color: var(--lamp-warn); color: var(--lamp-warn); }
 
 /* Entrance used once per place */
@@ -263,7 +263,7 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .stack { display: grid; border: 1px solid var(--wire); border-radius: 8px; overflow: hidden; }
 .layer { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 10px; padding: 9px 12px; border-top: 1px solid var(--wire-soft); align-items: start; }
 .layer:first-child { border-top: 0; }
-.layer.wins { background: var(--route-soft); }
+.layer.wins { background: var(--wire-soft); }
 .layer .name { overflow-wrap: anywhere; }
 .layer .why { color: var(--ink-3); font-size: 12px; overflow-wrap: anywhere; }
 .drawer section { display: grid; gap: 8px; min-width: 0; }

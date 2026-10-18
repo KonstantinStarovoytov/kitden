@@ -57,7 +57,21 @@ def test_cursor_loading_a_plugin_twice_is_one_cell_with_count_2(home):
     row = rows_by(load_map(build_inventory(home), None), "plugin", "superpowers")
     assert row.cells["cursor"].count == 2
     assert row.cells["cursor"].where == "everywhere"  # Cursor's own copy comes first
-    assert {"text": "Cursor loads it twice", "level": "warning"} in row.flags
+    assert {
+        "text": "Cursor loads it twice",
+        "level": "warning",
+        "client": "cursor",
+        "fix": "Turn one copy off to keep the other.",
+        "fix_action": "plugin.disable",
+    } in row.flags
+
+
+def test_a_duplicate_skill_names_the_fix_without_an_action(home):
+    row = rows_by(load_map(build_inventory(home), None), "skill", "docker-expert")
+    flag = next(f for f in row.flags if f["client"] == "codex")
+    assert flag["text"] == "Codex loads it twice"
+    assert flag["fix"] == "Remove one copy to keep the other."
+    assert flag["fix_action"] is None
 
 
 def test_cross_loaded_cells_say_via_which_client(home):
@@ -71,9 +85,13 @@ def test_gateway_entries_are_state_gw(home):
     mark_gateways(inventory, [Gateway(url="https://mcp.neon.tech/mcp")])
     rows = load_map(inventory, None, gateway_registered=True)
     assert rows_by(rows, "mcp_server", "Neon").cells["cursor"].state == "gw"
-    assert {"text": "Around gateway", "level": "warning"} in rows_by(
-        rows, "mcp_server", "langfuse-data"
-    ).flags
+    assert {
+        "text": "Around gateway",
+        "level": "warning",
+        "client": "codex",
+        "fix": "Add it in the gateway, then remove this direct entry.",
+        "fix_action": "mcp.remove_direct",
+    } in rows_by(rows, "mcp_server", "langfuse-data").flags
 
 
 def test_direct_entries_are_only_info_without_a_gateway(home):
