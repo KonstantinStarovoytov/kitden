@@ -1,6 +1,6 @@
 // Load map: items in rows, Claude Code, Codex and Cursor in columns.
 import { button, el, shortPath } from "./dom.js";
-import { animate, entrance, EASE_IN_OUT, land } from "./motion.js";
+import { entrance, glide, land } from "./motion.js";
 import { banner, flag, mark, morphSocket, skeleton, socket } from "./parts.js";
 import { data, go, loadMap, projectPath, render, setState, state } from "./store.js";
 
@@ -21,8 +21,6 @@ export function onOpenItem(fn) { opener = fn; }
 // Another place (the Overview) asks for the selected row to open in the panel once drawn.
 let openNext = false;
 export function openSelectedOnRender() { openNext = true; }
-
-let inkFrom = null;
 
 const cellKey = (cell) => `${cell.state}|${cell.where || ""}`;
 
@@ -58,7 +56,9 @@ export function renderMap(main) {
     const first = KINDS.find(([kind]) => counts[kind]);
     if (first) setState({ kind: first[0] });
   }
-  main.append(tabs(counts));
+  const tabBox = tabs(counts);
+  main.append(tabBox);
+  glide(tabBox, tabBox.querySelector('[aria-selected="true"]'), "map-tabs");
 
   const bar = el("div", "toolbar");
   const seg = el("div", "seg");
@@ -71,6 +71,7 @@ export function renderMap(main) {
   }
   bar.append(seg);
   main.append(bar);
+  glide(seg, seg.querySelector('[aria-pressed="true"]'), "map-filter");
 
   const rows = found.filter((r) => r.kind === state.kind).filter(passesFilter);
   const wantOpen = openNext;
@@ -111,21 +112,7 @@ function tabs(counts) {
     tab.append(el("span", "count", String(counts[kind])));
     box.append(tab);
   }
-  const ink = el("span", "tab-ink");
-  ink.setAttribute("aria-hidden", "true");
-  box.append(ink);
-  requestAnimationFrame(() => placeInk(box, ink));
   return box;
-}
-
-// One underline glides from the previous tab to the new one.
-function placeInk(box, ink) {
-  const active = box.querySelector('[aria-selected="true"]');
-  if (!active) return;
-  const to = `translateX(${active.offsetLeft}px) scaleX(${active.offsetWidth})`;
-  ink.style.transform = to;
-  if (inkFrom && inkFrom !== to) animate(ink, [{ transform: inkFrom }, { transform: to }], { duration: 260, easing: EASE_IN_OUT });
-  inkFrom = to;
 }
 
 function buildTable(columns, rows) {

@@ -1,7 +1,7 @@
 // Gateway: which clients reach it, and which servers are not connected to it.
 import { postJson } from "./api.js";
 import { button, el, plural, webLink } from "./dom.js";
-import { entrance } from "./motion.js";
+import { entrance, fold } from "./motion.js";
 import { openItem, review, toast } from "./panel.js";
 import { banner, CLIENT_ICONS, CLIENT_NAMES, DARK_ICONS, flag, mark, skeleton } from "./parts.js";
 import { data, loadGateway, loadMap, reload, render } from "./store.js";
@@ -85,7 +85,7 @@ export function renderGateway(main) {
   more.open = draft.addOpen;
   more.addEventListener("toggle", () => { draft.addOpen = more.open; });
   more.append(el("summary", null, "Add another gateway"), addForm());
-  main.append(more);
+  main.append(fold(more));
   entrance("gateway", blocks);
 }
 
@@ -111,7 +111,7 @@ function gatewayCard(gateway, model) {
     box.open = draft.connectOpen === null ? true : draft.connectOpen;
     box.addEventListener("toggle", () => { draft.connectOpen = box.open; });
     box.append(el("summary", null, "Connect clients"), connectForm(model.gateways, waiting));
-    card.append(box);
+    card.append(fold(box));
   }
   return card;
 }

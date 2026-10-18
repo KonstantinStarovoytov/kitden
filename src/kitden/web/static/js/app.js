@@ -1,7 +1,7 @@
 // Entry point: the shell (rail, top bar), routing, theme, rescan and live updates.
 import { postJson } from "./api.js";
 import { $, $$, reportError } from "./dom.js";
-import { rollTo, transition } from "./motion.js";
+import { glide, rollTo, transition } from "./motion.js";
 import { renderAgents } from "./agents.js";
 import { renderChanges } from "./changes.js";
 import { renderGateway } from "./gateway.js";
@@ -43,6 +43,7 @@ function renderPlace() {
     if (link.dataset.view === state.view) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
   }
+  glide($(".nav"), $('.nav a[aria-current="page"]'), "nav");
   renderShell();
 }
 

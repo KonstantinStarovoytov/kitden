@@ -91,12 +91,15 @@ a { color: var(--route); }
 .rail { border-right: 1px solid var(--wire); padding: 14px 10px; display: flex; flex-direction: column; gap: 2px; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 8px 8px 22px; font-size: 20px; font-weight: 650; letter-spacing: -0.01em; }
 .brand-mark { width: 30px; height: 30px; flex: none; background: url("/static/brand/kitden.svg") center / contain no-repeat; }
-.nav a { display: flex; align-items: center; justify-content: space-between; height: 30px; padding: 0 8px; border-radius: 6px; color: var(--ink-2); text-decoration: none; transition: background-color var(--t-fast) ease, color var(--t-fast) ease, transform 260ms var(--spring); }
+.nav { position: relative; }
+.nav a { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; height: 30px; padding: 0 8px; border-radius: 6px; color: var(--ink-2); text-decoration: none; transition: background-color var(--t-fast) ease, color var(--t-fast) ease, transform 260ms var(--spring); }
 .nav a:hover { background: var(--wire-soft); color: var(--ink); }
 .nav a:active { transform: scale(0.98); transition-duration: var(--t-fast), var(--t-fast), 80ms; }
-.nav a[aria-current="page"] { background: var(--route-soft); color: var(--route); box-shadow: inset 3px 0 var(--brand); font-weight: 600; }
+.nav a[aria-current="page"] { color: var(--route); font-weight: 600; }
+.nav a[aria-current="page"]:hover { background: transparent; }
 /* One mark slides between the choices of a group (rail, tabs, filters); the choice itself is instant. */
 .ink { position: absolute; left: 0; top: 0; z-index: 0; border-radius: 6px; background: var(--route-soft); pointer-events: none; opacity: 0; transition: opacity var(--t-fast) ease; }
+.nav .ink { box-shadow: inset 3px 0 var(--brand); }
 .count { font-size: 11px; color: var(--ink-3); }
 .count.warn { color: var(--lamp-warn); font-weight: 600; }
 .rail-foot { margin-top: auto; padding: 8px; display: grid; gap: 8px; color: var(--ink-3); font-size: 12px; }
@@ -141,11 +144,12 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .where-box select { border: 0; background: transparent; color: var(--ink); max-width: 300px; height: 26px; cursor: pointer; text-overflow: ellipsis; }
 .where-box { transition: background-color var(--t-fast) ease, border-color var(--t-fast) ease; }
 .where-box:hover { border-color: var(--wire-strong); }
-.seg { display: inline-flex; padding: 2px; background: var(--inset); border-radius: 7px; border: 1px solid var(--wire-soft); }
-.seg button { height: 24px; padding: 0 10px; border: 0; background: transparent; border-radius: 5px; color: var(--ink-2); cursor: pointer; transition: color var(--t-fast) ease, transform 260ms var(--spring); }
+.seg { position: relative; display: inline-flex; padding: 2px; background: var(--inset); border-radius: 7px; border: 1px solid var(--wire-soft); }
+.seg button { position: relative; z-index: 1; height: 24px; padding: 0 10px; border: 0; background: transparent; border-radius: 5px; color: var(--ink-2); cursor: pointer; transition: color var(--t-fast) ease, transform 260ms var(--spring); }
 .seg button:hover { color: var(--ink); }
 .seg button:active { transform: scale(0.96); transition-duration: var(--t-fast), 80ms; }
-.seg button[aria-pressed="true"] { background: var(--route-soft); color: var(--route); box-shadow: 0 0 0 1px var(--wire); font-weight: 600; }
+.seg button[aria-pressed="true"] { color: var(--route); font-weight: 600; }
+.seg .ink { border-radius: 5px; box-shadow: 0 0 0 1px var(--wire); }
 .field { display: grid; gap: 4px; }
 .field > span { color: var(--ink-3); font-size: 12px; }
 .field input, .field select { height: 30px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--wire-strong); background: var(--inset); color: var(--ink); min-width: 0; transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease; }
@@ -265,13 +269,13 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 /* Load map */
 .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
 .tabs { position: relative; display: flex; gap: 2px; border-bottom: 1px solid var(--wire); margin-bottom: 12px; overflow-x: auto; }
-.tabs button { border: 0; background: transparent; padding: 8px 10px; border-radius: 6px 6px 0 0; color: var(--ink-3); cursor: pointer; white-space: nowrap; transition: color var(--t-fast) ease, background-color var(--t-fast) ease, transform 260ms var(--spring); }
+.tabs button { position: relative; z-index: 1; border: 0; background: transparent; padding: 8px 10px; border-radius: 6px 6px 0 0; color: var(--ink-3); cursor: pointer; white-space: nowrap; transition: color var(--t-fast) ease, background-color var(--t-fast) ease, transform 260ms var(--spring); }
 .tabs button:hover { color: var(--ink); background: var(--wire-soft); }
 .tabs button:active { transform: scale(0.97); transition-duration: var(--t-fast), var(--t-fast), 80ms; }
 .tabs button[aria-selected="true"] { color: var(--route); font-weight: 600; }
 .tabs button[aria-selected="true"]:hover { background: transparent; }
 .tabs .count { margin-left: 4px; }
-.tab-ink { position: absolute; left: 0; bottom: 0; height: 2px; width: 1px; background: var(--brand); transform-origin: left; }
+.tabs .ink { top: auto; bottom: 0; height: 2px !important; border-radius: 0; background: var(--brand); box-shadow: none; }
 table.map { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--panel); border: 1px solid var(--wire); border-radius: 8px; table-layout: fixed; }
 .map th { text-align: left; font-weight: 500; color: var(--ink-3); font-size: 12px; padding: 0 12px; height: 34px; border-bottom: 1px solid var(--wire); background: var(--panel); position: sticky; top: 51px; z-index: 1; }
 .map th:first-child { border-top-left-radius: 8px; } .map th:last-child { border-top-right-radius: 8px; }
@@ -405,6 +409,7 @@ details.file-change[open] pre.diff .line { animation: line-in 260ms var(--ease-o
 .change-detail p { margin: 0; }
 details.connect, details.add-more { margin-top: 12px; }
 details.connect > summary, details.add-more > summary { cursor: pointer; color: var(--ink-2); font-weight: 500; }
+details.connect .fold > .fold-in, details.add-more .fold > .fold-in { display: block; }
 
 /* Page changes and the theme switch (View Transitions, where supported) */
 ::view-transition-group(*) { animation-duration: 340ms; animation-timing-function: var(--ease-drawer); }

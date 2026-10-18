@@ -120,3 +120,10 @@ def test_apply_turns_green_only_after_verified_and_only_ok_toasts_get_a_check():
     assert text.count("{ ok: true }") == 2
     assert "Undone. The previous settings are back." in text
     assert 'toast("Undo stopped' in text  # a stopped undo gets no check
+
+
+def test_one_mark_slides_between_the_choices_of_a_group():
+    assert 'glide($(".nav")' in script("app.js")
+    text = script("map.js")
+    assert '"map-tabs"' in text and '"map-filter"' in text
+    assert "tab-ink" not in CSS and "tab-ink" not in text
