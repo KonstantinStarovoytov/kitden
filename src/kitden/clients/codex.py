@@ -12,8 +12,8 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from agentsetup.changes.json_splice import ABSENT
-from agentsetup.clients.base import (
+from kitden.changes.json_splice import ABSENT
+from kitden.clients.base import (
     REMOVE_DIRECT,
     SETUP_NAME,
     ClientAdapter,
@@ -27,8 +27,8 @@ from agentsetup.clients.base import (
     skill_items,
     toggle_action,
 )
-from agentsetup.clients.versions import version_command
-from agentsetup.model import (
+from kitden.clients.versions import version_command
+from kitden.model import (
     Enabled,
     FileEdit,
     Gateway,

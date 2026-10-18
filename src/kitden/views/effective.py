@@ -8,7 +8,7 @@ not load, and parts of a Claude Code plugin load only when that plugin loads.
 from dataclasses import dataclass, field
 from pathlib import PurePath
 
-from agentsetup.model import Enabled, Item, ItemKind, Scope
+from kitden.model import Enabled, Item, ItemKind, Scope
 
 DESKTOP = "claude_desktop_code_tab"
 DESKTOP_RANK = 99  # claude_desktop_config.json wins on a name clash

@@ -3,8 +3,8 @@ import time
 
 from starlette.testclient import TestClient
 
-from agentsetup.views.inventory import Inventory
-from agentsetup.web.app import Broadcaster, State, create_app, event_lines
+from kitden.views.inventory import Inventory
+from kitden.web.app import Broadcaster, State, create_app, event_lines
 
 ORIGIN = "http://127.0.0.1:47800"
 

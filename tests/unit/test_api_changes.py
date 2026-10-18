@@ -5,11 +5,11 @@ import json
 import pytest
 from starlette.testclient import TestClient
 
-import agentsetup.clients.base as base
-from agentsetup.changes import json_splice
-from agentsetup.changes.client_cli import CommandResult
-from agentsetup.views.inventory import build_inventory
-from agentsetup.web.app import create_app
+import kitden.clients.base as base
+from kitden.changes import json_splice
+from kitden.changes.client_cli import CommandResult
+from kitden.views.inventory import build_inventory
+from kitden.web.app import create_app
 from tests.conftest import make_home, write_cursor_fixture_state
 
 ORIGIN = "http://127.0.0.1:47800"

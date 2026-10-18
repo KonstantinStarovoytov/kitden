@@ -8,8 +8,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from agentsetup.changes.json_splice import ABSENT
-from agentsetup.clients.base import (
+from kitden.changes.json_splice import ABSENT
+from kitden.clients.base import (
     REMOVE_DIRECT,
     SETUP_NAME,
     ClientAdapter,
@@ -24,8 +24,8 @@ from agentsetup.clients.base import (
     skill_items,
     toggle_action,
 )
-from agentsetup.clients.versions import highest_version, is_supported
-from agentsetup.model import (
+from kitden.clients.versions import highest_version, is_supported
+from kitden.model import (
     Client,
     ClientStatus,
     Enabled,

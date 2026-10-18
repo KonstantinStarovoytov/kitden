@@ -2,11 +2,11 @@
 
 import pytest
 
-import agentsetup.clients.base as base
-from agentsetup.model import Gateway
-from agentsetup.views.findings import mark_gateways
-from agentsetup.views.gateway_view import gateway_view
-from agentsetup.views.inventory import build_inventory
+import kitden.clients.base as base
+from kitden.model import Gateway
+from kitden.views.findings import mark_gateways
+from kitden.views.gateway_view import gateway_view
+from kitden.views.inventory import build_inventory
 from tests.conftest import make_home, write_cursor_fixture_state
 
 

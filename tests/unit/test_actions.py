@@ -4,11 +4,11 @@ import json
 
 import pytest
 
-import agentsetup.clients.base as base
-from agentsetup.changes.actions import connect_steps, remove_steps
-from agentsetup.changes.json_splice import ABSENT
-from agentsetup.model import Gateway, GatewayAuth
-from agentsetup.views.inventory import build_inventory, default_adapters
+import kitden.clients.base as base
+from kitden.changes.actions import connect_steps, remove_steps
+from kitden.changes.json_splice import ABSENT
+from kitden.model import Gateway, GatewayAuth
+from kitden.views.inventory import build_inventory, default_adapters
 from tests.conftest import make_home, write_cursor_fixture_state
 
 URL = "http://127.0.0.1:12008/metamcp/dev/mcp"

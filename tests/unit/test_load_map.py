@@ -2,8 +2,8 @@
 
 import pytest
 
-import agentsetup.clients.base as base
-from agentsetup.model import (
+import kitden.clients.base as base
+from kitden.model import (
     Client,
     ClientStatus,
     Gateway,
@@ -13,9 +13,9 @@ from agentsetup.model import (
     Source,
     SourceKind,
 )
-from agentsetup.views.findings import mark_gateways
-from agentsetup.views.inventory import Inventory, build_inventory
-from agentsetup.views.load_map import COLUMNS, load_map, map_dict
+from kitden.views.findings import mark_gateways
+from kitden.views.inventory import Inventory, build_inventory
+from kitden.views.load_map import COLUMNS, load_map, map_dict
 from tests.conftest import make_home, write_cursor_fixture_state
 
 EVIL = '<img src=x onerror="alert(1)">'

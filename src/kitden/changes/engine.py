@@ -21,13 +21,13 @@ from typing import Any
 
 import tomlkit
 
-from agentsetup.changes import json_splice, toml_edit
-from agentsetup.changes.atomic import RefusedWriteError, write_atomic
-from agentsetup.changes.backup import ChangeStore
-from agentsetup.changes.client_cli import CommandResult
-from agentsetup.changes.json_splice import ABSENT, UnrecognizedFormatError
-from agentsetup.model import Change, ChangeState, FileEdit, Scope, Step
-from agentsetup.redact import redact
+from kitden.changes import json_splice, toml_edit
+from kitden.changes.atomic import RefusedWriteError, write_atomic
+from kitden.changes.backup import ChangeStore
+from kitden.changes.client_cli import CommandResult
+from kitden.changes.json_splice import ABSENT, UnrecognizedFormatError
+from kitden.model import Change, ChangeState, FileEdit, Scope, Step
+from kitden.redact import redact
 
 EDITORS = {"json": json_splice, "toml": toml_edit}
 CLIENT_CLI = "client_cli"

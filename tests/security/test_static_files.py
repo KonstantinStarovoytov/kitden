@@ -3,7 +3,7 @@
 import re
 from pathlib import Path
 
-STATIC = Path(__file__).parents[2] / "src/agentsetup/web/static"
+STATIC = Path(__file__).parents[2] / "src/kitden/web/static"
 SCRIPTS = sorted((STATIC / "js").glob("*.js"))
 INDEX = STATIC / "index.html"
 SVG_NS = "http://www.w3.org/2000/svg"

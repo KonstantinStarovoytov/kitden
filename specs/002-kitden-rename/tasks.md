@@ -13,7 +13,7 @@ Format: `[ID] [P?] [Story] Description`. `[P]` = can run in parallel (different 
 **Goal**: one name for the package, command, page and MCP server.
 **Independent test**: `kitden --version`, page title, MCP entry name in a sandbox client.
 
-- [ ] T001 [US1] Move `src/agentsetup` to `src/kitden` with `git mv`; update imports, `pyproject.toml`
+- [X] T001 [US1] Move `src/agentsetup` to `src/kitden` with `git mv`; update imports, `pyproject.toml`
   (name `kitden`, script `kitden`, version 0.2.0) and `uv.lock`. The whole suite stays green.
 - [ ] T002 [US1] Tests first in `tests/unit/test_cli.py`, `tests/unit/test_mcp_server.py`,
   `tests/unit/test_setup_server.py`: `--version` prints `kitden 0.2.0`; MCP server name `kitden`;

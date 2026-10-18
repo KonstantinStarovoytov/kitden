@@ -12,8 +12,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from agentsetup.clients.versions import is_supported, parse_version, version_command
-from agentsetup.model import (
+from kitden.clients.versions import is_supported, parse_version, version_command
+from kitden.model import (
     Client,
     ClientStatus,
     Enabled,
@@ -29,7 +29,7 @@ from agentsetup.model import (
     Step,
     UnknownReason,
 )
-from agentsetup.redact import redact
+from kitden.redact import redact
 
 # MCP entry fields shown on the page (after redaction). Everything else stays hidden.
 _SUMMARY_FIELDS = ("type", "transport", "command", "args", "url")

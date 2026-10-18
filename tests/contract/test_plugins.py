@@ -9,14 +9,14 @@ import subprocess
 
 import pytest
 
-import agentsetup.clients.base as base
-from agentsetup.changes.actions import plugin_steps
-from agentsetup.changes.backup import ChangeStore
-from agentsetup.changes.client_cli import CommandRunner, find_command
-from agentsetup.changes.engine import Engine
-from agentsetup.changes.toml_edit import get_value
-from agentsetup.model import ChangeState
-from agentsetup.views.inventory import build_inventory, default_adapters
+import kitden.clients.base as base
+from kitden.changes.actions import plugin_steps
+from kitden.changes.backup import ChangeStore
+from kitden.changes.client_cli import CommandRunner, find_command
+from kitden.changes.engine import Engine
+from kitden.changes.toml_edit import get_value
+from kitden.model import ChangeState
+from kitden.views.inventory import build_inventory, default_adapters
 from tests.conftest import make_home
 
 pytestmark = pytest.mark.contract

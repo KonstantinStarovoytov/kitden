@@ -6,7 +6,7 @@ import subprocess  # noqa: S404 - runs fixed client commands without a shell
 from dataclasses import dataclass
 from pathlib import Path
 
-from agentsetup.redact import redact_text
+from kitden.redact import redact_text
 
 TIMEOUT_SECONDS = 60.0
 

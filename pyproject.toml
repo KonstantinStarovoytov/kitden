@@ -1,5 +1,5 @@
 [project]
-name = "agentsetup"
+name = "kitden"
 version = "0.1.0"
 description = "See and safely change what AI coding clients load on this computer."
 readme = "README.md"
@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.scripts]
-agentsetup = "agentsetup.cli:main"
+agentsetup = "kitden.cli:main"
 
 [dependency-groups]
 dev = [
@@ -29,7 +29,7 @@ requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/agentsetup"]
+packages = ["src/kitden"]
 
 [tool.ruff]
 line-length = 100

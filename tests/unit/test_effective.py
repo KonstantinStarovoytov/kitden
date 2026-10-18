@@ -1,9 +1,9 @@
 import pytest
 
-import agentsetup.clients.base as base
-from agentsetup.model import Enabled, Item, ItemKind, Scope, Source, SourceKind
-from agentsetup.views.effective import effective_view
-from agentsetup.views.inventory import Inventory, build_inventory
+import kitden.clients.base as base
+from kitden.model import Enabled, Item, ItemKind, Scope, Source, SourceKind
+from kitden.views.effective import effective_view
+from kitden.views.inventory import Inventory, build_inventory
 from tests.conftest import make_home, write_cursor_fixture_state
 
 

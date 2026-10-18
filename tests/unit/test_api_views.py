@@ -3,9 +3,9 @@
 import pytest
 from starlette.testclient import TestClient
 
-import agentsetup.clients.base as base
-from agentsetup.views.inventory import build_inventory
-from agentsetup.web.app import create_app
+import kitden.clients.base as base
+from kitden.views.inventory import build_inventory
+from kitden.web.app import create_app
 from tests.conftest import make_home, write_cursor_fixture_state
 
 ORIGIN = "http://127.0.0.1:47800"

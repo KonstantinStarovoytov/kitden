@@ -2,9 +2,9 @@
 
 import pytest
 
-import agentsetup.clients.base as base
-from agentsetup.views.explain import explain
-from agentsetup.views.inventory import build_inventory
+import kitden.clients.base as base
+from kitden.views.explain import explain
+from kitden.views.inventory import build_inventory
 from tests.conftest import make_home, write_cursor_fixture_state
 
 

@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from agentsetup.redact import redact, redact_text
+from kitden.redact import redact, redact_text
 
 KEEP_DAYS = 30
 KEEP_COUNT = 100

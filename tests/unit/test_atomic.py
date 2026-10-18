@@ -3,7 +3,7 @@ import stat
 
 import pytest
 
-from agentsetup.changes.atomic import RefusedWriteError, write_atomic
+from kitden.changes.atomic import RefusedWriteError, write_atomic
 
 
 def _mode(path):

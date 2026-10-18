@@ -12,31 +12,31 @@ from starlette.responses import FileResponse, JSONResponse, StreamingResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
-from agentsetup.changes.actions import (
+from kitden.changes.actions import (
     GATEWAY_CONNECT,
     connect_steps,
     plugin_steps,
     remove_steps,
     setup_server_steps,
 )
-from agentsetup.changes.backup import ChangeStore
-from agentsetup.changes.client_cli import CommandRunner
-from agentsetup.changes.engine import ChangeRefusedError, Engine, Runner
-from agentsetup.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, REMOVE_DIRECT, SETUP_SERVER
-from agentsetup.gateways import add_gateway, data_dir, load_gateways
-from agentsetup.mcp_server import installed_command
-from agentsetup.model import Change, ChangeState, Gateway, GatewayAuth
-from agentsetup.redact import redact_text
-from agentsetup.views.commands import commands_for
-from agentsetup.views.effective import project_views
-from agentsetup.views.explain import explain
-from agentsetup.views.findings import find_bypasses, find_findings, finding_dict, mark_gateways
-from agentsetup.views.gateway_view import gateway_dict, gateway_view
-from agentsetup.views.inventory import Inventory, default_adapters, inventory_dict, item_dict
-from agentsetup.views.load_map import load_map, map_dict
-from agentsetup.views.overview import overview
-from agentsetup.watch import Watcher
-from agentsetup.web.security import SecurityMiddleware
+from kitden.changes.backup import ChangeStore
+from kitden.changes.client_cli import CommandRunner
+from kitden.changes.engine import ChangeRefusedError, Engine, Runner
+from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, REMOVE_DIRECT, SETUP_SERVER
+from kitden.gateways import add_gateway, data_dir, load_gateways
+from kitden.mcp_server import installed_command
+from kitden.model import Change, ChangeState, Gateway, GatewayAuth
+from kitden.redact import redact_text
+from kitden.views.commands import commands_for
+from kitden.views.effective import project_views
+from kitden.views.explain import explain
+from kitden.views.findings import find_bypasses, find_findings, finding_dict, mark_gateways
+from kitden.views.gateway_view import gateway_dict, gateway_view
+from kitden.views.inventory import Inventory, default_adapters, inventory_dict, item_dict
+from kitden.views.load_map import load_map, map_dict
+from kitden.views.overview import overview
+from kitden.watch import Watcher
+from kitden.web.security import SecurityMiddleware
 
 STATIC = Path(__file__).parent / "static"
 HEARTBEAT_SECONDS = 15

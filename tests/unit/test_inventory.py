@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from agentsetup.clients.base import ClientAdapter, Scan
-from agentsetup.model import (
+from kitden.clients.base import ClientAdapter, Scan
+from kitden.model import (
     ClientStatus,
     Item,
     ItemKind,
@@ -10,7 +10,7 @@ from agentsetup.model import (
     Source,
     SourceKind,
 )
-from agentsetup.views.inventory import build_inventory
+from kitden.views.inventory import build_inventory
 
 
 def _item(client, name):

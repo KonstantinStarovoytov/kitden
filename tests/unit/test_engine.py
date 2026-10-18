@@ -6,12 +6,12 @@ import stat
 
 import pytest
 
-from agentsetup.changes import json_splice, toml_edit
-from agentsetup.changes.backup import ChangeStore
-from agentsetup.changes.client_cli import CommandResult
-from agentsetup.changes.engine import ChangeRefusedError, Engine
-from agentsetup.changes.json_splice import ABSENT
-from agentsetup.model import ChangeState, FileEdit, Scope, Step
+from kitden.changes import json_splice, toml_edit
+from kitden.changes.backup import ChangeStore
+from kitden.changes.client_cli import CommandResult
+from kitden.changes.engine import ChangeRefusedError, Engine
+from kitden.changes.json_splice import ABSENT
+from kitden.model import ChangeState, FileEdit, Scope, Step
 
 CONFIG = """# my Codex settings
 model = "gpt-5"  # keep this comment

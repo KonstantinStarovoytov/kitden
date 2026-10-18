@@ -1,5 +1,5 @@
-from agentsetup.clients.codex import CodexAdapter
-from agentsetup.model import UnknownReason
+from kitden.clients.codex import CodexAdapter
+from kitden.model import UnknownReason
 from tests.conftest import all_text, make_home, rows
 
 FIXTURE = "codex/0.159.2"

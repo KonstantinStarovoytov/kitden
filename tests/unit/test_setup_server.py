@@ -4,9 +4,9 @@ import json
 
 import pytest
 
-import agentsetup.clients.base as base
-from agentsetup.changes.actions import setup_server_steps
-from agentsetup.views.inventory import default_adapters
+import kitden.clients.base as base
+from kitden.changes.actions import setup_server_steps
+from kitden.views.inventory import default_adapters
 from tests.conftest import make_home
 
 COMMAND = "/Users/me/.local/bin/agentsetup"

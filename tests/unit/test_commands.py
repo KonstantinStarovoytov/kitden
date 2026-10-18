@@ -2,9 +2,9 @@
 
 import pytest
 
-import agentsetup.clients.base as base
-from agentsetup.views.commands import commands_for
-from agentsetup.views.inventory import build_inventory, default_adapters
+import kitden.clients.base as base
+from kitden.views.commands import commands_for
+from kitden.views.inventory import build_inventory, default_adapters
 from tests.conftest import make_home, write_cursor_fixture_state
 
 
@@ -82,7 +82,7 @@ def test_items_that_are_not_plugins_or_marketplaces_have_no_commands(setup):
 
 
 def test_git_sources_with_credentials_are_hidden(setup, tmp_path):
-    from agentsetup.views.commands import marketplace_add
+    from kitden.views.commands import marketplace_add
 
     command = marketplace_add(
         "codex", "https://user:ghp_a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6@github.com/a/b.git"

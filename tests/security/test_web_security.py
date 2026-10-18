@@ -1,8 +1,8 @@
 import pytest
 from starlette.testclient import TestClient
 
-from agentsetup.views.inventory import Inventory
-from agentsetup.web.app import create_app
+from kitden.views.inventory import Inventory
+from kitden.web.app import create_app
 
 PORT = 47800
 ORIGIN = f"http://127.0.0.1:{PORT}"

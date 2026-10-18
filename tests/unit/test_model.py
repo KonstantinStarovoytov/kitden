@@ -1,6 +1,6 @@
 import pytest
 
-from agentsetup.model import (
+from kitden.model import (
     Change,
     ChangeState,
     Finding,

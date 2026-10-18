@@ -9,7 +9,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import replace
 
-from agentsetup.model import (
+from kitden.model import (
     ClientStatus,
     Enabled,
     Finding,
@@ -22,7 +22,7 @@ from agentsetup.model import (
     SourceKind,
     normalize_url,
 )
-from agentsetup.views.effective import DESKTOP, effective_view
+from kitden.views.effective import DESKTOP, effective_view
 
 # Kinds where two copies are a problem. Hooks all run by design; marketplaces are just sources.
 DUPLICATE_KINDS = {ItemKind.MCP_SERVER, ItemKind.SKILL, ItemKind.PLUGIN}

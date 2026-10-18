@@ -1,8 +1,8 @@
 import re
 import socket
 
-import agentsetup.cli as cli
-from agentsetup.cli import main, pick_port
+import kitden.cli as cli
+from kitden.cli import main, pick_port
 
 
 def test_version_prints_name_and_version_and_exits_zero(capsys):
@@ -66,7 +66,7 @@ def test_start_link_is_visible_to_a_program_reading_the_output(tmp_path):
     import sys
 
     process = subprocess.Popen(
-        [sys.executable, "-m", "agentsetup.cli", "--no-browser", "--home", str(tmp_path)],
+        [sys.executable, "-m", "kitden.cli", "--no-browser", "--home", str(tmp_path)],
         stdout=subprocess.PIPE,
         text=True,
     )
@@ -79,7 +79,7 @@ def test_start_link_is_visible_to_a_program_reading_the_output(tmp_path):
 
 
 def test_mcp_command_serves_the_read_only_server(monkeypatch, tmp_path):
-    import agentsetup.mcp_server as mcp_server
+    import kitden.mcp_server as mcp_server
 
     started = []
     monkeypatch.setattr(mcp_server, "run", lambda home=None: started.append(home))
@@ -88,7 +88,7 @@ def test_mcp_command_serves_the_read_only_server(monkeypatch, tmp_path):
 
 
 def test_installed_command_is_an_absolute_path():
-    from agentsetup.mcp_server import installed_command
+    from kitden.mcp_server import installed_command
 
     command = installed_command()
     assert command is not None and command.startswith("/")

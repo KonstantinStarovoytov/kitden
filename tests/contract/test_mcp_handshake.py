@@ -12,14 +12,14 @@ import subprocess
 import pytest
 from mcp import Client, StdioServerParameters
 
-import agentsetup.clients.base as base
-from agentsetup.changes.actions import setup_server_steps
-from agentsetup.changes.backup import ChangeStore
-from agentsetup.changes.client_cli import CommandRunner, find_command
-from agentsetup.changes.engine import Engine
-from agentsetup.mcp_server import installed_command
-from agentsetup.model import ChangeState
-from agentsetup.views.inventory import default_adapters
+import kitden.clients.base as base
+from kitden.changes.actions import setup_server_steps
+from kitden.changes.backup import ChangeStore
+from kitden.changes.client_cli import CommandRunner, find_command
+from kitden.changes.engine import Engine
+from kitden.mcp_server import installed_command
+from kitden.model import ChangeState
+from kitden.views.inventory import default_adapters
 from tests.conftest import make_home
 
 pytestmark = [pytest.mark.contract, pytest.mark.anyio]

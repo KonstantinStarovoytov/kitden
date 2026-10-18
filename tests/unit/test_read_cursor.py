@@ -1,5 +1,5 @@
-from agentsetup.clients.cursor import INSTALLED_PREFIX, REACTIVE_KEY, CursorAdapter
-from agentsetup.model import SourceKind, UnknownReason
+from kitden.clients.cursor import INSTALLED_PREFIX, REACTIVE_KEY, CursorAdapter
+from kitden.model import SourceKind, UnknownReason
 from tests.conftest import (
     CURSOR_DB,
     all_text,

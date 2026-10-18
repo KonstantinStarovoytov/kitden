@@ -14,12 +14,12 @@ import pytest
 from mcp import Client
 from starlette.testclient import TestClient
 
-import agentsetup.cli as cli
-import agentsetup.clients.base as base
-from agentsetup.gateways import data_dir
-from agentsetup.mcp_server import create_server
-from agentsetup.views.inventory import build_inventory
-from agentsetup.web.app import create_app
+import kitden.cli as cli
+import kitden.clients.base as base
+from kitden.gateways import data_dir
+from kitden.mcp_server import create_server
+from kitden.views.inventory import build_inventory
+from kitden.web.app import create_app
 from tests.conftest import make_home, write_cursor_fixture_state
 from tests.unit.test_api_changes import FakeClaude
 

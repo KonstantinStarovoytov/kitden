@@ -3,11 +3,11 @@
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from agentsetup.clients.versions import MINIMUM_VERSIONS
-from agentsetup.model import FindingType, Gateway, Severity, UnknownReason, _hash
-from agentsetup.views.findings import base_name, find_bypasses, find_findings
-from agentsetup.views.gateway_view import group_of, loaded_mcp
-from agentsetup.views.load_map import NAMES
+from kitden.clients.versions import MINIMUM_VERSIONS
+from kitden.model import FindingType, Gateway, Severity, UnknownReason, _hash
+from kitden.views.findings import base_name, find_bypasses, find_findings
+from kitden.views.gateway_view import group_of, loaded_mcp
+from kitden.views.load_map import NAMES
 
 READ_PROBLEMS = {
     UnknownReason.UNRECOGNIZED_FORMAT: "The file format is not recognized.",

@@ -3,8 +3,8 @@
 import re
 from pathlib import Path
 
-from agentsetup.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, REMOVE_DIRECT, ClientAdapter
-from agentsetup.model import Gateway, Item, Step
+from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, REMOVE_DIRECT, ClientAdapter
+from kitden.model import Gateway, Item, Step
 
 GATEWAY_CONNECT = "gateway.connect"
 ENTRY_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")

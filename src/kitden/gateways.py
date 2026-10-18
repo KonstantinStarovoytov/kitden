@@ -8,9 +8,9 @@ import json
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from agentsetup.changes.atomic import write_atomic
-from agentsetup.model import Gateway, GatewayAuth
-from agentsetup.redact import redact
+from kitden.changes.atomic import write_atomic
+from kitden.model import Gateway, GatewayAuth
+from kitden.redact import redact
 
 DATA_DIR = "Library/Application Support/agentsetup"
 SETTINGS = f"{DATA_DIR}/settings.json"

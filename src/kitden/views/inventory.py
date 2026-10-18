@@ -5,11 +5,11 @@ from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from agentsetup.clients.base import ClientAdapter
-from agentsetup.clients.claude_code import ClaudeCodeAdapter
-from agentsetup.clients.codex import CodexAdapter
-from agentsetup.clients.cursor import CursorAdapter
-from agentsetup.model import (
+from kitden.clients.base import ClientAdapter
+from kitden.clients.claude_code import ClaudeCodeAdapter
+from kitden.clients.codex import CodexAdapter
+from kitden.clients.cursor import CursorAdapter
+from kitden.model import (
     Client,
     ClientStatus,
     Item,

@@ -1,9 +1,9 @@
 """Gateway page model: which clients reach the gateway, and what still goes around it."""
 
-from agentsetup.model import Gateway, Item, ItemKind
-from agentsetup.views.effective import DESKTOP, effective_view
-from agentsetup.views.findings import bypass_kind
-from agentsetup.views.load_map import COLUMNS
+from kitden.model import Gateway, Item, ItemKind
+from kitden.views.effective import DESKTOP, effective_view
+from kitden.views.findings import bypass_kind
+from kitden.views.load_map import COLUMNS
 
 
 def gateway_dict(gateway: Gateway) -> dict:

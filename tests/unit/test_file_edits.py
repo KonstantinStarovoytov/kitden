@@ -2,8 +2,8 @@
 
 import pytest
 
-from agentsetup.changes import json_splice, toml_edit
-from agentsetup.changes.json_splice import ABSENT, UnrecognizedFormatError
+from kitden.changes import json_splice, toml_edit
+from kitden.changes.json_splice import ABSENT, UnrecognizedFormatError
 
 GATEWAY = {"type": "http", "url": "http://127.0.0.1:12008/mcp"}
 

@@ -8,9 +8,9 @@ import shlex
 from dataclasses import dataclass
 from urllib.parse import urlsplit, urlunsplit
 
-from agentsetup.clients.base import ClientAdapter
-from agentsetup.model import Item, ItemKind, Scope
-from agentsetup.redact import redact_text
+from kitden.clients.base import ClientAdapter
+from kitden.model import Item, ItemKind, Scope
+from kitden.redact import redact_text
 
 CLAUDE = "claude_code"
 CODEX = "codex"

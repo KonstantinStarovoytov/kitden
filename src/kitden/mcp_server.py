@@ -14,12 +14,12 @@ from typing import Any
 from mcp.server.mcpserver import MCPServer
 from mcp_types import ToolAnnotations
 
-from agentsetup.gateways import load_gateways
-from agentsetup.model import Project
-from agentsetup.views.effective import DESKTOP, found_clients, project_views
-from agentsetup.views.explain import brief, explain
-from agentsetup.views.findings import find_bypasses, find_findings, finding_dict, mark_gateways
-from agentsetup.views.inventory import Inventory, build_inventory
+from kitden.gateways import load_gateways
+from kitden.model import Project
+from kitden.views.effective import DESKTOP, found_clients, project_views
+from kitden.views.explain import brief, explain
+from kitden.views.findings import find_bypasses, find_findings, finding_dict, mark_gateways
+from kitden.views.inventory import Inventory, build_inventory
 
 READ_ONLY = ToolAnnotations(
     readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False

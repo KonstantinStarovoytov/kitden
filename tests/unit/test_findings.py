@@ -1,4 +1,4 @@
-from agentsetup.model import (
+from kitden.model import (
     Client,
     ClientStatus,
     Enabled,
@@ -9,8 +9,8 @@ from agentsetup.model import (
     Source,
     SourceKind,
 )
-from agentsetup.views.findings import find_bypasses, find_findings, mark_gateways
-from agentsetup.views.inventory import Inventory
+from kitden.views.findings import find_bypasses, find_findings, mark_gateways
+from kitden.views.inventory import Inventory
 
 
 def item(

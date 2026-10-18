@@ -2,7 +2,7 @@ import json
 import stat
 from datetime import UTC, datetime, timedelta
 
-from agentsetup.changes.backup import ChangeStore
+from kitden.changes.backup import ChangeStore
 
 SECRET_LINE = b'token = "SENTINEL_SECRET_BACKUP"\n'
 

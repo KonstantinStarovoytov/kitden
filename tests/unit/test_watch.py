@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from agentsetup.watch import Watcher, is_relevant
+from kitden.watch import Watcher, is_relevant
 
 
 @pytest.mark.parametrize(

@@ -9,8 +9,8 @@ import webbrowser
 from collections import Counter
 from pathlib import Path
 
-from agentsetup import __version__
-from agentsetup.views.inventory import Inventory, build_inventory, inventory_dict
+from kitden import __version__
+from kitden.views.inventory import Inventory, build_inventory, inventory_dict
 
 HOST = "127.0.0.1"
 DEFAULT_PORT = 47800
@@ -40,7 +40,7 @@ def run_server(app, host: str, port: int) -> None:
 
 
 def _start(args: argparse.Namespace) -> int:
-    from agentsetup.web.app import create_app
+    from kitden.web.app import create_app
 
     port = pick_port(DEFAULT_PORT)
     if port is None:
@@ -107,7 +107,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "scan":
         return _scan(args)
     if args.command == "mcp":
-        from agentsetup import mcp_server
+        from kitden import mcp_server
 
         mcp_server.run(Path(args.home).expanduser() if args.home else None)
         return 0

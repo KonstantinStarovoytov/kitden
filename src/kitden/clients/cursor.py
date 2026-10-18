@@ -12,8 +12,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlsplit
 
-from agentsetup.changes.json_splice import ABSENT
-from agentsetup.clients.base import (
+from kitden.changes.json_splice import ABSENT
+from kitden.clients.base import (
     REMOVE_DIRECT,
     SETUP_NAME,
     ClientAdapter,
@@ -26,7 +26,7 @@ from agentsetup.clients.base import (
     project,
     skill_items,
 )
-from agentsetup.model import (
+from kitden.model import (
     Enabled,
     FileEdit,
     Gateway,

@@ -1,6 +1,6 @@
 import pytest
 
-from agentsetup.clients.versions import (
+from kitden.clients.versions import (
     highest_version,
     is_supported,
     parse_version,
@@ -69,7 +69,7 @@ def test_version_command_is_none_when_client_missing():
 def test_version_commands_are_cached_for_a_while(monkeypatch):
     import subprocess
 
-    import agentsetup.clients.base as base
+    import kitden.clients.base as base
 
     runs = []
 

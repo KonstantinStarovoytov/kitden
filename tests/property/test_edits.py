@@ -12,8 +12,8 @@ import tomlkit
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from agentsetup.changes import json_splice, toml_edit
-from agentsetup.changes.json_splice import ABSENT
+from kitden.changes import json_splice, toml_edit
+from kitden.changes.json_splice import ABSENT
 
 names = st.from_regex(r"[a-z][a-z0-9_-]{0,11}", fullmatch=True)
 scalars = st.one_of(

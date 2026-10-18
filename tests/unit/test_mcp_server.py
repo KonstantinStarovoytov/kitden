@@ -7,10 +7,10 @@ import pytest
 from mcp import Client
 from starlette.testclient import TestClient
 
-import agentsetup.clients.base as base
-from agentsetup.mcp_server import create_server
-from agentsetup.views.inventory import build_inventory
-from agentsetup.web.app import create_app
+import kitden.clients.base as base
+from kitden.mcp_server import create_server
+from kitden.views.inventory import build_inventory
+from kitden.web.app import create_app
 from tests.conftest import all_text, make_home, write_cursor_fixture_state
 
 TOOLS = {"show_setup", "list_findings", "explain_item", "list_projects"}

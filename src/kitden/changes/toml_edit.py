@@ -9,7 +9,7 @@ from typing import Any
 import tomlkit
 from tomlkit.exceptions import TOMLKitError
 
-from agentsetup.changes.json_splice import ABSENT, UnrecognizedFormatError
+from kitden.changes.json_splice import ABSENT, UnrecognizedFormatError
 
 
 def _load(text: str) -> tomlkit.TOMLDocument:

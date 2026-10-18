@@ -2,8 +2,8 @@ import stat
 
 import pytest
 
-from agentsetup.gateways import SETTINGS, add_gateway, load_gateways
-from agentsetup.model import Gateway, GatewayAuth
+from kitden.gateways import SETTINGS, add_gateway, load_gateways
+from kitden.model import Gateway, GatewayAuth
 
 URL = "http://127.0.0.1:12008/metamcp/dev/mcp"
 

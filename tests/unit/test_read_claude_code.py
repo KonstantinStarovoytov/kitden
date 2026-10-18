@@ -1,5 +1,5 @@
-from agentsetup.clients.claude_code import ClaudeCodeAdapter
-from agentsetup.model import ClientStatus, Enabled, UnknownReason
+from kitden.clients.claude_code import ClaudeCodeAdapter
+from kitden.model import ClientStatus, Enabled, UnknownReason
 from tests.conftest import all_text, make_home, rows
 
 FIXTURE = "claude_code/2.1.283"

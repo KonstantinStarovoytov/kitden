@@ -3,8 +3,8 @@ import json
 
 import pytest
 
-import agentsetup.clients.base as base
-from agentsetup.cli import main
+import kitden.clients.base as base
+from kitden.cli import main
 from tests.conftest import make_home, write_cursor_fixture_state
 
 ALL = ("claude_code/2.1.283", "codex/0.159.2", "cursor/3.21.16")

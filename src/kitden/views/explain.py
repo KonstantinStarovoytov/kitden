@@ -2,9 +2,9 @@
 
 from typing import Any
 
-from agentsetup.model import Enabled, Item, ItemKind
-from agentsetup.views.effective import effective_view
-from agentsetup.views.findings import base_name
+from kitden.model import Enabled, Item, ItemKind
+from kitden.views.effective import effective_view
+from kitden.views.findings import base_name
 
 
 def brief(item: Item) -> dict[str, Any]:

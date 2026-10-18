@@ -8,7 +8,7 @@ has no column of its own: its extra items show in the Claude Code column as "Des
 
 from dataclasses import dataclass, field
 
-from agentsetup.model import (
+from kitden.model import (
     ClientStatus,
     Enabled,
     FindingType,
@@ -17,8 +17,8 @@ from agentsetup.model import (
     Scope,
     _hash,
 )
-from agentsetup.views.effective import DESKTOP, effective_view
-from agentsetup.views.findings import base_name, bypass_kind, find_bypasses, find_findings
+from kitden.views.effective import DESKTOP, effective_view
+from kitden.views.findings import base_name, bypass_kind, find_bypasses, find_findings
 
 COLUMNS = ("claude_code", "codex", "cursor")
 MARKS = {"claude_code": "CC", "codex": "CX", "cursor": "CU"}
