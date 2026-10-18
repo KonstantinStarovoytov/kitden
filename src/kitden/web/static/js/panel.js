@@ -2,7 +2,7 @@
 import { getJson, postJson, query } from "./api.js";
 import { $, $$, button, el, plural, reportError, shortPath, shortPaths } from "./dom.js";
 import { morphOnNextRender, onOpenItem } from "./map.js";
-import { animate, finishTransition, fold } from "./motion.js";
+import { animate, finishTransition, fold, transition } from "./motion.js";
 import { CLIENT_NAMES, diffCounts, mark, socket } from "./parts.js";
 import { busy, data, reload, render, setBusy, state } from "./store.js";
 
@@ -490,6 +490,7 @@ function lockReview(locked, apply, cancel) {
 
 function resetApply(apply, cancel, label) {
   for (const extra of apply.querySelectorAll(".spinner, .check")) extra.remove();
+  apply.classList.remove("done");
   label.textContent = "Apply";
   label.classList.remove("swap");
   lockReview(false, apply, cancel);
@@ -542,15 +543,26 @@ async function applyChange(change, { apply, cancel, label, body }) {
   await wait(Math.max(0, 520 - (performance.now() - started)));
   for (const spin of apply.querySelectorAll(".spinner")) spin.remove();
   apply.prepend(checkMark());
+  apply.classList.add("done");
   label.textContent = "Applied";
   await Promise.all([wait(450), reload().catch(() => {})]);
   current = null;
   closePanel({ keepSelection: true, focus: false, force: true });
-  morphOnNextRender();
-  render();
+  showEffect();
   restoreFocus();
   setBusy(false);
-  toast(changeWords(after).done, () => undoChange(after));
+  toast(changeWords(after).done, () => undoChange(after), { ok: true });
+}
+
+// The page shows the effect where it happened: the Load map morphs its cells, every other
+// place cross-fades to its new state.
+function showEffect() {
+  if (state.view === "map") {
+    morphOnNextRender();
+    render();
+  } else {
+    transition(render);
+  }
 }
 
 export async function undoChange(change) {
@@ -560,10 +572,9 @@ export async function undoChange(change) {
   try {
     const result = await postJson(`/api/changes/${encodeURIComponent(change.id)}/undo`);
     await reload().catch(() => {});
-    morphOnNextRender();
-    render();
+    showEffect();
     const after = result.data;
-    if (after && after.state === "undone") toast("Undone. The previous settings are back.");
+    if (after && after.state === "undone") toast("Undone. The previous settings are back.", null, { ok: true });
     else if (after && after.state === "undo_blocked") toast("Undo stopped: the file changed after the change was applied.");
     else toast((after && after.detail) || `Undo failed (${result.status}).`);
   } finally {
@@ -597,10 +608,12 @@ export function hideToast() {
 
 // A short note after a change, with Undo when it can be undone. Hides after 6 s; the
 // countdown pauses while the pointer or focus is on it.
-export function toast(text, onUndo) {
+// A check mark only for a state the server verified (applied, undone); never for an error.
+export function toast(text, onUndo, { ok = false } = {}) {
   const node = $("#toast");
   node.classList.remove("show");
   node.replaceChildren(el("span", null, text));
+  if (ok) node.prepend(checkMark());
   if (onUndo) node.append(button("Undo", () => onUndo()));
   node.append(el("span", "timer"));
   void node.offsetWidth;

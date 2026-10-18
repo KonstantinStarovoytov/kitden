@@ -126,6 +126,8 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .btn.small { height: 24px; padding: 0 8px; font-size: 12px; }
 .btn .label { transition: filter var(--t-fast) ease, opacity var(--t-fast) ease; }
 .btn .label.swap { filter: blur(2px); opacity: 0; }
+.btn.primary.done, .btn.primary.done:hover { background: var(--lamp-on); color: #ffffff; }
+.toast .check { flex: none; color: var(--lamp-on); }
 .spinner { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid currentColor; border-right-color: transparent; animation: spin 600ms linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .check path { stroke-dasharray: 20; stroke-dashoffset: 20; animation: draw 320ms var(--ease-out) forwards; }
@@ -385,7 +387,7 @@ details.file-change[open] pre.diff .line { animation: line-in 260ms var(--ease-o
 
 /* Toast with an undo countdown that pauses on hover */
 .toast { position: fixed; z-index: 30; left: 50%; bottom: 20px; transform: translate(-50%, 140%); visibility: hidden; background: var(--ink); color: var(--canvas); border-radius: 10px; padding: 8px 8px 8px 14px; display: flex; gap: 12px; align-items: center; overflow: hidden; max-width: calc(100vw - 32px); transition: transform var(--t-panel) var(--ease-out), visibility 0s linear var(--t-panel); }
-.toast.show { transform: translate(-50%, 0); visibility: visible; transition: transform var(--t-panel) var(--ease-out), visibility 0s; }
+.toast.show { transform: translate(-50%, 0); visibility: visible; transition: transform 420ms var(--spring), visibility 0s; }
 .toast .btn { background: transparent; color: var(--canvas); border-color: color-mix(in srgb, var(--canvas) 35%, transparent); }
 .toast .timer { position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: var(--route); transform-origin: left; }
 .toast.show .timer { animation: countdown 6s linear forwards; }

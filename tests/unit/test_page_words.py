@@ -112,3 +112,11 @@ def test_review_counts_the_diff_and_folds_the_file_change():
     text = script("panel.js")
     assert "diffCounts" in text and "fold(files)" in text
     assert "Show file change" in text and "Show file changes" in text
+
+
+def test_apply_turns_green_only_after_verified_and_only_ok_toasts_get_a_check():
+    text = script("panel.js")
+    assert text.index('after.state !== "verified"') < text.index('apply.classList.add("done")')
+    assert text.count("{ ok: true }") == 2
+    assert "Undone. The previous settings are back." in text
+    assert 'toast("Undo stopped' in text  # a stopped undo gets no check
