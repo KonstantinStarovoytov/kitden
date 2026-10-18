@@ -59,13 +59,6 @@ export function flag({ text, level }) {
   return el("span", level === "warning" ? "flag" : "flag info", text);
 }
 
-export function heading(text, aside) {
-  const h = el("h2");
-  h.append(el("span", null, text));
-  if (aside) h.append(el("span", "count", aside));
-  return h;
-}
-
 export function skeleton(kind = "card", count = 3) {
   const box = el("div");
   box.setAttribute("aria-busy", "true");
@@ -105,11 +98,6 @@ export function latestChanges(entries) {
   const seen = new Map();
   for (const entry of entries) if (!seen.has(entry.id)) seen.set(entry.id, entry);
   return [...seen.values()];
-}
-
-export function timeOf(entry) {
-  const when = new Date(entry.time);
-  return Number.isNaN(when.getTime()) ? "" : when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 export { plural };

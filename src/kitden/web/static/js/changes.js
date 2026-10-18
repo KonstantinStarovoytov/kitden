@@ -54,15 +54,24 @@ function changeRow(entry) {
   const li = el("li");
   const [word, look] = STATE_BADGES[entry.state] || [entry.state, "badge"];
   const actions = el("span", "row-actions");
-  const details = button(open.has(entry.id) ? "Hide" : "Details", () => {
-    if (open.has(entry.id)) open.delete(entry.id); else open.add(entry.id);
-    render();
-  }, "btn ghost small");
-  details.setAttribute("aria-expanded", String(open.has(entry.id)));
-  actions.append(details);
   if (entry.state === "verified") actions.append(button("Undo", () => undoChange(entry)));
   li.append(el("span", "muted", when(entry.time)), el("span", null, changeTitle(entry)), el("span", look, word), actions);
-  if (!open.has(entry.id)) return [li];
+  // The whole row opens the details; the Undo button keeps to itself.
+  const shown = open.has(entry.id);
+  li.tabIndex = 0;
+  li.setAttribute("aria-expanded", String(shown));
+  const toggle = () => {
+    if (shown) open.delete(entry.id); else open.add(entry.id);
+    render();
+  };
+  li.addEventListener("click", (event) => { if (!event.target.closest("button")) toggle(); });
+  li.addEventListener("keydown", (event) => {
+    if (event.target === li && (event.key === "Enter" || event.key === " ")) {
+      event.preventDefault();
+      toggle();
+    }
+  });
+  if (!shown) return [li];
 
   const more = el("li", "change-detail");
   const steps = el("ul");

@@ -1,6 +1,6 @@
 // Gateway: which clients reach it, and what still goes around it.
 import { postJson } from "./api.js";
-import { button, el, plural, shortPath, webLink } from "./dom.js";
+import { button, el, plural, webLink } from "./dom.js";
 import { entrance } from "./motion.js";
 import { review, toast } from "./panel.js";
 import { banner, CLIENT_NAMES, mark, skeleton } from "./parts.js";
@@ -15,17 +15,13 @@ const GROUPS = [
 
 // What the person typed survives a redraw (a rescan can redraw the page at any time).
 const draft = { add: { url: "", ui_url: "", auth: "none", key_env_var: "" }, connect: null, addOpen: false, connectOpen: null };
+// Every client gets the same entry name; the review shows the exact entry before Apply.
+const ENTRY_NAME = "gateway";
 
 export function gatewayName(gateway) {
   if (/metamcp/i.test(gateway.url)) return "MetaMCP";
   if (/obot/i.test(gateway.url)) return "Obot";
   try { return new URL(gateway.url).host || "Gateway"; } catch { return "Gateway"; }
-}
-
-function loginWords(gateway) {
-  if (gateway.auth === "env_key") return `key in $${gateway.key_env_var}`;
-  if (gateway.auth === "oauth") return "OAuth login";
-  return "no login";
 }
 
 function foundClients() {
@@ -87,7 +83,7 @@ export function renderGateway(main) {
 function gatewayHead(gateway) {
   const head = el("div", "gw-head");
   const left = el("div");
-  left.append(el("div", "kicker", `${gatewayName(gateway)} · ${loginWords(gateway)}`), el("div", "gw-url", gateway.url));
+  left.append(el("div", "kicker", gatewayName(gateway)), el("div", "gw-url", gateway.url));
   const right = el("div");
   if (gateway.ui_url) right.append(webLink(gateway.ui_url, `Open ${gatewayName(gateway)} ↗`));
   head.append(left, right);
@@ -97,14 +93,15 @@ function gatewayHead(gateway) {
 function gatewayCard(gateway, gateways, connections) {
   const card = el("section", "card");
   card.append(gatewayHead(gateway), routes(gateway, connections));
-  const found = foundClients();
-  const waiting = found.filter((c) => !(connections[c] || []).length);
-  const box = el("details", "connect");
-  box.open = draft.connectOpen === null ? waiting.length > 0 : draft.connectOpen;
-  box.addEventListener("toggle", () => { draft.connectOpen = box.open; });
-  box.append(el("summary", null, waiting.length ? "Connect clients" : "Connect again with another entry name"));
-  box.append(connectForm(gateways, found, waiting));
-  card.append(box);
+  // Only clients without a gateway entry are offered; the others are connected already.
+  const waiting = foundClients().filter((c) => !(connections[c] || []).length);
+  if (waiting.length) {
+    const box = el("details", "connect");
+    box.open = draft.connectOpen === null ? true : draft.connectOpen;
+    box.addEventListener("toggle", () => { draft.connectOpen = box.open; });
+    box.append(el("summary", null, "Connect clients"), connectForm(gateways, waiting));
+    card.append(box);
+  }
   return card;
 }
 
@@ -148,13 +145,11 @@ function groupRow(entry, group) {
   const row = el("div", "list-row");
   const name = el("span", "mono", entry.name);
   name.title = entry.name;
-  const path = el("span", "path mono", shortPath(entry.path));
-  path.title = entry.path || "";
   const action = el("span");
   if (group === "move" && entry.actions.includes("mcp.remove_direct")) {
     action.append(button("Remove…", () => review({ action: "mcp.remove_direct", targets: [{ item: entry.item }], params: {} })));
   }
-  row.append(mark(entry.client), name, path, action);
+  row.append(mark(entry.client), name, action);
   return row;
 }
 
@@ -173,9 +168,9 @@ function input(attrs, value, onInput) {
 }
 
 // Connect any registered gateway; the first one is chosen until the person picks another.
-function connectForm(gateways, found, waiting) {
+function connectForm(gateways, waiting) {
   if (!draft.connect || !gateways.some((g) => g.id === draft.connect.gateway)) {
-    draft.connect = { gateway: gateways[0].id, name: "gateway", clients: new Set(waiting.length ? waiting : found) };
+    draft.connect = { gateway: gateways[0].id, clients: new Set(waiting) };
   }
   const state = draft.connect;
   const form = el("form", "form");
@@ -186,11 +181,9 @@ function connectForm(gateways, found, waiting) {
     pick.addEventListener("change", () => { state.gateway = pick.value; });
     form.append(field("Gateway", pick));
   }
-  const name = input({ required: true, pattern: "[A-Za-z0-9][A-Za-z0-9_\\-]*", autocomplete: "off" }, state.name, (v) => { state.name = v; });
-  form.append(field("Entry name", name));
   const checks = el("fieldset", "checks");
   checks.append(el("legend", null, "Add to"));
-  for (const client of found) {
+  for (const client of waiting) {
     const label = el("label");
     const box = el("input");
     box.type = "checkbox";
@@ -200,7 +193,6 @@ function connectForm(gateways, found, waiting) {
     label.append(box, el("span", null, CLIENT_NAMES[client]));
     checks.append(label);
   }
-  if (!found.length) checks.append(el("span", "muted", "No client found to connect."));
   form.append(checks);
   const message = el("span", "form-message");
   message.setAttribute("aria-live", "polite");
@@ -209,14 +201,14 @@ function connectForm(gateways, found, waiting) {
   form.append(submit, message);
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    const targets = [...state.clients].filter((c) => found.includes(c)).map((client) => ({ client }));
+    const targets = [...state.clients].filter((c) => waiting.includes(c)).map((client) => ({ client }));
     if (!targets.length) {
       message.className = "form-message error";
       message.textContent = "Choose at least one client.";
       return;
     }
     message.textContent = "";
-    review({ action: "gateway.connect", targets, params: { gateway: state.gateway, name: state.name.trim() } });
+    review({ action: "gateway.connect", targets, params: { gateway: state.gateway, name: ENTRY_NAME } });
   });
   return form;
 }

@@ -102,8 +102,7 @@ def test_gateway_card_only_with_a_registered_gateway(home):
     )
     assert card["action"] == "Review"
     assert card["target"] == {"view": "gateway"}
-    assert data["gateway"]["through"] == 2
-    assert data["gateway"]["name"] == "mcp.neon.tech"
+    assert data["gateway"] == {"name": "mcp.neon.tech"}
 
 
 def test_servers_that_cannot_move_are_not_an_attention_card(home):

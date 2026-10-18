@@ -192,8 +192,6 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .client-row:first-of-type { border-top: 0; }
 .client-row .name { font-weight: 500; }
 .client-row .meta { color: var(--ink-3); font-size: 12px; }
-.bar { height: 6px; border-radius: 3px; background: var(--inset); overflow: hidden; margin: 6px 0; }
-.bar span { display: block; height: 100%; width: 100%; background: var(--route); transform-origin: left; transform: scaleX(var(--fill, 0)); transition: transform 700ms var(--ease-out); }
 .feed { list-style: none; margin: 0; padding: 0; }
 .feed li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 7px 0; border-top: 1px solid var(--wire-soft); align-items: center; }
 .feed li:first-child { border-top: 0; }
@@ -218,7 +216,6 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .map .item { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .map .item .mono { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .table-scroll { min-width: 0; }
-.legend { display: flex; gap: 14px; flex-wrap: wrap; color: var(--ink-3); font-size: 12px; margin-top: 10px; }
 
 /* Gateway */
 .gw-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
@@ -237,10 +234,9 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .group-title { margin: 24px 0 2px; }
 .group-note { margin: 0 0 10px; color: var(--ink-3); }
 .list { background: var(--panel); border: 1px solid var(--wire); border-radius: 8px; }
-.list-row { display: grid; grid-template-columns: 24px minmax(0, 1.2fr) minmax(0, 1.6fr) auto; gap: 12px; align-items: center; padding: 0 12px; min-height: 40px; border-top: 1px solid var(--wire-soft); }
+.list-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 0 12px; min-height: 40px; border-top: 1px solid var(--wire-soft); }
 .list-row:first-child { border-top: 0; }
-.list-row .mono, .list-row .path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.list-row .path { color: var(--ink-3); }
+.list-row .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conn { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
 .conn .cell { border: 1px solid var(--wire-soft); border-radius: 6px; padding: 10px 12px; background: var(--canvas); display: grid; gap: 6px; justify-items: start; }
 
@@ -297,9 +293,12 @@ pre.diff .del { color: var(--danger); }
 .toast:hover .timer, .toast:focus-within .timer { animation-play-state: paused; }
 @keyframes countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 
-.timeline .feed li { grid-template-columns: 120px minmax(0, 1fr) auto auto; padding: 10px 12px; }
+.timeline .feed li { grid-template-columns: 120px minmax(0, 1fr) auto auto; padding: 10px 12px; cursor: pointer; transition: background-color 120ms ease; }
+.timeline .feed li:hover { background: var(--inset); }
+.timeline .feed li:focus-visible { outline-offset: -2px; }
 .timeline .row-actions { display: flex; gap: 4px; justify-content: flex-end; }
-.timeline .feed li.change-detail { display: block; padding: 0 12px 12px 144px; border-top: 0; }
+.timeline .feed li.change-detail { display: block; padding: 0 12px 12px 144px; border-top: 0; cursor: default; }
+.timeline .feed li.change-detail:hover { background: transparent; }
 .change-detail ul { margin: 0 0 6px; padding-left: 18px; }
 .change-detail p { margin: 0; }
 details.connect, details.add-more { margin-top: 12px; }
@@ -327,8 +326,6 @@ html.theme-switch::view-transition-old(page), html.theme-switch::view-transition
   .conn { grid-template-columns: 1fr; }
   .timeline .feed li { grid-template-columns: minmax(0, 1fr) auto; }
   .timeline .feed li.change-detail { padding-left: 12px; }
-  .list-row { grid-template-columns: 24px minmax(0, 1fr) auto; }
-  .list-row .path { display: none; }
   .topbar { padding: 10px 16px; flex-wrap: wrap; gap: 8px; }
   .where-box, .search { flex: 1 1 100%; max-width: none; min-width: 0; }
   .where-box select { flex: 1; width: 0; max-width: none; }

@@ -50,9 +50,6 @@ function renderPlace() {
 function renderShell() {
   const overview = data.overview;
   rollTo($("#nav-attention"), overview && overview.attention.length ? overview.attention.length : "");
-  $("#nav-items").textContent = data.map ? String(data.map.rows.length) : "";
-  const gateway = overview && overview.gateway;
-  $("#nav-around").textContent = gateway && gateway.total > gateway.through ? `${gateway.total - gateway.through} around` : "";
   // Changes still in effect, the ones Undo can take back.
   const changes = latestChanges(data.changes || []).filter((e) => e.state === "verified").length;
   rollTo($("#nav-changes"), changes || "");

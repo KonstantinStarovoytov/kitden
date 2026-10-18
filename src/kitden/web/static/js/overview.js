@@ -1,9 +1,9 @@
-// Overview: what needs attention first, then clients, gateway and recent changes.
+// Overview: what needs attention first, then the clients and, without a gateway, how to get one.
 import { getJson, query } from "./api.js";
 import { button, el, plural, shortPaths } from "./dom.js";
 import { openSelectedOnRender } from "./map.js";
 import { entrance } from "./motion.js";
-import { banner, changeTitle, heading, latestChanges, mark, skeleton, socket, timeOf } from "./parts.js";
+import { banner, mark, skeleton, socket } from "./parts.js";
 import { data, go, loadOverview, projectPath, render } from "./store.js";
 
 let notesOpen = false;
@@ -45,7 +45,9 @@ export function renderOverview(main) {
   grid.append(left);
 
   const side = el("div", "side");
-  side.append(clientsCard(model.clients), gatewayCard(model.gateway), changesCard());
+  side.append(clientsCard(model.clients));
+  // With a gateway, the attention card is the one place on this page that mentions it.
+  if (!model.gateway) side.append(gatewayCard());
   grid.append(side);
   main.append(grid);
   entrance("overview", [...blocks, ...side.children]);
@@ -82,61 +84,24 @@ function notesBlock(count) {
 
 function clientsCard(clients) {
   const card = el("section", "card");
-  const found = clients.filter((c) => c.status === "found").length;
-  card.append(heading("Clients", `${found} found`));
+  card.append(el("h2", null, "Clients"));
   for (const client of clients) {
     const row = el("div", "client-row");
     const info = el("div");
     info.append(el("div", "name", client.name), el("div", "meta", client.version ? client.version : "version unknown"));
-    let status;
-    if (client.status !== "found") status = socket({ state: "missing" });
-    else if (client.version && !client.tested) status = socket({ state: "unk", word: "Not tested" });
-    else status = socket({ state: "on", word: client.version ? "Tested" : "Found" });
-    row.append(mark(client.id), info, status);
+    row.append(mark(client.id), info);
+    // A status only when something is wrong: not installed, or a version Kitden has not tested.
+    if (client.status !== "found") row.append(socket({ state: "missing" }));
+    else if (client.version && !client.tested) row.append(socket({ state: "unk", word: "Not tested" }));
     card.append(row);
   }
   return card;
 }
 
-function gatewayCard(gateway) {
+function gatewayCard() {
   const card = el("section", "card");
-  if (!gateway) {
-    card.append(heading("Gateway", ""), el("p", null, "No gateway yet."));
-    card.append(el("p", "muted", "Manage MCP tools in one place and connect it to every client."));
-    card.append(button("Set up", () => go("gateway")));
-    return card;
-  }
-  card.append(heading("Gateway", gateway.name));
-  card.append(el("p", null, `${gateway.through} of ${plural(gateway.total, "MCP server", "MCP servers")} go through the gateway.`));
-  const bar = el("div", "bar");
-  const fill = el("span");
-  bar.append(fill);
-  card.append(bar);
-  const share = gateway.total ? gateway.through / gateway.total : 0;
-  requestAnimationFrame(() => requestAnimationFrame(() => fill.style.setProperty("--fill", String(share))));
-  const rest = [];
-  if (gateway.can_move) rest.push(`${gateway.can_move} more can move in.`);
-  if (gateway.stay_local) rest.push(`${gateway.stay_local} must stay on this Mac.`);
-  if (rest.length) card.append(el("p", "muted", rest.join(" ")));
+  card.append(el("h2", null, "Gateway"), el("p", null, "No gateway yet."));
+  card.append(el("p", "muted", "Manage MCP tools in one place and connect it to every client."));
+  card.append(button("Set up", () => go("gateway")));
   return card;
 }
-
-function changesCard() {
-  const card = el("section", "card");
-  card.append(heading("Recent changes", ""));
-  const recent = latestChanges(data.changes || []).slice(0, 3);
-  if (!recent.length) {
-    card.append(el("p", "muted", "No changes yet. Changes you make here appear with Undo."));
-    return card;
-  }
-  const list = el("ul", "feed");
-  for (const entry of recent) {
-    const li = el("li");
-    li.append(el("span", null, changeTitle(entry)), el("span", "muted", timeOf(entry)));
-    list.append(li);
-  }
-  card.append(list);
-  card.append(button("All changes", () => go("changes"), "btn ghost small"));
-  return card;
-}
-

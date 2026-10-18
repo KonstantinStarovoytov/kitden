@@ -345,12 +345,13 @@ function afterLine(entries) {
   return line;
 }
 
+// Only the lines that change show; the diff's own header lines say nothing a person needs.
 function diffLines(text) {
   const pre = el("pre", "diff");
   for (const line of String(text || "").split("\n")) {
+    if (line === "--- before" || line === "+++ after" || /^@@ /.test(line)) continue;
     let look = null;
-    if (/^(\+\+\+|---|@@)/.test(line)) look = "faint";
-    else if (line.startsWith("+")) look = "add";
+    if (line.startsWith("+")) look = "add";
     else if (line.startsWith("-")) look = "del";
     pre.append(el("span", look, `${line}\n`));
   }

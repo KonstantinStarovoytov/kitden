@@ -43,8 +43,8 @@ export function renderMap(main) {
   main.append(el("h1", null, "Load map"));
   const path = projectPath();
   main.append(el("p", "lede", path
-    ? `What each client loads in ${shortPath(path)}. Click a row to see where it comes from.`
-    : "What each client loads outside any project. Choose a project in Where to see its own items; click a row to see where it comes from."));
+    ? `What each client loads in ${shortPath(path)}.`
+    : "What each client loads outside any project."));
   const model = data.map;
   if (!model) {
     if (data.errors.map) main.append(banner("the load map", async () => { await loadMap(); render(); }));
@@ -83,7 +83,7 @@ export function renderMap(main) {
   const table = buildTable(model.columns, rows);
   const scroller = el("div", "table-scroll");
   scroller.append(table);
-  main.append(scroller, legend());
+  main.append(scroller);
   snapshot(model.rows);
   morphNext = false;
   entrance("map", [table]);
@@ -169,19 +169,14 @@ function buildRow(columns, row) {
     const before = previousCells[row.key] && previousCells[row.key][column.id];
     const changed = morphNext && before && before !== cellKey(cell);
     const shown = changed ? { state: before.split("|")[0], where: before.split("|")[1] || null } : cell;
-    const node = socket({ state: shown.state, where: cellWhere(shown, cell) });
+    const node = socket({ state: shown.state, where: shown.where });
     td.append(node);
-    if (changed) setTimeout(() => morphSocket(node, { state: cell.state, where: cellWhere(cell, cell) }), 260);
+    if (changed) setTimeout(() => morphSocket(node, { state: cell.state, where: cell.where }), 260);
     tr.append(td);
   }
   tr.addEventListener("click", () => openRow(row, tr, "pointer"));
   tr.addEventListener("keydown", (event) => onRowKey(event, row, tr));
   return tr;
-}
-
-function cellWhere(shown, cell) {
-  if (!shown.where) return null;
-  return cell.count > 1 && shown === cell ? `${shown.where} ×${cell.count}` : shown.where;
 }
 
 function openRow(row, tr, how) {
@@ -216,12 +211,5 @@ function emptyState(counts) {
   } else {
     box.append(el("strong", null, `No ${label} in any client`), el("p", null, `${label[0].toUpperCase()}${label.slice(1)} you add in Claude Code, Codex or Cursor will show up here.`));
   }
-  return box;
-}
-
-function legend() {
-  const box = el("div", "legend");
-  box.setAttribute("aria-label", "Legend");
-  for (const s of ["on", "off", "gw", "unk", "missing"]) box.append(socket({ state: s }));
   return box;
 }

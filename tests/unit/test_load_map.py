@@ -94,6 +94,13 @@ def test_gateway_entries_are_state_gw(home):
     } in rows_by(rows, "mcp_server", "langfuse-data").flags
 
 
+def test_unknown_state_is_said_by_the_cell_alone(home):
+    rows = load_map(build_inventory(home), None)
+    gmail = rows_by(rows, "plugin", "gmail")
+    assert "unk" in {cell.state for cell in gmail.cells.values()}
+    assert all(f["text"] != "State unknown" for r in rows for f in r.flags)
+
+
 def test_direct_entries_are_only_info_without_a_gateway(home):
     rows = load_map(build_inventory(home), None)
     assert {"text": "Direct", "level": "info"} in rows_by(rows, "mcp_server", "Neon").flags

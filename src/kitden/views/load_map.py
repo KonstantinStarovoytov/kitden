@@ -104,8 +104,6 @@ def _flag(finding, item: Item, gateway_registered: bool) -> dict | None:
         fix, action = DUPLICATE_FIXES.get(item.kind, ("Remove one copy to keep the other.", None))
         text = f"{NAMES.get(finding.client, finding.client)} loads it twice"
         return _warning(text, finding.client, fix, action)
-    if finding.type is FindingType.UNKNOWN_STATE:
-        return {"text": "State unknown", "level": "info"}
     if finding.type is FindingType.BYPASSES_GATEWAY:
         kind = bypass_kind(item)
         if "plugin" in kind:

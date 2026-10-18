@@ -135,14 +135,7 @@ def overview(inventory, gateways: list[Gateway], project: str | None) -> dict:
     groups = {g: sum(1 for i in around if group_of(i) == g) for g in ("move", "local", "plugin")}
     gateway = None
     if gateways:
-        gateway = {
-            "name": urlsplit(gateways[0].url).netloc or "Gateway",
-            "through": len(mcp) - len(around),
-            "total": len(mcp),
-            "can_move": groups["move"],
-            "stay_local": groups["local"],
-            "from_plugins": groups["plugin"],
-        }
+        gateway = {"name": urlsplit(gateways[0].url).netloc or "Gateway"}
         # Local and plugin servers cannot move, so only remote direct entries need attention.
         if groups["move"]:
             them, entries = ("it", "entry") if groups["move"] == 1 else ("them", "entries")
