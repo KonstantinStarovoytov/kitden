@@ -50,7 +50,7 @@ Format: `[ID] [P?] [Story] Description`. `[P]` = can run in parallel (different 
 - [X] T007 [US2] Tests first: `setup_server.update` builds remove + add per client; only remove when
   `kitden` already exists; 422 for a target that is not an old entry and when `kitden` is not
   installed. Then `changes/actions.py` and the preview branch in `web/app.py`. Depends on T004, T006.
-- [ ] T008 [US2] Contract test in `tests/contract/test_mcp_handshake.py`: real `claude` and `codex`
+- [X] T008 [US2] Contract test in `tests/contract/test_mcp_handshake.py`: real `claude` and `codex`
   in a sandbox home with an old entry → update → `claude mcp get kitden` and `codex mcp list --json`
   show `kitden`; Undo restores the files byte for byte.
 - [ ] T009 [US2] Page: Agents shows "Old entry" with "Update to Kitden…" (and "old command is

@@ -85,3 +85,56 @@ async def test_register_handshake_and_undo(home):
     engine.undo(change.id)
     assert change.state is ChangeState.UNDONE, change.error
     assert [f.read_bytes() for f in files] == original
+
+
+async def test_old_entries_update_to_kitden_with_real_clients(home):
+    """Feature 002: old entries become `kitden`, and Undo brings them back."""
+    from kitden.changes import json_splice, toml_edit
+    from kitden.changes.actions import update_steps
+    from kitden.views.inventory import build_inventory
+    from kitden.views.setup_server import is_old_entry
+
+    old = {"type": "stdio", "command": "/opt/old/bin/agentsetup", "args": ["mcp"]}
+    claude = find_command("claude", home)
+    subprocess.run(  # noqa: S603 - fixed test command
+        [claude, "mcp", "add-json", "-s", "user", "agentsetup", json.dumps(old)],
+        env=_env(home),
+        capture_output=True,
+        check=True,
+    )
+    config = home / ".codex/config.toml"
+    codex_old = {"command": "/opt/old/bin/agentsetup", "args": ["mcp"]}
+    config.write_text(
+        toml_edit.set_value(config.read_text(), ("mcp_servers", "agentsetup"), codex_old)
+    )
+    codex_before = config.read_bytes()
+
+    items = [i for i in build_inventory(home).items if is_old_entry(i)]
+    assert {i.client for i in items} == {"claude_code", "codex"}
+    adapters = {a.id: a for a in default_adapters(home)}
+    command = installed_command()
+    engine = Engine(ChangeStore(home / "data"), CommandRunner(home))
+    change = engine.preview("setup_server.update", update_steps(adapters, items, set(), command))
+    engine.apply(change.id)
+    assert change.state is ChangeState.VERIFIED, change.error
+
+    got = subprocess.run(  # noqa: S603 - fixed test command
+        [claude, "mcp", "get", "kitden"], env=_env(home), capture_output=True, text=True
+    )
+    assert got.returncode == 0 and command in got.stdout
+    listed = subprocess.run(  # noqa: S603 - fixed test command
+        [_codex(), "mcp", "list", "--json"],
+        env=_env(home),
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    names = {s["name"] for s in json.loads(listed)}
+    assert "kitden" in names and "agentsetup" not in names
+
+    engine.undo(change.id)
+    assert change.state is ChangeState.UNDONE, change.error
+    assert config.read_bytes() == codex_before
+    text = (home / ".claude.json").read_text()
+    assert json_splice.get_value(text, ("mcpServers", "agentsetup")) == old
+    assert json_splice.get_value(text, ("mcpServers", "kitden")) is json_splice.ABSENT
