@@ -118,6 +118,23 @@ def test_connect_previews_then_applies_then_undoes_exactly(client):
     assert _files(client.home) == original
 
 
+def test_preview_says_what_each_client_shows_after(client):
+    gateway = _register(client).json()
+    change = _connect(client, gateway["id"], clients=["codex", "cursor"]).json()
+    assert change["after"] == [
+        {"client": "codex", "state": "gw", "word": "Via gateway"},
+        {"client": "cursor", "state": "gw", "word": "Via gateway"},
+    ]
+    neon = next(
+        i
+        for i in client.get("/api/items?client=cursor&kind=mcp_server").json()
+        if i["name"] == "Neon"
+    )
+    body = {"action": "mcp.remove_direct", "targets": [{"item": neon["id"]}], "params": {}}
+    change = client.post("/api/changes/preview", json=body, headers=POST).json()
+    assert change["after"] == [{"client": "cursor", "state": "off", "word": "Removed"}]
+
+
 def test_a_hand_edit_between_preview_and_apply_stops_the_change(client):
     gateway = _register(client).json()
     change = _connect(client, gateway["id"], clients=["codex"]).json()

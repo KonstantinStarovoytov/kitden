@@ -269,6 +269,12 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .drawer section { display: grid; gap: 8px; min-width: 0; }
 .drawer .chip h2 { margin: 0; }
 .drawer .skeleton.card { height: 120px; }
+.after { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.after .note { color: var(--ink-3); font-size: 12px; }
+.after .chip { gap: 8px; }
+.after .chip > span:nth-child(2) { color: var(--ink-2); }
+details.file-change > summary { cursor: pointer; color: var(--ink-2); font-weight: 500; }
+details.file-change > .step, details.file-change > p { margin-top: 10px; }
 .step { border: 1px solid var(--wire); border-radius: 8px; overflow: hidden; }
 .step-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; }
 .step-head strong { white-space: nowrap; }

@@ -75,10 +75,12 @@ function restoreFocus() {
   else $("#main").focus();
 }
 
+// A review has no close button up here: its footer holds the one Cancel.
 function header(kicker, title, lede, closeLabel = "Close", mono = false) {
   const head = el("header");
   const top = el("div", "top");
-  top.append(el("span", "kicker", kicker), button(closeLabel, () => closePanel(), "btn ghost small"));
+  top.append(el("span", "kicker", kicker));
+  if (closeLabel) top.append(button(closeLabel, () => closePanel(), "btn ghost small"));
   const h1 = el("h1", mono ? "title-mono" : null, title);
   h1.id = "panel-title";
   head.append(top, h1);
@@ -325,10 +327,22 @@ export async function review(previewBody) {
     footer.append(button("Close", () => closePanel(), "btn"));
     const body = el("div", "body");
     body.append(callout((result.data && result.data.detail) || `Could not prepare this change (${result.status}).`, "error"));
-    openPanel([header("Review change", "Could not prepare this change"), body, footer]);
+    openPanel([header("Review change", "Could not prepare this change", null, null), body, footer]);
     return;
   }
   showReview(result.data, previewBody);
+}
+
+// "After: [CC] Claude Code ● Off · [CU] Cursor ● Loads once", in the Load map's sockets.
+function afterLine(entries) {
+  const line = el("div", "after");
+  line.append(el("span", "note", "After:"));
+  for (const entry of entries) {
+    const chip = el("span", "chip");
+    chip.append(mark(entry.client), el("span", null, clientName(entry.client)), socket({ state: entry.state, word: entry.word }));
+    line.append(chip);
+  }
+  return line;
 }
 
 function diffLines(text) {
@@ -347,7 +361,11 @@ function showReview(change, previewBody) {
   current = { type: "review", change, previewBody };
   const words = changeWords(change);
   const body = el("div", "body");
+  if (change.after && change.after.length) body.append(afterLine(change.after));
   if (change.shared_file_warning) body.append(callout("This edits a project file that is usually shared through git."));
+  // The result comes first; the file change and the command wait behind one summary.
+  const files = el("details", "file-change");
+  files.append(el("summary", null, change.steps.length > 1 ? "Show file changes" : "Show file change"));
   for (const step of change.steps) {
     const box = el("div", "step");
     const head = el("div", "step-head");
@@ -355,9 +373,10 @@ function showReview(change, previewBody) {
     file.title = step.path || "";
     head.append(mark(step.client), el("strong", null, clientName(step.client)), file);
     box.append(head, diffLines(step.diff));
-    body.append(box);
-    if (step.command) body.append(el("p", "muted", `Runs ${clientName(step.client)}'s own command: ${step.command}`));
+    files.append(box);
+    if (step.command) files.append(el("p", "muted", `Runs ${clientName(step.client)}'s own command: ${step.command}`));
   }
+  body.append(files);
   const notes = [...new Set(change.steps.flatMap((s) => [s.restart_note, s.login_note && `Log in: ${s.login_note}`]).filter(Boolean))];
   if (notes.length) {
     const after = el("section");
@@ -376,7 +395,7 @@ function showReview(change, previewBody) {
   apply.append(label);
   apply.addEventListener("click", () => applyChange(change, { apply, cancel, label, body }).catch(failed(apply, cancel, label, body)));
   footer.append(cancel, apply);
-  openPanel([header("Review change", words.title, "Nothing is written until you press Apply. A backup is kept, so you can undo.", "Cancel"), body, footer]);
+  openPanel([header("Review change", words.title, "Nothing is written until you press Apply. A backup is kept, so you can undo.", null), body, footer]);
 }
 
 function failed(apply, cancel, label, body) {

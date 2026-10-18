@@ -31,6 +31,7 @@ from kitden.command import installed_command
 from kitden.gateways import add_gateway, data_dir, load_gateways
 from kitden.model import Change, ChangeState, Gateway, GatewayAuth
 from kitden.redact import redact_text
+from kitden.views.after import after_words
 from kitden.views.commands import commands_for
 from kitden.views.effective import project_views
 from kitden.views.explain import explain
@@ -412,7 +413,7 @@ def create_app(
         except ValueError as error:  # includes ChangeRefusedError
             return _error(str(error), 422)
         events.publish("change_state")
-        return JSONResponse(change_dict(change))
+        return JSONResponse({**change_dict(change), "after": after_words(change, state.inventory)})
 
     async def change_action(request: Request) -> JSONResponse:
         if engine is None:
