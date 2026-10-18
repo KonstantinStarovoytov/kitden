@@ -84,3 +84,17 @@ def test_gateway_card_only_with_a_registered_gateway(home):
     assert card["target"] == {"view": "gateway"}
     assert data["gateway"]["through"] == 2
     assert data["gateway"]["name"] == "mcp.neon.tech"
+
+
+def test_old_kitden_entries_get_one_card_that_opens_agents(home):
+    from kitden.changes import toml_edit
+
+    config = home / ".codex/config.toml"
+    old = {"command": "/Users/me/.local/bin/agentsetup", "args": ["mcp"]}
+    config.write_text(toml_edit.set_value(config.read_text(), ("mcp_servers", "agentsetup"), old))
+    data = overview(build_inventory(home), [], None)
+    card = next(a for a in data["attention"] if a["title"].startswith("Old Kitden"))
+    assert card["title"] == "Old Kitden entry in Codex"
+    assert card["action"] == "Update"
+    assert card["target"] == {"view": "agents"}
+    assert data["headline"] == "4 things need attention"

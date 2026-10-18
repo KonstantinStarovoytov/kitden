@@ -53,7 +53,7 @@ Format: `[ID] [P?] [Story] Description`. `[P]` = can run in parallel (different 
 - [X] T008 [US2] Contract test in `tests/contract/test_mcp_handshake.py`: real `claude` and `codex`
   in a sandbox home with an old entry → update → `claude mcp get kitden` and `codex mcp list --json`
   show `kitden`; Undo restores the files byte for byte.
-- [ ] T009 [US2] Page: Agents shows "Old entry" with "Update to Kitden…" (and "old command is
+- [X] T009 [US2] Page: Agents shows "Old entry" with "Update to Kitden…" (and "old command is
   missing" when so); Overview shows an attention card for old entries that opens Agents. Files:
   `web/static/js/agents.js`, `views/overview.py`, `tests/unit/test_overview.py`. Browser check.
 

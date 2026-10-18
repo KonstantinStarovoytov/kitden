@@ -8,6 +8,7 @@ from kitden.model import FindingType, Gateway, Severity, UnknownReason, _hash
 from kitden.views.findings import base_name, find_bypasses, find_findings
 from kitden.views.gateway_view import group_of, loaded_mcp
 from kitden.views.load_map import NAMES
+from kitden.views.setup_server import setup_server_state
 
 READ_PROBLEMS = {
     UnknownReason.UNRECOGNIZED_FORMAT: "The file format is not recognized.",
@@ -81,9 +82,31 @@ def _duplicates(inventory, findings) -> list[dict]:
     return sorted(cards, key=lambda c: c["title"])
 
 
+def _old_entries(inventory) -> list[dict]:
+    """One card for entries the working version (agentsetup) added (feature 002)."""
+    clients = [NAMES[s["client"]] for s in setup_server_state(inventory) if s["item"]]
+    if not clients:
+        return []
+    where = " and ".join([", ".join(clients[:-1]), clients[-1]] if len(clients) > 1 else clients)
+    return [
+        {
+            "id": _hash("old-entries", where),
+            "title": f"Old Kitden {'entry' if len(clients) == 1 else 'entries'} in {where}",
+            "text": "Made by the working version, agentsetup. Update so the client starts kitden.",
+            "action": "Update",
+            "target": {"view": "agents"},
+        }
+    ]
+
+
 def overview(inventory, gateways: list[Gateway], project: str | None) -> dict:
     findings = find_findings(inventory, project)
-    attention = _unreadable(inventory) + _untested(inventory) + _duplicates(inventory, findings)
+    attention = (
+        _unreadable(inventory)
+        + _untested(inventory)
+        + _old_entries(inventory)
+        + _duplicates(inventory, findings)
+    )
 
     mcp = loaded_mcp(inventory, project)
     around = [i for i in mcp if not i.via_gateway]

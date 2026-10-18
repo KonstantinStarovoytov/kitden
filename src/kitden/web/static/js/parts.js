@@ -87,6 +87,7 @@ const ACTION_WORDS = {
   "plugin.enable": "Turned on",
   "plugin.disable": "Turned off",
   "setup_server.register": "Added show my setup",
+  "setup_server.update": "Updated show my setup to Kitden",
 };
 
 // One line for a change log entry: what, which entries, which clients.
@@ -94,7 +95,8 @@ export function changeTitle(entry) {
   const verb = ACTION_WORDS[entry.action] || entry.action;
   const names = [...new Set(entry.steps.map((s) => s.name))];
   const clients = [...new Set(entry.steps.map((s) => CLIENT_NAMES[s.client] || s.client))];
-  const what = entry.action === "gateway.connect" || entry.action === "setup_server.register" ? "" : ` ${names.join(", ")}`;
+  const whole = ["gateway.connect", "setup_server.register", "setup_server.update"].includes(entry.action);
+  const what = whole ? "" : ` ${names.join(", ")}`;
   return `${verb}${what} · ${clients.join(", ")}`;
 }
 

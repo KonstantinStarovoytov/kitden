@@ -15,7 +15,7 @@ export function setBusy(value) {
 }
 // When the last full reload started, so a skipped rescan can tell whether it was covered.
 export const freshness = { reloadStartedAt: 0 };
-export const data = { clients: null, projects: null, overview: null, map: null, gateway: null, changes: null, errors: {} };
+export const data = { clients: null, projects: null, overview: null, map: null, gateway: null, changes: null, setupServer: null, errors: {} };
 
 let renderPlace = () => {};
 export function setRenderer(fn) { renderPlace = fn; }
@@ -118,8 +118,12 @@ export async function loadChanges() {
 }
 
 // Everything the current place shows, after a scan or a change.
+export async function loadSetupServer() {
+  await guarded("setupServer", "/api/setup-server", (v) => { data.setupServer = v; });
+}
+
 export async function reload() {
   freshness.reloadStartedAt = performance.now();
   await loadShared();
-  await Promise.all([loadOverview(), loadMap(), loadGateway()]);
+  await Promise.all([loadOverview(), loadMap(), loadGateway(), loadSetupServer()]);
 }

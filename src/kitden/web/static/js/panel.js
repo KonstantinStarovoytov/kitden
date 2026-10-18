@@ -273,6 +273,7 @@ async function showCommands(row, definitions) {
 const DONE_WORDS = {
   "plugin.disable": "Turned off", "plugin.enable": "Turned on", "mcp.remove_direct": "Removed",
   "gateway.connect": "Connected the gateway", "setup_server.register": "Added show my setup",
+  "setup_server.update": "Updated show my setup to Kitden",
 };
 
 // The review title names the exact entry; the toast uses the short name ("superpowers").
@@ -286,10 +287,11 @@ function changeWords(change) {
     "mcp.remove_direct": `Remove ${names} from ${clients}`,
     "gateway.connect": `Connect the gateway to ${clients}`,
     "setup_server.register": `Add “show my setup” to ${clients}`,
+    "setup_server.update": `Update “show my setup” to Kitden in ${clients}`,
   }[change.action] || change.action;
   const verb = DONE_WORDS[change.action] || change.action;
-  const what = ["gateway.connect", "setup_server.register"].includes(change.action)
-    ? `${verb} to ${clients}`
+  const what = ["gateway.connect", "setup_server.register", "setup_server.update"].includes(change.action)
+    ? `${verb} ${change.action === "setup_server.update" ? "in" : "to"} ${clients}`
     : `${verb} ${short} ${change.action === "mcp.remove_direct" ? "from" : "in"} ${clients}`;
   const notes = [...new Set(change.steps.map((s) => s.restart_note).filter(Boolean))]
     .map((note) => note.replace(/,? for this to take effect\.?$/, ""));
