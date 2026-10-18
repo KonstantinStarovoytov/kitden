@@ -27,9 +27,9 @@ before and after: unchanged (or the files do not exist).
 1. Record the client file hashes as above.
 2. Paste the macOS line from the README. Expected: `Installing uv…`, `Installing Kitden…`,
    `Opening the Kitden page…`, the page opens, the PATH hint is printed, all under 3 minutes
-   (SC-002).
+   (SC-002). Without the command line tools, it stops with the `xcode-select --install` line.
 3. Open a new terminal: `kitden --version` works after `uv tool update-shell`.
-4. Paste the line again. Expected: no uv install; `Updating Kitden…`; the page opens.
+4. Paste the line again. Expected: no uv install; `Installing Kitden…` again; the page opens.
 5. Hashes unchanged.
 6. On a Linux machine or VM, or with `uname` faked: the line prints the "macOS today" message and
    installs nothing (exit 1).
@@ -82,10 +82,11 @@ prints `kitden 0.1.0` (SC-003).
 
 | What | Version | Date | Result |
 | --- | --- | --- | --- |
-| macOS | | | |
-| uv | | | |
-| Claude Code (terminal) | | | |
-| Claude Desktop Code tab | | | |
-| Codex app / CLI | | | |
-| Cursor | | | |
-| Kitden | | | |
+| macOS | 26 (Darwin 25.6) | 2026-10-18 | §1 passes; §2 and §3 wait for a clean account |
+| uv | 0.10.10 | 2026-10-18 | `uv tool install` from a git ref and the update on a new ref checked with a local repository |
+| Claude Code (terminal) | 2.1.283 | 2026-10-18 | `validate --strict`, marketplace add, install, list, uninstall pass in a sandbox home (contract test); a session with the plugin not yet checked |
+| Claude Desktop Code tab | — | — | not checked (research R6 PATH question open) |
+| Codex app / CLI | CLI 0.163.0-alpha.10.2 (ChatGPT app) | 2026-10-18 | marketplace add, plugin add, remove pass in a sandbox home and the page shows Codex as `plugin` (contract test); whether a session starts the plugin's server not checked |
+| Cursor | — | — | not checked |
+| Windows script | — | — | text checked only; no PowerShell on this Mac |
+| Kitden | 0.1.0 | 2026-10-18 | `kitden 0.1.0` from the built wheel outside the checkout |

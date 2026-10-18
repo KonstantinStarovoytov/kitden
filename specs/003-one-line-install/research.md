@@ -129,8 +129,12 @@ feature, not runtime behaviour: the [quickstart](quickstart.md) checks the real 
   Claude Code's strict validation warns on unknown fields. Two small files, no ambiguity.
 - **Versions**: `version` in both manifests equals the package version (R10). Claude Code detects
   an update by the manifest version, so every release changes it.
-- **Checked on this machine**: this layout, with the extra root `plugin.json` and `mcp.json`,
-  passes `claude plugin validate --strict` for the plugin and for the marketplace (2026-10-18).
+- **Checked on this machine** (2026-10-18): this layout, with the extra root `plugin.json` and
+  `mcp.json`, passes `claude plugin validate --strict` for the plugin and for the marketplace.
+  With the repository added as a marketplace from its path, Claude Code 2.1.283 copies the plugin
+  into `~/.claude/plugins/cache/kitden/kitden/0.1.0/` and lists its `mcpServers`; the Codex CLI
+  0.163 copies it into `~/.codex/plugins/cache/kitden/kitden/0.1.0/` with `mcp.json` and writes
+  `[plugins."kitden@kitden"] enabled = true` (contract test `tests/contract/test_plugin_install.py`).
 - **Sources**: [Claude Code: publish a plugin](https://code.claude.com/docs/en/plugins/publish),
   [Claude Code: create a marketplace](https://code.claude.com/docs/en/plugins/create-marketplace),
   [Claude Code: manifest reference](https://code.claude.com/docs/en/plugins-reference) (layout,
@@ -194,6 +198,15 @@ the quickstart records it (expected `~/.cursor/mcp.json`).
   mark the pair as a duplicate with the existing rule. Cursor has no plugin path: the button
   writes a user-level entry, the existing `added` state.
 - **Rationale**: FR-014; an honest inventory (constitution IV).
+- **Found while building** (2026-10-18): the Codex reader now reads `mcp.json` (or `.mcp.json`)
+  in an installed plugin's cache folder, so Codex reaches the `plugin` state too (checked with
+  the real `codex` in the contract test); whether a Codex session starts that server is still
+  the quickstart §5 check. A plugin entry beside an old `agentsetup` entry keeps the `plugin`
+  state and the update only removes the old entry; the API refuses to add a second entry where
+  the plugin provides the server. The existing effective view ranks a user entry over a plugin
+  entry of the same name, so that pair is reported as an override (info), not a duplicate; in
+  Claude Code both would run (`plugin:kitden:kitden` and `kitden`). That is a follow-up for the
+  inventory, not for this feature.
 - **Sources**: `src/kitden/views/setup_server.py`, `src/kitden/model.py` (`SourceKind.PLUGIN`,
   `Scope.PLUGIN`).
 

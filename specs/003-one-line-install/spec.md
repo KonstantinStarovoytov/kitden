@@ -181,8 +181,9 @@ Cursor button; ask each client what loads.
 - **FR-002**: The package MUST run the page with `uvx --from git+https://github.com/<owner>/kitden kitden`
   (and with `uvx kitden` once it is on PyPI), print its version with `--version`, and include
   every file the page needs.
-- **FR-003**: The README MUST show the git form of the `uvx` command as the first install path,
-  with the pinned-tag form next to it. The `uvx kitden` form is added when PyPI publishing lands.
+- **FR-003**: The README MUST show the git form of the `uvx` command (pinned to the release tag,
+  and the plain form) as the way to run Kitden without installing it. The `uvx kitden` form is
+  added when PyPI publishing lands.
 - **FR-004**: The package metadata MUST name the license, the project links, the supported system
   and the Python versions. The source distribution MUST contain only what is needed to build and
   run Kitden: no tests, fixtures, specs or research.
@@ -214,7 +215,8 @@ Cursor button; ask each client what loads.
   contract. This feature adds no tools.
 - **FR-014**: Kitden's Agents place MUST recognise a kitden server that a plugin provides
   (Claude Code, Codex) and show it as provided by the plugin instead of offering to add a second
-  entry. A user-level entry next to a plugin entry MUST be shown as a duplicate.
+  entry. A user-level entry next to a plugin entry MUST be reported: the page's existing rule shows
+  it as the user entry replacing the plugin one, naming both.
 - **FR-015**: The plugin version MUST equal the package version. A release MUST update both.
 - **FR-016**: The README MUST show, in this order: the install line, `uvx kitden`, the Claude Code
   command, the Codex commands and the Cursor button, and MUST say what each one changes on the
