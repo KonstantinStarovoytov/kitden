@@ -1,13 +1,14 @@
 import re
 import socket
 
+import kitden
 import kitden.cli as cli
 from kitden.cli import main, pick_port
 
 
 def test_version_prints_name_and_version_and_exits_zero(capsys):
     assert main(["--version"]) == 0
-    assert capsys.readouterr().out.strip() == "kitden 0.2.0"
+    assert capsys.readouterr().out.strip() == f"kitden {kitden.__version__}"
 
 
 def _busy(port):
