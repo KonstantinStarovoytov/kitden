@@ -5,7 +5,7 @@
 # when a newer release is named below. See specs/003-one-line-install/contracts/install-scripts.md.
 set -eu
 
-KITDEN_REF="v0.1.0"
+KITDEN_REF="v0.1.1"
 KITDEN_SOURCE="git+https://github.com/KonstantinStarovoytov/kitden@$KITDEN_REF"
 FOLLOW_UP="https://github.com/KonstantinStarovoytov/kitden#linux-and-windows"
 

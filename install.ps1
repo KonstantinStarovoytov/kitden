@@ -4,7 +4,7 @@
 # See specs/003-one-line-install/contracts/install-scripts.md.
 $ErrorActionPreference = "Stop"
 
-$KitdenRef = "v0.1.0"
+$KitdenRef = "v0.1.1"
 $KitdenSource = "git+https://github.com/KonstantinStarovoytov/kitden@$KitdenRef"
 $FollowUp = "https://github.com/KonstantinStarovoytov/kitden#linux-and-windows"
 

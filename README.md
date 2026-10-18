@@ -1,3 +1,5 @@
+<img src="src/kitden/web/static/brand/kitden.svg" width="48" height="48" alt="Kitden house">
+
 # Kitden
 
 **See what your coding agents load. Change it with confidence.**
@@ -11,6 +13,9 @@ their own files. Kitden shows all of them on one page and lets you change them s
     <img src="docs/images/overview.jpg" alt="The Kitden page: three things need attention, each with one button to fix it" width="800">
   </picture>
 </p>
+
+The screenshots above show the previous release. The current interface uses the
+[Quiet Den + Graphite identity](DESIGN.md).
 
 ## The problem
 
@@ -66,7 +71,7 @@ kitden
 Already have uv? Run it without installing:
 
 ```bash
-uvx --from git+https://github.com/KonstantinStarovoytov/kitden@v0.1.0 kitden
+uvx --from git+https://github.com/KonstantinStarovoytov/kitden@v0.1.1 kitden
 ```
 
 Linux and Windows are not supported yet.
