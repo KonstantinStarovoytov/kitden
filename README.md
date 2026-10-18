@@ -6,7 +6,10 @@ Claude Code, Codex and Cursor each keep their own MCP servers, plugins, skills a
 their own files. Kitden shows all of them on one page and lets you change them safely.
 
 <p align="center">
-  <img src="docs/images/overview.jpg" alt="The Kitden page: three things need attention, each with one button to fix it" width="800">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/overview-dark.jpg">
+    <img src="docs/images/overview.jpg" alt="The Kitden page: three things need attention, each with one button to fix it" width="800">
+  </picture>
 </p>
 
 ## The problem
@@ -32,7 +35,10 @@ Nobody wants to open six JSON and TOML files to find out.
 ## How it works
 
 <p align="center">
-  <img src="docs/images/how-it-works.svg" alt="Kitden reads the settings of Claude Code, Codex and Cursor, shows them on one local page, and writes a change back with a backup you can undo" width="860">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/how-it-works-dark.svg">
+    <img src="docs/images/how-it-works.svg" alt="Kitden reads the settings of Claude Code, Codex and Cursor, shows them on one local page, and writes a change back with a backup you can undo" width="860">
+  </picture>
 </p>
 
 1. Kitden reads the settings files of your agents. Nothing leaves your Mac.

@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="300" viewBox="0 0 860 300" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14">
+  <title>How Kitden works: it reads the settings of your coding agents, shows them on one page, and writes changes with a backup you can undo.</title>
+  <rect width="860" height="300" rx="12" fill="#0f1115"/>
+
+  <!-- Your coding agents -->
+  <text x="40" y="42" font-size="12" fill="#858c99" font-weight="600" letter-spacing="1">YOUR CODING AGENTS</text>
+  <g>
+    <rect x="40" y="60" width="200" height="48" rx="8" fill="#14171c" stroke="#2a2f38"/>
+    <rect x="52" y="72" width="24" height="24" rx="5" fill="#0f1115" stroke="#3a4049"/>
+    <text x="64" y="89" text-anchor="middle" font-size="10" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="#b4bac6">CC</text>
+    <text x="88" y="89" fill="#e7e9ee" font-weight="600">Claude Code</text>
+
+    <rect x="40" y="124" width="200" height="48" rx="8" fill="#14171c" stroke="#2a2f38"/>
+    <rect x="52" y="136" width="24" height="24" rx="5" fill="#0f1115" stroke="#3a4049"/>
+    <text x="64" y="153" text-anchor="middle" font-size="10" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="#b4bac6">CX</text>
+    <text x="88" y="153" fill="#e7e9ee" font-weight="600">Codex</text>
+
+    <rect x="40" y="188" width="200" height="48" rx="8" fill="#14171c" stroke="#2a2f38"/>
+    <rect x="52" y="200" width="24" height="24" rx="5" fill="#0f1115" stroke="#3a4049"/>
+    <text x="64" y="217" text-anchor="middle" font-size="10" font-weight="700" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="#b4bac6">CU</text>
+    <text x="88" y="217" fill="#e7e9ee" font-weight="600">Cursor</text>
+  </g>
+  <text x="40" y="266" font-size="12" fill="#858c99">Each keeps its own settings files:</text>
+  <text x="40" y="284" font-size="12" fill="#858c99">MCP servers, plugins, skills, hooks</text>
+
+  <!-- Arrows: read -->
+  <g stroke="#6b717d" stroke-width="1.5" fill="none">
+    <path d="M240 84 C 300 84, 300 148, 350 148"/>
+    <path d="M240 148 L 350 148"/>
+    <path d="M240 212 C 300 212, 300 148, 350 148"/>
+  </g>
+  <polygon points="350,143 360,148 350,153" fill="#6b717d"/>
+  <text x="270" y="134" font-size="12" fill="#858c99">reads</text>
+
+  <!-- Kitden -->
+  <rect x="360" y="96" width="180" height="104" rx="10" fill="#e7e9ee"/>
+  <rect x="380" y="116" width="18" height="18" rx="5" fill="#0f1115"/>
+  <rect x="384" y="121" width="10" height="2" fill="#e7e9ee"/>
+  <rect x="384" y="127" width="10" height="2" fill="#e7e9ee"/>
+  <text x="406" y="130" fill="#0f1115" font-weight="700" font-size="16">Kitden</text>
+  <text x="380" y="158" fill="#464d5b" font-size="12">one local page</text>
+  <text x="380" y="176" fill="#464d5b" font-size="12">nothing leaves your Mac</text>
+
+  <!-- Arrows: show -->
+  <path d="M540 148 L 650 148" stroke="#6b717d" stroke-width="1.5"/>
+  <polygon points="650,143 660,148 650,153" fill="#6b717d"/>
+  <text x="572" y="136" font-size="12" fill="#858c99">shows</text>
+
+  <!-- You -->
+  <rect x="660" y="60" width="160" height="176" rx="10" fill="#14171c" stroke="#2a2f38"/>
+  <text x="740" y="90" text-anchor="middle" fill="#e7e9ee" font-weight="700" font-size="15">You</text>
+  <g font-size="12" fill="#b4bac6">
+    <circle cx="684" cy="116" r="4" fill="#47c27a"/>
+    <text x="696" y="120">what loads where</text>
+    <circle cx="684" cy="142" r="4" fill="#e0a347"/>
+    <text x="696" y="146">what loads twice</text>
+    <circle cx="684" cy="168" r="4" fill="#6f9bff"/>
+    <text x="696" y="172">what to switch off</text>
+  </g>
+  <rect x="680" y="192" width="120" height="28" rx="6" fill="#e7e9ee"/>
+  <text x="740" y="211" text-anchor="middle" fill="#0f1115" font-size="12" font-weight="600">Apply</text>
+
+  <!-- Arrow: write back with backup -->
+  <path d="M680 206 C 600 206, 600 262, 300 262 C 262 262, 262 236, 240 236" stroke="#6f9bff" stroke-width="1.5" fill="none" stroke-dasharray="4 5"/>
+  <polygon points="246,231 236,236 246,241" fill="#6f9bff"/>
+  <text x="330" y="284" font-size="12" fill="#6f9bff">writes the change with a backup · Undo puts it back</text>
+</svg>
