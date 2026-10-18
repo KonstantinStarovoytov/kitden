@@ -1,0 +1,11 @@
+{
+  "name": "kitden",
+  "displayName": "Kitden",
+  "version": "0.1.0",
+  "description": "Ask what your coding agents load; open the Kitden page",
+  "author": { "name": "<owner>" },
+  "homepage": "https://github.com/<owner>/kitden",
+  "repository": "https://github.com/<owner>/kitden",
+  "license": "Apache-2.0",
+  "keywords": ["mcp", "setup", "claude-code", "codex", "cursor"]
+}

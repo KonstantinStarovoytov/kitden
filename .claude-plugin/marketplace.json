@@ -1,0 +1,12 @@
+{
+  "name": "kitden",
+  "description": "See what your coding agents load. Change it with confidence.",
+  "owner": { "name": "<owner>" },
+  "plugins": [
+    {
+      "name": "kitden",
+      "source": "./plugins/kitden",
+      "description": "Ask what your coding agents load; open the Kitden page"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "kitden",
+  "plugins": [
+    {
+      "name": "kitden",
+      "source": { "source": "local", "path": "./plugins/kitden" },
+      "policy": { "installation": "AVAILABLE" }
+    }
+  ]
+}
