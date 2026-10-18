@@ -94,3 +94,10 @@ def test_plugin_switch_opens_a_review_and_does_not_flip_itself():
 
 # Motion pass 2 (2026-10-18): each page keeps the parts the design brief asked for.
 CSS = (STATIC / "style.css").read_text()
+
+
+def test_controls_press_and_the_switch_waits_for_the_preview():
+    assert ".switch.pending" in CSS
+    assert ".seg button:active" in CSS and ".tabs button:active" in CSS
+    text = script("panel.js")
+    assert 'classList.add("pending")' in text and 'setAttribute("aria-busy", "true")' in text

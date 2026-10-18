@@ -227,7 +227,20 @@ function pluginSwitch(def, action) {
   node.setAttribute("aria-label", `${on ? "Turn off" : "Turn on"} in ${clientName(def.client)}…`);
   node.title = on ? "On. Press to review turning it off." : "Off. Press to review turning it on.";
   node.append(el("span", "thumb"));
-  node.addEventListener("click", () => review({ action, targets: [{ item: def.id }], params: {} }).catch(reportError));
+  // While the preview is fetched the thumb rests half-way: pending, not flipped.
+  node.addEventListener("click", async () => {
+    if (node.classList.contains("pending")) return;
+    node.classList.add("pending");
+    node.setAttribute("aria-busy", "true");
+    try {
+      await review({ action, targets: [{ item: def.id }], params: {} });
+    } catch (error) {
+      reportError(error);
+    } finally {
+      node.classList.remove("pending");
+      node.removeAttribute("aria-busy");
+    }
+  });
   return node;
 }
 

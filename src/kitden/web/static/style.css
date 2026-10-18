@@ -91,8 +91,9 @@ a { color: var(--route); }
 .rail { border-right: 1px solid var(--wire); padding: 14px 10px; display: flex; flex-direction: column; gap: 2px; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 8px 8px 22px; font-size: 20px; font-weight: 650; letter-spacing: -0.01em; }
 .brand-mark { width: 30px; height: 30px; flex: none; background: url("/static/brand/kitden.svg") center / contain no-repeat; }
-.nav a { display: flex; align-items: center; justify-content: space-between; height: 30px; padding: 0 8px; border-radius: 6px; color: var(--ink-2); text-decoration: none; transition: background-color var(--t-fast) ease, color var(--t-fast) ease; }
+.nav a { display: flex; align-items: center; justify-content: space-between; height: 30px; padding: 0 8px; border-radius: 6px; color: var(--ink-2); text-decoration: none; transition: background-color var(--t-fast) ease, color var(--t-fast) ease, transform 260ms var(--spring); }
 .nav a:hover { background: var(--wire-soft); color: var(--ink); }
+.nav a:active { transform: scale(0.98); transition-duration: var(--t-fast), var(--t-fast), 80ms; }
 .nav a[aria-current="page"] { background: var(--route-soft); color: var(--route); box-shadow: inset 3px 0 var(--brand); font-weight: 600; }
 /* One mark slides between the choices of a group (rail, tabs, filters); the choice itself is instant. */
 .ink { position: absolute; left: 0; top: 0; z-index: 0; border-radius: 6px; background: var(--route-soft); pointer-events: none; opacity: 0; transition: opacity var(--t-fast) ease; }
@@ -135,13 +136,19 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .search input::-webkit-search-cancel-button { display: none; }
 .where-box { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 4px 0 10px; border: 1px solid var(--wire); border-radius: 7px; background: var(--panel); max-width: 380px; }
 .where-box select:focus-visible { outline: none; }
-.where-box select { border: 0; background: var(--panel); color: var(--ink); max-width: 300px; height: 26px; cursor: pointer; text-overflow: ellipsis; }
+.where-box select { border: 0; background: transparent; color: var(--ink); max-width: 300px; height: 26px; cursor: pointer; text-overflow: ellipsis; }
+.where-box { transition: background-color var(--t-fast) ease, border-color var(--t-fast) ease; }
+.where-box:hover { border-color: var(--wire-strong); }
 .seg { display: inline-flex; padding: 2px; background: var(--inset); border-radius: 7px; border: 1px solid var(--wire-soft); }
-.seg button { height: 24px; padding: 0 10px; border: 0; background: transparent; border-radius: 5px; color: var(--ink-2); cursor: pointer; }
+.seg button { height: 24px; padding: 0 10px; border: 0; background: transparent; border-radius: 5px; color: var(--ink-2); cursor: pointer; transition: color var(--t-fast) ease, transform 260ms var(--spring); }
+.seg button:hover { color: var(--ink); }
+.seg button:active { transform: scale(0.96); transition-duration: var(--t-fast), 80ms; }
 .seg button[aria-pressed="true"] { background: var(--route-soft); color: var(--route); box-shadow: 0 0 0 1px var(--wire); font-weight: 600; }
 .field { display: grid; gap: 4px; }
 .field > span { color: var(--ink-3); font-size: 12px; }
-.field input, .field select { height: 30px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--wire-strong); background: var(--inset); color: var(--ink); min-width: 0; }
+.field input, .field select { height: 30px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--wire-strong); background: var(--inset); color: var(--ink); min-width: 0; transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease; }
+.field input:hover, .field select:hover { border-color: var(--ink-3); }
+.field input:focus-visible, .field select:focus-visible { background: var(--panel); }
 .form { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 10px 0; }
 .form .grow { flex: 1 1 280px; }
 .checks { display: flex; gap: 14px; align-items: center; border: 0; padding: 0; margin: 0; }
@@ -196,6 +203,9 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .switch:hover { filter: brightness(1.06); }
 .switch:active .thumb { width: 20px; }
 .switch[aria-checked="true"]:active .thumb { transform: translateX(10px); }
+/* Waiting for the preview: the thumb rests half-way, neither on nor off, until the review opens. */
+.switch.pending { cursor: progress; }
+.switch.pending .thumb, .switch[aria-checked="true"].pending .thumb { transform: translateX(7px); width: 16px; }
 
 /* Entrance used once per place */
 .rise { animation: rise 380ms var(--ease-out) both; }
@@ -252,8 +262,11 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 /* Load map */
 .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
 .tabs { position: relative; display: flex; gap: 2px; border-bottom: 1px solid var(--wire); margin-bottom: 12px; overflow-x: auto; }
-.tabs button { border: 0; background: transparent; padding: 8px 10px; color: var(--ink-3); cursor: pointer; white-space: nowrap; transition: color var(--t-fast) ease; }
+.tabs button { border: 0; background: transparent; padding: 8px 10px; border-radius: 6px 6px 0 0; color: var(--ink-3); cursor: pointer; white-space: nowrap; transition: color var(--t-fast) ease, background-color var(--t-fast) ease, transform 260ms var(--spring); }
+.tabs button:hover { color: var(--ink); background: var(--wire-soft); }
+.tabs button:active { transform: scale(0.97); transition-duration: var(--t-fast), var(--t-fast), 80ms; }
 .tabs button[aria-selected="true"] { color: var(--route); font-weight: 600; }
+.tabs button[aria-selected="true"]:hover { background: transparent; }
 .tabs .count { margin-left: 4px; }
 .tab-ink { position: absolute; left: 0; bottom: 0; height: 2px; width: 1px; background: var(--brand); transform-origin: left; }
 table.map { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--panel); border: 1px solid var(--wire); border-radius: 8px; table-layout: fixed; }
@@ -263,6 +276,7 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .map tr:last-child td { border-bottom: 0; }
 .map tbody tr { cursor: pointer; }
 .map tbody tr:hover td { background: var(--inset); }
+.map tbody tr:active td { background: var(--wire-soft); transition-duration: 60ms; }
 .map tbody tr[aria-selected="true"] td { background: var(--route-soft); }
 .map tbody tr.arrive td { animation: arrive 1200ms var(--ease-out) both; }
 @keyframes arrive { 0%, 30% { background: color-mix(in srgb, var(--brand) 22%, var(--route-soft)); } }
