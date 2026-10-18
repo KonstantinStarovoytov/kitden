@@ -14,6 +14,7 @@ const FILTERS = [["all", "All"], ["problems", "Needs attention"], ["diff", "Diff
 // new one and a resolved flag can shrink away instead of vanishing.
 export let previousCells = {};
 let previousFlags = {};
+let lastProject = null;
 let morphNext = false;
 export function morphOnNextRender() { morphNext = true; }
 
@@ -42,9 +43,13 @@ function passesFilter(row) {
 export function renderMap(main) {
   main.append(el("h1", null, "Load map"));
   const path = projectPath();
-  main.append(el("p", "lede", path
+  const lede = el("p", "lede", path
     ? `What each client loads in ${shortPath(path)}.`
-    : "What each client loads in the global setup, with no project open."));
+    : "What each client loads in the global setup, with no project open.");
+  // After a scope change the words rise in while the cells morph.
+  if (lastProject !== null && lastProject !== state.project) lede.classList.add("fresh");
+  lastProject = state.project;
+  main.append(lede);
   const model = data.map;
   if (!model) {
     if (data.errors.map) main.append(banner("the load map", async () => { await loadMap(); render(); }));

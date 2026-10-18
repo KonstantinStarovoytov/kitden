@@ -71,13 +71,16 @@ function renderShell() {
   }
   where.title = projects.find((project) => project.id === state.project)?.path || "Global setup";
   where.value = state.project;
+  where.closest(".where-box").classList.toggle("project", Boolean(state.project));
   if ($("#q") !== document.activeElement) $("#q").value = state.q;
 }
 
-async function refresh() {
+// A scope change cross-fades the page (the Load map morphs its cells instead).
+async function refresh({ fade = false } = {}) {
   await reload();
   $("#scanned").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  renderPlace();
+  if (fade) transition(renderPlace);
+  else renderPlace();
 }
 
 // Theme: follows the system until the switch is used; the new theme spreads in a circle.
@@ -187,7 +190,7 @@ function start() {
     setState({ project: event.target.value, selected: null });
     // On the Load map, each cell turns into its state in the new scope instead of jumping.
     if (state.view === "map") morphOnNextRender();
-    refresh().catch(reportError);
+    refresh({ fade: state.view !== "map" }).catch(reportError);
   });
   $("#q").addEventListener("input", (event) => {
     const q = event.target.value.trim();

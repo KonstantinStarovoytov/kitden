@@ -139,3 +139,14 @@ def test_load_map_shows_one_flag_per_wording_and_resolved_flags_shrink_away():
     text = script("map.js")
     assert "findIndex((o) => o.text === f.text)" in text
     assert 'classList.add("gone")' in text and ".flag.gone" in CSS
+
+
+def test_scope_switch_marks_the_project_picker_and_the_lede():
+    assert 'classList.toggle("project"' in script("app.js")
+    assert ".where-box.project" in CSS
+    assert 'classList.add("fresh")' in script("map.js")
+
+
+def test_reduced_motion_turns_every_animation_off():
+    assert "prefers-reduced-motion: reduce" in CSS
+    assert "reducedMotion.matches" in script("motion.js")
