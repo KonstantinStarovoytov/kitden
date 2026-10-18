@@ -3,7 +3,7 @@ import { postJson } from "./api.js";
 import { button, el, plural, webLink } from "./dom.js";
 import { entrance } from "./motion.js";
 import { review, toast } from "./panel.js";
-import { banner, CLIENT_NAMES, mark, skeleton } from "./parts.js";
+import { banner, CLIENT_ICONS, CLIENT_NAMES, mark, skeleton } from "./parts.js";
 import { data, loadGateway, reload, render } from "./store.js";
 
 const WRITABLE = ["claude_code", "codex", "cursor"];
@@ -140,7 +140,10 @@ function routes(gateway, connections) {
       add("path", { d, class: `flow ${speeds[i]}` });
     }
     add("rect", { x: 8, y: y - 15, width: 142, height: 30, rx: 7, class: "node" });
-    add("text", { x: 22, y: y + 4 }, { claude_code: "CC", codex: "CX", cursor: "CU" }[client]);
+    // The same tile as mark(): the Claude glyph sits inside it, the other icons fill it.
+    const pad = CLIENT_ICONS[client] === "claude.png" ? 4 : 0;
+    add("rect", { x: 16, y: y - 12, width: 24, height: 24, rx: 6, class: "node-tile" });
+    add("image", { x: 16 + pad, y: y - 12 + pad, width: 24 - 2 * pad, height: 24 - 2 * pad, href: `/static/brand/clients/${CLIENT_ICONS[client]}`, class: "node-icon", "aria-hidden": "true" });
     add("text", { x: 50, y: y + 4, class: "sub" }, CLIENT_NAMES[client]);
   });
   add("rect", { x: hub.x, y: hub.y - 22, width: 160, height: 44, rx: 9, class: "hub" });

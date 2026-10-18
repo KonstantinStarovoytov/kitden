@@ -2,6 +2,7 @@
 import { getJson, postJson, query } from "./api.js";
 import { $, $$, button, el, shortPath, shortPaths } from "./dom.js";
 import { morphOnNextRender, onOpenItem } from "./map.js";
+import { finishTransition } from "./motion.js";
 import { CLIENT_NAMES, mark, socket } from "./parts.js";
 import { busy, data, reload, render, setBusy, state } from "./store.js";
 
@@ -37,6 +38,7 @@ function swapContent(content) {
 
 // Put content in the panel and slide it in. Keyboard opens are instant.
 export function openPanel(content, { instant = false } = {}) {
+  finishTransition();
   const drawer = $("#drawer");
   if (isPanelOpen()) { swapContent(content); return; }
   drawer.replaceChildren(...content);

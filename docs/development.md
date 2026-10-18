@@ -48,6 +48,7 @@ macOS paths. Support for both is a later feature.
 | [Feature 001 spec](../specs/001-agent-setup-inventory/spec.md) | First release specification: user stories, requirements, success criteria |
 | [Feature 002 spec](../specs/002-kitden-rename/spec.md) | The Kitden name, `kitden open`, one page per computer |
 | [Feature 003 spec](../specs/003-one-line-install/spec.md) | One-line install: the install line, `uvx` from the repository, the plugin for Claude Code and Codex, the Cursor button |
+| [Visual system](../DESIGN.md) | The Kitden house, colors and client marks ([feature 005 spec](../specs/005-den-brand/spec.md)) |
 | [Design and install review](research/design-and-install-review-2026-10-18.md) | Fresh-eyes review of the page and the install path |
 | [Naming and licensing](research/naming-and-licensing-2026-10-17.md) | How the name Kitden was chosen; license options |
 | [Brief review](research/brief-review-2026-10-17.md) | Independent review by two models: scores, missed competitors, recommended cuts, experiments |

@@ -8,6 +8,10 @@ export const STATE_WORDS = {
 export const CLIENT_MARKS = {
   claude_code: "CC", codex: "CX", cursor: "CU", claude_desktop_code_tab: "CD",
 };
+export const CLIENT_ICONS = {
+  claude_code: "claude.png", claude_desktop_code_tab: "claude.png",
+  codex: "codex.png", cursor: "cursor.png",
+};
 export const CLIENT_NAMES = {
   claude_code: "Claude Code", codex: "Codex", cursor: "Cursor",
   claude_desktop_code_tab: "Claude Desktop (Code tab)",
@@ -51,6 +55,22 @@ export function morphSocket(node, { state, where }) {
 export function mark(clientId) {
   const node = el("span", "mono-mark", CLIENT_MARKS[clientId] || "?");
   node.title = CLIENT_NAMES[clientId] || clientId;
+  const icon = CLIENT_ICONS[clientId];
+  if (icon) {
+    // One rounded tile for every client; the vendor icon keeps its own colors.
+    node.className = "client-mark";
+    node.dataset.icon = icon.replace(".png", "");
+    const image = el("img");
+    image.src = `/static/brand/clients/${icon}`;
+    image.alt = "";
+    image.width = 24;
+    image.height = 24;
+    image.addEventListener("error", () => {
+      node.className = "mono-mark";
+      node.textContent = CLIENT_MARKS[clientId] || "?";
+    }, { once: true });
+    node.replaceChildren(image);
+  }
   node.setAttribute("aria-hidden", "true");
   return node;
 }

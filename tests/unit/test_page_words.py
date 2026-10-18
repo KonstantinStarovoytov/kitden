@@ -57,7 +57,8 @@ def test_project_picker_says_project_not_where():
     assert "Project:" in INDEX and "Where:" not in INDEX
     assert 'aria-label="Project"' in INDEX
     app = script("app.js")
-    assert "No project (global setup)" in app and "Everywhere" not in app
+    assert 'new Option("Global", "")' in app and "No project" not in app
+    assert '<option value="">Global</option>' in INDEX
     assert "outside any project" not in script("map.js")
 
 

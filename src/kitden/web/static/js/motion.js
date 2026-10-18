@@ -10,17 +10,36 @@ export function animate(node, keyframes, options) {
   return node.animate(keyframes, { easing: EASE_OUT, ...options });
 }
 
+let activeTransition = null;
+let activeClass = null;
+
+// Snapshots sit above all normal stacking contexts; drop them before opening a drawer.
+export function finishTransition() {
+  activeTransition?.skipTransition();
+  if (activeClass) document.documentElement.classList.remove(activeClass);
+  activeTransition = null;
+  activeClass = null;
+}
+
 // Run a DOM change as a View Transition where the browser has one; otherwise just run it.
 // Hidden tabs skip it: the browser would hold the change until the tab is visible.
 export function transition(change, extraClass) {
+  finishTransition();
   if (!document.startViewTransition || reducedMotion.matches || document.hidden) {
     change();
     return null;
   }
   if (extraClass) document.documentElement.classList.add(extraClass);
   const t = document.startViewTransition(change);
+  activeTransition = t;
+  activeClass = extraClass;
   t.ready.catch(() => {});
-  t.finished.catch(() => {}).finally(() => extraClass && document.documentElement.classList.remove(extraClass));
+  t.finished.catch(() => {}).finally(() => {
+    if (activeTransition !== t) return;
+    if (extraClass) document.documentElement.classList.remove(extraClass);
+    activeTransition = null;
+    activeClass = null;
+  });
   return t;
 }
 

@@ -1,6 +1,6 @@
 // Entry point: the shell (rail, top bar), routing, theme, rescan and live updates.
 import { postJson } from "./api.js";
-import { $, $$, reportError, shortPath } from "./dom.js";
+import { $, $$, reportError } from "./dom.js";
 import { rollTo, transition } from "./motion.js";
 import { renderAgents } from "./agents.js";
 import { renderChanges } from "./changes.js";
@@ -54,19 +54,21 @@ function renderShell() {
   const changes = latestChanges(data.changes || []).filter((e) => e.state === "verified").length;
   rollTo($("#nav-changes"), changes || "");
 
-  // The project picker: the folder name first, then its parent folder, short.
+  // Keep the picker compact; full paths are available on hover.
   const where = $("#where");
   const projects = data.projects || [];
-  if (where.options.length !== projects.length + 1) {
-    where.replaceChildren(new Option("No project (global setup)", ""));
+  const signature = JSON.stringify(projects.map(({ id, path, exists }) => [id, path, exists]));
+  if (where.dataset.projects !== signature) {
+    where.replaceChildren(new Option("Global", ""));
     for (const project of projects) {
-      const parts = shortPath(project.path).split("/");
-      const name = parts.pop();
-      const parent = parts.join("/");
-      const label = `${name}${parent ? ` · ${parent}` : ""}${project.exists ? "" : " (folder missing)"}`;
-      where.append(new Option(label, project.id));
+      const name = project.path.split("/").filter(Boolean).pop() || project.path;
+      const option = new Option(`${name}${project.exists ? "" : " (folder missing)"}`, project.id);
+      option.title = project.path;
+      where.append(option);
     }
+    where.dataset.projects = signature;
   }
+  where.title = projects.find((project) => project.id === state.project)?.path || "Global setup";
   where.value = state.project;
   if ($("#q") !== document.activeElement) $("#q").value = state.q;
 }

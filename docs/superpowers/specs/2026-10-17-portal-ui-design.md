@@ -1,5 +1,7 @@
 # Portal UI and UX design (proposal)
 
+Visual identity update (2026-10-18): [Quiet Den + Graphite](../../../DESIGN.md) supersedes the original palette and placeholder mark. Layout and behavior guidance below remains historical context.
+
 Status: proposal for the owner, 2026-10-17. Clickable mockup with test data:
 [docs/design/portal-mockup.html](../../design/portal-mockup.html). Research behind it:
 [design skills and tools](../../research/design-skills-and-tools-2026-10-17.md).
