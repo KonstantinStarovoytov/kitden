@@ -1,8 +1,8 @@
 // Changes: every change made from this page, newest first, with Undo.
 import { button, el, shortPath, shortPaths } from "./dom.js";
 import { entrance } from "./motion.js";
-import { undoChange } from "./panel.js";
-import { banner, CLIENT_NAMES, changeTitle, latestChanges, skeleton } from "./parts.js";
+import { closePanel, openChange, undoChange } from "./panel.js";
+import { banner, changeTitle, latestChanges, mark, skeleton } from "./parts.js";
 import { data, loadChanges, render } from "./store.js";
 
 // The state in words. Rows that no longer change anything are plain grey text, not badges.
@@ -18,8 +18,6 @@ const STATE_BADGES = {
 const OVER = ["undone", "cancelled"];
 
 const SCOPE_WORDS = { user: "everywhere", project: "project", local: "this Mac" };
-
-const open = new Set();
 
 function when(time) {
   const date = new Date(time);
@@ -46,7 +44,7 @@ export function renderChanges(main) {
   }
   const card = el("div", "card timeline");
   const list = el("ul", "feed");
-  for (const entry of latest) list.append(...changeRow(entry));
+  for (const entry of latest) list.append(changeRow(entry));
   card.append(list);
   main.append(card);
   entrance("changes", [card]);
@@ -58,36 +56,37 @@ function changeRow(entry) {
   const actions = el("span", "row-actions");
   if (entry.state === "verified") actions.append(button("Undo", () => undoChange(entry)));
   li.append(el("span", "muted", when(entry.time)), el("span", null, changeTitle(entry)), el("span", look, word), actions);
-  // The whole row opens the details; the Undo button keeps to itself.
-  const shown = open.has(entry.id);
+  // The whole row opens the panel with the files it touched; the Undo button keeps to itself.
   li.tabIndex = 0;
-  li.setAttribute("aria-expanded", String(shown));
-  const toggle = () => {
-    if (shown) open.delete(entry.id); else open.add(entry.id);
-    render();
-  };
-  li.addEventListener("click", (event) => { if (!event.target.closest("button")) toggle(); });
+  li.addEventListener("click", (event) => { if (!event.target.closest("button")) show(entry); });
   li.addEventListener("keydown", (event) => {
     if (event.target === li && (event.key === "Enter" || event.key === " ")) {
       event.preventDefault();
-      toggle();
+      show(entry);
     }
   });
-  if (!shown) return [li];
+  return li;
+}
 
-  const more = el("li", "change-detail");
-  const steps = el("ul");
+// Files, paths and the error text live here, not on the page.
+function show(entry) {
+  const body = el("div", "body");
+  const steps = el("div", "stack");
   for (const step of entry.steps) {
-    const line = el("li");
-    const path = el("span", "mono muted", shortPath(step.path));
+    const row = el("div", "layer");
+    const middle = el("div");
+    middle.append(el("div", "name", `${step.name} · ${SCOPE_WORDS[step.scope] || step.scope}`));
+    const path = el("div", "why mono", shortPath(step.path));
     path.title = step.path || "";
-    const scope = SCOPE_WORDS[step.scope] || step.scope;
-    line.append(el("span", null, `${CLIENT_NAMES[step.client] || step.client} · ${scope} · ${step.name} `), path);
-    steps.append(line);
+    middle.append(path);
+    row.append(mark(step.client), middle);
+    steps.append(row);
   }
-  more.append(steps);
+  body.append(steps);
   const history = data.changes.filter((e) => e.id === entry.id).reverse();
-  more.append(el("p", "muted", history.map((e) => `${when(e.time)} ${(STATE_BADGES[e.state] || [e.state])[0]}`).join(" → ")));
-  if (entry.error) more.append(el("p", "muted", shortPaths(entry.error)));
-  return [li, more];
+  body.append(el("p", "muted", history.map((e) => `${when(e.time)} ${(STATE_BADGES[e.state] || [e.state])[0]}`).join(" → ")));
+  if (entry.error) body.append(el("p", "muted", shortPaths(entry.error)));
+  // Undo from the panel closes it; the page then shows the undone row.
+  const undo = () => { closePanel({ focus: false }); return undoChange(entry); };
+  openChange(changeTitle(entry), body, entry.state === "verified" ? undo : null);
 }

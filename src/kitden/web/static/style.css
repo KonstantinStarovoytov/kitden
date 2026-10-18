@@ -288,6 +288,7 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .stack { display: grid; border: 1px solid var(--wire); border-radius: 8px; overflow: hidden; }
 .layer { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 10px; padding: 9px 12px; border-top: 1px solid var(--wire-soft); align-items: start; }
 .layer:first-child { border-top: 0; }
+.layer > .client-mark, .layer > .mono-mark { --tile: 20px; }
 .layer.wins { background: var(--wire-soft); }
 .layer .name { overflow-wrap: anywhere; }
 .layer .why { color: var(--ink-3); font-size: 12px; overflow-wrap: anywhere; }
@@ -327,10 +328,6 @@ pre.diff .del { color: var(--danger); }
 .timeline .feed li:focus-visible { outline-offset: -2px; }
 .timeline .row-actions { display: flex; gap: 4px; justify-content: flex-end; }
 .timeline .feed li.over, .timeline .feed li.over .muted { color: var(--ink-4); }
-.timeline .feed li.change-detail { display: block; padding: 0 12px 12px 144px; border-top: 0; cursor: default; }
-.timeline .feed li.change-detail:hover { background: transparent; }
-.change-detail ul { margin: 0 0 6px; padding-left: 18px; }
-.change-detail p { margin: 0; }
 details.connect, details.add-more { margin-top: 12px; }
 details.connect > summary, details.add-more > summary { cursor: pointer; color: var(--ink-2); font-weight: 500; }
 
@@ -355,7 +352,6 @@ html.theme-switch::view-transition-old(root), html.theme-switch::view-transition
   .overview { grid-template-columns: 1fr; }
   .conn { grid-template-columns: 1fr; }
   .timeline .feed li { grid-template-columns: minmax(0, 1fr) auto; }
-  .timeline .feed li.change-detail { padding-left: 12px; }
   .topbar { padding: 10px 16px; flex-wrap: wrap; gap: 8px; }
   .where-box, .search { flex: 1 1 100%; max-width: none; min-width: 0; }
   .where-box select { flex: 1; width: 0; max-width: none; }
