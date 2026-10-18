@@ -64,7 +64,7 @@ Format: `[ID] [P?] [Story] Description`. `[P]` = can run in parallel (different 
 **Goal**: `kitden open` returns at once; one page per home folder.
 **Independent test**: quickstart §4.
 
-- [ ] T010 [US3] Tests first in `tests/unit/test_page.py`: the page lock lets only one page run per
+- [X] T010 [US3] Tests first in `tests/unit/test_page.py`: the page lock lets only one page run per
   home; `page.json` has mode 0600 and is removed on stop; a record without a held lock is stale.
   Then `page.py` ([R3](research.md#r3-one-page-per-home-folder), [R4](research.md#r4-page-record)).
 - [ ] T011 [US3] Tests first: `open` with a running page opens it and starts nothing; with no page it
