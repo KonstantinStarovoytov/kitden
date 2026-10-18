@@ -156,14 +156,22 @@ function groupRow(row, group) {
   const marks = el("span", "chip");
   marks.setAttribute("aria-label", row.clients.map((c) => CLIENT_NAMES[c] || c).join(", "));
   for (const client of row.clients) marks.append(mark(client));
+  // The name, then what the server is: its address or its command (already redacted).
+  const what = el("span", "what");
   const name = el("span", "mono", row.name);
   name.title = row.name;
+  what.append(name);
+  if (row.summary) {
+    const sub = el("span", "sub mono", row.summary);
+    sub.title = row.summary;
+    what.append(sub);
+  }
   const action = el("span");
   if (group === "move" && row.items.length) {
     const targets = row.items.map((item) => ({ item }));
     action.append(button("Remove direct entry…", () => review({ action: "mcp.remove_direct", targets, params: {} })));
   }
-  node.append(marks, name, action);
+  node.append(marks, what, action);
   return node;
 }
 

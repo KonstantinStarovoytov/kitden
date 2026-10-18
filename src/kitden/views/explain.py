@@ -1,10 +1,27 @@
 """Every definition of one name, which one loads, and why (page side panel and MCP server)."""
 
+import json
 from typing import Any
 
 from kitden.model import Enabled, Item, ItemKind
 from kitden.views.effective import effective_view
 from kitden.views.findings import base_name
+
+
+def summary_line(item: Item) -> str:
+    """What an MCP server is, in one line: its address, or its command with the arguments.
+
+    The summary is already redacted (FR-006), so secrets never reach this line.
+    """
+    summary = dict(item.summary)
+    if summary.get("url"):
+        return summary["url"]
+    try:
+        args = json.loads(summary.get("args", "[]"))
+    except ValueError:
+        args = [summary.get("args", "")]
+    parts = [summary.get("command", ""), *(args if isinstance(args, list) else [str(args)])]
+    return " ".join(str(p) for p in parts if p)
 
 
 def brief(item: Item) -> dict[str, Any]:
@@ -24,6 +41,7 @@ def brief(item: Item) -> dict[str, Any]:
         "change_hint": item.change_hint,
         "secret_present": item.secret_present,
         "actions": list(item.actions),
+        "summary": summary_line(item) or None,
     }
 
 

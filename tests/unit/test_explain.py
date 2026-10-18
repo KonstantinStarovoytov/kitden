@@ -47,6 +47,16 @@ def test_actions_and_hints_are_included(home):
     assert cursor_own["actions"] == []
 
 
+def test_mcp_definitions_carry_a_short_summary_line(home):
+    neon = explain(build_inventory(home), "Neon", "mcp_server", None)
+    assert neon[0]["summary"] == "https://mcp.neon.tech/mcp"
+    n8n = explain(build_inventory(home), "n8n-mcp", "mcp_server", None)
+    assert n8n[0]["summary"].startswith("npx n8n-mcp -e ")
+    assert "SENTINEL" not in n8n[0]["summary"]
+    plugin = explain(build_inventory(home), "superpowers", "plugin", None)
+    assert plugin[0]["summary"] is None
+
+
 def test_exact_names_still_match_for_other_kinds(home):
     found = explain(build_inventory(home), "neon", "mcp_server", str(home / "work/api"))
     assert {(d["client"], d["scope"]) for d in found} == {("codex", "user"), ("codex", "project")}

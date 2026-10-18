@@ -206,6 +206,7 @@ function layer(def) {
   const where = el("div", "why mono", shortPath(def.source));
   where.title = def.source || "";
   middle.append(where);
+  if (def.summary) middle.append(el("div", "why mono", def.summary));
   if (why) middle.append(el("div", "why", why));
   row.append(dot, middle, el("span", wins ? "badge win" : "badge", badge));
   return row;

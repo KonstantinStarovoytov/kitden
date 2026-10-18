@@ -33,6 +33,9 @@ def test_gateway_groups_have_one_row_per_server(home):
     assert len(neon["items"]) == 1  # the one direct entry that can be removed
     assert row(groups, "local", "n8n-mcp")["clients"] == ["cursor"]
     assert all(r["name"] != "aseprite" for g in groups.values() for r in g)  # turned off
+    # A dimmed second line says what the server is: its address or its command.
+    assert neon["summary"] == "https://mcp.neon.tech/mcp"
+    assert row(groups, "local", "n8n-mcp")["summary"].startswith("npx n8n-mcp")
 
 
 def test_kitdens_own_server_is_not_listed(home):

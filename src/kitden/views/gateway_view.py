@@ -3,6 +3,7 @@
 from kitden.clients.base import REMOVE_DIRECT
 from kitden.model import Gateway, Item, ItemKind
 from kitden.views.effective import DESKTOP, effective_view
+from kitden.views.explain import summary_line
 from kitden.views.findings import bypass_kind
 from kitden.views.load_map import COLUMNS
 from kitden.views.setup_server import is_own_entry
@@ -57,7 +58,10 @@ def gateway_view(inventory, gateways: list[Gateway], project: str | None) -> dic
         if item.via_gateway:
             continue
         rows = groups[group_of(item)]
-        row = rows.setdefault(item.name, {"name": item.name, "clients": [], "items": []})
+        row = rows.setdefault(
+            item.name,
+            {"name": item.name, "summary": summary_line(item), "clients": [], "items": []},
+        )
         if item.client not in row["clients"]:
             row["clients"].append(item.client)
         if REMOVE_DIRECT in item.actions:

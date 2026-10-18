@@ -124,8 +124,13 @@ def _page_outputs(home) -> list[str]:
             "/api/findings",
             "/api/changes",
             "/api/gateways",
+            "/api/overview",
+            "/api/map",
+            "/api/gateway-view",
         ]:
             outputs.append(page.get(path).text)
+        for item in page.get("/api/items?kind=mcp_server").json():
+            outputs.append(page.get(f"/api/explain?name={item['name']}&kind=mcp_server").text)
         for project in page.get("/api/projects").json():
             outputs.append(page.get(f"/api/projects/{project['id']}/effective").text)
             outputs.append(page.get(f"/api/findings?project={project['path']}").text)
