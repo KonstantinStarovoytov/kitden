@@ -106,3 +106,9 @@ def test_controls_press_and_the_switch_waits_for_the_preview():
 def test_client_tile_flies_to_its_load_map_column():
     assert "fly(tile, `client-${clientId}`)" in script("overview.js")
     assert "land(tile, `client-${column.id}`)" in script("map.js")
+
+
+def test_review_counts_the_diff_and_folds_the_file_change():
+    text = script("panel.js")
+    assert "diffCounts" in text and "fold(files)" in text
+    assert "Show file change" in text and "Show file changes" in text

@@ -77,3 +77,11 @@ test('land() ignores a tile with another name', () => {
   transition(() => {});
   finishTransition();
 });
+
+const { diffCounts } = await import('../../src/kitden/web/static/js/parts.js');
+
+test('the diff count skips the header lines', () => {
+  const diff = '--- before\n+++ after\n@@ -1,3 +1,3 @@\n   "a": {\n-  "x": true\n+  "x": false\n+  "y": 1\n   }';
+  assert.deepEqual(diffCounts(diff), { added: 2, removed: 1 });
+  assert.deepEqual(diffCounts(''), { added: 0, removed: 0 });
+});

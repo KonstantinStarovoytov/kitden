@@ -124,6 +124,18 @@ export function changeTitle(entry) {
   return `${verb}${what} · ${clients.join(", ")}`;
 }
 
+// How many lines a diff adds and removes: the summary says so before the diff is opened.
+export function diffCounts(text) {
+  let added = 0;
+  let removed = 0;
+  for (const line of String(text || "").split("\n")) {
+    if (line.startsWith("+++") || line.startsWith("---")) continue;
+    if (line.startsWith("+")) added += 1;
+    else if (line.startsWith("-")) removed += 1;
+  }
+  return { added, removed };
+}
+
 // The latest log line per change, newest first.
 export function latestChanges(entries) {
   const seen = new Map();

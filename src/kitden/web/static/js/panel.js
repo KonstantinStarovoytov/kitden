@@ -1,9 +1,9 @@
 // Side panel: item details, change review, the Apply motion, and the toast with Undo.
 import { getJson, postJson, query } from "./api.js";
-import { $, $$, button, el, reportError, shortPath, shortPaths } from "./dom.js";
+import { $, $$, button, el, plural, reportError, shortPath, shortPaths } from "./dom.js";
 import { morphOnNextRender, onOpenItem } from "./map.js";
-import { animate, finishTransition } from "./motion.js";
-import { CLIENT_NAMES, mark, socket } from "./parts.js";
+import { animate, finishTransition, fold } from "./motion.js";
+import { CLIENT_NAMES, diffCounts, mark, socket } from "./parts.js";
 import { busy, data, reload, render, setBusy, state } from "./store.js";
 
 const KIND_WORDS = {
@@ -418,7 +418,16 @@ function showReview(change, previewBody) {
   if (change.shared_file_warning) body.append(callout("This edits a project file that is usually shared through git."));
   // The result comes first; the file change and the command wait behind one summary.
   const files = el("details", "file-change");
-  files.append(el("summary", null, change.steps.length > 1 ? "Show file changes" : "Show file change"));
+  const summary = el("summary", null, change.steps.length > 1 ? "Show file changes" : "Show file change");
+  const counts = change.steps.map((s) => diffCounts(s.diff)).reduce((a, b) => ({ added: a.added + b.added, removed: a.removed + b.removed }), { added: 0, removed: 0 });
+  if (counts.added || counts.removed) {
+    const count = el("span", "diff-count");
+    count.setAttribute("aria-label", `${plural(counts.added, "line", "lines")} added, ${counts.removed} removed`);
+    if (counts.added) count.append(el("span", "plus", `+${counts.added}`));
+    if (counts.removed) count.append(el("span", "minus", `−${counts.removed}`));
+    summary.append(count);
+  }
+  files.append(summary);
   for (const step of change.steps) {
     const box = el("div", "step");
     const head = el("div", "step-head");
@@ -429,7 +438,7 @@ function showReview(change, previewBody) {
     files.append(box);
     if (step.command) files.append(el("p", "muted", `Runs ${clientName(step.client)}'s own command: ${step.command}`));
   }
-  body.append(files);
+  body.append(fold(files));
   const notes = [...new Set(change.steps.flatMap((s) => [s.restart_note, s.login_note && `Log in: ${s.login_note}`]).filter(Boolean))];
   if (notes.length) {
     const after = el("section");

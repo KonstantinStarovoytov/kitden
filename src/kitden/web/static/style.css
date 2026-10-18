@@ -357,11 +357,16 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .after .chip > span:nth-child(2) { color: var(--ink-2); }
 details.file-change { min-width: 0; }
 details.file-change > summary { cursor: pointer; color: var(--ink-2); font-weight: 500; }
-details.file-change > .step, details.file-change > p { margin-top: 10px; }
+.diff-count { font-family: var(--mono); font-size: 11px; display: inline-flex; gap: 6px; margin-left: 8px; }
+.diff-count .plus { color: var(--lamp-on); }
+.diff-count .minus { color: var(--danger); }
 .fold { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 280ms var(--ease-out); }
 .fold > .fold-in { overflow: hidden; min-height: 0; display: grid; gap: 10px; align-content: start; opacity: 0; transform: translateY(-4px); transition: opacity 200ms ease, transform 280ms var(--spring); }
 .fold.open { grid-template-rows: 1fr; }
 .fold.open > .fold-in { opacity: 1; transform: none; transition-delay: 40ms; }
+details.file-change .fold-in, details.connect .fold-in, details.add-more .fold-in { padding-top: 10px; }
+details.connect .fold-in > .form, details.add-more .fold-in > .form { margin: 0; }
+summary::-webkit-details-marker { transition: transform 200ms ease; }
 .step { border: 1px solid var(--wire); border-radius: 8px; overflow: hidden; }
 .step-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; }
 .step-head strong { white-space: nowrap; }
