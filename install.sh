@@ -2,7 +2,7 @@
 # Installs Kitden on macOS: uv when it is missing, then Kitden as a uv tool, then opens the page.
 # One line:  curl -LsSf https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/install.sh | sh
 # It never changes anything in Claude Code, Codex or Cursor. Running it again updates Kitden
-# when a newer release is named below. See specs/003-one-line-install/contracts/install-scripts.md.
+# when a newer release is named below.
 set -eu
 
 KITDEN_REF="v0.1.1"

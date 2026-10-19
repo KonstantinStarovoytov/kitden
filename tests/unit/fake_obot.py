@@ -1,7 +1,7 @@
 """A fake Obot v0.26.3 for tests: keys, `/api/me` and vMCPs in memory.
 
-It answers the read calls `kitden.gateway_api.ObotClient` makes (specs/007-obot-gateway/
-research.md) on 127.0.0.1 in a thread. No network, no real gateway. Error bodies are plain
+It answers the read calls `kitden.gateway_api.ObotClient` makes on 127.0.0.1 in a thread.
+No network, no real gateway. Error bodies are plain
 text, as the real Obot answers them.
 """
 

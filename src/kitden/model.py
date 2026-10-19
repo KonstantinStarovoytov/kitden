@@ -1,4 +1,4 @@
-"""Shared data model. See specs/001-agent-setup-inventory/data-model.md."""
+"""Shared data model: clients, items, sources, gateways and changes."""
 
 import hashlib
 import re

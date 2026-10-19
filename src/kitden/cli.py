@@ -1,4 +1,4 @@
-"""Command line entry point. See specs/001-agent-setup-inventory/contracts/cli.md."""
+"""Command line entry point: kitden, open, serve, scan, mcp."""
 
 import argparse
 import contextlib

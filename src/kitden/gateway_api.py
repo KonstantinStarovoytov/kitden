@@ -1,10 +1,10 @@
 """Talk to a gateway: MetaMCP (sign in, list, add, remove) and Obot (list, feature 007).
 
 MetaMCP 2.4.22 has no public management API; these are the tRPC calls its own web page makes
-(docs/research/gateway-api-2026-10-19.md). Obot v0.26.3 takes an API key with the `api` scope
-(specs/007-obot-gateway/research.md). Every answer is checked for the shape we expect, and an
-unexpected one raises `GatewayError` so nothing is written on a guess. Error text never
-carries a response body: bodies can hold header values and tokens.
+(checked 2026-10-19). Obot v0.26.3 takes an API key with the hidden `api` scope from
+`obot login --scope api` (checked 2026-10-19). Every answer is checked for the shape we
+expect, and an unexpected one raises `GatewayError` so nothing is written on a guess. Error
+text never carries a response body: bodies can hold header values and tokens.
 """
 
 import contextlib

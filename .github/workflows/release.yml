@@ -1,6 +1,5 @@
 # Checks on every push to main and every pull request. A tag v<version> also builds the package,
 # publishes it to PyPI and creates a GitHub release with the built files.
-# See specs/003-one-line-install/contracts/release.md.
 name: Checks and release
 
 on:
