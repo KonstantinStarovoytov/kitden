@@ -92,7 +92,8 @@ def test_codex_installs_the_plugin_from_the_repository(home):
     added = json.loads(_run(codex, add, home, env))
     assert added["marketplaceName"] == "kitden"
     installed = json.loads(_run(codex, ["plugin", "add", "kitden@kitden", "--json"], home, env))
-    assert installed["pluginId"] == "kitden@kitden" and installed["version"] == "0.1.0"
+    version = json.loads((ROOT / "plugins/kitden/plugin.json").read_text())["version"]
+    assert installed["pluginId"] == "kitden@kitden" and installed["version"] == version
     copied = Path(installed["installedPath"])
     assert copied.is_relative_to(home / ".codex/plugins/cache")
     assert (copied / "mcp.json").read_bytes() == (ROOT / "plugins/kitden/mcp.json").read_bytes()
