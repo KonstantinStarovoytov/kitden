@@ -695,6 +695,22 @@ def test_move_one_server_into_obot_then_undo(client, obot):
     assert obot.held_names() == ["docs"] and list(obot.entries) == ["e1"]
 
 
+def test_moving_several_servers_into_a_busy_obot_still_works(client, obot):
+    # The real Obot answers 409 to a quick second write while its controller catches up.
+    original = _files(client.home)
+    gateway = _register_obot(client, obot).json()
+    rows = [r for r in _move_rows(client) if r["name"].lower() == "neon"]
+    obot.conflicts = {2}
+    change = _move(client, gateway["id"], [i for r in rows for i in r["items"]]).json()
+    applied = client.post(f"/api/changes/{change['id']}/apply", headers=POST)
+    assert applied.json()["state"] == "verified", applied.json().get("error")
+    assert obot.held_names() == ["neon", "Neon"]
+    obot.conflicts = {obot.vmcp_puts + 1}
+    undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST)
+    assert undone.json()["state"] == "undone", undone.json().get("error")
+    assert _files(client.home) == original and obot.held_names() == []
+
+
 def test_move_into_obot_needs_an_administrator(client, obot):
     original = _files(client.home)
     gateway = _register_obot(client, obot).json()

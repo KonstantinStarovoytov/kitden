@@ -215,6 +215,28 @@ def test_obot_add_then_remove(obot):
     assert client.remove(entry) is False  # already gone
 
 
+def test_obot_add_tries_again_when_obot_was_busy_updating_the_connection(obot):
+    # Obot answers 409 when its controller changed the vMCP between its read and write.
+    obot.hold("docs", "https://docs.example.com/mcp")
+    obot.conflicts = {1, 2}
+    client = ObotClient(obot_gateway(obot), OBOT_ENV, pause=0)
+    entry = client.add("neon", {"type": "STREAMABLE_HTTP", "url": "https://mcp.neon.tech/mcp"})
+    assert [s["name"] for s in client.held()] == ["docs", "neon"]
+    assert obot.vmcp_puts == 3 and obot.vmcp_writes == 1
+    assert obot.calls.count(f"GET /api/vmcps/{obot.vmcp_id}") >= 3  # read again each time
+    obot.conflicts = {4}
+    assert client.remove(entry) is True
+    assert [s["name"] for s in client.held()] == ["docs"]
+
+
+def test_obot_add_gives_up_on_a_connection_that_stays_busy(obot):
+    obot.always_conflict = True
+    client = ObotClient(obot_gateway(obot), OBOT_ENV, pause=0)
+    with pytest.raises(GatewayError, match="Obot was busy updating the connection"):
+        client.add("neon", {"type": "STREAMABLE_HTTP", "url": "https://mcp.neon.tech/mcp"})
+    assert obot.entries == {}  # the new catalog entry is deleted again
+
+
 def test_obot_header_values_become_sensitive_header_configuration(obot):
     client = ObotClient(obot_gateway(obot), OBOT_ENV)
     entry = client.add(

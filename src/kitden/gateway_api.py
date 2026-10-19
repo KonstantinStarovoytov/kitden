@@ -11,9 +11,10 @@ import contextlib
 import json
 import os
 import re
+import time
 import urllib.error
 import urllib.request
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any
 from urllib.parse import quote, urlsplit
 
@@ -23,6 +24,10 @@ TIMEOUT_SECONDS = 5.0
 NAME = re.compile(r"[A-Za-z0-9_-]+")
 VERSION_CHECKED = "MetaMCP 2.4.22"
 OBOT_VERSION_CHECKED = "Obot v0.26.3"
+# Obot's own controller updates a connection's status right after every change, so a quick next
+# write can meet "the object has been modified" (409). Read again and retry this many times
+# (checked 2026-10-19 against the Obot v0.26.3 source: VMCPHandler.Update, vmcp SyncStatus).
+OBOT_WRITE_TRIES = 4
 
 
 class GatewayError(Exception):
@@ -225,6 +230,7 @@ class ObotClient:
         gateway: Gateway,
         env: Mapping[str, str] | None = None,
         timeout: float = TIMEOUT_SECONDS,
+        pause: float = 0.25,
     ) -> None:
         if gateway.kind != "obot" or not gateway.key_env_var:
             raise GatewayError("Add the name of the Obot key variable to this gateway first")
@@ -234,6 +240,7 @@ class ObotClient:
         self.gateway = gateway
         self.env = os.environ if env is None else env
         self.timeout = timeout
+        self.pause = pause  # seconds before the first retry after a 409; doubles each time
 
     def __enter__(self) -> "ObotClient":
         return self
@@ -305,12 +312,28 @@ class ObotClient:
 
     MANIFEST_KEYS = ("displayName", "description", "icon", "toolSearch", "components", "profiles")
 
-    def _write_components(self, body: dict, components: list[dict]) -> None:
-        manifest = {k: body[k] for k in self.MANIFEST_KEYS if k in body}
-        manifest["components"] = components
-        status, _ = self._request("PUT", f"/api/vmcps/{quote(self.vmcp)}", manifest)
-        if status != 200:
-            raise self._refused(status, "changing the connection")
+    def _change_components(self, change: Callable[[list[dict]], list[dict] | None]) -> None:
+        """Read the connection, change its components, write it back. `change` returns None
+        when there is nothing to write. A 409 means Obot's controller changed the connection
+        between Obot's own read and write: read again and retry."""
+        for attempt in range(OBOT_WRITE_TRIES):
+            body = self._vmcp_manifest()
+            components = change(body["components"])
+            if components is None:
+                return
+            manifest = {k: body[k] for k in self.MANIFEST_KEYS if k in body}
+            manifest["components"] = components
+            status, _ = self._request("PUT", f"/api/vmcps/{quote(self.vmcp)}", manifest)
+            if status == 200:
+                return
+            if status != 409:
+                raise self._refused(status, "changing the connection")
+            if attempt + 1 < OBOT_WRITE_TRIES:
+                time.sleep(self.pause * 2**attempt)
+        raise GatewayError(
+            "Obot was busy updating the connection and did not take the change (409); "
+            "try again in a moment"
+        )
 
     def _catalog(self) -> str:
         status, body = self._request("GET", "/api/mcp-catalogs")
@@ -326,7 +349,7 @@ class ObotClient:
         """Make the remote server a catalog entry and put it on the connection. Returns the
         entry id. `server` is `{type, url, headers?}`; header values become static, sensitive
         header configuration that Obot stores as a credential."""
-        body = self._vmcp_manifest()
+        self._vmcp_manifest()  # the connection must exist before a catalog entry is made
         catalog = self._catalog()
         manifest: dict = {
             "name": name,
@@ -363,8 +386,14 @@ class ObotClient:
         if not entry:
             raise GatewayError("Obot did not return the new entry; nothing else was changed")
         component = {"name": name, "mcpCatalogID": catalog, "mcpServerCatalogEntryID": entry}
+
+        def add_component(components: list[dict]) -> list[dict] | None:
+            if any(c.get("mcpServerCatalogEntryID") == entry for c in components):
+                return None
+            return [*components, component]
+
         try:
-            self._write_components(body, [*body["components"], component])
+            self._change_components(add_component)
         except GatewayError:
             self._request("DELETE", f"/api/mcp-catalogs/{quote(catalog)}/entries/{quote(entry)}")
             raise
@@ -383,7 +412,12 @@ class ObotClient:
             None,
         )
         if len(kept) != len(body["components"]):
-            self._write_components(body, kept)
+
+            def drop(components: list[dict]) -> list[dict] | None:
+                left = [c for c in components if c.get("mcpServerCatalogEntryID") != entry]
+                return left if len(left) != len(components) else None
+
+            self._change_components(drop)
         catalog = catalog or self._catalog()
         status, _ = self._request(
             "DELETE", f"/api/mcp-catalogs/{quote(catalog)}/entries/{quote(entry)}"

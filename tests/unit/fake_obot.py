@@ -24,6 +24,11 @@ class FakeObot:
         self.forbidden = False  # the key's role may not read vMCPs (403)
         self.forbid_writes = False  # the key's user is not an administrator (403 on entries)
         self.fail_vmcp_write = False  # PUT on the vMCP answers 500
+        # PUTs on the vMCP that answer 409, counted from 1: the real Obot does this when its own
+        # controller updated the vMCP status between the handler's read and write (v0.26.3).
+        self.conflicts: set[int] = set()
+        self.always_conflict = False
+        self.vmcp_puts = 0
         self.odd_shape = False  # answers with a shape Kitden does not know
         self._server = ThreadingHTTPServer(("127.0.0.1", 0), self._handler())
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
@@ -79,6 +84,12 @@ class FakeObot:
 
     def _put_vmcp(self, manifest: dict) -> tuple[int, str]:
         """The real Update: components are matched to catalog entries, snapshots reloaded."""
+        self.vmcp_puts += 1
+        if self.always_conflict or self.vmcp_puts in self.conflicts:
+            return 409, (
+                f'Operation cannot be fulfilled on vmcps.obot.obot.ai "{self.vmcp_id}": the object '
+                "has been modified; please apply your changes to the latest version and try again"
+            )
         if self.fail_vmcp_write:
             return 500, "failed to update VMCP"
         if manifest.get("profiles") != self.profiles:
