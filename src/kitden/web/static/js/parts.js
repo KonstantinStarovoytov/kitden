@@ -18,6 +18,8 @@ export const CLIENT_NAMES = {
   claude_code: "Claude Code", codex: "Codex", cursor: "Cursor",
   claude_desktop_code_tab: "Claude Desktop (Code tab)", gateway: "Gateway",
 };
+// A direct server, when no gateway here can take it: the Gateway page and Details say the same.
+export const GATEWAY_NOTE = "Add the server in the gateway first, then remove its direct entry here.";
 
 export function socket({ state, where, word }) {
   const node = el("span", `socket s-${state}`);

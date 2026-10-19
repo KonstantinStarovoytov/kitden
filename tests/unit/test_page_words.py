@@ -338,3 +338,14 @@ def test_gateway_connect_form_serves_its_own_card_only():
     assert "connectForm(gateway, waiting)" in text
     assert "Object.values(model.connections).some" in text
     assert "connectForm(model.gateways" not in text
+
+
+def test_direct_servers_are_options_and_details_offers_move_first():
+    overview = script("overview.js")
+    assert '"Can improve"' in overview and "model.suggestions" in overview
+    assert ".issue.suggestion" in CSS
+    panel = script("panel.js")
+    assert "Move into the gateway…" in panel and 'action: "gateway.move"' in panel
+    # Without a gateway that takes servers, the panel says the same as the Gateway page.
+    assert "Add the server in the gateway first" in script("parts.js")
+    assert "GATEWAY_NOTE" in panel and "GATEWAY_NOTE" in script("gateway.js")

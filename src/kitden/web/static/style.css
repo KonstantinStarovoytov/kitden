@@ -243,6 +243,7 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .issue h3 { font-size: 14px; margin: 0; font-weight: 600; letter-spacing: -0.005em; overflow-wrap: anywhere; }
 .issue p { margin: 0; color: var(--ink-2); overflow-wrap: anywhere; text-wrap: pretty; }
 .issue .btn { grid-column: 2; grid-row: 1 / span 2; }
+.issue.suggestion { border-color: var(--wire); }
 .all-clear { padding: 18px 16px; background: var(--panel); border: 1px solid var(--wire); border-radius: 8px; color: var(--ink-2); }
 .notes-toggle { justify-self: start; margin-top: 4px; }
 .notes { margin-top: 6px; }

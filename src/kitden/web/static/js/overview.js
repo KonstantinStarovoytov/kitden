@@ -27,14 +27,12 @@ export function renderOverview(main) {
   if (currentError("overview")) main.append(staleNote(data.readAt.overview));
 
   const grid = el("div", "overview");
+  const column = el("div", "attention");
   const left = el("section", "attention");
   left.setAttribute("aria-label", "Needs attention");
   const blocks = [];
-  // One card per problem: a short title, one sentence, one button that names the action.
   for (const card of model.attention) {
-    const article = el("article", "issue");
-    article.append(el("h3", null, card.title), el("p", null, card.text));
-    if (card.action && card.target) article.append(button(card.action, () => follow(card.target), "btn primary"));
+    const article = issueCard(card, "issue");
     left.append(article);
     blocks.push(article);
   }
@@ -43,16 +41,38 @@ export function renderOverview(main) {
     left.append(clear);
     blocks.push(clear);
   }
-  if (model.notes) left.append(notesBlock(model.notes));
-  grid.append(left);
+  column.append(left);
+  // Options, not problems: the same cards without the warning colour.
+  if (model.suggestions.length) {
+    const options = el("section", "attention");
+    const title = el("h2", "section-title", "Can improve");
+    options.append(title);
+    blocks.push(title);
+    for (const card of model.suggestions) {
+      const article = issueCard(card, "issue suggestion");
+      options.append(article);
+      blocks.push(article);
+    }
+    column.append(options);
+  }
+  if (model.notes) column.append(notesBlock(model.notes));
+  grid.append(column);
 
   const side = el("div", "side");
   side.append(clientsCard(model.clients));
-  // With a gateway, the attention card is the one place on this page that mentions it.
+  // With a gateway, the Can improve card is the one place on this page that mentions it.
   if (!model.gateway) side.append(gatewayCard());
   grid.append(side);
   main.append(grid);
   entrance("overview", [...blocks, ...side.children]);
+}
+
+// One card per problem or option: a short title, one sentence, one button that names the action.
+function issueCard(card, look) {
+  const article = el("article", look);
+  article.append(el("h3", null, card.title), el("p", null, card.text));
+  if (card.action && card.target) article.append(button(card.action, () => follow(card.target), "btn primary"));
+  return article;
 }
 
 // A card about an item opens that item in the side panel; paths and the fix live there.

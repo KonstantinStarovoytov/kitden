@@ -7,6 +7,7 @@ import pytest
 import kitden.clients.base as base
 from kitden.model import Gateway, _hash
 from kitden.views.findings import mark_gateways
+from kitden.views.gateway_view import gateway_view
 from kitden.views.inventory import build_inventory
 from kitden.views.overview import overview
 from tests.conftest import CURSOR_DB, make_home, write_cursor_fixture_state
@@ -90,17 +91,50 @@ def test_gateway_card_only_with_a_registered_gateway(home):
     inventory = build_inventory(home)
     data = overview(inventory, [], None)
     assert data["gateway"] is None
-    assert not any("gateway" in a["title"] for a in data["attention"])
+    assert data["suggestions"] == []
 
     gateway = Gateway(url="https://mcp.neon.tech/mcp")
     mark_gateways(inventory, [gateway])
     data = overview(inventory, [gateway], None)
-    card = data["attention"][-1]
-    assert card["title"] == "4 MCP servers are not connected to the gateway"
-    assert card["text"] == "2 can move into the gateway, 2 must stay on this Mac."
-    assert card["action"] == "Review"
-    assert card["target"] == {"view": "gateway"}
+    assert [s["title"] for s in data["suggestions"]] == ["2 MCP servers can move into the gateway"]
     assert data["gateway"] == {"name": "mcp.neon.tech"}
+
+
+def test_direct_servers_are_a_suggestion_not_attention(home):
+    inventory = build_inventory(home)
+    gateway = Gateway(url="https://mcp.neon.tech/mcp")
+    mark_gateways(inventory, [gateway])
+    data = overview(inventory, [gateway], None)
+    moves = len(gateway_view(inventory, [gateway], None)["groups"]["move"])
+    assert all("gateway" not in a["title"] for a in data["attention"])
+    assert data["suggestions"] == [
+        {
+            "title": f"{moves} MCP servers can move into the gateway",
+            "text": "They connect to each client directly now.",
+            "action": "Review",
+            "target": {"view": "gateway"},
+        }
+    ]
+    assert data["headline"] == "2 things need attention"  # the two duplicates only
+
+
+def test_a_server_in_two_clients_is_one_suggestion_row(home):
+    from kitden.changes import toml_edit
+
+    # github is already a direct entry in Claude Code; Codex gets one too.
+    config = home / ".codex/config.toml"
+    github = {"url": "https://api.githubcopilot.com/mcp/"}
+    config.write_text(toml_edit.set_value(config.read_text(), ("mcp_servers", "github"), github))
+    inventory = build_inventory(home)
+    gateway = Gateway(url="https://mcp.neon.tech/mcp")
+    mark_gateways(inventory, [gateway])
+    # langfuse-data goes through the gateway, so only github is left to move.
+    for index, item in enumerate(inventory.items):
+        if item.name == "langfuse-data":
+            inventory.items[index] = replace(item, via_gateway=gateway.id)
+    [card] = overview(inventory, [gateway], None)["suggestions"]
+    assert card["title"] == "1 MCP server can move into the gateway"
+    assert card["text"] == "It connects to each client directly now."
 
 
 def test_kitdens_own_server_is_not_counted_as_not_connected(home):
@@ -112,12 +146,11 @@ def test_kitdens_own_server_is_not_counted_as_not_connected(home):
     inventory = build_inventory(home)
     gateway = Gateway(url="https://mcp.neon.tech/mcp")
     mark_gateways(inventory, [gateway])
-    card = overview(inventory, [gateway], None)["attention"][-1]
-    assert card["title"] == "4 MCP servers are not connected to the gateway"
-    assert card["text"] == "2 can move into the gateway, 2 must stay on this Mac."
+    [card] = overview(inventory, [gateway], None)["suggestions"]
+    assert card["title"] == "2 MCP servers can move into the gateway"
 
 
-def test_servers_that_cannot_move_are_not_an_attention_card(home):
+def test_servers_that_cannot_move_are_not_a_suggestion(home):
     inventory = build_inventory(home)
     gateway = Gateway(url="https://mcp.neon.tech/mcp")
     mark_gateways(inventory, [gateway])
@@ -127,6 +160,7 @@ def test_servers_that_cannot_move_are_not_an_attention_card(home):
             inventory.items[index] = replace(item, via_gateway=gateway.id)
     data = overview(inventory, [gateway], None)
     assert not any("gateway" in a["title"] for a in data["attention"])
+    assert data["suggestions"] == []
 
 
 def test_old_kitden_entries_get_one_card_that_opens_agents(home):

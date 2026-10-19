@@ -119,13 +119,10 @@ def test_gateway_entries_are_state_gw(home):
     mark_gateways(inventory, [Gateway(url="https://mcp.neon.tech/mcp")])
     rows = load_map(inventory, None, gateway_registered=True)
     assert rows_by(rows, "mcp_server", "Neon").cells["cursor"].state == "gw"
-    assert {
-        "text": "Not via gateway",
-        "level": "warning",
-        "client": "codex",
-        "fix": "Add it in the gateway, then remove this direct entry.",
-        "fix_action": "mcp.remove_direct",
-    } in rows_by(rows, "mcp_server", "langfuse-data").flags
+    # A direct server is an option to move, not a problem.
+    assert rows_by(rows, "mcp_server", "langfuse-data").flags == [
+        {"text": "Direct connection", "level": "info"}
+    ]
 
 
 def test_unknown_state_is_said_by_the_cell_alone(home):

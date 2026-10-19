@@ -10,7 +10,7 @@ from urllib.parse import urlsplit
 from kitden.clients.versions import MINIMUM_VERSIONS
 from kitden.model import FindingType, Gateway, Severity, UnknownReason, _hash
 from kitden.views.findings import base_name, find_bypasses, find_findings
-from kitden.views.gateway_view import group_of, loaded_mcp
+from kitden.views.gateway_view import gateway_view
 from kitden.views.load_map import COLUMNS, NAMES
 from kitden.views.setup_server import setup_server_state
 
@@ -130,27 +130,20 @@ def overview(inventory, gateways: list[Gateway], project: str | None) -> dict:
         + _duplicates(inventory, findings)
     )
 
-    mcp = loaded_mcp(inventory, project)
-    around = [i for i in mcp if not i.via_gateway]
-    groups = {g: sum(1 for i in around if group_of(i) == g) for g in ("move", "local", "plugin")}
+    # Direct servers are an option, not a problem. The count is the Gateway page's rows, so a
+    # server in two clients counts once; local and plugin servers cannot move and are left out.
     gateway = None
+    suggestions = []
     if gateways:
         gateway = {"name": urlsplit(gateways[0].url).netloc or "Gateway"}
-        # Local and plugin servers cannot move, so only remote direct entries need attention.
-        if groups["move"]:
-            parts = [
-                f"{groups['move']} can move into the gateway",
-                f"{groups['local']} must stay on this Mac" if groups["local"] else "",
-                _count(groups["plugin"], "comes with a plugin", "come with plugins")
-                if groups["plugin"]
-                else "",
-            ]
-            attention.append(
+        moves = len(gateway_view(inventory, gateways, project)["groups"]["move"])
+        if moves:
+            suggestions.append(
                 {
-                    "id": _hash("gateway", project),
-                    "title": f"{_count(len(around), 'MCP server is', 'MCP servers are')} "
-                    "not connected to the gateway",
-                    "text": f"{', '.join(p for p in parts if p)}.",
+                    "title": f"{_count(moves, 'MCP server', 'MCP servers')} can move into "
+                    "the gateway",
+                    "text": f"{'It connects' if moves == 1 else 'They connect'} to each client "
+                    "directly now.",
                     "action": "Review",
                     "target": {"view": "gateway"},
                 }
@@ -164,6 +157,7 @@ def overview(inventory, gateways: list[Gateway], project: str | None) -> dict:
     return {
         "headline": headline,
         "attention": attention,
+        "suggestions": suggestions,
         "notes": len(info),
         "clients": [
             {

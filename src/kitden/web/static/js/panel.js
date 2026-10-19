@@ -3,8 +3,8 @@ import { getJson, postJson, query } from "./api.js";
 import { $, $$, button, el, plural, reportError, shortPath, shortPaths } from "./dom.js";
 import { morphOnNextRender, onOpenItem } from "./map.js";
 import { animate, finishTransition, fold, transition } from "./motion.js";
-import { CLIENT_NAMES, diffCounts, mark, notesSection, socket } from "./parts.js";
-import { busy, data, reload, render, setBusy, state } from "./store.js";
+import { CLIENT_NAMES, diffCounts, GATEWAY_NOTE, mark, notesSection, socket } from "./parts.js";
+import { busy, current as currentModel, data, reload, render, setBusy, state } from "./store.js";
 
 const KIND_WORDS = {
   mcp_server: "MCP server", plugin: "Plugin", skill: "Skill", hook: "Hook", marketplace: "Marketplace",
@@ -154,6 +154,20 @@ function sideEffect({ def, action }, warnings) {
   return [el("span", "note side", `${SIDE_EFFECTS[action]} ${clientName(def.client)} itself`)];
 }
 
+// A server the Gateway page lists under "Can move", with the entries a move takes and the
+// gateway that can take them (none when it must be added in the gateway by hand).
+function moveFor(row) {
+  const model = row.kind === "mcp_server" ? currentModel("gateway") : null;
+  const direct = model && model.groups.move.find((r) => r.name === row.name);
+  if (!direct || !direct.items.length) return null;
+  return { items: direct.items, gateway: model.gateways.find((g) => g.movable) || null };
+}
+
+function moveButton({ items, gateway }) {
+  const targets = items.map((item) => ({ item }));
+  return button("Move into the gateway…", () => review({ action: "gateway.move", targets, params: { gateway: gateway.id } }), "btn primary");
+}
+
 // The other actions wait behind one button, so the primary one stands alone.
 function moreButton(buttons) {
   const more = button("More", () => {
@@ -283,6 +297,8 @@ function showDetails(row, definitions) {
   if (definitions.some((d) => d.secret_present)) {
     body.append(el("p", "muted", "This entry holds a secret. It is hidden here and never logged."));
   }
+  const move = moveFor(row);
+  if (move && !move.gateway) body.append(el("p", "muted", GATEWAY_NOTE));
 
   const footer = el("footer");
   const withCommands = definitions.filter((d) => d.kind === "plugin" || d.kind === "marketplace");
@@ -295,14 +311,16 @@ function showDetails(row, definitions) {
     const label = ACTION_BUTTONS[action](`${clientName(def.client)}${where}`);
     return button(label, () => review({ action, targets: [{ item: def.id }], params: {} }), look);
   };
-  // The action that fixes the warning is the primary button; the rest wait under More. With a
-  // warning no button fixes, every action stays plain.
-  let primary = offers.find((o) => warnings.some((f) => f.fix_action === o.action && f.client === o.def.client));
-  if (!primary && offers.length === 1 && !warnings.length) primary = offers[0];
+  // A server a gateway here can take leads with Move. Otherwise the action that fixes the
+  // warning is the primary button. The rest wait under More. With a warning no button fixes, or
+  // a server to add in the gateway by hand first, every action stays plain.
+  let primary = move ? null : offers.find((o) => warnings.some((f) => f.fix_action === o.action && f.client === o.def.client));
+  if (!move && !primary && offers.length === 1 && !warnings.length) primary = offers[0];
   const rest = offers.filter((o) => o !== primary).flatMap((o) => [...sideEffect(o, warnings), buttonFor(o, "btn")]);
-  if (primary) {
+  const lead = move && move.gateway ? moveButton(move) : primary && buttonFor(primary, "btn primary");
+  if (lead) {
     if (rest.length || commands.length) footer.append(moreButton([...rest, ...commands]));
-    footer.append(buttonFor(primary, "btn primary"));
+    footer.append(lead);
   } else {
     if (commands.length) footer.append(el("span", "note", "Install, update or move to another client:"), ...commands);
     footer.append(...rest);

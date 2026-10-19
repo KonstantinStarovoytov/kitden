@@ -3,7 +3,7 @@ import { getJson, postJson } from "./api.js";
 import { button, el, plural, webLink } from "./dom.js";
 import { entrance, fold, reducedMotion } from "./motion.js";
 import { openInfo, openItem, review, toast } from "./panel.js";
-import { banner, CLIENT_ICONS, CLIENT_NAMES, DARK_ICONS, flag, mark, skeleton, staleNote } from "./parts.js";
+import { banner, CLIENT_ICONS, CLIENT_NAMES, DARK_ICONS, flag, GATEWAY_NOTE, mark, skeleton, staleNote } from "./parts.js";
 import { current, currentError, data, freshness, loadGateway, loadMap, reload, render, state } from "./store.js";
 
 const WRITABLE = ["claude_code", "codex", "cursor"];
@@ -98,7 +98,7 @@ export function renderGateway(main) {
       const targets = movable.map((item) => ({ item }));
       head.append(button(`Move all ${movable.length}…`, () => review({ action: "gateway.move", targets, params: { gateway: target.id } })));
     }
-    section.append(head, el("p", "group-note", key === "move" && !target ? "Add the server in the gateway first, then remove its direct entry here." : note));
+    section.append(head, el("p", "group-note", key === "move" && !target ? GATEWAY_NOTE : note));
     const list = el("div", "list");
     for (const row of rows) list.append(groupRow(row, key, target));
     section.append(list);
@@ -399,8 +399,9 @@ function groupRow(row, group, target) {
 }
 
 async function showServer(name) {
-  if (!data.map) await loadMap();
-  const row = ((data.map && data.map.rows) || []).find((r) => r.kind === "mcp_server" && r.name === name);
+  if (!current("map")) await loadMap();
+  const map = current("map");
+  const row = ((map && map.rows) || []).find((r) => r.kind === "mcp_server" && r.name === name);
   if (row) await openItem(row);
   else toast("Could not find this server on the Load map.");
 }

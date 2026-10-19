@@ -85,7 +85,6 @@ DUPLICATE_FIXES = {
     ItemKind.PLUGIN: ("Turn one copy off to keep the other.", "plugin.disable"),
     ItemKind.MCP_SERVER: ("Remove one entry to keep the other.", "mcp.remove_direct"),
 }
-GATEWAY_FIX = "Add it in the gateway, then remove this direct entry."
 
 
 def _warning(text: str, client: str, fix: str, fix_action: str | None) -> dict:
@@ -133,9 +132,8 @@ def _flag(finding, item: Item, gateway_registered: bool, copies: list[Item]) -> 
             return {"text": "From plugin", "level": "info"}
         if "local server" in kind:
             return {"text": "Local server", "level": "info"}
-        if gateway_registered:
-            return _warning("Not via gateway", item.client, GATEWAY_FIX, "mcp.remove_direct")
-        return {"text": "Direct", "level": "info"}
+        # With a gateway, a direct server is an option to move, not a problem.
+        return {"text": "Direct connection" if gateway_registered else "Direct", "level": "info"}
     return None
 
 
