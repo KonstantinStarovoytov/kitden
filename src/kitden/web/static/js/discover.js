@@ -14,10 +14,12 @@ const COLUMNS = ["claude_code", "codex", "cursor"];
 const ROUTE_WORDS = { ready: "Ready", add_marketplace: "Adds the marketplace first" };
 const CURSOR_NOTE = "Cursor loads Claude Code plugins when Include Third-Party Plugins is on.";
 const NEEDS_PLUGIN = "This skill needs the rest of its plugin. Add the plugin instead.";
-// What Cursor also loads once Claude Code has it, per kind; the server reads Cursor's switches.
+// What Cursor also loads, per way in; the server reads Cursor's switches. A Codex copy goes to
+// ~/.agents/skills, which Cursor always reads (checked against Cursor's docs, 2026-10-19).
 const ALSO_LOADS = {
   plugin: "Cursor will also load this through Claude Code.",
   skill: "Cursor will also load it from Claude Code's folder.",
+  shared: "Cursor will also load it from the shared skills folder.",
 };
 
 const KINDS = [["plugin", "Plugins"], ["skill", "Skills"]];
@@ -179,8 +181,8 @@ function offerTable(offers, skills) {
   const clients = columns();
   const table = el("table", "map offers");
   const widths = el("colgroup");
-  const share = `${(56 / clients.length).toFixed(1)}%`;
-  for (const width of ["34%", ...clients.map(() => share), "10%"]) {
+  const share = `${(48 / clients.length).toFixed(1)}%`;
+  for (const width of ["42%", ...clients.map(() => share), "10%"]) {
     const col = el("col");
     col.style.width = width;
     widths.append(col);
@@ -200,8 +202,6 @@ function offerTable(offers, skills) {
   const thead = el("thead");
   thead.append(head);
   const body = el("tbody");
-  const names = new Map();
-  for (const offer of offers) names.set(offer.name, (names.get(offer.name) || 0) + 1);
   let apart = false;
   for (const offer of offers) {
     // Items found only by a word in their description come last, under their own line.
@@ -213,7 +213,7 @@ function offerTable(offers, skills) {
       tr.append(td);
       body.append(tr);
     }
-    body.append(skills ? skillRow(offer, clients) : offerRow(offer, clients, names.get(offer.name) > 1));
+    body.append(skills ? skillRow(offer, clients) : offerRow(offer, clients));
   }
   table.append(widths, thead, body);
   return table;
@@ -285,24 +285,35 @@ function tableRow(key, show) {
   return tr;
 }
 
-// One row: the name and what it does, one cell per client, and Add.
-function offerRow(offer, clients, twin) {
-  const tr = tableRow(offer.id, () => showOffer(offer));
-  const nameCell = el("td");
+// The first cell of a row. Line one: the name, which stays one line, and a flag. Line two: where
+// it comes from, never cut, then what it does, on up to two lines.
+function itemCell(item, flagged, from, fromTitle) {
+  const cell = el("td");
   const top = el("div", "item");
-  const name = el("span", "mono", offer.name);
-  name.title = offer.id;
+  const name = el("span", "mono", item.name);
+  name.title = item.id;
   top.append(name);
-  if (offer.category) top.append(flag({ text: offer.category, level: "info" }));
-  // Two marketplaces can offer a plugin with one name: then say which one this is.
-  if (twin) top.append(el("span", "from", offer.marketplace));
-  nameCell.append(top);
-  if (offer.description) {
-    const desc = el("div", "desc", offer.description);
-    desc.title = offer.description;
-    nameCell.append(desc);
+  if (flagged) top.append(flagged);
+  cell.append(top);
+  const meta = el("div", "meta");
+  if (from) {
+    const source = el("span", "from", from);
+    if (fromTitle) source.title = fromTitle;
+    meta.append(source);
   }
-  tr.append(nameCell);
+  if (item.description) {
+    const desc = el("span", "desc", item.description);
+    desc.title = item.description;
+    meta.append(desc);
+  }
+  if (meta.children.length) cell.append(meta);
+  return cell;
+}
+
+// One row: the name, the marketplace and what it does, one cell per client, and Add.
+function offerRow(offer, clients) {
+  const tr = tableRow(offer.id, () => showOffer(offer));
+  tr.append(itemCell(offer, offer.category ? flag({ text: offer.category, level: "info" }) : null, offer.marketplace));
   for (const client of clients) {
     const td = el("td");
     td.append(cell(offer, client));
@@ -321,23 +332,9 @@ function offerRow(offer, clients, twin) {
 // One skill: the name, where it comes from and what it does, one cell per client, and Add.
 function skillRow(skill, clients) {
   const tr = tableRow(skill.id, () => showSkill(skill));
-  const nameCell = el("td");
-  const top = el("div", "item");
-  const name = el("span", "mono", skill.name);
-  name.title = skill.id;
-  top.append(name);
-  if (!skill.self_contained) top.append(flag({ text: "Needs its plugin", level: "warning" }));
   // The plugin's short name; the marketplace is in the filter and in Details.
-  const from = el("span", "from", skill.plugin ? skill.plugin.split("@")[0] : skill.from);
-  from.title = skill.from;
-  top.append(from);
-  nameCell.append(top);
-  if (skill.description) {
-    const desc = el("div", "desc", skill.description);
-    desc.title = skill.description;
-    nameCell.append(desc);
-  }
-  tr.append(nameCell);
+  const from = skill.plugin ? skill.plugin.split("@")[0] : skill.from;
+  tr.append(itemCell(skill, skill.self_contained ? null : flag({ text: "Needs its plugin", level: "warning" }), from, skill.from));
   for (const client of clients) {
     const td = el("td");
     td.append(skillCell(skill, client));
@@ -399,7 +396,8 @@ function showOffer(offer) {
     const state = offer.installed.includes(client) ? "Installed" : ROUTE_WORDS[offer.routes[client]] || "Cannot get it from this marketplace";
     clients.append(el("li", null, `${CLIENT_NAMES[client]}: ${state}`));
   }
-  clients.append(el("li", "muted", "Cursor: loads Claude Code plugins when Include Third-Party Plugins is on."));
+  // Only when the server says Cursor loads Claude Code's plugins, and Claude Code can have this one.
+  if (cursorPlugin(offer, cursorInherits()) !== "none") clients.append(el("li", "muted", "Cursor: loads it through Claude Code."));
   body.append(section("Clients", [clients]));
   const add = openFor(offer).length ? [button("Add…", () => addForm(offer), "btn primary")] : [];
   openInfo("Plugin", offer.name, body, add);
@@ -457,12 +455,15 @@ export function startChosen(open) {
   return new Set(open.length === 1 ? open : []);
 }
 
-// The line naming Cursor while it would load the change through Claude Code, or "".
-// A checked Cursor is named already, so the skill line is not needed then.
-export function alsoLoads(kind, inherits, chosen) {
-  if (!inherits[kind] || !chosen.has("claude_code")) return "";
-  if (kind === "skill" && chosen.has("cursor")) return "";
-  return ALSO_LOADS[kind];
+// The line naming Cursor while it would load the change without being checked, or "".
+// `open` holds the clients the form offers; Cursor is one only when it is here and lacks the item.
+// A checked Cursor is named already, so the skill lines are not needed then.
+export function alsoLoads(kind, inherits, chosen, open = []) {
+  if (kind === "plugin") return inherits.plugin && chosen.has("claude_code") ? ALSO_LOADS.plugin : "";
+  if (chosen.has("cursor")) return "";
+  if (inherits.skill && chosen.has("claude_code")) return ALSO_LOADS.skill;
+  // A Codex copy lands in ~/.agents/skills, which Cursor reads whatever its third-party switch says.
+  return chosen.has("codex") && open.includes("cursor") ? ALSO_LOADS.shared : "";
 }
 
 // Checkboxes for the clients that can take it, checked as `chosen` says; `onChange` hears each.
@@ -486,13 +487,14 @@ function clientChecks(open, chosen, note, onChange) {
   return checks;
 }
 
-function addFormBody(checks, chosen, onSubmit) {
+// The form: the clients, an optional note about them, then Preview and its message.
+function addFormBody(checks, chosen, onSubmit, note = null) {
   const form = el("form", "form");
   const message = el("span", "form-message");
   message.setAttribute("aria-live", "polite");
   const submit = el("button", "btn primary", "Preview");
   submit.type = "submit";
-  form.append(checks, submit, message);
+  form.append(...[checks, note, submit, message].filter(Boolean));
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     if (!chosen.size) {
@@ -506,21 +508,19 @@ function addFormBody(checks, chosen, onSubmit) {
 }
 
 // The Add form for both kinds: what it is, where it comes from, notes, the clients, Preview.
-// Below the form, a line names Cursor while it would load the change through Claude Code.
+// Between the clients and Preview, a line names Cursor while it would load the change too.
 function addPanel(kicker, offer, { source, notes, checkNote, preview }) {
   const open = openFor(offer);
   const chosen = startChosen(open);
   const body = el("div", "body");
   if (offer.description) body.append(el("p", null, offer.description));
   body.append(el("p", "muted", `Source: ${source}`), ...notes);
-  const also = el("p", "muted");
-  const showAlso = () => {
-    also.textContent = alsoLoads(offer.kind, cursorInherits(), chosen);
-    also.hidden = !also.textContent;
-  };
+  // Always in the page, so a screen reader hears the line when it changes.
+  const also = el("p", "also muted");
+  also.setAttribute("aria-live", "polite");
+  const showAlso = () => { also.textContent = alsoLoads(offer.kind, cursorInherits(), chosen, open); };
   showAlso();
-  const form = addFormBody(clientChecks(open, chosen, checkNote, showAlso), chosen, () => preview([...chosen]));
-  body.append(form, also);
+  body.append(addFormBody(clientChecks(open, chosen, checkNote, showAlso), chosen, () => preview([...chosen]), also));
   openPanel([panelHead(kicker, offer.name), body, el("footer")]);
 }
 

@@ -295,6 +295,26 @@ def test_add_forms_name_the_source_and_every_client_the_change_reaches():
     assert "Cursor will also load it from Claude Code's folder." in text
 
 
+def test_discover_rows_keep_the_name_and_the_source_readable():
+    text, css = script("discover.js"), (STATIC / "style.css").read_text()
+    assert '["42%"' in text and 'el("div", "meta")' in text
+    assert ".offers .desc" in css and "-webkit-line-clamp: 2" in css
+    assert ".offers .from { flex: none" in css
+    # Every row names its source, so the twin check is gone.
+    assert "twin" not in text and "names.get" not in text
+
+
+def test_discover_details_and_add_form_follow_what_the_server_says_about_cursor():
+    text = script("discover.js")
+    # Details no longer claim a Cursor setting; the line shows only when Cursor would load it.
+    assert "Cursor: loads it through Claude Code." in text
+    assert "Cursor: loads Claude Code plugins when" not in text
+    assert "Cursor will also load it from the shared skills folder." in text
+    # The note is a polite live region inside the form, before Preview.
+    assert 'also.setAttribute("aria-live", "polite")' in text
+    assert "[checks, note, submit, message]" in text
+
+
 def test_a_lost_apply_answer_is_checked_not_guessed():
     text = script("panel.js")
     assert "Nothing was changed by this page" not in text

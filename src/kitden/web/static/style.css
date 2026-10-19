@@ -165,6 +165,10 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .checks { display: flex; gap: 14px; align-items: center; border: 0; padding: 0; margin: 0; }
 .checks legend { color: var(--ink-3); font-size: 12px; padding: 0; margin-bottom: 4px; }
 .checks label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+/* A note on its own line between the clients and Preview. It stays in the page so a screen reader
+   hears it change; empty, it is a zero-width item that takes back its gap. */
+.form .also { flex: 1 0 100%; margin: 0; }
+.form .also:empty { flex: none; width: 0; margin-left: -12px; }
 .form-message { color: var(--ink-3); font-size: 12px; }
 .form-message.error { color: var(--danger); }
 
@@ -305,8 +309,11 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .table-scroll { min-width: 0; }
 /* Discover: the Load map's table, with a line on what each plugin does and an Add column. */
 .offers td { height: auto; padding-top: 7px; padding-bottom: 7px; }
-.offers .desc { margin-top: 2px; color: var(--ink-3); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.offers .from { color: var(--ink-3); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Line two of the item cell: the source, never cut, then up to two lines of what it does. When the
+   cell is narrow the description drops under the source. */
+.offers .meta { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; margin-top: 2px; min-width: 0; font-size: 12px; color: var(--ink-3); }
+.offers .from { flex: none; max-width: 100%; color: var(--ink-2); overflow-wrap: anywhere; }
+.offers .desc { flex: 1 1 16ch; min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .offers .act { text-align: right; padding-left: 0; }
 /* "+ marketplace" goes under "Can add", lined up with the word, so it never gets cut off. */
 .offers .socket { flex-wrap: wrap; row-gap: 0; }
