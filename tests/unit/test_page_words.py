@@ -198,3 +198,14 @@ def test_moves_are_named_on_changes_and_in_the_review():
     panel = script("panel.js")
     assert "Move ${names} into the gateway" in panel
     assert "into the gateway" in panel
+
+
+# Feature 007: an Obot gateway beside MetaMCP ---------------------------------------------
+
+
+def test_gateway_form_takes_an_obot_key_variable_never_the_key():
+    text = script("gateway.js")
+    assert 'path.startsWith("/mcp-connect/")' in text
+    assert "Obot API key variable name (not the key)" in text
+    assert "ok1-" not in text
+    assert "model.gateways.find((g) => g.movable)" in text

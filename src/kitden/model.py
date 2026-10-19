@@ -286,9 +286,9 @@ class Gateway:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "url", normalize_url(self.url))
-        if self.auth is GatewayAuth.ENV_KEY and not (
-            self.key_env_var and _ENV_NAME.fullmatch(self.key_env_var)
-        ):
+        if self.auth is GatewayAuth.ENV_KEY and not self.key_env_var:
+            raise ValueError("key_env_var must be an environment variable name, never a secret")
+        if self.key_env_var and not _ENV_NAME.fullmatch(self.key_env_var):
             raise ValueError("key_env_var must be an environment variable name, never a secret")
         if bool(self.login_email) != bool(self.login_password_env_var):
             raise ValueError("A sign-in needs both the email and the password variable's name")
@@ -300,9 +300,27 @@ class Gateway:
             raise ValueError("The sign-in email does not look like an email address")
 
     @property
+    def kind(self) -> str:
+        """Which gateway the address belongs to, told from its path: MetaMCP serves
+        `/metamcp/<endpoint>/mcp`, Obot `/mcp-connect/<vmcp id>` (feature 007)."""
+        path = urlsplit(self.url).path
+        if path.startswith("/metamcp/"):
+            return "metamcp"
+        if path.startswith("/mcp-connect/"):
+            return "obot"
+        return "other"
+
+    @property
     def managed(self) -> bool:
-        """Kitden can sign in and change what the gateway holds."""
+        """Kitden can read what the gateway holds: MetaMCP with a sign-in, Obot with a key."""
+        if self.kind == "obot":
+            return bool(self.key_env_var)
         return bool(self.login_email and self.login_password_env_var)
+
+    @property
+    def movable(self) -> bool:
+        """Kitden can move servers into it from here (feature 006: MetaMCP only)."""
+        return self.kind == "metamcp" and self.managed
 
     @property
     def id(self) -> str:

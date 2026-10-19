@@ -19,9 +19,21 @@ const draft = { add: { ...EMPTY_ADD }, connect: null, addOpen: false, connectOpe
 // Every client gets the same entry name; the review shows the exact entry before Apply.
 const ENTRY_NAME = "gateway";
 
+// Which gateway an address belongs to, told from its path (the server does the same).
+export function kindOf(url) {
+  try {
+    const path = new URL(url).pathname;
+    if (path.startsWith("/metamcp/")) return "metamcp";
+    if (path.startsWith("/mcp-connect/")) return "obot";
+  } catch { /* not an address yet */ }
+  return "other";
+}
+
+const KIND_NAMES = { metamcp: "MetaMCP", obot: "Obot" };
+
 export function gatewayName(gateway) {
-  if (/metamcp/i.test(gateway.url)) return "MetaMCP";
-  if (/obot/i.test(gateway.url)) return "Obot";
+  const kind = gateway.kind || kindOf(gateway.url);
+  if (KIND_NAMES[kind]) return KIND_NAMES[kind];
   try { return new URL(gateway.url).host || "Gateway"; } catch { return "Gateway"; }
 }
 
@@ -62,7 +74,7 @@ export function renderGateway(main) {
   }
 
   // The gateway Kitden can manage from here takes the servers that move.
-  const target = model.gateways.find((g) => g.managed) || null;
+  const target = model.gateways.find((g) => g.movable) || null;
   // One heading says what the lists below are: MCP servers that reach a client directly.
   if (GROUPS.some(([key]) => model.groups[key].length)) {
     const title = el("h2", "section-title", "MCP servers not in the gateway");
@@ -137,7 +149,8 @@ function heldSection(gateway) {
   const box = el("section", "held");
   const title = (count) => el("h3", "group-title", count === undefined ? "In the gateway" : `In the gateway · ${count}`);
   if (!gateway.managed) {
-    box.append(title(), el("p", "group-note", "To see and change what it holds from here, save the gateway again with its sign-in details."));
+    const need = gateway.kind === "obot" ? "the name of the variable that holds an Obot API key" : "its sign-in details";
+    box.append(title(), el("p", "group-note", `To see what it holds from here, save the gateway again with ${need}.`));
     return box;
   }
   let entry = held.get(gateway.id);
@@ -404,16 +417,27 @@ function connectForm(gateways, waiting) {
 function addForm() {
   const state = draft.add;
   const form = el("form", "form");
-  const url = input({ type: "url", required: true, placeholder: "http://127.0.0.1:12008/metamcp/local/mcp", autocomplete: "off" }, state.url, (v) => { state.url = v; });
+  const url = input({ type: "url", required: true, placeholder: "http://127.0.0.1:12008/metamcp/local/mcp or http://127.0.0.1:8080/mcp-connect/<id>", autocomplete: "off" }, state.url, (v) => { state.url = v; showFields(); });
   const ui = input({ type: "url", placeholder: "http://127.0.0.1:12008", autocomplete: "off" }, state.ui_url, (v) => { state.ui_url = v; });
   const login = el("select");
   for (const [value, text] of [["none", "None"], ["env_key", "Key in an environment variable"], ["oauth", "OAuth login"]]) login.append(new Option(text, value));
   login.value = state.auth;
   const key = input({ pattern: "[A-Z_][A-Z0-9_]*", placeholder: "GATEWAY_KEY", autocomplete: "off", spellcheck: false }, state.key_env_var, (v) => { state.key_env_var = v; });
-  const keyField = field("Variable name (not the key)", key);
-  const showKey = () => { keyField.hidden = login.value !== "env_key"; key.required = login.value === "env_key"; };
-  login.addEventListener("change", () => { state.auth = login.value; showKey(); });
-  showKey();
+  const keyLabel = el("span", null, "Variable name (not the key)");
+  const keyField = el("label", "field");
+  keyField.append(keyLabel, key);
+  // The fields follow the address: an Obot gateway needs the variable that holds an API key
+  // (Kitden reads what it holds with it, even when the clients sign in with OAuth); a MetaMCP
+  // gateway needs a sign-in. The key or password itself is never typed into Kitden.
+  const showFields = () => {
+    const kind = kindOf(state.url);
+    const needsKey = login.value === "env_key" || kind === "obot";
+    keyField.hidden = !needsKey;
+    key.required = needsKey;
+    keyLabel.textContent = kind === "obot" && login.value !== "env_key" ? "Obot API key variable name (not the key)" : "Variable name (not the key)";
+    emailField.hidden = passwordField.hidden = kind === "obot";
+  };
+  login.addEventListener("change", () => { state.auth = login.value; showFields(); });
   const urlField = field("MCP address", url);
   urlField.classList.add("grow");
   const uiField = field("Interface link (optional)", ui);
@@ -425,6 +449,7 @@ function addForm() {
   const emailField = field("Sign-in email (to manage it from here)", email);
   emailField.classList.add("grow");
   const passwordField = field("Password variable name (not the password)", password);
+  showFields();
   const message = el("span", "form-message");
   message.setAttribute("aria-live", "polite");
   const submit = el("button", "btn primary", "Save gateway");
@@ -438,7 +463,7 @@ function addForm() {
         url: state.url.trim(),
         ui_url: state.ui_url.trim() || null,
         auth: state.auth,
-        key_env_var: state.auth === "env_key" ? state.key_env_var.trim() : null,
+        key_env_var: state.auth === "env_key" || kindOf(state.url) === "obot" ? state.key_env_var.trim() : null,
         login_email: state.login_email.trim() || null,
         login_password_env_var: state.login_password_env_var.trim() || null,
       });

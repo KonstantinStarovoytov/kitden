@@ -141,8 +141,10 @@ def move_steps(
     then the remove step of every client entry. The gateway steps come first."""
     if not items:
         raise ValueError("Choose a server to move")
-    if not gateway.managed:
-        raise ValueError("Add the sign-in email and password variable to the gateway first")
+    if not gateway.movable:
+        if gateway.kind == "metamcp":
+            raise ValueError("Add the sign-in email and password variable to the gateway first")
+        raise ValueError("Kitden cannot move servers into this gateway yet (feature 007, Step B)")
     gateway_steps: dict[str, Step] = {}
     file_steps: list[Step] = []
     for item in items:
