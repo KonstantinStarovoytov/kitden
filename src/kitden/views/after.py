@@ -33,6 +33,11 @@ def after_words(change: Change, inventory) -> list[dict]:
         if step.client == GATEWAY_CLIENT or any(e["client"] == step.client for e in out):
             continue
         state, word = WORDS.get(change.action, ("on", "Changed"))
+        # A moved server reaches the client only if the client has a gateway entry.
+        if change.action == "gateway.move" and not any(
+            i.client == step.client and i.via_gateway for i in inventory.items
+        ):
+            state, word = "off", "Removed"
         if change.action == "plugin.disable" and _other_copy_loads(
             inventory, step.client, step.name
         ):

@@ -174,3 +174,27 @@ def test_overview_notes_are_rows_with_a_details_button():
     text = script("overview.js")
     assert '"Details"' in text
     assert "shortPaths" not in text
+
+
+# Feature 006: the gateway is managed from here --------------------------------------------
+
+
+def test_gateway_offers_move_and_keeps_the_side_door_small():
+    text = script("gateway.js")
+    assert "Move into the gateway…" in text
+    assert "Move all ${movable.length}…" in text
+    assert "In the gateway" in text
+    assert 'link.classList.add("small", "ghost")' in text
+
+
+def test_gateway_form_never_takes_the_password_itself():
+    text = script("gateway.js")
+    assert "Password variable name (not the password)" in text
+    assert 'type: "password"' not in text
+
+
+def test_moves_are_named_on_changes_and_in_the_review():
+    assert '"gateway.move": "Moved into the gateway"' in script("parts.js")
+    panel = script("panel.js")
+    assert "Move ${names} into the gateway" in panel
+    assert "into the gateway" in panel

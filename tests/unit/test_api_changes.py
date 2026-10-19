@@ -416,7 +416,11 @@ def test_move_one_server_then_undo(client, fake):
     assert [s["client"] for s in change["steps"]] == ["gateway", "gateway", "codex", "cursor"]
     assert change["steps"][0]["path"] == gateway["url"]
     assert "+" in change["steps"][0]["diff"] and "neon" in change["steps"][0]["diff"]
-    assert [a["client"] for a in change["after"]] == ["codex", "cursor"]
+    # Neither client has a gateway entry yet, so the entry is simply gone for them.
+    assert [(a["client"], a["word"]) for a in change["after"]] == [
+        ("codex", "Removed"),
+        ("cursor", "Removed"),
+    ]
     assert _files(client.home) == original and fake.held_names() == []
 
     applied = client.post(f"/api/changes/{change['id']}/apply", headers=POST)

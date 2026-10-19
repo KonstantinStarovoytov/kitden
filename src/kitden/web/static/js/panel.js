@@ -347,6 +347,12 @@ async function showCommands(row, definitions) {
 
 // A change from the Changes page: the Changes page builds the body (steps with their files,
 // history, error); the panel frames it. Undo stays with the row that opened it.
+// A read-only note in the panel, for example a server the gateway holds.
+export function openInfo(kicker, title, body) {
+  current = { type: "info" };
+  openPanel([header(kicker, title, null, "Close", true), body, el("footer")]);
+}
+
 export function openChange(title, body, onUndo) {
   current = { type: "change" };
   const footer = el("footer");
@@ -359,15 +365,17 @@ export function openChange(title, body, onUndo) {
 const DONE_WORDS = {
   "plugin.disable": "Turned off", "plugin.enable": "Turned on", "mcp.remove_direct": "Removed",
   "gateway.connect": "Connected the gateway", "setup_server.register": "Added show my setup",
-  "setup_server.update": "Updated show my setup to Kitden",
+  "setup_server.update": "Updated show my setup to Kitden", "gateway.move": "Moved",
 };
 
 // The review title names the exact entry; the toast uses the short name ("superpowers").
 function changeWords(change) {
-  const names = joinWords([...new Set(change.steps.map((s) => s.name))]);
-  const short = joinWords([...new Set(change.steps.map((s) => s.name.split("@")[0]))]);
-  const clients = joinWords([...new Set(change.steps.map((s) => clientName(s.client)))]);
+  const steps = change.steps.filter((s) => s.client !== "gateway");
+  const names = joinWords([...new Set(steps.map((s) => s.name))]);
+  const short = joinWords([...new Set(steps.map((s) => s.name.split("@")[0]))]);
+  const clients = joinWords([...new Set(steps.map((s) => clientName(s.client)))]);
   const title = {
+    "gateway.move": `Move ${names} into the gateway`,
     "plugin.disable": `Turn off ${names} in ${clients}`,
     "plugin.enable": `Turn on ${names} in ${clients}`,
     "mcp.remove_direct": `Remove ${names} from ${clients}`,
@@ -376,9 +384,12 @@ function changeWords(change) {
     "setup_server.update": `Update “show my setup” to Kitden in ${clients}`,
   }[change.action] || change.action;
   const verb = DONE_WORDS[change.action] || change.action;
-  const what = ["gateway.connect", "setup_server.register", "setup_server.update"].includes(change.action)
-    ? `${verb} ${change.action === "setup_server.update" ? "in" : "to"} ${clients}`
-    : `${verb} ${short} ${change.action === "mcp.remove_direct" ? "from" : "in"} ${clients}`;
+  let what = `${verb} ${short} ${change.action === "mcp.remove_direct" ? "from" : "in"} ${clients}`;
+  if (["gateway.connect", "setup_server.register", "setup_server.update"].includes(change.action)) {
+    what = `${verb} ${change.action === "setup_server.update" ? "in" : "to"} ${clients}`;
+  } else if (change.action === "gateway.move") {
+    what = `${verb} ${short} into the gateway`;
+  }
   const notes = [...new Set(change.steps.map((s) => s.restart_note).filter(Boolean))]
     .map((note) => note.replace(/,? for this to take effect\.?$/, ""));
   const after = notes.length > 1 ? [`Restart or reload ${clients}`] : notes;
@@ -595,7 +606,7 @@ export async function undoChange(change) {
     showEffect();
     const after = result.data;
     if (after && after.state === "undone") toast("Undone. The previous settings are back.", null, { ok: true });
-    else if (after && after.state === "undo_blocked") toast("Undo stopped: the file changed after the change was applied.");
+    else if (after && after.state === "undo_blocked") toast("Undo stopped: " + (after.error ? shortPaths(after.error) : "the file changed after the change was applied."));
     else toast((after && after.detail) || `Undo failed (${result.status}).`);
   } finally {
     setBusy(false);

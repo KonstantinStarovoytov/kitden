@@ -1,14 +1,14 @@
 // Gateway: which clients reach it, and which servers are not connected to it.
-import { postJson } from "./api.js";
+import { getJson, postJson } from "./api.js";
 import { button, el, plural, webLink } from "./dom.js";
 import { entrance, fold, reducedMotion } from "./motion.js";
-import { openItem, review, toast } from "./panel.js";
+import { openInfo, openItem, review, toast } from "./panel.js";
 import { banner, CLIENT_ICONS, CLIENT_NAMES, DARK_ICONS, flag, mark, skeleton } from "./parts.js";
-import { data, loadGateway, loadMap, reload, render } from "./store.js";
+import { data, freshness, loadGateway, loadMap, reload, render, state } from "./store.js";
 
 const WRITABLE = ["claude_code", "codex", "cursor"];
 const GROUPS = [
-  ["move", "Can move into the gateway", "Add the server in the gateway first, then remove its direct entry here."],
+  ["move", "Can move into the gateway", "Moving adds the server to the gateway, then removes its direct entry here."],
   ["local", "Must run on this Mac", "Local servers start a program here; a gateway cannot reach them. Nothing to do."],
   ["plugin", "Come with a plugin", "Turn the plugin off if you do not want them."],
 ];
@@ -56,11 +56,13 @@ export function renderGateway(main) {
   blocks.push(card);
   for (const gateway of others) {
     const more = el("section", "card");
-    more.append(gatewayHead(gateway, model));
+    more.append(gatewayHead(gateway, model), heldSection(gateway));
     main.append(more);
     blocks.push(more);
   }
 
+  // The gateway Kitden can manage from here takes the servers that move.
+  const target = model.gateways.find((g) => g.managed) || null;
   // One heading says what the lists below are: MCP servers that reach a client directly.
   if (GROUPS.some(([key]) => model.groups[key].length)) {
     const title = el("h2", "section-title", "MCP servers not in the gateway");
@@ -74,9 +76,16 @@ export function renderGateway(main) {
     const entries = rows.reduce((n, row) => n + row.clients.length, 0);
     const count = entries === rows.length ? String(entries) : `${entries} entries in ${plural(rows.length, "server", "servers")}`;
     const section = el("section");
-    section.append(el("h3", "group-title", `${title} · ${count}`), el("p", "group-note", note));
+    const head = el("div", "group-head");
+    head.append(el("h3", "group-title", `${title} · ${count}`));
+    const movable = key === "move" && target ? rows.flatMap((row) => row.items) : [];
+    if (movable.length) {
+      const targets = movable.map((item) => ({ item }));
+      head.append(button(`Move all ${movable.length}…`, () => review({ action: "gateway.move", targets, params: { gateway: target.id } })));
+    }
+    section.append(head, el("p", "group-note", key === "move" && !target ? "Add the server in the gateway first, then remove its direct entry here." : note));
     const list = el("div", "list");
-    for (const row of rows) list.append(groupRow(row, key));
+    for (const row of rows) list.append(groupRow(row, key, target));
     section.append(list);
     main.append(section);
     blocks.push(section);
@@ -97,14 +106,99 @@ function gatewayHead(gateway, model) {
   const used = model.gateways.length > 1 ? ` · ${model.used.includes(gateway.id) ? "Used" : "Not used"}` : "";
   left.append(el("div", "kicker", `${gatewayName(gateway)}${used}`), el("div", "gw-url", gateway.url));
   const right = el("div");
-  if (gateway.ui_url) right.append(webLink(gateway.ui_url, `Open ${gatewayName(gateway)} ↗`));
+  if (gateway.ui_url) {
+    // A small side door: everything the page can do happens here.
+    const link = webLink(gateway.ui_url, `Open ${gatewayName(gateway)} ↗`);
+    link.classList.add("small", "ghost");
+    right.append(link);
+  }
   head.append(left, right);
   return head;
 }
 
+// What each managed gateway holds, read from the gateway itself when the card draws and
+// again after every reload. An answer that fails never blocks the rest of the page.
+const held = new Map(); // gateway id -> { servers, error, at, loading }
+
+async function loadHeld(gateway) {
+  const at = performance.now();
+  held.set(gateway.id, { loading: true, at });
+  let answer;
+  try {
+    answer = await getJson(`/api/gateways/${encodeURIComponent(gateway.id)}/servers`);
+  } catch {
+    answer = { servers: null, error: "Could not read what the gateway holds." };
+  }
+  held.set(gateway.id, { ...answer, at });
+  if (state.view === "gateway") render();
+}
+
+function heldSection(gateway) {
+  const box = el("section", "held");
+  const title = (count) => el("h3", "group-title", count === undefined ? "In the gateway" : `In the gateway · ${count}`);
+  if (!gateway.managed) {
+    box.append(title(), el("p", "group-note", "To see and change what it holds from here, save the gateway again with its sign-in details."));
+    return box;
+  }
+  let entry = held.get(gateway.id);
+  if (!entry || entry.at < freshness.reloadStartedAt) {
+    loadHeld(gateway);
+    entry = held.get(gateway.id);
+  }
+  if (entry.loading) {
+    box.append(title(), skeleton("line", 2));
+    return box;
+  }
+  if (!entry.servers) {
+    box.append(title(), el("p", "group-note", entry.error || "Could not read what the gateway holds."));
+    return box;
+  }
+  box.append(title(entry.servers.length));
+  if (!entry.servers.length) {
+    box.append(el("p", "group-note", "Nothing yet. Move a server from the lists below."));
+    return box;
+  }
+  const list = el("div", "list");
+  for (const server of entry.servers) list.append(heldRow(server, gateway));
+  box.append(list);
+  return box;
+}
+
+// One row per server the gateway holds: its name and what it is. The address stays behind
+// Details, as on the other lists.
+function heldRow(server, gateway) {
+  const node = el("div", "list-row");
+  const marks = el("span", "chip");
+  marks.setAttribute("aria-label", gatewayName(gateway));
+  marks.append(mark("gateway"));
+  const what = el("span", "what");
+  const name = el("span", "mono", server.name);
+  name.title = server.name;
+  what.append(name, flag({ text: server.type === "SSE" ? "SSE" : "Remote", level: "info" }));
+  const actions = el("span", "row-actions");
+  actions.append(button("Details", () => showHeld(server, gateway), "btn small ghost"));
+  node.append(marks, what, actions);
+  return node;
+}
+
+function showHeld(server, gateway) {
+  const body = el("div", "body");
+  const row = el("div", "layer");
+  const middle = el("div");
+  middle.append(el("div", "name", `In ${gatewayName(gateway)} · ${server.type === "SSE" ? "SSE" : "Streamable HTTP"}`));
+  const url = el("div", "why mono", server.url || "");
+  url.title = server.url || "";
+  middle.append(url);
+  row.append(mark("gateway"), middle);
+  const stack = el("div", "stack");
+  stack.append(row);
+  body.append(stack, el("p", "muted", `Tools and access are set in ${gatewayName(gateway)} itself.`));
+  openInfo("MCP server", server.name, body);
+}
+
 function gatewayCard(gateway, model) {
   const card = el("section", "card");
-  card.append(gatewayHead(gateway, model), routes(gateway, model.connections, model.groups.move));
+  card.append(gatewayHead(gateway, model), routes(gateway, model.connections, model.groups.move), heldSection(gateway));
   // Only clients without a gateway entry are offered; the others are connected already.
   const waiting = foundClients().filter((c) => !(model.connections[c] || []).length);
   if (waiting.length) {
@@ -216,7 +310,7 @@ const GROUP_WORDS = { move: "Remote", local: "Local", plugin: "Plugin" };
 
 // One row per server: the clients that have it, its name and what it is. Addresses and
 // commands stay behind Details (the same panel as on the Load map).
-function groupRow(row, group) {
+function groupRow(row, group, target) {
   const node = el("div", "list-row");
   node.dataset.clients = row.clients.join(" ");
   node.addEventListener("pointerenter", () => focusRoutes(row.clients, { wires: false, rows: false }));
@@ -232,7 +326,9 @@ function groupRow(row, group) {
   actions.append(button("Details", () => showServer(row.name), "btn small ghost"));
   if (group === "move" && row.items.length) {
     const targets = row.items.map((item) => ({ item }));
-    actions.append(button("Remove direct entry…", () => review({ action: "mcp.remove_direct", targets, params: {} })));
+    // With a managed gateway the move does both steps; without one, only the removal is here.
+    if (target) actions.append(button("Move into the gateway…", () => review({ action: "gateway.move", targets, params: { gateway: target.id } })));
+    else actions.append(button("Remove direct entry…", () => review({ action: "mcp.remove_direct", targets, params: {} })));
   }
   node.append(marks, what, actions);
   return node;

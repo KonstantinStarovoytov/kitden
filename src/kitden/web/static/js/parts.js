@@ -6,7 +6,7 @@ export const STATE_WORDS = {
   missing: "Not installed", none: "—",
 };
 export const CLIENT_MARKS = {
-  claude_code: "CC", codex: "CX", cursor: "CU", claude_desktop_code_tab: "CD",
+  claude_code: "CC", codex: "CX", cursor: "CU", claude_desktop_code_tab: "CD", gateway: "GW",
 };
 // Icon file names under /static/brand/clients. Codex and Cursor also ship a "-dark" version.
 export const CLIENT_ICONS = {
@@ -15,7 +15,7 @@ export const CLIENT_ICONS = {
 export const DARK_ICONS = new Set(["codex", "cursor"]);
 export const CLIENT_NAMES = {
   claude_code: "Claude Code", codex: "Codex", cursor: "Cursor",
-  claude_desktop_code_tab: "Claude Desktop (Code tab)",
+  claude_desktop_code_tab: "Claude Desktop (Code tab)", gateway: "Gateway",
 };
 
 export function socket({ state, where, word }) {
@@ -105,6 +105,7 @@ export function banner(what, onRetry) {
 
 const ACTION_WORDS = {
   "gateway.connect": "Added gateway",
+  "gateway.move": "Moved into the gateway",
   "mcp.remove_direct": "Removed",
   "plugin.enable": "Turned on",
   "plugin.disable": "Turned off",
@@ -117,8 +118,10 @@ const ACTION_WORDS = {
 export function changeTitle(entry) {
   const verb = ACTION_WORDS[entry.action] || entry.action;
   const plugin = ["plugin.enable", "plugin.disable"].includes(entry.action);
-  const names = [...new Set(entry.steps.map((s) => (plugin ? s.name.split("@")[0] : s.name)))];
-  const clients = [...new Set(entry.steps.map((s) => CLIENT_NAMES[s.client] || s.client))];
+  // The gateway's own step is not a client: the line names the clients the entry left.
+  const steps = entry.steps.filter((s) => s.client !== "gateway");
+  const names = [...new Set(steps.map((s) => (plugin ? s.name.split("@")[0] : s.name)))];
+  const clients = [...new Set(steps.map((s) => CLIENT_NAMES[s.client] || s.client))];
   const whole = ["gateway.connect", "setup_server.register", "setup_server.update"].includes(entry.action);
   const what = whole ? "" : ` ${names.join(", ")}`;
   return `${verb}${what} · ${clients.join(", ")}`;
