@@ -56,6 +56,10 @@ function renderShell() {
   // Changes still in effect, the ones Undo can take back.
   const changes = latestChanges(data.changes || []).filter((e) => e.state === "verified").length;
   rollTo($("#nav-changes"), changes || "");
+  // The time of the last reload where every read worked, and a note when the latest one failed.
+  const { lastGoodRead, lastReadFailed } = freshness;
+  const time = lastGoodRead ? new Date(lastGoodRead).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "…";
+  $("#scanned").textContent = `${time}${lastReadFailed ? " · could not refresh" : ""}`;
 
   // Keep the picker compact; full paths are available on hover.
   const where = $("#where");
@@ -80,10 +84,6 @@ function renderShell() {
 // A scope change cross-fades the page (the Load map morphs its cells instead).
 async function refresh({ fade = false } = {}) {
   await reload();
-  // The time of the last reload where every read worked, and a note when the latest one failed.
-  const { lastGoodRead, lastReadFailed } = freshness;
-  const time = lastGoodRead ? new Date(lastGoodRead).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "…";
-  $("#scanned").textContent = `${time}${lastReadFailed ? " · could not refresh" : ""}`;
   if (fade) transition(renderPlace);
   else renderPlace();
 }
@@ -195,7 +195,14 @@ function start() {
     setState({ project: event.target.value, selected: null });
     // On the Load map, each cell turns into its state in the new scope instead of jumping.
     if (state.view === "map") morphOnNextRender();
-    refresh({ fade: state.view !== "map" }).catch(reportError);
+    // The old project's page stays until the new one is read, faded and marked as waiting.
+    const main = $("#main");
+    main.classList.add("pending");
+    main.setAttribute("aria-busy", "true");
+    refresh({ fade: state.view !== "map" }).catch(reportError).finally(() => {
+      main.classList.remove("pending");
+      main.removeAttribute("aria-busy");
+    });
   });
   $("#q").addEventListener("input", (event) => {
     const q = event.target.value.trim();

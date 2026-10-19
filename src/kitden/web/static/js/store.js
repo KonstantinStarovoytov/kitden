@@ -17,14 +17,20 @@ export function setBusy(value) {
 // when the last reload with no failed read ended, and whether the latest one had a failure.
 export const freshness = { reloadStartedAt: 0, lastGoodRead: null, lastReadFailed: false };
 // scope: the project each read was for. readAt: when each read last worked.
+// errorScope: the project each failed read was for.
 export const data = {
   clients: null, projects: null, overview: null, map: null, gateway: null, changes: null, setupServer: null,
-  errors: {}, scope: {}, readAt: {},
+  errors: {}, scope: {}, readAt: {}, errorScope: {},
 };
 
 // A project's data only while that project is shown, so another project's data never shows.
 export function current(name) {
   return data.scope[name] === state.project ? data[name] : null;
+}
+
+// The same for a failed read: another project's error is not this project's.
+export function currentError(name) {
+  return data.errorScope[name] === state.project ? data.errors[name] || null : null;
 }
 
 let renderPlace = () => {};
@@ -101,8 +107,11 @@ async function guarded(name, url, apply, scope) {
     data.scope[name] = scope;
     data.readAt[name] = Date.now();
     delete data.errors[name];
+    delete data.errorScope[name];
   } catch (error) {
-    if (!notShown()) data.errors[name] = error;
+    if (notShown()) return;
+    data.errors[name] = error;
+    data.errorScope[name] = scope;
   }
 }
 

@@ -4,7 +4,7 @@ import { button, el, plural, webLink } from "./dom.js";
 import { entrance, fold, reducedMotion } from "./motion.js";
 import { openInfo, openItem, review, toast } from "./panel.js";
 import { banner, CLIENT_ICONS, CLIENT_NAMES, DARK_ICONS, flag, mark, skeleton, staleNote } from "./parts.js";
-import { current, data, freshness, loadGateway, loadMap, reload, render, state } from "./store.js";
+import { current, currentError, data, freshness, loadGateway, loadMap, reload, render, state } from "./store.js";
 
 const WRITABLE = ["claude_code", "codex", "cursor"];
 const GROUPS = [
@@ -46,11 +46,11 @@ export function renderGateway(main) {
   main.append(el("p", "lede", "Turn MCP tools on and off in the gateway, not in each client. Here you see which clients reach it and which servers are not connected to it."));
   const model = current("gateway");
   if (!model) {
-    if (data.errors.gateway) main.append(banner("the gateway", async () => { await loadGateway(); render(); }));
+    if (currentError("gateway")) main.append(banner("the gateway", async () => { await loadGateway(); render(); }));
     else main.append(skeleton("card", 2));
     return;
   }
-  if (data.errors.gateway) main.append(staleNote(data.readAt.gateway));
+  if (currentError("gateway")) main.append(staleNote(data.readAt.gateway));
 
   const blocks = [];
   if (!model.gateways.length) {

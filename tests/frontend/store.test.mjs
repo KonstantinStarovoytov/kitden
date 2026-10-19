@@ -14,7 +14,7 @@ function fetchAnswers(map) { answers = map; failing = null; }
 function fetchFails(url) { failing = url; }
 const ALL_OK = {};
 
-const { current, data, freshness, loadMap, reload, state } = await import('../../src/kitden/web/static/js/store.js');
+const { current, currentError, data, freshness, loadMap, reload, state } = await import('../../src/kitden/web/static/js/store.js');
 
 beforeEach(() => { state.project = ''; });
 
@@ -52,4 +52,15 @@ test('an answer for a project no longer shown is dropped', async () => {
   state.project = 'b';
   await lateFailure;
   assert.equal(data.errors.map, undefined);
+});
+
+test('an error for one project is not an error for the next one', async () => {
+  fetchFails('/api/map?project=a');
+  state.project = 'a'; await reload();
+  assert.ok(currentError('map'));
+  state.project = 'b';
+  const pending = loadMap();
+  assert.equal(currentError('map'), null);
+  await pending;
+  assert.equal(currentError('map'), null);
 });

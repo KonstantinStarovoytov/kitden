@@ -2,7 +2,7 @@
 import { button, el } from "./dom.js";
 import { animate, entrance, EASE_IN_OUT, glide, land } from "./motion.js";
 import { banner, flag, mark, morphSocket, skeleton, socket, staleNote } from "./parts.js";
-import { current, data, go, loadMap, projectPath, render, setState, state } from "./store.js";
+import { current, currentError, data, go, loadMap, projectPath, render, setState, state } from "./store.js";
 
 const KINDS = [
   ["mcp_server", "MCP servers"], ["plugin", "Plugins"], ["skill", "Skills"],
@@ -53,11 +53,11 @@ export function renderMap(main) {
   main.append(lede);
   const model = current("map");
   if (!model) {
-    if (data.errors.map) main.append(banner("the load map", async () => { await loadMap(); render(); }));
+    if (currentError("map")) main.append(banner("the load map", async () => { await loadMap(); render(); }));
     else main.append(skeleton("table", 1));
     return;
   }
-  if (data.errors.map) main.append(staleNote(data.readAt.map));
+  if (currentError("map")) main.append(staleNote(data.readAt.map));
 
   const found = model.rows.filter(matches);
   const counts = Object.fromEntries(KINDS.map(([kind]) => [kind, found.filter((r) => r.kind === kind).length]));

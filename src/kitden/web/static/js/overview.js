@@ -5,7 +5,7 @@ import { openSelectedOnRender } from "./map.js";
 import { entrance, fly } from "./motion.js";
 import { toast } from "./panel.js";
 import { banner, flag, mark, skeleton, socket, staleNote } from "./parts.js";
-import { current, data, go, loadMap, loadOverview, projectPath, render } from "./store.js";
+import { current, currentError, data, go, loadMap, loadOverview, projectPath, render } from "./store.js";
 
 let notesOpen = false;
 
@@ -13,7 +13,7 @@ export function renderOverview(main) {
   const model = current("overview");
   if (!model) {
     main.append(el("h1", null, "Overview"));
-    if (data.errors.overview) main.append(banner("the overview", async () => { await loadOverview(); render(); }));
+    if (currentError("overview")) main.append(banner("the overview", async () => { await loadOverview(); render(); }));
     else main.append(skeleton("card", 3));
     return;
   }
@@ -24,7 +24,7 @@ export function renderOverview(main) {
   main.append(el("p", "lede", model.attention.length
     ? `Everything else looks fine: ${plural(found, "client", "clients")} found, ${plural(projects, "project", "projects")}.`
     : `${plural(found, "client", "clients")} found, ${plural(projects, "project", "projects")}. Nothing needs your attention.`));
-  if (data.errors.overview) main.append(staleNote(data.readAt.overview));
+  if (currentError("overview")) main.append(staleNote(data.readAt.overview));
 
   const grid = el("div", "overview");
   const left = el("section", "attention");
@@ -142,8 +142,9 @@ function noteRow(finding) {
 
 // The note is about items on the Load map; open the first one there, in the panel.
 async function showNote(finding) {
-  if (!data.map) await loadMap();
-  const rows = (data.map && data.map.rows) || [];
+  if (!current("map")) await loadMap();
+  const map = current("map");
+  const rows = (map && map.rows) || [];
   const row = rows.find((r) => Object.values(r.cells).some((cell) => (cell.items || []).some((id) => finding.items.includes(id))));
   if (row) follow({ view: "map", kind: row.kind, row: row.key });
   else toast("Could not find this item on the Load map.");

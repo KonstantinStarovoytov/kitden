@@ -313,3 +313,20 @@ def test_a_failed_refresh_says_when_the_shown_data_was_read():
         text = script(name)
         assert f'current("{model}")' in text and f"staleNote(data.readAt.{model})" in text
     assert '" · could not refresh"' in script("app.js")
+
+
+def test_the_rail_time_follows_every_render_not_only_a_refresh():
+    app = script("app.js")
+    shell = app.split("function renderShell()")[1].split("\n}\n")[0]
+    refresh = app.split("async function refresh(")[1].split("\n}\n")[0]
+    assert '$("#scanned").textContent' in shell and "lastGoodRead" in shell
+    assert "#scanned" not in refresh
+
+
+def test_a_project_switch_marks_the_old_page_as_waiting():
+    app = script("app.js")
+    assert 'main.classList.add("pending")' in app
+    assert 'main.setAttribute("aria-busy", "true")' in app
+    assert ".finally(" in app and 'main.classList.remove("pending")' in app
+    style = (STATIC / "style.css").read_text()
+    assert ".page.pending { opacity: 0.5; pointer-events: none;" in style

@@ -112,7 +112,8 @@ a { color: var(--route); }
 .topbar::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: linear-gradient(90deg, transparent, var(--route), transparent); transform: translateX(-100%); opacity: 0; }
 .topbar.scanning::after { opacity: 1; animation: sweep 900ms var(--ease-in-out) infinite; }
 @keyframes sweep { to { transform: translateX(100%); } }
-.page { padding: 20px 24px 48px; max-width: 1180px; outline: none; }
+.page { padding: 20px 24px 48px; max-width: 1180px; outline: none; transition: opacity var(--t-fast) ease; }
+.page.pending { opacity: 0.5; pointer-events: none; }
 h1 { font-size: 18px; margin: 0; letter-spacing: -0.015em; font-weight: 600; text-wrap: balance; }
 h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .lede { color: var(--ink-2); margin: 4px 0 18px; max-width: 70ch; text-wrap: pretty; }
