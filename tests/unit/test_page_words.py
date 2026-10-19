@@ -285,3 +285,11 @@ def test_a_skill_copy_names_every_client_it_reaches():
     assert "s.reaches || [s.client]" in panel and "Add ${names} to ${clients}" in panel
     assert "filter(Boolean))) box.append(callout(note))" in panel  # Cursor loads it twice
     assert '"skill.install": "Added skill"' in script("parts.js")
+
+
+def test_gateway_connect_form_serves_its_own_card_only():
+    text = script("gateway.js")
+    # The form is for the card's gateway; a client in any gateway is not offered again.
+    assert "connectForm(gateway, waiting)" in text
+    assert "Object.values(model.connections).some" in text
+    assert "connectForm(model.gateways" not in text

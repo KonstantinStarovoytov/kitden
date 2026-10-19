@@ -90,9 +90,9 @@ def test_connections_list_gateway_entries_per_client(home):
 def test_each_gateway_lists_only_its_own_effective_connections(home):
     a = Gateway(url="https://gw-a.test/mcp")
     b = Gateway(url="https://gw-b.test/mcp")
-    # Codex neon goes through A and Cursor Neon through B. Three more entries must not show
-    # unless they load: a Codex entry that is off, an entry in the website project only (A),
-    # and a Desktop Code tab entry (B), which counts as Claude Code.
+    # Codex neon goes through A and Cursor Neon through B. Three more entries test the scope:
+    # a Codex entry that is off (A) never shows; an entry in the website project only (A) shows
+    # only with that project; a Desktop Code tab entry (B) shows and counts as Claude Code.
     codex = home / ".codex/config.toml"
     codex.write_text(
         codex.read_text().replace("https://mcp.neon.tech/mcp", a.url)
