@@ -1,6 +1,7 @@
 # Feature 007: Obot as a gateway in Kitden
 
-Date: 2026-10-19. Status: **proposal**, research and specification only; no code yet.
+Date: 2026-10-19. Status: Step A **implemented** the same day ([quickstart](quickstart.md));
+Step B stays a proposal.
 Research: [where to run Obot](../../docs/research/obot-deploy-2026-10-19.md),
 [gateway APIs](../../docs/research/gateway-api-2026-10-19.md), [calls and their stability](research.md).
 Feature 006 did the same for MetaMCP: [spec](../006-gateway-inside/spec.md).
@@ -36,7 +37,8 @@ key is refused with one plain sentence.
 ### US2 — See what the gateway holds (Step A, P1)
 
 The gateway card shows "In the gateway · N" with the names of the servers Obot exposes on that
-connection address. Details opens the side panel with the server's kind and, when Obot gives
+connection address (the vMCP behind `…/mcp-connect/<id>`; see research R2 for why not the
+legacy server list). Details opens the side panel with the server's kind and, when Obot gives
 it, its address. When Obot cannot be reached, the key is missing or refused, or the answer has
 an unexpected shape, the card says so in one line and the rest of the page keeps working.
 

@@ -80,5 +80,6 @@ Nothing in Step A needs Community registration or an Enterprise licence.
 Live check on 2026-10-19 (v0.26.3, Owner's key with the `api` scope): `GET /api/me` → 200
 (`id`, `username`, `role`, `effectiveRole`, `groups`); `GET /api/mcp-servers` → 200
 `{items: []}`; `GET /api/mcp-server-instances` → 200; `GET /api/mcp-catalogs` → 200 with one
-catalog `default` holding 208 entries. `GET /api/vmcps/{id}` was not tried: the instance held
-no vMCP yet. T003 must check it first.
+catalog `default` holding 208 entries. `GET /api/vmcps/{id}` on the live instance was tried
+only for an id that does not exist (404, plain-text body, shown as the card note): the
+instance held no vMCP yet. The components shape is covered by the fake from `vmcp.go`.
