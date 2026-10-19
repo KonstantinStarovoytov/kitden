@@ -6,6 +6,7 @@ import subprocess  # noqa: S404 - runs fixed client commands without a shell
 from dataclasses import dataclass
 from pathlib import Path
 
+from kitden.clients.versions import app_commands
 from kitden.redact import redact_text
 
 TIMEOUT_SECONDS = 60.0
@@ -25,6 +26,9 @@ def find_command(name: str, home: Path) -> str | None:
     for candidate in (home / ".local/bin" / name, home / ".claude/local" / name):
         if candidate.is_file() and os.access(candidate, os.X_OK):
             return str(candidate)
+    for bundled in app_commands(name):
+        if os.path.isfile(bundled) and os.access(bundled, os.X_OK):
+            return bundled
     return None
 
 

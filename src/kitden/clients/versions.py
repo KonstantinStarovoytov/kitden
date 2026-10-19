@@ -23,6 +23,11 @@ _COMMANDS: dict[str, tuple[str, tuple[str, ...]]] = {
 _VERSION = re.compile(r"\b(\d+(?:\.\d+)+)\b")
 
 
+def app_commands(name: str) -> tuple[str, ...]:
+    """Where an app keeps a client's command when it is not on PATH (Codex in ChatGPT.app)."""
+    return next((paths for command, paths in _COMMANDS.values() if command == name), ())
+
+
 def parse_version(client: str, output: str) -> str | None:
     """Return the first dotted version number in a client's version output."""
     match = _VERSION.search(output)
