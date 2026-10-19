@@ -282,6 +282,9 @@ class Engine:
         self.run = run
         self.on_write = on_write or (lambda path, sha: None)
         self.gateway_clients = gateway_clients
+        # Called as each step of an Apply or Undo is done: (change id, steps done, all steps).
+        # The page shows "Applying 2 of 5" from it; it runs in the worker thread.
+        self.on_progress: Callable[[str, int, int], None] = lambda change_id, done, total: None
         self.changes: dict[str, Change] = {}
         for record in store.load():
             try:
@@ -458,14 +461,16 @@ class Engine:
             step.edit.backup_path = str(copy) if copy else None
         self.store.prune()
         change.move_to(ChangeState.APPLYING)
+        tick = self._counter(change)
         ran: list[Step] = []
         copied: list[Step] = []
         try:
             # The gateway side first: a server that cannot be added leaves the files alone.
-            self._apply_gateway(gateway_steps)
+            self._apply_gateway(gateway_steps, tick)
             for step in copy_steps:
                 copied.append(step)
                 self._apply_copy(step)
+                tick()
             # Steps on one file run in order, each on the result of the one before.
             working = dict(current)
             expected: dict[str, bytes | None] = {}
@@ -475,6 +480,7 @@ class Engine:
                 ran.append(step)
                 working[path] = result if result is not None else _read(path)
                 expected[path] = result
+                tick()
             for step in file_steps:
                 self._verify(step, step.edit.after, expected[step.edit.path])
         except (
@@ -526,7 +532,19 @@ class Engine:
         if digest(copy.target) != copy.content_hash:
             raise _ApplyError(f"{copy.target}: the copy did not read back like the source")
 
-    def _apply_gateway(self, steps: list[Step]) -> None:
+    def _counter(self, change: Change) -> Callable[[], None]:
+        """A function that counts one more step done and tells `on_progress`."""
+        done = 0
+        total = len(change.steps)
+
+        def tick() -> None:
+            nonlocal done
+            done = min(done + 1, total)
+            self.on_progress(change.id, done, total)
+
+        return tick
+
+    def _apply_gateway(self, steps: list[Step], tick: Callable[[], None] = lambda: None) -> None:
         """Add each server, then read the list back: every name must be there."""
         if not steps:
             return
@@ -534,12 +552,18 @@ class Engine:
             for step in steps:
                 g = step.gateway
                 g.server_uuid = client.add(g.name, g.server)
+                tick()
             held = {s["name"] for s in client.held()}
         missing = [s.gateway.name for s in steps if s.gateway.name not in held]
         if missing:
             raise _ApplyError(f"the gateway did not list {', '.join(missing)} after adding it")
 
-    def _remove_from_gateway(self, steps: list[Step], best_effort: bool = False) -> list[str]:
+    def _remove_from_gateway(
+        self,
+        steps: list[Step],
+        best_effort: bool = False,
+        tick: Callable[[], None] = lambda: None,
+    ) -> list[str]:
         """Remove the added servers, last first. Returns the names that were already gone."""
         added = [s for s in reversed(steps) if s.gateway and s.gateway.server_uuid]
         if not added:
@@ -550,6 +574,7 @@ class Engine:
                 for step in added:
                     if not client.remove(step.gateway.server_uuid):
                         gone.append(step.gateway.name)
+                    tick()
         except GatewayError:
             if not best_effort:
                 raise
@@ -603,8 +628,11 @@ class Engine:
                 return change
 
         # The gateway side goes first: if it cannot be reached, the files stay as they are.
+        tick = self._counter(change)
         try:
-            gone = self._remove_from_gateway([s for s in change.steps if s.gateway is not None])
+            gone = self._remove_from_gateway(
+                [s for s in change.steps if s.gateway is not None], tick=tick
+            )
         except GatewayError as error:
             change.move_to(ChangeState.UNDO_BLOCKED)
             change.error = f"{error}; the client files were not changed"
@@ -612,6 +640,7 @@ class Engine:
             return change
         for step in reversed(copies):
             remove_folder(step.copy.target)
+            tick()
         # Inverse commands, last step first. An entry already gone needs no command.
         for step in reversed(change.steps):
             if step.edit is None or step.edit.path not in by_command:
@@ -626,6 +655,7 @@ class Engine:
                 self._finish(change)
                 return change
             self.on_write(step.edit.path, _sha(_read(step.edit.path)))
+            tick()
         for path, data in plans.items():
             self._write(path, data)
         for step in change.steps:
@@ -633,6 +663,7 @@ class Engine:
                 raise RuntimeError(f"{step.edit.path}: undo did not read back as expected")
             if step.copy and os.path.lexists(step.copy.target):
                 raise RuntimeError(f"{step.copy.target}: undo did not remove the copy")
+        self.on_progress(change.id, len(change.steps), len(change.steps))
         change.move_to(ChangeState.UNDONE)
         if gone:
             change.error = f"{', '.join(gone)} had already been removed from the gateway"

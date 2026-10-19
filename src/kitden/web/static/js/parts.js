@@ -106,6 +106,11 @@ export function mark(clientId) {
   return node;
 }
 
+// "Applying 2 of 5" while a change with several steps runs; one step just says the verb.
+export function stepText(verb, done, total) {
+  return total > 1 ? `${verb} ${done} of ${total}` : `${verb}…`;
+}
+
 export function flag({ text, level }) {
   return el("span", level === "warning" ? "flag" : "flag info", text);
 }

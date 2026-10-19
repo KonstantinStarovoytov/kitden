@@ -1,7 +1,7 @@
 // Discover: plugins in the marketplaces already on this computer, the skills inside them and
 // in the clients' own skill folders, and one review to add any of them.
 import { getJson, query } from "./api.js";
-import { button, el, plural, shortPath, tabKeys, webLink } from "./dom.js";
+import { busyWhile, button, el, plural, reportError, shortPath, tabKeys, webLink } from "./dom.js";
 import { entrance, glide } from "./motion.js";
 import { closePanel, openInfo, openPanel, review } from "./panel.js";
 import { banner, CLIENT_NAMES, clientCheck, flag, mark, opens, skeleton, socket } from "./parts.js";
@@ -514,7 +514,7 @@ function addFormBody(checks, chosen, onSubmit, note = null) {
       message.textContent = "Choose at least one client.";
       return;
     }
-    onSubmit();
+    busyWhile(submit, onSubmit()).catch(reportError);
   });
   return form;
 }
@@ -574,7 +574,7 @@ function marketplaceForm() {
   field.append(el("span", null, "Marketplace link"), input);
   const chosen = new Set(INSTALLERS);
   const form = addFormBody(clientChecks(INSTALLERS, chosen), chosen, () => {
-    review({ action: "marketplace.add", targets: [...chosen].map((client) => ({ client })), params: { source: input.value.trim() } });
+    return review({ action: "marketplace.add", targets: [...chosen].map((client) => ({ client })), params: { source: input.value.trim() } });
   });
   form.prepend(field);
   body.append(el("p", "muted", "For a GitHub repository, Kitden reads its marketplace file once to name it. Cursor keeps its marketplaces in the Cursor account: add them in Cursor."), form);

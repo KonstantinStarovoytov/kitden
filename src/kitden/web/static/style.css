@@ -123,8 +123,10 @@ a { color: var(--route); }
 
 .content { isolation: isolate; overflow: auto; position: relative; }
 .topbar { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--canvas) 88%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--wire-soft); display: flex; align-items: center; gap: 12px; padding: 10px 24px; }
-.topbar::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: linear-gradient(90deg, transparent, var(--route), transparent); transform: translateX(-100%); opacity: 0; }
-.topbar.scanning::after { opacity: 1; animation: sweep 900ms var(--ease-in-out) infinite; }
+/* The scan line shows only when a scan takes a while: a quick scan (after each Apply) is over
+   before the delay, so it never blinks. A slow, calm sweep while a long scan really runs. */
+.topbar::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: linear-gradient(90deg, transparent, var(--route), transparent); transform: translateX(-100%); opacity: 0; transition: opacity 200ms ease; }
+.topbar.scanning::after { opacity: 1; transition-delay: 400ms; animation: sweep 1600ms var(--ease-in-out) 400ms infinite; }
 @keyframes sweep { to { transform: translateX(100%); } }
 .page { padding: 20px 24px 48px; max-width: 1180px; outline: none; transition: opacity var(--t-fast) ease; }
 .page.pending { opacity: 0.5; pointer-events: none; }
@@ -143,6 +145,14 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .btn.ghost { border-color: transparent; background: transparent; color: var(--ink-2); }
 .btn.ghost:hover { background: var(--wire-soft); color: var(--ink); }
 .btn.small { height: 24px; padding: 0 8px; font-size: 12px; }
+/* Busy: a small spinner takes the words' place after a short wait; the words keep the size. */
+.btn.busy { color: transparent; }
+.btn.busy > * { visibility: hidden; }
+.btn.busy:disabled { opacity: 1; cursor: progress; }
+.btn.busy::after { content: ""; position: absolute; inset: 0; margin: auto; width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--ink-2); border-right-color: transparent; animation: spin 600ms linear infinite, fade-in 180ms var(--ease-out); }
+.btn.primary.busy::after { border-color: var(--on-action); border-right-color: transparent; }
+/* Apply's step meter: a thin line along the bottom edge, filled to the share of steps done. */
+.btn .meter { position: absolute; left: 6px; right: 6px; bottom: 3px; height: 2px; border-radius: 1px; background: currentColor; opacity: 0.55; transform: scaleX(0); transform-origin: left; transition: transform 240ms var(--ease-out); pointer-events: none; }
 /* Applied: green at once and at full strength, though the button is disabled. */
 .btn.primary.done, .btn.primary.done:hover, .btn.primary.done:disabled { background: var(--success); color: var(--on-success); opacity: 1; transition: none; }
 .toast .check { flex: none; color: var(--lamp-on); }
@@ -478,6 +488,8 @@ details.connect .fold > .fold-in, details.add-more .fold > .fold-in { display: b
 html.theme-switch::view-transition-old(root), html.theme-switch::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
 
 @media (prefers-reduced-motion: reduce) {
+  /* No sweep: a still line says a long scan runs. */
+  .topbar.scanning::after { transform: none; opacity: 0.6; }
   *, *::before, *::after { animation: none !important; transition-property: opacity, color, background-color !important; }
   ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }

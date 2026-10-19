@@ -7,7 +7,7 @@ const media = { matches: false };
 globalThis.matchMedia = () => media;
 function element(tag) {
   const node = {
-    tag, className: '', textContent: '', children: [], attributes: {}, parent: null,
+    tag, className: '', textContent: '', children: [], attributes: {}, dataset: {}, parent: null,
     get childNodes() { return node.children; },
     classList: {
       contains: (name) => node.className.split(' ').includes(name),

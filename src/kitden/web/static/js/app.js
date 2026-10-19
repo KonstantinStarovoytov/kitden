@@ -1,6 +1,6 @@
 // Entry point: the shell (rail, top bar), routing, theme, rescan and live updates.
 import { postJson } from "./api.js";
-import { $, $$, focusKey, reportError } from "./dom.js";
+import { $, $$, busyWhile, focusKey, reportError } from "./dom.js";
 import { glide, rollTo, transition } from "./motion.js";
 import { renderAgents } from "./agents.js";
 import { renderChanges } from "./changes.js";
@@ -122,16 +122,11 @@ function switchTheme(event) {
 }
 
 async function rescan() {
-  const bar = $("#topbar");
-  $("#rescan").disabled = true;
-  bar.classList.add("scanning");
-  try {
+  if ($("#rescan").dataset.working) return;
+  await busyWhile($("#rescan"), (async () => {
     await postJson("/api/rescan");
     await refresh();
-  } finally {
-    bar.classList.remove("scanning");
-    $("#rescan").disabled = false;
-  }
+  })());
 }
 
 // A live rescan redraws the page, except while a change runs or someone types in a form:
@@ -160,6 +155,12 @@ function catchUp() {
 function listen() {
   const events = new EventSource("/api/events");
   events.addEventListener("rescan_started", () => $("#topbar").classList.add("scanning"));
+  // How many steps of a running change are done; the review's Apply button counts them.
+  events.addEventListener("change_progress", (event) => {
+    let detail = null;
+    try { detail = JSON.parse(event.data); } catch { return; }
+    document.dispatchEvent(new CustomEvent("kitden:progress", { detail }));
+  });
   events.addEventListener("rescan_finished", () => {
     $("#topbar").classList.remove("scanning");
     liveRefresh();

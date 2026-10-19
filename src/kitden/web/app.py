@@ -2,6 +2,7 @@
 
 import asyncio
 import contextlib
+import json
 import sys
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from pathlib import Path
@@ -62,18 +63,22 @@ STATIC = Path(__file__).parent / "static"
 HEARTBEAT_SECONDS = 15
 
 
+Event = str | tuple[str, dict]
+
+
 class Broadcaster:
-    """Sends short event names (never item contents) to every open event stream."""
+    """Sends short event names (never item contents) to every open event stream. An event may
+    carry a little data, such as how many steps of a change are done."""
 
     def __init__(self) -> None:
-        self._queues: set[asyncio.Queue[str]] = set()
+        self._queues: set[asyncio.Queue[Event]] = set()
 
-    def subscribe(self) -> asyncio.Queue[str]:
-        queue: asyncio.Queue[str] = asyncio.Queue()
+    def subscribe(self) -> asyncio.Queue[Event]:
+        queue: asyncio.Queue[Event] = asyncio.Queue()
         self._queues.add(queue)
         return queue
 
-    def unsubscribe(self, queue: asyncio.Queue[str]) -> None:
+    def unsubscribe(self, queue: asyncio.Queue[Event]) -> None:
         self._queues.discard(queue)
 
     @property
@@ -81,13 +86,13 @@ class Broadcaster:
         """Open event streams, one per open tab."""
         return len(self._queues)
 
-    def publish(self, event: str) -> None:
+    def publish(self, event: str, data: dict | None = None) -> None:
         for queue in self._queues:
-            queue.put_nowait(event)
+            queue.put_nowait((event, data) if data is not None else event)
 
 
 async def event_lines(
-    queue: asyncio.Queue[str],
+    queue: asyncio.Queue[Event],
     is_disconnected: Callable[[], Awaitable[bool]],
     heartbeat: float = HEARTBEAT_SECONDS,
 ) -> AsyncIterator[str]:
@@ -96,7 +101,8 @@ async def event_lines(
     while not await is_disconnected():
         try:
             event = await asyncio.wait_for(queue.get(), heartbeat)
-            yield f"event: {event}\ndata: {{}}\n\n"
+            name, data = event if isinstance(event, tuple) else (event, {})
+            yield f"event: {name}\ndata: {json.dumps(data)}\n\n"
         except TimeoutError:
             yield ": heartbeat\n\n"
 
@@ -554,13 +560,23 @@ def create_app(
         method = {"apply": engine.apply, "cancel": engine.cancel, "undo": engine.undo}.get(verb)
         if method is None:
             return _error("Unknown action.", 404)
+        loop = asyncio.get_running_loop()
+
+        def progress(change_id: str, done: int, total: int) -> None:
+            # The engine works in a thread; the open pages hear it on the event loop.
+            data = {"id": change_id, "done": done, "total": total}
+            loop.call_soon_threadsafe(events.publish, "change_progress", data)
+
         async with write_lock:
+            engine.on_progress = progress
             try:
                 change = await asyncio.to_thread(method, change_id)
             except ChangeRefusedError as error:
                 return _error(str(error), 422)
             except ValueError as error:
                 return _error(str(error), 409)
+            finally:
+                engine.on_progress = lambda change_id, done, total: None
             if verb != "cancel":
                 await state.rescan()
         events.publish("change_state")
@@ -707,6 +723,7 @@ def create_app(
         lifespan=lifespan,
     )
     app.state.inventory = state
+    app.state.events = events
     # What a background page checks before it stops by itself (feature 002, research R6).
     app.state.activity = SimpleNamespace(tabs=lambda: events.count, busy=write_lock.locked)
     return app

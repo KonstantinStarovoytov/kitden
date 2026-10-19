@@ -90,6 +90,8 @@ Defined once in `style.css`; JavaScript reads `--spring` from there.
 | Status | 320–380 ms `--ease-in-out` | Socket morph (dot fill, words fade) |
 | Success | check draws 320 ms, never delays the next action | Applied, Undone |
 | Stagger | 45 ms between blocks | First visit |
+| Busy | spinner after 150 ms, in the button's own place | A button whose work takes a moment |
+| Scan line | shows after 400 ms, 1.6 s calm sweep | A rescan that takes a while |
 | `--spring` | critically damped `linear()` spring, no overshoot; falls back to `--ease-out` | Everything the hand moves |
 
 ### Patterns
@@ -108,6 +110,8 @@ All helpers live in `src/kitden/web/static/js/motion.js`.
 | Arrival | `.arrive` row glow + `.pulse` socket ping | Coming from a finding |
 | First visit | `entrance(place, nodes)` | Every place, once |
 | Pending switch | `.switch.pending` (thumb half-way) | Plugin switch while the preview loads |
+| Busy button | `busyWhile(button, work)` (dom.js); `button()` uses it | Every button that waits on the server; quick work never shows it |
+| Step count | `change_progress` events → "Applying 2 of 5" + `.btn .meter` | Apply of a change with several steps, from the server's own count |
 | Applied | `.btn.primary.done` (green at once, full strength) + drawn check | Review footer, after `verified` |
 | Toast check | `toast(text, undo, { ok: true })` | Only for verified and undone |
 | Route focus | `focusRoutes(clients, { wires, rows })` | Gateway diagram and lists, hover and keyboard |

@@ -711,6 +711,20 @@ def test_moving_several_servers_into_a_busy_obot_still_works(client, obot):
     assert _files(client.home) == original and obot.held_names() == []
 
 
+def test_apply_tells_the_open_page_how_many_steps_are_done(client, obot):
+    gateway = _register_obot(client, obot).json()
+    rows = [r for r in _move_rows(client) if r["name"].lower() == "neon"]
+    change = _move(client, gateway["id"], [i for r in rows for i in r["items"]]).json()
+    queue = client.app.state.events.subscribe()
+    client.post(f"/api/changes/{change['id']}/apply", headers=POST)
+    seen = []
+    while not queue.empty():
+        event = queue.get_nowait()
+        if isinstance(event, tuple) and event[0] == "change_progress":
+            seen.append((event[1]["done"], event[1]["total"]))
+    assert seen == [(1, 4), (2, 4), (3, 4), (4, 4)]
+
+
 def test_move_into_obot_needs_an_administrator(client, obot):
     original = _files(client.home)
     gateway = _register_obot(client, obot).json()

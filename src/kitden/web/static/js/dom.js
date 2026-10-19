@@ -14,8 +14,39 @@ export function el(tag, className, text) {
 export function button(label, onClick, className = "btn small") {
   const node = el("button", className, label);
   node.type = "button";
-  if (onClick) node.addEventListener("click", (event) => Promise.resolve(onClick(event)).catch(reportError));
+  if (onClick) {
+    node.addEventListener("click", (event) => {
+      if (node.dataset.working) return; // a second press while the first one works
+      busyWhile(node, Promise.resolve().then(() => onClick(event))).catch(reportError);
+    });
+  }
   return node;
+}
+
+// A button whose work takes a moment shows a small spinner in place of its words. It waits a
+// little first, so quick work never flickers; the words stay in the layout, so the button
+// keeps its size. The button is off while it works and comes back as it was.
+export function busyWhile(node, work, delay = 150) {
+  const promise = Promise.resolve(work);
+  const wasDisabled = node.disabled;
+  let shown = false;
+  node.dataset.working = "1";
+  const timer = setTimeout(() => {
+    shown = true;
+    node.classList.add("busy");
+    node.setAttribute("aria-busy", "true");
+    node.disabled = true;
+  }, delay);
+  const done = () => {
+    clearTimeout(timer);
+    delete node.dataset.working;
+    if (!shown) return;
+    node.classList.remove("busy");
+    node.removeAttribute("aria-busy");
+    node.disabled = wasDisabled;
+  };
+  promise.then(done, done);
+  return promise;
 }
 
 // A redraw replaces every node. What names a control across it: its data-focus key (a tab, a

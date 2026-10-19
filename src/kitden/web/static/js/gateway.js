@@ -1,6 +1,6 @@
 // Gateway: which clients reach it, and which servers are not connected to it.
 import { getJson, postJson } from "./api.js";
-import { button, el, plural, webLink } from "./dom.js";
+import { busyWhile, button, el, plural, reportError, webLink } from "./dom.js";
 import { entrance, fold, reducedMotion } from "./motion.js";
 import { openInfo, openItem, review, toast } from "./panel.js";
 import { banner, CLIENT_ICONS, CLIENT_NAMES, clientCheck, DARK_ICONS, flag, GATEWAY_NOTE, mark, skeleton, staleNote } from "./parts.js";
@@ -449,7 +449,7 @@ function connectForm(gateway, waiting) {
       return;
     }
     message.textContent = "";
-    review({ action: "gateway.connect", targets, params: { gateway: state.gateway, name: ENTRY_NAME } });
+    busyWhile(submit, review({ action: "gateway.connect", targets, params: { gateway: state.gateway, name: ENTRY_NAME } })).catch(reportError);
   });
   return form;
 }
@@ -495,10 +495,8 @@ function addForm() {
   const submit = el("button", "btn primary", "Save gateway");
   submit.type = "submit";
   form.append(urlField, uiField, field("Login", login), keyField, emailField, passwordField, submit, message);
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    submit.disabled = true;
-    try {
+  async function save() {
+    {
       const result = await postJson("/api/gateways", {
         url: state.url.trim(),
         ui_url: state.ui_url.trim() || null,
@@ -517,9 +515,12 @@ function addForm() {
       await reload();
       render();
       toast("Gateway saved. Now connect your clients to it.");
-    } finally {
-      submit.disabled = false;
     }
+  }
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (submit.dataset.working) return;
+    busyWhile(submit, save()).catch(reportError);
   });
   return form;
 }

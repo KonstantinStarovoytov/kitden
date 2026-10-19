@@ -3,7 +3,7 @@ import { getJson, postJson, query } from "./api.js";
 import { $, $$, button, el, plural, reportError, shortPath, shortPaths } from "./dom.js";
 import { morphOnNextRender, onOpenItem } from "./map.js";
 import { finishTransition, fold, transition } from "./motion.js";
-import { CLIENT_NAMES, diffCounts, GATEWAY_NOTE, mark, notesSection, socket } from "./parts.js";
+import { CLIENT_NAMES, diffCounts, GATEWAY_NOTE, mark, notesSection, socket, stepText } from "./parts.js";
 import { busy, current as currentModel, currentError, reload, render, setBusy, state } from "./store.js";
 
 const KIND_WORDS = {
@@ -620,9 +620,28 @@ async function applyChange(change, { apply, cancel, label, body }) {
   lockReview(true, apply, cancel);
   label.textContent = "Applying…";
   apply.prepend(el("span", "spinner"));
+  // A change with several steps counts them as the server finishes each one, and a thin bar
+  // along the button's bottom edge fills to match. Both show only what the server reported.
+  const meter = el("span", "meter");
+  meter.setAttribute("aria-hidden", "true");
+  apply.append(meter);
+  const onProgress = (event) => {
+    const { id, done, total } = event.detail || {};
+    if (id !== change.id || !(total > 1)) return;
+    label.textContent = stepText("Applying", done, total);
+    meter.style.transform = `scaleX(${done / total})`;
+  };
+  document.addEventListener("kitden:progress", onProgress);
   // The last try's error stays until now, the next action.
   for (const old of body.querySelectorAll(".callout.error")) old.remove();
-  const { after, failure } = await changeOutcome(change.id, "apply");
+  let outcome;
+  try {
+    outcome = await changeOutcome(change.id, "apply");
+  } finally {
+    document.removeEventListener("kitden:progress", onProgress);
+    meter.remove();
+  }
+  const { after, failure } = outcome;
   if (after && current) current.change = after;
 
   if (!after || after.state !== "verified") {

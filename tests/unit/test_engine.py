@@ -386,6 +386,20 @@ def test_move_adds_to_the_gateway_then_removes_the_entry_and_undoes(tmp_path, fa
     assert config.read_text() == CONFIG
 
 
+def test_apply_and_undo_say_how_many_steps_are_done(tmp_path, fake, config):
+    # The page shows "Applying 1 of 2" from these counts, so a long move is not a silent wait.
+    engine, gateway = gateway_engine(tmp_path, fake)
+    change = engine.preview("gateway.move", move_steps(gateway, config))
+    seen = []
+    engine.on_progress = lambda change_id, done, total: seen.append((change_id, done, total))
+    engine.apply(change.id)
+    assert seen == [(change.id, 1, 2), (change.id, 2, 2)]
+    seen.clear()
+    engine.undo(change.id)
+    assert seen[-1] == (change.id, 2, 2)
+    assert all(done <= total for _, done, total in seen)
+
+
 def test_a_name_the_gateway_already_holds_is_refused(tmp_path, fake, config):
     engine, gateway = gateway_engine(tmp_path, fake)
     fake.hold("neon", "https://mcp.neon.tech/mcp")

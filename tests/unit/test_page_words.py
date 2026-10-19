@@ -473,3 +473,21 @@ def test_every_view_reads_project_data_through_current():
     for path in (STATIC / "js").glob("*.js"):
         if path.name != "store.js":
             assert not re.search(r"\bdata\.(map|gateway|overview)\b", path.read_text()), path.name
+
+
+def test_buttons_show_progress_and_the_scan_line_no_longer_blinks():
+    css = (STATIC / "style.css").read_text()
+    # A button that waits shows a small spinner in its own place, words kept for the size.
+    assert ".btn.busy::after" in css and ".btn.busy { color: transparent; }" in css
+    assert 'node.addEventListener("click", (event) => {' in script("dom.js")
+    assert "busyWhile(node" in script("dom.js")
+    for name in ("discover.js", "gateway.js"):
+        assert "busyWhile(submit" in script(name)
+    assert 'busyWhile($("#rescan")' in script("app.js")
+    # A change with several steps counts them in the Apply button, from the server's events.
+    assert '"change_progress"' in script("app.js") and '"kitden:progress"' in script("app.js")
+    panel = script("panel.js")
+    assert 'stepText("Applying", done, total)' in panel and '"kitden:progress"' in panel
+    assert ".btn .meter" in css
+    # The scan line shows only when a scan takes a while, so quick scans never blink.
+    assert ".topbar.scanning::after { opacity: 1; transition-delay: 400ms;" in css
