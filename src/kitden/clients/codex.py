@@ -151,6 +151,21 @@ class CodexAdapter(ClientAdapter):
             sources[name] = None if built_in or not isinstance(source, str) else source
         return sources
 
+    def marketplace_roots(self) -> dict[str, Path]:
+        """Local marketplaces from config.toml, plus the curated one Codex keeps in `.tmp`."""
+        config = _dict(Reader(CLIENT).toml(self.codex_home / "config.toml"))
+        roots = {}
+        for name, entry in _dict(config.get("marketplaces")).items():
+            source = _dict(entry).get("source")
+            if _dict(entry).get("source_type") == "local" and isinstance(source, str):
+                if Path(source).is_dir():
+                    roots[name] = Path(source)
+        curated = self.codex_home / ".tmp/plugins"
+        listed = _dict(Reader(CLIENT).json(curated / ".agents/plugins/marketplace.json"))
+        if isinstance(listed.get("name"), str):
+            roots.setdefault(listed["name"], curated)
+        return roots
+
     def gateway_step(self, gateway: Gateway, name: str) -> Step:
         value = {"url": gateway.url}
         if gateway.auth is GatewayAuth.ENV_KEY and gateway.key_env_var:

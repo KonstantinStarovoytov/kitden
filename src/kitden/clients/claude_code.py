@@ -130,6 +130,15 @@ class ClaudeCodeAdapter(ClientAdapter):
             sources[name] = value if isinstance(value, str) else None
         return sources
 
+    def marketplace_roots(self) -> dict[str, Path]:
+        known = _dict(Reader(CLIENT).json(self.home / ".claude/plugins/known_marketplaces.json"))
+        roots = {}
+        for name, entry in known.items():
+            where = _dict(entry).get("installLocation")
+            if isinstance(where, str) and Path(where).is_dir():
+                roots[name] = Path(where)
+        return roots
+
     def gateway_step(self, gateway: Gateway, name: str) -> Step:
         value: dict[str, Any] = {"type": "http", "url": gateway.url}
         headers = bearer_header(gateway, "${{{}}}")

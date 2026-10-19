@@ -264,6 +264,10 @@ class ClientAdapter(ABC):
         """Marketplace name -> a source other clients can add (None: built into this client)."""
         return {}
 
+    def marketplace_roots(self) -> dict[str, Path]:
+        """Marketplace name -> the folder on this computer that holds its marketplace file."""
+        return {}
+
 
 REMOVE_DIRECT = "mcp.remove_direct"
 PLUGIN_ENABLE = "plugin.enable"
