@@ -349,3 +349,5 @@ def test_direct_servers_are_options_and_details_offers_move_first():
     # Without a gateway that takes servers, the panel says the same as the Gateway page.
     assert "Add the server in the gateway first" in script("parts.js")
     assert "GATEWAY_NOTE" in panel and "GATEWAY_NOTE" in script("gateway.js")
+    # An option is quieter than a problem: a plain button, not the primary one.
+    assert 'option ? "btn" : "btn primary"' in overview

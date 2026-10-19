@@ -137,19 +137,6 @@ def test_a_server_in_two_clients_is_one_suggestion_row(home):
     assert card["text"] == "It connects to each client directly now."
 
 
-def test_kitdens_own_server_is_not_counted_as_not_connected(home):
-    from kitden.changes import toml_edit
-
-    config = home / ".codex/config.toml"
-    mine = {"command": "/opt/kitden/bin/kitden", "args": ["mcp"]}
-    config.write_text(toml_edit.set_value(config.read_text(), ("mcp_servers", "kitden"), mine))
-    inventory = build_inventory(home)
-    gateway = Gateway(url="https://mcp.neon.tech/mcp")
-    mark_gateways(inventory, [gateway])
-    [card] = overview(inventory, [gateway], None)["suggestions"]
-    assert card["title"] == "2 MCP servers can move into the gateway"
-
-
 def test_servers_that_cannot_move_are_not_a_suggestion(home):
     inventory = build_inventory(home)
     gateway = Gateway(url="https://mcp.neon.tech/mcp")

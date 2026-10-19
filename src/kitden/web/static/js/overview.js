@@ -32,7 +32,7 @@ export function renderOverview(main) {
   left.setAttribute("aria-label", "Needs attention");
   const blocks = [];
   for (const card of model.attention) {
-    const article = issueCard(card, "issue");
+    const article = issueCard(card);
     left.append(article);
     blocks.push(article);
   }
@@ -49,7 +49,7 @@ export function renderOverview(main) {
     options.append(title);
     blocks.push(title);
     for (const card of model.suggestions) {
-      const article = issueCard(card, "issue suggestion");
+      const article = issueCard(card, { option: true });
       options.append(article);
       blocks.push(article);
     }
@@ -68,10 +68,11 @@ export function renderOverview(main) {
 }
 
 // One card per problem or option: a short title, one sentence, one button that names the action.
-function issueCard(card, look) {
-  const article = el("article", look);
+// An option is quieter than a problem: no warning border, a plain button.
+function issueCard(card, { option = false } = {}) {
+  const article = el("article", option ? "issue suggestion" : "issue");
   article.append(el("h3", null, card.title), el("p", null, card.text));
-  if (card.action && card.target) article.append(button(card.action, () => follow(card.target), "btn primary"));
+  if (card.action && card.target) article.append(button(card.action, () => follow(card.target), option ? "btn" : "btn primary"));
   return article;
 }
 

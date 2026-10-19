@@ -155,17 +155,30 @@ function sideEffect({ def, action }, warnings) {
 }
 
 // A server the Gateway page lists under "Can move", with the entries a move takes and the
-// gateway that can take them (none when it must be added in the gateway by hand).
-function moveFor(row) {
-  const model = row.kind === "mcp_server" ? currentModel("gateway") : null;
-  const direct = model && model.groups.move.find((r) => r.name === row.name);
+// gateway that can take them (none when it must be added in the gateway by hand). Without a
+// registered gateway there is nothing to move into, so Details stays as it was.
+export function moveFor(row, model) {
+  if (row.kind !== "mcp_server" || !model || !model.gateways.length) return null;
+  const direct = model.groups.move.find((r) => r.name === row.name);
   if (!direct || !direct.items.length) return null;
   return { items: direct.items, gateway: model.gateways.find((g) => g.movable) || null };
 }
 
-function moveButton({ items, gateway }) {
+// The footer's lead action and the rest, in order; "move" stands for Move into the gateway.
+// A problem comes before an option: the warning's fix leads, then Move, then a lone action. With
+// a warning no button fixes, or a server to add in the gateway by hand first, nothing leads.
+export function footerActions(offers, warnings, move) {
+  const fix = offers.find((o) => warnings.some((f) => f.fix_action === o.action && f.client === o.def.client));
+  const options = move && move.gateway ? ["move", ...offers] : offers;
+  let lead = fix || null;
+  if (!lead && !warnings.length && move && move.gateway) lead = "move";
+  if (!lead && !warnings.length && !move && offers.length === 1) lead = offers[0];
+  return { lead, rest: options.filter((o) => o !== lead) };
+}
+
+function moveButton({ items, gateway }, look) {
   const targets = items.map((item) => ({ item }));
-  return button("Move into the gateway…", () => review({ action: "gateway.move", targets, params: { gateway: gateway.id } }), "btn primary");
+  return button("Move into the gateway…", () => review({ action: "gateway.move", targets, params: { gateway: gateway.id } }), look);
 }
 
 // The other actions wait behind one button, so the primary one stands alone.
@@ -297,7 +310,7 @@ function showDetails(row, definitions) {
   if (definitions.some((d) => d.secret_present)) {
     body.append(el("p", "muted", "This entry holds a secret. It is hidden here and never logged."));
   }
-  const move = moveFor(row);
+  const move = moveFor(row, currentModel("gateway"));
   if (move && !move.gateway) body.append(el("p", "muted", GATEWAY_NOTE));
 
   const footer = el("footer");
@@ -311,16 +324,12 @@ function showDetails(row, definitions) {
     const label = ACTION_BUTTONS[action](`${clientName(def.client)}${where}`);
     return button(label, () => review({ action, targets: [{ item: def.id }], params: {} }), look);
   };
-  // A server a gateway here can take leads with Move. Otherwise the action that fixes the
-  // warning is the primary button. The rest wait under More. With a warning no button fixes, or
-  // a server to add in the gateway by hand first, every action stays plain.
-  let primary = move ? null : offers.find((o) => warnings.some((f) => f.fix_action === o.action && f.client === o.def.client));
-  if (!move && !primary && offers.length === 1 && !warnings.length) primary = offers[0];
-  const rest = offers.filter((o) => o !== primary).flatMap((o) => [...sideEffect(o, warnings), buttonFor(o, "btn")]);
-  const lead = move && move.gateway ? moveButton(move) : primary && buttonFor(primary, "btn primary");
+  // The lead action is the primary button; the rest wait under More. Without a lead, all stay plain.
+  const { lead, rest: others } = footerActions(offers, warnings, move);
+  const rest = others.flatMap((o) => (o === "move" ? [moveButton(move, "btn")] : [...sideEffect(o, warnings), buttonFor(o, "btn")]));
   if (lead) {
     if (rest.length || commands.length) footer.append(moreButton([...rest, ...commands]));
-    footer.append(lead);
+    footer.append(lead === "move" ? moveButton(move, "btn primary") : buttonFor(lead, "btn primary"));
   } else {
     if (commands.length) footer.append(el("span", "note", "Install, update or move to another client:"), ...commands);
     footer.append(...rest);
