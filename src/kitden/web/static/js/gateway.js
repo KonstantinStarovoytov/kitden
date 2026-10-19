@@ -228,14 +228,16 @@ function showHeld(server, gateway) {
 
 function gatewayCard(gateway, model) {
   const card = el("section", "card");
-  card.append(gatewayHead(gateway, model), routes(gateway, model.connections, model.groups.move), heldSection(gateway));
-  // Only clients without a gateway entry are offered; the others are connected already.
-  const waiting = foundClients().filter((c) => !(model.connections[c] || []).length);
+  const connections = model.connections[gateway.id] || {};
+  card.append(gatewayHead(gateway, model), routes(gateway, connections, model.groups.move), heldSection(gateway));
+  // Only clients without an entry in any gateway are offered. One that uses another gateway
+  // moves with "Use this gateway…"; connecting it here too would load its servers twice.
+  const waiting = foundClients().filter((c) => !Object.values(model.connections).some((per) => (per[c] || []).length));
   if (waiting.length) {
     const box = el("details", "connect");
     box.open = draft.connectOpen === null ? true : draft.connectOpen;
     box.addEventListener("toggle", () => { draft.connectOpen = box.open; });
-    box.append(el("summary", null, "Connect clients"), connectForm(model.gateways, waiting));
+    box.append(el("summary", null, "Connect clients"), connectForm(gateway, waiting));
     card.append(fold(box));
   }
   return card;
@@ -417,20 +419,13 @@ function input(attrs, value, onInput) {
   return node;
 }
 
-// Connect any registered gateway; the first one is chosen until the person picks another.
-function connectForm(gateways, waiting) {
-  if (!draft.connect || !gateways.some((g) => g.id === draft.connect.gateway)) {
-    draft.connect = { gateway: gateways[0].id, clients: new Set(waiting) };
+// Connect clients to the gateway of this card, and only to it.
+function connectForm(gateway, waiting) {
+  if (!draft.connect || draft.connect.gateway !== gateway.id) {
+    draft.connect = { gateway: gateway.id, clients: new Set(waiting) };
   }
   const state = draft.connect;
   const form = el("form", "form");
-  if (gateways.length > 1) {
-    const pick = el("select");
-    for (const g of gateways) pick.append(new Option(`${gatewayName(g)} · ${g.url}`, g.id));
-    pick.value = state.gateway;
-    pick.addEventListener("change", () => { state.gateway = pick.value; });
-    form.append(field("Gateway", pick));
-  }
   const checks = el("fieldset", "checks");
   checks.append(el("legend", null, "Add to"));
   for (const client of waiting) {

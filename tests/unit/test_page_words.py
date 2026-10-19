@@ -330,3 +330,11 @@ def test_a_project_switch_marks_the_old_page_as_waiting():
     assert ".finally(" in app and 'main.classList.remove("pending")' in app
     style = (STATIC / "style.css").read_text()
     assert ".page.pending { opacity: 0.5; pointer-events: none;" in style
+
+
+def test_gateway_connect_form_serves_its_own_card_only():
+    text = script("gateway.js")
+    # The form is for the card's gateway; a client in any gateway is not offered again.
+    assert "connectForm(gateway, waiting)" in text
+    assert "Object.values(model.connections).some" in text
+    assert "connectForm(model.gateways" not in text
