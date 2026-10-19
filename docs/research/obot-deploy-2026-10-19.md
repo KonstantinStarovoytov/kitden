@@ -6,7 +6,9 @@ releases. Status: **research result** with two proposals at the end. Earlier not
 Feature: [007 Obot gateway](../../specs/007-obot-gateway/spec.md).
 
 Vendor documentation shows a documented feature, not runtime behaviour. The only setup we ran
-ourselves is Docker on the owner's Mac (trial of 2026-10-16, image of 2026-10-08).
+ourselves is Docker on the owner's Mac: the trial of 2026-10-16 (image of 2026-10-08) and, on
+2026-10-19, v0.26.3 bound to `127.0.0.1:8080` with authentication on, GitHub sign-in,
+`OBOT_SERVER_HOSTNAME=http://localhost:8080` and the volume `kitden-obot-data`.
 
 ## What Obot is today
 
@@ -113,6 +115,13 @@ provider, an encryption provider, nightly volume backups, and only trusted peopl
 or above. Kubernetes is more than a small team needs to operate. Obot Cloud is the fastest way
 to see the product, but its price is not published and the team's credentials leave the
 team's machines; use the 14-day trial to evaluate, not as the plan.
+
+## The CLI on a Mac
+
+`brew install obot-platform/tap/obot` (the page Obot's UI links to). `obot login --url … --scope
+api --print-token` makes the key Kitden needs; `api` is not offered in the UI or the CLI help
+but is accepted. **Do not run `obot setup`**: it writes Cursor and Claude Code configs directly,
+with no preview or backup. Kitden's connect flow does that part with review and Undo.
 
 ## Open points for the owner
 

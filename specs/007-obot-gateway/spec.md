@@ -46,9 +46,8 @@ names; with the fake stopped, the card shows the one-line note.
 ### US3 — Connect clients to Obot (Step A, P1)
 
 "Connect" works as for any gateway today: one entry per client pointing at the connection
-address. Sign-in to the gateway is either the same key through a variable reference (Codex,
-Claude Code, Cursor write `${VAR}`, never the value) or the client's own OAuth login, as the
-owner chose when registering the gateway.
+address. Clients sign in with their own OAuth login (the owner's choice); the key variable is
+for Kitden only and never reaches a client file.
 
 **Test**: the existing connect round-trip tests pass with an Obot address.
 
@@ -122,16 +121,17 @@ listed in the review as skipped, with the reason.
 
 - The owner runs Obot where the research proposes: Docker on the Mac, bound to `127.0.0.1`,
   authentication on. A VPS works the same for Step A.
-- One API key with the `api` and `all-mcp` scopes serves both Kitden and the clients. If the
-  owner prefers OAuth for the clients, the record still needs the key variable for Kitden.
+- Clients sign in to Obot with OAuth per client (owner's choice, 2026-10-19, GitHub as the
+  provider). Kitden itself uses an API key with the `api` scope from the key variable; the key
+  never reaches a client file.
 - The key's user can read the vMCP behind the stored address (the user connects to it).
 
-## Open questions (owner)
+## Open question (owner)
 
-1. Clients sign in to Obot with the same key (`${VAR}` in each client file) or with OAuth per
-   client (a browser login each)? The trial used OAuth for Codex.
-2. Should Step B be built at all while MetaMCP is the owner's gateway? It is roughly the size
-   of feature 006 again.
+Should Step B be built at all while MetaMCP is the owner's gateway? It is roughly the size of
+feature 006 again.
+
+Answered 2026-10-19: clients sign in with OAuth per client, not with the key.
 
 ## Exclusions
 

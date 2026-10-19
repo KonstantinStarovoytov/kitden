@@ -7,11 +7,17 @@ Where to run Obot: [docs/research/obot-deploy-2026-10-19.md](../../docs/research
 ## R1. Sign-in: one API key in an environment variable
 
 - **Decision**: the record keeps `key_env_var`; the key is made with
-  `obot login --url <obot> --scope api --scope all-mcp --print-token` and set in the shell
-  before Kitden starts. `--scope` replaces the defaults, so both scopes must be listed.
+  `obot login --url <obot> --scope api --print-token` and set in the shell before Kitden
+  starts. `--scope` replaces the defaults, so `api` must be listed.
 - **Why**: documented flow; the key is shown once and is checked with `/api/me`; the `api`
   scope opens "Obot API endpoints allowed by your user role", so a Standard User's key reads
   only what that user can see. Same shape as `GatewayAuth.ENV_KEY` today.
+- **Live check (2026-10-19, Obot v0.26.3 in Docker on the Mac, GitHub sign-in)**: the web
+  form "Agent Auth Scopes → Create Auth Scope" and `obot --help` offer only MCP servers, LLM,
+  skills and device scans; `api` is a hidden scope that `obot login` still accepts, and the
+  `ok1-` key it gives works. The CLI comes from `brew install obot-platform/tap/obot`. Kitden's
+  docs must warn: **do not run `obot setup`**, it writes Cursor and Claude Code configs
+  directly, with no preview or backup.
 - **Alternatives**: email and password (rejected: Obot's Local provider is a browser flow, not a
   documented API; MetaMCP needed it because it has nothing else).
 - **Source**: [agent auth scopes](https://docs.obot.ai/functionality/agent-auth-scopes/).
@@ -33,11 +39,11 @@ Where to run Obot: [docs/research/obot-deploy-2026-10-19.md](../../docs/research
   [vmcp.go](https://github.com/obot-platform/obot/blob/main/apiclient/types/vmcp.go),
   [v0.26.2 notes](https://github.com/obot-platform/obot/releases/tag/v0.26.2).
 
-## R3. Clients connect with the key or with OAuth
+## R3. Clients connect with OAuth
 
-- **Decision**: keep both `env_key` (the same key, written as `${VAR}`; the `all-mcp` scope
-  lets it connect) and `oauth` (per-client browser login, as in the trial). The owner picks
-  one at registration (spec, open question 1).
+- **Decision (owner, 2026-10-19)**: clients use `oauth` (per-client browser login, as in the
+  trial); `key_env_var` is for Kitden only. `env_key` stays possible for a key with the
+  `all-mcp` scope but is not the default for Obot.
 - **Source**: [agent auth scopes](https://docs.obot.ai/functionality/agent-auth-scopes/)
   ("Include the API key in the Authorization header when connecting to MCP servers"),
   [gateway trial](../../docs/research/gateway-trial-2026-10-16.md) (Codex OAuth).
@@ -70,3 +76,9 @@ a Power User to add a remote server to their own vMCP, and a stable `PUT /api/vm
 | `https://host/mcp-connect/{id}` | the clients' endpoint | yes | any granted user | any |
 
 Nothing in Step A needs Community registration or an Enterprise licence.
+
+Live check on 2026-10-19 (v0.26.3, Owner's key with the `api` scope): `GET /api/me` → 200
+(`id`, `username`, `role`, `effectiveRole`, `groups`); `GET /api/mcp-servers` → 200
+`{items: []}`; `GET /api/mcp-server-instances` → 200; `GET /api/mcp-catalogs` → 200 with one
+catalog `default` holding 208 entries. `GET /api/vmcps/{id}` was not tried: the instance held
+no vMCP yet. T003 must check it first.
