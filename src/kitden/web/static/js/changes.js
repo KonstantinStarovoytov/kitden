@@ -2,7 +2,7 @@
 import { button, el, shortPath, shortPaths } from "./dom.js";
 import { entrance } from "./motion.js";
 import { closePanel, openChange, undoChange } from "./panel.js";
-import { banner, changeTitle, latestChanges, mark, skeleton } from "./parts.js";
+import { banner, changeTitle, latestChanges, mark, notesSection, skeleton } from "./parts.js";
 import { data, loadChanges, render } from "./store.js";
 
 // The state in words. Rows that no longer change anything are plain grey text, not badges.
@@ -17,7 +17,7 @@ const STATE_BADGES = {
 };
 const OVER = ["undone", "cancelled"];
 
-const SCOPE_WORDS = { user: "everywhere", project: "project", local: "this Mac" };
+const SCOPE_WORDS = { user: "global settings", project: "project", local: "this Mac" };
 
 function when(time) {
   const date = new Date(time);
@@ -83,6 +83,9 @@ function show(entry) {
     steps.append(row);
   }
   body.append(steps);
+  // Older log entries have no notes; they show no section.
+  const notes = notesSection("To take effect", entry.steps);
+  if (notes) body.append(notes);
   const history = data.changes.filter((e) => e.id === entry.id).reverse();
   body.append(el("p", "muted", history.map((e) => `${when(e.time)} ${(STATE_BADGES[e.state] || [e.state])[0]}`).join(" → ")));
   if (entry.error) body.append(el("p", "muted", shortPaths(entry.error)));

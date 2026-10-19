@@ -148,6 +148,17 @@ export function diffCounts(text) {
   return { added, removed };
 }
 
+// The restart and log-in notes of a change's steps, each once, under a heading. Null when none.
+export function notesSection(heading, steps) {
+  const notes = [...new Set(steps.flatMap((s) => [s.restart_note, s.login_note && `Log in: ${s.login_note}`]).filter(Boolean))];
+  if (!notes.length) return null;
+  const section = el("section");
+  const list = el("ul", "checklist");
+  for (const note of notes) list.append(el("li", null, note));
+  section.append(el("h2", null, heading), list);
+  return section;
+}
+
 // The latest log line per change, newest first.
 export function latestChanges(entries) {
   const seen = new Map();

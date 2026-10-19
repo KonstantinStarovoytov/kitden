@@ -24,7 +24,7 @@ COLUMNS = ("claude_code", "codex", "cursor")
 MARKS = {"claude_code": "CC", "codex": "CX", "cursor": "CU"}
 NAMES = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
 SCOPE_WORDS = {
-    Scope.USER: "everywhere",
+    Scope.USER: "global settings",
     Scope.PROJECT: "this project",
     Scope.LOCAL: "this Mac",
     Scope.PLUGIN: "plugin",

@@ -3,7 +3,7 @@ import { getJson, postJson, query } from "./api.js";
 import { $, $$, button, el, plural, reportError, shortPath, shortPaths } from "./dom.js";
 import { morphOnNextRender, onOpenItem } from "./map.js";
 import { animate, finishTransition, fold, transition } from "./motion.js";
-import { CLIENT_NAMES, diffCounts, mark, socket } from "./parts.js";
+import { CLIENT_NAMES, diffCounts, mark, notesSection, socket } from "./parts.js";
 import { busy, data, reload, render, setBusy, state } from "./store.js";
 
 const KIND_WORDS = {
@@ -166,7 +166,7 @@ function moreButton(buttons) {
 function scopeWords(def) {
   const project = def.project ? def.project.split("/").filter(Boolean).pop() : "";
   const words = {
-    user: "Everywhere",
+    user: "Global settings",
     project: `Project ${project}`,
     local: project ? `Only on this Mac · ${project}` : "Only on this Mac",
     plugin: "From a plugin",
@@ -488,14 +488,8 @@ function showReview(change, previewBody) {
     if (step.command) files.append(el("p", "muted", `Runs ${clientName(step.client)}'s own command: ${step.command}`));
   }
   body.append(fold(files));
-  const notes = [...new Set(change.steps.flatMap((s) => [s.restart_note, s.login_note && `Log in: ${s.login_note}`]).filter(Boolean))];
-  if (notes.length) {
-    const after = el("section");
-    const list = el("ul", "checklist");
-    for (const note of notes) list.append(el("li", null, note));
-    after.append(el("h2", null, "After you apply"), list);
-    body.append(after);
-  }
+  const after = notesSection("After you apply", change.steps);
+  if (after) body.append(after);
 
   const footer = el("footer");
   footer.append(el("span", "note", APPLY_KEY));

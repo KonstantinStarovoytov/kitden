@@ -292,3 +292,10 @@ def test_a_lost_apply_answer_is_checked_not_guessed():
     assert "Nothing was changed by this page" not in text
     assert "Could not confirm the result. Check Changes before trying again." in text
     assert "readChange(" in text
+
+
+def test_changes_and_the_load_map_say_saved_settings_and_scope():
+    assert "Based on saved settings." in script("map.js")
+    changes = script("changes.js")
+    assert "To take effect" in changes and "global settings" in changes
+    assert '"everywhere"' not in changes

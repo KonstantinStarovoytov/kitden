@@ -45,8 +45,8 @@ export function renderMap(main) {
   // The project goes by its folder name; the full path stays in the project picker's hover.
   const folder = projectPath().split("/").filter(Boolean).pop();
   const lede = el("p", "lede", folder
-    ? `What each client loads in the project ${folder}.`
-    : "What each client loads in the global setup, with no project open.");
+    ? `What each client loads in the project ${folder}. Based on saved settings.`
+    : "What each client loads in the global setup, with no project open. Based on saved settings.");
   // After a scope change the words rise in while the cells morph.
   if (lastProject !== null && lastProject !== state.project) lede.classList.add("fresh");
   lastProject = state.project;

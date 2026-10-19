@@ -56,7 +56,7 @@ def test_cell_states_for_the_website_project(home):
 def test_cursor_loading_a_plugin_twice_is_one_cell_with_count_2(home):
     row = rows_by(load_map(build_inventory(home), None), "plugin", "superpowers")
     assert row.cells["cursor"].count == 2
-    assert row.cells["cursor"].where == "everywhere"  # Cursor's own copy comes first
+    assert row.cells["cursor"].where == "global settings"  # Cursor's own copy comes first
     assert [f["text"] for f in row.flags] == ["Cursor loads it twice"]
 
 
@@ -111,7 +111,7 @@ def test_a_duplicate_skill_names_the_fix_without_an_action(home):
 def test_cross_loaded_cells_say_via_which_client(home):
     row = rows_by(load_map(build_inventory(home), None), "skill", "brandkit")
     assert (row.cells["cursor"].state, row.cells["cursor"].where) == ("on", "via Claude Code")
-    assert row.cells["claude_code"].where == "everywhere"
+    assert row.cells["claude_code"].where == "global settings"
 
 
 def test_gateway_entries_are_state_gw(home):

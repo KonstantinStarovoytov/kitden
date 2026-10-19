@@ -657,6 +657,8 @@ class Engine:
                         "path": _step_path(s),
                         "mechanism": s.mechanism,
                         "reaches": s.copy.readers if s.copy else None,
+                        "restart_note": s.restart_note,
+                        "login_note": s.login_note,
                         "before_hash": s.edit.before_hash if s.edit else None,
                         "after_hash": s.edit.after_hash if s.edit else None,
                     }

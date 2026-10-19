@@ -235,6 +235,15 @@ def test_a_change_can_be_read_back_by_id(client):
     assert answer.json()["id"] == change_id and answer.json()["state"] == "verified"
 
 
+def test_the_changes_log_keeps_each_steps_restart_note(client):
+    from kitden.clients.codex import RESTART
+
+    _apply_remove_direct(client)
+    step = client.get("/api/changes").json()[0]["steps"][0]
+    assert step["restart_note"] == RESTART
+    assert step["login_note"] is None
+
+
 def test_reading_an_unknown_change_is_404(client):
     answer = client.get("/api/changes/nope")
     assert answer.status_code == 404 and answer.json()["detail"] == "Unknown change."
