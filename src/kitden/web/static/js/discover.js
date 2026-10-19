@@ -223,12 +223,14 @@ function offerTable(offers, skills) {
   return table;
 }
 
-// How Cursor gets a plugin: only through Claude Code, and only when it imports Claude Code's
-// plugins. "on" it loads it, "off" it will once Claude Code has it, "none" it cannot.
+// Cursor's cell for a plugin. Cursor gets plugins only through Claude Code, and only when it
+// imports Claude Code's plugins: "on" it loads it, "off" it will once Claude Code has it,
+// "none" it cannot. A plugin Cursor holds itself is "Installed", as cursorLine says.
 export function cursorPlugin(offer, inherits) {
-  if (offer.installed.includes("cursor")) return "on";
+  const through = inherits.plugin && offer.installed.includes("claude_code");
+  if (offer.installed.includes("cursor")) return { state: "on", word: through ? "Via Claude Code" : "Installed" };
   const viaClaude = offer.installed.includes("claude_code") || offer.routes.claude_code;
-  return inherits.plugin && viaClaude ? "off" : "none";
+  return { state: inherits.plugin && viaClaude ? "off" : "none", word: "Via Claude Code" };
 }
 
 // The Cursor line in a plugin's Details, or "". Cursor loads it through Claude Code only when
@@ -243,9 +245,9 @@ export function cursorLine(offer, inherits) {
 // Where the plugin is, or how the client gets it: a filled dot is there, a ring can be added.
 function cell(offer, client) {
   if (client === "cursor") {
-    const how = cursorPlugin(offer, cursorInherits());
-    const node = socket({ state: how, word: "Via Claude Code" });
-    node.title = how === "none" ? "" : CURSOR_NOTE;
+    const { state: how, word } = cursorPlugin(offer, cursorInherits());
+    const node = socket({ state: how, word });
+    node.title = how !== "none" && word === "Via Claude Code" ? CURSOR_NOTE : "";
     return node;
   }
   if (offer.installed.includes(client)) return socket({ state: "on", word: "Installed" });

@@ -384,6 +384,8 @@ def test_direct_servers_are_options_and_details_offers_move_first():
     # Without a gateway that takes servers, the panel says the same as the Gateway page.
     assert "Add the server in the gateway first" in script("parts.js")
     assert "GATEWAY_NOTE" in panel and "GATEWAY_NOTE" in script("gateway.js")
+    # A gateway that could not be read says so, instead of hiding Move.
+    assert "Could not read the gateway, so Move is not offered." in panel
     # An option is quieter than a problem: a plain button, not the primary one.
     assert 'option ? "btn" : "btn primary"' in overview
 
@@ -450,3 +452,10 @@ def test_apply_sets_its_label_at_once_and_a_failure_focuses_the_button():
     assert 'label.textContent = "Applying…"' in flow
     assert "next.focus()" in flow
     assert ".label.swap" not in CSS
+
+
+def test_every_view_reads_project_data_through_current():
+    # current() drops another project's data, so a view never shows it under this one's name.
+    for path in (STATIC / "js").glob("*.js"):
+        if path.name != "store.js":
+            assert not re.search(r"\bdata\.(map|gateway|overview)\b", path.read_text()), path.name

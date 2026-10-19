@@ -9,12 +9,21 @@ const both = { plugin: true, skill: true };
 const none = { plugin: false, skill: false };
 
 test('Cursor shows a plugin only when it imports what Claude Code has', () => {
+  const via = (state) => ({ state, word: 'Via Claude Code' });
   const ready = { installed: [], routes: { claude_code: 'ready' } };
-  assert.equal(cursorPlugin(ready, both), 'off');
-  assert.equal(cursorPlugin(ready, none), 'none');
-  assert.equal(cursorPlugin({ installed: ['claude_code'], routes: {} }, both), 'off');
-  assert.equal(cursorPlugin({ installed: ['codex'], routes: { codex: 'ready' } }, both), 'none');
-  assert.equal(cursorPlugin({ installed: ['claude_code', 'cursor'], routes: {} }, both), 'on');
+  assert.deepEqual(cursorPlugin(ready, both), via('off'));
+  assert.deepEqual(cursorPlugin(ready, none), via('none'));
+  assert.deepEqual(cursorPlugin({ installed: ['claude_code'], routes: {} }, both), via('off'));
+  assert.deepEqual(cursorPlugin({ installed: ['codex'], routes: { codex: 'ready' } }, both), via('none'));
+  assert.deepEqual(cursorPlugin({ installed: ['claude_code', 'cursor'], routes: {} }, both), via('on'));
+});
+
+test('a plugin Cursor holds itself is Installed, as its Details line says', () => {
+  const own = { state: 'on', word: 'Installed' };
+  assert.deepEqual(cursorPlugin({ installed: ['cursor'], routes: {} }, both), own);
+  assert.deepEqual(cursorPlugin({ installed: ['cursor'], routes: { claude_code: 'ready' } }, both), own);
+  // Claude Code has it too, but Cursor does not import it: Cursor's copy is its own.
+  assert.deepEqual(cursorPlugin({ installed: ['claude_code', 'cursor'], routes: {} }, none), own);
 });
 
 test('Details say how Cursor gets a plugin only when that is a fact', () => {

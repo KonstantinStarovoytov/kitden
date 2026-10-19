@@ -4,7 +4,7 @@ import { $, $$, button, el, plural, reportError, shortPath, shortPaths } from ".
 import { morphOnNextRender, onOpenItem } from "./map.js";
 import { finishTransition, fold, transition } from "./motion.js";
 import { CLIENT_NAMES, diffCounts, GATEWAY_NOTE, mark, notesSection, socket } from "./parts.js";
-import { busy, current as currentModel, data, reload, render, setBusy, state } from "./store.js";
+import { busy, current as currentModel, currentError, reload, render, setBusy, state } from "./store.js";
 
 const KIND_WORDS = {
   mcp_server: "MCP server", plugin: "Plugin", skill: "Skill", hook: "Hook", marketplace: "Marketplace",
@@ -15,7 +15,8 @@ const ACTION_BUTTONS = {
   "plugin.enable": (client) => `Turn on in ${client}…`,
   "mcp.remove_direct": (client) => `Remove from ${client}…`,
 };
-const APPLY_KEY = /Mac/.test(navigator.platform) ? "⌘ Enter to apply" : "Ctrl Enter to apply";
+// Node before 21 (the tests) has no navigator.
+const APPLY_KEY = typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "⌘ Enter to apply" : "Ctrl Enter to apply";
 
 // What is open now: "item" or "review", and for a review the change and the request behind it.
 let current = null;
@@ -130,7 +131,8 @@ export async function openItem(row, { instant = false } = {}) {
 }
 
 function itemHeader(row) {
-  const loads = (data.map ? data.map.columns : [])
+  const map = currentModel("map");
+  const loads = (map ? map.columns : [])
     .filter((c) => ["on", "gw"].includes(row.cells[c.id] && row.cells[c.id].state))
     .map((c) => c.name);
   const lede = loads.length ? `Loads in ${joinWords(loads)}.` : "Does not load anywhere here.";
@@ -155,9 +157,12 @@ function sideEffect({ def, action }, warnings) {
 
 // A server the Gateway page lists under "Can move", with the entries a move takes and the
 // gateway that can take them (none when it must be added in the gateway by hand). Without a
-// registered gateway there is nothing to move into, so Details stays as it was.
-export function moveFor(row, model) {
-  if (row.kind !== "mcp_server" || !model || !model.gateways.length) return null;
+// registered gateway there is nothing to move into, so Details stays as it was. When the
+// gateway could not be read (`unread`), Move cannot be judged: it is marked `unread`.
+export function moveFor(row, model, unread = false) {
+  if (row.kind !== "mcp_server") return null;
+  if (!model) return unread ? { items: [], gateway: null, unread: true } : null;
+  if (!model.gateways.length) return null;
   const direct = model.groups.move.find((r) => r.name === row.name);
   if (!direct || !direct.items.length) return null;
   return { items: direct.items, gateway: model.gateways.find((g) => g.movable) || null };
@@ -309,8 +314,9 @@ function showDetails(row, definitions) {
   if (definitions.some((d) => d.secret_present)) {
     body.append(el("p", "muted", "This entry holds a secret. It is hidden here and never logged."));
   }
-  const move = moveFor(row, currentModel("gateway"));
-  if (move && !move.gateway) body.append(el("p", "muted", GATEWAY_NOTE));
+  const move = moveFor(row, currentModel("gateway"), Boolean(currentError("gateway")));
+  if (move && move.unread) body.append(el("p", "muted", "Could not read the gateway, so Move is not offered."));
+  else if (move && !move.gateway) body.append(el("p", "muted", GATEWAY_NOTE));
 
   const footer = el("footer");
   const withCommands = definitions.filter((d) => d.kind === "plugin" || d.kind === "marketplace");
@@ -563,8 +569,12 @@ const STOPPED = {
   stale: "A file changed after the preview, so nothing was written. Preview again to see the current state.",
   restored: "The change did not check out, so the original settings were put back.",
 };
-// A change read back in these states has not ended, so the page cannot say how it went.
-const PENDING = ["previewed", "applying"];
+// The states a change can end in after each verb. Read back in any other state it has not
+// ended, so the page cannot say how it went.
+const ENDED = {
+  apply: ["verified", "stale", "restored", "cancelled", "undone", "undo_blocked"],
+  undo: ["undone", "undo_blocked"],
+};
 const LOST = "Could not confirm the result. Check Changes before trying again.";
 
 // The change as the server holds it now, or null when it cannot be read.
@@ -576,18 +586,20 @@ async function readChange(id) {
   }
 }
 
-// How an Apply ended: the change as the server holds it, or why it failed.
-export async function applyOutcome(id) {
+// How an Apply or an Undo ("apply", "undo") ended: the change as the server holds it, or why
+// it failed.
+export async function changeOutcome(id, verb) {
+  const name = verb === "undo" ? "Undo" : "Apply";
   try {
-    const result = await postJson(`/api/changes/${encodeURIComponent(id)}/apply`);
-    if (!result.data) throw new Error(`The Apply answer had no body (${result.status}).`);
+    const result = await postJson(`/api/changes/${encodeURIComponent(id)}/${verb}`);
+    if (!result.data) throw new Error(`The ${name} answer had no body (${result.status}).`);
     if (result.data.id) return { after: result.data, failure: null };
-    return { after: null, failure: result.data.detail || `Apply failed (${result.status}).` };
+    return { after: null, failure: result.data.detail || `${name} failed (${result.status}).` };
   } catch (error) {
     // No answer, or one with no body, yet the change may have run: ask the server how it ended.
     console.error(error);
     const read = await readChange(id);
-    return { after: read && !PENDING.includes(read.state) ? read : null, failure: LOST };
+    return { after: read && ENDED[verb].includes(read.state) ? read : null, failure: LOST };
   }
 }
 
@@ -600,7 +612,7 @@ async function applyChange(change, { apply, cancel, label, body }) {
   lockReview(true, apply, cancel);
   label.textContent = "Applying…";
   apply.prepend(el("span", "spinner"));
-  const { after, failure } = await applyOutcome(change.id);
+  const { after, failure } = await changeOutcome(change.id, "apply");
   if (after && current) current.change = after;
 
   if (!after || after.state !== "verified") {
@@ -650,18 +662,19 @@ function showEffect() {
   }
 }
 
+// Undo, from the toast or the Changes page. Whatever the answer, the page reloads first: the
+// server may have put the files back even when its answer was lost.
 export async function undoChange(change) {
   if (busy.change) return;
   hideToast();
   setBusy(true);
   try {
-    const result = await postJson(`/api/changes/${encodeURIComponent(change.id)}/undo`);
+    const { after, failure } = await changeOutcome(change.id, "undo");
     await reload().catch(() => {});
     showEffect();
-    const after = result.data;
     if (after && after.state === "undone") toast("Undone. The previous settings are back.", null, { ok: true });
     else if (after && after.state === "undo_blocked") toast("Undo stopped: " + (after.error ? shortPaths(after.error) : "the file changed after the change was applied."));
-    else toast((after && after.detail) || `Undo failed (${result.status}).`);
+    else toast(failure);
   } finally {
     setBusy(false);
   }

@@ -49,3 +49,29 @@ def test_success_and_action_labels_are_readable_in_both_themes():
 def test_system_dark_theme_has_the_same_success_tokens():
     for name in ("--success", "--on-success"):
         assert DARK_AUTO[name] == DARK_RULE[name]
+
+
+def over(color: str, share: float, base: str) -> str:
+    """`color` at `share` opacity on `base`, as color-mix(color share, transparent) draws."""
+    mixed = (
+        round(share * int(color[i : i + 2], 16) + (1 - share) * int(base[i : i + 2], 16))
+        for i in (1, 3, 5)
+    )
+    return "#" + "".join(f"{c:02x}" for c in mixed)
+
+
+def test_diff_text_is_readable_on_its_tint_and_on_the_panel():
+    # Diff lines sit on a 9% tint of their lamp over the inset; the counts sit on the drawer.
+    for lamp in ("--lamp-on", "--danger"):
+        assert f"color-mix(in srgb, var({lamp}) 9%, transparent)" in CSS
+    assert "pre.diff .add { color: var(--diff-add);" in CSS
+    assert "pre.diff .del { color: var(--diff-del);" in CSS
+    assert ".diff-count .plus { color: var(--diff-add); }" in CSS
+    assert ".diff-count .minus { color: var(--diff-del); }" in CSS
+    for theme in (LIGHT, DARK):
+        for text, lamp in (("--diff-add", "--lamp-on"), ("--diff-del", "--danger")):
+            tint = over(theme[lamp], 0.09, theme["--inset"])
+            assert contrast(theme[text], tint) >= 4.5, (text, theme[text], tint)
+            assert contrast(theme[text], theme["--panel-raised"]) >= 4.5, (text, theme[text])
+    for name in ("--diff-add", "--diff-del"):
+        assert DARK_AUTO[name] == DARK_RULE[name]

@@ -174,7 +174,8 @@ async function showNote(finding) {
 function clientsCard(clients) {
   const card = el("section", "card");
   card.append(el("h2", null, "Clients"));
-  const columns = new Set((data.map ? data.map.columns : []).map((c) => c.id).concat(["claude_code", "codex", "cursor"]));
+  const map = current("map");
+  const columns = new Set((map ? map.columns : []).map((c) => c.id).concat(["claude_code", "codex", "cursor"]));
   for (const client of clients) {
     const row = el("div", "client-row");
     const info = el("div");

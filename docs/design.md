@@ -28,11 +28,13 @@ Canonical asset: `src/kitden/web/static/brand/kitden.svg`. The sidebar and favic
 | Action hover | #9F4025 | #9F4025 |
 | Success fill (Applied button) | #177A42 | #47C27A |
 | Success text | #FFFFFF | #0B1A12 |
+| Added diff text (`--diff-add`) | #136A39 | #47C27A |
+| Removed diff text (`--diff-del`) | #B23434 | #F07070 |
 | Accent text / links | #A44226 | #F09A7C |
 | Selection surface | #F6E8E2 | #382A27 |
 | Focus | #B34B2D | #F09A7C |
 
-The brand mark is fixed; functional shades adapt for text contrast. Text on the action and success fills keeps at least 4.5:1 in both themes (WCAG 2.2 AA, checked 2026-10-19); `tests/unit/test_contrast.py` holds the line. Do not use the logo color for every small label. Success stays green, warnings amber and errors red, paired with text/shape. Gateway routes use the accent family and square state indicators. Vendor marks must retain their own permitted colors when verified; Claude, Cursor and Codex use local vendor icons (see `src/kitden/web/static/brand/clients/ATTRIBUTION.md`). Neutral monograms are used only for unknown clients or failed image loads.
+The brand mark is fixed; functional shades adapt for text contrast. Text on the action and success fills, and diff text on its tint and on the drawer, keeps at least 4.5:1 in both themes (WCAG 2.2 AA, checked 2026-10-19); `tests/unit/test_contrast.py` holds the line. Do not use the logo color for every small label. Success stays green, warnings amber and errors red, paired with text/shape. Gateway routes use the accent family and square state indicators. Vendor marks must retain their own permitted colors when verified; Claude, Cursor and Codex use local vendor icons (see `src/kitden/web/static/brand/clients/ATTRIBUTION.md`). Neutral monograms are used only for unknown clients or failed image loads.
 
 ## Client marks
 
@@ -41,6 +43,8 @@ Every client mark is the same rounded tile (24 px, radius 6, raised-panel backgr
 ## Components
 
 Preserve the compact information layout. Use restrained neutral panels, fine borders and the existing 6–10 px corner radii. Primary actions use the action fill. Selected navigation uses a tinted background, accent text and a brand-colored inset bar. Tabs and selected filters use the same accent family. Tables, drawer, forms, loading, toast and empty states inherit shared tokens; no page-specific blue accents.
+
+On Overview, an option ("Can improve") is a quiet card: `.issue.suggestion` has no warning border and a plain button, not the primary one.
 
 A row that opens Details ends with a quiet › and the hidden words "Open details" (`opens()` in `parts.js`). The chevron turns accent on hover and keyboard focus; it does not move. The search box names what it searches: the catalog on Discover, what is set up everywhere else.
 
@@ -117,7 +121,7 @@ All helpers live in `src/kitden/web/static/js/motion.js`.
 - Put the resting style in CSS and the animation in a class or keyframe, so a skipped animation
   still lands on the right look.
 - Never read the true state from `transitionend` or `animationend`; use a timer or the data.
-- New wording tests go in `tests/unit/test_page_words.py`; helper logic in `tests/frontend/motion.test.mjs`.
+- New wording tests go in `tests/unit/test_page_words.py`; helper logic in a node test in `tests/frontend/` (all run with `node --test tests/frontend/*.test.mjs`).
 
 ### Accessibility
 
