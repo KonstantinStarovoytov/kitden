@@ -67,6 +67,9 @@ class CodexAdapter(ClientAdapter):
     id = CLIENT
     display_name = "Codex"
     config_root = ".codex"
+    # Codex also reads ~/.codex/skills; the shared folder is the one Cursor reads too.
+    skills_folder = ".agents/skills"
+    skill_note = RESTART
 
     def __init__(
         self,

@@ -220,21 +220,39 @@ class GatewayEdit:
 
 
 GATEWAY_CLIENT = "gateway"  # the pseudo-client of a gateway step
+COPY_FOLDER = "copy_folder"  # the mechanism of a step that copies a skill folder
+
+
+@dataclass
+class FolderCopy:
+    """A skill folder copied into a client's skills folder (Discover, phase 2).
+
+    The target must not exist before. Undo removes the copy only while its content hash is
+    the one written at Apply; a changed copy stays.
+    """
+
+    source: str
+    target: str
+    readers: list[str] = field(default_factory=list)  # clients that read the target folder
+    content_hash: str | None = None  # of the source at preview; the copy must read back the same
+    masked_diff: str = ""
 
 
 @dataclass
 class Step:
     """One target of a change: one client, scope and entry, written by one mechanism.
 
-    A step has either a file edit or a gateway edit; a gateway step's client is "gateway".
+    A step has a file edit, a gateway edit or a folder copy; a gateway step's client is
+    "gateway".
     """
 
     client: str
     scope: Scope
     name: str
     edit: FileEdit | None = None
-    mechanism: str = "format_preserving_edit"  # or "client_cli", "gateway_api"
+    mechanism: str = "format_preserving_edit"  # or "client_cli", "gateway_api", "copy_folder"
     gateway: GatewayEdit | None = None
+    copy: FolderCopy | None = None
     command: list[str] | None = None
     undo_command: list[str] | None = None  # the inverse command; Undo runs it, no file restore
     cwd: str | None = None

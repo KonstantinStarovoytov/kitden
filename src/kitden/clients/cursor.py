@@ -77,10 +77,18 @@ class CursorAdapter(ClientAdapter):
     id = CLIENT
     display_name = "Cursor"
     config_root = ".cursor"
+    skills_folder = ".cursor/skills"
+    skill_note = RESTART
 
     def item_actions(self, item: Item) -> tuple[str, ...]:
         direct = is_direct_entry(item, CLIENT, {Scope.USER, Scope.PROJECT})
         return (REMOVE_DIRECT,) if direct else ()
+
+    def reads_other_clients(self) -> bool:
+        """Include Third-Party Plugins is on (the default): Cursor also reads ~/.claude/skills
+        and ~/.codex/skills, so a skill there reaches Cursor too."""
+        _, flags = self._state(Reader(CLIENT))
+        return flags.get("thirdPartyExtensibilityEnabled", True) is not False
 
     def gateway_step(self, gateway: Gateway, name: str) -> Step:
         value: dict[str, Any] = {"url": gateway.url}

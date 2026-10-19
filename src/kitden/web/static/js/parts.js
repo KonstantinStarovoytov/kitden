@@ -13,6 +13,7 @@ export const CLIENT_ICONS = {
   claude_code: "claude", claude_desktop_code_tab: "claude", codex: "codex", cursor: "cursor",
 };
 export const DARK_ICONS = new Set(["codex", "cursor"]);
+export const CLIENT_ORDER = ["claude_code", "claude_desktop_code_tab", "codex", "cursor"];
 export const CLIENT_NAMES = {
   claude_code: "Claude Code", codex: "Codex", cursor: "Cursor",
   claude_desktop_code_tab: "Claude Desktop (Code tab)", gateway: "Gateway",
@@ -109,6 +110,7 @@ const ACTION_WORDS = {
   "gateway.switch": "Switched the gateway",
   "plugin.install": "Added",
   "marketplace.add": "Added marketplace",
+  "skill.install": "Added skill",
   "mcp.remove_direct": "Removed",
   "plugin.enable": "Turned on",
   "plugin.disable": "Turned off",
@@ -125,7 +127,10 @@ export function changeTitle(entry) {
   // install's marketplace steps only make the plugin reachable: the line names the plugin.
   const steps = entry.steps.filter((s) => s.client !== "gateway" && (entry.action !== "plugin.install" || s.name.includes("@")));
   const names = [...new Set(steps.map((s) => (plugin ? s.name.split("@")[0] : s.name)))];
-  const clients = [...new Set(steps.map((s) => CLIENT_NAMES[s.client] || s.client))];
+  // A copied skill folder reaches every client that reads that folder.
+  const reached = [...new Set(steps.flatMap((s) => s.reaches || [s.client]))];
+  reached.sort((a, b) => CLIENT_ORDER.indexOf(a) - CLIENT_ORDER.indexOf(b));
+  const clients = reached.map((c) => CLIENT_NAMES[c] || c);
   const whole = ["gateway.connect", "gateway.switch", "setup_server.register", "setup_server.update"].includes(entry.action);
   const what = whole ? "" : ` ${names.join(", ")}`;
   return `${verb}${what} · ${clients.join(", ")}`;

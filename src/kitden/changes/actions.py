@@ -17,6 +17,7 @@ GATEWAY_MOVE = "gateway.move"
 GATEWAY_SWITCH = "gateway.switch"
 PLUGIN_INSTALL = "plugin.install"
 MARKETPLACE_ADD = "marketplace.add"
+SKILL_INSTALL = "skill.install"
 CLIENT_WORDS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
 SETUP_SERVER_UPDATE = "setup_server.update"
 ENTRY_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
@@ -93,6 +94,41 @@ def install_steps(
                 raise ValueError(f"The source of {offer['marketplace']} is not known")
             steps.append(adapter.marketplace_add_step(offer["marketplace"], source))
         steps.append(adapter.plugin_install_step(offer["id"]))
+    return steps
+
+
+def skill_steps(
+    adapters: dict[str, ClientAdapter], skill: dict, clients: list[str], found: set[str]
+) -> list[Step]:
+    """Copy one catalog skill so each chosen client loads it once (Discover, phase 2).
+
+    Claude Code reads ~/.claude/skills; Codex and Cursor both read ~/.agents/skills, so one
+    copy there serves both; Cursor alone gets ~/.cursor/skills. With Include Third-Party
+    Plugins on, Cursor also reads ~/.claude/skills, so a copy for Claude Code reaches it too.
+    """
+    if not clients:
+        raise ValueError("Choose at least one client")
+    if not skill["self_contained"]:
+        raise ValueError("This skill needs the rest of its plugin. Add the plugin instead.")
+    chosen = list(dict.fromkeys(clients))
+    for client in chosen:
+        words = CLIENT_WORDS.get(client, client)
+        if client in skill["installed"]:
+            raise ValueError(f"{words} already has {skill['name']}")
+        if skill["routes"].get(client) is None or client not in adapters:
+            raise ValueError(f"{words} cannot get {skill['name']}")
+    cursor = adapters.get("cursor") if "cursor" in found else None
+    via_claude = bool(cursor and cursor.reads_other_clients())
+    folder = Path(skill["path"])
+    steps = []
+    if "claude_code" in chosen:
+        readers = ["claude_code"] + (["cursor"] if via_claude else [])
+        steps.append(adapters["claude_code"].skill_copy_step(folder, readers))
+    if "codex" in chosen:
+        readers = ["codex"] + (["cursor"] if cursor else [])
+        steps.append(adapters["codex"].skill_copy_step(folder, readers))
+    elif "cursor" in chosen and not ("claude_code" in chosen and via_claude):
+        steps.append(adapters["cursor"].skill_copy_step(folder, ["cursor"]))
     return steps
 
 

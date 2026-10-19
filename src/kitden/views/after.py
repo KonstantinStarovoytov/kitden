@@ -1,7 +1,10 @@
 """What each client shows after a change: the first line of the review (feature 004)."""
 
-from kitden.model import GATEWAY_CLIENT, Change, ItemKind
+from kitden.model import GATEWAY_CLIENT, Change, ItemKind, Scope
 from kitden.views.effective import effective_view
+
+SKILL_CLIENTS = ("claude_code", "codex", "cursor")
+CLIENT_WORDS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
 
 # Socket state and word per action, as on the Load map.
 WORDS = {
@@ -29,8 +32,41 @@ def _other_copy_loads(inventory, client: str, name: str) -> bool:
     return len(copies) > 1
 
 
+def _skill_words(change: Change, inventory) -> list[dict]:
+    """Every client that will load the skill, and twice when it reads two folders that hold it:
+    a copy made here or one it already has."""
+    name = change.steps[0].name
+    counts: dict[str, int] = {}
+    for item in inventory.items:
+        loads_now = (
+            item.kind is ItemKind.SKILL
+            and item.scope in (Scope.USER, Scope.PLUGIN)
+            and item.name == name
+        )
+        if loads_now:
+            counts[item.client] = 1
+    for step in change.steps:
+        for client in step.copy.readers if step.copy else []:
+            counts[client] = counts.get(client, 0) + 1
+    out = []
+    for client in SKILL_CLIENTS:
+        if not counts.get(client):
+            continue
+        entry = {"client": client, "state": "on", "word": "Loads"}
+        if counts[client] > 1:
+            entry["word"] = "Loads twice"
+            entry["note"] = (
+                f"{CLIENT_WORDS[client]} reads two folders that hold this skill, so it loads "
+                "the skill twice."
+            )
+        out.append(entry)
+    return out
+
+
 def after_words(change: Change, inventory) -> list[dict]:
     """One entry per client: {"client", "state", "word"}, in step order."""
+    if change.action == "skill.install" and change.steps:
+        return _skill_words(change, inventory)
     out: list[dict] = []
     for step in change.steps:
         if step.client == GATEWAY_CLIENT or any(e["client"] == step.client for e in out):

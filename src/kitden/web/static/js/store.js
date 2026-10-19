@@ -36,6 +36,7 @@ export function parseHash(hash) {
 export function hashFor(s) {
   const params = { project: s.project, q: s.q };
   if (s.view === "map") Object.assign(params, { kind: s.kind, only: s.only === "all" ? "" : s.only });
+  if (s.view === "discover") params.kind = s.kind === "skill" ? "skill" : "";
   return `#${s.view}${query(params)}`;
 }
 

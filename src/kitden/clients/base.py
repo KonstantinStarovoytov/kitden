@@ -14,9 +14,11 @@ from typing import Any
 
 from kitden.clients.versions import is_supported, parse_version, version_command
 from kitden.model import (
+    COPY_FOLDER,
     Client,
     ClientStatus,
     Enabled,
+    FolderCopy,
     Gateway,
     GatewayAuth,
     Item,
@@ -212,6 +214,8 @@ class ClientAdapter(ABC):
     id: str
     display_name: str
     config_root: str
+    skills_folder: str = ""  # where the client reads the user's own skills, under home
+    skill_note: str = ""  # what to do after a skill is added
 
     def __init__(self, home: Path, read_version: Callable[[], str | None] | None = None) -> None:
         self.home = home
@@ -275,6 +279,26 @@ class ClientAdapter(ABC):
     def plugin_install_step(self, plugin_id: str) -> Step:
         """Install a plugin for the user with the client's own command (Discover)."""
         raise ValueError(f"{self.id} cannot install a plugin from here")
+
+    def skill_copy_step(self, folder: Path, readers: list[str]) -> Step:
+        """Copy a skill folder into this client's skills folder (Discover, phase 2).
+
+        `readers` are the clients that read that folder; the review names them.
+        """
+        if not self.skills_folder:
+            raise ValueError(f"{self.id} has no skills folder")
+        target = self.home / self.skills_folder / folder.name
+        if target.exists() or target.is_symlink():
+            raise ValueError(f"{self.display_name} already has a skill named {folder.name}")
+        copy = FolderCopy(source=str(folder), target=str(target), readers=list(readers))
+        return Step(
+            client=self.id,
+            scope=Scope.USER,
+            name=folder.name,
+            mechanism=COPY_FOLDER,
+            copy=copy,
+            restart_note=self.skill_note or None,
+        )
 
 
 REMOVE_DIRECT = "mcp.remove_direct"

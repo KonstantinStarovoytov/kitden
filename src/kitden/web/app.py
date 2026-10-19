@@ -21,6 +21,7 @@ from kitden.changes.actions import (
     MARKETPLACE_ADD,
     PLUGIN_INSTALL,
     SETUP_SERVER_UPDATE,
+    SKILL_INSTALL,
     connect_steps,
     install_steps,
     marketplace_steps,
@@ -28,6 +29,7 @@ from kitden.changes.actions import (
     plugin_steps,
     remove_steps,
     setup_server_steps,
+    skill_steps,
     switch_steps,
     update_steps,
 )
@@ -52,6 +54,7 @@ from kitden.views.inventory import Inventory, default_adapters, inventory_dict, 
 from kitden.views.load_map import load_map, map_dict
 from kitden.views.overview import overview
 from kitden.views.setup_server import is_old_entry, setup_server_state
+from kitden.views.skills import skill_catalog
 from kitden.watch import Watcher
 from kitden.web.security import SecurityMiddleware
 
@@ -98,6 +101,19 @@ async def event_lines(
             yield ": heartbeat\n\n"
 
 
+def _step_path(step) -> str | None:
+    if step.edit:
+        return step.edit.path
+    if step.gateway:
+        return step.gateway.url
+    return step.copy.target if step.copy else None
+
+
+def _step_diff(step) -> str:
+    part = step.edit or step.gateway or step.copy
+    return part.masked_diff if part else ""
+
+
 def change_dict(change: Change) -> dict:
     """What the page may see of a change: masked diffs and notes, never the values."""
     return {
@@ -113,12 +129,9 @@ def change_dict(change: Change) -> dict:
                 "scope": str(s.scope),
                 "name": s.name,
                 "mechanism": s.mechanism,
-                "path": s.edit.path if s.edit else s.gateway.url if s.gateway else None,
-                "diff": s.edit.masked_diff
-                if s.edit
-                else s.gateway.masked_diff
-                if s.gateway
-                else "",
+                "path": _step_path(s),
+                "diff": _step_diff(s),
+                "reaches": s.copy.readers if s.copy else None,
                 "command": redact_text(" ".join(s.command)) if s.command else None,
                 "restart_note": s.restart_note,
                 "login_note": s.login_note,
@@ -441,6 +454,20 @@ def create_app(
                     return _error("This plugin is not in a marketplace on this computer.", 422)
                 clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
                 steps = install_steps(adapters, offer, clients)
+            elif action == SKILL_INSTALL:
+                skill = next(
+                    (
+                        s
+                        for s in skill_catalog(state.inventory, adapters)
+                        if s["id"] == params.get("skill")
+                    ),
+                    None,
+                )
+                if skill is None:
+                    return _error("This skill is not on this computer.", 422)
+                clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+                found = {c["id"] for c in state.data["clients"] if c["status"] == "found"}
+                steps = skill_steps(adapters, skill, clients, found)
             elif action == MARKETPLACE_ADD:
                 try:
                     found = await asyncio.to_thread(read_marketplace, str(params.get("source", "")))
@@ -533,17 +560,22 @@ def create_app(
         return JSONResponse(engine.store.entries() if engine else [])
 
     async def catalog_view(request: Request) -> JSONResponse:
-        """Plugins in the marketplaces on this computer, matching the search (Discover).
+        """Plugins in the marketplaces on this computer, matching the search (Discover), or
+        with `kind=skill` the skills in those plugins and in the clients' skill folders.
 
         Filters: `only` (new: no client has it; added: one has it), `category`, `marketplace`.
         `facets` count the categories and marketplaces among the search results, so a filter
         menu can say how many each one holds.
         """
         params = request.query_params
-        offers = catalog(state.inventory, adapters)
+        if params.get("kind") == "skill":
+            offers = skill_catalog(state.inventory, adapters)
+        else:
+            offers = catalog(state.inventory, adapters)
         marketplaces: dict[str, int] = {}
         for offer in offers:
-            marketplaces[offer["marketplace"]] = marketplaces.get(offer["marketplace"], 0) + 1
+            if offer["marketplace"]:
+                marketplaces[offer["marketplace"]] = marketplaces.get(offer["marketplace"], 0) + 1
         found = search(offers, params.get("q", ""))
         only = params.get("only", "all")
         if only == "new":

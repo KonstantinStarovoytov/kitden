@@ -253,3 +253,35 @@ def test_discover_rows_say_where_each_plugin_can_go_without_details():
     assert "Also mention “${cache.asked.q}” in the description" in text
     # The row opens Details, so there is no Details button on it.
     assert '"Details"' not in text
+
+
+# Discover, phase 2: a Skills tab beside Plugins ------------------------------------------
+
+
+def test_discover_has_a_skills_tab_that_reuses_the_table_and_the_add_flow():
+    text = script("discover.js")
+    assert '[["plugin", "Plugins"], ["skill", "Skills"]]' in text
+    assert '"skill.install"' in text and '"Add skill"' in text
+    # One row builder for both kinds, one table, one Add… flow.
+    assert text.count("tableRow(") == 3 and text.count('el("table", "map offers")') == 1
+    assert 'params.kind = s.kind === "skill" ? "skill" : ""' in script("store.js")
+
+
+def test_skill_rows_say_where_each_skill_comes_from_and_how_each_client_loads_it():
+    text = script("discover.js")
+    assert 'skill.plugin ? skill.plugin.split("@")[0] : skill.from' in text
+    assert '"Needs its plugin"' in text and '"Can add"' in text
+    # The refusal, in the owner's words, and a way to the plugin that holds the skill.
+    assert "This skill needs the rest of its plugin. Add the plugin instead." in text
+    assert '"Find the plugin"' in text
+    # Details list the files and mark the scripts the agent may run; paths stay in Details.
+    assert '"What it brings"' in text and '"script"' in text
+    assert "shortPath(skill.path)" in text
+    assert '"Details"' not in text
+
+
+def test_a_skill_copy_names_every_client_it_reaches():
+    panel = script("panel.js")
+    assert "s.reaches || [s.client]" in panel and "Add ${names} to ${clients}" in panel
+    assert "filter(Boolean))) box.append(callout(note))" in panel  # Cursor loads it twice
+    assert '"skill.install": "Added skill"' in script("parts.js")

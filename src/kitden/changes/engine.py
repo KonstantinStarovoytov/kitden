@@ -10,6 +10,7 @@ Two kinds of checks:
   as we left it, in which case the backup bytes are restored exactly.
 """
 
+import contextlib
 import difflib
 import hashlib
 import json
@@ -26,15 +27,23 @@ from kitden.changes import json_splice, toml_edit
 from kitden.changes.atomic import RefusedWriteError, write_atomic
 from kitden.changes.backup import ChangeStore
 from kitden.changes.client_cli import CommandResult
+from kitden.changes.copy_folder import (
+    CopyRefusedError,
+    copy_folder,
+    digest,
+    list_files,
+    remove_folder,
+)
 from kitden.changes.json_splice import ABSENT, PRESENT, UnrecognizedFormatError
 from kitden.gateway_api import GatewayError
-from kitden.model import Change, ChangeState, FileEdit, GatewayEdit, Scope, Step
+from kitden.model import Change, ChangeState, FileEdit, FolderCopy, GatewayEdit, Scope, Step
 from kitden.redact import redact
 
 EDITORS = {"json": json_splice, "toml": toml_edit}
 CLIENT_CLI = "client_cli"
 FILE_EDIT = "format_preserving_edit"
 GATEWAY_API = "gateway_api"  # a step that adds a server to a gateway (feature 006)
+# A step that copies a skill folder (Discover, phase 2) has mechanism model.COPY_FOLDER.
 
 Runner = Callable[[list[str], str | None], CommandResult]
 # Opens a signed-in client for the gateway a step names; used as a context manager.
@@ -47,6 +56,15 @@ class ChangeRefusedError(ValueError):
 
 class _ApplyError(Exception):
     pass
+
+
+def _step_path(step: Step) -> str | None:
+    """Where a step writes: the file, the gateway address or the copied folder."""
+    if step.edit is not None:
+        return step.edit.path
+    if step.gateway is not None:
+        return step.gateway.url
+    return step.copy.target if step.copy is not None else None
 
 
 def _sha(data: bytes | None) -> str | None:
@@ -171,6 +189,10 @@ def _gateway_record(gateway: GatewayEdit | None) -> dict | None:
     }
 
 
+def _copy_record(copy: FolderCopy | None) -> dict | None:
+    return None if copy is None else dict(copy.__dict__)
+
+
 def _record(change: Change) -> dict:
     steps = []
     for step in change.steps:
@@ -188,6 +210,7 @@ def _record(change: Change) -> dict:
                 "shared_file": step.shared_file,
                 "edit": _edit_record(step.edit),
                 "gateway": _gateway_record(step.gateway),
+                "copy": _copy_record(step.copy),
             }
         )
     return {
@@ -219,6 +242,8 @@ def _from_record(record: dict) -> Change:
             )
         g = raw.get("gateway")
         gateway = GatewayEdit(**g) if g is not None else None
+        c = raw.get("copy")
+        copy = FolderCopy(**c) if c is not None else None
         steps.append(
             Step(
                 client=raw["client"],
@@ -226,6 +251,7 @@ def _from_record(record: dict) -> Change:
                 name=raw["name"],
                 edit=edit,
                 gateway=gateway,
+                copy=copy,
                 mechanism=raw["mechanism"],
                 command=raw["command"],
                 undo_command=raw.get("undo_command"),
@@ -273,6 +299,7 @@ class Engine:
         or an entry inside another one.
         """
         self._preview_gateway([s for s in steps if s.gateway is not None])
+        self._preview_copies([s for s in steps if s.copy is not None])
         targets: list[tuple[str, tuple]] = []
         for step in steps:
             edit = step.edit
@@ -336,6 +363,27 @@ class Engine:
             lines = json.dumps({g.name: shown}, indent=2, ensure_ascii=False).splitlines()
             g.masked_diff = f"{g.url}\n" + "\n".join(f"+{line}" for line in lines)
 
+    def _preview_copies(self, steps: list[Step]) -> None:
+        """Read each source folder; a target that already exists refuses the change."""
+        seen: set[str] = set()
+        for step in steps:
+            copy = step.copy
+            assert copy is not None
+            copy.source = os.path.realpath(copy.source)
+            if os.path.lexists(copy.target):
+                raise ChangeRefusedError(f"{copy.target} already exists; nothing is copied")
+            if copy.target in seen:
+                raise ChangeRefusedError(f"{copy.target} would be written twice in one change")
+            seen.add(copy.target)
+            try:
+                files = list_files(copy.source)
+                copy.content_hash = digest(copy.source)
+            except (CopyRefusedError, OSError) as error:
+                raise ChangeRefusedError(f"{step.name}: {error}") from None
+            if not files:
+                raise ChangeRefusedError(f"{copy.source} holds no files")
+            copy.masked_diff = "\n".join(f"+{f}" for f in files)
+
     def cancel(self, change_id: str) -> Change:
         change = self.changes[change_id]
         change.move_to(ChangeState.CANCELLED)
@@ -393,9 +441,11 @@ class Engine:
             change.move_to(ChangeState.APPLYING)  # raises: only a previewed change applies
         file_steps = [s for s in change.steps if s.edit is not None]
         gateway_steps = [s for s in change.steps if s.gateway is not None]
+        copy_steps = [s for s in change.steps if s.copy is not None]
         current = {step.edit.path: _read(step.edit.path) for step in file_steps}
-        for step in file_steps:
-            reason = self._stale(step, current[step.edit.path])
+        reasons = [self._stale(s, current[s.edit.path]) for s in file_steps]
+        reasons += [self._stale_copy(s) for s in copy_steps]
+        for reason in reasons:
             if reason:
                 change.move_to(ChangeState.STALE)
                 change.error = reason
@@ -409,9 +459,13 @@ class Engine:
         self.store.prune()
         change.move_to(ChangeState.APPLYING)
         ran: list[Step] = []
+        copied: list[Step] = []
         try:
             # The gateway side first: a server that cannot be added leaves the files alone.
             self._apply_gateway(gateway_steps)
+            for step in copy_steps:
+                copied.append(step)
+                self._apply_copy(step)
             # Steps on one file run in order, each on the result of the one before.
             working = dict(current)
             expected: dict[str, bytes | None] = {}
@@ -425,6 +479,7 @@ class Engine:
                 self._verify(step, step.edit.after, expected[step.edit.path])
         except (
             _ApplyError,
+            CopyRefusedError,
             GatewayError,
             OSError,
             RefusedWriteError,
@@ -439,6 +494,9 @@ class Engine:
             for path, data in current.items():
                 if path not in by_command and _read(path) != data:
                     self._write(path, data)
+            for step in reversed(copied):
+                with contextlib.suppress(OSError):
+                    remove_folder(step.copy.target)
             self._remove_from_gateway(gateway_steps, best_effort=True)
             change.move_to(ChangeState.RESTORED)
             change.error = f"{error} The original settings were restored."
@@ -450,6 +508,23 @@ class Engine:
         change.move_to(ChangeState.VERIFIED)
         self._finish(change)
         return change
+
+    def _stale_copy(self, step: Step) -> str | None:
+        copy = step.copy
+        if os.path.lexists(copy.target):
+            return f"{copy.target} appeared since preview; review the change again"
+        try:
+            same = digest(copy.source) == copy.content_hash
+        except (CopyRefusedError, OSError):
+            same = False
+        return None if same else f"{copy.source} changed since preview; review the change again"
+
+    def _apply_copy(self, step: Step) -> None:
+        """Copy the folder, then read the copy back: it must hash like the source."""
+        copy = step.copy
+        copy_folder(copy.source, copy.target)
+        if digest(copy.target) != copy.content_hash:
+            raise _ApplyError(f"{copy.target}: the copy did not read back like the source")
 
     def _apply_gateway(self, steps: list[Step]) -> None:
         """Add each server, then read the list back: every name must be there."""
@@ -509,6 +584,24 @@ class Engine:
                 return change
             plans[path] = restored
 
+        copies = [s for s in change.steps if s.copy is not None]
+        for step in copies:
+            copy = step.copy
+            if not os.path.lexists(copy.target):
+                continue  # already gone; nothing to remove
+            try:
+                same = digest(copy.target) == copy.content_hash
+            except (CopyRefusedError, OSError):
+                same = False
+            if not same:
+                change.move_to(ChangeState.UNDO_BLOCKED)
+                change.error = (
+                    f"{copy.target} changed after the change was applied; undo would delete "
+                    "that, so nothing was changed"
+                )
+                self._finish(change)
+                return change
+
         # The gateway side goes first: if it cannot be reached, the files stay as they are.
         try:
             gone = self._remove_from_gateway([s for s in change.steps if s.gateway is not None])
@@ -517,6 +610,8 @@ class Engine:
             change.error = f"{error}; the client files were not changed"
             self._finish(change)
             return change
+        for step in reversed(copies):
+            remove_folder(step.copy.target)
         # Inverse commands, last step first. An entry already gone needs no command.
         for step in reversed(change.steps):
             if step.edit is None or step.edit.path not in by_command:
@@ -536,6 +631,8 @@ class Engine:
         for step in change.steps:
             if step.edit and _value(step.edit, _read(step.edit.path)) != step.edit.before:
                 raise RuntimeError(f"{step.edit.path}: undo did not read back as expected")
+            if step.copy and os.path.lexists(step.copy.target):
+                raise RuntimeError(f"{step.copy.target}: undo did not remove the copy")
         change.move_to(ChangeState.UNDONE)
         if gone:
             change.error = f"{', '.join(gone)} had already been removed from the gateway"
@@ -557,8 +654,9 @@ class Engine:
                         "client": s.client,
                         "scope": str(s.scope),
                         "name": s.name,
-                        "path": s.edit.path if s.edit else s.gateway.url if s.gateway else None,
+                        "path": _step_path(s),
                         "mechanism": s.mechanism,
+                        "reaches": s.copy.readers if s.copy else None,
                         "before_hash": s.edit.before_hash if s.edit else None,
                         "after_hash": s.edit.after_hash if s.edit else None,
                     }

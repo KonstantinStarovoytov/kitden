@@ -64,6 +64,8 @@ class ClaudeCodeAdapter(ClientAdapter):
     id = CLIENT
     display_name = "Claude Code"
     config_root = ".claude"
+    skills_folder = ".claude/skills"
+    skill_note = NEW_SESSION
 
     def extra_clients(self) -> list[Client]:
         """The Claude Desktop Code tab: Claude Code settings plus claude_desktop_config.json."""

@@ -218,8 +218,10 @@ def _score(offer: dict, words: list[str]) -> int:
     """
     name = offer["name"].lower()
     name_words = WORD.findall(name)
-    category = WORD.findall((offer.get("category") or "").lower())
-    text = set(WORD.findall(f"{offer['description']} {offer['marketplace']}".lower()))
+    # A skill's `from` (its plugin) counts like a category.
+    tags = f"{offer.get('category') or ''} {offer.get('from') or ''}".lower()
+    category = WORD.findall(tags)
+    text = set(WORD.findall(f"{offer['description']} {offer.get('marketplace') or ''}".lower()))
     score = 0
     for word in words:
         if name == word:

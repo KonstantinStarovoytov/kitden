@@ -367,6 +367,7 @@ const DONE_WORDS = {
   "gateway.connect": "Connected the gateway", "setup_server.register": "Added show my setup",
   "setup_server.update": "Updated show my setup to Kitden", "gateway.move": "Moved",
   "gateway.switch": "Switched the gateway", "plugin.install": "Added", "marketplace.add": "Added the marketplace",
+  "skill.install": "Added",
 };
 
 // The review title names the exact entry; the toast uses the short name ("superpowers").
@@ -374,7 +375,10 @@ function changeWords(change) {
   const steps = change.steps.filter((s) => s.client !== "gateway");
   const names = joinWords([...new Set(steps.map((s) => s.name))]);
   const short = joinWords([...new Set(steps.map((s) => s.name.split("@")[0]))]);
-  const clients = joinWords([...new Set(steps.map((s) => clientName(s.client)))]);
+  // A copied skill folder reaches every client that reads that folder, not only its owner.
+  const reached = [...new Set(steps.flatMap((s) => s.reaches || [s.client]))];
+  reached.sort((a, b) => CLIENT_ORDER.indexOf(a) - CLIENT_ORDER.indexOf(b));
+  const clients = joinWords(reached.map(clientName));
   const title = {
     "gateway.move": `Move ${names} into the gateway`,
     "plugin.disable": `Turn off ${names} in ${clients}`,
@@ -383,6 +387,7 @@ function changeWords(change) {
     "gateway.connect": `Connect the gateway to ${clients}`,
     "plugin.install": `Add ${joinWords([...new Set(steps.filter((s) => s.name.includes("@")).map((s) => s.name))])} to ${clients}`,
     "marketplace.add": `Add the ${names} marketplace to ${clients}`,
+    "skill.install": `Add ${names} to ${clients}`,
     // Each client's last step adds the new entry; it is named after the gateway.
     "gateway.switch": `Use ${steps.length ? steps[steps.length - 1].name : "the new gateway"} in ${clients}`,
     "setup_server.register": `Add “show my setup” to ${clients}`,
@@ -392,7 +397,7 @@ function changeWords(change) {
   let what = `${verb} ${short} ${change.action === "mcp.remove_direct" ? "from" : "in"} ${clients}`;
   if (change.action === "plugin.install") {
     what = `${verb} ${joinWords([...new Set(steps.filter((s) => s.name.includes("@")).map((s) => s.name.split("@")[0]))])} to ${clients}`;
-  } else if (change.action === "marketplace.add") {
+  } else if (change.action === "marketplace.add" || change.action === "skill.install") {
     what = `${verb} ${short} to ${clients}`;
   } else if (["gateway.connect", "gateway.switch", "setup_server.register", "setup_server.update"].includes(change.action)) {
     what = `${verb} ${["setup_server.update", "gateway.switch"].includes(change.action) ? "in" : "to"} ${clients}`;
@@ -421,7 +426,9 @@ export async function review(previewBody) {
 }
 
 // "After: [CC] Claude Code ● Off · [CU] Cursor ● Loads once", in the Load map's sockets.
+// An entry with a note (a client that would load a skill twice) gets its one line below.
 function afterLine(entries) {
+  const box = el("div");
   const line = el("div", "after");
   line.append(el("span", "note", "After:"));
   for (const entry of entries) {
@@ -429,7 +436,9 @@ function afterLine(entries) {
     chip.append(mark(entry.client), el("span", null, clientName(entry.client)), socket({ state: entry.state, word: entry.word }));
     line.append(chip);
   }
-  return line;
+  box.append(line);
+  for (const note of new Set(entries.map((e) => e.note).filter(Boolean))) box.append(callout(note));
+  return box;
 }
 
 // Only the lines that change show; the diff's own header lines say nothing a person needs.
