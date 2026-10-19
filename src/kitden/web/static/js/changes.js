@@ -2,7 +2,7 @@
 import { button, el, shortPath, shortPaths } from "./dom.js";
 import { entrance } from "./motion.js";
 import { closePanel, openChange, undoChange } from "./panel.js";
-import { banner, changeTitle, latestChanges, mark, notesSection, skeleton } from "./parts.js";
+import { banner, changeTitle, latestChanges, mark, notesSection, opens, skeleton } from "./parts.js";
 import { data, loadChanges, render } from "./store.js";
 
 // The state in words. Rows that no longer change anything are plain grey text, not badges.
@@ -55,7 +55,7 @@ function changeRow(entry) {
   const [word, look] = STATE_BADGES[entry.state] || [entry.state, "badge"];
   const actions = el("span", "row-actions");
   if (entry.state === "verified") actions.append(button("Undo", () => undoChange(entry)));
-  li.append(el("span", "muted", when(entry.time)), el("span", null, changeTitle(entry)), el("span", look, word), actions);
+  li.append(el("span", "muted", when(entry.time)), el("span", null, changeTitle(entry)), el("span", look, word), actions, opens());
   // The whole row opens the panel with the files it touched; the Undo button keeps to itself.
   li.tabIndex = 0;
   li.addEventListener("click", (event) => { if (!event.target.closest("button")) show(entry); });

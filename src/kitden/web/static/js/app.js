@@ -79,6 +79,10 @@ function renderShell() {
   where.value = state.project;
   where.closest(".where-box").classList.toggle("project", Boolean(state.project));
   if ($("#q") !== document.activeElement) $("#q").value = state.q;
+  // Discover searches what can be added; every other place searches what is already set up.
+  const scope = state.view === "discover" ? "Search plugins and skills to add…" : "Search your setup…";
+  $("#q").placeholder = scope;
+  $("#q").setAttribute("aria-label", scope);
 }
 
 // A scope change cross-fades the page (the Load map morphs its cells instead).

@@ -1,7 +1,7 @@
 // Load map: items in rows, Claude Code, Codex and Cursor in columns.
 import { button, el } from "./dom.js";
 import { animate, entrance, EASE_IN_OUT, glide, land } from "./motion.js";
-import { banner, flag, mark, morphSocket, skeleton, socket, staleNote } from "./parts.js";
+import { banner, flag, mark, morphSocket, opens, skeleton, socket, staleNote } from "./parts.js";
 import { current, currentError, data, go, loadMap, projectPath, render, setState, state } from "./store.js";
 
 const KINDS = [
@@ -177,6 +177,7 @@ function buildRow(columns, row) {
     box.append(node);
     setTimeout(() => node.remove(), 400);
   }
+  box.append(opens());
   nameCell.append(box);
   tr.append(nameCell);
   for (const column of columns) {

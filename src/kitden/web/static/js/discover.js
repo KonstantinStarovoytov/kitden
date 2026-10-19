@@ -4,7 +4,7 @@ import { getJson, query } from "./api.js";
 import { button, el, plural, shortPath, webLink } from "./dom.js";
 import { entrance, glide } from "./motion.js";
 import { closePanel, openInfo, openPanel, review } from "./panel.js";
-import { banner, CLIENT_NAMES, flag, mark, skeleton, socket } from "./parts.js";
+import { banner, CLIENT_NAMES, flag, mark, opens, skeleton, socket } from "./parts.js";
 import { data, freshness, go, render, state } from "./store.js";
 
 // Clients whose own command line installs plugins. Cursor keeps its plugins in the account,
@@ -294,8 +294,9 @@ function tableRow(key, show) {
   return tr;
 }
 
-// The first cell of a row. Line one: the name, which stays one line, and a flag. Line two: where
-// it comes from, never cut, then what it does, on up to two lines.
+// The first cell of a row. Line one: the name, which stays one line, a flag, and the chevron that
+// says the row opens Details. Line two: where it comes from, never cut, then what it does, on up
+// to two lines.
 function itemCell(item, flagged, from) {
   const cell = el("td");
   const top = el("div", "item");
@@ -303,6 +304,7 @@ function itemCell(item, flagged, from) {
   name.title = item.id;
   top.append(name);
   if (flagged) top.append(flagged);
+  top.append(opens());
   cell.append(top);
   const meta = el("div", "meta");
   if (from) {

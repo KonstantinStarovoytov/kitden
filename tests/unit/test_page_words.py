@@ -1,5 +1,6 @@
 """Words and parts the design review (2026-10-18) removed from the page stay removed."""
 
+import re
 from pathlib import Path
 
 STATIC = Path(__file__).parents[2] / "src/kitden/web/static"
@@ -385,3 +386,18 @@ def test_direct_servers_are_options_and_details_offers_move_first():
     assert "GATEWAY_NOTE" in panel and "GATEWAY_NOTE" in script("gateway.js")
     # An option is quieter than a problem: a plain button, not the primary one.
     assert 'option ? "btn" : "btn primary"' in overview
+
+
+def test_rows_say_they_open_details_and_search_names_its_scope():
+    for name in ("map.js", "discover.js", "changes.js"):
+        assert "opens()" in script(name)
+    assert ".sr-only" in CSS
+    # The chevron is quiet, and takes the accent when the row is hovered or focused.
+    assert re.search(r"\n\.opens \{[^}]*color: var\(--ink-3\)", CSS)
+    assert re.search(r"tr:hover \.opens[^{]*\{ color: var\(--route\)", CSS)
+    assert "li:hover .opens" in CSS and "tr:focus-visible .opens" in CSS
+    app = script("app.js")
+    assert "Search your setup…" in app and "Search plugins and skills to add…" in app
+    assert 'placeholder="Search your setup…"' in INDEX
+    assert 'aria-label="Search your setup…"' in INDEX
+    assert "Find an item" not in INDEX

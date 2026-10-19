@@ -91,6 +91,15 @@ export function flag({ text, level }) {
   return el("span", level === "warning" ? "flag" : "flag info", text);
 }
 
+// The end of a row that opens Details: a chevron for the eye, words for a screen reader.
+export function opens() {
+  const node = el("span", "opens");
+  const chevron = el("span", null, "›");
+  chevron.setAttribute("aria-hidden", "true");
+  node.append(chevron, el("span", "sr-only", "Open details"));
+  return node;
+}
+
 export function skeleton(kind = "card", count = 3) {
   const box = el("div");
   box.setAttribute("aria-busy", "true");

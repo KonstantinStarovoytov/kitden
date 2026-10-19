@@ -82,6 +82,9 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--action); }
 .mono { font-family: var(--mono); font-size: 12px; }
 .muted { color: var(--ink-3); }
 .faint { color: var(--ink-4); }
+/* The chevron at the end of a row that opens Details. It only changes colour: no motion. */
+.opens { position: relative; flex: none; margin-left: auto; color: var(--ink-3); font-size: 16px; line-height: 1; }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
 .skip { position: absolute; left: -999px; }
 .skip:focus { left: 12px; top: 12px; z-index: 50; background: var(--panel); padding: 6px 10px; }
 a { color: var(--route); }
@@ -306,6 +309,7 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .map tbody tr:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .map .item { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .map .item .mono { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 9ch; }
+.map tbody tr:hover .opens, .map tbody tr:focus-visible .opens { color: var(--route); }
 .table-scroll { min-width: 0; }
 /* Discover: the Load map's table, with a line on what each plugin does and an Add column. */
 .offers td { height: auto; padding-top: 7px; padding-bottom: 7px; }
@@ -449,9 +453,10 @@ details.file-change[open] pre.diff .line { animation: line-in 260ms var(--ease-o
 .toast:hover .timer, .toast:focus-within .timer { animation-play-state: paused; }
 @keyframes countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 
-.timeline .feed li { grid-template-columns: 120px minmax(0, 1fr) auto auto; padding: 10px 12px; cursor: pointer; transition: background-color 120ms ease; }
+.timeline .feed li { grid-template-columns: 120px minmax(0, 1fr) auto auto 12px; padding: 10px 12px; cursor: pointer; transition: background-color 120ms ease; }
 .timeline .feed li:hover { background: var(--inset); }
 .timeline .feed li:focus-visible { outline-offset: -2px; }
+.timeline .feed li:hover .opens, .timeline .feed li:focus-visible .opens { color: var(--route); }
 .timeline .row-actions { display: flex; gap: 4px; justify-content: flex-end; }
 .timeline .feed li.over, .timeline .feed li.over .muted { color: var(--ink-4); }
 details.connect, details.add-more { margin-top: 12px; }
@@ -480,7 +485,9 @@ html.theme-switch::view-transition-old(root), html.theme-switch::view-transition
   .rail-foot { margin: 0; padding: 0 4px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; width: 100%; }
   .overview { grid-template-columns: 1fr; }
   .conn { grid-template-columns: 1fr; }
-  .timeline .feed li { grid-template-columns: minmax(0, 1fr) auto; }
+  /* Narrow: the time and the title on line one; the badge, the buttons and the chevron on line two. */
+  .timeline .feed li { grid-template-columns: minmax(0, 1fr) auto 12px; }
+  .timeline .feed li > span:nth-child(2) { grid-column: 2 / -1; }
   .topbar { padding: 10px 16px; flex-wrap: wrap; gap: 8px; }
   .where-box, .search { flex: 1 1 100%; max-width: none; min-width: 0; }
   .where-box select { flex: 1; width: 0; max-width: none; }
