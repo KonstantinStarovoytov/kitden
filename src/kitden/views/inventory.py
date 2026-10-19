@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
+from kitden.apps import app_roots, app_url
 from kitden.clients.base import ClientAdapter
 from kitden.clients.claude_code import ClaudeCodeAdapter
 from kitden.clients.codex import CodexAdapter
@@ -34,13 +35,19 @@ def default_adapters(home: Path) -> list[ClientAdapter]:
 
 
 def build_inventory(
-    home: Path | None = None, adapters: Iterable[ClientAdapter] | None = None
+    home: Path | None = None,
+    adapters: Iterable[ClientAdapter] | None = None,
+    apps: list[Path] | None = None,
 ) -> Inventory:
+    """Read every client. `apps` is where to look for the clients' Mac apps; by default the
+    usual folders of `home`'s owner, and nowhere when the test passes its own adapters."""
     adapters = list(adapters) if adapters is not None else default_adapters(home or Path.home())
+    if apps is None:
+        apps = app_roots(home) if home is not None else []
     inventory = Inventory()
     projects: dict[str, Project] = {}
     for adapter in adapters:
-        client = adapter.detect()
+        client = replace(adapter.detect(), app_url=app_url(adapter.id, apps))
         if client.status is ClientStatus.NOT_FOUND:
             inventory.clients.append(client)
             continue

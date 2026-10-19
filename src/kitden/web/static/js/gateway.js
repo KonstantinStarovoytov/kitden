@@ -268,13 +268,15 @@ function showDirect(client) {
 
 // Three clients, one hub: a wire only for a client that has a gateway entry. A client
 // without one stands apart.
-// Each client opens its own Mac app through the link scheme the app registers (checked
-// 2026-10-19 in each app's Info.plist): Claude, Cursor, and ChatGPT for Codex.
-const CLIENT_APPS = {
-  claude_code: { app: "Claude", url: "claude://" },
-  codex: { app: "ChatGPT", url: "codex://" },
-  cursor: { app: "Cursor", url: "cursor://" },
-};
+// Each client opens its own Mac app through the link scheme the app registers: Claude,
+// Cursor, and ChatGPT for Codex. The server reads the scheme from the installed app's
+// Info.plist at scan time (`app_url`); without the app the node stays a plain node.
+const CLIENT_APPS = { claude_code: "Claude", codex: "ChatGPT", cursor: "Cursor" };
+
+function appUrl(client) {
+  const found = (data.clients || []).find((c) => c.id === client);
+  return found && found.app_url ? found.app_url : null;
+}
 
 // The gateway's own page: the saved link, or the address it serves.
 function gatewayPage(gateway) {
@@ -323,9 +325,10 @@ function routes(gateway, connections, direct = []) {
     const around = direct.filter((row) => row.clients.includes(client)).length;
     const group = add("g", { class: linked.includes(client) ? "route linked" : "route", "data-client": client });
     const state = linked.includes(client) ? `connected to ${name}` : `not connected to ${name}`;
-    const app = CLIENT_APPS[client];
-    // The node opens the client's app; the browser asks once before it opens an app.
-    opens(group, `Open ${app.app} · ${CLIENT_NAMES[client]}: ${state}`, () => { window.location.href = app.url; });
+    const url = appUrl(client);
+    // With the app installed, the node opens it; the browser asks once before it does.
+    if (url) opens(group, `Open ${CLIENT_APPS[client]} · ${CLIENT_NAMES[client]}: ${state}`, () => { window.location.href = url; });
+    else group.setAttribute("aria-label", `${CLIENT_NAMES[client]}: ${state}`);
     group.addEventListener("pointerenter", () => focusRoutes([client]));
     group.addEventListener("pointerleave", () => focusRoutes([]));
     group.addEventListener("focus", () => focusRoutes([client]));

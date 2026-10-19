@@ -108,6 +108,7 @@ class Client:
     version_supported: bool = False
     config_roots: tuple[str, ...] = ()
     write_capabilities: frozenset[str] = frozenset()
+    app_url: str | None = None  # `claude://` when the client's Mac app is installed (apps.py)
 
 
 @dataclass(frozen=True)

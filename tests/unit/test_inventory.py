@@ -60,3 +60,16 @@ def test_missing_clients_are_listed_but_not_scanned():
     inventory = build_inventory(adapters=[missing])
     assert [c.status for c in inventory.clients] == [ClientStatus.NOT_FOUND]
     assert inventory.items == []
+
+
+def test_clients_carry_the_link_of_their_installed_app():
+    from tests.conftest import FIXTURES
+
+    a = FakeAdapter("claude_code", Scan())
+    b = FakeAdapter("codex", Scan())
+    inventory = build_inventory(adapters=[a, b], apps=[FIXTURES / "apps"])
+    assert {c.id: c.app_url for c in inventory.clients} == {
+        "claude_code": "claude://",
+        "codex": "codex://",
+    }
+    assert all(c.app_url is None for c in build_inventory(adapters=[a, b]).clients)

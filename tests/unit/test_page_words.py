@@ -226,6 +226,8 @@ def test_a_gateway_the_clients_do_not_use_offers_to_take_them_over():
 
 def test_diagram_nodes_open_the_client_apps_and_the_gateway():
     text = script("gateway.js")
+    # The scheme comes from the installed app, read by the server; none is hard-coded.
     for scheme in ('"claude://"', '"codex://"', '"cursor://"'):
-        assert scheme in text
+        assert scheme not in text
+    assert "found.app_url" in text and "if (url) opens(group" in text
     assert 'window.open(page, "_blank", "noopener")' in text
