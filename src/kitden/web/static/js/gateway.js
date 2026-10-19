@@ -268,6 +268,35 @@ function showDirect(client) {
 
 // Three clients, one hub: a wire only for a client that has a gateway entry. A client
 // without one stands apart.
+// Each client opens its own Mac app through the link scheme the app registers (checked
+// 2026-10-19 in each app's Info.plist): Claude, Cursor, and ChatGPT for Codex.
+const CLIENT_APPS = {
+  claude_code: { app: "Claude", url: "claude://" },
+  codex: { app: "ChatGPT", url: "codex://" },
+  cursor: { app: "Cursor", url: "cursor://" },
+};
+
+// The gateway's own page: the saved link, or the address it serves.
+function gatewayPage(gateway) {
+  if (gateway.ui_url) return gateway.ui_url;
+  try { return new URL(gateway.url).origin; } catch { return null; }
+}
+
+// A diagram node that acts like a link: click, Enter or Space.
+function opens(node, label, open) {
+  node.classList.add("clickable");
+  node.setAttribute("role", "link");
+  node.setAttribute("tabindex", "0");
+  node.setAttribute("aria-label", label);
+  const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+  title.textContent = label;
+  node.prepend(title);
+  node.addEventListener("click", open);
+  node.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") { event.preventDefault(); open(); }
+  });
+}
+
 function routes(gateway, connections, direct = []) {
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
@@ -292,21 +321,15 @@ function routes(gateway, connections, direct = []) {
     const y = 25 + i * 50;
     const d = `M 200 ${y} C 330 ${y}, 350 ${hub.y}, ${hub.x - 2} ${hub.y}`;
     const around = direct.filter((row) => row.clients.includes(client)).length;
-    const group = add("g", { class: linked.includes(client) ? "route linked" : "route", "data-client": client, tabindex: "0", role: "img" });
+    const group = add("g", { class: linked.includes(client) ? "route linked" : "route", "data-client": client });
     const state = linked.includes(client) ? `connected to ${name}` : `not connected to ${name}`;
-    group.setAttribute("aria-label", around ? `${CLIENT_NAMES[client]}: ${state}, ${plural(around, "direct entry", "direct entries")}` : `${CLIENT_NAMES[client]}: ${state}`);
+    const app = CLIENT_APPS[client];
+    // The node opens the client's app; the browser asks once before it opens an app.
+    opens(group, `Open ${app.app} · ${CLIENT_NAMES[client]}: ${state}`, () => { window.location.href = app.url; });
     group.addEventListener("pointerenter", () => focusRoutes([client]));
     group.addEventListener("pointerleave", () => focusRoutes([]));
     group.addEventListener("focus", () => focusRoutes([client]));
     group.addEventListener("blur", () => focusRoutes([]));
-    // A client with direct entries leads to them in the lists below.
-    if (around) {
-      group.classList.add("clickable");
-      group.addEventListener("click", () => showDirect(client));
-      group.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); showDirect(client); }
-      });
-    }
     if (linked.includes(client)) {
       const wire = add("path", { d, class: "wire", pathLength: "1" }, null, group);
       const key = `${gateway.id}:${client}`;
@@ -326,12 +349,18 @@ function routes(gateway, connections, direct = []) {
     add("image", { ...box, href: `/static/brand/clients/${icon}.png`, class: "node-icon icon-light" }, null, tile);
     if (DARK_ICONS.has(icon)) add("image", { ...box, href: `/static/brand/clients/${icon}-dark.png`, class: "node-icon icon-dark" }, null, tile);
     add("text", { x: 50, y: y + 4, class: "sub" }, CLIENT_NAMES[client], group);
-    // Servers this client reaches directly, around the gateway: listed below the diagram.
-    if (around) add("text", { x: 190, y: y + 4, class: "bypass", "text-anchor": "end" }, `${around} direct`, group);
+    // Servers this client reaches directly, around the gateway: the count leads to them below.
+    if (around) {
+      const count = add("text", { x: 190, y: y + 4, class: "bypass", "text-anchor": "end" }, `${around} direct`, group);
+      count.addEventListener("click", (event) => { event.stopPropagation(); showDirect(client); });
+    }
   });
-  add("rect", { x: hub.x, y: hub.y - 22, width: 160, height: 44, rx: 9, class: "hub" });
-  add("text", { x: hub.x + 14, y: hub.y - 2 }, name);
-  add("text", { x: hub.x + 14, y: hub.y + 14, class: "sub" }, linked.length ? plural(linked.length, "client", "clients") : "No clients yet");
+  const node = add("g", { class: "hub-node" });
+  add("rect", { x: hub.x, y: hub.y - 22, width: 160, height: 44, rx: 9, class: "hub" }, null, node);
+  add("text", { x: hub.x + 14, y: hub.y - 2 }, name, node);
+  add("text", { x: hub.x + 14, y: hub.y + 14, class: "sub" }, linked.length ? plural(linked.length, "client", "clients") : "No clients yet", node);
+  const page = gatewayPage(gateway);
+  if (page) opens(node, `Open ${name}`, () => window.open(page, "_blank", "noopener"));
   return svg;
 }
 

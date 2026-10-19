@@ -131,7 +131,8 @@ def test_one_mark_slides_between_the_choices_of_a_group():
 
 def test_gateway_routes_light_their_rows_and_take_keyboard_focus():
     text = script("gateway.js")
-    assert "node.dataset.clients" in text and 'tabindex: "0"' in text and '"lit"' in text
+    assert "node.dataset.clients" in text and '"lit"' in text
+    assert 'setAttribute("tabindex", "0")' in text
     assert "fold(box)" in text and "fold(more)" in text
 
 
@@ -221,3 +222,10 @@ def test_a_gateway_the_clients_do_not_use_offers_to_take_them_over():
     text = script("gateway.js")
     assert "Use this gateway…" in text and '"gateway.switch"' in text
     assert "model.used.includes(b.id)" in text  # the used gateway gets the card with the routes
+
+
+def test_diagram_nodes_open_the_client_apps_and_the_gateway():
+    text = script("gateway.js")
+    for scheme in ('"claude://"', '"codex://"', '"cursor://"'):
+        assert scheme in text
+    assert 'window.open(page, "_blank", "noopener")' in text

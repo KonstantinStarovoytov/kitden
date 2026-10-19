@@ -312,7 +312,6 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .routes .wire.draw { animation: wire-draw 700ms var(--ease-out) both; }
 @keyframes wire-draw { from { stroke-dashoffset: 1; } }
 .routes .route { transition: opacity 200ms ease; }
-.routes .route.linked { cursor: default; }
 .routes .route:focus { outline: none; }
 .routes .route:focus-visible .node { stroke: var(--focus); stroke-width: 2; }
 .routes .route.clickable { cursor: pointer; }
@@ -324,6 +323,12 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .routes .node-tile { fill: var(--panel-raised); stroke: var(--wire-strong); }
 .routes .node-icon { clip-path: inset(0 round 6px); }
 .routes .hub { fill: var(--route-soft); stroke: var(--route); }
+.routes .hub-node.clickable, .routes .bypass { cursor: pointer; }
+.routes .hub { transition: fill 180ms ease; }
+.routes .hub-node:hover .hub, .routes .hub-node:focus-visible .hub { fill: color-mix(in srgb, var(--route) 22%, var(--route-soft)); }
+.routes .hub-node:focus { outline: none; }
+.routes .hub-node:focus-visible .hub { stroke-width: 2; }
+.routes .bypass:hover { text-decoration: underline; }
 .routes text { fill: var(--ink); font: 600 11px var(--mono); }
 .routes .sub { fill: var(--ink-3); font: 400 11px var(--sans); }
 .routes .bypass { fill: var(--lamp-warn); font: 500 11px var(--sans); }
