@@ -8,7 +8,7 @@
   behind Details.
 - Follow [docs/design.md](docs/design.md) for how the page looks and moves.
 - Tests use sandbox homes and never touch the real home folder. Run `uv run pytest -q`,
-  `uv run ruff check .` and `node --test tests/frontend/motion.test.mjs` before each commit.
+  `uv run ruff check .` and `node --test tests/frontend/*.test.mjs` before each commit.
 - Keep work proportional to a self-hosted tool for one person or a small team: the simplest
   mechanism that works, no speculative options.
 - Check changing facts about other tools (client file formats, gateway APIs) against their

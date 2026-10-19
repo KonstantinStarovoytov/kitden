@@ -11,7 +11,7 @@ import { renderOverview } from "./overview.js";
 import { closePanel, initPanel, isPanelOpen } from "./panel.js";
 import { latestChanges } from "./parts.js";
 import {
-  busy, data, followAddress, freshness, go, loadShared, onIdle, parseHash, reload, setRenderer, setState, state, VIEWS,
+  busy, current, data, followAddress, freshness, go, loadShared, onIdle, parseHash, reload, setRenderer, setState, state, VIEWS,
 } from "./store.js";
 
 const PLACES = {
@@ -51,7 +51,7 @@ function renderPlace() {
 
 // Rail counters and the Where list follow the data.
 function renderShell() {
-  const overview = data.overview;
+  const overview = current("overview");
   rollTo($("#nav-attention"), overview && overview.attention.length ? overview.attention.length : "");
   // Changes still in effect, the ones Undo can take back.
   const changes = latestChanges(data.changes || []).filter((e) => e.state === "verified").length;
@@ -80,7 +80,10 @@ function renderShell() {
 // A scope change cross-fades the page (the Load map morphs its cells instead).
 async function refresh({ fade = false } = {}) {
   await reload();
-  $("#scanned").textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  // The time of the last reload where every read worked, and a note when the latest one failed.
+  const { lastGoodRead, lastReadFailed } = freshness;
+  const time = lastGoodRead ? new Date(lastGoodRead).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "…";
+  $("#scanned").textContent = `${time}${lastReadFailed ? " · could not refresh" : ""}`;
   if (fade) transition(renderPlace);
   else renderPlace();
 }

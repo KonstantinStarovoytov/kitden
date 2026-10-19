@@ -305,3 +305,11 @@ def test_changes_show_restart_notes_only_for_changes_that_happened():
     changes = script("changes.js")
     assert '["verified", "undone", "undo_blocked"].includes(entry.state)' in changes
     assert 'project: "this project"' in changes
+
+
+def test_a_failed_refresh_says_when_the_shown_data_was_read():
+    assert "Could not refresh. Showing what Kitden read at ${clock}." in script("parts.js")
+    for name, model in (("map.js", "map"), ("overview.js", "overview"), ("gateway.js", "gateway")):
+        text = script(name)
+        assert f'current("{model}")' in text and f"staleNote(data.readAt.{model})" in text
+    assert '" · could not refresh"' in script("app.js")

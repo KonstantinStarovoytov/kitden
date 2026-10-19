@@ -4,13 +4,13 @@ import { button, el, plural } from "./dom.js";
 import { openSelectedOnRender } from "./map.js";
 import { entrance, fly } from "./motion.js";
 import { toast } from "./panel.js";
-import { banner, flag, mark, skeleton, socket } from "./parts.js";
-import { data, go, loadMap, loadOverview, projectPath, render } from "./store.js";
+import { banner, flag, mark, skeleton, socket, staleNote } from "./parts.js";
+import { current, data, go, loadMap, loadOverview, projectPath, render } from "./store.js";
 
 let notesOpen = false;
 
 export function renderOverview(main) {
-  const model = data.overview;
+  const model = current("overview");
   if (!model) {
     main.append(el("h1", null, "Overview"));
     if (data.errors.overview) main.append(banner("the overview", async () => { await loadOverview(); render(); }));
@@ -24,6 +24,7 @@ export function renderOverview(main) {
   main.append(el("p", "lede", model.attention.length
     ? `Everything else looks fine: ${plural(found, "client", "clients")} found, ${plural(projects, "project", "projects")}.`
     : `${plural(found, "client", "clients")} found, ${plural(projects, "project", "projects")}. Nothing needs your attention.`));
+  if (data.errors.overview) main.append(staleNote(data.readAt.overview));
 
   const grid = el("div", "overview");
   const left = el("section", "attention");
@@ -102,14 +103,15 @@ const openClients = new Set();
 // A count opens that Load map tab; the client's tile flies to its column there.
 function loadsLine(clientId, tile) {
   const line = el("div", "loads");
-  if (!data.map) {
+  const map = current("map");
+  if (!map) {
     line.append(el("span", "muted", "Counting…"));
     const failed = () => line.replaceChildren(el("span", "muted", "Could not count."));
-    loadMap().then(() => (data.map ? line.replaceWith(loadsLine(clientId, tile)) : failed())).catch(failed);
+    loadMap().then(() => (current("map") ? line.replaceWith(loadsLine(clientId, tile)) : failed())).catch(failed);
     return line;
   }
   const counts = LOAD_KINDS.map(([kind, one, many]) => {
-    const n = data.map.rows.filter((r) => r.kind === kind && ["on", "gw"].includes(r.cells[clientId] && r.cells[clientId].state)).length;
+    const n = map.rows.filter((r) => r.kind === kind && ["on", "gw"].includes(r.cells[clientId] && r.cells[clientId].state)).length;
     return [kind, n, plural(n, one, many)];
   }).filter(([, n]) => n);
   if (!counts.length) line.append(el("span", "muted", "Loads nothing here."));

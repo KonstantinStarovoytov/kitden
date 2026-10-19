@@ -104,6 +104,17 @@ export function banner(what, onRetry) {
   return node;
 }
 
+// Above a page whose latest read failed: the page still shows the read from that time.
+export function staleNote(time) {
+  const clock = new Date(time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const node = el("div", "callout stale");
+  node.setAttribute("role", "note");
+  const icon = el("span", null, "⚠");
+  icon.setAttribute("aria-hidden", "true");
+  node.append(icon, el("span", null, `Could not refresh. Showing what Kitden read at ${clock}.`));
+  return node;
+}
+
 const ACTION_WORDS = {
   "gateway.connect": "Added gateway",
   "gateway.move": "Moved into the gateway",

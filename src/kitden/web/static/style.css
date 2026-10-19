@@ -425,6 +425,7 @@ details.file-change[open] pre.diff .line { animation: line-in 260ms var(--ease-o
 @keyframes line-in { from { opacity: 0; transform: translateX(-6px); } }
 .callout { display: flex; gap: 8px; padding: 10px 12px; border-radius: 8px; background: var(--lamp-warn-soft); color: var(--ink-2); }
 .callout.error { background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.callout.stale { margin-bottom: 12px; }
 .checklist { margin: 0; padding-left: 18px; color: var(--ink-2); }
 .checklist .badge { margin-left: 6px; }
 .commands { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }

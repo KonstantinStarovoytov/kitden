@@ -13,9 +13,19 @@ export function setBusy(value) {
   busy.change = value;
   if (!value) idleListener();
 }
-// When the last full reload started, so a skipped rescan can tell whether it was covered.
-export const freshness = { reloadStartedAt: 0 };
-export const data = { clients: null, projects: null, overview: null, map: null, gateway: null, changes: null, setupServer: null, errors: {} };
+// When the last full reload started, so a skipped rescan can tell whether it was covered;
+// when the last reload with no failed read ended, and whether the latest one had a failure.
+export const freshness = { reloadStartedAt: 0, lastGoodRead: null, lastReadFailed: false };
+// scope: the project each read was for. readAt: when each read last worked.
+export const data = {
+  clients: null, projects: null, overview: null, map: null, gateway: null, changes: null, setupServer: null,
+  errors: {}, scope: {}, readAt: {},
+};
+
+// A project's data only while that project is shown, so another project's data never shows.
+export function current(name) {
+  return data.scope[name] === state.project ? data[name] : null;
+}
 
 let renderPlace = () => {};
 export function setRenderer(fn) { renderPlace = fn; }
@@ -81,12 +91,18 @@ export function projectPath() {
   return found ? found.path : "";
 }
 
-async function guarded(name, url, apply) {
+// A read for a project (scope) is dropped if another project is shown by the time it answers.
+async function guarded(name, url, apply, scope) {
+  const notShown = () => scope !== undefined && scope !== state.project;
   try {
-    apply(await getJson(url));
+    const value = await getJson(url);
+    if (notShown()) return;
+    apply(value);
+    data.scope[name] = scope;
+    data.readAt[name] = Date.now();
     delete data.errors[name];
   } catch (error) {
-    data.errors[name] = error;
+    if (!notShown()) data.errors[name] = error;
   }
 }
 
@@ -103,15 +119,18 @@ export async function loadShared() {
 }
 
 export async function loadOverview() {
-  await guarded("overview", `/api/overview${query({ project: state.project })}`, (v) => { data.overview = v; });
+  const { project } = state;
+  await guarded("overview", `/api/overview${query({ project })}`, (v) => { data.overview = v; }, project);
 }
 
 export async function loadMap() {
-  await guarded("map", `/api/map${query({ project: state.project })}`, (v) => { data.map = v; });
+  const { project } = state;
+  await guarded("map", `/api/map${query({ project })}`, (v) => { data.map = v; }, project);
 }
 
 export async function loadGateway() {
-  await guarded("gateway", `/api/gateway-view${query({ project: state.project })}`, (v) => { data.gateway = v; });
+  const { project } = state;
+  await guarded("gateway", `/api/gateway-view${query({ project })}`, (v) => { data.gateway = v; }, project);
 }
 
 export async function loadChanges() {
@@ -127,4 +146,6 @@ export async function reload() {
   freshness.reloadStartedAt = performance.now();
   await loadShared();
   await Promise.all([loadOverview(), loadMap(), loadGateway(), loadSetupServer()]);
+  freshness.lastReadFailed = Object.keys(data.errors).length > 0;
+  if (!freshness.lastReadFailed) freshness.lastGoodRead = Date.now();
 }
