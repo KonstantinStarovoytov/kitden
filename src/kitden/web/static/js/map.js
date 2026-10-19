@@ -1,8 +1,8 @@
 // Load map: items in rows, Claude Code, Codex and Cursor in columns.
 import { button, el, tabKeys } from "./dom.js";
-import { animate, entrance, EASE_IN_OUT, glide, land } from "./motion.js";
+import { animate, entrance, EASE_IN_OUT, glide, land, reducedMotion } from "./motion.js";
 import { banner, flag, mark, morphSocket, opens, skeleton, socket, staleNote } from "./parts.js";
-import { current, currentError, data, go, loadMap, projectPath, render, setState, state } from "./store.js";
+import { current, currentError, data, go, projectPath, retry, setState, state } from "./store.js";
 
 const KINDS = [
   ["mcp_server", "MCP servers"], ["plugin", "Plugins"], ["skill", "Skills"],
@@ -53,7 +53,7 @@ export function renderMap(main) {
   main.append(lede);
   const model = current("map");
   if (!model) {
-    if (currentError("map")) main.append(banner("the load map", async () => { await loadMap(); render(); }));
+    if (currentError("map")) main.append(banner("the load map", retry));
     else main.append(skeleton("table", 1));
     return;
   }
@@ -191,7 +191,7 @@ function buildRow(columns, row) {
     const shown = changed ? { state: before.split("|")[0], where: before.split("|")[1] || null } : cell;
     const node = socket({ state: shown.state, where: shown.where });
     td.append(node);
-    if (changed) setTimeout(() => morphSocket(node, { state: cell.state, where: cell.where }), 260);
+    if (changed) setTimeout(() => morphSocket(node, { state: cell.state, where: cell.where }), reducedMotion.matches ? 0 : 260);
     tr.append(td);
   }
   tr.addEventListener("click", () => openRow(row, tr, "pointer"));

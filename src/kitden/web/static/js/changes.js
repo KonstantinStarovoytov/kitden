@@ -3,7 +3,7 @@ import { button, el, shortPath, shortPaths } from "./dom.js";
 import { entrance } from "./motion.js";
 import { closePanel, openChange, undoChange } from "./panel.js";
 import { banner, changeTitle, latestChanges, mark, notesSection, opens, skeleton } from "./parts.js";
-import { data, loadChanges, render } from "./store.js";
+import { data, retry } from "./store.js";
 
 // The state in words. Rows that no longer change anything are plain grey text, not badges.
 const STATE_BADGES = {
@@ -31,7 +31,7 @@ export function renderChanges(main) {
   main.append(el("h1", null, "Changes"));
   main.append(el("p", "lede", "Every change made from this page. Each one has a backup; Undo puts the previous file back."));
   if (!data.changes) {
-    if (data.errors.changes) main.append(banner("the changes", async () => { await loadChanges(); render(); }));
+    if (data.errors.changes) main.append(banner("the changes", retry));
     else main.append(skeleton("card", 2));
     return;
   }

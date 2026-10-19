@@ -83,6 +83,7 @@ async function quietly(fn) {
 const verified = { id: 'c1', state: 'verified' };
 const apply = 'POST /api/changes/c1/apply';
 const read = 'GET /api/changes/c1';
+const LOST = 'Could not confirm the result. Check Changes before trying again.';
 
 test('an Apply answer with a change in it is used as it is', async () => {
   const calls = server(() => Response.json(verified), () => Response.json(verified));
@@ -91,9 +92,27 @@ test('an Apply answer with a change in it is used as it is', async () => {
 });
 
 test('an Apply refusal the server explains is a failure, not a lost answer', async () => {
-  const calls = server(() => Response.json({ detail: 'Preview again.' }, { status: 409 }), () => Response.json(verified));
-  assert.deepEqual(await changeOutcome('c1', 'apply'), { after: null, failure: 'Preview again.' });
+  const calls = server(() => Response.json({ detail: 'nothing to change in ~/.claude.json' }, { status: 422 }), () => Response.json(verified));
+  assert.deepEqual(await changeOutcome('c1', 'apply'), { after: null, failure: 'nothing to change in ~/.claude.json' });
   assert.deepEqual(calls, [apply]);
+});
+
+test('Apply again after a lost answer reads the change back, never shows the server words', async () => {
+  // The first Apply ran, but its answer and the read-back were both lost. A second Apply is
+  // refused, because the change is no longer previewed.
+  const refused = () => Response.json({ detail: 'cannot move from verified to applying' }, { status: 409 });
+  const calls = server(refused, () => Response.json(verified));
+  assert.deepEqual(await changeOutcome('c1', 'apply'), { after: verified, failure: LOST });
+  assert.deepEqual(calls, [apply, read]);
+  // Any other end gets the usual words for it in the Apply flow.
+  const stale = { id: 'c1', state: 'stale' };
+  server(refused, () => Response.json(stale));
+  assert.deepEqual(await changeOutcome('c1', 'apply'), { after: stale, failure: LOST });
+  // Not ended, or not readable: the page cannot say how it went.
+  server(refused, () => Response.json({ id: 'c1', state: 'applying' }));
+  assert.deepEqual(await changeOutcome('c1', 'apply'), { after: null, failure: LOST });
+  server(refused, () => new Response('', { status: 502 }));
+  assert.deepEqual(await changeOutcome('c1', 'apply'), { after: null, failure: LOST });
 });
 
 test('an Apply answer with no readable body is read back, not called a failure', async () => {
@@ -114,7 +133,6 @@ test('a lost Apply answer whose change has not ended cannot say how it went', as
   assert.deepEqual(await quietly(() => changeOutcome('c1', 'apply')), { after: null, failure: 'Could not confirm the result. Check Changes before trying again.' });
 });
 
-const LOST = 'Could not confirm the result. Check Changes before trying again.';
 const undone = { id: 'c1', state: 'undone' };
 const undo = 'POST /api/changes/c1/undo';
 const lostAnswers = [
@@ -147,7 +165,11 @@ test('an Undo answer is used as it is, and a refusal the server explains is a fa
   let calls = server(() => Response.json(blocked, { status: 409 }), () => Response.json(verified));
   assert.deepEqual(await changeOutcome('c1', 'undo'), { after: blocked, failure: null });
   assert.deepEqual(calls, [undo]);
-  calls = server(() => Response.json({ detail: 'Only an applied change can be undone.' }, { status: 409 }), () => Response.json(undone));
-  assert.deepEqual(await changeOutcome('c1', 'undo'), { after: null, failure: 'Only an applied change can be undone.' });
+  calls = server(() => Response.json({ detail: 'The gateway cannot be managed from here' }, { status: 422 }), () => Response.json(undone));
+  assert.deepEqual(await changeOutcome('c1', 'undo'), { after: null, failure: 'The gateway cannot be managed from here' });
   assert.deepEqual(calls, [undo]);
+  // Refused because it moved on already: read back, as for Apply.
+  calls = server(() => Response.json({ detail: 'cannot move from undone to undone' }, { status: 409 }), () => Response.json(undone));
+  assert.deepEqual(await changeOutcome('c1', 'undo'), { after: undone, failure: LOST });
+  assert.deepEqual(calls, [undo, read]);
 });

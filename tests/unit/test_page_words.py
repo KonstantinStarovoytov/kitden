@@ -152,6 +152,8 @@ def test_scope_switch_marks_the_project_picker_and_the_lede():
 def test_reduced_motion_turns_every_animation_off():
     assert "prefers-reduced-motion: reduce" in CSS
     assert "reducedMotion.matches" in script("motion.js")
+    # A changed Load map cell shows its new word at once (parts.test.mjs checks the swap).
+    assert "reducedMotion.matches ? 0 : 260" in script("map.js")
 
 
 def test_a_plugin_the_page_cannot_change_shows_a_locked_switch():
@@ -350,6 +352,14 @@ def test_a_failed_refresh_says_when_the_shown_data_was_read():
     assert '" · could not refresh"' in script("app.js")
 
 
+def test_a_banner_retry_reads_everything_again():
+    # So the rail's time and its "could not refresh" note are right after it (store.test.mjs).
+    for name in ("map.js", "overview.js", "gateway.js", "changes.js", "agents.js"):
+        text = script(name)
+        assert re.search(r"banner\([^;]*, retry\)", text), name
+        assert "render(); })" not in text, name
+
+
 def test_the_rail_time_follows_every_render_not_only_a_refresh():
     app = script("app.js")
     shell = app.split("function renderShell()")[1].split("\n}\n")[0]
@@ -452,6 +462,10 @@ def test_apply_sets_its_label_at_once_and_a_failure_focuses_the_button():
     assert 'label.textContent = "Applying…"' in flow
     assert "next.focus()" in flow
     assert ".label.swap" not in CSS
+    # An error from the last try goes when Apply is pressed again, so it never sits next to Applied.
+    apply = flow.split("async function applyChange")[1]
+    clear = 'for (const old of body.querySelectorAll(".callout.error")) old.remove();'
+    assert apply.index(clear) < apply.index('changeOutcome(change.id, "apply")')
 
 
 def test_every_view_reads_project_data_through_current():

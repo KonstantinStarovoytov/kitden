@@ -4,7 +4,7 @@ import { button, el } from "./dom.js";
 import { entrance } from "./motion.js";
 import { review } from "./panel.js";
 import { banner, CLIENT_NAMES, mark, skeleton, socket } from "./parts.js";
-import { data, loadSetupServer, render } from "./store.js";
+import { data, retry } from "./store.js";
 
 // The old entry was made by the working version, called agentsetup (feature 002).
 function update(item) {
@@ -39,7 +39,7 @@ export function renderAgents(main) {
   main.append(el("h1", null, "Let agents read this setup"));
   main.append(el("p", "lede", "Adds a read-only MCP server to a client. An agent can then answer “what do you load here?” without changing anything."));
   if (!data.setupServer) {
-    if (data.errors.setupServer) main.append(banner("the clients", async () => { await loadSetupServer(); render(); }));
+    if (data.errors.setupServer) main.append(banner("the clients", retry));
     else main.append(skeleton("card", 1));
     return;
   }

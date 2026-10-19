@@ -42,8 +42,18 @@ def test_success_and_action_labels_are_readable_in_both_themes():
     for theme in (LIGHT, DARK):
         assert contrast(theme["--on-success"], theme["--success"]) >= 4.5
         assert contrast(theme["--on-action"], theme["--action"]) >= 4.5
-    done = ".btn.primary.done, .btn.primary.done:hover"
-    assert done + " { background: var(--success); color: var(--on-success); }" in CSS
+
+
+def test_the_applied_label_is_drawn_at_full_strength_at_once():
+    # A disabled button is drawn at 0.7 opacity, which would take the label below 4.5:1, and
+    # a fill that fades passes through colors the label was not checked on.
+    assert ".btn:disabled { cursor: default; opacity: 0.7; }" in CSS
+    rule = block(".btn.primary.done, .btn.primary.done:hover, .btn.primary.done:disabled {")
+    assert "background: var(--success);" in rule and "color: var(--on-success);" in rule
+    assert "opacity: 1;" in rule and "transition: none;" in rule
+    # No later rule draws the done button fainter.
+    later = CSS[CSS.index(rule) :]
+    assert not re.search(r"\.done[^{]*\{[^}]*opacity: 0", later)
 
 
 def test_system_dark_theme_has_the_same_success_tokens():

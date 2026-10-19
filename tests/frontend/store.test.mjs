@@ -14,7 +14,7 @@ function fetchAnswers(map) { answers = map; failing = null; }
 function fetchFails(url) { failing = url; }
 const ALL_OK = {};
 
-const { current, currentError, data, freshness, loadMap, reload, state } = await import('../../src/kitden/web/static/js/store.js');
+const { current, currentError, data, freshness, loadMap, reload, retry, setRenderer, state } = await import('../../src/kitden/web/static/js/store.js');
 
 beforeEach(() => { state.project = ''; });
 
@@ -35,6 +35,24 @@ test('the last good read time moves only when every read worked', async () => {
   fetchFails('/api/overview'); await reload();
   assert.equal(freshness.lastGoodRead, good);
   assert.equal(freshness.lastReadFailed, true);
+});
+
+test('a Retry that works clears the rail note; one that fails keeps it and the old time', async () => {
+  let drawn = 0;
+  setRenderer(() => { drawn += 1; });
+  fetchAnswers(ALL_OK); await reload();
+  const good = freshness.lastGoodRead;
+  fetchFails('/api/map'); await reload();
+  await retry();
+  assert.equal(freshness.lastReadFailed, true);
+  assert.equal(freshness.lastGoodRead, good);
+  fetchAnswers(ALL_OK);
+  await retry();
+  assert.equal(freshness.lastReadFailed, false);
+  assert.ok(freshness.lastGoodRead >= good);
+  assert.equal(data.errors.map, undefined);
+  assert.equal(drawn, 2);
+  setRenderer(() => {});
 });
 
 test('an answer for a project no longer shown is dropped', async () => {

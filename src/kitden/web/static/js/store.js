@@ -158,3 +158,9 @@ export async function reload() {
   freshness.lastReadFailed = Object.keys(data.errors).length > 0;
   if (!freshness.lastReadFailed) freshness.lastGoodRead = Date.now();
 }
+
+// A page's Retry reads everything again, so the rail's time and its note are right after it.
+export async function retry() {
+  await reload();
+  render();
+}

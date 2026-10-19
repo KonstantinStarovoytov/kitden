@@ -586,21 +586,29 @@ async function readChange(id) {
   }
 }
 
+// How the change ended, read back from the server, when the answer cannot say.
+async function readOutcome(id, verb) {
+  const read = await readChange(id);
+  return { after: read && ENDED[verb].includes(read.state) ? read : null, failure: LOST };
+}
+
 // How an Apply or an Undo ("apply", "undo") ended: the change as the server holds it, or why
 // it failed.
 export async function changeOutcome(id, verb) {
   const name = verb === "undo" ? "Undo" : "Apply";
+  let result;
   try {
-    const result = await postJson(`/api/changes/${encodeURIComponent(id)}/${verb}`);
+    result = await postJson(`/api/changes/${encodeURIComponent(id)}/${verb}`);
     if (!result.data) throw new Error(`The ${name} answer had no body (${result.status}).`);
-    if (result.data.id) return { after: result.data, failure: null };
-    return { after: null, failure: result.data.detail || `${name} failed (${result.status}).` };
   } catch (error) {
     // No answer, or one with no body, yet the change may have run: ask the server how it ended.
     console.error(error);
-    const read = await readChange(id);
-    return { after: read && ENDED[verb].includes(read.state) ? read : null, failure: LOST };
+    return readOutcome(id, verb);
   }
+  if (result.data.id) return { after: result.data, failure: null };
+  // 409 with no change: it had moved on already, for example by an Apply whose answer was lost.
+  if (result.status === 409) return readOutcome(id, verb);
+  return { after: null, failure: result.data.detail || `${name} failed (${result.status}).` };
 }
 
 // Apply → Applying… (spinner) → Applied (the check draws); then the panel leaves and the
@@ -612,6 +620,8 @@ async function applyChange(change, { apply, cancel, label, body }) {
   lockReview(true, apply, cancel);
   label.textContent = "Applying…";
   apply.prepend(el("span", "spinner"));
+  // The last try's error stays until now, the next action.
+  for (const old of body.querySelectorAll(".callout.error")) old.remove();
   const { after, failure } = await changeOutcome(change.id, "apply");
   if (after && current) current.change = after;
 
@@ -620,7 +630,6 @@ async function applyChange(change, { apply, cancel, label, body }) {
     resetApply(apply, cancel, label);
     const reason = after ? STOPPED[after.state] || `The change stopped: ${after.state}.` : failure;
     const detail = after && after.error ? ` (${shortPaths(after.error)})` : "";
-    for (const old of body.querySelectorAll(".callout.error")) old.remove();
     body.prepend(callout(`${reason}${detail}`, "error"));
     // Focus goes to the button in Apply's place; the callout says what went wrong.
     let next = apply;

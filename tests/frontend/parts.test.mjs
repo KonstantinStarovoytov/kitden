@@ -1,17 +1,35 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-// parts.js needs only these from a browser to load; this stub builds just enough nodes.
-globalThis.matchMedia = () => ({ matches: false });
-globalThis.document = {
-  createElement: (tag) => ({
-    tag, className: '', textContent: '', children: [], attributes: {},
-    append(...nodes) { this.children.push(...nodes); },
-    setAttribute(name, value) { this.attributes[name] = value; },
-    addEventListener(type, listener) { this.listeners = { ...this.listeners, [type]: listener }; },
-  }),
-};
-const { clientCheck, opens } = await import('../../src/kitden/web/static/js/parts.js');
+// parts.js needs only these from a browser to load. The stub element knows classes,
+// attributes, children and class selectors (".word, .where"); `media` is reduced motion.
+const media = { matches: false };
+globalThis.matchMedia = () => media;
+function element(tag) {
+  const node = {
+    tag, className: '', textContent: '', children: [], attributes: {}, parent: null,
+    get childNodes() { return node.children; },
+    classList: {
+      contains: (name) => node.className.split(' ').includes(name),
+      add: (name) => { if (!node.classList.contains(name)) node.className = `${node.className} ${name}`.trim(); },
+      remove: (name) => { node.className = node.className.split(' ').filter((c) => c !== name).join(' '); },
+    },
+    append(...nodes) { for (const n of nodes) { n.parent = node; node.children.push(n); } },
+    replaceChildren(...nodes) { node.children = []; node.append(...nodes); },
+    replaceWith(other) { node.parent.children[node.parent.children.indexOf(node)] = other; other.parent = node.parent; },
+    matches: (selector) => selector.split(',').some((s) => node.classList.contains(s.trim().slice(1))),
+    querySelectorAll: (selector) => node.children.flatMap((c) => [...(c.matches(selector) ? [c] : []), ...c.querySelectorAll(selector)]),
+    querySelector: (selector) => node.querySelectorAll(selector)[0] || null,
+    setAttribute(name, value) { node.attributes[name] = value; },
+    getAttribute: (name) => node.attributes[name] ?? null,
+    hasAttribute: (name) => name in node.attributes,
+    removeAttribute(name) { delete node.attributes[name]; },
+    addEventListener(type, listener) { node.listeners = { ...node.listeners, [type]: listener }; },
+  };
+  return node;
+}
+globalThis.document = { createElement: element };
+const { banner, clientCheck, morphSocket, opens, socket } = await import('../../src/kitden/web/static/js/parts.js');
 
 test('a row that opens Details ends with a chevron for the eye and words for a screen reader', () => {
   const node = opens();
@@ -45,4 +63,52 @@ test('a note after the client name is read as part of its name', () => {
   assert.equal(box.attributes['aria-label'], 'Claude Code · adds the marketplace first');
   assert.equal(name.textContent, 'Claude Code');
   assert.equal(note.textContent, ' · adds the marketplace first');
+});
+
+test('with reduced motion a changed socket shows its new word at once, never faded', () => {
+  media.matches = true;
+  try {
+    const node = socket({ state: 'off' });
+    morphSocket(node, { state: 'on', where: 'global' });
+    assert.equal(node.className, 'socket s-on');
+    assert.equal(node.querySelector('.word').textContent, 'Loads');
+    assert.equal(node.querySelector('.where').textContent, 'global');
+    assert.equal(node.querySelectorAll('.swap').length, 0);
+  } finally {
+    media.matches = false;
+  }
+});
+
+// A page with the banner on it; `focused` says what got keyboard focus after the Retry.
+function retryOn({ failsAgain, focusKept = false }) {
+  const focused = [];
+  const control = (name) => ({ focus: () => focused.push(name) });
+  const main = {
+    contains: () => focusKept,
+    querySelector: (selector) => (selector === '.banner button' ? (failsAgain ? control('new Retry') : null) : control('first control')),
+    focus: () => focused.push('main'),
+  };
+  globalThis.document.querySelector = (selector) => (selector === '#main' ? main : null);
+  let retried = 0;
+  const node = banner('the load map', async () => { retried += 1; });
+  const retry = node.children.find((c) => c.tag === 'button');
+  return { focused, press: async () => { await retry.listeners.click(); return retried; } };
+}
+
+test('after a Retry that works, focus goes to the first control on the page', async () => {
+  const page = retryOn({ failsAgain: false });
+  assert.equal(await page.press(), 1);
+  assert.deepEqual(page.focused, ['first control']);
+});
+
+test('after a Retry that fails again, focus goes to the new Retry button', async () => {
+  const page = retryOn({ failsAgain: true });
+  await page.press();
+  assert.deepEqual(page.focused, ['new Retry']);
+});
+
+test('a redraw that kept focus on the page is left alone', async () => {
+  const page = retryOn({ failsAgain: false, focusKept: true });
+  await page.press();
+  assert.deepEqual(page.focused, []);
 });

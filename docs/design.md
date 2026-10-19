@@ -108,7 +108,7 @@ All helpers live in `src/kitden/web/static/js/motion.js`.
 | Arrival | `.arrive` row glow + `.pulse` socket ping | Coming from a finding |
 | First visit | `entrance(place, nodes)` | Every place, once |
 | Pending switch | `.switch.pending` (thumb half-way) | Plugin switch while the preview loads |
-| Applied | `.btn.primary.done` + drawn check | Review footer, after `verified` |
+| Applied | `.btn.primary.done` (green at once, full strength) + drawn check | Review footer, after `verified` |
 | Toast check | `toast(text, undo, { ok: true })` | Only for verified and undone |
 | Route focus | `focusRoutes(clients, { wires, rows })` | Gateway diagram and lists, hover and keyboard |
 
@@ -126,13 +126,14 @@ All helpers live in `src/kitden/web/static/js/motion.js`.
 ### Accessibility
 
 - `prefers-reduced-motion: reduce` turns every animation and transform transition off (one
-  rule at the end of `style.css`); `animate()` and `transition()` return early; folds and
-  flights just switch.
+  rule at the end of `style.css`); `animate()` and `transition()` return early; folds,
+  flights and socket morphs just switch.
 - Keyboard opens and closes the panel instantly. Gateway routes are focusable and announce
   their state. Every control keeps `:focus-visible`.
 - A redraw keeps keyboard focus: a tab, filter button, menu or row with a `data-focus` key (or
   a row key) gets focus back. Arrow keys, Home and End move between tabs and select (`tabKeys()`
-  in `dom.js`). The review's Tab loop includes its "Show file change" summary.
+  in `dom.js`). The review's Tab loop includes its "Show file change" summary. After a page's
+  Retry, focus goes to the new Retry if the read failed again, else to the page's first control.
 - Live regions: the toast is `role="status"`; errors are `role="alert"`.
 
 ### Performance

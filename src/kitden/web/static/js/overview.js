@@ -5,7 +5,7 @@ import { openSelectedOnRender } from "./map.js";
 import { entrance, fly } from "./motion.js";
 import { toast } from "./panel.js";
 import { banner, flag, mark, skeleton, socket, staleNote } from "./parts.js";
-import { current, currentError, data, go, loadMap, loadOverview, projectPath, render } from "./store.js";
+import { current, currentError, data, go, loadMap, projectPath, render, retry } from "./store.js";
 
 let notesOpen = false;
 
@@ -13,7 +13,7 @@ export function renderOverview(main) {
   const model = current("overview");
   if (!model) {
     main.append(el("h1", null, "Overview"));
-    if (currentError("overview")) main.append(banner("the overview", async () => { await loadOverview(); render(); }));
+    if (currentError("overview")) main.append(banner("the overview", retry));
     else main.append(skeleton("card", 3));
     return;
   }

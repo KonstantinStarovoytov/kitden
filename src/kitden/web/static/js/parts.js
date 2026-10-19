@@ -1,5 +1,6 @@
 // Small parts shared by every place: sockets, client marks, flags, loading and error states.
-import { button, el, plural } from "./dom.js";
+import { $, button, el, plural } from "./dom.js";
+import { reducedMotion } from "./motion.js";
 
 export const STATE_WORDS = {
   on: "Loads", off: "Off", over: "Overridden", unk: "Unknown", gw: "Via gateway",
@@ -52,12 +53,12 @@ export function socket({ state, where, word }) {
 
 // Morph a socket to a new state: the words fade out, the new socket fades in, one ping.
 // The socket is rebuilt, so "not set up" (no dot) and the other states swap cleanly.
+// With reduced motion the new words show at once.
 export function morphSocket(node, { state, where }) {
-  const texts = [...node.querySelectorAll(".word, .where")];
-  texts.forEach((t) => t.classList.add("swap"));
-  setTimeout(() => {
+  const still = reducedMotion.matches;
+  const swap = () => {
     const fresh = socket({ state, where });
-    node.className = `${fresh.className} pulse`;
+    node.className = still ? fresh.className : `${fresh.className} pulse`;
     if (fresh.hasAttribute("aria-label")) node.setAttribute("aria-label", fresh.getAttribute("aria-label"));
     else node.removeAttribute("aria-label");
     // Keep the old dot when both have one, so its fill drains or fills instead of jumping.
@@ -65,10 +66,13 @@ export function morphSocket(node, { state, where }) {
     const newDot = fresh.querySelector(".dot");
     if (oldDot && newDot) newDot.replaceWith(oldDot);
     const parts = [...fresh.childNodes];
-    parts.filter((p) => p.matches(".word, .where")).forEach((p) => p.classList.add("swap"));
+    if (!still) parts.filter((p) => p.matches(".word, .where")).forEach((p) => p.classList.add("swap"));
     node.replaceChildren(...parts);
-    requestAnimationFrame(() => node.querySelectorAll(".swap").forEach((t) => t.classList.remove("swap")));
-  }, 160);
+    if (!still) requestAnimationFrame(() => node.querySelectorAll(".swap").forEach((t) => t.classList.remove("swap")));
+  };
+  if (still) { swap(); return; }
+  node.querySelectorAll(".word, .where").forEach((t) => t.classList.add("swap"));
+  setTimeout(swap, 160);
 }
 
 export function mark(clientId) {
@@ -123,10 +127,19 @@ export function skeleton(kind = "card", count = 3) {
   return box;
 }
 
+const CONTROLS = "button:not([disabled]), a[href], select, input, textarea, summary, [tabindex]:not([tabindex='-1'])";
+
+// The page is drawn again after a Retry, so this button is gone. Focus goes to the new Retry
+// when the read failed again, otherwise to the first control on the page.
 export function banner(what, onRetry) {
   const node = el("div", "banner");
   node.setAttribute("role", "alert");
-  node.append(el("span", null, `Could not load ${what}.`), button("Retry", onRetry));
+  node.append(el("span", null, `Could not load ${what}.`), button("Retry", async () => {
+    await onRetry();
+    const main = $("#main");
+    if (!main || main.contains(document.activeElement)) return;
+    (main.querySelector(".banner button") || main.querySelector(CONTROLS) || main).focus();
+  }));
   return node;
 }
 
