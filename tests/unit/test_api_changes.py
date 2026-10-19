@@ -215,6 +215,43 @@ def test_removing_a_direct_entry_and_undo(client):
     assert _files(client.home) == original
 
 
+def _apply_remove_direct(client):
+    """Preview and apply removing Codex's user-level `neon` entry. Returns the change id."""
+    neon = next(
+        i
+        for i in client.get("/api/items?client=codex&kind=mcp_server").json()
+        if i["name"] == "neon" and i["scope"] == "user"
+    )
+    body = {"action": "mcp.remove_direct", "targets": [{"item": neon["id"]}], "params": {}}
+    change = client.post("/api/changes/preview", json=body, headers=POST).json()
+    client.post(f"/api/changes/{change['id']}/apply", headers=POST)
+    return change["id"]
+
+
+def test_a_change_can_be_read_back_by_id(client):
+    change_id = _apply_remove_direct(client)
+    answer = client.get(f"/api/changes/{change_id}")
+    assert answer.status_code == 200
+    assert answer.json()["id"] == change_id and answer.json()["state"] == "verified"
+
+
+def test_reading_an_unknown_change_is_404(client):
+    answer = client.get("/api/changes/nope")
+    assert answer.status_code == 404 and answer.json()["detail"] == "Unknown change."
+
+
+def test_a_change_only_in_the_log_can_be_read_back(client):
+    gateway = _register(client).json()
+    change = _connect(client, gateway["id"], clients=["codex"]).json()
+    config = client.home / ".codex/config.toml"
+    config.write_text(config.read_text() + "# by hand\n")
+    client.post(f"/api/changes/{change['id']}/apply", headers=POST)
+    with _app_client(client.home) as again:  # a restarted page keeps only the log of it
+        again.get("/?token=tok")
+        answer = again.get(f"/api/changes/{change['id']}")
+    assert answer.status_code == 200 and answer.json()["state"] == "stale"
+
+
 def test_removing_a_server_from_two_clients_is_one_change(client):
     items = client.get("/api/items?kind=mcp_server").json()
     github = next(i for i in items if i["name"] == "github" and i["client"] == "claude_code")

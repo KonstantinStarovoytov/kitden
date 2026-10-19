@@ -504,19 +504,16 @@ function showReview(change, previewBody) {
   apply.type = "button";
   const label = el("span", "label", "Apply");
   apply.append(label);
-  apply.addEventListener("click", () => applyChange(change, { apply, cancel, label, body }).catch(failed(apply, cancel, label, body)));
+  apply.addEventListener("click", () => applyChange(change, { apply, cancel, label, body }).catch(brokeAfterAnswer));
   footer.append(cancel, apply);
   openPanel([header("Review change", words.title, "Nothing is written until you press Apply. A backup is kept, so you can undo.", null), body, footer]);
 }
 
-function failed(apply, cancel, label, body) {
-  return (error) => {
-    console.error(error);
-    setBusy(false);
-    resetApply(apply, cancel, label);
-    body.prepend(callout("Could not reach the page server. Nothing was changed by this page.", "error"));
-    shake(apply);
-  };
+// Something broke after the server answered (a render, the toast). The answer stands, so
+// the page says nothing new about the change; it only frees itself and logs the error.
+function brokeAfterAnswer(error) {
+  setBusy(false);
+  reportError(error);
 }
 
 // A short "no" from the button that was pressed; the error itself stays in the callout.
@@ -559,6 +556,18 @@ const STOPPED = {
   stale: "A file changed after the preview, so nothing was written. Preview again to see the current state.",
   restored: "The change did not check out, so the original settings were put back.",
 };
+// A change read back in these states has not ended, so the page cannot say how it went.
+const PENDING = ["previewed", "applying"];
+const LOST = "Could not confirm the result. Check Changes before trying again.";
+
+// The change as the server holds it now, or null when it cannot be read.
+async function readChange(id) {
+  try {
+    return await getJson(`/api/changes/${encodeURIComponent(id)}`);
+  } catch {
+    return null;
+  }
+}
 
 // Apply → Applying… (spinner) → Applied (the check draws); then the panel leaves and the
 // page shows the effect where it happened.
@@ -570,14 +579,24 @@ async function applyChange(change, { apply, cancel, label, body }) {
   swapLabel(label, "Applying…");
   apply.prepend(el("span", "spinner"));
   const started = performance.now();
-  const result = await postJson(`/api/changes/${encodeURIComponent(change.id)}/apply`);
-  const after = result.data && result.data.id ? result.data : null;
+  let after = null;
+  let failure = LOST;
+  try {
+    const result = await postJson(`/api/changes/${encodeURIComponent(change.id)}/apply`);
+    after = result.data && result.data.id ? result.data : null;
+    failure = (result.data && result.data.detail) || `Apply failed (${result.status}).`;
+  } catch (error) {
+    // No answer came back, yet the change may have run: ask the server how it ended.
+    console.error(error);
+    const read = await readChange(change.id);
+    if (read && !PENDING.includes(read.state)) after = read;
+  }
   if (after && current) current.change = after;
 
   if (!after || after.state !== "verified") {
     setBusy(false);
     resetApply(apply, cancel, label);
-    const reason = after ? STOPPED[after.state] || `The change stopped: ${after.state}.` : (result.data && result.data.detail) || `Apply failed (${result.status}).`;
+    const reason = after ? STOPPED[after.state] || `The change stopped: ${after.state}.` : failure;
     const detail = after && after.error ? ` (${shortPaths(after.error)})` : "";
     for (const old of body.querySelectorAll(".callout.error")) old.remove();
     body.prepend(callout(`${reason}${detail}`, "error"));
@@ -588,7 +607,11 @@ async function applyChange(change, { apply, cancel, label, body }) {
     reload().then(render).catch(() => {});
     return;
   }
+  await showApplied(after, apply, label, started);
+}
 
+// The server said `verified`: the check draws, the panel leaves, the toast offers Undo.
+async function showApplied(after, apply, label, started) {
   await wait(Math.max(0, 520 - (performance.now() - started)));
   for (const spin of apply.querySelectorAll(".spinner")) spin.remove();
   apply.prepend(checkMark());

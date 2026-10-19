@@ -556,6 +556,18 @@ def create_app(
         events.publish("change_state")
         return JSONResponse(change_dict(change), status_code=STATUS.get(change.state, 200))
 
+    async def change_view(request: Request) -> JSONResponse:
+        """One change as it stands now, so the page can check an Apply whose answer was lost."""
+        if engine is None:
+            return _error("Changes are not available.", 404)
+        change_id = request.path_params["change_id"]
+        if change_id in engine.changes:
+            return JSONResponse(change_dict(engine.changes[change_id]))
+        logged = next((e for e in engine.store.entries() if e.get("id") == change_id), None)
+        if logged is None:
+            return _error("Unknown change.", 404)
+        return JSONResponse(logged)
+
     async def changes(request: Request) -> JSONResponse:
         return JSONResponse(engine.store.entries() if engine else [])
 
@@ -660,6 +672,7 @@ def create_app(
             Route("/api/gateways/{gateway_id}/servers", gateway_servers),
             Route("/api/changes", changes),
             Route("/api/changes/preview", preview, methods=["POST"]),
+            Route("/api/changes/{change_id}", change_view),
             Route("/api/changes/{change_id}/{verb}", change_action, methods=["POST"]),
             Route("/api/commands", commands),
             Route("/api/catalog", catalog_view),

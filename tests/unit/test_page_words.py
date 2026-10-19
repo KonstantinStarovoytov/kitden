@@ -285,3 +285,10 @@ def test_a_skill_copy_names_every_client_it_reaches():
     assert "s.reaches || [s.client]" in panel and "Add ${names} to ${clients}" in panel
     assert "filter(Boolean))) box.append(callout(note))" in panel  # Cursor loads it twice
     assert '"skill.install": "Added skill"' in script("parts.js")
+
+
+def test_a_lost_apply_answer_is_checked_not_guessed():
+    text = script("panel.js")
+    assert "Nothing was changed by this page" not in text
+    assert "Could not confirm the result. Check Changes before trying again." in text
+    assert "readChange(" in text
