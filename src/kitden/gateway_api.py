@@ -1,8 +1,9 @@
-"""Talk to a MetaMCP gateway: sign in, list what it holds, add and remove a remote server.
+"""Talk to a gateway: MetaMCP (sign in, list, add, remove) and Obot (list, feature 007).
 
 MetaMCP 2.4.22 has no public management API; these are the tRPC calls its own web page makes
-(docs/research/gateway-api-2026-10-19.md). Every answer is checked for the shape we expect, and
-an unexpected one raises `GatewayError` so nothing is written on a guess. Error text never
+(docs/research/gateway-api-2026-10-19.md). Obot v0.26.3 takes an API key with the `api` scope
+(specs/007-obot-gateway/research.md). Every answer is checked for the shape we expect, and an
+unexpected one raises `GatewayError` so nothing is written on a guess. Error text never
 carries a response body: bodies can hold header values and tokens.
 """
 
@@ -21,6 +22,7 @@ from kitden.model import Gateway
 TIMEOUT_SECONDS = 5.0
 NAME = re.compile(r"[A-Za-z0-9_-]+")
 VERSION_CHECKED = "MetaMCP 2.4.22"
+OBOT_VERSION_CHECKED = "Obot v0.26.3"
 
 
 class GatewayError(Exception):
@@ -197,6 +199,84 @@ class MetaMcpClient:
                 return False
             raise
         return True
+
+
+def vmcp_id(url: str) -> str:
+    """`http://host/mcp-connect/<id>` -> `<id>`."""
+    parts = urlsplit(url).path.strip("/").split("/")
+    if len(parts) >= 2 and parts[0] == "mcp-connect" and parts[1]:
+        return parts[1]
+    raise GatewayError("The gateway address is not an Obot connection (…/mcp-connect/<id>)")
+
+
+class ObotClient:
+    """Read what an Obot gateway holds: the components of the vMCP behind the stored address.
+
+    One call, `GET /api/vmcps/<id>`, with the key from the environment variable the gateway
+    record names. The key never appears in a message. Checked against Obot v0.26.3.
+    """
+
+    def __init__(
+        self,
+        gateway: Gateway,
+        env: Mapping[str, str] | None = None,
+        timeout: float = TIMEOUT_SECONDS,
+    ) -> None:
+        if gateway.kind != "obot" or not gateway.key_env_var:
+            raise GatewayError("Add the name of the Obot key variable to this gateway first")
+        parts = urlsplit(gateway.url)
+        self.base = f"{parts.scheme}://{parts.netloc}"
+        self.vmcp = vmcp_id(gateway.url)
+        self.gateway = gateway
+        self.env = os.environ if env is None else env
+        self.timeout = timeout
+
+    def _get(self, path: str) -> Any:
+        var = self.gateway.key_env_var or ""
+        key = self.env.get(var)
+        if not key:
+            raise GatewayError(f"Set {var} in the environment before starting Kitden")
+        request = urllib.request.Request(self.base + path)  # noqa: S310 - http(s) checked on save
+        request.add_header("Accept", "application/json")
+        request.add_header("Authorization", f"Bearer {key}")
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:  # noqa: S310
+                return response.status, _json(response.read())
+        except urllib.error.HTTPError as error:
+            return error.code, None
+        except (urllib.error.URLError, OSError, TimeoutError) as error:
+            reason = getattr(error, "reason", error)
+            raise GatewayError(f"Could not reach the gateway at {self.base}: {reason}") from None
+
+    def held(self) -> list[dict]:
+        """Servers on the connection: name, kind (Obot's runtime) and address when it has one."""
+        status, body = self._get(f"/api/vmcps/{quote(self.vmcp)}")
+        if status in (401, 403):
+            raise GatewayError(f"Obot refused the key ({status}); check its scope and role")
+        if status == 404:
+            raise GatewayError(f"Obot has no connection named {self.vmcp}")
+        if status != 200:
+            raise GatewayError(f"Obot answered {status}")
+        if not isinstance(body, dict) or not isinstance(body.get("components"), list):
+            raise GatewayError(
+                f"Obot answered in an unexpected shape (checked against {OBOT_VERSION_CHECKED})"
+            )
+        held = []
+        for component in body["components"]:
+            if not isinstance(component, dict):
+                continue
+            entry = component.get("catalogEntry") or {}
+            manifest = entry.get("manifest") if isinstance(entry, dict) else None
+            manifest = manifest if isinstance(manifest, dict) else entry
+            remote = manifest.get("remoteConfig") if isinstance(manifest, dict) else None
+            held.append(
+                {
+                    "name": component.get("name"),
+                    "type": manifest.get("runtime") if isinstance(manifest, dict) else None,
+                    "url": remote.get("fixedURL") if isinstance(remote, dict) else None,
+                }
+            )
+        return held
 
 
 def _json(raw: bytes) -> Any:

@@ -1,10 +1,18 @@
-"""The MetaMCP client against the fake gateway (feature 006, T003)."""
+"""The gateway clients against fake gateways: MetaMCP (feature 006), Obot (feature 007)."""
 
 import pytest
 
-from kitden.gateway_api import GatewayError, MetaMcpClient, endpoint_name, gateway_name
+from kitden.gateway_api import (
+    GatewayError,
+    MetaMcpClient,
+    ObotClient,
+    endpoint_name,
+    gateway_name,
+    vmcp_id,
+)
 from kitden.model import Gateway
 from tests.unit.fake_metamcp import FakeMetaMcp
+from tests.unit.fake_obot import FakeObot
 
 ENV = {"METAMCP_PW": "right-password"}
 SECRET = "SENTINEL_SECRET_HEADER"
@@ -111,3 +119,80 @@ def test_endpoint_and_server_names():
     assert gateway_name("My Server.v2") == "My-Server-v2"
     assert gateway_name("a__b") == "a_b"
     assert gateway_name("...") == "server"
+
+
+# Feature 007: the Obot client against the fake Obot ---------------------------------------
+
+OBOT_ENV = {"OBOT_KEY": "ok1-3-k1-rightsecret"}
+
+
+@pytest.fixture
+def obot():
+    fake = FakeObot().start()
+    yield fake
+    fake.stop()
+
+
+def obot_gateway(fake):
+    return Gateway(url=fake.mcp_url, auth="oauth", key_env_var="OBOT_KEY")
+
+
+def test_obot_held_lists_the_servers_on_the_vmcp(obot):
+    obot.hold("docs", "https://docs.example.com/mcp")
+    obot.hold("github", runtime="containerized")
+    held = ObotClient(obot_gateway(obot), OBOT_ENV).held()
+    assert held == [
+        {"name": "docs", "type": "remote", "url": "https://docs.example.com/mcp"},
+        {"name": "github", "type": "containerized", "url": None},
+    ]
+    assert obot.calls == [f"/api/vmcps/{obot.vmcp_id}"]
+
+
+def test_obot_held_is_empty_for_an_empty_vmcp(obot):
+    assert ObotClient(obot_gateway(obot), OBOT_ENV).held() == []
+
+
+def test_obot_missing_key_variable_says_which_one(obot):
+    with pytest.raises(GatewayError, match="Set OBOT_KEY"):
+        ObotClient(obot_gateway(obot), {}).held()
+
+
+def test_obot_wrong_key_is_refused_without_showing_it(obot):
+    with pytest.raises(GatewayError) as error:
+        ObotClient(obot_gateway(obot), {"OBOT_KEY": "ok1-3-k1-wrongsecret"}).held()
+    assert "refused the key (401)" in str(error.value)
+    assert "wrongsecret" not in str(error.value)
+
+
+def test_obot_forbidden_key(obot):
+    obot.forbidden = True
+    with pytest.raises(GatewayError, match=r"refused the key \(403\)"):
+        ObotClient(obot_gateway(obot), OBOT_ENV).held()
+
+
+def test_obot_unknown_vmcp(obot):
+    gateway = Gateway(url=f"{obot.url}/mcp-connect/other", auth="oauth", key_env_var="OBOT_KEY")
+    with pytest.raises(GatewayError, match="has no connection named other"):
+        ObotClient(gateway, OBOT_ENV).held()
+
+
+def test_obot_unknown_answer_shape(obot):
+    obot.odd_shape = True
+    with pytest.raises(GatewayError, match="unexpected shape"):
+        ObotClient(obot_gateway(obot), OBOT_ENV).held()
+
+
+def test_obot_unreachable():
+    fake = FakeObot().start()
+    gateway = obot_gateway(fake)
+    fake.stop()
+    with pytest.raises(GatewayError, match="Could not reach"):
+        ObotClient(gateway, OBOT_ENV).held()
+
+
+def test_obot_needs_a_key_variable_and_an_obot_address(obot):
+    with pytest.raises(GatewayError, match="key variable"):
+        ObotClient(Gateway(url=obot.mcp_url), OBOT_ENV)
+    assert vmcp_id("http://127.0.0.1:8080/mcp-connect/v1abc") == "v1abc"
+    with pytest.raises(GatewayError):
+        vmcp_id("http://127.0.0.1:8080/api/vmcps/v1abc")
