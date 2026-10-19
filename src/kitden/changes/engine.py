@@ -15,6 +15,7 @@ import hashlib
 import json
 import os
 from collections.abc import Callable
+from contextlib import AbstractContextManager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -26,14 +27,18 @@ from kitden.changes.atomic import RefusedWriteError, write_atomic
 from kitden.changes.backup import ChangeStore
 from kitden.changes.client_cli import CommandResult
 from kitden.changes.json_splice import ABSENT, UnrecognizedFormatError
-from kitden.model import Change, ChangeState, FileEdit, Scope, Step
+from kitden.gateway_api import GatewayError
+from kitden.model import Change, ChangeState, FileEdit, GatewayEdit, Scope, Step
 from kitden.redact import redact
 
 EDITORS = {"json": json_splice, "toml": toml_edit}
 CLIENT_CLI = "client_cli"
 FILE_EDIT = "format_preserving_edit"
+GATEWAY_API = "gateway_api"  # a step that adds a server to a gateway (feature 006)
 
 Runner = Callable[[list[str], str | None], CommandResult]
+# Opens a signed-in client for the gateway a step names; used as a context manager.
+GatewayClients = Callable[[GatewayEdit], AbstractContextManager]
 
 
 class ChangeRefusedError(ValueError):
@@ -118,10 +123,39 @@ def _decode(record: dict) -> Any:
     return ABSENT if record.get("absent") else record.get("value")
 
 
+def _edit_record(edit: FileEdit | None) -> dict | None:
+    if edit is None:
+        return None
+    return {
+        "path": edit.path,
+        "fmt": edit.fmt,
+        "key": list(edit.key),
+        "check": edit.check,
+        "before": _encode(edit.before),
+        "after": _encode(edit.after),
+        "before_hash": edit.before_hash,
+        "after_hash": edit.after_hash,
+        "backup_path": edit.backup_path,
+        "masked_diff": edit.masked_diff,
+    }
+
+
+def _gateway_record(gateway: GatewayEdit | None) -> dict | None:
+    if gateway is None:
+        return None
+    return {
+        "gateway_id": gateway.gateway_id,
+        "url": gateway.url,
+        "name": gateway.name,
+        "server": gateway.server,
+        "server_uuid": gateway.server_uuid,
+        "masked_diff": gateway.masked_diff,
+    }
+
+
 def _record(change: Change) -> dict:
     steps = []
     for step in change.steps:
-        edit = step.edit
         steps.append(
             {
                 "client": step.client,
@@ -133,18 +167,8 @@ def _record(change: Change) -> dict:
                 "restart_note": step.restart_note,
                 "login_note": step.login_note,
                 "shared_file": step.shared_file,
-                "edit": {
-                    "path": edit.path,
-                    "fmt": edit.fmt,
-                    "key": list(edit.key),
-                    "check": edit.check,
-                    "before": _encode(edit.before),
-                    "after": _encode(edit.after),
-                    "before_hash": edit.before_hash,
-                    "after_hash": edit.after_hash,
-                    "backup_path": edit.backup_path,
-                    "masked_diff": edit.masked_diff,
-                },
+                "edit": _edit_record(step.edit),
+                "gateway": _gateway_record(step.gateway),
             }
         )
     return {
@@ -160,24 +184,29 @@ def _from_record(record: dict) -> Change:
     steps = []
     for raw in record["steps"]:
         e = raw["edit"]
-        edit = FileEdit(
-            path=e["path"],
-            fmt=e["fmt"],
-            key=tuple(e["key"]),
-            after=_decode(e["after"]),
-            before=_decode(e["before"]),
-            check=e["check"],
-            before_hash=e["before_hash"],
-            after_hash=e["after_hash"],
-            backup_path=e["backup_path"],
-            masked_diff=e["masked_diff"],
-        )
+        edit = None
+        if e is not None:
+            edit = FileEdit(
+                path=e["path"],
+                fmt=e["fmt"],
+                key=tuple(e["key"]),
+                after=_decode(e["after"]),
+                before=_decode(e["before"]),
+                check=e["check"],
+                before_hash=e["before_hash"],
+                after_hash=e["after_hash"],
+                backup_path=e["backup_path"],
+                masked_diff=e["masked_diff"],
+            )
+        g = raw.get("gateway")
+        gateway = GatewayEdit(**g) if g is not None else None
         steps.append(
             Step(
                 client=raw["client"],
                 scope=Scope(raw["scope"]),
                 name=raw["name"],
                 edit=edit,
+                gateway=gateway,
                 mechanism=raw["mechanism"],
                 command=raw["command"],
                 cwd=raw["cwd"],
@@ -201,10 +230,12 @@ class Engine:
         store: ChangeStore,
         run: Runner,
         on_write: Callable[[str, str | None], None] | None = None,
+        gateway_clients: GatewayClients | None = None,
     ) -> None:
         self.store = store
         self.run = run
         self.on_write = on_write or (lambda path, sha: None)
+        self.gateway_clients = gateway_clients
         self.changes: dict[str, Change] = {}
         for record in store.load():
             try:
@@ -221,9 +252,12 @@ class Engine:
         Several steps may edit one file (research R2 of feature 002), but never the same entry
         or an entry inside another one.
         """
+        self._preview_gateway([s for s in steps if s.gateway is not None])
         targets: list[tuple[str, tuple]] = []
         for step in steps:
             edit = step.edit
+            if edit is None:
+                continue
             edit.path = os.path.realpath(edit.path)
             key = tuple(edit.key)
             for path, other in targets:
@@ -244,6 +278,39 @@ class Engine:
         change = Change(action=action, steps=steps)
         self.changes[change.id] = change
         return change
+
+    def _client(self, gateway: GatewayEdit) -> AbstractContextManager:
+        if self.gateway_clients is None:
+            raise ChangeRefusedError("The gateway cannot be managed from here")
+        return self.gateway_clients(gateway)
+
+    def _preview_gateway(self, steps: list[Step]) -> None:
+        """Read what the gateway holds; a name already there refuses the change."""
+        if not steps:
+            return
+        gateway = steps[0].gateway
+        assert gateway is not None
+        try:
+            with self._client(gateway) as client:
+                held = {s["name"] for s in client.held()}
+        except GatewayError as error:
+            raise ChangeRefusedError(str(error)) from None
+        seen: set[str] = set()
+        for step in steps:
+            g = step.gateway
+            assert g is not None
+            if g.gateway_id != gateway.gateway_id:
+                raise ChangeRefusedError("One change can move servers into one gateway only")
+            if g.name in held:
+                raise ChangeRefusedError(
+                    f"The gateway already has {g.name}. Remove the direct entry instead."
+                )
+            if g.name in seen:
+                raise ChangeRefusedError(f"{g.name} would be added twice in one change")
+            seen.add(g.name)
+            shown = redact(g.server)[0]
+            lines = json.dumps({g.name: shown}, indent=2, ensure_ascii=False).splitlines()
+            g.masked_diff = f"{g.url}\n" + "\n".join(f"+{line}" for line in lines)
 
     def cancel(self, change_id: str) -> Change:
         change = self.changes[change_id]
@@ -300,8 +367,10 @@ class Engine:
         change = self.changes[change_id]
         if change.state is not ChangeState.PREVIEWED:
             change.move_to(ChangeState.APPLYING)  # raises: only a previewed change applies
-        current = {step.edit.path: _read(step.edit.path) for step in change.steps}
-        for step in change.steps:
+        file_steps = [s for s in change.steps if s.edit is not None]
+        gateway_steps = [s for s in change.steps if s.gateway is not None]
+        current = {step.edit.path: _read(step.edit.path) for step in file_steps}
+        for step in file_steps:
             reason = self._stale(step, current[step.edit.path])
             if reason:
                 change.move_to(ChangeState.STALE)
@@ -310,36 +379,74 @@ class Engine:
                 return change
 
         saved = self.store.backup(change.id, current)
-        for step in change.steps:
+        for step in file_steps:
             copy = saved[step.edit.path]
             step.edit.backup_path = str(copy) if copy else None
         self.store.prune()
         change.move_to(ChangeState.APPLYING)
         try:
+            # The gateway side first: a server that cannot be added leaves the files alone.
+            self._apply_gateway(gateway_steps)
             # Steps on one file run in order, each on the result of the one before.
             working = dict(current)
             expected: dict[str, bytes | None] = {}
-            for step in change.steps:
+            for step in file_steps:
                 path = step.edit.path
                 result = self._apply_step(step, working[path])
                 working[path] = result if result is not None else _read(path)
                 expected[path] = result
-            for step in change.steps:
+            for step in file_steps:
                 self._verify(step, step.edit.after, expected[step.edit.path])
-        except (_ApplyError, OSError, RefusedWriteError, UnrecognizedFormatError) as error:
+        except (
+            _ApplyError,
+            GatewayError,
+            OSError,
+            RefusedWriteError,
+            UnrecognizedFormatError,
+        ) as error:
             for path, data in current.items():
                 if _read(path) != data:
                     self._write(path, data)
+            self._remove_from_gateway(gateway_steps, best_effort=True)
             change.move_to(ChangeState.RESTORED)
             change.error = f"{error} The original settings were restored."
             self._finish(change)
             return change
 
-        for step in change.steps:
+        for step in file_steps:
             step.edit.after_hash = _sha(_read(step.edit.path))
         change.move_to(ChangeState.VERIFIED)
         self._finish(change)
         return change
+
+    def _apply_gateway(self, steps: list[Step]) -> None:
+        """Add each server, then read the list back: every name must be there."""
+        if not steps:
+            return
+        with self._client(steps[0].gateway) as client:
+            for step in steps:
+                g = step.gateway
+                g.server_uuid = client.add(g.name, g.server)
+            held = {s["name"] for s in client.held()}
+        missing = [s.gateway.name for s in steps if s.gateway.name not in held]
+        if missing:
+            raise _ApplyError(f"the gateway did not list {', '.join(missing)} after adding it")
+
+    def _remove_from_gateway(self, steps: list[Step], best_effort: bool = False) -> list[str]:
+        """Remove the added servers, last first. Returns the names that were already gone."""
+        added = [s for s in reversed(steps) if s.gateway and s.gateway.server_uuid]
+        if not added:
+            return []
+        gone = []
+        try:
+            with self._client(added[0].gateway) as client:
+                for step in added:
+                    if not client.remove(step.gateway.server_uuid):
+                        gone.append(step.gateway.name)
+        except GatewayError:
+            if not best_effort:
+                raise
+        return gone
 
     # Undo --------------------------------------------------------------------------------
 
@@ -349,7 +456,8 @@ class Engine:
             change.move_to(ChangeState.UNDONE)  # raises: only a verified change can be undone
         by_path: dict[str, list[Step]] = {}
         for step in change.steps:
-            by_path.setdefault(step.edit.path, []).append(step)
+            if step.edit is not None:
+                by_path.setdefault(step.edit.path, []).append(step)
         plans: dict[str, bytes | None] = {}
         for path, steps in by_path.items():
             data = _read(path)
@@ -368,12 +476,22 @@ class Engine:
                 return change
             plans[path] = restored
 
+        # The gateway side goes first: if it cannot be reached, the files stay as they are.
+        try:
+            gone = self._remove_from_gateway([s for s in change.steps if s.gateway is not None])
+        except GatewayError as error:
+            change.move_to(ChangeState.UNDO_BLOCKED)
+            change.error = f"{error}; the client files were not changed"
+            self._finish(change)
+            return change
         for path, data in plans.items():
             self._write(path, data)
         for step in change.steps:
-            if _value(step.edit, _read(step.edit.path)) != step.edit.before:
+            if step.edit and _value(step.edit, _read(step.edit.path)) != step.edit.before:
                 raise RuntimeError(f"{step.edit.path}: undo did not read back as expected")
         change.move_to(ChangeState.UNDONE)
+        if gone:
+            change.error = f"{', '.join(gone)} had already been removed from the gateway"
         self._finish(change)
         return change
 
@@ -392,10 +510,10 @@ class Engine:
                         "client": s.client,
                         "scope": str(s.scope),
                         "name": s.name,
-                        "path": s.edit.path,
+                        "path": s.edit.path if s.edit else s.gateway.url if s.gateway else None,
                         "mechanism": s.mechanism,
-                        "before_hash": s.edit.before_hash,
-                        "after_hash": s.edit.after_hash,
+                        "before_hash": s.edit.before_hash if s.edit else None,
+                        "after_hash": s.edit.after_hash if s.edit else None,
                     }
                     for s in change.steps
                 ],

@@ -11,7 +11,9 @@ from kitden.changes.backup import ChangeStore
 from kitden.changes.client_cli import CommandResult
 from kitden.changes.engine import ChangeRefusedError, Engine
 from kitden.changes.json_splice import ABSENT
-from kitden.model import ChangeState, FileEdit, Scope, Step
+from kitden.gateway_api import MetaMcpClient
+from kitden.model import GATEWAY_CLIENT, ChangeState, FileEdit, Gateway, GatewayEdit, Scope, Step
+from tests.unit.fake_metamcp import FakeMetaMcp
 
 CONFIG = """# my Codex settings
 model = "gpt-5"  # keep this comment
@@ -319,3 +321,137 @@ def test_two_steps_on_the_same_entry_are_refused(tmp_path, config):
     ]
     with pytest.raises(ChangeRefusedError, match="twice"):
         engine.preview("gateway.connect", steps)
+
+
+# Moving a server into the gateway (feature 006) --------------------------------------------
+
+NEON = {
+    "type": "STREAMABLE_HTTP",
+    "url": "https://mcp.neon.tech/mcp",
+    "headers": {"Authorization": "Bearer SENTINEL_SECRET_NEON"},
+}
+
+
+@pytest.fixture
+def fake():
+    fake = FakeMetaMcp().start()
+    yield fake
+    fake.stop()
+
+
+def gateway_engine(tmp_path, fake, run=None):
+    gateway = Gateway(url=fake.mcp_url, login_email="me@example.com", login_password_env_var="PW")
+
+    def clients(edit):
+        return MetaMcpClient(gateway, {"PW": "right-password"})
+
+    store = ChangeStore(tmp_path / "data")
+    return Engine(store, run=run or FakeClaude(None), gateway_clients=clients), gateway
+
+
+def gateway_step(gateway, name="neon", server=NEON):
+    edit = GatewayEdit(gateway_id=gateway.id, url=gateway.url, name=name, server=server)
+    return Step(
+        client=GATEWAY_CLIENT, scope=Scope.USER, name=name, gateway=edit, mechanism="gateway_api"
+    )
+
+
+def move_steps(gateway, config):
+    return [gateway_step(gateway), toml_step(config, ("mcp_servers", "neon"), ABSENT)]
+
+
+def test_move_adds_to_the_gateway_then_removes_the_entry_and_undoes(tmp_path, fake, config):
+    engine, gateway = gateway_engine(tmp_path, fake)
+    change = engine.preview("gateway.move", move_steps(gateway, config))
+    assert change.state is ChangeState.PREVIEWED
+    assert fake.held_names() == [] and config.read_text() == CONFIG
+    diff = change.steps[0].gateway.masked_diff
+    assert "+" in diff and "neon" in diff and "SENTINEL" not in diff and "[secret]" in diff
+
+    engine.apply(change.id)
+    assert change.state is ChangeState.VERIFIED
+    assert fake.held_names() == ["neon"]
+    assert toml_edit.get_value(config.read_text(), ("mcp_servers", "neon")) is ABSENT
+    uuid = change.steps[0].gateway.server_uuid
+    assert fake.servers[uuid]["headers"]["Authorization"].endswith("SENTINEL_SECRET_NEON")
+    assert "SENTINEL" not in json.dumps(engine.store.entries())
+    entry = engine.store.entries()[0]
+    assert entry["steps"][0]["path"] == gateway.url and entry["steps"][0]["client"] == "gateway"
+    assert fake.sessions == set()
+
+    second, _ = gateway_engine(tmp_path, fake)  # undo after a restart, from the record
+    second.undo(change.id)
+    assert second.changes[change.id].state is ChangeState.UNDONE
+    assert fake.held_names() == [] and fake.servers == {}
+    assert config.read_text() == CONFIG
+
+
+def test_a_name_the_gateway_already_holds_is_refused(tmp_path, fake, config):
+    engine, gateway = gateway_engine(tmp_path, fake)
+    fake.hold("neon", "https://mcp.neon.tech/mcp")
+    with pytest.raises(ChangeRefusedError, match="already has neon"):
+        engine.preview("gateway.move", move_steps(gateway, config))
+
+
+def test_an_unreachable_gateway_refuses_the_preview(tmp_path, config):
+    fake = FakeMetaMcp().start()
+    engine, gateway = gateway_engine(tmp_path, fake)
+    fake.stop()
+    with pytest.raises(ChangeRefusedError, match="Could not reach"):
+        engine.preview("gateway.move", move_steps(gateway, config))
+    assert config.read_text() == CONFIG
+
+
+def test_without_a_gateway_client_the_step_is_refused(tmp_path, fake, config):
+    _, gateway = gateway_engine(tmp_path, fake)
+    with pytest.raises(ChangeRefusedError, match="cannot be managed"):
+        make_engine(tmp_path).preview("gateway.move", move_steps(gateway, config))
+
+
+def test_a_failed_file_step_removes_the_server_from_the_gateway_again(tmp_path, fake, claude_json):
+    original = claude_json.read_bytes()
+    engine, gateway = gateway_engine(tmp_path, fake, run=FakeClaude(claude_json, wrong_value=True))
+    value = {"type": "http", "url": "http://127.0.0.1:12008/mcp"}
+    command = ["claude", "mcp", "add-json", "-s", "user", "gw", json.dumps(value)]
+    steps = [gateway_step(gateway), claude_step(claude_json, "gw", value, command)]
+    change = engine.preview("gateway.move", steps)
+    engine.apply(change.id)
+    assert change.state is ChangeState.RESTORED
+    assert claude_json.read_bytes() == original
+    assert fake.held_names() == [] and fake.servers == {}
+
+
+def test_undo_stops_when_the_gateway_cannot_be_reached(tmp_path, config):
+    fake = FakeMetaMcp().start()
+    engine, gateway = gateway_engine(tmp_path, fake)
+    change = engine.preview("gateway.move", move_steps(gateway, config))
+    engine.apply(change.id)
+    after = config.read_text()
+    fake.stop()
+    engine.undo(change.id)
+    assert change.state is ChangeState.UNDO_BLOCKED
+    assert "not changed" in change.error
+    assert config.read_text() == after
+
+
+def test_undo_goes_on_when_the_server_was_removed_by_hand(tmp_path, fake, config):
+    engine, gateway = gateway_engine(tmp_path, fake)
+    change = engine.preview("gateway.move", move_steps(gateway, config))
+    engine.apply(change.id)
+    del fake.servers[change.steps[0].gateway.server_uuid]
+    fake.in_namespace = []
+    engine.undo(change.id)
+    assert change.state is ChangeState.UNDONE
+    assert "already been removed" in change.error
+    assert config.read_text() == CONFIG
+
+
+def test_a_change_without_file_steps_is_still_recorded(tmp_path, fake):
+    engine, gateway = gateway_engine(tmp_path, fake)
+    change = engine.preview("gateway.move", [gateway_step(gateway)])
+    engine.apply(change.id)
+    assert change.state is ChangeState.VERIFIED
+    assert fake.held_names() == ["neon"]
+    assert engine.store.entries()[0]["state"] == "verified"
+    engine.undo(change.id)
+    assert change.state is ChangeState.UNDONE and fake.held_names() == []

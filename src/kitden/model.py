@@ -207,14 +207,33 @@ class FileEdit:
 
 
 @dataclass
+class GatewayEdit:
+    """One remote server added to a gateway (feature 006). `server` may hold secrets."""
+
+    gateway_id: str
+    url: str  # the gateway's endpoint address: the step's place on the Changes page
+    name: str  # the server's name in the gateway
+    server: dict  # type, url, headers, as MetaMCP takes them
+    server_uuid: str | None = None  # known after apply; undo removes it
+    masked_diff: str = ""
+
+
+GATEWAY_CLIENT = "gateway"  # the pseudo-client of a gateway step
+
+
+@dataclass
 class Step:
-    """One target of a change: one client, scope and entry, written by one mechanism."""
+    """One target of a change: one client, scope and entry, written by one mechanism.
+
+    A step has either a file edit or a gateway edit; a gateway step's client is "gateway".
+    """
 
     client: str
     scope: Scope
     name: str
-    edit: FileEdit
-    mechanism: str = "format_preserving_edit"  # or "client_cli"
+    edit: FileEdit | None = None
+    mechanism: str = "format_preserving_edit"  # or "client_cli", "gateway_api"
+    gateway: GatewayEdit | None = None
     command: list[str] | None = None
     cwd: str | None = None
     restart_note: str | None = None
