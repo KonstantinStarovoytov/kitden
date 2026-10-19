@@ -540,10 +540,17 @@ def create_app(
         for offer in offers:
             marketplaces[offer["marketplace"]] = marketplaces.get(offer["marketplace"], 0) + 1
         found = search(offers, query)
+        # "new": no client has it yet; "added": at least one client has it.
+        only = request.query_params.get("only", "all")
+        if only == "new":
+            found = [o for o in found if not o["installed"]]
+        elif only == "added":
+            found = [o for o in found if o["installed"]]
         return JSONResponse(
             {
-                "offers": found[:200],
+                "offers": found[:1000],
                 "total": len(found),
+                "all": len(offers),
                 "marketplaces": [{"name": n, "count": c} for n, c in sorted(marketplaces.items())],
             }
         )

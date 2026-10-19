@@ -238,3 +238,4 @@ def test_discover_adds_plugins_and_marketplaces_in_one_review():
     assert '"plugin.install"' in text and '"marketplace.add"' in text
     assert "Add a marketplace…" in text and '"Details"' in text
     assert '<a href="#discover" data-view="discover">Discover</a>' in INDEX
+    assert '["new", "Not added"]' in text and "match “${state.q}”" in text

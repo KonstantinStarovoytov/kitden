@@ -216,3 +216,13 @@ def test_a_codex_only_marketplace_is_refused_for_claude_code(client, tmp_path):
     answer = _marketplace(client, str(tmp_path / "codex-only"), ["claude_code"])
     assert answer.status_code == 422
     assert "Claude Code reads only" in answer.json()["detail"]
+
+
+def test_the_catalog_filters_what_no_client_has_yet(client):
+    every = client.get("/api/catalog").json()
+    new = client.get("/api/catalog?only=new").json()
+    added = client.get("/api/catalog?only=added").json()
+    assert every["all"] == new["all"] == added["all"] == every["total"]
+    assert new["total"] + added["total"] == every["total"]
+    assert all(not o["installed"] for o in new["offers"])
+    assert all(o["installed"] for o in added["offers"])
