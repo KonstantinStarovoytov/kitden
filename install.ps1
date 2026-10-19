@@ -3,7 +3,7 @@
 # It never changes anything in Claude Code, Codex or Cursor.
 $ErrorActionPreference = "Stop"
 
-$KitdenRef = "v0.1.1"
+$KitdenRef = "v0.2.0"
 $KitdenSource = "git+https://github.com/KonstantinStarovoytov/kitden@$KitdenRef"
 $FollowUp = "https://github.com/KonstantinStarovoytov/kitden#linux-and-windows"
 

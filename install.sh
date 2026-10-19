@@ -5,7 +5,7 @@
 # when a newer release is named below.
 set -eu
 
-KITDEN_REF="v0.1.1"
+KITDEN_REF="v0.2.0"
 KITDEN_SOURCE="git+https://github.com/KonstantinStarovoytov/kitden@$KITDEN_REF"
 FOLLOW_UP="https://github.com/KonstantinStarovoytov/kitden#linux-and-windows"
 

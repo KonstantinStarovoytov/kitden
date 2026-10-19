@@ -23,6 +23,8 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **UX audit fixes:** keyboard focus stays through redraws, every control is at least 24 px,
   success and diff text keep 4.5:1 contrast, a lost Apply or Undo answer is read back, restart
   notes only for changes that happened.
+- **Progress you can see:** a busy button shows a spinner in its own place, and Apply counts
+  the steps of a long change.
 - **New look:** the Kitden house, light and dark Graphite themes, client icons, and calm motion
   that shows what changed.
 
