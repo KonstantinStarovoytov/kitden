@@ -132,6 +132,20 @@ def test_turning_off_third_party_imports_removes_cross_loaded_items(tmp_path, no
     assert rows(scan.items, home) == OWN
 
 
+def cursor_adapter(path, flags, no_version):
+    home = make_home(path, FIXTURE)
+    write_cursor_fixture_state(home, {REACTIVE_KEY: flags})
+    return CursorAdapter(home, read_version=no_version)
+
+
+def test_cursor_imports_claude_plugins_only_with_both_switches_on(tmp_path, no_version):
+    assert cursor_adapter(tmp_path / "a", {}, no_version).imports_claude_plugins() is True
+    off = {"importPluginsFromClaudeOnBoot": False}
+    assert cursor_adapter(tmp_path / "b", off, no_version).imports_claude_plugins() is False
+    no_third = {"thirdPartyExtensibilityEnabled": False}
+    assert cursor_adapter(tmp_path / "c", no_third, no_version).imports_claude_plugins() is False
+
+
 def test_secret_rows_and_values_never_appear(tmp_path, no_version):
     _, scan = _scan(tmp_path, no_version)
     assert "SENTINEL_SECRET" not in all_text(scan)

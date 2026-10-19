@@ -90,6 +90,13 @@ class CursorAdapter(ClientAdapter):
         _, flags = self._state(Reader(CLIENT))
         return flags.get("thirdPartyExtensibilityEnabled", True) is not False
 
+    def imports_claude_plugins(self) -> bool:
+        """Include Third-Party Plugins and the import of Claude Code plugins are both on (the
+        defaults): Cursor loads the plugins Claude Code has, as the scan reads them."""
+        _, flags = self._state(Reader(CLIENT))
+        third_party = flags.get("thirdPartyExtensibilityEnabled", True) is not False
+        return third_party and flags.get("importPluginsFromClaudeOnBoot", True) is not False
+
     def gateway_step(self, gateway: Gateway, name: str) -> Step:
         value: dict[str, Any] = {"url": gateway.url}
         headers = bearer_header(gateway, "${{env:{}}}")

@@ -287,6 +287,14 @@ def test_a_skill_copy_names_every_client_it_reaches():
     assert '"skill.install": "Added skill"' in script("parts.js")
 
 
+def test_add_forms_name_the_source_and_every_client_the_change_reaches():
+    text = script("discover.js")
+    # The server says whether Cursor loads what Claude Code has; the page does not guess.
+    assert "answer.inherits" in text and "Source: " in text
+    assert "Cursor will also load this through Claude Code." in text
+    assert "Cursor will also load it from Claude Code's folder." in text
+
+
 def test_a_lost_apply_answer_is_checked_not_guessed():
     text = script("panel.js")
     assert "Nothing was changed by this page" not in text

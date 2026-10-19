@@ -14,6 +14,11 @@ const COLUMNS = ["claude_code", "codex", "cursor"];
 const ROUTE_WORDS = { ready: "Ready", add_marketplace: "Adds the marketplace first" };
 const CURSOR_NOTE = "Cursor loads Claude Code plugins when Include Third-Party Plugins is on.";
 const NEEDS_PLUGIN = "This skill needs the rest of its plugin. Add the plugin instead.";
+// What Cursor also loads once Claude Code has it, per kind; the server reads Cursor's switches.
+const ALSO_LOADS = {
+  plugin: "Cursor will also load this through Claude Code.",
+  skill: "Cursor will also load it from Claude Code's folder.",
+};
 
 const KINDS = [["plugin", "Plugins"], ["skill", "Skills"]];
 const SHOW = [["all", "All"], ["new", "Not added"], ["added", "Added"]];
@@ -28,6 +33,11 @@ let cache = { key: null, at: 0, answer: null, asked: null, error: null, loading:
 
 function cacheKey() {
   return [kind(), filters.show, filters.category, filters.marketplace, state.q].join("|");
+}
+
+// Whether Cursor loads Claude Code's plugins and the skills in its folder, from the last answer.
+function cursorInherits() {
+  return (cache.answer && cache.answer.inherits) || { plugin: false, skill: false };
 }
 
 async function load() {
@@ -209,14 +219,20 @@ function offerTable(offers, skills) {
   return table;
 }
 
+// How Cursor gets a plugin: only through Claude Code, and only when it imports Claude Code's
+// plugins. "on" it loads it, "off" it will once Claude Code has it, "none" it cannot.
+export function cursorPlugin(offer, inherits) {
+  if (offer.installed.includes("cursor")) return "on";
+  const viaClaude = offer.installed.includes("claude_code") || offer.routes.claude_code;
+  return inherits.plugin && viaClaude ? "off" : "none";
+}
+
 // Where the plugin is, or how the client gets it: a filled dot is there, a ring can be added.
 function cell(offer, client) {
   if (client === "cursor") {
-    const viaClaude = offer.installed.includes("claude_code") || offer.routes.claude_code;
-    const node = offer.installed.includes("cursor")
-      ? socket({ state: "on", word: "Via Claude Code" })
-      : viaClaude ? socket({ state: "off", word: "Via Claude Code" }) : socket({ state: "none" });
-    node.title = viaClaude ? CURSOR_NOTE : "";
+    const how = cursorPlugin(offer, cursorInherits());
+    const node = socket({ state: how, word: "Via Claude Code" });
+    node.title = how === "none" ? "" : CURSOR_NOTE;
     return node;
   }
   if (offer.installed.includes(client)) return socket({ state: "on", word: "Installed" });
@@ -293,9 +309,8 @@ function offerRow(offer, clients, twin) {
     tr.append(td);
   }
   const act = el("td", "act");
-  const open = INSTALLERS.filter((c) => offer.routes[c] && !offer.installed.includes(c));
-  if (open.length) {
-    const add = button("Add…", (event) => { event.stopPropagation(); addForm(offer, open); }, "btn small");
+  if (openFor(offer).length) {
+    const add = button("Add…", (event) => { event.stopPropagation(); addForm(offer); }, "btn small");
     add.setAttribute("aria-label", `Add ${offer.name}`);
     act.append(add);
   }
@@ -329,9 +344,8 @@ function skillRow(skill, clients) {
     tr.append(td);
   }
   const act = el("td", "act");
-  const open = clients.filter((c) => skill.routes[c]);
-  if (open.length) {
-    const add = button("Add…", (event) => { event.stopPropagation(); addSkillForm(skill, open); }, "btn small");
+  if (openFor(skill).length) {
+    const add = button("Add…", (event) => { event.stopPropagation(); addSkillForm(skill); }, "btn small");
     add.setAttribute("aria-label", `Add ${skill.name}`);
     act.append(add);
   }
@@ -387,7 +401,8 @@ function showOffer(offer) {
   }
   clients.append(el("li", "muted", "Cursor: loads Claude Code plugins when Include Third-Party Plugins is on."));
   body.append(section("Clients", [clients]));
-  openInfo("Plugin", offer.name, body);
+  const add = openFor(offer).length ? [button("Add…", () => addForm(offer), "btn primary")] : [];
+  openInfo("Plugin", offer.name, body, add);
 }
 
 // Details: what the skill is, where it comes from, the files it brings (scripts marked, because
@@ -427,19 +442,42 @@ function showSkill(skill) {
     clients.append(el("li", null, `${CLIENT_NAMES[client]}: ${word}`));
   }
   body.append(section("Clients", [clients]));
-  openInfo("Skill", skill.name, body);
+  const add = openFor(skill).length ? [button("Add…", () => addSkillForm(skill), "btn primary")] : [];
+  openInfo("Skill", skill.name, body, add);
 }
 
-// Checkboxes for the clients that can take it, then Preview.
-function clientChecks(open, chosen, note) {
+// The clients that can take it now: the choices in its Add form.
+function openFor(offer) {
+  if (offer.kind === "skill") return columns().filter((c) => offer.routes[c]);
+  return INSTALLERS.filter((c) => offer.routes[c] && !offer.installed.includes(c));
+}
+
+// A client starts checked only when it is the one choice; otherwise the developer picks.
+export function startChosen(open) {
+  return new Set(open.length === 1 ? open : []);
+}
+
+// The line naming Cursor while it would load the change through Claude Code, or "".
+// A checked Cursor is named already, so the skill line is not needed then.
+export function alsoLoads(kind, inherits, chosen) {
+  if (!inherits[kind] || !chosen.has("claude_code")) return "";
+  if (kind === "skill" && chosen.has("cursor")) return "";
+  return ALSO_LOADS[kind];
+}
+
+// Checkboxes for the clients that can take it, checked as `chosen` says; `onChange` hears each.
+function clientChecks(open, chosen, note, onChange) {
   const checks = el("fieldset", "checks");
   checks.append(el("legend", null, "Add to"));
   for (const client of open) {
     const label = el("label");
     const box = el("input");
     box.type = "checkbox";
-    box.checked = true;
-    box.addEventListener("change", () => { if (box.checked) chosen.add(client); else chosen.delete(client); });
+    box.checked = chosen.has(client);
+    box.addEventListener("change", () => {
+      if (box.checked) chosen.add(client); else chosen.delete(client);
+      if (onChange) onChange();
+    });
     label.append(box, el("span", null, CLIENT_NAMES[client]));
     const extra = note ? note(client) : null;
     if (extra) label.append(el("span", "muted", ` · ${extra}`));
@@ -467,30 +505,49 @@ function addFormBody(checks, chosen, onSubmit) {
   return form;
 }
 
-// Choose the clients, then the usual review: exactly what runs and what is written.
-function addForm(offer, open) {
+// The Add form for both kinds: what it is, where it comes from, notes, the clients, Preview.
+// Below the form, a line names Cursor while it would load the change through Claude Code.
+function addPanel(kicker, offer, { source, notes, checkNote, preview }) {
+  const open = openFor(offer);
+  const chosen = startChosen(open);
   const body = el("div", "body");
-  const chosen = new Set(open);
-  const checks = clientChecks(open, chosen, (client) => (offer.routes[client] === "add_marketplace" ? `adds ${offer.marketplace} first` : null));
-  const form = addFormBody(checks, chosen, () => {
-    review({ action: "plugin.install", targets: [...chosen].map((client) => ({ client })), params: { plugin: offer.id } });
+  if (offer.description) body.append(el("p", null, offer.description));
+  body.append(el("p", "muted", `Source: ${source}`), ...notes);
+  const also = el("p", "muted");
+  const showAlso = () => {
+    also.textContent = alsoLoads(offer.kind, cursorInherits(), chosen);
+    also.hidden = !also.textContent;
+  };
+  showAlso();
+  const form = addFormBody(clientChecks(open, chosen, checkNote, showAlso), chosen, () => preview([...chosen]));
+  body.append(form, also);
+  openPanel([panelHead(kicker, offer.name), body, el("footer")]);
+}
+
+// Choose the clients, then the usual review: exactly what runs and what is written.
+function addForm(offer) {
+  const notes = [];
+  if (offer.inside && offer.inside.hooks.length) notes.push(el("p", "callout", `It brings hooks that run by themselves (${offer.inside.hooks.join(", ")}). Open Details to see them.`));
+  addPanel("Add plugin", offer, {
+    source: offer.marketplace,
+    notes,
+    checkNote: (client) => (offer.routes[client] === "add_marketplace" ? `adds ${offer.marketplace} first` : null),
+    preview: (clients) => review({ action: "plugin.install", targets: clients.map((client) => ({ client })), params: { plugin: offer.id } }),
   });
-  if (offer.inside && offer.inside.hooks.length) body.append(el("p", "callout", `It brings hooks that run by themselves (${offer.inside.hooks.join(", ")}). Open Details to see them.`));
-  body.append(form);
-  openPanel([panelHead("Add plugin", offer.name), body, el("footer")]);
 }
 
 // Choose the clients; the review then shows the fewest copies so each one loads the skill once.
-function addSkillForm(skill, open) {
-  const body = el("div", "body");
-  const chosen = new Set(open);
-  const form = addFormBody(clientChecks(open, chosen), chosen, () => {
-    review({ action: "skill.install", targets: [...chosen].map((client) => ({ client })), params: { skill: skill.id } });
-  });
+function addSkillForm(skill) {
+  const notes = [];
   const scripts = skill.files.filter((f) => f.script).length;
-  if (scripts) body.append(el("p", "callout", `It brings ${plural(scripts, "script", "scripts")} the agent may run. Open Details to see them.`));
-  body.append(el("p", "muted", "The skill folder is copied, so it keeps working when the marketplace changes. Undo removes the copy while it is unchanged."), form);
-  openPanel([panelHead("Add skill", skill.name), body, el("footer")]);
+  if (scripts) notes.push(el("p", "callout", `It brings ${plural(scripts, "script", "scripts")} the agent may run. Open Details to see them.`));
+  notes.push(el("p", "muted", "The skill folder is copied, so it keeps working when the marketplace changes. Undo removes the copy while it is unchanged."));
+  // A plugin's skill comes from the plugin; one already set up, from the clients that hold it.
+  addPanel("Add skill", skill, {
+    source: skill.from,
+    notes,
+    preview: (clients) => review({ action: "skill.install", targets: clients.map((client) => ({ client })), params: { skill: skill.id } }),
+  });
 }
 
 // Add a marketplace from a folder here or a GitHub repository.

@@ -55,3 +55,10 @@ def test_one_entry_per_client_even_with_two_steps():
         steps=[step("claude_code", "agentsetup"), step("claude_code", "kitden")],
     )
     assert after_words(change, inv) == [{"client": "claude_code", "state": "on", "word": "Updated"}]
+
+
+def test_cursor_gets_a_plugin_only_through_claude_code():
+    change = Change(action="plugin.install", steps=[step("codex", "notes@official")])
+    assert after_words(change, inventory(), cursor_imports=True) == [
+        {"client": "codex", "state": "on", "word": "Loads"}
+    ]

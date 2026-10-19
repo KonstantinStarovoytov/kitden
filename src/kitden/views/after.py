@@ -5,6 +5,12 @@ from kitden.views.effective import effective_view
 
 SKILL_CLIENTS = ("claude_code", "codex", "cursor")
 CLIENT_WORDS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
+CURSOR_IMPORT = {
+    "client": "cursor",
+    "state": "on",
+    "word": "Loads",
+    "note": "Cursor loads Claude Code plugins, so it gets this one too.",
+}
 
 # Socket state and word per action, as on the Load map.
 WORDS = {
@@ -63,8 +69,12 @@ def _skill_words(change: Change, inventory) -> list[dict]:
     return out
 
 
-def after_words(change: Change, inventory) -> list[dict]:
-    """One entry per client: {"client", "state", "word"}, in step order."""
+def after_words(change: Change, inventory, cursor_imports: bool = False) -> list[dict]:
+    """One entry per client: {"client", "state", "word"}, in step order.
+
+    With `cursor_imports` (Cursor loads Claude Code's plugins), a plugin added to Claude Code
+    names Cursor last, with a note.
+    """
     if change.action == "skill.install" and change.steps:
         return _skill_words(change, inventory)
     out: list[dict] = []
@@ -82,4 +92,7 @@ def after_words(change: Change, inventory) -> list[dict]:
         ):
             state, word = "on", "Loads once"
         out.append({"client": step.client, "state": state, "word": word})
+    to_claude = any(s.client == "claude_code" for s in change.steps)
+    if change.action == "plugin.install" and to_claude and cursor_imports:
+        out.append(dict(CURSOR_IMPORT))
     return out

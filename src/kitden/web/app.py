@@ -425,6 +425,12 @@ def create_app(
     def _item(item_id: str):
         return next((i for i in state.inventory.items if i.id == item_id), None)
 
+    def _found_cursor():
+        """The Cursor adapter when Cursor is on this computer, else None."""
+        clients = state.data["clients"]
+        found = any(c["id"] == "cursor" and c["status"] == "found" for c in clients)
+        return adapters.get("cursor") if found else None
+
     async def preview(request: Request) -> JSONResponse:
         if engine is None:
             return _error("Changes are not available.", 404)
@@ -532,7 +538,11 @@ def create_app(
         except ValueError as error:  # includes ChangeRefusedError
             return _error(str(error), 422)
         events.publish("change_state")
-        return JSONResponse({**change_dict(change), "after": after_words(change, state.inventory)})
+        # Only an added plugin can reach Cursor through Claude Code.
+        cursor = _found_cursor() if action == PLUGIN_INSTALL else None
+        imports = bool(cursor and cursor.imports_claude_plugins())
+        after = after_words(change, state.inventory, cursor_imports=imports)
+        return JSONResponse({**change_dict(change), "after": after})
 
     async def change_action(request: Request) -> JSONResponse:
         if engine is None:
@@ -577,7 +587,8 @@ def create_app(
 
         Filters: `only` (new: no client has it; added: one has it), `category`, `marketplace`.
         `facets` count the categories and marketplaces among the search results, so a filter
-        menu can say how many each one holds.
+        menu can say how many each one holds. `inherits` says whether Cursor loads Claude
+        Code's plugins and the skills in its folder.
         """
         params = request.query_params
         if params.get("kind") == "skill":
@@ -614,6 +625,11 @@ def create_app(
             "marketplaces": counts("marketplace", in_category),
         }
         found = [o for o in in_category if not marketplace or o["marketplace"] == marketplace]
+        cursor = _found_cursor()
+        inherits = {
+            "plugin": bool(cursor and cursor.imports_claude_plugins()),
+            "skill": bool(cursor and cursor.reads_other_clients()),
+        }
         return JSONResponse(
             {
                 "offers": found[:1000],
@@ -621,6 +637,7 @@ def create_app(
                 "all": len(offers),
                 "marketplaces": [{"name": n, "count": c} for n, c in sorted(marketplaces.items())],
                 "facets": facets,
+                "inherits": inherits,
             }
         )
 

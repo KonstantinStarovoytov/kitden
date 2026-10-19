@@ -372,14 +372,16 @@ async function showCommands(row, definitions) {
   }
 }
 
-// A change from the Changes page: the Changes page builds the body (steps with their files,
-// history, error); the panel frames it. Undo stays with the row that opened it.
-// A read-only note in the panel, for example a server the gateway holds.
-export function openInfo(kicker, title, body) {
+// A note in the panel, for example a server the gateway holds; `actions` go in its footer.
+export function openInfo(kicker, title, body, actions = []) {
   current = { type: "info" };
-  openPanel([header(kicker, title, null, "Close", true), body, el("footer")]);
+  const footer = el("footer");
+  footer.append(...actions);
+  openPanel([header(kicker, title, null, "Close", true), body, footer]);
 }
 
+// A change from the Changes page: the Changes page builds the body (steps with their files,
+// history, error); the panel frames it. Undo stays with the row that opened it.
 export function openChange(title, body, onUndo) {
   current = { type: "change" };
   const footer = el("footer");

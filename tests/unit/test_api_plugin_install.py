@@ -10,9 +10,10 @@ from starlette.testclient import TestClient
 import kitden.clients.base as base
 from kitden.changes import json_splice, toml_edit
 from kitden.changes.client_cli import CommandResult
+from kitden.clients.cursor import REACTIVE_KEY
 from kitden.views.inventory import build_inventory
 from kitden.web.app import create_app
-from tests.conftest import make_home
+from tests.conftest import make_home, write_cursor_fixture_state
 from tests.unit.test_catalog import add_marketplaces
 
 ORIGIN = "http://127.0.0.1:47800"
@@ -84,16 +85,37 @@ class FakeCli:
         return CommandResult(0, "{}")
 
 
-@pytest.fixture
-def client(tmp_path, monkeypatch):
+def _client(tmp_path, monkeypatch, cursor_flags=None):
+    """Claude Code and Codex; with `cursor_flags`, also Cursor with those switches."""
     monkeypatch.setattr(base, "read_command_version", lambda client: None)
-    home = add_marketplaces(make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2"))
+    fixtures = ["claude_code/2.1.283", "codex/0.159.2"]
+    if cursor_flags is not None:
+        fixtures.append("cursor/3.21.16")
+    home = add_marketplaces(make_home(tmp_path, *fixtures))
+    if cursor_flags is not None:
+        write_cursor_fixture_state(home, {REACTIVE_KEY: cursor_flags})
     run = FakeCli(home)
     app = create_app(lambda: build_inventory(home), token="tok", port=47800, home=home, run=run)
     with TestClient(app, base_url=ORIGIN, follow_redirects=False) as c:
         c.get("/?token=tok")
         c.home, c.run = home, run
         yield c
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    yield from _client(tmp_path, monkeypatch)
+
+
+@pytest.fixture
+def cursor_client(tmp_path, monkeypatch):
+    yield from _client(tmp_path, monkeypatch, cursor_flags={})
+
+
+@pytest.fixture
+def strict_cursor_client(tmp_path, monkeypatch):
+    off = {"importPluginsFromClaudeOnBoot": False}
+    yield from _client(tmp_path, monkeypatch, cursor_flags=off)
 
 
 def _files(home):
@@ -170,6 +192,30 @@ def test_a_client_without_a_route_is_refused(client):
 def test_an_unknown_plugin_is_refused(client):
     answer = _preview(client, "nothing@nowhere", ["codex"])
     assert answer.status_code == 422
+
+
+def test_adding_to_claude_code_says_cursor_loads_it_too(cursor_client):
+    change = _preview(cursor_client, "linter@claude-plugins-official", ["claude_code"]).json()
+    assert change["after"][-1] == {
+        "client": "cursor",
+        "state": "on",
+        "word": "Loads",
+        "note": "Cursor loads Claude Code plugins, so it gets this one too.",
+    }
+    assert cursor_client.get("/api/catalog").json()["inherits"] == {"plugin": True, "skill": True}
+
+
+def test_with_cursor_import_off_the_review_does_not_name_cursor(strict_cursor_client):
+    change = _preview(strict_cursor_client, "linter@claude-plugins-official", ["claude_code"])
+    assert [e["client"] for e in change.json()["after"]] == ["claude_code"]
+    inherits = strict_cursor_client.get("/api/catalog?kind=skill").json()["inherits"]
+    assert inherits == {"plugin": False, "skill": True}
+
+
+def test_without_cursor_neither_kind_is_inherited(client):
+    for kind in ("plugin", "skill"):
+        answer = client.get(f"/api/catalog?kind={kind}").json()
+        assert answer["inherits"] == {"plugin": False, "skill": False}
 
 
 def _marketplace(client, source, clients):
