@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 // discover.js needs only this from a browser to load; the tests call its pure parts.
 globalThis.matchMedia = () => ({ matches: false });
-const { alsoLoads, cursorPlugin, startChosen } = await import('../../src/kitden/web/static/js/discover.js');
+const { addLabel, alsoLoads, cursorLine, cursorPlugin, startChosen } = await import('../../src/kitden/web/static/js/discover.js');
 
 const both = { plugin: true, skill: true };
 const none = { plugin: false, skill: false };
@@ -15,6 +15,31 @@ test('Cursor shows a plugin only when it imports what Claude Code has', () => {
   assert.equal(cursorPlugin({ installed: ['claude_code'], routes: {} }, both), 'off');
   assert.equal(cursorPlugin({ installed: ['codex'], routes: { codex: 'ready' } }, both), 'none');
   assert.equal(cursorPlugin({ installed: ['claude_code', 'cursor'], routes: {} }, both), 'on');
+});
+
+test('Details say how Cursor gets a plugin only when that is a fact', () => {
+  const through = 'Cursor: loads it through Claude Code.';
+  const has = 'Cursor: has it.';
+  const claude = { installed: ['claude_code'], routes: { claude_code: 'ready' } };
+  // Cursor imports Claude Code's plugins, and Claude Code has this one or can take it.
+  assert.equal(cursorLine(claude, both), through);
+  assert.equal(cursorLine({ installed: [], routes: { claude_code: 'ready' } }, both), through);
+  // Cursor does not import them, or Claude Code cannot have this one: nothing to say.
+  assert.equal(cursorLine(claude, none), '');
+  assert.equal(cursorLine({ installed: [], routes: { codex: 'ready' } }, both), '');
+  // A plugin Cursor holds itself is Cursor's own, whether or not it imports.
+  assert.equal(cursorLine({ installed: ['cursor'], routes: {} }, both), has);
+  assert.equal(cursorLine({ installed: ['cursor'], routes: {} }, none), has);
+  assert.equal(cursorLine({ installed: ['cursor'], routes: { claude_code: 'ready' } }, both), has);
+  assert.equal(cursorLine({ installed: ['claude_code', 'cursor'], routes: {} }, none), has);
+  // Claude Code has it too and Cursor imports: it loads it through Claude Code.
+  assert.equal(cursorLine({ installed: ['claude_code', 'cursor'], routes: {} }, both), through);
+});
+
+test('an Add button names its item and where it comes from', () => {
+  assert.equal(addLabel('canva', 'claude-plugins-official'), 'Add canva from claude-plugins-official');
+  assert.equal(addLabel('canva', 'canva@community-tools'), 'Add canva from canva@community-tools');
+  assert.equal(addLabel('canva', ''), 'Add canva');
 });
 
 test('the plugin form names Cursor while Claude Code is checked', () => {

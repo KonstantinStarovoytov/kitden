@@ -227,6 +227,15 @@ export function cursorPlugin(offer, inherits) {
   return inherits.plugin && viaClaude ? "off" : "none";
 }
 
+// The Cursor line in a plugin's Details, or "". Through Claude Code only when Cursor imports its
+// plugins and Claude Code has this one or can take it. A plugin Cursor holds itself is Cursor's own.
+export function cursorLine(offer, inherits) {
+  const through = "Cursor: loads it through Claude Code.";
+  if (inherits.plugin && offer.installed.includes("claude_code")) return through;
+  if (offer.installed.includes("cursor")) return "Cursor: has it.";
+  return inherits.plugin && offer.routes.claude_code ? through : "";
+}
+
 // Where the plugin is, or how the client gets it: a filled dot is there, a ring can be added.
 function cell(offer, client) {
   if (client === "cursor") {
@@ -287,7 +296,7 @@ function tableRow(key, show) {
 
 // The first cell of a row. Line one: the name, which stays one line, and a flag. Line two: where
 // it comes from, never cut, then what it does, on up to two lines.
-function itemCell(item, flagged, from, fromTitle) {
+function itemCell(item, flagged, from) {
   const cell = el("td");
   const top = el("div", "item");
   const name = el("span", "mono", item.name);
@@ -297,9 +306,7 @@ function itemCell(item, flagged, from, fromTitle) {
   cell.append(top);
   const meta = el("div", "meta");
   if (from) {
-    const source = el("span", "from", from);
-    if (fromTitle) source.title = fromTitle;
-    meta.append(source);
+    meta.append(el("span", "from", from));
   }
   if (item.description) {
     const desc = el("span", "desc", item.description);
@@ -308,6 +315,11 @@ function itemCell(item, flagged, from, fromTitle) {
   }
   if (meta.children.length) cell.append(meta);
   return cell;
+}
+
+// The Add button's name for a screen reader: the item and the source its row shows.
+export function addLabel(name, source) {
+  return source ? `Add ${name} from ${source}` : `Add ${name}`;
 }
 
 // One row: the name, the marketplace and what it does, one cell per client, and Add.
@@ -322,7 +334,7 @@ function offerRow(offer, clients) {
   const act = el("td", "act");
   if (openFor(offer).length) {
     const add = button("Add…", (event) => { event.stopPropagation(); addForm(offer); }, "btn small");
-    add.setAttribute("aria-label", `Add ${offer.name}`);
+    add.setAttribute("aria-label", addLabel(offer.name, offer.marketplace));
     act.append(add);
   }
   tr.append(act);
@@ -332,9 +344,9 @@ function offerRow(offer, clients) {
 // One skill: the name, where it comes from and what it does, one cell per client, and Add.
 function skillRow(skill, clients) {
   const tr = tableRow(skill.id, () => showSkill(skill));
-  // The plugin's short name; the marketplace is in the filter and in Details.
-  const from = skill.plugin ? skill.plugin.split("@")[0] : skill.from;
-  tr.append(itemCell(skill, skill.self_contained ? null : flag({ text: "Needs its plugin", level: "warning" }), from, skill.from));
+  // A plugin's skill shows name@marketplace, so same-name plugins in two marketplaces differ.
+  const from = skill.plugin || skill.from;
+  tr.append(itemCell(skill, skill.self_contained ? null : flag({ text: "Needs its plugin", level: "warning" }), from));
   for (const client of clients) {
     const td = el("td");
     td.append(skillCell(skill, client));
@@ -343,7 +355,7 @@ function skillRow(skill, clients) {
   const act = el("td", "act");
   if (openFor(skill).length) {
     const add = button("Add…", (event) => { event.stopPropagation(); addSkillForm(skill); }, "btn small");
-    add.setAttribute("aria-label", `Add ${skill.name}`);
+    add.setAttribute("aria-label", addLabel(skill.name, from));
     act.append(add);
   }
   tr.append(act);
@@ -396,8 +408,8 @@ function showOffer(offer) {
     const state = offer.installed.includes(client) ? "Installed" : ROUTE_WORDS[offer.routes[client]] || "Cannot get it from this marketplace";
     clients.append(el("li", null, `${CLIENT_NAMES[client]}: ${state}`));
   }
-  // Only when the server says Cursor loads Claude Code's plugins, and Claude Code can have this one.
-  if (cursorPlugin(offer, cursorInherits()) !== "none") clients.append(el("li", "muted", "Cursor: loads it through Claude Code."));
+  const cursor = cursorLine(offer, cursorInherits());
+  if (cursor) clients.append(el("li", "muted", cursor));
   body.append(section("Clients", [clients]));
   const add = openFor(offer).length ? [button("Add…", () => addForm(offer), "btn primary")] : [];
   openInfo("Plugin", offer.name, body, add);

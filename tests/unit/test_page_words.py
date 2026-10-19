@@ -269,7 +269,8 @@ def test_discover_has_a_skills_tab_that_reuses_the_table_and_the_add_flow():
 
 def test_skill_rows_say_where_each_skill_comes_from_and_how_each_client_loads_it():
     text = script("discover.js")
-    assert 'skill.plugin ? skill.plugin.split("@")[0] : skill.from' in text
+    # A plugin's skill shows name@marketplace, so same-name plugins in two marketplaces differ.
+    assert "skill.plugin || skill.from" in text and 'skill.plugin.split("@")[0] :' not in text
     assert '"Needs its plugin"' in text and '"Can add"' in text
     # The refusal, in the owner's words, and a way to the plugin that holds the skill.
     assert "This skill needs the rest of its plugin. Add the plugin instead." in text
@@ -302,12 +303,16 @@ def test_discover_rows_keep_the_name_and_the_source_readable():
     assert ".offers .from { flex: none" in css
     # Every row names its source, so the twin check is gone.
     assert "twin" not in text and "names.get" not in text
+    # So does its Add button, or twin rows would give two buttons one name.
+    assert "addLabel(offer.name, offer.marketplace)" in text
+    assert "addLabel(skill.name, from)" in text
 
 
 def test_discover_details_and_add_form_follow_what_the_server_says_about_cursor():
     text = script("discover.js")
     # Details no longer claim a Cursor setting; the line shows only when Cursor would load it.
-    assert "Cursor: loads it through Claude Code." in text
+    assert "Cursor: loads it through Claude Code." in text and "Cursor: has it." in text
+    assert "cursorLine(offer, cursorInherits())" in text
     assert "Cursor: loads Claude Code plugins when" not in text
     assert "Cursor will also load it from the shared skills folder." in text
     # The note is a polite live region inside the form, before Preview.
