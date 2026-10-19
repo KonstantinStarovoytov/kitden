@@ -12,7 +12,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from kitden.changes.json_splice import ABSENT
+from kitden.changes.json_splice import ABSENT, PRESENT
 from kitden.clients.base import (
     REMOVE_DIRECT,
     SETUP_NAME,
@@ -150,6 +150,45 @@ class CodexAdapter(ClientAdapter):
             )
             sources[name] = None if built_in or not isinstance(source, str) else source
         return sources
+
+    def marketplace_add_step(self, name: str, source: str) -> Step:
+        # Checked 2026-10-19 (0.163): these commands touch only their own tables in config.toml;
+        # comments and order stay, and `remove` gives back the exact bytes.
+        edit = FileEdit(
+            path=str(self.codex_home / "config.toml"),
+            fmt="toml",
+            key=("marketplaces", name),
+            after=PRESENT,
+            check="entry",
+        )
+        return Step(
+            client=CLIENT,
+            scope=Scope.USER,
+            name=name,
+            edit=edit,
+            mechanism="client_cli",
+            command=["codex", "plugin", "marketplace", "add", source, "--json"],
+            undo_command=["codex", "plugin", "marketplace", "remove", name],
+        )
+
+    def plugin_install_step(self, plugin_id: str) -> Step:
+        edit = FileEdit(
+            path=str(self.codex_home / "config.toml"),
+            fmt="toml",
+            key=("plugins", plugin_id, "enabled"),
+            after=True,
+            check="entry",
+        )
+        return Step(
+            client=CLIENT,
+            scope=Scope.USER,
+            name=plugin_id,
+            edit=edit,
+            mechanism="client_cli",
+            command=["codex", "plugin", "add", plugin_id, "--json"],
+            undo_command=["codex", "plugin", "remove", plugin_id],
+            restart_note=RESTART,
+        )
 
     def marketplace_roots(self) -> dict[str, Path]:
         """Local marketplaces from config.toml, plus the curated one Codex keeps in `.tmp`."""

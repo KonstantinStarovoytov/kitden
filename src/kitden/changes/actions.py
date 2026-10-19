@@ -15,6 +15,8 @@ from kitden.model import GATEWAY_CLIENT, Gateway, GatewayEdit, Item, Scope, Step
 GATEWAY_CONNECT = "gateway.connect"
 GATEWAY_MOVE = "gateway.move"
 GATEWAY_SWITCH = "gateway.switch"
+PLUGIN_INSTALL = "plugin.install"
+CLIENT_WORDS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
 SETUP_SERVER_UPDATE = "setup_server.update"
 ENTRY_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
 
@@ -58,6 +60,38 @@ def switch_steps(
         steps += [adapter.remove_step(replace(i, via_gateway=None)) for i in mine]
         if not any(i.client == client and i.via_gateway == gateway.id for i in items):
             steps.append(adapter.gateway_step(gateway, name))
+    return steps
+
+
+def install_steps(
+    adapters: dict[str, ClientAdapter], offer: dict, clients: list[str]
+) -> list[Step]:
+    """Install one catalog plugin in the chosen clients (Discover). A client that does not know
+    the plugin's marketplace first adds it, from the source another client uses."""
+    if not clients:
+        raise ValueError("Choose at least one client")
+    steps = []
+    for client in dict.fromkeys(clients):
+        route = offer["routes"].get(client)
+        if route is None or client not in adapters:
+            raise ValueError(f"{CLIENT_WORDS.get(client, client)} cannot get {offer['name']}")
+        if client in offer["installed"]:
+            raise ValueError(f"{CLIENT_WORDS.get(client, client)} already has {offer['name']}")
+        adapter = adapters[client]
+        if route == "add_marketplace":
+            source = next(
+                (
+                    s
+                    for other, a in adapters.items()
+                    if other != client
+                    and isinstance(s := a.marketplace_sources().get(offer["marketplace"]), str)
+                ),
+                None,
+            )
+            if source is None:
+                raise ValueError(f"The source of {offer['marketplace']} is not known")
+            steps.append(adapter.marketplace_add_step(offer["marketplace"], source))
+        steps.append(adapter.plugin_install_step(offer["id"]))
     return steps
 
 

@@ -18,10 +18,8 @@ def _write(path: Path, data) -> None:
     path.write_text(data if isinstance(data, str) else json.dumps(data))
 
 
-@pytest.fixture
-def home(tmp_path, monkeypatch):
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
-    home = make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2")
+def add_marketplaces(home: Path) -> Path:
+    """A Claude Code marketplace clone and Codex's curated marketplace, as the clients keep them."""
     # The Claude Code marketplace clone that known_marketplaces.json points to.
     root = home / ".claude/plugins/marketplaces/claude-plugins-official"
     _write(
@@ -86,6 +84,12 @@ def home(tmp_path, monkeypatch):
         {"name": "tracker", "version": "5.0.1", "description": "Track issues from Codex"},
     )
     return home
+
+
+@pytest.fixture
+def home(tmp_path, monkeypatch):
+    monkeypatch.setattr(base, "read_command_version", lambda client: None)
+    return add_marketplaces(make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2"))
 
 
 def _offers(home):

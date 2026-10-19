@@ -268,6 +268,14 @@ class ClientAdapter(ABC):
         """Marketplace name -> the folder on this computer that holds its marketplace file."""
         return {}
 
+    def marketplace_add_step(self, name: str, source: str) -> Step:
+        """Add a marketplace with the client's own command (Discover)."""
+        raise ValueError(f"{self.id} cannot add a marketplace from here")
+
+    def plugin_install_step(self, plugin_id: str) -> Step:
+        """Install a plugin for the user with the client's own command (Discover)."""
+        raise ValueError(f"{self.id} cannot install a plugin from here")
+
 
 REMOVE_DIRECT = "mcp.remove_direct"
 PLUGIN_ENABLE = "plugin.enable"

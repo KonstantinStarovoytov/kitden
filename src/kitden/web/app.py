@@ -18,8 +18,10 @@ from kitden.changes.actions import (
     GATEWAY_CONNECT,
     GATEWAY_MOVE,
     GATEWAY_SWITCH,
+    PLUGIN_INSTALL,
     SETUP_SERVER_UPDATE,
     connect_steps,
+    install_steps,
     move_steps,
     plugin_steps,
     remove_steps,
@@ -37,6 +39,7 @@ from kitden.gateways import add_gateway, data_dir, load_gateways
 from kitden.model import Change, ChangeState, Gateway, GatewayAuth, GatewayEdit, ItemKind
 from kitden.redact import redact_text
 from kitden.views.after import after_words
+from kitden.views.catalog import catalog, search
 from kitden.views.commands import commands_for
 from kitden.views.effective import project_views
 from kitden.views.explain import explain
@@ -422,6 +425,19 @@ def create_app(
                     return _error("Register the gateway first.", 422)
                 clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
                 steps = connect_steps(adapters, clients, gateway, str(params.get("name", "")))
+            elif action == PLUGIN_INSTALL:
+                offer = next(
+                    (
+                        o
+                        for o in catalog(state.inventory, adapters)
+                        if o["id"] == params.get("plugin")
+                    ),
+                    None,
+                )
+                if offer is None:
+                    return _error("This plugin is not in a marketplace on this computer.", 422)
+                clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+                steps = install_steps(adapters, offer, clients)
             elif action == GATEWAY_SWITCH:
                 gateway = next(
                     (g for g in load_gateways(home) if g.id == params.get("gateway")), None
@@ -506,6 +522,22 @@ def create_app(
     async def changes(request: Request) -> JSONResponse:
         return JSONResponse(engine.store.entries() if engine else [])
 
+    async def catalog_view(request: Request) -> JSONResponse:
+        """Plugins in the marketplaces on this computer, matching the search (Discover)."""
+        offers = catalog(state.inventory, adapters)
+        query = request.query_params.get("q", "")
+        marketplaces: dict[str, int] = {}
+        for offer in offers:
+            marketplaces[offer["marketplace"]] = marketplaces.get(offer["marketplace"], 0) + 1
+        found = search(offers, query)
+        return JSONResponse(
+            {
+                "offers": found[:200],
+                "total": len(found),
+                "marketplaces": [{"name": n, "count": c} for n, c in sorted(marketplaces.items())],
+            }
+        )
+
     async def commands(request: Request) -> JSONResponse:
         """Steps the developer runs themselves (FR-029, FR-035). Never run by the tool."""
         item = _item(request.query_params.get("item", ""))
@@ -556,6 +588,7 @@ def create_app(
             Route("/api/changes/preview", preview, methods=["POST"]),
             Route("/api/changes/{change_id}/{verb}", change_action, methods=["POST"]),
             Route("/api/commands", commands),
+            Route("/api/catalog", catalog_view),
             Route("/api/map", _read_model(_map)),
             Route("/api/explain", _read_model(_explain)),
             Route("/api/overview", _read_model(_overview)),

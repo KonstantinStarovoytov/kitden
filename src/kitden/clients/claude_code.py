@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from kitden.changes.json_splice import ABSENT
+from kitden.changes.json_splice import ABSENT, PRESENT
 from kitden.clients.base import (
     REMOVE_DIRECT,
     SETUP_NAME,
@@ -129,6 +129,46 @@ class ClaudeCodeAdapter(ClientAdapter):
             value = source.get("repo") or source.get("url") or source.get("path")
             sources[name] = value if isinstance(value, str) else None
         return sources
+
+    def marketplace_add_step(self, name: str, source: str) -> Step:
+        # Checked 2026-10-19 (2.1.283): `marketplace add` records the source under
+        # extraKnownMarketplaces in ~/.claude/settings.json; `remove` takes it out.
+        edit = FileEdit(
+            path=str(self.home / ".claude/settings.json"),
+            fmt="json",
+            key=("extraKnownMarketplaces", name),
+            after=PRESENT,
+            check="entry",
+        )
+        return Step(
+            client=CLIENT,
+            scope=Scope.USER,
+            name=name,
+            edit=edit,
+            mechanism="client_cli",
+            command=["claude", "plugin", "marketplace", "add", source],
+            undo_command=["claude", "plugin", "marketplace", "remove", name],
+        )
+
+    def plugin_install_step(self, plugin_id: str) -> Step:
+        # No -y: a plugin that installs by running a command stops here and says so.
+        edit = FileEdit(
+            path=str(self.home / ".claude/settings.json"),
+            fmt="json",
+            key=("enabledPlugins", plugin_id),
+            after=True,
+            check="entry",
+        )
+        return Step(
+            client=CLIENT,
+            scope=Scope.USER,
+            name=plugin_id,
+            edit=edit,
+            mechanism="client_cli",
+            command=["claude", "plugin", "install", plugin_id, "-s", "user", "--json"],
+            undo_command=["claude", "plugin", "uninstall", plugin_id, "-s", "user", "--json"],
+            restart_note=RELOAD,
+        )
 
     def marketplace_roots(self) -> dict[str, Path]:
         known = _dict(Reader(CLIENT).json(self.home / ".claude/plugins/known_marketplaces.json"))
