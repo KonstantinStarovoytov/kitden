@@ -4,6 +4,7 @@ import { $, $$, reportError } from "./dom.js";
 import { glide, rollTo, transition } from "./motion.js";
 import { renderAgents } from "./agents.js";
 import { renderChanges } from "./changes.js";
+import { renderDiscover } from "./discover.js";
 import { renderGateway } from "./gateway.js";
 import { morphOnNextRender, renderMap } from "./map.js";
 import { renderOverview } from "./overview.js";
@@ -16,6 +17,7 @@ import {
 const PLACES = {
   overview: { title: "Overview", render: renderOverview },
   map: { title: "Load map", render: renderMap },
+  discover: { title: "Discover", render: renderDiscover },
   gateway: { title: "Gateway", render: renderGateway },
   changes: { title: "Changes", render: renderChanges },
   agents: { title: "Agents", render: renderAgents },
@@ -194,7 +196,8 @@ function start() {
   });
   $("#q").addEventListener("input", (event) => {
     const q = event.target.value.trim();
-    if (state.view !== "map" && q) go("map", { q });
+    // Discover searches the marketplaces; every other place searches what is installed.
+    if (!["map", "discover"].includes(state.view) && q) go("map", { q });
     else go(state.view, { q });
   });
   document.addEventListener("keydown", (event) => {

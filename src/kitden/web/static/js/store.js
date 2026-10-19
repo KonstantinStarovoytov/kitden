@@ -3,7 +3,7 @@
 import { getJson, query } from "./api.js";
 import { transition } from "./motion.js";
 
-export const VIEWS = ["overview", "map", "gateway", "changes", "agents"];
+export const VIEWS = ["overview", "map", "discover", "gateway", "changes", "agents"];
 export const state = { view: "overview", kind: "mcp_server", only: "all", project: "", q: "", selected: null };
 // A change is being applied or undone: live rescans wait so the result can morph in.
 export const busy = { change: false };

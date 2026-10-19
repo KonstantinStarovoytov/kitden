@@ -107,6 +107,8 @@ const ACTION_WORDS = {
   "gateway.connect": "Added gateway",
   "gateway.move": "Moved into the gateway",
   "gateway.switch": "Switched the gateway",
+  "plugin.install": "Added",
+  "marketplace.add": "Added marketplace",
   "mcp.remove_direct": "Removed",
   "plugin.enable": "Turned on",
   "plugin.disable": "Turned off",
@@ -118,9 +120,10 @@ const ACTION_WORDS = {
 // short name ("superpowers"); the review named the exact entry before Apply.
 export function changeTitle(entry) {
   const verb = ACTION_WORDS[entry.action] || entry.action;
-  const plugin = ["plugin.enable", "plugin.disable"].includes(entry.action);
-  // The gateway's own step is not a client: the line names the clients the entry left.
-  const steps = entry.steps.filter((s) => s.client !== "gateway");
+  const plugin = ["plugin.enable", "plugin.disable", "plugin.install"].includes(entry.action);
+  // The gateway's own step is not a client: the line names the clients the entry left. An
+  // install's marketplace steps only make the plugin reachable: the line names the plugin.
+  const steps = entry.steps.filter((s) => s.client !== "gateway" && (entry.action !== "plugin.install" || s.name.includes("@")));
   const names = [...new Set(steps.map((s) => (plugin ? s.name.split("@")[0] : s.name)))];
   const clients = [...new Set(steps.map((s) => CLIENT_NAMES[s.client] || s.client))];
   const whole = ["gateway.connect", "gateway.switch", "setup_server.register", "setup_server.update"].includes(entry.action);

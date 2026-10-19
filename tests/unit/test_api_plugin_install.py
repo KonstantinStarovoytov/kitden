@@ -1,6 +1,8 @@
 """Adding a plugin from Discover: one review, the clients' own commands, verify, Undo (phase 1)."""
 
+import json
 import tomllib
+from pathlib import Path
 
 import pytest
 from starlette.testclient import TestClient
@@ -17,6 +19,15 @@ ORIGIN = "http://127.0.0.1:47800"
 POST = {"Origin": ORIGIN, "X-Tool-Request": "1"}
 
 
+def _marketplace_name(source):
+    """The name a client would read from the marketplace file at a local source."""
+    for name in (".claude-plugin/marketplace.json", ".agents/plugins/marketplace.json"):
+        path = Path(source) / name
+        if path.is_file():
+            return json.loads(path.read_text())["name"]
+    return "claude-plugins-official"
+
+
 class FakeCli:
     """Acts like `claude plugin …` and `codex plugin …`: each writes its own record."""
 
@@ -29,18 +40,40 @@ class FakeCli:
         if command[0] == "claude":
             path = self.home / ".claude/settings.json"
             text = path.read_text()
-            if command[1:3] == ["plugin", "install"]:
+            record = self.home / ".claude/plugins/installed_plugins.json"
+            installed = record.read_text()
+            known_path = self.home / ".claude/plugins/known_marketplaces.json"
+            known = known_path.read_text()
+            if command[1:4] == ["plugin", "marketplace", "add"]:
+                name = _marketplace_name(command[4])
+                entry = {"source": {"source": "directory", "path": command[4]}}
+                text = json_splice.set_value(text, ("extraKnownMarketplaces", name), entry)
+                # Like the real CLI: a folder marketplace is read where it is.
+                known = json_splice.set_value(
+                    known, (name,), {**entry, "installLocation": command[4]}
+                )
+            elif command[1:4] == ["plugin", "marketplace", "remove"]:
+                text = json_splice.delete_value(text, ("extraKnownMarketplaces", command[4]))
+                known = json_splice.delete_value(known, (command[4],))
+            elif command[1:3] == ["plugin", "install"]:
                 text = json_splice.set_value(text, ("enabledPlugins", command[3]), True)
+                cache = self.home / ".claude/plugins/cache" / command[3].replace("@", "/") / "1.0.0"
+                cache.mkdir(parents=True, exist_ok=True)
+                entry = [{"scope": "user", "installPath": str(cache), "version": "1.0.0"}]
+                installed = json_splice.set_value(installed, ("plugins", command[3]), entry)
             elif command[1:3] == ["plugin", "uninstall"]:
                 text = json_splice.delete_value(text, ("enabledPlugins", command[3]))
+                installed = json_splice.delete_value(installed, ("plugins", command[3]))
             path.write_text(text)
+            record.write_text(installed)
+            known_path.write_text(known)
             return CommandResult(0, "{}")
         path = self.home / ".codex/config.toml"
         text = path.read_text()
         if command[1:4] == ["plugin", "marketplace", "add"]:
-            entry = {"source_type": "git", "source": command[4]}
-            name = "team-tools" if "team-mkt" in command[4] else "claude-plugins-official"
-            text = toml_edit.set_value(text, ("marketplaces", name), entry)
+            local = Path(command[4]).is_absolute()
+            entry = {"source_type": "local" if local else "git", "source": command[4]}
+            text = toml_edit.set_value(text, ("marketplaces", _marketplace_name(command[4])), entry)
         elif command[1:4] == ["plugin", "marketplace", "remove"]:
             text = toml_edit.delete_value(text, ("marketplaces", command[4]))
         elif command[1:3] == ["plugin", "add"]:
@@ -64,7 +97,12 @@ def client(tmp_path, monkeypatch):
 
 
 def _files(home):
-    return {n: (home / n).read_bytes() for n in (".claude/settings.json", ".codex/config.toml")}
+    names = (
+        ".claude/settings.json",
+        ".codex/config.toml",
+        ".claude/plugins/installed_plugins.json",
+    )
+    return {n: (home / n).read_bytes() for n in names}
 
 
 def _preview(client, plugin, clients):
@@ -104,6 +142,8 @@ def test_a_plugin_goes_to_two_clients_in_one_review_and_undo_takes_it_back(clien
     assert ["claude", "plugin", "install", "linter@claude-plugins-official"] in commands
     assert ["codex", "plugin", "marketplace", "add"] in commands
     assert all("-y" not in c and "--yes" not in c for c in client.run.calls)
+    linter = client.get("/api/catalog?q=linter").json()["offers"][0]
+    assert sorted(linter["installed"]) == ["claude_code", "codex"]
     config = tomllib.loads((client.home / ".codex/config.toml").read_text())
     assert config["plugins"]["linter@claude-plugins-official"] == {"enabled": True}
     assert (
@@ -152,6 +192,9 @@ def test_a_marketplace_from_a_folder_goes_to_codex_and_undo_removes_it(client, t
     assert [(s["client"], s["name"]) for s in change["steps"]] == [("codex", "team-tools")]
     applied = client.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
     assert applied["state"] == "verified", applied.get("error")
+    # Its plugins show in Discover at once.
+    offers = client.get("/api/catalog?q=a").json()["offers"]
+    assert any(o["id"] == "a@team-tools" and o["routes"].get("codex") == "ready" for o in offers)
     undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
     assert undone["state"] == "undone"
     assert _files(client.home) == before

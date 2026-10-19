@@ -231,3 +231,10 @@ def test_diagram_nodes_open_the_client_apps_and_the_gateway():
         assert scheme not in text
     assert "found.app_url" in text and "if (url) opens(group" in text
     assert 'window.open(page, "_blank", "noopener")' in text
+
+
+def test_discover_adds_plugins_and_marketplaces_in_one_review():
+    text = script("discover.js")
+    assert '"plugin.install"' in text and '"marketplace.add"' in text
+    assert "Add a marketplace…" in text and '"Details"' in text
+    assert '<a href="#discover" data-view="discover">Discover</a>' in INDEX

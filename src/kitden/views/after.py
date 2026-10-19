@@ -12,6 +12,7 @@ WORDS = {
     "gateway.move": ("gw", "Via gateway"),
     "gateway.switch": ("gw", "Via the new gateway"),
     "plugin.install": ("on", "Loads"),
+    "marketplace.add": ("on", "Added"),
     "setup_server.register": ("on", "Added"),
     "setup_server.update": ("on", "Updated"),
 }
