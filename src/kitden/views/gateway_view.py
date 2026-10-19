@@ -52,15 +52,18 @@ def group_of(item: Item) -> str:
 
 
 def gateway_view(inventory, gateways: list[Gateway], project: str | None) -> dict:
-    connections: dict[str, list[str]] = {c: [] for c in COLUMNS}
-    for item in inventory.items:
-        column = "claude_code" if item.client == DESKTOP else item.client
-        if item.via_gateway and column in connections and item.name not in connections[column]:
-            connections[column].append(item.name)
+    # Per gateway and client: the servers that load in this scope and go through that gateway.
+    connections: dict[str, dict[str, list[str]]] = {
+        g.id: {c: [] for c in COLUMNS} for g in gateways
+    }
     # One row per server name, with the clients that have it and the entries that can go.
     groups: dict[str, dict[str, dict]] = {"move": {}, "local": {}, "plugin": {}}
     for item in loaded_mcp(inventory, project):
         if item.via_gateway:
+            column = "claude_code" if item.client == DESKTOP else item.client
+            names = connections.get(item.via_gateway, {}).get(column)
+            if names is not None and item.name not in names:
+                names.append(item.name)
             continue
         rows = groups[group_of(item)]
         row = rows.setdefault(
@@ -73,8 +76,11 @@ def gateway_view(inventory, gateways: list[Gateway], project: str | None) -> dic
             row["items"].append(item.id)
     return {
         "gateways": [gateway_dict(g) for g in gateways],
-        "connections": {c: sorted(names) for c, names in connections.items()},
-        "used": sorted({i.via_gateway for i in inventory.items if i.via_gateway}),
+        "connections": {
+            g: {c: sorted(names) for c, names in columns.items()}
+            for g, columns in connections.items()
+        },
+        "used": sorted(g for g, columns in connections.items() if any(columns.values())),
         "groups": {
             g: sorted(rows.values(), key=lambda r: r["name"].lower()) for g, rows in groups.items()
         },

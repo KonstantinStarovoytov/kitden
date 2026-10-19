@@ -1,5 +1,7 @@
 """Gateway page model: connections and what goes around it (redesign plan, Task 3)."""
 
+import json
+
 import pytest
 
 import kitden.clients.base as base
@@ -77,7 +79,60 @@ def test_connections_list_gateway_entries_per_client(home):
     gateway = Gateway(url="https://mcp.neon.tech/mcp", ui_url="https://console.neon.tech")
     mark_gateways(inventory, [gateway])
     data = gateway_view(inventory, [gateway], None)
-    assert data["connections"] == {"claude_code": [], "codex": ["neon"], "cursor": ["Neon"]}
+    assert data["connections"] == {
+        gateway.id: {"claude_code": [], "codex": ["neon"], "cursor": ["Neon"]}
+    }
     assert data["gateways"][0]["ui_url"] == "https://console.neon.tech"
     assert data["used"] == [gateway.id]
     assert row(data["groups"], "move", "Neon") is None
+
+
+def test_each_gateway_lists_only_its_own_effective_connections(home):
+    a = Gateway(url="https://gw-a.test/mcp")
+    b = Gateway(url="https://gw-b.test/mcp")
+    # Codex neon goes through A and Cursor Neon through B. Three more entries must not show
+    # unless they load: a Codex entry that is off, an entry in the website project only (A),
+    # and a Desktop Code tab entry (B), which counts as Claude Code.
+    codex = home / ".codex/config.toml"
+    codex.write_text(
+        codex.read_text().replace("https://mcp.neon.tech/mcp", a.url)
+        + f'\n[mcp_servers.paused]\nurl = "{a.url}"\nenabled = false\n'
+    )
+    cursor = home / ".cursor/mcp.json"
+    config = json.loads(cursor.read_text())
+    config["mcpServers"]["Neon"]["url"] = b.url
+    cursor.write_text(json.dumps(config))
+    website = home / "work/website"
+    mcp_json = website / ".mcp.json"
+    config = json.loads(mcp_json.read_text())
+    config["mcpServers"]["docs"]["url"] = a.url
+    mcp_json.write_text(json.dumps(config))
+    desktop = home / "Library/Application Support/Claude/claude_desktop_config.json"
+    config = json.loads(desktop.read_text())
+    config["mcpServers"]["desk"] = {"url": b.url}
+    desktop.write_text(json.dumps(config))
+
+    def connections(project):
+        inventory = build_inventory(home)
+        mark_gateways(inventory, [a, b])
+        return gateway_view(inventory, [a, b], project)
+
+    everywhere = connections(None)
+    assert everywhere["connections"] == {
+        a.id: {"claude_code": [], "codex": ["neon"], "cursor": []},
+        b.id: {"claude_code": ["desk"], "codex": [], "cursor": ["Neon"]},
+    }
+    assert everywhere["used"] == sorted([a.id, b.id])
+    in_project = connections(str(website))
+    assert in_project["connections"][a.id]["claude_code"] == ["docs"]
+    assert in_project["connections"][b.id]["claude_code"] == ["desk"]
+
+
+def test_a_gateway_nobody_uses_has_empty_columns_and_is_not_used(home):
+    used = Gateway(url="https://mcp.neon.tech/mcp")
+    idle = Gateway(url="https://gw-idle.test/mcp")
+    inventory = build_inventory(home)
+    mark_gateways(inventory, [used, idle])
+    data = gateway_view(inventory, [used, idle], None)
+    assert data["connections"][idle.id] == {"claude_code": [], "codex": [], "cursor": []}
+    assert data["used"] == [used.id]

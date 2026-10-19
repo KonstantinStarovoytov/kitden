@@ -227,9 +227,10 @@ function showHeld(server, gateway) {
 
 function gatewayCard(gateway, model) {
   const card = el("section", "card");
-  card.append(gatewayHead(gateway, model), routes(gateway, model.connections, model.groups.move), heldSection(gateway));
-  // Only clients without a gateway entry are offered; the others are connected already.
-  const waiting = foundClients().filter((c) => !(model.connections[c] || []).length);
+  const connections = model.connections[gateway.id] || {};
+  card.append(gatewayHead(gateway, model), routes(gateway, connections, model.groups.move), heldSection(gateway));
+  // Only clients without an entry in this gateway are offered; the others are connected already.
+  const waiting = foundClients().filter((c) => !(connections[c] || []).length);
   if (waiting.length) {
     const box = el("details", "connect");
     box.open = draft.connectOpen === null ? true : draft.connectOpen;
