@@ -6,6 +6,7 @@ marketplace; Codex keeps local marketplaces and its curated one in `.tmp`. Forma
 """
 
 import json
+import re
 import shlex
 from pathlib import Path
 from typing import Any
@@ -115,6 +116,11 @@ def _inside(folder: Path, entry: dict) -> dict:
     }
 
 
+def _category_name(raw: Any) -> str | None:
+    key = category_key(raw)
+    return key[:1].upper() + key[1:] if key else None
+
+
 def _author(raw: Any) -> str | None:
     if isinstance(raw, dict) and isinstance(raw.get("name"), str):
         return raw["name"]
@@ -170,9 +176,7 @@ def catalog(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
                     "name": entry["name"],
                     "marketplace": marketplace,
                     "description": description if isinstance(description, str) else "",
-                    "category": entry.get("category")
-                    if isinstance(entry.get("category"), str)
-                    else None,
+                    "category": _category_name(entry.get("category")),
                     "author": _author(entry.get("author")),
                     "homepage": entry.get("homepage")
                     if isinstance(entry.get("homepage"), str)
@@ -190,18 +194,43 @@ def catalog(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
     return sorted(offers.values(), key=lambda o: (o["name"].lower(), o["marketplace"]))
 
 
+# Marketplaces name the same category in different ways; one key per category.
+CATEGORY_ALIASES = {
+    "developer tools": "development",
+    "engineering": "development",
+    "creativity": "design",
+}
+WORD = re.compile(r"[a-z0-9]+")
+
+
+def category_key(raw: Any) -> str | None:
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    key = raw.strip().lower()
+    return CATEGORY_ALIASES.get(key, key)
+
+
 def _score(offer: dict, words: list[str]) -> int:
+    """Name first, then category, then whole words of the description; 0 if a word is missing.
+
+    A query word matches the start of a word in the name ("design" finds ui-designer), but the
+    description needs the word itself or its plural, so "design" does not find "designed".
+    """
     name = offer["name"].lower()
-    text = f"{offer['description']} {offer.get('category') or ''} {offer['marketplace']}".lower()
+    name_words = WORD.findall(name)
+    category = WORD.findall((offer.get("category") or "").lower())
+    text = set(WORD.findall(f"{offer['description']} {offer['marketplace']}".lower()))
     score = 0
     for word in words:
         if name == word:
             score += 100
-        elif name.startswith(word):
+        elif any(w == word for w in name_words):
+            score += 80
+        elif any(w.startswith(word) for w in name_words):
             score += 60
-        elif word in name:
-            score += 40
-        elif word in text:
+        elif word in category or any(w.startswith(word) for w in category):
+            score += 50
+        elif word in text or f"{word}s" in text or f"{word}es" in text:
             score += 10
         else:
             return 0  # every word must match somewhere
@@ -209,9 +238,15 @@ def _score(offer: dict, words: list[str]) -> int:
 
 
 def search(offers: list[dict], query: str) -> list[dict]:
-    """Offers that match every word, best first: the name counts more than the description."""
+    """Offers that match every word, best first: the name counts more than the description.
+
+    Each found offer gets `match`: "name" when a word is in its name or category, "text" when
+    only its description has the words, so the page can show those apart.
+    """
     words = query.lower().split()
     if not words:
         return offers
     scored = [(_score(o, words), o) for o in offers]
-    return [o for s, o in sorted(scored, key=lambda p: (-p[0], p[1]["name"].lower())) if s]
+    ranked = sorted(scored, key=lambda p: (-p[0], p[1]["name"].lower()))
+    only_text = 10 * len(words)  # each word found in the description only
+    return [{**o, "match": "text" if s == only_text else "name"} for s, o in ranked if s]

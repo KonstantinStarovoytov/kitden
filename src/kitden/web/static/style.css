@@ -301,6 +301,21 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .map .item { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .map .item .mono { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 9ch; }
 .table-scroll { min-width: 0; }
+/* Discover: the Load map's table, with a line on what each plugin does and an Add column. */
+.offers td { height: auto; padding-top: 7px; padding-bottom: 7px; }
+.offers .desc { margin-top: 2px; color: var(--ink-3); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.offers .from { color: var(--ink-3); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.offers .act { text-align: right; padding-left: 0; }
+/* "+ marketplace" goes under "Can add", lined up with the word, so it never gets cut off. */
+.offers .socket { flex-wrap: wrap; row-gap: 0; }
+.offers .socket .where { flex-basis: 100%; padding-left: 16px; }
+.offers .socket .where::before { content: none; }
+.map.offers tbody tr.group { cursor: default; }
+.map.offers tbody tr.group td { height: 30px; padding-top: 10px; padding-bottom: 4px; background: var(--inset); color: var(--ink-3); font-size: 12px; }
+.toolbar .grow { flex: 1; }
+.filter select { height: 28px; max-width: 220px; padding: 0 6px; border-radius: 7px; border: 1px solid var(--wire); background: var(--panel); color: var(--ink-2); cursor: pointer; text-overflow: ellipsis; transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease; }
+.filter select:hover { border-color: var(--wire-strong); }
+.filter.on select { background: var(--route-soft); border-color: color-mix(in srgb, var(--route) 40%, var(--wire)); color: var(--route); font-weight: 600; }
 
 /* Gateway */
 .gw-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
@@ -445,7 +460,8 @@ html.theme-switch::view-transition-old(root), html.theme-switch::view-transition
   ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }
 @media (max-width: 900px) {
-  .shell { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+  /* minmax(0, …): a wide table or a long project name scrolls inside, not the whole page. */
+  .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .rail { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--wire); }
   .brand { padding: 0 8px 0 4px; }
   .nav { display: flex; gap: 2px; overflow-x: auto; max-width: 100%; }

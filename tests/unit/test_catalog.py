@@ -102,7 +102,7 @@ def test_plugins_from_a_claude_marketplace_on_disk(home):
     offers = _offers(home)
     linter = offers["linter@claude-plugins-official"]
     assert linter["description"] == "Lint the code you change"
-    assert linter["category"] == "development" and linter["author"] == "Acme"
+    assert linter["category"] == "Development" and linter["author"] == "Acme"
     assert linter["routes"]["claude_code"] == "ready"
     # Codex can take it after adding the same marketplace from Claude Code's source.
     assert linter["routes"]["codex"] == "add_marketplace"
@@ -144,3 +144,37 @@ def test_search_ranks_the_name_first_then_the_description(home):
     assert found[:2] == ["linter", "deploy-helper"]
     assert [o["name"] for o in search(offers, "issues")] == ["tracker"]
     assert len(search(offers, "")) == len(offers)
+
+
+def _offer(name, description="", category=None, marketplace="m"):
+    return {
+        "id": f"{name}@{marketplace}",
+        "name": name,
+        "description": description,
+        "category": category,
+        "marketplace": marketplace,
+    }
+
+
+def test_search_matches_whole_words_and_ranks_name_then_category_then_description():
+    offers = [
+        _offer("supabase", "Schema design and SQL", "database"),
+        _offer("api-audit", "Designed for AI-assisted development", "security"),
+        _offer("figma", "Work with your files", "design"),
+        _offer("ui-designer", "Themes", "development"),
+        _offer("design", "Anything", None),
+    ]
+    found = [o["name"] for o in search(offers, "design")]
+    # "Designed" is another word; the name counts most, then the category, then the text.
+    assert found == ["design", "ui-designer", "figma", "supabase"]
+    # A plugin found only by its description is marked, so the page can group it apart.
+    assert [o["match"] for o in search(offers, "design")] == ["name", "name", "name", "text"]
+
+
+def test_categories_merge_case_and_known_names():
+    from kitden.views.catalog import category_key
+
+    assert category_key("Productivity") == category_key("productivity") == "productivity"
+    assert category_key("Developer Tools") == "development"
+    assert category_key("Creativity") == "design"
+    assert category_key(None) is None

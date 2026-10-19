@@ -533,25 +533,50 @@ def create_app(
         return JSONResponse(engine.store.entries() if engine else [])
 
     async def catalog_view(request: Request) -> JSONResponse:
-        """Plugins in the marketplaces on this computer, matching the search (Discover)."""
+        """Plugins in the marketplaces on this computer, matching the search (Discover).
+
+        Filters: `only` (new: no client has it; added: one has it), `category`, `marketplace`.
+        `facets` count the categories and marketplaces among the search results, so a filter
+        menu can say how many each one holds.
+        """
+        params = request.query_params
         offers = catalog(state.inventory, adapters)
-        query = request.query_params.get("q", "")
         marketplaces: dict[str, int] = {}
         for offer in offers:
             marketplaces[offer["marketplace"]] = marketplaces.get(offer["marketplace"], 0) + 1
-        found = search(offers, query)
-        # "new": no client has it yet; "added": at least one client has it.
-        only = request.query_params.get("only", "all")
+        found = search(offers, params.get("q", ""))
+        only = params.get("only", "all")
         if only == "new":
             found = [o for o in found if not o["installed"]]
         elif only == "added":
             found = [o for o in found if o["installed"]]
+
+        def counts(key: str, rows: list[dict]) -> list[dict]:
+            seen: dict[str, int] = {}
+            for row in rows:
+                if row.get(key):
+                    seen[row[key]] = seen.get(row[key], 0) + 1
+            return [
+                {"name": n, "count": c}
+                for n, c in sorted(seen.items(), key=lambda p: (-p[1], p[0]))
+            ]
+
+        category = params.get("category")
+        marketplace = params.get("marketplace")
+        in_marketplace = [o for o in found if not marketplace or o["marketplace"] == marketplace]
+        in_category = [o for o in found if not category or o["category"] == category]
+        facets = {
+            "categories": counts("category", in_marketplace),
+            "marketplaces": counts("marketplace", in_category),
+        }
+        found = [o for o in in_category if not marketplace or o["marketplace"] == marketplace]
         return JSONResponse(
             {
                 "offers": found[:1000],
                 "total": len(found),
                 "all": len(offers),
                 "marketplaces": [{"name": n, "count": c} for n, c in sorted(marketplaces.items())],
+                "facets": facets,
             }
         )
 

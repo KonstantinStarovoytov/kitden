@@ -226,3 +226,15 @@ def test_the_catalog_filters_what_no_client_has_yet(client):
     assert new["total"] + added["total"] == every["total"]
     assert all(not o["installed"] for o in new["offers"])
     assert all(o["installed"] for o in added["offers"])
+
+
+def test_the_catalog_filters_by_category_and_marketplace_and_counts_both(client):
+    every = client.get("/api/catalog").json()
+    names = {c["name"]: c["count"] for c in every["facets"]["categories"]}
+    assert names == {"Development": 1, "Productivity": 1}
+    dev = client.get("/api/catalog?category=Development").json()
+    assert [o["name"] for o in dev["offers"]] == ["linter"]
+    # The marketplace menu counts what is left in the chosen category.
+    assert dev["facets"]["marketplaces"] == [{"name": "claude-plugins-official", "count": 1}]
+    curated = client.get("/api/catalog?marketplace=openai-curated").json()
+    assert [o["name"] for o in curated["offers"]] == ["tracker"]

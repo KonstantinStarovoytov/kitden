@@ -3,27 +3,41 @@ import { getJson, query } from "./api.js";
 import { button, el, plural, webLink } from "./dom.js";
 import { entrance, glide } from "./motion.js";
 import { closePanel, openInfo, openPanel, review } from "./panel.js";
-import { banner, CLIENT_NAMES, flag, mark, skeleton } from "./parts.js";
-import { freshness, render, state } from "./store.js";
+import { banner, CLIENT_NAMES, flag, mark, skeleton, socket } from "./parts.js";
+import { data, freshness, render, state } from "./store.js";
 
 // Clients whose own command line installs plugins. Cursor keeps its plugins in the account,
 // and it loads Claude Code's plugins by itself when "Include Third-Party Plugins" is on.
 const INSTALLERS = ["claude_code", "codex"];
+const COLUMNS = ["claude_code", "codex", "cursor"];
 const ROUTE_WORDS = { ready: "Ready", add_marketplace: "Adds the marketplace first" };
+const CURSOR_NOTE = "Cursor loads Claude Code plugins when Include Third-Party Plugins is on.";
 
 const SHOW = [["all", "All"], ["new", "Not added"], ["added", "Added"]];
-let show = "all";
+const filters = { show: "all", category: "", marketplace: "" };
 
 // The last answer, per search and filter; a rescan or a change makes it old.
-let cache = { key: null, at: 0, answer: null, error: null, loading: false };
+// `asked` keeps the search and filters the answer is for, so the summary never mixes them.
+let cache = { key: null, at: 0, answer: null, asked: null, error: null, loading: false };
 
-async function load(q, only) {
-  const key = `${only}|${q}`;
+function cacheKey() {
+  return [filters.show, filters.category, filters.marketplace, state.q].join("|");
+}
+
+async function load() {
+  const key = cacheKey();
+  const asked = { ...filters, q: state.q };
   cache = { ...cache, key, loading: true };
+  const params = {
+    q: state.q,
+    only: filters.show === "all" ? "" : filters.show,
+    category: filters.category,
+    marketplace: filters.marketplace,
+  };
   try {
-    const answer = await getJson(`/api/catalog${query({ q, only: only === "all" ? "" : only })}`);
+    const answer = await getJson(`/api/catalog${query(params)}`);
     if (cache.key !== key) return; // a newer search won
-    cache = { key, at: performance.now(), answer, error: null, loading: false };
+    cache = { key, at: performance.now(), answer, asked, error: null, loading: false };
   } catch (error) {
     if (cache.key !== key) return;
     cache = { ...cache, error, loading: false };
@@ -31,35 +45,62 @@ async function load(q, only) {
   if (state.view === "discover") render();
 }
 
-// "386 plugins in 5 marketplaces", or "10 of 386 plugins match “git”" while searching.
-function summary(answer) {
-  const marketplaces = plural(answer.marketplaces.length, "marketplace", "marketplaces");
-  if (!state.q && show === "all") {
-    return `${plural(answer.all, "plugin", "plugins")} in ${marketplaces} on this computer. Add one to Claude Code or Codex in one review.`;
+// "386 plugins in 5 marketplaces", or "10 of 386 plugins match “git”, in Design" with filters.
+function summary(answer, asked) {
+  const filtered = asked.q || asked.show !== "all" || asked.category || asked.marketplace;
+  if (!filtered) {
+    const all = plural(answer.marketplaces.length, "marketplace", "marketplaces");
+    return `${plural(answer.all, "plugin", "plugins")} in ${all} on this computer. Add one to Claude Code or Codex in one review.`;
   }
-  const state_ = { new: "not added yet", added: "already added" }[show];
   const parts = [];
-  if (state.q) parts.push(`match “${state.q}”`);
-  if (state_) parts.push(`${state.q ? "and are" : "are"} ${state_}`);
-  return `${answer.total} of ${plural(answer.all, "plugin", "plugins")} ${parts.join(" ")}, in ${marketplaces}.`;
+  if (asked.q) parts.push(`match “${asked.q}”`);
+  if (asked.category) parts.push(`in ${asked.category}`);
+  const among = plural(answer.facets.marketplaces.length, "marketplace", "marketplaces");
+  parts.push(asked.marketplace ? `from ${asked.marketplace}` : `in ${among}`);
+  const added = { new: "not added yet", added: "already added" }[asked.show];
+  if (added) parts.push(added);
+  return `${answer.total} of ${plural(answer.all, "plugin", "plugins")} ${parts.join(", ")}.`;
+}
+
+// A menu of the categories or marketplaces in the results, each with its count.
+function picker(label, all, key, facets) {
+  const select = el("select");
+  select.setAttribute("aria-label", label);
+  select.append(new Option(all, ""));
+  const chosen = filters[key];
+  const options = facets.some((f) => f.name === chosen) || !chosen ? facets : [{ name: chosen, count: 0 }, ...facets];
+  for (const facet of options) select.append(new Option(`${facet.name} (${facet.count})`, facet.name));
+  select.value = chosen;
+  select.addEventListener("change", () => { filters[key] = select.value; render(); });
+  const box = el("label", "filter");
+  if (chosen) box.classList.add("on");
+  box.append(select);
+  return box;
 }
 
 export function renderDiscover(main) {
   main.append(el("h1", null, "Discover"));
-  const stale = cache.key !== `${show}|${state.q}` || cache.at < freshness.reloadStartedAt;
-  if (stale && !cache.loading) load(state.q, show);
+  const stale = cache.key !== cacheKey() || cache.at < freshness.reloadStartedAt;
+  if (stale && !cache.loading) load();
   const answer = cache.answer;
-  main.append(el("p", "lede", answer ? summary(answer) : "Plugins in the marketplaces on this computer."));
+  main.append(el("p", "lede", answer ? summary(answer, cache.asked) : "Plugins in the marketplaces on this computer."));
   const tools = el("div", "toolbar");
   const seg = el("div", "seg");
   seg.setAttribute("role", "group");
   seg.setAttribute("aria-label", "Show");
   for (const [id, label] of SHOW) {
-    const b = button(label, () => { show = id; render(); }, "");
-    b.setAttribute("aria-pressed", String(show === id));
+    const b = button(label, () => { filters.show = id; render(); }, "");
+    b.setAttribute("aria-pressed", String(filters.show === id));
     seg.append(b);
   }
-  tools.append(seg, button("Add a marketplace…", () => marketplaceForm(), "btn small"));
+  tools.append(seg);
+  if (answer && answer.facets) {
+    tools.append(
+      picker("Category", "All categories", "category", answer.facets.categories),
+      picker("Marketplace", "All marketplaces", "marketplace", answer.facets.marketplaces),
+    );
+  }
+  tools.append(el("span", "grow"), button("Add a marketplace…", () => marketplaceForm(), "btn small"));
   main.append(tools);
   glide(seg, seg.querySelector('[aria-pressed="true"]'), "discover-filter");
   if (cache.error && !answer) {
@@ -72,43 +113,148 @@ export function renderDiscover(main) {
   }
   if (!answer.offers.length) {
     const empty = el("div", "empty");
-    const searching = state.q || show !== "all";
+    const searching = state.q || filters.show !== "all" || filters.category || filters.marketplace;
     empty.append(el("strong", null, searching ? "Nothing here" : "No marketplaces yet"),
       el("span", null, searching ? "Try another word or filter, or add a marketplace." : "Add a marketplace from a link to see its plugins here."));
     main.append(empty);
     return;
   }
-  const list = el("div", "list");
-  const names = new Map();
-  for (const offer of answer.offers) names.set(offer.name, (names.get(offer.name) || 0) + 1);
-  for (const offer of answer.offers) list.append(offerRow(offer, names.get(offer.name) > 1));
-  main.append(list);
+  const table = offerTable(answer.offers);
+  const scroller = el("div", "table-scroll");
+  scroller.append(table);
+  main.append(scroller);
   if (answer.total > answer.offers.length) {
     main.append(el("p", "group-note", `Showing ${answer.offers.length} of ${answer.total}. Search to narrow it down.`));
   }
-  entrance("discover", [tools, list]);
+  entrance("discover", [tools, table]);
 }
 
-// One row: the plugin's name, where it is installed, and Add.
-function offerRow(offer, twin) {
-  const node = el("div", "list-row");
-  const marks = el("span", "chip");
-  for (const client of offer.installed) marks.append(mark(client));
-  marks.setAttribute("aria-label", offer.installed.length ? `Installed in ${offer.installed.map((c) => CLIENT_NAMES[c] || c).join(", ")}` : "Not installed");
-  const what = el("span", "what");
+// The clients this computer has, in the Load map's order; all three before they are read.
+function columns() {
+  const found = (data.clients || []).filter((c) => c.status === "found").map((c) => c.id);
+  const shown = COLUMNS.filter((c) => !data.clients || found.includes(c));
+  return shown.length ? shown : COLUMNS;
+}
+
+function offerTable(offers) {
+  const clients = columns();
+  const table = el("table", "map offers");
+  const widths = el("colgroup");
+  const share = `${(56 / clients.length).toFixed(1)}%`;
+  for (const width of ["34%", ...clients.map(() => share), "10%"]) {
+    const col = el("col");
+    col.style.width = width;
+    widths.append(col);
+  }
+  const head = el("tr");
+  head.append(el("th", null, "Plugin"));
+  for (const client of clients) {
+    const th = el("th");
+    const chip = el("span", "chip");
+    chip.append(mark(client), el("span", null, CLIENT_NAMES[client]));
+    th.append(chip);
+    head.append(th);
+  }
+  const action = el("th");
+  action.setAttribute("aria-label", "Add");
+  head.append(action);
+  const thead = el("thead");
+  thead.append(head);
+  const body = el("tbody");
+  const names = new Map();
+  for (const offer of offers) names.set(offer.name, (names.get(offer.name) || 0) + 1);
+  let apart = false;
+  for (const offer of offers) {
+    // Plugins found only by a word in their description come last, under their own line.
+    if (offer.match === "text" && !apart) {
+      apart = true;
+      const tr = el("tr", "group");
+      const td = el("td", null, `Also mention “${cache.asked.q}” in the description`);
+      td.colSpan = clients.length + 2;
+      tr.append(td);
+      body.append(tr);
+    }
+    body.append(offerRow(offer, clients, names.get(offer.name) > 1));
+  }
+  table.append(widths, thead, body);
+  return table;
+}
+
+// Where the plugin is, or how the client gets it: a filled dot is there, a ring can be added.
+function cell(offer, client) {
+  if (client === "cursor") {
+    const viaClaude = offer.installed.includes("claude_code") || offer.routes.claude_code;
+    const node = offer.installed.includes("cursor")
+      ? socket({ state: "on", word: "Via Claude Code" })
+      : viaClaude ? socket({ state: "off", word: "Via Claude Code" }) : socket({ state: "none" });
+    node.title = viaClaude ? CURSOR_NOTE : "";
+    return node;
+  }
+  if (offer.installed.includes(client)) return socket({ state: "on", word: "Installed" });
+  const route = offer.routes[client];
+  if (!route) {
+    const none = socket({ state: "none" });
+    none.setAttribute("aria-label", "Cannot add from this marketplace");
+    return none;
+  }
+  const node = socket({ state: "off", word: "Can add", where: route === "add_marketplace" ? "+ marketplace" : null });
+  if (route === "add_marketplace") node.title = `Adds the ${offer.marketplace} marketplace first`;
+  return node;
+}
+
+// One row: the name and what it does, one cell per client, and Add.
+function offerRow(offer, clients, twin) {
+  const tr = el("tr");
+  tr.tabIndex = 0;
+  tr.dataset.key = offer.id;
+  tr.setAttribute("aria-selected", String(state.selected === offer.id));
+  const nameCell = el("td");
+  const top = el("div", "item");
   const name = el("span", "mono", offer.name);
   name.title = offer.id;
-  what.append(name);
-  if (offer.category) what.append(flag({ text: offer.category, level: "info" }));
+  top.append(name);
+  if (offer.category) top.append(flag({ text: offer.category, level: "info" }));
   // Two marketplaces can offer a plugin with one name: then say which one this is.
-  if (twin) what.append(el("span", "from", offer.marketplace));
-  const actions = el("span", "row-actions");
-  actions.append(button("Details", () => showOffer(offer), "btn small ghost"));
+  if (twin) top.append(el("span", "from", offer.marketplace));
+  nameCell.append(top);
+  if (offer.description) {
+    const desc = el("div", "desc", offer.description);
+    desc.title = offer.description;
+    nameCell.append(desc);
+  }
+  tr.append(nameCell);
+  for (const client of clients) {
+    const td = el("td");
+    td.append(cell(offer, client));
+    tr.append(td);
+  }
+  const act = el("td", "act");
   const open = INSTALLERS.filter((c) => offer.routes[c] && !offer.installed.includes(c));
-  if (open.length) actions.append(button("Add…", () => addForm(offer, open), "btn small"));
-  else actions.append(el("span", "row-word", offer.installed.length ? "Added" : "Not for these clients"));
-  node.append(marks, what, actions);
-  return node;
+  if (open.length) {
+    const add = button("Add…", (event) => { event.stopPropagation(); addForm(offer, open); }, "btn small");
+    add.setAttribute("aria-label", `Add ${offer.name}`);
+    act.append(add);
+  }
+  tr.append(act);
+  const show = () => {
+    for (const other of tr.parentElement.querySelectorAll('tr[aria-selected="true"]')) other.setAttribute("aria-selected", "false");
+    tr.setAttribute("aria-selected", "true");
+    state.selected = offer.id;
+    showOffer(offer);
+  };
+  tr.addEventListener("click", show);
+  tr.addEventListener("keydown", (event) => {
+    if (event.target !== tr) return;
+    if (event.key === "Enter") { event.preventDefault(); show(); }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const step = event.key === "ArrowDown" ? "nextElementSibling" : "previousElementSibling";
+      let next = tr[step];
+      while (next && !next.dataset.key) next = next[step]; // skip the group line
+      if (next) next.focus();
+    }
+  });
+  return tr;
 }
 
 function section(title, children) {

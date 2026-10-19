@@ -236,6 +236,20 @@ def test_diagram_nodes_open_the_client_apps_and_the_gateway():
 def test_discover_adds_plugins_and_marketplaces_in_one_review():
     text = script("discover.js")
     assert '"plugin.install"' in text and '"marketplace.add"' in text
-    assert "Add a marketplace…" in text and '"Details"' in text
+    assert "Add a marketplace…" in text
     assert '<a href="#discover" data-view="discover">Discover</a>' in INDEX
-    assert '["new", "Not added"]' in text and "match “${state.q}”" in text
+    assert '["new", "Not added"]' in text and "match “${asked.q}”" in text
+
+
+def test_discover_rows_say_where_each_plugin_can_go_without_details():
+    text = script("discover.js")
+    # One cell per client, like the Load map: a filled dot is there, a ring can be added.
+    assert '"Installed"' in text and '"Can add"' in text and '"Via Claude Code"' in text
+    assert 'el("table", "map offers")' in text and '"desc"' in text
+    # Filters by category and marketplace, fed by the counts the server sends.
+    assert '"All categories"' in text and '"All marketplaces"' in text
+    assert "answer.facets" in text
+    # Plugins found only by their description are grouped apart, so the reason is clear.
+    assert "Also mention “${cache.asked.q}” in the description" in text
+    # The row opens Details, so there is no Details button on it.
+    assert '"Details"' not in text
