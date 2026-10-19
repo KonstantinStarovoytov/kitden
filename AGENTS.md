@@ -13,5 +13,8 @@
   mechanism that works, no speculative options.
 - Check changing facts about other tools (client file formats, gateway APIs) against their
   own docs, and write the date you checked next to the claim.
+- When you finish a task that changes what Kitden does or plans, update ROADMAP.md in the same
+  change.
+- Every release has a notes file; see [docs/development.md](docs/development.md).
 - Commit messages: a short plain subject, one to three simple lines.
 - Earlier specs and research live in the git tag `dev-notes-2026-10-19`.

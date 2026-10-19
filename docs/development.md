@@ -38,10 +38,14 @@ framework, no bundler, nothing loaded from another site. How it looks and moves:
 1. `uv version X.Y.Z`, and the same number in `plugins/kitden/.claude-plugin/plugin.json`,
    `plugins/kitden/plugin.json` and `KITDEN_REF` in `install.sh` and `install.ps1`
    (a test checks they match).
-2. Commit, then `git tag vX.Y.Z` and `git push origin main vX.Y.Z`.
+2. Write `docs/releases/vX.Y.Z.md`: plain notes for users about everything since the last tag
+   (`git log vA.B.C..HEAD`), grouped as New, Better and Fixed.
+3. Update `ROADMAP.md`: move what shipped under Done and change the "Last updated" date.
+4. Commit, then `git tag vX.Y.Z` and `git push origin main vX.Y.Z`.
 
-The workflow runs the checks, publishes to PyPI with trusted publishing and creates the GitHub
-release.
+The workflow runs the checks and stops if the notes file is missing. Then it publishes to PyPI
+with trusted publishing and creates the GitHub release with the notes file as its text.
+`README.md` is also the PyPI page, so its images and links use full `https://` addresses.
 
 ## Gateways
 
