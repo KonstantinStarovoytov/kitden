@@ -19,11 +19,13 @@ test('Cursor shows a plugin only when it imports what Claude Code has', () => {
 
 test('Details say how Cursor gets a plugin only when that is a fact', () => {
   const through = 'Cursor: loads it through Claude Code.';
+  const once = 'Cursor: gets it through Claude Code once you add it there.';
   const has = 'Cursor: has it.';
   const claude = { installed: ['claude_code'], routes: { claude_code: 'ready' } };
-  // Cursor imports Claude Code's plugins, and Claude Code has this one or can take it.
+  // Cursor imports Claude Code's plugins and Claude Code has this one: it loads it now.
   assert.equal(cursorLine(claude, both), through);
-  assert.equal(cursorLine({ installed: [], routes: { claude_code: 'ready' } }, both), through);
+  // Claude Code can take it but has not: Cursor gets it only after that.
+  assert.equal(cursorLine({ installed: [], routes: { claude_code: 'ready' } }, both), once);
   // Cursor does not import them, or Claude Code cannot have this one: nothing to say.
   assert.equal(cursorLine(claude, none), '');
   assert.equal(cursorLine({ installed: [], routes: { codex: 'ready' } }, both), '');

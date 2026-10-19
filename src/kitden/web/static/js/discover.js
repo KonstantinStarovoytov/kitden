@@ -227,13 +227,13 @@ export function cursorPlugin(offer, inherits) {
   return inherits.plugin && viaClaude ? "off" : "none";
 }
 
-// The Cursor line in a plugin's Details, or "". Through Claude Code only when Cursor imports its
-// plugins and Claude Code has this one or can take it. A plugin Cursor holds itself is Cursor's own.
+// The Cursor line in a plugin's Details, or "". Cursor loads it through Claude Code only when
+// Claude Code has it and Cursor imports its plugins. If Claude Code can only take it, Cursor gets
+// it after you add it there. A plugin Cursor holds itself is Cursor's own.
 export function cursorLine(offer, inherits) {
-  const through = "Cursor: loads it through Claude Code.";
-  if (inherits.plugin && offer.installed.includes("claude_code")) return through;
+  if (inherits.plugin && offer.installed.includes("claude_code")) return "Cursor: loads it through Claude Code.";
   if (offer.installed.includes("cursor")) return "Cursor: has it.";
-  return inherits.plugin && offer.routes.claude_code ? through : "";
+  return inherits.plugin && offer.routes.claude_code ? "Cursor: gets it through Claude Code once you add it there." : "";
 }
 
 // Where the plugin is, or how the client gets it: a filled dot is there, a ring can be added.

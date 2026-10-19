@@ -312,6 +312,7 @@ def test_discover_details_and_add_form_follow_what_the_server_says_about_cursor(
     text = script("discover.js")
     # Details no longer claim a Cursor setting; the line shows only when Cursor would load it.
     assert "Cursor: loads it through Claude Code." in text and "Cursor: has it." in text
+    assert "Cursor: gets it through Claude Code once you add it there." in text
     assert "cursorLine(offer, cursorInherits())" in text
     assert "Cursor: loads Claude Code plugins when" not in text
     assert "Cursor will also load it from the shared skills folder." in text
