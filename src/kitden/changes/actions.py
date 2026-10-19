@@ -1,6 +1,7 @@
 """Turn a requested action into steps for the change engine (write-matrix.md)."""
 
 import re
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,7 @@ from kitden.model import GATEWAY_CLIENT, Gateway, GatewayEdit, Item, Scope, Step
 
 GATEWAY_CONNECT = "gateway.connect"
 GATEWAY_MOVE = "gateway.move"
+GATEWAY_SWITCH = "gateway.switch"
 SETUP_SERVER_UPDATE = "setup_server.update"
 ENTRY_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
 
@@ -29,6 +31,31 @@ def connect_steps(
         if adapter is None:
             raise ValueError(f"{client} cannot be connected to a gateway")
         steps.append(adapter.gateway_step(gateway, name))
+    return steps
+
+
+def switch_steps(
+    adapters: dict[str, ClientAdapter], items: list[Item], gateway: Gateway, name: str
+) -> list[Step]:
+    """Move clients from their gateway to another: per client, remove each entry that points to
+    another gateway, then add one entry for this one. Both edit one file, in order."""
+    if not ENTRY_NAME.fullmatch(name):
+        raise ValueError("The entry name may use letters, digits, '-' and '_' only")
+    old = [i for i in items if i.via_gateway and i.via_gateway != gateway.id]
+    if not old:
+        raise ValueError("No client uses another gateway")
+    steps = []
+    for client in dict.fromkeys(i.client for i in old):
+        adapter = adapters.get(client)
+        if adapter is None:
+            raise ValueError(f"{client} cannot be connected to a gateway")
+        mine = [i for i in old if i.client == client]
+        if any(i.name == name for i in mine):
+            raise ValueError(f"{client} already has an entry named {name}; choose another name")
+        # The entry points to a gateway, so it is not "direct"; it is still an entry we may edit.
+        steps += [adapter.remove_step(replace(i, via_gateway=None)) for i in mine]
+        if not any(i.client == client and i.via_gateway == gateway.id for i in items):
+            steps.append(adapter.gateway_step(gateway, name))
     return steps
 
 

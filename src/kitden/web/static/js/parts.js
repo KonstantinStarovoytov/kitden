@@ -106,6 +106,7 @@ export function banner(what, onRetry) {
 const ACTION_WORDS = {
   "gateway.connect": "Added gateway",
   "gateway.move": "Moved into the gateway",
+  "gateway.switch": "Switched the gateway",
   "mcp.remove_direct": "Removed",
   "plugin.enable": "Turned on",
   "plugin.disable": "Turned off",
@@ -122,7 +123,7 @@ export function changeTitle(entry) {
   const steps = entry.steps.filter((s) => s.client !== "gateway");
   const names = [...new Set(steps.map((s) => (plugin ? s.name.split("@")[0] : s.name)))];
   const clients = [...new Set(steps.map((s) => CLIENT_NAMES[s.client] || s.client))];
-  const whole = ["gateway.connect", "setup_server.register", "setup_server.update"].includes(entry.action);
+  const whole = ["gateway.connect", "gateway.switch", "setup_server.register", "setup_server.update"].includes(entry.action);
   const what = whole ? "" : ` ${names.join(", ")}`;
   return `${verb}${what} · ${clients.join(", ")}`;
 }

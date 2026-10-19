@@ -62,7 +62,9 @@ export function renderGateway(main) {
     return;
   }
 
-  const [first, ...others] = model.gateways;
+  // The gateway the clients use gets the big card with the routes; the others follow.
+  const ordered = [...model.gateways].sort((a, b) => Number(model.used.includes(b.id)) - Number(model.used.includes(a.id)));
+  const [first, ...others] = ordered;
   const card = gatewayCard(first, model);
   main.append(card);
   blocks.push(card);
@@ -123,6 +125,11 @@ function gatewayHead(gateway, model) {
     const link = webLink(gateway.ui_url, `Open ${gatewayName(gateway)} ↗`);
     link.classList.add("small", "ghost");
     right.append(link);
+  }
+  // Clients use another gateway: one review moves all of them here (the old entries go).
+  if (model.used.length && !model.used.includes(gateway.id)) {
+    const name = gatewayName(gateway).toLowerCase().replace(/[^a-z0-9_-]+/g, "-");
+    right.append(button("Use this gateway…", () => review({ action: "gateway.switch", targets: [], params: { gateway: gateway.id, name } }), "btn small primary"));
   }
   head.append(left, right);
   return head;

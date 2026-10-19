@@ -10,6 +10,7 @@ WORDS = {
     "mcp.remove_direct": ("off", "Removed"),
     "gateway.connect": ("gw", "Via gateway"),
     "gateway.move": ("gw", "Via gateway"),
+    "gateway.switch": ("gw", "Via the new gateway"),
     "setup_server.register": ("on", "Added"),
     "setup_server.update": ("on", "Updated"),
 }

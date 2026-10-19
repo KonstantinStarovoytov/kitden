@@ -564,3 +564,57 @@ def test_clients_connect_to_obot_with_a_key_reference_or_an_oauth_login(client, 
     assert notes["codex"] == "Run: codex mcp login gateway"
     assert notes["claude_code"]
     assert obot.key not in json.dumps(change)
+
+
+def test_clients_switch_from_one_gateway_to_another_and_undo_puts_them_back(client):
+    old = _register(client).json()
+    connected = _connect(client, old["id"]).json()
+    client.post(f"/api/changes/{connected['id']}/apply", headers=POST)
+    before = _files(client.home)
+    new = client.post(
+        "/api/gateways",
+        json={"url": "http://localhost:8080/mcp-connect/vmcp1", "auth": "oauth"},
+        headers=POST,
+    ).json()
+
+    body = {
+        "action": "gateway.switch",
+        "targets": [],
+        "params": {"gateway": new["id"], "name": "obot"},
+    }
+    preview = client.post("/api/changes/preview", json=body, headers=POST)
+    assert preview.status_code == 200
+    change = preview.json()
+    assert [(s["client"], s["name"]) for s in change["steps"]] == [
+        ("claude_code", "gateway"),
+        ("claude_code", "obot"),
+        ("codex", "gateway"),
+        ("codex", "obot"),
+        ("cursor", "gateway"),
+        ("cursor", "obot"),
+    ]
+    assert _files(client.home) == before
+
+    applied = client.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
+    assert applied["state"] == "verified"
+    items = client.get("/api/items?kind=mcp_server").json()
+    via = {(i["client"], i["name"]): i["via_gateway"] for i in items if i["via_gateway"]}
+    assert via == {(c, "obot"): new["id"] for c in ("claude_code", "codex", "cursor")}
+
+    undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
+    assert undone["state"] == "undone"
+    assert _files(client.home) == before
+
+
+def test_switching_to_the_gateway_already_in_use_is_refused(client):
+    gateway = _register(client).json()
+    connected = _connect(client, gateway["id"]).json()
+    client.post(f"/api/changes/{connected['id']}/apply", headers=POST)
+    body = {
+        "action": "gateway.switch",
+        "targets": [],
+        "params": {"gateway": gateway["id"], "name": "gateway"},
+    }
+    answer = client.post("/api/changes/preview", json=body, headers=POST)
+    assert answer.status_code == 422
+    assert "No client uses another gateway" in answer.json()["detail"]

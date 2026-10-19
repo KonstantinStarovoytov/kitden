@@ -215,3 +215,9 @@ def test_held_rows_say_remote_hosted_or_sse_and_keep_addresses_behind_details():
     text = script("gateway.js")
     assert 'return "Hosted";' in text and 'return "Remote";' in text
     assert "Nothing yet. Add servers in ${gatewayName(gateway)} itself." in text
+
+
+def test_a_gateway_the_clients_do_not_use_offers_to_take_them_over():
+    text = script("gateway.js")
+    assert "Use this gateway…" in text and '"gateway.switch"' in text
+    assert "model.used.includes(b.id)" in text  # the used gateway gets the card with the routes

@@ -17,12 +17,14 @@ from starlette.staticfiles import StaticFiles
 from kitden.changes.actions import (
     GATEWAY_CONNECT,
     GATEWAY_MOVE,
+    GATEWAY_SWITCH,
     SETUP_SERVER_UPDATE,
     connect_steps,
     move_steps,
     plugin_steps,
     remove_steps,
     setup_server_steps,
+    switch_steps,
     update_steps,
 )
 from kitden.changes.backup import ChangeStore
@@ -32,7 +34,7 @@ from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, REMOVE_DIRECT, SE
 from kitden.command import installed_command
 from kitden.gateway_api import GatewayError, MetaMcpClient, ObotClient
 from kitden.gateways import add_gateway, data_dir, load_gateways
-from kitden.model import Change, ChangeState, Gateway, GatewayAuth, GatewayEdit
+from kitden.model import Change, ChangeState, Gateway, GatewayAuth, GatewayEdit, ItemKind
 from kitden.redact import redact_text
 from kitden.views.after import after_words
 from kitden.views.commands import commands_for
@@ -420,6 +422,14 @@ def create_app(
                     return _error("Register the gateway first.", 422)
                 clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
                 steps = connect_steps(adapters, clients, gateway, str(params.get("name", "")))
+            elif action == GATEWAY_SWITCH:
+                gateway = next(
+                    (g for g in load_gateways(home) if g.id == params.get("gateway")), None
+                )
+                if gateway is None:
+                    return _error("Register the gateway first.", 422)
+                mcp = [i for i in state.inventory.items if i.kind is ItemKind.MCP_SERVER]
+                steps = switch_steps(adapters, mcp, gateway, str(params.get("name", "")))
             elif action == SETUP_SERVER:
                 command = (setup_command or installed_command)()
                 if command is None:

@@ -366,6 +366,7 @@ const DONE_WORDS = {
   "plugin.disable": "Turned off", "plugin.enable": "Turned on", "mcp.remove_direct": "Removed",
   "gateway.connect": "Connected the gateway", "setup_server.register": "Added show my setup",
   "setup_server.update": "Updated show my setup to Kitden", "gateway.move": "Moved",
+  "gateway.switch": "Switched the gateway",
 };
 
 // The review title names the exact entry; the toast uses the short name ("superpowers").
@@ -380,13 +381,15 @@ function changeWords(change) {
     "plugin.enable": `Turn on ${names} in ${clients}`,
     "mcp.remove_direct": `Remove ${names} from ${clients}`,
     "gateway.connect": `Connect the gateway to ${clients}`,
+    // Each client's last step adds the new entry; it is named after the gateway.
+    "gateway.switch": `Use ${steps.length ? steps[steps.length - 1].name : "the new gateway"} in ${clients}`,
     "setup_server.register": `Add “show my setup” to ${clients}`,
     "setup_server.update": `Update “show my setup” to Kitden in ${clients}`,
   }[change.action] || change.action;
   const verb = DONE_WORDS[change.action] || change.action;
   let what = `${verb} ${short} ${change.action === "mcp.remove_direct" ? "from" : "in"} ${clients}`;
-  if (["gateway.connect", "setup_server.register", "setup_server.update"].includes(change.action)) {
-    what = `${verb} ${change.action === "setup_server.update" ? "in" : "to"} ${clients}`;
+  if (["gateway.connect", "gateway.switch", "setup_server.register", "setup_server.update"].includes(change.action)) {
+    what = `${verb} ${["setup_server.update", "gateway.switch"].includes(change.action) ? "in" : "to"} ${clients}`;
   } else if (change.action === "gateway.move") {
     what = `${verb} ${short} into the gateway`;
   }
