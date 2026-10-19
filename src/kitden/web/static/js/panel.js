@@ -2,7 +2,7 @@
 import { getJson, postJson, query } from "./api.js";
 import { $, $$, button, el, plural, reportError, shortPath, shortPaths } from "./dom.js";
 import { morphOnNextRender, onOpenItem } from "./map.js";
-import { animate, finishTransition, fold, transition } from "./motion.js";
+import { finishTransition, fold, transition } from "./motion.js";
 import { CLIENT_NAMES, diffCounts, GATEWAY_NOTE, mark, notesSection, socket } from "./parts.js";
 import { busy, current as currentModel, data, reload, render, setBusy, state } from "./store.js";
 
@@ -22,7 +22,6 @@ let current = null;
 let opener = null;
 let openerKey = null;
 
-const wait = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 const clientName = (id) => CLIENT_NAMES[id] || id;
 
 export function isPanelOpen() {
@@ -471,19 +470,15 @@ function afterLine(entries) {
 }
 
 // Only the lines that change show; the diff's own header lines say nothing a person needs.
-// Each line is a block, so removed and added lines carry their own tint; they settle in one
-// after another when the file change is opened.
+// Each line is a block, so removed and added lines carry their own tint.
 function diffLines(text) {
   const pre = el("pre", "diff");
-  let index = 0;
   for (const line of String(text || "").split("\n")) {
     if (line === "--- before" || line === "+++ after" || /^@@ /.test(line)) continue;
     let look = "line";
     if (line.startsWith("+")) look = "line add";
     else if (line.startsWith("-")) look = "line del";
-    const node = el("span", look, line || " ");
-    node.style.setProperty("--i", String(Math.min(index++, 14)));
-    pre.append(node);
+    pre.append(el("span", look, line || " "));
   }
   return pre;
 }
@@ -539,16 +534,6 @@ function brokeAfterAnswer(error) {
   reportError(error);
 }
 
-// A short "no" from the button that was pressed; the error itself stays in the callout.
-function shake(node) {
-  animate(node, [{ transform: "translateX(0)" }, { transform: "translateX(-10px)" }, { transform: "translateX(7px)" }, { transform: "translateX(-4px)" }, { transform: "translateX(0)" }], { duration: 360 });
-}
-
-function swapLabel(label, text) {
-  label.classList.add("swap");
-  setTimeout(() => { label.textContent = text; label.classList.remove("swap"); }, 120);
-}
-
 // The header's Cancel and the footer buttons are off while a change runs.
 function lockReview(locked, apply, cancel) {
   apply.disabled = locked;
@@ -561,7 +546,6 @@ function resetApply(apply, cancel, label) {
   for (const extra of apply.querySelectorAll(".spinner, .check")) extra.remove();
   apply.classList.remove("done");
   label.textContent = "Apply";
-  label.classList.remove("swap");
   lockReview(false, apply, cancel);
 }
 
@@ -592,28 +576,31 @@ async function readChange(id) {
   }
 }
 
+// How an Apply ended: the change as the server holds it, or why it failed.
+export async function applyOutcome(id) {
+  try {
+    const result = await postJson(`/api/changes/${encodeURIComponent(id)}/apply`);
+    if (!result.data) throw new Error(`The Apply answer had no body (${result.status}).`);
+    if (result.data.id) return { after: result.data, failure: null };
+    return { after: null, failure: result.data.detail || `Apply failed (${result.status}).` };
+  } catch (error) {
+    // No answer, or one with no body, yet the change may have run: ask the server how it ended.
+    console.error(error);
+    const read = await readChange(id);
+    return { after: read && !PENDING.includes(read.state) ? read : null, failure: LOST };
+  }
+}
+
 // Apply → Applying… (spinner) → Applied (the check draws); then the panel leaves and the
-// page shows the effect where it happened.
+// page shows the effect where it happened. Each step waits for work, never for a timer.
 async function applyChange(change, { apply, cancel, label, body }) {
-  if (busy.change || apply.disabled) return;
+  if (busy.change) return;
   const previewBody = current && current.previewBody;
   setBusy(true);
   lockReview(true, apply, cancel);
-  swapLabel(label, "Applying…");
+  label.textContent = "Applying…";
   apply.prepend(el("span", "spinner"));
-  const started = performance.now();
-  let after = null;
-  let failure = LOST;
-  try {
-    const result = await postJson(`/api/changes/${encodeURIComponent(change.id)}/apply`);
-    after = result.data && result.data.id ? result.data : null;
-    failure = (result.data && result.data.detail) || `Apply failed (${result.status}).`;
-  } catch (error) {
-    // No answer came back, yet the change may have run: ask the server how it ended.
-    console.error(error);
-    const read = await readChange(change.id);
-    if (read && !PENDING.includes(read.state)) after = read;
-  }
+  const { after, failure } = await applyOutcome(change.id);
   if (after && current) current.change = after;
 
   if (!after || after.state !== "verified") {
@@ -623,24 +610,27 @@ async function applyChange(change, { apply, cancel, label, body }) {
     const detail = after && after.error ? ` (${shortPaths(after.error)})` : "";
     for (const old of body.querySelectorAll(".callout.error")) old.remove();
     body.prepend(callout(`${reason}${detail}`, "error"));
-    shake(apply);
+    // Focus goes to the button in Apply's place; the callout says what went wrong.
+    let next = apply;
     if (after && after.state !== "previewed") {
-      apply.replaceWith(button("Preview again", () => review(previewBody), "btn primary"));
+      next = button("Preview again", () => review(previewBody), "btn primary");
+      apply.replaceWith(next);
     }
+    next.focus();
     reload().then(render).catch(() => {});
     return;
   }
-  await showApplied(after, apply, label, started);
+  await showApplied(after, apply, label);
 }
 
-// The server said `verified`: the check draws, the panel leaves, the toast offers Undo.
-async function showApplied(after, apply, label, started) {
-  await wait(Math.max(0, 520 - (performance.now() - started)));
+// The server said `verified`: the button turns green while the page reloads, then the panel
+// leaves at once and the toast offers Undo.
+async function showApplied(after, apply, label) {
   for (const spin of apply.querySelectorAll(".spinner")) spin.remove();
   apply.prepend(checkMark());
   apply.classList.add("done");
   label.textContent = "Applied";
-  await Promise.all([wait(450), reload().catch(() => {})]);
+  await reload().catch(() => {});
   current = null;
   closePanel({ keepSelection: true, focus: false, force: true });
   showEffect();

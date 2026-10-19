@@ -50,7 +50,7 @@ export function socket({ state, where, word }) {
   return node;
 }
 
-// Morph a socket to a new state: the words blur out, the new socket blurs in, one ping.
+// Morph a socket to a new state: the words fade out, the new socket fades in, one ping.
 // The socket is rebuilt, so "not set up" (no dot) and the other states swap cleanly.
 export function morphSocket(node, { state, where }) {
   const texts = [...node.querySelectorAll(".word, .where")];

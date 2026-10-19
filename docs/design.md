@@ -60,8 +60,8 @@ has verified it. Calm beats bouncy: a tool that edits files must feel steady.
    observe. A gateway wire draws once when its connection first appears, then rests.
 3. **Point, don't move.** To show where something is, light it (row glow, socket ping, lit
    rows). Layout moves only when the thing itself moves (a tile flying to its column).
-4. **Errors stay.** An error is a callout that stays until the next action; the button that
-   failed shakes once. No success animation can follow an error.
+4. **Errors stay.** An error is a callout that stays until the next action; focus goes back to
+   the button that failed. No success animation can follow an error.
 5. **Interruptible.** Every animation can be cut short; the true state is always the resting
    style, never something an animation must finish to reach.
 6. **Transform and opacity.** Only these animate, with three small exceptions (the client
@@ -74,15 +74,14 @@ Defined once in `style.css`; JavaScript reads `--spring` from there.
 | Token | Value | Use |
 | --- | --- | --- |
 | Press | 80 ms in to 0.98, 260 ms `--spring` out | Buttons, tabs, filters, rail links, switches, tiles |
-| `--t-fast` | 180 ms ease | Hover colour, label swaps, focus |
-| `--t-panel` | 320 ms `--ease-drawer` | Drawer, scrim |
+| `--t-fast` | 180 ms ease | Hover colour, word fades, focus |
+| `--t-panel` | 240 ms `--ease-drawer` | Drawer, scrim |
 | Fold | 280 ms `--ease-out` | A `<details>` opening or closing |
 | Glide | 300 ms `--spring` | The mark sliding between choices |
 | Flight | 340 ms `--ease-drawer` | A shared tile between places |
-| Status | 320–380 ms `--ease-in-out` | Socket morph (dot fill, words blur) |
-| Success | check draws 320 ms, button stays green 450 ms | Applied, Undone |
-| Error | 10 px shake, 360 ms | A failed Apply |
-| Stagger | 45 ms between blocks, 18 ms between diff lines (14 at most) | First visit, diff |
+| Status | 320–380 ms `--ease-in-out` | Socket morph (dot fill, words fade) |
+| Success | check draws 320 ms, never delays the next action | Applied, Undone |
+| Stagger | 45 ms between blocks | First visit |
 | `--spring` | critically damped `linear()` spring, no overshoot; falls back to `--ease-out` | Everything the hand moves |
 
 ### Patterns
@@ -110,6 +109,7 @@ All helpers live in `src/kitden/web/static/js/motion.js`.
 - One motion per change. A change that morphs cells does not also cross-fade the page.
 - A new control gets the press (`transform`), a hover colour and a visible focus ring; nothing else.
 - Lists stagger, single things do not. Total stagger under 500 ms.
+- A drawer has one motion: it slides in. Its blocks and diff lines are there at once.
 - Put the resting style in CSS and the animation in a class or keyframe, so a skipped animation
   still lands on the right look.
 - Never read the true state from `transitionend` or `animationend`; use a timer or the data.

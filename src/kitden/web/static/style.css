@@ -34,7 +34,7 @@
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
   --t-press: 120ms;
   --t-fast: 180ms;
-  --t-panel: 320ms;
+  --t-panel: 240ms;
   /* A critically damped spring (no overshoot: calm, for a tool that edits real files). */
   --spring: var(--ease-out);
 }
@@ -132,8 +132,6 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .btn.ghost { border-color: transparent; background: transparent; color: var(--ink-2); }
 .btn.ghost:hover { background: var(--wire-soft); color: var(--ink); }
 .btn.small { height: 24px; padding: 0 8px; font-size: 12px; }
-.btn .label { transition: filter var(--t-fast) ease, opacity var(--t-fast) ease; }
-.btn .label.swap { filter: blur(2px); opacity: 0; }
 .btn.primary.done, .btn.primary.done:hover { background: var(--lamp-on); color: #ffffff; }
 .toast .check { flex: none; color: var(--lamp-on); }
 .spinner { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid currentColor; border-right-color: transparent; animation: spin 600ms linear infinite; }
@@ -202,10 +200,10 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .s-over { color: var(--ink-3); } .s-over .dot { background: linear-gradient(135deg, transparent 44%, currentColor 45% 55%, transparent 56%); }
 .s-unk { color: var(--lamp-warn); } .s-unk .dot { border-style: dashed; }
 .s-none, .s-missing { color: var(--ink-4); }
-.socket .word { color: var(--ink-2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: filter var(--t-fast) ease, opacity var(--t-fast) ease; }
-.socket .where { color: var(--ink-3); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: filter var(--t-fast) ease, opacity var(--t-fast) ease; }
+.socket .word { color: var(--ink-2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: opacity var(--t-fast) ease; }
+.socket .where { color: var(--ink-3); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: opacity var(--t-fast) ease; }
 .socket .where::before { content: "· "; }
-.socket .swap { filter: blur(2px); opacity: 0; }
+.socket .swap { opacity: 0; }
 .socket.pulse .dot { animation: ping 900ms var(--ease-out) 1; }
 @keyframes ping { 0% { box-shadow: 0 0 0 0 currentColor; } 100% { box-shadow: 0 0 0 7px transparent; } }
 .flag { flex: none; font-size: 11px; padding: 0 6px; border-radius: 10px; line-height: 18px; background: var(--lamp-warn-soft); color: var(--lamp-warn); font-weight: 500; white-space: nowrap; }
@@ -392,10 +390,6 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .drawer header { padding: 16px 20px 12px; border-bottom: 1px solid var(--wire); display: grid; gap: 4px; }
 .drawer header .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .drawer .body { flex: 1; padding: 16px 20px; overflow: auto; display: grid; gap: 18px; align-content: start; }
-.drawer.open .body > * { animation: rise 360ms var(--ease-out) both; }
-.drawer.open .body > *:nth-child(2) { animation-delay: 40ms; }
-.drawer.open .body > *:nth-child(3) { animation-delay: 80ms; }
-.drawer.open .body > *:nth-child(n+4) { animation-delay: 120ms; }
 .drawer footer { padding: 12px 20px; border-top: 1px solid var(--wire); display: flex; gap: 8px; justify-content: flex-end; align-items: center; flex-wrap: wrap; }
 .drawer footer .note { margin-right: auto; color: var(--ink-3); font-size: 12px; }
 .drawer footer .note.side { margin-right: 0; margin-left: auto; text-align: right; }
@@ -434,8 +428,6 @@ pre.diff { margin: 0; padding: 10px 12px; background: var(--inset); border-top: 
 pre.diff .line { display: block; margin: 0 -12px; padding: 0 12px; }
 pre.diff .add { color: var(--lamp-on); background: color-mix(in srgb, var(--lamp-on) 9%, transparent); box-shadow: inset 2px 0 var(--lamp-on); }
 pre.diff .del { color: var(--danger); background: color-mix(in srgb, var(--danger) 9%, transparent); box-shadow: inset 2px 0 var(--danger); }
-details.file-change[open] pre.diff .line { animation: line-in 260ms var(--ease-out) both; animation-delay: calc(var(--i, 0) * 18ms); }
-@keyframes line-in { from { opacity: 0; transform: translateX(-6px); } }
 .callout { display: flex; gap: 8px; padding: 10px 12px; border-radius: 8px; background: var(--lamp-warn-soft); color: var(--ink-2); }
 .callout.error { background: color-mix(in srgb, var(--danger) 10%, transparent); }
 .callout.stale { margin-bottom: 12px; }

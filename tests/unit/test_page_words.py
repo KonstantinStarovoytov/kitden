@@ -431,3 +431,22 @@ def test_client_checkboxes_come_from_one_named_part():
     for name in ("discover.js", "gateway.js"):
         text = script(name)
         assert "clientCheck(" in text and 'type = "checkbox"' not in text
+
+
+def test_apply_waits_for_work_not_for_a_timer():
+    panel, css = script("panel.js"), (STATIC / "style.css").read_text()
+    assert "520 - (performance.now()" not in panel and "wait(450)" not in panel
+    assert "shake(" not in panel
+    assert ".drawer.open .body > *:nth-child(2)" not in css and "line-in" not in css
+    assert "--t-panel: 240ms" in css
+    assert ".socket .swap { opacity: 0; }" in css
+
+
+def test_apply_sets_its_label_at_once_and_a_failure_focuses_the_button():
+    panel = script("panel.js")
+    flow = panel.split("function brokeAfterAnswer")[1].split("function showEffect")[0]
+    # No timer in the Apply flow, so a late label cannot land on a button already reset.
+    assert "setTimeout" not in flow and "const wait" not in panel
+    assert 'label.textContent = "Applying…"' in flow
+    assert "next.focus()" in flow
+    assert ".label.swap" not in CSS
