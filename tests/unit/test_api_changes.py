@@ -481,3 +481,67 @@ def test_an_unmanaged_gateway_cannot_take_servers(client, fake):
     assert refused.status_code == 422 and "sign-in" in refused.json()["detail"]
     answer = client.get(f"/api/gateways/{gateway['id']}/servers").json()
     assert answer["servers"] is None and "sign-in" in answer["error"]
+
+
+# Feature 007: an Obot gateway beside MetaMCP ---------------------------------------------
+
+
+@pytest.fixture
+def obot(monkeypatch):
+    from tests.unit.fake_obot import FakeObot
+
+    fake = FakeObot().start()
+    monkeypatch.setenv("OBOT_KEY", fake.key)
+    yield fake
+    fake.stop()
+
+
+def _register_obot(client, fake, **extra):
+    body = {"url": fake.mcp_url, "auth": "oauth", "key_env_var": "OBOT_KEY", **extra}
+    return client.post("/api/gateways", json=body, headers=POST)
+
+
+def test_the_page_reads_what_an_obot_gateway_holds(client, obot):
+    obot.hold("docs", "https://docs.example.com/mcp")
+    saved = _register_obot(client, obot, ui_url=obot.url).json()
+    assert (saved["kind"], saved["managed"], saved["movable"]) == ("obot", True, False)
+    answer = client.get(f"/api/gateways/{saved['id']}/servers").json()
+    assert answer == {
+        "servers": [{"name": "docs", "type": "remote", "url": "https://docs.example.com/mcp"}],
+        "error": None,
+    }
+    obot.stop()
+    answer = client.get(f"/api/gateways/{saved['id']}/servers").json()
+    assert answer["servers"] is None and "Could not reach" in answer["error"]
+    assert obot.key not in answer["error"]
+
+
+def test_an_obot_gateway_without_a_key_variable_says_so(client, obot):
+    saved = _register_obot(client, obot, key_env_var=None).json()
+    assert saved["managed"] is False
+    answer = client.get(f"/api/gateways/{saved['id']}/servers").json()
+    assert answer["servers"] is None and "key variable" in answer["error"]
+    neon = next(r for r in _move_rows(client) if r["name"] == "neon")
+    refused = _move(client, saved["id"], neon["items"])
+    assert refused.status_code == 422 and "Step B" in refused.json()["detail"]
+
+
+def test_an_obot_key_never_reaches_a_client_file_or_a_response(client, obot):
+    saved = _register_obot(client, obot).json()
+    assert obot.key not in client.get("/api/gateways").text
+    change = _connect(client, saved["id"]).json()
+    assert change["state"] == "previewed"
+    assert obot.key not in json.dumps(change)
+    applied = client.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
+    assert applied["state"] == "verified"
+    for name, raw in _files(client.home).items():
+        assert raw is not None and obot.key.encode() not in raw, name
+        assert b"mcp-connect" in raw, name
+    marked = {
+        i["client"]
+        for i in client.get("/api/items?kind=mcp_server").json()
+        if i["name"] == "gateway" and i["via_gateway"]
+    }
+    assert marked == {"claude_code", "codex", "cursor"}
+    undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
+    assert undone["state"] == "undone"

@@ -30,7 +30,7 @@ from kitden.changes.client_cli import CommandRunner
 from kitden.changes.engine import ChangeRefusedError, Engine, Runner
 from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, REMOVE_DIRECT, SETUP_SERVER
 from kitden.command import installed_command
-from kitden.gateway_api import GatewayError, MetaMcpClient
+from kitden.gateway_api import GatewayError, MetaMcpClient, ObotClient
 from kitden.gateways import add_gateway, data_dir, load_gateways
 from kitden.model import Change, ChangeState, Gateway, GatewayAuth, GatewayEdit
 from kitden.redact import redact_text
@@ -388,10 +388,12 @@ def create_app(
             return _error("Unknown gateway.", 404)
 
         def read() -> list[dict]:
-            with MetaMcpClient(gateway) as client:
-                return [
-                    {"name": s["name"], "type": s["type"], "url": s["url"]} for s in client.held()
-                ]
+            if gateway.kind == "obot":
+                held = ObotClient(gateway).held()
+            else:
+                with MetaMcpClient(gateway) as client:
+                    held = client.held()
+            return [{"name": s["name"], "type": s["type"], "url": s["url"]} for s in held]
 
         try:
             servers = await asyncio.to_thread(read)

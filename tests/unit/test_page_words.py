@@ -209,3 +209,9 @@ def test_gateway_form_takes_an_obot_key_variable_never_the_key():
     assert "Obot API key variable name (not the key)" in text
     assert "ok1-" not in text
     assert "model.gateways.find((g) => g.movable)" in text
+
+
+def test_held_rows_say_remote_hosted_or_sse_and_keep_addresses_behind_details():
+    text = script("gateway.js")
+    assert 'return "Hosted";' in text and 'return "Remote";' in text
+    assert "Nothing yet. Add servers in ${gatewayName(gateway)} itself." in text

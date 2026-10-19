@@ -168,13 +168,21 @@ function heldSection(gateway) {
   }
   box.append(title(entry.servers.length));
   if (!entry.servers.length) {
-    box.append(el("p", "group-note", "Nothing yet. Move a server from the lists below."));
+    box.append(el("p", "group-note", gateway.movable ? "Nothing yet. Move a server from the lists below." : `Nothing yet. Add servers in ${gatewayName(gateway)} itself.`));
     return box;
   }
   const list = el("div", "list");
   for (const server of entry.servers) list.append(heldRow(server, gateway));
   box.append(list);
   return box;
+}
+
+// What a held server is, in one word. MetaMCP says SSE or STREAMABLE_HTTP; Obot says how it
+// runs the server: a remote address, or a program Obot hosts (uvx, npx, containerized).
+function heldKind(server) {
+  if (server.type === "SSE") return "SSE";
+  if (!server.type || server.type === "STREAMABLE_HTTP" || server.type === "remote") return "Remote";
+  return "Hosted";
 }
 
 // One row per server the gateway holds: its name and what it is. The address stays behind
@@ -187,7 +195,7 @@ function heldRow(server, gateway) {
   const what = el("span", "what");
   const name = el("span", "mono", server.name);
   name.title = server.name;
-  what.append(name, flag({ text: server.type === "SSE" ? "SSE" : "Remote", level: "info" }));
+  what.append(name, flag({ text: heldKind(server), level: "info" }));
   const actions = el("span", "row-actions");
   actions.append(button("Details", () => showHeld(server, gateway), "btn small ghost"));
   node.append(marks, what, actions);
@@ -198,10 +206,11 @@ function showHeld(server, gateway) {
   const body = el("div", "body");
   const row = el("div", "layer");
   const middle = el("div");
-  middle.append(el("div", "name", `In ${gatewayName(gateway)} · ${server.type === "SSE" ? "SSE" : "Streamable HTTP"}`));
+  const kind = heldKind(server);
+  middle.append(el("div", "name", `In ${gatewayName(gateway)} · ${kind === "Remote" ? "Streamable HTTP" : kind === "Hosted" ? `Hosted by ${gatewayName(gateway)} (${server.type})` : kind}`));
   const url = el("div", "why mono", server.url || "");
   url.title = server.url || "";
-  middle.append(url);
+  if (server.url) middle.append(url);
   row.append(mark("gateway"), middle);
   const stack = el("div", "stack");
   stack.append(row);
