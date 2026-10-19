@@ -122,6 +122,9 @@ All helpers live in `src/kitden/web/static/js/motion.js`.
   flights just switch.
 - Keyboard opens and closes the panel instantly. Gateway routes are focusable and announce
   their state. Every control keeps `:focus-visible`.
+- A redraw keeps keyboard focus: a tab, filter button, menu or row with a `data-focus` key (or
+  a row key) gets focus back. Arrow keys, Home and End move between tabs and select (`tabKeys()`
+  in `dom.js`). The review's Tab loop includes its "Show file change" summary.
 - Live regions: the toast is `role="status"`; errors are `role="alert"`.
 
 ### Performance

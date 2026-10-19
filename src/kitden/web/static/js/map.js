@@ -1,5 +1,5 @@
 // Load map: items in rows, Claude Code, Codex and Cursor in columns.
-import { button, el } from "./dom.js";
+import { button, el, tabKeys } from "./dom.js";
 import { animate, entrance, EASE_IN_OUT, glide, land } from "./motion.js";
 import { banner, flag, mark, morphSocket, opens, skeleton, socket, staleNote } from "./parts.js";
 import { current, currentError, data, go, loadMap, projectPath, render, setState, state } from "./store.js";
@@ -76,6 +76,7 @@ export function renderMap(main) {
   for (const [id, label] of FILTERS) {
     const b = button(label, () => go("map", { only: id }), "");
     b.setAttribute("aria-pressed", String(state.only === id));
+    b.dataset.focus = `show:${id}`;
     seg.append(b);
   }
   bar.append(seg);
@@ -118,9 +119,11 @@ function tabs(counts) {
     tab.setAttribute("role", "tab");
     tab.setAttribute("aria-selected", String(state.kind === kind));
     tab.dataset.kind = kind;
+    tab.dataset.focus = `tab:${kind}`;
     tab.append(el("span", "count", String(counts[kind])));
     box.append(tab);
   }
+  tabKeys(box);
   return box;
 }
 

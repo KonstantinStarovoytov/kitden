@@ -3,7 +3,7 @@ import { getJson, postJson } from "./api.js";
 import { button, el, plural, webLink } from "./dom.js";
 import { entrance, fold, reducedMotion } from "./motion.js";
 import { openInfo, openItem, review, toast } from "./panel.js";
-import { banner, CLIENT_ICONS, CLIENT_NAMES, DARK_ICONS, flag, GATEWAY_NOTE, mark, skeleton, staleNote } from "./parts.js";
+import { banner, CLIENT_ICONS, CLIENT_NAMES, clientCheck, DARK_ICONS, flag, GATEWAY_NOTE, mark, skeleton, staleNote } from "./parts.js";
 import { current, currentError, data, freshness, loadGateway, loadMap, reload, render, state } from "./store.js";
 
 const WRITABLE = ["claude_code", "codex", "cursor"];
@@ -430,14 +430,9 @@ function connectForm(gateway, waiting) {
   const checks = el("fieldset", "checks");
   checks.append(el("legend", null, "Add to"));
   for (const client of waiting) {
-    const label = el("label");
-    const box = el("input");
-    box.type = "checkbox";
-    box.value = client;
-    box.checked = state.clients.has(client);
-    box.addEventListener("change", () => { if (box.checked) state.clients.add(client); else state.clients.delete(client); });
-    label.append(box, el("span", null, CLIENT_NAMES[client]));
-    checks.append(label);
+    checks.append(clientCheck(client, state.clients.has(client), null, (checked) => {
+      if (checked) state.clients.add(client); else state.clients.delete(client);
+    }));
   }
   form.append(checks);
   const message = el("span", "form-message");

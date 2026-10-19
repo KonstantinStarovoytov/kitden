@@ -1,10 +1,10 @@
 // Discover: plugins in the marketplaces already on this computer, the skills inside them and
 // in the clients' own skill folders, and one review to add any of them.
 import { getJson, query } from "./api.js";
-import { button, el, plural, shortPath, webLink } from "./dom.js";
+import { button, el, plural, shortPath, tabKeys, webLink } from "./dom.js";
 import { entrance, glide } from "./motion.js";
 import { closePanel, openInfo, openPanel, review } from "./panel.js";
-import { banner, CLIENT_NAMES, flag, mark, opens, skeleton, socket } from "./parts.js";
+import { banner, CLIENT_NAMES, clientCheck, flag, mark, opens, skeleton, socket } from "./parts.js";
 import { data, freshness, go, render, state } from "./store.js";
 
 // Clients whose own command line installs plugins. Cursor keeps its plugins in the account,
@@ -88,6 +88,7 @@ function summary(answer, asked) {
 function picker(label, all, key, facets) {
   const select = el("select");
   select.setAttribute("aria-label", label);
+  select.dataset.focus = `filter:${key}`;
   select.append(new Option(all, ""));
   const chosen = filters[key];
   const options = facets.some((f) => f.name === chosen) || !chosen ? facets : [{ name: chosen, count: 0 }, ...facets];
@@ -107,8 +108,10 @@ function kindTabs() {
     const tab = button(label, () => go("discover", { kind: id, selected: null }), "");
     tab.setAttribute("role", "tab");
     tab.setAttribute("aria-selected", String(kind() === id));
+    tab.dataset.focus = `tab:${id}`;
     box.append(tab);
   }
+  tabKeys(box);
   return box;
 }
 
@@ -131,6 +134,7 @@ export function renderDiscover(main) {
   for (const [id, label] of SHOW) {
     const b = button(label, () => { filters.show = id; render(); }, "");
     b.setAttribute("aria-pressed", String(filters.show === id));
+    b.dataset.focus = `show:${id}`;
     seg.append(b);
   }
   tools.append(seg);
@@ -485,18 +489,10 @@ function clientChecks(open, chosen, note, onChange) {
   const checks = el("fieldset", "checks");
   checks.append(el("legend", null, "Add to"));
   for (const client of open) {
-    const label = el("label");
-    const box = el("input");
-    box.type = "checkbox";
-    box.checked = chosen.has(client);
-    box.addEventListener("change", () => {
-      if (box.checked) chosen.add(client); else chosen.delete(client);
+    checks.append(clientCheck(client, chosen.has(client), note ? note(client) : null, (checked) => {
+      if (checked) chosen.add(client); else chosen.delete(client);
       if (onChange) onChange();
-    });
-    label.append(box, el("span", null, CLIENT_NAMES[client]));
-    const extra = note ? note(client) : null;
-    if (extra) label.append(el("span", "muted", ` · ${extra}`));
-    checks.append(label);
+    }));
   }
   return checks;
 }

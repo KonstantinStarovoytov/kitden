@@ -1,6 +1,6 @@
 // Entry point: the shell (rail, top bar), routing, theme, rescan and live updates.
 import { postJson } from "./api.js";
-import { $, $$, reportError } from "./dom.js";
+import { $, $$, focusKey, reportError } from "./dom.js";
 import { glide, rollTo, transition } from "./motion.js";
 import { renderAgents } from "./agents.js";
 import { renderChanges } from "./changes.js";
@@ -24,21 +24,23 @@ const PLACES = {
 };
 
 let shownView = null;
+// What a redraw can hand focus back to: controls with a data-focus key, and table rows.
+const FOCUSABLE = "[data-focus], tr[data-key]";
 
 function renderPlace() {
   if (shownView !== state.view && isPanelOpen()) closePanel({ instant: true, keepSelection: true, focus: false });
   const samePlace = shownView === state.view;
   shownView = state.view;
   const main = $("#main");
-  // A redraw of the same place keeps keyboard focus on the same row.
-  const focusedRow = samePlace && main.contains(document.activeElement) ? document.activeElement.closest("tr[data-key]") : null;
-  const rowKey = focusedRow ? focusedRow.dataset.key : null;
+  // A redraw of the same place keeps keyboard focus on the same row, tab, filter or menu.
+  const focused = samePlace && main.contains(document.activeElement) ? document.activeElement.closest(FOCUSABLE) : null;
+  const key = focused ? focusKey(focused) : null;
   main.replaceChildren();
   const place = PLACES[state.view] || PLACES.overview;
   place.render(main);
-  if (rowKey) {
-    const row = $$("tr[data-key]", main).find((tr) => tr.dataset.key === rowKey);
-    if (row) row.focus({ preventScroll: true });
+  if (key) {
+    const same = $$(FOCUSABLE, main).find((node) => focusKey(node) === key);
+    if (same) same.focus({ preventScroll: true });
   }
   document.title = `${place.title} · Kitden`;
   for (const link of $$(".nav a")) {
@@ -80,8 +82,9 @@ function renderShell() {
   where.closest(".where-box").classList.toggle("project", Boolean(state.project));
   if ($("#q") !== document.activeElement) $("#q").value = state.q;
   // Discover searches what can be added; every other place searches what is already set up.
-  const scope = state.view === "discover" ? "Search plugins and skills to add…" : "Search your setup…";
-  $("#q").placeholder = scope;
+  // The placeholder trails off; the accessible name is the same words without the dots.
+  const scope = state.view === "discover" ? "Search plugins and skills to add" : "Search your setup";
+  $("#q").placeholder = `${scope}…`;
   $("#q").setAttribute("aria-label", scope);
 }
 

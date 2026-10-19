@@ -18,6 +18,39 @@ export function button(label, onClick, className = "btn small") {
   return node;
 }
 
+// A redraw replaces every node. What names a control across it: its data-focus key (a tab, a
+// filter button, a menu), or for a table row its own key. Null when it has neither.
+export function focusKey(node) {
+  if (node.dataset.focus) return node.dataset.focus;
+  return node.dataset.key ? `row:${node.dataset.key}` : null;
+}
+
+// The tab an arrow, Home or End moves to from tab `at` of `count`, or null for any other key.
+// The arrows wrap around.
+export function tabAfter(key, at, count) {
+  if (key === "ArrowRight") return (at + 1) % count;
+  if (key === "ArrowLeft") return (at - 1 + count) % count;
+  if (key === "Home") return 0;
+  if (key === "End") return count - 1;
+  return null;
+}
+
+// Keys on a row of tabs: focus moves to the tab, then it is selected. A key with a modifier is
+// the browser's (Alt+Left is Back), so it is left alone.
+export function tabKeys(box) {
+  box.addEventListener("keydown", (event) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const tabs = $$('[role="tab"]', box);
+    const at = tabs.indexOf(document.activeElement);
+    const to = at < 0 ? null : tabAfter(event.key, at, tabs.length);
+    if (to === null) return;
+    event.preventDefault();
+    if (to === at) return;
+    tabs[to].focus();
+    tabs[to].click();
+  });
+}
+
 // Only http and https links are ever made clickable.
 export function webLink(url, text) {
   if (!/^https?:\/\//i.test(String(url || ""))) return el("span", null, text);

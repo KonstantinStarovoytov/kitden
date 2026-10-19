@@ -397,7 +397,37 @@ def test_rows_say_they_open_details_and_search_names_its_scope():
     assert re.search(r"tr:hover \.opens[^{]*\{ color: var\(--route\)", CSS)
     assert "li:hover .opens" in CSS and "tr:focus-visible .opens" in CSS
     app = script("app.js")
-    assert "Search your setup…" in app and "Search plugins and skills to add…" in app
+    assert '"Search your setup"' in app and '"Search plugins and skills to add"' in app
+    # The placeholder trails off; the accessible name does not repeat the dots.
+    assert "placeholder = `${scope}…`" in app and 'setAttribute("aria-label", scope)' in app
     assert 'placeholder="Search your setup…"' in INDEX
-    assert 'aria-label="Search your setup…"' in INDEX
+    assert 'aria-label="Search your setup"' in INDEX
     assert "Find an item" not in INDEX
+
+
+def test_focus_returns_to_the_control_and_the_review_reaches_its_summary():
+    # The key and the tab keys live in dom.js, so the Load map and Discover share them.
+    assert "focusKey(" in script("app.js") and "dataset.focus" in script("dom.js")
+    for key in ('"ArrowRight"', '"ArrowLeft"', '"Home"', '"End"'):
+        assert key in script("dom.js")
+    trap = script("panel.js").split("function trapFocus")[1].split("\n}")[0]
+    assert "summary" in trap and "textarea" in trap and "getClientRects" in trap
+
+
+def test_every_control_a_render_replaces_names_itself_for_focus():
+    for name, keys in {
+        "map.js": ("`tab:${kind}`", "`show:${id}`"),
+        "discover.js": ("`tab:${id}`", "`show:${id}`", "`filter:${key}`"),
+    }.items():
+        text = script(name)
+        for key in keys:
+            assert f"dataset.focus = {key}" in text, (name, key)
+        assert "tabKeys(" in text
+
+
+def test_client_checkboxes_come_from_one_named_part():
+    check = script("parts.js").split("export function clientCheck")[1].split("\n}")[0]
+    assert 'setAttribute("aria-label"' in check and "box.value = client" in check
+    for name in ("discover.js", "gateway.js"):
+        text = script(name)
+        assert "clientCheck(" in text and 'type = "checkbox"' not in text

@@ -18,6 +18,21 @@ export const CLIENT_NAMES = {
   claude_code: "Claude Code", codex: "Codex", cursor: "Cursor",
   claude_desktop_code_tab: "Claude Desktop (Code tab)", gateway: "Gateway",
 };
+// One client's checkbox in an Add form. Its name is the client's name (and the note after it),
+// so a screen reader never says "on"; its value is the client id. `onChange` hears the new state.
+export function clientCheck(client, checked, note, onChange) {
+  const label = el("label");
+  const box = el("input");
+  box.type = "checkbox";
+  box.value = client;
+  box.checked = checked;
+  box.setAttribute("aria-label", note ? `${CLIENT_NAMES[client]} · ${note}` : CLIENT_NAMES[client]);
+  box.addEventListener("change", () => { if (onChange) onChange(box.checked); });
+  label.append(box, el("span", null, CLIENT_NAMES[client]));
+  if (note) label.append(el("span", "muted", ` · ${note}`));
+  return label;
+}
+
 // A direct server, when no gateway here can take it: the Gateway page and Details say the same.
 export const GATEWAY_NOTE = "Add the server in the gateway first, then remove its direct entry here.";
 

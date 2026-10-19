@@ -725,7 +725,9 @@ export function toast(text, onUndo, { ok = false } = {}) {
 function trapFocus(event) {
   if (event.key !== "Tab" || !isPanelOpen()) return;
   const drawer = $("#drawer");
-  const stops = $$("button:not([disabled]), a[href], select, input, [tabindex]:not([tabindex='-1'])", drawer);
+  // Only what is drawn: a closed Details hides everything but its summary.
+  const stops = $$("button:not([disabled]), a[href], select, input, textarea, summary, [tabindex]:not([tabindex='-1'])", drawer)
+    .filter((node) => node.getClientRects().length > 0);
   if (!stops.length || !drawer.contains(document.activeElement)) {
     event.preventDefault();
     (stops[0] || drawer).focus();
