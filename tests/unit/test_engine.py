@@ -455,3 +455,115 @@ def test_a_change_without_file_steps_is_still_recorded(tmp_path, fake):
     assert engine.store.entries()[0]["state"] == "verified"
     engine.undo(change.id)
     assert change.state is ChangeState.UNDONE and fake.held_names() == []
+
+
+class FakePluginCli:
+    """Acts like `claude plugin install/uninstall` and `marketplace add/remove` on settings.json:
+    the client writes its own record, and uninstall really removes it."""
+
+    def __init__(self, path, fail_on=None):
+        self.path = path
+        self.fail_on = fail_on
+        self.calls = []
+
+    def __call__(self, command, cwd):
+        self.calls.append(command)
+        if self.fail_on and self.fail_on in command:
+            return CommandResult(returncode=1, output="refused")
+        data = json.loads(self.path.read_text())
+        if command[1:3] == ["plugin", "install"]:
+            data.setdefault("enabledPlugins", {})[command[3]] = True
+        elif command[1:3] == ["plugin", "uninstall"]:
+            data.get("enabledPlugins", {}).pop(command[3], None)
+        elif command[1:4] == ["plugin", "marketplace", "add"]:
+            data.setdefault("extraKnownMarketplaces", {})["tools"] = {
+                "source": {"source": "github", "repo": command[4]},
+                "added": "2026-10-19",
+            }
+        elif command[1:4] == ["plugin", "marketplace", "remove"]:
+            data.get("extraKnownMarketplaces", {}).pop(command[4], None)
+        self.path.write_text(json.dumps(data, indent=2))
+        return CommandResult(returncode=0, output="{}")
+
+
+def plugin_steps(settings):
+    add = Step(
+        client="claude_code",
+        scope=Scope.USER,
+        name="tools",
+        edit=FileEdit(
+            path=str(settings),
+            fmt="json",
+            key=("extraKnownMarketplaces", "tools"),
+            after=json_splice.PRESENT,
+            check="entry",
+        ),
+        mechanism="client_cli",
+        command=["claude", "plugin", "marketplace", "add", "acme/tools"],
+        undo_command=["claude", "plugin", "marketplace", "remove", "tools"],
+    )
+    install = Step(
+        client="claude_code",
+        scope=Scope.USER,
+        name="lint@tools",
+        edit=FileEdit(
+            path=str(settings),
+            fmt="json",
+            key=("enabledPlugins", "lint@tools"),
+            after=True,
+            check="entry",
+        ),
+        mechanism="client_cli",
+        command=["claude", "plugin", "install", "lint@tools", "-s", "user", "--json"],
+        undo_command=["claude", "plugin", "uninstall", "lint@tools", "-s", "user", "--json"],
+    )
+    return [add, install]
+
+
+@pytest.fixture
+def settings(tmp_path):
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps({"theme": "dark"}, indent=2))
+    return path
+
+
+def test_an_entry_the_client_writes_itself_only_has_to_be_there(tmp_path, settings):
+    engine = make_engine(tmp_path, run=FakePluginCli(settings))
+    change = engine.preview("plugin.install", plugin_steps(settings))
+    assert "added by the client" in change.steps[0].edit.masked_diff
+    assert engine.apply(change.id).state is ChangeState.VERIFIED
+    data = json.loads(settings.read_text())
+    assert (
+        data["enabledPlugins"] == {"lint@tools": True} and "tools" in data["extraKnownMarketplaces"]
+    )
+
+
+def test_undo_runs_the_inverse_commands_in_reverse_order(tmp_path, settings):
+    cli = FakePluginCli(settings)
+    engine = make_engine(tmp_path, run=cli)
+    change = engine.preview("plugin.install", plugin_steps(settings))
+    engine.apply(change.id)
+    # Something else writes the same file afterwards: undo still works, it does not restore bytes.
+    data = json.loads(settings.read_text())
+    data["theme"] = "light"
+    settings.write_text(json.dumps(data))
+    assert engine.undo(change.id).state is ChangeState.UNDONE
+    assert [c[1:3] for c in cli.calls[-2:]] == [["plugin", "uninstall"], ["plugin", "marketplace"]]
+    after = json.loads(settings.read_text())
+    assert after == {"theme": "light", "enabledPlugins": {}, "extraKnownMarketplaces": {}}
+
+
+def test_a_failed_install_runs_the_inverse_of_what_already_ran(tmp_path, settings):
+    cli = FakePluginCli(settings, fail_on="install")
+    engine = make_engine(tmp_path, run=cli)
+    change = engine.preview("plugin.install", plugin_steps(settings))
+    assert engine.apply(change.id).state is ChangeState.RESTORED
+    assert cli.calls[-1][1:4] == ["plugin", "marketplace", "remove"]
+    assert json.loads(settings.read_text()).get("extraKnownMarketplaces", {}) == {}
+
+
+def test_an_entry_that_is_already_there_is_refused(tmp_path, settings):
+    settings.write_text(json.dumps({"extraKnownMarketplaces": {"tools": {}}}))
+    engine = make_engine(tmp_path, run=FakePluginCli(settings))
+    with pytest.raises(ChangeRefusedError):
+        engine.preview("plugin.install", plugin_steps(settings)[:1])

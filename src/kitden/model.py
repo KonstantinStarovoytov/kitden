@@ -236,6 +236,7 @@ class Step:
     mechanism: str = "format_preserving_edit"  # or "client_cli", "gateway_api"
     gateway: GatewayEdit | None = None
     command: list[str] | None = None
+    undo_command: list[str] | None = None  # the inverse command; Undo runs it, no file restore
     cwd: str | None = None
     restart_note: str | None = None
     login_note: str | None = None

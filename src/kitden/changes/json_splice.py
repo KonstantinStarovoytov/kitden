@@ -20,6 +20,15 @@ ABSENT: Any = _Absent()
 """Marks a missing value: get_value returns it, and edits use it for 'not there'."""
 
 
+class _Present:
+    def __repr__(self) -> str:
+        return "PRESENT"
+
+
+PRESENT: Any = _Present()
+"""An entry a client command writes in its own shape: only its presence is checked."""
+
+
 class UnrecognizedFormatError(ValueError):
     """The file is not in a format we can edit safely."""
 

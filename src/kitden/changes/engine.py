@@ -26,7 +26,7 @@ from kitden.changes import json_splice, toml_edit
 from kitden.changes.atomic import RefusedWriteError, write_atomic
 from kitden.changes.backup import ChangeStore
 from kitden.changes.client_cli import CommandResult
-from kitden.changes.json_splice import ABSENT, UnrecognizedFormatError
+from kitden.changes.json_splice import ABSENT, PRESENT, UnrecognizedFormatError
 from kitden.gateway_api import GatewayError
 from kitden.model import Change, ChangeState, FileEdit, GatewayEdit, Scope, Step
 from kitden.redact import redact
@@ -67,6 +67,8 @@ def _value(edit: FileEdit, data: bytes | None) -> Any:
 def _render(edit: FileEdit, value: Any) -> list[str]:
     if value is ABSENT:
         return []
+    if value is PRESENT:
+        return [f'"{edit.key[-1]}": added by the client']
     shown = redact(value)[0]
     if edit.fmt == "toml":
         nested: Any = shown
@@ -85,6 +87,8 @@ def masked_diff(edit: FileEdit) -> str:
 
 
 def _matches(step: Step, value: Any, expected: Any) -> bool:
+    if expected is PRESENT:
+        return value is not ABSENT
     # A client command may add fields of its own; our fields must all be there.
     if step.mechanism == CLIENT_CLI and isinstance(value, dict) and isinstance(expected, dict):
         return all(value.get(k) == v for k, v in expected.items())
@@ -115,11 +119,25 @@ def _undo_entries(steps: list[Step], data: bytes | None) -> bytes | None:
     return text.encode()
 
 
+def _command_paths(steps: list[Step]) -> set[str]:
+    """Files whose every step is taken back by an inverse command, not by restoring bytes."""
+    paths: dict[str, bool] = {}
+    for step in steps:
+        if step.edit is not None:
+            ok = step.mechanism == CLIENT_CLI and bool(step.undo_command)
+            paths[step.edit.path] = paths.get(step.edit.path, True) and ok
+    return {path for path, ok in paths.items() if ok}
+
+
 def _encode(value: Any) -> dict:
+    if value is PRESENT:
+        return {"present": True}
     return {"absent": True} if value is ABSENT else {"value": value}
 
 
 def _decode(record: dict) -> Any:
+    if record.get("present"):
+        return PRESENT
     return ABSENT if record.get("absent") else record.get("value")
 
 
@@ -163,6 +181,7 @@ def _record(change: Change) -> dict:
                 "name": step.name,
                 "mechanism": step.mechanism,
                 "command": step.command,
+                "undo_command": step.undo_command,
                 "cwd": step.cwd,
                 "restart_note": step.restart_note,
                 "login_note": step.login_note,
@@ -209,6 +228,7 @@ def _from_record(record: dict) -> Change:
                 gateway=gateway,
                 mechanism=raw["mechanism"],
                 command=raw["command"],
+                undo_command=raw.get("undo_command"),
                 cwd=raw["cwd"],
                 restart_note=raw["restart_note"],
                 login_note=raw["login_note"],
@@ -271,8 +291,12 @@ class Engine:
                 edit.before = _value(edit, data)
             except (UnrecognizedFormatError, UnicodeDecodeError) as error:
                 raise ChangeRefusedError(f"{edit.path}: {error}") from None
-            if edit.before == edit.after:
+            if edit.before == edit.after or (edit.after is PRESENT and edit.before is not ABSENT):
                 raise ChangeRefusedError(f"nothing to change in {edit.path}")
+            if edit.after is PRESENT and step.mechanism != CLIENT_CLI:
+                raise ChangeRefusedError(
+                    "only a client command can write an entry in its own shape"
+                )
             edit.before_hash = _sha(data)
             edit.masked_diff = masked_diff(edit)
         change = Change(action=action, steps=steps)
@@ -384,6 +408,7 @@ class Engine:
             step.edit.backup_path = str(copy) if copy else None
         self.store.prune()
         change.move_to(ChangeState.APPLYING)
+        ran: list[Step] = []
         try:
             # The gateway side first: a server that cannot be added leaves the files alone.
             self._apply_gateway(gateway_steps)
@@ -393,6 +418,7 @@ class Engine:
             for step in file_steps:
                 path = step.edit.path
                 result = self._apply_step(step, working[path])
+                ran.append(step)
                 working[path] = result if result is not None else _read(path)
                 expected[path] = result
             for step in file_steps:
@@ -404,8 +430,14 @@ class Engine:
             RefusedWriteError,
             UnrecognizedFormatError,
         ) as error:
+            # A step with an inverse command is taken back by that command (an install leaves
+            # more than the file behind); every other file gets its original bytes.
+            by_command = _command_paths(file_steps)
+            for step in reversed(ran):
+                if step.edit.path in by_command:
+                    self.run(step.undo_command, step.cwd)
             for path, data in current.items():
-                if _read(path) != data:
+                if path not in by_command and _read(path) != data:
                     self._write(path, data)
             self._remove_from_gateway(gateway_steps, best_effort=True)
             change.move_to(ChangeState.RESTORED)
@@ -454,9 +486,10 @@ class Engine:
         change = self.changes[change_id]
         if change.state is not ChangeState.VERIFIED:
             change.move_to(ChangeState.UNDONE)  # raises: only a verified change can be undone
+        by_command = _command_paths(change.steps)
         by_path: dict[str, list[Step]] = {}
         for step in change.steps:
-            if step.edit is not None:
+            if step.edit is not None and step.edit.path not in by_command:
                 by_path.setdefault(step.edit.path, []).append(step)
         plans: dict[str, bytes | None] = {}
         for path, steps in by_path.items():
@@ -484,6 +517,20 @@ class Engine:
             change.error = f"{error}; the client files were not changed"
             self._finish(change)
             return change
+        # Inverse commands, last step first. An entry already gone needs no command.
+        for step in reversed(change.steps):
+            if step.edit is None or step.edit.path not in by_command:
+                continue
+            if _value(step.edit, _read(step.edit.path)) is ABSENT and step.edit.before is ABSENT:
+                continue
+            result = self.run(step.undo_command, step.cwd)
+            if result.returncode != 0:
+                change.move_to(ChangeState.UNDO_BLOCKED)
+                shown = " ".join(step.undo_command[:4])
+                change.error = f"`{shown}` failed: {result.output}"
+                self._finish(change)
+                return change
+            self.on_write(step.edit.path, _sha(_read(step.edit.path)))
         for path, data in plans.items():
             self._write(path, data)
         for step in change.steps:
