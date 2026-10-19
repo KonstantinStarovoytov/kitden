@@ -21,6 +21,9 @@
   --route: #a44226;
   --route-soft: #f6e8e2;
   --lamp-on: #1c8a4c;
+  /* Fill and label of the Applied button: 4.5:1 or better in both themes (tests/unit/test_contrast.py). */
+  --success: #177a42;
+  --on-success: #ffffff;
   --lamp-warn: #97590a;
   --lamp-warn-soft: rgba(151, 89, 10, 0.10);
   --lamp-off: #9aa1ad;
@@ -48,6 +51,7 @@
     --ink: #f2f3f5; --ink-2: #c1c6cf; --ink-3: #a5adba; --ink-4: #a5adba;
     --wire: rgba(255, 255, 255, 0.08); --wire-soft: rgba(255, 255, 255, 0.05); --wire-strong: rgba(255, 255, 255, 0.16);
     --route: #f09a7c; --route-soft: #382a27;
+    --success: #47c27a; --on-success: #0b1a12;
     --lamp-on: #47c27a; --lamp-warn: #e0a347; --lamp-warn-soft: rgba(224, 163, 71, 0.12); --lamp-off: #6b717d;
     --danger: #f07070; --focus: #f09a7c;
     --shadow-pop: 0 0 0 1px var(--wire-strong), 0 12px 32px rgba(0, 0, 0, 0.45);
@@ -59,6 +63,7 @@
   --ink: #f2f3f5; --ink-2: #c1c6cf; --ink-3: #a5adba; --ink-4: #a5adba;
   --wire: rgba(255, 255, 255, 0.08); --wire-soft: rgba(255, 255, 255, 0.05); --wire-strong: rgba(255, 255, 255, 0.16);
   --route: #f09a7c; --route-soft: #382a27;
+  --success: #47c27a; --on-success: #0b1a12;
   --lamp-on: #47c27a; --lamp-warn: #e0a347; --lamp-warn-soft: rgba(224, 163, 71, 0.12); --lamp-off: #6b717d;
   --danger: #f07070; --focus: #f09a7c;
   --shadow-pop: 0 0 0 1px var(--wire-strong), 0 12px 32px rgba(0, 0, 0, 0.45);
@@ -85,8 +90,8 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--action); }
 /* The chevron at the end of a row that opens Details. It only changes colour: no motion. */
 .opens { position: relative; flex: none; margin-left: auto; color: var(--ink-3); font-size: 16px; line-height: 1; }
 .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
-.skip { position: absolute; left: -999px; }
-.skip:focus { left: 12px; top: 12px; z-index: 50; background: var(--panel); padding: 6px 10px; }
+.skip { position: absolute; left: -999px; padding: 6px 10px; }
+.skip:focus { left: 12px; top: 12px; z-index: 50; background: var(--panel); }
 a { color: var(--route); }
 
 /* Shell */
@@ -107,6 +112,7 @@ a { color: var(--route); }
 .count.warn { color: var(--lamp-warn); font-weight: 600; }
 .rail-foot { margin-top: auto; padding: 8px; display: grid; gap: 8px; color: var(--ink-3); font-size: 12px; }
 .rail-foot button { justify-self: start; }
+.rail-foot a { line-height: 24px; }
 .roll { display: inline-grid; overflow: hidden; height: 1.45em; vertical-align: bottom; }
 .roll > span { grid-area: 1 / 1; }
 
@@ -132,7 +138,7 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .btn.ghost { border-color: transparent; background: transparent; color: var(--ink-2); }
 .btn.ghost:hover { background: var(--wire-soft); color: var(--ink); }
 .btn.small { height: 24px; padding: 0 8px; font-size: 12px; }
-.btn.primary.done, .btn.primary.done:hover { background: var(--lamp-on); color: #ffffff; }
+.btn.primary.done, .btn.primary.done:hover { background: var(--success); color: var(--on-success); }
 .toast .check { flex: none; color: var(--lamp-on); }
 .spinner { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid currentColor; border-right-color: transparent; animation: spin 600ms linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -140,7 +146,7 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 @keyframes draw { to { stroke-dashoffset: 0; } }
 .kbd { font-family: var(--mono); font-size: 11px; padding: 0 5px; border: 1px solid var(--wire); border-radius: 4px; color: var(--ink-3); }
 .search { flex: 1; max-width: 420px; display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border-radius: 7px; background: var(--inset); border: 1px solid var(--wire-soft); color: var(--ink-3); }
-.search input { border: 0; background: transparent; outline: none; flex: 1; min-width: 0; color: var(--ink); }
+.search input { align-self: stretch; border: 0; background: transparent; outline: none; flex: 1; min-width: 0; color: var(--ink); }
 .search input::-webkit-search-cancel-button { display: none; }
 .where-box { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 4px 0 10px; border: 1px solid var(--wire); border-radius: 7px; background: var(--panel); max-width: 380px; }
 .where-box select:focus-visible { outline: none; }
@@ -165,7 +171,7 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .form .grow { flex: 1 1 280px; }
 .checks { display: flex; gap: 14px; align-items: center; border: 0; padding: 0; margin: 0; }
 .checks legend { color: var(--ink-3); font-size: 12px; padding: 0; margin-bottom: 4px; }
-.checks label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.checks label { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; cursor: pointer; }
 /* A note on its own line between the clients and Preview. It stays in the page so a screen reader
    hears it change; empty, it is a zero-width item that takes back its gap. */
 .form .also { flex: 1 0 100%; margin: 0; }
@@ -213,9 +219,10 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .badge { font-size: 11px; padding: 0 6px; line-height: 18px; border-radius: 4px; border: 1px solid var(--wire); color: var(--ink-2); white-space: nowrap; }
 .badge.win { border-color: var(--ink-3); color: var(--ink); font-weight: 500; }
 .badge.warn { border-color: var(--lamp-warn); color: var(--lamp-warn); }
-/* The plugin switch shows the real state; pressing squeezes the thumb and opens the review. */
-.switch { position: relative; width: 34px; height: 20px; flex: none; border-radius: 10px; border: 0; padding: 0; cursor: pointer; background: var(--wire-strong); transition: background-color 200ms ease, transform 260ms var(--spring); align-self: center; }
-.switch[aria-checked="true"] { background: var(--action); }
+/* The plugin switch shows the real state; pressing squeezes the thumb and opens the review.
+   It is 24 px high to press. The 34 x 20 track is painted between two clear 2 px bands. */
+.switch { position: relative; width: 34px; height: 24px; flex: none; border-radius: 10px / 12px; border: solid transparent; border-width: 2px 0; background-clip: padding-box; padding: 0; cursor: pointer; background-color: var(--wire-strong); transition: background-color 200ms ease, transform 260ms var(--spring); align-self: center; }
+.switch[aria-checked="true"] { background-color: var(--action); }
 .switch .thumb { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 8px; background: #ffffff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); transition: transform 160ms var(--ease-in-out), width 120ms var(--ease-out); }
 .switch[aria-checked="true"] .thumb { transform: translateX(14px); }
 .switch:hover:not(:disabled) { filter: brightness(1.06); }
@@ -408,6 +415,7 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .after .note { color: var(--ink-3); font-size: 12px; }
 .after .chip { gap: 8px; }
 .after .chip > span:nth-child(2) { color: var(--ink-2); }
+details > summary { line-height: 24px; }
 details.file-change { min-width: 0; }
 details.file-change > summary { cursor: pointer; color: var(--ink-2); font-weight: 500; }
 .diff-count { font-family: var(--mono); font-size: 11px; display: inline-flex; gap: 6px; margin-left: 8px; }
