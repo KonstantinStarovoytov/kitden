@@ -2,24 +2,20 @@
 
 <h1 align="center">Kitden</h1>
 
-<p align="center"><b>One calm page for everything your AI coding agents load.</b><br>
-Claude Code, Codex and Cursor — every MCP server, plugin, skill and hook, in one place.<br>
-See what loads twice. Fix it in one click. Undo anytime.</p>
+<p align="center"><b>See and safely change what your AI coding agents load.</b><br>
+Claude Code, Codex and Cursor: every MCP server, skill, plugin, hook and marketplace on one local page.<br>
+Look at each change first, Apply it with a backup, Undo it any time.</p>
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/overview-dark.jpg">
-    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/overview.jpg" alt="The Kitden page: three things need attention, each with one button to fix it" width="800">
+    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/overview.jpg" alt="Kitden Overview: two things need attention, one thing can improve, and the four clients found" width="860">
   </picture>
 </p>
-
-<p align="center">
 
 ```bash
 uvx kitden
 ```
-
-</p>
 
 ## Why you want it
 
@@ -29,19 +25,78 @@ You use two or three AI coding tools. A few weeks in:
 - an MCP server you removed from one tool still runs in another;
 - an agent edited its own settings, and you are not sure what changed.
 
-The answers are spread over six JSON and TOML files. Kitden reads them all and shows **one page**.
+The answers are spread over many JSON and TOML files. Kitden reads them all, shows them on one
+page, and changes a file only after you have seen the exact edit.
 
-## What you get
+Kitden is for one developer or a small team. It runs on your Mac at `127.0.0.1`, with no account
+and no telemetry.
 
-| | |
-| --- | --- |
-| **See everything** | Every MCP server, plugin, skill, hook and marketplace, for every client, side by side. Nothing to configure. |
-| **Know what needs attention** | Things that load twice, servers that skip your gateway, files that could not be read. Each with one button to fix it. |
-| **Change without fear** | Turn a plugin off, remove an old entry, move servers into your gateway. You see the exact change first; Apply keeps a backup; Undo puts it back. |
-| **One gateway for all clients** | Connect [Obot](https://obot.ai) or MetaMCP to every client at once, switch all of them to another gateway in one review, see what each holds and which servers go around it. |
-| **Jump straight in** | Click a client on the gateway map to open Claude, ChatGPT (Codex) or Cursor; click the gateway to open it. |
-| **Agents can ask too** | A read-only "show my setup" server lets Claude Code, Codex or Cursor answer "what do you load here?". |
-| **Private by design** | Runs on your Mac only (`127.0.0.1`). No account, no telemetry, secrets never shown or logged. Kitden goes online only when you add a marketplace from a GitHub link: it reads that one file from `raw.githubusercontent.com`. |
+## What you can do
+
+### See what needs attention
+
+**Overview** lists what needs attention, such as an item that loads twice, and what can improve,
+such as servers that could move into your gateway. Each one has a button that opens its fix.
+The clients Kitden found sit on the right.
+
+### See what loads where
+
+**Load map** has one row per item and one column per client. Each cell says if the item loads,
+is off, goes through the gateway, or is not there. Tabs split MCP servers, plugins, skills, hooks
+and marketplaces. Pick a project at the top to see what loads in that folder.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/load-map-dark.jpg">
+    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/load-map.jpg" alt="Load map: MCP servers in rows, Claude Code, Codex and Cursor in columns, and the state of each in the cells" width="860">
+  </picture>
+</p>
+
+### Add plugins and skills
+
+**Discover** searches the plugins and skills in the marketplaces already on your computer. Add
+one to Claude Code and Codex in one review. The review names every client the change reaches,
+including Cursor when it loads Claude Code's plugins. You can also add a marketplace from a folder
+or a GitHub link.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/discover-dark.jpg">
+    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/discover.jpg" alt="Discover: plugins that match a search, and the review for adding one to Claude Code and Codex, which says Cursor gets it too" width="860">
+  </picture>
+</p>
+
+### Use one gateway for every client
+
+**Gateway** works with [Obot](https://obot.ai) (with OAuth sign-in) and MetaMCP. Connect your
+clients, see what the gateway holds and which servers go around it, and move direct servers into
+it one at a time or all at once. Switch every client to another gateway in one review. Click a
+client in the diagram to open its app.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/gateway-dark.jpg">
+    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/gateway.jpg" alt="Gateway: Claude Code, Codex and Cursor linked to an Obot gateway, what the gateway holds, and servers that can move into it" width="860">
+  </picture>
+</p>
+
+### Check every change before it is written
+
+Every change opens a review first: the clients it reaches and the exact file change, with secrets
+hidden. Apply keeps a backup, writes the change and checks it. **Changes** keeps the history, with
+Undo and what to restart for a change to take effect.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/review-dark.jpg">
+    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/review.jpg" alt="The review for moving the github server into the gateway: one entry added to the gateway, the same entry removed from Claude Code's file" width="860">
+  </picture>
+</p>
+
+### Let your agents ask
+
+**Agents** adds a read-only MCP server to Claude Code, Codex or Cursor, so you can ask your agent
+"show my setup". It cannot change anything.
 
 ## Install
 
@@ -51,7 +106,7 @@ macOS. With [uv](https://docs.astral.sh/uv/):
 uvx kitden
 ```
 
-Without uv — one line installs uv and Kitden, then opens the page:
+Without uv, one line installs uv and Kitden, then opens the page:
 
 ```bash
 curl -LsSf https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/install.sh | sh
@@ -68,6 +123,8 @@ From inside your agent:
 Then ask your agent **"show my setup"**. Cursor also takes the plain link
 `cursor://anysphere.cursor-deeplink/mcp/install?name=kitden&config=eyJjb21tYW5kIjoia2l0ZGVuIiwiYXJncyI6WyJtY3AiXX0=`.
 
+Linux and Windows are not supported yet.
+
 ## How it works
 
 <p align="center">
@@ -77,28 +134,23 @@ Then ask your agent **"show my setup"**. Cursor also takes the plain link
   </picture>
 </p>
 
-1. Kitden reads your agents' settings files. Nothing leaves your Mac.
-2. It shows them on one page in your browser.
+1. Kitden reads your agents' settings files.
+2. It shows them on one page in your browser, at `127.0.0.1` only.
 3. You press Apply. Kitden backs the file up, writes the change and checks it. Undo brings the old
-   file back.
+   file back. Backups stay for 30 days, and the newest 100 changes always keep theirs.
+
+Secrets are never shown or logged. Kitden goes online only to reach the gateways you add, and to
+read one marketplace file from `raw.githubusercontent.com` when you add a marketplace from a
+GitHub link.
 
 ## Roadmap
 
-| Status | What |
-| --- | --- |
-| ✅ Done | One page for Claude Code (with the Desktop Code tab), Codex and Cursor; duplicates; safe on/off with Undo |
-| ✅ Done | Obot as your gateway: OAuth sign-in, see what it holds, connect or switch every client in one review |
-| ✅ Done | MetaMCP: the same, plus moving direct servers into it with one Apply and one Undo |
-| 🔨 Now | Move servers into Obot from Kitden |
-| ⏭ Next | Copy any command with one click |
-| ⏭ Next | Linux and Windows |
-| 💭 Later | A living map: clients → config files → servers, plugins, skills → gateways |
-| 💭 Later | A shared setup for a small team |
-
+What is done and what comes next: [ROADMAP.md](https://github.com/KonstantinStarovoytov/kitden/blob/main/ROADMAP.md).
 Ideas and bugs: [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
 
 ## More
 
-- [Develop and release](docs/development.md)
-- [Visual and motion rules](docs/design.md)
-- License: [Apache-2.0](LICENSE)
+- [Release notes](https://github.com/KonstantinStarovoytov/kitden/releases)
+- [Develop and release](https://github.com/KonstantinStarovoytov/kitden/blob/main/docs/development.md)
+- [Visual and motion rules](https://github.com/KonstantinStarovoytov/kitden/blob/main/docs/design.md)
+- License: [Apache-2.0](https://github.com/KonstantinStarovoytov/kitden/blob/main/LICENSE)
