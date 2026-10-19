@@ -355,6 +355,8 @@ def create_app(
                 ui_url=body.get("ui_url") or None,
                 auth=GatewayAuth(body.get("auth", "none")),
                 key_env_var=body.get("key_env_var") or None,
+                login_email=str(body.get("login_email") or "").strip() or None,
+                login_password_env_var=body.get("login_password_env_var") or None,
             )
             add_gateway(home, gateway)
         except ValueError as error:

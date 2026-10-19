@@ -110,6 +110,8 @@ def load_gateways(home: Path) -> list[Gateway]:
                 ui_url=raw.get("ui_url"),
                 auth=GatewayAuth(raw.get("auth", "none")),
                 key_env_var=raw.get("key_env_var"),
+                login_email=raw.get("login_email"),
+                login_password_env_var=raw.get("login_password_env_var"),
             )
             check_gateway(gateway)
         except (KeyError, TypeError, ValueError):
@@ -124,7 +126,14 @@ def add_gateway(home: Path, gateway: Gateway) -> Gateway:
     settings = _read(home)
     kept = [g for g in load_gateways(home) if g.id != gateway.id]
     settings["gateways"] = [
-        {"url": g.url, "ui_url": g.ui_url, "auth": str(g.auth), "key_env_var": g.key_env_var}
+        {
+            "url": g.url,
+            "ui_url": g.ui_url,
+            "auth": str(g.auth),
+            "key_env_var": g.key_env_var,
+            "login_email": g.login_email,
+            "login_password_env_var": g.login_password_env_var,
+        }
         for g in [*kept, gateway]
     ]
     folder = data_dir(home)

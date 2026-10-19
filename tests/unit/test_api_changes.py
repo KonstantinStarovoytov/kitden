@@ -120,6 +120,22 @@ def test_registering_a_gateway_refuses_secrets(client):
     assert client.get("/api/gateways").json() == [response.json()]
 
 
+def test_registering_sign_in_details_keeps_no_password(client):
+    half = _register(client, login_email="me@example.com")
+    assert half.status_code == 422
+    secret = _register(client, login_email="me@example.com", login_password_env_var="hunter2pw")
+    assert secret.status_code == 422
+    ok = _register(client, login_email=" me@example.com ", login_password_env_var="METAMCP_PW")
+    assert ok.status_code == 200
+    saved = ok.json()
+    assert (saved["login_email"], saved["login_password_env_var"]) == (
+        "me@example.com",
+        "METAMCP_PW",
+    )
+    assert saved["managed"] is True
+    assert client.get("/api/gateway-view").json()["gateways"][0]["managed"] is True
+
+
 def test_connect_previews_then_applies_then_undoes_exactly(client):
     original = _files(client.home)
     gateway = _register(client).json()

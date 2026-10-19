@@ -52,3 +52,26 @@ def test_interface_link_must_be_a_web_address(tmp_path):
 def test_a_key_value_is_never_accepted(tmp_path):
     with pytest.raises(ValueError):
         Gateway(url=URL, auth=GatewayAuth.ENV_KEY, key_env_var="sk-abc123secretvalue")
+
+
+def test_sign_in_details_keep_the_email_and_the_variable_name(tmp_path):
+    gateway = Gateway(url=URL, login_email="me@example.com", login_password_env_var="METAMCP_PW")
+    add_gateway(tmp_path, gateway)
+    assert load_gateways(tmp_path) == [gateway]
+    assert gateway.managed
+    assert not Gateway(url=URL).managed
+    assert "METAMCP_PW" in (tmp_path / SETTINGS).read_text()
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"login_email": "me@example.com"},  # no variable
+        {"login_password_env_var": "METAMCP_PW"},  # no email
+        {"login_email": "me@example.com", "login_password_env_var": "hunter2secret"},
+        {"login_email": "not an email", "login_password_env_var": "METAMCP_PW"},
+    ],
+)
+def test_a_password_or_half_a_sign_in_is_refused(fields):
+    with pytest.raises(ValueError):
+        Gateway(url=URL, **fields)

@@ -16,6 +16,9 @@ def gateway_dict(gateway: Gateway) -> dict:
         "ui_url": gateway.ui_url,
         "auth": str(gateway.auth),
         "key_env_var": gateway.key_env_var,
+        "login_email": gateway.login_email,
+        "login_password_env_var": gateway.login_password_env_var,
+        "managed": gateway.managed,
     }
 
 

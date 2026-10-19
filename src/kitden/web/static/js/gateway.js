@@ -14,7 +14,8 @@ const GROUPS = [
 ];
 
 // What the person typed survives a redraw (a rescan can redraw the page at any time).
-const draft = { add: { url: "", ui_url: "", auth: "none", key_env_var: "" }, connect: null, addOpen: false, connectOpen: null };
+const EMPTY_ADD = { url: "", ui_url: "", auth: "none", key_env_var: "", login_email: "", login_password_env_var: "" };
+const draft = { add: { ...EMPTY_ADD }, connect: null, addOpen: false, connectOpen: null };
 // Every client gets the same entry name; the review shows the exact entry before Apply.
 const ENTRY_NAME = "gateway";
 
@@ -321,11 +322,18 @@ function addForm() {
   urlField.classList.add("grow");
   const uiField = field("Interface link (optional)", ui);
   uiField.classList.add("grow");
+  // Sign-in for managing the gateway from here (feature 006). The password itself is never
+  // typed into Kitden: only the name of the variable that holds it.
+  const email = input({ type: "email", placeholder: "you@example.com", autocomplete: "off" }, state.login_email, (v) => { state.login_email = v; });
+  const password = input({ pattern: "[A-Z_][A-Z0-9_]*", placeholder: "METAMCP_PASSWORD", autocomplete: "off", spellcheck: false }, state.login_password_env_var, (v) => { state.login_password_env_var = v; });
+  const emailField = field("Sign-in email (to manage it from here)", email);
+  emailField.classList.add("grow");
+  const passwordField = field("Password variable name (not the password)", password);
   const message = el("span", "form-message");
   message.setAttribute("aria-live", "polite");
   const submit = el("button", "btn primary", "Save gateway");
   submit.type = "submit";
-  form.append(urlField, uiField, field("Login", login), keyField, submit, message);
+  form.append(urlField, uiField, field("Login", login), keyField, emailField, passwordField, submit, message);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     submit.disabled = true;
@@ -335,13 +343,15 @@ function addForm() {
         ui_url: state.ui_url.trim() || null,
         auth: state.auth,
         key_env_var: state.auth === "env_key" ? state.key_env_var.trim() : null,
+        login_email: state.login_email.trim() || null,
+        login_password_env_var: state.login_password_env_var.trim() || null,
       });
       if (!result.ok) {
         message.className = "form-message error";
         message.textContent = (result.data && result.data.detail) || `Not saved (${result.status}).`;
         return;
       }
-      draft.add = { url: "", ui_url: "", auth: "none", key_env_var: "" };
+      draft.add = { ...EMPTY_ADD };
       draft.addOpen = false;
       await reload();
       render();

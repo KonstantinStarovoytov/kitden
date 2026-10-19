@@ -260,6 +260,10 @@ class Gateway:
     ui_url: str | None = None
     auth: GatewayAuth = GatewayAuth.NONE
     key_env_var: str | None = None
+    # Sign-in for managing the gateway from Kitden (feature 006): the email is kept, the
+    # password lives in an environment variable whose name is kept.
+    login_email: str | None = None
+    login_password_env_var: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "url", normalize_url(self.url))
@@ -267,6 +271,19 @@ class Gateway:
             self.key_env_var and _ENV_NAME.fullmatch(self.key_env_var)
         ):
             raise ValueError("key_env_var must be an environment variable name, never a secret")
+        if bool(self.login_email) != bool(self.login_password_env_var):
+            raise ValueError("A sign-in needs both the email and the password variable's name")
+        if self.login_password_env_var and not _ENV_NAME.fullmatch(self.login_password_env_var):
+            raise ValueError(
+                "login_password_env_var must be an environment variable name, never a password"
+            )
+        if self.login_email and ("@" not in self.login_email or " " in self.login_email):
+            raise ValueError("The sign-in email does not look like an email address")
+
+    @property
+    def managed(self) -> bool:
+        """Kitden can sign in and change what the gateway holds."""
+        return bool(self.login_email and self.login_password_env_var)
 
     @property
     def id(self) -> str:
