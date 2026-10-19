@@ -13,6 +13,7 @@ from kitden.changes.client_cli import CommandResult
 from kitden.views.inventory import build_inventory
 from kitden.web.app import create_app
 from tests.conftest import make_home, write_cursor_fixture_state
+from tests.unit.fake_metamcp import FakeMetaMcp
 
 ORIGIN = "http://127.0.0.1:47800"
 POST = {"Origin": ORIGIN, "X-Tool-Request": "1"}
@@ -350,3 +351,129 @@ def test_updating_an_old_entry_beside_the_plugin_only_removes_it(plugin_client):
     assert change.status_code == 200, change.text
     steps = change.json()["steps"]
     assert len(steps) == 1 and "agentsetup" in steps[0]["diff"]
+
+
+# Moving servers into the gateway (feature 006) ---------------------------------------------
+
+
+@pytest.fixture
+def fake(monkeypatch):
+    monkeypatch.setenv("METAMCP_PW", "right-password")
+    fake = FakeMetaMcp().start()
+    yield fake
+    fake.stop()
+
+
+def _managed(client, fake):
+    body = {
+        "url": fake.mcp_url,
+        "login_email": "me@example.com",
+        "login_password_env_var": "METAMCP_PW",
+    }
+    return client.post("/api/gateways", json=body, headers=POST).json()
+
+
+def _move_rows(client):
+    return client.get("/api/gateway-view").json()["groups"]["move"]
+
+
+def _move(client, gateway_id, items):
+    body = {
+        "action": "gateway.move",
+        "targets": [{"item": i} for i in items],
+        "params": {"gateway": gateway_id},
+    }
+    return client.post("/api/changes/preview", json=body, headers=POST)
+
+
+def test_the_page_reads_what_the_gateway_holds(client, fake):
+    gateway = _managed(client, fake)
+    fake.hold("docs", "http://127.0.0.1:8765/mcp")
+    answer = client.get(f"/api/gateways/{gateway['id']}/servers").json()
+    assert answer == {
+        "servers": [
+            {"name": "docs", "type": "STREAMABLE_HTTP", "url": "http://127.0.0.1:8765/mcp"}
+        ],
+        "error": None,
+    }
+    assert client.get("/api/gateways/nope/servers").status_code == 404
+    fake.stop()
+    answer = client.get(f"/api/gateways/{gateway['id']}/servers").json()
+    assert answer["servers"] is None and "Could not reach" in answer["error"]
+
+
+def test_move_one_server_then_undo(client, fake):
+    original = _files(client.home)
+    gateway = _managed(client, fake)
+    # The fixture has "neon" in Codex and "Neon" in Cursor: two rows, moved as one change.
+    rows = [r for r in _move_rows(client) if r["name"].lower() == "neon"]
+    assert [r["clients"] for r in rows] == [["codex"], ["cursor"]]
+    items = [i for r in rows for i in r["items"]]
+
+    preview = _move(client, gateway["id"], items)
+    assert preview.status_code == 200, preview.json()
+    change = preview.json()
+    assert [s["client"] for s in change["steps"]] == ["gateway", "gateway", "codex", "cursor"]
+    assert change["steps"][0]["path"] == gateway["url"]
+    assert "+" in change["steps"][0]["diff"] and "neon" in change["steps"][0]["diff"]
+    assert [a["client"] for a in change["after"]] == ["codex", "cursor"]
+    assert _files(client.home) == original and fake.held_names() == []
+
+    applied = client.post(f"/api/changes/{change['id']}/apply", headers=POST)
+    assert applied.status_code == 200 and applied.json()["state"] == "verified"
+    assert fake.held_names() == ["neon", "Neon"]
+    assert all(r["name"].lower() != "neon" for r in _move_rows(client))
+    entry = client.get("/api/changes").json()[0]
+    assert entry["action"] == "gateway.move" and entry["steps"][0]["client"] == "gateway"
+
+    undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST)
+    assert undone.status_code == 200 and undone.json()["state"] == "undone"
+    assert _files(client.home) == original and fake.held_names() == []
+
+
+def test_move_all_keeps_secrets_out_of_sight(client, fake):
+    original = _files(client.home)
+    gateway = _managed(client, fake)
+    items = [i for row in _move_rows(client) for i in row["items"]]
+    names = sorted(r["name"] for r in _move_rows(client))
+    change = _move(client, gateway["id"], items).json()
+    assert "SENTINEL" not in json.dumps(change)
+    applied = client.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
+    assert applied["state"] == "verified"
+    assert sorted(fake.held_names()) == [n.replace(".", "-") for n in names]
+    github = next(s for s in fake.servers.values() if s["name"] == "github")
+    assert github["headers"]["Authorization"] == "Bearer SENTINEL_SECRET_GITHUB"
+    assert _move_rows(client) == []
+    assert "SENTINEL" not in json.dumps(client.get("/api/changes").json())
+    undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
+    assert undone["state"] == "undone"
+    assert _files(client.home) == original and fake.servers == {}
+
+
+def test_a_name_the_gateway_holds_or_a_variable_is_refused(client, fake):
+    gateway = _managed(client, fake)
+    fake.hold("neon", "https://mcp.neon.tech/mcp")
+    neon = next(r for r in _move_rows(client) if r["name"] == "neon")
+    refused = _move(client, gateway["id"], neon["items"])
+    assert refused.status_code == 422 and "already has neon" in refused.json()["detail"]
+
+    mcp = client.home / ".cursor/mcp.json"
+    data = json.loads(mcp.read_text())
+    data["mcpServers"]["linear"] = {
+        "url": "https://mcp.linear.app/mcp",
+        "headers": {"Authorization": "Bearer ${env:LINEAR}"},
+    }
+    mcp.write_text(json.dumps(data, indent=2))
+    client.post("/api/rescan", headers=POST)
+    linear = next(r for r in _move_rows(client) if r["name"] == "linear")
+    refused = _move(client, gateway["id"], linear["items"])
+    assert refused.status_code == 422 and "variable" in refused.json()["detail"]
+
+
+def test_an_unmanaged_gateway_cannot_take_servers(client, fake):
+    gateway = _register(client, url=fake.mcp_url).json()
+    neon = next(r for r in _move_rows(client) if r["name"] == "neon")
+    refused = _move(client, gateway["id"], neon["items"])
+    assert refused.status_code == 422 and "sign-in" in refused.json()["detail"]
+    answer = client.get(f"/api/gateways/{gateway['id']}/servers").json()
+    assert answer["servers"] is None and "sign-in" in answer["error"]

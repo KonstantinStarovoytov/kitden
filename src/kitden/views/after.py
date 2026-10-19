@@ -1,6 +1,6 @@
 """What each client shows after a change: the first line of the review (feature 004)."""
 
-from kitden.model import Change, ItemKind
+from kitden.model import GATEWAY_CLIENT, Change, ItemKind
 from kitden.views.effective import effective_view
 
 # Socket state and word per action, as on the Load map.
@@ -9,6 +9,7 @@ WORDS = {
     "plugin.disable": ("off", "Off"),
     "mcp.remove_direct": ("off", "Removed"),
     "gateway.connect": ("gw", "Via gateway"),
+    "gateway.move": ("gw", "Via gateway"),
     "setup_server.register": ("on", "Added"),
     "setup_server.update": ("on", "Updated"),
 }
@@ -29,7 +30,7 @@ def after_words(change: Change, inventory) -> list[dict]:
     """One entry per client: {"client", "state", "word"}, in step order."""
     out: list[dict] = []
     for step in change.steps:
-        if any(entry["client"] == step.client for entry in out):
+        if step.client == GATEWAY_CLIENT or any(e["client"] == step.client for e in out):
             continue
         state, word = WORDS.get(change.action, ("on", "Changed"))
         if change.action == "plugin.disable" and _other_copy_loads(

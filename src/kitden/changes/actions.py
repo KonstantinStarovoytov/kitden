@@ -2,11 +2,15 @@
 
 import re
 from pathlib import Path
+from typing import Any
 
+from kitden.changes import json_splice, toml_edit
 from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, REMOVE_DIRECT, ClientAdapter
-from kitden.model import Gateway, Item, Step
+from kitden.gateway_api import gateway_name
+from kitden.model import GATEWAY_CLIENT, Gateway, GatewayEdit, Item, Scope, Step
 
 GATEWAY_CONNECT = "gateway.connect"
+GATEWAY_MOVE = "gateway.move"
 SETUP_SERVER_UPDATE = "setup_server.update"
 ENTRY_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
 
@@ -89,3 +93,78 @@ def update_steps(
                 raise ValueError("The setup server needs the absolute path of the kitden command")
             steps.append(adapter.setup_server_step(command, ["mcp"]))
     return steps
+
+
+def _raw_entry(step: Step) -> Any:
+    """The entry as written in the client file, secrets included. Never shown."""
+    edit = step.edit
+    assert edit is not None
+    editor = {"json": json_splice, "toml": toml_edit}[edit.fmt]
+    try:
+        text = Path(edit.path).read_text()
+    except OSError:
+        return None
+    try:
+        value = editor.get_value(text, edit.key)
+    except json_splice.UnrecognizedFormatError:
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _gateway_server(name: str, entry: dict) -> dict:
+    """What MetaMCP needs for one remote server, from a client's entry (research table)."""
+    url = entry.get("url")
+    if not isinstance(url, str) or not url.startswith(("http://", "https://")):
+        raise ValueError(f"{name} is not a remote server; a gateway cannot run it")
+    if entry.get("env_http_headers") or entry.get("bearer_token_env_var"):
+        raise ValueError(f"{name} uses a variable the gateway cannot read")
+    headers = entry.get("headers") or entry.get("http_headers") or {}
+    if not isinstance(headers, dict) or any(
+        not isinstance(v, str) or "${" in v for v in headers.values()
+    ):
+        raise ValueError(f"{name} uses a variable the gateway cannot read")
+    kind = (
+        "SSE"
+        if str(entry.get("type", "")).lower() == "sse" or url.endswith("/sse")
+        else ("STREAMABLE_HTTP")
+    )
+    server: dict = {"type": kind, "url": url}
+    if headers:
+        server["headers"] = headers
+    return server
+
+
+def move_steps(
+    adapters: dict[str, ClientAdapter], items: list[Item], gateway: Gateway
+) -> list[Step]:
+    """Move direct entries into the gateway (feature 006): one gateway step per server name,
+    then the remove step of every client entry. The gateway steps come first."""
+    if not items:
+        raise ValueError("Choose a server to move")
+    if not gateway.managed:
+        raise ValueError("Add the sign-in email and password variable to the gateway first")
+    gateway_steps: dict[str, Step] = {}
+    file_steps: list[Step] = []
+    for item in items:
+        remove = remove_steps(adapters, item)[0]
+        file_steps.append(remove)
+        name = gateway_name(item.name)
+        if name in gateway_steps:
+            continue
+        entry = _raw_entry(remove)
+        if entry is None:
+            raise ValueError(f"{item.name} could not be read from its file")
+        edit = GatewayEdit(
+            gateway_id=gateway.id,
+            url=gateway.url,
+            name=name,
+            server=_gateway_server(item.name, entry),
+        )
+        gateway_steps[name] = Step(
+            client=GATEWAY_CLIENT,
+            scope=Scope.USER,
+            name=name,
+            gateway=edit,
+            mechanism="gateway_api",
+        )
+    return [*gateway_steps.values(), *file_steps]

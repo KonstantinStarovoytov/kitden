@@ -16,8 +16,10 @@ from starlette.staticfiles import StaticFiles
 
 from kitden.changes.actions import (
     GATEWAY_CONNECT,
+    GATEWAY_MOVE,
     SETUP_SERVER_UPDATE,
     connect_steps,
+    move_steps,
     plugin_steps,
     remove_steps,
     setup_server_steps,
@@ -28,8 +30,9 @@ from kitden.changes.client_cli import CommandRunner
 from kitden.changes.engine import ChangeRefusedError, Engine, Runner
 from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, REMOVE_DIRECT, SETUP_SERVER
 from kitden.command import installed_command
+from kitden.gateway_api import GatewayError, MetaMcpClient
 from kitden.gateways import add_gateway, data_dir, load_gateways
-from kitden.model import Change, ChangeState, Gateway, GatewayAuth
+from kitden.model import Change, ChangeState, Gateway, GatewayAuth, GatewayEdit
 from kitden.redact import redact_text
 from kitden.views.after import after_words
 from kitden.views.commands import commands_for
@@ -102,8 +105,12 @@ def change_dict(change: Change) -> dict:
                 "scope": str(s.scope),
                 "name": s.name,
                 "mechanism": s.mechanism,
-                "path": s.edit.path,
-                "diff": s.edit.masked_diff,
+                "path": s.edit.path if s.edit else s.gateway.url if s.gateway else None,
+                "diff": s.edit.masked_diff
+                if s.edit
+                else s.gateway.masked_diff
+                if s.gateway
+                else "",
                 "command": redact_text(" ".join(s.command)) if s.command else None,
                 "restart_note": s.restart_note,
                 "login_note": s.login_note,
@@ -215,7 +222,15 @@ def create_app(
             if sha and watcher_ref:
                 watcher_ref[0].expect(Path(path), sha)
 
-        engine = Engine(ChangeStore(data_dir(home)), run or CommandRunner(home), on_write)
+        def gateway_client(edit: GatewayEdit) -> MetaMcpClient:
+            found = next((g for g in load_gateways(home) if g.id == edit.gateway_id), None)
+            if found is None:
+                raise GatewayError("This gateway is no longer registered")
+            return MetaMcpClient(found)
+
+        engine = Engine(
+            ChangeStore(data_dir(home)), run or CommandRunner(home), on_write, gateway_client
+        )
         adapters = {a.id: a for a in default_adapters(home)}
     write_lock = asyncio.Lock()
 
@@ -364,6 +379,26 @@ def create_app(
         await state.rescan()
         return JSONResponse(gateway_dict(gateway))
 
+    async def gateway_servers(request: Request) -> JSONResponse:
+        """What the gateway holds, read live; an error never blocks the page (FR-008)."""
+        gateway = next(
+            (g for g in _registered() if g.id == request.path_params["gateway_id"]), None
+        )
+        if gateway is None:
+            return _error("Unknown gateway.", 404)
+
+        def read() -> list[dict]:
+            with MetaMcpClient(gateway) as client:
+                return [
+                    {"name": s["name"], "type": s["type"], "url": s["url"]} for s in client.held()
+                ]
+
+        try:
+            servers = await asyncio.to_thread(read)
+        except GatewayError as error:
+            return JSONResponse({"servers": None, "error": redact_text(str(error))})
+        return JSONResponse({"servers": servers, "error": None})
+
     def _item(item_id: str):
         return next((i for i in state.inventory.items if i.id == item_id), None)
 
@@ -404,6 +439,17 @@ def create_app(
                     if command is None:
                         return _error("Install the tool first: uv tool install <this folder>", 422)
                 steps = update_steps(adapters, items, added, command)
+            elif action == GATEWAY_MOVE:
+                gateway = next(
+                    (g for g in load_gateways(home) if g.id == params.get("gateway")), None
+                )
+                if gateway is None:
+                    return _error("Register the gateway first.", 422)
+                ids = [str(t.get("item")) for t in targets if isinstance(t, dict)]
+                items = [_item(i) for i in ids]
+                if not items or any(i is None for i in items):
+                    return _error("Choose a known server.", 422)
+                steps = move_steps(adapters, items, gateway)
             elif action in (REMOVE_DIRECT, PLUGIN_ENABLE, PLUGIN_DISABLE):
                 ids = [t.get("item") for t in targets if isinstance(t, dict)]
                 items = [_item(str(i)) for i in ids]
@@ -493,6 +539,7 @@ def create_app(
             Route("/api/findings", findings),
             Route("/api/rescan", rescan, methods=["POST"]),
             Route("/api/gateways", gateways, methods=["GET", "POST"]),
+            Route("/api/gateways/{gateway_id}/servers", gateway_servers),
             Route("/api/changes", changes),
             Route("/api/changes/preview", preview, methods=["POST"]),
             Route("/api/changes/{change_id}/{verb}", change_action, methods=["POST"]),
