@@ -33,3 +33,32 @@ def test_sdist_holds_only_what_runs():
     config = tomllib.loads((ROOT / "pyproject.toml").read_text())
     only = config["tool"]["hatch"]["build"]["targets"]["sdist"]["only-include"]
     assert only == ["src/kitden", "README.md", "LICENSE"]
+
+
+# Released before release notes files existed.
+NO_NOTES = {"0.1.0", "0.1.1"}
+
+
+def test_the_version_has_release_notes():
+    """The release workflow stops a tag without notes; this catches it before the tag."""
+    version = _project()["version"]
+    if version in NO_NOTES:
+        return
+    notes = ROOT / f"docs/releases/v{version}.md"
+    assert notes.is_file(), f"write docs/releases/v{version}.md before the release"
+    assert notes.read_text().strip()
+
+
+def test_the_readme_works_on_pypi():
+    """README.md is the PyPI page: every image and link is a full https address."""
+    import re
+
+    readme = (ROOT / "README.md").read_text()
+    targets = re.findall(r'(?:src|srcset|href)="([^"]+)"', readme)
+    targets += re.findall(r"\]\(([^)\s]+)\)", readme)
+    assert targets
+    for target in targets:
+        assert target.startswith("https://"), target
+    for picture in re.findall(r"<picture>.*?</picture>", readme, re.S):
+        assert "<img " in picture, "PyPI drops <picture>; keep a plain <img> inside"
+    assert "https://github.com/KonstantinStarovoytov/kitden/blob/main/ROADMAP.md" in readme

@@ -42,3 +42,25 @@ def test_pypi_publish_is_its_own_job_between_build_and_release():
     assert "uv publish" in publish and "--trusted-publishing always" in publish
     release = text.split("  release:")[1]
     assert "needs: [build, publish]" in release
+
+
+def _build_steps() -> list[str]:
+    build = WORKFLOW.read_text().split("  build:")[1].split("  publish:")[0]
+    return build.split("\n      - ")[1:]
+
+
+def test_the_release_text_is_the_notes_file():
+    release = WORKFLOW.read_text().split("  release:")[1]
+    assert '--notes-file "docs/releases/$GITHUB_REF_NAME.md"' in release
+    assert "--generate-notes" not in release
+
+
+def test_a_tag_without_notes_stops_before_pypi():
+    """The build job checks the notes file; publish needs build, so nothing reaches PyPI first."""
+    steps = [s for s in _build_steps() if 'docs/releases/$GITHUB_REF_NAME.md"' in s]
+    assert len(steps) == 1
+    assert "if: startsWith(github.ref, 'refs/tags/')" in steps[0]
+    assert 'test -s "docs/releases/$GITHUB_REF_NAME.md"' in steps[0]
+    assert "exit 1" in steps[0]
+    publish = WORKFLOW.read_text().split("  publish:")[1].split("  release:")[0]
+    assert "needs: build" in publish
