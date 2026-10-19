@@ -16,6 +16,7 @@ GATEWAY_CONNECT = "gateway.connect"
 GATEWAY_MOVE = "gateway.move"
 GATEWAY_SWITCH = "gateway.switch"
 PLUGIN_INSTALL = "plugin.install"
+MARKETPLACE_ADD = "marketplace.add"
 CLIENT_WORDS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
 SETUP_SERVER_UPDATE = "setup_server.update"
 ENTRY_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
@@ -92,6 +93,26 @@ def install_steps(
                 raise ValueError(f"The source of {offer['marketplace']} is not known")
             steps.append(adapter.marketplace_add_step(offer["marketplace"], source))
         steps.append(adapter.plugin_install_step(offer["id"]))
+    return steps
+
+
+def marketplace_steps(
+    adapters: dict[str, ClientAdapter], found: dict, clients: list[str]
+) -> list[Step]:
+    """Add one marketplace, read from its link, to the chosen clients (Discover)."""
+    if not clients:
+        raise ValueError("Choose at least one client")
+    steps = []
+    for client in dict.fromkeys(clients):
+        adapter = adapters.get(client)
+        words = CLIENT_WORDS.get(client, client)
+        if adapter is None or client == "cursor":
+            raise ValueError(f"{words} keeps its marketplaces in the Cursor account; add it there")
+        if client == "claude_code" and "claude" not in found["formats"]:
+            raise ValueError("Claude Code reads only .claude-plugin/marketplace.json")
+        if found["name"] in adapter.marketplace_sources():
+            raise ValueError(f"{words} already has a marketplace named {found['name']}")
+        steps.append(adapter.marketplace_add_step(found["name"], found["source"]))
     return steps
 
 

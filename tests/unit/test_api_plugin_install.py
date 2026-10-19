@@ -39,7 +39,8 @@ class FakeCli:
         text = path.read_text()
         if command[1:4] == ["plugin", "marketplace", "add"]:
             entry = {"source_type": "git", "source": command[4]}
-            text = toml_edit.set_value(text, ("marketplaces", "claude-plugins-official"), entry)
+            name = "team-tools" if "team-mkt" in command[4] else "claude-plugins-official"
+            text = toml_edit.set_value(text, ("marketplaces", name), entry)
         elif command[1:4] == ["plugin", "marketplace", "remove"]:
             text = toml_edit.delete_value(text, ("marketplaces", command[4]))
         elif command[1:3] == ["plugin", "add"]:
@@ -129,3 +130,46 @@ def test_a_client_without_a_route_is_refused(client):
 def test_an_unknown_plugin_is_refused(client):
     answer = _preview(client, "nothing@nowhere", ["codex"])
     assert answer.status_code == 422
+
+
+def _marketplace(client, source, clients):
+    body = {
+        "action": "marketplace.add",
+        "targets": [{"client": c} for c in clients],
+        "params": {"source": source},
+    }
+    return client.post("/api/changes/preview", json=body, headers=POST)
+
+
+def test_a_marketplace_from_a_folder_goes_to_codex_and_undo_removes_it(client, tmp_path):
+    folder = tmp_path / "team-mkt/.claude-plugin"
+    folder.mkdir(parents=True)
+    (folder / "marketplace.json").write_text('{"name": "team-tools", "plugins": [{"name": "a"}]}')
+    before = _files(client.home)
+    preview = _marketplace(client, str(tmp_path / "team-mkt"), ["codex"])
+    assert preview.status_code == 200, preview.text
+    change = preview.json()
+    assert [(s["client"], s["name"]) for s in change["steps"]] == [("codex", "team-tools")]
+    applied = client.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
+    assert applied["state"] == "verified", applied.get("error")
+    undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
+    assert undone["state"] == "undone"
+    assert _files(client.home) == before
+
+
+def test_a_marketplace_the_client_already_has_is_refused(client, tmp_path):
+    folder = tmp_path / "again/.claude-plugin"
+    folder.mkdir(parents=True)
+    (folder / "marketplace.json").write_text('{"name": "claude-plugins-official", "plugins": []}')
+    answer = _marketplace(client, str(tmp_path / "again"), ["claude_code"])
+    assert answer.status_code == 422
+    assert "already has" in answer.json()["detail"]
+
+
+def test_a_codex_only_marketplace_is_refused_for_claude_code(client, tmp_path):
+    folder = tmp_path / "codex-only/.agents/plugins"
+    folder.mkdir(parents=True)
+    (folder / "marketplace.json").write_text('{"name": "cx", "plugins": []}')
+    answer = _marketplace(client, str(tmp_path / "codex-only"), ["claude_code"])
+    assert answer.status_code == 422
+    assert "Claude Code reads only" in answer.json()["detail"]

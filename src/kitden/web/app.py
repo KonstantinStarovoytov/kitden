@@ -18,10 +18,12 @@ from kitden.changes.actions import (
     GATEWAY_CONNECT,
     GATEWAY_MOVE,
     GATEWAY_SWITCH,
+    MARKETPLACE_ADD,
     PLUGIN_INSTALL,
     SETUP_SERVER_UPDATE,
     connect_steps,
     install_steps,
+    marketplace_steps,
     move_steps,
     plugin_steps,
     remove_steps,
@@ -36,6 +38,7 @@ from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, REMOVE_DIRECT, SE
 from kitden.command import installed_command
 from kitden.gateway_api import GatewayError, MetaMcpClient, ObotClient
 from kitden.gateways import add_gateway, data_dir, load_gateways
+from kitden.marketplace_link import LinkError, read_marketplace
 from kitden.model import Change, ChangeState, Gateway, GatewayAuth, GatewayEdit, ItemKind
 from kitden.redact import redact_text
 from kitden.views.after import after_words
@@ -438,6 +441,13 @@ def create_app(
                     return _error("This plugin is not in a marketplace on this computer.", 422)
                 clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
                 steps = install_steps(adapters, offer, clients)
+            elif action == MARKETPLACE_ADD:
+                try:
+                    found = await asyncio.to_thread(read_marketplace, str(params.get("source", "")))
+                except LinkError as error:
+                    return _error(str(error), 422)
+                clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+                steps = marketplace_steps(adapters, found, clients)
             elif action == GATEWAY_SWITCH:
                 gateway = next(
                     (g for g in load_gateways(home) if g.id == params.get("gateway")), None

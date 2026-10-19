@@ -41,7 +41,7 @@ The answers are spread over six JSON and TOML files. Kitden reads them all and s
 | **One gateway for all clients** | Connect [Obot](https://obot.ai) or MetaMCP to every client at once, switch all of them to another gateway in one review, see what each holds and which servers go around it. |
 | **Jump straight in** | Click a client on the gateway map to open Claude, ChatGPT (Codex) or Cursor; click the gateway to open it. |
 | **Agents can ask too** | A read-only "show my setup" server lets Claude Code, Codex or Cursor answer "what do you load here?". |
-| **Private by design** | Runs on your Mac only (`127.0.0.1`). No account, no telemetry, secrets never shown or logged. |
+| **Private by design** | Runs on your Mac only (`127.0.0.1`). No account, no telemetry, secrets never shown or logged. Kitden goes online only when you add a marketplace from a GitHub link: it reads that one file from `raw.githubusercontent.com`. |
 
 ## Install
 
