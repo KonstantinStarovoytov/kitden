@@ -17,7 +17,7 @@ const STATE_BADGES = {
 };
 const OVER = ["undone", "cancelled"];
 
-const SCOPE_WORDS = { user: "global settings", project: "project", local: "this Mac" };
+const SCOPE_WORDS = { user: "global settings", project: "this project", local: "this Mac" };
 
 function when(time) {
   const date = new Date(time);
@@ -83,8 +83,8 @@ function show(entry) {
     steps.append(row);
   }
   body.append(steps);
-  // Older log entries have no notes; they show no section.
-  const notes = notesSection("To take effect", entry.steps);
+  // Only a change that happened needs a restart. Older log entries have no notes: no section.
+  const notes = ["verified", "undone", "undo_blocked"].includes(entry.state) && notesSection("To take effect", entry.steps);
   if (notes) body.append(notes);
   const history = data.changes.filter((e) => e.id === entry.id).reverse();
   body.append(el("p", "muted", history.map((e) => `${when(e.time)} ${(STATE_BADGES[e.state] || [e.state])[0]}`).join(" → ")));

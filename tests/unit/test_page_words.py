@@ -299,3 +299,9 @@ def test_changes_and_the_load_map_say_saved_settings_and_scope():
     changes = script("changes.js")
     assert "To take effect" in changes and "global settings" in changes
     assert '"everywhere"' not in changes
+
+
+def test_changes_show_restart_notes_only_for_changes_that_happened():
+    changes = script("changes.js")
+    assert '["verified", "undone", "undo_blocked"].includes(entry.state)' in changes
+    assert 'project: "this project"' in changes
