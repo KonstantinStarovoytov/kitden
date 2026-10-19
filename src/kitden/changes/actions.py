@@ -1,9 +1,11 @@
 """Turn a requested action into steps for the change engine (write-matrix.md)."""
 
+import ipaddress
 import re
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from kitden.changes import json_splice, toml_edit
 from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, REMOVE_DIRECT, ClientAdapter
@@ -161,28 +163,55 @@ def _gateway_server(name: str, entry: dict) -> dict:
     return server
 
 
+LOCAL_HOSTS = {"localhost", "host.docker.internal"}
+
+
+def is_local_address(url: str) -> bool:
+    """True for an address on this computer or a private network: localhost, 127/8, ::1,
+    RFC 1918, link-local and unique-local ranges, and Docker's name for the host."""
+    host = (urlsplit(url).hostname or "").lower()
+    if host in LOCAL_HOSTS or host.endswith(".localhost"):
+        return True
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return address.is_loopback or address.is_private or address.is_link_local
+
+
 def move_steps(
     adapters: dict[str, ClientAdapter], items: list[Item], gateway: Gateway
 ) -> list[Step]:
-    """Move direct entries into the gateway (feature 006): one gateway step per server name,
-    then the remove step of every client entry. The gateway steps come first."""
+    """Move direct entries into the gateway: one gateway step per server name, then the
+    remove step of every client entry. The gateway steps come first.
+
+    MetaMCP (feature 006) cleans the name to what it accepts. Obot (checked 2026-10-19,
+    v0.26.3) keeps the name, needs an administrator's key, and refuses servers on this
+    computer or a private network; Kitden refuses those before the review."""
     if not items:
         raise ValueError("Choose a server to move")
     if not gateway.movable:
         if gateway.kind == "metamcp":
             raise ValueError("Add the sign-in email and password variable to the gateway first")
-        raise ValueError("Kitden cannot move servers into this gateway yet (feature 007, Step B)")
+        if gateway.kind == "obot":
+            raise ValueError("Add the name of the Obot key variable to the gateway first")
+        raise ValueError("Kitden cannot move servers into this gateway")
     gateway_steps: dict[str, Step] = {}
     file_steps: list[Step] = []
     for item in items:
         remove = remove_steps(adapters, item)[0]
         file_steps.append(remove)
-        name = gateway_name(item.name)
+        name = item.name if gateway.kind == "obot" else gateway_name(item.name)
         if name in gateway_steps:
             continue
         entry = _raw_entry(remove)
         if entry is None:
             raise ValueError(f"{item.name} could not be read from its file")
+        if gateway.kind == "obot" and is_local_address(str(entry.get("url", ""))):
+            raise ValueError(
+                f"Obot cannot reach {item.name}: it runs on this computer or a private "
+                "network. Keep the direct entry, or set up an Obot tunnel."
+            )
         edit = GatewayEdit(
             gateway_id=gateway.id,
             url=gateway.url,

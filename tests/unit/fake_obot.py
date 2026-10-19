@@ -16,8 +16,14 @@ class FakeObot:
         self.key = key
         self.vmcp_id = vmcp_id
         self.components: list[dict] = []
+        self.entries: dict[str, dict] = {}  # catalog entries Kitden created, by id
+        self.profiles = [{"name": "default", "subjects": [{"type": "obotGroup", "id": "admin"}]}]
+        self.profiles_kept = True  # a PUT wrote the profiles back unchanged
+        self.vmcp_writes = 0
         self.calls: list[str] = []
         self.forbidden = False  # the key's role may not read vMCPs (403)
+        self.forbid_writes = False  # the key's user is not an administrator (403 on entries)
+        self.fail_vmcp_write = False  # PUT on the vMCP answers 500
         self.odd_shape = False  # answers with a shape Kitden does not know
         self._server = ThreadingHTTPServer(("127.0.0.1", 0), self._handler())
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
@@ -44,24 +50,74 @@ class FakeObot:
         manifest: dict = {"name": name, "runtime": runtime}
         if url:
             manifest["remoteConfig"] = {"fixedURL": url}
-        self.components.append(
-            {
-                "id": f"c{len(self.components) + 1}",
-                "name": name,
-                "mcpCatalogID": "default",
-                "mcpServerCatalogEntryID": f"e{len(self.components) + 1}",
-                "catalogEntry": {"manifest": manifest},
-            }
-        )
+        entry = f"e{len(self.entries) + 1}"
+        self.entries[entry] = {"id": entry, "manifest": manifest, "editable": False}
+        self.components.append(self._component(name, entry))
+
+    def held_names(self) -> list[str]:
+        return [c["name"] for c in self.components]
+
+    def _component(self, name: str, entry: str) -> dict:
+        return {
+            "id": f"c{len(self.components) + 1}",
+            "name": name,
+            "mcpCatalogID": "default",
+            "mcpServerCatalogEntryID": entry,
+            "catalogEntry": {"manifest": self.entries[entry]["manifest"]},
+        }
 
     def _vmcp(self) -> dict:
         return {
             "id": self.vmcp_id,
             "displayName": "work",
+            "description": "",
             "components": self.components,
+            "profiles": self.profiles,
             "userID": "3",
             "status": {},
         }
+
+    def _put_vmcp(self, manifest: dict) -> tuple[int, str]:
+        """The real Update: components are matched to catalog entries, snapshots reloaded."""
+        if self.fail_vmcp_write:
+            return 500, "failed to update VMCP"
+        if manifest.get("profiles") != self.profiles:
+            self.profiles_kept = False
+        rebuilt = []
+        for component in manifest.get("components", []):
+            entry = component.get("mcpServerCatalogEntryID")
+            if entry not in self.entries:
+                return 400, f"invalid VMCP manifest: catalog entry {entry} not found"
+            rebuilt.append(
+                {
+                    **self._component(component["name"], entry),
+                    **{k: v for k, v in component.items() if k == "id"},
+                }
+            )
+        self.components = rebuilt
+        self.vmcp_writes += 1
+        return 200, ""
+
+    def _create_entry(self, manifest: dict) -> tuple[int, dict | str]:
+        """The real CreateEntry: a remote entry needs an http(s) fixedURL that is not local."""
+        remote = manifest.get("remoteConfig") or {}
+        url = remote.get("fixedURL", "")
+        if manifest.get("runtime") != "remote" or not url.startswith(("http://", "https://")):
+            return (
+                400,
+                "failed to validate entry manifest: either fixedURL, hostname, or urlTemplate "
+                "must be provided",
+            )
+        host = urlsplit(url).hostname or ""
+        if host in ("localhost", "127.0.0.1", "::1") or host.startswith(("10.", "192.168.")):
+            return (
+                400,
+                "failed to validate entry manifest: fixedURL: localhost and private addresses "
+                "are not allowed",
+            )
+        entry = f"default-{manifest['name'].lower().replace(' ', '-')}-{len(self.entries) + 1:04x}"
+        self.entries[entry] = {"id": entry, "manifest": manifest, "editable": True}
+        return 201, {"id": entry, "manifest": manifest, "editable": True}
 
     def _handler(self):
         fake = self
@@ -78,24 +134,76 @@ class FakeObot:
                 self.end_headers()
                 self.wfile.write(raw)
 
-            def do_GET(self):
+            def _body(self) -> dict:
+                length = int(self.headers.get("Content-Length") or 0)
+                raw = self.rfile.read(length) if length else b""
+                return json.loads(raw) if raw else {}
+
+            def _route(self, method: str) -> None:
                 path = urlsplit(self.path).path
-                fake.calls.append(path)
+                fake.calls.append(f"{method} {path}")
                 if self.headers.get("Authorization") != f"Bearer {fake.key}":
                     self._send(401, "unauthorized", text=True)
-                elif path == "/api/me":
+                elif method == "GET" and path == "/api/me":
                     self._send(200, {"id": "3", "username": "me", "role": 8, "effectiveRole": 8})
+                elif method == "GET" and path == "/api/mcp-catalogs":
+                    self._send(200, {"items": [{"id": "default", "displayName": "Default"}]})
                 elif path == f"/api/vmcps/{fake.vmcp_id}":
                     if fake.forbidden:
                         self._send(403, "forbidden", text=True)
                     elif fake.odd_shape:
                         self._send(200, {"surprise": True})
-                    else:
+                    elif method == "GET":
                         self._send(200, fake._vmcp())
+                    elif method == "PUT":
+                        status, text = fake._put_vmcp(self._body())
+                        self._send(status, fake._vmcp()) if status == 200 else self._send(
+                            status, text, text=True
+                        )
+                    else:
+                        self._send(405, "method not allowed", text=True)
                 elif path.startswith("/api/vmcps/"):
                     name = path.rsplit("/", 1)[-1]
                     self._send(404, f'VMCP.obot.obot.ai "{name}" not found', text=True)
+                elif method == "POST" and path == "/api/mcp-catalogs/default/entries":
+                    if fake.forbid_writes:
+                        self._send(403, "forbidden", text=True)
+                        return
+                    status, body = fake._create_entry(self._body())
+                    self._send(status, body, text=isinstance(body, str))
+                elif method == "DELETE" and path.startswith("/api/mcp-catalogs/default/entries/"):
+                    entry = path.rsplit("/", 1)[-1]
+                    if fake.forbid_writes:
+                        self._send(403, "forbidden", text=True)
+                    elif entry not in fake.entries:
+                        self._send(
+                            404,
+                            f'MCPServerCatalogEntry.obot.obot.ai "{entry}" not found',
+                            text=True,
+                        )
+                    elif not fake.entries[entry]["editable"]:
+                        self._send(
+                            400, "entry is not editable and cannot be manually deleted", text=True
+                        )
+                    else:
+                        del fake.entries[entry]
+                        fake.components = [
+                            c for c in fake.components if c["mcpServerCatalogEntryID"] != entry
+                        ]
+                        self._send(204, "", text=True)
                 else:
                     self._send(404, "404 page not found", text=True)
+
+            def do_GET(self):
+                self._route("GET")
+
+            def do_POST(self):
+                self._route("POST")
+
+            def do_PUT(self):
+                self._route("PUT")
+
+            def do_DELETE(self):
+                self._route("DELETE")
 
         return Handler

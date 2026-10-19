@@ -319,8 +319,8 @@ class Gateway:
 
     @property
     def movable(self) -> bool:
-        """Kitden can move servers into it from here (feature 006: MetaMCP only)."""
-        return self.kind == "metamcp" and self.managed
+        """Kitden can move servers into it from here: a managed MetaMCP or Obot gateway."""
+        return self.kind in ("metamcp", "obot") and self.managed
 
     @property
     def id(self) -> str:

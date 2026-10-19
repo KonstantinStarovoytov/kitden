@@ -48,6 +48,11 @@ release.
 - **Obot** — sign in with OAuth; Kitden reads it with an API key from
   `obot login --url <obot> --scope api --scope all-mcp --print-token`, kept in an environment
   variable. Do not run `obot setup`: it edits client files without a backup.
+  "Move into the gateway" takes the administrator's path (checked 2026-10-19, v0.26.3, from
+  source; there are no reference docs): a catalog entry in the built-in catalog, then the vMCP
+  manifest written back with one more component. A key without the admin role gets a clear
+  refusal and nothing is written. Servers on this computer or a private network are refused
+  before the review: Obot blocks them unless a tunnel is set up.
 - **MetaMCP** — has no public management API; Kitden signs in with an email and a password
   from an environment variable to move servers into it.
 

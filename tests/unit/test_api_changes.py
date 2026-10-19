@@ -504,12 +504,12 @@ def _register_obot(client, fake, **extra):
 def test_the_page_reads_what_an_obot_gateway_holds(client, obot):
     obot.hold("docs", "https://docs.example.com/mcp")
     saved = _register_obot(client, obot, ui_url=obot.url).json()
-    assert (saved["kind"], saved["managed"], saved["movable"]) == ("obot", True, False)
+    assert (saved["kind"], saved["managed"], saved["movable"]) == ("obot", True, True)
     answer = client.get(f"/api/gateways/{saved['id']}/servers").json()
     assert answer == {
         "servers": [{"name": "docs", "type": "remote", "url": "https://docs.example.com/mcp"}],
         "error": None,
-    }
+    }  # the entry id stays inside Kitden
     obot.stop()
     answer = client.get(f"/api/gateways/{saved['id']}/servers").json()
     assert answer["servers"] is None and "Could not reach" in answer["error"]
@@ -523,7 +523,7 @@ def test_an_obot_gateway_without_a_key_variable_says_so(client, obot):
     assert answer["servers"] is None and "key variable" in answer["error"]
     neon = next(r for r in _move_rows(client) if r["name"] == "neon")
     refused = _move(client, saved["id"], neon["items"])
-    assert refused.status_code == 422 and "Step B" in refused.json()["detail"]
+    assert refused.status_code == 422 and "key variable" in refused.json()["detail"]
 
 
 def test_an_obot_key_never_reaches_a_client_file_or_a_response(client, obot):
@@ -618,3 +618,61 @@ def test_switching_to_the_gateway_already_in_use_is_refused(client):
     answer = client.post("/api/changes/preview", json=body, headers=POST)
     assert answer.status_code == 422
     assert "No client uses another gateway" in answer.json()["detail"]
+
+
+def test_move_one_server_into_obot_then_undo(client, obot):
+    original = _files(client.home)
+    gateway = _register_obot(client, obot).json()
+    assert gateway["movable"] is True
+    obot.hold("docs", "https://docs.example.com/mcp")
+    rows = [r for r in _move_rows(client) if r["name"].lower() == "neon"]
+    items = [i for r in rows for i in r["items"]]
+
+    preview = _move(client, gateway["id"], items)
+    assert preview.status_code == 200, preview.json()
+    change = preview.json()
+    assert [s["client"] for s in change["steps"]] == ["gateway", "gateway", "codex", "cursor"]
+    assert "mcp.neon.tech" in change["steps"][0]["diff"]
+    assert _files(client.home) == original and obot.held_names() == ["docs"]
+
+    applied = client.post(f"/api/changes/{change['id']}/apply", headers=POST)
+    assert applied.status_code == 200 and applied.json()["state"] == "verified"
+    assert obot.held_names() == ["docs", "neon", "Neon"]  # Obot keeps the names as they are
+    assert len(obot.entries) == 3 and obot.profiles_kept
+    assert all(r["name"].lower() != "neon" for r in _move_rows(client))
+    held = client.get(f"/api/gateways/{gateway['id']}/servers").json()["servers"]
+    assert [s["name"] for s in held] == ["docs", "neon", "Neon"]
+
+    undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST)
+    assert undone.status_code == 200 and undone.json()["state"] == "undone"
+    assert _files(client.home) == original
+    assert obot.held_names() == ["docs"] and list(obot.entries) == ["e1"]
+
+
+def test_move_into_obot_needs_an_administrator(client, obot):
+    original = _files(client.home)
+    gateway = _register_obot(client, obot).json()
+    obot.forbid_writes = True
+    neon = next(r for r in _move_rows(client) if r["name"] == "neon")
+    change = _move(client, gateway["id"], neon["items"]).json()
+    applied = client.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
+    assert applied["state"] == "restored" and "administrator" in applied["error"]
+    assert obot.key not in applied["error"]
+    assert _files(client.home) == original and obot.entries == {}
+
+
+def test_move_into_obot_refuses_a_server_on_this_computer(tmp_path, monkeypatch, obot):
+    home = _home(tmp_path, monkeypatch)
+    mcp = home / ".cursor/mcp.json"
+    data = json.loads(mcp.read_text())
+    data["mcpServers"]["bridge"] = {"url": "http://127.0.0.1:8765/mcp"}
+    mcp.write_text(json.dumps(data, indent=2))
+    with _app_client(home) as c:
+        c.get("/?token=tok")
+        gateway = _register_obot(c, obot).json()
+        bridge = next(r for r in _move_rows(c) if r["name"] == "bridge")
+        refused = _move(c, gateway["id"], bridge["items"])
+        assert refused.status_code == 422
+        assert "runs on this computer" in refused.json()["detail"]
+        assert "tunnel" in refused.json()["detail"]
+    assert obot.entries == {}

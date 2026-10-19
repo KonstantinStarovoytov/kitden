@@ -92,7 +92,7 @@ def test_an_obot_gateway_is_managed_with_a_key_variable_even_for_oauth_clients(t
     gateway = Gateway(url=OBOT, auth=GatewayAuth.OAUTH, key_env_var="OBOT_KEY")
     add_gateway(tmp_path, gateway)
     assert load_gateways(tmp_path) == [gateway]
-    assert gateway.managed and not gateway.movable
+    assert gateway.managed and gateway.movable
     assert not Gateway(url=OBOT, auth=GatewayAuth.OAUTH).managed
     managed_metamcp = Gateway(url=URL, login_email="me@example.com", login_password_env_var="PW")
     assert managed_metamcp.movable

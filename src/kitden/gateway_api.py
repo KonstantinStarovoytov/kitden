@@ -210,10 +210,14 @@ def vmcp_id(url: str) -> str:
 
 
 class ObotClient:
-    """Read what an Obot gateway holds: the components of the vMCP behind the stored address.
+    """Talk to an Obot gateway with the key from the environment variable the record names.
 
-    One call, `GET /api/vmcps/<id>`, with the key from the environment variable the gateway
-    record names. The key never appears in a message. Checked against Obot v0.26.3.
+    Reading is one call, `GET /api/vmcps/<id>`: the components of the vMCP behind the stored
+    address. Adding a remote server takes the administrator's path (checked 2026-10-19 against
+    Obot v0.26.3 source, no reference docs exist): a catalog entry in the built-in catalog
+    (`POST /api/mcp-catalogs/<catalog>/entries`), then the vMCP manifest written back with one
+    more component (`PUT /api/vmcps/<id>`). Removing is the reverse. A key without the admin
+    role gets 403 on the entry call, and nothing is written. The key never appears in a message.
     """
 
     def __init__(
@@ -231,14 +235,23 @@ class ObotClient:
         self.env = os.environ if env is None else env
         self.timeout = timeout
 
-    def _get(self, path: str) -> Any:
+    def __enter__(self) -> "ObotClient":
+        return self
+
+    def __exit__(self, *exc) -> None:
+        return None
+
+    def _request(self, method: str, path: str, body: dict | None = None) -> tuple[int, Any]:
         var = self.gateway.key_env_var or ""
         key = self.env.get(var)
         if not key:
             raise GatewayError(f"Set {var} in the environment before starting Kitden")
-        request = urllib.request.Request(self.base + path)  # noqa: S310 - http(s) checked on save
+        data = json.dumps(body).encode() if body is not None else None
+        request = urllib.request.Request(self.base + path, data=data, method=method)  # noqa: S310 - http(s) checked on save
         request.add_header("Accept", "application/json")
         request.add_header("Authorization", f"Bearer {key}")
+        if data is not None:
+            request.add_header("Content-Type", "application/json")
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:  # noqa: S310
                 return response.status, _json(response.read())
@@ -248,19 +261,28 @@ class ObotClient:
             reason = getattr(error, "reason", error)
             raise GatewayError(f"Could not reach the gateway at {self.base}: {reason}") from None
 
-    def held(self) -> list[dict]:
-        """Servers on the connection: name, kind (Obot's runtime) and address when it has one."""
-        status, body = self._get(f"/api/vmcps/{quote(self.vmcp)}")
+    def _refused(self, status: int, what: str) -> GatewayError:
         if status in (401, 403):
-            raise GatewayError(f"Obot refused the key ({status}); check its scope and role")
+            return GatewayError(
+                f"Obot refused the key for {what} ({status}); check its scope and role"
+            )
+        return GatewayError(f"Obot answered {status} to {what}; nothing else was changed")
+
+    def _vmcp_manifest(self) -> dict:
+        status, body = self._request("GET", f"/api/vmcps/{quote(self.vmcp)}")
         if status == 404:
             raise GatewayError(f"Obot has no connection named {self.vmcp}")
         if status != 200:
-            raise GatewayError(f"Obot answered {status}")
+            raise self._refused(status, "the connection")
         if not isinstance(body, dict) or not isinstance(body.get("components"), list):
             raise GatewayError(
                 f"Obot answered in an unexpected shape (checked against {OBOT_VERSION_CHECKED})"
             )
+        return body
+
+    def held(self) -> list[dict]:
+        """Servers on the connection: name, kind (Obot's runtime) and address when it has one."""
+        body = self._vmcp_manifest()
         held = []
         for component in body["components"]:
             if not isinstance(component, dict):
@@ -274,9 +296,103 @@ class ObotClient:
                     "name": component.get("name"),
                     "type": manifest.get("runtime") if isinstance(manifest, dict) else None,
                     "url": remote.get("fixedURL") if isinstance(remote, dict) else None,
+                    "uuid": component.get("mcpServerCatalogEntryID"),
                 }
             )
         return held
+
+    # Writing (the administrator's path) -------------------------------------------------
+
+    MANIFEST_KEYS = ("displayName", "description", "icon", "toolSearch", "components", "profiles")
+
+    def _write_components(self, body: dict, components: list[dict]) -> None:
+        manifest = {k: body[k] for k in self.MANIFEST_KEYS if k in body}
+        manifest["components"] = components
+        status, _ = self._request("PUT", f"/api/vmcps/{quote(self.vmcp)}", manifest)
+        if status != 200:
+            raise self._refused(status, "changing the connection")
+
+    def _catalog(self) -> str:
+        status, body = self._request("GET", "/api/mcp-catalogs")
+        if status != 200:
+            raise self._refused(status, "the catalog")
+        items = body.get("items") if isinstance(body, dict) else None
+        ids = [i.get("id") for i in _list(items) if isinstance(i, dict) and i.get("id")]
+        if not ids:
+            raise GatewayError("Obot has no catalog to add the server to")
+        return "default" if "default" in ids else ids[0]
+
+    def add(self, name: str, server: dict) -> str:
+        """Make the remote server a catalog entry and put it on the connection. Returns the
+        entry id. `server` is `{type, url, headers?}`; header values become static, sensitive
+        header configuration that Obot stores as a credential."""
+        body = self._vmcp_manifest()
+        catalog = self._catalog()
+        manifest: dict = {
+            "name": name,
+            "shortDescription": "Added from Kitden",
+            "description": "",
+            "icon": "",
+            "runtime": "remote",
+            "remoteConfig": {"fixedURL": server["url"]},
+        }
+        headers = server.get("headers") or {}
+        if headers:
+            manifest["config"] = [
+                {
+                    "name": key,
+                    "description": "",
+                    "key": key,
+                    "value": value,
+                    "sensitive": True,
+                    "required": True,
+                    "usage": "header",
+                }
+                for key, value in headers.items()
+            ]
+        status, created = self._request(
+            "POST", f"/api/mcp-catalogs/{quote(catalog)}/entries", manifest
+        )
+        if status == 403:
+            raise GatewayError(
+                "Only an Obot administrator can add servers; the key's user is not one (403)"
+            )
+        if status not in (200, 201):
+            raise self._refused(status, "adding the server")
+        entry = created.get("id") if isinstance(created, dict) else None
+        if not entry:
+            raise GatewayError("Obot did not return the new entry; nothing else was changed")
+        component = {"name": name, "mcpCatalogID": catalog, "mcpServerCatalogEntryID": entry}
+        try:
+            self._write_components(body, [*body["components"], component])
+        except GatewayError:
+            self._request("DELETE", f"/api/mcp-catalogs/{quote(catalog)}/entries/{quote(entry)}")
+            raise
+        return entry
+
+    def remove(self, entry: str) -> bool:
+        """Take the server off the connection and delete its entry. False if already gone."""
+        body = self._vmcp_manifest()
+        kept = [c for c in body["components"] if c.get("mcpServerCatalogEntryID") != entry]
+        catalog = next(
+            (
+                c.get("mcpCatalogID")
+                for c in body["components"]
+                if c.get("mcpServerCatalogEntryID") == entry
+            ),
+            None,
+        )
+        if len(kept) != len(body["components"]):
+            self._write_components(body, kept)
+        catalog = catalog or self._catalog()
+        status, _ = self._request(
+            "DELETE", f"/api/mcp-catalogs/{quote(catalog)}/entries/{quote(entry)}"
+        )
+        if status == 404:
+            return False
+        if status not in (200, 204):
+            raise self._refused(status, "removing the server")
+        return True
 
 
 def _json(raw: bytes) -> Any:

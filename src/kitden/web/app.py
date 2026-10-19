@@ -224,11 +224,11 @@ def create_app(
             if sha and watcher_ref:
                 watcher_ref[0].expect(Path(path), sha)
 
-        def gateway_client(edit: GatewayEdit) -> MetaMcpClient:
+        def gateway_client(edit: GatewayEdit) -> MetaMcpClient | ObotClient:
             found = next((g for g in load_gateways(home) if g.id == edit.gateway_id), None)
             if found is None:
                 raise GatewayError("This gateway is no longer registered")
-            return MetaMcpClient(found)
+            return ObotClient(found) if found.kind == "obot" else MetaMcpClient(found)
 
         engine = Engine(
             ChangeStore(data_dir(home)), run or CommandRunner(home), on_write, gateway_client

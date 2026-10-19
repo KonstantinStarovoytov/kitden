@@ -141,11 +141,12 @@ def test_obot_held_lists_the_servers_on_the_vmcp(obot):
     obot.hold("docs", "https://docs.example.com/mcp")
     obot.hold("github", runtime="containerized")
     held = ObotClient(obot_gateway(obot), OBOT_ENV).held()
-    assert held == [
-        {"name": "docs", "type": "remote", "url": "https://docs.example.com/mcp"},
-        {"name": "github", "type": "containerized", "url": None},
+    assert [(s["name"], s["type"], s["url"]) for s in held] == [
+        ("docs", "remote", "https://docs.example.com/mcp"),
+        ("github", "containerized", None),
     ]
-    assert obot.calls == [f"/api/vmcps/{obot.vmcp_id}"]
+    assert held[0]["uuid"] == "e1"
+    assert obot.calls == [f"GET /api/vmcps/{obot.vmcp_id}"]
 
 
 def test_obot_held_is_empty_for_an_empty_vmcp(obot):
@@ -160,13 +161,13 @@ def test_obot_missing_key_variable_says_which_one(obot):
 def test_obot_wrong_key_is_refused_without_showing_it(obot):
     with pytest.raises(GatewayError) as error:
         ObotClient(obot_gateway(obot), {"OBOT_KEY": "ok1-3-k1-wrongsecret"}).held()
-    assert "refused the key (401)" in str(error.value)
+    assert "refused the key for the connection (401)" in str(error.value)
     assert "wrongsecret" not in str(error.value)
 
 
 def test_obot_forbidden_key(obot):
     obot.forbidden = True
-    with pytest.raises(GatewayError, match=r"refused the key \(403\)"):
+    with pytest.raises(GatewayError, match=r"refused the key for the connection \(403\)"):
         ObotClient(obot_gateway(obot), OBOT_ENV).held()
 
 
@@ -196,3 +197,70 @@ def test_obot_needs_a_key_variable_and_an_obot_address(obot):
     assert vmcp_id("http://127.0.0.1:8080/mcp-connect/v1abc") == "v1abc"
     with pytest.raises(GatewayError):
         vmcp_id("http://127.0.0.1:8080/api/vmcps/v1abc")
+
+
+def test_obot_add_then_remove(obot):
+    obot.hold("docs", "https://docs.example.com/mcp")
+    client = ObotClient(obot_gateway(obot), OBOT_ENV)
+    entry = client.add("neon", {"type": "STREAMABLE_HTTP", "url": "https://mcp.neon.tech/mcp"})
+    assert entry in obot.entries
+    assert obot.entries[entry]["manifest"]["remoteConfig"] == {
+        "fixedURL": "https://mcp.neon.tech/mcp"
+    }
+    assert [s["name"] for s in client.held()] == ["docs", "neon"]
+    assert obot.vmcp_writes == 1 and obot.profiles_kept
+    assert client.remove(entry) is True
+    assert [s["name"] for s in client.held()] == ["docs"]
+    assert entry not in obot.entries
+    assert client.remove(entry) is False  # already gone
+
+
+def test_obot_header_values_become_sensitive_header_configuration(obot):
+    client = ObotClient(obot_gateway(obot), OBOT_ENV)
+    entry = client.add(
+        "x",
+        {
+            "type": "STREAMABLE_HTTP",
+            "url": "https://x.example/mcp",
+            "headers": {"Authorization": SECRET},
+        },
+    )
+    config = obot.entries[entry]["manifest"]["config"]
+    assert config == [
+        {
+            "name": "Authorization",
+            "description": "",
+            "key": "Authorization",
+            "value": SECRET,
+            "sensitive": True,
+            "required": True,
+            "usage": "header",
+        }
+    ]
+
+
+def test_obot_non_admin_key_cannot_add_and_nothing_is_written(obot):
+    obot.forbid_writes = True
+    client = ObotClient(obot_gateway(obot), OBOT_ENV)
+    with pytest.raises(GatewayError, match="administrator"):
+        client.add("x", {"type": "STREAMABLE_HTTP", "url": "https://x.example/mcp"})
+    assert obot.entries == {} and obot.vmcp_writes == 0
+
+
+def test_obot_add_deletes_the_entry_again_when_the_connection_update_fails(obot):
+    obot.fail_vmcp_write = True
+    client = ObotClient(obot_gateway(obot), OBOT_ENV)
+    with pytest.raises(GatewayError, match="changing the connection"):
+        client.add("x", {"type": "STREAMABLE_HTTP", "url": "https://x.example/mcp"})
+    assert obot.entries == {} and obot.components == []
+
+
+def test_obot_error_text_never_carries_the_key_or_a_header_value(obot):
+    obot.fail_vmcp_write = True
+    client = ObotClient(obot_gateway(obot), OBOT_ENV)
+    with pytest.raises(GatewayError) as error:
+        client.add(
+            "x",
+            {"type": "STREAMABLE_HTTP", "url": "https://x.example/mcp", "headers": {"A": SECRET}},
+        )
+    assert SECRET not in str(error.value) and obot.key not in str(error.value)
