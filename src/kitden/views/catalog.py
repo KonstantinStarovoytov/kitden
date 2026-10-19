@@ -184,9 +184,9 @@ def catalog(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
                 }
     for offer in offers.values():
         for client in INSTALLERS:
-            if client in adapters and client not in offer["routes"]:
-                if _can_add(client, offer["marketplace"], sources):
-                    offer["routes"][client] = "add_marketplace"
+            missing = client in adapters and client not in offer["routes"]
+            if missing and _can_add(client, offer["marketplace"], sources):
+                offer["routes"][client] = "add_marketplace"
     return sorted(offers.values(), key=lambda o: (o["name"].lower(), o["marketplace"]))
 
 

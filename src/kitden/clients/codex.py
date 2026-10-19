@@ -157,9 +157,9 @@ class CodexAdapter(ClientAdapter):
         roots = {}
         for name, entry in _dict(config.get("marketplaces")).items():
             source = _dict(entry).get("source")
-            if _dict(entry).get("source_type") == "local" and isinstance(source, str):
-                if Path(source).is_dir():
-                    roots[name] = Path(source)
+            local = _dict(entry).get("source_type") == "local" and isinstance(source, str)
+            if local and Path(source).is_dir():
+                roots[name] = Path(source)
         curated = self.codex_home / ".tmp/plugins"
         listed = _dict(Reader(CLIENT).json(curated / ".agents/plugins/marketplace.json"))
         if isinstance(listed.get("name"), str):
