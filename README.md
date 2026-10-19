@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/src/kitden/web/static/brand/kitden.svg" width="56" height="56" alt="">
-</p>
+<img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/logo.svg" width="100%" alt="Kitden">
 
 <h1 align="center">Kitden</h1>
 
@@ -40,7 +38,8 @@ The answers are spread over six JSON and TOML files. Kitden reads them all and s
 | **See everything** | Every MCP server, plugin, skill, hook and marketplace, for every client, side by side. Nothing to configure. |
 | **Know what needs attention** | Things that load twice, servers that skip your gateway, files that could not be read. Each with one button to fix it. |
 | **Change without fear** | Turn a plugin off, remove an old entry, move servers into your gateway. You see the exact change first; Apply keeps a backup; Undo puts it back. |
-| **One gateway for all clients** | Connect [Obot](https://obot.ai) (or MetaMCP) to every client at once, see what it holds, and spot servers that go around it. |
+| **One gateway for all clients** | Connect [Obot](https://obot.ai) or MetaMCP to every client at once, switch all of them to another gateway in one review, see what each holds and which servers go around it. |
+| **Jump straight in** | Click a client on the gateway map to open Claude, ChatGPT (Codex) or Cursor; click the gateway to open it. |
 | **Agents can ask too** | A read-only "show my setup" server lets Claude Code, Codex or Cursor answer "what do you load here?". |
 | **Private by design** | Runs on your Mac only (`127.0.0.1`). No account, no telemetry, secrets never shown or logged. |
 
@@ -88,7 +87,7 @@ Then ask your agent **"show my setup"**. Cursor also takes the plain link
 | Status | What |
 | --- | --- |
 | ✅ Done | One page for Claude Code (with the Desktop Code tab), Codex and Cursor; duplicates; safe on/off with Undo |
-| ✅ Done | Obot as your gateway: OAuth sign-in, see what it holds, connect every client in one review |
+| ✅ Done | Obot as your gateway: OAuth sign-in, see what it holds, connect or switch every client in one review |
 | ✅ Done | MetaMCP: the same, plus moving direct servers into it with one Apply and one Undo |
 | 🔨 Now | Move servers into Obot from Kitden |
 | ⏭ Next | Copy any command with one click |
