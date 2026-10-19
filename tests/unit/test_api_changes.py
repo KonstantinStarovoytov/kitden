@@ -545,3 +545,22 @@ def test_an_obot_key_never_reaches_a_client_file_or_a_response(client, obot):
     assert marked == {"claude_code", "codex", "cursor"}
     undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
     assert undone["state"] == "undone"
+
+
+def test_clients_connect_to_obot_with_a_key_reference_or_an_oauth_login(client, obot):
+    by_key = _register_obot(client, obot, auth="env_key").json()
+    change = _connect(client, by_key["id"]).json()
+    client.post(f"/api/changes/{change['id']}/apply", headers=POST)
+    files = _files(client.home)
+    assert b'bearer_token_env_var = "OBOT_KEY"' in files[".codex/config.toml"]
+    assert b"${OBOT_KEY}" in files[".claude.json"]
+    assert b"${env:OBOT_KEY}" in files[".cursor/mcp.json"]
+    assert all(obot.key.encode() not in raw for raw in files.values())
+    client.post(f"/api/changes/{change['id']}/undo", headers=POST)
+
+    by_login = _register_obot(client, obot, url=obot.mcp_url + "2").json()
+    change = _connect(client, by_login["id"], clients=["codex", "claude_code"]).json()
+    notes = {s["client"]: s.get("login_note") for s in change["steps"]}
+    assert notes["codex"] == "Run: codex mcp login gateway"
+    assert notes["claude_code"]
+    assert obot.key not in json.dumps(change)
