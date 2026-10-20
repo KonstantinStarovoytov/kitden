@@ -1,10 +1,15 @@
 // Page state, data cache and navigation. The URL hash keeps the state, so links and Back work:
-// #<view>?kind=<kind>&only=<filter>&project=<id>&q=<text>
+// #library?kind=<kind>&show=<mine|new|all>&category=<name>&attention=1&project=<id>&q=<text>
 import { getJson, query } from "./api.js";
 import { transition } from "./motion.js";
 
-export const VIEWS = ["overview", "map", "discover", "gateway", "changes", "agents"];
-export const state = { view: "overview", kind: "mcp_server", only: "all", project: "", q: "", selected: null };
+export const VIEWS = ["overview", "library", "gateway", "changes", "agents"];
+// Places the Library replaced, and the choice each one opens it on.
+export const OLD_VIEWS = { map: "mine", discover: "new" };
+const SHOWS = ["mine", "new", "all"];
+export const state = {
+  view: "overview", kind: "mcp_server", show: "mine", category: "", attention: false, project: "", q: "", selected: null,
+};
 // A change is being applied or undone: live rescans wait so the result can morph in.
 export const busy = { change: false };
 let idleListener = () => {};
@@ -37,23 +42,30 @@ let renderPlace = () => {};
 export function setRenderer(fn) { renderPlace = fn; }
 export function render() { renderPlace(); }
 
+// Old #map and #discover addresses open the Library on "On this Mac" and "Can add".
 export function parseHash(hash) {
-  const [view, rest] = String(hash || "").replace(/^#/, "").split("?");
+  const [place, rest] = String(hash || "").replace(/^#/, "").split("?");
   const params = new URLSearchParams(rest || "");
+  const old = OLD_VIEWS[place];
+  const show = params.get("show");
+  let kind = params.get("kind") || "mcp_server";
+  if (place === "discover") kind = kind === "skill" ? "skill" : "plugin";
   return {
-    view: VIEWS.includes(view) ? view : "overview",
-    kind: params.get("kind") || "mcp_server",
-    only: params.get("only") || "all",
+    view: old ? "library" : VIEWS.includes(place) ? place : "overview",
+    kind,
+    show: old || (SHOWS.includes(show) ? show : "mine"),
+    category: params.get("category") || "",
+    attention: params.get("attention") === "1",
     project: params.get("project") || "",
     q: params.get("q") || "",
   };
 }
 
 export function hashFor(s) {
-  const params = { project: s.project, q: s.q };
-  if (s.view === "map") Object.assign(params, { kind: s.kind, only: s.only === "all" ? "" : s.only });
-  if (s.view === "discover") params.kind = s.kind === "skill" ? "skill" : "";
-  return `#${s.view}${query(params)}`;
+  const library = s.view === "library"
+    ? { kind: s.kind, show: s.show === "mine" ? "" : s.show, category: s.category, attention: s.attention ? "1" : "" }
+    : {};
+  return `#${s.view}${query({ ...library, project: s.project, q: s.q })}`;
 }
 
 // A new place or project gets its own history entry, so Back returns to it; tabs, filters

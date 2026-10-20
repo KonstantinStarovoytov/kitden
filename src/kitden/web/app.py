@@ -680,11 +680,6 @@ def create_app(
             "marketplaces": counts("marketplace", in_category),
         }
         found = [o for o in in_category if not marketplace or o["marketplace"] == marketplace]
-        cursor = _found_cursor()
-        inherits = {
-            "plugin": bool(cursor and cursor.imports_claude_plugins()),
-            "skill": bool(cursor and cursor.reads_other_clients()),
-        }
         return JSONResponse(
             {
                 "offers": found[:1000],
@@ -692,12 +687,21 @@ def create_app(
                 "all": len(offers),
                 "marketplaces": [{"name": n, "count": c} for n, c in sorted(marketplaces.items())],
                 "facets": facets,
-                "inherits": inherits,
+                "inherits": _inherits(),
             }
         )
 
+    def _inherits() -> dict:
+        """Whether Cursor loads Claude Code's plugins and the skills in its folder."""
+        cursor = _found_cursor()
+        return {
+            "plugin": bool(cursor and cursor.imports_claude_plugins()),
+            "skill": bool(cursor and cursor.reads_other_clients()),
+        }
+
     async def offer_view(request: Request) -> JSONResponse:
-        """One plugin or skill from the catalogs, for Details of a row not on this computer."""
+        """One plugin or skill from the catalogs, for Details of a row not on this computer, with
+        `inherits` as /api/catalog has it, so Details and the Add form can name Cursor."""
         params = request.query_params
         if params.get("kind") == "skill":
             offers = skill_catalog(state.inventory, adapters)
@@ -706,7 +710,7 @@ def create_app(
         found = next((o for o in offers if o["id"] == params.get("id")), None)
         if found is None:
             return _error("Not on this computer.", 404)
-        return JSONResponse(found)
+        return JSONResponse({**found, "inherits": _inherits()})
 
     async def commands(request: Request) -> JSONResponse:
         """Steps the developer runs themselves (FR-029, FR-035). Never run by the tool."""

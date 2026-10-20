@@ -4,20 +4,18 @@ import { $, $$, busyWhile, focusKey, reportError } from "./dom.js";
 import { glide, rollTo, transition } from "./motion.js";
 import { renderAgents } from "./agents.js";
 import { renderChanges } from "./changes.js";
-import { renderDiscover } from "./discover.js";
 import { renderGateway } from "./gateway.js";
-import { morphOnNextRender, renderMap } from "./map.js";
+import { loadLibrary, morphOnNextRender, renderLibrary } from "./library.js";
 import { renderOverview } from "./overview.js";
 import { closePanel, initPanel, isPanelOpen } from "./panel.js";
 import { latestChanges } from "./parts.js";
 import {
-  busy, current, data, followAddress, freshness, go, loadShared, onIdle, parseHash, reload, setRenderer, setState, state, VIEWS,
+  busy, current, data, followAddress, freshness, go, loadShared, OLD_VIEWS, onIdle, parseHash, reload, setRenderer, setState, state, VIEWS,
 } from "./store.js";
 
 const PLACES = {
   overview: { title: "Overview", render: renderOverview },
-  map: { title: "Load map", render: renderMap },
-  discover: { title: "Discover", render: renderDiscover },
+  library: { title: "Library", render: renderLibrary },
   gateway: { title: "Gateway", render: renderGateway },
   changes: { title: "Changes", render: renderChanges },
   agents: { title: "Agents", render: renderAgents },
@@ -81,16 +79,12 @@ function renderShell() {
   where.value = state.project;
   where.closest(".where-box").classList.toggle("project", Boolean(state.project));
   if ($("#q") !== document.activeElement) $("#q").value = state.q;
-  // Discover searches what can be added; every other place searches what is already set up.
-  // The placeholder trails off; the accessible name is the same words without the dots.
-  const scope = state.view === "discover" ? "Search plugins and skills to add" : "Search your setup";
-  $("#q").placeholder = `${scope}…`;
-  $("#q").setAttribute("aria-label", scope);
 }
 
-// A scope change cross-fades the page (the Load map morphs its cells instead).
+// A scope change cross-fades the page (the Library morphs its cells instead). The Library's
+// rows are read beside everything else, so the page draws once with both.
 async function refresh({ fade = false } = {}) {
-  await reload();
+  await Promise.all([reload(), loadLibrary()]);
   if (fade) transition(renderPlace);
   else renderPlace();
 }
@@ -169,15 +163,18 @@ function listen() {
   $("#main").addEventListener("focusout", () => setTimeout(() => { if (!typing()) catchUp(); }, 0));
 }
 
-// Back, Forward or an edited address. Unknown places (like the skip link's #main) are ignored.
+// Back, Forward or an edited address. Unknown places (like the skip link's #main) are ignored;
+// an old #map or #discover address opens the Library and the address says so.
 function fromAddress() {
   const view = location.hash.replace(/^#/, "").split("?")[0];
-  if (!VIEWS.includes(view)) return;
+  const old = Boolean(OLD_VIEWS[view]);
+  if (!VIEWS.includes(view) && !old) return;
   const next = parseHash(location.hash);
-  if (["view", "project", "kind", "only", "q"].every((key) => next[key] === state[key])) return;
+  const same = ["view", "project", "kind", "show", "category", "attention", "q"].every((key) => next[key] === state[key]);
   const newProject = next.project !== state.project;
-  followAddress(next);
-  if (newProject) refresh().catch(reportError);
+  if (!same) followAddress(next);
+  if (old) setState({});
+  if (!same && newProject) refresh().catch(reportError);
 }
 
 function start() {
@@ -185,6 +182,7 @@ function start() {
   try { saved = localStorage.getItem(THEME_KEY) || localStorage.getItem(OLD_THEME_KEY); } catch { saved = null; }
   applyTheme(saved);
   Object.assign(state, parseHash(location.hash));
+  if (OLD_VIEWS[location.hash.replace(/^#/, "").split("?")[0]]) setState({});
   setRenderer(renderPlace);
 
   document.addEventListener("click", (event) => {
@@ -201,21 +199,21 @@ function start() {
   });
   $("#where").addEventListener("change", (event) => {
     setState({ project: event.target.value, selected: null });
-    // On the Load map, each cell turns into its state in the new scope instead of jumping.
-    if (state.view === "map") morphOnNextRender();
+    // On the Library, each cell turns into its state in the new scope instead of jumping.
+    if (state.view === "library") morphOnNextRender();
     // The old project's page stays until the new one is read, faded and marked as waiting.
     const main = $("#main");
     main.classList.add("pending");
     main.setAttribute("aria-busy", "true");
-    refresh({ fade: state.view !== "map" }).catch(reportError).finally(() => {
+    refresh({ fade: state.view !== "library" }).catch(reportError).finally(() => {
       main.classList.remove("pending");
       main.removeAttribute("aria-busy");
     });
   });
   $("#q").addEventListener("input", (event) => {
     const q = event.target.value.trim();
-    // Discover searches the marketplaces; every other place searches what is installed.
-    if (!["map", "discover"].includes(state.view) && q) go("map", { q });
+    // The Library searches what is set up and the marketplaces; other places send a search there.
+    if (state.view !== "library" && q) go("library", { q });
     else go(state.view, { q });
   });
   document.addEventListener("keydown", (event) => {

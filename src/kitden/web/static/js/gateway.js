@@ -373,7 +373,7 @@ function routes(gateway, connections, direct = []) {
 const GROUP_WORDS = { move: "Remote", local: "Local", plugin: "Plugin" };
 
 // One row per server: the clients that have it, its name and what it is. Addresses and
-// commands stay behind Details (the same panel as on the Load map).
+// commands stay behind Details (the same panel as in the Library).
 function groupRow(row, group, target) {
   const node = el("div", "list-row");
   node.dataset.clients = row.clients.join(" ");
@@ -403,7 +403,7 @@ async function showServer(name) {
   const map = current("map");
   const row = ((map && map.rows) || []).find((r) => r.kind === "mcp_server" && r.name === name);
   if (row) await openItem(row);
-  else toast("Could not find this server on the Load map.");
+  else toast("Could not find this server in the Library.");
 }
 
 function field(label, control) {

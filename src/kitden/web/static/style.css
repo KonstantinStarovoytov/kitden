@@ -305,7 +305,7 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .feed li:first-child { border-top: 0; }
 .feed li > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* Load map */
+/* Library */
 .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
 .tabs { position: relative; display: flex; gap: 2px; border-bottom: 1px solid var(--wire); margin-bottom: 12px; overflow-x: auto; }
 .tabs button { position: relative; z-index: 1; border: 0; background: transparent; padding: 8px 10px; border-radius: 6px 6px 0 0; color: var(--ink-3); cursor: pointer; white-space: nowrap; transition: color var(--t-fast) ease, background-color var(--t-fast) ease, transform 260ms var(--spring); }
@@ -333,20 +333,25 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .map .item .mono { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 9ch; }
 .map tbody tr:hover .opens, .map tbody tr:focus-visible .opens { color: var(--route); }
 .table-scroll { min-width: 0; }
-/* Discover: the Load map's table, with a line on what each plugin does and an Add column. */
-.offers td { height: auto; padding-top: 7px; padding-bottom: 7px; }
-/* Line two of the item cell: the source, never cut, then up to two lines of what it does. When the
-   cell is narrow the description drops under the source. */
-.offers .meta { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; margin-top: 2px; min-width: 0; font-size: 12px; color: var(--ink-3); }
-.offers .from { flex: none; max-width: 100%; color: var(--ink-2); overflow-wrap: anywhere; }
-.offers .desc { flex: 1 1 16ch; min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
-.offers .act { text-align: right; padding-left: 0; }
-/* "+ marketplace" goes under "Can add", lined up with the word, so it never gets cut off. */
-.offers .socket { flex-wrap: wrap; row-gap: 0; }
-.offers .socket .where { flex-basis: 100%; padding-left: 16px; }
-.offers .socket .where::before { content: none; }
-.map.offers tbody tr.group { cursor: default; }
-.map.offers tbody tr.group td { height: 30px; padding-top: 10px; padding-bottom: 4px; background: var(--inset); color: var(--ink-3); font-size: 12px; }
+/* Library rows: line one is the name, quiet meta text, flags and the chevron; line two says what it
+   does, cut to one line. A client's cell holds a state or the one button for what it can add. */
+.library td { height: auto; padding-top: 7px; padding-bottom: 7px; }
+/* The meta text gives way first, so the name stays readable; a short name keeps no gap after it. */
+.library .item .mono { min-width: 3ch; }
+.library .item .meta { flex: 0 999 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-3); font-size: 12px; }
+.library .desc { margin-top: 2px; font-size: 12px; color: var(--ink-3); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; overflow-wrap: anywhere; }
+.library tbody tr.group { cursor: default; }
+.library tbody tr.group td { height: 30px; padding-top: 10px; padding-bottom: 4px; background: var(--inset); color: var(--ink-3); font-size: 12px; }
+.btn.add { color: var(--route); border-color: color-mix(in srgb, var(--route) 45%, var(--wire)); background: transparent; }
+.btn.add:hover:not(:disabled) { background: var(--route-soft); }
+.s-via { color: var(--lamp-off); }
+.s-done { color: var(--lamp-on); } .s-done .dot::after { transform: scale(1); }
+.btn.toggle[aria-pressed="true"] { background: var(--route-soft); border-color: color-mix(in srgb, var(--route) 40%, var(--wire)); color: var(--route); font-weight: 600; }
+/* One quiet line each above the table: a marketplace an add brings in first, matches a choice hides. */
+.page > .note, .page > .more { margin: 0 0 8px; color: var(--ink-3); font-size: 12px; }
+.more { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; }
+.more .btn { color: var(--route); padding: 0 4px; }
+.empty .more { justify-content: center; margin: 6px 0 0; }
 .toolbar .grow { flex: 1; }
 .filter select { height: 28px; max-width: 220px; padding: 0 6px; border-radius: 7px; border: 1px solid var(--wire); background: var(--panel); color: var(--ink-2); cursor: pointer; text-overflow: ellipsis; transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease; }
 .filter select:hover { border-color: var(--wire-strong); }

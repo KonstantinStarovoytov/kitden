@@ -1,7 +1,7 @@
 // Side panel: item details, change review, the Apply motion, and the toast with Undo.
 import { getJson, postJson, query } from "./api.js";
 import { $, $$, button, el, plural, reportError, shortPath, shortPaths } from "./dom.js";
-import { morphOnNextRender, onOpenItem } from "./map.js";
+import { loadLibrary, morphOnNextRender, onOpenItem, rowTitle } from "./library.js";
 import { finishTransition, fold, transition } from "./motion.js";
 import { CLIENT_NAMES, diffCounts, GATEWAY_NOTE, mark, notesSection, socket, stepText } from "./parts.js";
 import { busy, current as currentModel, currentError, reload, render, setBusy, state } from "./store.js";
@@ -132,13 +132,14 @@ export async function openItem(row, { instant = false } = {}) {
   showDetails(row, definitions);
 }
 
+// The title names the source too when two rows share the name ("superpowers · cursor-public").
 function itemHeader(row) {
   const map = currentModel("map");
   const loads = (map ? map.columns : [])
     .filter((c) => ["on", "gw"].includes(row.cells[c.id] && row.cells[c.id].state))
     .map((c) => c.name);
   const lede = loads.length ? `Loads in ${joinWords(loads)}.` : "Does not load anywhere here.";
-  return header(KIND_WORDS[row.kind] || row.kind, row.name, lede, "Close", true);
+  return header(KIND_WORDS[row.kind] || row.kind, rowTitle(row), lede, "Close", true);
 }
 
 // The warning names the fix; the server sends both (load_map.py).
@@ -254,7 +255,7 @@ function layer(def) {
 }
 
 // A switch that shows the plugin's real state. Pressing it opens the review; it flips only
-// when the change is written and checked, never before (the Load map then shows the new state).
+// when the change is written and checked, never before (the Library then shows the new state).
 // Without an action the switch is locked: it shows the state and says where to change it.
 function pluginSwitch(def, action) {
   const on = action ? action === "plugin.disable" : def.enabled === "on";
@@ -457,8 +458,9 @@ export function leftOutText(leftOut) {
   return `Left out: ${leftOut.map((s) => `${s.name} (${s.why})`).join(", ")}.`;
 }
 
-// Ask the server for a preview and show it. Used by the Load map, Gateway and Agents places.
-export async function review(previewBody) {
+// Ask the server for a preview and show it. Used by the Library, Gateway and Agents places.
+// `note` shows as a callout above the result, for example that an add is for every project.
+export async function review(previewBody, { note = null } = {}) {
   const result = await postJson("/api/changes/preview", previewBody);
   if (!result.ok || !result.data || !result.data.id) {
     current = { type: "error" };
@@ -469,10 +471,10 @@ export async function review(previewBody) {
     openPanel([header("Review change", "Could not prepare this change", null, null), body, footer]);
     return;
   }
-  showReview(result.data, previewBody);
+  showReview(result.data, previewBody, note);
 }
 
-// "After: [CC] Claude Code ● Off · [CU] Cursor ● Loads once", in the Load map's sockets.
+// "After: [CC] Claude Code ● Off · [CU] Cursor ● Loads once", in the Library's sockets.
 // An entry with a note (a client that would load a skill twice) gets its one line below.
 function afterLine(entries) {
   const box = el("div");
@@ -502,10 +504,11 @@ function diffLines(text) {
   return pre;
 }
 
-function showReview(change, previewBody) {
-  current = { type: "review", change, previewBody };
+function showReview(change, previewBody, note) {
+  current = { type: "review", change, previewBody, note };
   const words = changeWords(change, previewBody);
   const body = el("div", "body");
+  if (note) body.append(callout(note));
   if (change.after && change.after.length) body.append(afterLine(change.after));
   if (change.shared_file_warning) body.append(callout("This edits a project file that is usually shared through git."));
   // The result comes first; the file change and the command wait behind one summary.
@@ -638,6 +641,7 @@ export async function changeOutcome(id, verb) {
 async function applyChange(change, { apply, cancel, label, body }) {
   if (busy.change) return;
   const previewBody = current && current.previewBody;
+  const note = current && current.note;
   setBusy(true);
   lockReview(true, apply, cancel);
   label.textContent = "Applying…";
@@ -675,7 +679,7 @@ async function applyChange(change, { apply, cancel, label, body }) {
     // Focus goes to the button in Apply's place; the callout says what went wrong.
     let next = apply;
     if (after && after.state !== "previewed") {
-      next = button("Preview again", () => review(previewBody), "btn primary");
+      next = button("Preview again", () => review(previewBody, { note }), "btn primary");
       apply.replaceWith(next);
     }
     next.focus();
@@ -692,7 +696,7 @@ async function showApplied(after, apply, label) {
   apply.prepend(checkMark());
   apply.classList.add("done");
   label.textContent = "Applied";
-  await reload().catch(() => {});
+  await reloadAll();
   current = null;
   closePanel({ keepSelection: true, focus: false, force: true });
   showEffect();
@@ -701,10 +705,15 @@ async function showApplied(after, apply, label) {
   toast(changeWords(after).done, () => undoChange(after), { ok: true });
 }
 
-// The page shows the effect where it happened: the Load map morphs its cells, every other
+// Everything the page shows, the Library's rows too, read again after a change.
+async function reloadAll() {
+  await Promise.all([reload().catch(() => {}), loadLibrary()]);
+}
+
+// The page shows the effect where it happened: the Library morphs its cells, every other
 // place cross-fades to its new state.
 function showEffect() {
-  if (state.view === "map") {
+  if (state.view === "library") {
     morphOnNextRender();
     render();
   } else {
@@ -720,7 +729,7 @@ export async function undoChange(change) {
   setBusy(true);
   try {
     const { after, failure } = await changeOutcome(change.id, "undo");
-    await reload().catch(() => {});
+    await reloadAll();
     showEffect();
     if (after && after.state === "undone") toast("Undone. The previous settings are back.", null, { ok: true });
     else if (after && after.state === "undo_blocked") toast("Undo stopped: " + (after.error ? shortPaths(after.error) : "the file changed after the change was applied."));

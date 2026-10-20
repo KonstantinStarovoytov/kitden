@@ -1,7 +1,7 @@
 // Overview: what needs attention first, then the clients and, without a gateway, how to get one.
 import { getJson, query } from "./api.js";
 import { button, el, plural } from "./dom.js";
-import { openSelectedOnRender } from "./map.js";
+import { openSelectedOnRender } from "./library.js";
 import { entrance, fly } from "./motion.js";
 import { toast } from "./panel.js";
 import { banner, flag, mark, skeleton, socket, staleNote } from "./parts.js";
@@ -77,10 +77,11 @@ function issueCard(card, { option = false } = {}) {
 }
 
 // A card about an item opens that item in the side panel; paths and the fix live there.
+// The server still names the Load map ("map"); its rows are the Library's "On this Mac".
 function follow(target) {
   if (target.view === "map") {
     openSelectedOnRender();
-    go("map", { kind: target.kind, only: "all", q: "", selected: target.row });
+    go("library", { kind: target.kind, show: "mine", category: "", attention: false, q: "", selected: target.row });
   } else {
     go(target.view);
   }
@@ -114,14 +115,14 @@ function notesBlock(count) {
   return box;
 }
 
-// A found client opens to what it loads, counted from the Load map; each count goes there.
+// A found client opens to what it loads, counted from the load map data; each count opens the Library.
 const LOAD_KINDS = [
   ["mcp_server", "MCP server", "MCP servers"], ["plugin", "plugin", "plugins"],
   ["skill", "skill", "skills"], ["hook", "hook", "hooks"],
 ];
 const openClients = new Set();
 
-// A count opens that Load map tab; the client's tile flies to its column there.
+// A count opens that Library tab; the client's tile flies to its column there.
 function loadsLine(clientId, tile) {
   const line = el("div", "loads");
   const map = current("map");
@@ -139,7 +140,7 @@ function loadsLine(clientId, tile) {
   for (const [kind, , words] of counts) {
     line.append(button(words, () => {
       fly(tile, `client-${clientId}`);
-      go("map", { kind, only: "all", q: "" });
+      go("library", { kind, show: "mine", category: "", attention: false, q: "" });
     }, "btn small ghost"));
   }
   return line;
@@ -161,14 +162,14 @@ function noteRow(finding) {
   return node;
 }
 
-// The note is about items on the Load map; open the first one there, in the panel.
+// The note is about items on this computer; open the first one in the Library, in the panel.
 async function showNote(finding) {
   if (!current("map")) await loadMap();
   const map = current("map");
   const rows = (map && map.rows) || [];
   const row = rows.find((r) => Object.values(r.cells).some((cell) => (cell.items || []).some((id) => finding.items.includes(id))));
   if (row) follow({ view: "map", kind: row.kind, row: row.key });
-  else toast("Could not find this item on the Load map.");
+  else toast("Could not find this item in the Library.");
 }
 
 function clientsCard(clients) {

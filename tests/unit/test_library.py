@@ -443,7 +443,10 @@ def test_api_library_and_offer(home):
 
         plugin = client.get(f"/api/offer?kind=plugin&id={PLUGIN}")
         assert plugin.status_code == 200 and plugin.json()["id"] == PLUGIN
+        # Details and the Add form say what Cursor loads as well; the server reads its switches.
+        assert plugin.json()["inherits"] == {"plugin": True, "skill": True}
         skill = client.get(f"/api/offer?kind=skill&id=tidy@{PLUGIN}")
         assert skill.status_code == 200 and skill.json()["name"] == "tidy"
+        assert skill.json()["inherits"] == {"plugin": True, "skill": True}
         missing = client.get("/api/offer?kind=plugin&id=nope@nowhere")
         assert (missing.status_code, missing.json()) == (404, {"detail": "Not on this computer."})

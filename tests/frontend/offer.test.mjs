@@ -1,30 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-// discover.js needs only this from a browser to load; the tests call its pure parts.
+// offer.js needs only this from a browser to load; the tests call its pure parts.
 globalThis.matchMedia = () => ({ matches: false });
-const { addLabel, alsoLoads, cursorLine, cursorPlugin, startChosen } = await import('../../src/kitden/web/static/js/discover.js');
+delete globalThis.navigator;
+const { alsoLoads, cursorLine, projectNote, startChosen } = await import('../../src/kitden/web/static/js/offer.js');
 
 const both = { plugin: true, skill: true };
 const none = { plugin: false, skill: false };
-
-test('Cursor shows a plugin only when it imports what Claude Code has', () => {
-  const via = (state) => ({ state, word: 'Via Claude Code' });
-  const ready = { installed: [], routes: { claude_code: 'ready' } };
-  assert.deepEqual(cursorPlugin(ready, both), via('off'));
-  assert.deepEqual(cursorPlugin(ready, none), via('none'));
-  assert.deepEqual(cursorPlugin({ installed: ['claude_code'], routes: {} }, both), via('off'));
-  assert.deepEqual(cursorPlugin({ installed: ['codex'], routes: { codex: 'ready' } }, both), via('none'));
-  assert.deepEqual(cursorPlugin({ installed: ['claude_code', 'cursor'], routes: {} }, both), via('on'));
-});
-
-test('a plugin Cursor holds itself is Installed, as its Details line says', () => {
-  const own = { state: 'on', word: 'Installed' };
-  assert.deepEqual(cursorPlugin({ installed: ['cursor'], routes: {} }, both), own);
-  assert.deepEqual(cursorPlugin({ installed: ['cursor'], routes: { claude_code: 'ready' } }, both), own);
-  // Claude Code has it too, but Cursor does not import it: Cursor's copy is its own.
-  assert.deepEqual(cursorPlugin({ installed: ['claude_code', 'cursor'], routes: {} }, none), own);
-});
 
 test('Details say how Cursor gets a plugin only when that is a fact', () => {
   const through = 'Cursor: loads it through Claude Code.';
@@ -45,12 +28,6 @@ test('Details say how Cursor gets a plugin only when that is a fact', () => {
   assert.equal(cursorLine({ installed: ['claude_code', 'cursor'], routes: {} }, none), has);
   // Claude Code has it too and Cursor imports: it loads it through Claude Code.
   assert.equal(cursorLine({ installed: ['claude_code', 'cursor'], routes: {} }, both), through);
-});
-
-test('an Add button names its item and where it comes from', () => {
-  assert.equal(addLabel('canva', 'claude-plugins-official'), 'Add canva from claude-plugins-official');
-  assert.equal(addLabel('canva', 'canva@community-tools'), 'Add canva from canva@community-tools');
-  assert.equal(addLabel('canva', ''), 'Add canva');
 });
 
 test('the plugin form names Cursor while Claude Code is checked', () => {
@@ -87,4 +64,9 @@ test('a Codex copy reaches Cursor through the shared skills folder', () => {
 test('a client is checked for you only when it is the one choice', () => {
   assert.deepEqual([...startChosen(['codex'])], ['codex']);
   assert.deepEqual([...startChosen(['claude_code', 'codex'])], []);
+});
+
+test('an add in a project view says it is for every project', () => {
+  assert.equal(projectNote('p1'), 'Adds for all your projects.');
+  assert.equal(projectNote(''), null);
 });
