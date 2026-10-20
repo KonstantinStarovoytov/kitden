@@ -491,3 +491,21 @@ def test_buttons_show_progress_and_the_scan_line_no_longer_blinks():
     assert ".btn .meter" in css
     # The scan line shows only when a scan takes a while, so quick scans never blink.
     assert ".topbar.scanning::after { opacity: 1; transition-delay: 400ms;" in css
+
+
+def test_while_a_change_is_written_the_review_says_so_and_offers_nothing_to_press():
+    panel = script("panel.js")
+    lock = panel.split("function lockReview(")[1].split("\n}\n")[0]
+    # Cancel and the close button go away while the change is written, and come back after.
+    assert "cancel.hidden = locked" in lock and "close.hidden = locked" in lock
+    # The note under the buttons says what is happening instead of the Apply shortcut.
+    assert "WRITING" in lock and "APPLY_KEY" in lock
+    writing = (
+        "Writing the change. It can't stop halfway: if a step fails, Kitden puts everything back."
+    )
+    assert writing in panel
+    css = (STATIC / "style.css").read_text()
+    # A button that is off never lights up on hover and says so with the pointer.
+    assert ".btn:hover:not(:disabled)" in css
+    assert ".btn:disabled { cursor: not-allowed; opacity: 0.5; }" in css
+    assert ".btn.primary.apply:disabled { opacity: 1; cursor: progress; }" in css

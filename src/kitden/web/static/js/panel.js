@@ -17,6 +17,8 @@ const ACTION_BUTTONS = {
 };
 // Node before 21 (the tests) has no navigator.
 const APPLY_KEY = typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "⌘ Enter to apply" : "Ctrl Enter to apply";
+// While a change is written nothing in the review can stop it; the note says what happens.
+const WRITING = "Writing the change. It can't stop halfway: if a step fails, Kitden puts everything back.";
 
 // What is open now: "item" or "review", and for a review the change and the request behind it.
 let current = null;
@@ -540,12 +542,19 @@ function brokeAfterAnswer(error) {
   reportError(error);
 }
 
-// The header's Cancel and the footer buttons are off while a change runs.
+// While a change is written, Cancel and the close button are gone (nothing could stop it)
+// and the note under the buttons says what is happening; they come back if it stops.
 function lockReview(locked, apply, cancel) {
   apply.disabled = locked;
   cancel.disabled = locked;
+  cancel.hidden = locked;
   const close = $("#drawer header .top button");
-  if (close) close.disabled = locked;
+  if (close) {
+    close.disabled = locked;
+    close.hidden = locked;
+  }
+  const note = $("#drawer footer .note");
+  if (note) note.textContent = locked ? WRITING : APPLY_KEY;
 }
 
 function resetApply(apply, cancel, label) {

@@ -45,9 +45,9 @@ def test_success_and_action_labels_are_readable_in_both_themes():
 
 
 def test_the_applied_label_is_drawn_at_full_strength_at_once():
-    # A disabled button is drawn at 0.7 opacity, which would take the label below 4.5:1, and
+    # A disabled button is drawn at 0.5 opacity, which would take the label below 4.5:1, and
     # a fill that fades passes through colors the label was not checked on.
-    assert ".btn:disabled { cursor: default; opacity: 0.7; }" in CSS
+    assert ".btn:disabled { cursor: not-allowed; opacity: 0.5; }" in CSS
     rule = block(".btn.primary.done, .btn.primary.done:hover, .btn.primary.done:disabled {")
     assert "background: var(--success);" in rule and "color: var(--on-success);" in rule
     assert "opacity: 1;" in rule and "transition: none;" in rule
