@@ -10,7 +10,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 ### Not released yet
 
 - **Library:** one page in place of Load map and Discover. Only the clients on this computer get
-  a column, and the action sits in the client's cell: "+ Add", or why there is none.
+  a column, and the action sits in the client's cell: "+ Add", or why there is none. A server
+  another client has points to the gateway; a marketplace says it comes with its first plugin.
+  "Add…" for several clients warns, like "+ Add", when a client would load two of the same name.
 - **Add skills:** a client that cannot install a plugin takes its skills instead, in one review
   with Undo. It reads plugins from Codex's marketplaces and the ones Cursor installed itself.
   A skill the client already loads, from its folders or another plugin, is left out.

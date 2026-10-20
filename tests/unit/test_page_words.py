@@ -579,8 +579,10 @@ def test_a_cell_add_reviews_one_client_and_the_review_shows_its_note():
     assert review in text
     offer = script("offer.js")
     assert '"Adds for all your projects."' in offer
-    # Every add in a project view says so, a marketplace too.
-    assert offer.count("{ note: projectNote(state.project) }") == 3
+    # Every add in a project view says so, a marketplace too. The plugin form adds the
+    # warnings of the checked clients, as their cells do.
+    assert offer.count("{ note: projectNote(state.project) }") == 2
+    assert "{ note: formNote(row, clients, state.project) }" in offer
     panel = script("panel.js")
     assert "export async function review(previewBody, { note = null } = {})" in panel
     assert "if (note) body.append(callout(note));" in panel

@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // offer.js needs only this from a browser to load; the tests call its pure parts.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { alsoLoads, cursorLine, projectNote, startChosen } = await import('../../src/kitden/web/static/js/offer.js');
+const { alsoLoads, cursorLine, formNote, projectNote, startChosen } = await import('../../src/kitden/web/static/js/offer.js');
 
 const both = { plugin: true, skill: true };
 const none = { plugin: false, skill: false };
@@ -69,4 +69,17 @@ test('a client is checked for you only when it is the one choice', () => {
 test('an add in a project view says it is for every project', () => {
   assert.equal(projectNote('p1'), 'Adds for all your projects.');
   assert.equal(projectNote(''), null);
+});
+
+test('the Add form passes the warning of each checked client, as its cell does', () => {
+  const warn = 'Codex already has documents from openai-curated. It will load both.';
+  const row = { cells: {
+    claude_code: { add: { action: 'plugin.install', warn: null } },
+    codex: { add: { action: 'plugin.install', warn } },
+    cursor: { add: null },
+  } };
+  assert.equal(formNote(row, ['claude_code'], ''), null);
+  assert.equal(formNote(row, ['claude_code', 'codex'], ''), warn);
+  assert.equal(formNote(row, ['codex'], 'p1'), `${warn} Adds for all your projects.`);
+  assert.equal(formNote(row, ['claude_code'], 'p1'), 'Adds for all your projects.');
 });

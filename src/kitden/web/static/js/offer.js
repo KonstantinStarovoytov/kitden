@@ -169,7 +169,7 @@ export function addOptions(row, offer) {
 
 // A cell's add opens the same review as the cell's own button; "Add…" opens the form.
 export function addButton(option, row, offer, look) {
-  if (option.form) return button(option.label, () => (row.kind === "skill" ? addSkillForm : addForm)(offer), look);
+  if (option.form) return button(option.label, () => (row.kind === "skill" ? addSkillForm(offer) : addForm(offer, row)), look);
   return button(option.label, () => review(previewFor(option.add, option.client), { note: noteFor(option.add, state.project) }), look);
 }
 
@@ -279,8 +279,15 @@ function addPanel(kicker, offer, { source, notes, checkNote, preview }) {
   openPanel([panelHead(kicker, offer.name), body, el("footer")]);
 }
 
+// The Add form's review note: the warning of each checked client, as its cell's button passes
+// it ("It will load both"), then the project line.
+export function formNote(row, clients, project) {
+  const warns = clients.map((client) => row.cells[client] && row.cells[client].add && row.cells[client].add.warn);
+  return noteFor({ warn: warns.filter(Boolean).join(" ") }, project);
+}
+
 // Choose the clients, then the usual review: exactly what runs and what is written.
-export function addForm(offer) {
+export function addForm(offer, row) {
   const notes = [];
   if (offer.inside && offer.inside.hooks.length) notes.push(el("p", "callout", `It brings hooks that run by themselves (${offer.inside.hooks.join(", ")}). Open Details to see them.`));
   addPanel("Add plugin", offer, {
@@ -289,7 +296,7 @@ export function addForm(offer) {
     checkNote: (client) => (offer.routes[client] === "add_marketplace" ? `adds ${offer.marketplace} first` : null),
     preview: (clients) => review(
       { action: "plugin.install", targets: clients.map((client) => ({ client })), params: { plugin: offer.id } },
-      { note: projectNote(state.project) },
+      { note: formNote(row, clients, state.project) },
     ),
   });
 }
