@@ -612,3 +612,19 @@ def test_library_columns_hide_with_a_quiet_minus_kept_in_this_browser():
     assert re.search(r"\.btn\.hide-col \{[^}]*width: 24px", css)
     assert ".map th:hover .hide-col" in css and ".map th:focus-within .hide-col" in css
     assert "@media (hover: none) { .btn.hide-col { opacity: 1; } }" in css
+
+
+def test_details_show_what_the_item_is_and_every_way_to_add_it():
+    panel, offer = script("panel.js"), script("offer.js")
+    # The marketplace's entry is read beside the definitions; when it fails the rest still shows.
+    assert "row.offer ? getJson(`/api/offer${query({ kind: row.kind, id: row.offer })}`)" in panel
+    assert ".catch(() => null)" in panel
+    assert "body.append(...about(offer))" in panel
+    # A Details button opens the same review as the cell's own button.
+    assert "review(previewFor(option.add, option.client), {" in offer
+    assert "note: noteFor(option.add, state.project) })" in offer
+    assert '"Add…"' in offer and 'button("Add…", () => addForm(offer), "btn primary")' not in offer
+    # With nothing to do, the first line of the body says why, quietly.
+    first = 'const body = el("div", "body");\n  if (why) body.append(el("p", "muted", why));'
+    assert first in panel
+    assert 'if (why) body.prepend(el("p", "muted", why));' in offer

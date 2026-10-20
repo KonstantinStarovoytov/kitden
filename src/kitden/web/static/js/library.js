@@ -554,7 +554,7 @@ async function openOffer(row) {
     return;
   }
   if (state.selected !== row.key) return; // another row was chosen meanwhile
-  (row.kind === "skill" ? showSkill : showOffer)(offer, rowTitle(row));
+  (row.kind === "skill" ? showSkill : showOffer)(offer, row);
 }
 
 function onRowKey(event, row, tr) {

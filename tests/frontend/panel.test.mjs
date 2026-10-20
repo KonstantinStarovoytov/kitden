@@ -6,6 +6,7 @@ globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; panel.js must load there too.
 delete globalThis.navigator;
 const { changeOutcome, changeWords, footerActions, leftOutText, moveFor } = await import('../../src/kitden/web/static/js/panel.js');
+const { addOptions, whyNoAction } = await import('../../src/kitden/web/static/js/offer.js');
 
 const github = { kind: 'mcp_server', name: 'github' };
 const direct = { name: 'github', items: ['entry-1', 'entry-2'] };
@@ -193,4 +194,64 @@ test('what Add skills leaves out is one plain line, or nothing', () => {
     leftOutText([{ name: 'b', why: 'needs the rest of the plugin' }, { name: 'c', why: 'Claude Code already has it' }]),
     'Left out: b (needs the rest of the plugin), c (Claude Code already has it).',
   );
+});
+
+// One Details for every row: every way to add it, or why not -------------------------------
+
+const cell = (fields) => ({ state: 'none', where: null, items: [], word: null, add: null, reason: null, ...fields });
+const plain = { action: 'plugin.install', label: '+ Add', plugin: 'figma@openai-curated', skill: null, marketplace: null, warn: null };
+const skills = { ...plain, action: 'plugin.skills', label: 'Add skills', plugin: 'superpowers@cursor-public' };
+const labels = (options) => options.map((o) => o.label);
+const entry = { kind: 'plugin', id: 'figma@openai-curated' };
+
+test('Details offer each cell action as a button', () => {
+  // A Cursor plugin: Add skills to the other two, in column order whatever order the cells come in.
+  const twin = { kind: 'plugin', cells: { cursor: cell({ state: 'on' }), codex: cell({ add: skills }), claude_code: cell({ add: skills }) } };
+  const options = addOptions(twin, null);
+  assert.deepEqual(labels(options), ['Add skills to Claude Code…', 'Add skills to Codex…']);
+  assert.deepEqual(options.map((o) => [o.client, o.add]), [['claude_code', skills], ['codex', skills]]);
+  // "+ Add" in the Codex column is "Add to Codex…"; a skill's plugin add keeps its words.
+  const plugin = { kind: 'plugin', cells: { claude_code: cell({ state: 'on' }), codex: cell({ add: plain }), cursor: cell({ state: 'via' }) } };
+  assert.deepEqual(labels(addOptions(plugin, entry)), ['Add to Codex…']);
+  const needs = { kind: 'skill', cells: { claude_code: cell({ state: 'on' }), cursor: cell({ add: { ...plain, label: 'Add the plugin' } }) } };
+  assert.deepEqual(labels(addOptions(needs, entry)), ['Add the plugin to Cursor…']);
+  // Two clients take it as a plain add: "Add…" too, to add to both in one review. It needs the
+  // marketplace's entry, so without one it is left out.
+  const two = { kind: 'plugin', cells: { claude_code: cell({ add: plain }), codex: cell({ add: plain }), cursor: cell({ reason: 'No.' }) } };
+  assert.deepEqual(labels(addOptions(two, entry)), ['Add to Claude Code…', 'Add to Codex…', 'Add…']);
+  assert.equal(addOptions(two, entry)[2].form, true);
+  assert.deepEqual(labels(addOptions(two, null)), ['Add to Claude Code…', 'Add to Codex…']);
+  // Add skills and Add the plugin are not plain adds of the item.
+  const mixed = { kind: 'plugin', cells: { claude_code: cell({ add: skills }), codex: cell({ add: plain }), cursor: cell({ add: skills }) } };
+  assert.deepEqual(labels(addOptions(mixed, entry)), ['Add skills to Claude Code…', 'Add to Codex…', 'Add skills to Cursor…']);
+  const copy = { ...plain, action: 'skill.install', plugin: null, skill: 'tidy@skills' };
+  const skill = { kind: 'skill', cells: { claude_code: cell({ add: copy }), codex: cell({ add: { ...plain, label: 'Add the plugin' } }), cursor: cell({ add: copy }) } };
+  assert.deepEqual(labels(addOptions(skill, { kind: 'skill' })), ['Add to Claude Code…', 'Add the plugin to Codex…', 'Add to Cursor…', 'Add…']);
+
+  // With no lead yet, the first add is the primary button and the rest wait under More.
+  const [first, second] = options;
+  assert.deepEqual(footerActions([], [], null, [first, second]), { lead: first, rest: [second] });
+  // Today's lead stays first: a lone switch leads and the adds wait.
+  const off = { def: { id: 'p-1', client: 'claude_code' }, action: 'plugin.disable' };
+  assert.deepEqual(footerActions([off], [], null, [first]), { lead: off, rest: [first] });
+  // A warning no button fixes: nothing leads, so no add looks like the fix.
+  const twice = { level: 'warning', client: 'cursor', fix_action: null, via: 'claude_code' };
+  assert.deepEqual(footerActions([], [twice], null, [first, second]), { lead: null, rest: [first, second] });
+});
+
+test('Details with nothing to do say why first', () => {
+  const cant = (client) => `${client} can't install this plugin, and it has no skills to copy.`;
+  const row = { kind: 'plugin', cells: { cursor: cell({ reason: cant('Cursor') }), codex: cell({ state: 'unk' }), claude_code: cell({ reason: cant('Claude Code') }) } };
+  // No button at all: nothing leads and nothing waits.
+  assert.deepEqual(footerActions([], [], null, addOptions(row, null)), { lead: null, rest: [] });
+  // Each cell's reason once, in column order.
+  assert.equal(whyNoAction(row, []), `${cant('Claude Code')} ${cant('Cursor')}`);
+  const outside = "This skill uses files outside its folder, so it can't be copied.";
+  assert.equal(whyNoAction({ cells: { claude_code: cell({ reason: outside }), codex: cell({ reason: outside }) } }), outside);
+  // No reasons: where to change it, from the item's own settings.
+  const hint = 'On/off is stored in your ChatGPT account. Change it in Codex: Plugins.';
+  const remote = { cells: { codex: cell({ state: 'unk' }) } };
+  assert.equal(whyNoAction(remote, [{ change_hint: null }, { change_hint: hint }]), hint);
+  // Nothing known (an MCP server row from the scan has no reasons): no line.
+  assert.equal(whyNoAction({ cells: { codex: { state: 'on', where: 'global settings', items: [] } } }, []), '');
 });

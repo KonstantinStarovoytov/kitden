@@ -1,7 +1,9 @@
-// Details of a plugin or skill from the marketplaces on this computer, and the forms that add
-// one to several clients in one review. The Library opens them for rows not on this computer.
+// Details of a plugin or skill from the marketplaces on this computer, every way to add it (or
+// why there is none), and the forms that add one to several clients in one review. The Library
+// opens these Details for rows not on this computer; the panel's Details use the parts.
 import { busyWhile, button, el, plural, reportError, shortPath, webLink } from "./dom.js";
-import { closePanel, openInfo, openPanel, review } from "./panel.js";
+import { noteFor, previewFor, rowTitle } from "./library.js";
+import { closePanel, footerActions, footerButtons, openInfo, openPanel, review } from "./panel.js";
 import { CLIENT_NAMES, clientCheck } from "./parts.js";
 import { data, go, state } from "./store.js";
 
@@ -73,8 +75,7 @@ export function inside(offer) {
 }
 
 // Details: what the plugin is, where it comes from, what is inside, and how each client gets it.
-// `title` names the source too when two rows share the name.
-export function showOffer(offer, title = offer.name) {
+export function showOffer(offer, row) {
   const body = el("div", "body");
   if (offer.description) body.append(el("p", null, offer.description));
   const from = [];
@@ -96,13 +97,12 @@ export function showOffer(offer, title = offer.name) {
   const cursor = cursorLine(offer, inherits(offer));
   if (cursor) clients.append(el("li", "muted", cursor));
   body.append(section("Clients", [clients]));
-  const add = openFor(offer).length ? [button("Add…", () => addForm(offer), "btn primary")] : [];
-  openInfo("Plugin", title, body, add);
+  openInfo("Plugin", rowTitle(row), body, addActions(row, offer, body));
 }
 
 // Details: what the skill is, where it comes from, the files it brings (scripts marked, because
 // the agent may run them), and how each client loads it.
-export function showSkill(skill, title = skill.name) {
+export function showSkill(skill, row) {
   const body = el("div", "body");
   if (skill.description) body.append(el("p", null, skill.description));
   if (!skill.self_contained) {
@@ -120,25 +120,72 @@ export function showSkill(skill, title = skill.name) {
   const path = el("li", "mono", shortPath(skill.path));
   path.title = skill.path;
   from.append(path);
-  body.append(section("Where it comes from", [from]));
-  const files = el("ul", "checklist");
-  for (const file of skill.files) {
-    const li = el("li", "mono", file.path);
-    if (file.script) li.append(el("span", "badge warn", "script"));
-    files.append(li);
-  }
-  const brings = [files];
-  const scripts = skill.files.filter((f) => f.script).length;
-  if (scripts) brings.unshift(el("p", "callout", `${plural(scripts, "script", "scripts")} the agent may run. Read them before you add the skill.`));
-  body.append(section("What it brings", brings));
+  body.append(section("Where it comes from", [from]), section("What it brings", brings(skill)));
   const clients = el("ul", "checklist");
   for (const client of columns()) {
     const word = skill.installed[client] || (skill.routes[client] ? "Can add" : skill.self_contained ? "Not set up" : "Needs its plugin");
     clients.append(el("li", null, `${CLIENT_NAMES[client]}: ${word}`));
   }
   body.append(section("Clients", [clients]));
-  const add = openFor(skill).length ? [button("Add…", () => addSkillForm(skill), "btn primary")] : [];
-  openInfo("Skill", title, body, add);
+  openInfo("Skill", rowTitle(row), body, addActions(row, skill, body));
+}
+
+// The files a skill brings, the scripts marked and counted first.
+function brings(skill) {
+  const files = el("ul", "checklist");
+  for (const file of skill.files) {
+    const li = el("li", "mono", file.path);
+    if (file.script) li.append(el("span", "badge warn", "script"));
+    files.append(li);
+  }
+  const scripts = skill.files.filter((f) => f.script).length;
+  if (!scripts) return [files];
+  return [el("p", "callout", `${plural(scripts, "script", "scripts")} the agent may run. Read them before you add the skill.`), files];
+}
+
+// What the item is, for Details of a row on this computer: the description, then what the
+// plugin holds or the files the skill brings.
+export function about(offer) {
+  const out = offer.description ? [el("p", null, offer.description)] : [];
+  out.push(offer.kind === "skill" ? section("What it brings", brings(offer)) : section("What's inside", inside(offer)));
+  return out;
+}
+
+// Every way to add the row's item, as Details offer them: each cell's add in column order ("+ Add"
+// in the Codex column is "Add to Codex…"), then "Add…" when two or more clients can take it as a
+// plain add, to add to several in one review. "Add…" needs the marketplace's entry (`offer`).
+export function addOptions(row, offer) {
+  const options = COLUMNS.filter((c) => row.cells[c] && row.cells[c].add).map((client) => {
+    const add = row.cells[client].add;
+    return { client, add, label: `${add.label.replace(/^\+ /, "")} to ${CLIENT_NAMES[client]}…` };
+  });
+  const plain = row.kind === "skill" ? "skill.install" : "plugin.install";
+  if (offer && options.filter((o) => o.add.action === plain).length > 1) options.push({ form: true, label: "Add…" });
+  return options;
+}
+
+// A cell's add opens the same review as the cell's own button; "Add…" opens the form.
+export function addButton(option, row, offer, look) {
+  if (option.form) return button(option.label, () => (row.kind === "skill" ? addSkillForm : addForm)(offer), look);
+  return button(option.label, () => review(previewFor(option.add, option.client), { note: noteFor(option.add, state.project) }), look);
+}
+
+// Why Details offer nothing to do, in one line: each cell's reason once, in column order; else
+// where to change it, from the item's own settings; else "".
+export function whyNoAction(row, definitions = []) {
+  const reasons = new Set(COLUMNS.map((c) => row.cells[c] && row.cells[c].reason).filter(Boolean));
+  if (reasons.size) return [...reasons].join(" ");
+  const hint = definitions.find((d) => d.change_hint);
+  return hint ? hint.change_hint : "";
+}
+
+// The footer of Details for a row not on this computer: every way to add it. With none, the
+// body's first line says why.
+function addActions(row, offer, body) {
+  const options = addOptions(row, offer);
+  const why = options.length ? "" : whyNoAction(row);
+  if (why) body.prepend(el("p", "muted", why));
+  return footerButtons(footerActions([], [], null, options), (option, look) => [addButton(option, row, offer, look)]);
 }
 
 // The clients that can take it now: the choices in its Add form.

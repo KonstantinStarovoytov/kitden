@@ -3,6 +3,7 @@ import { getJson, postJson, query } from "./api.js";
 import { $, $$, button, el, plural, reportError, shortPath, shortPaths } from "./dom.js";
 import { loadLibrary, morphOnNextRender, onOpenItem, rowTitle } from "./library.js";
 import { finishTransition, fold, transition } from "./motion.js";
+import { about, addButton, addOptions, whyNoAction } from "./offer.js";
 import { CLIENT_NAMES, diffCounts, GATEWAY_NOTE, mark, notesSection, socket, stepText } from "./parts.js";
 import { busy, current as currentModel, currentError, reload, render, setBusy, state } from "./store.js";
 
@@ -113,6 +114,9 @@ export async function openItem(row, { instant = false } = {}) {
   const body = el("div", "body");
   body.append(el("div", "skeleton card"));
   openPanel([itemHeader(row), body, el("footer")], { instant });
+  // The marketplace's entry says what the item is; read beside the definitions. Without it the
+  // rest still shows.
+  const entry = row.offer ? getJson(`/api/offer${query({ kind: row.kind, id: row.offer })}`).catch(() => null) : null;
   let definitions;
   try {
     const params = { name: row.lookup || row.name, kind: row.kind, project: state.project };
@@ -127,9 +131,11 @@ export async function openItem(row, { instant = false } = {}) {
     }
     return;
   }
+  const offer = await entry;
   if (!current || current.row !== row) return;
   current.definitions = definitions;
-  showDetails(row, definitions);
+  current.offer = offer;
+  showDetails(row, definitions, offer);
 }
 
 // The title names the source too when two rows share the name ("superpowers · cursor-public").
@@ -171,15 +177,17 @@ export function moveFor(row, model, unread = false) {
   return { items: direct.items, gateway: model.gateways.find((g) => g.movable) || null };
 }
 
-// The footer's lead action and the rest, in order; "move" stands for Move into the gateway.
-// A problem comes before an option: the warning's fix leads, then Move, then a lone action. With
-// a warning no button fixes, or a server to add in the gateway by hand first, nothing leads.
-export function footerActions(offers, warnings, move) {
+// The footer's lead action and the rest, in order; "move" stands for Move into the gateway, and
+// `adds` are the ways to add the item (offer.js addOptions). A problem comes before an option:
+// the warning's fix leads, then Move, then a lone action, then the first add. With a warning no
+// button fixes, or a server to add in the gateway by hand first, nothing leads.
+export function footerActions(offers, warnings, move, adds = []) {
   const fix = offers.find((o) => warnings.some((f) => f.fix_action === o.action && f.client === o.def.client));
-  const options = move && move.gateway ? ["move", ...offers] : offers;
+  const options = [...(move && move.gateway ? ["move"] : []), ...offers, ...adds];
   let lead = fix || null;
   if (!lead && !warnings.length && move && move.gateway) lead = "move";
   if (!lead && !warnings.length && !move && offers.length === 1) lead = offers[0];
+  if (!lead && !warnings.length && adds.length) lead = adds[0];
   return { lead, rest: options.filter((o) => o !== lead) };
 }
 
@@ -195,6 +203,18 @@ function moreButton(buttons) {
     buttons[0].focus();
   }, "btn");
   return more;
+}
+
+// A Details footer from footerActions: the lead is the primary button and the rest, then
+// `commands`, wait under More. Without a lead every action is plain, after the commands.
+// `draw(option, look)` gives an option's nodes.
+export function footerButtons({ lead, rest }, draw, commands = []) {
+  if (lead) {
+    const others = [...rest.flatMap((o) => draw(o, "btn")), ...commands];
+    return [...(others.length ? [moreButton(others)] : []), ...draw(lead, "btn primary")];
+  }
+  const note = commands.length ? [el("span", "note", "Install, update or move to another client:"), ...commands] : [];
+  return [...note, ...rest.flatMap((o) => draw(o, "btn"))];
 }
 
 function scopeWords(def) {
@@ -289,9 +309,17 @@ function pluginSwitch(def, action) {
   return node;
 }
 
-function showDetails(row, definitions) {
-  const body = el("div", "body");
+// Details of a row on this computer: why nothing can be done (when so), what it is (`offer`, the
+// marketplace's entry, when read), warnings, what each client loads, then every action.
+function showDetails(row, definitions, offer = null) {
   const warnings = row.flags.filter((x) => x.level === "warning");
+  const move = moveFor(row, currentModel("gateway"), Boolean(currentError("gateway")));
+  const offers = definitions.flatMap((def) => def.actions.filter((a) => ACTION_BUTTONS[a]).map((action) => ({ def, action })));
+  const actions = footerActions(offers, warnings, move, addOptions(row, offer));
+  const why = actions.lead || actions.rest.length ? "" : whyNoAction(row, definitions);
+  const body = el("div", "body");
+  if (why) body.append(el("p", "muted", why));
+  if (offer) body.append(...about(offer));
   for (const f of warnings) body.append(callout(warningText(f)));
   // A warning that already says where to change it (a copy loaded from another client)
   // replaces the hints under that client, so the fact appears once.
@@ -309,7 +337,7 @@ function showDetails(row, definitions) {
     const stack = el("div", "stack");
     for (const def of byClient.get(client)) stack.append(layer(def));
     section.append(title, stack);
-    const hints = covered.has(client) ? [] : new Set(byClient.get(client).filter((d) => d.change_hint && !d.actions.length).map((d) => d.change_hint));
+    const hints = covered.has(client) ? [] : new Set(byClient.get(client).filter((d) => d.change_hint && !d.actions.length && d.change_hint !== why).map((d) => d.change_hint));
     for (const hint of hints) section.append(el("p", "muted", hint));
     body.append(section);
   }
@@ -317,31 +345,26 @@ function showDetails(row, definitions) {
   if (definitions.some((d) => d.secret_present)) {
     body.append(el("p", "muted", "This entry holds a secret. It is hidden here and never logged."));
   }
-  const move = moveFor(row, currentModel("gateway"), Boolean(currentError("gateway")));
   if (move && move.unread) body.append(el("p", "muted", "Could not read the gateway, so Move is not offered."));
   else if (move && !move.gateway) body.append(el("p", "muted", GATEWAY_NOTE));
 
-  const footer = el("footer");
   const withCommands = definitions.filter((d) => d.kind === "plugin" || d.kind === "marketplace");
   const commands = withCommands.length ? [button("Commands…", () => showCommands(row, withCommands), "btn")] : [];
   // Name the scope too when one client has more than one definition that can change.
-  const offers = definitions.flatMap((def) => def.actions.filter((a) => ACTION_BUTTONS[a]).map((action) => ({ def, action })));
   const buttonFor = ({ def, action }, look) => {
     const twins = offers.filter((o) => o.def.client === def.client).length > 1;
     const where = twins ? ` (${scopeWords(def).toLowerCase()})` : "";
     const label = ACTION_BUTTONS[action](`${clientName(def.client)}${where}`);
     return button(label, () => review({ action, targets: [{ item: def.id }], params: {} }), look);
   };
-  // The lead action is the primary button; the rest wait under More. Without a lead, all stay plain.
-  const { lead, rest: others } = footerActions(offers, warnings, move);
-  const rest = others.flatMap((o) => (o === "move" ? [moveButton(move, "btn")] : [...sideEffect(o, warnings), buttonFor(o, "btn")]));
-  if (lead) {
-    if (rest.length || commands.length) footer.append(moreButton([...rest, ...commands]));
-    footer.append(lead === "move" ? moveButton(move, "btn primary") : buttonFor(lead, "btn primary"));
-  } else {
-    if (commands.length) footer.append(el("span", "note", "Install, update or move to another client:"), ...commands);
-    footer.append(...rest);
-  }
+  // A plain action names what else it changes; the primary one stands alone.
+  const draw = (o, look) => {
+    if (o === "move") return [moveButton(move, look)];
+    if (o.def) return [...(look === "btn" ? sideEffect(o, warnings) : []), buttonFor(o, look)];
+    return [addButton(o, row, offer, look)];
+  };
+  const footer = el("footer");
+  footer.append(...footerButtons(actions, draw, commands));
   swapContent([itemHeader(row), body, footer]);
 }
 
@@ -349,7 +372,7 @@ async function showCommands(row, definitions) {
   const body = el("div", "body");
   body.append(el("p", "muted", "You run these yourself. This page never runs them."));
   const footer = el("footer");
-  footer.append(button("Back", () => showDetails(row, current.definitions), "btn"));
+  footer.append(button("Back", () => showDetails(row, current.definitions, current.offer), "btn"));
   swapContent([header("Commands", row.name, null, "Close", true), body, footer]);
   const seen = new Set();
   for (const def of definitions) {
