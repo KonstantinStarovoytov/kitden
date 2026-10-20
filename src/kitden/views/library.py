@@ -5,9 +5,13 @@ marketplaces on this computer offer). Each cell already says the state, or the o
 that client, or why there is none. Columns are the clients found on this computer.
 """
 
+from collections.abc import Callable
+
 from kitden.changes.actions import PLUGIN_INSTALL, PLUGIN_SKILLS, SKILL_INSTALL
-from kitden.model import ClientStatus, ItemKind, _hash
+from kitden.clients.base import REMOVE_DIRECT
+from kitden.model import ClientStatus, Item, ItemKind, _hash
 from kitden.views.catalog import catalog, search
+from kitden.views.gateway_view import group_of
 from kitden.views.load_map import COLUMNS, MARKS, NAMES, Row, load_map
 from kitden.views.skills import skill_catalog
 
@@ -18,6 +22,7 @@ SHOWS = ("mine", "new", "all")
 VIA_CLAUDE_CODE = "Cursor loads Claude Code's plugins. Add it to Claude Code."
 SKILL_VIA_CLAUDE_CODE = "Cursor loads Claude Code's plugins. Add the plugin to Claude Code."
 OUTSIDE_FOLDER = "This skill uses files outside its folder, so it can't be copied."
+SHARE_IN_GATEWAY = "Move it into the gateway to share it."
 
 
 def _cell(
@@ -98,21 +103,74 @@ def _map_cell(row: Row, client: str) -> dict:
 
 # Each builder gives (row, holders): holders are the found clients that have the item.
 Built = list[tuple[dict, set[str]]]
+# Why a client has a dash in a load map row, or None when no reason is true.
+Why = Callable[[Row, str], str | None]
 
 
-def _map_rows(map_rows: list[Row], kind: str, found: list[str]) -> Built:
-    """MCP servers, hooks and marketplaces: the load map rows as they are."""
+def _map_rows(map_rows: list[Row], kind: str, found: list[str], why: Why | None = None) -> Built:
+    """MCP servers, hooks and marketplaces: the load map rows as they are, and a reason on a
+    dash where `why` has one."""
     out = []
     for r in map_rows:
         if str(r.kind) != kind:
             continue
         holders = {c for c in found if _has(r, c)}
         cells = {c: _map_cell(r, c) for c in found}
+        for client, cell in cells.items():
+            if why and cell["state"] == "none":
+                cell["reason"] = why(r, client)
         row = _row(
             r.key, kind, r.name, r.source, cells, mine=bool(holders), lookup=r.lookup, flags=r.flags
         )
         out.append((row, holders))
     return out
+
+
+def _server_why(map_rows: list[Row], found: list[str], items: list[Item]) -> Why:
+    """A gateway entry: connect the client. A direct server another client loads: move it into
+    the gateway this client reaches. Kitden copies no server entry from one client to another,
+    so other dashes have no reason."""
+    by_id = {i.id: i for i in items}
+    servers = [r for r in map_rows if r.kind is ItemKind.MCP_SERVER]
+    on_gateway = {c for r in servers for c in found if r.cells[c].state == "gw"}
+
+    def movable(row: Row) -> bool:
+        # The same entries the Gateway page offers to move.
+        loaded = [
+            i for c in found if row.cells[c].state in ("on", "unk") for i in row.cells[c].items
+        ]
+        return any(
+            group_of(by_id[i]) == "move" and REMOVE_DIRECT in by_id[i].actions
+            for i in loaded
+            if i in by_id
+        )
+
+    def why(row: Row, client: str) -> str | None:
+        if client in on_gateway:
+            return SHARE_IN_GATEWAY if movable(row) else None
+        if any(row.cells[c].state == "gw" for c in found):
+            return f"Connect {NAMES[client]} to the gateway on the Gateway page."
+        return None
+
+    return why
+
+
+def _marketplace_why(offers: list[dict]) -> Why:
+    """A client gets a marketplace with the first plugin it adds from it. Cursor keeps its
+    plugins in the account, so Kitden adds none there and its dash has no reason."""
+    brings = {
+        (c, o["marketplace"])
+        for o in offers
+        for c, r in o["routes"].items()
+        if r == "add_marketplace"
+    }
+
+    def why(row: Row, client: str) -> str | None:
+        if (client, row.name) in brings:
+            return f"{NAMES[client]} gets it the first time you add one of its plugins."
+        return None
+
+    return why
 
 
 # Plugins -------------------------------------------------------------------------------------
@@ -425,9 +483,14 @@ def library(
     offers = catalog(inventory, adapters)
     skills = skill_catalog(inventory, adapters)
     built = {
+        "mcp_server": _map_rows(
+            map_rows, "mcp_server", found, _server_why(map_rows, found, inventory.items)
+        ),
         "plugin": _plugin_rows(map_rows, offers, skills, found, cursor_imports),
         "skill": _skill_rows(map_rows, offers, skills, found, cursor_imports),
-        **{k: _map_rows(map_rows, k, found) for k in KINDS if k not in CATALOG_KINDS},
+        # Kitden adds no hooks, so a hook's dash has no reason.
+        "hook": _map_rows(map_rows, "hook", found),
+        "marketplace": _map_rows(map_rows, "marketplace", found, _marketplace_why(offers)),
     }
     rows = {}
     for k, pairs in built.items():
