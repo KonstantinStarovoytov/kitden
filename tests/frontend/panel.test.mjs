@@ -221,12 +221,15 @@ test('Details offer each cell action as a button', () => {
   assert.deepEqual(labels(addOptions(two, entry)), ['Add to Claude Code…', 'Add to Codex…', 'Add…']);
   assert.equal(addOptions(two, entry)[2].form, true);
   assert.deepEqual(labels(addOptions(two, null)), ['Add to Claude Code…', 'Add to Codex…']);
-  // Add skills and Add the plugin are not plain adds of the item.
+  // The real install comes first, then Add the plugin, then Add skills; each in column order.
+  // Add skills and Add the plugin are not plain adds of the item, so they never make "Add…".
   const mixed = { kind: 'plugin', cells: { claude_code: cell({ add: skills }), codex: cell({ add: plain }), cursor: cell({ add: skills }) } };
-  assert.deepEqual(labels(addOptions(mixed, entry)), ['Add skills to Claude Code…', 'Add to Codex…', 'Add skills to Cursor…']);
+  const ordered = addOptions(mixed, entry);
+  assert.deepEqual(labels(ordered), ['Add to Codex…', 'Add skills to Claude Code…', 'Add skills to Cursor…']);
+  assert.equal(footerActions([], [], null, ordered).lead.label, 'Add to Codex…');
   const copy = { ...plain, action: 'skill.install', plugin: null, skill: 'tidy@skills' };
   const skill = { kind: 'skill', cells: { claude_code: cell({ add: copy }), codex: cell({ add: { ...plain, label: 'Add the plugin' } }), cursor: cell({ add: copy }) } };
-  assert.deepEqual(labels(addOptions(skill, { kind: 'skill' })), ['Add to Claude Code…', 'Add the plugin to Codex…', 'Add to Cursor…', 'Add…']);
+  assert.deepEqual(labels(addOptions(skill, { kind: 'skill' })), ['Add to Claude Code…', 'Add to Cursor…', 'Add the plugin to Codex…', 'Add…']);
 
   // With no lead yet, the first add is the primary button and the rest wait under More.
   const [first, second] = options;

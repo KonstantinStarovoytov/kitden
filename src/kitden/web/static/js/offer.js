@@ -151,15 +151,18 @@ export function about(offer) {
   return out;
 }
 
-// Every way to add the row's item, as Details offer them: each cell's add in column order ("+ Add"
-// in the Codex column is "Add to Codex…"), then "Add…" when two or more clients can take it as a
-// plain add, to add to several in one review. "Add…" needs the marketplace's entry (`offer`).
+// Every way to add the row's item, as Details offer them: each cell's add ("+ Add" in the Codex
+// column is "Add to Codex…"), the real install first, then "Add the plugin", then "Add skills",
+// each in column order. Then "Add…" when two or more clients can take it as a plain add, to add
+// to several in one review. "Add…" needs the marketplace's entry (`offer`).
 export function addOptions(row, offer) {
+  const plain = row.kind === "skill" ? "skill.install" : "plugin.install";
+  const rank = (add) => (add.action === plain ? 0 : add.action === "plugin.skills" ? 2 : 1);
   const options = COLUMNS.filter((c) => row.cells[c] && row.cells[c].add).map((client) => {
     const add = row.cells[client].add;
     return { client, add, label: `${add.label.replace(/^\+ /, "")} to ${CLIENT_NAMES[client]}…` };
   });
-  const plain = row.kind === "skill" ? "skill.install" : "plugin.install";
+  options.sort((a, b) => rank(a.add) - rank(b.add));
   if (offer && options.filter((o) => o.add.action === plain).length > 1) options.push({ form: true, label: "Add…" });
   return options;
 }
