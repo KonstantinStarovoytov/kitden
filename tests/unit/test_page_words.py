@@ -105,8 +105,14 @@ def test_controls_press_and_the_switch_waits_for_the_preview():
 
 
 def test_client_tile_flies_to_its_library_column():
-    assert "fly(tile, `client-${clientId}`)" in script("overview.js")
+    overview = script("overview.js")
+    assert "fly(tile, `client-${clientId}`)" in overview
     assert "land(tile, `client-${column.id}`)" in script("library.js")
+    # The tab is read before the place changes, so its table is drawn where the tile can land.
+    count = overview.split("function loadsLine")[1].split("\n}\n")[0]
+    assert count.index("await loadLibraryFor(choice);") < count.index("fly(tile")
+    card = overview.split("async function follow")[1].split("\n}\n")[0]
+    assert card.index("await loadLibraryFor(choice);") < card.index('go("library"')
 
 
 def test_review_counts_the_diff_and_folds_the_file_change():
@@ -252,7 +258,10 @@ def test_library_adds_plugins_and_marketplaces_in_one_review():
 def test_library_rows_say_what_each_client_has_or_can_add_without_details():
     text = script("library.js")
     # One cell per client: the server's state, or the one button for what it can add.
-    assert "socket({ state: cell.state, where: cell.where, word: cell.word })" in text
+    assert (
+        "socket({ state: cell.state, where: cell.where, word: cell.word, label: cell.reason })"
+        in text
+    )
     assert "button(cell.add.label" in text and '"btn small add"' in text
     assert 'via: "Via Claude Code", done: "Skills added"' in script("parts.js")
     assert 'el("table", "map library")' in text and '"desc"' in text
@@ -539,7 +548,9 @@ def test_library_replaces_load_map_and_discover():
     assert "Differs between clients" not in text
     # Old addresses open the Library; the Overview's links go there too.
     assert 'OLD_VIEWS = { map: "mine", discover: "new" }' in script("store.js")
-    assert 'go("library", { kind: target.kind, show: "mine"' in script("overview.js")
+    overview = script("overview.js")
+    assert 'kind: target.kind, show: "mine"' in overview
+    assert 'go("library", { ...choice, selected: target.row })' in overview
 
 
 def test_library_says_why_when_there_is_nothing_to_do():
@@ -549,6 +560,10 @@ def test_library_says_why_when_there_is_nothing_to_do():
     assert "Kitden found no AI coding clients." in text and '"Open Overview"' in text
     # Search keeps the choice and says what it hides.
     assert "more not on this Mac" in text and '"Show all"' in text
+    # The line goes away with the choice; focus moves to that choice.
+    assert """document.querySelector('#main [data-focus="show:all"]')""" in text
+    # A morph into a dash keeps its reason for a screen reader.
+    assert "label: cell.reason" in text and 'label || "Not set up"' in script("parts.js")
     assert "`Needs attention · ${answer.attention}`" in text
     # Marketplace notes stay above the table, once each, never in the cells.
     assert 'el("p", "note", note)' in text
@@ -558,7 +573,10 @@ def test_a_cell_add_reviews_one_client_and_the_review_shows_its_note():
     text = script("library.js")
     review = "review(previewFor(cell.add, client), { note: noteFor(cell.add, state.project) })"
     assert review in text
-    assert '"Adds for all your projects."' in script("offer.js")
+    offer = script("offer.js")
+    assert '"Adds for all your projects."' in offer
+    # Every add in a project view says so, a marketplace too.
+    assert offer.count("{ note: projectNote(state.project) }") == 3
     panel = script("panel.js")
     assert "export async function review(previewBody, { note = null } = {})" in panel
     assert "if (note) body.append(callout(note));" in panel
@@ -572,6 +590,6 @@ def test_typing_waits_before_the_library_asks_the_server():
     text = script("library.js")
     assert "const TYPING_MS = 200;" in text and "load(); }, TYPING_MS);" in text
     # A newer request wins, and a change waits for the new rows before the cells morph.
-    assert "if (cacheKey() === key) cache =" in text
+    assert "order === sent && at >= cache.at" in text and "if (latest()) cache =" in text
     assert "await Promise.all([reload(), loadLibrary()]);" in script("app.js")
     assert "await Promise.all([reload().catch(() => {}), loadLibrary()]);" in script("panel.js")

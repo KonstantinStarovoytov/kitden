@@ -256,9 +256,10 @@ export function marketplaceForm() {
   input.spellcheck = false;
   field.append(el("span", null, "Marketplace link"), input);
   const chosen = new Set(INSTALLERS);
-  const form = addFormBody(clientChecks(INSTALLERS, chosen), chosen, () => {
-    return review({ action: "marketplace.add", targets: [...chosen].map((client) => ({ client })), params: { source: input.value.trim() } });
-  });
+  const form = addFormBody(clientChecks(INSTALLERS, chosen), chosen, () => review(
+    { action: "marketplace.add", targets: [...chosen].map((client) => ({ client })), params: { source: input.value.trim() } },
+    { note: projectNote(state.project) },
+  ));
   form.prepend(field);
   body.append(el("p", "muted", "For a GitHub repository, Kitden reads its marketplace file once to name it. Cursor keeps its marketplaces in the Cursor account: add them in Cursor."), form);
   openPanel([panelHead("Add marketplace", "From a link"), body, el("footer")]);

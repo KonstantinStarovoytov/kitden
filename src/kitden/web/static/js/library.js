@@ -17,6 +17,8 @@ const KINDS = [
 const CATALOG = ["plugin", "skill"];
 const SHOW = [["mine", "On this Mac"], ["new", "Can add"], ["all", "All"]];
 const KIND_WORDS = { plugin: "Plugin", skill: "Skill" };
+// The tab's name inside a sentence: "No MCP servers in any client", "No plugins to add".
+const KIND_NOUNS = { mcp_server: "MCP servers", plugin: "plugins", skill: "skills", hook: "hooks", marketplace: "marketplaces" };
 // Typing waits this long after the last key before asking the server.
 const TYPING_MS = 200;
 
@@ -79,26 +81,22 @@ export function cellNode(row, client) {
     node.dataset.focus = `add:${row.key}:${client}`;
     return node;
   }
-  const node = socket({ state: cell.state, where: cell.where, word: cell.word });
-  if (cell.reason) {
-    node.title = cell.reason;
-    if (cell.state === "none") node.setAttribute("aria-label", cell.reason);
-  }
+  const node = socket({ state: cell.state, where: cell.where, word: cell.word, label: cell.reason });
+  if (cell.reason) node.title = cell.reason;
   return node;
 }
 
 // The kind tab shown: an unknown one from an old address falls back to the first tab.
-function currentKind() {
-  return KINDS.some(([kind]) => kind === state.kind) ? state.kind : "mcp_server";
-}
+const currentKind = () => asking().kind;
 
-// The question for the server. Tabs without a catalog show only what is on this computer.
-function asking() {
-  const kind = currentKind();
+// The question for the server, for the shown tab or (`choice`) one about to show. Tabs without a
+// catalog show only what is on this computer.
+function asking(choice = state) {
+  const kind = KINDS.some(([id]) => id === choice.kind) ? choice.kind : "mcp_server";
   const catalog = CATALOG.includes(kind);
   return {
-    project: state.project, kind, show: catalog ? state.show : "mine", q: state.q,
-    category: catalog ? state.category : "", attention: state.attention,
+    project: choice.project, kind, show: catalog ? choice.show : "mine", q: choice.q,
+    category: catalog ? choice.category : "", attention: choice.attention,
   };
 }
 
@@ -110,6 +108,8 @@ let cache = { key: null, at: 0, readAt: 0, answer: null, asked: null, error: nul
 let pending = null;
 let timer = null;
 let lastQ = null;
+// Requests in the order they were sent: only the last one sent may change the cache.
+let sent = 0;
 
 function needsLoad(key) {
   const since = freshness.reloadStartedAt;
@@ -118,23 +118,25 @@ function needsLoad(key) {
   return !(cache.key === key && cache.at >= since);
 }
 
-// Ask for the shown tab. A newer request wins: an answer for a key no longer shown is dropped.
-// `draw` redraws the page when the answer is in; a caller that draws itself passes false.
-function load(draw = true) {
-  const key = cacheKey();
+// Ask the server (`asked`: the shown tab unless given). A newer request wins: only the answer to
+// the last request sent is kept, and never over a newer answer. `draw` redraws the page when the
+// answer is in; a caller that draws itself passes false.
+function load(asked = asking(), draw = true) {
+  const key = JSON.stringify(asked);
   if (pending && pending.key === key && pending.at >= freshness.reloadStartedAt) {
     if (!draw) pending.draw = false;
     return pending.promise;
   }
-  const asked = asking();
   const at = performance.now();
+  const order = ++sent;
+  const latest = () => order === sent && at >= cache.at;
   lastQ = asked.q;
-  // Task 6 sends the hidden columns here too.
+  // The hidden columns will go here too, once a column can be hidden.
   const params = { ...asked, attention: asked.attention ? "1" : "" };
   const job = { key, at, draw };
   job.promise = getJson(`/api/library${query(params)}`).then(
-    (answer) => { if (cacheKey() === key) cache = { key, at, readAt: Date.now(), answer, asked, error: null, errorKey: null, failedAt: 0 }; },
-    (error) => { if (cacheKey() === key) Object.assign(cache, { error, errorKey: key, failedAt: at }); },
+    (answer) => { if (latest()) cache = { key, at, readAt: Date.now(), answer, asked, error: null, errorKey: null, failedAt: 0 }; },
+    (error) => { if (latest()) Object.assign(cache, { error, errorKey: key, failedAt: at }); },
   ).finally(() => {
     if (pending === job) pending = null;
     if (job.draw && state.view === "library" && cacheKey() === key) render();
@@ -154,13 +156,26 @@ function schedule(key) {
   timer = setTimeout(() => { timer = null; if (state.view === "library") load(); }, TYPING_MS);
 }
 
+// Read a tab (`choice`: state keys such as kind and show over the current state) without drawing,
+// unless its answer is fresh already. Never rejects.
+function read(choice) {
+  const asked = asking({ ...state, ...choice });
+  const fresh = cache.key === JSON.stringify(asked) && cache.at >= freshness.reloadStartedAt;
+  return fresh ? Promise.resolve() : load(asked, false);
+}
+
 // For a caller that draws the page itself once the shown tab is read (a reload, a change or a
 // project switch), so the cells morph then and not before. Call it right after reload() starts.
 export function loadLibrary() {
   if (state.view !== "library") return Promise.resolve();
   clearTimeout(timer);
-  const key = cacheKey();
-  return cache.key === key && cache.at >= freshness.reloadStartedAt ? Promise.resolve() : load(false);
+  return read({});
+}
+
+// Read the tab another place is about to open, so it is drawn inside the place change and a
+// client tile can fly to its column there (Overview counts and cards).
+export function loadLibraryFor(choice) {
+  return read(choice);
 }
 
 export function renderLibrary(main) {
@@ -209,18 +224,18 @@ export function renderLibrary(main) {
   if (fresh) openNext = false;
   if (!answer.rows.length) {
     main.append(emptyState(asked, more));
-    if (fresh) finish(answer.rows);
+    finish(answer.rows);
     return;
   }
   if (more) main.append(moreNode(more));
-  // Task 6 hides columns; a hidden one is still in `columns`, marked.
+  // A hidden column is still in `columns`, marked; it is not drawn.
   const columns = answer.columns.filter((c) => !c.hidden);
   const groups = asked.show === "all" && CATALOG.includes(asked.kind);
-  const table = buildTable(columns, answer.rows, groups, morphNext && fresh);
+  const table = buildTable(columns, answer.rows, groups, morphNext);
   const scroller = el("div", "table-scroll");
   scroller.append(table);
   main.append(scroller);
-  if (fresh) finish(answer.rows);
+  finish(answer.rows);
   entrance("library", [table]);
 
   const selected = table.querySelector('tr[aria-selected="true"]');
@@ -235,7 +250,7 @@ export function renderLibrary(main) {
   if (row && selected) openRow(row, selected, "pointer");
 }
 
-// A fresh answer is drawn: the next change morphs from what it shows.
+// Rows are drawn: the morph is used up, and the next change morphs from what they show.
 function finish(rows) {
   morphNext = false;
   previousCells = Object.fromEntries(rows.map((r) => [r.key, Object.fromEntries(Object.entries(r.cells).map(([c, cell]) => [c, cellKey(cell)]))]));
@@ -308,10 +323,15 @@ function categoryPicker(categories) {
   return box;
 }
 
-// "3 more not on this Mac · Show all": the words, then a button for the last part.
+// "3 more not on this Mac · Show all": the words, then a button for the last part. The line goes
+// away with the choice, so focus moves to that choice.
 function moreNode(line) {
   const box = el("p", "more");
-  const all = button("Show all", () => go("library", { show: "all", selected: null }), "btn ghost small");
+  const all = button("Show all", () => {
+    go("library", { show: "all", selected: null });
+    const choice = document.querySelector('#main [data-focus="show:all"]');
+    if (choice) choice.focus();
+  }, "btn ghost small");
   all.dataset.focus = "more:all";
   box.append(el("span", null, `${line.split(" · ")[0]} · `), all);
   return box;
@@ -323,9 +343,9 @@ function noClients() {
   return box;
 }
 
-function emptyState(asked, more) {
+export function emptyState(asked, more) {
   const box = el("div", "empty");
-  const label = (KINDS.find(([kind]) => kind === asked.kind) || ["", "items"])[1].toLowerCase();
+  const label = KIND_NOUNS[asked.kind] || "items";
   if (more) {
     const where = asked.show === "mine" ? "on this Mac" : "you can add";
     box.append(el("strong", null, `Nothing ${where} matches “${asked.q}”`), moreNode(more));
@@ -443,7 +463,8 @@ function settle(row, client, before) {
   }
   const old = socket({ state: was, where: where || null });
   old.title = node.title;
-  setTimeout(() => morphSocket(old, { state: cell.state, where: cell.where }), reducedMotion.matches ? 0 : 260);
+  const next = { state: cell.state, where: cell.where, word: cell.word, label: cell.reason };
+  setTimeout(() => morphSocket(old, next), reducedMotion.matches ? 0 : 260);
   return old;
 }
 
@@ -452,7 +473,7 @@ function openRow(row, tr, how) {
   for (const other of tr.parentElement.querySelectorAll('tr[aria-selected="true"]')) other.setAttribute("aria-selected", "false");
   tr.setAttribute("aria-selected", "true");
   // A row on this computer opens what each client loads; one only in a marketplace opens the
-  // marketplace's entry. Task 7 joins both into one Details.
+  // marketplace's entry.
   if (row.lookup || !row.offer) {
     if (opener) opener(row, tr, how);
   } else {

@@ -37,11 +37,12 @@ export function clientCheck(client, checked, note, onChange) {
 // A direct server, when no gateway here can take it: the Gateway page and Details say the same.
 export const GATEWAY_NOTE = "Add the server in the gateway first, then remove its direct entry here.";
 
-export function socket({ state, where, word }) {
+// `label` is what a screen reader hears for a dash: why nothing can be done, when known.
+export function socket({ state, where, word, label }) {
   const node = el("span", `socket s-${state}`);
   if (state === "none") {
     node.append(el("span", "word faint", "—"));
-    node.setAttribute("aria-label", "Not set up");
+    node.setAttribute("aria-label", label || "Not set up");
     return node;
   }
   const dot = el("span", "dot");
@@ -53,11 +54,12 @@ export function socket({ state, where, word }) {
 
 // Morph a socket to a new state: the words fade out, the new socket fades in, one ping.
 // The socket is rebuilt, so "not set up" (no dot) and the other states swap cleanly.
-// With reduced motion the new words show at once.
-export function morphSocket(node, { state, where }) {
+// `next` takes what socket() takes, so a word or a dash's reason stays. With reduced motion the
+// new words show at once.
+export function morphSocket(node, next) {
   const still = reducedMotion.matches;
   const swap = () => {
-    const fresh = socket({ state, where });
+    const fresh = socket(next);
     node.className = still ? fresh.className : `${fresh.className} pulse`;
     if (fresh.hasAttribute("aria-label")) node.setAttribute("aria-label", fresh.getAttribute("aria-label"));
     else node.removeAttribute("aria-label");

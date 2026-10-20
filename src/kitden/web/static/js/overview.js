@@ -1,7 +1,7 @@
 // Overview: what needs attention first, then the clients and, without a gateway, how to get one.
 import { getJson, query } from "./api.js";
 import { button, el, plural } from "./dom.js";
-import { openSelectedOnRender } from "./library.js";
+import { loadLibraryFor, openSelectedOnRender } from "./library.js";
 import { entrance, fly } from "./motion.js";
 import { toast } from "./panel.js";
 import { banner, flag, mark, skeleton, socket, staleNote } from "./parts.js";
@@ -78,10 +78,13 @@ function issueCard(card, { option = false } = {}) {
 
 // A card about an item opens that item in the side panel; paths and the fix live there.
 // The server still names the Load map ("map"); its rows are the Library's "On this Mac".
-function follow(target) {
+// The tab is read first, so the Library draws its rows inside the place change.
+async function follow(target) {
   if (target.view === "map") {
+    const choice = { kind: target.kind, show: "mine", category: "", attention: false, q: "" };
+    await loadLibraryFor(choice);
     openSelectedOnRender();
-    go("library", { kind: target.kind, show: "mine", category: "", attention: false, q: "", selected: target.row });
+    go("library", { ...choice, selected: target.row });
   } else {
     go(target.view);
   }
@@ -122,7 +125,9 @@ const LOAD_KINDS = [
 ];
 const openClients = new Set();
 
-// A count opens that Library tab; the client's tile flies to its column there.
+// A count opens that Library tab; the client's tile flies to its column there. The tab is read
+// first (the button shows a spinner if that takes a while), so its table is drawn inside the place
+// change, where the tile can land.
 function loadsLine(clientId, tile) {
   const line = el("div", "loads");
   const map = current("map");
@@ -138,9 +143,11 @@ function loadsLine(clientId, tile) {
   }).filter(([, n]) => n);
   if (!counts.length) line.append(el("span", "muted", "Loads nothing here."));
   for (const [kind, , words] of counts) {
-    line.append(button(words, () => {
+    line.append(button(words, async () => {
+      const choice = { kind, show: "mine", category: "", attention: false, q: "" };
+      await loadLibraryFor(choice);
       fly(tile, `client-${clientId}`);
-      go("library", { kind, show: "mine", category: "", attention: false, q: "" });
+      go("library", choice);
     }, "btn small ghost"));
   }
   return line;
@@ -168,7 +175,7 @@ async function showNote(finding) {
   const map = current("map");
   const rows = (map && map.rows) || [];
   const row = rows.find((r) => Object.values(r.cells).some((cell) => (cell.items || []).some((id) => finding.items.includes(id))));
-  if (row) follow({ view: "map", kind: row.kind, row: row.key });
+  if (row) await follow({ view: "map", kind: row.kind, row: row.key });
   else toast("Could not find this item in the Library.");
 }
 

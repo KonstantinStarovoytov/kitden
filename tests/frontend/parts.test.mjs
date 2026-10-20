@@ -79,6 +79,27 @@ test('with reduced motion a changed socket shows its new word at once, never fad
   }
 });
 
+test('a socket that morphs into a dash keeps the reason it was given', () => {
+  media.matches = true;
+  try {
+    const reason = "Codex can't install this plugin, and it has no skills to copy.";
+    const node = socket({ state: 'on' });
+    morphSocket(node, { state: 'none', label: reason });
+    assert.equal(node.className, 'socket s-none');
+    assert.equal(node.attributes['aria-label'], reason);
+    // Without a reason it says what it always said.
+    const plain = socket({ state: 'on' });
+    morphSocket(plain, { state: 'none' });
+    assert.equal(plain.attributes['aria-label'], 'Not set up');
+    // The words the server sent stay through the morph.
+    const done = socket({ state: 'off' });
+    morphSocket(done, { state: 'done', word: 'Skills added' });
+    assert.equal(done.querySelector('.word').textContent, 'Skills added');
+  } finally {
+    media.matches = false;
+  }
+});
+
 // A page with the banner on it; `focused` says what got keyboard focus after the Retry.
 function retryOn({ failsAgain, focusKept = false }) {
   const focused = [];

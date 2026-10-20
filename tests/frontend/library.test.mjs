@@ -21,8 +21,14 @@ function element(tag) {
   return node;
 }
 globalThis.document = { createElement: element };
-const { cellNode, metaText, moreLine, noteFor, previewFor } = await import('../../src/kitden/web/static/js/library.js');
-const { hashFor, parseHash } = await import('../../src/kitden/web/static/js/store.js');
+// Each request waits until the test answers it, so a test decides which answer comes first.
+const requests = [];
+globalThis.fetch = (url) => new Promise((resolve) => {
+  requests.push({ url, answer: (body) => resolve({ ok: true, status: 200, json: async () => body }) });
+});
+const { cellNode, emptyState, loadLibrary, loadLibraryFor, metaText, moreLine, noteFor, previewFor } = await import('../../src/kitden/web/static/js/library.js');
+const { freshness, hashFor, parseHash, state } = await import('../../src/kitden/web/static/js/store.js');
+const later = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const cell = (fields) => ({ state: 'none', where: null, items: [], word: null, add: null, reason: null, ...fields });
 const add = (fields) => ({ action: 'plugin.install', label: '+ Add', plugin: null, skill: null, marketplace: null, warn: null, ...fields });
@@ -106,7 +112,9 @@ test('the more line names what the choice hides', () => {
 test('old map and discover addresses open the Library', () => {
   const library = (fields) => ({ view: 'library', kind: 'mcp_server', show: 'mine', category: '', attention: false, project: '', q: '', ...fields });
   assert.deepEqual(parseHash('#map'), library({}));
-  assert.deepEqual(parseHash('#map?kind=plugin&only=problems&project=p1&q=git'), library({ kind: 'plugin', project: 'p1', q: 'git' }));
+  // The Load map's "Needs attention" filter carries over.
+  assert.deepEqual(parseHash('#map?kind=plugin&only=problems&project=p1&q=git'), library({ kind: 'plugin', attention: true, project: 'p1', q: 'git' }));
+  assert.equal(parseHash('#map?only=diff').attention, false);
   assert.deepEqual(parseHash('#discover'), library({ kind: 'plugin', show: 'new' }));
   assert.deepEqual(parseHash('#discover?kind=skill&q=pdf'), library({ kind: 'skill', show: 'new', q: 'pdf' }));
   assert.deepEqual(parseHash('#discover?kind=hook'), library({ kind: 'plugin', show: 'new' }));
@@ -118,4 +126,58 @@ test('old map and discover addresses open the Library', () => {
   assert.equal(hashFor(library({})), '#library?kind=mcp_server');
   assert.equal(parseHash('#library?show=nope').show, 'mine');
   assert.equal(parseHash('#nowhere').view, 'overview');
+});
+
+test('a search the choice hides shows the more line, not an empty table', () => {
+  const box = emptyState({ kind: 'plugin', show: 'mine', q: 'figma' }, moreLine({ more: 2 }, 'mine'));
+  assert.equal(box.className, 'empty');
+  assert.equal(box.children[0].textContent, 'Nothing on this Mac matches “figma”');
+  const [words, all] = box.children[1].children;
+  assert.equal(box.children[1].className, 'more');
+  assert.equal(words.textContent, '2 more not on this Mac · ');
+  assert.equal(all.textContent, 'Show all');
+  const added = emptyState({ kind: 'skill', show: 'new', q: 'pdf' }, moreLine({ more: 1 }, 'new'));
+  assert.equal(added.children[0].textContent, 'Nothing you can add matches “pdf”');
+});
+
+test('an empty tab names its kind the way the tab does', () => {
+  const servers = emptyState({ kind: 'mcp_server', show: 'mine', q: '' }, null);
+  assert.deepEqual(servers.children.map((c) => c.textContent), ['No MCP servers in any client', 'MCP servers you add in Claude Code, Codex or Cursor will show up here.']);
+  const plugins = emptyState({ kind: 'plugin', show: 'mine', q: '' }, null);
+  assert.deepEqual(plugins.children.map((c) => c.textContent), ['No plugins in any client', 'Plugins you add in Claude Code, Codex or Cursor will show up here.']);
+});
+
+test('an older answer never replaces a newer one for the same tab', async () => {
+  Object.assign(state, { view: 'library', kind: 'plugin', show: 'mine', category: '', attention: false, project: '', q: '' });
+  freshness.reloadStartedAt = performance.now();
+  requests.length = 0;
+  const older = loadLibrary();
+  await later(2);
+  // A rescan: the first request is now old, so the page asks again.
+  freshness.reloadStartedAt = performance.now();
+  const newer = loadLibrary();
+  assert.equal(requests.length, 2);
+  requests[1].answer({ rows: ['new'] });
+  await newer;
+  requests[0].answer({ rows: ['old'] });
+  await older;
+  // The newer answer is still the one kept: nothing more to ask (a request starts at once).
+  loadLibrary();
+  assert.equal(requests.length, 2);
+});
+
+test('a tab read before the Library shows is kept for it', async () => {
+  Object.assign(state, { view: 'overview', kind: 'mcp_server', show: 'new', category: 'Design', attention: true, project: '', q: 'x' });
+  freshness.reloadStartedAt = performance.now();
+  requests.length = 0;
+  const read = loadLibraryFor({ kind: 'skill', show: 'mine', category: '', attention: false, q: '' });
+  assert.equal(requests.length, 1);
+  assert.match(requests[0].url, /^\/api\/library\?kind=skill&show=mine$/);
+  requests[0].answer({ rows: [] });
+  await read;
+  // Reading it again, or showing that tab, asks nothing new (a request starts at once).
+  loadLibraryFor({ kind: 'skill', show: 'mine', category: '', attention: false, q: '' });
+  Object.assign(state, { view: 'library', kind: 'skill', show: 'mine', category: '', attention: false, q: '' });
+  loadLibrary();
+  assert.equal(requests.length, 1);
 });

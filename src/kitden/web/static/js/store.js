@@ -42,7 +42,8 @@ let renderPlace = () => {};
 export function setRenderer(fn) { renderPlace = fn; }
 export function render() { renderPlace(); }
 
-// Old #map and #discover addresses open the Library on "On this Mac" and "Can add".
+// Old #map and #discover addresses open the Library on "On this Mac" and "Can add"; the Load
+// map's "Needs attention" filter (only=problems) carries over.
 export function parseHash(hash) {
   const [place, rest] = String(hash || "").replace(/^#/, "").split("?");
   const params = new URLSearchParams(rest || "");
@@ -55,7 +56,7 @@ export function parseHash(hash) {
     kind,
     show: old || (SHOWS.includes(show) ? show : "mine"),
     category: params.get("category") || "",
-    attention: params.get("attention") === "1",
+    attention: params.get("attention") === "1" || (place === "map" && params.get("only") === "problems"),
     project: params.get("project") || "",
     q: params.get("q") || "",
   };
