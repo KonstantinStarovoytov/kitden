@@ -39,30 +39,23 @@ and no telemetry.
 such as servers that could move into your gateway. Each one has a button that opens its fix.
 The clients Kitden found sit on the right.
 
-### See what loads where
+### See what each client has, and add what it lacks
 
-**Load map** has one row per item and one column per client. Each cell says if the item loads,
-is off, goes through the gateway, or is not there. Tabs split MCP servers, plugins, skills, hooks
-and marketplaces. Pick a project at the top to see what loads in that folder.
+**Library** is one page for what each client loads and what you can add to it. Each row is an
+item and each column is a client on this computer; the "−" on a column head hides that client,
+and "Show" brings it back. Tabs split MCP servers, plugins, skills, hooks and marketplaces. On
+plugins and skills, choose On this Mac, Can add or All, and filter by category. Pick a project at
+the top to see what loads in that folder.
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/load-map-dark.jpg">
-    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/load-map.jpg" alt="Load map: MCP servers in rows, Claude Code, Codex and Cursor in columns, and the state of each in the cells" width="860">
-  </picture>
-</p>
-
-### Add plugins and skills
-
-**Discover** searches the plugins and skills in the marketplaces already on your computer. Add
-one to Claude Code and Codex in one review. The review names every client the change reaches,
-including Cursor when it loads Claude Code's plugins. You can also add a marketplace from a folder
-or a GitHub link.
+The action sits in the client's cell. "+ Add" adds a plugin or skill to that client. "Add
+skills" copies the skills of a plugin into a client that cannot install the plugin itself. "Add
+the plugin" is for a skill that needs its plugin. A cell with nothing to do says why. Each button
+opens a review first. You can also add a marketplace from a folder or a GitHub link.
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/discover-dark.jpg">
-    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/discover.jpg" alt="Discover: plugins that match a search, and the review for adding one to Claude Code and Codex, which says Cursor gets it too" width="860">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/library-dark.jpg">
+    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/library.jpg" alt="Library: plugins in rows, a column for each client, and a + Add button in the cells where a client can take one" width="860">
   </picture>
 </p>
 
@@ -82,9 +75,10 @@ client in the diagram to open its app.
 
 ### Check every change before it is written
 
-Every change opens a review first: the clients it reaches and the exact file change, with secrets
-hidden. Apply keeps a backup, writes the change and checks it. **Changes** keeps the history, with
-Undo and what to restart for a change to take effect.
+Every change opens a review first: the clients it reaches (Cursor too, when it loads Claude
+Code's plugins) and the exact file change, with secrets hidden. Apply keeps a backup, writes the
+change and checks it. **Changes** keeps the history, with Undo and what to restart for a change
+to take effect.
 
 <p align="center">
   <picture>

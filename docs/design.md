@@ -46,7 +46,19 @@ Preserve the compact information layout. Use restrained neutral panels, fine bor
 
 On Overview, an option ("Can improve") is a quiet card: `.issue.suggestion` has no warning border and a plain button, not the primary one.
 
-A row that opens Details ends with a quiet › and the hidden words "Open details" (`opens()` in `parts.js`). The chevron turns accent on hover and keyboard focus; it does not move. The search box names what it searches: the catalog on Discover, what is set up everywhere else.
+A row that opens Details ends with a quiet › and the hidden words "Open details" (`opens()` in `parts.js`). The chevron turns accent on hover and keyboard focus; it does not move. The search box names what it searches: your setup and the marketplaces.
+
+The Library has one row per item and one column per client found on this computer.
+
+| Part | Look |
+| --- | --- |
+| Row, line one | The name in mono, then quiet muted text: the category, and the source only when two rows share a name. The quiet text gives way first when the line is tight. Flags and the › come last. |
+| Row, line two | What it does, in muted text, one line, cut with "…". |
+| Cell state | A dot and a word. "Via Claude Code" is an empty gray ring, like Off: the client loads it only through Claude Code. "Skills added" is a filled green dot, like Loads. A dash says why in its hover text. |
+| Cell button | A small outlined button in the accent family ("+ Add", "Add skills", "Add the plugin") in place of a state. It opens the review for that one client; the rest of the row opens Details. |
+| Column head | The client's tile and name, and a small quiet "−" that hides the column. It shows on hover and keyboard focus, and always on touch screens. The last shown column has none. |
+| Hidden line | One quiet line above the table: "Hidden: Cursor · Show". Show brings every column back. |
+| Group line | With All: "On this Mac", then "Not on this Mac yet", each on a quiet band. |
 
 Every pressable area is at least 24 px tall and wide (WCAG 2.2 AA target size, checked 2026-10-19). The plugin switch keeps its 34 x 20 track inside a 24 px button, and a client checkbox is pressed through its 24 px label.
 
@@ -100,14 +112,15 @@ All helpers live in `src/kitden/web/static/js/motion.js`.
 
 | Pattern | Helper | Where |
 | --- | --- | --- |
-| Place change cross-fade | `transition(change)` | Rail links, Back, a scope change off the Load map |
-| Shared tile | `fly(node, name)` before `go()`, `land(twin, name)` while the new place draws | Overview count → Load map column |
-| Sliding mark | `glide(box, active, key)` | Rail, Load map tabs, filters |
+| Place change cross-fade | `transition(change)` | Rail links, Back, a scope change off the Library |
+| Shared tile | `fly(node, name)` before `go()`, `land(twin, name)` while the new place draws | Overview count → Library column |
+| Sliding mark | `glide(box, active, key)` | Rail, Library tabs, the show choice |
 | Smooth `<details>` | `fold(details)` | File change in a review, gateway forms |
 | Rolling number | `rollTo(holder, value)` | Rail counts |
-| Socket morph | `morphSocket(node, state)` (parts.js) | Load map after Apply, Undo or a scope change |
-| Resolved flag | `.flag.gone` | Load map after a verified change |
+| Socket morph | `morphSocket(node, state)` (parts.js) | Library after Apply, Undo or a scope change |
+| Resolved flag | `.flag.gone` | Library after a verified change |
 | Arrival | `.arrive` row glow + `.pulse` socket ping | Coming from a finding |
+| Add lands | `.socket.pulse` on a cell that held a button | Library after a verified add |
 | First visit | `entrance(place, nodes)` | Every place, once |
 | Pending switch | `.switch.pending` (thumb half-way) | Plugin switch while the preview loads |
 | Busy button | `busyWhile(button, work)` (dom.js); `button()` uses it | Every button that waits on the server; quick work never shows it |
@@ -153,7 +166,7 @@ Open a place with a shared tile:
 
 ```js
 fly(tile, `client-${clientId}`);   // on the old place, right before go()
-go("map", { kind });
+go("library", { kind });
 // on the new place, while it draws:
 land(columnTile, `client-${columnId}`);
 ```
@@ -161,7 +174,7 @@ land(columnTile, `client-${columnId}`);
 A group with a sliding mark (the group needs `position: relative`):
 
 ```js
-glide(box, box.querySelector('[aria-selected="true"]'), "map-tabs");
+glide(box, box.querySelector('[aria-selected="true"]'), "library-tabs");
 ```
 
 A smooth `<details>`:
