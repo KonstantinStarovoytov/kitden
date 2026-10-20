@@ -86,6 +86,23 @@ export function cellNode(row, client) {
   return node;
 }
 
+// Columns hidden on this page. The choice stays in this browser only; a store that cannot be read
+// or written means nothing is hidden.
+const HIDDEN_KEY = "kitden-hidden-clients";
+
+export function hiddenClients() {
+  try {
+    const list = JSON.parse(localStorage.getItem(HIDDEN_KEY));
+    return Array.isArray(list) && list.every((id) => typeof id === "string") ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+export function setHidden(list) {
+  try { localStorage.setItem(HIDDEN_KEY, JSON.stringify(list)); } catch { /* private window */ }
+}
+
 // The kind tab shown: an unknown one from an old address falls back to the first tab.
 const currentKind = () => asking().kind;
 
@@ -97,6 +114,8 @@ function asking(choice = state) {
   return {
     project: choice.project, kind, show: catalog ? choice.show : "mine", q: choice.q,
     category: catalog ? choice.category : "", attention: choice.attention,
+    // Sorted, so the same choice made in another order is the same question.
+    hidden: hiddenClients().sort().join(","),
   };
 }
 
@@ -131,7 +150,6 @@ function load(asked = asking(), draw = true) {
   const order = ++sent;
   const latest = () => order === sent && at >= cache.at;
   lastQ = asked.q;
-  // The hidden columns will go here too, once a column can be hidden.
   const params = { ...asked, attention: asked.attention ? "1" : "" };
   const job = { key, at, draw };
   job.promise = getJson(`/api/library${query(params)}`).then(
@@ -218,6 +236,8 @@ export function renderLibrary(main) {
     return;
   }
   if (failed) main.append(staleNote(cache.readAt));
+  const hidden = hiddenLine(answer.columns);
+  if (hidden) main.append(hidden);
   for (const note of answer.notes) main.append(el("p", "note", note));
   const more = moreLine(answer, asked.show);
   const wantOpen = fresh && openNext;
@@ -337,6 +357,44 @@ function moreNode(line) {
   return box;
 }
 
+// Save the choice, ask again (the server leaves out the rows only hidden clients have) and draw
+// once the answer is in. Focus then goes to the first of `focus` that is on the page.
+async function chooseHidden(list, focus) {
+  setHidden(list);
+  await loadLibrary();
+  render();
+  for (const key of focus.filter(Boolean)) {
+    const node = document.querySelector(`#main [data-focus="${key}"]`);
+    if (node) {
+      node.focus();
+      return;
+    }
+  }
+}
+
+// A column's small "−": hides it on this page only. The last shown column has none. Focus goes to
+// the next column's "−", or to Show when there is none.
+export function hideButton(column, shown) {
+  if (shown.length < 2) return null;
+  const at = shown.findIndex((c) => c.id === column.id);
+  const next = shown[at + 1];
+  const node = button("−", () => chooseHidden([...new Set([...hiddenClients(), column.id])], [next && `hide:${next.id}`, "hidden:show"]), "btn ghost small hide-col");
+  node.setAttribute("aria-label", `Hide ${column.name}`);
+  node.dataset.focus = `hide:${column.id}`;
+  return node;
+}
+
+// "Hidden: Codex, Cursor · Show": Show brings every hidden column back. Null when none is hidden.
+export function hiddenLine(columns) {
+  const gone = columns.filter((c) => c.hidden);
+  if (!gone.length) return null;
+  const box = el("p", "more");
+  const show = button("Show", () => chooseHidden([], [`hide:${gone[0].id}`]), "btn ghost small");
+  show.dataset.focus = "hidden:show";
+  box.append(el("span", null, `Hidden: ${gone.map((c) => c.name).join(", ")} · `), show);
+  return box;
+}
+
 function noClients() {
   const box = el("div", "empty");
   box.append(el("strong", null, "Kitden found no AI coding clients."), button("Open Overview", () => go("overview"), "btn"));
@@ -376,12 +434,16 @@ function buildTable(columns, rows, groups, morph) {
   headRow.append(el("th", null, "Name"));
   for (const column of columns) {
     const th = el("th");
+    const head = el("div", "col-head");
     const chip = el("span", "chip");
     const tile = mark(column.id);
     // Coming from the Overview, the client's tile flies here from its row.
     land(tile, `client-${column.id}`);
     chip.append(tile, el("span", null, column.name));
-    th.append(chip);
+    head.append(chip);
+    const hide = hideButton(column, columns);
+    if (hide) head.append(hide);
+    th.append(head);
     headRow.append(th);
   }
   head.append(headRow);

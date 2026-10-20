@@ -16,17 +16,29 @@ function element(tag) {
     append(...nodes) { node.children.push(...nodes); },
     setAttribute(name, value) { node.attributes[name] = value; },
     getAttribute: (name) => node.attributes[name] ?? null,
-    addEventListener() {},
+    listeners: {},
+    addEventListener(type, fn) { (node.listeners[type] ||= []).push(fn); },
   };
   return node;
 }
-globalThis.document = { createElement: element };
+// `drawn` is what a test says is on the page: selector → node, for focus.
+const drawn = {};
+globalThis.document = { createElement: element, querySelector: (selector) => drawn[selector] || null };
+// This browser's store: a test swaps `store.broken` on to make every read and write throw.
+const store = { broken: false, items: {} };
+Object.defineProperty(globalThis, 'localStorage', {
+  configurable: true,
+  value: {
+    getItem(key) { if (store.broken) throw new Error('blocked'); return key in store.items ? store.items[key] : null; },
+    setItem(key, value) { if (store.broken) throw new Error('blocked'); store.items[key] = String(value); },
+  },
+});
 // Each request waits until the test answers it, so a test decides which answer comes first.
 const requests = [];
 globalThis.fetch = (url) => new Promise((resolve) => {
   requests.push({ url, answer: (body) => resolve({ ok: true, status: 200, json: async () => body }) });
 });
-const { cellNode, emptyState, loadLibrary, loadLibraryFor, metaText, moreLine, noteFor, previewFor } = await import('../../src/kitden/web/static/js/library.js');
+const { cellNode, emptyState, hiddenClients, hiddenLine, hideButton, loadLibrary, loadLibraryFor, metaText, moreLine, noteFor, previewFor, setHidden } = await import('../../src/kitden/web/static/js/library.js');
 const { freshness, hashFor, parseHash, state } = await import('../../src/kitden/web/static/js/store.js');
 const later = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -180,4 +192,110 @@ test('a tab read before the Library shows is kept for it', async () => {
   Object.assign(state, { view: 'library', kind: 'skill', show: 'mine', category: '', attention: false, q: '' });
   loadLibrary();
   assert.equal(requests.length, 1);
+});
+
+const COLUMNS = [
+  { id: 'claude_code', name: 'Claude Code', hidden: false },
+  { id: 'codex', name: 'Codex', hidden: false },
+  { id: 'cursor', name: 'Cursor', hidden: false },
+];
+const hiding = (...ids) => COLUMNS.map((c) => ({ ...c, hidden: ids.includes(c.id) }));
+
+test('hidden clients survive a broken store', () => {
+  store.items = {};
+  setHidden(['codex', 'cursor']);
+  assert.deepEqual(hiddenClients(), ['codex', 'cursor']);
+  // Anything that is not a list of ids reads as nothing hidden.
+  for (const junk of ['not json', '{"a":1}', 'null', '[1,{"x":2}]']) {
+    store.items['kitden-hidden-clients'] = junk;
+    assert.deepEqual(hiddenClients(), [], junk);
+  }
+  // A store that throws on every read and write: nothing hidden, and no error.
+  store.broken = true;
+  assert.deepEqual(hiddenClients(), []);
+  setHidden(['cursor']);
+  store.broken = false;
+  assert.deepEqual(hiddenClients(), []);
+});
+
+test('the last column has no hide button', () => {
+  const button = hideButton(COLUMNS[1], COLUMNS);
+  assert.equal(button.tag, 'button');
+  assert.equal(button.textContent, '−');
+  assert.equal(button.attributes['aria-label'], 'Hide Codex');
+  assert.equal(button.dataset.focus, 'hide:codex');
+  assert.equal(hideButton(COLUMNS[1], COLUMNS.slice(0, 2)).attributes['aria-label'], 'Hide Codex');
+  assert.equal(hideButton(COLUMNS[1], [COLUMNS[1]]), null);
+});
+
+test('the hidden line names every hidden client', () => {
+  assert.equal(hiddenLine(hiding()), null);
+  const one = hiddenLine(hiding('cursor'));
+  const [words, show] = one.children;
+  assert.equal(one.className, 'more');
+  assert.equal(words.textContent, 'Hidden: Cursor · ');
+  assert.equal(show.textContent, 'Show');
+  assert.equal(show.dataset.focus, 'hidden:show');
+  assert.equal(hiddenLine(hiding('codex', 'cursor')).children[0].textContent, 'Hidden: Codex, Cursor · ');
+});
+
+test('the hidden choice is part of the question, so a change asks again', async () => {
+  Object.assign(state, { view: 'library', kind: 'skill', show: 'mine', category: '', attention: false, project: '', q: '' });
+  store.items = {};
+  freshness.reloadStartedAt = performance.now();
+  requests.length = 0;
+  const all = loadLibrary();
+  assert.equal(requests.length, 1);
+  assert.doesNotMatch(requests[0].url, /hidden/);
+  requests[0].answer({ rows: [] });
+  await all;
+  // The order they were hidden in does not matter: the server gets one sorted list.
+  setHidden(['cursor', 'codex']);
+  const fewer = loadLibrary();
+  assert.equal(requests.length, 2);
+  assert.match(requests[1].url, /^\/api\/library\?kind=skill&show=mine&hidden=codex%2Ccursor$/);
+  requests[1].answer({ rows: [] });
+  await fewer;
+  setHidden(['codex', 'cursor']);
+  loadLibrary();
+  assert.equal(requests.length, 2);
+});
+
+test('a hide button saves the choice, asks again, then focuses the next column or Show', async () => {
+  Object.assign(state, { view: 'library', kind: 'plugin', show: 'mine', category: '', attention: false, project: '', q: '' });
+  store.items = {};
+  freshness.reloadStartedAt = performance.now();
+  requests.length = 0;
+  const focused = [];
+  const focusable = (key) => { drawn[`#main [data-focus="${key}"]`] = { focus: () => focused.push(key) }; };
+  focusable('hide:cursor');
+  focusable('hidden:show');
+
+  // Hiding Codex: the next column is Cursor.
+  hideButton(COLUMNS[1], COLUMNS).listeners.click[0]({});
+  await later(2);
+  assert.deepEqual(hiddenClients(), ['codex']);
+  assert.equal(requests.length, 1);
+  assert.match(requests[0].url, /hidden=codex$/);
+  requests[0].answer({ rows: [] });
+  await later(2);
+  assert.deepEqual(focused, ['hide:cursor']);
+
+  // Hiding the last of the shown columns has no next one: focus goes to Show.
+  hideButton(COLUMNS[2], [COLUMNS[0], COLUMNS[2]]).listeners.click[0]({});
+  await later(2);
+  assert.deepEqual(hiddenClients(), ['codex', 'cursor']);
+  requests[1].answer({ rows: [] });
+  await later(2);
+  assert.deepEqual(focused, ['hide:cursor', 'hidden:show']);
+
+  // Show brings every column back, and focus goes to the first one that came back.
+  focusable('hide:codex');
+  hiddenLine(hiding('codex', 'cursor')).children[1].listeners.click[0]({});
+  await later(2);
+  assert.deepEqual(hiddenClients(), []);
+  assert.doesNotMatch(requests[2].url, /hidden/);
+  requests[2].answer({ rows: [] });
+  await later(2);
+  assert.deepEqual(focused, ['hide:cursor', 'hidden:show', 'hide:codex']);
 });

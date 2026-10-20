@@ -452,6 +452,8 @@ def test_every_control_a_render_replaces_names_itself_for_focus():
             "`add:${row.key}:${client}`",
             '"more:all"',
             '"add:marketplace"',
+            "`hide:${column.id}`",
+            '"hidden:show"',
         ),
     }.items():
         text = script(name)
@@ -593,3 +595,20 @@ def test_typing_waits_before_the_library_asks_the_server():
     assert "order === sent && at >= cache.at" in text and "if (latest()) cache =" in text
     assert "await Promise.all([reload(), loadLibrary()]);" in script("app.js")
     assert "await Promise.all([reload().catch(() => {}), loadLibrary()]);" in script("panel.js")
+
+
+def test_library_columns_hide_with_a_quiet_minus_kept_in_this_browser():
+    text, css = script("library.js"), (STATIC / "style.css").read_text()
+    # The choice lives in this browser; every read and write is inside try/catch.
+    assert 'const HIDDEN_KEY = "kitden-hidden-clients"' in text
+    store = text.split("export function hiddenClients")[1].split("// The kind tab shown")[0]
+    assert store.count("localStorage.") == 2
+    assert store.count("try {") == 2 and store.count("catch") == 2
+    # A named button per column, not drawn for the last one; the server gets the sorted list.
+    assert 'button("−"' in text and "`Hide ${column.name}`" in text and "shown.length < 2" in text
+    assert 'hidden: hiddenClients().sort().join(",")' in text
+    assert '`Hidden: ${gone.map((c) => c.name).join(", ")} · `' in text
+    # Quiet: seen on hover or focus of the header, and always where there is no hover.
+    assert re.search(r"\.btn\.hide-col \{[^}]*width: 24px", css)
+    assert ".map th:hover .hide-col" in css and ".map th:focus-within .hide-col" in css
+    assert "@media (hover: none) { .btn.hide-col { opacity: 1; } }" in css
