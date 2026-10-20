@@ -68,7 +68,7 @@ export function noteFor(add, project) {
 // names repeat) and to which client.
 function addName(row, client, add) {
   const name = row.same_name && row.source ? `${row.name} (${row.source})` : row.name;
-  const what = { "Add skills": `Add skills from ${name}`, "Add the plugin": `Add the plugin with ${name}` }[add.label] || `Add ${name}`;
+  const what = { "+ Add skills": `Add skills from ${name}`, "+ Add the plugin": `Add the plugin with ${name}` }[add.label] || `Add ${name}`;
   return `${what} to ${CLIENT_NAMES[client] || client}`;
 }
 

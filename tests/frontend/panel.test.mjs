@@ -200,7 +200,7 @@ test('what Add skills leaves out is one plain line, or nothing', () => {
 
 const cell = (fields) => ({ state: 'none', where: null, items: [], word: null, add: null, reason: null, ...fields });
 const plain = { action: 'plugin.install', label: '+ Add', plugin: 'figma@openai-curated', skill: null, marketplace: null, warn: null };
-const skills = { ...plain, action: 'plugin.skills', label: 'Add skills', plugin: 'superpowers@cursor-public' };
+const skills = { ...plain, action: 'plugin.skills', label: '+ Add skills', plugin: 'superpowers@cursor-public' };
 const labels = (options) => options.map((o) => o.label);
 const entry = { kind: 'plugin', id: 'figma@openai-curated' };
 
@@ -213,7 +213,7 @@ test('Details offer each cell action as a button', () => {
   // "+ Add" in the Codex column is "Add to Codex…"; a skill's plugin add keeps its words.
   const plugin = { kind: 'plugin', cells: { claude_code: cell({ state: 'on' }), codex: cell({ add: plain }), cursor: cell({ state: 'via' }) } };
   assert.deepEqual(labels(addOptions(plugin, entry)), ['Add to Codex…']);
-  const needs = { kind: 'skill', cells: { claude_code: cell({ state: 'on' }), cursor: cell({ add: { ...plain, label: 'Add the plugin' } }) } };
+  const needs = { kind: 'skill', cells: { claude_code: cell({ state: 'on' }), cursor: cell({ add: { ...plain, label: '+ Add the plugin' } }) } };
   assert.deepEqual(labels(addOptions(needs, entry)), ['Add the plugin to Cursor…']);
   // Two clients take it as a plain add: "Add…" too, to add to both in one review. It needs the
   // marketplace's entry, so without one it is left out.
@@ -228,7 +228,7 @@ test('Details offer each cell action as a button', () => {
   assert.deepEqual(labels(ordered), ['Add to Codex…', 'Add skills to Claude Code…', 'Add skills to Cursor…']);
   assert.equal(footerActions([], [], null, ordered).lead.label, 'Add to Codex…');
   const copy = { ...plain, action: 'skill.install', plugin: null, skill: 'tidy@skills' };
-  const skill = { kind: 'skill', cells: { claude_code: cell({ add: copy }), codex: cell({ add: { ...plain, label: 'Add the plugin' } }), cursor: cell({ add: copy }) } };
+  const skill = { kind: 'skill', cells: { claude_code: cell({ add: copy }), codex: cell({ add: { ...plain, label: '+ Add the plugin' } }), cursor: cell({ add: copy }) } };
   assert.deepEqual(labels(addOptions(skill, { kind: 'skill' })), ['Add to Claude Code…', 'Add to Cursor…', 'Add the plugin to Codex…', 'Add…']);
 
   // With no lead yet, the first add is the primary button and the rest wait under More.

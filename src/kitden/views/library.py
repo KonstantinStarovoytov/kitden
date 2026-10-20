@@ -153,7 +153,7 @@ def _plugin_cell(
             if twin
             else None
         )
-        return _cell(add=_add(PLUGIN_SKILLS, "Add skills", plugin_id, warn=warn))
+        return _cell(add=_add(PLUGIN_SKILLS, "+ Add skills", plugin_id, warn=warn))
     # Copied here, or brought by another plugin: either way the client has them.
     if alone and all(client in s["installed"] for s in alone):
         return _cell(
@@ -257,7 +257,7 @@ def _skill_cell(
     if route:
         marketplace = skill["marketplace"] if route == "add_marketplace" else None
         return _cell(
-            add=_add(PLUGIN_INSTALL, "Add the plugin", skill["plugin"], marketplace=marketplace)
+            add=_add(PLUGIN_INSTALL, "+ Add the plugin", skill["plugin"], marketplace=marketplace)
         )
     if client == "cursor" and cursor_imports and "claude_code" in plugin_routes:
         return _cell("via", word="Via Claude Code", reason=SKILL_VIA_CLAUDE_CODE)

@@ -610,10 +610,14 @@ def test_library_columns_hide_with_a_quiet_minus_kept_in_this_browser():
     assert 'button("−"' in text and "`Hide ${column.name}`" in text and "shown.length < 2" in text
     assert 'hidden: hiddenClients().sort().join(",")' in text
     assert '`Hidden: ${gone.map((c) => c.name).join(", ")} · `' in text
-    # Quiet: seen on hover or focus of the header, and always where there is no hover.
-    assert re.search(r"\.btn\.hide-col \{[^}]*width: 24px", css)
-    assert ".map th:hover .hide-col" in css and ".map th:focus-within .hide-col" in css
-    assert "@media (hover: none) { .btn.hide-col { opacity: 1; } }" in css
+    # Always there, in quiet gray, so it can be found; it darkens on hover and focus.
+    rule = re.search(r"\.btn\.hide-col \{([^}]*)\}", css).group(1)
+    assert "width: 24px" in rule and "color: var(--ink-3)" in rule and "opacity" not in rule
+    assert ".map th:hover .hide-col" not in css
+    assert (
+        ".btn.hide-col:hover:not(:disabled), .btn.hide-col:focus-visible { color: var(--ink); }"
+        in css
+    )
 
 
 def test_details_show_what_the_item_is_and_every_way_to_add_it():

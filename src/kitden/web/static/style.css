@@ -322,9 +322,8 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .map th .client-mark[data-icon="claude"] img { padding: 3px; }
 /* A column's "−": quiet until the header is hovered or focused, and always seen where there is no hover. */
 .map th .col-head { display: flex; align-items: center; gap: 2px; min-width: 0; }
-.btn.hide-col { flex: none; width: 24px; padding: 0; justify-content: center; font-size: 16px; line-height: 1; color: var(--ink-3); opacity: 0; }
-.map th:hover .hide-col, .map th:focus-within .hide-col { opacity: 1; }
-@media (hover: none) { .btn.hide-col { opacity: 1; } }
+.btn.hide-col { flex: none; width: 24px; padding: 0; justify-content: center; font-size: 16px; line-height: 1; color: var(--ink-3); }
+.btn.hide-col:hover:not(:disabled), .btn.hide-col:focus-visible { color: var(--ink); }
 .map td { padding: 0 12px; height: 34px; border-bottom: 1px solid var(--wire-soft); overflow: hidden; transition: background-color 120ms ease; }
 .map tr:last-child td { border-bottom: 0; }
 .map tbody tr { cursor: pointer; }

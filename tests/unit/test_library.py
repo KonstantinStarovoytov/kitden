@@ -136,9 +136,11 @@ def test_codex_plugin_offers_add_skills_to_claude_code(home):
     assert (row["mine"], row["offer"], row["lookup"]) == (True, DOCUMENTS, DOCUMENTS)
     assert (row["category"], row["description"]) == ("Productivity", "Read and write office files")
     assert row["cells"]["codex"]["state"] == "on"
-    assert row["cells"]["claude_code"] == _cell(add=_add("plugin.skills", "Add skills", DOCUMENTS))
+    assert row["cells"]["claude_code"] == _cell(
+        add=_add("plugin.skills", "+ Add skills", DOCUMENTS)
+    )
     # Cursor can't install it either, and Claude Code has no way to it: Cursor gets the skills.
-    assert row["cells"]["cursor"]["add"]["label"] == "Add skills"
+    assert row["cells"]["cursor"]["add"]["label"] == "+ Add skills"
 
 
 def test_cursor_plugin_offers_add_skills_to_claude_code_and_codex(home):
@@ -155,7 +157,7 @@ def test_cursor_plugin_offers_add_skills_to_claude_code_and_codex(home):
     assert (glean["description"], glean["category"]) == ("", None)
     assert glean["cells"]["cursor"]["state"] == "on"
     for client in ("claude_code", "codex"):
-        assert glean["cells"][client] == _cell(add=_add("plugin.skills", "Add skills", GLEAN))
+        assert glean["cells"][client] == _cell(add=_add("plugin.skills", "+ Add skills", GLEAN))
 
     empty = _row(answer, "empty")["cells"]["codex"]
     assert empty == _cell(reason="Codex can't install this plugin, and it has no skills to copy.")
@@ -183,7 +185,7 @@ def test_cursor_gets_via_claude_code_for_a_claude_plugin(home, tmp_path):
     # With Include Third-Party Plugins off, Cursor takes the skills that work alone instead.
     strict = _home(tmp_path / "strict", {REACTIVE_KEY: {"thirdPartyExtensibilityEnabled": False}})
     toolbox = _row(_library(strict, show="new"), "toolbox")
-    assert toolbox["cells"]["cursor"] == _cell(add=_add("plugin.skills", "Add skills", PLUGIN))
+    assert toolbox["cells"]["cursor"] == _cell(add=_add("plugin.skills", "+ Add skills", PLUGIN))
     # And a skill that needs the plugin has no way into Cursor.
     rooted = _row(_library(strict, "skill", show="new"), "rooted")
     assert rooted["cells"]["cursor"] == _cell(
@@ -195,7 +197,7 @@ def test_add_skills_turns_into_has_its_skills_when_all_are_there(home):
     for name in ("docx", "pptx"):
         _skill(home / ".claude/skills", name)
     row = _row(_library(home), "documents")
-    assert row["cells"]["claude_code"]["add"]["label"] == "Add skills"  # xlsx is still missing
+    assert row["cells"]["claude_code"]["add"]["label"] == "+ Add skills"  # xlsx is still missing
 
     _skill(home / ".claude/skills", "xlsx")
     row = _row(_library(home), "documents")
@@ -223,7 +225,7 @@ def test_skills_a_client_loads_from_another_plugin_count_as_had(home):
         reason="Claude Code already has every skill it can take from this plugin.",
     )
     assert row["cells"]["codex"] == _cell(
-        add=_add("plugin.skills", "Add skills", "superpowers@cursor-public")
+        add=_add("plugin.skills", "+ Add skills", "superpowers@cursor-public")
     )
 
     # One more skill: Claude Code can take that one, and the review says it has a twin.
@@ -234,7 +236,7 @@ def test_skills_a_client_loads_from_another_plugin_count_as_had(home):
         "It will load skills from both."
     )
     assert row["cells"]["claude_code"] == _cell(
-        add=_add("plugin.skills", "Add skills", "superpowers@cursor-public", warn=warn)
+        add=_add("plugin.skills", "+ Add skills", "superpowers@cursor-public", warn=warn)
     )
     assert row["cells"]["codex"]["add"]["warn"] is None
 
@@ -264,11 +266,11 @@ def test_skill_that_needs_its_plugin_offers_add_the_plugin(home):
     rooted = _row(answer, "rooted")
     assert rooted["offer"] == f"rooted@{PLUGIN}" and rooted["source"] == PLUGIN
     assert rooted["cells"]["claude_code"] == _cell(
-        add=_add("plugin.install", "Add the plugin", PLUGIN)
+        add=_add("plugin.install", "+ Add the plugin", PLUGIN)
     )
     # Codex first adds the marketplace the plugin comes from.
     assert rooted["cells"]["codex"]["add"] == _add(
-        "plugin.install", "Add the plugin", PLUGIN, marketplace=OFFICIAL
+        "plugin.install", "+ Add the plugin", PLUGIN, marketplace=OFFICIAL
     )
     # Cursor loads the plugin once Claude Code has it.
     assert rooted["cells"]["cursor"] == _cell(
@@ -415,7 +417,7 @@ def test_hidden_column_drops_rows_only_it_has(home):
     shown = _library(home)
     assert glean in _names(shown)
     for client in ("claude_code", "codex"):
-        assert _row(shown, "glean")["cells"][client]["add"]["label"] == "Add skills"
+        assert _row(shown, "glean")["cells"][client]["add"]["label"] == "+ Add skills"
 
     cursor = frozenset({"cursor"})
     hidden = _library(home, hidden=cursor)

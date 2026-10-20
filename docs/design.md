@@ -55,8 +55,8 @@ The Library has one row per item and one column per client found on this compute
 | Row, line one | The name in mono, then quiet muted text: the category, and the source only when two rows share a name. The quiet text gives way first when the line is tight. The › comes last. |
 | Row, line two | Flags first, then what it does, in muted text, one line, cut with "…". With no description the flags have the line to themselves; a row with neither has one line. |
 | Cell state | A dot and a word. "Via Claude Code" is an empty gray ring, like Off: Cursor does not have it yet, and loads it through Claude Code once Claude Code has it. "Has its skills" (the client has every skill in the plugin, copied here or from another plugin) is a filled green dot, like Loads. On plugins and skills, a dash says why in its hover text. |
-| Cell button | A small outlined button in the accent family ("+ Add", "Add skills", "Add the plugin") in place of a state. It opens the review for that one client; the rest of the row opens Details. |
-| Column head | The client's tile and name, and a small quiet "−" that hides the column. It shows on hover and keyboard focus, and always on touch screens. The last shown column has none. |
+| Cell button | A small outlined button in the accent family ("+ Add", "+ Add skills", "+ Add the plugin") in place of a state. It opens the review for that one client; the rest of the row opens Details. |
+| Column head | The client's tile and name, and a small "−" in quiet gray that hides the column; it darkens on hover and keyboard focus. The last shown column has none. |
 | Hidden line | One quiet line above the table: "Hidden: Cursor · Show". Show brings every column back. |
 | Group line | With All: "On this Mac", then "Not on this Mac yet", each on a quiet band. |
 

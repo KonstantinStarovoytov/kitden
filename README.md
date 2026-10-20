@@ -47,9 +47,9 @@ and "Show" brings it back. Tabs split MCP servers, plugins, skills, hooks and ma
 plugins and skills, choose On this Mac, Can add or All, and filter by category. Pick a project at
 the top to see what loads in that folder.
 
-The action sits in the client's cell. "+ Add" adds a plugin or skill to that client. "Add
+The action sits in the client's cell. "+ Add" adds a plugin or skill to that client. "+ Add
 skills" copies the skills of a plugin that work on their own into a client that cannot install the
-plugin itself. "Add the plugin" is for a skill that needs its plugin. On plugins and skills, a
+plugin itself. "+ Add the plugin" is for a skill that needs its plugin. On plugins and skills, a
 cell with nothing to do says why. You can also add a marketplace from a folder or a GitHub link.
 
 <p align="center">

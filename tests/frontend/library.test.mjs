@@ -56,13 +56,13 @@ test('a cell with an add shows its label and nothing else', () => {
   const twin = cellNode(row({ codex: cell({ add: add({ plugin: 'figma@openai-curated' }) }) }, { same_name: true }), 'codex');
   assert.equal(twin.attributes['aria-label'], 'Add figma (openai-curated) to Codex');
 
-  const skills = cellNode(row({ claude_code: cell({ add: add({ action: 'plugin.skills', label: 'Add skills', plugin: 'figma@openai-curated' }) }) }), 'claude_code');
-  assert.equal(skills.textContent, 'Add skills');
+  const skills = cellNode(row({ claude_code: cell({ add: add({ action: 'plugin.skills', label: '+ Add skills', plugin: 'figma@openai-curated' }) }) }), 'claude_code');
+  assert.equal(skills.textContent, '+ Add skills');
   assert.deepEqual(skills.children, []);
   assert.equal(skills.attributes['aria-label'], 'Add skills from figma to Claude Code');
 
-  const plugin2 = cellNode(row({ cursor: cell({ add: add({ label: 'Add the plugin', plugin: 'glean@cursor-public' }) }) }, { kind: 'skill', name: 'find-owner' }), 'cursor');
-  assert.equal(plugin2.textContent, 'Add the plugin');
+  const plugin2 = cellNode(row({ cursor: cell({ add: add({ label: '+ Add the plugin', plugin: 'glean@cursor-public' }) }) }, { kind: 'skill', name: 'find-owner' }), 'cursor');
+  assert.equal(plugin2.textContent, '+ Add the plugin');
   assert.equal(plugin2.attributes['aria-label'], 'Add the plugin with find-owner to Cursor');
 });
 
@@ -93,7 +93,7 @@ test('a state cell says the state, and why when the server says', () => {
 test('a cell add asks for a review of that one client', () => {
   assert.deepEqual(previewFor(add({ plugin: 'figma@openai-curated' }), 'codex'),
     { action: 'plugin.install', targets: [{ client: 'codex' }], params: { plugin: 'figma@openai-curated' } });
-  assert.deepEqual(previewFor(add({ action: 'plugin.skills', label: 'Add skills', plugin: 'documents@openai-curated' }), 'claude_code'),
+  assert.deepEqual(previewFor(add({ action: 'plugin.skills', label: '+ Add skills', plugin: 'documents@openai-curated' }), 'claude_code'),
     { action: 'plugin.skills', targets: [{ client: 'claude_code' }], params: { plugin: 'documents@openai-curated' } });
   assert.deepEqual(previewFor(add({ action: 'skill.install', skill: 'tidy@toolbox@x' }), 'cursor'),
     { action: 'skill.install', targets: [{ client: 'cursor' }], params: { skill: 'tidy@toolbox@x' } });
