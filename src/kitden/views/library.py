@@ -94,22 +94,23 @@ def _map_cell(row: Row, client: str) -> dict:
     return _cell(cell.state, cell.where, cell.items)
 
 
-def _map_rows(map_rows: list[Row], kind: str, found: list[str], visible: list[str]) -> list[dict]:
+# Each builder gives (row, holders): holders are the found clients that have the item.
+Built = list[tuple[dict, set[str]]]
+
+
+def _map_rows(map_rows: list[Row], kind: str, found: list[str]) -> Built:
     """MCP servers, hooks and marketplaces: the load map rows as they are."""
-    return [
-        _row(
-            r.key,
-            kind,
-            r.name,
-            r.source,
-            {c: _map_cell(r, c) for c in found},
-            mine=any(_has(r, c) for c in visible),
-            lookup=r.lookup,
-            flags=r.flags,
+    out = []
+    for r in map_rows:
+        if str(r.kind) != kind:
+            continue
+        holders = {c for c in found if _has(r, c)}
+        cells = {c: _map_cell(r, c) for c in found}
+        row = _row(
+            r.key, kind, r.name, r.source, cells, mine=bool(holders), lookup=r.lookup, flags=r.flags
         )
-        for r in map_rows
-        if str(r.kind) == kind
-    ]
+        out.append((row, holders))
+    return out
 
 
 # Plugins -------------------------------------------------------------------------------------
@@ -149,9 +150,8 @@ def _plugin_rows(
     offers: list[dict],
     skills: list[dict],
     found: list[str],
-    visible: list[str],
     cursor_imports: bool,
-) -> list[dict]:
+) -> Built:
     """Plugins on this computer and plugins in its marketplaces, one row per
     name@marketplace: a load map row and an offer with the same id are one row."""
     rows = {r.key: r for r in map_rows if r.kind is ItemKind.PLUGIN}
@@ -190,28 +190,32 @@ def _plugin_rows(
                 client, plugin_id, routes, plugin_skills, cursor_imports, warn
             )
         installed = offer["installed"] if offer else []
-        out.append(
-            _row(
-                key,
-                "plugin",
-                name,
-                source,
-                cells,
-                mine=any(_has(row, c) or c in installed for c in visible),
-                lookup=row.lookup if row else None,
-                offer=offer["id"] if offer else None,
-                flags=row.flags if row else [],
-                category=offer["category"] if offer else None,
-                description=offer["description"] if offer else "",
-            )
+        holders = {c for c in found if _has(row, c) or c in installed}
+        built = _row(
+            key,
+            "plugin",
+            name,
+            source,
+            cells,
+            mine=bool(holders),
+            lookup=row.lookup if row else None,
+            offer=offer["id"] if offer else None,
+            flags=row.flags if row else [],
+            category=offer["category"] if offer else None,
+            description=offer["description"] if offer else "",
         )
+        out.append((built, holders))
     return out
 
 
 # Skills --------------------------------------------------------------------------------------
 
 
-def _skill_cell(client: str, skill: dict, plugin_routes: dict[str, str]) -> dict:
+def _skill_cell(client: str, skill: dict, row: Row | None, plugin_routes: dict[str, str]) -> dict:
+    """The scan's state when it has one; else how the skill list says the client gets it, or
+    what the client can add."""
+    if _has(row, client):
+        return _map_cell(row, client)
     word = skill["installed"].get(client)
     if word:
         # "Via Claude Code" -> "via Claude Code", as the load map says it.
@@ -234,12 +238,12 @@ def _skill_rows(
     offers: list[dict],
     skills: list[dict],
     found: list[str],
-    visible: list[str],
-) -> list[dict]:
+) -> Built:
     """Every skill in the skill catalog, plus skills the load map has that it does not.
 
-    A catalog row takes the flags and lookup of the load map row with its name. The first one
-    also takes its key, so links from the Overview still find it; keys stay unique.
+    A catalog row takes the cells, flags and lookup of the load map row with its name, where
+    that row has them. The first one also takes its key, so links from the Overview still find
+    it; keys stay unique.
     """
     mapped = {r.name: r for r in map_rows if r.kind is ItemKind.SKILL}
     routes = {o["id"]: o["routes"] for o in offers}
@@ -250,24 +254,24 @@ def _skill_rows(
         key = row.key if row and row.key not in used else _hash(ItemKind.SKILL, skill["id"])
         used.add(key)
         plugin_routes = {c: r for c, r in routes.get(skill["plugin"], {}).items() if c in found}
-        out.append(
-            _row(
-                key,
-                "skill",
-                skill["name"],
-                skill["from"],
-                {c: _skill_cell(c, skill, plugin_routes) for c in found},
-                mine=any(c in skill["installed"] for c in visible),
-                lookup=row.lookup if row else None,
-                offer=skill["id"],
-                flags=row.flags if row else [],
-                category=skill["category"],
-                description=skill["description"],
-            )
+        holders = {c for c in found if _has(row, c) or c in skill["installed"]}
+        built = _row(
+            key,
+            "skill",
+            skill["name"],
+            skill["from"],
+            {c: _skill_cell(c, skill, row, plugin_routes) for c in found},
+            mine=bool(holders),
+            lookup=row.lookup if row else None,
+            offer=skill["id"],
+            flags=row.flags if row else [],
+            category=skill["category"],
+            description=skill["description"],
         )
+        out.append((built, holders))
     named = {s["name"] for s in skills}
     extra = [r for r in map_rows if r.kind is ItemKind.SKILL and r.name not in named]
-    return out + _map_rows(extra, "skill", found, visible)
+    return out + _map_rows(extra, "skill", found)
 
 
 # Filters -------------------------------------------------------------------------------------
@@ -281,8 +285,10 @@ def _mark_same_names(rows: list[dict]) -> None:
         row["same_name"] = seen[row["name"]] > 1
 
 
-def _in_view(row: dict, visible: list[str]) -> bool:
-    """A shown client has it, or can do something with it."""
+def _in_view(row: dict, holders: set[str], visible: list[str]) -> bool:
+    """Not a row only hidden clients have, and a shown client has it or can do something."""
+    if holders and not holders.intersection(visible):
+        return False
     return any(row["cells"][c]["state"] != "none" or row["cells"][c]["add"] for c in visible)
 
 
@@ -304,12 +310,9 @@ def _matching(rows: list[dict], q: str) -> list[dict]:
     return [rows[t["at"]] for t in search(terms, q)]
 
 
-def _chosen(rows: list[dict], visible: list[str], show: str, q: str) -> list[dict]:
-    """Rows a shown client has or can take, that the show choice keeps, matching the search."""
-    kept = [
-        r for r in rows if _in_view(r, visible) and (show == "all" or r["mine"] == (show == "mine"))
-    ]
-    return _matching(kept, q)
+def _chosen(rows: list[dict], show: str, q: str) -> list[dict]:
+    """Rows the show choice keeps, matching the search."""
+    return _matching([r for r in rows if show == "all" or r["mine"] == (show == "mine")], q)
 
 
 def _needs_attention(row: dict) -> bool:
@@ -381,30 +384,32 @@ def library(
     map_rows = load_map(inventory, project, gateway_registered=gateway_registered)
     offers = catalog(inventory, adapters)
     skills = skill_catalog(inventory, adapters)
-    rows = {
-        "plugin": _plugin_rows(map_rows, offers, skills, found, visible, cursor_imports),
-        "skill": _skill_rows(map_rows, offers, skills, found, visible),
-        **{k: _map_rows(map_rows, k, found, visible) for k in KINDS if k not in CATALOG_KINDS},
+    built = {
+        "plugin": _plugin_rows(map_rows, offers, skills, found, cursor_imports),
+        "skill": _skill_rows(map_rows, offers, skills, found),
+        **{k: _map_rows(map_rows, k, found) for k in KINDS if k not in CATALOG_KINDS},
     }
-    for kind_rows in rows.values():
-        _mark_same_names(kind_rows)
+    rows = {}
+    for k, pairs in built.items():
+        _mark_same_names([r for r, _ in pairs])
+        rows[k] = [r for r, holders in pairs if _in_view(r, holders, visible)]
 
     def show_for(k: str) -> str:
         return show if k in CATALOG_KINDS else "mine"
 
     has_catalog = kind in CATALOG_KINDS
     category = category if has_catalog else ""
-    matched = _chosen(rows[kind], visible, show_for(kind), q)
+    matched = _chosen(rows[kind], show_for(kind), q)
     shown = _narrowed(matched, category, attention)
     more = 0
     if q.strip() and has_catalog and show != "all":
-        everything = _narrowed(_chosen(rows[kind], visible, "all", q), category, attention)
+        everything = _narrowed(_chosen(rows[kind], "all", q), category, attention)
         more = len(everything) - len(shown)
     return {
         "columns": [
             {"id": c, "name": NAMES[c], "mark": MARKS[c], "hidden": c in hidden} for c in found
         ],
-        "counts": {k: len(_chosen(rows[k], visible, show_for(k), q)) for k in KINDS},
+        "counts": {k: len(_chosen(rows[k], show_for(k), q)) for k in KINDS},
         "rows": _ordered(shown, q),
         "more": more,
         "attention": len(_narrowed(matched, category, True)),

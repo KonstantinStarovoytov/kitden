@@ -216,13 +216,21 @@ def test_skill_that_needs_its_plugin_offers_add_the_plugin(home):
         add=_add("skill.install", "+ Add", skill=f"tidy@{PLUGIN}")
     )
 
-    # A skill a client has says how it has it; Details can find its definitions by name.
-    brandkit = _row(_library(home, "skill"), "brandkit")
+
+def test_skill_cells_keep_the_state_the_scan_found(home):
+    answer = _library(home, "skill", show="all")
+    # Codex has pixel-art turned off in config.toml.
+    codex = _row(answer, "pixel-art")["cells"]["codex"]
+    assert (codex["state"], codex["where"]) == ("off", "global settings") and codex["items"]
+    # Details can find a skill's definitions by name.
+    brandkit = _row(answer, "brandkit")
     assert (brandkit["mine"], brandkit["lookup"]) == (True, "brandkit")
-    assert brandkit["cells"]["claude_code"]["state"] == "on"
-    assert brandkit["cells"]["claude_code"]["where"] == "installed"
+    assert brandkit["cells"]["claude_code"]["where"] == "global settings"
     assert brandkit["cells"]["cursor"]["where"] == "via Claude Code"
     assert brandkit["cells"]["codex"]["add"]["action"] == "skill.install"
+    # Where the scan shows nothing, the skill list says how the client gets it.
+    superpowers = _row(answer, "brainstorming", f"superpowers@{OFFICIAL}")
+    assert superpowers["cells"]["cursor"] == {**_cell("on"), "where": "via plugin"}
 
 
 def test_show_mine_new_and_all(home):
@@ -273,29 +281,39 @@ def test_search_reports_matches_the_show_choice_hides(home):
     assert (_names(found), found["more"]) == ([("toolbox", OFFICIAL)], 0)
     assert _library(home, show="all", q="toolbox")["more"] == 0
     assert _library(home)["more"] == 0
-    # The plugin's name finds its skills too.
+    # The plugin's name finds its skills too. Claude Code has a skill named brainstorming (from
+    # superpowers), so that one counts as on this computer.
     skills = _library(home, "skill", q="toolbox")
-    assert (skills["rows"], skills["more"]) == ([], 4)
+    assert (_names(skills), skills["more"]) == ([("brainstorming", PLUGIN)], 3)
     # On tabs without a catalog the search looks at names, and nothing is hidden by a choice.
     servers = _library(home, "mcp_server", q="neon")
     assert {r["name"] for r in servers["rows"]} == {"neon", "Neon"} and servers["more"] == 0
 
 
 def test_hidden_column_drops_rows_only_it_has(home):
+    glean = ("glean", "cursor-public")
     shown = _library(home)
-    hidden = _library(home, hidden=frozenset({"cursor"}))
+    assert glean in _names(shown)
+    for client in ("claude_code", "codex"):
+        assert _row(shown, "glean")["cells"][client]["add"]["label"] == "Add skills"
+
+    cursor = frozenset({"cursor"})
+    hidden = _library(home, hidden=cursor)
     assert [c["hidden"] for c in hidden["columns"]] == [False, False, True]
-    assert set(_names(shown)) - set(_names(hidden)) == {
-        ("glean", "cursor-public"),
-        ("plugin 4800 (name not stored locally)", None),
-        ("superpowers", "cursor-public"),
-    }
-    assert hidden["counts"]["plugin"] == shown["counts"]["plugin"] - 3
-    # The clients shown can still take glean's skills, so it is something to add now.
-    can_add = _library(home, show="new", hidden=frozenset({"cursor"}))
-    assert _names(can_add) == [("glean", "cursor-public"), ("toolbox", OFFICIAL)]
-    every = _library(home, show="all", hidden=frozenset({"cursor"}))
-    assert ("superpowers", "cursor-public") not in _names(every)
+    # Only Cursor has these three, so they leave every choice and the counts, even though
+    # glean's skills could still go to the clients shown.
+    only_cursor = {glean, ("plugin 4800 (name not stored locally)", None)}
+    only_cursor.add(("superpowers", "cursor-public"))
+    assert set(_names(shown)) - set(_names(hidden)) == only_cursor
+    assert hidden["counts"]["plugin"] == shown["counts"]["plugin"] - len(only_cursor)
+    for show in ("mine", "new", "all"):
+        answer = _library(home, show=show, hidden=cursor)
+        assert not only_cursor & set(_names(answer)), show
+    every = _library(home, show="all")
+    assert _library(home, show="all", hidden=cursor)["counts"]["plugin"] == (
+        every["counts"]["plugin"] - len(only_cursor)
+    )
+    assert _library(home, show="new", hidden=cursor)["counts"]["plugin"] == 1
 
 
 def test_one_marketplace_note_per_client_and_marketplace(home):
@@ -358,8 +376,6 @@ def test_api_library_and_offer(home):
         # Only Claude Code is shown: rows it has, or can add to it.
         assert {r["name"] for r in answer["rows"]} == {
             "Claude account plugins and connectors",
-            "documents",
-            "glean",
             "superpowers",
             "toolbox",
         }
