@@ -1,4 +1,4 @@
-"""Copying a skill folder as a change: preview, apply, verify, undo (Discover, phase 2)."""
+"""Copying a skill folder as a change: preview, apply, verify, undo."""
 
 import os
 import stat

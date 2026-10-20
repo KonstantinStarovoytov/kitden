@@ -43,7 +43,7 @@ EDITORS = {"json": json_splice, "toml": toml_edit}
 CLIENT_CLI = "client_cli"
 FILE_EDIT = "format_preserving_edit"
 GATEWAY_API = "gateway_api"  # a step that adds a server to a gateway (feature 006)
-# A step that copies a skill folder (Discover, phase 2) has mechanism model.COPY_FOLDER.
+# A step that copies a skill folder has mechanism model.COPY_FOLDER.
 
 Runner = Callable[[list[str], str | None], CommandResult]
 # Opens a signed-in client for the gateway a step names; used as a context manager.

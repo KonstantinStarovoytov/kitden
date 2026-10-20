@@ -225,7 +225,7 @@ COPY_FOLDER = "copy_folder"  # the mechanism of a step that copies a skill folde
 
 @dataclass
 class FolderCopy:
-    """A skill folder copied into a client's skills folder (Discover, phase 2).
+    """A skill folder copied into a client's skills folder.
 
     The target must not exist before. Undo removes the copy only while its content hash is
     the one written at Apply; a changed copy stays.

@@ -14,7 +14,7 @@ CURSOR_IMPORT = {
     "note": "Cursor loads Claude Code plugins, so it gets this one too.",
 }
 
-# Socket state and word per action, as on the Load map.
+# Socket state and word per action, as the Library shows them.
 WORDS = {
     "plugin.enable": ("on", "Loads"),
     "plugin.disable": ("off", "Off"),

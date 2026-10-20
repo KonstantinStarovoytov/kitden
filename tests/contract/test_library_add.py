@@ -1,4 +1,4 @@
-"""Discover with the real clients in a sandbox home: add a marketplace, install a plugin in
+"""The Library with the real clients in a sandbox home: add a marketplace, install a plugin in
 Claude Code and Codex in one review, then Undo both. Run with: pytest -m contract
 
 The marketplace is this repository's folder, so nothing is downloaded. The real home folder is
@@ -48,6 +48,16 @@ def _run(client, body):
     return change["id"]
 
 
+def _cells(client, plugin):
+    """The plugin's Library cells: what each client has, or the add it offers."""
+    rows = client.get("/api/library?kind=plugin&show=all").json()["rows"]
+    row = next(r for r in rows if r["offer"] == plugin)
+    return {
+        c: cell["add"]["action"] if cell["add"] else cell["state"]
+        for c, cell in row["cells"].items()
+    }
+
+
 def _settings(home):
     data = json.loads((home / ".claude/settings.json").read_text())
     return {k: v for k, v in data.items() if v != {}}  # the CLI leaves empty tables behind
@@ -62,22 +72,15 @@ def test_add_a_marketplace_and_a_plugin_to_both_clients_then_undo(client):
     added = _run(
         client, {"action": "marketplace.add", "targets": both, "params": {"source": str(ROOT)}}
     )
-    offer = next(
-        o
-        for o in client.get("/api/catalog?q=kitden").json()["offers"]
-        if o["id"] == "kitden@kitden"
-    )
-    assert offer["routes"] == {"claude_code": "ready", "codex": "ready"}
+    assert _cells(client, "kitden@kitden") == {
+        "claude_code": "plugin.install",
+        "codex": "plugin.install",
+    }
 
     installed = _run(
         client, {"action": "plugin.install", "targets": both, "params": {"plugin": "kitden@kitden"}}
     )
-    offer = next(
-        o
-        for o in client.get("/api/catalog?q=kitden").json()["offers"]
-        if o["id"] == "kitden@kitden"
-    )
-    assert sorted(offer["installed"]) == ["claude_code", "codex"]
+    assert _cells(client, "kitden@kitden") == {"claude_code": "on", "codex": "on"}
     assert tomllib.loads((home / ".codex/config.toml").read_text())["plugins"]["kitden@kitden"] == {
         "enabled": True
     }

@@ -48,7 +48,7 @@ from kitden.marketplace_link import LinkError, read_marketplace
 from kitden.model import Change, ChangeState, Gateway, GatewayAuth, GatewayEdit, ItemKind
 from kitden.redact import redact_text
 from kitden.views.after import after_words
-from kitden.views.catalog import catalog, search
+from kitden.views.catalog import catalog
 from kitden.views.commands import commands_for
 from kitden.views.effective import project_views
 from kitden.views.explain import explain
@@ -775,61 +775,6 @@ def create_app(
     async def changes(request: Request) -> JSONResponse:
         return JSONResponse(engine.store.entries() if engine else [])
 
-    async def catalog_view(request: Request) -> JSONResponse:
-        """Plugins in the marketplaces on this computer, matching the search (Discover), or
-        with `kind=skill` the skills in those plugins and in the clients' skill folders.
-
-        Filters: `only` (new: no client has it; added: one has it), `category`, `marketplace`.
-        `facets` count the categories and marketplaces among the search results, so a filter
-        menu can say how many each one holds. `inherits` says whether Cursor loads Claude
-        Code's plugins and the skills in its folder.
-        """
-        params = request.query_params
-        if params.get("kind") == "skill":
-            offers = skill_catalog(state.inventory, adapters)
-        else:
-            offers = catalog(state.inventory, adapters)
-        marketplaces: dict[str, int] = {}
-        for offer in offers:
-            if offer["marketplace"]:
-                marketplaces[offer["marketplace"]] = marketplaces.get(offer["marketplace"], 0) + 1
-        found = search(offers, params.get("q", ""))
-        only = params.get("only", "all")
-        if only == "new":
-            found = [o for o in found if not o["installed"]]
-        elif only == "added":
-            found = [o for o in found if o["installed"]]
-
-        def counts(key: str, rows: list[dict]) -> list[dict]:
-            seen: dict[str, int] = {}
-            for row in rows:
-                if row.get(key):
-                    seen[row[key]] = seen.get(row[key], 0) + 1
-            return [
-                {"name": n, "count": c}
-                for n, c in sorted(seen.items(), key=lambda p: (-p[1], p[0]))
-            ]
-
-        category = params.get("category")
-        marketplace = params.get("marketplace")
-        in_marketplace = [o for o in found if not marketplace or o["marketplace"] == marketplace]
-        in_category = [o for o in found if not category or o["category"] == category]
-        facets = {
-            "categories": counts("category", in_marketplace),
-            "marketplaces": counts("marketplace", in_category),
-        }
-        found = [o for o in in_category if not marketplace or o["marketplace"] == marketplace]
-        return JSONResponse(
-            {
-                "offers": found[:1000],
-                "total": len(found),
-                "all": len(offers),
-                "marketplaces": [{"name": n, "count": c} for n, c in sorted(marketplaces.items())],
-                "facets": facets,
-                "inherits": _inherits(),
-            }
-        )
-
     def _inherits() -> dict:
         """Whether Cursor loads Claude Code's plugins and the skills in its folder."""
         cursor = _found_cursor()
@@ -840,7 +785,7 @@ def create_app(
 
     async def offer_view(request: Request) -> JSONResponse:
         """One plugin or skill from the catalogs, for Details of a row not on this computer, with
-        `inherits` as /api/catalog has it, so Details and the Add form can name Cursor."""
+        `inherits`, so Details and the Add form can name Cursor."""
         params = request.query_params
         read = skill_catalog if params.get("kind") == "skill" else catalog
         offers = await asyncio.to_thread(read, state.inventory, adapters)
@@ -900,7 +845,6 @@ def create_app(
             Route("/api/changes/{change_id}", change_view),
             Route("/api/changes/{change_id}/{verb}", change_action, methods=["POST"]),
             Route("/api/commands", commands),
-            Route("/api/catalog", catalog_view),
             Route("/api/map", _read_model(_map)),
             Route("/api/library", _read_model(_library)),
             Route("/api/offer", offer_view),

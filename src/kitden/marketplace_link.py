@@ -1,4 +1,4 @@
-"""Read a marketplace from a link before adding it, so the review can name it (Discover).
+"""Read a marketplace from a link before adding it, so the review can name it.
 
 Two kinds of links: a folder on this computer, or a GitHub repository ("owner/repo" or its
 github.com address). For a repository Kitden reads the marketplace file once from

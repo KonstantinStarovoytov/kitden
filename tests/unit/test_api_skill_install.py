@@ -1,4 +1,4 @@
-"""Adding a skill from Discover: the fewest copies, one review, verify, Undo (phase 2)."""
+"""Adding a skill from the Library: the fewest copies, one review, verify, Undo."""
 
 import pytest
 from starlette.testclient import TestClient
@@ -67,20 +67,6 @@ def _preview(client, skill, clients):
 
 def _targets(change):
     return [(s["client"], s["path"].split("/home/")[1], s["reaches"]) for s in change["steps"]]
-
-
-def test_the_catalog_serves_skills_with_their_own_counts(client):
-    answer = client.get("/api/catalog?kind=skill").json()
-    names = {o["name"] for o in answer["offers"]}
-    assert {"tidy", "rooted", "reaching", "brandkit", "docker-expert"} <= names
-    assert answer["all"] == answer["total"] == len(answer["offers"])
-    # Marketplaces count the plugin skills only; a client's own skills have none.
-    assert answer["marketplaces"] == [{"name": "claude-plugins-official", "count": 5}]
-    assert answer["facets"]["categories"] == []
-    found = client.get("/api/catalog?kind=skill&q=tidy").json()["offers"]
-    assert [o["id"] for o in found] == [TIDY]
-    added = client.get("/api/catalog?kind=skill&only=added").json()["offers"]
-    assert all(o["installed"] for o in added) and any(o["name"] == "brandkit" for o in added)
 
 
 def test_one_client_gets_one_copy_in_its_own_folder(client):
@@ -166,7 +152,7 @@ def test_apply_copies_then_undo_removes_and_a_changed_copy_stays(client):
     assert applied["state"] == "verified", applied.get("error")
     for folder in (home / ".claude/skills/tidy", home / ".agents/skills/tidy"):
         assert digest(folder) == digest(source)
-    tidy = next(o for o in client.get("/api/catalog?kind=skill&q=tidy").json()["offers"])
+    tidy = client.get(f"/api/offer?kind=skill&id={TIDY}").json()
     assert tidy["installed"] == {
         "claude_code": "Installed",
         "codex": "Installed",

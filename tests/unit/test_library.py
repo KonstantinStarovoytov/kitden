@@ -10,6 +10,8 @@ from starlette.testclient import TestClient
 
 import kitden.clients.base as base
 from kitden.clients.cursor import REACTIVE_KEY
+from kitden.model import Gateway
+from kitden.views.findings import mark_gateways
 from kitden.views.inventory import build_inventory, default_adapters
 from kitden.views.library import library
 from kitden.web.app import create_app
@@ -367,7 +369,7 @@ def test_search_reports_matches_the_show_choice_hides(home):
 
 
 def test_tabs_without_a_catalog_find_any_part_of_a_name(home):
-    # As the Load map did: "hub" finds github. Plugins and skills keep the Discover scoring.
+    # "hub" finds github. Plugins and skills rank by catalog.search.
     servers = _library(home, "mcp_server", q="hub")
     assert _names(servers) == [("github", None)]
     assert servers["counts"]["mcp_server"] == 1
@@ -488,6 +490,41 @@ def test_same_name_from_two_marketplaces_is_marked(home):
         "Codex already has documents from openai-curated. It will load both."
     )
     assert other["cells"]["claude_code"]["add"]["warn"] is None
+
+
+def _server_reasons(home: Path, gateway: bool) -> dict:
+    """Per MCP server row, the reason of each dash."""
+    inventory = build_inventory(home)
+    if gateway:
+        mark_gateways(inventory, [Gateway(url="https://mcp.neon.tech/mcp")])
+    adapters = {a.id: a for a in default_adapters(home)}
+    answer = library(inventory, adapters, None, gateway_registered=gateway, kind="mcp_server")
+    return {
+        r["name"]: {c: cell["reason"] for c, cell in r["cells"].items() if cell["state"] == "none"}
+        for r in answer["rows"]
+    }
+
+
+def test_a_server_dash_says_how_the_gateway_would_share_it(home):
+    # Codex and Cursor reach the gateway through their neon entries; Claude Code does not.
+    reasons = _server_reasons(home, gateway=True)
+    connect = "Connect Claude Code to the gateway on the Gateway page."
+    share = "Move it into the gateway to share it."
+    assert reasons["neon"] == {"claude_code": connect, "cursor": None}
+    assert reasons["github"] == {"codex": share, "cursor": share}
+    assert reasons["langfuse-data"] == {"claude_code": None, "cursor": share}
+    # A server that runs on this computer does not move.
+    assert reasons["n8n-mcp"] == {"claude_code": None, "codex": None}
+    without = _server_reasons(home, gateway=False)
+    assert all(r is None for row in without.values() for r in row.values())
+
+
+def test_a_marketplace_dash_says_when_an_add_brings_it(home):
+    answer = _library(home, "marketplace")
+    official = _row(answer, OFFICIAL)["cells"]
+    assert official["codex"]["reason"] == "Codex gets it the first time you add one of its plugins."
+    assert official["cursor"]["reason"] is None
+    assert _row(answer, "openai-bundled")["cells"]["claude_code"]["reason"] is None
 
 
 def test_api_library_and_offer(home):

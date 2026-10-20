@@ -274,15 +274,15 @@ class ClientAdapter(ABC):
         return {}
 
     def marketplace_add_step(self, name: str, source: str) -> Step:
-        """Add a marketplace with the client's own command (Discover)."""
+        """Add a marketplace with the client's own command."""
         raise ValueError(f"{self.id} cannot add a marketplace from here")
 
     def plugin_install_step(self, plugin_id: str) -> Step:
-        """Install a plugin for the user with the client's own command (Discover)."""
+        """Install a plugin for the user with the client's own command."""
         raise ValueError(f"{self.id} cannot install a plugin from here")
 
     def skill_copy_step(self, folder: Path, readers: list[str]) -> Step:
-        """Copy a skill folder into this client's skills folder (Discover, phase 2).
+        """Copy a skill folder into this client's skills folder.
 
         `readers` are the clients that read that folder; the review names them.
         """

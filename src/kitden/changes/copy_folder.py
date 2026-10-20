@@ -1,4 +1,4 @@
-"""Copy a skill folder into a client's skills folder, and take the copy back (Discover, phase 2).
+"""Copy a skill folder into a client's skills folder, and take the copy back.
 
 Only regular files are copied. A link or a special file stops the change before anything is
 written, so nothing outside the source folder is ever read, and nothing outside the target

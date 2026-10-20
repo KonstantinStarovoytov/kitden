@@ -1,4 +1,4 @@
-"""The catalog: plugins from the marketplaces already on this computer (Discover, phase 1)."""
+"""The catalog: plugins from the marketplaces already on this computer."""
 
 import json
 from pathlib import Path
