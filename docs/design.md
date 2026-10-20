@@ -104,6 +104,7 @@ Defined once in `style.css`; JavaScript reads `--spring` from there.
 | Stagger | 45 ms between blocks | First visit |
 | Busy | spinner after 150 ms, in the button's own place | A button whose work takes a moment |
 | Scan line | shows after 400 ms, 1.6 s calm sweep | A rescan that takes a while |
+| Start line | shows after 1 s; fills from the left as each step of the first scan ends, with "Reading Codex and Cursor…" or "Still checking …" beside the search | Starting Kitden |
 | `--spring` | critically damped `linear()` spring, no overshoot; falls back to `--ease-out` | Everything the hand moves |
 
 ### Patterns

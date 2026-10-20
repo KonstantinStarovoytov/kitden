@@ -77,20 +77,27 @@ class CodexAdapter(ClientAdapter):
         read_version=None,
         codex_home: Path | None = None,
         list_plugins: Callable[[], dict] | None = None,
+        quick: bool = False,
     ) -> None:
         super().__init__(home, read_version)
+        # A quick scan does not wait for `codex plugin list` (15 s on a real Mac, 2026-10-20):
+        # remote plugins show "Unknown" until the full scan that follows fills them in.
+        self.quick = quick
         env_home = os.environ.get("CODEX_HOME")
         self.codex_home = codex_home or (Path(env_home) if env_home else home / ".codex")
         self._list_plugins = list_plugins or self._run_plugin_list
+
+    def _list_key(self) -> tuple:
+        config = self.codex_home / "config.toml"
+        stat = config.stat() if config.exists() else None
+        return (str(self.codex_home), stat.st_mtime_ns if stat else 0, stat.st_size if stat else 0)
 
     def _run_plugin_list(self) -> dict:
         """`codex plugin list --json`, the only local view of remote plugins' on/off."""
         command = version_command(CLIENT)
         if command is None:
             return {}
-        config = self.codex_home / "config.toml"
-        stat = config.stat() if config.exists() else None
-        key = (str(self.codex_home), stat.st_mtime_ns if stat else 0, stat.st_size if stat else 0)
+        key = self._list_key()
         if key not in _LIST_CACHE:
             env = {**os.environ, "HOME": str(self.home), "CODEX_HOME": str(self.codex_home)}
             done = subprocess.run(  # noqa: S603 - fixed client command, no shell
@@ -106,6 +113,9 @@ class CodexAdapter(ClientAdapter):
 
     def _plugin_states(self) -> dict[str, bool]:
         if self._read_version() is None:
+            return {}
+        own_list = self._list_plugins == self._run_plugin_list
+        if self.quick and own_list and self._list_key() not in _LIST_CACHE:
             return {}
         try:
             listing = self._list_plugins()

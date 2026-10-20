@@ -127,6 +127,11 @@ a { color: var(--route); }
    before the delay, so it never blinks. A slow, calm sweep while a long scan really runs. */
 .topbar::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: linear-gradient(90deg, transparent, var(--route), transparent); transform: translateX(-100%); opacity: 0; transition: opacity 200ms ease; }
 .topbar.scanning::after { opacity: 1; transition-delay: 400ms; animation: sweep 1600ms var(--ease-in-out) 400ms infinite; }
+/* The first scan: the line fills from the left as each step ends, beside a word of what is left.
+   Shown only after a second (the page adds .progress then), so a quick start never blinks. */
+.topbar.progress::after { opacity: 1; transform: scaleX(var(--scan-done, 0)); transform-origin: left; background: var(--route); animation: none; transition: transform 400ms var(--ease-out), opacity 200ms ease; }
+.scan-status { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-3); font-size: 12px; opacity: 0; transition: opacity 200ms ease; }
+.topbar.progress .scan-status { opacity: 1; }
 @keyframes sweep { to { transform: translateX(100%); } }
 .page { padding: 20px 24px 48px; max-width: 1180px; outline: none; transition: opacity var(--t-fast) ease; }
 .page.pending { opacity: 0.5; pointer-events: none; }
@@ -506,6 +511,7 @@ html.theme-switch::view-transition-old(root), html.theme-switch::view-transition
 @media (prefers-reduced-motion: reduce) {
   /* No sweep: a still line says a long scan runs. */
   .topbar.scanning::after { transform: none; opacity: 0.6; }
+  .topbar.progress::after { transition: none; }
   *, *::before, *::after { animation: none !important; transition-property: opacity, color, background-color !important; }
   ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }

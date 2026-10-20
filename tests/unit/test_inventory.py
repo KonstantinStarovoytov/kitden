@@ -1,6 +1,8 @@
+import time
 from pathlib import Path
 
 from kitden.clients.base import ClientAdapter, Scan
+from kitden.clients.codex import CodexAdapter
 from kitden.model import (
     ClientStatus,
     Item,
@@ -10,7 +12,7 @@ from kitden.model import (
     Source,
     SourceKind,
 )
-from kitden.views.inventory import build_inventory
+from kitden.views.inventory import build_inventory, default_adapters
 
 
 def _item(client, name):
@@ -73,3 +75,29 @@ def test_clients_carry_the_link_of_their_installed_app():
         "codex": "codex://",
     }
     assert all(c.app_url is None for c in build_inventory(adapters=[a, b]).clients)
+
+
+class SlowAdapter(FakeAdapter):
+    def scan(self):
+        time.sleep(0.3)
+        return super().scan()
+
+
+def test_clients_are_read_side_by_side_and_each_says_when_it_is_done():
+    adapters = [
+        SlowAdapter(c, Scan(items=[_item(c, "x")])) for c in ("claude_code", "codex", "cursor")
+    ]
+    done = []
+    started = time.monotonic()
+    inventory = build_inventory(adapters=adapters, on_step=done.append)
+    assert time.monotonic() - started < 0.6  # not 0.9: the three reads overlap
+    assert sorted(done) == ["claude_code", "codex", "cursor"]
+    assert [c.id for c in inventory.clients] == ["claude_code", "codex", "cursor"]
+    assert [i.client for i in inventory.items] == ["claude_code", "codex", "cursor"]
+
+
+def test_a_quick_build_asks_codex_for_a_quick_scan(tmp_path):
+    codex = next(a for a in default_adapters(tmp_path, quick=True) if a.id == "codex")
+    assert isinstance(codex, CodexAdapter) and codex.quick is True
+    codex = next(a for a in default_adapters(tmp_path) if a.id == "codex")
+    assert codex.quick is False

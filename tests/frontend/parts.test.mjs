@@ -139,3 +139,15 @@ test('an Add skills entry on the Changes page counts the skills, not every name'
   assert.equal(changeTitle({ action: 'plugin.skills', steps: [step('a'), step('b'), step('c')] }), 'Added 3 skills · Codex, Cursor');
   assert.equal(changeTitle({ action: 'plugin.skills', steps: [step('a')] }), 'Added 1 skill · Codex, Cursor');
 });
+
+// The first scan: one quiet line that says what is still read, and how much is done.
+const { scanLine } = await import('../../src/kitden/web/static/js/parts.js');
+
+test('the scan line names what is still read, and how far it got', () => {
+  const steps = (done) => ['Claude Code', 'Codex', 'Cursor', 'Codex plugins', 'marketplaces'].map((name, i) => ({ name, done: done.includes(i), later: i >= 3 }));
+  assert.equal(scanLine(null), null);
+  assert.equal(scanLine({ ready: true, steps: [] }), null);
+  assert.equal(scanLine({ ready: true, steps: steps([0, 1, 2, 3, 4]) }), null);
+  assert.deepEqual(scanLine({ ready: false, steps: steps([0]) }), { text: 'Reading Codex and Cursor…', share: 0.2 });
+  assert.deepEqual(scanLine({ ready: true, steps: steps([0, 1, 2]) }), { text: 'Still checking Codex plugins and marketplaces…', share: 0.6 });
+});

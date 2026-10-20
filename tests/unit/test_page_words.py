@@ -634,3 +634,16 @@ def test_details_show_what_the_item_is_and_every_way_to_add_it():
     first = 'const body = el("div", "body");\n  if (why) body.append(el("p", "muted", why));'
     assert first in panel
     assert 'if (why) body.prepend(el("p", "muted", why));' in offer
+
+
+def test_the_start_says_what_it_still_reads_and_fills_a_line_as_steps_end():
+    app, css = script("app.js"), (STATIC / "style.css").read_text()
+    assert (
+        '<span class="scan-status" id="scan-status" role="status" aria-live="polite"></span>'
+        in INDEX
+    )
+    assert 'events.addEventListener("scan_progress"' in app
+    assert 'getJson("/api/progress").then(showScan)' in app
+    assert "const SCAN_LINE_DELAY_MS = 1000;" in app
+    assert "transform: scaleX(var(--scan-done, 0)); transform-origin: left;" in css
+    assert ".topbar.progress::after { transition: none; }" in css

@@ -235,6 +235,67 @@ def test_a_failing_first_scan_still_lets_the_page_answer():
         assert client.get("/api/clients").json() == []
 
 
+def test_the_first_scan_is_quick_and_the_full_scan_follows(tmp_path):
+    from starlette.testclient import TestClient
+
+    from kitden.views.inventory import Inventory
+    from kitden.web.app import create_app
+
+    calls = []
+
+    def build(quick=False, on_step=None):
+        calls.append(quick)
+        time.sleep(0.4 if quick else 0.2)
+        if on_step:
+            on_step("codex")
+        return Inventory()
+
+    app = create_app(build, token="tok", port=47800, first_scan_later=True, quick_first=True)
+    with TestClient(app, base_url="http://127.0.0.1:47800", follow_redirects=False) as client:
+        client.get("/?token=tok")
+        # The progress answers at once, before the first scan is done.
+        started = time.monotonic()
+        early = client.get("/api/progress").json()
+        assert time.monotonic() - started < 0.3
+        assert early["ready"] is False
+        assert [s["name"] for s in early["steps"]] == [
+            "Claude Code",
+            "Codex",
+            "Cursor",
+            "Codex plugins",
+        ]
+        assert client.get("/api/clients").status_code == 200  # after the quick scan
+        assert calls[0] is True
+        for _ in range(40):
+            view = client.get("/api/progress").json()
+            if view["ready"] and all(s["done"] for s in view["steps"]):
+                break
+            time.sleep(0.05)
+        else:
+            raise AssertionError(f"the scan never finished: {view}")
+    assert calls == [True, False]
+
+
+def test_the_marketplaces_are_read_once_the_page_has_its_data(tmp_path):
+    from starlette.testclient import TestClient
+
+    from kitden.views.inventory import Inventory
+    from kitden.web.app import create_app
+
+    app = create_app(
+        lambda quick=False, on_step=None: Inventory(),
+        token="tok",
+        port=47800,
+        home=tmp_path,
+        first_scan_later=True,
+        quick_first=True,
+    )
+    with TestClient(app, base_url="http://127.0.0.1:47800", follow_redirects=False) as client:
+        client.get("/?token=tok")
+        names = [s["name"] for s in client.get("/api/progress").json()["steps"]]
+        assert names[-1] == "marketplaces"
+
+
 def test_the_page_does_not_load_the_mcp_sdk():
     # The MCP SDK takes about half a second to import; only `kitden mcp` needs it.
     import subprocess

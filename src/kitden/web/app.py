@@ -167,32 +167,121 @@ def _error(text: str, status: int) -> JSONResponse:
     return JSONResponse({"detail": text}, status_code=status)
 
 
+# What the first scan reads, step by step, so the page can say what it still waits for.
+CLIENT_STEPS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
+FULL_STEP = "Codex plugins"
+WARM_STEP = "marketplaces"
+
+
+class Progress:
+    """The first scan's steps and which are done; each change goes to the open pages."""
+
+    def __init__(self, events: Broadcaster) -> None:
+        self.events = events
+        self.steps: list[dict] = []
+        self.ready = False
+
+    def start(self, first: list[str], later: list[str]) -> None:
+        """`first` end when the page has its data; `later` run after it, in the background."""
+        self.steps = [{"name": n, "done": False, "later": False} for n in first]
+        self.steps += [{"name": n, "done": False, "later": True} for n in later]
+        self._publish()
+
+    def done(self, *names: str) -> None:
+        for step in self.steps:
+            if step["name"] in names:
+                step["done"] = True
+        self._publish()
+
+    def mark_ready(self, *names: str) -> None:
+        """The page has its data; `names` are steps that ended with it."""
+        self.ready = True
+        self.done(*names)
+
+    def view(self) -> dict:
+        return {"ready": self.ready, "steps": [dict(step) for step in self.steps]}
+
+    def _publish(self) -> None:
+        self.events.publish("scan_progress", self.view())
+
+
 class State:
     """The current inventory, rebuilt on demand.
 
     With `scan_now=False` the page starts empty and the first scan runs once the server is up,
-    so `kitden open` does not wait for it; API calls wait for `ready` instead.
+    so `kitden open` does not wait for it; API calls wait for `ready` instead. With
+    `quick_first` that first scan skips slow questions so the page has its data in a second or
+    two; the full scan follows in the background, and so does `warm` (it reads the
+    marketplaces, so the Library opens at once).
     """
 
     def __init__(
-        self, build: Callable[[], Inventory], events: Broadcaster, scan_now: bool = True
+        self,
+        build: Callable[..., Inventory],
+        events: Broadcaster,
+        scan_now: bool = True,
+        quick_first: bool = False,
+        warm: Callable[[Inventory], None] | None = None,
     ) -> None:
         self.build = build
         self.events = events
+        self.quick_first = quick_first
+        self.warm = warm
+        self.progress = Progress(events)
         self.ready = asyncio.Event()
         self.inventory = build() if scan_now else Inventory()
         self.data = inventory_dict(self.inventory)
         self.lock = asyncio.Lock()
         if scan_now:
             self.ready.set()
+            self.progress.ready = True
 
     async def first_scan(self) -> None:
         try:
-            await self.rescan()
+            if self.quick_first:
+                await self._quick_then_full()
+            else:
+                await self.rescan()
         except Exception as error:  # noqa: BLE001 - the page must answer even if the scan fails
             print(f"The first scan failed: {error}", file=sys.stderr, flush=True)
         finally:
             self.ready.set()
+            if not self.progress.ready:
+                self.progress.mark_ready()
+
+    async def _quick_then_full(self) -> None:
+        later = [FULL_STEP] + ([WARM_STEP] if self.warm else [])
+        self.progress.start(list(CLIENT_STEPS.values()), later)
+        loop = asyncio.get_running_loop()
+
+        def step(client: str) -> None:
+            if client in CLIENT_STEPS:
+                loop.call_soon_threadsafe(self.progress.done, CLIENT_STEPS[client])
+
+        async with self.lock:
+            self.inventory = await asyncio.to_thread(self.build, quick=True, on_step=step)
+            self.data = inventory_dict(self.inventory)
+        self.ready.set()
+        self.progress.mark_ready(
+            *CLIENT_STEPS.values()
+        )  # a client not found has no step of its own
+        await asyncio.gather(self._full_scan(), self._warm())
+
+    async def _full_scan(self) -> None:
+        try:
+            await self.rescan()
+        finally:
+            self.progress.done(FULL_STEP)
+
+    async def _warm(self) -> None:
+        if self.warm is None:
+            return
+        try:
+            await asyncio.to_thread(self.warm, self.inventory)
+        except Exception as error:  # noqa: BLE001 - only a head start; the Library reads again
+            print(f"Reading the marketplaces failed: {error}", file=sys.stderr, flush=True)
+        finally:
+            self.progress.done(WARM_STEP)
 
     async def rescan(self) -> dict:
         async with self.lock:
@@ -212,7 +301,8 @@ class WaitForFirstScan:
 
     async def __call__(self, scope, receive, send) -> None:
         path = scope.get("path", "")
-        if scope["type"] == "http" and path.startswith("/api/") and path != "/api/events":
+        waits = path.startswith("/api/") and path not in ("/api/events", "/api/progress")
+        if scope["type"] == "http" and waits:
             await self.state.ready.wait()
         await self.app(scope, receive, send)
 
@@ -233,20 +323,33 @@ def create_app(
     run: Runner | None = None,
     setup_command: Callable[[], str | None] | None = None,
     first_scan_later: bool = False,
+    quick_first: bool = False,
 ) -> Starlette:
     """The page. Changes are available only when `home` is given (the folder being shown)."""
     events = Broadcaster()
     watcher_ref: list[Watcher] = []
 
-    def build_marked() -> Inventory:
-        inventory = build()
+    def build_marked(**options) -> Inventory:
+        inventory = build(**options)
         if home is not None:
             mark_gateways(inventory, load_gateways(home))
         return inventory
 
-    state = State(build_marked, events, scan_now=not first_scan_later)
+    adapters = {a.id: a for a in default_adapters(home)} if home is not None else {}
+
+    def warm(inventory: Inventory) -> None:
+        """Read the marketplaces' plugins and skills once, so the first Library read is quick."""
+        catalog(inventory, adapters)
+        skill_catalog(inventory, adapters)
+
+    state = State(
+        build_marked,
+        events,
+        scan_now=not first_scan_later,
+        quick_first=quick_first,
+        warm=warm if home is not None else None,
+    )
     engine = None
-    adapters = {}
     if home is not None:
 
         def on_write(path: str, sha: str | None) -> None:
@@ -262,7 +365,6 @@ def create_app(
         engine = Engine(
             ChangeStore(data_dir(home)), run or CommandRunner(home), on_write, gateway_client
         )
-        adapters = {a.id: a for a in default_adapters(home)}
     write_lock = asyncio.Lock()
 
     async def on_files_changed() -> None:
@@ -287,6 +389,10 @@ def create_app(
 
     async def index(request: Request) -> FileResponse:
         return FileResponse(STATIC / "index.html")
+
+    async def progress(request: Request) -> JSONResponse:
+        """What the first scan still reads; answers before that scan is done."""
+        return JSONResponse(state.progress.view())
 
     async def clients(request: Request) -> JSONResponse:
         return JSONResponse(state.data["clients"])
@@ -775,6 +881,7 @@ def create_app(
             Route("/api/overview", _read_model(_overview)),
             Route("/api/gateway-view", _read_model(_gateway_view)),
             Route("/api/events", stream),
+            Route("/api/progress", progress),
             Mount("/static", StaticFiles(directory=STATIC), name="static"),
         ],
         middleware=[

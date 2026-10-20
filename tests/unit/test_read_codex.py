@@ -99,3 +99,14 @@ def test_a_plugin_turned_off_turns_its_servers_off(tmp_path, no_version):
     _install_kitden_plugin(home, enabled="false")
     scan = CodexAdapter(home, read_version=no_version).scan()
     assert ("codex", "mcp_server", "kitden", "plugin", "off", None) in rows(scan.items, home)
+
+
+# A quick first scan: `codex plugin list` took 15 s on a real Mac, so the page does not wait.
+def test_a_quick_scan_does_not_wait_for_the_codex_plugin_list(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(CodexAdapter, "_run_plugin_list", lambda self: calls.append(1) or {})
+    home = make_home(tmp_path, FIXTURE)
+    CodexAdapter(home, read_version=lambda: "0.159.2", quick=True).scan()
+    assert calls == []
+    CodexAdapter(home, read_version=lambda: "0.159.2").scan()
+    assert calls == [1]

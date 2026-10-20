@@ -123,13 +123,14 @@ def _serve(args: argparse.Namespace) -> int:
             return EXIT_NO_PORT
         token = secrets.token_urlsafe(32)
         app = create_app(
-            lambda: build_inventory(home),
+            lambda **options: build_inventory(home, **options),
             token=token,
             port=port,
             watch_folders=[root / name for name in WATCHED],
             flat_folders=[root],
             home=root,
             first_scan_later=True,  # listen first; the page shows its skeleton while it scans
+            quick_first=True,  # data in a second or two; slow answers come in the background
         )
         url = f"http://{HOST}:{port}/?token={token}"
         if not args.background:  # a background page writes to page.log; keep the token out

@@ -1,5 +1,5 @@
 // Entry point: the shell (rail, top bar), routing, theme, rescan and live updates.
-import { postJson } from "./api.js";
+import { getJson, postJson } from "./api.js";
 import { $, $$, busyWhile, focusKey, reportError } from "./dom.js";
 import { glide, rollTo, transition } from "./motion.js";
 import { renderAgents } from "./agents.js";
@@ -8,7 +8,7 @@ import { renderGateway } from "./gateway.js";
 import { loadLibrary, morphOnNextRender, renderLibrary } from "./library.js";
 import { renderOverview } from "./overview.js";
 import { closePanel, initPanel, isPanelOpen } from "./panel.js";
-import { latestChanges } from "./parts.js";
+import { latestChanges, scanLine } from "./parts.js";
 import {
   busy, current, data, followAddress, freshness, go, loadShared, OLD_VIEWS, onIdle, parseHash, reload, setRenderer, setState, state, VIEWS,
 } from "./store.js";
@@ -146,8 +146,37 @@ function catchUp() {
   else missedAt = 0;
 }
 
+// The first scan says what it still reads, and a bar under the top bar fills as each step ends.
+// It shows only when the wait is long enough to notice, so a quick start never blinks.
+const SCAN_LINE_DELAY_MS = 1000;
+let scanLineTimer = null;
+
+function showScan(view) {
+  const line = scanLine(view);
+  const bar = $("#topbar");
+  const status = $("#scan-status");
+  if (!line) {
+    clearTimeout(scanLineTimer);
+    scanLineTimer = null;
+    bar.classList.remove("progress");
+    status.textContent = "";
+    return;
+  }
+  status.textContent = line.text;
+  bar.style.setProperty("--scan-done", String(line.share));
+  if (!bar.classList.contains("progress") && !scanLineTimer) {
+    scanLineTimer = setTimeout(() => {
+      scanLineTimer = null;
+      if ($("#scan-status").textContent) bar.classList.add("progress");
+    }, SCAN_LINE_DELAY_MS);
+  }
+}
+
 function listen() {
   const events = new EventSource("/api/events");
+  events.addEventListener("scan_progress", (event) => {
+    try { showScan(JSON.parse(event.data)); } catch { /* a broken message changes nothing */ }
+  });
   events.addEventListener("rescan_started", () => $("#topbar").classList.add("scanning"));
   // How many steps of a running change are done; the review's Apply button counts them.
   events.addEventListener("change_progress", (event) => {
@@ -228,6 +257,7 @@ function start() {
   initPanel();
 
   renderPlace();
+  getJson("/api/progress").then(showScan).catch(() => {});
   loadShared()
     .then(refresh)
     .catch(reportError);

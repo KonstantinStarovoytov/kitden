@@ -1,12 +1,13 @@
 """One inventory from all client adapters (FR-001 to FR-005)."""
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
 from kitden.apps import app_roots, app_url
-from kitden.clients.base import ClientAdapter
+from kitden.clients.base import ClientAdapter, Scan
 from kitden.clients.claude_code import ClaudeCodeAdapter
 from kitden.clients.codex import CodexAdapter
 from kitden.clients.cursor import CursorAdapter
@@ -30,31 +31,54 @@ class Inventory:
     problems: list[Source] = field(default_factory=list)
 
 
-def default_adapters(home: Path) -> list[ClientAdapter]:
-    return [ClaudeCodeAdapter(home), CodexAdapter(home), CursorAdapter(home)]
+def default_adapters(home: Path, quick: bool = False) -> list[ClientAdapter]:
+    """The three clients; `quick` skips what takes long to ask (see CodexAdapter)."""
+    return [ClaudeCodeAdapter(home), CodexAdapter(home, quick=quick), CursorAdapter(home)]
+
+
+def _read(adapter: ClientAdapter, apps: list[Path]) -> tuple[Client, Scan | None]:
+    """One client's detection and scan; no scan when it is not found or could not be read."""
+    client = replace(adapter.detect(), app_url=app_url(adapter.id, apps))
+    if client.status is ClientStatus.NOT_FOUND:
+        return client, None
+    try:
+        return client, adapter.scan()
+    except Exception:  # a changed file format must not hide the other clients
+        return replace(client, status=ClientStatus.UNREADABLE), None
 
 
 def build_inventory(
     home: Path | None = None,
     adapters: Iterable[ClientAdapter] | None = None,
     apps: list[Path] | None = None,
+    *,
+    quick: bool = False,
+    on_step: Callable[[str], None] | None = None,
 ) -> Inventory:
-    """Read every client. `apps` is where to look for the clients' Mac apps; by default the
-    usual folders of `home`'s owner, and nowhere when the test passes its own adapters."""
-    adapters = list(adapters) if adapters is not None else default_adapters(home or Path.home())
+    """Read every client, side by side; `on_step(client_id)` runs as each one is done. `apps`
+    is where to look for the clients' Mac apps; by default the usual folders of `home`'s owner,
+    and nowhere when the test passes its own adapters. `quick` skips slow questions."""
+    if adapters is None:
+        adapters = default_adapters(home or Path.home(), quick=quick)
+    adapters = list(adapters)
     if apps is None:
         apps = app_roots(home) if home is not None else []
+
+    def read(adapter: ClientAdapter) -> tuple[Client, Scan | None]:
+        found = _read(adapter, apps)
+        if on_step:
+            on_step(adapter.id)
+        return found
+
+    with ThreadPoolExecutor(max_workers=max(len(adapters), 1)) as pool:
+        results = list(pool.map(read, adapters))
     inventory = Inventory()
     projects: dict[str, Project] = {}
-    for adapter in adapters:
-        client = replace(adapter.detect(), app_url=app_url(adapter.id, apps))
-        if client.status is ClientStatus.NOT_FOUND:
+    for adapter, (client, scan) in zip(adapters, results, strict=True):
+        if scan is None:
             inventory.clients.append(client)
-            continue
-        try:
-            scan = adapter.scan()
-        except Exception:  # a changed file format must not hide the other clients
-            inventory.clients.append(replace(client, status=ClientStatus.UNREADABLE))
+            if client.status is not ClientStatus.UNREADABLE:
+                continue
             inventory.problems.append(
                 Source(
                     kind=SourceKind.MANAGED,

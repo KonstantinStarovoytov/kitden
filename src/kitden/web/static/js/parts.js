@@ -1,11 +1,23 @@
 // Small parts shared by every place: sockets, client marks, flags, loading and error states.
-import { $, button, el, plural } from "./dom.js";
+import { $, button, el, joinWords, plural } from "./dom.js";
 import { reducedMotion } from "./motion.js";
 
 export const STATE_WORDS = {
   on: "Loads", off: "Off", over: "Overridden", unk: "Unknown", gw: "Via gateway",
   missing: "Not installed", none: "—", via: "Via Claude Code", done: "Has its skills",
 };
+// The first scan's line: what is still read, and how much of the work is done (0 to 1). Before
+// the page has its data it names the clients it reads; then the slow answers still checked.
+export function scanLine(view) {
+  if (!view || !view.steps || !view.steps.length) return null;
+  const open = view.steps.filter((step) => !step.done);
+  if (!open.length) return null;
+  const share = (view.steps.length - open.length) / view.steps.length;
+  const named = open.filter((step) => Boolean(step.later) === Boolean(view.ready)).map((step) => step.name);
+  const words = named.length ? named : open.map((step) => step.name);
+  return { text: `${view.ready ? "Still checking" : "Reading"} ${joinWords(words)}…`, share };
+}
+
 export const CLIENT_MARKS = {
   claude_code: "CC", codex: "CX", cursor: "CU", claude_desktop_code_tab: "CD", gateway: "GW",
 };
