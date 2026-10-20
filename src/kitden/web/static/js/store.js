@@ -42,7 +42,7 @@ let renderPlace = () => {};
 export function setRenderer(fn) { renderPlace = fn; }
 export function render() { renderPlace(); }
 
-// Old #map and #discover addresses open the Library on "On this Mac" and "Can add"; the Load
+// Old #map and #discover addresses open the Library on "Installed" and "New"; the Load
 // map's "Needs attention" filter (only=problems) carries over.
 export function parseHash(hash) {
   const [place, rest] = String(hash || "").replace(/^#/, "").split("?");

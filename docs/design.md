@@ -58,7 +58,7 @@ The Library has one row per item and one column per client found on this compute
 | Cell button | A small outlined button in the accent family ("+ Add", "+ Add skills", "+ Add the plugin") in place of a state. It opens the review for that one client; the rest of the row opens Details. |
 | Column head | The client's tile and name, and a small "−" in quiet gray that hides the column; it darkens on hover and keyboard focus. The last shown column has none. |
 | Hidden line | One quiet line above the table: "Hidden: Cursor · Show". Show brings every column back. |
-| Group line | With All: "On this Mac", then "Not on this Mac yet", each on a quiet band. |
+| Group line | With All: "Installed", then "New", each on a quiet band. |
 
 Every pressable area is at least 24 px tall and wide (WCAG 2.2 AA target size, checked 2026-10-19). The plugin switch keeps its 34 x 20 track inside a 24 px button, and a client checkbox is pressed through its 24 px label.
 

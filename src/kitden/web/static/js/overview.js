@@ -77,7 +77,7 @@ function issueCard(card, { option = false } = {}) {
 }
 
 // A card about an item opens that item in the side panel; paths and the fix live there.
-// The server still names the Load map ("map"); its rows are the Library's "On this Mac".
+// The server still names the Load map ("map"); its rows are the Library's "Installed".
 // The tab is read first, so the Library draws its rows inside the place change.
 async function follow(target) {
   if (target.view === "map") {

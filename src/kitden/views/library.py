@@ -466,10 +466,10 @@ def library(
 ) -> dict:
     """The rows of one kind tab, with the columns, the tab counts and the lines above the table.
 
-    `show` is "mine" (on this computer), "new" (can add) or "all"; the tabs without a catalog
-    always show what is on this computer. `hidden` columns stay in `columns`, marked, and a row
-    that only they have is left out; hiding every found client hides none. Counts follow show,
-    search and hidden, not the category.
+    `show` is "mine" (Installed), "new" (New: not on this computer yet) or "all"; the tabs
+    without a catalog always show what is on this computer. `hidden` columns stay in
+    `columns`, marked, and a row that only they have is left out; hiding every found client
+    hides none. Counts follow show, search and hidden, not the category.
     """
     status = {c.id: c.status for c in inventory.clients}
     found = [c for c in COLUMNS if status.get(c) is ClientStatus.FOUND]

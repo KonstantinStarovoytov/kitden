@@ -15,7 +15,7 @@ const KINDS = [
 ];
 // Tabs with something to add; the others show only what is on this computer.
 const CATALOG = ["plugin", "skill"];
-const SHOW = [["mine", "On this Mac"], ["new", "Can add"], ["all", "All"]];
+const SHOW = [["mine", "Installed"], ["new", "New"], ["all", "All"]];
 const KIND_WORDS = { plugin: "Plugin", skill: "Skill" };
 // The tab's name inside a sentence: "No MCP servers in any client", "No plugins to add".
 const KIND_NOUNS = { mcp_server: "MCP servers", plugin: "plugins", skill: "skills", hook: "hooks", marketplace: "marketplaces" };
@@ -50,7 +50,7 @@ export function rowTitle(row) {
 // One line when the show choice hides matches of the search, or null.
 export function moreLine(answer, show) {
   if (!answer.more || show === "all") return null;
-  return `${answer.more} more ${show === "mine" ? "not on this Mac" : "on this Mac"} · Show all`;
+  return `${answer.more} more ${show === "mine" ? "in New" : "installed"} · Show all`;
 }
 
 // What a cell's add asks the review for: that one client.
@@ -351,7 +351,7 @@ function categoryPicker(categories) {
   return box;
 }
 
-// "3 more not on this Mac · Show all": the words, then a button for the last part. The line goes
+// "3 more in New · Show all": the words, then a button for the last part. The line goes
 // away with the choice, so focus moves to that choice.
 function moreNode(line) {
   const box = el("p", "more");
@@ -413,7 +413,7 @@ export function emptyState(asked, more) {
   const box = el("div", "empty");
   const label = KIND_NOUNS[asked.kind] || "items";
   if (more) {
-    const where = asked.show === "mine" ? "on this Mac" : "you can add";
+    const where = asked.show === "mine" ? "installed" : "new";
     box.append(el("strong", null, `Nothing ${where} matches “${asked.q}”`), moreNode(more));
   } else if (asked.q) {
     box.append(el("strong", null, `Nothing matches “${asked.q}”`), button("Clear search", () => go("library", { q: "" })));
@@ -464,7 +464,7 @@ function buildTable(columns, rows, groups, morph) {
     if (groups && row.mine !== group) {
       group = row.mine;
       const tr = el("tr", "group");
-      const td = el("td", null, row.mine ? "On this Mac" : "Not on this Mac yet");
+      const td = el("td", null, row.mine ? "Installed" : "New");
       td.colSpan = columns.length + 1;
       tr.append(td);
       body.append(tr);

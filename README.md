@@ -44,8 +44,8 @@ The clients Kitden found sit on the right.
 **Library** is one page for what each client loads and what you can add to it. Each row is an
 item and each column is a client on this computer; the "−" on a column head hides that client,
 and "Show" brings it back. Tabs split MCP servers, plugins, skills, hooks and marketplaces. On
-plugins and skills, choose On this Mac, Can add or All, and filter by category. Pick a project at
-the top to see what loads in that folder.
+plugins and skills, choose Installed, New (not on this computer yet) or All, and filter by
+category. Pick a project at the top to see what loads in that folder.
 
 The action sits in the client's cell. "+ Add" adds a plugin or skill to that client. "+ Add
 skills" copies the skills of a plugin that work on their own into a client that cannot install the

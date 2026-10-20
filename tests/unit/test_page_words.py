@@ -252,7 +252,7 @@ def test_library_adds_plugins_and_marketplaces_in_one_review():
     # Adding a marketplace lives on the Marketplaces tab.
     assert '"Add a marketplace…"' in library and 'kind === "marketplace"' in library
     assert '<a href="#library" data-view="library">Library</a>' in INDEX
-    assert '["new", "Can add"]' in library and '"Not on this Mac yet"' in library
+    assert '["new", "New"]' in library and 'row.mine ? "Installed" : "New"' in library
 
 
 def test_library_rows_say_what_each_client_has_or_can_add_without_details():
@@ -547,7 +547,7 @@ def test_library_replaces_load_map_and_discover():
     text = script("library.js")
     assert 'el("h1", null, "Library")' in text
     assert "What each client loads, and what you can add to it. Based on saved settings." in text
-    assert '[["mine", "On this Mac"], ["new", "Can add"], ["all", "All"]]' in text
+    assert '[["mine", "Installed"], ["new", "New"], ["all", "All"]]' in text
     # "Differs between clients" went away: the columns show it already.
     assert "Differs between clients" not in text
     # Old addresses open the Library; the Overview's links go there too.
@@ -563,7 +563,7 @@ def test_library_says_why_when_there_is_nothing_to_do():
     assert "node.title = cell.reason" in text
     assert "Kitden found no AI coding clients." in text and '"Open Overview"' in text
     # Search keeps the choice and says what it hides.
-    assert "more not on this Mac" in text and '"Show all"' in text
+    assert '"in New"' in text and '"Show all"' in text
     # The line goes away with the choice; focus moves to that choice.
     assert """document.querySelector('#main [data-focus="show:all"]')""" in text
     # A morph into a dash keeps its reason for a screen reader.

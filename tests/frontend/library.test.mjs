@@ -129,8 +129,8 @@ test('line one is the name and its quiet text; the flags go to line two', () => 
 });
 
 test('the more line names what the choice hides', () => {
-  assert.equal(moreLine({ more: 3 }, 'mine'), '3 more not on this Mac · Show all');
-  assert.equal(moreLine({ more: 3 }, 'new'), '3 more on this Mac · Show all');
+  assert.equal(moreLine({ more: 3 }, 'mine'), '3 more in New · Show all');
+  assert.equal(moreLine({ more: 3 }, 'new'), '3 more installed · Show all');
   assert.equal(moreLine({ more: 0 }, 'mine'), null);
   assert.equal(moreLine({ more: 3 }, 'all'), null);
 });
@@ -157,13 +157,13 @@ test('old map and discover addresses open the Library', () => {
 test('a search the choice hides shows the more line, not an empty table', () => {
   const box = emptyState({ kind: 'plugin', show: 'mine', q: 'figma' }, moreLine({ more: 2 }, 'mine'));
   assert.equal(box.className, 'empty');
-  assert.equal(box.children[0].textContent, 'Nothing on this Mac matches “figma”');
+  assert.equal(box.children[0].textContent, 'Nothing installed matches “figma”');
   const [words, all] = box.children[1].children;
   assert.equal(box.children[1].className, 'more');
-  assert.equal(words.textContent, '2 more not on this Mac · ');
+  assert.equal(words.textContent, '2 more in New · ');
   assert.equal(all.textContent, 'Show all');
   const added = emptyState({ kind: 'skill', show: 'new', q: 'pdf' }, moreLine({ more: 1 }, 'new'));
-  assert.equal(added.children[0].textContent, 'Nothing you can add matches “pdf”');
+  assert.equal(added.children[0].textContent, 'Nothing new matches “pdf”');
 });
 
 test('an empty tab names its kind the way the tab does', () => {
