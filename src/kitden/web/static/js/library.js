@@ -434,16 +434,16 @@ function buildTable(columns, rows, groups, morph) {
   headRow.append(el("th", null, "Name"));
   for (const column of columns) {
     const th = el("th");
-    const head = el("div", "col-head");
+    const cap = el("div", "col-head");
     const chip = el("span", "chip");
     const tile = mark(column.id);
     // Coming from the Overview, the client's tile flies here from its row.
     land(tile, `client-${column.id}`);
     chip.append(tile, el("span", null, column.name));
-    head.append(chip);
+    cap.append(chip);
     const hide = hideButton(column, columns);
-    if (hide) head.append(hide);
-    th.append(head);
+    if (hide) cap.append(hide);
+    th.append(cap);
     headRow.append(th);
   }
   head.append(headRow);
