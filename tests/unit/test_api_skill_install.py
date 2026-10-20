@@ -10,7 +10,13 @@ from kitden.clients.cursor import REACTIVE_KEY
 from kitden.views.inventory import build_inventory
 from kitden.web.app import create_app
 from tests.conftest import make_home, write_cursor_fixture_state
-from tests.unit.test_skills_catalog import PLUGIN, add_skills_marketplace
+from tests.unit.test_skills_catalog import (
+    GLEAN,
+    PLUGIN,
+    add_cursor_plugin,
+    add_skills_marketplace,
+    install_in_cursor,
+)
 
 ORIGIN = "http://127.0.0.1:47800"
 POST = {"Origin": ORIGIN, "X-Tool-Request": "1"}
@@ -226,12 +232,17 @@ def test_add_skills_is_one_change_that_undo_removes_whole(client):
         ("codex", "tidy"),
     ]
     assert change["left_out"] == LEFT_OUT
-    # Claude Code loads a skill named brainstorming from the superpowers plugin already; Cursor
-    # reads the shared folder the copies go to.
+    # Claude Code loads a skill named brainstorming from the superpowers plugin already. Cursor
+    # loads it from there too, and reads the shared folder the copies go to.
     assert change["after"] == [
         {"client": "claude_code", "state": "on", "word": "Loads"},
         {"client": "codex", "state": "on", "word": "Loads"},
-        {"client": "cursor", "state": "on", "word": "Loads"},
+        {
+            "client": "cursor",
+            "state": "on",
+            "word": "Loads twice",
+            "note": "Cursor would load brainstorming twice, from two folders.",
+        },
     ]
     assert not (home / ".agents/skills/tidy").exists()
 
@@ -253,34 +264,33 @@ def test_add_skills_is_one_change_that_undo_removes_whole(client):
 
 def test_add_skills_skips_what_the_client_has_and_undo_leaves_that_alone(client):
     home = client.home
-    earlier = _preview(client, BRAINSTORMING, ["claude_code"]).json()
+    earlier = _preview(client, BRAINSTORMING, ["codex"]).json()
     assert _apply(client, earlier)["state"] == "verified"
-    kept = digest(home / ".claude/skills/brainstorming")
+    kept = digest(home / ".agents/skills/brainstorming")
 
-    change = _add_skills(client, ["claude_code"]).json()
+    change = _add_skills(client, ["codex"]).json()
     assert [s["name"] for s in change["steps"]] == ["tidy"]
-    assert change["steps"][0]["reaches"] == ["claude_code", "cursor"]
+    assert change["steps"][0]["reaches"] == ["codex", "cursor"]
     assert change["left_out"] == [
-        {"name": "brainstorming", "why": "Claude Code already has it"},
+        {"name": "brainstorming", "why": "Codex already has it"},
         *LEFT_OUT,
     ]
     assert change["after"] == [
-        {"client": "claude_code", "state": "on", "word": "Loads"},
+        {"client": "codex", "state": "on", "word": "Loads"},
         {"client": "cursor", "state": "on", "word": "Loads"},
     ]
     assert _apply(client, change)["state"] == "verified"
-    assert (home / ".claude/skills/tidy/SKILL.md").is_file()
+    assert (home / ".agents/skills/tidy/SKILL.md").is_file()
 
     undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
     assert undone["state"] == "undone", undone.get("error")
-    assert not (home / ".claude/skills/tidy").exists()
-    assert digest(home / ".claude/skills/brainstorming") == kept
+    assert not (home / ".agents/skills/tidy").exists()
+    assert digest(home / ".agents/skills/brainstorming") == kept
 
 
 def test_add_skills_says_when_a_client_would_load_a_skill_twice(client):
     # Cursor already reads Codex's copy of tidy; Claude Code's folder would be a second one.
-    for skill, where in ((BRAINSTORMING, "claude_code"), (f"tidy@{PLUGIN}", "codex")):
-        assert _apply(client, _preview(client, skill, [where]).json())["state"] == "verified"
+    assert _apply(client, _preview(client, TIDY, ["codex"]).json())["state"] == "verified"
     change = _add_skills(client, ["claude_code"]).json()
     assert [s["name"] for s in change["steps"]] == ["tidy"]
     cursor = next(e for e in change["after"] if e["client"] == "cursor")
@@ -290,19 +300,42 @@ def test_add_skills_says_when_a_client_would_load_a_skill_twice(client):
     )
 
 
-def test_add_skills_with_several_skills_names_the_ones_loaded_twice(client):
-    # Claude Code loads brainstorming from the superpowers plugin; the copy would be a second one.
+def test_add_skills_leaves_out_a_skill_the_client_loads_from_another_plugin(client):
+    # Claude Code loads brainstorming from the superpowers plugin, so it takes no copy of it.
     change = _add_skills(client, ["claude_code"]).json()
-    assert [s["name"] for s in change["steps"]] == ["brainstorming", "tidy"]
+    assert [s["name"] for s in change["steps"]] == ["tidy"]
+    assert change["left_out"] == [
+        {"name": "brainstorming", "why": "Claude Code already has it"},
+        *LEFT_OUT,
+    ]
     assert change["after"] == [
-        {
-            "client": "claude_code",
-            "state": "on",
-            "word": "Loads twice",
-            "note": "Claude Code would load brainstorming twice, from two folders.",
-        },
+        {"client": "claude_code", "state": "on", "word": "Loads"},
         {"client": "cursor", "state": "on", "word": "Loads"},
     ]
+
+
+def test_add_skills_from_a_cursor_plugin_says_cursor_loads_them_twice(client):
+    # Cursor has glean (skills a and b) and reads Claude Code's folder too.
+    add_cursor_plugin(client.home)
+    install_in_cursor(client.home, GLEAN)
+    client.post("/api/rescan", headers=POST)
+    change = _add_skills(client, ["claude_code"], GLEAN).json()
+    assert [(s["name"], s["reaches"]) for s in change["steps"]] == [
+        ("a", ["claude_code", "cursor"]),
+        ("b", ["claude_code", "cursor"]),
+    ]
+    assert change["after"] == [
+        {"client": "claude_code", "state": "on", "word": "Loads"},
+        {
+            "client": "cursor",
+            "state": "on",
+            "word": "Loads twice",
+            "note": "Cursor would load a, b twice, from two folders.",
+        },
+    ]
+    # One skill copied on its own: the same.
+    one = _preview(client, f"a@{GLEAN}", ["claude_code"]).json()
+    assert one["after"][1]["word"] == "Loads twice"
 
 
 def test_add_skills_leaves_nothing_out_when_every_skill_is_copied(client):

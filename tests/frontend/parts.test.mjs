@@ -93,8 +93,8 @@ test('a socket that morphs into a dash keeps the reason it was given', () => {
     assert.equal(plain.attributes['aria-label'], 'Not set up');
     // The words the server sent stay through the morph.
     const done = socket({ state: 'off' });
-    morphSocket(done, { state: 'done', word: 'Skills added' });
-    assert.equal(done.querySelector('.word').textContent, 'Skills added');
+    morphSocket(done, { state: 'done', word: 'Has its skills' });
+    assert.equal(done.querySelector('.word').textContent, 'Has its skills');
   } finally {
     media.matches = false;
   }

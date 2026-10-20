@@ -5,6 +5,7 @@ from kitden.model import (
     Client,
     ClientStatus,
     FileEdit,
+    FolderCopy,
     Item,
     ItemKind,
     Scope,
@@ -61,4 +62,27 @@ def test_cursor_gets_a_plugin_only_through_claude_code():
     change = Change(action="plugin.install", steps=[step("codex", "notes@official")])
     assert after_words(change, inventory(), cursor_imports=True) == [
         {"client": "codex", "state": "on", "word": "Loads"}
+    ]
+
+
+def test_a_skill_a_client_loads_from_a_plugin_counts_whatever_the_path(tmp_path):
+    # The review reads the source folder by its real path; the skill list may name a link.
+    real = tmp_path / "real/skills/a"
+    real.mkdir(parents=True)
+    (tmp_path / "link").symlink_to(tmp_path / "real")
+    readers = ["claude_code", "cursor"]
+    copy = FolderCopy(source=str(real), target="/h/.claude/skills/a", readers=readers)
+    change = Change(
+        action="plugin.skills",
+        steps=[Step(client="claude_code", scope=Scope.USER, name="a", copy=copy)],
+    )
+    skills = [{"path": str(tmp_path / "link/skills/a"), "installed": {"cursor": "Via plugin"}}]
+    assert after_words(change, inventory(), skills=skills) == [
+        {"client": "claude_code", "state": "on", "word": "Loads"},
+        {
+            "client": "cursor",
+            "state": "on",
+            "word": "Loads twice",
+            "note": "Cursor reads two folders that hold this skill, so it loads the skill twice.",
+        },
     ]

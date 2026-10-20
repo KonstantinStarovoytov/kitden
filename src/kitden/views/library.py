@@ -121,17 +121,24 @@ def _map_rows(map_rows: list[Row], kind: str, found: list[str]) -> Built:
 def _plugin_cell(
     client: str,
     plugin_id: str,
+    name: str,
     offer: dict | None,
     routes: dict[str, str],
     skills: list[dict],
     cursor_imports: bool,
-    warn: str | None,
+    twin: str | None,
 ) -> dict:
-    """What a client without the plugin can do: add it, get it through Claude Code, or take
-    the skills that work alone. Otherwise, why not. A route comes only with an offer."""
+    """What a client without the plugin here can do: add it, get it through Claude Code, or
+    take the skills that work alone. Otherwise, why not. A route comes only with an offer.
+    `twin` is the other marketplace the client has a plugin of this name from."""
+    who = NAMES[client]
+    # The client has it in a project this view does not show; adding it again would fail.
+    if offer and client in offer["installed"]:
+        return _cell(reason=f"{who} has it in another project.")
     route = routes.get(client)
     if offer and route:
         marketplace = offer["marketplace"] if route == "add_marketplace" else None
+        warn = f"{who} already has {name} from {twin}. It will load both." if twin else None
         return _cell(
             add=_add(PLUGIN_INSTALL, "+ Add", plugin_id, marketplace=marketplace, warn=warn)
         )
@@ -141,11 +148,17 @@ def _plugin_cell(
         return _cell("via", word="Via Claude Code", reason=VIA_CLAUDE_CODE)
     alone = [s for s in skills if s["self_contained"]]
     if any(client in s["routes"] for s in alone):
-        return _cell(add=_add(PLUGIN_SKILLS, "Add skills", plugin_id))
+        warn = (
+            f"{who} already has {name} from {twin}. It will load skills from both."
+            if twin
+            else None
+        )
+        return _cell(add=_add(PLUGIN_SKILLS, "Add skills", plugin_id, warn=warn))
+    # Copied here, or brought by another plugin: either way the client has them.
     if alone and all(client in s["installed"] for s in alone):
-        return _cell("done", word="Skills added")
+        return _cell("done", word="Has its skills", reason=f"{who} has every skill in this plugin.")
     why = "its skills need the rest of it" if skills else "it has no skills to copy"
-    return _cell(reason=f"{NAMES[client]} can't install this plugin, and {why}.")
+    return _cell(reason=f"{who} can't install this plugin, and {why}.")
 
 
 def _plugin_rows(
@@ -184,13 +197,15 @@ def _plugin_rows(
                 cells[client] = _map_cell(row, client)
                 continue
             others = [m for m in has_name.get((name, client), []) if m != source]
-            warn = (
-                f"{NAMES[client]} already has {name} from {others[0]}. It will load both."
-                if others
-                else None
-            )
             cells[client] = _plugin_cell(
-                client, plugin_id, offer, routes, plugin_skills, cursor_imports, warn
+                client,
+                plugin_id,
+                name,
+                offer,
+                routes,
+                plugin_skills,
+                cursor_imports,
+                others[0] if others else None,
             )
         installed = offer["installed"] if offer else []
         holders = {c for c in found if _has(row, c) or c in installed}
@@ -307,10 +322,14 @@ def _in_view(row: dict, holders: set[str], visible: list[str]) -> bool:
     return any(row["cells"][c]["state"] != "none" or row["cells"][c]["add"] for c in visible)
 
 
-def _matching(rows: list[dict], q: str) -> list[dict]:
-    """Rows that match the search, best first (the Discover scoring)."""
+def _matching(rows: list[dict], q: str, kind: str) -> list[dict]:
+    """Rows that match the search: on plugins and skills best first (the Discover scoring), on
+    the other tabs any part of the name, as the Load map did ("hub" finds github)."""
     if not q.strip():
         return rows
+    if kind not in CATALOG_KINDS:
+        part = q.strip().lower()
+        return [r for r in rows if part in r["name"].lower()]
     terms = [
         {
             "name": r["name"],
@@ -325,9 +344,10 @@ def _matching(rows: list[dict], q: str) -> list[dict]:
     return [rows[t["at"]] for t in search(terms, q)]
 
 
-def _chosen(rows: list[dict], show: str, q: str) -> list[dict]:
+def _chosen(rows: list[dict], kind: str, show: str, q: str) -> list[dict]:
     """Rows the show choice keeps, matching the search."""
-    return _matching([r for r in rows if show == "all" or r["mine"] == (show == "mine")], q)
+    kept = [r for r in rows if show == "all" or r["mine"] == (show == "mine")]
+    return _matching(kept, q, kind)
 
 
 def _needs_attention(row: dict) -> bool:
@@ -350,9 +370,9 @@ def _categories(rows: list[dict]) -> list[dict]:
     return [{"name": n, "count": c} for n, c in sorted(seen.items(), key=lambda p: (-p[1], p[0]))]
 
 
-def _ordered(rows: list[dict], q: str) -> list[dict]:
+def _ordered(rows: list[dict], ranked: bool) -> list[dict]:
     """What is on this computer first; inside each group the search rank, or else by name."""
-    if q.strip():
+    if ranked:
         return sorted(rows, key=lambda r: not r["mine"])  # stable: keeps the search rank
     return sorted(rows, key=lambda r: (not r["mine"], r["name"].lower(), r["source"] or ""))
 
@@ -388,10 +408,13 @@ def library(
 
     `show` is "mine" (on this computer), "new" (can add) or "all"; the tabs without a catalog
     always show what is on this computer. `hidden` columns stay in `columns`, marked, and a row
-    that only they have is left out. Counts follow show, search and hidden, not the category.
+    that only they have is left out; hiding every found client hides none. Counts follow show,
+    search and hidden, not the category.
     """
     status = {c.id: c.status for c in inventory.clients}
     found = [c for c in COLUMNS if status.get(c) is ClientStatus.FOUND]
+    if hidden.issuperset(found):
+        hidden = frozenset()
     visible = [c for c in found if c not in hidden]
     cursor = adapters.get("cursor") if "cursor" in found else None
     cursor_imports = bool(cursor and cursor.imports_claude_plugins())
@@ -414,20 +437,21 @@ def library(
 
     has_catalog = kind in CATALOG_KINDS
     category = category if has_catalog else ""
-    matched = _chosen(rows[kind], show_for(kind), q)
+    matched = _chosen(rows[kind], kind, show_for(kind), q)
     shown = _narrowed(matched, category, attention)
     more = 0
     if q.strip() and has_catalog and show != "all":
-        everything = _narrowed(_chosen(rows[kind], "all", q), category, attention)
+        everything = _narrowed(_chosen(rows[kind], kind, "all", q), category, attention)
         more = len(everything) - len(shown)
     return {
         "columns": [
             {"id": c, "name": NAMES[c], "mark": MARKS[c], "hidden": c in hidden} for c in found
         ],
         "counts": {
-            k: len(matched) if k == kind else len(_chosen(rows[k], show_for(k), q)) for k in KINDS
+            k: len(matched) if k == kind else len(_chosen(rows[k], k, show_for(k), q))
+            for k in KINDS
         },
-        "rows": _ordered(shown, q),
+        "rows": _ordered(shown, ranked=bool(q.strip()) and has_catalog),
         "more": more,
         "attention": len(_narrowed(matched, category, True)),
         "categories": _categories(matched) if has_catalog else [],

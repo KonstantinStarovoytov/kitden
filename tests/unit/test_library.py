@@ -1,6 +1,8 @@
 """The Library: what each client has on this computer and what it can add, in one list."""
 
 import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -189,7 +191,7 @@ def test_cursor_gets_via_claude_code_for_a_claude_plugin(home, tmp_path):
     )
 
 
-def test_add_skills_turns_into_skills_added_when_all_are_there(home):
+def test_add_skills_turns_into_has_its_skills_when_all_are_there(home):
     for name in ("docx", "pptx"):
         _skill(home / ".claude/skills", name)
     row = _row(_library(home), "documents")
@@ -197,9 +199,58 @@ def test_add_skills_turns_into_skills_added_when_all_are_there(home):
 
     _skill(home / ".claude/skills", "xlsx")
     row = _row(_library(home), "documents")
-    assert row["cells"]["claude_code"] == _cell("done", word="Skills added")
+    assert row["cells"]["claude_code"] == _cell(
+        "done", word="Has its skills", reason="Claude Code has every skill in this plugin."
+    )
     # Cursor reads Claude Code's skills folder, so it has them all as well.
-    assert row["cells"]["cursor"] == _cell("done", word="Skills added")
+    assert row["cells"]["cursor"] == _cell(
+        "done", word="Has its skills", reason="Cursor has every skill in this plugin."
+    )
+
+
+def test_skills_a_client_loads_from_another_plugin_count_as_had(home):
+    # Cursor's superpowers holds brainstorming, which Claude Code loads from its own superpowers.
+    cursor_copy = home / ".cursor/plugins/cache/cursor-public/superpowers/1a2b3c4/skills"
+    _skill(cursor_copy, "brainstorming")
+    row = _row(_library(home), "superpowers", "cursor-public")
+    assert row["cells"]["claude_code"] == _cell(
+        "done", word="Has its skills", reason="Claude Code has every skill in this plugin."
+    )
+    assert row["cells"]["codex"] == _cell(
+        add=_add("plugin.skills", "Add skills", "superpowers@cursor-public")
+    )
+
+    # One more skill: Claude Code can take that one, and the review says it has a twin.
+    _skill(cursor_copy, "planning")
+    row = _row(_library(home), "superpowers", "cursor-public")
+    warn = (
+        "Claude Code already has superpowers from claude-plugins-official. "
+        "It will load skills from both."
+    )
+    assert row["cells"]["claude_code"] == _cell(
+        add=_add("plugin.skills", "Add skills", "superpowers@cursor-public", warn=warn)
+    )
+    assert row["cells"]["codex"]["add"]["warn"] is None
+
+
+def test_a_plugin_in_another_project_is_not_offered_again(home):
+    settings = home / "work/website/.claude/settings.json"
+    data = json.loads(settings.read_text())
+    data["enabledPlugins"][PLUGIN] = True
+    settings.write_text(json.dumps(data))
+    inventory = build_inventory(home)
+    adapters = {a.id: a for a in default_adapters(home)}
+
+    def toolbox(project):
+        answer = library(
+            inventory, adapters, project, gateway_registered=False, kind="plugin", show="all"
+        )
+        return _row(answer, "toolbox")["cells"]["claude_code"]
+
+    assert toolbox(str(home / "work/website"))["state"] == "on"
+    elsewhere = _cell(reason="Claude Code has it in another project.")
+    assert toolbox(None) == elsewhere
+    assert toolbox(str(home / "work/api")) == elsewhere
 
 
 def test_skill_that_needs_its_plugin_offers_add_the_plugin(home):
@@ -307,6 +358,18 @@ def test_search_reports_matches_the_show_choice_hides(home):
     assert {r["name"] for r in servers["rows"]} == {"neon", "Neon"} and servers["more"] == 0
 
 
+def test_tabs_without_a_catalog_find_any_part_of_a_name(home):
+    # As the Load map did: "hub" finds github. Plugins and skills keep the Discover scoring.
+    servers = _library(home, "mcp_server", q="hub")
+    assert _names(servers) == [("github", None)]
+    assert servers["counts"]["mcp_server"] == 1
+    assert _names(_library(home, "mcp_server", q="FUSE")) == [("langfuse-data", None)]
+    assert _names(_library(home, "hook", q="bash")) == [("PreToolUse: Bash", None)]
+    assert _names(_library(home, "marketplace", q="-mkt")) == [("team-mkt", None)]
+    assert _library(home, "plugin", q="hub")["counts"]["mcp_server"] == 1
+    assert _library(home, "plugin", show="all", q="ools")["rows"] == []
+
+
 def _list_plugins(marketplace_json: Path, *entries: dict) -> None:
     listed = json.loads(marketplace_json.read_text())
     listed["plugins"] += entries
@@ -365,6 +428,18 @@ def test_hidden_column_drops_rows_only_it_has(home):
         every["counts"]["plugin"] - len(only_cursor)
     )
     assert _library(home, show="new", hidden=cursor)["counts"]["plugin"] == 1
+
+
+def test_hiding_every_found_client_hides_none(home, tmp_path):
+    shown = _library(home, show="all")
+    everyone = _library(home, show="all", hidden=frozenset({"claude_code", "codex", "cursor"}))
+    assert [c["hidden"] for c in everyone["columns"]] == [False, False, False]
+    assert (everyone["rows"], everyone["counts"]) == (shown["rows"], shown["counts"])
+    # A client that is gone from this computer was hidden with the rest: the same.
+    two = make_home(tmp_path / "two", "claude_code/2.1.283", "codex/0.159.2")
+    left = _library(two, hidden=frozenset({"claude_code", "codex", "cursor"}))
+    assert [c["hidden"] for c in left["columns"]] == [False, False]
+    assert left["rows"] == _library(two)["rows"]
 
 
 def test_one_marketplace_note_per_client_and_marketplace(home):
@@ -450,3 +525,33 @@ def test_api_library_and_offer(home):
         assert skill.json()["inherits"] == {"plugin": True, "skill": True}
         missing = client.get("/api/offer?kind=plugin&id=nope@nowhere")
         assert (missing.status_code, missing.json()) == (404, {"detail": "Not on this computer."})
+
+
+def test_library_and_offer_let_other_requests_run_meanwhile(home, monkeypatch):
+    # The first read of every skill takes seconds; other requests must not wait for it.
+    import kitden.web.app as page
+
+    started, release = threading.Event(), threading.Event()
+
+    def slow(real):
+        def wait(*args, **kwargs):
+            started.set()
+            assert release.wait(5), "no other request could run meanwhile"
+            return real(*args, **kwargs)
+
+        return wait
+
+    monkeypatch.setattr(page, "library", slow(page.library))
+    monkeypatch.setattr(page, "skill_catalog", slow(page.skill_catalog))
+    app = create_app(lambda: build_inventory(home), token="tok", port=47800, home=home)
+    with TestClient(app, base_url=ORIGIN, follow_redirects=False) as client:
+        client.get("/?token=tok")
+        for path in ("/api/library?kind=plugin", f"/api/offer?kind=skill&id=tidy@{PLUGIN}"):
+            started.clear()
+            release.clear()
+            with ThreadPoolExecutor(1) as pool:
+                slow_read = pool.submit(client.get, path)
+                assert started.wait(5)
+                assert client.get("/api/clients").status_code == 200
+                release.set()
+                assert slow_read.result().status_code == 200, path

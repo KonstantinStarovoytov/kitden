@@ -131,10 +131,11 @@ def test_installed_copies_say_how_each_client_loads_them(home):
     via_plugin = rows["brainstorming@superpowers@claude-plugins-official"]
     assert via_plugin["installed"] == {"claude_code": "Via plugin", "cursor": "Via plugin"}
     assert via_plugin["routes"] == {"codex": "ready"}
-    # The same skill name from another plugin: nothing loads it yet from that plugin, but a
-    # standalone copy of the name would still count.
+    # The same skill name from another plugin: those clients have it already, so they take
+    # no copy.
     other = rows[f"brainstorming@{PLUGIN}"]
-    assert other["installed"] == {}
+    assert other["installed"] == {"claude_code": "Via plugin", "cursor": "Via plugin"}
+    assert other["routes"] == {"codex": "ready"}
     # Skills already in a client's own folder, with no plugin here: rows of their own.
     brandkit = rows["brandkit@skills"]
     assert brandkit["from"] == "Claude Code"
@@ -217,6 +218,17 @@ def test_a_cursor_plugin_skill_can_go_to_claude_code_and_codex(home):
     add_cursor_plugin(home)
     install_in_cursor(home, GLEAN)
     a = _rows(home)[f"a@{GLEAN}"]
+    assert a["installed"] == {"cursor": "Via plugin"}
+    assert a["routes"] == {"claude_code": "ready", "codex": "ready"}
+
+
+def test_a_skill_cursor_loads_from_its_plugin_counts_in_other_plugins_too(home):
+    # The scan has no items for the skills inside Cursor's plugins; the plugin folder says.
+    add_cursor_plugin(home)
+    install_in_cursor(home, GLEAN)
+    toolbox = home / ".claude/plugins/marketplaces/claude-plugins-official/plugins/toolbox"
+    _skill(toolbox / "skills", "a")
+    a = _rows(home)[f"a@{PLUGIN}"]
     assert a["installed"] == {"cursor": "Via plugin"}
     assert a["routes"] == {"claude_code": "ready", "codex": "ready"}
 

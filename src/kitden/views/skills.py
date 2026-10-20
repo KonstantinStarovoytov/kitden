@@ -204,13 +204,17 @@ def _row(
 def skill_catalog(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
     """Every skill on this computer, once, with what each client does with it.
 
-    `installed[client]` says how the client already loads it ("Installed" in its own folder,
-    "Via Claude Code" from another client's folder, "Via plugin"); `routes[client]` is "ready"
-    when the client can take a copy. A skill that is not self-contained has no routes.
+    `installed[client]` says how the client already loads a skill of that name ("Installed" in
+    its own folder, "Via Claude Code" from another client's folder, "Via plugin" from any of its
+    plugins); `routes[client]` is "ready" when the client can take a copy. A skill that is not
+    self-contained has no routes.
     """
     found = {c.id for c in inventory.clients if c.status is ClientStatus.FOUND and c.id in CLIENTS}
     loads: dict[str, dict[str, str]] = {}
     plugins: dict[str, set[str]] = {}
+    # Skill name -> the clients that load it from a plugin. The scan has these for Claude Code;
+    # for Codex and Cursor the plugin folders read below say.
+    from_plugins: dict[str, set[str]] = {}
     for item in inventory.items:
         if item.client not in CLIENTS:
             continue
@@ -221,6 +225,8 @@ def skill_catalog(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
             words = loads.setdefault(item.name, {})
             if own or item.client not in words:
                 words[item.client] = word
+        elif item.kind is ItemKind.SKILL and item.scope is Scope.PLUGIN:
+            from_plugins.setdefault(item.name, set()).add(item.client)
         elif item.kind is ItemKind.PLUGIN and "@" in item.name:
             plugins.setdefault(item.name, set()).add(item.client)
 
@@ -233,8 +239,6 @@ def skill_catalog(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
                 continue
             info = read_skill(skill_dir)
             installed = dict(loads.get(info["name"], {}))
-            for c in plugins.get(plugin_id, ()):
-                installed.setdefault(c, "Via plugin")
             rows[row_id] = _row(
                 row_id,
                 info,
@@ -281,9 +285,19 @@ def skill_catalog(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
             own.setdefault(item.name, Path(item.source.path).parent)
     for name, skill_dir in own.items():
         info = read_skill(skill_dir)
-        installed = loads.get(name, {})
+        installed = dict(loads.get(name, {}))
         owners = [CLIENT_WORDS[c] for c in CLIENTS if installed.get(c) == "Installed"]
         source = " and ".join(owners) if owners else "Your skills"
         row_id = f"{name}@skills"
         rows[row_id] = _row(row_id, info, skill_dir, source, None, None, None, installed, found)
+
+    # A client that loads a skill from one plugin has it: a copy from another place would be a
+    # second one, so it takes none. Its own folders still name the way it loads it.
+    for row in rows.values():
+        for client in plugins.get(row["plugin"], ()):
+            from_plugins.setdefault(row["name"], set()).add(client)
+    for row in rows.values():
+        for client in from_plugins.get(row["name"], ()):
+            row["installed"].setdefault(client, "Via plugin")
+        row["routes"] = {c: r for c, r in row["routes"].items() if c not in row["installed"]}
     return sorted(rows.values(), key=lambda r: (r["name"].lower(), r["from"].lower()))

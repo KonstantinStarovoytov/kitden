@@ -358,7 +358,10 @@ def create_app(
                 project = _project(request)
             except _UnknownProject:
                 return _error("Unknown project.", 404)
-            return make(request, project, project["path"] if project else None)
+            # The first Library read takes seconds (it reads every skill); in a thread, other
+            # requests and the event stream go on meanwhile.
+            path = project["path"] if project else None
+            return await asyncio.to_thread(make, request, project, path)
 
         return endpoint
 
@@ -469,6 +472,7 @@ def create_app(
         targets = body.get("targets") if isinstance(body.get("targets"), list) else []
         params = body.get("params") if isinstance(body.get("params"), dict) else {}
         left_out = None
+        copied = None  # the skill list's rows a skill copy takes, for the review's first line
         try:
             if action == GATEWAY_CONNECT:
                 gateway = next(
@@ -505,6 +509,7 @@ def create_app(
                 clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
                 found = {c["id"] for c in state.data["clients"] if c["status"] == "found"}
                 steps = skill_steps(adapters, skill, clients, found)
+                copied = [skill]
             elif action == PLUGIN_SKILLS:
                 if len(targets) != 1 or not isinstance(targets[0], dict):
                     return _error("Choose one client.", 422)
@@ -516,6 +521,7 @@ def create_app(
                 found = {c["id"] for c in state.data["clients"] if c["status"] == "found"}
                 steps = plugin_skill_steps(adapters, plugin_id, skills, client, found)
                 left_out = plugin_skills_left_out(plugin_id, skills, client)
+                copied = [s for s in skills if s["plugin"] == plugin_id]
             elif action == MARKETPLACE_ADD:
                 try:
                     found = await asyncio.to_thread(read_marketplace, str(params.get("source", "")))
@@ -583,7 +589,7 @@ def create_app(
         # Only an added plugin can reach Cursor through Claude Code.
         cursor = _found_cursor() if action == PLUGIN_INSTALL else None
         imports = bool(cursor and cursor.imports_claude_plugins())
-        after = after_words(change, state.inventory, cursor_imports=imports)
+        after = after_words(change, state.inventory, cursor_imports=imports, skills=copied)
         answer = {**change_dict(change), "after": after}
         if left_out is not None:
             answer["left_out"] = left_out
@@ -703,10 +709,8 @@ def create_app(
         """One plugin or skill from the catalogs, for Details of a row not on this computer, with
         `inherits` as /api/catalog has it, so Details and the Add form can name Cursor."""
         params = request.query_params
-        if params.get("kind") == "skill":
-            offers = skill_catalog(state.inventory, adapters)
-        else:
-            offers = catalog(state.inventory, adapters)
+        read = skill_catalog if params.get("kind") == "skill" else catalog
+        offers = await asyncio.to_thread(read, state.inventory, adapters)
         found = next((o for o in offers if o["id"] == params.get("id")), None)
         if found is None:
             return _error("Not on this computer.", 404)

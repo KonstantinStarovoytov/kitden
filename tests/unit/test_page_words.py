@@ -263,7 +263,7 @@ def test_library_rows_say_what_each_client_has_or_can_add_without_details():
         in text
     )
     assert "button(cell.add.label" in text and '"btn small add"' in text
-    assert 'via: "Via Claude Code", done: "Skills added"' in script("parts.js")
+    assert 'via: "Via Claude Code", done: "Has its skills"' in script("parts.js")
     assert 'el("table", "map library")' in text and '"desc"' in text
     # A category filter, fed by the counts the server sends.
     assert '"All categories"' in text and "answer.categories" in text

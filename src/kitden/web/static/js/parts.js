@@ -4,7 +4,7 @@ import { reducedMotion } from "./motion.js";
 
 export const STATE_WORDS = {
   on: "Loads", off: "Off", over: "Overridden", unk: "Unknown", gw: "Via gateway",
-  missing: "Not installed", none: "—", via: "Via Claude Code", done: "Skills added",
+  missing: "Not installed", none: "—", via: "Via Claude Code", done: "Has its skills",
 };
 export const CLIENT_MARKS = {
   claude_code: "CC", codex: "CX", cursor: "CU", claude_desktop_code_tab: "CD", gateway: "GW",

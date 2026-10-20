@@ -83,9 +83,9 @@ test('a state cell says the state, and why when the server says', () => {
   assert.equal(via.className, 'socket s-via');
   assert.equal(via.children[1].textContent, 'Via Claude Code');
   assert.equal(via.title, "Cursor loads Claude Code's plugins. Add it to Claude Code.");
-  const done = cellNode(row({ codex: cell({ state: 'done', word: 'Skills added' }) }), 'codex');
+  const done = cellNode(row({ codex: cell({ state: 'done', word: 'Has its skills' }) }), 'codex');
   assert.equal(done.className, 'socket s-done');
-  assert.equal(done.children[1].textContent, 'Skills added');
+  assert.equal(done.children[1].textContent, 'Has its skills');
   const on = cellNode(row({ codex: cell({ state: 'on', where: 'project' }) }), 'codex');
   assert.deepEqual(on.children.map((c) => c.textContent), ['', 'Loads', 'project']);
 });
