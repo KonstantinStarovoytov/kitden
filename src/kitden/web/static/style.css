@@ -348,8 +348,9 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .library .item .mono { min-width: 3ch; }
 .library .item .meta { min-width: 0; padding-left: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-3); font-size: 12px; }
 .library .item .opens { grid-column: 3; padding-left: 8px; }
-.library .sub { display: flex; align-items: center; gap: 6px; min-width: 0; margin-top: 2px; }
-.library .desc { flex: 1 1 auto; min-width: 0; font-size: 12px; color: var(--ink-3); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; overflow-wrap: anywhere; }
+/* Flags wrap onto their own line when a narrow row has no room for them and the words. */
+.library .sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; margin-top: 2px; }
+.library .desc { flex: 1 1 12em; min-width: 0; font-size: 12px; color: var(--ink-3); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; overflow-wrap: anywhere; }
 .library tbody tr.group { cursor: default; }
 .library tbody tr.group td { height: 30px; padding-top: 10px; padding-bottom: 4px; background: var(--inset); color: var(--ink-3); font-size: 12px; }
 .btn.add { color: var(--route); border-color: color-mix(in srgb, var(--route) 45%, var(--wire)); background: transparent; }

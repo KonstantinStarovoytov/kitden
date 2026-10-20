@@ -156,7 +156,11 @@ def _plugin_cell(
         return _cell(add=_add(PLUGIN_SKILLS, "Add skills", plugin_id, warn=warn))
     # Copied here, or brought by another plugin: either way the client has them.
     if alone and all(client in s["installed"] for s in alone):
-        return _cell("done", word="Has its skills", reason=f"{who} has every skill in this plugin.")
+        return _cell(
+            "done",
+            word="Has its skills",
+            reason=f"{who} already has every skill it can take from this plugin.",
+        )
     why = "its skills need the rest of it" if skills else "it has no skills to copy"
     return _cell(reason=f"{who} can't install this plugin, and {why}.")
 

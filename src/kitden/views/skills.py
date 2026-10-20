@@ -13,7 +13,7 @@ from pathlib import Path
 
 from kitden.changes.copy_folder import CopyRefusedError, list_files
 from kitden.clients.base import ClientAdapter
-from kitden.model import ClientStatus, ItemKind, Scope
+from kitden.model import ClientStatus, Enabled, ItemKind, Scope
 from kitden.views.catalog import (
     INSTALLERS,
     MARKETPLACE_FILES,
@@ -212,6 +212,7 @@ def skill_catalog(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
     found = {c.id for c in inventory.clients if c.status is ClientStatus.FOUND and c.id in CLIENTS}
     loads: dict[str, dict[str, str]] = {}
     plugins: dict[str, set[str]] = {}
+    plugins_on: dict[str, set[str]] = {}  # the same, only where the plugin is not turned off
     # Skill name -> the clients that load it from a plugin. The scan has these for Claude Code;
     # for Codex and Cursor the plugin folders read below say.
     from_plugins: dict[str, set[str]] = {}
@@ -226,9 +227,12 @@ def skill_catalog(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
             if own or item.client not in words:
                 words[item.client] = word
         elif item.kind is ItemKind.SKILL and item.scope is Scope.PLUGIN:
-            from_plugins.setdefault(item.name, set()).add(item.client)
+            if item.enabled is not Enabled.OFF:
+                from_plugins.setdefault(item.name, set()).add(item.client)
         elif item.kind is ItemKind.PLUGIN and "@" in item.name:
             plugins.setdefault(item.name, set()).add(item.client)
+            if item.enabled is not Enabled.OFF:
+                plugins_on.setdefault(item.name, set()).add(item.client)
 
     rows: dict[str, dict] = {}
 
@@ -294,7 +298,7 @@ def skill_catalog(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
     # A client that loads a skill from one plugin has it: a copy from another place would be a
     # second one, so it takes none. Its own folders still name the way it loads it.
     for row in rows.values():
-        for client in plugins.get(row["plugin"], ()):
+        for client in plugins_on.get(row["plugin"], ()):
             from_plugins.setdefault(row["name"], set()).add(client)
     for row in rows.values():
         for client in from_plugins.get(row["name"], ()):

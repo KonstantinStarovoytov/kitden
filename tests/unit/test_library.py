@@ -200,11 +200,15 @@ def test_add_skills_turns_into_has_its_skills_when_all_are_there(home):
     _skill(home / ".claude/skills", "xlsx")
     row = _row(_library(home), "documents")
     assert row["cells"]["claude_code"] == _cell(
-        "done", word="Has its skills", reason="Claude Code has every skill in this plugin."
+        "done",
+        word="Has its skills",
+        reason="Claude Code already has every skill it can take from this plugin.",
     )
     # Cursor reads Claude Code's skills folder, so it has them all as well.
     assert row["cells"]["cursor"] == _cell(
-        "done", word="Has its skills", reason="Cursor has every skill in this plugin."
+        "done",
+        word="Has its skills",
+        reason="Cursor already has every skill it can take from this plugin.",
     )
 
 
@@ -214,7 +218,9 @@ def test_skills_a_client_loads_from_another_plugin_count_as_had(home):
     _skill(cursor_copy, "brainstorming")
     row = _row(_library(home), "superpowers", "cursor-public")
     assert row["cells"]["claude_code"] == _cell(
-        "done", word="Has its skills", reason="Claude Code has every skill in this plugin."
+        "done",
+        word="Has its skills",
+        reason="Claude Code already has every skill it can take from this plugin.",
     )
     assert row["cells"]["codex"] == _cell(
         add=_add("plugin.skills", "Add skills", "superpowers@cursor-public")

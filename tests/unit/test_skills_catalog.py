@@ -125,6 +125,21 @@ def test_a_skill_that_needs_its_plugin_has_no_route(home):
     ]
 
 
+def test_a_plugin_that_is_off_does_not_count_as_having_its_skills(home):
+    # Claude Code has superpowers turned off: the same skill name from another plugin can go
+    # to Claude Code again.
+    settings = home / ".claude/settings.json"
+    settings.write_text(
+        settings.read_text().replace(
+            '"superpowers@claude-plugins-official": true',
+            '"superpowers@claude-plugins-official": false',
+        )
+    )
+    other = _rows(home)[f"brainstorming@{PLUGIN}"]
+    assert "claude_code" not in other["installed"]
+    assert other["routes"].get("claude_code") == "ready"
+
+
 def test_installed_copies_say_how_each_client_loads_them(home):
     rows = _rows(home)
     # Claude Code has the superpowers plugin; Cursor imports Claude Code plugins.
