@@ -83,7 +83,7 @@ a change to take effect.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/review-dark.jpg">
-    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/review.jpg" alt="The review for moving the linear server into the gateway: Claude Code and Codex will both reach it through the gateway, and what to restart" width="860">
+    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/review.jpg" alt="The review for moving the github server into the gateway: Claude Code will reach it through the gateway, and what to restart" width="860">
   </picture>
 </p>
 
