@@ -9,7 +9,13 @@ from kitden.web.app import create_app
 from tests.conftest import make_home, write_cursor_fixture_state
 
 ORIGIN = "http://127.0.0.1:47800"
-ENDPOINTS = ["/api/map", "/api/overview", "/api/gateway-view", "/api/explain?name=x"]
+ENDPOINTS = [
+    "/api/map",
+    "/api/library",
+    "/api/overview",
+    "/api/gateway-view",
+    "/api/explain?name=x",
+]
 
 
 def _app(home):
@@ -49,6 +55,17 @@ def test_map_everywhere_and_for_a_project(client):
     assert "site-db" in {r["name"] for r in site["rows"]}
 
 
+def test_library_everywhere_and_for_a_project(client):
+    everywhere = client.get("/api/library?kind=mcp_server").json()
+    assert everywhere["project"] is None
+    assert [c["id"] for c in everywhere["columns"]] == ["claude_code", "codex", "cursor"]
+    assert "site-db" not in {r["name"] for r in everywhere["rows"]}
+
+    site = client.get(f"/api/library?kind=mcp_server&project={_project_id(client, 'work/site')}")
+    assert site.json()["project"]["path"] == str(client.home / "work/site")
+    assert "site-db" in {r["name"] for r in site.json()["rows"]}
+
+
 def test_overview_and_gateway_view(client):
     assert client.get("/api/overview").json()["headline"] == "2 things need attention"
     groups = client.get("/api/gateway-view").json()["groups"]
@@ -72,7 +89,7 @@ def test_explain_needs_a_name(client):
     assert client.get("/api/explain?kind=plugin").status_code == 422
 
 
-@pytest.mark.parametrize("path", ENDPOINTS)
+@pytest.mark.parametrize("path", [*ENDPOINTS, "/api/offer?kind=plugin&id=x"])
 def test_new_endpoints_need_the_session_cookie(home, path):
     with TestClient(_app(home), base_url=ORIGIN, follow_redirects=False) as anonymous:
         assert anonymous.get(path).status_code == 401

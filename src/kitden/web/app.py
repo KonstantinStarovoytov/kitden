@@ -55,6 +55,7 @@ from kitden.views.explain import explain
 from kitden.views.findings import find_bypasses, find_findings, finding_dict, mark_gateways
 from kitden.views.gateway_view import gateway_dict, gateway_view
 from kitden.views.inventory import Inventory, default_adapters, inventory_dict, item_dict
+from kitden.views.library import KINDS, SHOWS, library
 from kitden.views.load_map import load_map, map_dict
 from kitden.views.overview import overview
 from kitden.views.setup_server import is_old_entry, setup_server_state
@@ -366,6 +367,26 @@ def create_app(
         rows = load_map(state.inventory, path, gateway_registered=bool(gateways))
         return JSONResponse({"project": project, **map_dict(state.inventory, rows)})
 
+    def _library(request, project, path):
+        """One kind tab of the Library: rows, columns, counts and the lines above the table."""
+        params = request.query_params
+        kind = params.get("kind")
+        show = params.get("show")
+        hidden = frozenset(c for c in params.get("hidden", "").split(",") if c)
+        answer = library(
+            state.inventory,
+            adapters,
+            path,
+            gateway_registered=bool(_registered()),
+            kind=kind if kind in KINDS else "mcp_server",
+            show=show if show in SHOWS else "mine",
+            q=params.get("q", ""),
+            category=params.get("category", ""),
+            hidden=hidden,
+            attention=params.get("attention") == "1",
+        )
+        return JSONResponse({"project": project, **answer})
+
     def _explain(request, project, path):
         name = request.query_params.get("name")
         if not name:
@@ -675,6 +696,18 @@ def create_app(
             }
         )
 
+    async def offer_view(request: Request) -> JSONResponse:
+        """One plugin or skill from the catalogs, for Details of a row not on this computer."""
+        params = request.query_params
+        if params.get("kind") == "skill":
+            offers = skill_catalog(state.inventory, adapters)
+        else:
+            offers = catalog(state.inventory, adapters)
+        found = next((o for o in offers if o["id"] == params.get("id")), None)
+        if found is None:
+            return _error("Not on this computer.", 404)
+        return JSONResponse(found)
+
     async def commands(request: Request) -> JSONResponse:
         """Steps the developer runs themselves (FR-029, FR-035). Never run by the tool."""
         item = _item(request.query_params.get("item", ""))
@@ -728,6 +761,8 @@ def create_app(
             Route("/api/commands", commands),
             Route("/api/catalog", catalog_view),
             Route("/api/map", _read_model(_map)),
+            Route("/api/library", _read_model(_library)),
+            Route("/api/offer", offer_view),
             Route("/api/explain", _read_model(_explain)),
             Route("/api/overview", _read_model(_overview)),
             Route("/api/gateway-view", _read_model(_gateway_view)),
