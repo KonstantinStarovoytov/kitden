@@ -14,7 +14,13 @@ from pathlib import Path
 from kitden.changes.copy_folder import CopyRefusedError, list_files
 from kitden.clients.base import ClientAdapter
 from kitden.model import ClientStatus, ItemKind, Scope
-from kitden.views.catalog import INSTALLERS, MARKETPLACE_FILES, _first, _plugin_dir
+from kitden.views.catalog import (
+    INSTALLERS,
+    MARKETPLACE_FILES,
+    _category_name,
+    _first,
+    _plugin_dir,
+)
 
 CLIENTS = ("claude_code", "codex", "cursor")
 CLIENT_WORDS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
@@ -172,6 +178,7 @@ def _row(
     source: str,
     plugin_id: str | None,
     marketplace: str | None,
+    category: str | None,
     installed: dict[str, str],
     found: set[str],
 ) -> dict:
@@ -184,7 +191,7 @@ def _row(
         "from": source,
         "plugin": plugin_id,
         "marketplace": marketplace,
-        "category": None,
+        "category": category,
         "path": str(folder),
         "files": info["files"],
         "self_contained": can,
@@ -218,6 +225,28 @@ def skill_catalog(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
             plugins.setdefault(item.name, set()).add(item.client)
 
     rows: dict[str, dict] = {}
+
+    def add_plugin_skills(plugin_id: str, marketplace: str, folder: Path, category: str | None):
+        for skill_dir in sorted(p.parent for p in folder.glob("skills/*/SKILL.md")):
+            row_id = f"{skill_dir.name}@{plugin_id}"
+            if row_id in rows:
+                continue
+            info = read_skill(skill_dir)
+            installed = dict(loads.get(info["name"], {}))
+            for c in plugins.get(plugin_id, ()):
+                installed.setdefault(c, "Via plugin")
+            rows[row_id] = _row(
+                row_id,
+                info,
+                skill_dir,
+                plugin_id,
+                plugin_id,
+                marketplace,
+                category,
+                installed,
+                found,
+            )
+
     for client in INSTALLERS:
         if client not in adapters:
             continue
@@ -229,18 +258,13 @@ def skill_catalog(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
                 folder = _plugin_dir(root, entry.get("source"))
                 if folder is None:
                     continue
-                plugin_id = f"{entry['name']}@{marketplace}"
-                for skill_dir in sorted(p.parent for p in folder.glob("skills/*/SKILL.md")):
-                    row_id = f"{skill_dir.name}@{plugin_id}"
-                    if row_id in rows:
-                        continue
-                    info = read_skill(skill_dir)
-                    installed = dict(loads.get(info["name"], {}))
-                    for c in plugins.get(plugin_id, ()):
-                        installed.setdefault(c, "Via plugin")
-                    rows[row_id] = _row(
-                        row_id, info, skill_dir, plugin_id, plugin_id, marketplace, installed, found
-                    )
+                category = _category_name(entry.get("category"))
+                add_plugin_skills(f"{entry['name']}@{marketplace}", marketplace, folder, category)
+
+    # Cursor keeps the plugins it installs in its own cache, with no marketplace file to read.
+    cursor = adapters.get("cursor")
+    for plugin_id, folder in (cursor.plugin_folders() if cursor else {}).items():
+        add_plugin_skills(plugin_id, plugin_id.split("@", 1)[1], folder, None)
 
     # A skill in a client's own folder that no plugin here holds: it can go to another client.
     plugin_names = {r["name"] for r in rows.values()}
@@ -261,5 +285,5 @@ def skill_catalog(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
         owners = [CLIENT_WORDS[c] for c in CLIENTS if installed.get(c) == "Installed"]
         source = " and ".join(owners) if owners else "Your skills"
         row_id = f"{name}@skills"
-        rows[row_id] = _row(row_id, info, skill_dir, source, None, None, installed, found)
+        rows[row_id] = _row(row_id, info, skill_dir, source, None, None, None, installed, found)
     return sorted(rows.values(), key=lambda r: (r["name"].lower(), r["from"].lower()))

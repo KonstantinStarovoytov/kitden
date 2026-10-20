@@ -2,6 +2,7 @@
 
 import json
 import os
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -10,7 +11,7 @@ import kitden.clients.base as base
 from kitden.views.catalog import search
 from kitden.views.inventory import build_inventory, default_adapters
 from kitden.views.skills import front_matter, read_skill, skill_catalog
-from tests.conftest import make_home, write_cursor_fixture_state
+from tests.conftest import CURSOR_DB, make_home, write_cursor_fixture_state
 
 PLUGIN = "toolbox@claude-plugins-official"
 
@@ -167,3 +168,73 @@ def test_a_skill_folder_is_read_again_only_when_it_changes(tmp_path):
     os.symlink(tmp_path, folder / "out")
     info = read_skill(folder)
     assert info["self_contained"] is False and "link" in info["needs"][0]
+
+
+GLEAN = "glean@cursor-public"
+
+
+def _skill(folder: Path, name: str) -> None:
+    _write(folder / name / "SKILL.md", f"---\nname: {name}\ndescription: The {name} skill.\n---\n")
+
+
+def add_cursor_plugin(home: Path) -> Path:
+    """A Cursor plugin with two downloaded versions: the old one has skill a only, the new one
+    has a and b. A hidden folder is never a version, even when it is the newest."""
+    plugin = home / ".cursor/plugins/cache/cursor-public/glean"
+    _skill(plugin / "old/skills", "a")
+    _skill(plugin / "new/skills", "a")
+    _skill(plugin / "new/skills", "b")
+    _skill(plugin / ".partial/skills", "c")
+    os.utime(plugin / "old", (1, 1))
+    os.utime(plugin / "new", (2, 2))
+    os.utime(plugin / ".partial", (3, 3))
+    return plugin
+
+
+def install_in_cursor(home: Path, plugin_id: str) -> None:
+    """Add a user plugin to Cursor's install records."""
+    key = "cursor.plugins.installedIds.123|no-workspace"
+    with sqlite3.connect(home / CURSOR_DB) as con:
+        (value,) = con.execute("SELECT value FROM ItemTable WHERE key = ?", (key,)).fetchone()
+        records = [*json.loads(value), {"id": plugin_id, "sources": ["user"]}]
+        con.execute("INSERT INTO ItemTable VALUES (?, ?)", (key, json.dumps(records)))
+
+
+def test_skills_inside_cursor_plugins_are_listed_from_the_newest_version(home):
+    plugin = add_cursor_plugin(home)
+    rows = {r["id"]: r for r in _rows(home).values() if r["plugin"] == GLEAN}
+    assert set(rows) == {f"a@{GLEAN}", f"b@{GLEAN}"}
+    a = rows[f"a@{GLEAN}"]
+    assert a["path"] == str(plugin / "new/skills/a")
+    assert a["from"] == GLEAN and a["marketplace"] == "cursor-public"
+    assert a["description"] == "The a skill." and a["category"] is None
+    # Not installed in Cursor here, so every client found can take a copy.
+    assert a["installed"] == {}
+    assert a["routes"] == {"claude_code": "ready", "codex": "ready", "cursor": "ready"}
+
+
+def test_a_cursor_plugin_skill_can_go_to_claude_code_and_codex(home):
+    add_cursor_plugin(home)
+    install_in_cursor(home, GLEAN)
+    a = _rows(home)[f"a@{GLEAN}"]
+    assert a["installed"] == {"cursor": "Via plugin"}
+    assert a["routes"] == {"claude_code": "ready", "codex": "ready"}
+
+
+def test_a_cursor_plugin_skill_is_not_listed_again_as_your_own(home):
+    add_cursor_plugin(home)
+    _skill(home / ".claude/skills", "a")
+    rows = [r for r in _rows(home).values() if r["name"] == "a"]
+    assert [r["id"] for r in rows] == [f"a@{GLEAN}"]
+
+
+def test_a_plugin_skill_has_its_plugin_category(home):
+    path = home / ".claude/plugins/marketplaces/claude-plugins-official/.claude-plugin"
+    listed = json.loads((path / "marketplace.json").read_text())
+    listed["plugins"][0]["category"] = "Developer Tools"
+    (path / "marketplace.json").write_text(json.dumps(listed))
+    rows = _rows(home)
+    toolbox = [r for r in rows.values() if r["plugin"] == PLUGIN]
+    assert len(toolbox) == 4 and {r["category"] for r in toolbox} == {"Development"}
+    assert rows["brainstorming@superpowers@claude-plugins-official"]["category"] is None
+    assert rows["brandkit@skills"]["category"] is None

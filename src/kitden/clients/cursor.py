@@ -357,6 +357,26 @@ class CursorAdapter(ClientAdapter):
                     )
         return items
 
+    def plugin_folders(self) -> dict[str, Path]:
+        """Plugin id -> the newest downloaded version of it in Cursor's plugin cache.
+
+        The cache is `plugins/cache/<marketplace>/<plugin>/<version>/`, where a version is a
+        commit-hash folder and a plugin may keep several. Hidden folders are skipped.
+        """
+
+        def folders(parent: Path) -> list[Path]:
+            found = parent.iterdir() if parent.is_dir() else []
+            return sorted(p for p in found if p.is_dir() and not p.name.startswith("."))
+
+        out: dict[str, Path] = {}
+        for marketplace in folders(self.home / ".cursor/plugins/cache"):
+            for plugin in folders(marketplace):
+                versions = folders(plugin)
+                if versions:
+                    newest = max(versions, key=lambda v: v.stat().st_mtime)
+                    out[f"{plugin.name}@{marketplace.name}"] = newest
+        return out
+
     def _skills(
         self, root: Path, scope: Scope, project_path: str | None, third_party: bool
     ) -> list[Item]:
