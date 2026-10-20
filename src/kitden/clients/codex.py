@@ -7,6 +7,7 @@ comments). Spike S4: the running app keeps outside edits.
 import json
 import os
 import subprocess  # noqa: S404 - runs the codex command without a shell
+import threading
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
@@ -52,6 +53,9 @@ LIST_TIMEOUT_SECONDS = 15
 # `codex plugin list --json` results, reused until config.toml changes (the app rewrites it on
 # every plugin toggle, spike S4).
 _LIST_CACHE: dict[tuple, dict] = {}
+# Lists being asked for in the background, so a second quick scan does not ask again.
+_FILLING: set[tuple] = set()
+_FILL_LOCK = threading.Lock()
 REMOTE_INSTALL_RECORD = ".codex-remote-plugin-install.json"
 
 
@@ -78,11 +82,14 @@ class CodexAdapter(ClientAdapter):
         codex_home: Path | None = None,
         list_plugins: Callable[[], dict] | None = None,
         quick: bool = False,
+        on_slow_answer: Callable[[], None] | None = None,
     ) -> None:
         super().__init__(home, read_version)
         # A quick scan does not wait for `codex plugin list` (15 s on a real Mac, 2026-10-20):
-        # remote plugins show "Unknown" until the full scan that follows fills them in.
+        # it asks in the background, and plugins without a config.toml entry show "Unknown"
+        # until `on_slow_answer` says the answer is in and a new scan reads it.
         self.quick = quick
+        self.on_slow_answer = on_slow_answer
         env_home = os.environ.get("CODEX_HOME")
         self.codex_home = codex_home or (Path(env_home) if env_home else home / ".codex")
         self._list_plugins = list_plugins or self._run_plugin_list
@@ -98,24 +105,49 @@ class CodexAdapter(ClientAdapter):
         if command is None:
             return {}
         key = self._list_key()
-        if key not in _LIST_CACHE:
-            env = {**os.environ, "HOME": str(self.home), "CODEX_HOME": str(self.codex_home)}
-            done = subprocess.run(  # noqa: S603 - fixed client command, no shell
-                [command[0], "plugin", "list", "--json"],
-                env=env,
-                capture_output=True,
-                text=True,
-                timeout=LIST_TIMEOUT_SECONDS,
-                check=False,
-            )
-            _LIST_CACHE[key] = json.loads(done.stdout) if done.returncode == 0 else {}
+        if key in _LIST_CACHE:
+            return _LIST_CACHE[key]
+        if self.quick:
+            self.skipped = True
+            self._ask_later(command, key)
+            return {}
+        return self._ask(command, key)
+
+    def _ask(self, command: list[str], key: tuple) -> dict:
+        env = {**os.environ, "HOME": str(self.home), "CODEX_HOME": str(self.codex_home)}
+        done = subprocess.run(  # noqa: S603 - fixed client command, no shell
+            [command[0], "plugin", "list", "--json"],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=LIST_TIMEOUT_SECONDS,
+            check=False,
+        )
+        _LIST_CACHE[key] = json.loads(done.stdout) if done.returncode == 0 else {}
         return _LIST_CACHE[key]
+
+    def _ask_later(self, command: list[str], key: tuple) -> None:
+        """Ask for the list in a thread, once per config.toml; then call `on_slow_answer`."""
+        with _FILL_LOCK:
+            if key in _FILLING:
+                return
+            _FILLING.add(key)
+
+        def ask() -> None:
+            try:
+                self._ask(command, key)
+            except (OSError, ValueError, subprocess.SubprocessError):
+                _LIST_CACHE[key] = {}  # no answer: the plugins stay "Unknown", no retry loop
+            finally:
+                with _FILL_LOCK:
+                    _FILLING.discard(key)
+            if self.on_slow_answer:
+                self.on_slow_answer()
+
+        threading.Thread(target=ask, name="codex-plugin-list", daemon=True).start()
 
     def _plugin_states(self) -> dict[str, bool]:
         if self._read_version() is None:
-            return {}
-        own_list = self._list_plugins == self._run_plugin_list
-        if self.quick and own_list and self._list_key() not in _LIST_CACHE:
             return {}
         try:
             listing = self._list_plugins()

@@ -101,12 +101,45 @@ def test_a_plugin_turned_off_turns_its_servers_off(tmp_path, no_version):
     assert ("codex", "mcp_server", "kitden", "plugin", "off", None) in rows(scan.items, home)
 
 
-# A quick first scan: `codex plugin list` took 15 s on a real Mac, so the page does not wait.
-def test_a_quick_scan_does_not_wait_for_the_codex_plugin_list(tmp_path, monkeypatch):
-    calls = []
-    monkeypatch.setattr(CodexAdapter, "_run_plugin_list", lambda self: calls.append(1) or {})
+# A quick scan never waits for `codex plugin list` (15 s on a real Mac): it asks in the
+# background, and says when the answer is in.
+def test_a_quick_scan_asks_codex_in_the_background_and_says_when_the_answer_is_in(
+    tmp_path, monkeypatch
+):
+    import json
+    import subprocess
+    import threading
+
+    import kitden.clients.codex as codex
+
+    monkeypatch.setattr(codex, "_LIST_CACHE", {})
+    monkeypatch.setattr(codex, "version_command", lambda client: ["codex", "--version"])
+    release, runs = threading.Event(), []
+
+    def slow_list(command, **kwargs):
+        runs.append(command)
+        release.wait(5)
+        listing = {"installed": [{"pluginId": "gmail@openai-curated-remote", "enabled": False}]}
+        return subprocess.CompletedProcess(command, 0, json.dumps(listing), "")
+
+    monkeypatch.setattr(codex.subprocess, "run", slow_list)
     home = make_home(tmp_path, FIXTURE)
-    CodexAdapter(home, read_version=lambda: "0.159.2", quick=True).scan()
-    assert calls == []
-    CodexAdapter(home, read_version=lambda: "0.159.2").scan()
-    assert calls == [1]
+    answered = threading.Event()
+
+    def quick():
+        return CodexAdapter(
+            home, read_version=lambda: "0.163.0", quick=True, on_slow_answer=answered.set
+        )
+
+    first = quick()
+    first.scan()  # does not wait for the list
+    assert first.skipped is True
+    second = quick()
+    second.scan()  # the list is still on its way: no second command
+    assert second.skipped is True
+    release.set()
+    assert answered.wait(5)
+    assert len(runs) == 1 and runs[0][1:] == ["plugin", "list", "--json"]
+    third = quick()
+    gmail = next(i for i in third.scan().items if i.name == "gmail@openai-curated-remote")
+    assert third.skipped is False and str(gmail.enabled) == "off"

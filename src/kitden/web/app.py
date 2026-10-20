@@ -169,7 +169,7 @@ def _error(text: str, status: int) -> JSONResponse:
 
 # What the first scan reads, step by step, so the page can say what it still waits for.
 CLIENT_STEPS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
-FULL_STEP = "Codex plugins"
+SLOW_STEP = "Codex plugins"
 WARM_STEP = "marketplaces"
 
 
@@ -188,6 +188,8 @@ class Progress:
         self._publish()
 
     def done(self, *names: str) -> None:
+        if not any(s["name"] in names and not s["done"] for s in self.steps):
+            return
         for step in self.steps:
             if step["name"] in names:
                 step["done"] = True
@@ -196,7 +198,14 @@ class Progress:
     def mark_ready(self, *names: str) -> None:
         """The page has its data; `names` are steps that ended with it."""
         self.ready = True
-        self.done(*names)
+        for step in self.steps:
+            if step["name"] in names:
+                step["done"] = True
+        self._publish()
+
+    def finish(self) -> None:
+        """Nothing is left to wait for, also after a failure."""
+        self.mark_ready(*(step["name"] for step in self.steps))
 
     def view(self) -> dict:
         return {"ready": self.ready, "steps": [dict(step) for step in self.steps]}
@@ -210,9 +219,9 @@ class State:
 
     With `scan_now=False` the page starts empty and the first scan runs once the server is up,
     so `kitden open` does not wait for it; API calls wait for `ready` instead. With
-    `quick_first` that first scan skips slow questions so the page has its data in a second or
-    two; the full scan follows in the background, and so does `warm` (it reads the
-    marketplaces, so the Library opens at once).
+    `quick_first` every scan is quick: a slow answer (Codex's plugin list) comes in the
+    background and brings one more scan. After the first scan, `warm` reads the marketplaces,
+    so the Library opens at once.
     """
 
     def __init__(
@@ -228,6 +237,8 @@ class State:
         self.quick_first = quick_first
         self.warm = warm
         self.progress = Progress(events)
+        self.loop: asyncio.AbstractEventLoop | None = None
+        self.follow_ups: set[asyncio.Task] = set()
         self.ready = asyncio.Event()
         self.inventory = build() if scan_now else Inventory()
         self.data = inventory_dict(self.inventory)
@@ -236,21 +247,40 @@ class State:
             self.ready.set()
             self.progress.ready = True
 
+    def _options(self, **more) -> dict:
+        if not self.quick_first:
+            return {}
+        return {"quick": True, "on_slow_answer": self._slow_answer_in, **more}
+
+    def _slow_answer_in(self) -> None:
+        """Called from the thread that asked; scans again on the page's own loop."""
+        if self.loop is None:
+            return
+        with contextlib.suppress(RuntimeError):  # the page has stopped
+            self.loop.call_soon_threadsafe(self._scan_again)
+
+    def _scan_again(self) -> None:
+        task = asyncio.ensure_future(self.rescan())
+        self.follow_ups.add(task)
+        task.add_done_callback(self.follow_ups.discard)
+
     async def first_scan(self) -> None:
+        self.loop = asyncio.get_running_loop()
         try:
             if self.quick_first:
-                await self._quick_then_full()
+                await self._quick_first_scan()
             else:
                 await self.rescan()
         except Exception as error:  # noqa: BLE001 - the page must answer even if the scan fails
             print(f"The first scan failed: {error}", file=sys.stderr, flush=True)
+            self.progress.finish()
         finally:
             self.ready.set()
             if not self.progress.ready:
-                self.progress.mark_ready()
+                self.progress.finish()
 
-    async def _quick_then_full(self) -> None:
-        later = [FULL_STEP] + ([WARM_STEP] if self.warm else [])
+    async def _quick_first_scan(self) -> None:
+        later = [SLOW_STEP] + ([WARM_STEP] if self.warm else [])
         self.progress.start(list(CLIENT_STEPS.values()), later)
         loop = asyncio.get_running_loop()
 
@@ -259,19 +289,14 @@ class State:
                 loop.call_soon_threadsafe(self.progress.done, CLIENT_STEPS[client])
 
         async with self.lock:
-            self.inventory = await asyncio.to_thread(self.build, quick=True, on_step=step)
+            options = self._options(on_step=step)
+            self.inventory = await asyncio.to_thread(self.build, **options)
             self.data = inventory_dict(self.inventory)
         self.ready.set()
-        self.progress.mark_ready(
-            *CLIENT_STEPS.values()
-        )  # a client not found has no step of its own
-        await asyncio.gather(self._full_scan(), self._warm())
-
-    async def _full_scan(self) -> None:
-        try:
-            await self.rescan()
-        finally:
-            self.progress.done(FULL_STEP)
+        # Every client step ends here, also for a client the build did not report.
+        done = list(CLIENT_STEPS.values()) + ([] if self.inventory.partial else [SLOW_STEP])
+        self.progress.mark_ready(*done)
+        await self._warm()
 
     async def _warm(self) -> None:
         if self.warm is None:
@@ -286,9 +311,11 @@ class State:
     async def rescan(self) -> dict:
         async with self.lock:
             self.events.publish("rescan_started")
-            self.inventory = await asyncio.to_thread(self.build)
+            self.inventory = await asyncio.to_thread(self.build, **self._options())
             self.data = inventory_dict(self.inventory)
             self.events.publish("rescan_finished")
+        if not self.inventory.partial:
+            self.progress.done(SLOW_STEP)
         return self.data
 
 
@@ -313,7 +340,7 @@ def _states_in(inventory, *states: str) -> set[str]:
 
 
 def create_app(
-    build: Callable[[], Inventory],
+    build: Callable[..., Inventory],
     token: str,
     port: int,
     watch_folders: Iterable[Path] = (),

@@ -17,6 +17,10 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Hide a column:** the "−" on a client's column head hides it on the page, and "Show" brings it
   back.
 - **Categories:** filter plugins and skills by category. The category shows quietly in each row.
+- **Quick start:** the page has its data in about two seconds. Codex's slow plugin list comes in
+  the background, and a line shows what is still read.
+- **Quick start:** the page has its data in about two seconds. Codex's slow plugin list comes in
+  the background, and a line shows what is still read.
 
 ### 0.2.0
 

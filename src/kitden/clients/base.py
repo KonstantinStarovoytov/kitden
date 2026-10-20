@@ -216,6 +216,7 @@ class ClientAdapter(ABC):
     config_root: str
     skills_folder: str = ""  # where the client reads the user's own skills, under home
     skill_note: str = ""  # what to do after a skill is added
+    skipped: bool = False  # a quick scan left out an answer that is still on its way
 
     def __init__(self, home: Path, read_version: Callable[[], str | None] | None = None) -> None:
         self.home = home

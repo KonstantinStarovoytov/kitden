@@ -101,3 +101,10 @@ def test_a_quick_build_asks_codex_for_a_quick_scan(tmp_path):
     assert isinstance(codex, CodexAdapter) and codex.quick is True
     codex = next(a for a in default_adapters(tmp_path) if a.id == "codex")
     assert codex.quick is False
+
+
+def test_an_inventory_says_when_a_client_still_waits_for_a_slow_answer():
+    waiting = FakeAdapter("codex")
+    waiting.skipped = True
+    assert build_inventory(adapters=[FakeAdapter("claude_code"), waiting]).partial is True
+    assert build_inventory(adapters=[FakeAdapter("claude_code")]).partial is False

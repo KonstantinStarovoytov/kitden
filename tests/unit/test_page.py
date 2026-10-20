@@ -235,7 +235,18 @@ def test_a_failing_first_scan_still_lets_the_page_answer():
         assert client.get("/api/clients").json() == []
 
 
-def test_the_first_scan_is_quick_and_the_full_scan_follows(tmp_path):
+def _progress_done(client, tries=60):
+    for _ in range(tries):
+        view = client.get("/api/progress").json()
+        if view["ready"] and all(s["done"] for s in view["steps"]):
+            return view
+        time.sleep(0.05)
+    raise AssertionError(f"the progress never ended: {view}")
+
+
+def test_scans_are_quick_and_a_slow_answer_brings_one_more(tmp_path):
+    import threading
+
     from starlette.testclient import TestClient
 
     from kitden.views.inventory import Inventory
@@ -243,20 +254,21 @@ def test_the_first_scan_is_quick_and_the_full_scan_follows(tmp_path):
 
     calls = []
 
-    def build(quick=False, on_step=None):
+    def build(quick=False, on_step=None, on_slow_answer=None):
         calls.append(quick)
-        time.sleep(0.4 if quick else 0.2)
+        time.sleep(0.3)
         if on_step:
             on_step("codex")
-        return Inventory()
+        inventory = Inventory()
+        if len(calls) == 1:  # Codex's list is on its way; it answers a moment later
+            inventory.partial = True
+            threading.Timer(0.2, on_slow_answer).start()
+        return inventory
 
     app = create_app(build, token="tok", port=47800, first_scan_later=True, quick_first=True)
     with TestClient(app, base_url="http://127.0.0.1:47800", follow_redirects=False) as client:
         client.get("/?token=tok")
-        # The progress answers at once, before the first scan is done.
-        started = time.monotonic()
-        early = client.get("/api/progress").json()
-        assert time.monotonic() - started < 0.3
+        early = client.get("/api/progress").json()  # answers before the first scan is done
         assert early["ready"] is False
         assert [s["name"] for s in early["steps"]] == [
             "Claude Code",
@@ -264,16 +276,45 @@ def test_the_first_scan_is_quick_and_the_full_scan_follows(tmp_path):
             "Cursor",
             "Codex plugins",
         ]
-        assert client.get("/api/clients").status_code == 200  # after the quick scan
-        assert calls[0] is True
-        for _ in range(40):
-            view = client.get("/api/progress").json()
-            if view["ready"] and all(s["done"] for s in view["steps"]):
-                break
-            time.sleep(0.05)
-        else:
-            raise AssertionError(f"the scan never finished: {view}")
-    assert calls == [True, False]
+        assert client.get("/api/clients").status_code == 200
+        _progress_done(client)
+    assert calls == [True, True]  # the second scan is quick too: the answer is cached by then
+
+
+def test_a_failing_quick_scan_still_ends_its_progress():
+    from starlette.testclient import TestClient
+
+    from kitden.web.app import create_app
+
+    def broken(quick=False, on_step=None, on_slow_answer=None):
+        raise RuntimeError("cannot read")
+
+    app = create_app(broken, token="tok", port=47800, first_scan_later=True, quick_first=True)
+    with TestClient(app, base_url="http://127.0.0.1:47800", follow_redirects=False) as client:
+        client.get("/?token=tok")
+        assert client.get("/api/clients").json() == []
+        _progress_done(client)
+
+
+def test_progress_tells_the_open_pages_each_step():
+    from kitden.web.app import Broadcaster, Progress
+
+    events = Broadcaster()
+    queue = events.subscribe()
+    progress = Progress(events)
+    progress.start(["Codex"], ["marketplaces"])
+    progress.done("Codex")
+    progress.finish()
+    sent = [queue.get_nowait() for _ in range(3)]
+    assert [name for name, _ in sent] == ["scan_progress"] * 3
+    assert sent[1][1]["steps"][0] == {"name": "Codex", "done": True, "later": False}
+    assert sent[2][1] == {
+        "ready": True,
+        "steps": [
+            {"name": "Codex", "done": True, "later": False},
+            {"name": "marketplaces", "done": True, "later": True},
+        ],
+    }
 
 
 def test_the_marketplaces_are_read_once_the_page_has_its_data(tmp_path):
@@ -283,7 +324,7 @@ def test_the_marketplaces_are_read_once_the_page_has_its_data(tmp_path):
     from kitden.web.app import create_app
 
     app = create_app(
-        lambda quick=False, on_step=None: Inventory(),
+        lambda quick=False, on_step=None, on_slow_answer=None: Inventory(),
         token="tok",
         port=47800,
         home=tmp_path,

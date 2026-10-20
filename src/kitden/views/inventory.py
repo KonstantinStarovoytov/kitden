@@ -1,5 +1,6 @@
 """One inventory from all client adapters (FR-001 to FR-005)."""
 
+import contextlib
 from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field, replace
@@ -29,11 +30,15 @@ class Inventory:
     items: list[Item] = field(default_factory=list)
     projects: list[Project] = field(default_factory=list)
     problems: list[Source] = field(default_factory=list)
+    partial: bool = False  # a quick scan left out a slow answer; a new scan follows when it is in
 
 
-def default_adapters(home: Path, quick: bool = False) -> list[ClientAdapter]:
-    """The three clients; `quick` skips what takes long to ask (see CodexAdapter)."""
-    return [ClaudeCodeAdapter(home), CodexAdapter(home, quick=quick), CursorAdapter(home)]
+def default_adapters(
+    home: Path, quick: bool = False, on_slow_answer: Callable[[], None] | None = None
+) -> list[ClientAdapter]:
+    """The three clients; `quick` does not wait for slow answers (see CodexAdapter)."""
+    codex = CodexAdapter(home, quick=quick, on_slow_answer=on_slow_answer)
+    return [ClaudeCodeAdapter(home), codex, CursorAdapter(home)]
 
 
 def _read(adapter: ClientAdapter, apps: list[Path]) -> tuple[Client, Scan | None]:
@@ -54,12 +59,14 @@ def build_inventory(
     *,
     quick: bool = False,
     on_step: Callable[[str], None] | None = None,
+    on_slow_answer: Callable[[], None] | None = None,
 ) -> Inventory:
     """Read every client, side by side; `on_step(client_id)` runs as each one is done. `apps`
     is where to look for the clients' Mac apps; by default the usual folders of `home`'s owner,
-    and nowhere when the test passes its own adapters. `quick` skips slow questions."""
+    and nowhere when the test passes its own adapters. `quick` does not wait for slow answers:
+    they come in the background, and `on_slow_answer` runs when one is in."""
     if adapters is None:
-        adapters = default_adapters(home or Path.home(), quick=quick)
+        adapters = default_adapters(home or Path.home(), quick, on_slow_answer)
     adapters = list(adapters)
     if apps is None:
         apps = app_roots(home) if home is not None else []
@@ -67,7 +74,8 @@ def build_inventory(
     def read(adapter: ClientAdapter) -> tuple[Client, Scan | None]:
         found = _read(adapter, apps)
         if on_step:
-            on_step(adapter.id)
+            with contextlib.suppress(Exception):  # only a progress note; never lose the scan
+                on_step(adapter.id)
         return found
 
     with ThreadPoolExecutor(max_workers=max(len(adapters), 1)) as pool:
@@ -101,6 +109,7 @@ def build_inventory(
                 else replace(known, known_by=tuple(dict.fromkeys(known.known_by + found.known_by)))
             )
     inventory.projects = sorted(projects.values(), key=lambda p: p.path)
+    inventory.partial = any(adapter.skipped for adapter in adapters)
     return inventory
 
 

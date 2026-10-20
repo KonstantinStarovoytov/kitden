@@ -147,37 +147,58 @@ function catchUp() {
 }
 
 // The first scan says what it still reads, and a bar under the top bar fills as each step ends.
-// It shows only when the wait is long enough to notice, so a quick start never blinks.
+// It shows only when the wait is long enough to notice, so a quick start never blinks; the
+// words appear with it (a screen reader hears them then, not before), and at the end the bar
+// fills up before it goes.
 const SCAN_LINE_DELAY_MS = 1000;
+const SCAN_LINE_END_MS = 400;
 let scanLineTimer = null;
+let scanning = null; // the last line, while the first scan still reads something
+
+function drawScan() {
+  const bar = $("#topbar");
+  bar.style.setProperty("--scan-done", String(scanning.share));
+  $("#scan-status").textContent = scanning.text;
+  bar.classList.add("progress");
+}
 
 function showScan(view) {
-  const line = scanLine(view);
   const bar = $("#topbar");
-  const status = $("#scan-status");
-  if (!line) {
-    clearTimeout(scanLineTimer);
-    scanLineTimer = null;
-    bar.classList.remove("progress");
-    status.textContent = "";
+  scanning = scanLine(view);
+  if (scanning) {
+    if (bar.classList.contains("progress")) drawScan();
+    else if (!scanLineTimer) {
+      scanLineTimer = setTimeout(() => {
+        scanLineTimer = null;
+        if (scanning) drawScan();
+      }, SCAN_LINE_DELAY_MS);
+    }
     return;
   }
-  status.textContent = line.text;
-  bar.style.setProperty("--scan-done", String(line.share));
-  if (!bar.classList.contains("progress") && !scanLineTimer) {
-    scanLineTimer = setTimeout(() => {
-      scanLineTimer = null;
-      if ($("#scan-status").textContent) bar.classList.add("progress");
-    }, SCAN_LINE_DELAY_MS);
-  }
+  clearTimeout(scanLineTimer);
+  scanLineTimer = null;
+  if (!bar.classList.contains("progress")) return;
+  bar.style.setProperty("--scan-done", "1");
+  setTimeout(() => {
+    if (scanning) return;
+    bar.classList.remove("progress");
+    $("#scan-status").textContent = "";
+  }, SCAN_LINE_END_MS);
+}
+
+function readScan() {
+  getJson("/api/progress").then(showScan).catch(() => {});
 }
 
 function listen() {
   const events = new EventSource("/api/events");
+  // Read where the first scan is on every (re)connect: steps sent while not connected are lost.
+  events.addEventListener("open", readScan);
   events.addEventListener("scan_progress", (event) => {
     try { showScan(JSON.parse(event.data)); } catch { /* a broken message changes nothing */ }
   });
-  events.addEventListener("rescan_started", () => $("#topbar").classList.add("scanning"));
+  // While the first scan's line runs, it already says that a scan runs: no sweep on top.
+  events.addEventListener("rescan_started", () => { if (!scanning) $("#topbar").classList.add("scanning"); });
   // How many steps of a running change are done; the review's Apply button counts them.
   events.addEventListener("change_progress", (event) => {
     let detail = null;
@@ -257,7 +278,6 @@ function start() {
   initPanel();
 
   renderPlace();
-  getJson("/api/progress").then(showScan).catch(() => {});
   loadShared()
     .then(refresh)
     .catch(reportError);
