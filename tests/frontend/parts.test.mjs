@@ -29,7 +29,7 @@ function element(tag) {
   return node;
 }
 globalThis.document = { createElement: element };
-const { banner, clientCheck, morphSocket, opens, socket } = await import('../../src/kitden/web/static/js/parts.js');
+const { banner, changeTitle, clientCheck, morphSocket, opens, socket } = await import('../../src/kitden/web/static/js/parts.js');
 
 test('a row that opens Details ends with a chevron for the eye and words for a screen reader', () => {
   const node = opens();
@@ -111,4 +111,10 @@ test('a redraw that kept focus on the page is left alone', async () => {
   const page = retryOn({ failsAgain: false, focusKept: true });
   await page.press();
   assert.deepEqual(page.focused, []);
+});
+
+test('an Add skills entry on the Changes page counts the skills, not every name', () => {
+  const step = (name) => ({ client: 'codex', name, reaches: ['codex', 'cursor'] });
+  assert.equal(changeTitle({ action: 'plugin.skills', steps: [step('a'), step('b'), step('c')] }), 'Added 3 skills · Codex, Cursor');
+  assert.equal(changeTitle({ action: 'plugin.skills', steps: [step('a')] }), 'Added 1 skill · Codex, Cursor');
 });

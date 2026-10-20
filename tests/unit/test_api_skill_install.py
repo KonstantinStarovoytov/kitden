@@ -194,3 +194,130 @@ def test_a_copied_skill_is_a_change_on_the_changes_page(client):
     assert (entry["action"], entry["state"]) == ("skill.install", "verified")
     assert entry["steps"][0]["reaches"] == ["cursor"]
     assert entry["steps"][0]["path"].endswith(".cursor/skills/tidy")
+
+
+# Add skills: a plugin's self-contained skills, copied into one client in one change -------
+
+BRAINSTORMING = f"brainstorming@{PLUGIN}"
+LEFT_OUT = [
+    {"name": "reaching", "why": "needs the rest of the plugin"},
+    {"name": "rooted", "why": "needs the rest of the plugin"},
+]
+
+
+def _add_skills(client, clients, plugin=PLUGIN):
+    body = {
+        "action": "plugin.skills",
+        "targets": [{"client": c} for c in clients],
+        "params": {"plugin": plugin},
+    }
+    return client.post("/api/changes/preview", json=body, headers=POST)
+
+
+def _apply(client, change):
+    return client.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
+
+
+def test_add_skills_is_one_change_that_undo_removes_whole(client):
+    home = client.home
+    change = _add_skills(client, ["codex"]).json()
+    assert [(s["client"], s["name"]) for s in change["steps"]] == [
+        ("codex", "brainstorming"),
+        ("codex", "tidy"),
+    ]
+    assert change["left_out"] == LEFT_OUT
+    # Claude Code loads a skill named brainstorming from the superpowers plugin already; Cursor
+    # reads the shared folder the copies go to.
+    assert change["after"] == [
+        {"client": "claude_code", "state": "on", "word": "Loads"},
+        {"client": "codex", "state": "on", "word": "Loads"},
+        {"client": "cursor", "state": "on", "word": "Loads"},
+    ]
+    assert not (home / ".agents/skills/tidy").exists()
+
+    assert _apply(client, change)["state"] == "verified"
+    for name in ("brainstorming", "tidy"):
+        assert (home / ".agents/skills" / name / "SKILL.md").is_file()
+    # The same plugin has nothing left to add there.
+    again = _add_skills(client, ["codex"])
+    assert again.status_code == 422
+    assert again.json()["detail"] == "Codex has every skill in toolbox it can use"
+
+    undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
+    assert undone["state"] == "undone", undone.get("error")
+    assert not (home / ".agents/skills/tidy").exists()
+    assert not (home / ".agents/skills/brainstorming").exists()
+    entry = client.get("/api/changes").json()[0]
+    assert (entry["action"], entry["state"]) == ("plugin.skills", "undone")
+
+
+def test_add_skills_skips_what_the_client_has_and_undo_leaves_that_alone(client):
+    home = client.home
+    earlier = _preview(client, BRAINSTORMING, ["claude_code"]).json()
+    assert _apply(client, earlier)["state"] == "verified"
+    kept = digest(home / ".claude/skills/brainstorming")
+
+    change = _add_skills(client, ["claude_code"]).json()
+    assert [s["name"] for s in change["steps"]] == ["tidy"]
+    assert change["steps"][0]["reaches"] == ["claude_code", "cursor"]
+    assert change["left_out"] == [
+        {"name": "brainstorming", "why": "Claude Code already has it"},
+        *LEFT_OUT,
+    ]
+    assert change["after"] == [
+        {"client": "claude_code", "state": "on", "word": "Loads"},
+        {"client": "cursor", "state": "on", "word": "Loads"},
+    ]
+    assert _apply(client, change)["state"] == "verified"
+    assert (home / ".claude/skills/tidy/SKILL.md").is_file()
+
+    undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
+    assert undone["state"] == "undone", undone.get("error")
+    assert not (home / ".claude/skills/tidy").exists()
+    assert digest(home / ".claude/skills/brainstorming") == kept
+
+
+def test_add_skills_says_when_a_client_would_load_a_skill_twice(client):
+    # Cursor already reads Codex's copy of tidy; Claude Code's folder would be a second one.
+    for skill, where in ((BRAINSTORMING, "claude_code"), (f"tidy@{PLUGIN}", "codex")):
+        assert _apply(client, _preview(client, skill, [where]).json())["state"] == "verified"
+    change = _add_skills(client, ["claude_code"]).json()
+    assert [s["name"] for s in change["steps"]] == ["tidy"]
+    cursor = next(e for e in change["after"] if e["client"] == "cursor")
+    assert cursor["word"] == "Loads twice"
+    assert cursor["note"] == (
+        "Cursor reads two folders that hold this skill, so it loads the skill twice."
+    )
+
+
+def test_add_skills_with_several_skills_names_the_ones_loaded_twice(client):
+    # Claude Code loads brainstorming from the superpowers plugin; the copy would be a second one.
+    change = _add_skills(client, ["claude_code"]).json()
+    assert [s["name"] for s in change["steps"]] == ["brainstorming", "tidy"]
+    assert change["after"] == [
+        {
+            "client": "claude_code",
+            "state": "on",
+            "word": "Loads twice",
+            "note": "Claude Code would load brainstorming twice, from two folders.",
+        },
+        {"client": "cursor", "state": "on", "word": "Loads"},
+    ]
+
+
+def test_add_skills_leaves_nothing_out_when_every_skill_is_copied(client):
+    change = _add_skills(client, ["codex"], "superpowers@claude-plugins-official").json()
+    assert [s["name"] for s in change["steps"]] == ["brainstorming"]
+    assert change["left_out"] == []
+    # Only this action says what it leaves out.
+    assert "left_out" not in _preview(client, TIDY, ["codex"]).json()
+
+
+def test_add_skills_needs_one_client_and_a_plugin_with_skills(client):
+    both = _add_skills(client, ["codex", "cursor"])
+    assert (both.status_code, both.json()["detail"]) == (422, "Choose one client.")
+    none = _add_skills(client, [])
+    assert (none.status_code, none.json()["detail"]) == (422, "Choose one client.")
+    unknown = _add_skills(client, ["codex"], "nothing@nowhere")
+    assert unknown.status_code == 422
+    assert unknown.json()["detail"] == "This plugin has no skills on this computer."

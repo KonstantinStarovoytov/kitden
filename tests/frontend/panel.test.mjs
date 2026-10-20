@@ -5,7 +5,7 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; panel.js must load there too.
 delete globalThis.navigator;
-const { changeOutcome, footerActions, moveFor } = await import('../../src/kitden/web/static/js/panel.js');
+const { changeOutcome, changeWords, footerActions, leftOutText, moveFor } = await import('../../src/kitden/web/static/js/panel.js');
 
 const github = { kind: 'mcp_server', name: 'github' };
 const direct = { name: 'github', items: ['entry-1', 'entry-2'] };
@@ -172,4 +172,25 @@ test('an Undo answer is used as it is, and a refusal the server explains is a fa
   calls = server(() => Response.json({ detail: 'cannot move from undone to undone' }, { status: 409 }), () => Response.json(undone));
   assert.deepEqual(await changeOutcome('c1', 'undo'), { after: undone, failure: LOST });
   assert.deepEqual(calls, [undo, read]);
+});
+
+// Add skills: one change, one review line for what is left out ------------------------------
+
+const copy = (name, reaches) => ({ client: 'claude_code', name, reaches });
+const added = { action: 'plugin.skills', steps: [copy('tidy', ['claude_code', 'cursor']), copy('docs', ['claude_code', 'cursor'])] };
+
+test('the review of Add skills names the plugin and every client the copies reach', () => {
+  const words = changeWords(added, { params: { plugin: 'toolbox@claude-plugins-official' } });
+  assert.equal(words.title, "Add toolbox's skills to Claude Code and Cursor");
+  assert.equal(words.done, 'Added 2 skills to Claude Code and Cursor');
+  assert.equal(changeWords({ ...added, steps: [added.steps[0]] }).done, 'Added 1 skill to Claude Code and Cursor');
+});
+
+test('what Add skills leaves out is one plain line, or nothing', () => {
+  assert.equal(leftOutText([]), '');
+  assert.equal(leftOutText(undefined), '');
+  assert.equal(
+    leftOutText([{ name: 'b', why: 'needs the rest of the plugin' }, { name: 'c', why: 'Claude Code already has it' }]),
+    'Left out: b (needs the rest of the plugin), c (Claude Code already has it).',
+  );
 });

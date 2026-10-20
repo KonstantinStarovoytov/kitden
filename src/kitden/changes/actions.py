@@ -18,6 +18,7 @@ GATEWAY_SWITCH = "gateway.switch"
 PLUGIN_INSTALL = "plugin.install"
 MARKETPLACE_ADD = "marketplace.add"
 SKILL_INSTALL = "skill.install"
+PLUGIN_SKILLS = "plugin.skills"
 CLIENT_WORDS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
 SETUP_SERVER_UPDATE = "setup_server.update"
 ENTRY_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
@@ -130,6 +131,50 @@ def skill_steps(
     elif "cursor" in chosen and not ("claude_code" in chosen and via_claude):
         steps.append(adapters["cursor"].skill_copy_step(folder, ["cursor"]))
     return steps
+
+
+def _left_out_why(skill: dict, client: str) -> str | None:
+    """Why an "Add skills" copy skips this skill for the client; None when it is copied."""
+    if client in skill["installed"]:
+        return f"{CLIENT_WORDS.get(client, client)} already has it"
+    if not skill["self_contained"]:
+        return "needs the rest of the plugin"
+    return None
+
+
+def plugin_skill_steps(
+    adapters: dict[str, ClientAdapter],
+    plugin_id: str,
+    skills: list[dict],
+    client: str,
+    found: set[str],
+) -> list[Step]:
+    """Copy the skills of one plugin that work alone into one client that cannot install the
+    plugin (Library). A skill the client already has is skipped. Each copy is the one Discover
+    makes for a single skill, so the folder choice is the same."""
+    steps = []
+    for skill in skills:
+        copied = (
+            skill["plugin"] == plugin_id
+            and client in skill["routes"]
+            and _left_out_why(skill, client) is None
+        )
+        if copied:
+            steps += skill_steps(adapters, skill, [client], found)
+    if not steps:
+        words = CLIENT_WORDS.get(client, client)
+        raise ValueError(f"{words} has every skill in {plugin_id.split('@')[0]} it can use")
+    return steps
+
+
+def plugin_skills_left_out(plugin_id: str, skills: list[dict], client: str) -> list[dict]:
+    """The skills of the plugin that "Add skills" does not copy, each with the reason."""
+    out = []
+    for skill in skills:
+        why = _left_out_why(skill, client) if skill["plugin"] == plugin_id else None
+        if why:
+            out.append({"name": skill["name"], "why": why})
+    return out
 
 
 def marketplace_steps(

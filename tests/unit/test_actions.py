@@ -5,11 +5,18 @@ import json
 import pytest
 
 import kitden.clients.base as base
-from kitden.changes.actions import connect_steps, remove_steps
+from kitden.changes.actions import (
+    connect_steps,
+    plugin_skill_steps,
+    plugin_skills_left_out,
+    remove_steps,
+)
 from kitden.changes.json_splice import ABSENT
 from kitden.model import Gateway, GatewayAuth
 from kitden.views.inventory import build_inventory, default_adapters
+from kitden.views.skills import skill_catalog
 from tests.conftest import make_home, write_cursor_fixture_state
+from tests.unit.test_skills_catalog import PLUGIN, add_skills_marketplace
 
 URL = "http://127.0.0.1:12008/metamcp/dev/mcp"
 KEYED = Gateway(url=URL, auth=GatewayAuth.ENV_KEY, key_env_var="GW_KEY")
@@ -155,3 +162,66 @@ def test_removal_is_refused_for_items_without_the_action(home, adapters):
     desktop = _item(inventory, "claude_desktop_code_tab", "metamcp-local", "user")
     with pytest.raises(ValueError, match="cannot be removed"):
         remove_steps(adapters, desktop)
+
+
+# Add skills: copy a plugin's self-contained skills into one client --------------------------
+
+ALL_FOUND = {"claude_code", "codex", "cursor"}
+
+
+def _skill_rows(home):
+    inventory = build_inventory(home)
+    adapters = {a.id: a for a in default_adapters(home)}
+    return adapters, skill_catalog(inventory, adapters)
+
+
+def _claude_has(home, name):
+    folder = home / ".claude/skills" / name
+    folder.mkdir(parents=True)
+    (folder / "SKILL.md").write_text(f"---\nname: {name}\ndescription: Mine.\n---\n")
+
+
+def test_add_skills_copies_each_self_contained_skill_once(home):
+    # toolbox holds tidy and brainstorming (both work alone), rooted and reaching (they do not).
+    add_skills_marketplace(home)
+    _claude_has(home, "brainstorming")
+    adapters, rows = _skill_rows(home)
+
+    steps = plugin_skill_steps(adapters, PLUGIN, rows, "claude_code", ALL_FOUND)
+    assert [(s.client, s.name) for s in steps] == [("claude_code", "tidy")]
+    assert steps[0].copy.target == str(home / ".claude/skills/tidy")
+    # Cursor reads Claude Code's folder, so it reads this copy too.
+    assert steps[0].copy.readers == ["claude_code", "cursor"]
+
+    # Codex has neither, so it gets both, in the shared folder Cursor reads as well.
+    steps = plugin_skill_steps(adapters, PLUGIN, rows, "codex", ALL_FOUND)
+    assert [s.name for s in steps] == ["brainstorming", "tidy"]
+    assert {s.copy.target for s in steps} == {
+        str(home / ".agents/skills/brainstorming"),
+        str(home / ".agents/skills/tidy"),
+    }
+    assert all(s.copy.readers == ["codex", "cursor"] for s in steps)
+
+
+def test_add_skills_names_what_it_leaves_out_and_why(home):
+    add_skills_marketplace(home)
+    _claude_has(home, "brainstorming")
+    _, rows = _skill_rows(home)
+    assert plugin_skills_left_out(PLUGIN, rows, "claude_code") == [
+        {"name": "brainstorming", "why": "Claude Code already has it"},
+        {"name": "reaching", "why": "needs the rest of the plugin"},
+        {"name": "rooted", "why": "needs the rest of the plugin"},
+    ]
+    assert plugin_skills_left_out(PLUGIN, rows, "codex") == [
+        {"name": "reaching", "why": "needs the rest of the plugin"},
+        {"name": "rooted", "why": "needs the rest of the plugin"},
+    ]
+
+
+def test_add_skills_refuses_when_nothing_is_left(home):
+    add_skills_marketplace(home)
+    _claude_has(home, "brainstorming")
+    _claude_has(home, "tidy")
+    adapters, rows = _skill_rows(home)
+    with pytest.raises(ValueError, match="^Claude Code has every skill in toolbox it can use$"):
+        plugin_skill_steps(adapters, PLUGIN, rows, "claude_code", ALL_FOUND)

@@ -166,6 +166,7 @@ const ACTION_WORDS = {
   "plugin.install": "Added",
   "marketplace.add": "Added marketplace",
   "skill.install": "Added skill",
+  "plugin.skills": "Added",
   "mcp.remove_direct": "Removed",
   "plugin.enable": "Turned on",
   "plugin.disable": "Turned off",
@@ -186,6 +187,8 @@ export function changeTitle(entry) {
   const reached = [...new Set(steps.flatMap((s) => s.reaches || [s.client]))];
   reached.sort((a, b) => CLIENT_ORDER.indexOf(a) - CLIENT_ORDER.indexOf(b));
   const clients = reached.map((c) => CLIENT_NAMES[c] || c);
+  // A plugin's skills can be many; the line counts them, the change lists them.
+  if (entry.action === "plugin.skills") return `${verb} ${plural(names.length, "skill", "skills")} · ${clients.join(", ")}`;
   const whole = ["gateway.connect", "gateway.switch", "setup_server.register", "setup_server.update"].includes(entry.action);
   const what = whole ? "" : ` ${names.join(", ")}`;
   return `${verb}${what} · ${clients.join(", ")}`;

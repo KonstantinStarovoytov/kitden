@@ -39,32 +39,37 @@ def _other_copy_loads(inventory, client: str, name: str) -> bool:
 
 
 def _skill_words(change: Change, inventory) -> list[dict]:
-    """Every client that will load the skill, and twice when it reads two folders that hold it:
-    a copy made here or one it already has."""
-    name = change.steps[0].name
-    counts: dict[str, int] = {}
+    """Every client that will load the skills, and twice when it reads two folders that hold
+    one of them: a copy made here or one it already has."""
+    names = list(dict.fromkeys(step.name for step in change.steps))
+    loads: dict[str, dict[str, int]] = {}  # client -> skill -> how many copies it loads
     for item in inventory.items:
         loads_now = (
             item.kind is ItemKind.SKILL
             and item.scope in (Scope.USER, Scope.PLUGIN)
-            and item.name == name
+            and item.name in names
         )
         if loads_now:
-            counts[item.client] = 1
+            loads.setdefault(item.client, {})[item.name] = 1
     for step in change.steps:
         for client in step.copy.readers if step.copy else []:
-            counts[client] = counts.get(client, 0) + 1
+            copies = loads.setdefault(client, {})
+            copies[step.name] = copies.get(step.name, 0) + 1
     out = []
     for client in SKILL_CLIENTS:
-        if not counts.get(client):
+        if not loads.get(client):
             continue
         entry = {"client": client, "state": "on", "word": "Loads"}
-        if counts[client] > 1:
+        twice = [name for name in names if loads[client].get(name, 0) > 1]
+        if twice:
             entry["word"] = "Loads twice"
-            entry["note"] = (
-                f"{CLIENT_WORDS[client]} reads two folders that hold this skill, so it loads "
-                "the skill twice."
-            )
+            who = CLIENT_WORDS[client]
+            if len(names) == 1:
+                entry["note"] = (
+                    f"{who} reads two folders that hold this skill, so it loads the skill twice."
+                )
+            else:
+                entry["note"] = f"{who} would load {', '.join(twice)} twice, from two folders."
         out.append(entry)
     return out
 
@@ -75,7 +80,7 @@ def after_words(change: Change, inventory, cursor_imports: bool = False) -> list
     With `cursor_imports` (Cursor loads Claude Code's plugins), a plugin added to Claude Code
     names Cursor last, with a note.
     """
-    if change.action == "skill.install" and change.steps:
+    if change.action in ("skill.install", "plugin.skills") and change.steps:
         return _skill_words(change, inventory)
     out: list[dict] = []
     for step in change.steps:

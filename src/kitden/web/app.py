@@ -21,12 +21,15 @@ from kitden.changes.actions import (
     GATEWAY_SWITCH,
     MARKETPLACE_ADD,
     PLUGIN_INSTALL,
+    PLUGIN_SKILLS,
     SETUP_SERVER_UPDATE,
     SKILL_INSTALL,
     connect_steps,
     install_steps,
     marketplace_steps,
     move_steps,
+    plugin_skill_steps,
+    plugin_skills_left_out,
     plugin_steps,
     remove_steps,
     setup_server_steps,
@@ -444,6 +447,7 @@ def create_app(
         action = body.get("action")
         targets = body.get("targets") if isinstance(body.get("targets"), list) else []
         params = body.get("params") if isinstance(body.get("params"), dict) else {}
+        left_out = None
         try:
             if action == GATEWAY_CONNECT:
                 gateway = next(
@@ -480,6 +484,17 @@ def create_app(
                 clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
                 found = {c["id"] for c in state.data["clients"] if c["status"] == "found"}
                 steps = skill_steps(adapters, skill, clients, found)
+            elif action == PLUGIN_SKILLS:
+                if len(targets) != 1 or not isinstance(targets[0], dict):
+                    return _error("Choose one client.", 422)
+                client = str(targets[0].get("client"))
+                plugin_id = str(params.get("plugin"))
+                skills = skill_catalog(state.inventory, adapters)
+                if not any(s["plugin"] == plugin_id for s in skills):
+                    return _error("This plugin has no skills on this computer.", 422)
+                found = {c["id"] for c in state.data["clients"] if c["status"] == "found"}
+                steps = plugin_skill_steps(adapters, plugin_id, skills, client, found)
+                left_out = plugin_skills_left_out(plugin_id, skills, client)
             elif action == MARKETPLACE_ADD:
                 try:
                     found = await asyncio.to_thread(read_marketplace, str(params.get("source", "")))
@@ -548,7 +563,10 @@ def create_app(
         cursor = _found_cursor() if action == PLUGIN_INSTALL else None
         imports = bool(cursor and cursor.imports_claude_plugins())
         after = after_words(change, state.inventory, cursor_imports=imports)
-        return JSONResponse({**change_dict(change), "after": after})
+        answer = {**change_dict(change), "after": after}
+        if left_out is not None:
+            answer["left_out"] = left_out
+        return JSONResponse(answer)
 
     async def change_action(request: Request) -> JSONResponse:
         if engine is None:

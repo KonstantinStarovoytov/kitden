@@ -403,11 +403,12 @@ const DONE_WORDS = {
   "gateway.connect": "Connected the gateway", "setup_server.register": "Added show my setup",
   "setup_server.update": "Updated show my setup to Kitden", "gateway.move": "Moved",
   "gateway.switch": "Switched the gateway", "plugin.install": "Added", "marketplace.add": "Added the marketplace",
-  "skill.install": "Added",
+  "skill.install": "Added", "plugin.skills": "Added",
 };
 
 // The review title names the exact entry; the toast uses the short name ("superpowers").
-function changeWords(change) {
+// `previewBody` is what the review asked for; Add skills names its plugin from it.
+export function changeWords(change, previewBody) {
   const steps = change.steps.filter((s) => s.client !== "gateway");
   const names = joinWords([...new Set(steps.map((s) => s.name))]);
   const short = joinWords([...new Set(steps.map((s) => s.name.split("@")[0]))]);
@@ -415,6 +416,7 @@ function changeWords(change) {
   const reached = [...new Set(steps.flatMap((s) => s.reaches || [s.client]))];
   reached.sort((a, b) => CLIENT_ORDER.indexOf(a) - CLIENT_ORDER.indexOf(b));
   const clients = joinWords(reached.map(clientName));
+  const plugin = ((previewBody && previewBody.params && previewBody.params.plugin) || "the plugin").split("@")[0];
   const title = {
     "gateway.move": `Move ${names} into the gateway`,
     "plugin.disable": `Turn off ${names} in ${clients}`,
@@ -424,6 +426,7 @@ function changeWords(change) {
     "plugin.install": `Add ${joinWords([...new Set(steps.filter((s) => s.name.includes("@")).map((s) => s.name))])} to ${clients}`,
     "marketplace.add": `Add the ${names} marketplace to ${clients}`,
     "skill.install": `Add ${names} to ${clients}`,
+    "plugin.skills": `Add ${plugin}'s skills to ${clients}`,
     // Each client's last step adds the new entry; it is named after the gateway.
     "gateway.switch": `Use ${steps.length ? steps[steps.length - 1].name : "the new gateway"} in ${clients}`,
     "setup_server.register": `Add “show my setup” to ${clients}`,
@@ -439,11 +442,19 @@ function changeWords(change) {
     what = `${verb} ${["setup_server.update", "gateway.switch"].includes(change.action) ? "in" : "to"} ${clients}`;
   } else if (change.action === "gateway.move") {
     what = `${verb} ${short} into the gateway`;
+  } else if (change.action === "plugin.skills") {
+    what = `${verb} ${plural(steps.length, "skill", "skills")} to ${clients}`;
   }
   const notes = [...new Set(change.steps.map((s) => s.restart_note).filter(Boolean))]
     .map((note) => note.replace(/,? for this to take effect\.?$/, ""));
   const after = notes.length > 1 ? [`Restart or reload ${clients}`] : notes;
   return { title, done: [what, ...after].join(" · ") };
+}
+
+// What Add skills does not copy, as one plain line; empty when it copies every skill.
+export function leftOutText(leftOut) {
+  if (!leftOut || !leftOut.length) return "";
+  return `Left out: ${leftOut.map((s) => `${s.name} (${s.why})`).join(", ")}.`;
 }
 
 // Ask the server for a preview and show it. Used by the Load map, Gateway and Agents places.
@@ -493,7 +504,7 @@ function diffLines(text) {
 
 function showReview(change, previewBody) {
   current = { type: "review", change, previewBody };
-  const words = changeWords(change);
+  const words = changeWords(change, previewBody);
   const body = el("div", "body");
   if (change.after && change.after.length) body.append(afterLine(change.after));
   if (change.shared_file_warning) body.append(callout("This edits a project file that is usually shared through git."));
@@ -520,6 +531,8 @@ function showReview(change, previewBody) {
     if (step.command) files.append(el("p", "muted", `Runs ${clientName(step.client)}'s own command: ${step.command}`));
   }
   body.append(fold(files));
+  const leftOut = leftOutText(change.left_out);
+  if (leftOut) body.append(el("p", "muted", leftOut));
   const after = notesSection("After you apply", change.steps);
   if (after) body.append(after);
 
