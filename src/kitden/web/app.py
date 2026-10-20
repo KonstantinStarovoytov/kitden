@@ -16,6 +16,7 @@ from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
 from kitden.changes.actions import (
+    CLIENT_WORDS,
     GATEWAY_CONNECT,
     GATEWAY_MOVE,
     GATEWAY_SWITCH,
@@ -39,7 +40,7 @@ from kitden.changes.actions import (
 )
 from kitden.changes.backup import ChangeStore
 from kitden.changes.client_cli import CommandRunner
-from kitden.changes.engine import ChangeRefusedError, Engine, Runner
+from kitden.changes.engine import ChangeRefusedError, Engine, NothingToChangeError, Runner
 from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, REMOVE_DIRECT, SETUP_SERVER
 from kitden.command import installed_command
 from kitden.gateway_api import GatewayError, MetaMcpClient, ObotClient
@@ -317,6 +318,14 @@ class State:
         if not self.inventory.partial:
             self.progress.done(SLOW_STEP)
         return self.data
+
+
+def refusal_words(error: ValueError) -> str:
+    """What the review says when a change cannot be prepared, in the owner's words."""
+    if isinstance(error, NothingToChangeError):
+        client = CLIENT_WORDS.get(error.client, error.client)
+        return f"{client} has this already. Nothing to change."
+    return str(error)
 
 
 class WaitForFirstScan:
@@ -717,7 +726,7 @@ def create_app(
                 return _error("This action is not offered.", 422)
             change = await asyncio.to_thread(engine.preview, str(action), steps)
         except ValueError as error:  # includes ChangeRefusedError
-            return _error(str(error), 422)
+            return _error(refusal_words(error), 422)
         events.publish("change_state")
         # Only an added plugin can reach Cursor through Claude Code.
         cursor = _found_cursor() if action == PLUGIN_INSTALL else None

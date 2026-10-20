@@ -54,6 +54,14 @@ class ChangeRefusedError(ValueError):
     """The change cannot be previewed (unknown format, hard link, nothing to change)."""
 
 
+class NothingToChangeError(ChangeRefusedError):
+    """The entry is already as the change would leave it; `client` is whose file it is."""
+
+    def __init__(self, path: str, client: str) -> None:
+        super().__init__(f"nothing to change in {path}")
+        self.client = client
+
+
 class _ApplyError(Exception):
     pass
 
@@ -322,7 +330,7 @@ class Engine:
             except (UnrecognizedFormatError, UnicodeDecodeError) as error:
                 raise ChangeRefusedError(f"{edit.path}: {error}") from None
             if edit.before == edit.after or (edit.after is PRESENT and edit.before is not ABSENT):
-                raise ChangeRefusedError(f"nothing to change in {edit.path}")
+                raise NothingToChangeError(edit.path, step.client)
             if edit.after is PRESENT and step.mechanism != CLIENT_CLI:
                 raise ChangeRefusedError(
                     "only a client command can write an entry in its own shape"

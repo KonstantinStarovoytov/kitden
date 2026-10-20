@@ -677,3 +677,10 @@ def test_tabs_and_filters_read_first_then_the_list_settles():
     assert "html.place-change #main { view-transition-name: page; }" in css
     assert "::view-transition-new(page) { animation: 260ms var(--ease-out) both page-in; }" in css
     assert 'if (view === "library" && state.view !== "library") await raceSlow(' in app
+
+
+def test_add_a_marketplace_sits_where_the_filters_sit_on_other_tabs():
+    # Pushed to the right, it left an empty band between the tabs and the table.
+    library = script("library.js")
+    assert 'bar.append(el("span", "grow"), add);' not in library
+    assert "bar.append(add);" in library

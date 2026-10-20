@@ -581,3 +581,14 @@ def test_an_entry_that_is_already_there_is_refused(tmp_path, settings):
     engine = make_engine(tmp_path, run=FakePluginCli(settings))
     with pytest.raises(ChangeRefusedError):
         engine.preview("plugin.install", plugin_steps(settings)[:1])
+
+
+def test_a_change_with_nothing_to_do_names_the_client_in_plain_words():
+    # "nothing to change in /Users/…/config.toml" told the owner nothing (2026-10-20).
+    from kitden.changes.engine import NothingToChangeError
+    from kitden.web.app import refusal_words
+
+    error = NothingToChangeError("/home/x/.codex/config.toml", "codex")
+    assert "nothing to change" in str(error)
+    assert refusal_words(error) == "Codex has this already. Nothing to change."
+    assert refusal_words(ValueError("Choose at least one client")) == "Choose at least one client"

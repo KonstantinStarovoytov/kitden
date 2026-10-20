@@ -378,7 +378,7 @@ function toolbar(kind, answer) {
   if (kind === "marketplace") {
     const add = button("Add a marketplace…", () => marketplaceForm(), "btn small");
     add.dataset.focus = "add:marketplace";
-    bar.append(el("span", "grow"), add);
+    bar.append(add);
   }
   return bar.children.length ? bar : null;
 }
