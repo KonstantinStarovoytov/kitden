@@ -1,6 +1,7 @@
 """The load map: one row per item, one column per client (portal redesign).
 
-Rows group items by kind and base name, so the same plugin from two marketplaces is one row.
+Rows group items by kind and name. A plugin is one row per marketplace ("figma@a" and
+"figma@b" are two rows named "figma"); other kinds group by name.
 Each cell says what that client does with the item in the chosen project: loads it, has it but
 does not load it, routes it through the gateway, or does not know. The Claude Desktop Code tab
 has no column of its own: its extra items show in the Claude Code column as "Desktop app".
@@ -46,8 +47,15 @@ class Row:
     key: str
     kind: ItemKind
     name: str
+    source: str | None  # the marketplace of a plugin id, else None
+    lookup: str  # the full item name that /api/explain takes
     cells: dict[str, Cell] = field(default_factory=dict)
     flags: list[dict] = field(default_factory=list)
+
+
+def row_key(item: Item) -> str:
+    """The row an item belongs to: a plugin per full id, anything else per name."""
+    return _hash(item.kind, item.name if item.kind is ItemKind.PLUGIN else base_name(item))
 
 
 def _where(item: Item, column: str) -> str:
@@ -149,9 +157,16 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
     rows: dict[str, Row] = {}
 
     def row_for(item: Item) -> Row:
-        key = _hash(item.kind, base_name(item))
+        key = row_key(item)
         if key not in rows:
-            rows[key] = Row(key=key, kind=item.kind, name=base_name(item))
+            marketplace = item.name.partition("@")[2] if item.kind is ItemKind.PLUGIN else ""
+            rows[key] = Row(
+                key=key,
+                kind=item.kind,
+                name=base_name(item),
+                source=marketplace or None,
+                lookup=item.name,
+            )
         return rows[key]
 
     # Everywhere means user-level items only; a project adds its own items.
@@ -194,7 +209,9 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
             if flag and flag not in row.flags:
                 row.flags.append(flag)
     order = {ItemKind.MCP_SERVER: 0, ItemKind.PLUGIN: 1, ItemKind.SKILL: 2, ItemKind.HOOK: 3}
-    return sorted(rows.values(), key=lambda r: (order.get(r.kind, 4), r.name.lower()))
+    return sorted(
+        rows.values(), key=lambda r: (order.get(r.kind, 4), r.name.lower(), r.source or "")
+    )
 
 
 def map_dict(inventory, rows: list[Row]) -> dict:
@@ -209,6 +226,8 @@ def map_dict(inventory, rows: list[Row]) -> dict:
                 "key": r.key,
                 "kind": str(r.kind),
                 "name": r.name,
+                "source": r.source,
+                "lookup": r.lookup,
                 "cells": {
                     c: {
                         "state": cell.state,

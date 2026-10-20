@@ -13,6 +13,7 @@ from kitden.model import (
     Source,
     SourceKind,
 )
+from kitden.views.explain import explain
 from kitden.views.findings import mark_gateways
 from kitden.views.inventory import Inventory, build_inventory
 from kitden.views.load_map import COLUMNS, load_map, map_dict
@@ -38,30 +39,42 @@ def rows_by(rows, kind, name):
     return next(r for r in rows if (str(r.kind), r.name) == (kind, name))
 
 
-def test_rows_group_by_kind_and_base_name(home):
+def plugin_row(rows, lookup):
+    return next(r for r in rows if str(r.kind) == "plugin" and r.lookup == lookup)
+
+
+def test_rows_group_by_kind_and_name_with_one_plugin_row_per_marketplace(home):
     rows = load_map(build_inventory(home), None)
     superpowers = [r for r in rows if str(r.kind) == "plugin" and r.name == "superpowers"]
-    assert len(superpowers) == 1
-    assert superpowers[0].cells["codex"].state == "none"
-    assert superpowers[0].cells["claude_code"].state == "on"
-    assert set(superpowers[0].cells) == set(COLUMNS)
+    assert [(r.source, r.lookup) for r in superpowers] == [
+        ("claude-plugins-official", "superpowers@claude-plugins-official"),
+        ("cursor-public", "superpowers@cursor-public"),
+    ]
+    official = superpowers[0]
+    assert official.cells["codex"].state == "none"
+    assert official.cells["claude_code"].state == "on"
+    assert set(official.cells) == set(COLUMNS)
+    assert superpowers[1].cells["claude_code"].state == "none"
 
 
 def test_cell_states_for_the_website_project(home):
     rows = load_map(build_inventory(home), str(home / "work/website"))
-    cell = rows_by(rows, "plugin", "superpowers").cells["claude_code"]
+    cell = plugin_row(rows, "superpowers@claude-plugins-official").cells["claude_code"]
     assert (cell.state, cell.where) == ("off", "this project")
 
 
-def test_cursor_loading_a_plugin_twice_is_one_cell_with_count_2(home):
-    row = rows_by(load_map(build_inventory(home), None), "plugin", "superpowers")
-    assert row.cells["cursor"].count == 2
-    assert row.cells["cursor"].where == "global settings"  # Cursor's own copy comes first
-    assert [f["text"] for f in row.flags] == ["Cursor loads it twice"]
+def test_cursor_loading_a_plugin_twice_flags_both_rows_and_each_row_has_one_cell(home):
+    rows = load_map(build_inventory(home), None)
+    own = plugin_row(rows, "superpowers@cursor-public")
+    claudes = plugin_row(rows, "superpowers@claude-plugins-official")
+    assert (own.cells["cursor"].count, own.cells["cursor"].where) == (1, "global settings")
+    assert (claudes.cells["cursor"].count, claudes.cells["cursor"].where) == (1, "via Claude Code")
+    for row in (own, claudes):
+        assert [f["text"] for f in row.flags] == ["Cursor loads it twice"]
 
 
 def test_a_cursor_copy_of_a_claude_code_plugin_names_the_choice(home):
-    row = rows_by(load_map(build_inventory(home), None), "plugin", "superpowers")
+    row = plugin_row(load_map(build_inventory(home), None), "superpowers@claude-plugins-official")
     flag = next(f for f in row.flags if f["client"] == "cursor")
     assert flag["via"] == "claude_code"
     assert flag["fix_action"] is None
@@ -189,3 +202,33 @@ def test_project_only_items_are_not_rows_everywhere(home):
     assert "site-db" not in everywhere
     site = {r.name for r in load_map(build_inventory(home), str(home / "work/site"))}
     assert "site-db" in site
+
+
+def test_a_plugin_from_two_marketplaces_makes_two_rows(home):
+    config = home / ".codex/config.toml"
+    config.write_text(
+        config.read_text() + '\n[plugins."figma@a"]\nenabled = true\n'
+        '\n[plugins."figma@b"]\nenabled = true\n'
+    )
+    inventory = build_inventory(home)
+    rows = [r for r in load_map(inventory, None) if str(r.kind) == "plugin" and r.name == "figma"]
+    assert sorted((r.source, r.lookup) for r in rows) == [("a", "figma@a"), ("b", "figma@b")]
+    assert len({r.key for r in rows}) == 2
+    for row in rows:
+        assert row.cells["codex"].count == 1
+        assert [f["text"] for f in row.flags] == ["Codex loads it twice"]
+    only_a = explain(inventory, "figma@a", "plugin", None)
+    assert [d["name"] for d in only_a] == ["figma@a"]
+    data = map_dict(inventory, rows)
+    assert {(r["source"], r["lookup"]) for r in data["rows"]} == {
+        ("a", "figma@a"),
+        ("b", "figma@b"),
+    }
+
+
+def test_a_name_without_a_marketplace_has_no_source(home):
+    rows = load_map(build_inventory(home), None)
+    stored = rows_by(rows, "plugin", "plugin 4800 (name not stored locally)")
+    assert (stored.source, stored.lookup) == (None, "plugin 4800 (name not stored locally)")
+    skill = rows_by(rows, "skill", "docker-expert")
+    assert (skill.source, skill.lookup) == (None, "docker-expert")

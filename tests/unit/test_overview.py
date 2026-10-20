@@ -5,10 +5,11 @@ from dataclasses import replace
 import pytest
 
 import kitden.clients.base as base
-from kitden.model import Gateway, _hash
-from kitden.views.findings import mark_gateways
+from kitden.model import FindingType, Gateway
+from kitden.views.findings import find_findings, mark_gateways
 from kitden.views.gateway_view import gateway_view
 from kitden.views.inventory import build_inventory
+from kitden.views.load_map import load_map, row_key
 from kitden.views.overview import overview
 from tests.conftest import CURSOR_DB, make_home, write_cursor_fixture_state
 
@@ -41,11 +42,7 @@ def test_duplicate_card_is_one_sentence_and_opens_the_item(home):
     card = next(a for a in data["attention"] if a["title"].startswith("superpowers"))
     assert card["text"] == "Two copies of one plugin load; keep one."
     assert card["action"] == "Keep one…"
-    assert card["target"] == {
-        "view": "map",
-        "kind": "plugin",
-        "row": _hash("plugin", "superpowers"),
-    }
+    assert (card["target"]["view"], card["target"]["kind"]) == ("map", "plugin")
     skill = next(a for a in data["attention"] if a["title"].startswith("docker-expert"))
     assert skill["text"] == "Two copies of one skill load; keep one."
 
@@ -165,3 +162,18 @@ def test_old_kitden_entries_get_one_card_that_opens_agents(home):
     assert card["action"] == "Update"
     assert card["target"] == {"view": "agents"}
     assert data["headline"] == "3 things need attention"
+
+
+def test_overview_duplicate_points_at_a_row_the_map_has(home):
+    inventory = build_inventory(home)
+    by_id = {i.id: i for i in inventory.items}
+    twice = next(
+        f
+        for f in find_findings(inventory, None)
+        if f.type is FindingType.DUPLICATE_IN_CLIENT and by_id[f.items[0]].name.startswith("superp")
+    )
+    card = next(
+        a for a in overview(inventory, [], None)["attention"] if a["title"].startswith("superp")
+    )
+    assert card["target"]["row"] == row_key(by_id[twice.items[0]])
+    assert card["target"]["row"] in {r.key for r in load_map(inventory, None)}

@@ -168,6 +168,10 @@ def test_load_map_lede_names_the_project_folder_not_its_path():
     assert "shortPath" not in text
 
 
+def test_item_details_ask_for_the_full_name_so_a_plugin_shows_only_its_own_marketplace():
+    assert "name: row.lookup || row.name" in script("panel.js")
+
+
 def test_changes_rows_open_the_panel_and_keep_paths_off_the_page():
     text = script("changes.js")
     assert "openChange" in text

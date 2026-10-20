@@ -11,7 +11,7 @@ from kitden.clients.versions import MINIMUM_VERSIONS
 from kitden.model import FindingType, Gateway, Severity, UnknownReason, _hash
 from kitden.views.findings import base_name, find_bypasses, find_findings
 from kitden.views.gateway_view import gateway_view
-from kitden.views.load_map import COLUMNS, NAMES
+from kitden.views.load_map import COLUMNS, NAMES, row_key
 from kitden.views.setup_server import setup_server_state
 
 READ_PROBLEMS = {
@@ -80,7 +80,7 @@ def _duplicates(inventory, findings) -> list[dict]:
         if not items:
             continue
         key = (str(items[0].kind), base_name(items[0]))
-        group = groups.setdefault(key, {"clients": set(), "copies": 0})
+        group = groups.setdefault(key, {"clients": set(), "copies": 0, "row": row_key(items[0])})
         group["clients"].add(finding.client)
         group["copies"] = max(group["copies"], len(items))
     cards = []
@@ -95,7 +95,7 @@ def _duplicates(inventory, findings) -> list[dict]:
                 "text": f"{'Two' if copies == 2 else copies} copies of one "
                 f"{KIND_WORDS.get(kind, kind)} load; keep one.",
                 "action": "Keep one…",
-                "target": {"view": "map", "kind": kind, "row": _hash(kind, name)},
+                "target": {"view": "map", "kind": kind, "row": group["row"]},
             }
         )
     return sorted(cards, key=lambda c: c["title"])

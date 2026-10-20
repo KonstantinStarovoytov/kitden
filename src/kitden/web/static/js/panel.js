@@ -115,7 +115,7 @@ export async function openItem(row, { instant = false } = {}) {
   openPanel([itemHeader(row), body, el("footer")], { instant });
   let definitions;
   try {
-    const params = { name: row.name, kind: row.kind, project: state.project };
+    const params = { name: row.lookup || row.name, kind: row.kind, project: state.project };
     definitions = (await getJson(`/api/explain${query(params)}`)).definitions;
   } catch {
     if (current && current.row === row) {
