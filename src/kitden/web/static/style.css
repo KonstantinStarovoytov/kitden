@@ -338,13 +338,18 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .map .item .mono { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 9ch; }
 .map tbody tr:hover .opens, .map tbody tr:focus-visible .opens { color: var(--route); }
 .table-scroll { min-width: 0; }
-/* Library rows: line one is the name, quiet meta text, flags and the chevron; line two says what it
-   does, cut to one line. A client's cell holds a state or the one button for what it can add. */
+/* Library rows: line one is the name, quiet meta text and the chevron; line two holds the flags,
+   then what it does, cut to one line. A client's cell holds a state or the one button for what
+   it can add. */
 .library td { height: auto; padding-top: 7px; padding-bottom: 7px; }
-/* The meta text gives way first, so the name stays readable; a short name keeps no gap after it. */
+/* The name takes its whole width first and the meta text gives way, so a narrow row keeps the
+   name readable; a short name keeps no gap after it. The chevron keeps the last column. */
+.library .item { display: grid; grid-template-columns: minmax(3ch, max-content) minmax(0, 1fr) auto; column-gap: 0; }
 .library .item .mono { min-width: 3ch; }
-.library .item .meta { flex: 0 999 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-3); font-size: 12px; }
-.library .desc { margin-top: 2px; font-size: 12px; color: var(--ink-3); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; overflow-wrap: anywhere; }
+.library .item .meta { min-width: 0; padding-left: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-3); font-size: 12px; }
+.library .item .opens { grid-column: 3; padding-left: 8px; }
+.library .sub { display: flex; align-items: center; gap: 6px; min-width: 0; margin-top: 2px; }
+.library .desc { flex: 1 1 auto; min-width: 0; font-size: 12px; color: var(--ink-3); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; overflow-wrap: anywhere; }
 .library tbody tr.group { cursor: default; }
 .library tbody tr.group td { height: 30px; padding-top: 10px; padding-bottom: 4px; background: var(--inset); color: var(--ink-3); font-size: 12px; }
 .btn.add { color: var(--route); border-color: color-mix(in srgb, var(--route) 45%, var(--wire)); background: transparent; }

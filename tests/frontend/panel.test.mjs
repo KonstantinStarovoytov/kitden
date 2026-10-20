@@ -5,7 +5,7 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; panel.js must load there too.
 delete globalThis.navigator;
-const { changeOutcome, changeWords, footerActions, leftOutText, moveFor } = await import('../../src/kitden/web/static/js/panel.js');
+const { changeOutcome, changeWords, footerActions, leftOutText, loadsLede, moveFor } = await import('../../src/kitden/web/static/js/panel.js');
 const { addOptions, whyNoAction } = await import('../../src/kitden/web/static/js/offer.js');
 
 const github = { kind: 'mcp_server', name: 'github' };
@@ -247,8 +247,15 @@ test('Details with nothing to do say why first', () => {
   const row = { kind: 'plugin', cells: { cursor: cell({ reason: cant('Cursor') }), codex: cell({ state: 'unk' }), claude_code: cell({ reason: cant('Claude Code') }) } };
   // No button at all: nothing leads and nothing waits.
   assert.deepEqual(footerActions([], [], null, addOptions(row, null)), { lead: null, rest: [] });
-  // Each cell's reason once, in column order.
-  assert.equal(whyNoAction(row, []), `${cant('Claude Code')} ${cant('Cursor')}`);
+  // Clients with the same reason make one sentence, in column order.
+  assert.equal(whyNoAction(row, []), "Claude Code and Cursor can't install this plugin, and it has no skills to copy.");
+  const elsewhere = (client) => `${client} has it in another project.`;
+  const three = { cells: { claude_code: cell({ reason: elsewhere('Claude Code') }), codex: cell({ reason: elsewhere('Codex') }), cursor: cell({ reason: elsewhere('Cursor') }) } };
+  assert.equal(whyNoAction(three), 'Claude Code, Codex and Cursor have it in another project.');
+  const mixed = { cells: { claude_code: cell({ reason: cant('Claude Code') }), codex: cell({ reason: elsewhere('Codex') }), cursor: cell({ reason: cant('Cursor') }) } };
+  assert.equal(whyNoAction(mixed), `Claude Code and Cursor can't install this plugin, and it has no skills to copy. ${elsewhere('Codex')}`);
+  const needs = (client) => `${client} can't install the plugin this skill needs.`;
+  assert.equal(whyNoAction({ cells: { codex: cell({ reason: needs('Codex') }), cursor: cell({ reason: needs('Cursor') }) } }), "Codex and Cursor can't install the plugin this skill needs.");
   const outside = "This skill uses files outside its folder, so it can't be copied.";
   assert.equal(whyNoAction({ cells: { claude_code: cell({ reason: outside }), codex: cell({ reason: outside }) } }), outside);
   // No reasons: where to change it, from the item's own settings.
@@ -257,4 +264,14 @@ test('Details with nothing to do say why first', () => {
   assert.equal(whyNoAction(remote, [{ change_hint: null }, { change_hint: hint }]), hint);
   // Nothing known (an MCP server row from the scan has no reasons): no line.
   assert.equal(whyNoAction({ cells: { codex: { state: 'on', where: 'global settings', items: [] } } }, []), '');
+});
+
+test('the Details lede says where it loads, and where it may', () => {
+  const columns = [{ id: 'claude_code', name: 'Claude Code' }, { id: 'codex', name: 'Codex' }, { id: 'cursor', name: 'Cursor' }];
+  const lede = (states) => loadsLede({ cells: Object.fromEntries(Object.entries(states).map(([c, state]) => [c, cell({ state })])) }, columns);
+  assert.equal(lede({ claude_code: 'on', codex: 'gw', cursor: 'none' }), 'Loads in Claude Code and Codex.');
+  // The page cannot tell whether it is on: it may load there.
+  assert.equal(lede({ codex: 'unk' }), 'May load in Codex.');
+  assert.equal(lede({ claude_code: 'on', codex: 'unk' }), 'Loads in Claude Code. May load in Codex.');
+  assert.equal(lede({ claude_code: 'off', cursor: 'via' }), 'Does not load anywhere here.');
 });

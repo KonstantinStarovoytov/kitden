@@ -87,10 +87,13 @@ export function cellNode(row, client) {
 }
 
 // Columns hidden on this page. The choice stays in this browser only; a store that cannot be read
-// or written means nothing is hidden.
+// means nothing is hidden. When it cannot be written (a private window), the choice is kept here,
+// so "−" still works while the page is open.
 const HIDDEN_KEY = "kitden-hidden-clients";
+let hiddenHere = null;
 
 export function hiddenClients() {
+  if (hiddenHere) return [...hiddenHere];
   try {
     const list = JSON.parse(localStorage.getItem(HIDDEN_KEY));
     return Array.isArray(list) && list.every((id) => typeof id === "string") ? list : [];
@@ -100,7 +103,12 @@ export function hiddenClients() {
 }
 
 export function setHidden(list) {
-  try { localStorage.setItem(HIDDEN_KEY, JSON.stringify(list)); } catch { /* private window */ }
+  try {
+    localStorage.setItem(HIDDEN_KEY, JSON.stringify(list));
+    hiddenHere = null;
+  } catch {
+    hiddenHere = [...list];
+  }
 }
 
 // The kind tab shown: an unknown one from an old address falls back to the first tab.
@@ -467,39 +475,12 @@ function buildTable(columns, rows, groups, morph) {
   return table;
 }
 
-// Line one: the name, the quiet meta text, the flags and the chevron. Line two: what it does.
 function buildRow(columns, row, morph) {
   const tr = el("tr");
   tr.tabIndex = 0;
   tr.dataset.key = row.key;
   tr.setAttribute("aria-selected", String(state.selected === row.key));
-  const nameCell = el("td");
-  const line = el("div", "item");
-  const name = el("span", "mono", row.name);
-  name.title = row.name;
-  line.append(name);
-  const meta = metaText(row);
-  if (meta) line.append(el("small", "meta", meta));
-  // One flag per wording: three clients with the same note make one flag, not three.
-  const shown = row.flags.filter((f, i) => row.flags.findIndex((o) => o.text === f.text) === i);
-  for (const f of shown) line.append(flag(f));
-  // A flag that a verified change resolved shrinks away instead of vanishing.
-  const oldFlags = morph ? previousFlags[row.key] || [] : [];
-  for (const f of oldFlags.filter((o) => !shown.some((n) => n.text === o.text))) {
-    const node = flag(f);
-    node.classList.add("gone");
-    node.setAttribute("aria-hidden", "true");
-    line.append(node);
-    setTimeout(() => node.remove(), 400);
-  }
-  line.append(opens());
-  nameCell.append(line);
-  if (row.description) {
-    const desc = el("div", "desc", row.description);
-    desc.title = row.description;
-    nameCell.append(desc);
-  }
-  tr.append(nameCell);
+  tr.append(nameCell(row, morph));
   for (const column of columns) {
     const td = el("td");
     const before = morph && previousCells[row.key] && previousCells[row.key][column.id];
@@ -510,6 +491,41 @@ function buildRow(columns, row, morph) {
   tr.addEventListener("click", (event) => { if (!event.target.closest("button")) openRow(row, tr, "pointer"); });
   tr.addEventListener("keydown", (event) => onRowKey(event, row, tr));
   return tr;
+}
+
+// Line one: the name, the quiet meta text and the chevron, so a narrow row keeps them readable.
+// Line two: the flags, then what it does; the flags have it to themselves when there is no
+// description, and a row with neither has one line.
+export function nameCell(row, morph) {
+  const td = el("td");
+  const line = el("div", "item");
+  const name = el("span", "mono", row.name);
+  name.title = row.name;
+  line.append(name);
+  const meta = metaText(row);
+  if (meta) line.append(el("small", "meta", meta));
+  line.append(opens());
+  td.append(line);
+  const sub = el("div", "sub");
+  // One flag per wording: three clients with the same note make one flag, not three.
+  const shown = row.flags.filter((f, i) => row.flags.findIndex((o) => o.text === f.text) === i);
+  for (const f of shown) sub.append(flag(f));
+  // A flag that a verified change resolved shrinks away instead of vanishing.
+  const oldFlags = morph ? previousFlags[row.key] || [] : [];
+  for (const f of oldFlags.filter((o) => !shown.some((n) => n.text === o.text))) {
+    const node = flag(f);
+    node.classList.add("gone");
+    node.setAttribute("aria-hidden", "true");
+    sub.append(node);
+    setTimeout(() => node.remove(), 400);
+  }
+  if (row.description) {
+    const desc = el("div", "desc", row.description);
+    desc.title = row.description;
+    sub.append(desc);
+  }
+  if (sub.children.length) td.append(sub);
+  return td;
 }
 
 // A cell after a verified change: a state that changed morphs from the old one; a state where a

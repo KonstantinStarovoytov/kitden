@@ -257,9 +257,7 @@ def _skill_cell(
         )
     if client == "cursor" and cursor_imports and "claude_code" in plugin_routes:
         return _cell("via", word="Via Claude Code", reason=SKILL_VIA_CLAUDE_CODE)
-    return _cell(
-        reason=f"This skill needs its plugin, and {NAMES[client]} can't install that plugin."
-    )
+    return _cell(reason=f"{NAMES[client]} can't install the plugin this skill needs.")
 
 
 def _skill_rows(

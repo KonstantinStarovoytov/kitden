@@ -104,6 +104,12 @@ export function plural(count, one, many) {
   return `${count} ${count === 1 ? one : many}`;
 }
 
+// "Claude Code, Codex and Cursor".
+export function joinWords(words) {
+  if (words.length < 2) return words.join("");
+  return `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
+}
+
 export function reportError(error) {
   console.error(error);
   const status = document.getElementById("scanned");

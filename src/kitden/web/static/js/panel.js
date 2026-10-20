@@ -1,6 +1,6 @@
 // Side panel: item details, change review, the Apply motion, and the toast with Undo.
 import { getJson, postJson, query } from "./api.js";
-import { $, $$, button, el, plural, reportError, shortPath, shortPaths } from "./dom.js";
+import { $, $$, button, el, joinWords, plural, reportError, shortPath, shortPaths } from "./dom.js";
 import { loadLibrary, morphOnNextRender, onOpenItem, rowTitle } from "./library.js";
 import { finishTransition, fold, transition } from "./motion.js";
 import { about, addButton, addOptions, whyNoAction } from "./offer.js";
@@ -102,11 +102,6 @@ function callout(text, level = "warn") {
   return box;
 }
 
-function joinWords(words) {
-  if (words.length < 2) return words.join("");
-  return `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
-}
-
 // Item details ---------------------------------------------------------------------------
 
 export async function openItem(row, { instant = false } = {}) {
@@ -138,14 +133,24 @@ export async function openItem(row, { instant = false } = {}) {
   showDetails(row, definitions, offer);
 }
 
+// The line under the Details title: the clients that load the item, then those where the page
+// cannot tell whether it is on.
+export function loadsLede(row, columns) {
+  const names = (states) => columns
+    .filter((c) => states.includes(row.cells[c.id] && row.cells[c.id].state))
+    .map((c) => c.name);
+  const loads = names(["on", "gw"]);
+  const maybe = names(["unk"]);
+  const lines = [];
+  if (loads.length) lines.push(`Loads in ${joinWords(loads)}.`);
+  if (maybe.length) lines.push(`May load in ${joinWords(maybe)}.`);
+  return lines.join(" ") || "Does not load anywhere here.";
+}
+
 // The title names the source too when two rows share the name ("superpowers · cursor-public").
 function itemHeader(row) {
   const map = currentModel("map");
-  const loads = (map ? map.columns : [])
-    .filter((c) => ["on", "gw"].includes(row.cells[c.id] && row.cells[c.id].state))
-    .map((c) => c.name);
-  const lede = loads.length ? `Loads in ${joinWords(loads)}.` : "Does not load anywhere here.";
-  return header(KIND_WORDS[row.kind] || row.kind, rowTitle(row), lede, "Close", true);
+  return header(KIND_WORDS[row.kind] || row.kind, rowTitle(row), loadsLede(row, map ? map.columns : []), "Close", true);
 }
 
 // The warning names the fix; the server sends both (load_map.py).

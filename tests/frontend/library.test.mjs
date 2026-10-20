@@ -38,7 +38,7 @@ const requests = [];
 globalThis.fetch = (url) => new Promise((resolve) => {
   requests.push({ url, answer: (body) => resolve({ ok: true, status: 200, json: async () => body }) });
 });
-const { cellNode, emptyState, hiddenClients, hiddenLine, hideButton, loadLibrary, loadLibraryFor, metaText, moreLine, noteFor, previewFor, setHidden } = await import('../../src/kitden/web/static/js/library.js');
+const { cellNode, emptyState, hiddenClients, hiddenLine, hideButton, loadLibrary, loadLibraryFor, metaText, moreLine, nameCell, noteFor, previewFor, setHidden } = await import('../../src/kitden/web/static/js/library.js');
 const { freshness, hashFor, parseHash, state } = await import('../../src/kitden/web/static/js/store.js');
 const later = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -112,6 +112,20 @@ test('meta text shows the source only when names repeat', () => {
   assert.equal(metaText({ category: 'Design', source: 'openai-curated', same_name: false }), 'Design');
   assert.equal(metaText({ category: null, source: 'cursor-public', same_name: true }), 'cursor-public');
   assert.equal(metaText({ category: null, source: null, same_name: true }), '');
+});
+
+test('line one is the name and its quiet text; the flags go to line two', () => {
+  const twice = { text: 'Cursor loads it twice', level: 'warning' };
+  const flagged = row({}, { category: 'Design', same_name: true, description: 'Draw things', flags: [twice, twice] });
+  const [one, two] = nameCell(flagged, false).children;
+  assert.equal(one.className, 'item');
+  assert.deepEqual(one.children.map((c) => [c.className, c.textContent]), [['mono', 'figma'], ['meta', 'Design · openai-curated'], ['opens', '']]);
+  // One flag per wording, then what it does.
+  assert.equal(two.className, 'sub');
+  assert.deepEqual(two.children.map((c) => [c.className, c.textContent]), [['flag', 'Cursor loads it twice'], ['desc', 'Draw things']]);
+  // No description: the flags have line two to themselves. Neither: one line.
+  assert.deepEqual(nameCell({ ...flagged, description: '' }, false).children[1].children.map((c) => c.className), ['flag']);
+  assert.equal(nameCell({ ...flagged, description: '', flags: [] }, false).children.length, 1);
 });
 
 test('the more line names what the choice hides', () => {
@@ -210,11 +224,35 @@ test('hidden clients survive a broken store', () => {
     store.items['kitden-hidden-clients'] = junk;
     assert.deepEqual(hiddenClients(), [], junk);
   }
-  // A store that throws on every read and write: nothing hidden, and no error.
+  // A store that throws on every read: nothing hidden, and no error.
   store.broken = true;
   assert.deepEqual(hiddenClients(), []);
+  // One that cannot be written: the choice still holds while this page is open.
   setHidden(['cursor']);
+  assert.deepEqual(hiddenClients(), ['cursor']);
   store.broken = false;
+  assert.deepEqual(hiddenClients(), ['cursor']);
+  // Once the store takes a choice again, the store counts.
+  setHidden([]);
+  assert.equal(store.items['kitden-hidden-clients'], '[]');
+  store.items['kitden-hidden-clients'] = '["codex"]';
+  assert.deepEqual(hiddenClients(), ['codex']);
+  store.items = {};
+});
+
+test('a hide works while the store cannot be written', async () => {
+  Object.assign(state, { view: 'library', kind: 'plugin', show: 'mine', category: '', attention: false, project: '', q: '' });
+  store.items = {};
+  store.broken = true;
+  freshness.reloadStartedAt = performance.now();
+  requests.length = 0;
+  hideButton(COLUMNS[1], COLUMNS).listeners.click[0]({});
+  await later(2);
+  assert.match(requests[0].url, /hidden=codex$/);
+  requests[0].answer({ rows: [] });
+  await later(2);
+  store.broken = false;
+  setHidden([]);
   assert.deepEqual(hiddenClients(), []);
 });
 

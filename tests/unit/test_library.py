@@ -187,7 +187,7 @@ def test_cursor_gets_via_claude_code_for_a_claude_plugin(home, tmp_path):
     # And a skill that needs the plugin has no way into Cursor.
     rooted = _row(_library(strict, "skill", show="new"), "rooted")
     assert rooted["cells"]["cursor"] == _cell(
-        reason="This skill needs its plugin, and Cursor can't install that plugin."
+        reason="Cursor can't install the plugin this skill needs."
     )
 
 

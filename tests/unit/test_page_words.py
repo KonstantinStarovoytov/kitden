@@ -316,7 +316,9 @@ def test_library_rows_keep_the_name_and_the_source_readable():
     text, css = script("library.js"), (STATIC / "style.css").read_text()
     assert '["42%"' in text and 'el("small", "meta", meta)' in text
     assert ".library .desc" in css and "-webkit-line-clamp: 1" in css
-    assert ".library .item .meta { flex: 0 999 auto" in css  # the name shrinks last
+    # The name takes its whole width first; the meta text gives way. (Flex shrank the name by a
+    # fraction of a pixel too, which cut it with "…".)
+    assert ".library .item { display: grid; grid-template-columns: minmax(3ch, max-content)" in css
     # The server marks rows that share a name; the page does not count names itself.
     assert "names.get" not in text
     # A cell's button names its row's source too, or twin rows would give two buttons one name.

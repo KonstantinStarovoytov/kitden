@@ -1,7 +1,7 @@
 // Details of a plugin or skill from the marketplaces on this computer, every way to add it (or
 // why there is none), and the forms that add one to several clients in one review. The Library
 // opens these Details for rows not on this computer; the panel's Details use the parts.
-import { busyWhile, button, el, plural, reportError, shortPath, webLink } from "./dom.js";
+import { busyWhile, button, el, joinWords, plural, reportError, shortPath, webLink } from "./dom.js";
 import { noteFor, previewFor, rowTitle } from "./library.js";
 import { closePanel, footerActions, footerButtons, openInfo, openPanel, review } from "./panel.js";
 import { CLIENT_NAMES, clientCheck } from "./parts.js";
@@ -173,11 +173,27 @@ export function addButton(option, row, offer, look) {
   return button(option.label, () => review(previewFor(option.add, option.client), { note: noteFor(option.add, state.project) }), look);
 }
 
-// Why Details offer nothing to do, in one line: each cell's reason once, in column order; else
-// where to change it, from the item's own settings; else "".
+// Why Details offer nothing to do, in one line: each cell's reason once, in column order, and
+// clients whose reasons match after their name in one sentence ("Claude Code and Cursor can't
+// install this plugin, …"); else where to change it, from the item's own settings; else "".
 export function whyNoAction(row, definitions = []) {
-  const reasons = new Set(COLUMNS.map((c) => row.cells[c] && row.cells[c].reason).filter(Boolean));
-  if (reasons.size) return [...reasons].join(" ");
+  const reasons = new Map(); // what follows the client's name, or a whole reason -> the names
+  for (const client of COLUMNS) {
+    const reason = row.cells[client] && row.cells[client].reason;
+    if (!reason) continue;
+    const name = CLIENT_NAMES[client];
+    const named = reason.startsWith(`${name} `);
+    const key = named ? reason.slice(name.length) : reason;
+    if (!reasons.has(key)) reasons.set(key, named ? [] : null);
+    if (named) reasons.get(key).push(name);
+  }
+  if (reasons.size) {
+    return [...reasons].map(([rest, names]) => {
+      if (!names) return rest;
+      // "Codex has it" for one client, "Codex and Cursor have it" for two.
+      return joinWords(names) + (names.length > 1 ? rest.replace(/^ has /, " have ") : rest);
+    }).join(" ");
+  }
   const hint = definitions.find((d) => d.change_hint);
   return hint ? hint.change_hint : "";
 }
