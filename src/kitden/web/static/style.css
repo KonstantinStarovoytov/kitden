@@ -342,7 +342,7 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .map .item { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .map .item .mono { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 9ch; }
 .map tbody tr:hover .opens, .map tbody tr:focus-visible .opens { color: var(--route); }
-.table-scroll { min-width: 0; }
+.table-scroll { min-width: 0; transition: opacity var(--t-fast) ease; }
 /* Library rows: line one is the name, quiet meta text and the chevron; line two holds the flags,
    then what it does, cut to one line. A client's cell holds a state or the one button for what
    it can add. */
@@ -508,6 +508,16 @@ details.connect .fold > .fold-in, details.add-more .fold > .fold-in { display: b
 @keyframes fade-in { from { opacity: 0; } }
 @keyframes fade-out { to { opacity: 0; } }
 html.theme-switch::view-transition-old(root), html.theme-switch::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+/* A place change: only the page changes. The rail and the top bar stay still; the old page goes
+   in 120 ms and the new one rises 6 px in 260 ms. */
+html.place-change #main { view-transition-name: page; }
+html.place-change::view-transition-old(root), html.place-change::view-transition-new(root) { animation: none; }
+::view-transition-group(page) { animation: none; }
+::view-transition-old(page) { animation: 120ms ease both fade-out; }
+::view-transition-new(page) { animation: 260ms var(--ease-out) both page-in; }
+@keyframes page-in { from { opacity: 0; transform: translateY(6px); } }
+/* A tab or filter whose rows are slow to come: the old list dims while it waits. */
+.table-scroll.waiting { opacity: 0.5; pointer-events: none; }
 
 @media (prefers-reduced-motion: reduce) {
   /* No sweep: a still line says a long scan runs. */

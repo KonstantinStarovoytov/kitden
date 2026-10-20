@@ -5,7 +5,7 @@ import { glide, rollTo, transition } from "./motion.js";
 import { renderAgents } from "./agents.js";
 import { renderChanges } from "./changes.js";
 import { renderGateway } from "./gateway.js";
-import { loadLibrary, morphOnNextRender, renderLibrary } from "./library.js";
+import { loadLibrary, loadLibraryFor, morphOnNextRender, raceSlow, renderLibrary, settleRows, snapshotRows } from "./library.js";
 import { renderOverview } from "./overview.js";
 import { closePanel, initPanel, isPanelOpen } from "./panel.js";
 import { latestChanges, scanLine } from "./parts.js";
@@ -15,7 +15,7 @@ import {
 
 const PLACES = {
   overview: { title: "Overview", render: renderOverview },
-  library: { title: "Library", render: renderLibrary },
+  library: { title: "Library", render: renderLibrary, snapshot: snapshotRows, settle: settleRows },
   gateway: { title: "Gateway", render: renderGateway },
   changes: { title: "Changes", render: renderChanges },
   agents: { title: "Agents", render: renderAgents },
@@ -33,9 +33,12 @@ function renderPlace() {
   // A redraw of the same place keeps keyboard focus on the same row, tab, filter or menu.
   const focused = samePlace && main.contains(document.activeElement) ? document.activeElement.closest(FOCUSABLE) : null;
   const key = focused ? focusKey(focused) : null;
-  main.replaceChildren();
   const place = PLACES[state.view] || PLACES.overview;
+  // A redraw of the same place notes where its rows were, so they can move from there.
+  const before = samePlace && place.snapshot ? place.snapshot() : null;
+  main.replaceChildren();
   place.render(main);
+  if (place.settle) place.settle(before);
   if (key) {
     const same = $$(FOCUSABLE, main).find((node) => focusKey(node) === key);
     if (same) same.focus({ preventScroll: true });
@@ -190,6 +193,13 @@ function readScan() {
   getJson("/api/progress").then(showScan).catch(() => {});
 }
 
+// A rail link: the Library's rows are read first (up to a moment), so the page changes once,
+// already full, instead of a skeleton turning into a table after the change.
+async function openPlace(view) {
+  if (view === "library" && state.view !== "library") await raceSlow(loadLibraryFor({}), 300);
+  go(view);
+}
+
 function listen() {
   const events = new EventSource("/api/events");
   // Read where the first scan is on every (re)connect: steps sent while not connected are lost.
@@ -239,7 +249,7 @@ function start() {
     const link = event.target.closest("a[data-view]");
     if (!link) return;
     event.preventDefault();
-    go(link.dataset.view);
+    openPlace(link.dataset.view).catch(reportError);
   });
   window.addEventListener("hashchange", fromAddress);
   window.addEventListener("popstate", fromAddress);

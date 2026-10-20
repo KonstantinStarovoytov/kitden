@@ -113,11 +113,14 @@ All helpers live in `src/kitden/web/static/js/motion.js`.
 
 | Pattern | Helper | Where |
 | --- | --- | --- |
-| Place change cross-fade | `transition(change)` | Rail links, Back, a scope change off the Library |
+| Place change | `transition(change, "place-change")`: only the page goes (120 ms) and the new one rises 6 px (260 ms); the rail and top bar stay still | Rail links, Back; the Library's rows are read first (up to 300 ms) |
 | Shared tile | `fly(node, name)` before `go()`, `land(twin, name)` while the new place draws | Overview count → Library column |
 | Sliding mark | `glide(box, active, key)` | Rail, Library tabs, the show choice |
+| Ready, then swap | `choose(params)` (library.js): read the rows first; over 300 ms the old list dims (`.table-scroll.waiting`), never a skeleton | Library tabs, Installed / New / All, category, Needs attention |
+| List settle | `snapshotRows()` before a redraw, `settleRows()` after: rows that stay slide from their old place (260 ms `--spring`), new rows rise 4 px (200 ms, 20 ms apart, first 12) | Library filters and search |
+| Tab slide | in `settleRows()`: another tab's list slides in 8 px from that tab's side (220 ms) | Library kind tabs |
 | Smooth `<details>` | `fold(details)` | File change in a review, gateway forms |
-| Rolling number | `rollTo(holder, value)` | Rail counts |
+| Rolling number | `rollTo(holder, value)` | Rail counts, Library tab counts |
 | Socket morph | `morphSocket(node, state)` (parts.js) | Library after Apply, Undo or a scope change |
 | Resolved flag | `.flag.gone` | Library after a verified change |
 | Arrival | `.arrive` row glow + `.pulse` socket ping | Coming from a finding |

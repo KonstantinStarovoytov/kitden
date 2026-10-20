@@ -652,3 +652,28 @@ def test_the_start_says_what_it_still_reads_and_fills_a_line_as_steps_end():
     assert "const SCAN_LINE_DELAY_MS = 1000;" in app
     assert "transform: scaleX(var(--scan-done, 0)); transform-origin: left;" in css
     assert ".topbar.progress::after { transition: none; }" in css
+
+
+def test_tabs_and_filters_read_first_then_the_list_settles():
+    library, app, store = script("library.js"), script("app.js"), script("store.js")
+    css = (STATIC / "style.css").read_text()
+    # Tabs and filters read their rows before the page changes; a slow answer dims the old list.
+    assert "const SWAP_WAIT_MS = 300;" in library
+    # The pressed tab or choice is marked at once; the list follows when its rows are in.
+    assert "markChoice(pressed);" in library.split("async function choose")[1]
+    for call in (
+        "choose({ kind: id,",
+        "choose({ show: id,",
+        "choose({ attention:",
+        "choose({ category:",
+    ):
+        assert call in library
+    assert ".table-scroll.waiting { opacity: 0.5; pointer-events: none; }" in css
+    # A redraw of the same place notes where its rows were; the Library moves them from there.
+    assert "snapshot: snapshotRows, settle: settleRows" in app
+    assert "const before = samePlace && place.snapshot ? place.snapshot() : null;" in app
+    # A place change: only the page moves, and the Library's rows are read first.
+    assert '}, "place-change");' in store
+    assert "html.place-change #main { view-transition-name: page; }" in css
+    assert "::view-transition-new(page) { animation: 260ms var(--ease-out) both page-in; }" in css
+    assert 'if (view === "library" && state.view !== "library") await raceSlow(' in app

@@ -337,3 +337,25 @@ test('a hide button saves the choice, asks again, then focuses the next column o
   await later(2);
   assert.deepEqual(focused, ['hide:cursor', 'hidden:show', 'hide:codex']);
 });
+
+// Smooth changes: rows that stay slide from where they were, new rows rise in, a tab slides.
+const { raceSlow, rowMoves, tabDirection } = await import('../../src/kitden/web/static/js/library.js');
+
+test('rows that stay move from their old place; new rows are the ones that rise in', () => {
+  const before = new Map([['a', 100], ['b', 140], ['c', 180]]);
+  const after = new Map([['b', 100], ['d', 140], ['c', 180.4]]);
+  assert.deepEqual(rowMoves(before, after), { moved: [['b', 40]], entered: ['d'] });
+  assert.deepEqual(rowMoves(new Map(), after), { moved: [], entered: ['b', 'd', 'c'] });
+});
+
+test('a tab to the right slides in from the right, one to the left from the left', () => {
+  assert.equal(tabDirection('plugin', 'skill'), 1);
+  assert.equal(tabDirection('skill', 'mcp_server'), -1);
+  assert.equal(tabDirection('skill', 'skill'), 0);
+});
+
+test('a quick answer is waited for; a slow one is not', async () => {
+  assert.equal(await raceSlow(new Promise((done) => setTimeout(done, 5)), 100), true);
+  assert.equal(await raceSlow(new Promise((done) => setTimeout(done, 200)), 20), false);
+  assert.equal(await raceSlow(Promise.reject(new Error('no')), 100), true); // an error is an answer too
+});

@@ -79,7 +79,7 @@ function writeHash(addEntry = false) {
 }
 
 function show(moving) {
-  if (moving) transition(() => { renderPlace(); document.getElementById("content").scrollTop = 0; });
+  if (moving) transition(() => { renderPlace(); document.getElementById("content").scrollTop = 0; }, "place-change");
   else renderPlace();
 }
 

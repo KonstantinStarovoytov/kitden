@@ -3,7 +3,7 @@
 // dash that says why not. The server builds the rows and cells (views/library.py).
 import { getJson, query } from "./api.js";
 import { button, el, tabKeys } from "./dom.js";
-import { entrance, glide, land, reducedMotion } from "./motion.js";
+import { animate, entrance, glide, land, reducedMotion, rollTo, spring } from "./motion.js";
 import { marketplaceForm, projectNote, showOffer, showSkill } from "./offer.js";
 import { openInfo, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, mark, morphSocket, opens, skeleton, socket, staleNote } from "./parts.js";
@@ -21,6 +21,12 @@ const KIND_WORDS = { plugin: "Plugin", skill: "Skill" };
 const KIND_NOUNS = { mcp_server: "MCP servers", plugin: "plugins", skill: "skills", hook: "hooks", marketplace: "marketplaces" };
 // Typing waits this long after the last key before asking the server.
 const TYPING_MS = 200;
+// A tab or filter waits this long for its rows before it changes the page; a slower answer
+// dims the old list while it waits, so a skeleton never flashes between two lists.
+const SWAP_WAIT_MS = 300;
+// Rows on screen that move when the list changes; the rest just appear.
+const SETTLE_ROWS = 40;
+const RISE_ROWS = 12;
 
 // What each cell and flag showed last time, so a change can morph from the old state to the
 // new one and a resolved flag can shrink away instead of vanishing.
@@ -190,6 +196,39 @@ function read(choice) {
   return fresh ? Promise.resolve() : load(asked, false);
 }
 
+// Whether `promise` settles within `ms` (a failure counts as settled). It is not cancelled.
+export function raceSlow(promise, ms) {
+  return Promise.race([
+    Promise.resolve(promise).then(() => true, () => true),
+    new Promise((done) => setTimeout(() => done(false), ms)),
+  ]);
+}
+
+// The pressed tab or Installed / New / All choice is marked at once, and its mark slides there,
+// so the press answers right away; the list follows when its rows are in.
+function markChoice(node) {
+  const box = node && node.parentElement;
+  if (!box) return;
+  const attr = box.classList.contains("tabs") ? "aria-selected" : "aria-pressed";
+  for (const choice of box.querySelectorAll(":scope > button")) choice.setAttribute(attr, String(choice === node));
+  glide(box, node, box.classList.contains("tabs") ? "library-tabs" : "library-show");
+}
+
+// A tab or filter: read its rows first, so the list changes once, already full. The last
+// choice wins when several are pressed before their rows are in.
+let choosing = 0;
+async function choose(params, pressed = null) {
+  const mine = ++choosing;
+  markChoice(pressed);
+  const ready = read(params);
+  if (!(await raceSlow(ready, SWAP_WAIT_MS))) {
+    const list = document.querySelector("#main .table-scroll");
+    if (list) list.classList.add("waiting");
+    await ready;
+  }
+  if (mine === choosing) go("library", params);
+}
+
 // For a caller that draws the page itself once the shown tab is read (a reload, a change or a
 // project switch), so the cells morph then and not before. Call it right after reload() starts.
 export function loadLibrary() {
@@ -287,18 +326,28 @@ function finish(rows) {
 
 const cellKey = (cell) => `${cell.state}|${cell.where || ""}|${cell.add ? cell.add.label : ""}`;
 
+// The counts the tabs showed last, so a new count rolls from the old one.
+let lastCounts = null;
+
 function tabs(counts, kind) {
   const box = el("div", "tabs");
   box.setAttribute("role", "tablist");
   for (const [id, label] of KINDS) {
-    const tab = button(label, () => go("library", { kind: id, category: "", selected: null }), "");
+    const tab = button(label, () => choose({ kind: id, category: "", selected: null }, tab), "");
     tab.setAttribute("role", "tab");
     tab.setAttribute("aria-selected", String(kind === id));
     tab.dataset.kind = id;
     tab.dataset.focus = `tab:${id}`;
-    if (counts) tab.append(el("span", "count", String(counts[id])));
+    if (counts) {
+      const holder = el("span", "count roll");
+      const old = lastCounts ? lastCounts[id] : undefined;
+      holder.append(el("span", null, String(old === undefined ? counts[id] : old)));
+      if (old !== undefined && old !== counts[id]) rollTo(holder, counts[id]);
+      tab.append(holder);
+    }
     box.append(tab);
   }
+  if (counts) lastCounts = counts;
   tabKeys(box);
   return box;
 }
@@ -312,7 +361,7 @@ function toolbar(kind, answer) {
     seg.setAttribute("role", "group");
     seg.setAttribute("aria-label", "Show");
     for (const [id, label] of SHOW) {
-      const b = button(label, () => go("library", { show: id, selected: null }), "");
+      const b = button(label, () => choose({ show: id, selected: null }, b), "");
       b.setAttribute("aria-pressed", String(state.show === id));
       b.dataset.focus = `show:${id}`;
       seg.append(b);
@@ -321,7 +370,7 @@ function toolbar(kind, answer) {
     if (answer && (answer.categories.length || state.category)) bar.append(categoryPicker(answer.categories));
   }
   if (answer && (answer.attention || state.attention)) {
-    const toggle = button(`Needs attention · ${answer.attention}`, () => go("library", { attention: !state.attention, selected: null }), "btn small toggle");
+    const toggle = button(`Needs attention · ${answer.attention}`, () => choose({ attention: !state.attention, selected: null }), "btn small toggle");
     toggle.setAttribute("aria-pressed", String(state.attention));
     toggle.dataset.focus = "filter:attention";
     bar.append(toggle);
@@ -344,7 +393,7 @@ function categoryPicker(categories) {
   const options = !chosen || categories.some((c) => c.name === chosen) ? categories : [{ name: chosen, count: 0 }, ...categories];
   for (const c of options) select.append(new Option(`${c.name} (${c.count})`, c.name));
   select.value = chosen;
-  select.addEventListener("change", () => go("library", { category: select.value, selected: null }));
+  select.addEventListener("change", () => choose({ category: select.value, selected: null }));
   const box = el("label", "filter");
   if (chosen) box.classList.add("on");
   box.append(select);
@@ -464,6 +513,7 @@ function buildTable(columns, rows, groups, morph) {
     if (groups && row.mine !== group) {
       group = row.mine;
       const tr = el("tr", "group");
+      tr.dataset.key = row.mine ? "group:installed" : "group:new";
       const td = el("td", null, row.mine ? "Installed" : "New");
       td.colSpan = columns.length + 1;
       tr.append(td);
@@ -585,4 +635,65 @@ function onRowKey(event, row, tr) {
     while (next && !next.dataset.key) next = next[step]; // skip the group lines
     if (next) next.focus();
   }
+}
+
+// Smooth changes of the list. Before the page draws again it notes where each row on screen is;
+// after, rows that stay slide from there to their new place, new rows rise in, and another tab's
+// list slides in from the side of that tab. Only transform and opacity move; with reduced motion
+// nothing does.
+let drawnKind = null;
+
+function rowsOnScreen(table) {
+  const rows = [];
+  for (const tr of table.querySelectorAll("tbody tr[data-key]")) {
+    const box = tr.getBoundingClientRect();
+    if (box.bottom < 0) continue;
+    if (box.top > innerHeight || rows.length >= SETTLE_ROWS) break;
+    rows.push([tr, box.top]);
+  }
+  return rows;
+}
+
+export function rowMoves(before, after) {
+  const moved = [];
+  const entered = [];
+  for (const [key, top] of after) {
+    if (!before.has(key)) entered.push(key);
+    else if (Math.abs(before.get(key) - top) >= 1) moved.push([key, Math.round(before.get(key) - top)]);
+  }
+  return { moved, entered };
+}
+
+// 1 when `to` is a tab to the right of `from`, -1 to the left, 0 for the same tab.
+export function tabDirection(from, to) {
+  const order = KINDS.map(([id]) => id);
+  return Math.sign(order.indexOf(to) - order.indexOf(from));
+}
+
+export function snapshotRows() {
+  const table = document.querySelector("#main table.library");
+  if (!table) return null;
+  return { kind: drawnKind, tops: new Map(rowsOnScreen(table).map(([tr, top]) => [tr.dataset.key, top])) };
+}
+
+export function settleRows(before) {
+  const table = document.querySelector("#main table.library");
+  drawnKind = table ? currentKind() : null;
+  if (!before || !before.kind || !table || reducedMotion.matches) return;
+  const direction = tabDirection(before.kind, drawnKind);
+  if (direction) {
+    const frames = [{ opacity: 0, transform: `translateX(${8 * direction}px)` }, { opacity: 1, transform: "none" }];
+    animate(table.closest(".table-scroll"), frames, { duration: 220 });
+    return;
+  }
+  const rows = rowsOnScreen(table);
+  const byKey = new Map(rows.map(([tr]) => [tr.dataset.key, tr]));
+  const { moved, entered } = rowMoves(before.tops, new Map(rows.map(([tr, top]) => [tr.dataset.key, top])));
+  for (const [key, dy] of moved) {
+    animate(byKey.get(key), [{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: 260, easing: spring() });
+  }
+  entered.slice(0, RISE_ROWS).forEach((key, index) => {
+    const frames = [{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }];
+    animate(byKey.get(key), frames, { duration: 200, delay: index * 20, fill: "backwards" });
+  });
 }
