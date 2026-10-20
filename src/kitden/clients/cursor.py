@@ -361,7 +361,8 @@ class CursorAdapter(ClientAdapter):
         """Plugin id -> the newest downloaded version of it in Cursor's plugin cache.
 
         The cache is `plugins/cache/<marketplace>/<plugin>/<version>/`, where a version is a
-        commit-hash folder and a plugin may keep several. Hidden folders are skipped.
+        commit-hash folder and a plugin may keep several (checked on a real Cursor install,
+        2026-10-20). Hidden folders are skipped.
         """
 
         def folders(parent: Path) -> list[Path]:
