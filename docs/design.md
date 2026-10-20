@@ -46,7 +46,7 @@ Preserve the compact information layout. Use restrained neutral panels, fine bor
 
 On Overview, an option ("Can improve") is a quiet card: `.issue.suggestion` has no warning border and a plain button, not the primary one.
 
-A row that opens Details ends with a quiet › and the hidden words "Open details" (`opens()` in `parts.js`). The chevron turns accent on hover and keyboard focus; it does not move. The search box names what it searches: your setup and the marketplaces.
+A row that opens Details ends with a quiet › and the hidden words "Open details" (`opens()` in `parts.js`). The chevron turns accent on hover and keyboard focus; it does not move. The search box names what it searches: "Search your setup and marketplaces…".
 
 The Library has one row per item and one column per client found on this computer.
 
@@ -54,7 +54,7 @@ The Library has one row per item and one column per client found on this compute
 | --- | --- |
 | Row, line one | The name in mono, then quiet muted text: the category, and the source only when two rows share a name. The quiet text gives way first when the line is tight. Flags and the › come last. |
 | Row, line two | What it does, in muted text, one line, cut with "…". |
-| Cell state | A dot and a word. "Via Claude Code" is an empty gray ring, like Off: the client loads it only through Claude Code. "Skills added" is a filled green dot, like Loads. A dash says why in its hover text. |
+| Cell state | A dot and a word. "Via Claude Code" is an empty gray ring, like Off: Cursor does not have it yet, and loads it through Claude Code once Claude Code has it. "Skills added" is a filled green dot, like Loads. On plugins and skills, a dash says why in its hover text. |
 | Cell button | A small outlined button in the accent family ("+ Add", "Add skills", "Add the plugin") in place of a state. It opens the review for that one client; the rest of the row opens Details. |
 | Column head | The client's tile and name, and a small quiet "−" that hides the column. It shows on hover and keyboard focus, and always on touch screens. The last shown column has none. |
 | Hidden line | One quiet line above the table: "Hidden: Cursor · Show". Show brings every column back. |

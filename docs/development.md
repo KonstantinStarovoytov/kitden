@@ -40,7 +40,8 @@ framework, no bundler, nothing loaded from another site. How it looks and moves:
    `install.sh` and `install.ps1` (a test checks they match).
 2. Write `docs/releases/vX.Y.Z.md`: plain notes for users about everything since the last tag
    (`git log vA.B.C..HEAD`), grouped as New, Better and Fixed.
-3. Update `ROADMAP.md`: move what shipped under Done and change the "Last updated" date.
+3. Update `ROADMAP.md`: rename "### Not released yet" to the version, move anything else that
+   shipped under Done, and change the "Last updated" date.
 4. Commit, then `git tag vX.Y.Z` and `git push origin main vX.Y.Z`.
 
 The workflow runs the checks and stops if the notes file is missing. Then it publishes to PyPI

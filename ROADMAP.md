@@ -12,7 +12,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Library:** one page in place of Load map and Discover. Only the clients on this computer get
   a column, and the action sits in the client's cell: "+ Add", or why there is none.
 - **Add skills:** a client that cannot install a plugin takes its skills instead, in one review
-  with Undo. This works from Codex and from Cursor's own plugins too.
+  with Undo. It reads plugins from Codex's marketplaces and the ones Cursor installed itself.
 - **Hide a column:** the "−" on a client's column head hides it on the page, and "Show" brings it
   back.
 - **Categories:** filter plugins and skills by category. The category shows quietly in each row.

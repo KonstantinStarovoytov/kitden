@@ -48,9 +48,9 @@ plugins and skills, choose On this Mac, Can add or All, and filter by category. 
 the top to see what loads in that folder.
 
 The action sits in the client's cell. "+ Add" adds a plugin or skill to that client. "Add
-skills" copies the skills of a plugin into a client that cannot install the plugin itself. "Add
-the plugin" is for a skill that needs its plugin. A cell with nothing to do says why. Each button
-opens a review first. You can also add a marketplace from a folder or a GitHub link.
+skills" copies the skills of a plugin that work on their own into a client that cannot install the
+plugin itself. "Add the plugin" is for a skill that needs its plugin. On plugins and skills, a
+cell with nothing to do says why. You can also add a marketplace from a folder or a GitHub link.
 
 <p align="center">
   <picture>
@@ -75,10 +75,10 @@ client in the diagram to open its app.
 
 ### Check every change before it is written
 
-Every change opens a review first: the clients it reaches (Cursor too, when it loads Claude
-Code's plugins) and the exact file change, with secrets hidden. Apply keeps a backup, writes the
-change and checks it. **Changes** keeps the history, with Undo and what to restart for a change
-to take effect.
+Every change opens a review first: the clients it reaches (Cursor too, when an added
+plugin or skill reaches it) and the exact file change, with secrets hidden. Apply keeps a backup,
+writes the change and checks it. **Changes** keeps the history, with Undo and what to restart for
+a change to take effect.
 
 <p align="center">
   <picture>
