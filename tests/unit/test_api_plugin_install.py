@@ -1,4 +1,4 @@
-"""Adding a plugin from Discover: one review, the clients' own commands, verify, Undo (phase 1)."""
+"""Adding a plugin from the Library: one review, the clients' own commands, verify, Undo."""
 
 import json
 import tomllib
@@ -18,6 +18,7 @@ from tests.unit.test_catalog import add_marketplaces
 
 ORIGIN = "http://127.0.0.1:47800"
 POST = {"Origin": ORIGIN, "X-Tool-Request": "1"}
+LINTER = "linter@claude-plugins-official"
 
 
 def _marketplace_name(source):
@@ -136,18 +137,14 @@ def _preview(client, plugin, clients):
     return client.post("/api/changes/preview", json=body, headers=POST)
 
 
-def test_the_catalog_lists_plugins_with_how_each_client_gets_them(client):
-    answer = client.get("/api/catalog?q=lint").json()
-    assert [o["id"] for o in answer["offers"]][:2] == [
-        "linter@claude-plugins-official",
-        "deploy-helper@claude-plugins-official",
-    ]
-    assert answer["offers"][0]["routes"] == {"claude_code": "ready", "codex": "add_marketplace"}
+def _offer(client, plugin=LINTER):
+    """The plugin as Details of a Library row reads it."""
+    return client.get(f"/api/offer?kind=plugin&id={plugin}").json()
 
 
 def test_a_plugin_goes_to_two_clients_in_one_review_and_undo_takes_it_back(client):
     before = _files(client.home)
-    preview = _preview(client, "linter@claude-plugins-official", ["claude_code", "codex"])
+    preview = _preview(client, LINTER, ["claude_code", "codex"])
     assert preview.status_code == 200, preview.text
     change = preview.json()
     # Codex first adds the marketplace from Claude Code's source, then the plugin.
@@ -164,8 +161,7 @@ def test_a_plugin_goes_to_two_clients_in_one_review_and_undo_takes_it_back(clien
     assert ["claude", "plugin", "install", "linter@claude-plugins-official"] in commands
     assert ["codex", "plugin", "marketplace", "add"] in commands
     assert all("-y" not in c and "--yes" not in c for c in client.run.calls)
-    linter = client.get("/api/catalog?q=linter").json()["offers"][0]
-    assert sorted(linter["installed"]) == ["claude_code", "codex"]
+    assert sorted(_offer(client)["installed"]) == ["claude_code", "codex"]
     config = tomllib.loads((client.home / ".codex/config.toml").read_text())
     assert config["plugins"]["linter@claude-plugins-official"] == {"enabled": True}
     assert (
@@ -195,27 +191,24 @@ def test_an_unknown_plugin_is_refused(client):
 
 
 def test_adding_to_claude_code_says_cursor_loads_it_too(cursor_client):
-    change = _preview(cursor_client, "linter@claude-plugins-official", ["claude_code"]).json()
+    change = _preview(cursor_client, LINTER, ["claude_code"]).json()
     assert change["after"][-1] == {
         "client": "cursor",
         "state": "on",
         "word": "Loads",
         "note": "Cursor loads Claude Code plugins, so it gets this one too.",
     }
-    assert cursor_client.get("/api/catalog").json()["inherits"] == {"plugin": True, "skill": True}
+    assert _offer(cursor_client)["inherits"] == {"plugin": True, "skill": True}
 
 
 def test_with_cursor_import_off_the_review_does_not_name_cursor(strict_cursor_client):
-    change = _preview(strict_cursor_client, "linter@claude-plugins-official", ["claude_code"])
+    change = _preview(strict_cursor_client, LINTER, ["claude_code"])
     assert [e["client"] for e in change.json()["after"]] == ["claude_code"]
-    inherits = strict_cursor_client.get("/api/catalog?kind=skill").json()["inherits"]
-    assert inherits == {"plugin": False, "skill": True}
+    assert _offer(strict_cursor_client)["inherits"] == {"plugin": False, "skill": True}
 
 
 def test_without_cursor_neither_kind_is_inherited(client):
-    for kind in ("plugin", "skill"):
-        answer = client.get(f"/api/catalog?kind={kind}").json()
-        assert answer["inherits"] == {"plugin": False, "skill": False}
+    assert _offer(client)["inherits"] == {"plugin": False, "skill": False}
 
 
 def _marketplace(client, source, clients):
@@ -238,9 +231,10 @@ def test_a_marketplace_from_a_folder_goes_to_codex_and_undo_removes_it(client, t
     assert [(s["client"], s["name"]) for s in change["steps"]] == [("codex", "team-tools")]
     applied = client.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
     assert applied["state"] == "verified", applied.get("error")
-    # Its plugins show in Discover at once.
-    offers = client.get("/api/catalog?q=a").json()["offers"]
-    assert any(o["id"] == "a@team-tools" and o["routes"].get("codex") == "ready" for o in offers)
+    # Its plugins show in the Library at once, ready to add to Codex.
+    rows = client.get("/api/library?kind=plugin&show=new").json()["rows"]
+    added = next(r for r in rows if r["offer"] == "a@team-tools")
+    assert added["cells"]["codex"]["add"]["action"] == "plugin.install"
     undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
     assert undone["state"] == "undone"
     assert _files(client.home) == before
@@ -262,25 +256,3 @@ def test_a_codex_only_marketplace_is_refused_for_claude_code(client, tmp_path):
     answer = _marketplace(client, str(tmp_path / "codex-only"), ["claude_code"])
     assert answer.status_code == 422
     assert "Claude Code reads only" in answer.json()["detail"]
-
-
-def test_the_catalog_filters_what_no_client_has_yet(client):
-    every = client.get("/api/catalog").json()
-    new = client.get("/api/catalog?only=new").json()
-    added = client.get("/api/catalog?only=added").json()
-    assert every["all"] == new["all"] == added["all"] == every["total"]
-    assert new["total"] + added["total"] == every["total"]
-    assert all(not o["installed"] for o in new["offers"])
-    assert all(o["installed"] for o in added["offers"])
-
-
-def test_the_catalog_filters_by_category_and_marketplace_and_counts_both(client):
-    every = client.get("/api/catalog").json()
-    names = {c["name"]: c["count"] for c in every["facets"]["categories"]}
-    assert names == {"Development": 1, "Productivity": 1}
-    dev = client.get("/api/catalog?category=Development").json()
-    assert [o["name"] for o in dev["offers"]] == ["linter"]
-    # The marketplace menu counts what is left in the chosen category.
-    assert dev["facets"]["marketplaces"] == [{"name": "claude-plugins-official", "count": 1}]
-    curated = client.get("/api/catalog?marketplace=openai-curated").json()
-    assert [o["name"] for o in curated["offers"]] == ["tracker"]
