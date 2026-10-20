@@ -182,6 +182,11 @@ def test_cursor_gets_via_claude_code_for_a_claude_plugin(home, tmp_path):
     strict = _home(tmp_path / "strict", {REACTIVE_KEY: {"thirdPartyExtensibilityEnabled": False}})
     toolbox = _row(_library(strict, show="new"), "toolbox")
     assert toolbox["cells"]["cursor"] == _cell(add=_add("plugin.skills", "Add skills", PLUGIN))
+    # And a skill that needs the plugin has no way into Cursor.
+    rooted = _row(_library(strict, "skill", show="new"), "rooted")
+    assert rooted["cells"]["cursor"] == _cell(
+        reason="This skill needs its plugin, and Cursor can't install that plugin."
+    )
 
 
 def test_add_skills_turns_into_skills_added_when_all_are_there(home):
@@ -208,12 +213,24 @@ def test_skill_that_needs_its_plugin_offers_add_the_plugin(home):
     assert rooted["cells"]["codex"]["add"] == _add(
         "plugin.install", "Add the plugin", PLUGIN, marketplace=OFFICIAL
     )
+    # Cursor loads the plugin once Claude Code has it.
     assert rooted["cells"]["cursor"] == _cell(
-        reason="This skill needs its plugin, and Cursor can't install that plugin."
+        "via",
+        word="Via Claude Code",
+        reason="Cursor loads Claude Code's plugins. Add the plugin to Claude Code.",
     )
     tidy = _row(answer, "tidy")
     assert tidy["cells"]["codex"] == _cell(
         add=_add("skill.install", "+ Add", skill=f"tidy@{PLUGIN}")
+    )
+
+
+def test_own_skill_that_reaches_outside_its_folder_says_why(home):
+    _skill(home / ".claude/skills", "notes", "Read ../shared/notes.md\n")
+    notes = _row(_library(home, "skill"), "notes")
+    assert notes["source"] == "Claude Code" and notes["cells"]["claude_code"]["state"] == "on"
+    assert notes["cells"]["codex"] == _cell(
+        reason="This skill uses files outside its folder, so it can't be copied."
     )
 
 
@@ -288,6 +305,40 @@ def test_search_reports_matches_the_show_choice_hides(home):
     # On tabs without a catalog the search looks at names, and nothing is hidden by a choice.
     servers = _library(home, "mcp_server", q="neon")
     assert {r["name"] for r in servers["rows"]} == {"neon", "Neon"} and servers["more"] == 0
+
+
+def _list_plugins(marketplace_json: Path, *entries: dict) -> None:
+    listed = json.loads(marketplace_json.read_text())
+    listed["plugins"] += entries
+    marketplace_json.write_text(json.dumps(listed))
+
+
+def test_search_ranks_inside_each_group(home):
+    # On this computer: office-kit (Codex has it, "office" in the name) and documents ("office"
+    # in the description). Not yet: office (the whole name) and alpha (the description).
+    _list_plugins(
+        home / ".codex/.tmp/plugins/.agents/plugins/marketplace.json",
+        {"name": "office-kit", "source": {"source": "local", "path": "./plugins/office-kit"}},
+    )
+    config = home / ".codex/config.toml"
+    config.write_text(
+        config.read_text() + '\n[plugins."office-kit@openai-curated"]\nenabled = true\n'
+    )
+    _list_plugins(
+        home
+        / ".claude/plugins/marketplaces/claude-plugins-official/.claude-plugin/marketplace.json",
+        {"name": "alpha", "description": "Edit office files", "source": "./plugins/alpha"},
+        {"name": "office", "description": "Work with files", "source": "./plugins/office"},
+    )
+    answer = _library(home, show="all", q="office")
+    # Name before description inside each group, though the names sort the other way.
+    assert _names(answer) == [
+        ("office-kit", "openai-curated"),
+        ("documents", "openai-curated"),
+        ("office", OFFICIAL),
+        ("alpha", OFFICIAL),
+    ]
+    assert answer["counts"]["plugin"] == 4
 
 
 def test_hidden_column_drops_rows_only_it_has(home):

@@ -16,6 +16,8 @@ KINDS = ("mcp_server", "plugin", "skill", "hook", "marketplace")
 CATALOG_KINDS = ("plugin", "skill")
 SHOWS = ("mine", "new", "all")
 VIA_CLAUDE_CODE = "Cursor loads Claude Code's plugins. Add it to Claude Code."
+SKILL_VIA_CLAUDE_CODE = "Cursor loads Claude Code's plugins. Add the plugin to Claude Code."
+OUTSIDE_FOLDER = "This skill uses files outside its folder, so it can't be copied."
 
 
 def _cell(
@@ -119,16 +121,17 @@ def _map_rows(map_rows: list[Row], kind: str, found: list[str]) -> Built:
 def _plugin_cell(
     client: str,
     plugin_id: str,
+    offer: dict | None,
     routes: dict[str, str],
     skills: list[dict],
     cursor_imports: bool,
     warn: str | None,
 ) -> dict:
     """What a client without the plugin can do: add it, get it through Claude Code, or take
-    the skills that work alone. Otherwise, why not."""
+    the skills that work alone. Otherwise, why not. A route comes only with an offer."""
     route = routes.get(client)
-    if route:
-        marketplace = plugin_id.partition("@")[2] if route == "add_marketplace" else None
+    if offer and route:
+        marketplace = offer["marketplace"] if route == "add_marketplace" else None
         return _cell(
             add=_add(PLUGIN_INSTALL, "+ Add", plugin_id, marketplace=marketplace, warn=warn)
         )
@@ -174,6 +177,7 @@ def _plugin_rows(
         name = row.name if row else offer["name"]
         source = row.source if row else offer["marketplace"]
         routes = {c: r for c, r in (offer["routes"] if offer else {}).items() if c in found}
+        plugin_skills = by_plugin.get(plugin_id, [])
         cells = {}
         for client in found:
             if _has(row, client):
@@ -185,9 +189,8 @@ def _plugin_rows(
                 if others
                 else None
             )
-            plugin_skills = by_plugin.get(plugin_id, [])
             cells[client] = _plugin_cell(
-                client, plugin_id, routes, plugin_skills, cursor_imports, warn
+                client, plugin_id, offer, routes, plugin_skills, cursor_imports, warn
             )
         installed = offer["installed"] if offer else []
         holders = {c for c in found if _has(row, c) or c in installed}
@@ -211,7 +214,13 @@ def _plugin_rows(
 # Skills --------------------------------------------------------------------------------------
 
 
-def _skill_cell(client: str, skill: dict, row: Row | None, plugin_routes: dict[str, str]) -> dict:
+def _skill_cell(
+    client: str,
+    skill: dict,
+    row: Row | None,
+    plugin_routes: dict[str, str],
+    cursor_imports: bool,
+) -> dict:
     """The scan's state when it has one; else how the skill list says the client gets it, or
     what the client can add."""
     if _has(row, client):
@@ -222,12 +231,17 @@ def _skill_cell(client: str, skill: dict, row: Row | None, plugin_routes: dict[s
         return _cell("on", where=word[:1].lower() + word[1:])
     if client in skill["routes"]:
         return _cell(add=_add(SKILL_INSTALL, "+ Add", skill=skill["id"]))
+    # A found client without the skill and without a route: it does not work alone.
+    if skill["plugin"] is None:
+        return _cell(reason=OUTSIDE_FOLDER)
     route = plugin_routes.get(client)
-    if not skill["self_contained"] and route:
+    if route:
         marketplace = skill["marketplace"] if route == "add_marketplace" else None
         return _cell(
             add=_add(PLUGIN_INSTALL, "Add the plugin", skill["plugin"], marketplace=marketplace)
         )
+    if client == "cursor" and cursor_imports and "claude_code" in plugin_routes:
+        return _cell("via", word="Via Claude Code", reason=SKILL_VIA_CLAUDE_CODE)
     return _cell(
         reason=f"This skill needs its plugin, and {NAMES[client]} can't install that plugin."
     )
@@ -238,6 +252,7 @@ def _skill_rows(
     offers: list[dict],
     skills: list[dict],
     found: list[str],
+    cursor_imports: bool,
 ) -> Built:
     """Every skill in the skill catalog, plus skills the load map has that it does not.
 
@@ -260,7 +275,7 @@ def _skill_rows(
             "skill",
             skill["name"],
             skill["from"],
-            {c: _skill_cell(c, skill, row, plugin_routes) for c in found},
+            {c: _skill_cell(c, skill, row, plugin_routes, cursor_imports) for c in found},
             mine=bool(holders),
             lookup=row.lookup if row else None,
             offer=skill["id"],
@@ -386,7 +401,7 @@ def library(
     skills = skill_catalog(inventory, adapters)
     built = {
         "plugin": _plugin_rows(map_rows, offers, skills, found, cursor_imports),
-        "skill": _skill_rows(map_rows, offers, skills, found),
+        "skill": _skill_rows(map_rows, offers, skills, found, cursor_imports),
         **{k: _map_rows(map_rows, k, found) for k in KINDS if k not in CATALOG_KINDS},
     }
     rows = {}
@@ -409,7 +424,9 @@ def library(
         "columns": [
             {"id": c, "name": NAMES[c], "mark": MARKS[c], "hidden": c in hidden} for c in found
         ],
-        "counts": {k: len(_chosen(rows[k], show_for(k), q)) for k in KINDS},
+        "counts": {
+            k: len(matched) if k == kind else len(_chosen(rows[k], show_for(k), q)) for k in KINDS
+        },
         "rows": _ordered(shown, q),
         "more": more,
         "attention": len(_narrowed(matched, category, True)),
