@@ -265,3 +265,17 @@ def test_a_plugin_skill_has_its_plugin_category(home):
     assert len(toolbox) == 4 and {r["category"] for r in toolbox} == {"Development"}
     assert rows["brainstorming@superpowers@claude-plugins-official"]["category"] is None
     assert rows["brandkit@skills"]["category"] is None
+
+
+def test_a_long_line_does_not_slow_the_skill_list(tmp_path):
+    # A minified script made reading ~500 skills take 9 s (2026-10-20): the "../" search was
+    # quadratic on long runs of path characters. It must stay linear.
+    import time
+
+    skill = tmp_path / "packed"
+    _write(skill / "SKILL.md", "---\nname: packed\ndescription: Packed.\n---\nRead ../notes.md\n")
+    _write(skill / "dist/app.js", "a/b." * 20000 + "\n")
+    started = time.monotonic()
+    info = read_skill(skill)
+    assert time.monotonic() - started < 0.5
+    assert info["needs"] == ["points outside its folder: ../notes.md"]

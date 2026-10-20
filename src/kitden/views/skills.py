@@ -43,7 +43,9 @@ SCRIPT_SUFFIXES = {
 }
 TEXT_LIMIT = 512 * 1024
 # A path-like word that climbs out of its folder, such as ../../assets/logo.svg.
-PATH_UP = re.compile(r"[\w.${}~/-]*\.\./[\w.${}~/-]*")
+# A path that goes up a folder. It starts only where a path starts, so a long run of path
+# characters is read once, not once per character (that took 8 s on a real Mac, 2026-10-20).
+PATH_UP = re.compile(r"(?<![\w.${}~/-])[\w.${}~/-]*?\.\./[\w.${}~/-]*")
 KEY_LINE = re.compile(r"^([A-Za-z][\w-]*):\s*(.*)$")
 BLOCK_MARKS = {"|", ">", "|-", ">-", "|+", ">+"}
 
@@ -137,7 +139,7 @@ def _read_skill(folder: Path) -> dict:
             continue
         if "PLUGIN_ROOT" in text:
             plugin_root = True
-        for token in PATH_UP.findall(text):
+        for token in PATH_UP.findall(text) if "../" in text else ():
             resolved = os.path.normpath(os.path.join(path.parent, token))
             if resolved != str(folder) and not resolved.startswith(str(folder) + os.sep):
                 outside.add(token)
