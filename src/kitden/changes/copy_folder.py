@@ -45,18 +45,23 @@ def digest(folder: Path | str) -> str:
 
 
 def copy_folder(source: Path | str, target: Path | str) -> None:
-    """Copy every file, keeping its mode. The target folder must not exist yet."""
+    """Copy every file, keeping its mode. The target folder must not exist yet: one that
+    appears meanwhile is refused and left alone. A copy that fails partway is removed."""
     src = Path(source)
     dst = Path(target)
     if dst.exists() or dst.is_symlink():
         raise CopyRefusedError(f"{dst} already exists")
     files = list_files(src)
     dst.parent.mkdir(parents=True, exist_ok=True)
-    dst.mkdir()
-    for rel in files:
-        (dst / rel).parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(src / rel, dst / rel)
-        shutil.copymode(src / rel, dst / rel)
+    dst.mkdir()  # fails if the folder appeared meanwhile; nothing is made then
+    try:
+        for rel in files:
+            (dst / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(src / rel, dst / rel)
+            shutil.copymode(src / rel, dst / rel)
+    except Exception:
+        remove_folder(dst)  # this call made it
+        raise
 
 
 def remove_folder(target: Path | str) -> None:

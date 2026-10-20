@@ -156,3 +156,23 @@ def test_two_copies_in_one_change_and_a_failed_copy_removes_what_was_copied(tmp_
     engine.apply(change.id)
     assert change.state is ChangeState.RESTORED
     assert not target.exists()
+
+
+def test_a_copy_that_fails_partway_leaves_no_half_copy(tmp_path, places, monkeypatch):
+    import kitden.changes.copy_folder as copying
+
+    source, target = places
+    real = copying.shutil.copyfile
+
+    def full_disk(src, dst):
+        if str(dst).endswith("run.sh"):
+            raise OSError("No space left on device")
+        return real(src, dst)
+
+    monkeypatch.setattr(copying.shutil, "copyfile", full_disk)
+    engine = make_engine(tmp_path)
+    change = engine.preview("skill.install", [copy_step(source, target)])
+    engine.apply(change.id)
+    assert change.state is ChangeState.RESTORED
+    assert "No space left" in change.error
+    assert not target.exists()

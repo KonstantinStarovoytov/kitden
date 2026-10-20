@@ -354,3 +354,27 @@ def test_add_skills_needs_one_client_and_a_plugin_with_skills(client):
     unknown = _add_skills(client, ["codex"], "nothing@nowhere")
     assert unknown.status_code == 422
     assert unknown.json()["detail"] == "This plugin has no skills on this computer."
+
+
+def test_a_folder_that_appears_just_before_the_copy_is_left_alone(client, monkeypatch):
+    import kitden.changes.engine as engine
+
+    home = client.home
+    real_copy = engine.copy_folder
+
+    def someone_else_first(source, target):
+        # Between the check and the copy, another program makes the tidy folder.
+        if target.endswith("/tidy"):
+            mine = home / ".agents/skills/tidy"
+            mine.mkdir(parents=True)
+            (mine / "notes.md").write_text("mine\n")
+        real_copy(source, target)
+
+    monkeypatch.setattr(engine, "copy_folder", someone_else_first)
+    change = _add_skills(client, ["codex"]).json()
+    assert [s["name"] for s in change["steps"]] == ["brainstorming", "tidy"]
+    applied = _apply(client, change)
+    assert applied["state"] == "restored", applied
+    # The copy Kitden made is taken back; the folder it did not make stays as it was.
+    assert not (home / ".agents/skills/brainstorming").exists()
+    assert (home / ".agents/skills/tidy/notes.md").read_text() == "mine\n"

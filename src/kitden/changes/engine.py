@@ -468,8 +468,7 @@ class Engine:
             # The gateway side first: a server that cannot be added leaves the files alone.
             self._apply_gateway(gateway_steps, tick)
             for step in copy_steps:
-                copied.append(step)
-                self._apply_copy(step)
+                self._apply_copy(step, copied)
                 tick()
             # Steps on one file run in order, each on the result of the one before.
             working = dict(current)
@@ -525,10 +524,15 @@ class Engine:
             same = False
         return None if same else f"{copy.source} changed since preview; review the change again"
 
-    def _apply_copy(self, step: Step) -> None:
-        """Copy the folder, then read the copy back: it must hash like the source."""
+    def _apply_copy(self, step: Step, copied: list[Step]) -> None:
+        """Copy the folder, then read the copy back: it must hash like the source.
+
+        The step joins `copied`, what a failed change takes back, only once the folder is the
+        one Kitden made: a folder that appeared before the copy is refused and left alone.
+        """
         copy = step.copy
         copy_folder(copy.source, copy.target)
+        copied.append(step)
         if digest(copy.target) != copy.content_hash:
             raise _ApplyError(f"{copy.target}: the copy did not read back like the source")
 
