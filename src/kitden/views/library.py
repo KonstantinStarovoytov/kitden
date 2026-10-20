@@ -325,8 +325,8 @@ def _in_view(row: dict, holders: set[str], visible: list[str]) -> bool:
 
 
 def _matching(rows: list[dict], q: str, kind: str) -> list[dict]:
-    """Rows that match the search: on plugins and skills best first (the Discover scoring), on
-    the other tabs any part of the name, as the Load map did ("hub" finds github)."""
+    """Rows that match the search: on plugins and skills best first (catalog.search), on the
+    other tabs any part of the name ("hub" finds github)."""
     if not q.strip():
         return rows
     if kind not in CATALOG_KINDS:

@@ -367,7 +367,7 @@ def test_search_reports_matches_the_show_choice_hides(home):
 
 
 def test_tabs_without_a_catalog_find_any_part_of_a_name(home):
-    # As the Load map did: "hub" finds github. Plugins and skills keep the Discover scoring.
+    # "hub" finds github. Plugins and skills rank by catalog.search.
     servers = _library(home, "mcp_server", q="hub")
     assert _names(servers) == [("github", None)]
     assert servers["counts"]["mcp_server"] == 1

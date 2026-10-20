@@ -1,4 +1,4 @@
-"""The catalog: plugins in the marketplaces already on this computer (Discover, phase 1).
+"""The catalog: plugins in the marketplaces already on this computer.
 
 Read only: nothing here goes to the network or runs anything. Claude Code keeps a clone of each
 marketplace; Codex keeps local marketplaces and its curated one in `.tmp`. Formats checked on

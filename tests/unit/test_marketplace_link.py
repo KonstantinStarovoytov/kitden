@@ -1,4 +1,4 @@
-"""Adding a marketplace from a link: a folder here or a GitHub repository (Discover, phase 1)."""
+"""Adding a marketplace from a link: a folder here or a GitHub repository."""
 
 import json
 import urllib.error

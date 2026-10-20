@@ -69,7 +69,7 @@ def switch_steps(
 def install_steps(
     adapters: dict[str, ClientAdapter], offer: dict, clients: list[str]
 ) -> list[Step]:
-    """Install one catalog plugin in the chosen clients (Discover). A client that does not know
+    """Install one catalog plugin in the chosen clients. A client that does not know
     the plugin's marketplace first adds it, from the source another client uses."""
     if not clients:
         raise ValueError("Choose at least one client")
@@ -101,7 +101,7 @@ def install_steps(
 def skill_steps(
     adapters: dict[str, ClientAdapter], skill: dict, clients: list[str], found: set[str]
 ) -> list[Step]:
-    """Copy one catalog skill so each chosen client loads it once (Discover, phase 2).
+    """Copy one catalog skill so each chosen client loads it once.
 
     Claude Code reads ~/.claude/skills; Codex and Cursor both read ~/.agents/skills, so one
     copy there serves both; Cursor alone gets ~/.cursor/skills. With Include Third-Party
@@ -150,8 +150,8 @@ def plugin_skill_steps(
     found: set[str],
 ) -> list[Step]:
     """Copy the skills of one plugin that work alone into one client that cannot install the
-    plugin (Library). A skill the client already has is skipped. Each copy is the one Discover
-    makes for a single skill, so the folder choice is the same."""
+    plugin. A skill the client already has is skipped. Each copy is the one skill_steps makes
+    for a single skill, so the folder choice is the same."""
     steps = []
     for skill in skills:
         copied = (
@@ -180,7 +180,7 @@ def plugin_skills_left_out(plugin_id: str, skills: list[dict], client: str) -> l
 def marketplace_steps(
     adapters: dict[str, ClientAdapter], found: dict, clients: list[str]
 ) -> list[Step]:
-    """Add one marketplace, read from its link, to the chosen clients (Discover)."""
+    """Add one marketplace, read from its link, to the chosen clients."""
     if not clients:
         raise ValueError("Choose at least one client")
     steps = []

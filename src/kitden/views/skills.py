@@ -1,5 +1,5 @@
 """The skills catalog: skills inside the plugins on this computer, and the ones already in a
-client's skills folder, so they can be copied to another client (Discover, phase 2). Read only.
+client's skills folder, so they can be copied to another client. Read only.
 
 Where each client reads the user's skills (checked 2026-10-19: Claude Code 2.1.283, Codex CLI
 0.163, Cursor 3.21): Claude Code ~/.claude/skills; Codex ~/.agents/skills and ~/.codex/skills;
