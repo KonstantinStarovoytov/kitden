@@ -236,14 +236,18 @@ class CodexAdapter(ClientAdapter):
         )
 
     def marketplace_roots(self) -> dict[str, Path]:
-        """Local marketplaces from config.toml, plus the curated one Codex keeps in `.tmp`."""
+        """Marketplaces from config.toml, plus the curated one Codex keeps in `.tmp`. A local
+        one is its folder; a git one is the copy Codex clones into `.tmp/marketplaces/<name>`
+        (seen with Codex 0.163.0, 2026-10-20)."""
         config = _dict(Reader(CLIENT).toml(self.codex_home / "config.toml"))
         roots = {}
         for name, entry in _dict(config.get("marketplaces")).items():
             source = _dict(entry).get("source")
-            local = _dict(entry).get("source_type") == "local" and isinstance(source, str)
-            if local and Path(source).is_dir():
+            kind = _dict(entry).get("source_type")
+            if kind == "local" and isinstance(source, str) and Path(source).is_dir():
                 roots[name] = Path(source)
+            elif kind == "git" and (self.codex_home / ".tmp/marketplaces" / name).is_dir():
+                roots[name] = self.codex_home / ".tmp/marketplaces" / name
         curated = self.codex_home / ".tmp/plugins"
         listed = _dict(Reader(CLIENT).json(curated / ".agents/plugins/marketplace.json"))
         if isinstance(listed.get("name"), str):

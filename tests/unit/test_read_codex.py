@@ -143,3 +143,20 @@ def test_a_quick_scan_asks_codex_in_the_background_and_says_when_the_answer_is_i
     third = quick()
     gmail = next(i for i in third.scan().items if i.name == "gmail@openai-curated-remote")
     assert third.skipped is False and str(gmail.enabled) == "off"
+
+
+def test_a_git_marketplace_is_read_from_the_copy_codex_keeps(tmp_path, no_version):
+    # Codex clones a git marketplace into .tmp/marketplaces/<name> (seen with Codex 0.163.0,
+    # 2026-10-20). Without that root the Library offered to add a marketplace Codex has.
+    home = make_home(tmp_path, FIXTURE)
+    config = home / ".codex/config.toml"
+    config.write_text(
+        config.read_text()
+        + '\n[marketplaces.claude-plugins-official]\nsource_type = "git"\n'
+        + 'source = "https://github.com/anthropics/claude-plugins-official.git"\n'
+    )
+    clone = home / ".codex/.tmp/marketplaces/claude-plugins-official"
+    (clone / ".claude-plugin").mkdir(parents=True)
+    (clone / ".claude-plugin/marketplace.json").write_text('{"name": "claude-plugins-official"}')
+    roots = CodexAdapter(home, read_version=no_version).marketplace_roots()
+    assert roots["claude-plugins-official"] == clone
