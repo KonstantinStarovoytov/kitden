@@ -379,6 +379,34 @@ def test_a_server_name_with_other_characters_gets_a_clean_prefix():
     assert names == {"clash": ("a", "clash"), "my_docs_server_clash": ("my.docs server", "clash")}
 
 
+def test_servers_whose_names_clean_to_one_name_keep_every_tool():
+    # All four become "a_b_" in front; Kitden's own list_projects is taken too.
+    servers = ("a b", "a,b", "a.b", "a_b")
+    tools = {server: [tool("search"), tool("list_projects")] for server in servers}
+    names = exposed_names(tools, taken={"list_projects"})
+    assert sorted(names.values()) == sorted(
+        (s, t) for s in servers for t in ("search", "list_projects")
+    )
+    assert all(len(name) <= 54 for name in names)
+
+
+async def test_the_instructions_say_which_tools_only_read(home):
+    async with gateway(home) as client:
+        plain = client.instructions
+    write_settings(home, {"echo": echo("echo")})
+    save_tools(home, "echo", [tool("echo")])
+    async with gateway(home) as client:
+        held = client.instructions
+    assert plain == mcp_server.INSTRUCTIONS
+    assert "Read-only: this tool cannot change settings." in plain
+    assert "Read-only" not in held
+    assert (
+        "Kitden's own tools (show_setup, list_findings, explain_item, list_projects) only read"
+        in held
+    )
+    assert "The other tools come from MCP servers moved into the Kitden gateway" in held
+
+
 async def test_unreadable_settings_leave_kitden_mcp_as_it_was(home):
     path = data_dir(home) / SETTINGS_FILE
     path.parent.mkdir(parents=True, exist_ok=True)

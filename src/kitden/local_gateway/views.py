@@ -16,6 +16,7 @@ from kitden.local_gateway.project import project_chain
 from kitden.local_gateway.settings import (
     CLIENT,
     SETTINGS_FILE,
+    deciding_project,
     load_settings,
     load_tools,
     own_state,
@@ -70,25 +71,31 @@ def gateway_items(inventory, settings: dict, home: Path) -> list[Item]:
 
 def _states(settings: dict, server: str, tool: str | None, chain: list[str]) -> dict:
     """A server's or a tool's state along the picked project's chain (the picked project
-    first; empty for all projects), and whether the picked project's own rule makes it differ
-    from what the project would get without that rule."""
+    first; empty for all projects); whether the picked project's own rule makes it differ from
+    what the project would get without that rule; and the folder name of the project it would
+    then follow (None: all projects)."""
     own = own_state(settings["rules"]["projects"].get(chain[0]), server, tool) if chain else None
     without = state_in(settings, chain[1:], server, tool)
-    return {"state": own or without, "differs": own is not None and own != without}
+    by = deciding_project(settings, chain[1:], server, tool)
+    return {
+        "state": own or without,
+        "differs": own is not None and own != without,
+        "follows": Path(by).name if by else None,
+    }
 
 
 def held_servers(settings: dict, chain: list[str]) -> list[dict]:
     """Every server in the Kitden gateway, for its card: name, local or remote, and its state
     along the picked project's chain (empty: all projects). Commands, addresses and env stay
     out."""
-    return [
-        {
-            "name": name,
-            "kind": "remote" if isinstance(server, dict) and "url" in server else "local",
-            **_states(settings, name, None, chain),
-        }
-        for name, server in sorted(settings["servers"].items(), key=lambda pair: pair[0].lower())
-    ]
+    cards = []
+    for name, server in sorted(settings["servers"].items(), key=lambda pair: pair[0].lower()):
+        states = _states(settings, name, None, chain)
+        kind = "remote" if isinstance(server, dict) and "url" in server else "local"
+        cards.append(
+            {"name": name, "kind": kind, "state": states["state"], "differs": states["differs"]}
+        )
+    return cards
 
 
 def tools_view(settings: dict, tools: dict, server: str, chain: list[str]) -> dict:

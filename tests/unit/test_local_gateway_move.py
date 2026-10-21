@@ -552,7 +552,8 @@ def test_a_server_the_gateway_holds_is_updated_from_a_changed_direct_entry(home)
         assert "SENTINEL" not in answer.text
         assert change["after"][0]["note"] == (
             "Codex and Cursor will offer its tools through Kitden. "
-            "files in the Kitden gateway is updated. Applies to new sessions."
+            "files in the Kitden gateway is updated. Applies to new sessions. "
+            "Codex's own switches for files do not carry over; the gateway's rules stay."
         )
 
         applied = page.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
@@ -596,6 +597,94 @@ def test_a_server_the_gateway_holds_as_it_is_only_leaves_the_clients(home):
         undone = page.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
         assert undone["state"] == "undone", undone
     assert {path: path.read_bytes() for path in files} == before
+
+
+def test_a_held_server_keeps_the_gateways_rules_and_says_the_clients_switches_go(home):
+    write_json(gateway_file(home), {"servers": {"files": FILES}, "rules": {}})
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    add_codex(home, "files", CODEX_FILES + '\ndisabled_tools = ["write"]')
+    user = json.loads((home / ".claude/settings.json").read_text())
+    user["permissions"] = {"deny": ["mcp__files__write"]}
+    write_json(home / ".claude/settings.json", user)
+    # Cursor offers the gateway's tools but has no entry of its own to lose: no note for it.
+    add_cursor(home, "kitden", {"command": KITDEN, "args": ["mcp"]})
+
+    with page_for(home) as page:
+        answer = preview(page, home, ("claude_code", "files"), ("codex", "files"))
+        assert answer.status_code == 200, answer.json()
+        change = answer.json()
+        assert [(a["client"], a["word"], a.get("note")) for a in change["after"]] == [
+            (
+                "claude_code",
+                "Via Kitden gateway",
+                "Claude Code, Codex and Cursor will offer its tools through Kitden. files is in "
+                "the Kitden gateway already. Applies to new sessions. Claude Code's own switches "
+                "for files do not carry over; the gateway's rules stay.",
+            ),
+            (
+                "codex",
+                "Via Kitden gateway",
+                "Codex's own switches for files do not carry over; the gateway's rules stay.",
+            ),
+            ("cursor", "Via Kitden gateway", None),
+        ]
+        applied = page.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
+        assert applied["state"] == "verified", applied
+    assert load_settings(home)["rules"] == {"global": {}, "projects": {}}
+
+
+def test_a_held_server_review_says_where_the_gateway_has_it_on(home):
+    website = str(home / "work/website")
+    rules = {
+        "global": {"files": {"server": "off"}},
+        "projects": {website: {"files": {"server": "on"}}},
+    }
+    write_json(gateway_file(home), {"servers": {"files": FILES}, "rules": rules})
+    add_cursor(home, "files", FILES)
+    add_cursor(home, "kitden", {"command": KITDEN, "args": ["mcp"]})
+
+    def review():
+        with page_for(home) as page:
+            answer = preview(page, home, ("cursor", "files"))
+        assert answer.status_code == 200, answer.json()
+        return [(a["client"], a["state"], a["word"], a["note"]) for a in answer.json()["after"]]
+
+    assert review() == [
+        (
+            "cursor",
+            "gw",
+            "Via Kitden gateway",
+            "Cursor will offer its tools through Kitden. files is in the Kitden gateway already. "
+            "files is on only in website. Applies to new sessions. " + SWITCHES,
+        )
+    ]
+    # Off for all projects with no project of its own: no client offers it.
+    rules["projects"] = {}
+    write_json(gateway_file(home), {"servers": {"files": FILES}, "rules": rules})
+    assert review() == [
+        (
+            "cursor",
+            "off",
+            "Off",
+            "files is in the Kitden gateway already. files stays off in every client. "
+            "Applies to new sessions. " + SWITCHES,
+        )
+    ]
+
+
+def test_a_held_entry_keeps_the_longer_start_time(home):
+    old = {**FILES, "env": {"FILES_TOKEN": "SENTINEL_SECRET_OLD"}, "startup_timeout_sec": 60}
+    write_json(gateway_file(home), {"servers": {"files": old}, "rules": {}})
+    add_codex(home, "files", CODEX_FILES + "\nstartup_timeout_sec = 45")
+    assert move(home, ("codex", "files"))[0].edit.after == {**FILES, "startup_timeout_sec": 60}
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    assert move(home, ("claude_code", "files"))[0].edit.after == {
+        **FILES,
+        "startup_timeout_sec": 60,
+    }
+    old["startup_timeout_sec"] = 30
+    write_json(gateway_file(home), {"servers": {"files": old}, "rules": {}})
+    assert move(home, ("codex", "files"))[0].edit.after == {**FILES, "startup_timeout_sec": 45}
 
 
 def test_a_missing_kitden_command_is_refused(home):
@@ -704,7 +793,13 @@ def test_the_review_says_when_claude_code_allows_every_kitden_tool(tmp_path):
         "Claude Code allows every Kitden tool without asking; after the move that includes the "
         "tools of n8n-mcp."
     )
-    for where, rule in ((".claude/settings.json", "mcp__kitden"), (None, "mcp__kitden__*")):
+    # Installed as a plugin, Claude Code names the tools mcp__plugin_kitden_kitden__<tool>.
+    for where, rule in (
+        (".claude/settings.json", "mcp__kitden"),
+        (None, "mcp__kitden__*"),
+        (".claude/settings.json", "mcp__plugin_kitden_kitden"),
+        (None, "mcp__plugin_kitden_kitden__*"),
+    ):
         home = new_home(tmp_path / rule.replace("*", "all"))
         add_claude(home, "kitden", {"type": "stdio", "command": KITDEN, "args": ["mcp"]})
         path = home / (where or "work/website/.claude/settings.local.json")

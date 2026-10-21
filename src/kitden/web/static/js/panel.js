@@ -368,13 +368,16 @@ function projectLabel(id) {
 }
 
 // The rows of a held server's Details, for the project picked at the top (`where`, its folder
-// name) or for all projects (null): the whole server first, then each tool it lists.
+// name) or for all projects (null): the whole server first, then each tool it lists. A row
+// that differs names what it follows without its own setting: the project around it, or all
+// projects.
 export function toolRows(answer, where) {
   const place = where || "all projects";
   const row = (key, tool, name, description, entry) => {
     const on = entry.state !== "off";
     const what = tool === null ? answer.server : `${tool} of ${answer.server}`;
-    return { key, tool, name, description, on, differs: Boolean(entry.differs), label: `Turn ${on ? "off" : "on"} ${what} in ${place}…` };
+    const follows = entry.follows || "all projects";
+    return { key, tool, name, description, on, differs: Boolean(entry.differs), follows, label: `Turn ${on ? "off" : "on"} ${what} in ${place}…` };
   };
   return [
     row("server", null, "Whole server", `Turns every tool of ${answer.server} on or off.`, answer),
@@ -448,9 +451,9 @@ export function toolsSection(server, again, next = {}) {
       }
       if (row.differs) {
         const line = el("div", "differs");
-        const follow = button("Use all projects", () => change(row, null, `follow:${row.key}`), "btn small");
+        const follow = button(`Use ${row.follows}`, () => change(row, null, `follow:${row.key}`), "btn small");
         follow.dataset.focus = `follow:${row.key}`;
-        line.append(flag({ text: "Differs from all projects", level: "info" }), follow);
+        line.append(flag({ text: `Differs from ${row.follows}`, level: "info" }), follow);
         middle.append(line);
       }
       const toggle = switchNode(row.on, () => change(row, row.on ? "off" : "on", row.key));

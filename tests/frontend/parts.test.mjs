@@ -157,7 +157,8 @@ test('the Changes page names what moved into the Kitden gateway and which rule c
   const rule = (fields) => changeTitle({ action: 'gateway.rule', steps: slow, rule: { server: 'echo', tool: 'slow', project: 'website', state: 'off', ...fields } });
   assert.equal(rule({}), 'Turned off slow of echo in website');
   assert.equal(rule({ tool: null, project: null, state: 'on' }), 'Turned on echo in all projects');
-  assert.equal(rule({ state: null }), 'slow of echo in website follows all projects');
+  // A removed rule: what it follows then is not known when the line is read.
+  assert.equal(rule({ state: null }), 'slow of echo in website: own setting removed');
   // An old record without the rule's parts names what it has.
   assert.equal(changeTitle({ action: 'gateway.rule', steps: slow }), 'Changed the rule for slow · Kitden gateway');
 });

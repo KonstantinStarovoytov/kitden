@@ -122,6 +122,15 @@ def state_in(settings: dict, chain: Sequence[str], server: str, tool: str | None
     return "on" if _is_on(_scopes(settings, chain), server, tool) else "off"
 
 
+def deciding_project(
+    settings: dict, chain: Sequence[str], server: str, tool: str | None
+) -> str | None:
+    """The first project of the chain with its own state for a server or tool; None when the
+    global rule decides."""
+    projects = _dict(_dict(settings.get("rules")).get("projects"))
+    return next((p for p in chain if own_state(projects.get(p), server, tool)), None)
+
+
 def servers_on(settings: dict, chain: Sequence[str]) -> list[str]:
     """Every gateway server that is on along the chain, whether or not its tools are known."""
     scopes = _scopes(settings, chain)

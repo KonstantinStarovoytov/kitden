@@ -558,13 +558,16 @@ def _permission_rules(path: Path, kind: str = "deny") -> list[str]:
 
 def claude_allows_kitden(home: Path, known_projects: list[str]) -> bool:
     """True when Claude Code's user settings or a known project's settings allow every tool of
-    the `kitden` entry without asking (`mcp__kitden` or `mcp__kitden__*`). Tools moved into the
-    Kitden gateway are then allowed too."""
+    the `kitden` entry without asking (`mcp__kitden` or `mcp__kitden__*`, or the same for the
+    kitden plugin's server). Tools moved into the Kitden gateway are then allowed too."""
     files = [home / ".claude/settings.json"]
     for project in known_projects:
         folder = Path(project) / ".claude"
         files += [folder / "settings.json", folder / "settings.local.json"]
-    whole = {f"mcp__{SETUP_NAME}", f"mcp__{SETUP_NAME}__*"}
+    # A plugin's server tools are mcp__plugin_<plugin>_<server>__<tool> (checked 2026-10-21,
+    # code.claude.com MCP docs); the kitden plugin and its server are both "kitden".
+    servers = (f"mcp__{SETUP_NAME}", f"mcp__plugin_{SETUP_NAME}_{SETUP_NAME}")
+    whole = {rule for server in servers for rule in (server, f"{server}__*")}
     return any(rule in whole for path in files for rule in _permission_rules(path, "allow"))
 
 
@@ -718,7 +721,8 @@ def local_move_steps(
     lacks. An entry that must stay direct is refused, with the reason, before any step.
 
     A server the gateway holds already keeps its rules: a different entry replaces the held one
-    (a new token, say), and the same entry only leaves the clients.
+    (a new token, say), and the same entry only leaves the clients. A client's removal step is
+    marked (`switches_left`) when that client had tools or the server off, which do not carry.
     """
     if not items:
         raise ValueError("Choose a server to move.")
@@ -736,14 +740,17 @@ def local_move_steps(
             raise ValueError(f"{item.name} is set up differently in {where}; keep one first.")
         found.setdefault(item.name, []).append((item, entry))
         removes.append(remove)
-    # A Codex entry may give its server more time to start; the gateway keeps the longest.
+    settings = load_settings(home)
+    held = settings["servers"]
+    # A Codex entry may give its server more time to start; the gateway keeps the longest, also
+    # the one an entry it holds already has.
     for name, server in servers.items():
         waits = [e.get(START_TIME) for i, e in found[name] if i.client == "codex"]
+        if isinstance(held.get(name), dict):
+            waits.append(held[name].get(START_TIME))
         waits = [w for w in waits if isinstance(w, int | float) and not isinstance(w, bool)]
         if waits:
             servers[name] = {**server, START_TIME: max(waits)}
-    settings = load_settings(home)
-    held = settings["servers"]
     lacking = [c for c in dict.fromkeys(i.client for i in items) if c not in added_clients]
     if lacking and (command is None or not Path(command).is_absolute()):
         raise ValueError(NEEDS_COMMAND)
@@ -766,9 +773,14 @@ def local_move_steps(
     denies = _claude_denies(home, known_projects)
     project_offs = _claude_project_offs(home)
     for name in servers:
-        if name in held:
-            continue  # the gateway's own rules for it stay
         rules = _carried_rules(name, found[name], home, denies, project_offs)
+        if name in held:
+            # The gateway's own rules for it stay; the review names the clients whose own
+            # switches for it do not carry over.
+            had = {client for _, clients in rules.values() for client in clients}
+            for remove in removes:
+                remove.switches_left |= remove.name == name and remove.client in had
+            continue
         for (project, tool), (state, clients) in rules.items():
             step = rule_step(home, project, name, tool, state)
             step.carried_from = tuple(sorted(clients))

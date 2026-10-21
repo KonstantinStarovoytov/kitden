@@ -86,11 +86,12 @@ off in one project, Cursor cannot (checked 2026-10-21); the gateway gives the sa
 three.
 
 It holds local servers (a command) and remote ones (an address). Each switch is a review with a
-backup and Undo. Moving a server keeps the tools Claude Code and Codex had turned off; Cursor's own
-tool switches do not carry over. Moving a server the gateway holds again updates it, for example
-with a new token. A change applies to new sessions, so start a new one in your client. A moved
-server's env values and headers are kept in the gateway's settings file, which only you can read
-and which stays on this Mac.
+backup and Undo. Moving a server in for the first time keeps the tools Claude Code and Codex had
+turned off; Cursor's own tool switches do not carry over. Moving a server the gateway holds again
+updates it, for example with a new token, and keeps the gateway's switches for it; the clients'
+own switches do not carry over then. A change applies to new sessions, so start a new one in your
+client. A moved server's env values and headers are kept in the gateway's settings file, which only
+you can read and which stays on this Mac.
 
 A few servers stay direct for now, and the page says why:
 

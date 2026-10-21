@@ -114,9 +114,10 @@ test('a tool rule review names the tool, its server and the project', () => {
   const on = { ...off, params: { server: 'echo', tool: null, state: 'on', project: null } };
   assert.deepEqual(changeWords(rule(on.params), on), { title: 'Turn on echo in all projects', done: 'Turned on echo in all projects' });
   const follow = { ...off, params: { ...off.params, state: null } };
+  // What it then follows (all projects, or the project around it) is in the review's words.
   assert.deepEqual(changeWords(rule(follow.params), follow), {
-    title: 'Use all projects for slow of echo in website',
-    done: 'slow of echo in website follows all projects',
+    title: 'Remove the own setting for slow of echo in website',
+    done: 'slow of echo in website: own setting removed',
   });
   data.projects = null;
 });
@@ -131,17 +132,18 @@ test('an after entry with only a note draws no client chip', () => {
 
 test('a held server lists the whole server first, then each tool, for the project picked', () => {
   const answer = {
-    server: 'echo', state: 'on', differs: false, problem: null,
+    server: 'echo', state: 'on', differs: true, follows: 'repo', problem: null,
     tools: [
-      { name: 'echo', description: 'Says it back', state: 'on', differs: false },
-      { name: 'slow', description: '', state: 'off', differs: true },
+      { name: 'echo', description: 'Says it back', state: 'on', differs: false, follows: null },
+      { name: 'slow', description: '', state: 'off', differs: true, follows: null },
     ],
   };
   const rows = toolRows(answer, 'website');
-  assert.deepEqual(rows.map((r) => [r.key, r.tool, r.on, r.differs]), [
-    ['server', null, true, false],
-    ['tool:echo', 'echo', true, false],
-    ['tool:slow', 'slow', false, true],
+  // A row that differs names what it follows without its own setting: a project or all projects.
+  assert.deepEqual(rows.map((r) => [r.key, r.tool, r.on, r.differs, r.follows]), [
+    ['server', null, true, true, 'repo'],
+    ['tool:echo', 'echo', true, false, 'all projects'],
+    ['tool:slow', 'slow', false, true, 'all projects'],
   ]);
   assert.equal(rows[0].name, 'Whole server');
   assert.equal(rows[1].label, 'Turn off echo of echo in website…');

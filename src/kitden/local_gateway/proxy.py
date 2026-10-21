@@ -98,7 +98,8 @@ def exposed_names(
     in every project. Servers go in name order. A tool keeps its name unless an earlier server has
     it or the name is `taken` (Kitden's own tools); then it gets `<server>_` in front. A name over
     54 characters, or a `<server>_<tool>` that is in use too, becomes its first 45 characters, "_"
-    and the first 8 hex characters of its SHA-1. So no name is given twice. In the prefix, each
+    and the first 8 hex characters of its SHA-1; when that is in use too, of the name with "#2",
+    "#3" and so on. So no name is given twice and no tool is left out. In the prefix, each
     character a tool name may not have becomes "_".
     """
     names: dict[str, tuple[str, str]] = {}
@@ -108,9 +109,12 @@ def exposed_names(
             name = tool["name"]
             if name in used:
                 name = f"{NOT_IN_NAMES.sub('_', server)}_{name}"
-            if len(name) > NAME_LIMIT or name in used:
-                digest = hashlib.sha1(name.encode(), usedforsecurity=False).hexdigest()
-                name = f"{name[:45]}_{digest[:8]}"
+            seed, tries = name, 0
+            while len(name) > NAME_LIMIT or name in used:
+                tries += 1
+                key = seed if tries == 1 else f"{seed}#{tries}"
+                digest = hashlib.sha1(key.encode(), usedforsecurity=False).hexdigest()
+                name = f"{seed[:45]}_{digest[:8]}"
             names[name] = (server, tool["name"])
             used.update((tool["name"], name))
     return names

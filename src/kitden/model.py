@@ -261,6 +261,9 @@ class Step:
     shared_file: bool = False
     # A gateway rule carried over from these clients' settings; only the review's words use it.
     carried_from: tuple[str, ...] = ()
+    # A client's removal step: its own switches for a server the Kitden gateway holds already do
+    # not carry over. Only the review's words use it.
+    switches_left: bool = False
 
 
 @dataclass

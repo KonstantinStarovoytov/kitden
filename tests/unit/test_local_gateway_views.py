@@ -223,6 +223,7 @@ def test_tools_api_marks_project_differences(home):
             "description": "The echo tool",
             "state": "on",
             "differs": False,
+            "follows": None,
         }
         assert rows(everywhere) == [
             ("echo", "on", False),
@@ -678,6 +679,33 @@ def test_rules_follow_enclosing_projects_on_the_page_and_in_the_gateway(home, mo
         assert follow["after"][0]["note"] == (
             "slow of echo will be off in web, as in website. Applies to new sessions."
         )
+
+
+def test_a_row_names_what_it_follows_without_its_own_rule(home):
+    repo, _, _, sub = chain_home(home)
+    rules = {
+        "global": {"echo": {"tools": {"where": "off"}}},
+        "projects": {
+            str(repo): {"echo": {"server": "on", "tools": {"slow": "off"}}},
+            str(sub): {"echo": {"server": "off", "tools": {"slow": "on", "where": "on"}}},
+        },
+    }
+    hold(home, {"echo": echo()}, rules)
+    save_tools(home, "echo", [tool("echo"), tool("slow"), tool("where")])
+    with page_for(home) as page:
+        pid = project_id(page, str(sub))
+        web = page.get(f"/api/gateway/tools?server=echo&project={pid}").json()
+        everywhere = page.get("/api/gateway/tools?server=echo").json()
+    # Without its own rule, web would follow website for the server and slow, and all projects
+    # (None) for where.
+    assert (web["state"], web["differs"], web["follows"]) == ("off", True, "website")
+    assert [(t["name"], t["state"], t["differs"], t["follows"]) for t in web["tools"]] == [
+        ("echo", "on", False, None),
+        ("slow", "on", True, "website"),
+        ("where", "on", True, None),
+    ]
+    assert everywhere["follows"] is None
+    assert {t["follows"] for t in everywhere["tools"]} == {None}
 
 
 def test_the_library_and_the_card_follow_enclosing_projects(home):

@@ -707,8 +707,8 @@ def test_a_held_server_lists_its_tools_with_a_switch_each():
     panel = script("panel.js")
     for words in (
         '"Whole server"',
-        '"Differs from all projects"',
-        '"Use all projects"',
+        "`Differs from ${row.follows}`",
+        "`Use ${row.follows}`",
         '"Refresh tools"',
         '"All projects"',
         "Kitden does not know its tools yet.",

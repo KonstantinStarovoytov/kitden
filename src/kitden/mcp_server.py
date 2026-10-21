@@ -30,15 +30,24 @@ from kitden.views.inventory import Inventory, build_inventory
 READ_ONLY = ToolAnnotations(
     readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False
 )
-NO_CHANGES = (
-    "Read-only: this tool cannot change settings. Do not edit client settings files to work "
-    "around this; tell the developer to make the change on the local page (run `kitden open`), "
-    "which previews, backs up and can undo it."
+NO_EDITS = (
+    "Do not edit client settings files to work around this; tell the developer to make the "
+    "change on the local page (run `kitden open`), which previews, backs up and can undo it."
 )
-INSTRUCTIONS = (
+NO_CHANGES = "Read-only: this tool cannot change settings. " + NO_EDITS
+ABOUT = (
     "Shows which MCP servers, skills, plugins, hooks and marketplaces Claude Code, Codex and "
     "Cursor load on this computer, where each comes from, and problems such as duplicates. "
-    + NO_CHANGES
+)
+INSTRUCTIONS = ABOUT + NO_CHANGES
+# With servers in the Kitden gateway, the same server also offers their tools.
+GATEWAY_INSTRUCTIONS = (
+    ABOUT
+    + "Kitden's own tools (show_setup, list_findings, explain_item, list_projects) only read: "
+    "they cannot change settings. "
+    + NO_EDITS
+    + " The other tools come from MCP servers moved into the Kitden gateway and do what those "
+    "servers do."
 )
 
 
@@ -60,8 +69,12 @@ def resolve_project(inventory: Inventory, path: str) -> Project | None:
     return max(found, key=lambda p: len(p.path)) if found else None
 
 
-def create_server(build: Callable[[], Inventory], cwd: Callable[[], str] = os.getcwd) -> MCPServer:
-    server = MCPServer(name="kitden", instructions=INSTRUCTIONS)
+def create_server(
+    build: Callable[[], Inventory],
+    cwd: Callable[[], str] = os.getcwd,
+    instructions: str = INSTRUCTIONS,
+) -> MCPServer:
+    server = MCPServer(name="kitden", instructions=instructions)
 
     def project_for(inventory: Inventory, project_path: str | None) -> Project | None:
         return resolve_project(inventory, project_path or cwd())
@@ -154,8 +167,9 @@ def run(home: Path | None = None) -> None:
         inventory.items += gateway_items(inventory, load_settings(root), root)
         return inventory
 
-    server = create_server(build)
-    if not load_settings(root)["servers"]:
+    held = load_settings(root)["servers"]
+    server = create_server(build, instructions=GATEWAY_INSTRUCTIONS if held else INSTRUCTIONS)
+    if not held:
         server.run()
         return
     proxy.run(root, server, lambda: known_projects(root))

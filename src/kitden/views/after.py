@@ -8,7 +8,14 @@ from kitden.changes.json_splice import ABSENT
 from kitden.clients.base import SETUP_NAME
 from kitden.local_gateway.project import project_chain
 from kitden.local_gateway.settings import CLIENT as KITDEN
-from kitden.local_gateway.settings import load_settings, moved_in, own_state, rule_parts, state_in
+from kitden.local_gateway.settings import (
+    deciding_project,
+    load_settings,
+    moved_in,
+    own_state,
+    rule_parts,
+    state_in,
+)
 from kitden.model import GATEWAY_CLIENT, Change, ItemKind, Scope
 from kitden.views.effective import effective_view
 from kitden.views.setup_server import CLIENTS, setup_server_state
@@ -207,10 +214,16 @@ def _kitden_move_words(change: Change, inventory, home: Path | None) -> list[dic
         and s.edit.before not in (ABSENT, None)
     ]
     kept = [name for name in servers if name not in written]
+    known = [p.path for p in inventory.projects]
+    settings = load_settings(home) if home is not None else None
     rules = _kitden_rules(change)
     said, offered = [], []
+    held = {*updated, *kept}
     for name in servers:
-        words, off = _server_words(change, name, rules.get(name, {}))
+        if settings is not None and name in held:
+            words, off = _held_words(name, settings, known)
+        else:
+            words, off = _server_words(change, name, rules.get(name, {}))
         said += words
         if not off:
             offered.append(name)
@@ -229,13 +242,12 @@ def _kitden_move_words(change: Change, inventory, home: Path | None) -> list[dic
         whose = "its" if len(servers) == 1 else "their"
         what = f"{whose} tools" if offered == servers else f"the tools of {_join(offered)}"
         line.append(f"{who} will offer {what} through Kitden.")
-    line += said
     if updated:
         line.append(f"{_join(updated)} in the Kitden gateway {_is(updated)} updated.")
     if kept:
         line.append(f"{_join(kept)} {_is(kept)} in the Kitden gateway already.")
+    line += said
     new = [name for name in offered if name not in kept]
-    known = [p.path for p in inventory.projects]
     if new and "claude_code" in offering and home and claude_allows_kitden(home, known):
         line.append(
             "Claude Code allows every Kitden tool without asking; after the move that includes "
@@ -243,10 +255,40 @@ def _kitden_move_words(change: Change, inventory, home: Path | None) -> list[dic
         )
     line.append("Applies to new sessions.")
     out[0]["note"] = " ".join(line)
-    if "cursor" in removed:
-        entry = next(e for e in out if e["client"] == "cursor")
-        entry["note"] = " ".join(n for n in (entry.get("note"), CURSOR_SWITCHES) if n)
+    # Each client whose own switches for the servers do not carry over says so.
+    for entry in out:
+        client = entry["client"]
+        left = list(
+            dict.fromkeys(s.name for s in leaving if s.client == client and s.switches_left)
+        )
+        notes = [entry.get("note")]
+        if client == "cursor" and client in removed:
+            notes.append(CURSOR_SWITCHES)
+        if left:
+            notes.append(
+                f"{CLIENT_WORDS[client]}'s own switches for {_join(left)} do not carry over; "
+                "the gateway's rules stay."
+            )
+        if any(notes):
+            entry["note"] = " ".join(n for n in notes if n)
     return out
+
+
+def _held_words(name: str, settings: dict, known: list[str]) -> tuple[list[str], bool]:
+    """What the gateway's own rules, which stay, do to a server it holds already, and whether
+    it is off everywhere."""
+    rules = settings["rules"]
+    everywhere = own_state(rules["global"], name, None) or "on"
+    other = [
+        Path(p).name
+        for p in known
+        if own_state(rules["projects"].get(p), name, None) not in (None, everywhere)
+    ]
+    if everywhere == "on":
+        return ([f"{name} stays off in {_join(other)}."] if other else []), False
+    if other:
+        return [f"{name} is on only in {_join(other)}."], False
+    return [f"{name} stays off in every client."], True
 
 
 RULE_WORDS = {"on": "On", "off": "Off"}
@@ -269,7 +311,7 @@ def _rule_words(change: Change, inventory, home: Path) -> list[dict]:
     if edit.after is ABSENT:  # only a project follows all projects
         rest = [p for p in chain if p != project]
         state = state_in(settings, rest, server, tool)
-        by = next((p for p in rest if own_state(projects.get(p), server, tool)), None)
+        by = deciding_project(settings, rest, server, tool)
         source = "all projects" if by is None else Path(by).name
         word = f"Follows {source}"
         line = f"{what} will be {state} in {where}, as in {source}"

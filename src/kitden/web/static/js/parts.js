@@ -226,13 +226,14 @@ const ACTION_WORDS = {
 };
 
 // A Kitden gateway rule in words: "slow of echo in website", as the review's after line says
-// it. `where` is the project's folder name, or null for all projects; `state` null follows all
-// projects. The review's title and the line after a change (the toast, the Changes page).
+// it. `where` is the project's folder name, or null for all projects; `state` null removes the
+// project's own rule. The review's title and the line after a change (the toast, the Changes page).
 export function ruleText({ server, tool, state }, where) {
   const what = tool ? `${tool} of ${server}` : server;
   const place = where || "all projects";
   if (state === "on" || state === "off") return { title: `Turn ${state} ${what} in ${place}`, done: `Turned ${state} ${what} in ${place}` };
-  return { title: `Use all projects for ${what} in ${place}`, done: `${what} in ${place} follows all projects` };
+  // A removed rule: what the project then follows is in the review, not known when a line is read.
+  return { title: `Remove the own setting for ${what} in ${place}`, done: `${what} in ${place}: own setting removed` };
 }
 
 // One line for a change log entry: what, which entries, which clients. Plugins go by their
