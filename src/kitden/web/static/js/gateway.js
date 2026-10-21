@@ -282,6 +282,11 @@ function kitdenHeld(gateway) {
   const box = el("section", "held");
   const servers = gateway.servers || [];
   box.append(el("h3", "group-title", servers.length ? `In the gateway · ${servers.length}` : "In the gateway"));
+  // Settings Kitden cannot read are a problem, not an empty gateway.
+  if (gateway.problem) {
+    box.append(el("p", "group-note", gateway.problem));
+    return box;
+  }
   if (!servers.length) {
     box.append(el("p", "group-note", "Nothing yet. Move a server from the lists below."));
     return box;

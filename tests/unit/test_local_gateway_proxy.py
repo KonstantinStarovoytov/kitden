@@ -17,6 +17,7 @@ import pytest
 from mcp import Client, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp_types import ListRootsResult, Root
+from starlette.testclient import TestClient
 
 import kitden.clients.base as base
 import kitden.clients.codex as codex
@@ -27,9 +28,11 @@ from kitden.local_gateway.proxy import Upstreams, exposed_names
 from kitden.local_gateway.settings import SETTINGS_FILE, load_settings, load_tools, save_tools
 from kitden.mcp_server import create_server
 from kitden.views.inventory import build_inventory
+from kitden.web.app import create_app
 from tests.conftest import make_home, write_cursor_fixture_state
 
 ECHO = Path(__file__).parents[1] / "fixtures/fake_mcp/echo_server.py"
+KITDEN = "/opt/kitden/bin/kitden"
 READ_ONLY = {"show_setup", "list_findings", "explain_item", "list_projects"}
 pytestmark = pytest.mark.anyio
 
@@ -172,6 +175,38 @@ async def test_project_rules_decide_the_tools_of_a_session(home):
     assert await offered(cwd=chat) == {"echo", "clash"}
 
 
+async def test_kitdens_own_tools_see_the_servers_in_the_gateway(home, monkeypatch):
+    website = home / "work/website"
+    state = json.loads((home / ".claude.json").read_text())
+    state["mcpServers"]["kitden"] = {"type": "stdio", "command": KITDEN, "args": ["mcp"]}
+    # files is in the gateway, on only in website, and Claude Code has a direct copy too.
+    state["mcpServers"]["files"] = {"type": "stdio", **echo("files")}
+    (home / ".claude.json").write_text(json.dumps(state))
+    rules = {
+        "global": {"files": {"server": "off"}},
+        "projects": {str(website): {"files": {"server": "on"}}},
+    }
+    write_settings(home, {"files": echo("files")}, rules)
+    # `kitden mcp` as a client starts it, in this process so no client command runs.
+    monkeypatch.setattr(base, "read_command_version", lambda client: None)
+    served = {}
+    monkeypatch.setattr(proxy, "run", lambda home, own, known: served.update(own=own))
+    mcp_server.run(home)
+    here = {"project_path": str(website)}
+    setup = await served["own"].call_tool("show_setup", {"client": "claude_code", **here})
+    found = await served["own"].call_tool("list_findings", here)
+
+    views = setup.structured_content["views"]
+    items = [i for view in views for i in view["items"] if i["name"] == "files"]
+    assert [(i["scope"], i["via_gateway"]) for i in items] == [("project", "kitden")]
+    # The page says the same.
+    app = create_app(lambda: build_inventory(home), token="tok", port=47800, home=home)
+    with TestClient(app, base_url="http://127.0.0.1:47800") as page:
+        page.get("/?token=tok")
+        shown = page.get("/api/findings", params={"project": str(website)}).json()
+    assert [f["id"] for f in found.structured_content["findings"]] == [f["id"] for f in shown]
+
+
 async def test_a_call_reaches_the_upstream_server(home):
     website = home / "work/website"
     entry = echo("echo", "${workspaceFolder}", "${CLAUDE_PROJECT_DIR}", "${CLAUDE_PROJECT_DIR:-.}")
@@ -293,6 +328,63 @@ async def test_two_servers_with_one_tool_name_both_work_with_stable_names(home):
     write_settings(home, {"alpha": echo("alpha"), "beta": echo("beta")})
     async with gateway(home) as client:
         assert await names_offered(client) == first
+
+
+async def test_a_tool_turned_off_in_a_project_does_not_rename_another(home, monkeypatch):
+    website = home / "work/website"
+    rules = {"global": {}, "projects": {str(website): {"alpha": {"tools": {"clash": "off"}}}}}
+    write_settings(home, {"alpha": echo("alpha"), "beta": echo("beta")}, rules)
+    save_tools(home, "alpha", [tool("clash"), tool("echo")])
+    save_tools(home, "beta", [tool("clash")])
+
+    async def offered(folder):
+        monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(folder))
+        own = create_server(lambda: None)
+        server = proxy.gateway_server(home, own, known=lambda: [str(website)])
+        async with Client(server, mode="legacy") as client:
+            return await names_offered(client) - READ_ONLY
+
+    assert await offered(home / "work") == {"clash", "echo", "beta_clash"}
+    # beta's clash keeps its name where alpha's is off: one name is always one tool.
+    assert await offered(website) == {"echo", "beta_clash"}
+
+
+async def test_tools_keep_their_title_and_hints(home):
+    hints = {"readOnlyHint": True, "destructiveHint": False}
+    write_settings(home, {"docs": echo("docs")})
+    save_tools(home, "docs", [{**tool("search"), "title": "Search docs", "annotations": hints}])
+    server = proxy.gateway_server(home, create_server(lambda: None), known=lambda: [])
+    async with Client(server, mode="legacy") as client:
+        listed = {t.name: t for t in (await client.list_tools()).tools}
+    assert listed["search"].title == "Search docs"
+    assert listed["search"].annotations.read_only_hint is True
+    assert listed["search"].annotations.destructive_hint is False
+
+
+async def test_a_server_gets_the_start_time_its_codex_entry_had(home, monkeypatch):
+    monkeypatch.setattr(proxy, "START_TIMEOUT", 1.5)
+    stuck = {**echo("stuck", "--hang"), "startup_timeout_sec": 2}
+    quick = {**echo("quick", "--hang"), "startup_timeout_sec": 0.5}
+    async with Upstreams(home, {"servers": {"stuck": stuck, "quick": quick}}) as upstreams:
+        waited = [await upstreams.call(name, "wait", {}) for name in ("stuck", "quick")]
+    # The longer of the gateway's own time and the entry's own.
+    assert [text(answer) for answer in waited] == [
+        "stuck did not start in 2 seconds.",
+        "quick did not start in 1.5 seconds.",
+    ]
+
+
+def test_a_server_name_with_other_characters_gets_a_clean_prefix():
+    names = exposed_names({"a": [tool("clash")], "my.docs server": [tool("clash")]})
+    assert names == {"clash": ("a", "clash"), "my_docs_server_clash": ("my.docs server", "clash")}
+
+
+async def test_unreadable_settings_leave_kitden_mcp_as_it_was(home):
+    path = data_dir(home) / SETTINGS_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{ not json")
+    async with gateway(home) as client:
+        assert await names_offered(client) == READ_ONLY
 
 
 def test_exposed_names_stay_within_cursors_limit():

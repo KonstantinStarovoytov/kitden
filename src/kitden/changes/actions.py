@@ -24,6 +24,7 @@ from kitden.clients.base import (
 from kitden.gateway_api import gateway_name
 from kitden.local_gateway.settings import (
     PLACEHOLDERS,
+    START_TIME,
     load_settings,
     load_tools,
     rule_step,
@@ -457,7 +458,8 @@ def needs_sign_in(url: str, headers: dict) -> bool:
 
 def _gateway_entry(entry: dict) -> dict:
     """What the Kitden gateway runs: command, args and env, or url and headers. Keys only the
-    client reads (type, on/off, tool lists, timeouts) stay behind."""
+    client reads (type, on/off, tool lists, timeouts) stay behind; local_move_steps adds a
+    Codex entry's own start time."""
     server = {key: entry[key] for key in ("command", "args", "env", "url") if entry.get(key)}
     headers = entry.get("headers") or entry.get("http_headers")
     if headers:
@@ -542,26 +544,39 @@ def _movable(
     return remove, entry, server
 
 
-def _deny_rules(path: Path) -> list[str]:
-    """Claude Code's `permissions.deny` rules in one settings file; none if it cannot be read."""
+def _permission_rules(path: Path, kind: str = "deny") -> list[str]:
+    """Claude Code's `permissions.deny` (or `allow`) rules in one settings file; none if it
+    cannot be read."""
     try:
         data = json.loads(path.read_text())
     except (OSError, ValueError):
         return []
     permissions = data.get("permissions") if isinstance(data, dict) else None
-    deny = permissions.get("deny") if isinstance(permissions, dict) else None
-    return [rule for rule in deny if isinstance(rule, str)] if isinstance(deny, list) else []
+    rules = permissions.get(kind) if isinstance(permissions, dict) else None
+    return [rule for rule in rules if isinstance(rule, str)] if isinstance(rules, list) else []
+
+
+def claude_allows_kitden(home: Path, known_projects: list[str]) -> bool:
+    """True when Claude Code's user settings or a known project's settings allow every tool of
+    the `kitden` entry without asking (`mcp__kitden` or `mcp__kitden__*`). Tools moved into the
+    Kitden gateway are then allowed too."""
+    files = [home / ".claude/settings.json"]
+    for project in known_projects:
+        folder = Path(project) / ".claude"
+        files += [folder / "settings.json", folder / "settings.local.json"]
+    whole = {f"mcp__{SETUP_NAME}", f"mcp__{SETUP_NAME}__*"}
+    return any(rule in whole for path in files for rule in _permission_rules(path, "allow"))
 
 
 def _claude_denies(home: Path, known_projects: list[str]) -> dict[str | None, list[str]]:
     """Claude Code's deny rules: the user's (None) and each known project's."""
-    denies: dict[str | None, list[str]] = {None: _deny_rules(home / ".claude/settings.json")}
+    denies: dict[str | None, list[str]] = {None: _permission_rules(home / ".claude/settings.json")}
     for project in known_projects:
         folder = Path(project) / ".claude"
         if folder.resolve() == (home / ".claude").resolve():
             continue  # the home folder: its settings are the user's
-        denies[project] = _deny_rules(folder / "settings.json")
-        denies[project] += _deny_rules(folder / "settings.local.json")
+        denies[project] = _permission_rules(folder / "settings.json")
+        denies[project] += _permission_rules(folder / "settings.local.json")
     return denies
 
 
@@ -721,6 +736,12 @@ def local_move_steps(
             raise ValueError(f"{item.name} is set up differently in {where}; keep one first.")
         found.setdefault(item.name, []).append((item, entry))
         removes.append(remove)
+    # A Codex entry may give its server more time to start; the gateway keeps the longest.
+    for name, server in servers.items():
+        waits = [e.get(START_TIME) for i, e in found[name] if i.client == "codex"]
+        waits = [w for w in waits if isinstance(w, int | float) and not isinstance(w, bool)]
+        if waits:
+            servers[name] = {**server, START_TIME: max(waits)}
     settings = load_settings(home)
     held = settings["servers"]
     lacking = [c for c in dict.fromkeys(i.client for i in items) if c not in added_clients]

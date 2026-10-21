@@ -23,6 +23,8 @@ SETTINGS_FILE = "gateway.json"
 TOOLS_FILE = "gateway-tools.json"
 CLIENT = "kitden"
 STATES = ("on", "off")
+# A Codex entry's own start time; the move carries it and the gateway waits that long.
+START_TIME = "startup_timeout_sec"
 # Project folders in a local server's arguments; the gateway fills in the project it found.
 PLACEHOLDERS = ("${workspaceFolder}", "${CLAUDE_PROJECT_DIR}", "${CLAUDE_PROJECT_DIR:-.}")
 
@@ -49,6 +51,17 @@ def load_settings(home: Path) -> dict:
     }
 
 
+def settings_unreadable(home: Path) -> bool:
+    """True when the settings file is there but is not a JSON object. It then reads as empty,
+    and the page says so."""
+    try:
+        return not isinstance(json.loads((data_dir(home) / SETTINGS_FILE).read_text()), dict)
+    except FileNotFoundError:
+        return False
+    except (OSError, ValueError):
+        return True
+
+
 def load_tools(home: Path) -> dict[str, list[dict]]:
     """Each server's known tools, by server name. Entries that are not tools are left out."""
     data = _read(data_dir(home) / TOOLS_FILE)
@@ -60,7 +73,8 @@ def load_tools(home: Path) -> dict[str, list[dict]]:
 
 
 def save_tools(home: Path, server: str, tools: list[dict]) -> None:
-    """Replace one server's known tools. Each is kept as name, description and inputSchema."""
+    """Replace one server's known tools. Each is kept as name, description and inputSchema,
+    and its title and annotations (the read-only and destructive hints) when it has them."""
     # No lock on purpose: the write is atomic, and a list lost in a race is written again on the
     # next start or Rescan.
     folder = data_dir(home)
@@ -72,6 +86,7 @@ def save_tools(home: Path, server: str, tools: list[dict]) -> None:
             "name": tool["name"],
             "description": tool.get("description") or "",
             "inputSchema": tool.get("inputSchema") or {"type": "object"},
+            **{key: tool[key] for key in ("title", "annotations") if tool.get(key)},
         }
         for tool in tools
     ]

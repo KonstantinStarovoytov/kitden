@@ -699,6 +699,40 @@ def test_the_review_says_when_a_carried_rule_turns_off_what_a_client_had_on(tmp_
     ]
 
 
+def test_the_review_says_when_claude_code_allows_every_kitden_tool(tmp_path):
+    words = (
+        "Claude Code allows every Kitden tool without asking; after the move that includes the "
+        "tools of n8n-mcp."
+    )
+    for where, rule in ((".claude/settings.json", "mcp__kitden"), (None, "mcp__kitden__*")):
+        home = new_home(tmp_path / rule.replace("*", "all"))
+        add_claude(home, "kitden", {"type": "stdio", "command": KITDEN, "args": ["mcp"]})
+        path = home / (where or "work/website/.claude/settings.local.json")
+        data = json.loads(path.read_text()) if path.exists() else {}
+        data["permissions"] = {"allow": [rule]}
+        write_json(path, data)
+        with page_for(home) as page:
+            note = preview(page, home, ("cursor", "n8n-mcp")).json()["after"][0]["note"]
+        assert words in note, note
+
+    # Allowing only some of its tools is not every tool.
+    home = new_home(tmp_path / "some")
+    add_claude(home, "kitden", {"type": "stdio", "command": KITDEN, "args": ["mcp"]})
+    write_json(
+        home / ".claude/settings.json", {"permissions": {"allow": ["mcp__kitden__show_setup"]}}
+    )
+    with page_for(home) as page:
+        note = preview(page, home, ("cursor", "n8n-mcp")).json()["after"][0]["note"]
+    assert "allows every Kitden tool" not in note
+
+
+def test_a_codex_entry_keeps_its_own_start_time(home):
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    add_codex(home, "files", CODEX_FILES + "\nstartup_timeout_sec = 45")
+    steps = move(home, ("claude_code", "files"), ("codex", "files"))
+    assert steps[0].edit.after == {**FILES, "startup_timeout_sec": 45}
+
+
 def test_a_codex_entry_that_keeps_some_tools_on_has_its_tools_read_first(home):
     command = json.dumps(sys.executable)
     args = json.dumps([str(ECHO), "echo"])

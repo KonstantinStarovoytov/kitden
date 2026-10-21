@@ -20,6 +20,7 @@ from kitden.command import installed_command
 from kitden.gateways import load_gateways
 from kitden.local_gateway import proxy
 from kitden.local_gateway.settings import load_settings
+from kitden.local_gateway.views import gateway_items
 from kitden.model import Project
 from kitden.views.effective import DESKTOP, found_clients, project_views
 from kitden.views.explain import brief, explain
@@ -147,8 +148,10 @@ def run(home: Path | None = None) -> None:
     root = home or Path.home()
 
     def build() -> Inventory:
+        # As the page builds it, so the answers agree with the tools this server offers.
         inventory = build_inventory(root)
         mark_gateways(inventory, load_gateways(root))
+        inventory.items += gateway_items(inventory, load_settings(root), root)
         return inventory
 
     server = create_server(build)

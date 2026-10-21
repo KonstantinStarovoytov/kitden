@@ -417,8 +417,8 @@ def test_the_library_follows_the_server_rules(home):
             "codex": ("off", "Kitden gateway"),
             "cursor": ("gw", "Kitden gateway"),
         }
-        findings = page.get(f"/api/findings?project={pid}").json()
-        assert not [f for f in findings if "held" in f["names"]]
+        findings = page.get("/api/findings", params={"project": website}).json()
+        assert findings and not [f for f in findings if "held" in f["names"]]
 
 
 def test_a_carried_codex_off_reads_off(home):
@@ -756,3 +756,17 @@ def test_a_tool_rule_says_when_its_server_is_off_there(home):
         assert change["after"][0]["note"] == (
             "slow of echo will be off in website. Applies to new sessions."
         )
+
+
+def test_unreadable_gateway_settings_are_a_problem_not_an_empty_gateway(home):
+    path = data_dir(home) / SETTINGS_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{ not json")
+    with page_for(home) as page:
+        card = page.get("/api/gateway-view").json()["gateways"][0]
+    assert (card["id"], card["servers"]) == ("kitden", [])
+    assert card["problem"] == "Kitden could not read the gateway settings."
+
+    hold(home, {"files": FILES})
+    with page_for(home) as page:
+        assert "problem" not in page.get("/api/gateway-view").json()["gateways"][0]

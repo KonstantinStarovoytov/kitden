@@ -18,6 +18,7 @@ from kitden.local_gateway.settings import (
     rule_step,
     save_tools,
     servers_on,
+    settings_unreadable,
 )
 from kitden.model import Scope
 
@@ -161,9 +162,14 @@ def test_a_missing_settings_file_reads_as_empty(tmp_path):
 
 
 def test_an_unreadable_settings_file_reads_as_empty(tmp_path):
+    assert settings_unreadable(tmp_path) is False  # no file is no problem
     path = write_settings(tmp_path, {})
+    assert settings_unreadable(tmp_path) is False
     path.write_text("{ not json")
     assert load_settings(tmp_path) == {"servers": {}, "rules": {"global": {}, "projects": {}}}
+    assert settings_unreadable(tmp_path) is True
+    path.write_text("[]")
+    assert settings_unreadable(tmp_path) is True
     (data_dir(tmp_path) / TOOLS_FILE).write_text("[1, 2]")
     assert load_tools(tmp_path) == {}
     (data_dir(tmp_path) / TOOLS_FILE).write_text(
@@ -294,17 +300,31 @@ def test_saving_tools_replaces_that_servers_list_and_keeps_the_rest(tmp_path):
     assert names(load_tools(tmp_path)["linear"]) == ["search"]
 
 
-def test_a_saved_tool_keeps_name_description_and_input_schema_only(tmp_path):
+def test_a_saved_tool_keeps_what_the_client_is_shown_and_nothing_else(tmp_path):
     schema = {"type": "object", "properties": {"q": {"type": "string"}}, "required": ["q"]}
+    hints = {"readOnlyHint": True, "destructiveHint": False}
     save_tools(
         tmp_path,
         "linear",
         [
-            {"name": "search", "description": None, "inputSchema": schema, "title": "Search"},
+            {
+                "name": "search",
+                "description": None,
+                "inputSchema": schema,
+                "title": "Search",
+                "annotations": hints,
+                "_meta": {"x": 1},
+            },
             {"name": "ping"},
         ],
     )
     assert load_tools(tmp_path)["linear"] == [
-        {"name": "search", "description": "", "inputSchema": schema},
+        {
+            "name": "search",
+            "description": "",
+            "inputSchema": schema,
+            "title": "Search",
+            "annotations": hints,
+        },
         {"name": "ping", "description": "", "inputSchema": {"type": "object"}},
     ]

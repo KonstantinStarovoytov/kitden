@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 
+from kitden.changes.actions import claude_allows_kitden
 from kitden.changes.json_splice import ABSENT
 from kitden.clients.base import SETUP_NAME
 from kitden.local_gateway.project import project_chain
@@ -186,7 +187,7 @@ def _offering(inventory) -> set[str]:
     }
 
 
-def _kitden_move_words(change: Change, inventory) -> list[dict]:
+def _kitden_move_words(change: Change, inventory, home: Path | None) -> list[dict]:
     """A move into the Kitden gateway: every client with the `kitden` entry offers the moved
     tools, also one that did not have the server. One line says which, what the rules carried
     over from the clients do, and which servers the gateway had already."""
@@ -233,6 +234,13 @@ def _kitden_move_words(change: Change, inventory) -> list[dict]:
         line.append(f"{_join(updated)} in the Kitden gateway {_is(updated)} updated.")
     if kept:
         line.append(f"{_join(kept)} {_is(kept)} in the Kitden gateway already.")
+    new = [name for name in offered if name not in kept]
+    known = [p.path for p in inventory.projects]
+    if new and "claude_code" in offering and home and claude_allows_kitden(home, known):
+        line.append(
+            "Claude Code allows every Kitden tool without asking; after the move that includes "
+            f"the tools of {_join(new)}."
+        )
     line.append("Applies to new sessions.")
     out[0]["note"] = " ".join(line)
     if "cursor" in removed:
@@ -297,7 +305,8 @@ def after_words(
 
     With `cursor_imports` (Cursor loads Claude Code's plugins), a plugin added to Claude Code
     names Cursor last, with a note. `skills` are the skill list's rows a skill copy takes.
-    `home` is the folder whose Kitden gateway a change to its rules reads.
+    `home` is the folder whose Kitden gateway and Claude Code settings a change to the Kitden
+    gateway reads.
     """
     if change.action in ("skill.install", "plugin.skills") and change.steps:
         return _skill_words(change, inventory, skills or [])
@@ -308,7 +317,7 @@ def after_words(
     if change.action == "gateway.move" and not any(
         s.client == GATEWAY_CLIENT for s in change.steps
     ):
-        return _kitden_move_words(change, inventory)
+        return _kitden_move_words(change, inventory, home)
     out: list[dict] = []
     # The gateway a server moves into; a client reaches the server only through an entry for it.
     target = next((s.gateway.gateway_id for s in change.steps if s.gateway is not None), None)

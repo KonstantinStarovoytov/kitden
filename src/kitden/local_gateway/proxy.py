@@ -2,9 +2,10 @@
 
 A client starts `kitden mcp` once per session. When the gateway settings hold servers, it offers
 Kitden's own read-only tools and the tools turned on for the session's project, under names that
-are unique and short enough for every client. It finds the project and the tool list at the
-first `tools/list` and keeps them for the session. A server starts when one of its tools is first
-called, or at that first `tools/list` when its tool list is not known yet.
+are unique, the same in every project, and short enough for every client. It finds the session's
+folder, its projects and the tool list at the first `tools/list` and keeps them for the session.
+A local server starts in that folder when one of its tools is first called, or at that first
+`tools/list` when its tool list is not known yet.
 
 MCP SDK facts this relies on (mcp 2.3.0, checked 2026-10-21):
 - `MCPServer` keeps its low-level server in a private attribute. So the gateway is its own
@@ -20,6 +21,7 @@ MCP SDK facts this relies on (mcp 2.3.0, checked 2026-10-21):
 import hashlib
 import logging
 import os
+import re
 import sys
 from collections.abc import Callable, Iterable
 from contextlib import AsyncExitStack, asynccontextmanager
@@ -57,6 +59,7 @@ from mcp_types import (
 from kitden.local_gateway.project import project_chain, session_folder
 from kitden.local_gateway.settings import (
     PLACEHOLDERS,
+    START_TIME,
     allowed_tools,
     load_settings,
     load_tools,
@@ -70,6 +73,9 @@ CALL_TIMEOUT = 300  # seconds for one tool call
 ROOTS_TIMEOUT = 5  # seconds for the client to name its roots
 # Cursor allows 60 characters for server and tool (checked 2026-10-21); the entry is "kitden".
 NAME_LIMIT = 54
+# The Claude API takes tool names of letters, digits, "_" and "-" only (checked 2026-10-21,
+# platform.claude.com tool use docs), so a server's name in front of a tool keeps only those.
+NOT_IN_NAMES = re.compile(r"[^A-Za-z0-9_-]")
 # Error codes the SDK makes itself (mcp 2.3.0, checked 2026-10-21): a closed connection or a
 # timeout on any transport; and over HTTP the transport turns HTTP failures into JSON-RPC errors
 # too, and the one for a refused redirect names the other address. A server's own error with any
@@ -84,22 +90,24 @@ for _logger in ("httpx2", "mcp.client"):
 
 
 def exposed_names(
-    allowed: dict[str, list[dict]], taken: Iterable[str] = ()
+    tools: dict[str, list[dict]], taken: Iterable[str] = ()
 ) -> dict[str, tuple[str, str]]:
-    """The name each allowed tool is offered under → (server, tool).
+    """The name each tool is offered under → (server, tool).
 
-    Servers go in name order. A tool keeps its name unless an earlier server has it or the name is
-    `taken` (Kitden's own tools); then it gets `<server>_` in front. A name over 54 characters, or
-    a `<server>_<tool>` that is in use too, becomes its first 45 characters, "_" and the first 8
-    hex characters of its SHA-1. So no name is given twice.
+    `tools` are every held server's known tools, on or off, so a name always means the same tool
+    in every project. Servers go in name order. A tool keeps its name unless an earlier server has
+    it or the name is `taken` (Kitden's own tools); then it gets `<server>_` in front. A name over
+    54 characters, or a `<server>_<tool>` that is in use too, becomes its first 45 characters, "_"
+    and the first 8 hex characters of its SHA-1. So no name is given twice. In the prefix, each
+    character a tool name may not have becomes "_".
     """
     names: dict[str, tuple[str, str]] = {}
     used = set(taken)
-    for server in sorted(allowed):
-        for tool in allowed[server]:
+    for server in sorted(tools):
+        for tool in tools[server]:
             name = tool["name"]
             if name in used:
-                name = f"{server}_{name}"
+                name = f"{NOT_IN_NAMES.sub('_', server)}_{name}"
             if len(name) > NAME_LIMIT or name in used:
                 digest = hashlib.sha1(name.encode(), usedforsecurity=False).hexdigest()
                 name = f"{name[:45]}_{digest[:8]}"
@@ -167,13 +175,14 @@ class Upstreams:
         return self._group
 
     async def list_tools(self, server: str) -> list[dict]:
-        """The server's tools as it lists them, within START_TIMEOUT seconds.
+        """The server's tools as it lists them, within its start time (see `_start_time`).
 
         Raises UpstreamError when the server does not start or answer.
         """
         self._open()
+        wait = self._start_time(server)
         try:
-            with anyio.fail_after(START_TIMEOUT):
+            with anyio.fail_after(wait):
                 client = await self._client(server)
                 tools: list[dict] = []
                 cursor = None
@@ -190,7 +199,7 @@ class Upstreams:
             sentence = str(problem)
         except TimeoutError:
             state = "answer" if server in self._clients else "start"
-            sentence = f"{server} did not {state} in {START_TIMEOUT} seconds."
+            sentence = f"{server} did not {state} in {wait:g} seconds."
         except Exception:
             sentence = f"{server} did not list its tools."
         _say(sentence)
@@ -200,13 +209,14 @@ class Upstreams:
         """Call one tool. The server's own error answer comes back as it is; when the call
         fails in any other way, the result is an error with one plain sentence."""
         self._open()
+        wait = self._start_time(server)
         try:
-            with anyio.fail_after(START_TIMEOUT):
+            with anyio.fail_after(wait):
                 client = await self._client(server)
         except UpstreamError as problem:
             return _error(str(problem))
         except TimeoutError:
-            return _error(f"{server} did not start in {START_TIMEOUT} seconds.")
+            return _error(f"{server} did not start in {wait:g} seconds.")
         try:
             with anyio.fail_after(CALL_TIMEOUT):
                 return await client.call_tool(tool, arguments)
@@ -219,6 +229,14 @@ class Upstreams:
         except Exception:
             # The text of an error may hold the server's address; say it plainly instead.
             return _error(f"The call to {server} failed.")
+
+    def _start_time(self, server: str) -> float:
+        """Seconds for the server to start and list its tools: the gateway's own, or the longer
+        time its Codex entry gave it (`startup_timeout_sec`, carried by the move)."""
+        entry = self.settings["servers"].get(server)
+        wait = entry.get(START_TIME) if isinstance(entry, dict) else None
+        usable = isinstance(wait, int | float) and not isinstance(wait, bool)
+        return max(START_TIMEOUT, wait) if usable else START_TIMEOUT
 
     def _remote(self, server: str) -> bool:
         entry = self.settings["servers"].get(server)
@@ -289,13 +307,18 @@ class Upstreams:
 
 
 def _tool(name: str, tool: dict) -> Tool:
-    """An offered tool: the server's description and input schema under the offered name."""
+    """An offered tool under the offered name: the server's description, input schema, title
+    and annotations, so a client keeps its read-only and destructive hints."""
     schema = tool.get("inputSchema")
-    return Tool(
-        name=name,
-        description=tool.get("description") or None,
-        input_schema=schema if isinstance(schema, dict) else {"type": "object"},
-    )
+    plain = {
+        "name": name,
+        "description": tool.get("description") or None,
+        "input_schema": schema if isinstance(schema, dict) else {"type": "object"},
+    }
+    try:
+        return Tool(**plain, title=tool.get("title"), annotations=tool.get("annotations"))
+    except ValueError:  # a title or hints Kitden did not write: the tool goes without them
+        return Tool(**plain)
 
 
 async def _roots(ctx: ServerRequestContext) -> list[str]:
@@ -375,8 +398,11 @@ class _Gateway:
                 if server not in tools:
                     group.start_soon(self._learn, server, tools)
         allowed = allowed_tools(self.settings, tools, chain)
-        self.names = exposed_names(allowed, taken=[t.name for t in await self.own.list_tools()])
         found = {(server, t["name"]): t for server, listed in allowed.items() for t in listed}
+        # Names come from every held server's tools, so they do not change with the project.
+        held = {server: tools[server] for server in self.settings["servers"] if server in tools}
+        names = exposed_names(held, taken=[t.name for t in await self.own.list_tools()])
+        self.names = {name: key for name, key in names.items() if key in found}
         return [_tool(name, found[key]) for name, key in self.names.items()]
 
     def _known(self) -> list[str]:

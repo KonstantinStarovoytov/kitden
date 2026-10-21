@@ -62,10 +62,14 @@ def group_of(item: Item) -> str:
 
 
 def gateway_view(
-    inventory, gateways: list[Gateway], project: str | None, kitden: list[dict] | None = None
+    inventory,
+    gateways: list[Gateway],
+    project: str | None,
+    kitden: list[dict] | None = None,
+    problem: str | None = None,
 ) -> dict:
     """With `kitden` (the servers it holds; see `held_servers`), the Kitden gateway comes first
-    and local servers can move too."""
+    and local servers can move too. `problem` says why its settings could not be read."""
     ids = ([KITDEN_GATEWAY] if kitden is not None else []) + [g.id for g in gateways]
     # Per gateway and client: the servers that load in this scope and go through that gateway.
     connections: dict[str, dict[str, list[str]]] = {g: {c: [] for c in COLUMNS} for g in ids}
@@ -99,7 +103,11 @@ def gateway_view(
         if REMOVE_DIRECT in item.actions:
             row["items"].append(item.id)
     return {
-        "gateways": ([{**KITDEN, "servers": kitden}] if kitden is not None else [])
+        "gateways": (
+            [{**KITDEN, "servers": kitden, **({"problem": problem} if problem else {})}]
+            if kitden is not None
+            else []
+        )
         + [gateway_dict(g) for g in gateways],
         "connections": {
             g: {c: sorted(names) for c, names in columns.items()}

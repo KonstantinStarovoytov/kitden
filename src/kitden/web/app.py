@@ -56,6 +56,7 @@ from kitden.local_gateway.settings import (
     load_tools,
     moved_in,
     save_tools,
+    settings_unreadable,
 )
 from kitden.local_gateway.views import (
     gateway_items,
@@ -87,6 +88,7 @@ from kitden.web.security import SecurityMiddleware
 
 STATIC = Path(__file__).parent / "static"
 HEARTBEAT_SECONDS = 15
+UNREADABLE = "Kitden could not read the gateway settings."
 
 
 Event = str | tuple[str, dict]
@@ -615,7 +617,9 @@ def create_app(
 
     def _gateway_view(request, project, path):
         held = held_servers(load_settings(home), _chain(path)) if home is not None else None
-        return JSONResponse(gateway_view(state.inventory, _registered(), path, kitden=held))
+        problem = UNREADABLE if home is not None and settings_unreadable(home) else None
+        view = gateway_view(state.inventory, _registered(), path, kitden=held, problem=problem)
+        return JSONResponse(view)
 
     async def gateway_tools(request: Request) -> JSONResponse:
         """A held server's tools with their states for the project, from the cache and rules."""

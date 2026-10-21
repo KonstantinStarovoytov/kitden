@@ -747,6 +747,8 @@ def test_tool_list_reads_again_and_keeps_focus_after_a_refresh_or_an_undo():
 def test_the_kitden_card_says_only_what_it_knows_about_clients():
     text = script("gateway.js")
     assert "Kitden could not read which clients use it." in text
+    # Settings it cannot read are a problem, not an empty gateway.
+    assert "if (gateway.problem)" in text
     assert "has it turned off." in text and "have it turned off." in text
 
 
