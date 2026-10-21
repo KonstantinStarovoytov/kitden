@@ -54,7 +54,6 @@ from kitden.local_gateway.settings import (
     load_settings,
     load_tools,
     moved_in,
-    rule_parts,
     save_tools,
 )
 from kitden.local_gateway.views import (
@@ -62,6 +61,7 @@ from kitden.local_gateway.views import (
     held_servers,
     load_proxy,
     refresh_tools,
+    rule_of,
     rule_steps,
     tools_view,
 )
@@ -913,23 +913,13 @@ def create_app(
         return JSONResponse(logged)
 
     def _with_rule(entry: dict) -> dict:
-        """A tool rule's log line, with the parts the Changes page names: the project's folder,
-        the server, the tool and the new state (None: follows all projects). Read from the
-        change Kitden keeps for Undo; an older line without it stays as it is."""
+        """A tool rule's log line, with the parts the Changes page names (see `rule_of`), read
+        from the change Kitden keeps for Undo. A line without them stays as it is."""
         assert engine is not None
-        change = engine.changes.get(entry.get("id", ""))
-        if entry.get("action") != GATEWAY_RULE or change is None or not change.steps:
+        if entry.get("action") != GATEWAY_RULE:
             return entry
-        edit = change.steps[0].edit
-        if edit is None:
-            return entry
-        project, server, tool = rule_parts(edit.key)
-        state = edit.after if edit.after in ("on", "off") else None
-        folder = Path(project).name if project else None
-        return {
-            **entry,
-            "rule": {"project": folder, "server": server, "tool": tool, "state": state},
-        }
+        rule = rule_of(engine.changes.get(entry.get("id", "")))
+        return {**entry, "rule": rule} if rule else entry
 
     async def changes(request: Request) -> JSONResponse:
         return JSONResponse([_with_rule(e) for e in engine.store.entries()] if engine else [])

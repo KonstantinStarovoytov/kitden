@@ -9,7 +9,7 @@ from collections.abc import Iterable
 from dataclasses import replace
 from pathlib import Path
 
-from kitden.changes.actions import KITDEN_GATEWAY
+from kitden.changes.actions import GATEWAY_RULE, KITDEN_GATEWAY
 from kitden.clients.base import mcp_item
 from kitden.gateways import data_dir
 from kitden.local_gateway.settings import (
@@ -18,10 +18,11 @@ from kitden.local_gateway.settings import (
     load_settings,
     load_tools,
     own_state,
+    rule_parts,
     rule_step,
     save_tools,
 )
-from kitden.model import Enabled, Item, Scope, Source, SourceKind, Step
+from kitden.model import Change, Enabled, Item, Scope, Source, SourceKind, Step
 from kitden.views.setup_server import setup_server_state
 
 
@@ -117,6 +118,24 @@ def rule_steps(home: Path, params: dict, projects: dict[str, str]) -> list[Step]
     if project is None and state is None:
         raise ValueError("Choose on or off.")
     return [rule_step(home, projects.get(project), server, tool, state)]
+
+
+def rule_of(change: Change | None) -> dict | None:
+    """A tool rule change's parts for the Changes page: the project's folder (None: all
+    projects), the server, the tool (None: the whole server) and the new state (None: follows
+    all projects). None when the change is not a rule or its record cannot be read as one."""
+    if change is None or change.action != GATEWAY_RULE or not change.steps:
+        return None
+    edit = change.steps[0].edit
+    if edit is None or edit.key[:1] != ("rules",):
+        return None
+    try:
+        project, server, tool = rule_parts(edit.key)
+    except IndexError:  # a key too short to be a rule
+        return None
+    state = edit.after if edit.after in ("on", "off") else None
+    folder = Path(project).name if project else None
+    return {"project": folder, "server": server, "tool": tool, "state": state}
 
 
 async def load_proxy():

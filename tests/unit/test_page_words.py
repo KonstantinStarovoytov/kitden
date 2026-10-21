@@ -736,8 +736,9 @@ def test_tool_list_reads_again_and_keeps_focus_after_a_refresh_or_an_undo():
     assert "if (await ended) reloadTools();" in panel
     # Undo with Details open puts focus back on the switch it changed.
     assert "focus: tools.flipped" in panel
-    # Only the tool list's own Details skips the page's usual effect after an Undo.
-    assert "if (tools && tools.section.isConnected) {" in panel
+    # Only an open tool list's Details skips the page's usual effect after an Undo; a closed
+    # drawer keeps its old content, so "connected" alone would reopen it.
+    assert "if (isPanelOpen() && tools && tools.section.isConnected) {" in panel
     # A tool's description wraps to two lines, so it can be read without a pointer.
     rule = CSS.split(".layer.tool .why {")[1].split("}")[0]
     assert "-webkit-line-clamp: 2" in rule and "nowrap" not in rule

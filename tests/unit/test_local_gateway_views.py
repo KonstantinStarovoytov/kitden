@@ -340,6 +340,24 @@ def rule_preview(page, **params):
     return page.post("/api/changes/preview", json=body, headers=POST)
 
 
+def test_a_rule_line_with_a_broken_record_stays_as_it_is(home):
+    hold(home, {"echo": echo()})
+    save_tools(home, "echo", [tool("echo"), tool("slow")])
+    with page_for(home) as page:
+        change = rule_preview(page, server="echo", tool="slow", state="off", project=None).json()
+        assert page.post(f"/api/changes/{change['id']}/apply", headers=POST).status_code == 200
+    record = data_dir(home) / "changes" / change["id"] / "change.json"
+    for key in (["rules"], ["rules", "global", "echo"]):
+        saved = json.loads(record.read_text())
+        saved["steps"][0]["edit"]["key"] = key
+        record.write_text(json.dumps(saved))
+        with page_for(home) as page:
+            answer = page.get("/api/changes")
+            assert answer.status_code == 200
+            line = next(e for e in answer.json() if e["id"] == change["id"])
+            assert "rule" not in line
+
+
 def test_a_rule_for_a_tool_the_server_lost_can_follow_all_projects(home):
     website = project(home, "website")
     hold(home, {"echo": echo()}, {"projects": {website: {"echo": {"tools": {"gone": "off"}}}}})

@@ -974,7 +974,7 @@ export async function undoChange(change) {
     await reloadAll();
     // With a tool list's Details still open, the page behind just redraws and Details is drawn
     // again from the files as they are now, focus on the switch the Undo changed back.
-    if (tools && tools.section.isConnected) {
+    if (isPanelOpen() && tools && tools.section.isConnected) {
       render();
       const undone = after && after.state === "undone";
       await tools.again({ focus: tools.flipped, flip: undone ? tools.flipped : null });
