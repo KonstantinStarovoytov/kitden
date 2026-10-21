@@ -141,9 +141,11 @@ def _strict_note(tmp_path, monkeypatch, on, tools):
     from kitden.local_gateway.views import strict_steps
     from kitden.views.inventory import build_inventory
     from tests.unit.test_local_gateway_move import gateway_file, new_home, tool, write_json
+    from tests.unit.test_local_gateway_views import KITDEN, add_entry
 
     monkeypatch.setattr(base, "read_command_version", lambda client: None)
     home = new_home(tmp_path)
+    add_entry(home, "cursor", "kitden", {"command": KITDEN, "args": ["mcp"]})
     rules = {} if on else {"global": {"github": {"mode": "strict"}}}
     write_json(gateway_file(home), {"servers": {"github": {"command": "npx"}}, "rules": rules})
     if tools:
@@ -160,11 +162,15 @@ def test_strict_on_says_only_turned_on_tools_are_offered(tmp_path, monkeypatch):
         "Strict mode on for github: only tools you turned on are offered; a new tool waits "
         f"until you turn it on. {GUARANTEE}"
     )
+    assert note.endswith(
+        "A tool turned off is refused at once. The client shows the new list in a new session."
+    )
 
 
 def test_strict_off_says_a_tool_without_a_rule_is_on(tmp_path, monkeypatch):
     note = _strict_note(tmp_path, monkeypatch, False, True)
     assert note.startswith("Strict mode off for github: a tool without a rule is on.")
+    assert note.endswith("Applies to new sessions.")
 
 
 def test_strict_on_without_a_tool_list_says_its_tools_show_as_off(tmp_path, monkeypatch):
@@ -187,3 +193,28 @@ def test_a_move_with_a_codex_allowlist_says_strict_mode_not_server_off(tmp_path,
     assert "github will be off" not in note and "github stays off" not in note
     assert "is on only in" not in note
     assert "will offer its tools through Kitden" in note
+
+
+def _rule_note(tmp_path, monkeypatch, on):
+    import kitden.clients.base as base
+    from kitden.local_gateway.settings import rule_step
+    from kitden.views.inventory import build_inventory
+    from tests.unit.test_local_gateway_move import gateway_file, new_home, write_json
+    from tests.unit.test_local_gateway_views import KITDEN, add_entry
+
+    monkeypatch.setattr(base, "read_command_version", lambda client: None)
+    home = new_home(tmp_path)
+    add_entry(home, "cursor", "kitden", {"command": KITDEN, "args": ["mcp"]})
+    write_json(gateway_file(home), {"servers": {"github": {"command": "npx"}}, "rules": {}})
+    step = rule_step(home, None, "github", "list_issues", "on" if on else "off")
+    change = Change(action="gateway.rule", steps=[step])
+    return after_words(change, build_inventory(home), home=home)[0]["note"]
+
+
+def test_a_rule_says_a_tool_turned_off_is_refused_at_once(tmp_path, monkeypatch):
+    note = _rule_note(tmp_path, monkeypatch, False)
+    assert note == (
+        "list_issues of github will be off in all projects. A tool turned off is refused at "
+        "once. The client shows the new list in a new session."
+    )
+    assert "Applies to new sessions." not in note

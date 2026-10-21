@@ -4,6 +4,7 @@ A client starts `kitden mcp` once per session. When the gateway settings hold se
 Kitden's own read-only tools and the tools turned on for the session's project, under names that
 are unique, the same in every project, and short enough for every client. It finds the session's
 folder, its projects and the tool list at the first `tools/list` and keeps them for the session.
+On each call of an upstream tool it reads the rules again and refuses a tool that is off now.
 A local server starts in that folder when one of its tools is first called, or at that first
 `tools/list` when its tool list is not known yet.
 
@@ -14,6 +15,7 @@ MCP SDK facts this relies on (mcp 2.3.0, checked 2026-10-21):
 - The server handles each request in its own task, so a slow call does not hold up the others.
 - `ServerSession.list_roots()` warns on every call that roots are deprecated (protocol
   2026-07-28); the gateway sends the same `roots/list` request with `send_request`.
+- `ServerSession.send_tool_list_changed()` sends `notifications/tools/list_changed`.
 - `Client` with `StdioServerParameters` puts the given env over HOME, LOGNAME, PATH, SHELL, TERM
   and USER of this process.
 """
@@ -56,11 +58,14 @@ from mcp_types import (
     Tool,
 )
 
+from kitden.gateways import data_dir
 from kitden.local_gateway.project import project_chain, session_folder
 from kitden.local_gateway.settings import (
     PLACEHOLDERS,
+    SETTINGS_FILE,
     START_TIME,
     allowed_tools,
+    is_allowed,
     load_settings,
     load_tools,
     save_tools,
@@ -359,6 +364,8 @@ class _Gateway:
         self.upstreams = Upstreams(home, self.settings)
         self.names: dict[str, tuple[str, str]] = {}
         self.tools: list[Tool] | None = None
+        self.chain: list[str] = []
+        self.rules_time: int | None = None  # when the rules file last changed, as last seen
         self._lock = anyio.Lock()
 
     async def list_tools(
@@ -374,6 +381,10 @@ class _Gateway:
             await self._offered(ctx)
             target = self.names.get(params.name)
             if target is not None:
+                await self._tell_new_list(ctx)
+                # The rules are read again on each call: a tool turned off is refused at once.
+                if not await anyio.to_thread.run_sync(is_allowed, self.home, self.chain, *target):
+                    return _answer(f"{params.name} is turned off in Kitden.")
                 return await self.upstreams.call(*target, arguments)
         try:
             return await self.own.call_tool(params.name, arguments)
@@ -393,6 +404,8 @@ class _Gateway:
         roots = await _roots(ctx)
         known = await anyio.to_thread.run_sync(self._known)
         folder, chain = _session(roots, known, self.home)
+        self.chain = chain
+        self.rules_time = await anyio.to_thread.run_sync(self._rules_time)
         # Local servers start in the session's folder; the rules follow its chain.
         self.upstreams.folder = folder
         tools = load_tools(self.home)
@@ -408,6 +421,33 @@ class _Gateway:
         names = exposed_names(held, taken=[t.name for t in await self.own.list_tools()])
         self.names = {name: key for name, key in names.items() if key in found}
         return [_tool(name, found[key]) for name, key in self.names.items()]
+
+    async def _tell_new_list(self, ctx: ServerRequestContext) -> None:
+        """Best effort: when the rules file changed and the tools it allows now differ from the
+        offered ones, tell the client once that the tool list changed. The offered list stays as
+        the session found it. This never fails a call."""
+        try:
+            changed = await anyio.to_thread.run_sync(self._rules_time)
+            if changed == self.rules_time:
+                return
+            self.rules_time = changed
+            if await anyio.to_thread.run_sync(self._allowed_now) != set(self.names.values()):
+                # mcp 2.3.0 ServerSession.send_tool_list_changed sends
+                # notifications/tools/list_changed (checked 2026-10-21).
+                await ctx.session.send_tool_list_changed()
+        except Exception:
+            return  # the client keeps its list until a new session
+
+    def _rules_time(self) -> int | None:
+        try:
+            return (data_dir(self.home) / SETTINGS_FILE).stat().st_mtime_ns
+        except OSError:
+            return None
+
+    def _allowed_now(self) -> set[tuple[str, str]]:
+        """The tools the rules allow now, from the known tool lists; no server is asked."""
+        allowed = allowed_tools(load_settings(self.home), load_tools(self.home), self.chain)
+        return {(server, t["name"]) for server, listed in allowed.items() for t in listed}
 
     def _known(self) -> list[str]:
         try:

@@ -32,6 +32,7 @@ from kitden.views.inventory import build_inventory
 from kitden.web.app import create_app
 from tests.conftest import make_home, write_cursor_fixture_state
 
+AT_ONCE = "A tool turned off is refused at once. The client shows the new list in a new session."
 KITDEN = "/opt/kitden/bin/kitden"
 FILES = {"command": "npx", "args": ["files-mcp"], "env": {"FILES_TOKEN": "SENTINEL_SECRET_FILES"}}
 ORIGIN = "http://127.0.0.1:47800"
@@ -280,7 +281,7 @@ def test_a_rule_change_previews_applies_and_undoes(home):
                 "client": "cursor",
                 "state": "off",
                 "word": "Off",
-                "note": "slow of echo will be off in website. Applies to new sessions.",
+                "note": "slow of echo will be off in website. " + AT_ONCE,
             }
         ]
         assert path.read_bytes() == before  # a preview writes nothing
@@ -312,7 +313,7 @@ def test_a_rule_change_previews_applies_and_undoes(home):
         assert follow["after"][0]["word"] == "Follows all projects"
         assert follow["after"][0]["state"] == "on"
         assert follow["after"][0]["note"] == (
-            "slow of echo will be on in website, as in all projects. Applies to new sessions."
+            "slow of echo will be on in website, as in all projects. " + AT_ONCE
         )
         page.post(f"/api/changes/{follow['id']}/cancel", headers=POST)
 
@@ -320,9 +321,7 @@ def test_a_rule_change_previews_applies_and_undoes(home):
         server = preview(page, server="echo", tool=None, state="off", project=None).json()
         assert [(s["client"], s["name"]) for s in server["steps"]] == [("kitden", "echo")]
         assert server["after"][0]["word"] == "Off"
-        assert server["after"][0]["note"] == (
-            "echo will be off in all projects. Applies to new sessions."
-        )
+        assert server["after"][0]["note"] == ("echo will be off in all projects. " + AT_ONCE)
         page.post(f"/api/changes/{server['id']}/cancel", headers=POST)
 
         undone = page.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
@@ -685,7 +684,7 @@ def test_rules_follow_enclosing_projects_on_the_page_and_in_the_gateway(home, mo
             "Follows website",
         )
         assert follow["after"][0]["note"] == (
-            "slow of echo will be off in web, as in website. Applies to new sessions."
+            "slow of echo will be off in web, as in website. " + AT_ONCE
         )
 
 
@@ -754,11 +753,11 @@ def test_a_rule_for_all_projects_names_the_projects_with_their_own_rule(home):
     with page_for(home) as page:
         assert note(page, server="echo", tool="slow", state="off", project=None) == (
             "slow of echo will be off in all projects. It stays on in website, which has its own "
-            "rule. Applies to new sessions."
+            "rule. " + AT_ONCE
         )
         # A project whose own rule is the same is not named.
         assert note(page, server="echo", tool="slow", state="on", project=None) == (
-            "slow of echo will be on in all projects. Applies to new sessions."
+            "slow of echo will be on in all projects. " + AT_ONCE
         )
     rules["projects"][api] = {"echo": {"server": "on", "tools": {"slow": "on"}}}
     rules["projects"][website]["echo"]["server"] = "on"
@@ -766,11 +765,11 @@ def test_a_rule_for_all_projects_names_the_projects_with_their_own_rule(home):
     with page_for(home) as page:
         assert note(page, server="echo", tool="slow", state="off", project=None) == (
             "slow of echo will be off in all projects. It stays on in api and website, which "
-            "have their own rules. Applies to new sessions."
+            "have their own rules. " + AT_ONCE
         )
         assert note(page, server="echo", tool=None, state="off", project=None) == (
             "echo will be off in all projects. It stays on in api and website, which have their "
-            "own rules. Applies to new sessions."
+            "own rules. " + AT_ONCE
         )
 
 
@@ -784,14 +783,12 @@ def test_a_tool_rule_says_when_its_server_is_off_there(home):
         pid = project_id(page, website)
         change = rule_preview(page, server="echo", tool="slow", state="on", project=pid).json()
         assert change["after"][0]["note"] == (
-            "slow of echo will be on in website, but echo is off there. Applies to new sessions."
+            "slow of echo will be on in website, but echo is off there. " + AT_ONCE
         )
         page.post(f"/api/changes/{change['id']}/cancel", headers=POST)
         # Turning a tool off needs no such word.
         change = rule_preview(page, server="echo", tool="slow", state="off", project=pid).json()
-        assert change["after"][0]["note"] == (
-            "slow of echo will be off in website. Applies to new sessions."
-        )
+        assert change["after"][0]["note"] == ("slow of echo will be off in website. " + AT_ONCE)
 
 
 def test_unreadable_gateway_settings_are_a_problem_not_an_empty_gateway(home):

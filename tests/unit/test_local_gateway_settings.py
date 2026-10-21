@@ -13,6 +13,7 @@ from kitden.local_gateway.settings import (
     SETTINGS_FILE,
     TOOLS_FILE,
     allowed_tools,
+    is_allowed,
     load_settings,
     load_tools,
     rule_step,
@@ -380,3 +381,24 @@ def test_a_saved_tool_keeps_what_the_client_is_shown_and_nothing_else(tmp_path):
         },
         {"name": "ping", "description": "", "inputSchema": {"type": "object"}},
     ]
+
+
+def test_is_allowed_reads_the_file_again(tmp_path):
+    write_settings(tmp_path, {"servers": {"github": {}}, "rules": {"global": {}, "projects": {}}})
+    assert is_allowed(tmp_path, [], "github", "echo") is True
+    off = {"github": {"tools": {"echo": "off"}}}
+    write_settings(tmp_path, {"servers": {"github": {}}, "rules": {"global": off, "projects": {}}})
+    assert is_allowed(tmp_path, [], "github", "echo") is False
+
+
+def test_a_tool_on_under_a_server_off_is_refused(tmp_path):
+    rules = {"global": {"github": {"server": "off", "tools": {"echo": "on"}}}, "projects": {}}
+    write_settings(tmp_path, {"servers": {"github": {}}, "rules": rules})
+    assert is_allowed(tmp_path, [], "github", "echo") is False
+
+
+def test_is_allowed_follows_strict_mode(tmp_path):
+    rules = {"global": {"github": {"mode": "strict", "tools": {"echo": "on"}}}, "projects": {}}
+    write_settings(tmp_path, {"servers": {"github": {}}, "rules": rules})
+    assert is_allowed(tmp_path, [], "github", "echo") is True
+    assert is_allowed(tmp_path, [], "github", "other") is False

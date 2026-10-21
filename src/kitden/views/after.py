@@ -329,6 +329,8 @@ def _held_words(name: str, settings: dict, known: list[str]) -> tuple[list[str],
 
 
 RULE_WORDS = {"on": "On", "off": "Off"}
+# The gateway reads the rules again on each call, but a client keeps the list it was offered.
+AT_ONCE = "A tool turned off is refused at once. The client shows the new list in a new session."
 
 
 def _rule_words(change: Change, inventory, home: Path) -> list[dict]:
@@ -369,7 +371,7 @@ def _rule_words(change: Change, inventory, home: Path) -> list[dict]:
     if not clients:
         return [{"note": f"{line} No client uses the Kitden gateway yet."}]
     out = [{"client": c, "state": state, "word": word} for c in clients]
-    out[0]["note"] = f"{line} Applies to new sessions."
+    out[0]["note"] = f"{line} {AT_ONCE}"
     return out
 
 
@@ -385,7 +387,8 @@ def _strict_words(change: Change, inventory, home: Path) -> list[dict]:
         return [{"note": f"{line} No client uses the Kitden gateway yet."}]
     word = "Strict" if on else "Not strict"
     out = [{"client": c, "state": "gw", "word": word} for c in clients]
-    out[0]["note"] = f"{line} Applies to new sessions."
+    # Strict on turns tools off, so they are refused at once; strict off only adds tools.
+    out[0]["note"] = f"{line} {AT_ONCE if on else 'Applies to new sessions.'}"
     return out
 
 

@@ -239,6 +239,48 @@ async def test_a_call_reaches_the_upstream_server(home):
     assert "KITDEN_OTHER" not in where["env"] and "CLAUDE_PROJECT_DIR" not in where["env"]
 
 
+async def test_a_tool_turned_off_during_a_session_is_refused_on_its_next_call(home):
+    write_settings(home, {"echo": echo("echo")})
+    save_tools(home, "echo", [tool("echo"), tool("where")])
+
+    async with gateway(home) as client:
+        await client.list_tools()
+        said = await client.call_tool("echo", {"text": "hi"})
+        off = {"global": {"echo": {"tools": {"echo": "off"}}}}
+        write_settings(home, {"echo": echo("echo")}, off)
+        answer = await client.call_tool("echo", {"text": "hi"})
+        other = await client.call_tool("where", {})
+        offered = await names_offered(client)
+
+    assert not said.is_error and text(said) == "hi"
+    assert answer.is_error and text(answer) == "echo is turned off in Kitden."
+    # Only the switched-off tool is refused; the list stays as the session found it.
+    assert not other.is_error
+    assert {"echo", "where"} <= offered
+
+
+async def test_the_gateway_says_once_that_the_tool_list_changed(home):
+    write_settings(home, {"echo": echo("echo")})
+    save_tools(home, "echo", [tool("echo"), tool("where")])
+    heard = []
+
+    async def listen(message):
+        heard.append(repr(message))
+
+    params = StdioServerParameters(
+        command=sys.executable, args=["-m", "kitden", "mcp", "--home", str(home)], cwd=home
+    )
+    async with Client(params, mode="legacy", message_handler=listen) as client:
+        await client.list_tools()
+        await client.call_tool("where", {})
+        off = {"global": {"echo": {"tools": {"echo": "off"}}}}
+        write_settings(home, {"echo": echo("echo")}, off)
+        await client.call_tool("where", {})
+        await client.call_tool("where", {})
+
+    assert sum("tools/list_changed" in h for h in heard) == 1
+
+
 async def test_a_local_server_starts_in_the_folder_the_session_names(home):
     website = home / "work/website"
     (website / ".git" / "worktrees" / "fix").mkdir(parents=True)

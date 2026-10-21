@@ -130,6 +130,15 @@ def state_in(settings: dict, chain: Sequence[str], server: str, tool: str | None
     return "on" if _is_on(_scopes(settings, chain), server, tool, strict) else "off"
 
 
+def is_allowed(home: Path, chain: Sequence[str], server: str, tool: str) -> bool:
+    """Whether a tool can be called now: the settings file is read again, and the server and
+    the tool must both be on along the chain."""
+    settings = load_settings(home)
+    return state_in(settings, chain, server, None) == "on" and (
+        state_in(settings, chain, server, tool) == "on"
+    )
+
+
 def deciding_project(
     settings: dict, chain: Sequence[str], server: str, tool: str | None
 ) -> str | None:
