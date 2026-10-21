@@ -111,7 +111,18 @@ def _page_outputs(home) -> list[str]:
                     "params": {},
                 }
                 changes.append(post("/api/changes/preview", body))
-        assert len(changes) >= 5
+        # A server put back from the Kitden gateway: `claude mcp add-json` carries its entry.
+        held = {"command": "npx", "env": {"FILES_TOKEN": "SENTINEL_SECRET_HELD"}}
+        settings = data_dir(home) / "gateway.json"
+        settings.parent.mkdir(parents=True, exist_ok=True)
+        settings.write_text(json.dumps({"servers": {"held-files": held}}))
+        body = {
+            "action": "gateway.put_back",
+            "targets": [{"client": "claude_code"}],
+            "params": {"server": "held-files"},
+        }
+        changes.append(post("/api/changes/preview", body))
+        assert len(changes) >= 6
         for change in changes:
             post(f"/api/changes/{change['id']}/apply")
             post(f"/api/changes/{change['id']}/undo")
@@ -168,6 +179,10 @@ async def test_no_secret_in_any_output_and_no_network(home, network_attempts, ca
     store = data_dir(home)
     outputs.append((store / "changes.log").read_text())
     outputs += [p.read_text() for p in store.glob("changes/*/manifest.json")]
+    # A change record keeps the entry for Undo, but its commands only masked.
+    for record in store.glob("changes/*/change.json"):
+        steps = json.loads(record.read_text())["steps"]
+        outputs.append(json.dumps([s["command"] for s in steps]))
 
     cli.main(["scan", "--json", "--home", str(home)])
     outputs.append(capsys.readouterr().out)

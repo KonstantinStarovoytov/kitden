@@ -411,6 +411,8 @@ KITDEN_GATEWAY = "kitden"  # the gateway inside `kitden mcp`, on this Mac
 GATEWAY_RULE = "gateway.rule"  # one switch of the Kitden gateway: a server or a tool on or off
 GATEWAY_STRICT = "gateway.strict"  # a held server's strict mode on or off: new tools wait
 GATEWAY_RULES = "gateway.rules"  # several tools of one server on or off in one review
+GATEWAY_REMOVE = "gateway.remove"  # a held server and its rules leave the Kitden gateway
+GATEWAY_PUT_BACK = "gateway.put_back"  # a held server's entry written into a client
 # Codex waits 10 s for a server to start and 60 s for a tool call (checked 2026-10-21). The
 # Kitden gateway may take up to 20 s to list a server and 300 s for one call.
 CODEX_TIMEOUTS = {"startup_timeout_sec": 30, "tool_timeout_sec": 300}
@@ -823,3 +825,34 @@ def local_move_steps(
                 step.edit.after = {**step.edit.after, **CODEX_TIMEOUTS}
             steps.append(step)
     return steps + _codex_timeout_steps(adapters)
+
+
+def _refuse_if_present(step: Step, client: str, name: str) -> None:
+    """A client that has an entry of that name already keeps it: nothing is replaced."""
+    if _raw_entry(step) is not None:
+        raise ValueError(f"{CLIENT_WORDS[client]} already has {name}.")
+
+
+def put_back_steps(
+    adapters: dict[str, ClientAdapter], home: Path, server: str, clients: list[str]
+) -> list[Step]:
+    """Write a held server's entry into each chosen client, as a user-scope MCP entry, in that
+    client's format. The gateway keeps the server; the review says it then loads twice."""
+    from kitden.changes.server_entry import translate_entry  # it reads helpers of this module
+
+    if not clients:
+        raise ValueError("Choose at least one client")
+    held = load_settings(home)["servers"].get(server)
+    if held is None:
+        raise ValueError("Choose a server in the Kitden gateway.")
+    entry = held  # Part 5 resolves the entry's stored secrets here (resolve_entry).
+    steps = []
+    for client in dict.fromkeys(clients):
+        value = translate_entry(entry, client)
+        adapter = adapters.get(client)
+        if adapter is None:
+            raise ValueError(f"{client} cannot take an MCP entry")
+        step = adapter.add_server_step(server, value)
+        _refuse_if_present(step, client, server)
+        steps.append(step)
+    return steps

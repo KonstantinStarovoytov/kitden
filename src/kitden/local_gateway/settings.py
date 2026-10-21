@@ -269,3 +269,21 @@ def settings_step(home: Path, key: tuple[str, ...], value: Any, name: str) -> St
         path=str(data_dir(home) / SETTINGS_FILE), fmt="json", key=key, after=value, check="entry"
     )
     return Step(client=CLIENT, scope=Scope.USER, name=name, edit=edit)
+
+
+def remove_server_steps(home: Path, server: str) -> list[Step]:
+    """Remove a held server and every rule for it, strict mode included, in one change: its
+    entry, then its global rules, then its rules in each project. Its known tools stay: they
+    are found data."""
+    settings = load_settings(home)
+    if server not in settings["servers"]:
+        raise ValueError("Choose a server in the Kitden gateway.")
+    rules = settings["rules"]
+    steps = [settings_step(home, ("servers", server), ABSENT, server)]
+    if server in rules["global"]:
+        steps.append(settings_step(home, ("rules", "global", server), ABSENT, server))
+    for project, held in rules["projects"].items():
+        if server in _dict(held):
+            key = ("rules", "projects", project, server)
+            steps.append(settings_step(home, key, ABSENT, server))
+    return steps

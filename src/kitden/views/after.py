@@ -3,7 +3,14 @@
 import os
 from pathlib import Path
 
-from kitden.changes.actions import GATEWAY_RULE, GATEWAY_RULES, GATEWAY_STRICT, claude_allows_kitden
+from kitden.changes.actions import (
+    GATEWAY_PUT_BACK,
+    GATEWAY_REMOVE,
+    GATEWAY_RULE,
+    GATEWAY_RULES,
+    GATEWAY_STRICT,
+    claude_allows_kitden,
+)
 from kitden.changes.json_splice import ABSENT
 from kitden.clients.base import SETUP_NAME
 from kitden.local_gateway.project import project_chain
@@ -19,6 +26,7 @@ from kitden.local_gateway.settings import (
     state_in,
 )
 from kitden.model import GATEWAY_CLIENT, Change, ItemKind, Scope, SourceKind
+from kitden.redact import redact
 from kitden.views.effective import effective_view
 from kitden.views.setup_server import CLIENTS, kitden_on, setup_server_state
 
@@ -491,6 +499,67 @@ def _strict_words(change: Change, inventory, home: Path) -> list[dict]:
     return out
 
 
+def home_path(path: str, home: Path) -> str:
+    """A path under the home folder as ~/…, for example ~/.claude.json; any other as it is."""
+    try:
+        return f"~/{Path(path).relative_to(home)}"
+    except ValueError:
+        return path
+
+
+def _gateway_remove_words(change: Change, inventory) -> list[dict]:
+    """A server leaves the Kitden gateway: each client that offers the gateway's tools loses
+    it. The note says whether a client still has its own entry for it."""
+    server = change.steps[0].name
+    direct = [
+        c
+        for c in CLIENTS
+        if any(
+            i.client == c
+            and i.kind is ItemKind.MCP_SERVER
+            and i.name == server
+            and i.via_gateway is None
+            for i in inventory.items
+        )
+    ]
+    if direct:
+        who = _join([CLIENT_WORDS[c] for c in direct])
+        own = "has its own entry" if len(direct) == 1 else "have their own entries"
+        first = f"{who} still {own} for {server}."
+    else:
+        first = f"{server} is then in no client."
+    clients = [c for c in CLIENTS if c in _offering(inventory)]
+    if not clients:
+        return [{"note": f"{first} Undo brings it back."}]
+    out = [{"client": c, "state": "off", "word": "Removed"} for c in clients]
+    out[0]["note"] = f"{first} Open sessions refuse its tools at once. Undo brings it back."
+    return out
+
+
+def _put_back_words(change: Change, inventory, home: Path) -> list[dict]:
+    """A held server written into clients: each loads it, and says when the entry holds a
+    secret, and when it then also gets the server through the Kitden gateway."""
+    settings = load_settings(home)
+    offering = _offering(inventory)
+    out = []
+    for step in change.steps:
+        edit = step.edit
+        assert edit is not None
+        entry = {"client": step.client, "state": "on", "word": "Loads"}
+        notes = []
+        if redact(edit.after)[1]:
+            notes.append(f"This writes a secret into {home_path(edit.path, home)}.")
+        if step.client in offering and state_in(settings, [], step.name, None) == "on":
+            notes.append(
+                f"{CLIENT_WORDS[step.client]} then loads {step.name} twice: directly and "
+                "through the Kitden gateway. Remove it from the gateway to keep one."
+            )
+        if notes:
+            entry["note"] = " ".join(notes)
+        out.append(entry)
+    return out
+
+
 def after_words(
     change: Change,
     inventory,
@@ -515,6 +584,10 @@ def after_words(
         return _rules_words(change, inventory, home)
     if change.action == GATEWAY_STRICT and home is not None:
         return _strict_words(change, inventory, home)
+    if change.action == GATEWAY_REMOVE and change.steps:
+        return _gateway_remove_words(change, inventory)
+    if change.action == GATEWAY_PUT_BACK and home is not None:
+        return _put_back_words(change, inventory, home)
     # A move into a registered gateway has that gateway's own step; one into the Kitden
     # gateway has none, also when the gateway holds the server already.
     if change.action == "gateway.move" and not any(

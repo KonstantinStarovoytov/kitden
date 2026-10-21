@@ -244,6 +244,9 @@ class ClaudeCodeAdapter(ClientAdapter):
     def setup_server_step(self, command: str, args: list[str]) -> Step:
         return self._add_entry(SETUP_NAME, {"type": "stdio", "command": command, "args": args})
 
+    def add_server_step(self, name: str, entry: dict) -> Step:
+        return self._add_entry(name, entry)
+
     def _add_entry(self, name: str, value: dict[str, Any], login: str | None = None) -> Step:
         """A user-scope MCP entry, added with `claude mcp add-json` (FR-021, FR-024)."""
         edit = FileEdit(

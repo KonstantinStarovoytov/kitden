@@ -2,7 +2,7 @@
 import { getJson, postJson } from "./api.js";
 import { busyWhile, button, el, joinWords, plural, reportError, webLink } from "./dom.js";
 import { entrance, fold, reducedMotion } from "./motion.js";
-import { moveInto, moveTargets, openInfo, openItem, review, toast, toolsSection } from "./panel.js";
+import { heldActions, heldButtons, moveInto, moveTargets, openInfo, openItem, review, toast, toolsSection } from "./panel.js";
 import { banner, CLIENT_ICONS, CLIENT_NAMES, clientCheck, DARK_ICONS, flag, GATEWAY_NOTE, gatewayName, kindOf, mark, skeleton, staleNote } from "./parts.js";
 import { current, currentError, data, freshness, loadMap, reload, render, retry, state } from "./store.js";
 
@@ -346,7 +346,7 @@ function showKitdenServer(server, next = {}) {
   const stack = el("div", "stack");
   stack.append(row);
   body.append(stack, toolsSection(server.name, (again) => showKitdenServer(server, again), next));
-  openInfo("MCP server", server.name, body);
+  openInfo("MCP server", server.name, body, heldButtons(heldActions(server.name, foundClients())));
 }
 
 function gatewayCard(gateway, model) {

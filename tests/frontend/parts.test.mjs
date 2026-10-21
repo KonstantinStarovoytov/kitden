@@ -207,3 +207,8 @@ test('the Changes page names the tools a batch switch changed', () => {
   const steps = [{ client: 'kitden', name: 'create_issue' }, { client: 'kitden', name: 'delete_issue' }];
   assert.equal(changeTitle({ action: 'gateway.rules', steps }), 'Changed the rules for create_issue, delete_issue · Kitden gateway');
 });
+
+test('the Changes page names a server removed from or put back from the Kitden gateway', () => {
+  assert.equal(changeTitle({ action: 'gateway.remove', steps: [{ client: 'kitden', name: 'files' }] }), 'Removed files from the Kitden gateway');
+  assert.equal(changeTitle({ action: 'gateway.put_back', steps: [{ client: 'codex', name: 'files' }] }), 'Put back files · Codex');
+});

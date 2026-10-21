@@ -46,7 +46,7 @@ from kitden.model import (
     Scope,
     Step,
 )
-from kitden.redact import redact
+from kitden.redact import masked_command, redact
 
 EDITORS = {"json": json_splice, "toml": toml_edit}
 CLIENT_CLI = "client_cli"
@@ -233,7 +233,8 @@ def _record(change: Change) -> dict:
                 "scope": str(step.scope),
                 "name": step.name,
                 "mechanism": step.mechanism,
-                "command": step.command,
+                # Only masked: Undo needs the inverse command, never this one.
+                "command": masked_command(step.command) if step.command else step.command,
                 "undo_command": step.undo_command,
                 "cwd": step.cwd,
                 "restart_note": step.restart_note,

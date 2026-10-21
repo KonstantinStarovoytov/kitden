@@ -5,7 +5,7 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; panel.js must load there too.
 delete globalThis.navigator;
-const { afterParts, changeOutcome, callsText, changeWords, footerActions, offerLabel, leftOutText, loadsLede, moveFor, moveTargets, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
+const { afterParts, changeOutcome, callsText, changeWords, footerActions, heldActions, offerLabel, leftOutText, loadsLede, moveFor, moveTargets, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
 const { addOptions, whyNoAction } = await import('../../src/kitden/web/static/js/offer.js');
 const { data } = await import('../../src/kitden/web/static/js/store.js');
 
@@ -440,4 +440,19 @@ test('calls text says how many and when', () => {
   assert.equal(callsText({ count: 12, last: '2026-10-21T14:02Z' }, now), 'Called 12 times, last today 14:02');
   assert.equal(callsText({ count: 1, last: '2026-10-20T09:15Z' }, now), 'Called once, last 20 Oct 09:15');
   assert.equal(callsText(null, now), null);
+});
+
+test('a held server offers Remove and Put back in each found client', () => {
+  const actions = heldActions('files', ['claude_code', 'cursor']);
+  assert.deepEqual(actions.map((a) => a.label), ['Remove from the Kitden gateway…', 'Put back in Claude Code…', 'Put back in Cursor…']);
+  assert.deepEqual(actions[0].body, { action: 'gateway.remove', targets: [], params: { server: 'files' } });
+  assert.deepEqual(actions[2].body, { action: 'gateway.put_back', targets: [{ client: 'cursor' }], params: { server: 'files' } });
+});
+
+test('removing from or putting back from the Kitden gateway is named', () => {
+  const remove = { action: 'gateway.remove', steps: [{ client: 'kitden', name: 'files' }, { client: 'kitden', name: 'files' }] };
+  assert.deepEqual(changeWords(remove, { params: { server: 'files' } }), { title: 'Remove files from the Kitden gateway', done: 'Removed files from the Kitden gateway' });
+  assert.equal(changeWords(remove).title, 'Remove files from the Kitden gateway');
+  const back = { action: 'gateway.put_back', steps: [{ client: 'claude_code', name: 'files', restart_note: 'Start a new Claude Code session (or a new Code tab chat) for this to take effect.' }] };
+  assert.deepEqual(changeWords(back, { params: { server: 'files' } }), { title: 'Put files back in Claude Code', done: 'Put files back in Claude Code · Start a new Claude Code session (or a new Code tab chat)' });
 });

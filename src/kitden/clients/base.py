@@ -259,6 +259,10 @@ class ClientAdapter(ABC):
         """The edit that removes one direct MCP entry."""
         raise ValueError(f"{item.name} cannot be removed here")
 
+    def add_server_step(self, name: str, entry: dict) -> Step:
+        """The edit that adds one MCP entry, already in this client's format (user scope)."""
+        raise ValueError(f"{self.id} cannot take an MCP entry")
+
     def plugin_step(self, item: Item, enable: bool) -> Step:
         """The edit that turns one plugin on or off."""
         raise ValueError(f"{item.name} cannot be turned {'on' if enable else 'off'} here")

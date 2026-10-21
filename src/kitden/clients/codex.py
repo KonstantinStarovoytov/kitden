@@ -294,6 +294,9 @@ class CodexAdapter(ClientAdapter):
     def setup_server_step(self, command: str, args: list[str]) -> Step:
         return self._add_entry(SETUP_NAME, {"command": command, "args": args})
 
+    def add_server_step(self, name: str, entry: dict) -> Step:
+        return self._add_entry(name, entry)
+
     def _add_entry(self, name: str, value: dict[str, Any], login: str | None = None) -> Step:
         edit = FileEdit(
             path=str(self.codex_home / "config.toml"),

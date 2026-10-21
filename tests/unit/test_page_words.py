@@ -819,3 +819,10 @@ def test_the_tool_list_says_reads_and_writes_and_has_a_batch_switch():
     assert "Turn off every writing tool…" in panel
     assert "from the server" in panel and "by its name" in panel
     assert 'action: "gateway.rules"' in panel
+
+
+def test_a_held_server_can_be_removed_or_put_back():
+    panel = script("panel.js")
+    assert '"Remove from the Kitden gateway…"' in panel
+    assert "`Put back in ${CLIENT_NAMES[client]}…`" in panel
+    assert "heldActions(" in script("gateway.js")

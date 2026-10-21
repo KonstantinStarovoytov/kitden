@@ -227,6 +227,8 @@ const ACTION_WORDS = {
   "gateway.rule": "Changed the rule for",
   "gateway.strict": "Changed strict mode for",
   "gateway.rules": "Changed the rules for",
+  "gateway.remove": "Removed",
+  "gateway.put_back": "Put back",
 };
 
 // A Kitden gateway rule in words: "slow of echo in website", as the review's after line says
@@ -271,6 +273,7 @@ export function changeTitle(entry) {
   if (entry.action === "gateway.strict" && entry.steps.length) return `${ACTION_WORDS[entry.action]} ${entry.steps[0].name} · Kitden gateway`;
   // The batch switch: its steps are the tools it changed.
   if (entry.action === "gateway.rules") return `${ACTION_WORDS[entry.action]} ${entry.steps.map((s) => s.name).join(", ")} · Kitden gateway`;
+  if (entry.action === "gateway.remove" && entry.steps.length) return `${ACTION_WORDS[entry.action]} ${entry.steps[0].name} from the Kitden gateway`;
   const kitden = kitdenMove(entry);
   const verb = kitden ? "Moved" : ACTION_WORDS[entry.action] || entry.action;
   const plugin = ["plugin.enable", "plugin.disable", "plugin.install", "plugin.remove"].includes(entry.action);

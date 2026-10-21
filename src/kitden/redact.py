@@ -4,6 +4,7 @@ Everything shown on the page, printed by `scan`, written to the change log, or r
 MCP server passes through `redact` first.
 """
 
+import json
 import re
 from typing import Any
 from urllib.parse import unquote_plus, urlsplit, urlunsplit
@@ -132,3 +133,17 @@ def redact_text(text: str) -> str:
     for shape in _TOKEN_SHAPES:
         text = shape.sub(SECRET, text)
     return text
+
+
+def masked_command(command: list[str]) -> list[str]:
+    """A client command as the page, the change record and the log keep it: an argument that
+    holds an entry as JSON (`claude mcp add-json <name> <json>`) is redacted. The command that
+    runs still carries the real values."""
+    out = []
+    for arg in command:
+        try:
+            value = json.loads(arg)
+        except ValueError:
+            value = None
+        out.append(json.dumps(redact(value)[0]) if isinstance(value, dict) else arg)
+    return out

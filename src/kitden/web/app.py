@@ -19,6 +19,8 @@ from kitden.changes.actions import (
     CLIENT_WORDS,
     GATEWAY_CONNECT,
     GATEWAY_MOVE,
+    GATEWAY_PUT_BACK,
+    GATEWAY_REMOVE,
     GATEWAY_RULE,
     GATEWAY_RULES,
     GATEWAY_STRICT,
@@ -37,6 +39,7 @@ from kitden.changes.actions import (
     plugin_skill_steps,
     plugin_skills_left_out,
     plugin_steps,
+    put_back_steps,
     remove_plugin_steps,
     remove_steps,
     setup_server_steps,
@@ -67,6 +70,7 @@ from kitden.local_gateway.settings import (
     load_settings,
     load_tools,
     moved_in,
+    remove_server_steps,
     save_tools,
     settings_unreadable,
 )
@@ -83,7 +87,7 @@ from kitden.local_gateway.views import (
 )
 from kitden.marketplace_link import LinkError, read_marketplace
 from kitden.model import Change, ChangeState, Gateway, GatewayAuth, GatewayEdit, ItemKind
-from kitden.redact import redact_text
+from kitden.redact import masked_command, redact_text
 from kitden.views.after import after_words
 from kitden.views.catalog import catalog
 from kitden.views.commands import commands_for
@@ -190,7 +194,7 @@ def change_dict(change: Change) -> dict:
                 "diff": _step_diff(s),
                 "reaches": _readers(s),
                 "keeps": s.removal.keeps if s.removal else None,
-                "command": redact_text(" ".join(s.command)) if s.command else None,
+                "command": redact_text(" ".join(masked_command(s.command))) if s.command else None,
                 "restart_note": s.restart_note,
                 "login_note": s.login_note,
                 "shared_file": s.shared_file,
@@ -870,6 +874,12 @@ def create_app(
                 steps = rules_steps(home, params, projects)
             elif action == GATEWAY_STRICT:
                 steps = strict_steps(home, params, load_tools(home))
+            elif action == GATEWAY_REMOVE:
+                steps = remove_server_steps(home, str(params.get("server", "")))
+            elif action == GATEWAY_PUT_BACK:
+                clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+                server = str(params.get("server", ""))
+                steps = put_back_steps(adapters, home, server, clients)
             elif action == GATEWAY_MOVE:
                 gateway = next(
                     (g for g in load_gateways(home) if g.id == params.get("gateway")), None

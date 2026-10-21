@@ -11,6 +11,7 @@ const KIND_WORDS = {
   mcp_server: "MCP server", plugin: "Plugin", skill: "Skill", hook: "Hook", marketplace: "Marketplace",
 };
 const CLIENT_ORDER = ["claude_code", "claude_desktop_code_tab", "codex", "cursor"];
+const WRITABLE = ["claude_code", "codex", "cursor"];
 const ACTION_BUTTONS = {
   "plugin.disable": (client) => `Turn off in ${client}…`,
   "plugin.enable": (client) => `Turn on in ${client}…`,
@@ -239,6 +240,29 @@ export function moveInto(gateways, items, title) {
 
 function moveButton({ items, gateways }, look, name) {
   return button("Move into the gateway…", () => moveInto(gateways, items, name), look);
+}
+
+// A server in the Kitden gateway can leave it, or be written back into a client as its own
+// entry. `clients` are the found clients Kitden can write.
+export function heldActions(server, clients) {
+  return [
+    { label: "Remove from the Kitden gateway…", body: { action: "gateway.remove", targets: [], params: { server } } },
+    ...clients.map((client) => ({
+      label: `Put back in ${CLIENT_NAMES[client]}…`,
+      body: { action: "gateway.put_back", targets: [{ client }], params: { server } },
+    })),
+  ];
+}
+
+// heldActions as plain buttons, for both Details of a held server.
+export function heldButtons(actions) {
+  const draw = (a, look) => [button(a.label, () => review(a.body), look)];
+  return footerButtons({ lead: null, rest: actions }, draw);
+}
+
+// The found clients Kitden can write, as the Gateway page reads them.
+function writableClients() {
+  return (data.clients || []).filter((c) => WRITABLE.includes(c.id) && c.status === "found").map((c) => c.id);
 }
 
 // The other actions wait behind one button, so the primary one stands alone.
@@ -632,7 +656,8 @@ function showDetails(row, definitions, offer = null, toolsNext = {}) {
     return [addButton(o, row, offer, look)];
   };
   const footer = el("footer");
-  footer.append(...footerButtons(actions, draw, commands));
+  const held = definitions.some((d) => d.via_gateway === "kitden") ? heldButtons(heldActions(row.name, writableClients())) : [];
+  footer.append(...held, ...footerButtons(actions, draw, commands));
   swapContent([itemHeader(row), body, footer]);
 }
 
@@ -697,6 +722,7 @@ const DONE_WORDS = {
   "setup_server.update": "Updated show my setup to Kitden", "gateway.move": "Moved",
   "gateway.switch": "Switched the gateway", "plugin.install": "Added", "marketplace.add": "Added the marketplace",
   "skill.install": "Added", "plugin.skills": "Added",
+  "gateway.remove": "Removed", "gateway.put_back": "Put",
 };
 
 // Actions whose words say "from" a client.
@@ -729,6 +755,7 @@ export function changeWords(change, previewBody) {
   reached.sort((a, b) => CLIENT_ORDER.indexOf(a) - CLIENT_ORDER.indexOf(b));
   const clients = joinWords(reached.map(clientName));
   const plugin = ((previewBody && previewBody.params && previewBody.params.plugin) || "the plugin").split("@")[0];
+  const server = (previewBody && previewBody.params && previewBody.params.server) || (change.steps[0] && change.steps[0].name);
   let title = {
     "gateway.move": kitden ? `Move ${names} into the Kitden gateway` : `Move ${names} into the gateway`,
     "plugin.disable": `Turn off ${names} in ${clients}`,
@@ -744,6 +771,8 @@ export function changeWords(change, previewBody) {
     "gateway.switch": `Use ${steps.length ? steps[steps.length - 1].name : "the new gateway"} in ${clients}`,
     "setup_server.register": `Add “show my setup” to ${clients}`,
     "setup_server.update": `Update “show my setup” to Kitden in ${clients}`,
+    "gateway.remove": `Remove ${server} from the Kitden gateway`,
+    "gateway.put_back": `Put ${server} back in ${clients}`,
   }[change.action] || change.action;
   const verb = DONE_WORDS[change.action] || change.action;
   let what = `${verb} ${short} ${REMOVES.includes(change.action) ? "from" : "in"} ${clients}`;
@@ -762,6 +791,10 @@ export function changeWords(change, previewBody) {
     what = `${verb} ${["setup_server.update", "gateway.switch"].includes(change.action) ? "in" : "to"} ${clients}`;
   } else if (change.action === "gateway.move") {
     what = `${verb} ${short} into ${kitden ? "the Kitden gateway" : "the gateway"}`;
+  } else if (change.action === "gateway.remove") {
+    what = `${verb} ${server} from the Kitden gateway`;
+  } else if (change.action === "gateway.put_back") {
+    what = `${verb} ${server} back in ${clients}`;
   } else if (change.action === "plugin.skills") {
     what = `${verb} ${plural(steps.length, "skill", "skills")} to ${clients}`;
   }
