@@ -47,6 +47,14 @@ command line does not (checked 2026-10-21).
 2. Pick the test project at the top and turn one tool off for it.
 3. Start a new session in that folder. The tool is gone; the others are still there.
 4. Undo the switch and the move. Start a new session; the server is direct again with its tool.
+5. Move the server in again. Turn on "Strict: only tools you turned on" and turn one tool off. A
+   new session offers only the tools that are on.
+6. In a session that is already open, call the tool you turned off. It is refused with "<name> is
+   turned off in Kitden." Turn it on again; the call works in the same session.
+7. Undo the switches and the move; check the server is direct again.
+
+Not run yet for steps 5 to 7: they need the real clients, and Part 2 was built and tested with
+fake servers only.
 
 ## Release
 
@@ -65,9 +73,12 @@ with trusted publishing and creates the GitHub release with the notes file as it
 
 ## Gateways
 
-- **Kitden gateway** — the servers and rules are `gateway.json` (mode 600) and the tool lists are
-  `gateway-tools.json`, both in `~/Library/Application Support/kitden`. Only `gateway.json`
-  changes through review and Undo. It also holds the env values and headers of moved servers; only
+- **Kitden gateway** — three files in `~/Library/Application Support/kitden` (mode 700):
+  `gateway.json` (mode 600) holds the servers and rules, `gateway-tools.json` the tool lists, and
+  `gateway-calls.json` the count and last time (UTC) of each tool's forwarded calls, never what
+  was sent. Only `gateway.json` changes through review and Undo; the other two are found data
+  that the gateway and Rescan write. The gateway reads `gateway.json` again on each call, so a
+  tool turned off is refused at once; if the file cannot be read, the rules it started with apply. It also holds the env values and headers of moved servers; only
   you can read it, and it stays on this Mac. `kitden mcp` finds the project once, at start: the
   `CLAUDE_PROJECT_DIR` variable, then the client's roots, then `WORKSPACE_FOLDER_PATHS`, then its
   start folder. Codex keeps a tool list for up to 30 minutes and ignores "list changed" (checked

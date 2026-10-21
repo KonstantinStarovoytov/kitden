@@ -91,9 +91,17 @@ It holds local servers (a command) and remote ones (an address). Each switch is 
 backup and Undo. Moving a server in for the first time keeps the tools Claude Code and Codex had
 turned off; Cursor's own tool switches do not carry over. Moving a server the gateway holds again
 updates it, for example with a new token, and keeps the gateway's switches for it; the clients'
-own switches do not carry over then. A change applies to new sessions, so start a new one in your
-client. A moved server's env values and headers are kept in the gateway's settings file, which only
+own switches do not carry over then. A tool you turn off is refused at once, even in a session
+that is already open; other changes apply to new sessions, so start a new one in your client. A moved server's env values and headers are kept in the gateway's settings file, which only
 you can read and which stays on this Mac.
+
+For a server you do not trust with new tools, turn on "Strict: only tools you turned on". It
+applies to all projects: the server offers only the tools you turned on, and a tool it adds later
+waits as "New · off" until you decide. Each tool shows a quiet word, reads, writes or may write,
+from the server's own hint or a guess from the tool's name. "Turn off every writing tool…" turns
+them off in one review. Hovering a tool shows how often it was called and when last; only the
+count and the time are kept, never what was sent. The words are a guess, so check the list; for a
+real guarantee, give the server a token that can only read.
 
 A few servers stay direct for now, and the page says why:
 

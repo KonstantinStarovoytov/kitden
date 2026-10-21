@@ -1,6 +1,6 @@
 # Kitden roadmap
 
-Last updated: 2026-10-21
+Last updated: 2026-10-22
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
@@ -31,6 +31,13 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **True words:** the start link, the agents server, where secrets go, and the sign-in check.
 - **Gateway page:** says the gateway controls only the servers in it, and folds a group after
   six rows.
+- **Strict mode:** a server can offer only the tools you turned on, for all projects. New tools
+  wait as "New · off". Codex's allowed-tools list moves in as strict.
+- **Turned off means refused:** a tool you turn off is refused at once, in open sessions too.
+  Folders Kitden does not know follow the All projects switches, and the page says so.
+- **Reads and writes:** each tool shows a quiet word, from the server or its name.
+  "Turn off every writing tool…" is one review, with the token advice.
+- **Calls counted:** hover a tool to see how often it was called and when last.
 
 ### 0.2.0
 
@@ -71,9 +78,6 @@ and a master plan with one plan per part,
 [docs/superpowers/plans/2026-10-21-review-follow-up.md](docs/superpowers/plans/2026-10-21-review-follow-up.md).
 The parts, in order:
 
-2. **The gateway's access contract:** a strict mode per server that offers only the tools you
-   turned on and keeps new tools out; a switched-off tool is refused at once; reads and writes
-   shown as a helper with one switch for every writing tool; calls counted.
 3. **Complete management:** remove a plugin, a skill or a gateway server; put a held server back
    in a client; add an MCP server to another client; add into one project; align a project
    across clients in one review.
