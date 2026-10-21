@@ -775,3 +775,9 @@ def test_the_kitden_card_says_what_the_gateway_governs():
     text = script("gateway.js")
     words = "The gateway controls only the servers in it. "
     assert words + "Direct entries and terminal tools are outside it." in text
+
+
+def test_gateway_groups_fold():
+    text = script("gateway.js")
+    assert "Show all " in text
+    assert "draft.expanded" in text

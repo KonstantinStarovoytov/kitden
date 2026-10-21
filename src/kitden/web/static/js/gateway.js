@@ -19,7 +19,7 @@ export const SETUP_NOTE = "The kitden entry shows your setup to agents and offer
 
 // What the person typed survives a redraw (a rescan can redraw the page at any time).
 const EMPTY_ADD = { url: "", ui_url: "", auth: "none", key_env_var: "", login_email: "", login_password_env_var: "" };
-const draft = { add: { ...EMPTY_ADD }, connect: null, addOpen: false, connectOpen: null };
+const draft = { add: { ...EMPTY_ADD }, connect: null, addOpen: false, connectOpen: null, expanded: {} };
 // Every client gets the same entry name; the review shows the exact entry before Apply.
 const ENTRY_NAME = "gateway";
 
@@ -54,6 +54,12 @@ export function offersSwitch(model, gateway) {
   if (gateway.kind === "kitden") return false;
   const used = model.used.filter((id) => id !== "kitden");
   return used.length > 0 && !used.includes(gateway.id);
+}
+
+// A long group shows its first rows; "Show all" opens the rest.
+export function visibleRows(rows, expanded, limit = 6) {
+  if (expanded || rows.length <= limit) return { shown: rows, cut: 0 };
+  return { shown: rows.slice(0, limit), cut: rows.length - limit };
 }
 
 export function renderGateway(main) {
@@ -122,8 +128,12 @@ export function renderGateway(main) {
     }
     section.append(head, el("p", "group-note", key === "move" && !targets.length ? GATEWAY_NOTE : note));
     const list = el("div", "list");
-    for (const row of rows) list.append(groupRow(row, key, targets));
+    const { shown, cut } = visibleRows(rows, draft.expanded[key]);
+    for (const row of shown) list.append(groupRow(row, key, targets));
     section.append(list);
+    if (cut > 0) {
+      section.append(button(`Show all ${rows.length}`, () => { draft.expanded[key] = true; render(); }, "btn small ghost"));
+    }
     main.append(section);
     blocks.push(section);
   }

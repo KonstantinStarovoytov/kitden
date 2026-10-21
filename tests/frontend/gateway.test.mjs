@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js needs only this from a browser to load; the tests call its pure parts.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { kitdenClients, offersSwitch } = await import('../../src/kitden/web/static/js/gateway.js');
+const { kitdenClients, offersSwitch, visibleRows } = await import('../../src/kitden/web/static/js/gateway.js');
 
 const entry = (client, state, fields = {}) => ({ client, state, item: null, enabled: true, ...fields });
 
@@ -45,4 +45,11 @@ test('a registered gateway offers to take the clients over only from another reg
   assert.equal(offersSwitch(model(['gw-1']), obot), false);
   assert.equal(offersSwitch(model([]), obot), false);
   assert.equal(offersSwitch(model(['gw-2']), kitden), false);
+});
+
+test('a group shows six rows and says how many more there are', () => {
+  const rows = Array.from({ length: 7 }, (_, i) => ({ name: `s${i}` }));
+  assert.deepEqual(visibleRows(rows, false), { shown: rows.slice(0, 6), cut: 1 });
+  assert.deepEqual(visibleRows(rows.slice(0, 6), false), { shown: rows.slice(0, 6), cut: 0 });
+  assert.deepEqual(visibleRows(rows, true), { shown: rows, cut: 0 });
 });
