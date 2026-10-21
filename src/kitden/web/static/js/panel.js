@@ -426,7 +426,9 @@ export function toolsSection(server, again, next = {}) {
   head.append(el("h2", null, `Tools · ${where || "All projects"}`), refresh);
   const list = el("div", "tool-list");
   list.append(skeleton("line", 3));
-  section.append(head, list);
+  section.append(head);
+  if (!state.project) section.append(el("p", "muted", "These switches also apply in folders Kitden does not know."));
+  section.append(list);
 
   const change = (row, value, pressed) => {
     const back = ({ error = null, verified = false } = {}) => again({ focus: verified ? row.key : pressed, error, flip: verified ? row.key : null });

@@ -17,3 +17,9 @@ def test_readme_says_where_secrets_go_and_what_the_agents_server_does():
     assert (
         "Servers moved into the gateway add their tools, which do what those servers do." in readme
     )
+
+
+def test_readme_says_what_an_unknown_folder_gets():
+    readme = " ".join((ROOT / "README.md").read_text().split())
+    words = "In a folder Kitden does not know as a project, the All projects switches apply."
+    assert words in readme

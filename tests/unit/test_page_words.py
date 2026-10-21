@@ -802,3 +802,7 @@ def test_the_tool_list_has_a_strict_switch():
     assert "Strict: only tools you turned on" in panel
     assert "Set for all projects" in panel
     assert 'action: "gateway.strict"' in panel
+
+
+def test_all_projects_says_unknown_folders_follow_it():
+    assert "These switches also apply in folders Kitden does not know." in script("panel.js")
