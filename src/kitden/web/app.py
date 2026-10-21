@@ -20,6 +20,7 @@ from kitden.changes.actions import (
     GATEWAY_CONNECT,
     GATEWAY_MOVE,
     GATEWAY_SWITCH,
+    KITDEN_GATEWAY,
     MARKETPLACE_ADD,
     PLUGIN_INSTALL,
     PLUGIN_SKILLS,
@@ -27,6 +28,7 @@ from kitden.changes.actions import (
     SKILL_INSTALL,
     connect_steps,
     install_steps,
+    local_move_steps,
     marketplace_steps,
     move_steps,
     plugin_skill_steps,
@@ -700,6 +702,18 @@ def create_app(
                     if command is None:
                         return _error("Install the tool first: uv tool install <this folder>", 422)
                 steps = update_steps(adapters, items, added, command)
+            elif action == GATEWAY_MOVE and params.get("gateway") == KITDEN_GATEWAY:
+                ids = [str(t.get("item")) for t in targets if isinstance(t, dict)]
+                items = [_item(i) for i in ids]
+                if not items or any(i is None for i in items):
+                    return _error("Choose a known server.", 422)
+                known = [p.path for p in state.inventory.projects]
+                added = _states_in(state.inventory, "added", "plugin")
+                command = (setup_command or installed_command)()
+                # It may ask a remote server whether it signs in, so not on the event loop.
+                steps = await asyncio.to_thread(
+                    local_move_steps, adapters, items, home, known, command, added_clients=added
+                )
             elif action == GATEWAY_MOVE:
                 gateway = next(
                     (g for g in load_gateways(home) if g.id == params.get("gateway")), None

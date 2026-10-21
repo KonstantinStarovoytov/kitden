@@ -1,16 +1,36 @@
 """Turn a requested action into steps for the change engine (write-matrix.md)."""
 
+import http.client
 import ipaddress
+import json
+import os
 import re
+import urllib.error
+import urllib.request
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
 from kitden.changes import json_splice, toml_edit
-from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, REMOVE_DIRECT, ClientAdapter
+from kitden.clients.base import (
+    PLUGIN_DISABLE,
+    PLUGIN_ENABLE,
+    REMOVE_DIRECT,
+    SETUP_NAME,
+    ClientAdapter,
+)
 from kitden.gateway_api import gateway_name
-from kitden.model import GATEWAY_CLIENT, Gateway, GatewayEdit, Item, Scope, Step
+from kitden.gateways import data_dir
+from kitden.local_gateway.settings import CLIENT as KITDEN_CLIENT
+from kitden.local_gateway.settings import (
+    PLACEHOLDERS,
+    SETTINGS_FILE,
+    load_settings,
+    load_tools,
+    rule_step,
+)
+from kitden.model import GATEWAY_CLIENT, FileEdit, Gateway, GatewayEdit, Item, Scope, Step
 
 GATEWAY_CONNECT = "gateway.connect"
 GATEWAY_MOVE = "gateway.move"
@@ -21,6 +41,7 @@ SKILL_INSTALL = "skill.install"
 PLUGIN_SKILLS = "plugin.skills"
 CLIENT_WORDS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
 SETUP_SERVER_UPDATE = "setup_server.update"
+NEEDS_COMMAND = "The setup server needs the absolute path of the kitden command"
 ENTRY_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
 
 
@@ -222,7 +243,7 @@ def setup_server_steps(
     GUI clients may not see the shell PATH, so the entry uses an absolute path (research R9).
     """
     if not Path(command).is_absolute():
-        raise ValueError("The setup server needs the absolute path of the kitden command")
+        raise ValueError(NEEDS_COMMAND)
     if not clients:
         raise ValueError("Choose at least one client")
     steps = []
@@ -255,7 +276,7 @@ def update_steps(
         steps.append(adapter.remove_step(item))
         if item.client not in added_clients:
             if command is None or not Path(command).is_absolute():
-                raise ValueError("The setup server needs the absolute path of the kitden command")
+                raise ValueError(NEEDS_COMMAND)
             steps.append(adapter.setup_server_step(command, ["mcp"]))
     return steps
 
@@ -362,3 +383,307 @@ def move_steps(
             mechanism="gateway_api",
         )
     return [*gateway_steps.values(), *file_steps]
+
+
+KITDEN_GATEWAY = "kitden"  # the gateway inside `kitden mcp`, on this Mac
+# Codex waits 10 s for a server to start and 60 s for a tool call (checked 2026-10-21). The
+# Kitden gateway may take up to 20 s to list a server and 300 s for one call.
+CODEX_TIMEOUTS = {"startup_timeout_sec": 30, "tool_timeout_sec": 300}
+# Keys whose values come from the shell or from another program (checked 2026-10-21): Cursor
+# `envFile`; Codex `env_vars`, `bearer_token_env_var`, `env_http_headers` and
+# `http_headers_helper`; Claude Code `headersHelper`.
+FROM_ELSEWHERE = (
+    "envFile",
+    "env_vars",
+    "bearer_token_env_var",
+    "env_http_headers",
+    "http_headers_helper",
+    "headersHelper",
+)
+SIGN_IN_SECONDS = 5
+MCP_VERSION = "2025-06-18"  # a protocol version every MCP server knows (checked 2026-10-21)
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Never follow a redirect, so the headers reach the server's own address only."""
+
+    def redirect_request(self, *args: Any, **kwargs: Any) -> None:
+        return None
+
+
+def needs_sign_in(url: str, headers: dict) -> bool:
+    """True when the server answers an MCP `initialize` with 401, as a server that signs in
+    with OAuth does. Raises OSError when there is no answer.
+
+    One POST to the server's own address, within 5 seconds. No redirect is followed and no
+    proxy is used, so the headers go nowhere else; an error never holds them.
+    """
+    if urlsplit(url).scheme not in ("http", "https"):
+        raise OSError("not a web address")
+    body = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": MCP_VERSION,
+            "capabilities": {},
+            "clientInfo": {"name": "kitden", "version": "1"},
+        },
+    }
+    request = urllib.request.Request(  # noqa: S310 - the scheme is http or https
+        url,
+        data=json.dumps(body).encode(),
+        method="POST",
+        headers={
+            **{str(k): str(v) for k, v in headers.items()},
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+        },
+    )
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect)
+    try:
+        with opener.open(request, timeout=SIGN_IN_SECONDS):
+            return False
+    except urllib.error.HTTPError as answer:
+        answer.close()
+        return answer.code == 401
+    except (OSError, ValueError, http.client.HTTPException):
+        raise OSError("no answer") from None
+
+
+def _gateway_entry(entry: dict) -> dict:
+    """What the Kitden gateway runs: command, args and env, or url and headers. Keys only the
+    client reads (type, on/off, tool lists, timeouts) stay behind."""
+    server = {key: entry[key] for key in ("command", "args", "env", "url") if entry.get(key)}
+    headers = entry.get("headers") or entry.get("http_headers")
+    if headers:
+        server["headers"] = headers
+    return server
+
+
+def _strings(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return [s for k, v in value.items() for s in (*_strings(k), *_strings(v))]
+    if isinstance(value, list):
+        return [s for v in value for s in _strings(v)]
+    return []
+
+
+def _reads_elsewhere(entry: dict, server: dict) -> bool:
+    """A key or a `${...}` value that the client fills in from elsewhere. A project folder in
+    the arguments is fine: the gateway fills it in."""
+    if any(key in entry for key in FROM_ELSEWHERE):
+        return True
+    args = []
+    for arg in _strings(server.get("args")):
+        for placeholder in PLACEHOLDERS:
+            arg = arg.replace(placeholder, "")
+        args.append(arg)
+    return any("${" in s for s in _strings({**server, "args": args}))
+
+
+def _movable(adapters: dict[str, ClientAdapter], item: Item) -> tuple[Step, dict, dict]:
+    """The item's remove step, its entry and what the gateway will run. Refuses, with the
+    reason, an entry that stays direct."""
+    name = item.name
+    if item.scope is Scope.PROJECT:
+        raise ValueError(f"{name} is in the project's own files; it stays there.")
+    if name == SETUP_NAME:
+        raise ValueError("Kitden's own entry stays in each client.")
+    remove = remove_steps(adapters, item)[0]
+    entry = _raw_entry(remove)
+    if entry is None:
+        raise ValueError(f"{name} could not be read from its file")
+    server = _gateway_entry(entry)
+    if _reads_elsewhere(entry, server):
+        raise ValueError(f"{name} reads values from your shell; it stays direct for now.")
+    if "cwd" in entry:
+        raise ValueError(f"{name} starts in its own folder; it stays direct for now.")
+    # The gateway speaks streamable HTTP; Claude Code also has `sse` and `ws` (checked
+    # 2026-10-21), and Cursor tells SSE by an address that ends in /sse.
+    url = str(server.get("url", ""))
+    if str(entry.get("type", "")).lower() in ("sse", "ws") or url.rstrip("/").endswith("/sse"):
+        raise ValueError(
+            f"{name} uses a connection the Kitden gateway does not support yet; "
+            "it stays direct for now."
+        )
+    shapes = {"command": str, "args": list, "env": dict, "url": str, "headers": dict}
+    wrong = any(not isinstance(server.get(k, kind()), kind) for k, kind in shapes.items())
+    if wrong or not ("command" in server or "url" in server):
+        raise ValueError(f"{name} could not be read from its file")
+    return remove, entry, server
+
+
+def _deny_rules(path: Path) -> list[str]:
+    """Claude Code's `permissions.deny` rules in one settings file; none if it cannot be read."""
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return []
+    permissions = data.get("permissions") if isinstance(data, dict) else None
+    deny = permissions.get("deny") if isinstance(permissions, dict) else None
+    return [rule for rule in deny if isinstance(rule, str)] if isinstance(deny, list) else []
+
+
+def _claude_denies(home: Path, known_projects: list[str]) -> dict[str | None, list[str]]:
+    """Claude Code's deny rules: the user's (None) and each known project's."""
+    denies: dict[str | None, list[str]] = {None: _deny_rules(home / ".claude/settings.json")}
+    for project in known_projects:
+        folder = Path(project) / ".claude"
+        if folder.resolve() == (home / ".claude").resolve():
+            continue  # the home folder: its settings are the user's
+        denies[project] = _deny_rules(folder / "settings.json")
+        denies[project] += _deny_rules(folder / "settings.local.json")
+    return denies
+
+
+def _carried_rules(
+    name: str, found: list[tuple[Item, dict]], home: Path, denies: dict[str | None, list[str]]
+) -> dict[tuple[str | None, str | None], str]:
+    """The server's rules from what the clients had: (project or None, tool or None) -> state.
+
+    Codex `enabled`, `enabled_tools` and `disabled_tools` and Claude Code deny rules turn things
+    off; a Claude Code local-scope entry turns the server on in its project only. Off wins.
+    """
+    rules: dict[tuple[str | None, str | None], str] = {}
+
+    def rule(project: str | None, tool: str | None, state: str) -> None:
+        if rules.get((project, tool)) != "off":
+            rules[(project, tool)] = state
+
+    known = [t["name"] for t in load_tools(home).get(name, [])]
+    codex_off = False
+    for item, entry in found:
+        if item.client != "codex":
+            continue
+        if entry.get("enabled") is False:
+            codex_off = True
+            rule(None, None, "off")
+        kept = entry.get("enabled_tools")
+        for tool in known if isinstance(kept, list) else []:
+            if tool not in kept:
+                rule(None, tool, "off")
+        off = entry.get("disabled_tools")
+        for tool in off if isinstance(off, list) else []:
+            if isinstance(tool, str):
+                rule(None, tool, "off")
+    prefix = f"mcp__{name}__"
+    for project, deny in denies.items():
+        for text in deny:
+            if text in (f"mcp__{name}", f"{prefix}*"):
+                rule(project, None, "off")
+            elif text.startswith(prefix) and text != prefix:
+                rule(project, text.removeprefix(prefix), "off")
+    local = [item.project for item, _ in found if item.scope is Scope.LOCAL]
+    if local and (codex_off or len(local) == len(found)):
+        rule(None, None, "off")
+        for project in local:
+            rule(project, None, "on")
+    return rules
+
+
+def _settings_step(home: Path, key: tuple[str, ...], value: Any, name: str) -> Step:
+    """One entry of the gateway settings as a change step."""
+    edit = FileEdit(
+        path=str(data_dir(home) / SETTINGS_FILE), fmt="json", key=key, after=value, check="entry"
+    )
+    return Step(client=KITDEN_CLIENT, scope=Scope.USER, name=name, edit=edit)
+
+
+def _codex_timeout_steps(adapters: dict[str, ClientAdapter]) -> list[Step]:
+    """The timeouts an existing Codex `kitden` entry lacks."""
+    adapter = adapters.get("codex")
+    if adapter is None:
+        return []
+    # The step that would add the entry names its file and key; its command is not used.
+    place = adapter.setup_server_step("", [])
+    entry = _raw_entry(place)
+    if entry is None:
+        return []
+    assert place.edit is not None
+    return [
+        Step(
+            client=place.client,
+            scope=Scope.USER,
+            name=SETUP_NAME,
+            edit=FileEdit(
+                path=place.edit.path, fmt=place.edit.fmt, key=(*place.edit.key, key), after=value
+            ),
+            restart_note=place.restart_note,
+        )
+        for key, value in CODEX_TIMEOUTS.items()
+        if key not in entry
+    ]
+
+
+def local_move_steps(
+    adapters: dict[str, ClientAdapter],
+    items: list[Item],
+    home: Path,
+    known_projects: list[str],
+    command: str | None,
+    *,
+    added_clients: set[str],
+) -> list[Step]:
+    """Move direct entries into the Kitden gateway, in one change.
+
+    The steps: each server in the gateway settings (plus the PATH its local servers use, when
+    the settings have none), the rules the clients had for it, the removal of each client
+    entry, and the `kitden` entry for each of those clients that lacks it (`added_clients` have
+    it, also from the kitden plugin). An existing Codex `kitden` entry gets the timeouts it
+    lacks. An entry that must stay direct is refused, with the reason, before any step.
+    """
+    if not items:
+        raise ValueError("Choose a server to move")
+    items = list({item.id: item for item in items}.values())
+    servers: dict[str, dict] = {}
+    found: dict[str, list[tuple[Item, dict]]] = {}
+    removes = []
+    for item in items:
+        remove, entry, server = _movable(adapters, item)
+        first = servers.setdefault(item.name, server)
+        if server != first:
+            a = CLIENT_WORDS[found[item.name][0][0].client]
+            b = CLIENT_WORDS[item.client]
+            where = f"two places in {a}" if a == b else f"{a} and {b}"
+            raise ValueError(f"{item.name} is set up differently in {where}; keep one first.")
+        found.setdefault(item.name, []).append((item, entry))
+        removes.append(remove)
+    settings = load_settings(home)
+    for name in servers:
+        if name in settings["servers"]:
+            raise ValueError(
+                f"The Kitden gateway already has {name}. Remove the direct entry instead."
+            )
+    lacking = [c for c in dict.fromkeys(i.client for i in items) if c not in added_clients]
+    if lacking and (command is None or not Path(command).is_absolute()):
+        raise ValueError(NEEDS_COMMAND)
+    for name, server in servers.items():
+        if "url" not in server:
+            continue
+        try:
+            oauth = needs_sign_in(server["url"], server.get("headers") or {})
+        except OSError:
+            raise ValueError(f"Kitden could not reach {name}.") from None
+        if oauth:
+            raise ValueError(f"{name} signs in with OAuth; it stays direct for now.")
+
+    steps = [_settings_step(home, ("servers", n), s, n) for n, s in servers.items()]
+    path = os.environ.get("PATH")
+    if path and not settings.get("path"):
+        steps.append(_settings_step(home, ("path",), path, "PATH"))
+    denies = _claude_denies(home, known_projects)
+    for name in servers:
+        rules = _carried_rules(name, found[name], home, denies)
+        steps += [rule_step(home, p, name, tool, state) for (p, tool), state in rules.items()]
+    steps += removes
+    if lacking:
+        assert command is not None  # checked above
+        for step in setup_server_steps(adapters, lacking, command):
+            if step.client == "codex":
+                assert step.edit is not None
+                step.edit.after = {**step.edit.after, **CODEX_TIMEOUTS}
+            steps.append(step)
+    return steps + _codex_timeout_steps(adapters)

@@ -56,6 +56,7 @@ from mcp_types import (
 
 from kitden.local_gateway.project import find_project
 from kitden.local_gateway.settings import (
+    PLACEHOLDERS,
     allowed_tools,
     load_settings,
     load_tools,
@@ -75,7 +76,6 @@ NAME_LIMIT = 54
 # other code is its answer, and it goes to the model as it is.
 SDK_CODES = {CONNECTION_CLOSED, REQUEST_TIMEOUT}
 HTTP_CODES = SDK_CODES | {PARSE_ERROR, INVALID_REQUEST, METHOD_NOT_FOUND, INTERNAL_ERROR}
-PLACEHOLDERS = ("${workspaceFolder}", "${CLAUDE_PROJECT_DIR}", "${CLAUDE_PROJECT_DIR:-.}")
 
 # The HTTP library logs each request with its full address, and the MCP client logs some failures
 # with addresses too; an address may hold a token. The gateway prints its own plain line instead.

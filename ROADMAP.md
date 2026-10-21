@@ -24,7 +24,8 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Quick start:** the page has its data in about two seconds. Codex's slow plugin list comes in
   the background, and a line shows what is still read.
 - **Kitden gateway (in progress):** `kitden mcp` also offers the tools of the servers moved into
-  it, only those turned on for the session's project. Moving servers in comes next.
+  it, only those turned on for the session's project. Moving a server in is one review with Undo
+  and keeps the tool rules Codex and Claude Code had. The page for it comes next.
 
 ### 0.2.0
 

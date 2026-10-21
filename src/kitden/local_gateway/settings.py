@@ -21,6 +21,8 @@ SETTINGS_FILE = "gateway.json"
 TOOLS_FILE = "gateway-tools.json"
 CLIENT = "kitden"
 STATES = ("on", "off")
+# Project folders in a local server's arguments; the gateway fills in the project it found.
+PLACEHOLDERS = ("${workspaceFolder}", "${CLAUDE_PROJECT_DIR}", "${CLAUDE_PROJECT_DIR:-.}")
 
 
 def _dict(value: Any) -> dict:

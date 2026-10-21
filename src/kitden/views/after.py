@@ -2,8 +2,11 @@
 
 import os
 
+from kitden.clients.base import SETUP_NAME
+from kitden.local_gateway.settings import CLIENT as KITDEN
 from kitden.model import GATEWAY_CLIENT, Change, ItemKind, Scope
 from kitden.views.effective import effective_view
+from kitden.views.setup_server import CLIENTS, setup_server_state
 
 SKILL_CLIENTS = ("claude_code", "codex", "cursor")
 CLIENT_WORDS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
@@ -27,6 +30,7 @@ WORDS = {
     "setup_server.register": ("on", "Added"),
     "setup_server.update": ("on", "Updated"),
 }
+CURSOR_SWITCHES = "Cursor's own switches for these tools do not carry over."
 
 
 def _other_copy_loads(inventory, client: str, name: str) -> bool:
@@ -87,6 +91,57 @@ def _skill_words(change: Change, inventory, skills: list[dict]) -> list[dict]:
     return out
 
 
+def _join(words: list[str]) -> str:
+    return words[0] if len(words) == 1 else f"{', '.join(words[:-1])} and {words[-1]}"
+
+
+def _kitden_move_words(change: Change, inventory) -> list[dict]:
+    """A move into the Kitden gateway: every client with the `kitden` entry offers the moved
+    tools, also one that did not have the server. One line says which, and where a moved
+    server is on only in its project or stays off."""
+    offering = {
+        s["client"]
+        for s in setup_server_state(inventory)
+        if s["state"] in ("added", "plugin") and s["enabled"] is not False
+    }
+    offering |= {s.client for s in change.steps if s.client in CLIENTS and s.name == SETUP_NAME}
+    removed = {s.client for s in change.steps if s.client in CLIENTS and s.name != SETUP_NAME}
+    out = []
+    for client in CLIENTS:
+        if client in offering:
+            out.append({"client": client, "state": "gw", "word": "Via Kitden gateway"})
+        elif client in removed:
+            out.append({"client": client, "state": "off", "word": "Removed"})
+    if not out:
+        return out
+    mine = [s.edit for s in change.steps if s.client == KITDEN and s.edit is not None]
+    servers = [e.key[1] for e in mine if e.key[0] == "servers"]
+    rules = {e.key: e.after for e in mine if e.key[0] == "rules"}
+    line = []
+    if offering:
+        who = _join([CLIENT_WORDS[c] for c in CLIENTS if c in offering])
+        whose = "its" if len(servers) == 1 else "their"
+        line.append(f"{who} will offer {whose} tools through Kitden.")
+    for name in servers:
+        if rules.get(("rules", "global", name, "server")) != "off":
+            continue
+        projects = [
+            key
+            for key, state in rules.items()
+            if key[1:2] == ("projects",) and key[3:] == (name, "server") and state == "on"
+        ]
+        if projects:
+            line.append(f"{name} is on only in its project{'s' if len(projects) > 1 else ''}.")
+        else:
+            line.append(f"{name} stays off, as it was.")
+    line.append("Applies to new sessions.")
+    out[0]["note"] = " ".join(line)
+    if "cursor" in removed:
+        entry = next(e for e in out if e["client"] == "cursor")
+        entry["note"] = " ".join(n for n in (entry.get("note"), CURSOR_SWITCHES) if n)
+    return out
+
+
 def after_words(
     change: Change, inventory, cursor_imports: bool = False, skills: list[dict] | None = None
 ) -> list[dict]:
@@ -97,6 +152,8 @@ def after_words(
     """
     if change.action in ("skill.install", "plugin.skills") and change.steps:
         return _skill_words(change, inventory, skills or [])
+    if change.action == "gateway.move" and any(s.client == KITDEN for s in change.steps):
+        return _kitden_move_words(change, inventory)
     out: list[dict] = []
     for step in change.steps:
         if step.client == GATEWAY_CLIENT or any(e["client"] == step.client for e in out):
