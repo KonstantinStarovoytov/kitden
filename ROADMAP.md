@@ -65,7 +65,7 @@ and a master plan with one plan per part,
 [docs/superpowers/plans/2026-10-21-review-follow-up.md](docs/superpowers/plans/2026-10-21-review-follow-up.md).
 The parts, in order:
 
-1. **Truth on the page:** Overview knows the Kitden gateway; an Add says its scope before the
+1. **Truth on the page:** Overview knows the Kitden gateway (done); an Add says its scope before the
    click; no notes about Kitden's own entries; the docs match the code; the gateway says what
    it governs; the Gateway page folds long lists.
 2. **The gateway's access contract:** a strict mode per server that offers only the tools you

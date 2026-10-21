@@ -613,11 +613,17 @@ def create_app(
         return JSONResponse({"definitions": explain(state.inventory, name, kind, path)})
 
     def _overview(request, project, path):
-        return JSONResponse(overview(state.inventory, _registered(), path))
+        held, problem = _kitden(path)
+        return JSONResponse(overview(state.inventory, _registered(), path, held, problem))
 
-    def _gateway_view(request, project, path):
+    def _kitden(path):
+        """The servers the Kitden gateway holds, and why its settings could not be read."""
         held = held_servers(load_settings(home), _chain(path)) if home is not None else None
         problem = UNREADABLE if home is not None and settings_unreadable(home) else None
+        return held, problem
+
+    def _gateway_view(request, project, path):
+        held, problem = _kitden(path)
         view = gateway_view(state.inventory, _registered(), path, kitden=held, problem=problem)
         return JSONResponse(view)
 

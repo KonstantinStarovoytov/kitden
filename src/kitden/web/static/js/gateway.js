@@ -15,7 +15,7 @@ const GROUPS = [
 // With the Kitden gateway, local servers can move too: it runs on this Mac.
 const LOCAL_WORDS = ["Run on this Mac", "They start a program here. Only the Kitden gateway can hold them, because it runs here too."];
 // The kitden entry is the same one that lets agents read this setup.
-const SETUP_NOTE = "The kitden entry shows your setup to agents and offers the tools in the Kitden gateway.";
+export const SETUP_NOTE = "The kitden entry shows your setup to agents and offers the tools in the Kitden gateway.";
 
 // What the person typed survives a redraw (a rescan can redraw the page at any time).
 const EMPTY_ADD = { url: "", ui_url: "", auth: "none", key_env_var: "", login_email: "", login_password_env_var: "" };

@@ -1,10 +1,11 @@
 // Overview: what needs attention first, then the clients and, without a gateway, how to get one.
 import { getJson, query } from "./api.js";
 import { button, el, plural } from "./dom.js";
+import { kitdenClients, SETUP_NOTE } from "./gateway.js";
 import { loadLibraryFor, openSelectedOnRender } from "./library.js";
 import { entrance, fly } from "./motion.js";
-import { toast } from "./panel.js";
-import { banner, flag, mark, skeleton, socket, staleNote } from "./parts.js";
+import { review, toast } from "./panel.js";
+import { banner, CLIENT_NAMES, flag, mark, skeleton, socket, staleNote } from "./parts.js";
 import { current, currentError, data, go, loadMap, projectPath, render, retry } from "./store.js";
 
 let notesOpen = false;
@@ -60,8 +61,8 @@ export function renderOverview(main) {
 
   const side = el("div", "side");
   side.append(clientsCard(model.clients));
-  // With a gateway, the Can improve card is the one place on this page that mentions it.
-  if (!model.gateway) side.append(gatewayCard());
+  // A registered gateway has no card: the Can improve card is the one place that mentions it.
+  if (!model.gateway || model.gateway.kind === "kitden") side.append(gatewayCard(model.gateway));
   grid.append(side);
   main.append(grid);
   entrance("overview", [...blocks, ...side.children]);
@@ -226,10 +227,27 @@ function clientsCard(clients) {
   return card;
 }
 
-function gatewayCard() {
+// The words of the gateway card. The Kitden gateway says what it holds and who reaches it, and
+// offers the first client without its entry; without any gateway the card offers "Set up".
+export function gatewayCardWords(gateway) {
+  if (!gateway) return { title: "Gateway", line: "No gateway yet.", action: "Set up" };
+  const names = gateway.clients.map((c) => CLIENT_NAMES[c]).join(", ");
+  const parts = [gateway.servers ? plural(gateway.servers, "server", "servers") : "", names].filter(Boolean);
+  const line = gateway.problem || parts.join(" · ") || "Nothing in it yet.";
+  const [lacking] = gateway.lacking;
+  return { title: gateway.name, line, action: lacking ? `Set up in ${CLIENT_NAMES[lacking]}…` : null };
+}
+
+function gatewayCard(gateway) {
+  const words = gatewayCardWords(gateway);
   const card = el("section", "card");
-  card.append(el("h2", null, "Gateway"), el("p", null, "No gateway yet."));
-  card.append(el("p", "muted", "Manage MCP tools in one place and connect it to every client."));
-  card.append(button("Set up", () => go("gateway")));
+  card.append(el("h2", null, words.title), el("p", null, words.line));
+  if (!gateway) card.append(el("p", "muted", "Manage MCP tools in one place and connect it to every client."));
+  if (words.action === "Set up") card.append(button(words.action, () => go("gateway")));
+  else if (words.action) {
+    // The same review the Gateway page opens for this client.
+    const entry = kitdenClients(data.setupServer).setup.find((s) => s.client === gateway.lacking[0]);
+    card.append(button(words.action, () => (entry ? review(entry.body, { note: SETUP_NOTE }) : go("gateway"))));
+  }
   return card;
 }

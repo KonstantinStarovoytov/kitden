@@ -121,7 +121,30 @@ def _old_entries(inventory) -> list[dict]:
     ]
 
 
-def overview(inventory, gateways: list[Gateway], project: str | None) -> dict:
+def _kitden_card(inventory, held: list[dict], problem: str | None) -> dict | None:
+    """The Kitden gateway: how many servers it holds and which clients reach it. A client with
+    an old entry is neither connected nor offered a new one: the old entry is updated instead."""
+    states = setup_server_state(inventory)
+    clients = [s["client"] for s in states if s["state"] in ("added", "plugin")]
+    if not (held or clients or problem):
+        return None
+    return {
+        "kind": "kitden",
+        "name": "Kitden gateway",
+        "servers": len(held),
+        "clients": clients,
+        "lacking": [s["client"] for s in states if s["state"] == "missing"],
+        "problem": problem,
+    }
+
+
+def overview(
+    inventory,
+    gateways: list[Gateway],
+    project: str | None,
+    held: list[dict] | None = None,
+    problem: str | None = None,
+) -> dict:
     findings = find_findings(inventory, project)
     attention = (
         _unreadable(inventory)
@@ -131,17 +154,21 @@ def overview(inventory, gateways: list[Gateway], project: str | None) -> dict:
     )
 
     # Direct servers are an option, not a problem. The count is the Gateway page's rows, so a
-    # server in two clients counts once; local and plugin servers cannot move and are left out.
+    # server in two clients counts once; with the Kitden gateway, local servers can move too.
     gateway = None
     suggestions = []
-    if gateways:
-        gateway = {"name": urlsplit(gateways[0].url).netloc or "Gateway"}
-        moves = len(gateway_view(inventory, gateways, project)["groups"]["move"])
+    kitden = None if held is None else _kitden_card(inventory, held, problem)
+    if kitden or gateways:
+        view = gateway_view(inventory, gateways, project, kitden=held if kitden else None)
+        groups = view["groups"]
+        rows = groups["move"] + (groups["local"] if kitden else [])
+        moves = len({row["name"] for row in rows})
+        gateway = kitden or {"name": urlsplit(gateways[0].url).netloc or "Gateway"}
         if moves:
+            into = "the Kitden gateway" if kitden else "the gateway"
             suggestions.append(
                 {
-                    "title": f"{_count(moves, 'MCP server', 'MCP servers')} can move into "
-                    "the gateway",
+                    "title": f"{_count(moves, 'MCP server', 'MCP servers')} can move into {into}",
                     "text": f"{'It connects' if moves == 1 else 'They connect'} to each client "
                     "directly now.",
                     "action": "Review",

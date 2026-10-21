@@ -759,3 +759,9 @@ def test_moves_into_the_kitden_gateway_name_it():
     assert 'openInfo("Move into the gateway", title, body' in panel
     # The Changes page names the server first: "Moved files into the Kitden gateway · …".
     assert "into the Kitden gateway · ${clients.join" in script("parts.js")
+
+
+def test_overview_offers_set_up_only_without_a_gateway():
+    overview = script("overview.js")
+    assert overview.count('"No gateway yet."') == 1
+    assert "gatewayCardWords" in overview

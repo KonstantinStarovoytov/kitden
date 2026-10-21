@@ -1,5 +1,6 @@
 """Overview: what needs attention, in plain words (redesign plan, Task 3)."""
 
+import json
 from dataclasses import replace
 
 import pytest
@@ -84,17 +85,65 @@ def test_all_clear_headline(tmp_path):
     assert overview(build_inventory(empty), [], None)["headline"] == "All clear"
 
 
-def test_gateway_card_only_with_a_registered_gateway(home):
-    inventory = build_inventory(home)
-    data = overview(inventory, [], None)
-    assert data["gateway"] is None
+def _add_kitden_entry(home, relative):
+    path = home / relative
+    data = json.loads(path.read_text())
+    data.setdefault("mcpServers", {})["kitden"] = {"command": "kitden", "args": ["mcp"]}
+    path.write_text(json.dumps(data))
+
+
+@pytest.fixture
+def connected(home):
+    """Claude Code and Cursor have the kitden entry; Codex does not."""
+    _add_kitden_entry(home, ".claude.json")
+    _add_kitden_entry(home, ".cursor/mcp.json")
+    return home
+
+
+def test_the_kitden_gateway_card_names_servers_and_clients(connected):
+    held = [{"name": "github", "kind": "local", "state": "on", "differs": False}]
+    data = overview(build_inventory(connected), [], None, held=held)
+    assert data["gateway"] == {
+        "kind": "kitden",
+        "name": "Kitden gateway",
+        "servers": 1,
+        "clients": ["claude_code", "cursor"],
+        "lacking": ["codex"],
+        "problem": None,
+    }
+    assert data["suggestions"][0]["title"].endswith("can move into the Kitden gateway")
+
+
+def test_without_held_servers_or_connected_clients_there_is_no_gateway(home):
+    data = overview(build_inventory(home), [], None, held=[])
+    assert data["gateway"] is None  # no client has the entry in the plain fixture
     assert data["suggestions"] == []
 
+
+def test_overview_says_when_the_gateway_settings_are_unreadable(home):
+    problem = "Kitden could not read the gateway settings."
+    data = overview(build_inventory(home), [], None, held=[], problem=problem)
+    assert data["gateway"]["problem"] == problem
+
+
+def test_an_old_entry_is_not_connected_and_gets_no_set_up_button(connected):
+    from kitden.changes import toml_edit
+
+    config = connected / ".codex/config.toml"
+    old = {"command": "/Users/me/.local/bin/agentsetup", "args": ["mcp"]}
+    config.write_text(toml_edit.set_value(config.read_text(), ("mcp_servers", "agentsetup"), old))
+    data = overview(build_inventory(connected), [], None, held=[])
+    assert "codex" not in data["gateway"]["clients"]
+    assert "codex" not in data["gateway"]["lacking"]
+
+
+def test_a_registered_gateway_still_gets_its_card_without_the_kitden_one(home):
+    inventory = build_inventory(home)
     gateway = Gateway(url="https://mcp.neon.tech/mcp")
     mark_gateways(inventory, [gateway])
-    data = overview(inventory, [gateway], None)
-    assert [s["title"] for s in data["suggestions"]] == ["2 MCP servers can move into the gateway"]
+    data = overview(inventory, [gateway], None, held=[])
     assert data["gateway"] == {"name": "mcp.neon.tech"}
+    assert [s["title"] for s in data["suggestions"]] == ["2 MCP servers can move into the gateway"]
 
 
 def test_direct_servers_are_a_suggestion_not_attention(home):
