@@ -113,7 +113,7 @@ test('a tool rule review names the tool, its server and the project', () => {
   const follow = { ...off, params: { ...off.params, state: null } };
   assert.deepEqual(changeWords(rule(follow.params), follow), {
     title: 'Use all projects for slow of echo in website',
-    done: 'slow of echo in website now follows all projects',
+    done: 'slow of echo in website follows all projects',
   });
   data.projects = null;
 });

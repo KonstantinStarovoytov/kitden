@@ -730,9 +730,29 @@ def test_a_tool_switch_flips_only_after_the_change_is_verified():
     assert 'callout(error, "error")' in panel
 
 
+def test_tool_list_reads_again_and_keeps_focus_after_a_refresh_or_an_undo():
+    panel = script("panel.js")
+    # Without the event stream the refresh still ends with the list read again.
+    assert "if (await ended) reloadTools();" in panel
+    # Undo with Details open puts focus back on the switch it changed.
+    assert "focus: tools.flipped" in panel
+    # Only the tool list's own Details skips the page's usual effect after an Undo.
+    assert "if (tools && tools.section.isConnected) {" in panel
+    # A tool's description wraps to two lines, so it can be read without a pointer.
+    rule = CSS.split(".layer.tool .why {")[1].split("}")[0]
+    assert "-webkit-line-clamp: 2" in rule and "nowrap" not in rule
+
+
+def test_the_kitden_card_says_only_what_it_knows_about_clients():
+    text = script("gateway.js")
+    assert "Kitden could not read which clients use it." in text
+    assert "has it turned off." in text and "have it turned off." in text
+
+
 def test_moves_into_the_kitden_gateway_name_it():
     panel = script("panel.js")
     assert "Move ${names} into the Kitden gateway" in panel
     # Two gateways can take a server: the panel asks which, never picks one silently.
     assert 'openInfo("Move into the gateway", title, body' in panel
-    assert '"Moved into the Kitden gateway"' in script("parts.js")
+    # The Changes page names the server first: "Moved files into the Kitden gateway · …".
+    assert "into the Kitden gateway · ${clients.join" in script("parts.js")

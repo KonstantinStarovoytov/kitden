@@ -146,10 +146,17 @@ test('the Changes page names what moved into the Kitden gateway and which rule c
     { client: 'claude_code', name: 'files' }, { client: 'cursor', name: 'files' },
     { client: 'cursor', name: 'kitden' }, { client: 'codex', name: 'kitden' },
   ];
-  assert.equal(changeTitle({ action: 'gateway.move', steps }), 'Moved into the Kitden gateway files · Claude Code, Cursor');
+  assert.equal(changeTitle({ action: 'gateway.move', steps }), 'Moved files into the Kitden gateway · Claude Code, Cursor');
   const obot = [{ client: 'gateway', name: 'docs' }, { client: 'cursor', name: 'docs' }];
   assert.equal(changeTitle({ action: 'gateway.move', steps: obot }), 'Moved into the gateway docs · Cursor');
-  assert.equal(changeTitle({ action: 'gateway.rule', steps: [{ client: 'kitden', name: 'slow' }] }), 'Changed the rule for slow · Kitden gateway');
+  // A rule names its tool, server, project and new state, as the review did.
+  const slow = [{ client: 'kitden', name: 'slow' }];
+  const rule = (fields) => changeTitle({ action: 'gateway.rule', steps: slow, rule: { server: 'echo', tool: 'slow', project: 'website', state: 'off', ...fields } });
+  assert.equal(rule({}), 'Turned off slow of echo in website');
+  assert.equal(rule({ tool: null, project: null, state: 'on' }), 'Turned on echo in all projects');
+  assert.equal(rule({ state: null }), 'slow of echo in website follows all projects');
+  // An old record without the rule's parts names what it has.
+  assert.equal(changeTitle({ action: 'gateway.rule', steps: slow }), 'Changed the rule for slow · Kitden gateway');
 });
 
 test('a gateway goes by its own name, its kind, or its address', () => {

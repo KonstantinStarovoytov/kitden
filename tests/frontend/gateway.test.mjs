@@ -9,25 +9,29 @@ const { kitdenClients, offersSwitch } = await import('../../src/kitden/web/stati
 const entry = (client, state, fields = {}) => ({ client, state, item: null, enabled: true, ...fields });
 
 test('the Kitden card connects every client with an on kitden entry and sets up the rest', () => {
-  const { linked, setup } = kitdenClients([
+  const { linked, setup, off, known } = kitdenClients([
     entry('claude_code', 'added'),
     entry('codex', 'missing'),
     entry('cursor', 'plugin'),
   ]);
   assert.deepEqual(linked, ['claude_code', 'cursor']);
+  assert.deepEqual(off, []);
+  assert.equal(known, true);
   assert.deepEqual(setup, [{ client: 'codex', label: 'Set up in Codex…', body: { action: 'setup_server.register', targets: [{ client: 'codex' }], params: {} } }]);
 });
 
 test('an old entry is updated, an off entry is not connected, a missing client is left out', () => {
-  const { linked, setup } = kitdenClients([
+  const { linked, setup, off } = kitdenClients([
     entry('claude_code', 'added', { enabled: false }),
     entry('codex', 'old', { item: 'codex:agentsetup' }),
     entry('cursor', 'not_installed', { enabled: null }),
   ]);
   assert.deepEqual(linked, []);
+  // An entry that is there but off: no wire, and the card says so.
+  assert.deepEqual(off, ['claude_code']);
   assert.deepEqual(setup, [{ client: 'codex', label: 'Set up in Codex…', body: { action: 'setup_server.update', targets: [{ item: 'codex:agentsetup' }], params: {} } }]);
-  // Without the answer, nothing is offered.
-  assert.deepEqual(kitdenClients(null), { linked: [], setup: [] });
+  // Without the answer nothing is offered, and the card does not claim who connects.
+  assert.deepEqual(kitdenClients(null), { linked: [], setup: [], off: [], known: false });
 });
 
 test('a registered gateway offers to take the clients over only from another registered one', () => {

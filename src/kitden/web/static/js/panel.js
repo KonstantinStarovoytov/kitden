@@ -4,7 +4,7 @@ import { $, $$, button, el, joinWords, plural, reportError, shortPath, shortPath
 import { loadLibrary, morphOnNextRender, onOpenItem, rowTitle, shownRow } from "./library.js";
 import { finishTransition, fold, transition } from "./motion.js";
 import { about, addButton, addOptions, whyNoAction } from "./offer.js";
-import { CLIENT_NAMES, diffCounts, flag, GATEWAY_NOTE, gatewayName, mark, movedNames, notesSection, skeleton, socket, stepText } from "./parts.js";
+import { CLIENT_NAMES, diffCounts, flag, GATEWAY_NOTE, gatewayName, mark, movedNames, notesSection, ruleText, skeleton, socket, stepText } from "./parts.js";
 import { busy, current as currentModel, currentError, data, reload, render, setBusy, state } from "./store.js";
 
 const KIND_WORDS = {
@@ -397,16 +397,17 @@ function withFocusKey(box, key) {
 // Asks every held server for its tools again. The server says when it is done; without the
 // event stream, stop waiting after a minute. The list reads the answer when the event comes.
 async function refreshTools() {
+  // True when the minute ran out: the list is read again here, since no event will do it.
   const ended = new Promise((resolve) => {
-    document.addEventListener("kitden:tools", resolve, { once: true });
-    setTimeout(resolve, 60000);
+    document.addEventListener("kitden:tools", () => resolve(false), { once: true });
+    setTimeout(() => resolve(true), 60000);
   });
   const result = await postJson("/api/gateway/tools/refresh");
   if (!result.ok) {
     if (tools) tools.load({ error: (result.data && result.data.detail) || `Could not refresh the tools (${result.status}).` });
     return;
   }
-  await ended;
+  if (await ended) reloadTools();
 }
 
 // A held server's tools, a switch each, for the project picked at the top. A switch opens the
@@ -479,7 +480,8 @@ export function toolsSection(server, again, next = {}) {
     const target = withFocusKey(section, options.focus || kept);
     if (target) target.focus();
   };
-  tools = { section, load, again };
+  // `flipped`: the switch the last verified change flipped; an Undo puts focus back on it.
+  tools = { section, load, again, flipped: next.flip || null };
   load(next);
   return section;
 }
@@ -611,19 +613,14 @@ const DONE_WORDS = {
   "skill.install": "Added", "plugin.skills": "Added",
 };
 
-// A tool rule in the words of the review's after line: "slow of echo in website".
-function ruleWords({ server, tool, state: value, project } = {}) {
-  const what = tool ? `${tool} of ${server}` : server;
-  const where = project ? projectLabel(project) : "all projects";
-  if (value === "on" || value === "off") return { title: `Turn ${value} ${what} in ${where}`, done: `Turned ${value} ${what} in ${where}` };
-  return { title: `Use all projects for ${what} in ${where}`, done: `${what} in ${where} now follows all projects` };
-}
-
 // The review title names the exact entry; the toast uses the short name ("superpowers").
 // `previewBody` is what the review asked for; Add skills names its plugin and a tool rule its
 // tool and project from it.
 export function changeWords(change, previewBody) {
-  if (change.action === "gateway.rule") return ruleWords(previewBody && previewBody.params);
+  if (change.action === "gateway.rule") {
+    const params = (previewBody && previewBody.params) || {};
+    return ruleText(params, params.project ? projectLabel(params.project) : null);
+  }
   // A move names the servers it takes; the Kitden gateway's own steps are not a client.
   const kitden = change.action === "gateway.move" && change.steps.some((s) => s.client === "kitden");
   const steps = change.steps.filter((s) => s.client !== "gateway" && s.client !== "kitden");
@@ -975,11 +972,12 @@ export async function undoChange(change) {
   try {
     const { after, failure } = await changeOutcome(change.id, "undo");
     await reloadAll();
-    // With Details still open (a tool switch), the page behind just redraws and Details is
-    // drawn again from the files as they are now.
-    if (isPanelOpen()) {
+    // With a tool list's Details still open, the page behind just redraws and Details is drawn
+    // again from the files as they are now, focus on the switch the Undo changed back.
+    if (tools && tools.section.isConnected) {
       render();
-      if (tools && tools.section.isConnected) await tools.again({});
+      const undone = after && after.state === "undone";
+      await tools.again({ focus: tools.flipped, flip: undone ? tools.flipped : null });
     } else {
       showEffect();
     }

@@ -219,11 +219,23 @@ const ACTION_WORDS = {
   "gateway.rule": "Changed the rule for",
 };
 
+// A Kitden gateway rule in words: "slow of echo in website", as the review's after line says
+// it. `where` is the project's folder name, or null for all projects; `state` null follows all
+// projects. The review's title and the line after a change (the toast, the Changes page).
+export function ruleText({ server, tool, state }, where) {
+  const what = tool ? `${tool} of ${server}` : server;
+  const place = where || "all projects";
+  if (state === "on" || state === "off") return { title: `Turn ${state} ${what} in ${place}`, done: `Turned ${state} ${what} in ${place}` };
+  return { title: `Use all projects for ${what} in ${place}`, done: `${what} in ${place} follows all projects` };
+}
+
 // One line for a change log entry: what, which entries, which clients. Plugins go by their
 // short name ("superpowers"); the review named the exact entry before Apply.
 export function changeTitle(entry) {
+  // A tool rule names its tool, server, project and new state (the server adds them).
+  if (entry.action === "gateway.rule" && entry.rule) return ruleText(entry.rule, entry.rule.project).done;
   const kitden = entry.action === "gateway.move" && entry.steps.some((s) => s.client === "kitden");
-  const verb = kitden ? "Moved into the Kitden gateway" : ACTION_WORDS[entry.action] || entry.action;
+  const verb = kitden ? "Moved" : ACTION_WORDS[entry.action] || entry.action;
   const plugin = ["plugin.enable", "plugin.disable", "plugin.install"].includes(entry.action);
   // The gateway's own step is not a client: the line names the clients the entry left. An
   // install's marketplace steps only make the plugin reachable: the line names the plugin.
@@ -239,6 +251,7 @@ export function changeTitle(entry) {
   if (entry.action === "plugin.skills") return `${verb} ${plural(names.length, "skill", "skills")} · ${clients.join(", ")}`;
   const whole = ["gateway.connect", "gateway.switch", "setup_server.register", "setup_server.update"].includes(entry.action);
   const what = whole ? "" : ` ${names.join(", ")}`;
+  if (kitden) return `${verb}${what} into the Kitden gateway · ${clients.join(", ")}`;
   return `${verb}${what} · ${clients.join(", ")}`;
 }
 

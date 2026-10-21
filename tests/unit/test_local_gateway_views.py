@@ -274,6 +274,14 @@ def test_a_rule_change_previews_applies_and_undoes(home):
 
         applied = page.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
         assert applied["state"] == "verified", applied
+        # The Changes page names the rule's parts; the log keeps no values.
+        logged = [e for e in page.get("/api/changes").json() if e["id"] == change["id"]]
+        assert logged[0]["rule"] == {
+            "project": "website",
+            "server": "echo",
+            "tool": "slow",
+            "state": "off",
+        }
         rules = load_settings(home)["rules"]
         assert rules["projects"] == {website: {"echo": {"tools": {"slow": "off"}}}}
         assert rules["global"] == {}
