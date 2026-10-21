@@ -486,8 +486,8 @@ def test_a_local_scope_server_is_on_only_in_its_project(home, tmp_path):
         "global": {"local-db": {"server": "off"}},
         "projects": {website: {"local-db": {"server": "on"}}},
     }
-    assert servers_on(settings, website) == ["local-db"]
-    assert servers_on(settings, None) == []
+    assert servers_on(settings, [website]) == ["local-db"]
+    assert servers_on(settings, []) == []
     assert "local-db" not in claude(home)["projects"][website]["mcpServers"]
 
     # The same server at user level too: it is on everywhere, so no rule is needed.

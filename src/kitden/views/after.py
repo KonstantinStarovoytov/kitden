@@ -5,8 +5,9 @@ from pathlib import Path
 
 from kitden.changes.json_splice import ABSENT
 from kitden.clients.base import SETUP_NAME
+from kitden.local_gateway.project import project_chain
 from kitden.local_gateway.settings import CLIENT as KITDEN
-from kitden.local_gateway.settings import moved_in, own_state, rule_parts
+from kitden.local_gateway.settings import load_settings, moved_in, own_state, rule_parts, state_in
 from kitden.model import GATEWAY_CLIENT, Change, ItemKind, Scope
 from kitden.views.effective import effective_view
 from kitden.views.setup_server import CLIENTS, setup_server_state
@@ -223,22 +224,40 @@ def _kitden_move_words(change: Change, inventory) -> list[dict]:
 RULE_WORDS = {"on": "On", "off": "Off"}
 
 
-def _rule_words(change: Change, inventory, gateway: dict) -> list[dict]:
+def _rule_words(change: Change, inventory, home: Path) -> list[dict]:
     """One switch of the Kitden gateway: what the server or tool will be in each client that
-    offers the gateway's tools, and one line that says it with the project. Following all
-    projects, it is what all projects have."""
+    offers the gateway's tools, and one line that says it with the project. Rules are read along
+    the project's chain, as the gateway reads them (see `project_chain`): following all
+    projects, it is what the projects around it or all projects have."""
     edit = change.steps[0].edit
     assert edit is not None
     project, server, tool = rule_parts(edit.key)
+    settings = load_settings(home)
+    projects = settings["rules"]["projects"]
+    known = [p.path for p in inventory.projects]
+    chain = project_chain(project, home, known) if project else []
     what = server if tool is None else f"{tool} of {server}"
     where = "all projects" if project is None else Path(project).name
     if edit.after is ABSENT:  # only a project follows all projects
-        state = own_state(gateway["rules"]["global"], server, tool) or "on"
-        word = "Follows all projects"
-        line = f"{what} will be {state} in {where}, as in all projects."
+        rest = [p for p in chain if p != project]
+        state = state_in(settings, rest, server, tool)
+        by = next((p for p in rest if own_state(projects.get(p), server, tool)), None)
+        source = "all projects" if by is None else Path(by).name
+        word = f"Follows {source}"
+        line = f"{what} will be {state} in {where}, as in {source}"
     else:
         state, word = edit.after, RULE_WORDS[edit.after]
-        line = f"{what} will be {state} in {where}."
+        line = f"{what} will be {state} in {where}"
+    if tool is not None and state == "on" and state_in(settings, chain, server, None) == "off":
+        line += f", but {server} is off there"
+    line += "."
+    if project is None:
+        # A project's own rule keeps its state; the words name each one that differs.
+        kept = [p for p in known if own_state(projects.get(p), server, tool) not in (None, state)]
+        if kept:
+            other = "off" if state == "on" else "on"
+            which = "which has its own rule" if len(kept) == 1 else "which have their own rules"
+            line += f" It stays {other} in {_join([Path(p).name for p in kept])}, {which}."
     clients = [c for c in CLIENTS if c in _offering(inventory)]
     if not clients:
         return [{"note": f"{line} No client uses the Kitden gateway yet."}]
@@ -252,18 +271,18 @@ def after_words(
     inventory,
     cursor_imports: bool = False,
     skills: list[dict] | None = None,
-    gateway: dict | None = None,
+    home: Path | None = None,
 ) -> list[dict]:
     """One entry per client: {"client", "state", "word"}, in step order.
 
     With `cursor_imports` (Cursor loads Claude Code's plugins), a plugin added to Claude Code
     names Cursor last, with a note. `skills` are the skill list's rows a skill copy takes.
-    `gateway` is the Kitden gateway's settings, for a change to its rules.
+    `home` is the folder whose Kitden gateway a change to its rules reads.
     """
     if change.action in ("skill.install", "plugin.skills") and change.steps:
         return _skill_words(change, inventory, skills or [])
-    if change.action == "gateway.rule" and gateway is not None:
-        return _rule_words(change, inventory, gateway)
+    if change.action == "gateway.rule" and home is not None:
+        return _rule_words(change, inventory, home)
     if change.action == "gateway.move" and any(s.client == KITDEN for s in change.steps):
         return _kitden_move_words(change, inventory)
     out: list[dict] = []

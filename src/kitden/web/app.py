@@ -49,6 +49,7 @@ from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, REMOVE_DIRECT, SE
 from kitden.command import installed_command
 from kitden.gateway_api import GatewayError, MetaMcpClient, ObotClient
 from kitden.gateways import add_gateway, data_dir, load_gateways
+from kitden.local_gateway.project import project_chain
 from kitden.local_gateway.settings import CLIENT as KITDEN
 from kitden.local_gateway.settings import (
     load_settings,
@@ -557,6 +558,13 @@ def create_app(
     def _registered() -> list:
         return load_gateways(home) if home is not None else []
 
+    def _chain(path: str | None) -> list[str]:
+        """The known projects whose gateway rules apply in the picked project, as the gateway
+        finds them for a session there (see `project_chain`); empty for all projects."""
+        if path is None or home is None:
+            return []
+        return project_chain(path, home, [p.path for p in state.inventory.projects])
+
     def _read_model(make):
         async def endpoint(request: Request) -> JSONResponse:
             try:
@@ -606,7 +614,7 @@ def create_app(
         return JSONResponse(overview(state.inventory, _registered(), path))
 
     def _gateway_view(request, project, path):
-        held = held_servers(load_settings(home), path) if home is not None else None
+        held = held_servers(load_settings(home), _chain(path)) if home is not None else None
         return JSONResponse(gateway_view(state.inventory, _registered(), path, kitden=held))
 
     async def gateway_tools(request: Request) -> JSONResponse:
@@ -622,7 +630,7 @@ def create_app(
         if server not in settings["servers"]:
             return _error("Unknown server.", 404)
         path = project["path"] if project else None
-        answer = tools_view(settings, load_tools(home), server, path)
+        answer = tools_view(settings, load_tools(home), server, _chain(path))
         return JSONResponse({**answer, "problem": tool_problems.get(server)})
 
     async def gateway_tools_refresh(request: Request) -> JSONResponse:
@@ -854,9 +862,8 @@ def create_app(
         # Only an added plugin can reach Cursor through Claude Code.
         cursor = _found_cursor() if action == PLUGIN_INSTALL else None
         imports = bool(cursor and cursor.imports_claude_plugins())
-        rules = load_settings(home) if action == GATEWAY_RULE else None
         after = after_words(
-            change, state.inventory, cursor_imports=imports, skills=copied, gateway=rules
+            change, state.inventory, cursor_imports=imports, skills=copied, home=home
         )
         answer = {**change_dict(change), "after": after}
         if left_out is not None:

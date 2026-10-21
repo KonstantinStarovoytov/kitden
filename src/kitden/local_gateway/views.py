@@ -12,6 +12,7 @@ from pathlib import Path
 from kitden.changes.actions import GATEWAY_RULE, KITDEN_GATEWAY
 from kitden.clients.base import mcp_item
 from kitden.gateways import data_dir
+from kitden.local_gateway.project import project_chain
 from kitden.local_gateway.settings import (
     CLIENT,
     SETTINGS_FILE,
@@ -21,6 +22,7 @@ from kitden.local_gateway.settings import (
     rule_parts,
     rule_step,
     save_tools,
+    state_in,
 )
 from kitden.model import Change, Enabled, Item, Scope, Source, SourceKind, Step
 from kitden.views.setup_server import setup_server_state
@@ -31,20 +33,24 @@ def gateway_items(inventory, settings: dict, home: Path) -> list[Item]:
     Overview count them and follow the server rules.
 
     Per client and server: one user-level item, off when the server is off for all projects,
-    and one project item for each project with its own state for the server. All are off where
-    the `kitden` entry is off.
+    and one project item for each known project whose chain (see `project_chain`) has a
+    project with its own state for the server. All are off where the `kitden` entry is off.
     """
     path = str(data_dir(home) / SETTINGS_FILE)
     rules = settings["rules"]
+    known = [p.path for p in inventory.projects]
     items = []
     for entry in setup_server_state(inventory):
         if entry["state"] not in ("added", "plugin"):
             continue
         for name, server in settings["servers"].items():
             places = [(None, own_state(rules["global"], name, None), f"servers.{name}")]
-            for project, own in rules["projects"].items():
-                state = own_state(own, name, None)
-                if state is not None:
+            # Only projects with a rule of their own for the server can change it.
+            ruled = [k for k in known if own_state(rules["projects"].get(k), name, None)]
+            for project in known:
+                chain = project_chain(project, home, ruled) if ruled else []
+                if chain:
+                    state = state_in(settings, chain, name, None)
                     places.append((project, state, f"rules.projects.{project}.{name}"))
             for project, state, key in places:
                 source = Source(kind=SourceKind.FILE, path=path, owner_client=CLIENT, key_path=key)
@@ -62,39 +68,40 @@ def gateway_items(inventory, settings: dict, home: Path) -> list[Item]:
     return items
 
 
-def _states(settings: dict, server: str, tool: str | None, project: str | None) -> dict:
-    """A server's or a tool's state in the project, and whether the project's own rule makes
-    it differ from all projects."""
-    rules = settings["rules"]
-    everywhere = own_state(rules["global"], server, tool) or "on"
-    own = own_state(rules["projects"].get(project), server, tool) if project else None
-    return {"state": own or everywhere, "differs": own is not None and own != everywhere}
+def _states(settings: dict, server: str, tool: str | None, chain: list[str]) -> dict:
+    """A server's or a tool's state along the picked project's chain (the picked project
+    first; empty for all projects), and whether the picked project's own rule makes it differ
+    from what the project would get without that rule."""
+    own = own_state(settings["rules"]["projects"].get(chain[0]), server, tool) if chain else None
+    without = state_in(settings, chain[1:], server, tool)
+    return {"state": own or without, "differs": own is not None and own != without}
 
 
-def held_servers(settings: dict, project: str | None) -> list[dict]:
-    """Every server in the Kitden gateway, for its card: name, local or remote, and its state in
-    the project (None: all projects). Commands, addresses and env stay out."""
+def held_servers(settings: dict, chain: list[str]) -> list[dict]:
+    """Every server in the Kitden gateway, for its card: name, local or remote, and its state
+    along the picked project's chain (empty: all projects). Commands, addresses and env stay
+    out."""
     return [
         {
             "name": name,
             "kind": "remote" if isinstance(server, dict) and "url" in server else "local",
-            **_states(settings, name, None, project),
+            **_states(settings, name, None, chain),
         }
         for name, server in sorted(settings["servers"].items(), key=lambda pair: pair[0].lower())
     ]
 
 
-def tools_view(settings: dict, tools: dict, server: str, project: str | None) -> dict:
-    """A held server's state and its known tools, each with its state, for the project (None:
-    all projects)."""
+def tools_view(settings: dict, tools: dict, server: str, chain: list[str]) -> dict:
+    """A held server's state and its known tools, each with its state, along the picked
+    project's chain (empty: all projects)."""
     return {
         "server": server,
-        **_states(settings, server, None, project),
+        **_states(settings, server, None, chain),
         "tools": [
             {
                 "name": tool["name"],
                 "description": tool.get("description") or "",
-                **_states(settings, server, tool["name"], project),
+                **_states(settings, server, tool["name"], chain),
             }
             for tool in tools.get(server, [])
         ],

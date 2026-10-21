@@ -8,12 +8,16 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 
+import anyio
 import pytest
+from mcp import Client
 from starlette.testclient import TestClient
 
 import kitden.clients.base as base
 import kitden.web.app as page_app
+from kitden import mcp_server
 from kitden.gateways import data_dir
+from kitden.local_gateway import proxy
 from kitden.local_gateway.settings import SETTINGS_FILE, load_settings, load_tools, save_tools
 from kitden.local_gateway.views import gateway_items, refresh_tools
 from kitden.views.gateway_view import gateway_view
@@ -513,8 +517,6 @@ def test_a_failed_refresh_keeps_the_old_list_and_says_why(home):
 
 
 def test_one_server_that_breaks_does_not_stop_the_others(home, monkeypatch):
-    from kitden.local_gateway import proxy
-
     hold(home, {"first": echo(), "second": echo()})
 
     class Breaks(proxy.Upstreams):
@@ -568,3 +570,189 @@ def test_a_refresh_asked_while_one_waits_is_not_queued_again(home, monkeypatch):
         until(lambda: len(calls) == 2)
         time.sleep(0.3)
         assert calls == [None, None]
+
+
+READ_ONLY = {"show_setup", "list_findings", "explain_item", "list_projects"}
+
+
+def know(home, *folders):
+    """Claude Code knows these folders as projects."""
+    path = home / ".claude.json"
+    data = json.loads(path.read_text())
+    for folder in folders:
+        folder.mkdir(parents=True, exist_ok=True)
+        data["projects"][str(folder)] = {}
+    path.write_text(json.dumps(data, indent=2))
+
+
+def worktree_of(main, folder):
+    """`folder` becomes a git worktree of `main`."""
+    (main / ".git" / "worktrees" / folder.name).mkdir(parents=True)
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / ".git").write_text(f"gitdir: {main}/.git/worktrees/{folder.name}\n")
+    return folder
+
+
+def chain_home(home):
+    """website is a git repo; Claude Code knows its worktree website-wt and its subfolder web;
+    website-fix is a worktree no client knows."""
+    repo = home / "work/website"
+    (repo / ".git").mkdir(parents=True)
+    wt = worktree_of(repo, home / "work/website-wt")
+    fix = worktree_of(repo, home / "work/website-fix")
+    sub = repo / "packages/web"
+    know(home, wt, sub)
+    return repo, wt, fix, sub
+
+
+def offered_in(home, folder, monkeypatch):
+    """The upstream tools the Kitden gateway offers in a Claude Code session in `folder`."""
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(folder))
+    known = mcp_server.known_projects(home)
+
+    async def session():
+        own = mcp_server.create_server(lambda: None)
+        server = proxy.gateway_server(home, own, known=lambda: known)
+        async with Client(server, mode="legacy") as client:
+            return {t.name for t in (await client.list_tools()).tools}
+
+    return anyio.run(session) - READ_ONLY
+
+
+def test_rules_follow_enclosing_projects_on_the_page_and_in_the_gateway(home, monkeypatch):
+    repo, wt, fix, sub = chain_home(home)
+    rules = {
+        "global": {},
+        "projects": {
+            str(repo): {"echo": {"tools": {"slow": "off"}}},
+            str(wt): {"echo": {"tools": {"clash": "off"}}},
+            str(sub): {"echo": {"tools": {"slow": "on", "where": "off"}}},
+        },
+    }
+    hold(home, {"echo": echo()}, rules)
+    save_tools(home, "echo", [tool(name) for name in ("echo", "slow", "clash", "where")])
+
+    expected = {
+        repo: {"echo", "clash", "where"},
+        # A rule under a worktree's own key applies there, and so does its main checkout's.
+        wt: {"echo", "where"},
+        # A worktree no client knows gets its main checkout's rules.
+        fix: {"echo", "clash", "where"},
+        # A known subfolder keeps its parent's rule unless it has its own.
+        sub: {"echo", "slow", "clash"},
+    }
+    for folder, tools in expected.items():
+        assert offered_in(home, folder, monkeypatch) == tools, folder
+
+    def states(page, folder):
+        pid = project_id(page, str(folder))
+        answer = page.get(f"/api/gateway/tools?server=echo&project={pid}").json()
+        return {t["name"]: (t["state"], t["differs"]) for t in answer["tools"]}
+
+    with page_for(home) as page:
+        for folder in (repo, wt, sub):
+            on = {name for name, (state, _) in states(page, folder).items() if state == "on"}
+            assert on == expected[folder], folder
+        # It differs where the project's own rule changes what it would get without it.
+        assert states(page, wt) == {
+            "echo": ("on", False),
+            "slow": ("off", False),
+            "clash": ("off", True),
+            "where": ("on", False),
+        }
+        assert states(page, sub) == {
+            "echo": ("on", False),
+            "slow": ("on", True),
+            "clash": ("on", False),
+            "where": ("off", True),
+        }
+        # Without its own rule, web follows website, and the review says so.
+        add_kitden(home, "cursor")
+        page.post("/api/rescan", headers=POST)
+        pid = project_id(page, str(sub))
+        follow = rule_preview(page, server="echo", tool="slow", state=None, project=pid).json()
+        assert (follow["after"][0]["state"], follow["after"][0]["word"]) == (
+            "off",
+            "Follows website",
+        )
+        assert follow["after"][0]["note"] == (
+            "slow of echo will be off in web, as in website. Applies to new sessions."
+        )
+
+
+def test_the_library_and_the_card_follow_enclosing_projects(home):
+    repo, wt, _, sub = chain_home(home)
+    rules = {"global": {}, "projects": {str(repo): {"files": {"server": "off"}}}}
+    hold(home, {"files": FILES}, rules)
+    add_kitden(home, "cursor")
+
+    def cell(page, folder):
+        pid = project_id(page, str(folder))
+        rows = page.get(f"/api/library?kind=mcp_server&project={pid}").json()["rows"]
+        return next(r for r in rows if r["name"] == "files")["cells"]["cursor"]["state"]
+
+    def card(page, folder):
+        pid = project_id(page, str(folder))
+        servers = page.get(f"/api/gateway-view?project={pid}").json()["gateways"][0]["servers"]
+        return [(s["state"], s["differs"]) for s in servers]
+
+    with page_for(home) as page:
+        assert [cell(page, f) for f in (repo, wt, sub)] == ["off", "off", "off"]
+        assert cell(page, home / "work/api") == "gw"
+        assert card(page, repo) == [("off", True)]
+        assert card(page, sub) == [("off", False)]
+
+
+def test_a_rule_for_all_projects_names_the_projects_with_their_own_rule(home):
+    website, api = project(home, "website"), project(home, "api")
+    rules = {"global": {}, "projects": {website: {"echo": {"tools": {"slow": "on"}}}}}
+    hold(home, {"echo": echo()}, rules)
+    save_tools(home, "echo", [tool("echo"), tool("slow")])
+    add_kitden(home, "cursor")
+
+    def note(page, **params):
+        answer = rule_preview(page, **params).json()
+        page.post(f"/api/changes/{answer['id']}/cancel", headers=POST)
+        return answer["after"][0]["note"]
+
+    with page_for(home) as page:
+        assert note(page, server="echo", tool="slow", state="off", project=None) == (
+            "slow of echo will be off in all projects. It stays on in website, which has its own "
+            "rule. Applies to new sessions."
+        )
+        # A project whose own rule is the same is not named.
+        assert note(page, server="echo", tool="slow", state="on", project=None) == (
+            "slow of echo will be on in all projects. Applies to new sessions."
+        )
+    rules["projects"][api] = {"echo": {"server": "on", "tools": {"slow": "on"}}}
+    rules["projects"][website]["echo"]["server"] = "on"
+    hold(home, {"echo": echo()}, rules)
+    with page_for(home) as page:
+        assert note(page, server="echo", tool="slow", state="off", project=None) == (
+            "slow of echo will be off in all projects. It stays on in api and website, which "
+            "have their own rules. Applies to new sessions."
+        )
+        assert note(page, server="echo", tool=None, state="off", project=None) == (
+            "echo will be off in all projects. It stays on in api and website, which have their "
+            "own rules. Applies to new sessions."
+        )
+
+
+def test_a_tool_rule_says_when_its_server_is_off_there(home):
+    website = project(home, "website")
+    rules = {"global": {"echo": {"server": "off"}}, "projects": {}}
+    hold(home, {"echo": echo()}, rules)
+    save_tools(home, "echo", [tool("echo"), tool("slow")])
+    add_kitden(home, "cursor")
+    with page_for(home) as page:
+        pid = project_id(page, website)
+        change = rule_preview(page, server="echo", tool="slow", state="on", project=pid).json()
+        assert change["after"][0]["note"] == (
+            "slow of echo will be on in website, but echo is off there. Applies to new sessions."
+        )
+        page.post(f"/api/changes/{change['id']}/cancel", headers=POST)
+        # Turning a tool off needs no such word.
+        change = rule_preview(page, server="echo", tool="slow", state="off", project=pid).json()
+        assert change["after"][0]["note"] == (
+            "slow of echo will be off in website. Applies to new sessions."
+        )

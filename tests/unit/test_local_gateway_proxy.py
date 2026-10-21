@@ -204,6 +204,38 @@ async def test_a_call_reaches_the_upstream_server(home):
     assert "KITDEN_OTHER" not in where["env"] and "CLAUDE_PROJECT_DIR" not in where["env"]
 
 
+async def test_a_local_server_starts_in_the_folder_the_session_names(home):
+    website = home / "work/website"
+    (website / ".git" / "worktrees" / "fix").mkdir(parents=True)
+    worktree = home / "work/website-fix"
+    worktree.mkdir()
+    (worktree / ".git").write_text(f"gitdir: {website}/.git/worktrees/fix\n")
+    # On only in website: a worktree of it gets its rules.
+    rules = {
+        "global": {"echo": {"server": "off"}},
+        "projects": {str(website): {"echo": {"server": "on"}}},
+    }
+    entry = echo("echo", "${workspaceFolder}", "${CLAUDE_PROJECT_DIR}")
+    write_settings(home, {"echo": entry}, rules)
+    save_tools(home, "echo", [tool("where")])
+
+    async def where(**how):
+        async with gateway(home, **how) as client:
+            assert "where" in await names_offered(client)
+            found = json.loads(text(await client.call_tool("where", {})))
+        return [Path(folder).resolve() for folder in (found["cwd"], *found["args"][1:])]
+
+    # Claude Code names the worktree; Codex starts the gateway in it.
+    assert await where(env={"CLAUDE_PROJECT_DIR": str(worktree)}) == [worktree.resolve()] * 3
+    inside = worktree / "src"
+    inside.mkdir()
+    assert await where(cwd=inside) == [inside.resolve()] * 3
+
+    # No folder named (Codex started in the home folder): the server starts in the home folder.
+    write_settings(home, {"echo": echo("echo", "${workspaceFolder}")})
+    assert await where() == [home.resolve()] * 2
+
+
 async def test_a_slow_server_does_not_hold_up_the_list_or_other_servers(
     home, tmp_path, monkeypatch
 ):

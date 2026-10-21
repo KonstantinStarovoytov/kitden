@@ -66,16 +66,16 @@ def test_tools_follow_global_then_project_rules():
         },
     }
 
-    everywhere = allowed_tools(settings, TOOLS, None)
+    everywhere = allowed_tools(settings, TOOLS, [])
     assert names(everywhere["github"]) == ["list_issues"]
     assert names(everywhere["linear"]) == ["search"]
 
-    in_p = allowed_tools(settings, TOOLS, "/p")
+    in_p = allowed_tools(settings, TOOLS, ["/p"])
     assert names(in_p["github"]) == ["delete_repo", "list_issues"]
     assert "linear" not in in_p
 
     # A project with no rules of its own gets the global set.
-    assert allowed_tools(settings, TOOLS, "/other") == everywhere
+    assert allowed_tools(settings, TOOLS, ["/other"]) == everywhere
 
 
 def test_a_project_can_turn_on_a_server_that_is_off_everywhere():
@@ -86,9 +86,35 @@ def test_a_project_can_turn_on_a_server_that_is_off_everywhere():
             "projects": {"/q": {"linear": {"server": "on"}}},
         },
     }
-    assert "linear" not in allowed_tools(settings, TOOLS, None)
-    assert "linear" not in allowed_tools(settings, TOOLS, "/p")
-    assert names(allowed_tools(settings, TOOLS, "/q")["linear"]) == ["search"]
+    assert "linear" not in allowed_tools(settings, TOOLS, [])
+    assert "linear" not in allowed_tools(settings, TOOLS, ["/p"])
+    assert names(allowed_tools(settings, TOOLS, ["/q"])["linear"]) == ["search"]
+
+
+def test_the_deepest_project_with_its_own_state_decides_then_the_next_then_global():
+    settings = {
+        "servers": SERVERS,
+        "rules": {
+            "global": {"github": {"tools": {"list_issues": "off"}}},
+            "projects": {
+                "/repo": {"github": {"tools": {"delete_repo": "off"}}},
+                "/repo/web": {"github": {"tools": {"list_issues": "on"}}},
+                "/repo-wt": {
+                    "github": {"tools": {"delete_repo": "on"}},
+                    "linear": {"server": "off"},
+                },
+            },
+        },
+    }
+    # A known subfolder keeps its parent's rule unless it has its own.
+    assert names(allowed_tools(settings, TOOLS, ["/repo/web", "/repo"])["github"]) == [
+        "list_issues"
+    ]
+    # A worktree's own rule wins over its main checkout's.
+    in_wt = allowed_tools(settings, TOOLS, ["/repo-wt", "/repo"])
+    assert names(in_wt["github"]) == ["delete_repo"]
+    assert servers_on(settings, ["/repo-wt", "/repo"]) == ["github"]
+    assert names(allowed_tools(settings, TOOLS, ["/repo"])["github"]) == []
 
 
 def test_a_rule_for_a_missing_tool_is_ignored_and_a_new_tool_is_on():
@@ -101,15 +127,15 @@ def test_a_rule_for_a_missing_tool_is_ignored_and_a_new_tool_is_on():
     }
     tools = {"github": [tool("delete_repo"), tool("list_issues"), tool("brand_new")]}
 
-    assert names(allowed_tools(settings, tools, None)["github"]) == ["list_issues", "brand_new"]
-    assert names(allowed_tools(settings, tools, "/p")["github"]) == ["list_issues", "brand_new"]
+    assert names(allowed_tools(settings, tools, [])["github"]) == ["list_issues", "brand_new"]
+    assert names(allowed_tools(settings, tools, ["/p"])["github"]) == ["list_issues", "brand_new"]
 
 
 def test_only_servers_in_the_gateway_with_a_known_tool_list_are_offered():
     settings = {"servers": SERVERS, "rules": {"global": {}, "projects": {}}}
     tools = {"github": [tool("list_issues")], "removed": [tool("old")]}  # linear: list not known
 
-    assert list(allowed_tools(settings, tools, None)) == ["github"]
+    assert list(allowed_tools(settings, tools, [])) == ["github"]
 
 
 def test_servers_on_lists_every_server_that_is_on_with_or_without_a_tool_list():
@@ -121,17 +147,17 @@ def test_servers_on_lists_every_server_that_is_on_with_or_without_a_tool_list():
         },
     }
 
-    assert servers_on(settings, None) == ["github", "notion"]
-    assert servers_on(settings, "/p") == ["github", "notion"]  # no rules of its own
-    assert servers_on(settings, "/q") == ["linear", "notion"]
-    assert servers_on({"servers": {}, "rules": {}}, "/q") == []
+    assert servers_on(settings, []) == ["github", "notion"]
+    assert servers_on(settings, ["/p"]) == ["github", "notion"]  # no rules of its own
+    assert servers_on(settings, ["/q"]) == ["linear", "notion"]
+    assert servers_on({"servers": {}, "rules": {}}, ["/q"]) == []
 
 
 def test_a_missing_settings_file_reads_as_empty(tmp_path):
     empty = {"servers": {}, "rules": {"global": {}, "projects": {}}}
     assert load_settings(tmp_path) == empty
     assert load_tools(tmp_path) == {}
-    assert allowed_tools(load_settings(tmp_path), load_tools(tmp_path), None) == {}
+    assert allowed_tools(load_settings(tmp_path), load_tools(tmp_path), []) == {}
 
 
 def test_an_unreadable_settings_file_reads_as_empty(tmp_path):
@@ -186,7 +212,7 @@ def test_rule_step_edits_one_entry_and_can_go_back_to_global(tmp_path):
     assert saved["rules"]["projects"] == {"/p": {"github": {"tools": {"delete_repo": "on"}}}}
     assert saved["rules"]["global"] == original["rules"]["global"]
     assert saved["servers"] == SERVERS
-    assert "delete_repo" in names(allowed_tools(load_settings(tmp_path), TOOLS, "/p")["github"])
+    assert "delete_repo" in names(allowed_tools(load_settings(tmp_path), TOOLS, ["/p"])["github"])
 
     # Follow the global rule again: the project's own value is removed.
     step = rule_step(tmp_path, "/p", "github", "delete_repo", None)
@@ -194,7 +220,9 @@ def test_rule_step_edits_one_entry_and_can_go_back_to_global(tmp_path):
     change_back = engine.preview("gateway.rule", [step])
     engine.apply(change_back.id)
     assert "delete_repo" not in json.dumps(json.loads(path.read_text())["rules"]["projects"])
-    assert "delete_repo" not in names(allowed_tools(load_settings(tmp_path), TOOLS, "/p")["github"])
+    assert "delete_repo" not in names(
+        allowed_tools(load_settings(tmp_path), TOOLS, ["/p"])["github"]
+    )
 
     # Undo puts the first file back exactly.
     engine.undo(change_back.id)

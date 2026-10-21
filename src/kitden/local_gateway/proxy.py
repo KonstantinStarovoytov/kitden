@@ -54,7 +54,7 @@ from mcp_types import (
     Tool,
 )
 
-from kitden.local_gateway.project import find_project
+from kitden.local_gateway.project import project_chain, session_folder
 from kitden.local_gateway.settings import (
     PLACEHOLDERS,
     allowed_tools,
@@ -136,16 +136,17 @@ class Upstreams:
     """The servers in the gateway, for one gateway process or one listing on the page.
 
     Use it as `async with Upstreams(home, settings) as upstreams:`. A server starts on its first
-    use and runs until the block ends. Set `project` before the first use: a local server runs in
-    that folder (or the home folder), and it fills the project placeholders in the arguments.
+    use and runs until the block ends. Set `folder` (the session's folder) before the first use:
+    a local server runs in that folder, or the home folder without one, and it fills the project
+    placeholders in the arguments.
     The block is a task group: an error raised in it comes out in an ExceptionGroup, so catch
     UpstreamError inside the block.
     """
 
-    def __init__(self, home: Path, settings: dict, project: str | None = None) -> None:
+    def __init__(self, home: Path, settings: dict, folder: str | None = None) -> None:
         self.home = home
         self.settings = settings
-        self.project = project
+        self.folder = folder
         self._clients: dict[str, Client] = {}
         self._locks: dict[str, anyio.Lock] = {}
         self._group: TaskGroup | None = None
@@ -268,7 +269,7 @@ class Upstreams:
                 httpx2.AsyncClient(headers=headers, timeout=timeout)
             )
             return streamable_http_client(str(entry["url"]), http_client=http)
-        folder = self.project or str(self.home)
+        folder = self.folder or str(self.home)
         return StdioServerParameters(
             command=entry["command"],
             args=[_fill(str(arg), folder) for arg in entry.get("args") or []],
@@ -311,11 +312,13 @@ async def _roots(ctx: ServerRequestContext) -> list[str]:
     return [str(root.uri) for root in answer.roots]
 
 
-def _project(roots: list[str], known: list[str], home: Path) -> str | None:
+def _session(roots: list[str], known: list[str], home: Path) -> tuple[str | None, list[str]]:
+    """The session's folder and the chain of known projects whose rules apply there."""
     try:
-        return find_project(os.environ, roots, Path.cwd(), home, known)
+        folder = session_folder(os.environ, roots, Path.cwd(), home)
+        return folder, project_chain(folder, home, known)
     except (OSError, ValueError):  # an unreadable folder or a malformed root: no project
-        return None
+        return None, []
 
 
 class _Gateway:
@@ -362,15 +365,16 @@ class _Gateway:
     async def _find(self, ctx: ServerRequestContext) -> list[Tool]:
         roots = await _roots(ctx)
         known = await anyio.to_thread.run_sync(self._known)
-        project = _project(roots, known, self.home)
-        self.upstreams.project = project
+        folder, chain = _session(roots, known, self.home)
+        # Local servers start in the session's folder; the rules follow its chain.
+        self.upstreams.folder = folder
         tools = load_tools(self.home)
         # A server whose list is not known yet is asked now, all of them at once.
         async with anyio.create_task_group() as group:
-            for server in servers_on(self.settings, project):
+            for server in servers_on(self.settings, chain):
                 if server not in tools:
                     group.start_soon(self._learn, server, tools)
-        allowed = allowed_tools(self.settings, tools, project)
+        allowed = allowed_tools(self.settings, tools, chain)
         self.names = exposed_names(allowed, taken=[t.name for t in await self.own.list_tools()])
         found = {(server, t["name"]): t for server, listed in allowed.items() for t in listed}
         return [_tool(name, found[key]) for name, key in self.names.items()]

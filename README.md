@@ -80,7 +80,8 @@ app.
 The Kitden gateway is the `kitden` entry that already lets agents read your setup; the page adds
 it to a client that lacks it. Move a server into it and every client that uses the Kitden gateway
 reaches it. Pick a project at the top, open a server in the gateway, and turn the whole server or
-one tool on or off for that project, or for all projects. Claude Code and Codex can turn a tool
+one tool on or off for that project, or for all projects. A project's switches also apply in its
+folders and git worktrees, unless they have their own. Claude Code and Codex can turn a tool
 off in one project, Cursor cannot (checked 2026-10-21); the gateway gives the same control in all
 three.
 
@@ -96,8 +97,8 @@ A few servers stay direct for now, and the page says why:
 - entries in a project's own files, such as `.mcp.json`: they are already per project;
 - entries that read a value from your shell, such as `${TOKEN}`: a client such as Codex starts the
   gateway with almost no environment, and copying the value would make a new copy of a secret;
-- entries that start in their own folder: the gateway starts every local server in the project
-  folder;
+- entries that start in their own folder: the gateway starts every local server in the folder
+  the session works in, such as the project or its worktree;
 - SSE and WebSocket connections: the gateway does not support them yet.
 
 ### Check every change before it is written

@@ -4,11 +4,13 @@ The settings file holds the servers and the rules. It changes only through the c
 (preview, Apply with a backup, verify, Undo). The tool cache holds what each server answered to
 `tools/list`; it is found data, so Rescan and the gateway write it directly.
 
-Rules: for each server "on" or "off", and a state for each tool. A project's rule wins over the
-global rule; with no rule a server or a tool is on.
+Rules: for each server "on" or "off", and a state for each tool. Rules are read along a chain
+of known projects (see project.project_chain): the deepest project with its own state wins, then
+the next, then the global rule; with no rule a server or a tool is on.
 """
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -93,31 +95,34 @@ def _is_on(scopes: list[dict], server: str, tool: str | None) -> bool:
     return True
 
 
-def _scopes(settings: dict, project: str | None) -> list[dict]:
-    """The rules to read, the project's first, then the global ones."""
+def _scopes(settings: dict, chain: Sequence[str]) -> list[dict]:
+    """The rules to read: each project's of the chain, deepest first, then the global ones."""
     rules = _dict(settings.get("rules"))
-    scopes = [_dict(rules.get("global"))]
-    if project is not None:
-        scopes.insert(0, _dict(_dict(rules.get("projects")).get(project)))
-    return scopes
+    projects = _dict(rules.get("projects"))
+    return [*(_dict(projects.get(project)) for project in chain), _dict(rules.get("global"))]
 
 
-def servers_on(settings: dict, project: str | None) -> list[str]:
-    """Every gateway server that is on for this project, whether or not its tools are known."""
-    scopes = _scopes(settings, project)
+def state_in(settings: dict, chain: Sequence[str], server: str, tool: str | None) -> str:
+    """The state of a server (`tool` None) or one of its tools along the chain: on or off."""
+    return "on" if _is_on(_scopes(settings, chain), server, tool) else "off"
+
+
+def servers_on(settings: dict, chain: Sequence[str]) -> list[str]:
+    """Every gateway server that is on along the chain, whether or not its tools are known."""
+    scopes = _scopes(settings, chain)
     return [server for server in _dict(settings.get("servers")) if _is_on(scopes, server, None)]
 
 
-def allowed_tools(settings: dict, tools: dict, project: str | None) -> dict[str, list[dict]]:
-    """For each gateway server that is on, its known tools that are on, for this project.
+def allowed_tools(settings: dict, tools: dict, chain: Sequence[str]) -> dict[str, list[dict]]:
+    """For each gateway server that is on, its known tools that are on, along the chain.
 
     A server whose tools are not known yet is left out (see `servers_on`). A rule for a tool the
     server no longer has does nothing; a tool the server adds is on.
     """
-    scopes = _scopes(settings, project)
+    scopes = _scopes(settings, chain)
     return {
         server: [t for t in tools[server] if _is_on(scopes, server, t["name"])]
-        for server in servers_on(settings, project)
+        for server in servers_on(settings, chain)
         if server in tools
     }
 
