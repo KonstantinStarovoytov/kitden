@@ -129,10 +129,14 @@ export function renderGateway(main) {
     section.append(head, el("p", "group-note", key === "move" && !targets.length ? GATEWAY_NOTE : note));
     const list = el("div", "list");
     const { shown, cut } = visibleRows(rows, draft.expanded[key]);
-    for (const row of shown) list.append(groupRow(row, key, targets));
+    // "Show all" is replaced by the rows; focus moves to the first new row's first control.
+    const focus = `show:${key}`;
+    shown.forEach((row, i) => list.append(groupRow(row, key, targets, draft.expanded[key] && i === 6 ? focus : null)));
     section.append(list);
     if (cut > 0) {
-      section.append(button(`Show all ${rows.length}`, () => { draft.expanded[key] = true; render(); }, "btn small ghost"));
+      const more = button(`Show all ${rows.length}`, () => { draft.expanded[key] = true; render(); }, "btn small ghost");
+      more.dataset.focus = focus;
+      section.append(more);
     }
     main.append(section);
     blocks.push(section);
@@ -495,7 +499,7 @@ const GROUP_WORDS = { move: "Remote", local: "Local", plugin: "Plugin" };
 // One row per server: the clients that have it, its name and what it is. Addresses and
 // commands stay behind Details (the same panel as in the Library). `targets`: the gateways that
 // can take it.
-function groupRow(row, group, targets) {
+function groupRow(row, group, targets, focus = null) {
   const node = el("div", "list-row");
   node.dataset.clients = row.clients.join(" ");
   node.addEventListener("pointerenter", () => focusRoutes(row.clients, { wires: false, rows: false }));
@@ -508,7 +512,9 @@ function groupRow(row, group, targets) {
   name.title = row.name;
   what.append(name, flag({ text: GROUP_WORDS[group], level: "info" }));
   const actions = el("span", "row-actions");
-  actions.append(button("Details", () => showServer(row.name), "btn small ghost"));
+  const details = button("Details", () => showServer(row.name), "btn small ghost");
+  if (focus) details.dataset.focus = focus;
+  actions.append(details);
   if (group !== "plugin" && row.items.length) {
     // With a gateway that takes it the move does both steps; without one, only the removal of
     // a remote server is here.

@@ -781,3 +781,11 @@ def test_gateway_groups_fold():
     text = script("gateway.js")
     assert "Show all " in text
     assert "draft.expanded" in text
+
+
+def test_gateway_show_all_hands_focus_to_the_first_new_row():
+    text = script("gateway.js")
+    assert text.count("show:${key}") == 1
+    assert "more.dataset.focus = focus" in text
+    assert "details.dataset.focus = focus" in text
+    assert "i === 6" in text
