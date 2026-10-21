@@ -556,8 +556,7 @@ def test_the_review_names_every_client_that_offers_the_tools(home):
             ("cursor", "Via Kitden gateway"),
         ]
         assert [a.get("note") for a in change["after"]] == [
-            "Claude Code and Cursor will offer its tools through Kitden. "
-            "Applies to new sessions.",
+            "Claude Code and Cursor will offer its tools through Kitden. Applies to new sessions.",
             SWITCHES,
         ]
 

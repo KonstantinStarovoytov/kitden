@@ -9,6 +9,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import replace
 
+from kitden.changes.actions import KITDEN_GATEWAY
 from kitden.model import (
     ClientStatus,
     Enabled,
@@ -82,6 +83,9 @@ def find_findings(inventory, project: str | None = None) -> list[Finding]:
                 )
 
         for winner, loser, mode in view.shadowed:
+            # A Kitden gateway server's project item replaces its global one by design.
+            if KITDEN_GATEWAY in (winner.via_gateway, loser.via_gateway):
+                continue
             findings.append(
                 _finding(
                     FindingType.SCOPE_OVERRIDE,

@@ -6,7 +6,7 @@ from pathlib import Path
 from kitden.changes.json_splice import ABSENT
 from kitden.clients.base import SETUP_NAME
 from kitden.local_gateway.settings import CLIENT as KITDEN
-from kitden.local_gateway.settings import own_state
+from kitden.local_gateway.settings import moved_in, own_state, rule_parts
 from kitden.model import GATEWAY_CLIENT, Change, ItemKind, Scope
 from kitden.views.effective import effective_view
 from kitden.views.setup_server import CLIENTS, setup_server_state
@@ -106,9 +106,8 @@ def _kitden_rules(change: Change) -> dict[str, dict]:
         key = step.edit.key if step.client == KITDEN and step.edit is not None else ()
         if key[:1] != ("rules",):
             continue
-        project, rest = (None, key[2:]) if key[1] == "global" else (key[2], key[3:])
-        tool = rest[2] if rest[1] == "tools" else None
-        rules.setdefault(rest[0], {})[(project, tool)] = (step.edit.after, step.carried_from)
+        project, server, tool = rule_parts(key)
+        rules.setdefault(server, {})[(project, tool)] = (step.edit.after, step.carried_from)
     return rules
 
 
@@ -189,11 +188,7 @@ def _kitden_move_words(change: Change, inventory) -> list[dict]:
     offering = _offering(inventory)
     offering |= {s.client for s in change.steps if s.client in CLIENTS and s.name == SETUP_NAME}
     removed = {s.client for s in change.steps if s.client in CLIENTS and s.name != SETUP_NAME}
-    servers = [
-        s.edit.key[1]
-        for s in change.steps
-        if s.client == KITDEN and s.edit is not None and s.edit.key[0] == "servers"
-    ]
+    servers = moved_in(change)
     rules = _kitden_rules(change)
     said, offered = [], []
     for name in servers:
@@ -230,20 +225,25 @@ RULE_WORDS = {"on": "On", "off": "Off"}
 
 def _rule_words(change: Change, inventory, gateway: dict) -> list[dict]:
     """One switch of the Kitden gateway: what the server or tool will be in each client that
-    offers the gateway's tools. Following all projects, it is what all projects have."""
+    offers the gateway's tools, and one line that says it with the project. Following all
+    projects, it is what all projects have."""
     edit = change.steps[0].edit
     assert edit is not None
-    # ("rules", "global" or "projects", <project>, server, "server" or "tools", <tool>)
-    rest = edit.key[2:] if edit.key[1] == "global" else edit.key[3:]
-    server, tool = rest[0], (rest[2] if rest[1] == "tools" else None)
-    if edit.after is ABSENT:
+    project, server, tool = rule_parts(edit.key)
+    what = server if tool is None else f"{tool} of {server}"
+    where = "all projects" if project is None else Path(project).name
+    if edit.after is ABSENT:  # only a project follows all projects
         state = own_state(gateway["rules"]["global"], server, tool) or "on"
         word = "Follows all projects"
+        line = f"{what} will be {state} in {where}, as in all projects."
     else:
         state, word = edit.after, RULE_WORDS[edit.after]
-    clients = [c for c in CLIENTS if c in _offering(inventory)] or [KITDEN]
+        line = f"{what} will be {state} in {where}."
+    clients = [c for c in CLIENTS if c in _offering(inventory)]
+    if not clients:
+        return [{"note": f"{line} No client uses the Kitden gateway yet."}]
     out = [{"client": c, "state": state, "word": word} for c in clients]
-    out[0]["note"] = "Applies to new sessions."
+    out[0]["note"] = f"{line} Applies to new sessions."
     return out
 
 
@@ -267,13 +267,14 @@ def after_words(
     if change.action == "gateway.move" and any(s.client == KITDEN for s in change.steps):
         return _kitden_move_words(change, inventory)
     out: list[dict] = []
+    # The gateway a server moves into; a client reaches the server only through an entry for it.
+    target = next((s.gateway.gateway_id for s in change.steps if s.gateway is not None), None)
     for step in change.steps:
         if step.client == GATEWAY_CLIENT or any(e["client"] == step.client for e in out):
             continue
         state, word = WORDS.get(change.action, ("on", "Changed"))
-        # A moved server reaches the client only if the client has a gateway entry.
         if change.action == "gateway.move" and not any(
-            i.client == step.client and i.via_gateway for i in inventory.items
+            i.client == step.client and i.via_gateway == target for i in inventory.items
         ):
             state, word = "off", "Removed"
         if change.action == "plugin.disable" and _other_copy_loads(

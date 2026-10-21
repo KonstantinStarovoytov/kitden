@@ -15,7 +15,7 @@ from typing import Any
 from kitden.changes.atomic import write_atomic
 from kitden.changes.json_splice import ABSENT
 from kitden.gateways import data_dir
-from kitden.model import FileEdit, Scope, Step
+from kitden.model import Change, FileEdit, Scope, Step
 
 SETTINGS_FILE = "gateway.json"
 TOOLS_FILE = "gateway-tools.json"
@@ -135,6 +135,22 @@ def rule_step(
     what = ("server",) if tool is None else ("tools", tool)
     value = ABSENT if state is None else state
     return settings_step(home, ("rules", *where, server, *what), value, tool or server)
+
+
+def rule_parts(key: tuple[str, ...]) -> tuple[str | None, str, str | None]:
+    """The project, server and tool of a rule's key, as rule_step makes it. None stands for
+    all projects or for the whole server."""
+    project, rest = (None, key[2:]) if key[1] == "global" else (key[2], key[3:])
+    return project, rest[0], (rest[2] if rest[1] == "tools" else None)
+
+
+def moved_in(change: Change) -> list[str]:
+    """The servers a change adds to the gateway's settings."""
+    return [
+        step.edit.key[1]
+        for step in change.steps
+        if step.client == CLIENT and step.edit is not None and step.edit.key[0] == "servers"
+    ]
 
 
 def settings_step(home: Path, key: tuple[str, ...], value: Any, name: str) -> Step:

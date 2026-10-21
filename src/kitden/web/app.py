@@ -50,10 +50,10 @@ from kitden.command import installed_command
 from kitden.gateway_api import GatewayError, MetaMcpClient, ObotClient
 from kitden.gateways import add_gateway, data_dir, load_gateways
 from kitden.local_gateway.settings import CLIENT as KITDEN
-from kitden.local_gateway.settings import load_settings, load_tools, save_tools
+from kitden.local_gateway.settings import load_settings, load_tools, moved_in, save_tools
 from kitden.local_gateway.views import (
     gateway_items,
-    moved_in,
+    load_proxy,
     refresh_tools,
     rule_steps,
     tools_view,
@@ -423,27 +423,38 @@ def create_app(
     tool_problems: dict[str, str] = {}
     refresh_lock = asyncio.Lock()
     refreshing: set[asyncio.Task] = set()
+    # The pass that waits for the running one: {"names": the servers it asks, or None for all}.
+    waiting: dict[str, list[str] | None] = {}
 
-    async def _refresh(names: list[str] | None) -> None:
-        async with refresh_lock:
-            try:
-                found = await refresh_tools(home, names)
-            except Exception as error:  # noqa: BLE001 - a background refresh must not stop the page
-                name = type(error).__name__
-                print(f"Refreshing the gateway tools failed ({name}).", file=sys.stderr, flush=True)
-                return
-        for name, problem in found.items():
-            if problem:
-                tool_problems[name] = problem
-            else:
-                tool_problems.pop(name, None)
-        events.publish("gateway_tools")
+    async def _refresh() -> None:
+        try:
+            async with refresh_lock:
+                found = await refresh_tools(home, waiting.pop("names"))
+            for name, problem in found.items():
+                if problem:
+                    tool_problems[name] = problem
+                else:
+                    tool_problems.pop(name, None)
+        except Exception as error:  # noqa: BLE001 - a background refresh must not stop the page
+            kind = type(error).__name__
+            print(f"Refreshing the gateway tools failed ({kind}).", file=sys.stderr, flush=True)
+        finally:
+            events.publish("gateway_tools")
 
     def refresh_later(names: list[str] | None = None) -> None:
-        """Ask the held servers (or only `names`) for their tools, in the background."""
+        """Ask the held servers (or only `names`) for their tools, in the background. A pass
+        that already waits takes these servers too, so none queues twice."""
         if home is None:
             return
-        task = asyncio.ensure_future(_refresh(names))
+        if "names" in waiting:
+            wanted = waiting["names"]
+            if wanted is None or names is None:
+                waiting["names"] = None
+            else:
+                waiting["names"] = list(dict.fromkeys([*wanted, *names]))
+            return
+        waiting["names"] = names
+        task = asyncio.ensure_future(_refresh())
         refreshing.add(task)
         task.add_done_callback(refreshing.discard)
 
@@ -677,13 +688,11 @@ def create_app(
 
     async def _read_tools(name: str, server: dict) -> list[dict] | None:
         """The server's tools, asked as the gateway asks; None when it does not answer."""
-        # The MCP SDK loads only here: the page must start without it.
-        from kitden.local_gateway.proxy import UpstreamError, Upstreams
-
-        async with Upstreams(home, {"servers": {name: server}}) as upstreams:
+        proxy = await load_proxy()  # the MCP SDK loads only here: the page starts without it
+        async with proxy.Upstreams(home, {"servers": {name: server}}) as upstreams:
             try:
                 return await upstreams.list_tools(name)
-            except UpstreamError:
+            except proxy.UpstreamError:
                 return None
 
     async def preview(request: Request) -> JSONResponse:

@@ -3,6 +3,8 @@
 The MCP SDK loads only when a server is asked for its tools: the page must start without it.
 """
 
+import asyncio
+import importlib
 from collections.abc import Iterable
 from dataclasses import replace
 from pathlib import Path
@@ -19,25 +21,43 @@ from kitden.local_gateway.settings import (
     rule_step,
     save_tools,
 )
-from kitden.model import Change, Enabled, Item, Scope, Source, SourceKind, Step
+from kitden.model import Enabled, Item, Scope, Source, SourceKind, Step
 from kitden.views.setup_server import setup_server_state
 
 
 def gateway_items(inventory, settings: dict, home: Path) -> list[Item]:
-    """One MCP server item per held server in each client with the `kitden` entry, so the
-    Library and the Overview count them. It is off where that entry is off."""
+    """The held servers in each client with the `kitden` entry, so the Library and the
+    Overview count them and follow the server rules.
+
+    Per client and server: one user-level item, off when the server is off for all projects,
+    and one project item for each project with its own state for the server. All are off where
+    the `kitden` entry is off.
+    """
     path = str(data_dir(home) / SETTINGS_FILE)
+    rules = settings["rules"]
     items = []
     for entry in setup_server_state(inventory):
         if entry["state"] not in ("added", "plugin"):
             continue
-        enabled = Enabled.OFF if entry["enabled"] is False else Enabled.ON
         for name, server in settings["servers"].items():
-            source = Source(
-                kind=SourceKind.FILE, path=path, owner_client=CLIENT, key_path=f"servers.{name}"
-            )
-            item = mcp_item(entry["client"], name, server, source, Scope.USER, enabled=enabled)
-            items.append(replace(item, via_gateway=KITDEN_GATEWAY))
+            places = [(None, own_state(rules["global"], name, None), f"servers.{name}")]
+            for project, own in rules["projects"].items():
+                state = own_state(own, name, None)
+                if state is not None:
+                    places.append((project, state, f"rules.projects.{project}.{name}"))
+            for project, state, key in places:
+                source = Source(kind=SourceKind.FILE, path=path, owner_client=CLIENT, key_path=key)
+                on = entry["enabled"] is not False and state != "off"
+                item = mcp_item(
+                    entry["client"],
+                    name,
+                    server,
+                    source,
+                    Scope.USER if project is None else Scope.PROJECT,
+                    project=project,
+                    enabled=Enabled.ON if on else Enabled.OFF,
+                )
+                items.append(replace(item, via_gateway=KITDEN_GATEWAY))
     return items
 
 
@@ -76,7 +96,8 @@ def rule_steps(home: Path, params: dict, projects: dict[str, str]) -> list[Step]
     if not isinstance(server, str) or server not in load_settings(home)["servers"]:
         raise ValueError("Choose a server in the Kitden gateway.")
     known = [t["name"] for t in load_tools(home).get(server, [])]
-    if tool is not None and tool not in known:
+    # A tool the server no longer lists may still have a rule: it can follow all projects.
+    if tool is not None and (not isinstance(tool, str) or (tool not in known and state)):
         raise ValueError("Choose a tool of this server.")
     if project is not None and (not isinstance(project, str) or project not in projects):
         raise ValueError("Unknown project.")
@@ -85,13 +106,10 @@ def rule_steps(home: Path, params: dict, projects: dict[str, str]) -> list[Step]
     return [rule_step(home, projects.get(project), server, tool, state)]
 
 
-def moved_in(change: Change) -> list[str]:
-    """The servers a move put into the Kitden gateway."""
-    return [
-        step.edit.key[1]
-        for step in change.steps
-        if step.client == CLIENT and step.edit is not None and step.edit.key[0] == "servers"
-    ]
+async def load_proxy():
+    """The gateway's proxy module. It loads the MCP SDK, which takes about half a second, so
+    it is imported in a thread: the page goes on meanwhile."""
+    return await asyncio.to_thread(importlib.import_module, "kitden.local_gateway.proxy")
 
 
 async def refresh_tools(home: Path, names: Iterable[str] | None = None) -> dict[str, str | None]:
@@ -105,18 +123,20 @@ async def refresh_tools(home: Path, names: Iterable[str] | None = None) -> dict[
     held = [name for name in (servers if names is None else names) if name in servers]
     if not held:
         return {}
-    # The MCP SDK loads only here: the page must start without it.
-    from kitden.local_gateway.proxy import UpstreamError, Upstreams
-
+    proxy = await load_proxy()
     found: dict[str, str | None] = {}
     for name in held:
         # One block per server, so each one stops before the next starts.
-        async with Upstreams(home, settings) as upstreams:
-            try:
-                tools = await upstreams.list_tools(name)
-            except UpstreamError as problem:
-                found[name] = str(problem)
-                continue
+        try:
+            async with proxy.Upstreams(home, settings) as upstreams:
+                try:
+                    tools = await upstreams.list_tools(name)
+                except proxy.UpstreamError as problem:
+                    found[name] = str(problem)
+                    continue
+        except Exception:  # noqa: BLE001 - the server did not stop cleanly; the others go on
+            found.setdefault(name, f"{name} did not list its tools.")
+            continue
         save_tools(home, name, tools)
         found[name] = None
     return found

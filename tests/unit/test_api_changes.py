@@ -10,6 +10,8 @@ from starlette.testclient import TestClient
 import kitden.clients.base as base
 from kitden.changes import json_splice
 from kitden.changes.client_cli import CommandResult
+from kitden.gateways import data_dir
+from kitden.local_gateway.settings import SETTINGS_FILE
 from kitden.views.inventory import build_inventory
 from kitden.web.app import create_app
 from tests.conftest import make_home, write_cursor_fixture_state
@@ -134,8 +136,8 @@ def test_registering_sign_in_details_keeps_no_password(client):
         "METAMCP_PW",
     )
     assert saved["managed"] is True
-    # The Kitden gateway comes first; the registered one follows.
-    assert client.get("/api/gateway-view").json()["gateways"][1]["managed"] is True
+    gateways = client.get("/api/gateway-view").json()["gateways"]
+    assert next(g for g in gateways if g["id"] == saved["id"])["managed"] is True
 
 
 def test_connect_previews_then_applies_then_undoes_exactly(client):
@@ -420,6 +422,18 @@ def _managed(client, fake):
     return client.post("/api/gateways", json=body, headers=POST).json()
 
 
+def _hold_in_kitden(home):
+    """A server held in the Kitden gateway, reached through Cursor's `kitden` entry."""
+    settings = data_dir(home) / SETTINGS_FILE
+    settings.parent.mkdir(parents=True, exist_ok=True)
+    settings.write_text(json.dumps({"servers": {"files": {"command": "npx"}}}))
+    cursor = home / ".cursor/mcp.json"
+    data = json.loads(cursor.read_text())
+    data["mcpServers"]["kitden"] = {"command": "/opt/kitden/bin/kitden", "args": ["mcp"]}
+    cursor.write_text(json.dumps(data))
+    return settings
+
+
 def _move_rows(client):
     return client.get("/api/gateway-view").json()["groups"]["move"]
 
@@ -480,6 +494,18 @@ def test_move_one_server_then_undo(client, fake):
     undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST)
     assert undone.status_code == 200 and undone.json()["state"] == "undone"
     assert _files(client.home) == original and fake.held_names() == []
+
+
+def test_a_kitden_entry_does_not_carry_a_server_moved_into_another_gateway(client, fake):
+    _hold_in_kitden(client.home)
+    gateway = _managed(client, fake)
+    rows = [r for r in _move_rows(client) if r["name"].lower() == "neon"]
+    change = _move(client, gateway["id"], [i for r in rows for i in r["items"]]).json()
+    # Cursor reaches the Kitden gateway, not this one, so Neon is gone for it.
+    assert [(a["client"], a["word"]) for a in change["after"]] == [
+        ("codex", "Removed"),
+        ("cursor", "Removed"),
+    ]
 
 
 def test_move_all_keeps_secrets_out_of_sight(client, fake):
@@ -651,6 +677,30 @@ def test_clients_switch_from_one_gateway_to_another_and_undo_puts_them_back(clie
     undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
     assert undone["state"] == "undone"
     assert _files(client.home) == before
+
+
+def test_switching_gateways_leaves_the_kitden_gateway_alone(client):
+    settings = _hold_in_kitden(client.home)
+    old = _register(client).json()
+    connected = _connect(client, old["id"]).json()
+    client.post(f"/api/changes/{connected['id']}/apply", headers=POST)
+    new = client.post(
+        "/api/gateways",
+        json={"url": "http://localhost:8080/mcp-connect/vmcp1", "auth": "oauth"},
+        headers=POST,
+    ).json()
+    body = {
+        "action": "gateway.switch",
+        "targets": [],
+        "params": {"gateway": new["id"], "name": "obot"},
+    }
+    preview = client.post("/api/changes/preview", json=body, headers=POST)
+    assert preview.status_code == 200, preview.json()
+    steps = preview.json()["steps"]
+    assert [(s["client"], s["name"]) for s in steps] == [
+        (c, n) for c in ("claude_code", "codex", "cursor") for n in ("gateway", "obot")
+    ]
+    assert all(s["path"] != str(settings) for s in steps)
 
 
 def test_switching_to_the_gateway_already_in_use_is_refused(client):

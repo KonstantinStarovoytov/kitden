@@ -1,7 +1,9 @@
 """The Kitden gateway on the page: held servers, the gateway card, tool rules and refreshes."""
 
+import asyncio
 import json
 import sys
+import threading
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -13,7 +15,7 @@ import kitden.clients.base as base
 import kitden.web.app as page_app
 from kitden.gateways import data_dir
 from kitden.local_gateway.settings import SETTINGS_FILE, load_settings, load_tools, save_tools
-from kitden.local_gateway.views import gateway_items
+from kitden.local_gateway.views import gateway_items, refresh_tools
 from kitden.views.gateway_view import gateway_view
 from kitden.views.inventory import build_inventory
 from kitden.web.app import create_app
@@ -229,7 +231,12 @@ def test_a_rule_change_previews_applies_and_undoes(home):
         assert change["action"] == "gateway.rule"
         assert [(s["client"], s["name"]) for s in change["steps"]] == [("kitden", "slow")]
         assert change["after"] == [
-            {"client": "cursor", "state": "off", "word": "Off", "note": "Applies to new sessions."}
+            {
+                "client": "cursor",
+                "state": "off",
+                "word": "Off",
+                "note": "slow of echo will be off in website. Applies to new sessions.",
+            }
         ]
         assert path.read_bytes() == before  # a preview writes nothing
 
@@ -251,12 +258,18 @@ def test_a_rule_change_previews_applies_and_undoes(home):
         follow = preview(page, server="echo", tool="slow", state=None, project=pid).json()
         assert follow["after"][0]["word"] == "Follows all projects"
         assert follow["after"][0]["state"] == "on"
+        assert follow["after"][0]["note"] == (
+            "slow of echo will be on in website, as in all projects. Applies to new sessions."
+        )
         page.post(f"/api/changes/{follow['id']}/cancel", headers=POST)
 
         # The whole server, for all projects.
         server = preview(page, server="echo", tool=None, state="off", project=None).json()
         assert [(s["client"], s["name"]) for s in server["steps"]] == [("kitden", "echo")]
         assert server["after"][0]["word"] == "Off"
+        assert server["after"][0]["note"] == (
+            "echo will be off in all projects. Applies to new sessions."
+        )
         page.post(f"/api/changes/{server['id']}/cancel", headers=POST)
 
         undone = page.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
@@ -280,6 +293,92 @@ def test_a_rule_change_previews_applies_and_undoes(home):
             assert refused.status_code == 422
             assert refused.json()["detail"] == words
         assert path.read_bytes() == before
+
+
+def rule_preview(page, **params):
+    body = {"action": "gateway.rule", "params": params}
+    return page.post("/api/changes/preview", json=body, headers=POST)
+
+
+def test_a_rule_for_a_tool_the_server_lost_can_follow_all_projects(home):
+    website = project(home, "website")
+    hold(home, {"echo": echo()}, {"projects": {website: {"echo": {"tools": {"gone": "off"}}}}})
+    save_tools(home, "echo", [tool("echo")])
+    add_kitden(home, "cursor")
+    with page_for(home) as page:
+        pid = project_id(page, website)
+        reset = rule_preview(page, server="echo", tool="gone", state=None, project=pid)
+        assert reset.status_code == 200, reset.json()
+        assert reset.json()["after"][0]["word"] == "Follows all projects"
+        again = rule_preview(page, server="echo", tool="gone", state="off", project=pid)
+        assert again.json()["detail"] == "Choose a tool of this server."
+
+
+def test_a_rule_review_says_when_no_client_uses_the_gateway(home):
+    hold(home, {"echo": echo()})
+    save_tools(home, "echo", [tool("slow")])
+    with page_for(home) as page:
+        pid = project_id(page, project(home, "website"))
+        change = rule_preview(page, server="echo", tool="slow", state="off", project=pid).json()
+    assert change["after"] == [
+        {"note": "slow of echo will be off in website. No client uses the Kitden gateway yet."}
+    ]
+
+
+def test_the_library_follows_the_server_rules(home):
+    website = project(home, "website")
+    # Moved from Claude Code's local scope: off for all projects, on in its project.
+    rules = {
+        "global": {"held": {"server": "off"}},
+        "projects": {website: {"held": {"server": "on"}}},
+    }
+    hold(home, {"held": echo()}, rules)
+    add_kitden(home, "claude_code", "cursor")
+    codex = home / ".codex/config.toml"
+    codex.write_text(
+        codex.read_text() + f'\n[mcp_servers.kitden]\ncommand = "{KITDEN}"\nenabled = false\n'
+    )
+
+    def cells(page, query=""):
+        rows = page.get(f"/api/library?kind=mcp_server{query}").json()["rows"]
+        row = next(r for r in rows if r["name"] == "held")
+        return {c: (cell["state"], cell["where"]) for c, cell in row["cells"].items()}
+
+    with page_for(home) as page:
+        pid = project_id(page, website)
+        assert cells(page) == {
+            c: ("off", "Kitden gateway") for c in ("claude_code", "codex", "cursor")
+        }
+        # Codex's own `kitden` entry is off, so it stays off there.
+        assert cells(page, f"&project={pid}") == {
+            "claude_code": ("gw", "Kitden gateway"),
+            "codex": ("off", "Kitden gateway"),
+            "cursor": ("gw", "Kitden gateway"),
+        }
+        findings = page.get(f"/api/findings?project={pid}").json()
+        assert not [f for f in findings if "held" in f["names"]]
+
+
+def test_a_carried_codex_off_reads_off(home):
+    command, args = json.dumps(sys.executable), json.dumps([str(ECHO), "echo"])
+    codex = home / ".codex/config.toml"
+    codex.write_text(
+        codex.read_text() + f"\n[mcp_servers.echo]\ncommand = {command}\nargs = {args}\n"
+        "enabled = false\n"
+    )
+    with page_for(home) as page:
+        items = page.get("/api/items?client=codex&kind=mcp_server").json()
+        body = {
+            "action": "gateway.move",
+            "targets": [{"item": next(i["id"] for i in items if i["name"] == "echo")}],
+            "params": {"gateway": "kitden"},
+        }
+        change = page.post("/api/changes/preview", json=body, headers=POST).json()
+        applied = page.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
+        assert applied["state"] == "verified", applied
+        rows = page.get("/api/library?kind=mcp_server").json()["rows"]
+        cell = next(r for r in rows if r["name"] == "echo")["cells"]["codex"]
+        assert (cell["state"], cell["where"]) == ("off", "Kitden gateway")
 
 
 def test_watcher_rescans_never_start_servers(home, monkeypatch):
@@ -353,3 +452,61 @@ def test_a_failed_refresh_keeps_the_old_list_and_says_why(home):
         assert [t["name"] for t in broken["tools"]] == ["old"]
         assert sorted(t["name"] for t in load_tools(home)["echo"]) == ECHO_TOOLS
         assert page.get("/api/gateway/tools?server=echo").json()["problem"] is None
+
+
+def test_one_server_that_breaks_does_not_stop_the_others(home, monkeypatch):
+    from kitden.local_gateway import proxy
+
+    hold(home, {"first": echo(), "second": echo()})
+
+    class Breaks(proxy.Upstreams):
+        """Closing fails after listing the first server."""
+
+        async def list_tools(self, server):
+            self.server = server
+            return await super().list_tools(server)
+
+        async def __aexit__(self, *exc_info):
+            await super().__aexit__(*exc_info)
+            if self.server == "first":
+                raise RuntimeError("closing failed")
+
+    monkeypatch.setattr(proxy, "Upstreams", Breaks)
+    found = asyncio.run(refresh_tools(home))
+    assert found == {"first": "first did not list its tools.", "second": None}
+    assert "first" not in load_tools(home)
+    assert sorted(t["name"] for t in load_tools(home)["second"]) == ECHO_TOOLS
+
+
+def test_the_page_hears_when_a_refresh_ends_even_after_a_failure(home, monkeypatch):
+    async def fails(*args):
+        raise RuntimeError("broken")
+
+    monkeypatch.setattr(page_app, "refresh_tools", fails)
+    with page_for(home) as page:
+        queue = page.app.state.events.subscribe()
+        page.post("/api/gateway/tools/refresh", headers=POST)
+        until(lambda: not queue.empty())
+        assert queue.get_nowait() == "gateway_tools"
+
+
+def test_a_refresh_asked_while_one_waits_is_not_queued_again(home, monkeypatch):
+    started, release = threading.Event(), threading.Event()
+    calls = []
+
+    async def slow(home, names=None):
+        calls.append(names)
+        started.set()
+        await asyncio.to_thread(release.wait, WAIT)
+        return {}
+
+    monkeypatch.setattr(page_app, "refresh_tools", slow)
+    with page_for(home) as page:
+        page.post("/api/gateway/tools/refresh", headers=POST)
+        assert started.wait(WAIT)
+        for _ in range(3):  # the first waits; the other two join it
+            page.post("/api/gateway/tools/refresh", headers=POST)
+        release.set()
+        until(lambda: len(calls) == 2)
+        time.sleep(0.3)
+        assert calls == [None, None]

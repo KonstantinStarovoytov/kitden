@@ -68,7 +68,8 @@ def switch_steps(
     another gateway, then add one entry for this one. Both edit one file, in order."""
     if not ENTRY_NAME.fullmatch(name):
         raise ValueError("The entry name may use letters, digits, '-' and '_' only")
-    old = [i for i in items if i.via_gateway and i.via_gateway != gateway.id]
+    # The Kitden gateway's servers live in its own settings, not in a client entry; they stay.
+    old = [i for i in items if i.via_gateway not in (None, gateway.id, KITDEN_GATEWAY)]
     if not old:
         raise ValueError("No client uses another gateway")
     steps = []
