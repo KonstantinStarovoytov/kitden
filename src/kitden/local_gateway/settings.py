@@ -177,6 +177,8 @@ def is_allowed(
     settings = _settings(data) if isinstance(data, dict) else fallback
     if settings is None:
         return False
+    if server not in settings["servers"]:
+        return False
     return state_in(settings, chain, server, None) == "on" and (
         state_in(settings, chain, server, tool) == "on"
     )

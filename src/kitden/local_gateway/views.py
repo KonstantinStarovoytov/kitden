@@ -119,6 +119,23 @@ WRITE_VERBS = (
     "upload",
     "execute",
     "run",
+    "edit",
+    "add",
+    "insert",
+    "drop",
+    "merge",
+    "push",
+    "commit",
+    "apply",
+    "replace",
+    "archive",
+    "publish",
+    "approve",
+    "assign",
+    "invite",
+    "fork",
+    "close",
+    "kill",
 )
 # Whole words of a name: runs of capitals before a capitalised word ("HTTPPost"), a word with
 # its first capital ("uploadFile"), or other runs of letters and digits; `_`, `-` and `.` split.
@@ -132,11 +149,12 @@ def tool_hint(tool: dict) -> tuple[str, str | None]:
     hints = tool.get("annotations") or {}
     if hints.get("readOnlyHint") is True:
         return "reads", "server"
-    if hints.get("readOnlyHint") is False or hints.get("destructiveHint") is True:
+    # In MCP, readOnlyHint defaults to false, and the other two hints only apply to tools that
+    # are not read-only: a tool that holds one of them writes.
+    if any(k in hints for k in ("readOnlyHint", "destructiveHint", "idempotentHint")):
         return "writes", "server"
     # Other annotations, such as a title, say nothing about writing: the name may.
-    said = "readOnlyHint" in hints or "destructiveHint" in hints
-    if not said and any(w.lower() in WRITE_VERBS for w in _WORD.findall(tool["name"])):
+    if any(w.lower() in WRITE_VERBS for w in _WORD.findall(tool["name"])):
         return "may write", "name"
     return "unknown", None
 

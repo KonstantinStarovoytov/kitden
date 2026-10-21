@@ -168,9 +168,12 @@ every such Cursor session; it is not taken unless the owner wants it.
 
 **2.5 Reads and writes, as a helper** (V6, C4, R1). `tools_view` returns for each tool a
 `hint`: `reads` when the server's annotations say `readOnlyHint: true`; `writes` when they say
-`readOnlyHint: false` or `destructiveHint: true`; `may write` when there are no annotations and
+`readOnlyHint: false` or `destructiveHint: true`, or hold `destructiveHint` or `idempotentHint`
+without `readOnlyHint` (it defaults to false); `may write` when none of those hints is there and
 the name holds a verb from a fixed list (write, create, delete, remove, update, set, send, post,
-put, patch, move, rename, upload, execute, run); `unknown` otherwise. The row shows the hint as
+put, patch, move, rename, upload, execute, run, edit, add, insert, drop, merge, push, commit,
+apply, replace, archive, publish, approve, assign, invite, fork, close, kill); `unknown`
+otherwise. The row shows the hint as
 one quiet word, with "(from the server)" or "(by its name)" in the hover text. Details gets one
 button "Turn off every writing tool…": a review with one rule step per tool whose hint is
 `writes` or `may write`, listing them, with two lines: "Hints come from the server and names

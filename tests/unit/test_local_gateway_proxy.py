@@ -266,6 +266,33 @@ async def test_a_tool_turned_off_during_a_session_is_refused_on_its_next_call(ho
     assert {"echo", "where"} <= offered
 
 
+async def test_strict_mode_offers_and_allows_only_the_tools_set_on(home):
+    rules = {"global": {"echo": {"mode": "strict", "tools": {"echo": "on", "where": "on"}}}}
+    write_settings(home, {"echo": echo("echo")}, rules)
+    save_tools(home, "echo", [tool("echo"), tool("where"), tool("clash")])
+
+    async with gateway(home) as client:
+        offered = await names_offered(client) - READ_ONLY
+        allowed = await client.call_tool("echo", {"text": "hi"})
+        refused = await client.call_tool("clash", {})
+
+    assert offered == {"echo", "where"}
+    assert not allowed.is_error and text(allowed) == "hi"
+    assert refused.is_error
+
+
+async def test_a_server_removed_during_a_session_is_refused(home):
+    write_settings(home, {"echo": echo("echo")})
+    save_tools(home, "echo", [tool("echo")])
+
+    async with gateway(home) as client:
+        await client.list_tools()
+        write_settings(home, {})
+        answer = await client.call_tool("echo", {"text": "hi"})
+
+    assert answer.is_error and text(answer) == "echo is turned off in Kitden."
+
+
 async def test_a_broken_rules_file_keeps_the_rules_the_session_started_with(home):
     off = {"global": {"echo": {"tools": {"echo": "off"}}}}
     write_settings(home, {"echo": echo("echo")}, off)

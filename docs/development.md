@@ -76,13 +76,14 @@ with trusted publishing and creates the GitHub release with the notes file as it
 - **Kitden gateway** — three files in `~/Library/Application Support/kitden` (mode 700):
   `gateway.json` (mode 600) holds the servers and rules, `gateway-tools.json` the tool lists, and
   `gateway-calls.json` the count and last time (UTC) of each tool's forwarded calls, never what
-  was sent. Only `gateway.json` changes through review and Undo; the other two are found data
-  that the gateway and Rescan write. The gateway reads `gateway.json` again on each call, so a
-  tool turned off is refused at once; if the file cannot be read, the rules it started with apply. It also holds the env values and headers of moved servers; only
-  you can read it, and it stays on this Mac. `kitden mcp` finds the project once, at start: the
-  `CLAUDE_PROJECT_DIR` variable, then the client's roots, then `WORKSPACE_FOLDER_PATHS`, then its
-  start folder. Codex keeps a tool list for up to 30 minutes and ignores "list changed" (checked
-  2026-10-21), so the tools are fixed for a session and a change applies to new sessions.
+  was sent. Only `gateway.json` changes through review and Undo; the other two are found data that
+  the gateway and Rescan write. The gateway reads `gateway.json` again on each call, so a tool
+  turned off is refused at once; if the file cannot be read, the rules it started with apply. It
+  also holds the env values and headers of moved servers; only you can read it, and it stays on
+  this Mac. `kitden mcp` finds the project once, at start: the `CLAUDE_PROJECT_DIR` variable, then
+  the client's roots, then `WORKSPACE_FOLDER_PATHS`, then its start folder. Codex keeps a tool
+  list for up to 30 minutes and ignores "list changed" (checked 2026-10-21), so the offered list
+  is fixed for a session; a tool turned off is still refused at once.
 - **Obot** — sign in with OAuth; Kitden reads it with an API key from
   `obot login --url <obot> --scope api --scope all-mcp --print-token`, kept in an environment
   variable. Do not run `obot setup`: it edits client files without a backup.

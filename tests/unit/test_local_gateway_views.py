@@ -920,14 +920,21 @@ def test_outside_strict_mode_no_tool_is_new(home):
         ({"name": "search"}, ("unknown", None)),
         ({"name": "delete_repo", "annotations": {"title": "Delete"}}, ("may write", "name")),
         ({"name": "delete_repo", "annotations": {"openWorldHint": True}}, ("may write", "name")),
-        ({"name": "delete_repo", "annotations": {"destructiveHint": False}}, ("unknown", None)),
+        ({"name": "search", "annotations": {"destructiveHint": False}}, ("writes", "server")),
+        ({"name": "search", "annotations": {"idempotentHint": True}}, ("writes", "server")),
+        ({"name": "edit_file"}, ("may write", "name")),
+        ({"name": "push_files"}, ("may write", "name")),
+        ({"name": "merge_pull_request"}, ("may write", "name")),
+        ({"name": "add_issue_comment"}, ("may write", "name")),
     ],
 )
 def test_tool_hints_come_from_annotations_then_names(tool, expected):
     assert tool_hint({"description": "", "inputSchema": {}, **tool}) == expected
 
 
-@pytest.mark.parametrize("name", ["runway_status", "settle_bill", "posture", "putative"])
+@pytest.mark.parametrize(
+    "name", ["runway_status", "settle_bill", "posture", "putative", "address", "closet", "pushover"]
+)
 def test_verbs_match_whole_words_only(name):
     assert tool_hint({"name": name}) == ("unknown", None)
 

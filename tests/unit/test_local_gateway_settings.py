@@ -395,6 +395,17 @@ def test_is_allowed_reads_the_file_again(tmp_path):
     assert is_allowed(tmp_path, [], "github", "echo") is False
 
 
+def test_a_server_removed_from_the_file_is_not_allowed(tmp_path):
+    on = {"servers": {"github": {}}, "rules": {"global": {}}}
+    write_settings(tmp_path, {"servers": {"other": {}}, "rules": {"global": {}, "projects": {}}})
+    assert is_allowed(tmp_path, [], "github", "echo", fallback=on) is False
+    # With an unreadable file, the fallback's servers decide.
+    path = write_settings(tmp_path, on)
+    path.write_text("{ not json")
+    assert is_allowed(tmp_path, [], "github", "echo", fallback=on) is True
+    assert is_allowed(tmp_path, [], "other", "echo", fallback=on) is False
+
+
 def test_a_tool_on_under_a_server_off_is_refused(tmp_path):
     rules = {"global": {"github": {"server": "off", "tools": {"echo": "on"}}}, "projects": {}}
     write_settings(tmp_path, {"servers": {"github": {}}, "rules": rules})
