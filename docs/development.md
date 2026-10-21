@@ -21,6 +21,7 @@ framework, no bundler, nothing loaded from another site. How it looks and moves:
 | `src/kitden/changes/` | Preview, Apply with backup, verify, Undo |
 | `src/kitden/views/` | What the page and the read-only MCP server show |
 | `src/kitden/gateway_api.py` | MetaMCP and Obot |
+| `src/kitden/local_gateway/` | The Kitden gateway: settings and rules, project finding, the proxy inside `kitden mcp` |
 | `src/kitden/web/` | The local page |
 | `plugins/kitden/` | The plugin for Claude Code and Codex |
 
@@ -31,7 +32,19 @@ framework, no bundler, nothing loaded from another site. How it looks and moves:
 | `kitden` / `kitden open` | Opens the page; it stops 10 minutes after its last tab closes |
 | `kitden serve` | Runs the page in the terminal until Ctrl+C |
 | `kitden scan --json` | Prints what the page shows and exits |
-| `kitden mcp` | The read-only "show my setup" server that clients start |
+| `kitden mcp` | The "show my setup" server that clients start; it also offers the tools of servers moved into the Kitden gateway |
+
+## Check before a release
+
+The tests use fake servers. Before a release that touches the Kitden gateway, check it once by
+hand in each of Claude Code, Codex and Cursor, on a test project (a throwaway folder; never your
+own project):
+
+1. In the page, move a server with a few tools into the Kitden gateway, and set up the `kitden`
+   entry in the client if it lacks one.
+2. Pick the test project at the top and turn one tool off for it.
+3. Start a new session in that folder. The tool is gone; the others are still there.
+4. Undo the switch and the move. Start a new session; the server is direct again with its tool.
 
 ## Release
 
@@ -50,6 +63,12 @@ with trusted publishing and creates the GitHub release with the notes file as it
 
 ## Gateways
 
+- **Kitden gateway** — the servers and rules are `gateway.json` (mode 600) and the tool lists are
+  `gateway-tools.json`, both in `~/Library/Application Support/kitden`. Only `gateway.json`
+  changes through review and Undo. `kitden mcp` finds the project once, at start: the
+  `CLAUDE_PROJECT_DIR` variable, then the client's roots, then `WORKSPACE_FOLDER_PATHS`, then its
+  start folder. Codex keeps a tool list for up to 30 minutes and ignores "list changed" (checked
+  2026-10-21), so the tools are fixed for a session and a change applies to new sessions.
 - **Obot** — sign in with OAuth; Kitden reads it with an API key from
   `obot login --url <obot> --scope api --scope all-mcp --print-token`, kept in an environment
   variable. Do not run `obot setup`: it edits client files without a backup.

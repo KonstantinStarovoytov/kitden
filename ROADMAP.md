@@ -21,15 +21,12 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Categories:** filter plugins and skills by category. The category shows quietly in each row.
 - **Quick start:** the page has its data in about two seconds. Codex's slow plugin list comes in
   the background, and a line shows what is still read.
-- **Quick start:** the page has its data in about two seconds. Codex's slow plugin list comes in
-  the background, and a line shows what is still read.
-- **Kitden gateway (in progress):** `kitden mcp` also offers the tools of the servers moved into
-  it, only those turned on for the session's project. Moving a server in is one review with Undo
-  and keeps the tool rules Codex and Claude Code had; local servers can move in too. The Gateway
-  page shows it first: the clients with the `kitden` entry, the servers it holds, and "Set up in"
-  for a client without the entry. A held server's Details has a switch for the whole server and
-  for each tool, for the project picked at the top; each switch is one review with Undo. The
-  README and a check in each client come next.
+- **Kitden gateway:** `kitden mcp` also holds MCP servers, local or remote, with no deploy and no
+  account. Pick a project on the Gateway page and turn a whole server or single tools on or off
+  for it, in every client; each switch is one review with Undo and applies to new sessions.
+  Moving a server in keeps the tool rules Claude Code and Codex had. OAuth servers, entries in a
+  project's own files, entries that read values from your shell and entries with their own
+  folder stay direct for now. Obot and MetaMCP stay for teams.
 
 ### 0.2.0
 
@@ -70,5 +67,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 ## Later
 
 - Remove a plugin.
+- Logins in one place: sign in once to servers that need OAuth, keep secrets in the keychain, and
+  let those servers move into the Kitden gateway too.
+- Skills per project: turn skills on or off for one project, as tools are today.
+- Overview suggests moving servers into the Kitden gateway.
 - A living map: clients → config files → servers, plugins, skills → gateways.
 - A shared setup for a small team.

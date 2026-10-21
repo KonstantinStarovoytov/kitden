@@ -61,17 +61,40 @@ cell with nothing to do says why. You can also add a marketplace from a folder o
 
 ### Use one gateway for every client
 
-**Gateway** works with [Obot](https://obot.ai) (with OAuth sign-in) and MetaMCP. Connect your
-clients, see what the gateway holds and which servers go around it, and move direct servers into
-it one at a time or all at once. Switch every client to another gateway in one review. Click a
-client in the diagram to open its app.
+**Gateway** shows the gateways your clients use. The Kitden gateway comes first: it runs on your
+Mac, with no deploy and no account. [Obot](https://obot.ai) (with OAuth sign-in) and MetaMCP stay
+for teams that want a shared service. Connect your clients, see what a gateway holds and which
+servers go around it, and move direct servers into it one at a time or all at once. Switch every
+client to another Obot or MetaMCP gateway in one review. Click a client in the diagram to open its
+app.
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/gateway-dark.jpg">
-    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/gateway.jpg" alt="Gateway: Claude Code, Codex and Cursor linked to an Obot gateway, what the gateway holds, and servers that can move into it" width="860">
+    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/gateway.jpg" alt="Gateway: the Kitden gateway first, with Claude Code and Cursor linked to it and one server it holds, then an Obot gateway below" width="860">
   </picture>
 </p>
+
+### The Kitden gateway: tools per project
+
+The Kitden gateway is the `kitden` entry that already lets agents read your setup; the page adds
+it to a client that lacks it. Move a server into it and every client reaches it there. Pick a
+project at the top, open a held server's Details, and turn the whole server or one tool on or off
+for that project, or for all projects. Claude Code and Codex can turn a tool off in one project,
+Cursor cannot (checked 2026-10-21); the gateway gives the same control in all three.
+
+It holds local servers (a command) and remote ones (an address). Each switch is a review with a
+backup and Undo. Moving a server keeps the tool rules Claude Code and Codex had; Cursor's own
+tool switches do not carry over. A change applies to new sessions, so start a new one in your
+client.
+
+A few servers stay direct for now, and the page says why:
+
+- servers that need an OAuth sign-in (one place for logins comes later);
+- entries in a project's own files, such as `.mcp.json`: they are already per project;
+- entries that read a value from your shell, such as `${TOKEN}`: the gateway starts without your
+  shell;
+- entries that start in their own folder.
 
 ### Check every change before it is written
 
@@ -90,7 +113,7 @@ a change to take effect.
 ### Let your agents ask
 
 **Agents** adds a read-only MCP server to Claude Code, Codex or Cursor, so you can ask your agent
-"show my setup". It cannot change anything.
+"show my setup". Its own tools cannot change anything.
 
 ## Install
 
@@ -133,9 +156,9 @@ Linux and Windows are not supported yet.
 3. You press Apply. Kitden backs the file up, writes the change and checks it. Undo brings the old
    file back. Backups stay for 30 days, and the newest 100 changes always keep theirs.
 
-Secrets are never shown or logged. Kitden goes online only to reach the gateways you add, and to
-read one marketplace file from `raw.githubusercontent.com` when you add a marketplace from a
-GitHub link.
+Secrets are never shown or logged. Kitden goes online only to reach the gateways and remote
+servers you add, and to read one marketplace file from `raw.githubusercontent.com` when you add a
+marketplace from a GitHub link.
 
 ## Roadmap
 

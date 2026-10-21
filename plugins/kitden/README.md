@@ -3,7 +3,8 @@
 Adds to Claude Code or Codex:
 
 - the skill `setup`: how to answer "what loads here" and when to open the Kitden page;
-- the read-only MCP server `kitden`, started as `kitden mcp`. It only reads.
+- the MCP server `kitden`, started as `kitden mcp`. Its own tools only read. It also offers the
+  tools of servers moved into the Kitden gateway.
 
 It needs Kitden installed on this computer: see the install line in the
 [Kitden README](https://github.com/KonstantinStarovoytov/kitden#install). Without it, the client shows the server as failed and the skill

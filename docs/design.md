@@ -62,6 +62,15 @@ The Library has one row per item and one column per client found on this compute
 
 Every pressable area is at least 24 px tall and wide (WCAG 2.2 AA target size, checked 2026-10-19). The plugin switch keeps its 34 x 20 track inside a 24 px button, and a client checkbox is pressed through its 24 px label.
 
+The Gateway page lists the Kitden gateway first, then any registered gateway (Obot, MetaMCP). Its rows show a name and flags; the command and address stay in Details.
+
+| Part | Look |
+| --- | --- |
+| Kitden gateway card | The kicker "Kitden gateway · On this Mac", the route diagram (a wire to each client whose `kitden` entry is on), then "In the gateway · N": a name, a Local or Remote flag, an Off flag where it is off, and Details. A client without the entry gets a quiet line, "Codex does not use it yet.", and "Set up in Codex…". |
+| Tool switches | In a held server's Details: "Tools · {project folder}" or "Tools · All projects", then "Whole server" first and one row with a switch per tool (name in mono, description cut at two lines). A project row that differs shows "Differs from all projects" and a "Use all projects" button. |
+| A switch changes | It rests half-way while the preview loads, then opens the review. The switch flips only after `verified`: Details stays open and is drawn again in the new state, the thumb slides once (`.switch.flipped`), focus is on that switch, and the toast has Undo. Cancel, or a refused preview (a callout says why), also comes back to Details, with focus on the switch. |
+| Move choice | "Move into the gateway…" asks only when there is a choice: "Move into the Kitden gateway…" first (primary), a registered gateway second (plain). With one choice the review opens at once. A local server can go only into the Kitden gateway. |
+
 Keep existing system fonts and motion, keyboard focus, and reduced-motion support. Search and project controls show a visible focus outline. Preserve explicit Apply, backup and Undo semantics. Brand color must not imply success or a safe action.
 
 ## Motion
@@ -126,7 +135,8 @@ All helpers live in `src/kitden/web/static/js/motion.js`.
 | Arrival | `.arrive` row glow + `.pulse` socket ping | Coming from a finding |
 | Add lands | `.socket.pulse` on a cell that held a button | Library after a verified add |
 | First visit | `entrance(place, nodes)` | Every place, once |
-| Pending switch | `.switch.pending` (thumb half-way) | Plugin switch while the preview loads |
+| Pending switch | `.switch.pending` (thumb half-way) | Plugin and tool switches while the preview loads |
+| Flipped switch | `.switch.flipped`: the thumb slides once into the verified state | Tool switch, after Apply or Undo is verified |
 | Busy button | `busyWhile(button, work)` (dom.js); `button()` uses it | Every button that waits on the server; quick work never shows it |
 | Step count | `change_progress` events → "Applying 2 of 5" + `.btn .meter` | Apply of a change with several steps, from the server's own count |
 | Applied | `.btn.primary.done` (green at once, full strength) + drawn check | Review footer, after `verified` |
