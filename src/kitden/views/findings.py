@@ -24,6 +24,7 @@ from kitden.model import (
     normalize_url,
 )
 from kitden.views.effective import DESKTOP, effective_view
+from kitden.views.setup_server import is_own_entry
 
 # Kinds where two copies are a problem. Hooks all run by design; marketplaces are just sources.
 DUPLICATE_KINDS = {ItemKind.MCP_SERVER, ItemKind.SKILL, ItemKind.PLUGIN}
@@ -111,6 +112,9 @@ def find_findings(inventory, project: str | None = None) -> list[Finding]:
                     )
                 )
             elif item.source.owner_client == client:
+                # Kitden's own entry and servers it holds are meant to be in every client.
+                if is_own_entry(item) or item.via_gateway == KITDEN_GATEWAY:
+                    continue
                 own[(item.kind, item.name)][client] = item
 
         unknown = [i for i in view.items if i.enabled is Enabled.UNKNOWN]

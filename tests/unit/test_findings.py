@@ -1,7 +1,13 @@
+import json
+
+from kitden.gateways import data_dir
+from kitden.local_gateway.settings import SETTINGS_FILE, load_settings
+from kitden.local_gateway.views import gateway_items
 from kitden.model import (
     Client,
     ClientStatus,
     Enabled,
+    FindingType,
     Gateway,
     Item,
     ItemKind,
@@ -10,7 +16,8 @@ from kitden.model import (
     SourceKind,
 )
 from kitden.views.findings import find_bypasses, find_findings, mark_gateways
-from kitden.views.inventory import Inventory
+from kitden.views.inventory import Inventory, build_inventory
+from tests.conftest import make_home, write_cursor_fixture_state
 
 
 def item(
@@ -212,3 +219,62 @@ def test_a_user_entry_beside_the_plugin_server_is_reported():
     )
     found = summary(find_findings(Inventory(items=[user, plugin])))
     assert ("scope_override", "info", ("kitden", "kitden")) in found
+
+
+KITDEN = {"command": "kitden", "args": ["mcp"]}
+
+
+def real_home(tmp_path):
+    home = make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2", "cursor/3.21.16")
+    write_cursor_fixture_state(home)
+    return home
+
+
+def add_entry(home, client, name, entry):
+    path = home / (".claude.json" if client == "claude_code" else ".cursor/mcp.json")
+    data = json.loads(path.read_text())
+    data.setdefault("mcpServers", {})[name] = entry
+    path.write_text(json.dumps(data, indent=2))
+
+
+def hold_github(home):
+    path = data_dir(home) / SETTINGS_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    settings = {"servers": {"github": {"command": "npx"}}, "rules": {"global": {}, "projects": {}}}
+    path.write_text(json.dumps(settings))
+
+
+def cross_client_names(home, with_held=False):
+    inventory = build_inventory(home)
+    if with_held:
+        inventory.items.extend(gateway_items(inventory, load_settings(home), home))
+    found = find_findings(inventory)
+    return [f.names for f in found if f.type is FindingType.SAME_IN_OTHER_CLIENTS]
+
+
+def test_kitden_entries_make_no_cross_client_note(tmp_path):
+    home = real_home(tmp_path)
+    for client in ("claude_code", "cursor"):
+        add_entry(home, client, "kitden", KITDEN)
+    names = cross_client_names(home)
+    assert all("kitden" not in n for n in names)
+
+
+def test_held_servers_make_no_cross_client_note(tmp_path):
+    home = real_home(tmp_path)
+    for client in ("claude_code", "cursor"):
+        add_entry(home, client, "kitden", KITDEN)
+    hold_github(home)
+    names = cross_client_names(home, with_held=True)
+    assert all("github" not in n for n in names)
+
+
+def test_direct_entries_beside_a_held_server_keep_their_note(tmp_path):
+    home = real_home(tmp_path)
+    for client in ("claude_code", "cursor"):
+        add_entry(home, client, "kitden", KITDEN)
+    hold_github(home)
+    add_entry(home, "claude_code", "github", {"command": "npx"})
+    add_entry(home, "cursor", "github", {"command": "npx"})
+    names = cross_client_names(home, with_held=True)
+    assert any(n == ("github", "github") for n in names)
