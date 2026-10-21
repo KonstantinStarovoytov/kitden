@@ -228,6 +228,7 @@ def test_tools_api_marks_project_differences(home):
         assert everywhere["tools"][0] == {
             "name": "echo",
             "description": "The echo tool",
+            "new": False,
             "state": "on",
             "differs": False,
             "follows": None,
@@ -869,3 +870,33 @@ def test_strict_on_keeps_the_tools_of_a_server_off_globally_but_on_in_a_project(
     hold(home, {"github": echo()}, rules)
     offered = allowed_tools(load_settings(home), load_tools(home), [website])["github"]
     assert [t["name"] for t in offered] == ["list_issues"]
+
+
+def test_in_strict_mode_an_unruled_tool_is_new_and_off(home):
+    rules = {"global": {"github": {"mode": "strict", "tools": {"list_issues": "on"}}}}
+    hold(home, {"github": echo()}, rules)
+    save_tools(home, "github", [tool("list_issues"), tool("create_issue")])
+    view = tools_view(load_settings(home), load_tools(home), "github", [])
+    assert [(t["name"], t["state"], t["new"]) for t in view["tools"]] == [
+        ("list_issues", "on", False),
+        ("create_issue", "off", True),
+    ]
+
+
+def test_a_tool_with_a_project_rule_is_not_new(home):
+    folder = project(home, "website")
+    rules = {
+        "global": {"github": {"mode": "strict"}},
+        "projects": {folder: {"github": {"tools": {"create_issue": "on"}}}},
+    }
+    hold(home, {"github": echo()}, rules)
+    save_tools(home, "github", [tool("create_issue")])
+    view = tools_view(load_settings(home), load_tools(home), "github", [folder])
+    assert [(t["state"], t["new"]) for t in view["tools"]] == [("on", False)]
+
+
+def test_outside_strict_mode_no_tool_is_new(home):
+    hold(home, {"github": echo()})
+    save_tools(home, "github", [tool("list_issues")])
+    view = tools_view(load_settings(home), load_tools(home), "github", [])
+    assert not any(t["new"] for t in view["tools"])

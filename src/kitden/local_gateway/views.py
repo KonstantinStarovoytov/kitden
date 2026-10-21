@@ -16,6 +16,7 @@ from kitden.local_gateway.project import project_chain
 from kitden.local_gateway.settings import (
     CLIENT,
     SETTINGS_FILE,
+    _scopes,
     deciding_project,
     load_settings,
     load_tools,
@@ -102,15 +103,19 @@ def held_servers(settings: dict, chain: list[str]) -> list[dict]:
 
 def tools_view(settings: dict, tools: dict, server: str, chain: list[str]) -> dict:
     """A held server's state and its known tools, each with its state, along the picked
-    project's chain (empty: all projects)."""
+    project's chain (empty: all projects). A tool is new when the server is strict and no rule
+    of the chain or for all projects has a state for it: it waits, off, until someone decides."""
+    strict = strict_mode(settings, server)
+    scopes = _scopes(settings, chain)
     return {
         "server": server,
         **_states(settings, server, None, chain),
-        "strict": strict_mode(settings, server),
+        "strict": strict,
         "tools": [
             {
                 "name": tool["name"],
                 "description": tool.get("description") or "",
+                "new": strict and all(own_state(r, server, tool["name"]) is None for r in scopes),
                 **_states(settings, server, tool["name"], chain),
             }
             for tool in tools.get(server, [])

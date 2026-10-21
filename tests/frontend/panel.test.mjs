@@ -365,3 +365,10 @@ test('the Details lede says where it loads, and where it may', () => {
   assert.equal(lede({ claude_code: 'on', codex: 'unk' }), 'Loads in Claude Code. May load in Codex.');
   assert.equal(lede({ claude_code: 'off', cursor: 'via' }), 'Does not load anywhere here.');
 });
+
+test('a new tool in strict mode is flagged', () => {
+  const rows = toolRows({ server: 'github', state: 'on', strict: true, tools: [{ name: 'create_issue', description: '', state: 'off', new: true }, { name: 'list_issues', description: '', state: 'on', new: false }] }, null);
+  assert.equal(rows[1].flag, 'New');
+  assert.equal(rows[2].flag, null);
+  assert.equal(rows[0].flag, null);
+});

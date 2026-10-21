@@ -377,7 +377,7 @@ export function toolRows(answer, where) {
     const on = entry.state !== "off";
     const what = tool === null ? answer.server : `${tool} of ${answer.server}`;
     const follows = entry.follows || "all projects";
-    return { key, tool, name, description, on, differs: Boolean(entry.differs), follows, label: `Turn ${on ? "off" : "on"} ${what} in ${place}…` };
+    return { key, tool, name, description, on, flag: entry.new ? "New" : null, differs: Boolean(entry.differs), follows, label: `Turn ${on ? "off" : "on"} ${what} in ${place}…` };
   };
   return [
     row("server", null, "Whole server", `Turns every tool of ${answer.server} on or off.`, answer),
@@ -465,7 +465,9 @@ export function toolsSection(server, again, next = {}) {
     for (const row of toolRows(answer, where)) {
       const node = el("div", row.tool === null ? "layer tool whole" : "layer tool");
       const middle = el("div");
-      middle.append(el("div", row.tool === null ? "name" : "name mono", row.name));
+      const title = el("div", row.tool === null ? "name" : "name mono", row.name);
+      if (row.flag) title.append(" ", flag({ text: row.flag, level: "info" }));
+      middle.append(title);
       if (row.description) {
         const about = el("div", "why", row.description);
         about.title = row.description;
