@@ -6,6 +6,7 @@ from pathlib import Path
 from kitden.changes.json_splice import ABSENT
 from kitden.clients.base import SETUP_NAME
 from kitden.local_gateway.settings import CLIENT as KITDEN
+from kitden.local_gateway.settings import own_state
 from kitden.model import GATEWAY_CLIENT, Change, ItemKind, Scope
 from kitden.views.effective import effective_view
 from kitden.views.setup_server import CLIENTS, setup_server_state
@@ -172,15 +173,20 @@ def _server_words(change: Change, name: str, rules: dict) -> tuple[list[str], bo
     return words, False
 
 
-def _kitden_move_words(change: Change, inventory) -> list[dict]:
-    """A move into the Kitden gateway: every client with the `kitden` entry offers the moved
-    tools, also one that did not have the server. One line says which, and what the rules
-    carried over from the clients do."""
-    offering = {
+def _offering(inventory) -> set[str]:
+    """The clients whose `kitden` entry is on: they offer the Kitden gateway's tools."""
+    return {
         s["client"]
         for s in setup_server_state(inventory)
         if s["state"] in ("added", "plugin") and s["enabled"] is not False
     }
+
+
+def _kitden_move_words(change: Change, inventory) -> list[dict]:
+    """A move into the Kitden gateway: every client with the `kitden` entry offers the moved
+    tools, also one that did not have the server. One line says which, and what the rules
+    carried over from the clients do."""
+    offering = _offering(inventory)
     offering |= {s.client for s in change.steps if s.client in CLIENTS and s.name == SETUP_NAME}
     removed = {s.client for s in change.steps if s.client in CLIENTS and s.name != SETUP_NAME}
     servers = [
@@ -219,16 +225,45 @@ def _kitden_move_words(change: Change, inventory) -> list[dict]:
     return out
 
 
+RULE_WORDS = {"on": "On", "off": "Off"}
+
+
+def _rule_words(change: Change, inventory, gateway: dict) -> list[dict]:
+    """One switch of the Kitden gateway: what the server or tool will be in each client that
+    offers the gateway's tools. Following all projects, it is what all projects have."""
+    edit = change.steps[0].edit
+    assert edit is not None
+    # ("rules", "global" or "projects", <project>, server, "server" or "tools", <tool>)
+    rest = edit.key[2:] if edit.key[1] == "global" else edit.key[3:]
+    server, tool = rest[0], (rest[2] if rest[1] == "tools" else None)
+    if edit.after is ABSENT:
+        state = own_state(gateway["rules"]["global"], server, tool) or "on"
+        word = "Follows all projects"
+    else:
+        state, word = edit.after, RULE_WORDS[edit.after]
+    clients = [c for c in CLIENTS if c in _offering(inventory)] or [KITDEN]
+    out = [{"client": c, "state": state, "word": word} for c in clients]
+    out[0]["note"] = "Applies to new sessions."
+    return out
+
+
 def after_words(
-    change: Change, inventory, cursor_imports: bool = False, skills: list[dict] | None = None
+    change: Change,
+    inventory,
+    cursor_imports: bool = False,
+    skills: list[dict] | None = None,
+    gateway: dict | None = None,
 ) -> list[dict]:
     """One entry per client: {"client", "state", "word"}, in step order.
 
     With `cursor_imports` (Cursor loads Claude Code's plugins), a plugin added to Claude Code
     names Cursor last, with a note. `skills` are the skill list's rows a skill copy takes.
+    `gateway` is the Kitden gateway's settings, for a change to its rules.
     """
     if change.action in ("skill.install", "plugin.skills") and change.steps:
         return _skill_words(change, inventory, skills or [])
+    if change.action == "gateway.rule" and gateway is not None:
+        return _rule_words(change, inventory, gateway)
     if change.action == "gateway.move" and any(s.client == KITDEN for s in change.steps):
         return _kitden_move_words(change, inventory)
     out: list[dict] = []

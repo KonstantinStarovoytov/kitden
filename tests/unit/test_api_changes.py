@@ -134,7 +134,8 @@ def test_registering_sign_in_details_keeps_no_password(client):
         "METAMCP_PW",
     )
     assert saved["managed"] is True
-    assert client.get("/api/gateway-view").json()["gateways"][0]["managed"] is True
+    # The Kitden gateway comes first; the registered one follows.
+    assert client.get("/api/gateway-view").json()["gateways"][1]["managed"] is True
 
 
 def test_connect_previews_then_applies_then_undoes_exactly(client):

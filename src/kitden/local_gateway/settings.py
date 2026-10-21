@@ -76,12 +76,19 @@ def save_tools(home: Path, server: str, tools: list[dict]) -> None:
     write_atomic(folder / TOOLS_FILE, json.dumps(cache, indent=2).encode())
 
 
+def own_state(rules: Any, server: str, tool: str | None) -> str | None:
+    """The state one scope of rules sets for a server (`tool` None) or one of its tools, or
+    None when it sets none. An empty object left by a removed rule sets none."""
+    entry = _dict(_dict(rules).get(server))
+    state = entry.get("server") if tool is None else _dict(entry.get("tools")).get(tool)
+    return state if state in STATES else None
+
+
 def _is_on(scopes: list[dict], server: str, tool: str | None) -> bool:
     """The first scope that has a state decides; with none, it is on."""
     for rules in scopes:
-        entry = _dict(rules.get(server))
-        state = entry.get("server") if tool is None else _dict(entry.get("tools")).get(tool)
-        if state in STATES:
+        state = own_state(rules, server, tool)
+        if state is not None:
             return state == "on"
     return True
 

@@ -19,6 +19,7 @@ from kitden.changes.actions import (
     CLIENT_WORDS,
     GATEWAY_CONNECT,
     GATEWAY_MOVE,
+    GATEWAY_RULE,
     GATEWAY_SWITCH,
     KITDEN_GATEWAY,
     MARKETPLACE_ADD,
@@ -48,7 +49,15 @@ from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, REMOVE_DIRECT, SE
 from kitden.command import installed_command
 from kitden.gateway_api import GatewayError, MetaMcpClient, ObotClient
 from kitden.gateways import add_gateway, data_dir, load_gateways
-from kitden.local_gateway.settings import save_tools
+from kitden.local_gateway.settings import CLIENT as KITDEN
+from kitden.local_gateway.settings import load_settings, load_tools, save_tools
+from kitden.local_gateway.views import (
+    gateway_items,
+    moved_in,
+    refresh_tools,
+    rule_steps,
+    tools_view,
+)
 from kitden.marketplace_link import LinkError, read_marketplace
 from kitden.model import Change, ChangeState, Gateway, GatewayAuth, GatewayEdit, ItemKind
 from kitden.redact import redact_text
@@ -327,6 +336,8 @@ class State:
 def refusal_words(error: ValueError) -> str:
     """What the review says when a change cannot be prepared, in the owner's words."""
     if isinstance(error, NothingToChangeError):
+        if error.client == KITDEN:
+            return "The Kitden gateway has this already. Nothing to change."
         client = CLIENT_WORDS.get(error.client, error.client)
         return f"{client} has this already. Nothing to change."
     return str(error)
@@ -373,6 +384,7 @@ def create_app(
         inventory = build(**options)
         if home is not None:
             mark_gateways(inventory, load_gateways(home))
+            inventory.items += gateway_items(inventory, load_settings(home), home)
         return inventory
 
     adapters = {a.id: a for a in default_adapters(home)} if home is not None else {}
@@ -406,8 +418,37 @@ def create_app(
             ChangeStore(data_dir(home)), run or CommandRunner(home), on_write, gateway_client
         )
     write_lock = asyncio.Lock()
+    # The Kitden gateway's tool lists: a refresh runs in the background, one at a time. A server
+    # that did not answer keeps its old list; the sentence that says why waits for Details.
+    tool_problems: dict[str, str] = {}
+    refresh_lock = asyncio.Lock()
+    refreshing: set[asyncio.Task] = set()
+
+    async def _refresh(names: list[str] | None) -> None:
+        async with refresh_lock:
+            try:
+                found = await refresh_tools(home, names)
+            except Exception as error:  # noqa: BLE001 - a background refresh must not stop the page
+                name = type(error).__name__
+                print(f"Refreshing the gateway tools failed ({name}).", file=sys.stderr, flush=True)
+                return
+        for name, problem in found.items():
+            if problem:
+                tool_problems[name] = problem
+            else:
+                tool_problems.pop(name, None)
+        events.publish("gateway_tools")
+
+    def refresh_later(names: list[str] | None = None) -> None:
+        """Ask the held servers (or only `names`) for their tools, in the background."""
+        if home is None:
+            return
+        task = asyncio.ensure_future(_refresh(names))
+        refreshing.add(task)
+        task.add_done_callback(refreshing.discard)
 
     async def on_files_changed() -> None:
+        # Never starts a server: only the Rescan button refreshes the tool lists.
         events.publish("files_changed")
         await state.rescan()
 
@@ -421,7 +462,7 @@ def create_app(
             yield
         finally:
             watcher.stop()
-            for running in (task, scan):
+            for running in (task, scan, *refreshing):
                 if running is not None:
                     running.cancel()
                     with contextlib.suppress(asyncio.CancelledError):
@@ -547,7 +588,31 @@ def create_app(
         return JSONResponse(overview(state.inventory, _registered(), path))
 
     def _gateway_view(request, project, path):
-        return JSONResponse(gateway_view(state.inventory, _registered(), path))
+        view = gateway_view(state.inventory, _registered(), path, kitden=home is not None)
+        return JSONResponse(view)
+
+    async def gateway_tools(request: Request) -> JSONResponse:
+        """A held server's tools with their states for the project, from the cache and rules."""
+        if home is None:
+            return _error("Changes are not available.", 404)
+        try:
+            project = _project(request)
+        except _UnknownProject:
+            return _error("Unknown project.", 404)
+        server = request.query_params.get("server", "")
+        settings = load_settings(home)
+        if server not in settings["servers"]:
+            return _error("Unknown server.", 404)
+        path = project["path"] if project else None
+        answer = tools_view(settings, load_tools(home), server, path)
+        return JSONResponse({**answer, "problem": tool_problems.get(server)})
+
+    async def gateway_tools_refresh(request: Request) -> JSONResponse:
+        """Starts asking each held server for its tools; `gateway_tools` says when it is done."""
+        if home is None:
+            return _error("Changes are not available.", 404)
+        refresh_later()
+        return JSONResponse({"refreshing": True}, status_code=202)
 
     # Gateways and changes (US3) ---------------------------------------------------------
 
@@ -739,6 +804,9 @@ def create_app(
                 steps = await asyncio.to_thread(
                     local_move_steps, adapters, items, home, known, command, added_clients=added
                 )
+            elif action == GATEWAY_RULE:
+                projects = {p["id"]: p["path"] for p in state.data["projects"]}
+                steps = rule_steps(home, params, projects)
             elif action == GATEWAY_MOVE:
                 gateway = next(
                     (g for g in load_gateways(home) if g.id == params.get("gateway")), None
@@ -770,7 +838,10 @@ def create_app(
         # Only an added plugin can reach Cursor through Claude Code.
         cursor = _found_cursor() if action == PLUGIN_INSTALL else None
         imports = bool(cursor and cursor.imports_claude_plugins())
-        after = after_words(change, state.inventory, cursor_imports=imports, skills=copied)
+        rules = load_settings(home) if action == GATEWAY_RULE else None
+        after = after_words(
+            change, state.inventory, cursor_imports=imports, skills=copied, gateway=rules
+        )
         answer = {**change_dict(change), "after": after}
         if left_out is not None:
             answer["left_out"] = left_out
@@ -805,6 +876,11 @@ def create_app(
                 engine.on_progress = lambda change_id, done, total: None
             if verb != "cancel":
                 await state.rescan()
+        if verb == "apply" and change.state is ChangeState.VERIFIED:
+            # Servers just moved into the Kitden gateway: Details shows their tools soon.
+            moved = moved_in(change) if change.action == GATEWAY_MOVE else []
+            if moved:
+                refresh_later(moved)
         events.publish("change_state")
         return JSONResponse(change_dict(change), status_code=STATUS.get(change.state, 200))
 
@@ -860,7 +936,9 @@ def create_app(
         return JSONResponse({"command": adapter.gateway_step(gateway, item.name).login_note})
 
     async def rescan(request: Request) -> JSONResponse:
+        """The Rescan button: read every client again and refresh the gateway's tool lists."""
         data = await state.rescan()
+        refresh_later()
         return JSONResponse({"items": len(data["items"]), "problems": len(data["problems"])})
 
     async def stream(request: Request) -> StreamingResponse:
@@ -888,6 +966,8 @@ def create_app(
             Route("/api/rescan", rescan, methods=["POST"]),
             Route("/api/gateways", gateways, methods=["GET", "POST"]),
             Route("/api/gateways/{gateway_id}/servers", gateway_servers),
+            Route("/api/gateway/tools", gateway_tools),
+            Route("/api/gateway/tools/refresh", gateway_tools_refresh, methods=["POST"]),
             Route("/api/changes", changes),
             Route("/api/changes/preview", preview, methods=["POST"]),
             Route("/api/changes/{change_id}", change_view),

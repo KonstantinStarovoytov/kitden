@@ -385,6 +385,7 @@ def move_steps(
 
 
 KITDEN_GATEWAY = "kitden"  # the gateway inside `kitden mcp`, on this Mac
+GATEWAY_RULE = "gateway.rule"  # one switch of the Kitden gateway: a server or a tool on or off
 # Codex waits 10 s for a server to start and 60 s for a tool call (checked 2026-10-21). The
 # Kitden gateway may take up to 20 s to list a server and 300 s for one call.
 CODEX_TIMEOUTS = {"startup_timeout_sec": 30, "tool_timeout_sec": 300}

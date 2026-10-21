@@ -9,6 +9,7 @@ has no column of its own: its extra items show in the Claude Code column as "Des
 
 from dataclasses import dataclass, field
 
+from kitden.changes.actions import KITDEN_GATEWAY
 from kitden.model import (
     ClientStatus,
     Enabled,
@@ -61,6 +62,8 @@ def row_key(item: Item) -> str:
 def _where(item: Item, column: str) -> str:
     if item.client == DESKTOP:
         return "Desktop app"
+    if item.via_gateway == KITDEN_GATEWAY:
+        return "Kitden gateway"
     owner = item.source.owner_client
     if owner in NAMES and owner != column:
         return f"via {NAMES[owner]}"
