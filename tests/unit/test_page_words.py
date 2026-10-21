@@ -769,3 +769,9 @@ def test_overview_offers_set_up_only_without_a_gateway():
 
 def test_library_says_the_add_scope_in_a_project():
     assert "Adding puts an item in all your projects." in script("library.js")
+
+
+def test_the_kitden_card_says_what_the_gateway_governs():
+    text = script("gateway.js")
+    words = "The gateway controls only the servers in it. "
+    assert words + "Direct entries and terminal tools are outside it." in text

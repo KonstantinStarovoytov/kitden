@@ -263,6 +263,13 @@ function kitdenCard(gateway, model) {
   if (known) card.append(routes(gateway, linked, [...model.groups.move, ...model.groups.local]));
   else card.append(el("p", "group-note", "Kitden could not read which clients use it."));
   card.append(kitdenHeld(gateway));
+  card.append(
+    el(
+      "p",
+      "group-note",
+      "The gateway controls only the servers in it. Direct entries and terminal tools are outside it.",
+    ),
+  );
   const names = (clients) => joinWords(clients.map((c) => CLIENT_NAMES[c]));
   if (off.length) {
     const line = el("div", "setup-line");
