@@ -1,7 +1,8 @@
 """Protects the local page (research R6, FR-037).
 
 - Only Host 127.0.0.1:<port> or localhost:<port> (blocks DNS rebinding).
-- A one-time start link with a random token sets an HttpOnly, SameSite=Strict session cookie.
+- A start link with a random token sets an HttpOnly, SameSite=Strict session cookie.
+  The link works while the page runs; `kitden open` reuses it.
 - Every request needs that cookie.
 - State-changing requests also need the exact same Origin, `Sec-Fetch-Site: same-origin` when
   sent, and the header `X-Tool-Request: 1`, so other websites cannot trigger them.

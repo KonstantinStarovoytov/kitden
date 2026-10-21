@@ -86,3 +86,47 @@ def test_a_skill_a_client_loads_from_a_plugin_counts_whatever_the_path(tmp_path)
             "note": "Cursor reads two folders that hold this skill, so it loads the skill twice.",
         },
     ]
+
+
+def _move_change(home, monkeypatch, *wanted):
+    import kitden.clients.base as base
+    from kitden.changes.backup import ChangeStore
+    from kitden.changes.engine import Engine
+    from kitden.gateways import data_dir
+    from kitden.views.inventory import build_inventory
+    from tests.unit.test_local_gateway_move import FakeClaude, move
+
+    monkeypatch.setattr(base, "read_command_version", lambda client: None)
+    change = Engine(ChangeStore(data_dir(home)), run=FakeClaude(home)).preview(
+        "gateway.move", move(home, *wanted)
+    )
+    return change, build_inventory(home)
+
+
+def test_a_remote_move_says_kitden_asked_the_server_once(tmp_path, monkeypatch):
+    from tests.unit.test_local_gateway_move import add_claude, new_home
+
+    home = new_home(tmp_path)
+    monkeypatch.setattr("kitden.changes.actions.needs_sign_in", lambda url, headers: False)
+    add_claude(home, "linear", {"type": "http", "url": "https://linear.invalid/mcp"})
+    change, inv = _move_change(home, monkeypatch, ("claude_code", "linear"))
+    note = after_words(change, inv, home=home)[0]["note"]
+    assert "Kitden asked linear once whether it needs a sign-in." in note
+    assert note.index("asked linear") < note.index("Applies to new sessions.")
+
+
+def test_an_update_move_names_the_kept_switches(tmp_path, monkeypatch):
+    import json
+
+    from tests.unit.test_local_gateway_move import add_claude, gateway_file, new_home, write_json
+
+    home = new_home(tmp_path)
+    files = {"command": "npx", "args": ["files-mcp"]}
+    write_json(gateway_file(home), {"servers": {"files": files}, "rules": {}})
+    add_claude(home, "files", {"type": "stdio", **files})
+    user = json.loads((home / ".claude/settings.json").read_text())
+    user["permissions"] = {"deny": ["mcp__files__write"]}
+    write_json(home / ".claude/settings.json", user)
+    change, inv = _move_change(home, monkeypatch, ("claude_code", "files"))
+    note = after_words(change, inv, home=home)[0]["note"]
+    assert "keeps its" in note and "do not carry over" in note

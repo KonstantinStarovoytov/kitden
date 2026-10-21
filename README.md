@@ -29,7 +29,7 @@ The answers are spread over many JSON and TOML files. Kitden reads them all, sho
 page, and changes a file only after you have seen the exact edit.
 
 Kitden is for one developer or a small team. It runs on your Mac at `127.0.0.1`, with no account
-and no telemetry.
+and no telemetry. Secrets stay on this Mac and go only to the server they belong to.
 
 ## What you can do
 
@@ -121,6 +121,7 @@ a change to take effect.
 
 **Agents** adds the Kitden MCP server to Claude Code, Codex or Cursor, so you can ask your agent
 "show my setup". Kitden's own tools only read.
+Servers moved into the gateway add their tools, which do what those servers do.
 
 ## Install
 

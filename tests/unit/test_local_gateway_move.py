@@ -553,7 +553,7 @@ def test_a_server_the_gateway_holds_is_updated_from_a_changed_direct_entry(home)
         assert change["after"][0]["note"] == (
             "Codex and Cursor will offer its tools through Kitden. "
             "files in the Kitden gateway is updated. Applies to new sessions. "
-            "Codex's own switches for files do not carry over; the gateway's rules stay."
+            "Codex's own switches for files do not carry over; the gateway keeps its rules."
         )
 
         applied = page.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
@@ -619,12 +619,12 @@ def test_a_held_server_keeps_the_gateways_rules_and_says_the_clients_switches_go
                 "Via Kitden gateway",
                 "Claude Code, Codex and Cursor will offer its tools through Kitden. files is in "
                 "the Kitden gateway already. Applies to new sessions. Claude Code's own switches "
-                "for files do not carry over; the gateway's rules stay.",
+                "for files do not carry over; the gateway keeps its rules.",
             ),
             (
                 "codex",
                 "Via Kitden gateway",
-                "Codex's own switches for files do not carry over; the gateway's rules stay.",
+                "Codex's own switches for files do not carry over; the gateway keeps its rules.",
             ),
             ("cursor", "Via Kitden gateway", None),
         ]

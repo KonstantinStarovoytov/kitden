@@ -253,6 +253,16 @@ def _kitden_move_words(change: Change, inventory, home: Path | None) -> list[dic
             "Claude Code allows every Kitden tool without asking; after the move that includes "
             f"the tools of {_join(new)}."
         )
+    for step in change.steps:
+        edit = step.edit
+        if (
+            step.client == KITDEN
+            and edit is not None
+            and edit.key[0] == "servers"
+            and isinstance(edit.after, dict)
+            and edit.after.get("url")
+        ):
+            line.append(f"Kitden asked {edit.key[1]} once whether it needs a sign-in.")
     line.append("Applies to new sessions.")
     out[0]["note"] = " ".join(line)
     # Each client whose own switches for the servers do not carry over says so.
@@ -267,7 +277,7 @@ def _kitden_move_words(change: Change, inventory, home: Path | None) -> list[dic
         if left:
             notes.append(
                 f"{CLIENT_WORDS[client]}'s own switches for {_join(left)} do not carry over; "
-                "the gateway's rules stay."
+                "the gateway keeps its rules."
             )
         if any(notes):
             entry["note"] = " ".join(n for n in notes if n)
