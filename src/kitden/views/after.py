@@ -18,7 +18,7 @@ from kitden.local_gateway.settings import (
     rule_parts,
     state_in,
 )
-from kitden.model import GATEWAY_CLIENT, Change, ItemKind, Scope
+from kitden.model import GATEWAY_CLIENT, Change, ItemKind, Scope, SourceKind
 from kitden.views.effective import effective_view
 from kitden.views.setup_server import CLIENTS, kitden_on, setup_server_state
 
@@ -51,15 +51,28 @@ CURSOR_REMOVE = {
     "word": "Removed",
     "note": "Cursor loads Claude Code plugins, so it loses this one too.",
 }
-CURSOR_KEEPS_ONE = {
-    "client": "cursor",
-    "state": "on",
-    "word": "Loads once",
-    "note": "Cursor loads Claude Code plugins, so it loses this copy and keeps its own.",
-}
+CURSOR_KEEPS = "Cursor loads Claude Code plugins, so it loses this copy and keeps {}."
+# Uninstall keeps the data folder (--keep-data) but not the plugin's saved options.
+REMOVE_NOTE = "Undo installs it again; its saved options are not brought back."
 CURSOR_SWITCHES = "Cursor's own switches for these tools do not carry over."
 # Strict mode only hides tools; the server's own token decides what it can do.
 GUARANTEE = "For a real guarantee, give {server} a token that can only read."
+
+
+def _cursor_keeps(inventory, name: str) -> str | None:
+    """Which copy Cursor still loads after a Claude Code plugin is removed, in words.
+
+    Cursor's own copy, or another Claude Code copy it imports; None when it loads no other.
+    """
+    short = name.split("@", 1)[0]
+    others = [
+        i
+        for i in effective_view(inventory, "cursor", None).items
+        if i.kind is ItemKind.PLUGIN and i.name.split("@", 1)[0] == short and i.name != name
+    ]
+    if any(i.source.kind is not SourceKind.OTHER_CLIENT_FOLDER for i in others):
+        return "its own"
+    return "the other Claude Code copy" if others else None
 
 
 def _other_copy_loads(inventory, client: str, name: str) -> bool:
@@ -503,12 +516,18 @@ def after_words(
         ):
             state, word = "on", "Loads once"
         out.append({"client": step.client, "state": state, "word": word})
+        if change.action == "plugin.remove" and step.client == "claude_code":
+            out[-1]["note"] = REMOVE_NOTE
     to_claude = any(s.client == "claude_code" for s in change.steps)
     if change.action == "plugin.install" and to_claude and cursor_imports:
         out.append(dict(CURSOR_IMPORT))
     # Cursor imports only Claude Code's user plugins; with a copy of its own it still loads one.
     removal = change.steps[0] if change.action == "plugin.remove" and change.steps else None
     if removal and to_claude and cursor_imports and removal.scope is Scope.USER:
-        keeps = _other_copy_loads(inventory, "cursor", removal.name)
-        out.append(dict(CURSOR_KEEPS_ONE if keeps else CURSOR_REMOVE))
+        keeps = _cursor_keeps(inventory, removal.name)
+        if keeps:
+            note = CURSOR_KEEPS.format(keeps)
+            out.append({"client": "cursor", "state": "on", "word": "Loads once", "note": note})
+        else:
+            out.append(dict(CURSOR_REMOVE))
     return out

@@ -43,10 +43,18 @@ def _settings(client):
 def test_removing_a_claude_code_plugin_runs_uninstall_and_undo_installs_it_again(client):
     change = _remove(client, _item(client, SUPERPOWERS)["id"]).json()
     assert [(s["client"], s["name"]) for s in change["steps"]] == [("claude_code", SUPERPOWERS)]
-    assert change["steps"][0]["command"] == f"claude plugin uninstall {SUPERPOWERS} -s user --json"
+    assert (
+        change["steps"][0]["command"]
+        == f"claude plugin uninstall {SUPERPOWERS} -s user --keep-data --json"
+    )
     # Cursor loads this copy from Claude Code and has one of its own, which stays.
     assert change["after"] == [
-        {"client": "claude_code", "state": "off", "word": "Removed"},
+        {
+            "client": "claude_code",
+            "state": "off",
+            "word": "Removed",
+            "note": "Undo installs it again; its saved options are not brought back.",
+        },
         {
             "client": "cursor",
             "state": "on",
@@ -72,7 +80,12 @@ def test_cursor_loses_a_claude_code_plugin_it_only_imports(client):
     )
     change = _remove(client, _item(client, LINTER)["id"]).json()
     assert change["after"] == [
-        {"client": "claude_code", "state": "off", "word": "Removed"},
+        {
+            "client": "claude_code",
+            "state": "off",
+            "word": "Removed",
+            "note": "Undo installs it again; its saved options are not brought back.",
+        },
         {
             "client": "cursor",
             "state": "off",
@@ -85,7 +98,14 @@ def test_cursor_loses_a_claude_code_plugin_it_only_imports(client):
 def test_undo_of_removing_an_off_plugin_leaves_it_off(plain):
     before = (plain.home / ".claude/settings.json").read_text()
     change = _remove(plain, _item(plain, OFF)["id"]).json()
-    assert change["after"] == [{"client": "claude_code", "state": "off", "word": "Removed"}]
+    assert change["after"] == [
+        {
+            "client": "claude_code",
+            "state": "off",
+            "word": "Removed",
+            "note": "Undo installs it again; its saved options are not brought back.",
+        }
+    ]
     assert plain.post(f"/api/changes/{change['id']}/apply", headers=POST).json()["state"] == (
         "verified"
     )
@@ -127,7 +147,7 @@ def test_a_project_plugin_is_removed_from_its_project(client):
     item = _item(client, SUPERPOWERS, scope="project")
     change = _remove(client, item["id"]).json()
     step = change["steps"][0]
-    assert step["command"] == f"claude plugin uninstall {SUPERPOWERS} -s project --json"
+    assert step["command"] == f"claude plugin uninstall {SUPERPOWERS} -s project --keep-data --json"
     # A project's file is shared, and Cursor imports only user plugins.
     assert change["shared_file_warning"] is True
     assert [e["client"] for e in change["after"]] == ["claude_code"]

@@ -181,6 +181,8 @@ class ClaudeCodeAdapter(ClientAdapter):
     # code.claude.com/docs/en/plugins/cli-reference): `uninstall <id> -s <scope> --json`
     # removes the plugin from that scope's settings file; it fails when the settings still
     # switch it on. `install` writes `true` again, so Undo of an "off" plugin sets it back off.
+    # `--keep-data` keeps the plugin's data folder for Undo (checked 2026-10-22, same help); its
+    # saved options and secrets still go.
     def plugin_remove_step(self, item: Item) -> Step:
         if PLUGIN_REMOVE not in self.item_actions(item):
             raise ValueError(f"{item.name} cannot be removed here")
@@ -200,7 +202,16 @@ class ClaudeCodeAdapter(ClientAdapter):
             name=item.name,
             edit=edit,
             mechanism="client_cli",
-            command=["claude", "plugin", "uninstall", item.name, "-s", scope, "--json"],
+            command=[
+                "claude",
+                "plugin",
+                "uninstall",
+                item.name,
+                "-s",
+                scope,
+                "--keep-data",
+                "--json",
+            ],
             undo_command=["claude", "plugin", "install", item.name, "-s", scope, "--json"],
             cwd=item.project if item.scope is Scope.PROJECT else None,
             restart_note=RELOAD,

@@ -273,3 +273,44 @@ def test_turning_off_tools_for_all_projects_names_projects_that_keep_them_on(tmp
         "They stay on for create_issue in website, which has its own rule. "
         "Hints come from the server"
     )
+
+
+def imported(name):
+    """A Claude Code plugin Cursor loads from Claude Code's install record."""
+    source = Source(
+        kind=SourceKind.OTHER_CLIENT_FOLDER, path="/h/i.json", owner_client="claude_code"
+    )
+    return Item(client="cursor", kind=ItemKind.PLUGIN, name=name, source=source, scope=Scope.USER)
+
+
+def test_removing_one_of_two_claude_code_copies_says_cursor_keeps_the_other():
+    inv = inventory(
+        plugin("claude_code", "x@a", "/h/a.json"),
+        plugin("claude_code", "x@b", "/h/a.json"),
+        imported("x@a"),
+        imported("x@b"),
+    )
+    change = Change(action="plugin.remove", steps=[step("claude_code", "x@a")])
+    assert after_words(change, inv, cursor_imports=True) == [
+        {
+            "client": "claude_code",
+            "state": "on",
+            "word": "Loads once",
+            "note": "Undo installs it again; its saved options are not brought back.",
+        },
+        {
+            "client": "cursor",
+            "state": "on",
+            "word": "Loads once",
+            "note": "Cursor loads Claude Code plugins, so it loses this copy and keeps "
+            "the other Claude Code copy.",
+        },
+    ]
+    # With a copy of its own, Cursor keeps that one.
+    own = plugin("cursor", "x@cursor-public", "/h/c.json")
+    words = after_words(
+        change,
+        inventory(plugin("claude_code", "x@a", "/h/a.json"), imported("x@a"), own),
+        cursor_imports=True,
+    )
+    assert words[1]["note"].endswith("keeps its own.")
