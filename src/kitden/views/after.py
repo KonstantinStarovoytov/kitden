@@ -99,6 +99,10 @@ def _join(words: list[str]) -> str:
     return words[0] if len(words) == 1 else f"{', '.join(words[:-1])} and {words[-1]}"
 
 
+def _is(words: list[str]) -> str:
+    return "is" if len(words) == 1 else "are"
+
+
 def _kitden_rules(change: Change) -> dict[str, dict]:
     """The gateway rules a move writes: server -> (project, tool) -> (state, the clients it
     comes from). None stands for all projects or for the whole server."""
@@ -184,12 +188,24 @@ def _offering(inventory) -> set[str]:
 
 def _kitden_move_words(change: Change, inventory) -> list[dict]:
     """A move into the Kitden gateway: every client with the `kitden` entry offers the moved
-    tools, also one that did not have the server. One line says which, and what the rules
-    carried over from the clients do."""
+    tools, also one that did not have the server. One line says which, what the rules carried
+    over from the clients do, and which servers the gateway had already."""
     offering = _offering(inventory)
     offering |= {s.client for s in change.steps if s.client in CLIENTS and s.name == SETUP_NAME}
-    removed = {s.client for s in change.steps if s.client in CLIENTS and s.name != SETUP_NAME}
-    servers = moved_in(change)
+    leaving = [s for s in change.steps if s.client in CLIENTS and s.name != SETUP_NAME]
+    removed = {s.client for s in leaving}
+    written = moved_in(change)
+    servers = list(dict.fromkeys([*written, *(s.name for s in leaving)]))
+    # A held server is updated when its entry was there before, and kept when it is the same.
+    updated = [
+        s.edit.key[1]
+        for s in change.steps
+        if s.client == KITDEN
+        and s.edit is not None
+        and s.edit.key[0] == "servers"
+        and s.edit.before not in (ABSENT, None)
+    ]
+    kept = [name for name in servers if name not in written]
     rules = _kitden_rules(change)
     said, offered = [], []
     for name in servers:
@@ -213,6 +229,10 @@ def _kitden_move_words(change: Change, inventory) -> list[dict]:
         what = f"{whose} tools" if offered == servers else f"the tools of {_join(offered)}"
         line.append(f"{who} will offer {what} through Kitden.")
     line += said
+    if updated:
+        line.append(f"{_join(updated)} in the Kitden gateway {_is(updated)} updated.")
+    if kept:
+        line.append(f"{_join(kept)} {_is(kept)} in the Kitden gateway already.")
     line.append("Applies to new sessions.")
     out[0]["note"] = " ".join(line)
     if "cursor" in removed:
@@ -283,7 +303,11 @@ def after_words(
         return _skill_words(change, inventory, skills or [])
     if change.action == "gateway.rule" and home is not None:
         return _rule_words(change, inventory, home)
-    if change.action == "gateway.move" and any(s.client == KITDEN for s in change.steps):
+    # A move into a registered gateway has that gateway's own step; one into the Kitden
+    # gateway has none, also when the gateway holds the server already.
+    if change.action == "gateway.move" and not any(
+        s.client == GATEWAY_CLIENT for s in change.steps
+    ):
         return _kitden_move_words(change, inventory)
     out: list[dict] = []
     # The gateway a server moves into; a client reaches the server only through an entry for it.

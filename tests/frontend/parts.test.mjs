@@ -149,6 +149,9 @@ test('the Changes page names what moved into the Kitden gateway and which rule c
   assert.equal(changeTitle({ action: 'gateway.move', steps }), 'Moved files into the Kitden gateway · Claude Code, Cursor');
   const obot = [{ client: 'gateway', name: 'docs' }, { client: 'cursor', name: 'docs' }];
   assert.equal(changeTitle({ action: 'gateway.move', steps: obot }), 'Moved into the gateway docs · Cursor');
+  // The Kitden gateway holds files as it is already: only the client's entry goes.
+  const held = [{ client: 'cursor', name: 'files' }];
+  assert.equal(changeTitle({ action: 'gateway.move', steps: held }), 'Moved files into the Kitden gateway · Cursor');
   // A rule names its tool, server, project and new state, as the review did.
   const slow = [{ client: 'kitden', name: 'slow' }];
   const rule = (fields) => changeTitle({ action: 'gateway.rule', steps: slow, rule: { server: 'echo', tool: 'slow', project: 'website', state: 'off', ...fields } });

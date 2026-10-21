@@ -672,13 +672,15 @@ def tools_to_read(
 ) -> dict[str, dict]:
     """The servers a move must ask for their tools first, by name, with what the gateway runs:
     a Codex entry that keeps only some tools on (`enabled_tools`), when Kitden does not know
-    its tools yet. Refuses an entry that stays direct, as local_move_steps does."""
+    its tools yet and the gateway does not hold it already (its rules stay). Refuses an entry
+    that stays direct, as local_move_steps does."""
     cached = load_tools(home)
+    held = load_settings(home)["servers"]
     wanted = {}
     for item in items:
         _, entry, server = _movable(adapters, item, known_projects)
         some = item.client == "codex" and isinstance(entry.get("enabled_tools"), list)
-        if some and item.name not in cached:
+        if some and item.name not in cached and item.name not in held:
             wanted[item.name] = server
     return wanted
 
@@ -699,6 +701,9 @@ def local_move_steps(
     entry, and the `kitden` entry for each of those clients that lacks it (`added_clients` have
     it, also from the kitden plugin). An existing Codex `kitden` entry gets the timeouts it
     lacks. An entry that must stay direct is refused, with the reason, before any step.
+
+    A server the gateway holds already keeps its rules: a different entry replaces the held one
+    (a new token, say), and the same entry only leaves the clients.
     """
     if not items:
         raise ValueError("Choose a server to move.")
@@ -717,11 +722,7 @@ def local_move_steps(
         found.setdefault(item.name, []).append((item, entry))
         removes.append(remove)
     settings = load_settings(home)
-    for name in servers:
-        if name in settings["servers"]:
-            raise ValueError(
-                f"The Kitden gateway already has {name}. Remove the direct entry instead."
-            )
+    held = settings["servers"]
     lacking = [c for c in dict.fromkeys(i.client for i in items) if c not in added_clients]
     if lacking and (command is None or not Path(command).is_absolute()):
         raise ValueError(NEEDS_COMMAND)
@@ -735,13 +736,17 @@ def local_move_steps(
         if oauth:
             raise ValueError(f"{name} signs in with OAuth; it stays direct for now.")
 
-    steps = [settings_step(home, ("servers", n), s, n) for n, s in servers.items()]
+    steps = [
+        settings_step(home, ("servers", n), s, n) for n, s in servers.items() if held.get(n) != s
+    ]
     path = os.environ.get("PATH")
-    if path and not settings.get("path"):
+    if steps and path and not settings.get("path"):  # with a server entry written
         steps.append(settings_step(home, ("path",), path, "PATH"))
     denies = _claude_denies(home, known_projects)
     project_offs = _claude_project_offs(home)
     for name in servers:
+        if name in held:
+            continue  # the gateway's own rules for it stay
         rules = _carried_rules(name, found[name], home, denies, project_offs)
         for (project, tool), (state, clients) in rules.items():
             step = rule_step(home, project, name, tool, state)

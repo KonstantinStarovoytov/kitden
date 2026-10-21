@@ -22,8 +22,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Quick start:** the page has its data in about two seconds. Codex's slow plugin list comes in
   the background, and a line shows what is still read.
 - **Kitden gateway:** on the Gateway page, pick a project and turn a whole MCP server or single
-  tools on or off for it, in every client. Local servers move in too. Each switch is one review
-  with Undo; no deploy, no account.
+  tools on or off for it, in every client; its folders and worktrees follow it. Local servers
+  move in too, and moving a server the gateway holds again updates it, for a new token. Each
+  switch is one review with Undo; no deploy, no account.
 
 ### 0.2.0
 
@@ -64,6 +65,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 ## Later
 
 - Remove a plugin.
+- Remove a server from the Kitden gateway.
 - Logins in one place: sign in once to servers that need OAuth, keep secrets in the keychain, and
   let those servers move into the Kitden gateway too.
 - Skills per project: turn skills on or off for one project, as tools are today.

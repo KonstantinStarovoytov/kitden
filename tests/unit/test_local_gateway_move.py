@@ -526,14 +526,79 @@ def test_an_existing_codex_kitden_entry_gets_the_timeouts_it_lacks(home):
     assert not gateway_file(home).exists()
 
 
-def test_a_name_the_gateway_has_and_a_missing_kitden_command_are_refused(home):
-    write_json(gateway_file(home), {"servers": {"aseprite": {"command": "uv"}}})
-    refused(
-        home,
-        ("codex", "aseprite"),
-        "The Kitden gateway already has aseprite. Remove the direct entry instead.",
-    )
+def test_a_server_the_gateway_holds_is_updated_from_a_changed_direct_entry(home):
+    old = {**FILES, "env": {"FILES_TOKEN": "SENTINEL_SECRET_OLD"}}
+    rules = {"global": {"files": {"tools": {"search": "off"}}}, "projects": {}}
+    write_json(gateway_file(home), {"servers": {"files": old}, "rules": rules, "path": "/bin"})
+    # A new token in Cursor; Codex also turns a tool off, which does not carry over.
+    add_cursor(home, "files", FILES)
+    add_cursor(home, "kitden", {"command": KITDEN, "args": ["mcp"]})
+    add_codex(home, "files", CODEX_FILES + '\ndisabled_tools = ["write"]')
+    files = [gateway_file(home), home / ".codex/config.toml", home / ".cursor/mcp.json"]
+    before = {path: path.read_bytes() for path in files}
 
+    with page_for(home) as page:
+        answer = preview(page, home, ("codex", "files"), ("cursor", "files"))
+        assert answer.status_code == 200, answer.json()
+        change = answer.json()
+        # One settings step replaces the held entry; the rules stay as they are.
+        assert [(s["client"], s["name"]) for s in change["steps"]] == [
+            ("kitden", "files"),
+            ("codex", "files"),
+            ("cursor", "files"),
+            ("codex", "kitden"),
+        ]
+        assert "servers > files" in change["steps"][0]["diff"]
+        assert "SENTINEL" not in answer.text
+        assert change["after"][0]["note"] == (
+            "Codex and Cursor will offer its tools through Kitden. "
+            "files in the Kitden gateway is updated. Applies to new sessions."
+        )
+
+        applied = page.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
+        assert applied["state"] == "verified", applied
+        saved = load_settings(home)
+        assert saved["servers"] == {"files": FILES}
+        assert (saved["rules"], saved["path"]) == (rules, "/bin")
+        assert "files" not in cursor(home)["mcpServers"]
+        assert "files" not in codex(home)["mcp_servers"]
+
+        undone = page.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
+        assert undone["state"] == "undone", undone
+    assert {path: path.read_bytes() for path in files} == before
+
+
+def test_a_server_the_gateway_holds_as_it_is_only_leaves_the_clients(home):
+    write_json(gateway_file(home), {"servers": {"files": FILES}, "rules": {}})
+    add_cursor(home, "files", FILES)
+    add_cursor(home, "kitden", {"command": KITDEN, "args": ["mcp"]})
+    files = [gateway_file(home), home / ".cursor/mcp.json"]
+    before = {path: path.read_bytes() for path in files}
+
+    with page_for(home) as page:
+        answer = preview(page, home, ("cursor", "files"))
+        assert answer.status_code == 200, answer.json()
+        change = answer.json()
+        assert [(s["client"], s["name"]) for s in change["steps"]] == [("cursor", "files")]
+        assert [(a["client"], a["word"]) for a in change["after"]] == [
+            ("cursor", "Via Kitden gateway")
+        ]
+        assert change["after"][0]["note"] == (
+            "Cursor will offer its tools through Kitden. files is in the Kitden gateway "
+            "already. Applies to new sessions. " + SWITCHES
+        )
+
+        applied = page.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
+        assert applied["state"] == "verified", applied
+        assert gateway_file(home).read_bytes() == before[gateway_file(home)]
+        assert "files" not in cursor(home)["mcpServers"]
+
+        undone = page.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
+        assert undone["state"] == "undone", undone
+    assert {path: path.read_bytes() for path in files} == before
+
+
+def test_a_missing_kitden_command_is_refused(home):
     words = "The setup server needs the absolute path of the kitden command"
     refused_without = pytest.raises(ValueError, match=f"^{re.escape(words)}$")
     with refused_without:

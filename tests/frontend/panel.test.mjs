@@ -100,6 +100,9 @@ test('a move into the Kitden gateway names the servers and that gateway, not its
   // A registered gateway keeps its words.
   const obotMove = { action: 'gateway.move', steps: [{ client: 'gateway', name: 'docs' }, { client: 'cursor', name: 'docs' }] };
   assert.equal(changeWords(obotMove).title, 'Move docs into the gateway');
+  // A server the Kitden gateway holds as it is: the move only removes the client's entry.
+  const held = { action: 'gateway.move', steps: [{ client: 'cursor', name: 'files' }] };
+  assert.equal(changeWords(held).title, 'Move files into the Kitden gateway');
 });
 
 const rule = (params) => ({ action: 'gateway.rule', steps: [{ client: 'kitden', name: params.tool || params.server }] });

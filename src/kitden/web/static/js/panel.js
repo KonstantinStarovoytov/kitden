@@ -4,7 +4,7 @@ import { $, $$, button, el, joinWords, plural, reportError, shortPath, shortPath
 import { loadLibrary, morphOnNextRender, onOpenItem, rowTitle, shownRow } from "./library.js";
 import { finishTransition, fold, transition } from "./motion.js";
 import { about, addButton, addOptions, whyNoAction } from "./offer.js";
-import { CLIENT_NAMES, diffCounts, flag, GATEWAY_NOTE, gatewayName, mark, movedNames, notesSection, ruleText, skeleton, socket, stepText } from "./parts.js";
+import { CLIENT_NAMES, diffCounts, flag, GATEWAY_NOTE, gatewayName, kitdenMove, mark, movedNames, notesSection, ruleText, skeleton, socket, stepText } from "./parts.js";
 import { busy, current as currentModel, currentError, data, reload, render, setBusy, state } from "./store.js";
 
 const KIND_WORDS = {
@@ -622,7 +622,7 @@ export function changeWords(change, previewBody) {
     return ruleText(params, params.project ? projectLabel(params.project) : null);
   }
   // A move names the servers it takes; the Kitden gateway's own steps are not a client.
-  const kitden = change.action === "gateway.move" && change.steps.some((s) => s.client === "kitden");
+  const kitden = kitdenMove(change);
   const steps = change.steps.filter((s) => s.client !== "gateway" && s.client !== "kitden");
   const listed = change.action === "gateway.move" ? movedNames(change.steps) : [...new Set(steps.map((s) => s.name))];
   const names = joinWords(listed);

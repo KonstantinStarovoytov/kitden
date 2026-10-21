@@ -76,6 +76,12 @@ export function movedNames(steps) {
   return [...new Set(steps.filter(leavesClient).map((s) => s.name))];
 }
 
+// A move into a registered gateway has that gateway's own step; one into the Kitden gateway has
+// none, also when the Kitden gateway holds the server already and only the entries go.
+export function kitdenMove(change) {
+  return change.action === "gateway.move" && !change.steps.some((s) => s.client === "gateway");
+}
+
 // A direct server, when no gateway here can take it: the Gateway page and Details say the same.
 export const GATEWAY_NOTE = "Add the server in the gateway first, then remove its direct entry here.";
 
@@ -234,7 +240,7 @@ export function ruleText({ server, tool, state }, where) {
 export function changeTitle(entry) {
   // A tool rule names its tool, server, project and new state (the server adds them).
   if (entry.action === "gateway.rule" && entry.rule) return ruleText(entry.rule, entry.rule.project).done;
-  const kitden = entry.action === "gateway.move" && entry.steps.some((s) => s.client === "kitden");
+  const kitden = kitdenMove(entry);
   const verb = kitden ? "Moved" : ACTION_WORDS[entry.action] || entry.action;
   const plugin = ["plugin.enable", "plugin.disable", "plugin.install"].includes(entry.action);
   // The gateway's own step is not a client: the line names the clients the entry left. An
