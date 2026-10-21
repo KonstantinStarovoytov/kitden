@@ -16,7 +16,6 @@ from kitden.local_gateway.project import project_chain
 from kitden.local_gateway.settings import (
     CLIENT,
     SETTINGS_FILE,
-    allowed_tools,
     deciding_project,
     load_settings,
     load_tools,
@@ -141,8 +140,9 @@ def rule_steps(home: Path, params: dict, projects: dict[str, str]) -> list[Step]
 def strict_steps(home: Path, params: dict, tools: dict[str, list[dict]]) -> list[Step]:
     """The change the strict switch makes: `params` has server and state ("on" or "off").
 
-    On writes the mode and an on for every tool offered now without its own global on, so
-    those stay on; a new tool then waits. Off removes the mode only."""
+    On writes the mode and a global on for every known tool without a global rule of its own,
+    whatever the server's state, so no project goes dark; a new tool then waits. A global off
+    stays, and project rules still come first. Off removes the mode only."""
     server, state = params.get("server"), params.get("state")
     settings = load_settings(home)
     if not isinstance(server, str) or server not in settings["servers"]:
@@ -151,13 +151,12 @@ def strict_steps(home: Path, params: dict, tools: dict[str, list[dict]]) -> list
         raise ValueError("Choose on or off.")
     if state == "off":
         return [strict_step(home, server, False)]
-    offered = allowed_tools(settings, tools, []).get(server, [])
     return [
         strict_step(home, server, True),
         *(
             rule_step(home, None, server, t["name"], "on")
-            for t in offered
-            if own_state(settings["rules"]["global"], server, t["name"]) != "on"
+            for t in tools.get(server, [])
+            if own_state(settings["rules"]["global"], server, t["name"]) is None
         ),
     ]
 

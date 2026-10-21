@@ -19,7 +19,13 @@ from kitden import mcp_server
 from kitden.changes.json_splice import ABSENT
 from kitden.gateways import data_dir
 from kitden.local_gateway import proxy
-from kitden.local_gateway.settings import SETTINGS_FILE, load_settings, load_tools, save_tools
+from kitden.local_gateway.settings import (
+    SETTINGS_FILE,
+    allowed_tools,
+    load_settings,
+    load_tools,
+    save_tools,
+)
 from kitden.local_gateway.views import gateway_items, refresh_tools, strict_steps, tools_view
 from kitden.views.gateway_view import gateway_view
 from kitden.views.inventory import build_inventory
@@ -843,3 +849,23 @@ def test_tools_view_says_strict(home):
     assert tools_view(load_settings(home), load_tools(home), "github", [])["strict"] is True
     hold(home, {"github": echo()})
     assert tools_view(load_settings(home), load_tools(home), "github", [])["strict"] is False
+
+
+def test_strict_on_keeps_the_tools_of_a_server_off_globally_but_on_in_a_project(home):
+    website = project(home, "website")
+    rules = {
+        "global": {"github": {"server": "off", "tools": {"create_issue": "off"}}},
+        "projects": {website: {"github": {"server": "on"}}},
+    }
+    hold(home, {"github": echo()}, rules)
+    save_tools(home, "github", [tool("list_issues"), tool("create_issue")])
+    steps = strict_steps(home, {"server": "github", "state": "on"}, load_tools(home))
+    assert [(s.edit.key[-1], s.edit.after) for s in steps] == [
+        ("mode", "strict"),
+        ("list_issues", "on"),
+    ]
+    rules["global"]["github"]["mode"] = "strict"
+    rules["global"]["github"]["tools"]["list_issues"] = "on"
+    hold(home, {"github": echo()}, rules)
+    offered = allowed_tools(load_settings(home), load_tools(home), [website])["github"]
+    assert [t["name"] for t in offered] == ["list_issues"]
