@@ -25,6 +25,12 @@ What Kitden does today and what comes next. Ideas and bugs:
   tools on or off for it, in every client; its folders and worktrees follow it. Local servers
   move in too, and moving a server the gateway holds again updates it, for a new token. Each
   switch is one review with Undo; no deploy, no account.
+- **Overview:** knows the Kitden gateway and says whether it is set up.
+- **Add scope:** in a project, the Library says an Add puts the item in all your projects.
+- **Kitden's own entries:** no cross-client note for them.
+- **True words:** the start link, the agents server, where secrets go, and the sign-in check.
+- **Gateway page:** says the gateway controls only the servers in it, and folds a group after
+  six rows.
 
 ### 0.2.0
 
@@ -65,22 +71,19 @@ and a master plan with one plan per part,
 [docs/superpowers/plans/2026-10-21-review-follow-up.md](docs/superpowers/plans/2026-10-21-review-follow-up.md).
 The parts, in order:
 
-1. **Truth on the page:** Overview knows the Kitden gateway (done); an Add says its scope before the
-   click; no notes about Kitden's own entries; the docs match the code; the gateway says what
-   it governs; the Gateway page folds long lists.
-2. **The gateway's access contract:** a strict mode per server that offers only the tools you
+1. **The gateway's access contract:** a strict mode per server that offers only the tools you
    turned on and keeps new tools out; a switched-off tool is refused at once; reads and writes
    shown as a helper with one switch for every writing tool; calls counted.
-3. **Complete management:** remove a plugin, a skill or a gateway server; put a held server back
+2. **Complete management:** remove a plugin, a skill or a gateway server; put a held server back
    in a client; add an MCP server to another client; add into one project; align a project
    across clients in one review.
-4. **Fast to open, and measured:** versions read in the background with a disk cache; a script
+3. **Fast to open, and measured:** versions read in the background with a disk cache; a script
    that reports time to the first usable view and to complete data.
-5. **Secrets have a lifecycle:** gateway secrets in the Keychain; backups say when they hold a
+4. **Secrets have a lifecycle:** gateway secrets in the Keychain; backups say when they hold a
    secret; logins in one place, so OAuth servers move into the gateway too.
-6. **The whole picture:** an Instructions tab (CLAUDE.md, AGENTS.md, Cursor rules, commands,
+5. **The whole picture:** an Instructions tab (CLAUDE.md, AGENTS.md, Cursor rules, commands,
    agents); tool counts.
-7. **Linux and Windows.**
+6. **Linux and Windows.**
 
 ## Next
 

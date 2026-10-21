@@ -37,7 +37,7 @@ and no telemetry. Secrets stay on this Mac and go only to the server they belong
 
 **Overview** lists what needs attention, such as an item that loads twice, and what can improve,
 such as servers that could move into your gateway. Each one has a button that opens its fix.
-The clients Kitden found sit on the right.
+The clients Kitden found sit on the right, and a card says whether the Kitden gateway is set up.
 
 ### See what each client has, and add what it lacks
 
@@ -45,7 +45,8 @@ The clients Kitden found sit on the right.
 item and each column is a client on this computer; the "−" on a column head hides that client,
 and "Show" brings it back. Tabs split MCP servers, plugins, skills, hooks and marketplaces. On
 plugins and skills, choose Installed, New (not on this computer yet) or All, and filter by
-category. Pick a project at the top to see what loads in that folder.
+category. Pick a project at the top to see what loads in that folder; an Add still puts the item
+in all your projects.
 
 The action sits in the client's cell. "+ Add" adds a plugin or skill to that client. "+ Add
 skills" copies the skills of a plugin that work on their own into a client that cannot install the
@@ -66,7 +67,7 @@ Mac, with no deploy and no account. [Obot](https://obot.ai) (with OAuth sign-in)
 for teams that want a shared service. Connect your clients, see what a gateway holds and which
 servers go around it, and move direct servers into it one at a time or all at once. Switch every
 client to another Obot or MetaMCP gateway in one review. Click a client in the diagram to open its
-app.
+app. A gateway controls only the servers in it; direct entries and terminal tools stay outside it.
 
 <p align="center">
   <picture>
