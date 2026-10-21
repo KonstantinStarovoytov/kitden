@@ -71,19 +71,19 @@ and a master plan with one plan per part,
 [docs/superpowers/plans/2026-10-21-review-follow-up.md](docs/superpowers/plans/2026-10-21-review-follow-up.md).
 The parts, in order:
 
-1. **The gateway's access contract:** a strict mode per server that offers only the tools you
+2. **The gateway's access contract:** a strict mode per server that offers only the tools you
    turned on and keeps new tools out; a switched-off tool is refused at once; reads and writes
    shown as a helper with one switch for every writing tool; calls counted.
-2. **Complete management:** remove a plugin, a skill or a gateway server; put a held server back
+3. **Complete management:** remove a plugin, a skill or a gateway server; put a held server back
    in a client; add an MCP server to another client; add into one project; align a project
    across clients in one review.
-3. **Fast to open, and measured:** versions read in the background with a disk cache; a script
+4. **Fast to open, and measured:** versions read in the background with a disk cache; a script
    that reports time to the first usable view and to complete data.
-4. **Secrets have a lifecycle:** gateway secrets in the Keychain; backups say when they hold a
+5. **Secrets have a lifecycle:** gateway secrets in the Keychain; backups say when they hold a
    secret; logins in one place, so OAuth servers move into the gateway too.
-5. **The whole picture:** an Instructions tab (CLAUDE.md, AGENTS.md, Cursor rules, commands,
+6. **The whole picture:** an Instructions tab (CLAUDE.md, AGENTS.md, Cursor rules, commands,
    agents); tool counts.
-6. **Linux and Windows.**
+7. **Linux and Windows.**
 
 ## Next
 

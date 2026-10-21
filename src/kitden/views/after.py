@@ -18,7 +18,7 @@ from kitden.local_gateway.settings import (
 )
 from kitden.model import GATEWAY_CLIENT, Change, ItemKind, Scope
 from kitden.views.effective import effective_view
-from kitden.views.setup_server import CLIENTS, setup_server_state
+from kitden.views.setup_server import CLIENTS, kitden_on, setup_server_state
 
 SKILL_CLIENTS = ("claude_code", "codex", "cursor")
 CLIENT_WORDS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
@@ -187,11 +187,7 @@ def _server_words(change: Change, name: str, rules: dict) -> tuple[list[str], bo
 
 def _offering(inventory) -> set[str]:
     """The clients whose `kitden` entry is on: they offer the Kitden gateway's tools."""
-    return {
-        s["client"]
-        for s in setup_server_state(inventory)
-        if s["state"] in ("added", "plugin") and s["enabled"] is not False
-    }
+    return {s["client"] for s in setup_server_state(inventory) if kitden_on(s)}
 
 
 def _kitden_move_words(change: Change, inventory, home: Path | None) -> list[dict]:

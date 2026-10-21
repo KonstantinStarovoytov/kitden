@@ -12,7 +12,7 @@ from kitden.model import FindingType, Gateway, Severity, UnknownReason, _hash
 from kitden.views.findings import base_name, find_bypasses, find_findings
 from kitden.views.gateway_view import gateway_view
 from kitden.views.load_map import COLUMNS, NAMES, row_key
-from kitden.views.setup_server import setup_server_state
+from kitden.views.setup_server import kitden_on, setup_server_state
 
 READ_PROBLEMS = {
     UnknownReason.UNRECOGNIZED_FORMAT: "The file format is not recognized",
@@ -125,7 +125,7 @@ def _kitden_card(inventory, held: list[dict], problem: str | None) -> dict | Non
     """The Kitden gateway: how many servers it holds and which clients reach it. A client with
     an old entry is neither connected nor offered a new one: the old entry is updated instead."""
     states = setup_server_state(inventory)
-    clients = [s["client"] for s in states if s["state"] in ("added", "plugin")]
+    clients = [s["client"] for s in states if kitden_on(s)]
     if not (held or clients or problem):
         return None
     return {

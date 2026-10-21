@@ -10,7 +10,10 @@ def test_the_start_link_is_not_called_one_time():
 
 def test_readme_says_where_secrets_go_and_what_the_agents_server_does():
     readme = (ROOT / "README.md").read_text()
-    assert "Secrets stay on this Mac and go only to the server they belong to." in readme
+    assert (
+        "Secrets stay on this Mac. They go only to the server they belong to, or to a gateway "
+        "you move that server into."
+    ) in readme
     assert (
         "Servers moved into the gateway add their tools, which do what those servers do." in readme
     )

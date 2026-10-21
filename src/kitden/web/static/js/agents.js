@@ -37,7 +37,7 @@ function cell(entry) {
 
 export function renderAgents(main) {
   main.append(el("h1", null, "Let agents read this setup"));
-  main.append(el("p", "lede", "Adds the Kitden MCP server to a client. An agent can then answer “what do you load here?”. Its own tools only read."));
+  main.append(el("p", "lede", "Adds the Kitden MCP server to a client. An agent can then answer “what do you load here?”. Its own tools only read. Servers moved into the gateway add their tools, which do what those servers do."));
   if (!data.setupServer) {
     if (data.errors.setupServer) main.append(banner("the clients", retry));
     else main.append(skeleton("card", 1));

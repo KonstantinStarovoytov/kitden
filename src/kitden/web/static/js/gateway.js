@@ -57,7 +57,9 @@ export function offersSwitch(model, gateway) {
 }
 
 // A long group shows its first rows; "Show all" opens the rest.
-export function visibleRows(rows, expanded, limit = 6) {
+export const FOLD_AT = 6;
+
+export function visibleRows(rows, expanded, limit = FOLD_AT) {
   if (expanded || rows.length <= limit) return { shown: rows, cut: 0 };
   return { shown: rows.slice(0, limit), cut: rows.length - limit };
 }
@@ -131,7 +133,7 @@ export function renderGateway(main) {
     const { shown, cut } = visibleRows(rows, draft.expanded[key]);
     // "Show all" is replaced by the rows; focus moves to the first new row's first control.
     const focus = `show:${key}`;
-    shown.forEach((row, i) => list.append(groupRow(row, key, targets, draft.expanded[key] && i === 6 ? focus : null)));
+    shown.forEach((row, i) => list.append(groupRow(row, key, targets, draft.expanded[key] && i === FOLD_AT ? focus : null)));
     section.append(list);
     if (cut > 0) {
       const more = button(`Show all ${rows.length}`, () => { draft.expanded[key] = true; render(); }, "btn small ghost");

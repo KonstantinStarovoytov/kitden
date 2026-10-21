@@ -52,6 +52,11 @@ def is_old_entry(item: Item) -> bool:
     return summary.get("command", "").endswith(f"/{OLD_NAME}") and args == ["mcp"]
 
 
+def kitden_on(entry: dict) -> bool:
+    """The client has a `kitden` entry (its own or a plugin's) and it is not turned off."""
+    return entry["state"] in ("added", "plugin") and entry["enabled"] is not False
+
+
 def setup_server_state(inventory) -> list[dict]:
     """Per client: `added`, `old`, `plugin`, `missing` or `not_installed`, and the old entry to
     update. A user-level entry wins over a plugin one, and a plugin one over an old entry, which is

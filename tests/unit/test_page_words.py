@@ -788,4 +788,10 @@ def test_gateway_show_all_hands_focus_to_the_first_new_row():
     assert text.count("show:${key}") == 1
     assert "more.dataset.focus = focus" in text
     assert "details.dataset.focus = focus" in text
-    assert "i === 6" in text
+    assert "i === FOLD_AT" in text
+    assert "limit = FOLD_AT" in text
+
+
+def test_agents_lede_says_held_servers_add_their_tools():
+    text = script("agents.js")
+    assert "Servers moved into the gateway add their tools, which do what those servers do." in text

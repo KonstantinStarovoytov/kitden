@@ -114,6 +114,15 @@ def test_the_kitden_gateway_card_names_servers_and_clients(connected):
     assert data["suggestions"][0]["title"].endswith("can move into the Kitden gateway")
 
 
+def test_a_turned_off_kitden_entry_is_not_connected_and_not_offered(connected):
+    codex = connected / ".codex/config.toml"
+    off = '\n[mcp_servers.kitden]\ncommand = "kitden"\nargs = ["mcp"]\nenabled = false\n'
+    codex.write_text(codex.read_text() + off)
+    held = [{"name": "github", "kind": "local", "state": "on", "differs": False}]
+    data = overview(build_inventory(connected), [], None, held=held)
+    assert data["gateway"]["clients"] == ["claude_code", "cursor"]
+
+
 def test_without_held_servers_or_connected_clients_there_is_no_gateway(home):
     data = overview(build_inventory(home), [], None, held=[])
     assert data["gateway"] is None  # no client has the entry in the plain fixture
