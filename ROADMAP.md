@@ -1,6 +1,6 @@
 # Kitden roadmap
 
-Last updated: 2026-10-20
+Last updated: 2026-10-21
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
@@ -23,6 +23,8 @@ What Kitden does today and what comes next. Ideas and bugs:
   the background, and a line shows what is still read.
 - **Quick start:** the page has its data in about two seconds. Codex's slow plugin list comes in
   the background, and a line shows what is still read.
+- **Kitden gateway (in progress):** `kitden mcp` also offers the tools of the servers moved into
+  it, only those turned on for the session's project. Moving servers in comes next.
 
 ### 0.2.0
 

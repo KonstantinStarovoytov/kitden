@@ -2,6 +2,7 @@
 
 Runs over stdio when a client starts `kitden mcp`. It answers with the same redacted model and
 the same project view as the page, and it has no tools that change anything (FR-030, FR-031).
+When servers are moved into the Kitden gateway, it also offers their tools (local_gateway.proxy).
 """
 
 import os
@@ -14,6 +15,8 @@ from mcp_types import ToolAnnotations
 
 from kitden.command import installed_command
 from kitden.gateways import load_gateways
+from kitden.local_gateway import proxy
+from kitden.local_gateway.settings import load_settings
 from kitden.model import Project
 from kitden.views.effective import DESKTOP, found_clients, project_views
 from kitden.views.explain import brief, explain
@@ -134,7 +137,10 @@ def create_server(build: Callable[[], Inventory], cwd: Callable[[], str] = os.ge
 
 
 def run(home: Path | None = None) -> None:
-    """Serve over stdio until the client closes the connection."""
+    """Serve over stdio until the client closes the connection.
+
+    With servers moved into the Kitden gateway, the same server also offers their tools.
+    """
     root = home or Path.home()
 
     def build() -> Inventory:
@@ -142,7 +148,15 @@ def run(home: Path | None = None) -> None:
         mark_gateways(inventory, load_gateways(root))
         return inventory
 
-    create_server(build).run()
+    server = create_server(build)
+    if not load_settings(root)["servers"]:
+        server.run()
+        return
+
+    def known() -> list[str]:
+        return [p.path for p in build_inventory(root, quick=True).projects]
+
+    proxy.run(root, server, known)
 
 
 __all__ = ["DESKTOP", "create_server", "installed_command", "resolve_project", "run"]
