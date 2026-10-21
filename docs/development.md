@@ -19,7 +19,7 @@ framework, no bundler, nothing loaded from another site. How it looks and moves:
 | --- | --- |
 | `src/kitden/clients/` | Reading and changing each client: Claude Code, Codex, Cursor |
 | `src/kitden/changes/` | Preview, Apply with backup, verify, Undo |
-| `src/kitden/views/` | What the page and the read-only MCP server show |
+| `src/kitden/views/` | What the page and the MCP server show |
 | `src/kitden/gateway_api.py` | MetaMCP and Obot |
 | `src/kitden/local_gateway/` | The Kitden gateway: settings and rules, project finding, the proxy inside `kitden mcp` |
 | `src/kitden/web/` | The local page |
@@ -38,7 +38,9 @@ framework, no bundler, nothing loaded from another site. How it looks and moves:
 
 The tests use fake servers. Before a release that touches the Kitden gateway, check it once by
 hand in each of Claude Code, Codex and Cursor, on a test project (a throwaway folder; never your
-own project):
+own project). Kitden must know the project: open it once in the client, so that it shows in the
+page's project list. For Cursor, check the IDE, which names the project to the gateway; Cursor's
+command line does not (checked 2026-10-21).
 
 1. In the page, move a server with a few tools into the Kitden gateway, and set up the `kitden`
    entry in the client if it lacks one.
@@ -65,7 +67,8 @@ with trusted publishing and creates the GitHub release with the notes file as it
 
 - **Kitden gateway** — the servers and rules are `gateway.json` (mode 600) and the tool lists are
   `gateway-tools.json`, both in `~/Library/Application Support/kitden`. Only `gateway.json`
-  changes through review and Undo. `kitden mcp` finds the project once, at start: the
+  changes through review and Undo. It also holds the env values and headers of moved servers; only
+  you can read it, and it stays on this Mac. `kitden mcp` finds the project once, at start: the
   `CLAUDE_PROJECT_DIR` variable, then the client's roots, then `WORKSPACE_FOLDER_PATHS`, then its
   start folder. Codex keeps a tool list for up to 30 minutes and ignores "list changed" (checked
   2026-10-21), so the tools are fixed for a session and a change applies to new sessions.

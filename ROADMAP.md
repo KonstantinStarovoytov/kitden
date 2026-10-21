@@ -21,12 +21,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Categories:** filter plugins and skills by category. The category shows quietly in each row.
 - **Quick start:** the page has its data in about two seconds. Codex's slow plugin list comes in
   the background, and a line shows what is still read.
-- **Kitden gateway:** `kitden mcp` also holds MCP servers, local or remote, with no deploy and no
-  account. Pick a project on the Gateway page and turn a whole server or single tools on or off
-  for it, in every client; each switch is one review with Undo and applies to new sessions.
-  Moving a server in keeps the tool rules Claude Code and Codex had. OAuth servers, entries in a
-  project's own files, entries that read values from your shell and entries with their own
-  folder stay direct for now. Obot and MetaMCP stay for teams.
+- **Kitden gateway:** on the Gateway page, pick a project and turn a whole MCP server or single
+  tools on or off for it, in every client. Local servers move in too. Each switch is one review
+  with Undo; no deploy, no account.
 
 ### 0.2.0
 

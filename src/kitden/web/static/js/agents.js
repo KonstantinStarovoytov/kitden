@@ -1,4 +1,4 @@
-// Agents: add the read-only "show my setup" MCP server to a client, update an old entry, or show
+// Agents: add the Kitden "show my setup" MCP server to a client, update an old entry, or show
 // that the kitden plugin already provides it (feature 003).
 import { button, el } from "./dom.js";
 import { entrance } from "./motion.js";
@@ -37,7 +37,7 @@ function cell(entry) {
 
 export function renderAgents(main) {
   main.append(el("h1", null, "Let agents read this setup"));
-  main.append(el("p", "lede", "Adds a read-only MCP server to a client. An agent can then answer “what do you load here?” without changing anything."));
+  main.append(el("p", "lede", "Adds the Kitden MCP server to a client. An agent can then answer “what do you load here?”. Its own tools only read."));
   if (!data.setupServer) {
     if (data.errors.setupServer) main.append(banner("the clients", retry));
     else main.append(skeleton("card", 1));

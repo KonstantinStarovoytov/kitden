@@ -78,23 +78,27 @@ app.
 ### The Kitden gateway: tools per project
 
 The Kitden gateway is the `kitden` entry that already lets agents read your setup; the page adds
-it to a client that lacks it. Move a server into it and every client reaches it there. Pick a
-project at the top, open a held server's Details, and turn the whole server or one tool on or off
-for that project, or for all projects. Claude Code and Codex can turn a tool off in one project,
-Cursor cannot (checked 2026-10-21); the gateway gives the same control in all three.
+it to a client that lacks it. Move a server into it and every client that uses the Kitden gateway
+reaches it. Pick a project at the top, open a server in the gateway, and turn the whole server or
+one tool on or off for that project, or for all projects. Claude Code and Codex can turn a tool
+off in one project, Cursor cannot (checked 2026-10-21); the gateway gives the same control in all
+three.
 
 It holds local servers (a command) and remote ones (an address). Each switch is a review with a
-backup and Undo. Moving a server keeps the tool rules Claude Code and Codex had; Cursor's own
+backup and Undo. Moving a server keeps the tools Claude Code and Codex had turned off; Cursor's own
 tool switches do not carry over. A change applies to new sessions, so start a new one in your
-client.
+client. A moved server's env values and headers are kept in the gateway's settings file, which only
+you can read and which stays on this Mac.
 
 A few servers stay direct for now, and the page says why:
 
 - servers that need an OAuth sign-in (one place for logins comes later);
 - entries in a project's own files, such as `.mcp.json`: they are already per project;
-- entries that read a value from your shell, such as `${TOKEN}`: the gateway starts without your
-  shell;
-- entries that start in their own folder.
+- entries that read a value from your shell, such as `${TOKEN}`: a client such as Codex starts the
+  gateway with almost no environment, and copying the value would make a new copy of a secret;
+- entries that start in their own folder: the gateway starts every local server in the project
+  folder;
+- SSE and WebSocket connections: the gateway does not support them yet.
 
 ### Check every change before it is written
 
@@ -112,8 +116,8 @@ a change to take effect.
 
 ### Let your agents ask
 
-**Agents** adds a read-only MCP server to Claude Code, Codex or Cursor, so you can ask your agent
-"show my setup". Its own tools cannot change anything.
+**Agents** adds the Kitden MCP server to Claude Code, Codex or Cursor, so you can ask your agent
+"show my setup". Kitden's own tools only read.
 
 ## Install
 

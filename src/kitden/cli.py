@@ -192,7 +192,7 @@ def main(argv: list[str] | None = None) -> int:
     serve.add_argument("--background", action="store_true", help=argparse.SUPPRESS)
     scan = commands.add_parser("scan", help="print what each client loads, then exit")
     scan.add_argument("--json", action="store_true", help="print JSON instead of a summary")
-    mcp = commands.add_parser("mcp", help="run the read-only MCP server over stdio")
+    mcp = commands.add_parser("mcp", help="run the Kitden MCP server and gateway over stdio")
     for sub in (opener, serve):
         sub.add_argument(
             "--no-browser", action="store_true", default=keep, help="only print the link"
