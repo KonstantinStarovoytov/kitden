@@ -101,13 +101,20 @@ def own_state(rules: Any, server: str, tool: str | None) -> str | None:
     return state if state in STATES else None
 
 
-def _is_on(scopes: list[dict], server: str, tool: str | None) -> bool:
-    """The first scope that has a state decides; with none, it is on."""
+def strict_mode(settings: dict, server: str) -> bool:
+    """Whether a server is in strict mode: a tool without a rule is off."""
+    rules = _dict(_dict(settings.get("rules")).get("global"))
+    return _dict(rules.get(server)).get("mode") == "strict"
+
+
+def _is_on(scopes: list[dict], server: str, tool: str | None, strict: bool = False) -> bool:
+    """The first scope that has a state decides. With none, it is on, except a tool of a
+    strict server."""
     for rules in scopes:
         state = own_state(rules, server, tool)
         if state is not None:
             return state == "on"
-    return True
+    return tool is None or not strict
 
 
 def _scopes(settings: dict, chain: Sequence[str]) -> list[dict]:
@@ -119,7 +126,8 @@ def _scopes(settings: dict, chain: Sequence[str]) -> list[dict]:
 
 def state_in(settings: dict, chain: Sequence[str], server: str, tool: str | None) -> str:
     """The state of a server (`tool` None) or one of its tools along the chain: on or off."""
-    return "on" if _is_on(_scopes(settings, chain), server, tool) else "off"
+    strict = strict_mode(settings, server)
+    return "on" if _is_on(_scopes(settings, chain), server, tool, strict) else "off"
 
 
 def deciding_project(
@@ -145,7 +153,11 @@ def allowed_tools(settings: dict, tools: dict, chain: Sequence[str]) -> dict[str
     """
     scopes = _scopes(settings, chain)
     return {
-        server: [t for t in tools[server] if _is_on(scopes, server, t["name"])]
+        server: [
+            t
+            for t in tools[server]
+            if _is_on(scopes, server, t["name"], strict_mode(settings, server))
+        ]
         for server in servers_on(settings, chain)
         if server in tools
     }
@@ -164,6 +176,13 @@ def rule_step(
     what = ("server",) if tool is None else ("tools", tool)
     value = ABSENT if state is None else state
     return settings_step(home, ("rules", *where, server, *what), value, tool or server)
+
+
+def strict_step(home: Path, server: str, on: bool) -> Step:
+    """A server's strict mode as a change step; off removes the mode."""
+    return settings_step(
+        home, ("rules", "global", server, "mode"), "strict" if on else ABSENT, server
+    )
 
 
 def rule_parts(key: tuple[str, ...]) -> tuple[str | None, str, str | None]:

@@ -19,6 +19,8 @@ from kitden.local_gateway.settings import (
     save_tools,
     servers_on,
     settings_unreadable,
+    state_in,
+    strict_step,
 )
 from kitden.model import Scope
 
@@ -77,6 +79,56 @@ def test_tools_follow_global_then_project_rules():
 
     # A project with no rules of its own gets the global set.
     assert allowed_tools(settings, TOOLS, ["/other"]) == everywhere
+
+
+def test_in_strict_mode_a_tool_without_a_rule_is_off():
+    settings = {
+        "servers": {"github": {}},
+        "rules": {
+            "global": {"github": {"mode": "strict", "tools": {"list_issues": "on"}}},
+            "projects": {},
+        },
+    }
+    tools = {"github": [tool("list_issues"), tool("create_issue")]}
+    assert names(allowed_tools(settings, tools, [])["github"]) == ["list_issues"]
+    assert state_in(settings, [], "github", "create_issue") == "off"
+    assert state_in(settings, [], "github", None) == "on"  # the server itself needs no rule
+
+
+def test_a_project_rule_still_wins_in_strict_mode():
+    settings = {
+        "servers": {"github": {}},
+        "rules": {
+            "global": {"github": {"mode": "strict"}},
+            "projects": {"/p": {"github": {"tools": {"create_issue": "on"}}}},
+        },
+    }
+    assert state_in(settings, ["/p"], "github", "create_issue") == "on"
+    assert state_in(settings, [], "github", "create_issue") == "off"
+
+
+def test_settings_without_a_mode_read_as_before():
+    settings = {
+        "servers": SERVERS,
+        "rules": {
+            "global": {"github": {"tools": {"delete_repo": "off"}}},
+            "projects": {
+                "/p": {"github": {"tools": {"delete_repo": "on"}}, "linear": {"server": "off"}}
+            },
+        },
+    }
+    assert names(allowed_tools(settings, TOOLS, [])["github"]) == ["list_issues"]
+    assert names(allowed_tools(settings, TOOLS, ["/p"])["github"]) == [
+        "delete_repo",
+        "list_issues",
+    ]
+
+
+def test_strict_step_writes_and_removes_the_mode(tmp_path):
+    step = strict_step(tmp_path, "github", True)
+    assert step.edit.key == ("rules", "global", "github", "mode")
+    assert step.edit.after == "strict"
+    assert strict_step(tmp_path, "github", False).edit.after is ABSENT
 
 
 def test_a_project_can_turn_on_a_server_that_is_off_everywhere():
