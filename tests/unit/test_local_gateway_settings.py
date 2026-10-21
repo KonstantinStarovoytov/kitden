@@ -17,6 +17,7 @@ from kitden.local_gateway.settings import (
     load_tools,
     rule_step,
     save_tools,
+    servers_on,
 )
 from kitden.model import Scope
 
@@ -111,6 +112,21 @@ def test_only_servers_in_the_gateway_with_a_known_tool_list_are_offered():
     assert list(allowed_tools(settings, tools, None)) == ["github"]
 
 
+def test_servers_on_lists_every_server_that_is_on_with_or_without_a_tool_list():
+    settings = {
+        "servers": {**SERVERS, "notion": {"command": "notion-mcp"}},  # no tool list known
+        "rules": {
+            "global": {"linear": {"server": "off"}, "ghost": {"server": "on"}},
+            "projects": {"/q": {"linear": {"server": "on"}, "github": {"server": "off"}}},
+        },
+    }
+
+    assert servers_on(settings, None) == ["github", "notion"]
+    assert servers_on(settings, "/p") == ["github", "notion"]  # no rules of its own
+    assert servers_on(settings, "/q") == ["linear", "notion"]
+    assert servers_on({"servers": {}, "rules": {}}, "/q") == []
+
+
 def test_a_missing_settings_file_reads_as_empty(tmp_path):
     empty = {"servers": {}, "rules": {"global": {}, "projects": {}}}
     assert load_settings(tmp_path) == empty
@@ -159,9 +175,13 @@ def test_rule_step_edits_one_entry_and_can_go_back_to_global(tmp_path):
     assert step.edit.path == str(path)
     assert step.edit.key == ("rules", "projects", "/p", "github", "tools", "delete_repo")
     change = engine.preview("gateway.rule", [step])
-    assert "SENTINEL_SECRET_GATEWAY" not in step.edit.masked_diff
+    assert "delete_repo" in step.edit.masked_diff
     engine.apply(change.id)
     assert str(change.state) == "verified"
+    records = (data_dir(tmp_path) / "changes" / change.id / "change.json").read_text()
+    records += (data_dir(tmp_path) / "changes.log").read_text()
+    assert "delete_repo" in records
+    assert "SENTINEL_SECRET_GATEWAY" not in records  # the servers' env is never recorded
     saved = json.loads(path.read_text())
     assert saved["rules"]["projects"] == {"/p": {"github": {"tools": {"delete_repo": "on"}}}}
     assert saved["rules"]["global"] == original["rules"]["global"]

@@ -57,6 +57,8 @@ def load_tools(home: Path) -> dict[str, list[dict]]:
 
 def save_tools(home: Path, server: str, tools: list[dict]) -> None:
     """Replace one server's known tools. Each is kept as name, description and inputSchema."""
+    # No lock on purpose: the write is atomic, and a list lost in a race is written again on the
+    # next start or Rescan.
     folder = data_dir(home)
     folder.mkdir(parents=True, exist_ok=True)
     folder.chmod(0o700)
@@ -82,20 +84,33 @@ def _is_on(scopes: list[dict], server: str, tool: str | None) -> bool:
     return True
 
 
-def allowed_tools(settings: dict, tools: dict, project: str | None) -> dict[str, list[dict]]:
-    """For each gateway server that is on, its known tools that are on, for this project.
-
-    A rule for a tool the server no longer has does nothing; a tool the server adds is on.
-    """
+def _scopes(settings: dict, project: str | None) -> list[dict]:
+    """The rules to read, the project's first, then the global ones."""
     rules = _dict(settings.get("rules"))
     scopes = [_dict(rules.get("global"))]
     if project is not None:
         scopes.insert(0, _dict(_dict(rules.get("projects")).get(project)))
-    offered = {}
-    for server in _dict(settings.get("servers")):
-        if server in tools and _is_on(scopes, server, None):
-            offered[server] = [t for t in tools[server] if _is_on(scopes, server, t["name"])]
-    return offered
+    return scopes
+
+
+def servers_on(settings: dict, project: str | None) -> list[str]:
+    """Every gateway server that is on for this project, whether or not its tools are known."""
+    scopes = _scopes(settings, project)
+    return [server for server in _dict(settings.get("servers")) if _is_on(scopes, server, None)]
+
+
+def allowed_tools(settings: dict, tools: dict, project: str | None) -> dict[str, list[dict]]:
+    """For each gateway server that is on, its known tools that are on, for this project.
+
+    A server whose tools are not known yet is left out (see `servers_on`). A rule for a tool the
+    server no longer has does nothing; a tool the server adds is on.
+    """
+    scopes = _scopes(settings, project)
+    return {
+        server: [t for t in tools[server] if _is_on(scopes, server, t["name"])]
+        for server in servers_on(settings, project)
+        if server in tools
+    }
 
 
 def rule_step(
