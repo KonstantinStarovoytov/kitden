@@ -329,6 +329,31 @@ def _held_words(name: str, settings: dict, known: list[str]) -> tuple[list[str],
 
 
 RULE_WORDS = {"on": "On", "off": "Off"}
+
+
+def _kept(projects: dict, known: list[str], server: str, tools: list, state: str) -> dict:
+    """The known projects whose own rule keeps one of `tools` (None: the whole server) at
+    the other state when all projects get `state`: project -> those tools, in order."""
+    kept: dict[str, list] = {}
+    for p in known:
+        for tool in tools:
+            if own_state(projects.get(p), server, tool) not in (None, state):
+                kept.setdefault(p, []).append(tool)
+    return kept
+
+
+def _kept_words(kept: dict, state: str, with_tools: bool) -> str:
+    """Where own rules keep the other state, for example: on in website, which has its own
+    rule. With `with_tools` it names the tools: on for create_issue in website, …"""
+    other = "off" if state == "on" else "on"
+    places = [
+        f"{_join(tools)} in {Path(p).name}" if with_tools else Path(p).name
+        for p, tools in kept.items()
+    ]
+    which = "which has its own rule" if len(kept) == 1 else "which have their own rules"
+    return f"{other} {'for ' if with_tools else 'in '}{_join(places)}, {which}"
+
+
 # The gateway reads the rules again on each call, but a client keeps the list it was offered.
 AT_ONCE = "A tool turned off is refused at once. The client shows the new list in a new session."
 
@@ -361,12 +386,9 @@ def _rule_words(change: Change, inventory, home: Path) -> list[dict]:
         line += f", but {server} is off there"
     line += "."
     if project is None:
-        # A project's own rule keeps its state; the words name each one that differs.
-        kept = [p for p in known if own_state(projects.get(p), server, tool) not in (None, state)]
+        kept = _kept(projects, known, server, [tool], state)
         if kept:
-            other = "off" if state == "on" else "on"
-            which = "which has its own rule" if len(kept) == 1 else "which have their own rules"
-            line += f" It stays {other} in {_join([Path(p).name for p in kept])}, {which}."
+            line += f" It stays {_kept_words(kept, state, with_tools=False)}."
     clients = [c for c in CLIENTS if c in _offering(inventory)]
     if not clients:
         return [{"note": f"{line} No client uses the Kitden gateway yet."}]
@@ -375,18 +397,26 @@ def _rule_words(change: Change, inventory, home: Path) -> list[dict]:
     return out
 
 
-def _rules_words(change: Change, inventory) -> list[dict]:
+def _rules_words(change: Change, inventory, home: Path) -> list[dict]:
     """The batch switch: several tools of one server on or off in one project or all, named,
-    with what the hints are worth and what a real guarantee takes."""
+    with each project whose own rule keeps one of them as it is, what the hints are worth and
+    what a real guarantee takes."""
     edits = [s.edit for s in change.steps if s.edit is not None]
     project, server, _ = rule_parts(edits[0].key)
     names = [rule_parts(e.key)[2] for e in edits]
     state = edits[0].after
     where = "all projects" if project is None else Path(project).name
     count = f"{len(names)} {'tool' if len(names) == 1 else 'tools'}"
+    first = f"{count} of {server} will be {state} in {where}: {', '.join(names)}."
+    if project is None:
+        known = [p.path for p in inventory.projects]
+        projects = load_settings(home)["rules"]["projects"]
+        kept = _kept(projects, known, server, names, state)
+        if kept:
+            first += f" They stay {_kept_words(kept, state, with_tools=True)}."
     line = " ".join(
         (
-            f"{count} of {server} will be {state} in {where}: {', '.join(names)}.",
+            first,
             "Hints come from the server and names are a guess; check the list.",
             GUARANTEE.format(server=server),
         )
@@ -434,8 +464,8 @@ def after_words(
         return _skill_words(change, inventory, skills or [])
     if change.action == GATEWAY_RULE and home is not None:
         return _rule_words(change, inventory, home)
-    if change.action == GATEWAY_RULES and change.steps:
-        return _rules_words(change, inventory)
+    if change.action == GATEWAY_RULES and change.steps and home is not None:
+        return _rules_words(change, inventory, home)
     if change.action == GATEWAY_STRICT and home is not None:
         return _strict_words(change, inventory, home)
     # A move into a registered gateway has that gateway's own step; one into the Kitden

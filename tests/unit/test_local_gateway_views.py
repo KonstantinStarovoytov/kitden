@@ -917,6 +917,9 @@ def test_outside_strict_mode_no_tool_is_new(home):
         ({"name": "create_issue"}, ("may write", "name")),
         ({"name": "uploadFile"}, ("may write", "name")),
         ({"name": "search"}, ("unknown", None)),
+        ({"name": "delete_repo", "annotations": {"title": "Delete"}}, ("may write", "name")),
+        ({"name": "delete_repo", "annotations": {"openWorldHint": True}}, ("may write", "name")),
+        ({"name": "delete_repo", "annotations": {"destructiveHint": False}}, ("unknown", None)),
     ],
 )
 def test_tool_hints_come_from_annotations_then_names(tool, expected):

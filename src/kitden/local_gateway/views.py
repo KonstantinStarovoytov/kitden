@@ -134,7 +134,9 @@ def tool_hint(tool: dict) -> tuple[str, str | None]:
         return "reads", "server"
     if hints.get("readOnlyHint") is False or hints.get("destructiveHint") is True:
         return "writes", "server"
-    if not hints and any(w.lower() in WRITE_VERBS for w in _WORD.findall(tool["name"])):
+    # Other annotations, such as a title, say nothing about writing: the name may.
+    said = "readOnlyHint" in hints or "destructiveHint" in hints
+    if not said and any(w.lower() in WRITE_VERBS for w in _WORD.findall(tool["name"])):
         return "may write", "name"
     return "unknown", None
 
@@ -152,11 +154,10 @@ def tools_view(settings: dict, tools: dict, server: str, chain: list[str]) -> di
         "tools": [
             {
                 "name": tool["name"],
+                **dict(zip(("hint", "hint_from"), tool_hint(tool), strict=True)),
                 "description": tool.get("description") or "",
                 "new": strict and all(own_state(r, server, tool["name"]) is None for r in scopes),
                 **_states(settings, server, tool["name"], chain),
-                "hint": tool_hint(tool)[0],
-                "hint_from": tool_hint(tool)[1],
             }
             for tool in tools.get(server, [])
         ],

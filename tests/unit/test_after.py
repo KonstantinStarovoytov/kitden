@@ -244,3 +244,32 @@ def test_turning_off_several_tools_names_them_and_says_names_are_a_guess(tmp_pat
         f"{GUARANTEE} "
         "A tool turned off is refused at once. The client shows the new list in a new session."
     )
+
+
+def test_turning_off_tools_for_all_projects_names_projects_that_keep_them_on(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    import kitden.clients.base as base
+    from kitden.local_gateway.settings import save_tools
+    from kitden.local_gateway.views import rules_steps
+    from kitden.views.inventory import build_inventory
+    from tests.unit.test_local_gateway_move import gateway_file, new_home, tool, write_json
+    from tests.unit.test_local_gateway_views import KITDEN, add_entry
+
+    monkeypatch.setattr(base, "read_command_version", lambda client: None)
+    home = new_home(tmp_path)
+    add_entry(home, "cursor", "kitden", {"command": KITDEN, "args": ["mcp"]})
+    inventory = build_inventory(home)
+    website = next(p.path for p in inventory.projects if Path(p.path).name == "website")
+    rules = {"projects": {website: {"github": {"tools": {"create_issue": "on"}}}}}
+    write_json(gateway_file(home), {"servers": {"github": {"command": "npx"}}, "rules": rules})
+    names = ["create_issue", "delete_issue"]
+    save_tools(home, "github", [tool(n) for n in names])
+    params = {"server": "github", "tools": names, "state": "off", "project": None}
+    change = Change(action="gateway.rules", steps=rules_steps(home, params, {}))
+    note = after_words(change, inventory, home=home)[0]["note"]
+    assert note.startswith(
+        "2 tools of github will be off in all projects: create_issue, delete_issue. "
+        "They stay on for create_issue in website, which has its own rule. "
+        "Hints come from the server"
+    )
