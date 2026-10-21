@@ -57,18 +57,37 @@ What Kitden does today and what comes next. Ideas and bugs:
 - A read-only "show my setup" MCP server for agents.
 - One-line install, a plugin for Claude Code and Codex, and an Add to Cursor link.
 
+## Planned
+
+The two reviews of 2026-10-21 (`docs/research/`) led to one approved design,
+[docs/superpowers/specs/2026-10-21-review-follow-up-design.md](docs/superpowers/specs/2026-10-21-review-follow-up-design.md),
+and a master plan with one plan per part,
+[docs/superpowers/plans/2026-10-21-review-follow-up.md](docs/superpowers/plans/2026-10-21-review-follow-up.md).
+The parts, in order:
+
+1. **Truth on the page:** Overview knows the Kitden gateway; an Add says its scope before the
+   click; no notes about Kitden's own entries; the docs match the code; the gateway says what
+   it governs; the Gateway page folds long lists.
+2. **The gateway's access contract:** a strict mode per server that offers only the tools you
+   turned on and keeps new tools out; a switched-off tool is refused at once; reads and writes
+   shown as a helper with one switch for every writing tool; calls counted.
+3. **Complete management:** remove a plugin, a skill or a gateway server; put a held server back
+   in a client; add an MCP server to another client; add into one project; align a project
+   across clients in one review.
+4. **Fast to open, and measured:** versions read in the background with a disk cache; a script
+   that reports time to the first usable view and to complete data.
+5. **Secrets have a lifecycle:** gateway secrets in the Keychain; backups say when they hold a
+   secret; logins in one place, so OAuth servers move into the gateway too.
+6. **The whole picture:** an Instructions tab (CLAUDE.md, AGENTS.md, Cursor rules, commands,
+   agents); tool counts.
+7. **Linux and Windows.**
+
 ## Next
 
 - Copy any command with one click.
-- Linux and Windows.
 
 ## Later
 
-- Remove a plugin.
-- Remove a server from the Kitden gateway.
-- Logins in one place: sign in once to servers that need OAuth, keep secrets in the keychain, and
-  let those servers move into the Kitden gateway too.
 - Skills per project: turn skills on or off for one project, as tools are today.
-- Overview suggests moving servers into the Kitden gateway.
 - A living map: clients → config files → servers, plugins, skills → gateways.
 - A shared setup for a small team.
