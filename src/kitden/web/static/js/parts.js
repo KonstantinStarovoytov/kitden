@@ -224,6 +224,7 @@ const ACTION_WORDS = {
   "setup_server.update": "Updated show my setup to Kitden",
   "gateway.rule": "Changed the rule for",
   "gateway.strict": "Changed strict mode for",
+  "gateway.rules": "Changed the rules for",
 };
 
 // A Kitden gateway rule in words: "slow of echo in website", as the review's after line says
@@ -235,6 +236,13 @@ export function ruleText({ server, tool, state }, where) {
   if (state === "on" || state === "off") return { title: `Turn ${state} ${what} in ${place}`, done: `Turned ${state} ${what} in ${place}` };
   // A removed rule: what the project then follows is in the review, not known when a line is read.
   return { title: `Remove the own setting for ${what} in ${place}`, done: `${what} in ${place}: own setting removed` };
+}
+
+// The batch switch in words: "Turn off 3 tools of github in website".
+export function rulesText({ server, tools, state }, where) {
+  const count = `${tools.length} ${tools.length === 1 ? "tool" : "tools"}`;
+  const what = `${state} ${count} of ${server} in ${where || "all projects"}`;
+  return { title: `Turn ${what}`, done: `Turned ${what}` };
 }
 
 // The strict switch in words: the review's title and the line after the change.
@@ -249,6 +257,8 @@ export function changeTitle(entry) {
   if (entry.action === "gateway.rule" && entry.rule) return ruleText(entry.rule, entry.rule.project).done;
   // The strict switch: its first step is the server's mode; the others are its tools.
   if (entry.action === "gateway.strict" && entry.steps.length) return `${ACTION_WORDS[entry.action]} ${entry.steps[0].name} · Kitden gateway`;
+  // The batch switch: its steps are the tools it changed.
+  if (entry.action === "gateway.rules") return `${ACTION_WORDS[entry.action]} ${entry.steps.map((s) => s.name).join(", ")} · Kitden gateway`;
   const kitden = kitdenMove(entry);
   const verb = kitden ? "Moved" : ACTION_WORDS[entry.action] || entry.action;
   const plugin = ["plugin.enable", "plugin.disable", "plugin.install"].includes(entry.action);

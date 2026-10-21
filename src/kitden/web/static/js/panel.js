@@ -4,7 +4,7 @@ import { $, $$, button, el, joinWords, plural, reportError, shortPath, shortPath
 import { loadLibrary, morphOnNextRender, onOpenItem, rowTitle, shownRow } from "./library.js";
 import { finishTransition, fold, transition } from "./motion.js";
 import { about, addButton, addOptions, whyNoAction } from "./offer.js";
-import { CLIENT_NAMES, diffCounts, flag, GATEWAY_NOTE, gatewayName, kitdenMove, mark, movedNames, notesSection, ruleText, skeleton, socket, stepText, strictText } from "./parts.js";
+import { CLIENT_NAMES, diffCounts, flag, GATEWAY_NOTE, gatewayName, kitdenMove, mark, movedNames, notesSection, ruleText, rulesText, skeleton, socket, stepText, strictText } from "./parts.js";
 import { busy, current as currentModel, currentError, data, reload, render, setBusy, state } from "./store.js";
 
 const KIND_WORDS = {
@@ -370,20 +370,29 @@ function projectLabel(id) {
 // The rows of a held server's Details, for the project picked at the top (`where`, its folder
 // name) or for all projects (null): the whole server first, then each tool it lists. A row
 // that differs names what it follows without its own setting: the project around it, or all
-// projects.
+// projects. A tool's hint says whether it reads or writes, from the server or by its name.
 export function toolRows(answer, where) {
   const place = where || "all projects";
   const row = (key, tool, name, description, entry) => {
     const on = entry.state !== "off";
     const what = tool === null ? answer.server : `${tool} of ${answer.server}`;
     const follows = entry.follows || "all projects";
-    return { key, tool, name, description, on, flag: entry.new ? "New" : null, differs: Boolean(entry.differs), follows, label: `Turn ${on ? "off" : "on"} ${what} in ${place}…` };
+    const hint = tool === null ? null : entry.hint || null;
+    const hintFrom = tool === null ? null : entry.hint_from || null;
+    return { key, tool, name, description, on, hint, hintFrom, flag: entry.new ? "New" : null, differs: Boolean(entry.differs), follows, label: `Turn ${on ? "off" : "on"} ${what} in ${place}…` };
   };
   return [
     row("server", null, "Whole server", `Turns every tool of ${answer.server} on or off.`, answer),
     ...answer.tools.map((t) => row(`tool:${t.name}`, t.name, t.name, t.description, t)),
   ];
 }
+
+// The tools the batch switch turns off: those that are on and write, or may write by their name.
+export function writingToolsOn(tools) {
+  return tools.filter((t) => t.state === "on" && (t.hint === "writes" || t.hint === "may write")).map((t) => t.name);
+}
+
+const HINT_FROM = { server: "from the server", name: "by its name" };
 
 // The tool list in the open panel: a refresh reads it again, an Undo draws its Details again.
 let tools = null;
@@ -463,11 +472,27 @@ export function toolsSection(server, again, next = {}) {
     if (answer.problem) nodes.push(callout(answer.problem));
     if (answer.state === "off") nodes.push(el("p", "muted", `${server} is off in ${where || "all projects"}, so none of its tools are offered there.`));
     nodes.push(strictRow(answer, flip));
+    const writing = writingToolsOn(answer.tools);
+    if (writing.length) {
+      // Verified, the button is gone (no writing tool is on), so focus goes to Refresh tools.
+      const back = ({ error = null, verified = false } = {}) => again({ focus: verified ? "tools:refresh" : "writing", error });
+      const params = { server, tools: writing, state: "off", project: state.project || null };
+      const all = button("Turn off every writing tool…", () => review({ action: "gateway.rules", targets: [], params }, { back }), "btn small");
+      all.dataset.focus = "writing";
+      const line = el("div");
+      line.append(all);
+      nodes.push(line);
+    }
     const stack = el("div", "stack");
     for (const row of toolRows(answer, where)) {
       const node = el("div", row.tool === null ? "layer tool whole" : "layer tool");
       const middle = el("div");
       const title = el("div", row.tool === null ? "name" : "name mono", row.name);
+      if (row.hintFrom) {
+        const hint = el("span", "muted hint", row.hint);
+        hint.title = HINT_FROM[row.hintFrom];
+        title.append(" ", hint);
+      }
       if (row.flag) title.append(" ", flag({ text: row.flag, level: "info" }));
       middle.append(title);
       if (row.description) {
@@ -653,6 +678,10 @@ export function changeWords(change, previewBody) {
   if (change.action === "gateway.strict") {
     const params = (previewBody && previewBody.params) || {};
     return strictText(params);
+  }
+  if (change.action === "gateway.rules") {
+    const params = (previewBody && previewBody.params) || {};
+    return rulesText({ ...params, tools: params.tools || [] }, params.project ? projectLabel(params.project) : null);
   }
   // A move names the servers it takes; the Kitden gateway's own steps are not a client.
   const kitden = kitdenMove(change);

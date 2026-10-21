@@ -5,6 +5,7 @@ The MCP SDK loads only when a server is asked for its tools: the page must start
 
 import asyncio
 import importlib
+import re
 from collections.abc import Iterable
 from dataclasses import replace
 from pathlib import Path
@@ -101,6 +102,43 @@ def held_servers(settings: dict, chain: list[str]) -> list[dict]:
     return cards
 
 
+# Words in a tool's name that suggest it changes something. A guess: the page says so.
+WRITE_VERBS = (
+    "write",
+    "create",
+    "delete",
+    "remove",
+    "update",
+    "set",
+    "send",
+    "post",
+    "put",
+    "patch",
+    "move",
+    "rename",
+    "upload",
+    "execute",
+    "run",
+)
+# Whole words of a name: runs of capitals before a capitalised word ("HTTPPost"), a word with
+# its first capital ("uploadFile"), or other runs of letters and digits; `_`, `-` and `.` split.
+_WORD = re.compile(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|\d+")
+
+
+def tool_hint(tool: dict) -> tuple[str, str | None]:
+    """Whether a tool reads or writes, and where that comes from: the server's hints
+    ("server"), or a verb among the whole words of its name ("name"). ("unknown", None) when
+    neither says."""
+    hints = tool.get("annotations") or {}
+    if hints.get("readOnlyHint") is True:
+        return "reads", "server"
+    if hints.get("readOnlyHint") is False or hints.get("destructiveHint") is True:
+        return "writes", "server"
+    if not hints and any(w.lower() in WRITE_VERBS for w in _WORD.findall(tool["name"])):
+        return "may write", "name"
+    return "unknown", None
+
+
 def tools_view(settings: dict, tools: dict, server: str, chain: list[str]) -> dict:
     """A held server's state and its known tools, each with its state, along the picked
     project's chain (empty: all projects). A tool is new when the server is strict and no rule
@@ -117,6 +155,8 @@ def tools_view(settings: dict, tools: dict, server: str, chain: list[str]) -> di
                 "description": tool.get("description") or "",
                 "new": strict and all(own_state(r, server, tool["name"]) is None for r in scopes),
                 **_states(settings, server, tool["name"], chain),
+                "hint": tool_hint(tool)[0],
+                "hint_from": tool_hint(tool)[1],
             }
             for tool in tools.get(server, [])
         ],
@@ -140,6 +180,19 @@ def rule_steps(home: Path, params: dict, projects: dict[str, str]) -> list[Step]
     if project is None and state is None:
         raise ValueError("Choose on or off.")
     return [rule_step(home, projects.get(project), server, tool, state)]
+
+
+def rules_steps(home: Path, params: dict, projects: dict[str, str]) -> list[Step]:
+    """The change one batch switch makes: `params` has server, tools (a list of names), state
+    ("on" or "off") and project (an id; None: all projects). One rule step per tool, checked
+    as `rule_steps` checks one switch."""
+    tools, state = params.get("tools"), params.get("state")
+    if not isinstance(tools, list) or not tools or not all(isinstance(t, str) for t in tools):
+        raise ValueError("Choose at least one tool.")
+    if state not in ("on", "off"):
+        raise ValueError("Choose on or off.")
+    names = dict.fromkeys(tools)  # each tool once, in order
+    return [s for tool in names for s in rule_steps(home, {**params, "tool": tool}, projects)]
 
 
 def strict_steps(home: Path, params: dict, tools: dict[str, list[dict]]) -> list[Step]:

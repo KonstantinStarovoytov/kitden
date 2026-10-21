@@ -806,3 +806,10 @@ def test_the_tool_list_has_a_strict_switch():
 
 def test_all_projects_says_unknown_folders_follow_it():
     assert "These switches also apply in folders Kitden does not know." in script("panel.js")
+
+
+def test_the_tool_list_says_reads_and_writes_and_has_a_batch_switch():
+    panel = script("panel.js")
+    assert "Turn off every writing tool…" in panel
+    assert "from the server" in panel and "by its name" in panel
+    assert 'action: "gateway.rules"' in panel

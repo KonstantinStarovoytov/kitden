@@ -461,6 +461,8 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .layer.tool.whole { background: var(--wire-soft); }
 /* A description wraps to two lines at most, so it can be read without a pointer. */
 .layer.tool .why { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* Reads or writes: a hint, said quietly after the tool's name. */
+.layer.tool .hint { font: 12px var(--sans); }
 .layer.tool .differs { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 .drawer .chip h2 { margin: 0; }
 .drawer .skeleton.card { height: 120px; }

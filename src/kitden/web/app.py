@@ -20,6 +20,7 @@ from kitden.changes.actions import (
     GATEWAY_CONNECT,
     GATEWAY_MOVE,
     GATEWAY_RULE,
+    GATEWAY_RULES,
     GATEWAY_STRICT,
     GATEWAY_SWITCH,
     KITDEN_GATEWAY,
@@ -66,6 +67,7 @@ from kitden.local_gateway.views import (
     refresh_tools,
     rule_of,
     rule_steps,
+    rules_steps,
     strict_steps,
     tools_view,
 )
@@ -843,6 +845,9 @@ def create_app(
             elif action == GATEWAY_RULE:
                 projects = {p["id"]: p["path"] for p in state.data["projects"]}
                 steps = rule_steps(home, params, projects)
+            elif action == GATEWAY_RULES:
+                projects = {p["id"]: p["path"] for p in state.data["projects"]}
+                steps = rules_steps(home, params, projects)
             elif action == GATEWAY_STRICT:
                 steps = strict_steps(home, params, load_tools(home))
             elif action == GATEWAY_MOVE:

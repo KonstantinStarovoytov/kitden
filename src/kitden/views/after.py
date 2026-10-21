@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 
-from kitden.changes.actions import GATEWAY_RULE, GATEWAY_STRICT, claude_allows_kitden
+from kitden.changes.actions import GATEWAY_RULE, GATEWAY_RULES, GATEWAY_STRICT, claude_allows_kitden
 from kitden.changes.json_splice import ABSENT
 from kitden.clients.base import SETUP_NAME
 from kitden.local_gateway.project import project_chain
@@ -375,6 +375,30 @@ def _rule_words(change: Change, inventory, home: Path) -> list[dict]:
     return out
 
 
+def _rules_words(change: Change, inventory) -> list[dict]:
+    """The batch switch: several tools of one server on or off in one project or all, named,
+    with what the hints are worth and what a real guarantee takes."""
+    edits = [s.edit for s in change.steps if s.edit is not None]
+    project, server, _ = rule_parts(edits[0].key)
+    names = [rule_parts(e.key)[2] for e in edits]
+    state = edits[0].after
+    where = "all projects" if project is None else Path(project).name
+    count = f"{len(names)} {'tool' if len(names) == 1 else 'tools'}"
+    line = " ".join(
+        (
+            f"{count} of {server} will be {state} in {where}: {', '.join(names)}.",
+            "Hints come from the server and names are a guess; check the list.",
+            GUARANTEE.format(server=server),
+        )
+    )
+    clients = [c for c in CLIENTS if c in _offering(inventory)]
+    if not clients:
+        return [{"note": f"{line} No client uses the Kitden gateway yet."}]
+    out = [{"client": c, "state": state, "word": RULE_WORDS[state]} for c in clients]
+    out[0]["note"] = f"{line} {AT_ONCE}"
+    return out
+
+
 def _strict_words(change: Change, inventory, home: Path) -> list[dict]:
     """The strict switch of a held server: one line that says what strict mode does, for each
     client that offers the gateway's tools."""
@@ -410,6 +434,8 @@ def after_words(
         return _skill_words(change, inventory, skills or [])
     if change.action == GATEWAY_RULE and home is not None:
         return _rule_words(change, inventory, home)
+    if change.action == GATEWAY_RULES and change.steps:
+        return _rules_words(change, inventory)
     if change.action == GATEWAY_STRICT and home is not None:
         return _strict_words(change, inventory, home)
     # A move into a registered gateway has that gateway's own step; one into the Kitden

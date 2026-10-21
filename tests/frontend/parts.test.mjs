@@ -187,3 +187,8 @@ test('the strict switch names its server, in the review and in the log', () => {
   const steps = [{ client: 'kitden', name: 'github' }, { client: 'kitden', name: 'list_issues' }];
   assert.equal(changeTitle({ action: 'gateway.strict', steps }), 'Changed strict mode for github · Kitden gateway');
 });
+
+test('the Changes page names the tools a batch switch changed', () => {
+  const steps = [{ client: 'kitden', name: 'create_issue' }, { client: 'kitden', name: 'delete_issue' }];
+  assert.equal(changeTitle({ action: 'gateway.rules', steps }), 'Changed the rules for create_issue, delete_issue · Kitden gateway');
+});

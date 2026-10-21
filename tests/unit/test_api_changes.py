@@ -822,3 +822,30 @@ def test_gateway_strict_previews_applies_and_undoes(client):
     undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
     assert undone["state"] == "undone", undone
     assert path.read_bytes() == before
+
+
+def test_gateway_rules_previews_one_change_with_several_steps(client):
+    from kitden.local_gateway.settings import save_tools
+
+    home = client.home
+    path = _hold_in_kitden(home)
+    tools = [{"name": n, "description": "", "inputSchema": {}} for n in ("create", "delete")]
+    save_tools(home, "files", tools)
+    before = path.read_bytes()
+    params = {"server": "files", "tools": ["create", "delete"], "state": "off", "project": None}
+    body = {"action": "gateway.rules", "targets": [], "params": params}
+    answer = client.post("/api/changes/preview", json=body, headers=POST)
+    assert answer.status_code == 200, answer.json()
+    change = answer.json()
+    assert len(change["steps"]) == 2
+    note = change["after"][0]["note"]
+    assert note.startswith("2 tools of files will be off in all projects: create, delete. ")
+    assert "Hints come from the server and names are a guess; check the list." in note
+    assert "For a real guarantee, give files a token that can only read." in note
+    applied = client.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
+    assert applied["state"] == "verified", applied
+    rules = json.loads(path.read_text())["rules"]["global"]["files"]
+    assert rules == {"tools": {"create": "off", "delete": "off"}}
+    undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
+    assert undone["state"] == "undone", undone
+    assert path.read_bytes() == before

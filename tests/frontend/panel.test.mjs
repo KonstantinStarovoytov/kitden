@@ -5,7 +5,7 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; panel.js must load there too.
 delete globalThis.navigator;
-const { afterParts, changeOutcome, changeWords, footerActions, leftOutText, loadsLede, moveFor, moveTargets, toolRows } = await import('../../src/kitden/web/static/js/panel.js');
+const { afterParts, changeOutcome, changeWords, footerActions, leftOutText, loadsLede, moveFor, moveTargets, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
 const { addOptions, whyNoAction } = await import('../../src/kitden/web/static/js/offer.js');
 const { data } = await import('../../src/kitden/web/static/js/store.js');
 
@@ -371,4 +371,26 @@ test('a new tool in strict mode is flagged', () => {
   assert.equal(rows[1].flag, 'New');
   assert.equal(rows[2].flag, null);
   assert.equal(rows[0].flag, null);
+});
+
+test('tool rows carry the hint and where it comes from', () => {
+  const rows = toolRows({ server: 'github', state: 'on', strict: false, tools: [{ name: 'read_file', description: '', state: 'on', hint: 'reads', hint_from: 'server', new: false }] }, null);
+  assert.equal(rows[1].hint, 'reads'); assert.equal(rows[1].hintFrom, 'server');
+  assert.equal(rows[0].hint, null);
+});
+
+test('the batch switch takes the writing tools that are on', () => {
+  const tools = [{ name: 'a', state: 'on', hint: 'writes' }, { name: 'b', state: 'off', hint: 'writes' }, { name: 'c', state: 'on', hint: 'may write' }, { name: 'd', state: 'on', hint: 'reads' }];
+  assert.deepEqual(writingToolsOn(tools), ['a', 'c']);
+  assert.deepEqual(writingToolsOn([]), []);
+});
+
+test('the batch review counts the tools and names the project', () => {
+  data.projects = [{ id: 'p1', path: '/Users/me/work/website' }];
+  const body = { action: 'gateway.rules', params: { server: 'github', tools: ['a', 'c'], state: 'off', project: 'p1' } };
+  const change = { action: 'gateway.rules', steps: [{ client: 'kitden', name: 'a' }, { client: 'kitden', name: 'c' }] };
+  assert.deepEqual(changeWords(change, body), { title: 'Turn off 2 tools of github in website', done: 'Turned off 2 tools of github in website' });
+  const one = { ...body, params: { ...body.params, tools: ['a'], project: null } };
+  assert.deepEqual(changeWords(change, one), { title: 'Turn off 1 tool of github in all projects', done: 'Turned off 1 tool of github in all projects' });
+  data.projects = null;
 });

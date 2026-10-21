@@ -218,3 +218,29 @@ def test_a_rule_says_a_tool_turned_off_is_refused_at_once(tmp_path, monkeypatch)
         "once. The client shows the new list in a new session."
     )
     assert "Applies to new sessions." not in note
+
+
+def test_turning_off_several_tools_names_them_and_says_names_are_a_guess(tmp_path, monkeypatch):
+    import kitden.clients.base as base
+    from kitden.local_gateway.settings import save_tools
+    from kitden.local_gateway.views import rules_steps
+    from kitden.views.inventory import build_inventory
+    from tests.unit.test_local_gateway_move import gateway_file, new_home, tool, write_json
+    from tests.unit.test_local_gateway_views import KITDEN, add_entry
+
+    monkeypatch.setattr(base, "read_command_version", lambda client: None)
+    home = new_home(tmp_path)
+    add_entry(home, "cursor", "kitden", {"command": KITDEN, "args": ["mcp"]})
+    write_json(gateway_file(home), {"servers": {"github": {"command": "npx"}}, "rules": {}})
+    names = ["create_issue", "delete_issue", "merge_pr"]
+    save_tools(home, "github", [tool(n) for n in names])
+    params = {"server": "github", "tools": names, "state": "off", "project": None}
+    change = Change(action="gateway.rules", steps=rules_steps(home, params, {}))
+    words = after_words(change, build_inventory(home), home=home)
+    assert words[0]["state"] == "off"
+    assert words[0]["note"] == (
+        "3 tools of github will be off in all projects: create_issue, delete_issue, merge_pr. "
+        "Hints come from the server and names are a guess; check the list. "
+        f"{GUARANTEE} "
+        "A tool turned off is refused at once. The client shows the new list in a new session."
+    )

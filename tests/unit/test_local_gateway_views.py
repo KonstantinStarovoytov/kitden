@@ -26,7 +26,14 @@ from kitden.local_gateway.settings import (
     load_tools,
     save_tools,
 )
-from kitden.local_gateway.views import gateway_items, refresh_tools, strict_steps, tools_view
+from kitden.local_gateway.views import (
+    gateway_items,
+    refresh_tools,
+    rules_steps,
+    strict_steps,
+    tool_hint,
+    tools_view,
+)
 from kitden.views.gateway_view import gateway_view
 from kitden.views.inventory import build_inventory
 from kitden.web.app import create_app
@@ -233,6 +240,8 @@ def test_tools_api_marks_project_differences(home):
             "state": "on",
             "differs": False,
             "follows": None,
+            "hint": "unknown",
+            "hint_from": None,
         }
         assert rows(everywhere) == [
             ("echo", "on", False),
@@ -897,3 +906,64 @@ def test_outside_strict_mode_no_tool_is_new(home):
     save_tools(home, "github", [tool("list_issues")])
     view = tools_view(load_settings(home), load_tools(home), "github", [])
     assert not any(t["new"] for t in view["tools"])
+
+
+@pytest.mark.parametrize(
+    "tool, expected",
+    [
+        ({"name": "read_file", "annotations": {"readOnlyHint": True}}, ("reads", "server")),
+        ({"name": "search", "annotations": {"readOnlyHint": False}}, ("writes", "server")),
+        ({"name": "delete_file", "annotations": {"destructiveHint": True}}, ("writes", "server")),
+        ({"name": "create_issue"}, ("may write", "name")),
+        ({"name": "uploadFile"}, ("may write", "name")),
+        ({"name": "search"}, ("unknown", None)),
+    ],
+)
+def test_tool_hints_come_from_annotations_then_names(tool, expected):
+    assert tool_hint({"description": "", "inputSchema": {}, **tool}) == expected
+
+
+@pytest.mark.parametrize("name", ["runway_status", "settle_bill", "posture", "putative"])
+def test_verbs_match_whole_words_only(name):
+    assert tool_hint({"name": name}) == ("unknown", None)
+
+
+@pytest.mark.parametrize("name", ["issues.create", "pr-merge-run", "HTTPPost", "sendMail"])
+def test_names_split_on_dots_dashes_and_capitals(name):
+    assert tool_hint({"name": name}) == ("may write", "name")
+
+
+def test_tools_view_says_each_tools_hint(home):
+    hold(home, {"github": echo()})
+    reads = {**tool("list_issues"), "annotations": {"readOnlyHint": True}}
+    save_tools(home, "github", [reads, tool("create_issue")])
+    tools = tools_view(load_settings(home), load_tools(home), "github", [])["tools"]
+    assert [(t["hint"], t["hint_from"]) for t in tools] == [
+        ("reads", "server"),
+        ("may write", "name"),
+    ]
+
+
+def test_rules_steps_make_one_step_per_tool(home):
+    hold(home, {"github": echo()})
+    save_tools(home, "github", [tool("create_issue"), tool("delete_issue")])
+    params = {"server": "github", "tools": ["create_issue", "delete_issue"], "state": "off"}
+    steps = rules_steps(home, {**params, "project": None}, {})
+    assert [s.edit.key[-1] for s in steps] == ["create_issue", "delete_issue"]
+    assert {(s.edit.key[1], s.edit.after) for s in steps} == {("global", "off")}
+
+
+def test_rules_steps_check_what_the_switch_checks(home):
+    hold(home, {"github": echo()})
+    save_tools(home, "github", [tool("create_issue")])
+    base = {"server": "github", "tools": ["create_issue"], "state": "off", "project": None}
+    for change, words in (
+        ({"tools": []}, "Choose at least one tool."),
+        ({"tools": "create_issue"}, "Choose at least one tool."),
+        ({"server": "nope"}, "Choose a server in the Kitden gateway."),
+        ({"tools": ["gone"]}, "Choose a tool of this server."),
+        ({"state": None}, "Choose on or off."),
+        ({"project": "p9"}, "Unknown project."),
+    ):
+        with pytest.raises(ValueError, match=words):
+            rules_steps(home, {**base, **change}, {})
