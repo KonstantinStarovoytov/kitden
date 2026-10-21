@@ -323,7 +323,7 @@ def test_library_rows_keep_the_name_and_the_source_readable():
     # The server marks rows that share a name; the page does not count names itself.
     assert "names.get" not in text
     # A cell's button names its row's source too, or twin rows would give two buttons one name.
-    assert "addName(row, client, cell.add)" in text
+    assert "addName(row, client, cell.add, state.project)" in text
 
 
 def test_offer_details_and_add_form_follow_what_the_server_says_about_cursor():
@@ -765,3 +765,7 @@ def test_overview_offers_set_up_only_without_a_gateway():
     overview = script("overview.js")
     assert overview.count('"No gateway yet."') == 1
     assert "gatewayCardWords" in overview
+
+
+def test_library_says_the_add_scope_in_a_project():
+    assert "Adding puts an item in all your projects." in script("library.js")

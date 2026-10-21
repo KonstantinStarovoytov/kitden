@@ -38,7 +38,7 @@ const requests = [];
 globalThis.fetch = (url) => new Promise((resolve) => {
   requests.push({ url, answer: (body) => resolve({ ok: true, status: 200, json: async () => body }) });
 });
-const { cellNode, emptyState, hiddenClients, hiddenLine, hideButton, loadLibrary, loadLibraryFor, metaText, moreLine, nameCell, noteFor, previewFor, setHidden } = await import('../../src/kitden/web/static/js/library.js');
+const { addName, scopeLine, cellNode, emptyState, hiddenClients, hiddenLine, hideButton, loadLibrary, loadLibraryFor, metaText, moreLine, nameCell, noteFor, previewFor, setHidden } = await import('../../src/kitden/web/static/js/library.js');
 const { freshness, hashFor, parseHash, state } = await import('../../src/kitden/web/static/js/store.js');
 const later = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -358,4 +358,15 @@ test('a quick answer is waited for; a slow one is not', async () => {
   assert.equal(await raceSlow(new Promise((done) => setTimeout(done, 5)), 100), true);
   assert.equal(await raceSlow(new Promise((done) => setTimeout(done, 200)), 20), false);
   assert.equal(await raceSlow(Promise.reject(new Error('no')), 100), true); // an error is an answer too
+});
+
+test('an Add names its scope when a project is picked', () => {
+  const row = { name: 'brandkit', kind: 'skill' };
+  assert.ok(addName(row, 'codex', { label: '+ Add' }, 'p1').endsWith(' for all projects'));
+  assert.ok(!addName(row, 'codex', { label: '+ Add' }, null).endsWith(' for all projects'));
+});
+test('the scope line needs a project and rows', () => {
+  assert.equal(scopeLine('p1', [{}]), 'Adding puts an item in all your projects.');
+  assert.equal(scopeLine('p1', []), null);
+  assert.equal(scopeLine(null, [{}]), null);
 });

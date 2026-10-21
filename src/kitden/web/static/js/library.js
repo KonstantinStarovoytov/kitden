@@ -72,10 +72,15 @@ export function noteFor(add, project) {
 
 // What a screen reader hears for a cell's button: its words first, then what, from where (when
 // names repeat) and to which client.
-function addName(row, client, add) {
+export function addName(row, client, add, project) {
   const name = row.same_name && row.source ? `${row.name} (${row.source})` : row.name;
   const what = { "+ Add skills": `Add skills from ${name}`, "+ Add the plugin": `Add the plugin with ${name}` }[add.label] || `Add ${name}`;
-  return `${what} to ${CLIENT_NAMES[client] || client}`;
+  return `${what} to ${CLIENT_NAMES[client] || client}${project ? " for all projects" : ""}`;
+}
+
+// A quiet line above the table: in a project, an Add still reaches every project.
+export function scopeLine(project, rows) {
+  return project && rows.length > 0 ? "Adding puts an item in all your projects." : null;
 }
 
 // One cell: a button for the one action, a state, or a dash that says why not.
@@ -83,7 +88,7 @@ export function cellNode(row, client) {
   const cell = row.cells[client];
   if (cell.add) {
     const node = button(cell.add.label, () => review(previewFor(cell.add, client), { note: noteFor(cell.add, state.project) }), "btn small add");
-    node.setAttribute("aria-label", addName(row, client, cell.add));
+    node.setAttribute("aria-label", addName(row, client, cell.add, state.project));
     node.dataset.focus = `add:${row.key}:${client}`;
     return node;
   }
@@ -308,6 +313,8 @@ export function renderLibrary(main) {
   const table = buildTable(columns, answer.rows, groups, morphNext);
   const scroller = el("div", "table-scroll");
   scroller.append(table);
+  const line = scopeLine(state.project, answer.rows);
+  if (line) main.append(el("p", "group-note", line));
   main.append(scroller);
   finish(answer.rows);
   entrance("library", [table]);
