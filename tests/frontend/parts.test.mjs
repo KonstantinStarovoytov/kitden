@@ -29,7 +29,7 @@ function element(tag) {
   return node;
 }
 globalThis.document = { createElement: element };
-const { banner, changeTitle, clientCheck, morphSocket, opens, socket } = await import('../../src/kitden/web/static/js/parts.js');
+const { banner, changeTitle, clientCheck, gatewayName, morphSocket, opens, socket } = await import('../../src/kitden/web/static/js/parts.js');
 
 test('a row that opens Details ends with a chevron for the eye and words for a screen reader', () => {
   const node = opens();
@@ -138,6 +138,25 @@ test('an Add skills entry on the Changes page counts the skills, not every name'
   const step = (name) => ({ client: 'codex', name, reaches: ['codex', 'cursor'] });
   assert.equal(changeTitle({ action: 'plugin.skills', steps: [step('a'), step('b'), step('c')] }), 'Added 3 skills · Codex, Cursor');
   assert.equal(changeTitle({ action: 'plugin.skills', steps: [step('a')] }), 'Added 1 skill · Codex, Cursor');
+});
+
+test('the Changes page names what moved into the Kitden gateway and which rule changed', () => {
+  const steps = [
+    { client: 'kitden', name: 'files' }, { client: 'kitden', name: 'PATH' },
+    { client: 'claude_code', name: 'files' }, { client: 'cursor', name: 'files' },
+    { client: 'cursor', name: 'kitden' }, { client: 'codex', name: 'kitden' },
+  ];
+  assert.equal(changeTitle({ action: 'gateway.move', steps }), 'Moved into the Kitden gateway files · Claude Code, Cursor');
+  const obot = [{ client: 'gateway', name: 'docs' }, { client: 'cursor', name: 'docs' }];
+  assert.equal(changeTitle({ action: 'gateway.move', steps: obot }), 'Moved into the gateway docs · Cursor');
+  assert.equal(changeTitle({ action: 'gateway.rule', steps: [{ client: 'kitden', name: 'slow' }] }), 'Changed the rule for slow · Kitden gateway');
+});
+
+test('a gateway goes by its own name, its kind, or its address', () => {
+  assert.equal(gatewayName({ kind: 'kitden', name: 'Kitden gateway' }), 'Kitden gateway');
+  assert.equal(gatewayName({ kind: 'obot', url: 'http://127.0.0.1:8080/mcp-connect/x' }), 'Obot');
+  assert.equal(gatewayName({ url: 'http://127.0.0.1:12008/metamcp/local/mcp' }), 'MetaMCP');
+  assert.equal(gatewayName({ url: 'https://tools.example.com/mcp' }), 'tools.example.com');
 });
 
 // The first scan: one quiet line that says what is still read, and how much is done.

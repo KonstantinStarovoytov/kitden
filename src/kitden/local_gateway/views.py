@@ -70,6 +70,19 @@ def _states(settings: dict, server: str, tool: str | None, project: str | None) 
     return {"state": own or everywhere, "differs": own is not None and own != everywhere}
 
 
+def held_servers(settings: dict, project: str | None) -> list[dict]:
+    """Every server in the Kitden gateway, for its card: name, local or remote, and its state in
+    the project (None: all projects). Commands, addresses and env stay out."""
+    return [
+        {
+            "name": name,
+            "kind": "remote" if isinstance(server, dict) and "url" in server else "local",
+            **_states(settings, name, None, project),
+        }
+        for name, server in sorted(settings["servers"].items(), key=lambda pair: pair[0].lower())
+    ]
+
+
 def tools_view(settings: dict, tools: dict, server: str, project: str | None) -> dict:
     """A held server's state and its known tools, each with its state, for the project (None:
     all projects)."""

@@ -215,6 +215,9 @@ function listen() {
     try { detail = JSON.parse(event.data); } catch { return; }
     document.dispatchEvent(new CustomEvent("kitden:progress", { detail }));
   });
+  // A refresh of the Kitden gateway's tool lists ended, also after a failure: an open tool
+  // list reads them again.
+  events.addEventListener("gateway_tools", () => document.dispatchEvent(new CustomEvent("kitden:tools")));
   events.addEventListener("rescan_finished", () => {
     $("#topbar").classList.remove("scanning");
     liveRefresh();

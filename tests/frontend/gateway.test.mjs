@@ -1,0 +1,44 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+
+// gateway.js needs only this from a browser to load; the tests call its pure parts.
+globalThis.matchMedia = () => ({ matches: false });
+delete globalThis.navigator;
+const { kitdenClients, offersSwitch } = await import('../../src/kitden/web/static/js/gateway.js');
+
+const entry = (client, state, fields = {}) => ({ client, state, item: null, enabled: true, ...fields });
+
+test('the Kitden card connects every client with an on kitden entry and sets up the rest', () => {
+  const { linked, setup } = kitdenClients([
+    entry('claude_code', 'added'),
+    entry('codex', 'missing'),
+    entry('cursor', 'plugin'),
+  ]);
+  assert.deepEqual(linked, ['claude_code', 'cursor']);
+  assert.deepEqual(setup, [{ client: 'codex', label: 'Set up in Codex…', body: { action: 'setup_server.register', targets: [{ client: 'codex' }], params: {} } }]);
+});
+
+test('an old entry is updated, an off entry is not connected, a missing client is left out', () => {
+  const { linked, setup } = kitdenClients([
+    entry('claude_code', 'added', { enabled: false }),
+    entry('codex', 'old', { item: 'codex:agentsetup' }),
+    entry('cursor', 'not_installed', { enabled: null }),
+  ]);
+  assert.deepEqual(linked, []);
+  assert.deepEqual(setup, [{ client: 'codex', label: 'Set up in Codex…', body: { action: 'setup_server.update', targets: [{ item: 'codex:agentsetup' }], params: {} } }]);
+  // Without the answer, nothing is offered.
+  assert.deepEqual(kitdenClients(null), { linked: [], setup: [] });
+});
+
+test('a registered gateway offers to take the clients over only from another registered one', () => {
+  const kitden = { id: 'kitden', kind: 'kitden' };
+  const obot = { id: 'gw-1' };
+  const meta = { id: 'gw-2' };
+  const model = (used) => ({ gateways: [kitden, obot, meta], used });
+  // The clients use only the Kitden gateway: a registered gateway has nothing to take over.
+  assert.equal(offersSwitch(model(['kitden']), obot), false);
+  assert.equal(offersSwitch(model(['kitden', 'gw-2']), obot), true);
+  assert.equal(offersSwitch(model(['gw-1']), obot), false);
+  assert.equal(offersSwitch(model([]), obot), false);
+  assert.equal(offersSwitch(model(['gw-2']), kitden), false);
+});

@@ -124,6 +124,10 @@ def test_held_servers_show_via_kitden_gateway_in_connected_clients(home):
             "codex": ("none", None),
             "cursor": ("gw", "Kitden gateway"),
         }
+        # Codex reaches it once it has the `kitden` entry: the Gateway page sets that up.
+        assert row["cells"]["codex"]["reason"] == (
+            "Set up the Kitden gateway in Codex on the Gateway page."
+        )
         assert "SENTINEL_SECRET_FILES" not in library.text
         assert "SENTINEL_SECRET_FILES" not in page.get("/api/items").text
 
@@ -143,6 +147,7 @@ def test_the_kitden_gateway_is_listed_and_local_servers_can_move(home):
         "name": "Kitden gateway",
         "where": "On this Mac",
         "movable": True,
+        "servers": [{"name": "files", "kind": "local", "state": "on", "differs": False}],
     }
     assert view["connections"]["kitden"] == {"claude_code": [], "codex": [], "cursor": ["files"]}
     assert view["used"] == ["kitden"]
@@ -156,6 +161,33 @@ def test_the_kitden_gateway_is_listed_and_local_servers_can_move(home):
     assert alone["gateways"] == []
     assert row(alone, "local", "n8n-mcp")["movable"] is False
     assert row(alone, "move", "Neon")["movable"] is False
+
+
+def test_the_kitden_card_lists_every_held_server_with_its_state_in_the_project(home):
+    website = project(home, "website")
+    docs = {"url": "https://docs.example.com/mcp"}
+    # No client has the `kitden` entry, and files is off everywhere but website: the card still
+    # lists both, so they can be found and switched.
+    rules = {
+        "global": {"files": {"server": "off"}},
+        "projects": {website: {"files": {"server": "on"}}},
+    }
+    hold(home, {"files": FILES, "docs": docs}, rules)
+
+    with page_for(home) as page:
+        everywhere = page.get("/api/gateway-view").json()["gateways"][0]["servers"]
+        there = page.get(f"/api/gateway-view?project={project_id(page, website)}").json()
+    assert everywhere == [
+        {"name": "docs", "kind": "remote", "state": "on", "differs": False},
+        {"name": "files", "kind": "local", "state": "off", "differs": False},
+    ]
+    assert there["gateways"][0]["servers"][1] == {
+        "name": "files",
+        "kind": "local",
+        "state": "on",
+        "differs": True,
+    }
+    assert "SENTINEL_SECRET_FILES" not in json.dumps(there)
 
 
 def test_tools_api_marks_project_differences(home):

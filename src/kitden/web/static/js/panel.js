@@ -1,11 +1,11 @@
 // Side panel: item details, change review, the Apply motion, and the toast with Undo.
 import { getJson, postJson, query } from "./api.js";
 import { $, $$, button, el, joinWords, plural, reportError, shortPath, shortPaths } from "./dom.js";
-import { loadLibrary, morphOnNextRender, onOpenItem, rowTitle } from "./library.js";
+import { loadLibrary, morphOnNextRender, onOpenItem, rowTitle, shownRow } from "./library.js";
 import { finishTransition, fold, transition } from "./motion.js";
 import { about, addButton, addOptions, whyNoAction } from "./offer.js";
-import { CLIENT_NAMES, diffCounts, GATEWAY_NOTE, mark, notesSection, socket, stepText } from "./parts.js";
-import { busy, current as currentModel, currentError, reload, render, setBusy, state } from "./store.js";
+import { CLIENT_NAMES, diffCounts, flag, GATEWAY_NOTE, gatewayName, mark, movedNames, notesSection, skeleton, socket, stepText } from "./parts.js";
+import { busy, current as currentModel, currentError, data, reload, render, setBusy, state } from "./store.js";
 
 const KIND_WORDS = {
   mcp_server: "MCP server", plugin: "Plugin", skill: "Skill", hook: "Hook", marketplace: "Marketplace",
@@ -58,9 +58,7 @@ export function openPanel(content, { instant = false } = {}) {
 // While a change is being applied the panel stays open: closing it could not stop the change.
 export function closePanel({ instant = false, keepSelection = false, focus = true, force = false } = {}) {
   if (!isPanelOpen() || (busy.change && !force)) return;
-  if (current && current.type === "review" && current.change && current.change.state === "previewed") {
-    postJson(`/api/changes/${encodeURIComponent(current.change.id)}/cancel`).catch(() => {});
-  }
+  cancelPreview();
   current = null;
   for (const node of [$("#drawer"), $("#scrim")]) {
     node.classList.toggle("instant", instant);
@@ -71,6 +69,13 @@ export function closePanel({ instant = false, keepSelection = false, focus = tru
     for (const row of $$('tr[aria-selected="true"]')) row.setAttribute("aria-selected", "false");
   }
   if (focus) restoreFocus();
+}
+
+// A review left without Apply: the server forgets its preview.
+function cancelPreview() {
+  if (current && current.type === "review" && current.change && current.change.state === "previewed") {
+    postJson(`/api/changes/${encodeURIComponent(current.change.id)}/cancel`).catch(() => {});
+  }
 }
 
 function restoreFocus() {
@@ -104,7 +109,8 @@ function callout(text, level = "warn") {
 
 // Item details ---------------------------------------------------------------------------
 
-export async function openItem(row, { instant = false } = {}) {
+// `tools` goes to the tool list of a server in the Kitden gateway (see toolsSection).
+export async function openItem(row, { instant = false, tools: toolsNext = {} } = {}) {
   current = { type: "item", row };
   const body = el("div", "body");
   body.append(el("div", "skeleton card"));
@@ -130,7 +136,7 @@ export async function openItem(row, { instant = false } = {}) {
   if (!current || current.row !== row) return;
   current.definitions = definitions;
   current.offer = offer;
-  showDetails(row, definitions, offer);
+  showDetails(row, definitions, offer, toolsNext);
 }
 
 // The line under the Details title: the clients that load the item, then those where the page
@@ -169,17 +175,33 @@ function sideEffect({ def, action }, warnings) {
   return [el("span", "note side", `${SIDE_EFFECTS[action]} ${clientName(def.client)} itself`)];
 }
 
-// A server the Gateway page lists under "Can move", with the entries a move takes and the
-// gateway that can take them (none when it must be added in the gateway by hand). Without a
-// registered gateway there is nothing to move into, so Details stays as it was. When the
-// gateway could not be read (`unread`), Move cannot be judged: it is marked `unread`.
+// The gateways that can take the direct servers of one group of the Gateway page, in the order
+// offered: the Kitden gateway first (it runs on this Mac, so it also takes local servers), then
+// each registered gateway that takes servers (remote ones only).
+export function moveTargets(model, group) {
+  if (!model) return [];
+  const kitden = model.gateways.filter((g) => g.kind === "kitden");
+  if (group === "local") return kitden;
+  if (group !== "move") return [];
+  return [...kitden, ...model.gateways.filter((g) => g.kind !== "kitden" && g.movable)];
+}
+
+// A server the Gateway page lists as one that can move, with the entries a move takes and the
+// gateways that can take them (none when it must be added in the gateway by hand). Without a
+// gateway there is nothing to move into, so Details stays as it was. When the gateway could
+// not be read (`unread`), Move cannot be judged: it is marked `unread`.
 export function moveFor(row, model, unread = false) {
   if (row.kind !== "mcp_server") return null;
-  if (!model) return unread ? { items: [], gateway: null, unread: true } : null;
+  if (!model) return unread ? { items: [], gateways: [], unread: true } : null;
   if (!model.gateways.length) return null;
-  const direct = model.groups.move.find((r) => r.name === row.name);
-  if (!direct || !direct.items.length) return null;
-  return { items: direct.items, gateway: model.gateways.find((g) => g.movable) || null };
+  for (const group of ["move", "local"]) {
+    const direct = (model.groups[group] || []).find((r) => r.name === row.name);
+    if (!direct || !direct.items.length) continue;
+    const gateways = moveTargets(model, group);
+    // A local server no gateway here can take stays as it was: nothing to say about it.
+    if (group === "move" || gateways.length) return { items: direct.items, gateways };
+  }
+  return null;
 }
 
 // The footer's lead action and the rest, in order; "move" stands for Move into the gateway, and
@@ -188,17 +210,33 @@ export function moveFor(row, model, unread = false) {
 // button fixes, or a server to add in the gateway by hand first, nothing leads.
 export function footerActions(offers, warnings, move, adds = []) {
   const fix = offers.find((o) => warnings.some((f) => f.fix_action === o.action && f.client === o.def.client));
-  const options = [...(move && move.gateway ? ["move"] : []), ...offers, ...adds];
+  const canMove = Boolean(move && move.gateways.length);
+  const options = [...(canMove ? ["move"] : []), ...offers, ...adds];
   let lead = fix || null;
-  if (!lead && !warnings.length && move && move.gateway) lead = "move";
+  if (!lead && !warnings.length && canMove) lead = "move";
   if (!lead && !warnings.length && !move && offers.length === 1) lead = offers[0];
   if (!lead && !warnings.length && adds.length) lead = adds[0];
   return { lead, rest: options.filter((o) => o !== lead) };
 }
 
-function moveButton({ items, gateway }, look) {
+// Move entries into a gateway. With one gateway that can take them the review opens at once;
+// with two the panel asks which, the Kitden gateway first. A move into the Kitden gateway may
+// ask the server for its tools first, so the button that started it stays busy until then.
+export function moveInto(gateways, items, title) {
   const targets = items.map((item) => ({ item }));
-  return button("Move into the gateway…", () => review({ action: "gateway.move", targets, params: { gateway: gateway.id } }), look);
+  const preview = (gateway) => review({ action: "gateway.move", targets, params: { gateway: gateway.id } });
+  if (gateways.length === 1) return preview(gateways[0]);
+  const body = el("div", "body");
+  body.append(el("p", "muted", "More than one gateway can take it. The Kitden gateway runs on this Mac and turns tools on or off per project."));
+  const into = (gateway) => (gateway.kind === "kitden" ? "the Kitden gateway" : gatewayName(gateway));
+  // The primary button sits last, so the Kitden gateway is drawn last.
+  const choices = gateways.map((gateway, i) => button(`Move into ${into(gateway)}…`, () => preview(gateway), i === 0 ? "btn primary" : "btn"));
+  openInfo("Move into the gateway", title, body, choices.reverse());
+  return null;
+}
+
+function moveButton({ items, gateways }, look, name) {
+  return button("Move into the gateway…", () => moveInto(gateways, items, name), look);
 }
 
 // The other actions wait behind one button, so the primary one stands alone.
@@ -279,23 +317,15 @@ function layer(def) {
   return row;
 }
 
-// A switch that shows the plugin's real state. Pressing it opens the review; it flips only
-// when the change is written and checked, never before (the Library then shows the new state).
-// Without an action the switch is locked: it shows the state and says where to change it.
-function pluginSwitch(def, action) {
-  const on = action ? action === "plugin.disable" : def.enabled === "on";
+// A switch that shows a real state. Pressing it runs `press`, which opens the review; it flips
+// only when the change is written and checked, never before. Without `press` it only shows.
+function switchNode(on, press) {
   const node = el("button", "switch");
   node.type = "button";
   node.setAttribute("role", "switch");
   node.setAttribute("aria-checked", String(on));
   node.append(el("span", "thumb"));
-  if (!action) {
-    node.disabled = true;
-    node.setAttribute("aria-label", `${on ? "On" : "Off"} in ${clientName(def.client)}; not changed from here`);
-    node.title = def.change_hint || "Not changed from here.";
-    return node;
-  }
-  node.setAttribute("aria-label", `${on ? "Turn off" : "Turn on"} in ${clientName(def.client)}…`);
+  if (!press) return node;
   node.title = on ? "On. Press to review turning it off." : "Off. Press to review turning it on.";
   // While the preview is fetched the thumb rests half-way: pending, not flipped.
   node.addEventListener("click", async () => {
@@ -303,7 +333,7 @@ function pluginSwitch(def, action) {
     node.classList.add("pending");
     node.setAttribute("aria-busy", "true");
     try {
-      await review({ action, targets: [{ item: def.id }], params: {} });
+      await press();
     } catch (error) {
       reportError(error);
     } finally {
@@ -314,9 +344,149 @@ function pluginSwitch(def, action) {
   return node;
 }
 
+// The plugin's real state; the Library shows the new state after a change. Without an action
+// the switch is locked: it shows the state and says where to change it.
+function pluginSwitch(def, action) {
+  const on = action ? action === "plugin.disable" : def.enabled === "on";
+  const node = switchNode(on, action ? () => review({ action, targets: [{ item: def.id }], params: {} }) : null);
+  if (!action) {
+    node.disabled = true;
+    node.setAttribute("aria-label", `${on ? "On" : "Off"} in ${clientName(def.client)}; not changed from here`);
+    node.title = def.change_hint || "Not changed from here.";
+    return node;
+  }
+  node.setAttribute("aria-label", `${on ? "Turn off" : "Turn on"} in ${clientName(def.client)}…`);
+  return node;
+}
+
+// Tools of a server in the Kitden gateway --------------------------------------------------
+
+// The project's folder name, as the picker at the top shows it.
+function projectLabel(id) {
+  const found = (data.projects || []).find((p) => p.id === id);
+  return found ? found.path.split("/").filter(Boolean).pop() || found.path : id;
+}
+
+// The rows of a held server's Details, for the project picked at the top (`where`, its folder
+// name) or for all projects (null): the whole server first, then each tool it lists.
+export function toolRows(answer, where) {
+  const place = where || "all projects";
+  const row = (key, tool, name, description, entry) => {
+    const on = entry.state !== "off";
+    const what = tool === null ? answer.server : `${tool} of ${answer.server}`;
+    return { key, tool, name, description, on, differs: Boolean(entry.differs), label: `Turn ${on ? "off" : "on"} ${what} in ${place}…` };
+  };
+  return [
+    row("server", null, "Whole server", `Turns every tool of ${answer.server} on or off.`, answer),
+    ...answer.tools.map((t) => row(`tool:${t.name}`, t.name, t.name, t.description, t)),
+  ];
+}
+
+// The tool list in the open panel: a refresh reads it again, an Undo draws its Details again.
+let tools = null;
+
+function reloadTools() {
+  if (tools && tools.section.isConnected) tools.load();
+}
+
+// The control with this data-focus key inside `box`, if there is one.
+function withFocusKey(box, key) {
+  return key ? [...box.querySelectorAll("[data-focus]")].find((node) => node.dataset.focus === key) || null : null;
+}
+
+// Asks every held server for its tools again. The server says when it is done; without the
+// event stream, stop waiting after a minute. The list reads the answer when the event comes.
+async function refreshTools() {
+  const ended = new Promise((resolve) => {
+    document.addEventListener("kitden:tools", resolve, { once: true });
+    setTimeout(resolve, 60000);
+  });
+  const result = await postJson("/api/gateway/tools/refresh");
+  if (!result.ok) {
+    if (tools) tools.load({ error: (result.data && result.data.detail) || `Could not refresh the tools (${result.status}).` });
+    return;
+  }
+  await ended;
+}
+
+// A held server's tools, a switch each, for the project picked at the top. A switch opens the
+// review; when the change is verified, `again(next)` draws this Details again with the switch
+// flipped. `next` says which control gets focus (`focus`), why a review stopped (`error`) and
+// which switch has just flipped (`flip`). An error stays as a callout until the next action.
+export function toolsSection(server, again, next = {}) {
+  const section = el("section", "tools");
+  const where = state.project ? projectLabel(state.project) : null;
+  const head = el("div", "tools-head");
+  const refresh = button("Refresh tools", () => refreshTools(), "btn small ghost");
+  refresh.dataset.focus = "tools:refresh";
+  head.append(el("h2", null, `Tools · ${where || "All projects"}`), refresh);
+  const list = el("div", "tool-list");
+  list.append(skeleton("line", 3));
+  section.append(head, list);
+
+  const change = (row, value, pressed) => {
+    const back = ({ error = null, verified = false } = {}) => again({ focus: verified ? row.key : pressed, error, flip: verified ? row.key : null });
+    const params = { server, tool: row.tool, state: value, project: state.project || null };
+    return review({ action: "gateway.rule", targets: [], params }, { back });
+  };
+
+  const draw = (answer, { error = null, flip = null }) => {
+    const nodes = [];
+    if (error) nodes.push(callout(error, "error"));
+    if (answer.problem) nodes.push(callout(answer.problem));
+    if (answer.state === "off") nodes.push(el("p", "muted", `${server} is off in ${where || "all projects"}, so none of its tools are offered there.`));
+    const stack = el("div", "stack");
+    for (const row of toolRows(answer, where)) {
+      const node = el("div", row.tool === null ? "layer tool whole" : "layer tool");
+      const middle = el("div");
+      middle.append(el("div", row.tool === null ? "name" : "name mono", row.name));
+      if (row.description) {
+        const about = el("div", "why", row.description);
+        about.title = row.description;
+        middle.append(about);
+      }
+      if (row.differs) {
+        const line = el("div", "differs");
+        const follow = button("Use all projects", () => change(row, null, `follow:${row.key}`), "btn small");
+        follow.dataset.focus = `follow:${row.key}`;
+        line.append(flag({ text: "Differs from all projects", level: "info" }), follow);
+        middle.append(line);
+      }
+      const toggle = switchNode(row.on, () => change(row, row.on ? "off" : "on", row.key));
+      toggle.setAttribute("aria-label", row.label);
+      toggle.dataset.focus = row.key;
+      // Drawn in its new state; the thumb slides there once (the resting style is the truth).
+      if (flip === row.key) toggle.classList.add("flipped");
+      node.append(middle, toggle);
+      stack.append(node);
+    }
+    nodes.push(stack);
+    if (!answer.tools.length) nodes.push(el("p", "muted", "Kitden does not know its tools yet. Refresh tools asks the server."));
+    return nodes;
+  };
+
+  const load = async (options = {}) => {
+    let answer = null;
+    try {
+      answer = await getJson(`/api/gateway/tools${query({ server, project: state.project })}`);
+    } catch {
+      answer = null;
+    }
+    if (!section.isConnected) return;
+    // A redraw keeps keyboard focus on the same control.
+    const kept = list.contains(document.activeElement) ? document.activeElement.dataset.focus : null;
+    list.replaceChildren(...(answer ? draw(answer, options) : [callout("Could not load the tools.", "error")]));
+    const target = withFocusKey(section, options.focus || kept);
+    if (target) target.focus();
+  };
+  tools = { section, load, again };
+  load(next);
+  return section;
+}
+
 // Details of a row on this computer: why nothing can be done (when so), what it is (`offer`, the
 // marketplace's entry, when read), warnings, what each client loads, then every action.
-function showDetails(row, definitions, offer = null) {
+function showDetails(row, definitions, offer = null, toolsNext = {}) {
   const warnings = row.flags.filter((x) => x.level === "warning");
   const move = moveFor(row, currentModel("gateway"), Boolean(currentError("gateway")));
   const offers = definitions.flatMap((def) => def.actions.filter((a) => ACTION_BUTTONS[a]).map((action) => ({ def, action })));
@@ -347,11 +517,17 @@ function showDetails(row, definitions, offer = null) {
     body.append(section);
   }
   if (!definitions.length) body.append(el("p", "muted", "No definitions found for this item here."));
+  // A server in the Kitden gateway: its tools, a switch each.
+  if (definitions.some((d) => d.via_gateway === "kitden")) {
+    // Drawn again after a change with the row as the Library reads it now, so the line under
+    // the title stays true.
+    body.append(toolsSection(row.name, (next) => openItem(shownRow(row.key) || row, { tools: next }), toolsNext));
+  }
   if (definitions.some((d) => d.secret_present)) {
     body.append(el("p", "muted", "This entry holds a secret. It is hidden here and never logged."));
   }
   if (move && move.unread) body.append(el("p", "muted", "Could not read the gateway, so Move is not offered."));
-  else if (move && !move.gateway) body.append(el("p", "muted", GATEWAY_NOTE));
+  else if (move && !move.gateways.length) body.append(el("p", "muted", GATEWAY_NOTE));
 
   const withCommands = definitions.filter((d) => d.kind === "plugin" || d.kind === "marketplace");
   const commands = withCommands.length ? [button("Commands…", () => showCommands(row, withCommands), "btn")] : [];
@@ -364,7 +540,7 @@ function showDetails(row, definitions, offer = null) {
   };
   // A plain action names what else it changes; the primary one stands alone.
   const draw = (o, look) => {
-    if (o === "move") return [moveButton(move, look)];
+    if (o === "move") return [moveButton(move, look, row.name)];
     if (o.def) return [...(look === "btn" ? sideEffect(o, warnings) : []), buttonFor(o, look)];
     return [addButton(o, row, offer, look)];
   };
@@ -435,19 +611,32 @@ const DONE_WORDS = {
   "skill.install": "Added", "plugin.skills": "Added",
 };
 
+// A tool rule in the words of the review's after line: "slow of echo in website".
+function ruleWords({ server, tool, state: value, project } = {}) {
+  const what = tool ? `${tool} of ${server}` : server;
+  const where = project ? projectLabel(project) : "all projects";
+  if (value === "on" || value === "off") return { title: `Turn ${value} ${what} in ${where}`, done: `Turned ${value} ${what} in ${where}` };
+  return { title: `Use all projects for ${what} in ${where}`, done: `${what} in ${where} now follows all projects` };
+}
+
 // The review title names the exact entry; the toast uses the short name ("superpowers").
-// `previewBody` is what the review asked for; Add skills names its plugin from it.
+// `previewBody` is what the review asked for; Add skills names its plugin and a tool rule its
+// tool and project from it.
 export function changeWords(change, previewBody) {
-  const steps = change.steps.filter((s) => s.client !== "gateway");
-  const names = joinWords([...new Set(steps.map((s) => s.name))]);
-  const short = joinWords([...new Set(steps.map((s) => s.name.split("@")[0]))]);
+  if (change.action === "gateway.rule") return ruleWords(previewBody && previewBody.params);
+  // A move names the servers it takes; the Kitden gateway's own steps are not a client.
+  const kitden = change.action === "gateway.move" && change.steps.some((s) => s.client === "kitden");
+  const steps = change.steps.filter((s) => s.client !== "gateway" && s.client !== "kitden");
+  const listed = change.action === "gateway.move" ? movedNames(change.steps) : [...new Set(steps.map((s) => s.name))];
+  const names = joinWords(listed);
+  const short = joinWords([...new Set(listed.map((name) => name.split("@")[0]))]);
   // A copied skill folder reaches every client that reads that folder, not only its owner.
   const reached = [...new Set(steps.flatMap((s) => s.reaches || [s.client]))];
   reached.sort((a, b) => CLIENT_ORDER.indexOf(a) - CLIENT_ORDER.indexOf(b));
   const clients = joinWords(reached.map(clientName));
   const plugin = ((previewBody && previewBody.params && previewBody.params.plugin) || "the plugin").split("@")[0];
   const title = {
-    "gateway.move": `Move ${names} into the gateway`,
+    "gateway.move": kitden ? `Move ${names} into the Kitden gateway` : `Move ${names} into the gateway`,
     "plugin.disable": `Turn off ${names} in ${clients}`,
     "plugin.enable": `Turn on ${names} in ${clients}`,
     "mcp.remove_direct": `Remove ${names} from ${clients}`,
@@ -470,7 +659,7 @@ export function changeWords(change, previewBody) {
   } else if (["gateway.connect", "gateway.switch", "setup_server.register", "setup_server.update"].includes(change.action)) {
     what = `${verb} ${["setup_server.update", "gateway.switch"].includes(change.action) ? "in" : "to"} ${clients}`;
   } else if (change.action === "gateway.move") {
-    what = `${verb} ${short} into the gateway`;
+    what = `${verb} ${short} into ${kitden ? "the Kitden gateway" : "the gateway"}`;
   } else if (change.action === "plugin.skills") {
     what = `${verb} ${plural(steps.length, "skill", "skills")} to ${clients}`;
   }
@@ -488,33 +677,49 @@ export function leftOutText(leftOut) {
 
 // Ask the server for a preview and show it. Used by the Library, Gateway and Agents places.
 // `note` shows as a callout above the result, for example that an add is for every project.
-export async function review(previewBody, { note = null } = {}) {
+// `back({ error, verified })` returns to the Details the review came from (a tool switch):
+// after Cancel, after Apply is verified, or with the reason the preview was refused.
+export async function review(previewBody, { note = null, back = null } = {}) {
   const result = await postJson("/api/changes/preview", previewBody);
   if (!result.ok || !result.data || !result.data.id) {
+    const reason = (result.data && result.data.detail) || `Could not prepare this change (${result.status}).`;
+    if (back) {
+      await back({ error: reason });
+      return;
+    }
     current = { type: "error" };
     const footer = el("footer");
     footer.append(button("Close", () => closePanel(), "btn"));
     const body = el("div", "body");
-    body.append(callout((result.data && result.data.detail) || `Could not prepare this change (${result.status}).`, "error"));
+    body.append(callout(reason, "error"));
     openPanel([header("Review change", "Could not prepare this change", null, null), body, footer]);
     return;
   }
-  showReview(result.data, previewBody, note);
+  showReview(result.data, previewBody, note, back);
+}
+
+// The after line's client chips, and its notes, each once. An entry may have only a note (a
+// tool rule when no client uses the Kitden gateway yet).
+export function afterParts(entries) {
+  return { chips: entries.filter((e) => e.client), notes: [...new Set(entries.map((e) => e.note).filter(Boolean))] };
 }
 
 // "After: [CC] Claude Code ● Off · [CU] Cursor ● Loads once", in the Library's sockets.
 // An entry with a note (a client that would load a skill twice) gets its one line below.
 function afterLine(entries) {
+  const { chips, notes } = afterParts(entries);
   const box = el("div");
-  const line = el("div", "after");
-  line.append(el("span", "note", "After:"));
-  for (const entry of entries) {
-    const chip = el("span", "chip");
-    chip.append(mark(entry.client), el("span", null, clientName(entry.client)), socket({ state: entry.state, word: entry.word }));
-    line.append(chip);
+  if (chips.length) {
+    const line = el("div", "after");
+    line.append(el("span", "note", "After:"));
+    for (const entry of chips) {
+      const chip = el("span", "chip");
+      chip.append(mark(entry.client), el("span", null, clientName(entry.client)), socket({ state: entry.state, word: entry.word }));
+      line.append(chip);
+    }
+    box.append(line);
   }
-  box.append(line);
-  for (const note of new Set(entries.map((e) => e.note).filter(Boolean))) box.append(callout(note));
+  for (const note of notes) box.append(callout(note));
   return box;
 }
 
@@ -532,8 +737,8 @@ function diffLines(text) {
   return pre;
 }
 
-function showReview(change, previewBody, note) {
-  current = { type: "review", change, previewBody, note };
+function showReview(change, previewBody, note, back = null) {
+  current = { type: "review", change, previewBody, note, back };
   const words = changeWords(change, previewBody);
   const body = el("div", "body");
   if (note) body.append(callout(note));
@@ -569,7 +774,12 @@ function showReview(change, previewBody, note) {
 
   const footer = el("footer");
   footer.append(el("span", "note", APPLY_KEY));
-  const cancel = button("Cancel", () => closePanel(), "btn");
+  // From a tool switch, Cancel goes back to its Details; otherwise it closes the panel.
+  const cancel = button("Cancel", () => {
+    if (!back) return closePanel();
+    cancelPreview();
+    return back();
+  }, "btn");
   const apply = el("button", "btn primary apply");
   apply.type = "button";
   const label = el("span", "label", "Apply");
@@ -670,6 +880,7 @@ async function applyChange(change, { apply, cancel, label, body }) {
   if (busy.change) return;
   const previewBody = current && current.previewBody;
   const note = current && current.note;
+  const back = current && current.back;
   setBusy(true);
   lockReview(true, apply, cancel);
   label.textContent = "Applying…";
@@ -707,30 +918,36 @@ async function applyChange(change, { apply, cancel, label, body }) {
     // Focus goes to the button in Apply's place; the callout says what went wrong.
     let next = apply;
     if (after && after.state !== "previewed") {
-      next = button("Preview again", () => review(previewBody, { note }), "btn primary");
+      next = button("Preview again", () => review(previewBody, { note, back }), "btn primary");
       apply.replaceWith(next);
     }
     next.focus();
     reload().then(render).catch(() => {});
     return;
   }
-  await showApplied(after, apply, label);
+  await showApplied(after, apply, label, previewBody, back);
 }
 
 // The server said `verified`: the button turns green while the page reloads, then the panel
-// leaves at once and the toast offers Undo.
-async function showApplied(after, apply, label) {
+// leaves at once and the toast offers Undo. From a tool switch, its Details comes back instead,
+// with the switch flipped, and the page behind shows the new state.
+async function showApplied(after, apply, label, previewBody, back) {
   for (const spin of apply.querySelectorAll(".spinner")) spin.remove();
   apply.prepend(checkMark());
   apply.classList.add("done");
   label.textContent = "Applied";
   await reloadAll();
-  current = null;
-  closePanel({ keepSelection: true, focus: false, force: true });
-  showEffect();
-  restoreFocus();
+  if (back) {
+    render();
+    await back({ verified: true });
+  } else {
+    current = null;
+    closePanel({ keepSelection: true, focus: false, force: true });
+    showEffect();
+    restoreFocus();
+  }
   setBusy(false);
-  toast(changeWords(after).done, () => undoChange(after), { ok: true });
+  toast(changeWords(after, previewBody).done, () => undoChange(after), { ok: true });
 }
 
 // Everything the page shows, the Library's rows too, read again after a change.
@@ -758,7 +975,14 @@ export async function undoChange(change) {
   try {
     const { after, failure } = await changeOutcome(change.id, "undo");
     await reloadAll();
-    showEffect();
+    // With Details still open (a tool switch), the page behind just redraws and Details is
+    // drawn again from the files as they are now.
+    if (isPanelOpen()) {
+      render();
+      if (tools && tools.section.isConnected) await tools.again({});
+    } else {
+      showEffect();
+    }
     if (after && after.state === "undone") toast("Undone. The previous settings are back.", null, { ok: true });
     else if (after && after.state === "undo_blocked") toast("Undo stopped: " + (after.error ? shortPaths(after.error) : "the file changed after the change was applied."));
     else toast(failure);
@@ -815,10 +1039,13 @@ export function toast(text, onUndo, { ok = false } = {}) {
 function trapFocus(event) {
   if (event.key !== "Tab" || !isPanelOpen()) return;
   const drawer = $("#drawer");
-  // Only what is drawn: a closed Details hides everything but its summary.
-  const stops = $$("button:not([disabled]), a[href], select, input, textarea, summary, [tabindex]:not([tabindex='-1'])", drawer)
+  // Only what is drawn: a closed Details hides everything but its summary. A toast shown while
+  // the panel stays open (after a tool switch) is in the loop too, so its Undo can be reached.
+  const shown = $("#toast").classList.contains("show") ? $$("button", $("#toast")) : [];
+  const stops = [...$$("button:not([disabled]), a[href], select, input, textarea, summary, [tabindex]:not([tabindex='-1'])", drawer), ...shown]
     .filter((node) => node.getClientRects().length > 0);
-  if (!stops.length || !drawer.contains(document.activeElement)) {
+  const inside = drawer.contains(document.activeElement) || $("#toast").contains(document.activeElement);
+  if (!stops.length || !inside) {
     event.preventDefault();
     (stops[0] || drawer).focus();
     return;
@@ -840,6 +1067,8 @@ export function initPanel() {
   drawer.setAttribute("aria-modal", "true");
   drawer.setAttribute("aria-labelledby", "panel-title");
   onOpenItem((row, tr, how) => openItem(row, { instant: how === "keyboard" }));
+  // A refresh of the gateway's tool lists ended: an open tool list reads them again.
+  document.addEventListener("kitden:tools", reloadTools);
   $("#scrim").addEventListener("click", () => { if (!busy.change) closePanel(); });
   document.addEventListener("keydown", trapFocus);
   document.addEventListener("keydown", (event) => {

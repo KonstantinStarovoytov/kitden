@@ -177,6 +177,13 @@ function load(asked = asking(), draw = true) {
   return job.promise;
 }
 
+// A row as the Library read it last, for Details drawn again after a change; null off the
+// Library or when the row is gone.
+export function shownRow(key) {
+  if (state.view !== "library" || !cache.answer) return null;
+  return cache.answer.rows.find((r) => r.key === key) || null;
+}
+
 // Typing waits until it stops; any other choice asks at once.
 function schedule(key) {
   if (!needsLoad(key)) return;

@@ -256,6 +256,11 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 /* Waiting for the preview: the thumb rests half-way, neither on nor off, until the review opens. */
 .switch.pending { cursor: progress; }
 .switch.pending .thumb, .switch[aria-checked="true"].pending .thumb { transform: translateX(7px); width: 16px; }
+/* A tool switch after a verified change: drawn in its new state, the thumb slides there once. */
+.switch.flipped .thumb { animation: thumb-off 200ms var(--ease-in-out); }
+.switch.flipped[aria-checked="true"] .thumb { animation-name: thumb-on; }
+@keyframes thumb-on { from { transform: none; } }
+@keyframes thumb-off { from { transform: translateX(14px); } }
 
 /* Entrance used once per place */
 .rise { animation: rise 380ms var(--ease-out) both; }
@@ -409,6 +414,7 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .group-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .group-head .group-title { margin-right: auto; }
 .held { margin-top: 8px; }
+.setup-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 .list { background: var(--panel); border: 1px solid var(--wire); border-radius: 8px; }
 .list-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 0 12px; min-height: 40px; border-top: 1px solid var(--wire-soft); }
 .list-row:first-child { border-top: 0; }
@@ -447,6 +453,14 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .layer .name { overflow-wrap: anywhere; }
 .layer .why { color: var(--ink-3); font-size: 12px; overflow-wrap: anywhere; }
 .drawer section { display: grid; gap: 8px; min-width: 0; }
+/* The tools of a server in the Kitden gateway: a switch each; the whole server first. */
+.tools-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tools-head h2 { margin: 0; }
+.tool-list { display: grid; gap: 8px; }
+.layer.tool { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.layer.tool.whole { background: var(--wire-soft); }
+.layer.tool .why { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.layer.tool .differs { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 .drawer .chip h2 { margin: 0; }
 .drawer .skeleton.card { height: 120px; }
 .after { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }

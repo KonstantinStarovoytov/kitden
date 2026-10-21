@@ -1,9 +1,9 @@
 // Gateway: which clients reach it, and which servers are not connected to it.
 import { getJson, postJson } from "./api.js";
-import { busyWhile, button, el, plural, reportError, webLink } from "./dom.js";
+import { busyWhile, button, el, joinWords, plural, reportError, webLink } from "./dom.js";
 import { entrance, fold, reducedMotion } from "./motion.js";
-import { openInfo, openItem, review, toast } from "./panel.js";
-import { banner, CLIENT_ICONS, CLIENT_NAMES, clientCheck, DARK_ICONS, flag, GATEWAY_NOTE, mark, skeleton, staleNote } from "./parts.js";
+import { moveInto, moveTargets, openInfo, openItem, review, toast, toolsSection } from "./panel.js";
+import { banner, CLIENT_ICONS, CLIENT_NAMES, clientCheck, DARK_ICONS, flag, GATEWAY_NOTE, gatewayName, kindOf, mark, skeleton, staleNote } from "./parts.js";
 import { current, currentError, data, freshness, loadMap, reload, render, retry, state } from "./store.js";
 
 const WRITABLE = ["claude_code", "codex", "cursor"];
@@ -12,6 +12,10 @@ const GROUPS = [
   ["local", "Must run on this Mac", "Local servers start a program here; a gateway cannot reach them. Nothing to do."],
   ["plugin", "Come with a plugin", "Turn the plugin off if you do not want them."],
 ];
+// With the Kitden gateway, local servers can move too: it runs on this Mac.
+const LOCAL_WORDS = ["Run on this Mac", "They start a program here. Only the Kitden gateway can hold them, because it runs here too."];
+// The kitden entry is the same one that lets agents read this setup.
+const SETUP_NOTE = "The kitden entry shows your setup to agents and offers the tools in the Kitden gateway.";
 
 // What the person typed survives a redraw (a rescan can redraw the page at any time).
 const EMPTY_ADD = { url: "", ui_url: "", auth: "none", key_env_var: "", login_email: "", login_password_env_var: "" };
@@ -19,26 +23,35 @@ const draft = { add: { ...EMPTY_ADD }, connect: null, addOpen: false, connectOpe
 // Every client gets the same entry name; the review shows the exact entry before Apply.
 const ENTRY_NAME = "gateway";
 
-// Which gateway an address belongs to, told from its path (the server does the same).
-export function kindOf(url) {
-  try {
-    const path = new URL(url).pathname;
-    if (path.startsWith("/metamcp/")) return "metamcp";
-    if (path.startsWith("/mcp-connect/")) return "obot";
-  } catch { /* not an address yet */ }
-  return "other";
-}
-
-const KIND_NAMES = { metamcp: "MetaMCP", obot: "Obot" };
-
-export function gatewayName(gateway) {
-  const kind = gateway.kind || kindOf(gateway.url);
-  if (KIND_NAMES[kind]) return KIND_NAMES[kind];
-  try { return new URL(gateway.url).host || "Gateway"; } catch { return "Gateway"; }
-}
-
 function foundClients() {
   return (data.clients || []).filter((c) => WRITABLE.includes(c.id) && c.status === "found").map((c) => c.id);
+}
+
+// The Kitden gateway reaches a client through the client's `kitden` entry, when that entry is
+// on. A client without the entry is offered to set it up; an old entry is updated. `entries`
+// is the answer of /api/setup-server.
+export function kitdenClients(entries) {
+  const linked = [];
+  const setup = [];
+  for (const entry of entries || []) {
+    if (!WRITABLE.includes(entry.client)) continue;
+    if ((entry.state === "added" || entry.state === "plugin") && entry.enabled !== false) linked.push(entry.client);
+    const label = `Set up in ${CLIENT_NAMES[entry.client]}…`;
+    if (entry.state === "missing") {
+      setup.push({ client: entry.client, label, body: { action: "setup_server.register", targets: [{ client: entry.client }], params: {} } });
+    } else if (entry.state === "old") {
+      setup.push({ client: entry.client, label, body: { action: "setup_server.update", targets: [{ item: entry.item }], params: {} } });
+    }
+  }
+  return { linked, setup };
+}
+
+// "Use this gateway…" moves the clients from another registered gateway to this one. The
+// Kitden gateway sits beside the registered ones: it is never switched to or away from.
+export function offersSwitch(model, gateway) {
+  if (gateway.kind === "kitden") return false;
+  const used = model.used.filter((id) => id !== "kitden");
+  return used.length > 0 && !used.includes(gateway.id);
 }
 
 export function renderGateway(main) {
@@ -53,6 +66,7 @@ export function renderGateway(main) {
   if (currentError("gateway")) main.append(staleNote(data.readAt.gateway));
 
   const blocks = [];
+  // Only without any gateway, the Kitden one included (no home folder to change).
   if (!model.gateways.length) {
     const card = el("section", "card");
     card.append(el("h2", null, "No gateway yet"));
@@ -63,44 +77,50 @@ export function renderGateway(main) {
     return;
   }
 
-  // The gateway the clients use gets the big card with the routes; the others follow.
-  const ordered = [...model.gateways].sort((a, b) => Number(model.used.includes(b.id)) - Number(model.used.includes(a.id)));
-  const [first, ...others] = ordered;
-  const card = gatewayCard(first, model);
-  main.append(card);
-  blocks.push(card);
-  for (const gateway of others) {
-    const more = el("section", "card");
-    more.append(gatewayHead(gateway, model), heldSection(gateway));
-    main.append(more);
-    blocks.push(more);
+  // The Kitden gateway comes first. Of the registered gateways, the one the clients use gets
+  // the big card with the routes; the others follow.
+  const kitden = model.gateways.find((g) => g.kind === "kitden");
+  if (kitden) {
+    const card = kitdenCard(kitden, model);
+    main.append(card);
+    blocks.push(card);
   }
+  const registered = model.gateways.filter((g) => g.kind !== "kitden");
+  const ordered = registered.sort((a, b) => Number(model.used.includes(b.id)) - Number(model.used.includes(a.id)));
+  ordered.forEach((gateway, i) => {
+    const card = i === 0 ? gatewayCard(gateway, model) : el("section", "card");
+    if (i > 0) card.append(gatewayHead(gateway, model), heldSection(gateway));
+    main.append(card);
+    blocks.push(card);
+  });
 
-  // The gateway Kitden can manage from here takes the servers that move.
-  const target = model.gateways.find((g) => g.movable) || null;
   // One heading says what the lists below are: MCP servers that reach a client directly.
   if (GROUPS.some(([key]) => model.groups[key].length)) {
     const title = el("h2", "section-title", "MCP servers not in the gateway");
     main.append(title);
     blocks.push(title);
   }
-  for (const [key, title, note] of GROUPS) {
+  for (const group of GROUPS) {
+    const key = group[0];
     const rows = model.groups[key];
     if (!rows.length) continue;
+    // The gateways that can take these servers: the Kitden gateway first, then a registered one.
+    const targets = moveTargets(model, key);
+    const [title, note] = key === "local" && targets.length ? LOCAL_WORDS : group.slice(1);
     // The heading counts entries; a server in two clients is one row (the Overview counts rows).
     const entries = rows.reduce((n, row) => n + row.clients.length, 0);
     const count = entries === rows.length ? String(entries) : `${entries} entries in ${plural(rows.length, "server", "servers")}`;
     const section = el("section");
     const head = el("div", "group-head");
     head.append(el("h3", "group-title", `${title} · ${count}`));
-    const movable = key === "move" && target ? rows.flatMap((row) => row.items) : [];
+    const movable = key === "move" && targets.length ? rows.flatMap((row) => row.items) : [];
     if (movable.length) {
-      const targets = movable.map((item) => ({ item }));
-      head.append(button(`Move all ${movable.length}…`, () => review({ action: "gateway.move", targets, params: { gateway: target.id } })));
+      const servers = plural(rows.filter((row) => row.items.length).length, "server", "servers");
+      head.append(button(`Move all ${movable.length}…`, () => moveInto(targets, movable, servers)));
     }
-    section.append(head, el("p", "group-note", key === "move" && !target ? GATEWAY_NOTE : note));
+    section.append(head, el("p", "group-note", key === "move" && !targets.length ? GATEWAY_NOTE : note));
     const list = el("div", "list");
-    for (const row of rows) list.append(groupRow(row, key, target));
+    for (const row of rows) list.append(groupRow(row, key, targets));
     section.append(list);
     main.append(section);
     blocks.push(section);
@@ -117,8 +137,9 @@ export function renderGateway(main) {
 function gatewayHead(gateway, model) {
   const head = el("div", "gw-head");
   const left = el("div");
-  // With two gateways, say which one the clients use.
-  const used = model.gateways.length > 1 ? ` · ${model.used.includes(gateway.id) ? "Used" : "Not used"}` : "";
+  // With two registered gateways, say which one the clients use.
+  const registered = model.gateways.filter((g) => g.kind !== "kitden");
+  const used = registered.length > 1 ? ` · ${model.used.includes(gateway.id) ? "Used" : "Not used"}` : "";
   left.append(el("div", "kicker", `${gatewayName(gateway)}${used}`), el("div", "gw-url", gateway.url));
   const right = el("div");
   if (gateway.ui_url) {
@@ -127,8 +148,9 @@ function gatewayHead(gateway, model) {
     link.classList.add("small", "ghost");
     right.append(link);
   }
-  // Clients use another gateway: one review moves all of them here (the old entries go).
-  if (model.used.length && !model.used.includes(gateway.id)) {
+  // Clients use another registered gateway: one review moves all of them here (the old
+  // entries go).
+  if (offersSwitch(model, gateway)) {
     const name = gatewayName(gateway).toLowerCase().replace(/[^a-z0-9_-]+/g, "-");
     right.append(button("Use this gateway…", () => review({ action: "gateway.switch", targets: [], params: { gateway: gateway.id, name } }), "btn small primary"));
   }
@@ -226,13 +248,78 @@ function showHeld(server, gateway) {
   openInfo("MCP server", server.name, body);
 }
 
+// The Kitden gateway: the clients whose kitden entry reaches it, the servers it holds, and
+// "Set up in …" for a client without the entry.
+function kitdenCard(gateway, model) {
+  const card = el("section", "card");
+  const head = el("div", "gw-head");
+  head.append(el("div", "kicker", `${gateway.name} · ${gateway.where}`));
+  const { linked, setup } = kitdenClients(data.setupServer);
+  // Local servers can move into it too, so they count as direct in the diagram.
+  card.append(head, routes(gateway, linked, [...model.groups.move, ...model.groups.local]), kitdenHeld(gateway));
+  if (setup.length) {
+    const line = el("div", "setup-line");
+    const names = setup.map((s) => CLIENT_NAMES[s.client]);
+    line.append(el("span", "muted", `${joinWords(names)} ${names.length > 1 ? "do" : "does"} not use it yet.`));
+    for (const s of setup) line.append(button(s.label, () => review(s.body, { note: SETUP_NOTE })));
+    card.append(line);
+  }
+  return card;
+}
+
+function kitdenHeld(gateway) {
+  const box = el("section", "held");
+  const servers = gateway.servers || [];
+  box.append(el("h3", "group-title", servers.length ? `In the gateway · ${servers.length}` : "In the gateway"));
+  if (!servers.length) {
+    box.append(el("p", "group-note", "Nothing yet. Move a server from the lists below."));
+    return box;
+  }
+  const list = el("div", "list");
+  for (const server of servers) {
+    const node = el("div", "list-row");
+    const marks = el("span", "chip");
+    marks.setAttribute("aria-label", gateway.name);
+    marks.append(mark("kitden"));
+    const what = el("span", "what");
+    const name = el("span", "mono", server.name);
+    name.title = server.name;
+    what.append(name, flag({ text: server.kind === "local" ? "Local" : "Remote", level: "info" }));
+    // Its state where the project picker points: off for all projects, or in this project.
+    if (server.state === "off") what.append(flag({ text: "Off", level: "info" }));
+    const actions = el("span", "row-actions");
+    actions.append(button("Details", () => showKitdenServer(server), "btn small ghost"));
+    node.append(marks, what, actions);
+    list.append(node);
+  }
+  box.append(list);
+  return box;
+}
+
+// Details of a server in the Kitden gateway: what it is, then its tools for the project picked
+// at the top. `next` goes to the tool list (see toolsSection).
+function showKitdenServer(server, next = {}) {
+  const body = el("div", "body");
+  const row = el("div", "layer");
+  const middle = el("div");
+  middle.append(el("div", "name", `In the Kitden gateway · ${server.kind === "local" ? "Runs on this Mac" : "Remote"}`));
+  row.append(mark("kitden"), middle);
+  const stack = el("div", "stack");
+  stack.append(row);
+  body.append(stack, toolsSection(server.name, (again) => showKitdenServer(server, again), next));
+  openInfo("MCP server", server.name, body);
+}
+
 function gatewayCard(gateway, model) {
   const card = el("section", "card");
   const connections = model.connections[gateway.id] || {};
-  card.append(gatewayHead(gateway, model), routes(gateway, connections, model.groups.move), heldSection(gateway));
-  // Only clients without an entry in any gateway are offered. One that uses another gateway
-  // moves with "Use this gateway…"; connecting it here too would load its servers twice.
-  const waiting = foundClients().filter((c) => !Object.values(model.connections).some((per) => (per[c] || []).length));
+  const linked = WRITABLE.filter((c) => (connections[c] || []).length);
+  card.append(gatewayHead(gateway, model), routes(gateway, linked, model.groups.move), heldSection(gateway));
+  // Only clients without an entry in any registered gateway are offered. One that uses another
+  // gateway moves with "Use this gateway…"; connecting it here too would load its servers
+  // twice. The Kitden gateway holds other servers, so its clients can connect here too.
+  const registered = Object.entries(model.connections).filter(([id]) => id !== "kitden").map(([, per]) => per);
+  const waiting = foundClients().filter((c) => !registered.some((per) => (per[c] || []).length));
   if (waiting.length) {
     const box = el("details", "connect");
     box.open = draft.connectOpen === null ? true : draft.connectOpen;
@@ -302,7 +389,8 @@ function opens(node, label, open) {
   });
 }
 
-function routes(gateway, connections, direct = []) {
+// `linked`: the clients that reach the gateway.
+function routes(gateway, linked, direct = []) {
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
   const add = (tag, attrs, text, parent = svg) => {
@@ -313,7 +401,6 @@ function routes(gateway, connections, direct = []) {
     return node;
   };
   const name = gatewayName(gateway);
-  const linked = WRITABLE.filter((c) => (connections[c] || []).length);
   const apart = WRITABLE.filter((c) => !linked.includes(c)).map((c) => CLIENT_NAMES[c]);
   svg.setAttribute("viewBox", "0 0 640 150");
   svg.setAttribute("class", "routes");
@@ -373,8 +460,9 @@ function routes(gateway, connections, direct = []) {
 const GROUP_WORDS = { move: "Remote", local: "Local", plugin: "Plugin" };
 
 // One row per server: the clients that have it, its name and what it is. Addresses and
-// commands stay behind Details (the same panel as in the Library).
-function groupRow(row, group, target) {
+// commands stay behind Details (the same panel as in the Library). `targets`: the gateways that
+// can take it.
+function groupRow(row, group, targets) {
   const node = el("div", "list-row");
   node.dataset.clients = row.clients.join(" ");
   node.addEventListener("pointerenter", () => focusRoutes(row.clients, { wires: false, rows: false }));
@@ -388,11 +476,11 @@ function groupRow(row, group, target) {
   what.append(name, flag({ text: GROUP_WORDS[group], level: "info" }));
   const actions = el("span", "row-actions");
   actions.append(button("Details", () => showServer(row.name), "btn small ghost"));
-  if (group === "move" && row.items.length) {
-    const targets = row.items.map((item) => ({ item }));
-    // With a managed gateway the move does both steps; without one, only the removal is here.
-    if (target) actions.append(button("Move into the gateway…", () => review({ action: "gateway.move", targets, params: { gateway: target.id } })));
-    else actions.append(button("Remove direct entry…", () => review({ action: "mcp.remove_direct", targets, params: {} })));
+  if (group !== "plugin" && row.items.length) {
+    // With a gateway that takes it the move does both steps; without one, only the removal of
+    // a remote server is here.
+    if (targets.length) actions.append(button("Move into the gateway…", () => moveInto(targets, row.items, row.name)));
+    else if (group === "move") actions.append(button("Remove direct entry…", () => review({ action: "mcp.remove_direct", targets: row.items.map((item) => ({ item })), params: {} })));
   }
   node.append(marks, what, actions);
   return node;

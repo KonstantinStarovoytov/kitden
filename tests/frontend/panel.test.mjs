@@ -5,14 +5,16 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; panel.js must load there too.
 delete globalThis.navigator;
-const { changeOutcome, changeWords, footerActions, leftOutText, loadsLede, moveFor } = await import('../../src/kitden/web/static/js/panel.js');
+const { afterParts, changeOutcome, changeWords, footerActions, leftOutText, loadsLede, moveFor, moveTargets, toolRows } = await import('../../src/kitden/web/static/js/panel.js');
 const { addOptions, whyNoAction } = await import('../../src/kitden/web/static/js/offer.js');
+const { data } = await import('../../src/kitden/web/static/js/store.js');
 
 const github = { kind: 'mcp_server', name: 'github' };
 const direct = { name: 'github', items: ['entry-1', 'entry-2'] };
 const obot = { id: 'gw-1', movable: true };
 const other = { id: 'gw-2', movable: false };
-const model = (gateways) => ({ gateways, groups: { move: [direct] } });
+const kitden = { id: 'kitden', kind: 'kitden', name: 'Kitden gateway', movable: true };
+const model = (gateways, local = []) => ({ gateways, groups: { move: [direct], local, plugin: [] } });
 const remove = { def: { id: 'entry-1', client: 'codex' }, action: 'mcp.remove_direct' };
 const duplicate = { level: 'warning', client: 'codex', fix_action: 'mcp.remove_direct' };
 
@@ -22,9 +24,22 @@ test('without a registered gateway Details has nothing to move into', () => {
   assert.deepEqual(footerActions([remove], [], null), { lead: remove, rest: [] });
 });
 
-test('the first gateway that takes servers is the move target', () => {
-  assert.deepEqual(moveFor(github, model([other, obot])), { items: direct.items, gateway: obot });
-  assert.deepEqual(moveFor(github, model([other])), { items: direct.items, gateway: null });
+test('the gateways that take servers are the move targets', () => {
+  assert.deepEqual(moveFor(github, model([other, obot])), { items: direct.items, gateways: [obot] });
+  assert.deepEqual(moveFor(github, model([other])), { items: direct.items, gateways: [] });
+});
+
+test('the Kitden gateway is offered first, a registered gateway second, never in its place', () => {
+  assert.deepEqual(moveTargets(model([kitden, other, obot]), 'move'), [kitden, obot]);
+  assert.deepEqual(moveFor(github, model([kitden, obot])), { items: direct.items, gateways: [kitden, obot] });
+  // A local server starts a program on this Mac: only the Kitden gateway can hold it.
+  const local = { name: 'files', items: ['entry-3'] };
+  assert.deepEqual(moveTargets(model([kitden, obot]), 'local'), [kitden]);
+  assert.deepEqual(moveFor({ kind: 'mcp_server', name: 'files' }, model([kitden, obot], [local])), { items: local.items, gateways: [kitden] });
+  // Without it a local server stays where it is, and says nothing about a gateway.
+  assert.equal(moveFor({ kind: 'mcp_server', name: 'files' }, model([obot], [local])), null);
+  assert.deepEqual(moveTargets(model([kitden, obot]), 'plugin'), []);
+  assert.deepEqual(moveTargets(null, 'move'), []);
 });
 
 test('only an MCP server with entries to take can move, matched by its exact name', () => {
@@ -35,12 +50,12 @@ test('only an MCP server with entries to take can move, matched by its exact nam
 });
 
 test('Move leads when nothing is wrong, and Remove waits under More', () => {
-  const move = { items: direct.items, gateway: obot };
+  const move = { items: direct.items, gateways: [obot] };
   assert.deepEqual(footerActions([remove], [], move), { lead: 'move', rest: [remove] });
 });
 
 test('a problem comes before an option: the duplicate fix leads, Move waits', () => {
-  const move = { items: direct.items, gateway: obot };
+  const move = { items: direct.items, gateways: [kitden, obot] };
   assert.deepEqual(footerActions([remove], [duplicate], move), { lead: remove, rest: ['move'] });
   // A warning no button fixes: nothing leads, Move is one plain choice.
   const unfixable = { ...duplicate, fix_action: null };
@@ -48,19 +63,89 @@ test('a problem comes before an option: the duplicate fix leads, Move waits', ()
 });
 
 test('a server to add in the gateway by hand first keeps a lone Remove plain', () => {
-  const move = { items: direct.items, gateway: null };
+  const move = { items: direct.items, gateways: [] };
   assert.deepEqual(footerActions([remove], [], move), { lead: null, rest: [remove] });
 });
 
 test('a gateway that could not be read keeps a lone Remove plain', () => {
   // Without the gateway model Move cannot be judged, so Remove must not lead in its place.
   const unread = moveFor(github, null, true);
-  assert.deepEqual(unread, { items: [], gateway: null, unread: true });
+  assert.deepEqual(unread, { items: [], gateways: [], unread: true });
   assert.deepEqual(footerActions([remove], [], unread), { lead: null, rest: [remove] });
   // Only an MCP server can move; for anything else the gateway does not matter.
   assert.equal(moveFor({ kind: 'plugin', name: 'github' }, null, true), null);
   // An earlier read for this project is still shown, so it still decides.
-  assert.deepEqual(moveFor(github, model([obot]), true), { items: direct.items, gateway: obot });
+  assert.deepEqual(moveFor(github, model([obot]), true), { items: direct.items, gateways: [obot] });
+});
+
+// The Kitden gateway: moves, tool rules and their review -----------------------------------
+
+const kitdenMove = {
+  action: 'gateway.move',
+  steps: [
+    { client: 'kitden', name: 'files' },
+    { client: 'kitden', name: 'PATH' },
+    { client: 'kitden', name: 'search' },
+    { client: 'claude_code', name: 'files', restart_note: 'Restart Claude Code for this to take effect.' },
+    { client: 'cursor', name: 'files' },
+    { client: 'cursor', name: 'kitden' },
+    { client: 'codex', name: 'kitden' },
+  ],
+};
+
+test('a move into the Kitden gateway names the servers and that gateway, not its own steps', () => {
+  const words = changeWords(kitdenMove);
+  assert.equal(words.title, 'Move files into the Kitden gateway');
+  assert.equal(words.done, 'Moved files into the Kitden gateway · Restart Claude Code');
+  // A registered gateway keeps its words.
+  const obotMove = { action: 'gateway.move', steps: [{ client: 'gateway', name: 'docs' }, { client: 'cursor', name: 'docs' }] };
+  assert.equal(changeWords(obotMove).title, 'Move docs into the gateway');
+});
+
+const rule = (params) => ({ action: 'gateway.rule', steps: [{ client: 'kitden', name: params.tool || params.server }] });
+
+test('a tool rule review names the tool, its server and the project', () => {
+  data.projects = [{ id: 'p1', path: '/Users/me/work/website' }];
+  const off = { action: 'gateway.rule', params: { server: 'echo', tool: 'slow', state: 'off', project: 'p1' } };
+  assert.deepEqual(changeWords(rule(off.params), off), { title: 'Turn off slow of echo in website', done: 'Turned off slow of echo in website' });
+  const on = { ...off, params: { server: 'echo', tool: null, state: 'on', project: null } };
+  assert.deepEqual(changeWords(rule(on.params), on), { title: 'Turn on echo in all projects', done: 'Turned on echo in all projects' });
+  const follow = { ...off, params: { ...off.params, state: null } };
+  assert.deepEqual(changeWords(rule(follow.params), follow), {
+    title: 'Use all projects for slow of echo in website',
+    done: 'slow of echo in website now follows all projects',
+  });
+  data.projects = null;
+});
+
+test('an after entry with only a note draws no client chip', () => {
+  const note = 'slow of echo will be off in website. No client uses the Kitden gateway yet.';
+  assert.deepEqual(afterParts([{ note }]), { chips: [], notes: [note] });
+  const cursor = { client: 'cursor', state: 'off', word: 'Off', note: 'Applies to new sessions.' };
+  assert.deepEqual(afterParts([cursor, { client: 'codex', state: 'off', word: 'Off' }]).chips.map((c) => c.client), ['cursor', 'codex']);
+  assert.deepEqual(afterParts([cursor]).notes, ['Applies to new sessions.']);
+});
+
+test('a held server lists the whole server first, then each tool, for the project picked', () => {
+  const answer = {
+    server: 'echo', state: 'on', differs: false, problem: null,
+    tools: [
+      { name: 'echo', description: 'Says it back', state: 'on', differs: false },
+      { name: 'slow', description: '', state: 'off', differs: true },
+    ],
+  };
+  const rows = toolRows(answer, 'website');
+  assert.deepEqual(rows.map((r) => [r.key, r.tool, r.on, r.differs]), [
+    ['server', null, true, false],
+    ['tool:echo', 'echo', true, false],
+    ['tool:slow', 'slow', false, true],
+  ]);
+  assert.equal(rows[0].name, 'Whole server');
+  assert.equal(rows[1].label, 'Turn off echo of echo in website…');
+  assert.equal(rows[2].label, 'Turn on slow of echo in website…');
+  assert.equal(rows[0].label, 'Turn off echo in website…');
+  // With Global picked the switches are the rules for all projects.
+  assert.equal(toolRows(answer, null)[2].label, 'Turn on slow of echo in all projects…');
 });
 
 // The server, as fetch sees it: the Apply or Undo answer, then the change read back. Records

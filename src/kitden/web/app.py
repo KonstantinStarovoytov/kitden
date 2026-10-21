@@ -53,6 +53,7 @@ from kitden.local_gateway.settings import CLIENT as KITDEN
 from kitden.local_gateway.settings import load_settings, load_tools, moved_in, save_tools
 from kitden.local_gateway.views import (
     gateway_items,
+    held_servers,
     load_proxy,
     refresh_tools,
     rule_steps,
@@ -599,8 +600,8 @@ def create_app(
         return JSONResponse(overview(state.inventory, _registered(), path))
 
     def _gateway_view(request, project, path):
-        view = gateway_view(state.inventory, _registered(), path, kitden=home is not None)
-        return JSONResponse(view)
+        held = held_servers(load_settings(home), path) if home is not None else None
+        return JSONResponse(gateway_view(state.inventory, _registered(), path, kitden=held))
 
     async def gateway_tools(request: Request) -> JSONResponse:
         """A held server's tools with their states for the project, from the cache and rules."""

@@ -62,17 +62,18 @@ def group_of(item: Item) -> str:
 
 
 def gateway_view(
-    inventory, gateways: list[Gateway], project: str | None, kitden: bool = False
+    inventory, gateways: list[Gateway], project: str | None, kitden: list[dict] | None = None
 ) -> dict:
-    """With `kitden`, the Kitden gateway comes first and local servers can move too."""
-    ids = ([KITDEN_GATEWAY] if kitden else []) + [g.id for g in gateways]
+    """With `kitden` (the servers it holds; see `held_servers`), the Kitden gateway comes first
+    and local servers can move too."""
+    ids = ([KITDEN_GATEWAY] if kitden is not None else []) + [g.id for g in gateways]
     # Per gateway and client: the servers that load in this scope and go through that gateway.
     connections: dict[str, dict[str, list[str]]] = {g: {c: [] for c in COLUMNS} for g in ids}
     # One row per server name, with the clients that have it and the entries that can go.
     groups: dict[str, dict[str, dict]] = {"move": {}, "local": {}, "plugin": {}}
     movable = {
-        "move": kitden or any(g.movable for g in gateways),
-        "local": kitden,
+        "move": kitden is not None or any(g.movable for g in gateways),
+        "local": kitden is not None,
         "plugin": False,
     }
     for item in loaded_mcp(inventory, project):
@@ -98,7 +99,8 @@ def gateway_view(
         if REMOVE_DIRECT in item.actions:
             row["items"].append(item.id)
     return {
-        "gateways": ([dict(KITDEN)] if kitden else []) + [gateway_dict(g) for g in gateways],
+        "gateways": ([{**KITDEN, "servers": kitden}] if kitden is not None else [])
+        + [gateway_dict(g) for g in gateways],
         "connections": {
             g: {c: sorted(names) for c, names in columns.items()}
             for g, columns in connections.items()

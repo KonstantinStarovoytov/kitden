@@ -25,9 +25,11 @@ What Kitden does today and what comes next. Ideas and bugs:
   the background, and a line shows what is still read.
 - **Kitden gateway (in progress):** `kitden mcp` also offers the tools of the servers moved into
   it, only those turned on for the session's project. Moving a server in is one review with Undo
-  and keeps the tool rules Codex and Claude Code had. The page's data is ready: held servers in
-  each client, the tools of each, and one review per switch; Rescan refreshes the tool lists. The
-  switches on the page come next.
+  and keeps the tool rules Codex and Claude Code had; local servers can move in too. The Gateway
+  page shows it first: the clients with the `kitden` entry, the servers it holds, and "Set up in"
+  for a client without the entry. A held server's Details has a switch for the whole server and
+  for each tool, for the project picked at the top; each switch is one review with Undo. The
+  README and a check in each client come next.
 
 ### 0.2.0
 

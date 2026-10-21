@@ -7,7 +7,7 @@ that client, or why there is none. Columns are the clients found on this compute
 
 from collections.abc import Callable
 
-from kitden.changes.actions import PLUGIN_INSTALL, PLUGIN_SKILLS, SKILL_INSTALL
+from kitden.changes.actions import KITDEN_GATEWAY, PLUGIN_INSTALL, PLUGIN_SKILLS, SKILL_INSTALL
 from kitden.clients.base import REMOVE_DIRECT
 from kitden.model import ClientStatus, Item, ItemKind, _hash
 from kitden.views.catalog import catalog, search
@@ -145,10 +145,21 @@ def _server_why(map_rows: list[Row], found: list[str], items: list[Item]) -> Why
             if i in by_id
         )
 
+    def held(row: Row) -> bool:
+        """The Kitden gateway holds it: a client reaches it through its `kitden` entry."""
+        return any(
+            by_id[i].via_gateway == KITDEN_GATEWAY
+            for c in found
+            for i in row.cells[c].items
+            if i in by_id
+        )
+
     def why(row: Row, client: str) -> str | None:
         if client in on_gateway:
             return SHARE_IN_GATEWAY if movable(row) else None
         if any(row.cells[c].state == "gw" for c in found):
+            if held(row):
+                return f"Set up the Kitden gateway in {NAMES[client]} on the Gateway page."
             return f"Connect {NAMES[client]} to the gateway on the Gateway page."
         return None
 

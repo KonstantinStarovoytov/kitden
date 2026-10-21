@@ -18,8 +18,9 @@ export function scanLine(view) {
   return { text: `${view.ready ? "Still checking" : "Reading"} ${joinWords(words)}…`, share };
 }
 
+// "gateway" is a registered gateway's own step; "kitden" is the Kitden gateway's settings file.
 export const CLIENT_MARKS = {
-  claude_code: "CC", codex: "CX", cursor: "CU", claude_desktop_code_tab: "CD", gateway: "GW",
+  claude_code: "CC", codex: "CX", cursor: "CU", claude_desktop_code_tab: "CD", gateway: "GW", kitden: "GW",
 };
 // Icon file names under /static/brand/clients. Codex and Cursor also ship a "-dark" version.
 export const CLIENT_ICONS = {
@@ -29,7 +30,7 @@ export const DARK_ICONS = new Set(["codex", "cursor"]);
 export const CLIENT_ORDER = ["claude_code", "claude_desktop_code_tab", "codex", "cursor"];
 export const CLIENT_NAMES = {
   claude_code: "Claude Code", codex: "Codex", cursor: "Cursor",
-  claude_desktop_code_tab: "Claude Desktop (Code tab)", gateway: "Gateway",
+  claude_desktop_code_tab: "Claude Desktop (Code tab)", gateway: "Gateway", kitden: "Kitden gateway",
 };
 // One client's checkbox in an Add form. Its name is the client's name (and the note after it),
 // so a screen reader never says "on"; its value is the client id. `onChange` hears the new state.
@@ -44,6 +45,35 @@ export function clientCheck(client, checked, note, onChange) {
   label.append(box, el("span", null, CLIENT_NAMES[client]));
   if (note) label.append(el("span", "muted", ` · ${note}`));
   return label;
+}
+
+// Which gateway an address belongs to, told from its path (the server does the same).
+export function kindOf(url) {
+  try {
+    const path = new URL(url).pathname;
+    if (path.startsWith("/metamcp/")) return "metamcp";
+    if (path.startsWith("/mcp-connect/")) return "obot";
+  } catch { /* not an address yet */ }
+  return "other";
+}
+
+const KIND_NAMES = { metamcp: "MetaMCP", obot: "Obot" };
+
+// The Kitden gateway has its own name; a registered one goes by its kind or its address.
+export function gatewayName(gateway) {
+  if (gateway.name) return gateway.name;
+  const kind = gateway.kind || kindOf(gateway.url);
+  if (KIND_NAMES[kind]) return KIND_NAMES[kind];
+  try { return new URL(gateway.url).host || "Gateway"; } catch { return "Gateway"; }
+}
+
+// A move's steps that take an entry out of a client. The gateway's own steps and the kitden
+// entry a move adds to a client are not servers.
+const leavesClient = (s) => s.client !== "gateway" && s.client !== "kitden" && s.name !== "kitden";
+
+// The servers a move takes, each once.
+export function movedNames(steps) {
+  return [...new Set(steps.filter(leavesClient).map((s) => s.name))];
 }
 
 // A direct server, when no gateway here can take it: the Gateway page and Details say the same.
@@ -186,16 +216,20 @@ const ACTION_WORDS = {
   "plugin.disable": "Turned off",
   "setup_server.register": "Added show my setup",
   "setup_server.update": "Updated show my setup to Kitden",
+  "gateway.rule": "Changed the rule for",
 };
 
 // One line for a change log entry: what, which entries, which clients. Plugins go by their
 // short name ("superpowers"); the review named the exact entry before Apply.
 export function changeTitle(entry) {
-  const verb = ACTION_WORDS[entry.action] || entry.action;
+  const kitden = entry.action === "gateway.move" && entry.steps.some((s) => s.client === "kitden");
+  const verb = kitden ? "Moved into the Kitden gateway" : ACTION_WORDS[entry.action] || entry.action;
   const plugin = ["plugin.enable", "plugin.disable", "plugin.install"].includes(entry.action);
   // The gateway's own step is not a client: the line names the clients the entry left. An
   // install's marketplace steps only make the plugin reachable: the line names the plugin.
-  const steps = entry.steps.filter((s) => s.client !== "gateway" && (entry.action !== "plugin.install" || s.name.includes("@")));
+  const steps = entry.action === "gateway.move"
+    ? entry.steps.filter(leavesClient)
+    : entry.steps.filter((s) => s.client !== "gateway" && (entry.action !== "plugin.install" || s.name.includes("@")));
   const names = [...new Set(steps.map((s) => (plugin ? s.name.split("@")[0] : s.name)))];
   // A copied skill folder reaches every client that reads that folder.
   const reached = [...new Set(steps.flatMap((s) => s.reaches || [s.client]))];

@@ -219,10 +219,11 @@ def test_moves_are_named_on_changes_and_in_the_review():
 
 def test_gateway_form_takes_an_obot_key_variable_never_the_key():
     text = script("gateway.js")
-    assert 'path.startsWith("/mcp-connect/")' in text
+    assert 'path.startsWith("/mcp-connect/")' in script("parts.js")
     assert "Obot API key variable name (not the key)" in text
     assert "ok1-" not in text
-    assert "model.gateways.find((g) => g.movable)" in text
+    # The gateways that take a server are offered in order, never one picked silently.
+    assert "moveTargets(model, key)" in text and "model.gateways.find((g) => g.movable)" not in text
 
 
 def test_held_rows_say_remote_hosted_or_sse_and_keep_addresses_behind_details():
@@ -300,7 +301,7 @@ def test_skill_rows_say_where_each_skill_comes_from_and_how_each_client_loads_it
 def test_a_skill_copy_names_every_client_it_reaches():
     panel = script("panel.js")
     assert "s.reaches || [s.client]" in panel and "Add ${names} to ${clients}" in panel
-    assert "filter(Boolean))) box.append(callout(note))" in panel  # Cursor loads it twice
+    assert "for (const note of notes) box.append(callout(note))" in panel  # Cursor loads it twice
     assert '"skill.install": "Added skill"' in script("parts.js")
 
 
@@ -399,7 +400,8 @@ def test_gateway_connect_form_serves_its_own_card_only():
     text = script("gateway.js")
     # The form is for the card's gateway; a client in any gateway is not offered again.
     assert "connectForm(gateway, waiting)" in text
-    assert "Object.values(model.connections).some" in text
+    # The Kitden gateway holds other servers: its clients can connect to a registered one too.
+    assert 'Object.entries(model.connections).filter(([id]) => id !== "kitden")' in text
     assert "connectForm(model.gateways" not in text
 
 
@@ -584,10 +586,10 @@ def test_a_cell_add_reviews_one_client_and_the_review_shows_its_note():
     assert offer.count("{ note: projectNote(state.project) }") == 2
     assert "{ note: formNote(row, clients, state.project) }" in offer
     panel = script("panel.js")
-    assert "export async function review(previewBody, { note = null } = {})" in panel
+    assert "export async function review(previewBody, { note = null, back = null } = {})" in panel
     assert "if (note) body.append(callout(note));" in panel
-    # Preview again keeps the note.
-    assert "review(previewBody, { note })" in panel
+    # Preview again keeps the note, and the Details a tool switch came from.
+    assert "review(previewBody, { note, back })" in panel
     # Details of a row with a repeated name name its source.
     assert "rowTitle(row)" in panel
 
@@ -684,3 +686,53 @@ def test_add_a_marketplace_sits_where_the_filters_sit_on_other_tabs():
     library = script("library.js")
     assert 'bar.append(el("span", "grow"), add);' not in library
     assert "bar.append(add);" in library
+
+
+# The Kitden gateway (2026-10-21) ----------------------------------------------------------
+
+
+def test_the_kitden_gateway_card_comes_first_and_sets_up_missing_clients():
+    text = script("gateway.js")
+    assert text.index("kitdenCard(kitden, model)") < text.index("gatewayCard(gateway, model)")
+    assert "`Set up in ${CLIENT_NAMES[entry.client]}…`" in text
+    assert '"setup_server.register"' in text and '"setup_server.update"' in text
+    assert "Nothing yet. Move a server from the lists below." in text
+    # Local servers can move into it: it runs on this Mac.
+    assert '"Run on this Mac"' in text and "Only the Kitden gateway can hold them" in text
+    # Its rows show a name and what it is; commands and env stay out of the page.
+    assert "server.command" not in text and "server.env" not in text
+
+
+def test_a_held_server_lists_its_tools_with_a_switch_each():
+    panel = script("panel.js")
+    for words in (
+        '"Whole server"',
+        '"Differs from all projects"',
+        '"Use all projects"',
+        '"Refresh tools"',
+        '"All projects"',
+        "Kitden does not know its tools yet.",
+    ):
+        assert words in panel, words
+    # Refresh tools waits for the server's own word that it is done, never a timer of its own.
+    assert '"/api/gateway/tools/refresh"' in panel and '"kitden:tools"' in panel
+    assert '"gateway_tools"' in script("app.js") and '"kitden:tools"' in script("app.js")
+
+
+def test_a_tool_switch_flips_only_after_the_change_is_verified():
+    panel = script("panel.js")
+    # Details comes back after Apply with the switch drawn in its new state; the thumb slides once.
+    assert "await back({ verified: true })" in panel
+    assert 'toggle.classList.add("flipped")' in panel
+    assert ".switch.flipped .thumb" in CSS and "@keyframes thumb-on" in CSS
+    # A refused preview stays as a callout in Details, and focus goes back to the switch.
+    assert "await back({ error: reason })" in panel
+    assert 'callout(error, "error")' in panel
+
+
+def test_moves_into_the_kitden_gateway_name_it():
+    panel = script("panel.js")
+    assert "Move ${names} into the Kitden gateway" in panel
+    # Two gateways can take a server: the panel asks which, never picks one silently.
+    assert 'openInfo("Move into the gateway", title, body' in panel
+    assert '"Moved into the Kitden gateway"' in script("parts.js")
