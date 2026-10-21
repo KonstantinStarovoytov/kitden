@@ -1,7 +1,9 @@
 """What each client shows after a change: the first line of the review (feature 004)."""
 
 import os
+from pathlib import Path
 
+from kitden.changes.json_splice import ABSENT
 from kitden.clients.base import SETUP_NAME
 from kitden.local_gateway.settings import CLIENT as KITDEN
 from kitden.model import GATEWAY_CLIENT, Change, ItemKind, Scope
@@ -95,10 +97,85 @@ def _join(words: list[str]) -> str:
     return words[0] if len(words) == 1 else f"{', '.join(words[:-1])} and {words[-1]}"
 
 
+def _kitden_rules(change: Change) -> dict[str, dict]:
+    """The gateway rules a move writes: server -> (project, tool) -> (state, the clients it
+    comes from). None stands for all projects or for the whole server."""
+    rules: dict[str, dict] = {}
+    for step in change.steps:
+        key = step.edit.key if step.client == KITDEN and step.edit is not None else ()
+        if key[:1] != ("rules",):
+            continue
+        project, rest = (None, key[2:]) if key[1] == "global" else (key[2], key[3:])
+        tool = rest[2] if rest[1] == "tools" else None
+        rules.setdefault(rest[0], {})[(project, tool)] = (step.edit.after, step.carried_from)
+    return rules
+
+
+def _had_on(change: Change, name: str, project: str | None) -> set[str]:
+    """The clients whose moved entry had the server on there: a user entry that was on (Codex
+    can turn one off), or a local-scope entry of that project."""
+    clients = set()
+    for step in change.steps:
+        edit = step.edit
+        removes = edit is not None and edit.after is ABSENT
+        if step.client not in CLIENTS or step.name != name or not removes:
+            continue
+        on = not (isinstance(edit.before, dict) and edit.before.get("enabled") is False)
+        where = step.cwd if step.scope is Scope.LOCAL else None
+        if on and where in (None, project):
+            clients.add(step.client)
+    return clients
+
+
+def _server_words(change: Change, name: str, rules: dict) -> tuple[list[str], bool]:
+    """What the carried rules do to one moved server, and whether it ends up off everywhere.
+
+    A rule has no per-client form, so an off a client had reaches every client; the words say
+    so when it turns off what another client had on."""
+
+    def who(clients: tuple[str, ...]) -> str:
+        return _join([CLIENT_WORDS[c] for c in CLIENTS if c in clients])
+
+    def place(project: str | None) -> str:
+        return "in every client" if project is None else f"in {Path(project).name} for every client"
+
+    words = []
+    state, source = rules.get((None, None), ("on", ()))
+    ons = [p for (p, tool), (s, _) in rules.items() if p and tool is None and s == "on"]
+    if state == "off":
+        if _had_on(change, name, None) - set(source):
+            where = " outside its project" if ons else ""
+            words.append(f"{name} will be off in every client{where}, as {who(source)} had it.")
+        elif ons:
+            words.append(f"{name} is on only in its project{'s' if len(ons) > 1 else ''}.")
+        else:
+            words.append(f"{name} stays off, as it was.")
+        if not ons:
+            return words, True
+    tools: dict[tuple, list[str]] = {}
+    for (project, tool), (s, source) in rules.items():
+        if s != "off" or (project, tool) == (None, None):
+            continue
+        changed = bool(_had_on(change, name, project) - set(source))
+        if tool is None and project is not None and state != "off":
+            folder = Path(project).name
+            words.append(
+                f"{name} will be off {place(project)}, as {who(source)} had it."
+                if changed
+                else f"{name} stays off in {folder}, as it was."
+            )
+        elif tool is not None and changed:
+            tools.setdefault((project, source), []).append(tool)
+    for (project, source), names in tools.items():
+        off = f"{_join(names)} of {name} will be off {place(project)}"
+        words.append(f"{off}, as {who(source)} had it.")
+    return words, False
+
+
 def _kitden_move_words(change: Change, inventory) -> list[dict]:
     """A move into the Kitden gateway: every client with the `kitden` entry offers the moved
-    tools, also one that did not have the server. One line says which, and where a moved
-    server is on only in its project or stays off."""
+    tools, also one that did not have the server. One line says which, and what the rules
+    carried over from the clients do."""
     offering = {
         s["client"]
         for s in setup_server_state(inventory)
@@ -106,34 +183,34 @@ def _kitden_move_words(change: Change, inventory) -> list[dict]:
     }
     offering |= {s.client for s in change.steps if s.client in CLIENTS and s.name == SETUP_NAME}
     removed = {s.client for s in change.steps if s.client in CLIENTS and s.name != SETUP_NAME}
+    servers = [
+        s.edit.key[1]
+        for s in change.steps
+        if s.client == KITDEN and s.edit is not None and s.edit.key[0] == "servers"
+    ]
+    rules = _kitden_rules(change)
+    said, offered = [], []
+    for name in servers:
+        words, off = _server_words(change, name, rules.get(name, {}))
+        said += words
+        if not off:
+            offered.append(name)
     out = []
     for client in CLIENTS:
         if client in offering:
-            out.append({"client": client, "state": "gw", "word": "Via Kitden gateway"})
+            word = "Via Kitden gateway" if offered else "Off"
+            out.append({"client": client, "state": "gw" if offered else "off", "word": word})
         elif client in removed:
             out.append({"client": client, "state": "off", "word": "Removed"})
     if not out:
         return out
-    mine = [s.edit for s in change.steps if s.client == KITDEN and s.edit is not None]
-    servers = [e.key[1] for e in mine if e.key[0] == "servers"]
-    rules = {e.key: e.after for e in mine if e.key[0] == "rules"}
     line = []
-    if offering:
+    if offering and offered:
         who = _join([CLIENT_WORDS[c] for c in CLIENTS if c in offering])
         whose = "its" if len(servers) == 1 else "their"
-        line.append(f"{who} will offer {whose} tools through Kitden.")
-    for name in servers:
-        if rules.get(("rules", "global", name, "server")) != "off":
-            continue
-        projects = [
-            key
-            for key, state in rules.items()
-            if key[1:2] == ("projects",) and key[3:] == (name, "server") and state == "on"
-        ]
-        if projects:
-            line.append(f"{name} is on only in its project{'s' if len(projects) > 1 else ''}.")
-        else:
-            line.append(f"{name} stays off, as it was.")
+        what = f"{whose} tools" if offered == servers else f"the tools of {_join(offered)}"
+        line.append(f"{who} will offer {what} through Kitden.")
+    line += said
     line.append("Applies to new sessions.")
     out[0]["note"] = " ".join(line)
     if "cursor" in removed:

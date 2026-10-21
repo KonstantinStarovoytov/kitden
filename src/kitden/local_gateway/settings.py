@@ -126,11 +126,13 @@ def rule_step(
         raise ValueError("A rule is on or off")
     where = ("global",) if project is None else ("projects", project)
     what = ("server",) if tool is None else ("tools", tool)
+    value = ABSENT if state is None else state
+    return settings_step(home, ("rules", *where, server, *what), value, tool or server)
+
+
+def settings_step(home: Path, key: tuple[str, ...], value: Any, name: str) -> Step:
+    """One entry of the settings file as a change step; ABSENT removes it."""
     edit = FileEdit(
-        path=str(data_dir(home) / SETTINGS_FILE),
-        fmt="json",
-        key=("rules", *where, server, *what),
-        after=ABSENT if state is None else state,
-        check="entry",
+        path=str(data_dir(home) / SETTINGS_FILE), fmt="json", key=key, after=value, check="entry"
     )
-    return Step(client=CLIENT, scope=Scope.USER, name=tool or server, edit=edit)
+    return Step(client=CLIENT, scope=Scope.USER, name=name, edit=edit)

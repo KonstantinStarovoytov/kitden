@@ -259,6 +259,8 @@ class Step:
     restart_note: str | None = None
     login_note: str | None = None
     shared_file: bool = False
+    # A gateway rule carried over from these clients' settings; only the review's words use it.
+    carried_from: tuple[str, ...] = ()
 
 
 @dataclass

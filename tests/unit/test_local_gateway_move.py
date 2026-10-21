@@ -4,9 +4,12 @@ import json
 import re
 import socket
 import stat
+import sys
 import threading
 import tomllib
+from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 import pytest
 from starlette.testclient import TestClient
@@ -18,7 +21,13 @@ from kitden.changes.backup import ChangeStore
 from kitden.changes.client_cli import CommandResult
 from kitden.changes.engine import Engine
 from kitden.gateways import data_dir
-from kitden.local_gateway.settings import SETTINGS_FILE, load_settings, save_tools, servers_on
+from kitden.local_gateway.settings import (
+    SETTINGS_FILE,
+    load_settings,
+    load_tools,
+    save_tools,
+    servers_on,
+)
 from kitden.views.inventory import build_inventory, default_adapters
 from kitden.views.setup_server import setup_server_state
 from kitden.web.app import create_app
@@ -31,6 +40,8 @@ args = ["files-mcp"]
 env = { FILES_TOKEN = "SENTINEL_SECRET_FILES" }"""
 ORIGIN = "http://127.0.0.1:47800"
 POST = {"Origin": ORIGIN, "X-Tool-Request": "1"}
+ECHO = Path(__file__).parents[1] / "fixtures/fake_mcp/echo_server.py"
+SWITCHES = "Cursor's own switches for these tools do not carry over."
 
 
 class FakeClaude:
@@ -84,6 +95,12 @@ class FakeRemote(ThreadingHTTPServer):
     @property
     def url(self):
         return f"http://127.0.0.1:{self.server_port}/mcp"
+
+
+def stop(*servers):
+    for server in servers:
+        server.shutdown()
+        server.server_close()
 
 
 @pytest.fixture(autouse=True)
@@ -151,6 +168,37 @@ def apply(home, steps):
     engine.apply(change.id)
     assert str(change.state) == "verified", change.error
     return engine, change
+
+
+@contextmanager
+def page_for(home, command=KITDEN):
+    """The local page on `home`, as `kitden open` serves it."""
+    app = create_app(
+        lambda: build_inventory(home),
+        token="tok",
+        port=47800,
+        home=home,
+        run=FakeClaude(home),
+        setup_command=lambda: command,
+    )
+    with TestClient(app, base_url=ORIGIN, follow_redirects=False) as page:
+        page.get("/?token=tok")
+        yield page
+
+
+def preview(page, home, *wanted):
+    """Ask the page to review moving the (client, name) entries into the Kitden gateway."""
+    ids = [
+        i.id
+        for i in build_inventory(home).items
+        if str(i.kind) == "mcp_server" and (i.client, i.name) in wanted
+    ]
+    body = {
+        "action": "gateway.move",
+        "targets": [{"item": i} for i in ids],
+        "params": {"gateway": "kitden"},
+    }
+    return page.post("/api/changes/preview", json=body, headers=POST)
 
 
 def gateway_file(home):
@@ -285,9 +333,13 @@ def test_project_file_entries_and_shell_values_are_refused_with_reasons(home):
     )
 
     add_cursor(home, "broken", {"command": "npx", "env": ["KEY=1"]})
-    refused(home, ("cursor", "broken"), "broken could not be read from its file")
+    refused(home, ("cursor", "broken"), "broken could not be read from its file.")
     add_cursor(home, "kitden", {"command": KITDEN, "args": ["mcp"]})
     refused(home, ("cursor", "kitden"), "Kitden's own entry stays in each client.")
+
+    # A trusted project changes Codex's neon in its own .codex/config.toml.
+    words = "neon is in the project's own files; it stays there."
+    refused(home, ("codex", "neon", "user"), words)
 
     # A project placeholder in the arguments is filled in by the gateway, so it may move.
     add_cursor(home, "per-project", {"command": "npx", "args": ["p-mcp", "${workspaceFolder}"]})
@@ -317,22 +369,28 @@ def test_two_different_entries_with_one_name_are_refused(home):
 
 
 def test_an_oauth_server_is_refused_after_a_401(home):
-    oauth, plain = FakeRemote(401), FakeRemote(200)
+    oauth, forbidden, plain = FakeRemote(401), FakeRemote(403), FakeRemote(200)
     try:
         add_claude(home, "linear", {"type": "http", "url": oauth.url})
         words = "linear signs in with OAuth; it stays direct for now."
         refused(home, ("claude_code", "linear"), words)
         assert len(oauth.got) == 1
         assert json.loads(oauth.got[0]["body"])["method"] == "initialize"
+        add_claude(home, "closed", {"type": "http", "url": forbidden.url})
+        words = "closed signs in with OAuth; it stays direct for now."
+        refused(home, ("claude_code", "closed"), words)
+
+        # An explicit type wins over the address: this one is streamable HTTP.
+        add_claude(home, "streamed", {"type": "http", "url": plain.url[:-4] + "/sse"})
+        assert move(home, ("claude_code", "streamed"))[0].edit.after["url"].endswith("/sse")
 
         secret = {"Authorization": "Bearer SENTINEL_SECRET_PLAIN"}
         add_codex(home, "plain", f'url = "{plain.url}"\nhttp_headers = {json_inline(secret)}')
         steps = move(home, ("codex", "plain"))
         assert steps[0].edit.after == {"url": plain.url, "headers": secret}
-        assert plain.got[0]["headers"]["Authorization"] == "Bearer SENTINEL_SECRET_PLAIN"
+        assert plain.got[-1]["headers"]["Authorization"] == "Bearer SENTINEL_SECRET_PLAIN"
     finally:
-        oauth.shutdown()
-        plain.shutdown()
+        stop(oauth, forbidden, plain)
 
 
 def json_inline(table):
@@ -355,13 +413,16 @@ def test_the_sign_in_check_sends_the_headers_to_the_servers_own_address_only(hom
         monkeypatch.setenv(name, f"http://127.0.0.1:{proxy.server_port}")
     secret = {"Authorization": "Bearer SENTINEL_SECRET_PROBE"}
     try:
-        assert needs_sign_in(moved.url, secret) is False  # an answer, but not a sign-in
+        # A redirect: the gateway would not follow it either, so it counts as no answer.
+        with pytest.raises(OSError):
+            needs_sign_in(moved.url, secret)
         assert len(moved.got) == 1
         assert moved.got[0]["headers"]["Authorization"] == "Bearer SENTINEL_SECRET_PROBE"
         assert elsewhere.got == [] and proxy.got == []  # no redirect followed, no proxy used
+        add_claude(home, "moved", {"type": "http", "url": moved.url})
+        refused(home, ("claude_code", "moved"), "Kitden could not reach moved.")
     finally:
-        for server in (elsewhere, proxy, moved):
-            server.shutdown()
+        stop(elsewhere, proxy, moved)
 
     with pytest.raises(OSError):
         needs_sign_in("file:///etc/hosts", {})
@@ -391,6 +452,11 @@ def test_codex_and_claude_rules_carry_over(home):
         home / "work/website/.claude/settings.local.json",
         {"permissions": {"deny": ["mcp__aseprite__draw"]}},
     )
+    # Turned off for one project in Claude Code's /mcp.
+    deleted = str(home / "work/deleted-project")
+    state = claude(home)
+    state["projects"][deleted]["disabledMcpServers"] = ["aseprite", "other"]
+    write_json(home / ".claude.json", state)
 
     apply(home, move(home, ("codex", "aseprite")))
     saved = json.loads(gateway_file(home).read_text())
@@ -402,7 +468,10 @@ def test_codex_and_claude_rules_carry_over(home):
                 "tools": {"delete_all": "off", "layers": "off", "export": "off"},
             }
         },
-        "projects": {website: {"aseprite": {"server": "off", "tools": {"draw": "off"}}}},
+        "projects": {
+            website: {"aseprite": {"server": "off", "tools": {"draw": "off"}}},
+            deleted: {"aseprite": {"server": "off"}},
+        },
     }
 
 
@@ -433,6 +502,8 @@ def test_a_local_scope_server_is_on_only_in_its_project(home, tmp_path):
 
 def test_an_existing_codex_kitden_entry_gets_the_timeouts_it_lacks(home):
     add_codex(home, "kitden", f'command = "{KITDEN}"\nargs = ["mcp"]\nstartup_timeout_sec = 45')
+    files = [home / ".claude.json", home / ".codex/config.toml", home / ".cursor/mcp.json"]
+    before = {path: path.read_bytes() for path in files}
     steps = move(home, ("cursor", "n8n-mcp"))
     # Claude Code has no entry to move, so it gets no `kitden` entry here.
     assert [(s.client, s.name) for s in steps if s.client != "kitden"] == [
@@ -440,7 +511,7 @@ def test_an_existing_codex_kitden_entry_gets_the_timeouts_it_lacks(home):
         ("cursor", "kitden"),
         ("codex", "kitden"),
     ]
-    apply(home, steps)
+    engine, change = apply(home, steps)
     assert codex(home)["mcp_servers"]["kitden"] == {
         "command": KITDEN,
         "args": ["mcp"],
@@ -448,6 +519,11 @@ def test_an_existing_codex_kitden_entry_gets_the_timeouts_it_lacks(home):
         "tool_timeout_sec": 300,
     }
     assert "# Owner comment: keep me" in (home / ".codex/config.toml").read_text()
+
+    engine.undo(change.id)
+    assert str(change.state) == "undone", change.error
+    assert {path: path.read_bytes() for path in files} == before
+    assert not gateway_file(home).exists()
 
 
 def test_a_name_the_gateway_has_and_a_missing_kitden_command_are_refused(home):
@@ -470,27 +546,10 @@ def test_a_name_the_gateway_has_and_a_missing_kitden_command_are_refused(home):
 def test_the_review_names_every_client_that_offers_the_tools(home):
     add_claude(home, "kitden", {"type": "stdio", "command": KITDEN, "args": ["mcp"]})
     original = {n: (home / n).read_bytes() for n in (".claude.json", ".cursor/mcp.json")}
-    app = create_app(
-        lambda: build_inventory(home),
-        token="tok",
-        port=47800,
-        home=home,
-        run=FakeClaude(home),
-        setup_command=lambda: KITDEN,
-    )
-    item = next(
-        i for i in build_inventory(home).items if (i.client, i.name) == ("cursor", "n8n-mcp")
-    )
-    body = {
-        "action": "gateway.move",
-        "targets": [{"item": item.id}],
-        "params": {"gateway": "kitden"},
-    }
-    with TestClient(app, base_url=ORIGIN, follow_redirects=False) as page:
-        page.get("/?token=tok")
-        preview = page.post("/api/changes/preview", json=body, headers=POST)
-        assert preview.status_code == 200, preview.json()
-        change = preview.json()
+    with page_for(home) as page:
+        answer = preview(page, home, ("cursor", "n8n-mcp"))
+        assert answer.status_code == 200, answer.json()
+        change = answer.json()
         assert "SENTINEL" not in json.dumps(change)
         assert [(a["client"], a["word"]) for a in change["after"]] == [
             ("claude_code", "Via Kitden gateway"),
@@ -499,7 +558,7 @@ def test_the_review_names_every_client_that_offers_the_tools(home):
         assert [a.get("note") for a in change["after"]] == [
             "Claude Code and Cursor will offer its tools through Kitden. "
             "Applies to new sessions.",
-            "Cursor's own switches for these tools do not carry over.",
+            SWITCHES,
         ]
 
         applied = page.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
@@ -510,36 +569,119 @@ def test_the_review_names_every_client_that_offers_the_tools(home):
         undone = page.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
         assert undone["state"] == "undone"
     assert {n: (home / n).read_bytes() for n in original} == original
+    assert not gateway_file(home).exists()
 
 
 def test_the_review_says_where_a_server_stays_on_or_off(home):
-    app = create_app(
-        lambda: build_inventory(home),
-        token="tok",
-        port=47800,
-        home=home,
-        run=FakeClaude(home),
-        setup_command=lambda: KITDEN,
-    )
-    items = [
-        i.id
-        for i in build_inventory(home).items
-        if (i.client, i.name) in (("claude_code", "local-db"), ("codex", "aseprite"))
-    ]
-    body = {
-        "action": "gateway.move",
-        "targets": [{"item": i} for i in items],
-        "params": {"gateway": "kitden"},
-    }
-    with TestClient(app, base_url=ORIGIN, follow_redirects=False) as page:
-        page.get("/?token=tok")
-        change = page.post("/api/changes/preview", json=body, headers=POST).json()
+    with page_for(home) as page:
+        wanted = (("claude_code", "local-db"), ("codex", "aseprite"))
+        change = preview(page, home, *wanted).json()
     assert [(a["client"], a["word"]) for a in change["after"]] == [
         ("claude_code", "Via Kitden gateway"),
         ("codex", "Via Kitden gateway"),
     ]
     assert change["after"][0]["note"] == (
-        "Claude Code and Codex will offer their tools through Kitden. "
+        "Claude Code and Codex will offer the tools of local-db through Kitden. "
         "local-db is on only in its project. aseprite stays off, as it was. "
         "Applies to new sessions."
     )
+
+
+def test_the_review_says_when_a_carried_rule_turns_off_what_a_client_had_on(tmp_path):
+    def review(home, *wanted):
+        with page_for(home) as page:
+            answer = preview(page, home, *wanted)
+        assert answer.status_code == 200, answer.json()
+        return answer.json()["after"]
+
+    # Codex had files off, Claude Code had it on: it will be off in Claude Code too.
+    home = new_home(tmp_path / "server")
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    add_codex(home, "files", CODEX_FILES + "\nenabled = false")
+    after = review(home, ("claude_code", "files"), ("codex", "files"))
+    assert [(a["client"], a["state"], a["word"]) for a in after] == [
+        ("claude_code", "off", "Off"),
+        ("codex", "off", "Off"),
+    ]
+    assert after[0]["note"] == (
+        "files will be off in every client, as Codex had it. Applies to new sessions."
+    )
+
+    # A tool Codex turned off will be off in Claude Code too.
+    home = new_home(tmp_path / "tool")
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    add_codex(home, "files", CODEX_FILES + '\ndisabled_tools = ["search"]')
+    after = review(home, ("claude_code", "files"), ("codex", "files"))
+    assert after[0]["note"] == (
+        "Claude Code and Codex will offer its tools through Kitden. "
+        "search of files will be off in every client, as Codex had it. "
+        "Applies to new sessions."
+    )
+
+    # Claude Code turned files off in one project: there it will be off in Cursor too.
+    home = new_home(tmp_path / "project")
+    website = str(home / "work/website")
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    add_cursor(home, "files", FILES)
+    state = claude(home)
+    state["projects"][website]["disabledMcpServers"] = ["files"]
+    write_json(home / ".claude.json", state)
+    after = review(home, ("claude_code", "files"), ("cursor", "files"))
+    assert [a.get("note") for a in after] == [
+        "Claude Code and Cursor will offer its tools through Kitden. "
+        "files will be off in website for every client, as Claude Code had it. "
+        "Applies to new sessions.",
+        SWITCHES,
+    ]
+
+
+def test_a_codex_entry_that_keeps_some_tools_on_has_its_tools_read_first(home):
+    command = json.dumps(sys.executable)
+    args = json.dumps([str(ECHO), "echo"])
+    add_codex(home, "echo", f'command = {command}\nargs = {args}\nenabled_tools = ["echo"]')
+    add_codex(home, "broken", 'command = "/nonexistent/kitden-test/server"\nenabled_tools = []')
+    with page_for(home) as page:
+        answer = preview(page, home, ("codex", "broken"))
+        assert answer.status_code == 422
+        assert answer.json()["detail"] == (
+            "Kitden could not read the tools of broken; it stays direct for now."
+        )
+
+        answer = preview(page, home, ("codex", "echo"))
+        assert answer.status_code == 200, answer.json()
+        assert sorted(t["name"] for t in load_tools(home)["echo"]) == [
+            "clash",
+            "echo",
+            "refuse",
+            "slow",
+            "where",
+        ]
+        applied = page.post(f"/api/changes/{answer.json()['id']}/apply", headers=POST).json()
+        assert applied["state"] == "verified"
+    off = {"clash": "off", "refuse": "off", "slow": "off", "where": "off"}
+    assert load_settings(home)["rules"]["global"] == {"echo": {"tools": off}}
+
+
+def test_header_values_stay_out_of_the_review_and_the_log(home):
+    plain = FakeRemote(200)
+    secret = {"Authorization": "Bearer SENTINEL_SECRET_HEADER"}
+    try:
+        add_claude(home, "plain", {"type": "http", "url": plain.url, "headers": secret})
+        with page_for(home) as page:
+            answer = preview(page, home, ("claude_code", "plain"))
+            assert answer.status_code == 200, answer.json()
+            assert "SENTINEL_SECRET_HEADER" not in answer.text
+            applied = page.post(f"/api/changes/{answer.json()['id']}/apply", headers=POST)
+            assert applied.json()["state"] == "verified"
+            assert "SENTINEL_SECRET_HEADER" not in applied.text
+            assert "SENTINEL_SECRET_HEADER" not in page.get("/api/changes").text
+        assert load_settings(home)["servers"]["plain"]["headers"] == secret
+    finally:
+        stop(plain)
+
+
+def test_without_the_kitden_command_the_page_says_to_install_it(home):
+    with page_for(home, command=None) as page:
+        answer = preview(page, home, ("cursor", "n8n-mcp"))
+    assert answer.status_code == 422
+    assert answer.json()["detail"] == "Install the tool first: uv tool install <this folder>"

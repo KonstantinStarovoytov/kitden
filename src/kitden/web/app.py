@@ -38,6 +38,7 @@ from kitden.changes.actions import (
     setup_server_steps,
     skill_steps,
     switch_steps,
+    tools_to_read,
     update_steps,
 )
 from kitden.changes.backup import ChangeStore
@@ -47,6 +48,7 @@ from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, REMOVE_DIRECT, SE
 from kitden.command import installed_command
 from kitden.gateway_api import GatewayError, MetaMcpClient, ObotClient
 from kitden.gateways import add_gateway, data_dir, load_gateways
+from kitden.local_gateway.settings import save_tools
 from kitden.marketplace_link import LinkError, read_marketplace
 from kitden.model import Change, ChangeState, Gateway, GatewayAuth, GatewayEdit, ItemKind
 from kitden.redact import redact_text
@@ -608,6 +610,17 @@ def create_app(
         found = any(c["id"] == "cursor" and c["status"] == "found" for c in clients)
         return adapters.get("cursor") if found else None
 
+    async def _read_tools(name: str, server: dict) -> list[dict] | None:
+        """The server's tools, asked as the gateway asks; None when it does not answer."""
+        # The MCP SDK loads only here: the page must start without it.
+        from kitden.local_gateway.proxy import UpstreamError, Upstreams
+
+        async with Upstreams(home, {"servers": {name: server}}) as upstreams:
+            try:
+                return await upstreams.list_tools(name)
+            except UpstreamError:
+                return None
+
     async def preview(request: Request) -> JSONResponse:
         if engine is None:
             return _error("Changes are not available.", 404)
@@ -710,6 +723,18 @@ def create_app(
                 known = [p.path for p in state.inventory.projects]
                 added = _states_in(state.inventory, "added", "plugin")
                 command = (setup_command or installed_command)()
+                if command is None and {i.client for i in items} - added:
+                    return _error("Install the tool first: uv tool install <this folder>", 422)
+                # A Codex entry that keeps only some tools on: Kitden needs the whole list.
+                wanted = await asyncio.to_thread(tools_to_read, adapters, items, home, known)
+                for name, server in wanted.items():
+                    tools = await _read_tools(name, server)
+                    if tools is None:
+                        return _error(
+                            f"Kitden could not read the tools of {name}; it stays direct for now.",
+                            422,
+                        )
+                    save_tools(home, name, tools)
                 # It may ask a remote server whether it signs in, so not on the event loop.
                 steps = await asyncio.to_thread(
                     local_move_steps, adapters, items, home, known, command, added_clients=added

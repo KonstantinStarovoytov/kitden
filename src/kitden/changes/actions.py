@@ -5,6 +5,7 @@ import ipaddress
 import json
 import os
 import re
+import tomllib
 import urllib.error
 import urllib.request
 from dataclasses import replace
@@ -21,14 +22,12 @@ from kitden.clients.base import (
     ClientAdapter,
 )
 from kitden.gateway_api import gateway_name
-from kitden.gateways import data_dir
-from kitden.local_gateway.settings import CLIENT as KITDEN_CLIENT
 from kitden.local_gateway.settings import (
     PLACEHOLDERS,
-    SETTINGS_FILE,
     load_settings,
     load_tools,
     rule_step,
+    settings_step,
 )
 from kitden.model import GATEWAY_CLIENT, FileEdit, Gateway, GatewayEdit, Item, Scope, Step
 
@@ -346,7 +345,7 @@ def move_steps(
     v0.26.3) keeps the name, needs an administrator's key, and refuses servers on this
     computer or a private network; Kitden refuses those before the review."""
     if not items:
-        raise ValueError("Choose a server to move")
+        raise ValueError("Choose a server to move.")
     if not gateway.movable:
         if gateway.kind == "metamcp":
             raise ValueError("Add the sign-in email and password variable to the gateway first")
@@ -363,7 +362,7 @@ def move_steps(
             continue
         entry = _raw_entry(remove)
         if entry is None:
-            raise ValueError(f"{item.name} could not be read from its file")
+            raise ValueError(f"{item.name} could not be read from its file.")
         if gateway.kind == "obot" and is_local_address(str(entry.get("url", ""))):
             raise ValueError(
                 f"Obot cannot reach {item.name}: it runs on this computer or a private "
@@ -412,8 +411,9 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def needs_sign_in(url: str, headers: dict) -> bool:
-    """True when the server answers an MCP `initialize` with 401, as a server that signs in
-    with OAuth does. Raises OSError when there is no answer.
+    """True when the server answers an MCP `initialize` with 401 or 403, as a server that
+    signs in with OAuth does (Claude Code reads both that way, checked 2026-10-21). Raises
+    OSError when there is no answer, or only a redirect, which the gateway would not follow.
 
     One POST to the server's own address, within 5 seconds. No redirect is followed and no
     proxy is used, so the headers go nowhere else; an error never holds them.
@@ -446,7 +446,9 @@ def needs_sign_in(url: str, headers: dict) -> bool:
             return False
     except urllib.error.HTTPError as answer:
         answer.close()
-        return answer.code == 401
+        if 300 <= answer.code < 400:
+            raise OSError("moved") from None
+        return answer.code in (401, 403)
     except (OSError, ValueError, http.client.HTTPException):
         raise OSError("no answer") from None
 
@@ -484,7 +486,25 @@ def _reads_elsewhere(entry: dict, server: dict) -> bool:
     return any("${" in s for s in _strings({**server, "args": args}))
 
 
-def _movable(adapters: dict[str, ClientAdapter], item: Item) -> tuple[Step, dict, dict]:
+def _codex_layers(name: str, known_projects: list[str], user_file: str) -> bool:
+    """A known project's `.codex/config.toml` has its own `[mcp_servers.<name>]` table, which
+    changes Codex's user entry there."""
+    for project in known_projects:
+        path = Path(project) / ".codex/config.toml"
+        if path.resolve() == Path(user_file).resolve():
+            continue  # the home folder: that file is the user's own
+        try:
+            servers = tomllib.loads(path.read_text()).get("mcp_servers")
+        except (OSError, ValueError):
+            continue
+        if isinstance(servers, dict) and name in servers:
+            return True
+    return False
+
+
+def _movable(
+    adapters: dict[str, ClientAdapter], item: Item, known_projects: list[str]
+) -> tuple[Step, dict, dict]:
     """The item's remove step, its entry and what the gateway will run. Refuses, with the
     reason, an entry that stays direct."""
     name = item.name
@@ -493,18 +513,22 @@ def _movable(adapters: dict[str, ClientAdapter], item: Item) -> tuple[Step, dict
     if name == SETUP_NAME:
         raise ValueError("Kitden's own entry stays in each client.")
     remove = remove_steps(adapters, item)[0]
+    assert remove.edit is not None
+    if item.client == "codex" and _codex_layers(name, known_projects, remove.edit.path):
+        raise ValueError(f"{name} is in the project's own files; it stays there.")
     entry = _raw_entry(remove)
     if entry is None:
-        raise ValueError(f"{name} could not be read from its file")
+        raise ValueError(f"{name} could not be read from its file.")
     server = _gateway_entry(entry)
     if _reads_elsewhere(entry, server):
         raise ValueError(f"{name} reads values from your shell; it stays direct for now.")
     if "cwd" in entry:
         raise ValueError(f"{name} starts in its own folder; it stays direct for now.")
     # The gateway speaks streamable HTTP; Claude Code also has `sse` and `ws` (checked
-    # 2026-10-21), and Cursor tells SSE by an address that ends in /sse.
-    url = str(server.get("url", ""))
-    if str(entry.get("type", "")).lower() in ("sse", "ws") or url.rstrip("/").endswith("/sse"):
+    # 2026-10-21). Without a type, an address that ends in /sse is SSE, as Cursor reads it.
+    kind = entry.get("type")
+    by_address = kind is None and str(server.get("url", "")).rstrip("/").endswith("/sse")
+    if str(kind).lower() in ("sse", "ws") or by_address:
         raise ValueError(
             f"{name} uses a connection the Kitden gateway does not support yet; "
             "it stays direct for now."
@@ -512,7 +536,7 @@ def _movable(adapters: dict[str, ClientAdapter], item: Item) -> tuple[Step, dict
     shapes = {"command": str, "args": list, "env": dict, "url": str, "headers": dict}
     wrong = any(not isinstance(server.get(k, kind()), kind) for k, kind in shapes.items())
     if wrong or not ("command" in server or "url" in server):
-        raise ValueError(f"{name} could not be read from its file")
+        raise ValueError(f"{name} could not be read from its file.")
     return remove, entry, server
 
 
@@ -539,19 +563,47 @@ def _claude_denies(home: Path, known_projects: list[str]) -> dict[str | None, li
     return denies
 
 
+def _claude_project_offs(home: Path) -> dict[str, list[str]]:
+    """The servers Claude Code's /mcp turned off in each project: `disabledMcpServers` in
+    ~/.claude.json (Task 4 ruling, 2026-10-21)."""
+    try:
+        state = json.loads((home / ".claude.json").read_text())
+    except (OSError, ValueError):
+        return {}
+    projects = state.get("projects") if isinstance(state, dict) else None
+    offs = {}
+    for project, data in projects.items() if isinstance(projects, dict) else []:
+        names = data.get("disabledMcpServers") if isinstance(data, dict) else None
+        if isinstance(names, list):
+            offs[project] = [n for n in names if isinstance(n, str)]
+    return offs
+
+
+Rules = dict[tuple[str | None, str | None], tuple[str, set[str]]]
+
+
 def _carried_rules(
-    name: str, found: list[tuple[Item, dict]], home: Path, denies: dict[str | None, list[str]]
-) -> dict[tuple[str | None, str | None], str]:
-    """The server's rules from what the clients had: (project or None, tool or None) -> state.
+    name: str,
+    found: list[tuple[Item, dict]],
+    home: Path,
+    denies: dict[str | None, list[str]],
+    project_offs: dict[str, list[str]],
+) -> Rules:
+    """The server's rules from what the clients had: (project or None, tool or None) ->
+    (state, the clients it comes from).
 
-    Codex `enabled`, `enabled_tools` and `disabled_tools` and Claude Code deny rules turn things
-    off; a Claude Code local-scope entry turns the server on in its project only. Off wins.
+    Codex `enabled`, `enabled_tools` and `disabled_tools`, Claude Code deny rules and servers
+    Claude Code turned off in a project turn things off; a Claude Code local-scope entry turns
+    the server on in its project only. A rule has no per-client form, so off wins.
     """
-    rules: dict[tuple[str | None, str | None], str] = {}
+    rules: Rules = {}
 
-    def rule(project: str | None, tool: str | None, state: str) -> None:
-        if rules.get((project, tool)) != "off":
-            rules[(project, tool)] = state
+    def rule(project: str | None, tool: str | None, state: str, client: str) -> None:
+        now, clients = rules.get((project, tool), (state, set()))
+        if now == state:
+            rules[(project, tool)] = (state, clients | {client})
+        elif state == "off":
+            rules[(project, tool)] = (state, {client})
 
     known = [t["name"] for t in load_tools(home).get(name, [])]
     codex_off = False
@@ -560,36 +612,31 @@ def _carried_rules(
             continue
         if entry.get("enabled") is False:
             codex_off = True
-            rule(None, None, "off")
+            rule(None, None, "off", "codex")
         kept = entry.get("enabled_tools")
         for tool in known if isinstance(kept, list) else []:
             if tool not in kept:
-                rule(None, tool, "off")
+                rule(None, tool, "off", "codex")
         off = entry.get("disabled_tools")
         for tool in off if isinstance(off, list) else []:
             if isinstance(tool, str):
-                rule(None, tool, "off")
+                rule(None, tool, "off", "codex")
     prefix = f"mcp__{name}__"
     for project, deny in denies.items():
         for text in deny:
             if text in (f"mcp__{name}", f"{prefix}*"):
-                rule(project, None, "off")
+                rule(project, None, "off", "claude_code")
             elif text.startswith(prefix) and text != prefix:
-                rule(project, text.removeprefix(prefix), "off")
+                rule(project, text.removeprefix(prefix), "off", "claude_code")
+    for project, names in project_offs.items():
+        if name in names:
+            rule(project, None, "off", "claude_code")
     local = [item.project for item, _ in found if item.scope is Scope.LOCAL]
     if local and (codex_off or len(local) == len(found)):
-        rule(None, None, "off")
+        rule(None, None, "off", "claude_code")
         for project in local:
-            rule(project, None, "on")
+            rule(project, None, "on", "claude_code")
     return rules
-
-
-def _settings_step(home: Path, key: tuple[str, ...], value: Any, name: str) -> Step:
-    """One entry of the gateway settings as a change step."""
-    edit = FileEdit(
-        path=str(data_dir(home) / SETTINGS_FILE), fmt="json", key=key, after=value, check="entry"
-    )
-    return Step(client=KITDEN_CLIENT, scope=Scope.USER, name=name, edit=edit)
 
 
 def _codex_timeout_steps(adapters: dict[str, ClientAdapter]) -> list[Step]:
@@ -618,6 +665,22 @@ def _codex_timeout_steps(adapters: dict[str, ClientAdapter]) -> list[Step]:
     ]
 
 
+def tools_to_read(
+    adapters: dict[str, ClientAdapter], items: list[Item], home: Path, known_projects: list[str]
+) -> dict[str, dict]:
+    """The servers a move must ask for their tools first, by name, with what the gateway runs:
+    a Codex entry that keeps only some tools on (`enabled_tools`), when Kitden does not know
+    its tools yet. Refuses an entry that stays direct, as local_move_steps does."""
+    cached = load_tools(home)
+    wanted = {}
+    for item in items:
+        _, entry, server = _movable(adapters, item, known_projects)
+        some = item.client == "codex" and isinstance(entry.get("enabled_tools"), list)
+        if some and item.name not in cached:
+            wanted[item.name] = server
+    return wanted
+
+
 def local_move_steps(
     adapters: dict[str, ClientAdapter],
     items: list[Item],
@@ -636,13 +699,13 @@ def local_move_steps(
     lacks. An entry that must stay direct is refused, with the reason, before any step.
     """
     if not items:
-        raise ValueError("Choose a server to move")
+        raise ValueError("Choose a server to move.")
     items = list({item.id: item for item in items}.values())
     servers: dict[str, dict] = {}
     found: dict[str, list[tuple[Item, dict]]] = {}
     removes = []
     for item in items:
-        remove, entry, server = _movable(adapters, item)
+        remove, entry, server = _movable(adapters, item, known_projects)
         first = servers.setdefault(item.name, server)
         if server != first:
             a = CLIENT_WORDS[found[item.name][0][0].client]
@@ -670,14 +733,18 @@ def local_move_steps(
         if oauth:
             raise ValueError(f"{name} signs in with OAuth; it stays direct for now.")
 
-    steps = [_settings_step(home, ("servers", n), s, n) for n, s in servers.items()]
+    steps = [settings_step(home, ("servers", n), s, n) for n, s in servers.items()]
     path = os.environ.get("PATH")
     if path and not settings.get("path"):
-        steps.append(_settings_step(home, ("path",), path, "PATH"))
+        steps.append(settings_step(home, ("path",), path, "PATH"))
     denies = _claude_denies(home, known_projects)
+    project_offs = _claude_project_offs(home)
     for name in servers:
-        rules = _carried_rules(name, found[name], home, denies)
-        steps += [rule_step(home, p, name, tool, state) for (p, tool), state in rules.items()]
+        rules = _carried_rules(name, found[name], home, denies, project_offs)
+        for (project, tool), (state, clients) in rules.items():
+            step = rule_step(home, project, name, tool, state)
+            step.carried_from = tuple(sorted(clients))
+            steps.append(step)
     steps += removes
     if lacking:
         assert command is not None  # checked above
