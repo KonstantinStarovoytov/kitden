@@ -62,6 +62,19 @@ test('a problem comes before an option: the duplicate fix leads, Move waits', ()
   assert.deepEqual(footerActions([remove], [unfixable], move), { lead: null, rest: ['move', remove] });
 });
 
+test('a duplicate plugin leads with Remove; turning it off waits under More', () => {
+  const off = { def: { id: 'p-1', client: 'claude_code' }, action: 'plugin.disable' };
+  const removePlugin = { def: { id: 'p-1', client: 'claude_code' }, action: 'plugin.remove' };
+  const twice = { level: 'warning', client: 'claude_code', fix_action: 'plugin.remove' };
+  assert.deepEqual(footerActions([off, removePlugin], [twice], null), { lead: removePlugin, rest: [off] });
+});
+
+test('a plugin removal names the plugin and the client', () => {
+  const change = { action: 'plugin.remove', steps: [{ client: 'claude_code', name: 'superpowers@claude-plugins-official' }] };
+  assert.equal(changeWords(change).title, 'Remove superpowers from Claude Code');
+  assert.equal(changeWords(change).done, 'Removed superpowers from Claude Code');
+});
+
 test('a server to add in the gateway by hand first keeps a lone Remove plain', () => {
   const move = { items: direct.items, gateways: [] };
   assert.deepEqual(footerActions([remove], [], move), { lead: null, rest: [remove] });

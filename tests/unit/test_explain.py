@@ -41,7 +41,7 @@ def test_why_says_which_definition_wins(home):
 def test_actions_and_hints_are_included(home):
     found = explain(build_inventory(home), "superpowers", "plugin", None)
     user = next(d for d in found if (d["client"], d["scope"]) == ("claude_code", "user"))
-    assert user["actions"] == ["plugin.disable"]
+    assert user["actions"] == ["plugin.disable", "plugin.remove"]
     cursor_own = next(d for d in found if d["name"] == "superpowers@cursor-public")
     assert "Customize" in cursor_own["change_hint"]
     assert cursor_own["actions"] == []

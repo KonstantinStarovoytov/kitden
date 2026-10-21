@@ -107,8 +107,8 @@ def test_two_copies_of_a_plugin_in_one_client_offer_to_turn_one_off():
             "text": "Claude Code loads it twice",
             "level": "warning",
             "client": "claude_code",
-            "fix": "Turn one copy off to keep the other.",
-            "fix_action": "plugin.disable",
+            "fix": "Remove one copy to keep the other.",
+            "fix_action": "plugin.remove",
         }
     ]
 

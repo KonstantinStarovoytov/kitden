@@ -43,9 +43,11 @@ from kitden.model import (
 
 CLIENT = "cursor"
 RESTART = "Restart Cursor for this to take effect."
+# checked 2026-10-22 (cursor.com/docs/plugins): installed plugins are managed in Customize, and
+# an install is for the user or a project. The menu words come from spike S1 (Cursor 3.21).
 CURSOR_HINT = (
-    "Cursor has no plugin on/off. Change it in Cursor: Customize → Plugins → the plugin's menu "
-    "(Add for Myself / Add to Project)."
+    "Cursor keeps its plugins in its own database. Remove it in Cursor: Customize → Plugins. "
+    "The plugin's menu there has Add for Myself / Add to Project."
 )
 IMPORT_HINT = (
     "Cursor loads this Claude Code plugin. Turn it off in Claude Code, or turn off "

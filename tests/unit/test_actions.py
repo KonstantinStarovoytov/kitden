@@ -53,6 +53,7 @@ def test_only_direct_entries_in_files_can_be_removed_and_nothing_adds_or_toggles
         "mcp.remove_direct",
         "plugin.enable",
         "plugin.disable",
+        "plugin.remove",
     }
     mcp_actions = {a for i in inventory.items if str(i.kind) == "mcp_server" for a in i.actions}
     assert mcp_actions == {"mcp.remove_direct"}

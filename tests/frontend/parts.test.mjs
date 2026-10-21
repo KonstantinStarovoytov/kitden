@@ -140,6 +140,10 @@ test('an Add skills entry on the Changes page counts the skills, not every name'
   assert.equal(changeTitle({ action: 'plugin.skills', steps: [step('a')] }), 'Added 1 skill · Codex, Cursor');
 });
 
+test('a plugin removal on the Changes page uses the short name', () => {
+  assert.equal(changeTitle({ action: 'plugin.remove', steps: [{ client: 'codex', name: 'browser@openai-bundled' }] }), 'Removed browser · Codex');
+});
+
 test('the Changes page names what moved into the Kitden gateway and which rule changed', () => {
   const steps = [
     { client: 'kitden', name: 'files' }, { client: 'kitden', name: 'PATH' },

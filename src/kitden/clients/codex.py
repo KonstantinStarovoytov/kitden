@@ -15,6 +15,7 @@ from typing import Any
 
 from kitden.changes.json_splice import ABSENT, PRESENT
 from kitden.clients.base import (
+    PLUGIN_REMOVE,
     REMOVE_DIRECT,
     SETUP_NAME,
     ClientAdapter,
@@ -170,7 +171,7 @@ class CodexAdapter(ClientAdapter):
             and item.source.kind is SourceKind.FILE
             and item.source.read_status is ReadStatus.OK
         ):
-            return toggle_action(item)
+            return (*toggle_action(item), PLUGIN_REMOVE)
         return ()
 
     def plugin_step(self, item: Item, enable: bool) -> Step:
@@ -232,6 +233,31 @@ class CodexAdapter(ClientAdapter):
             mechanism="client_cli",
             command=["codex", "plugin", "add", plugin_id, "--json"],
             undo_command=["codex", "plugin", "remove", plugin_id],
+            restart_note=RESTART,
+        )
+
+    # checked 2026-10-22: no codex command on this Mac, and the plugins docs
+    # (learn.chatgpt.com/docs/plugins) show only the /plugins browser. `codex plugin remove <id>`
+    # is in `codex plugin --help` of 0.163 (research of 2026-10-19); that it deletes the
+    # `[plugins."<id>"]` table is assumed, and a different result fails the check and is undone.
+    def plugin_remove_step(self, item: Item) -> Step:
+        if PLUGIN_REMOVE not in self.item_actions(item):
+            raise ValueError(f"{item.name} cannot be removed here")
+        edit = FileEdit(
+            path=str(item.source.path),
+            fmt="toml",
+            key=("plugins", item.name),
+            after=ABSENT,
+            check="entry",
+        )
+        return Step(
+            client=CLIENT,
+            scope=item.scope,
+            name=item.name,
+            edit=edit,
+            mechanism="client_cli",
+            command=["codex", "plugin", "remove", item.name],
+            undo_command=["codex", "plugin", "add", item.name, "--json"],
             restart_note=RESTART,
         )
 

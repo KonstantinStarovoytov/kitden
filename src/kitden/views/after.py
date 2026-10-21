@@ -36,6 +36,7 @@ WORDS = {
     "plugin.enable": ("on", "Loads"),
     "plugin.disable": ("off", "Off"),
     "mcp.remove_direct": ("off", "Removed"),
+    "plugin.remove": ("off", "Removed"),
     "gateway.connect": ("gw", "Via gateway"),
     "gateway.move": ("gw", "Via gateway"),
     "gateway.switch": ("gw", "Via the new gateway"),
@@ -43,6 +44,18 @@ WORDS = {
     "marketplace.add": ("on", "Added"),
     "setup_server.register": ("on", "Added"),
     "setup_server.update": ("on", "Updated"),
+}
+CURSOR_REMOVE = {
+    "client": "cursor",
+    "state": "off",
+    "word": "Removed",
+    "note": "Cursor loads Claude Code plugins, so it loses this one too.",
+}
+CURSOR_KEEPS_ONE = {
+    "client": "cursor",
+    "state": "on",
+    "word": "Loads once",
+    "note": "Cursor loads Claude Code plugins, so it loses this copy and keeps its own.",
 }
 CURSOR_SWITCHES = "Cursor's own switches for these tools do not carry over."
 # Strict mode only hides tools; the server's own token decides what it can do.
@@ -485,7 +498,7 @@ def after_words(
             i.client == step.client and i.via_gateway == target for i in inventory.items
         ):
             state, word = "off", "Removed"
-        if change.action == "plugin.disable" and _other_copy_loads(
+        if change.action in ("plugin.disable", "plugin.remove") and _other_copy_loads(
             inventory, step.client, step.name
         ):
             state, word = "on", "Loads once"
@@ -493,4 +506,9 @@ def after_words(
     to_claude = any(s.client == "claude_code" for s in change.steps)
     if change.action == "plugin.install" and to_claude and cursor_imports:
         out.append(dict(CURSOR_IMPORT))
+    # Cursor imports only Claude Code's user plugins; with a copy of its own it still loads one.
+    removal = change.steps[0] if change.action == "plugin.remove" and change.steps else None
+    if removal and to_claude and cursor_imports and removal.scope is Scope.USER:
+        keeps = _other_copy_loads(inventory, "cursor", removal.name)
+        out.append(dict(CURSOR_KEEPS_ONE if keeps else CURSOR_REMOVE))
     return out

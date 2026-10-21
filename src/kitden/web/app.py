@@ -37,6 +37,7 @@ from kitden.changes.actions import (
     plugin_skill_steps,
     plugin_skills_left_out,
     plugin_steps,
+    remove_plugin_steps,
     remove_steps,
     setup_server_steps,
     skill_steps,
@@ -47,7 +48,13 @@ from kitden.changes.actions import (
 from kitden.changes.backup import ChangeStore
 from kitden.changes.client_cli import CommandRunner
 from kitden.changes.engine import ChangeRefusedError, Engine, NothingToChangeError, Runner
-from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, REMOVE_DIRECT, SETUP_SERVER
+from kitden.clients.base import (
+    PLUGIN_DISABLE,
+    PLUGIN_ENABLE,
+    PLUGIN_REMOVE,
+    REMOVE_DIRECT,
+    SETUP_SERVER,
+)
 from kitden.command import installed_command
 from kitden.gateway_api import GatewayError, MetaMcpClient, ObotClient
 from kitden.gateways import add_gateway, data_dir, load_gateways
@@ -862,7 +869,7 @@ def create_app(
                 if not items or any(i is None for i in items):
                     return _error("Choose a known server.", 422)
                 steps = move_steps(adapters, items, gateway)
-            elif action in (REMOVE_DIRECT, PLUGIN_ENABLE, PLUGIN_DISABLE):
+            elif action in (REMOVE_DIRECT, PLUGIN_ENABLE, PLUGIN_DISABLE, PLUGIN_REMOVE):
                 ids = [t.get("item") for t in targets if isinstance(t, dict)]
                 items = [_item(str(i)) for i in ids]
                 # A direct entry may go from several clients at once; a plugin is one item.
@@ -871,6 +878,8 @@ def create_app(
                     return _error("Choose one known item.", 422)
                 if action == REMOVE_DIRECT:
                     steps = [s for item in items for s in remove_steps(adapters, item)]
+                elif action == PLUGIN_REMOVE:
+                    steps = remove_plugin_steps(adapters, items[0])
                 else:
                     steps = plugin_steps(adapters, items[0], action == PLUGIN_ENABLE)
             else:
@@ -879,8 +888,8 @@ def create_app(
         except ValueError as error:  # includes ChangeRefusedError
             return _error(refusal_words(error), 422)
         events.publish("change_state")
-        # Only an added plugin can reach Cursor through Claude Code.
-        cursor = _found_cursor() if action == PLUGIN_INSTALL else None
+        # Only an added or removed plugin reaches Cursor through Claude Code.
+        cursor = _found_cursor() if action in (PLUGIN_INSTALL, PLUGIN_REMOVE) else None
         imports = bool(cursor and cursor.imports_claude_plugins())
         after = after_words(
             change, state.inventory, cursor_imports=imports, skills=copied, home=home

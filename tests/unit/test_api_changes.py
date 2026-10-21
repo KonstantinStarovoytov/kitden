@@ -334,7 +334,7 @@ def test_turning_a_plugin_off_and_undo(client):
     plugin = next(
         i
         for i in client.get("/api/items?client=claude_code&kind=plugin&scope=user").json()
-        if i["actions"] == ["plugin.disable"]
+        if i["actions"] == ["plugin.disable", "plugin.remove"]
     )
     body = {"action": "plugin.disable", "targets": [{"item": plugin["id"]}], "params": {}}
     change = client.post("/api/changes/preview", json=body, headers=POST).json()
@@ -342,7 +342,7 @@ def test_turning_a_plugin_off_and_undo(client):
     applied = client.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
     assert applied["state"] == "verified"
     after = next(i for i in client.get("/api/items").json() if i["id"] == plugin["id"])
-    assert after["enabled"] == "off" and after["actions"] == ["plugin.enable"]
+    assert after["enabled"] == "off" and after["actions"] == ["plugin.enable", "plugin.remove"]
     client.post(f"/api/changes/{change['id']}/undo", headers=POST)
     assert settings.read_bytes() == original
 

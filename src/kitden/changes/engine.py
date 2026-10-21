@@ -439,6 +439,20 @@ class Engine:
         self._write(edit.path, new.encode())
         return new.encode()
 
+    def _put_entry_back(self, step: Step) -> None:
+        """After an inverse command, set the entry back as it was before the change.
+
+        Installing a removed plugin again turns it on; one that was off is set off again, so
+        Undo leaves the file as it was. Only the entry is written.
+        """
+        edit = step.edit
+        data = _read(edit.path)
+        now = _value(edit, data)
+        if edit.before is ABSENT or now is ABSENT or now == edit.before:
+            return
+        text = EDITORS[edit.fmt].set_value((data or b"").decode(), edit.key, edit.before)
+        self._write(edit.path, text.encode())
+
     def _verify(self, step: Step, expected: Any, exact: bytes | None = None) -> None:
         data = _read(step.edit.path)
         if not _matches(step, _value(step.edit, data), expected):
@@ -503,7 +517,13 @@ class Engine:
             by_command = _command_paths(file_steps)
             for step in reversed(ran):
                 if step.edit.path in by_command:
-                    self.run(step.undo_command, step.cwd)
+                    if self.run(step.undo_command, step.cwd).returncode != 0:
+                        continue
+                    # A failure here must not stop the rest of the restore.
+                    with contextlib.suppress(
+                        OSError, RefusedWriteError, UnicodeDecodeError, UnrecognizedFormatError
+                    ):
+                        self._put_entry_back(step)
             for path, data in current.items():
                 if path not in by_command and _read(path) != data:
                     self._write(path, data)
@@ -666,6 +686,7 @@ class Engine:
                 change.error = f"`{shown}` failed: {result.output}"
                 self._finish(change)
                 return change
+            self._put_entry_back(step)
             self.on_write(step.edit.path, _sha(_read(step.edit.path)))
             tick()
         for path, data in plans.items():

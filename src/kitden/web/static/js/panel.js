@@ -15,6 +15,7 @@ const ACTION_BUTTONS = {
   "plugin.disable": (client) => `Turn off in ${client}…`,
   "plugin.enable": (client) => `Turn on in ${client}…`,
   "mcp.remove_direct": (client) => `Remove from ${client}…`,
+  "plugin.remove": (client) => `Remove from ${client}…`,
 };
 // Node before 21 (the tests) has no navigator.
 const APPLY_KEY = typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "⌘ Enter to apply" : "Ctrl Enter to apply";
@@ -674,12 +675,15 @@ export function openChange(title, body, onUndo) {
 // Change review --------------------------------------------------------------------------
 
 const DONE_WORDS = {
-  "plugin.disable": "Turned off", "plugin.enable": "Turned on", "mcp.remove_direct": "Removed",
+  "plugin.disable": "Turned off", "plugin.enable": "Turned on", "mcp.remove_direct": "Removed", "plugin.remove": "Removed",
   "gateway.connect": "Connected the gateway", "setup_server.register": "Added show my setup",
   "setup_server.update": "Updated show my setup to Kitden", "gateway.move": "Moved",
   "gateway.switch": "Switched the gateway", "plugin.install": "Added", "marketplace.add": "Added the marketplace",
   "skill.install": "Added", "plugin.skills": "Added",
 };
+
+// Actions whose words say "from" a client.
+const REMOVES = ["mcp.remove_direct", "plugin.remove"];
 
 // The review title names the exact entry; the toast uses the short name ("superpowers").
 // `previewBody` is what the review asked for; Add skills names its plugin and a tool rule its
@@ -713,6 +717,7 @@ export function changeWords(change, previewBody) {
     "plugin.disable": `Turn off ${names} in ${clients}`,
     "plugin.enable": `Turn on ${names} in ${clients}`,
     "mcp.remove_direct": `Remove ${names} from ${clients}`,
+    "plugin.remove": `Remove ${short} from ${clients}`,
     "gateway.connect": `Connect the gateway to ${clients}`,
     "plugin.install": `Add ${joinWords([...new Set(steps.filter((s) => s.name.includes("@")).map((s) => s.name))])} to ${clients}`,
     "marketplace.add": `Add the ${names} marketplace to ${clients}`,
@@ -724,7 +729,7 @@ export function changeWords(change, previewBody) {
     "setup_server.update": `Update “show my setup” to Kitden in ${clients}`,
   }[change.action] || change.action;
   const verb = DONE_WORDS[change.action] || change.action;
-  let what = `${verb} ${short} ${change.action === "mcp.remove_direct" ? "from" : "in"} ${clients}`;
+  let what = `${verb} ${short} ${REMOVES.includes(change.action) ? "from" : "in"} ${clients}`;
   if (change.action === "plugin.install") {
     what = `${verb} ${joinWords([...new Set(steps.filter((s) => s.name.includes("@")).map((s) => s.name.split("@")[0]))])} to ${clients}`;
   } else if (change.action === "marketplace.add" || change.action === "skill.install") {

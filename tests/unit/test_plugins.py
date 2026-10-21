@@ -68,17 +68,27 @@ def test_plugins_offer_the_opposite_of_their_state_where_the_state_is_in_a_file(
         for i in inventory.items
         if str(i.kind) == "plugin"
     }
+    # A plugin written in a settings file can also be removed (spec 3.1).
     assert actions[("claude_code", "superpowers@claude-plugins-official", "user")] == (
         "plugin.disable",
+        "plugin.remove",
     )
     assert actions[("claude_code", "claude-md-management@claude-plugins-official", "user")] == (
         "plugin.enable",
+        "plugin.remove",
     )
     assert actions[("claude_code", "superpowers@claude-plugins-official", "project")] == (
         "plugin.enable",
+        "plugin.remove",
     )
-    assert actions[("codex", "browser@openai-bundled", "user")] == ("plugin.disable",)
-    assert actions[("codex", "pdf@openai-primary-runtime", "user")] == ("plugin.enable",)
+    assert actions[("codex", "browser@openai-bundled", "user")] == (
+        "plugin.disable",
+        "plugin.remove",
+    )
+    assert actions[("codex", "pdf@openai-primary-runtime", "user")] == (
+        "plugin.enable",
+        "plugin.remove",
+    )
     for key in [
         ("claude_code", "notes@synced", "account"),
         ("claude_code", "Claude account plugins and connectors", "account"),

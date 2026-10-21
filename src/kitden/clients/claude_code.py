@@ -10,6 +10,7 @@ from typing import Any
 
 from kitden.changes.json_splice import ABSENT, PRESENT
 from kitden.clients.base import (
+    PLUGIN_REMOVE,
     REMOVE_DIRECT,
     SETUP_NAME,
     ClientAdapter,
@@ -50,6 +51,8 @@ ACCOUNT_HINT = "Stored in your Claude account. Change it in the Claude app or on
 DESKTOP = "claude_desktop_code_tab"
 DESKTOP_CONFIG = "Library/Application Support/Claude/claude_desktop_config.json"
 DESKTOP_BUNDLED = "Library/Application Support/Claude/claude-code"
+# Plugins that come from these places have no install to remove (plugins/loading docs).
+NOT_INSTALLED = ("@synced", "@inline", "@skills-dir")
 
 
 def _on(value: bool | None) -> Enabled:
@@ -95,7 +98,9 @@ class ClaudeCodeAdapter(ClientAdapter):
             and item.source.read_status is ReadStatus.OK
             and item.scope in (Scope.USER, Scope.PROJECT)
         ):
-            return toggle_action(item)
+            if item.name.endswith(NOT_INSTALLED):
+                return toggle_action(item)
+            return (*toggle_action(item), PLUGIN_REMOVE)
         return ()
 
     def plugin_step(self, item: Item, enable: bool) -> Step:
@@ -170,6 +175,36 @@ class ClaudeCodeAdapter(ClientAdapter):
             command=["claude", "plugin", "install", plugin_id, "-s", "user", "--json"],
             undo_command=["claude", "plugin", "uninstall", plugin_id, "-s", "user", "--json"],
             restart_note=RELOAD,
+        )
+
+    # checked 2026-10-22 (`claude plugin uninstall --help`, 2.1.283, and
+    # code.claude.com/docs/en/plugins/cli-reference): `uninstall <id> -s <scope> --json`
+    # removes the plugin from that scope's settings file; it fails when the settings still
+    # switch it on. `install` writes `true` again, so Undo of an "off" plugin sets it back off.
+    def plugin_remove_step(self, item: Item) -> Step:
+        if PLUGIN_REMOVE not in self.item_actions(item):
+            raise ValueError(f"{item.name} cannot be removed here")
+        if item.scope is Scope.PROJECT and not Path(str(item.project)).is_dir():
+            raise ValueError(f"the project folder {item.project} is missing")
+        edit = FileEdit(
+            path=str(item.source.path),
+            fmt="json",
+            key=("enabledPlugins", item.name),
+            after=ABSENT,
+            check="entry",
+        )
+        scope = str(item.scope)
+        return Step(
+            client=CLIENT,
+            scope=item.scope,
+            name=item.name,
+            edit=edit,
+            mechanism="client_cli",
+            command=["claude", "plugin", "uninstall", item.name, "-s", scope, "--json"],
+            undo_command=["claude", "plugin", "install", item.name, "-s", scope, "--json"],
+            cwd=item.project if item.scope is Scope.PROJECT else None,
+            restart_note=RELOAD,
+            shared_file=item.scope is Scope.PROJECT,
         )
 
     def marketplace_roots(self) -> dict[str, Path]:

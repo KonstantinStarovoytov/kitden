@@ -281,6 +281,10 @@ class ClientAdapter(ABC):
         """Install a plugin for the user with the client's own command."""
         raise ValueError(f"{self.id} cannot install a plugin from here")
 
+    def plugin_remove_step(self, item: Item) -> Step:
+        """Remove one installed plugin with the client's own command."""
+        raise ValueError(f"{item.name} cannot be removed here")
+
     def skill_copy_step(self, folder: Path, readers: list[str]) -> Step:
         """Copy a skill folder into this client's skills folder.
 
@@ -307,6 +311,7 @@ PLUGIN_ENABLE = "plugin.enable"
 SETUP_SERVER = "setup_server.register"
 SETUP_NAME = "kitden"
 PLUGIN_DISABLE = "plugin.disable"
+PLUGIN_REMOVE = "plugin.remove"
 
 
 def toggle_action(item: Item) -> tuple[str, ...]:

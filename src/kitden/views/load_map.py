@@ -93,7 +93,7 @@ def _cell(column: str, loaded: list[Item], present: list[Item], winners: set[str
 
 # What fixes a duplicate, and the action that does it where the page has one.
 DUPLICATE_FIXES = {
-    ItemKind.PLUGIN: ("Turn one copy off to keep the other.", "plugin.disable"),
+    ItemKind.PLUGIN: ("Remove one copy to keep the other.", "plugin.remove"),
     ItemKind.MCP_SERVER: ("Remove one entry to keep the other.", "mcp.remove_direct"),
 }
 

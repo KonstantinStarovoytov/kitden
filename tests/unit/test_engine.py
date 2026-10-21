@@ -567,6 +567,53 @@ def test_undo_runs_the_inverse_commands_in_reverse_order(tmp_path, settings):
     assert after == {"theme": "light", "enabledPlugins": {}, "extraKnownMarketplaces": {}}
 
 
+def removal(settings, plugin):
+    """Uninstall one plugin; Undo installs it again with the client's own command."""
+    return Step(
+        client="claude_code",
+        scope=Scope.USER,
+        name=plugin,
+        edit=FileEdit(
+            path=str(settings),
+            fmt="json",
+            key=("enabledPlugins", plugin),
+            after=ABSENT,
+            check="entry",
+        ),
+        mechanism="client_cli",
+        command=["claude", "plugin", "uninstall", plugin, "-s", "user", "--json"],
+        undo_command=["claude", "plugin", "install", plugin, "-s", "user", "--json"],
+    )
+
+
+def test_undo_of_removing_an_off_plugin_puts_it_back_off(tmp_path, settings):
+    # The client's install turns the plugin on; Undo then sets the entry back as it was.
+    settings.write_text(json.dumps({"enabledPlugins": {"lint@tools": False}, "theme": "dark"}))
+    cli = FakePluginCli(settings)
+    engine = make_engine(tmp_path, run=cli)
+    change = engine.preview("plugin.remove", [removal(settings, "lint@tools")])
+    assert engine.apply(change.id).state is ChangeState.VERIFIED
+    assert json.loads(settings.read_text())["enabledPlugins"] == {}
+    assert engine.undo(change.id).state is ChangeState.UNDONE
+    assert cli.calls[-1][1:3] == ["plugin", "install"]
+    assert json.loads(settings.read_text()) == {
+        "enabledPlugins": {"lint@tools": False},
+        "theme": "dark",
+    }
+
+
+def test_a_failed_removal_puts_an_off_plugin_back_off(tmp_path, settings):
+    settings.write_text(json.dumps({"enabledPlugins": {"lint@tools": False, "fmt@tools": True}}))
+    cli = FakePluginCli(settings, fail_on="fmt@tools")
+    engine = make_engine(tmp_path, run=cli)
+    steps = [removal(settings, "lint@tools"), removal(settings, "fmt@tools")]
+    change = engine.preview("plugin.remove", steps)
+    assert engine.apply(change.id).state is ChangeState.RESTORED
+    assert cli.calls[-1][1:4] == ["plugin", "install", "lint@tools"]
+    plugins = json.loads(settings.read_text())["enabledPlugins"]
+    assert plugins == {"lint@tools": False, "fmt@tools": True}
+
+
 def test_a_failed_install_runs_the_inverse_of_what_already_ran(tmp_path, settings):
     cli = FakePluginCli(settings, fail_on="install")
     engine = make_engine(tmp_path, run=cli)

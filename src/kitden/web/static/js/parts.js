@@ -220,6 +220,7 @@ const ACTION_WORDS = {
   "mcp.remove_direct": "Removed",
   "plugin.enable": "Turned on",
   "plugin.disable": "Turned off",
+  "plugin.remove": "Removed",
   "setup_server.register": "Added show my setup",
   "setup_server.update": "Updated show my setup to Kitden",
   "gateway.rule": "Changed the rule for",
@@ -261,7 +262,7 @@ export function changeTitle(entry) {
   if (entry.action === "gateway.rules") return `${ACTION_WORDS[entry.action]} ${entry.steps.map((s) => s.name).join(", ")} · Kitden gateway`;
   const kitden = kitdenMove(entry);
   const verb = kitden ? "Moved" : ACTION_WORDS[entry.action] || entry.action;
-  const plugin = ["plugin.enable", "plugin.disable", "plugin.install"].includes(entry.action);
+  const plugin = ["plugin.enable", "plugin.disable", "plugin.install", "plugin.remove"].includes(entry.action);
   // The gateway's own step is not a client: the line names the clients the entry left. An
   // install's marketplace steps only make the plugin reachable: the line names the plugin.
   const steps = entry.action === "gateway.move"

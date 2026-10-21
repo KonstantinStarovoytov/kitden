@@ -17,6 +17,7 @@ from kitden.changes import json_splice, toml_edit
 from kitden.clients.base import (
     PLUGIN_DISABLE,
     PLUGIN_ENABLE,
+    PLUGIN_REMOVE,
     REMOVE_DIRECT,
     SETUP_NAME,
     ClientAdapter,
@@ -226,6 +227,14 @@ def remove_steps(adapters: dict[str, ClientAdapter], item: Item) -> list[Step]:
     if adapter is None or REMOVE_DIRECT not in item.actions:
         raise ValueError(f"{item.name} cannot be removed here")
     return [adapter.remove_step(item)]
+
+
+def remove_plugin_steps(adapters: dict[str, ClientAdapter], item: Item) -> list[Step]:
+    """Remove one installed plugin with its client's own command (spec 3.1)."""
+    adapter = adapters.get(item.client)
+    if adapter is None or PLUGIN_REMOVE not in item.actions:
+        raise ValueError(f"{item.name} cannot be removed here")
+    return [adapter.plugin_remove_step(item)]
 
 
 def plugin_steps(adapters: dict[str, ClientAdapter], item: Item, enable: bool) -> list[Step]:
