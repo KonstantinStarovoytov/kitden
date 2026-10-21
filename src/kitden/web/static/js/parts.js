@@ -223,6 +223,7 @@ const ACTION_WORDS = {
   "setup_server.register": "Added show my setup",
   "setup_server.update": "Updated show my setup to Kitden",
   "gateway.rule": "Changed the rule for",
+  "gateway.strict": "Changed strict mode for",
 };
 
 // A Kitden gateway rule in words: "slow of echo in website", as the review's after line says
@@ -236,11 +237,18 @@ export function ruleText({ server, tool, state }, where) {
   return { title: `Remove the own setting for ${what} in ${place}`, done: `${what} in ${place}: own setting removed` };
 }
 
+// The strict switch in words: the review's title and the line after the change.
+export function strictText({ server, state }) {
+  return { title: `Turn strict mode ${state} for ${server}`, done: `Turned strict mode ${state} for ${server}` };
+}
+
 // One line for a change log entry: what, which entries, which clients. Plugins go by their
 // short name ("superpowers"); the review named the exact entry before Apply.
 export function changeTitle(entry) {
   // A tool rule names its tool, server, project and new state (the server adds them).
   if (entry.action === "gateway.rule" && entry.rule) return ruleText(entry.rule, entry.rule.project).done;
+  // The strict switch: its first step is the server's mode; the others are its tools.
+  if (entry.action === "gateway.strict" && entry.steps.length) return `${ACTION_WORDS[entry.action]} ${entry.steps[0].name} · Kitden gateway`;
   const kitden = kitdenMove(entry);
   const verb = kitden ? "Moved" : ACTION_WORDS[entry.action] || entry.action;
   const plugin = ["plugin.enable", "plugin.disable", "plugin.install"].includes(entry.action);

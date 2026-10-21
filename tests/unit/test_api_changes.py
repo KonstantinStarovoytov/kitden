@@ -803,3 +803,22 @@ def test_move_into_obot_refuses_a_server_on_this_computer(tmp_path, monkeypatch,
         assert "runs on this computer" in refused.json()["detail"]
         assert "tunnel" in refused.json()["detail"]
     assert obot.entries == {}
+
+
+def test_gateway_strict_previews_applies_and_undoes(client):
+    home = client.home
+    path = _hold_in_kitden(home)
+    path.write_text(json.dumps({"servers": {"github": {"command": "npx"}}}))
+    before = path.read_bytes()
+    params = {"server": "github", "state": "on"}
+    body = {"action": "gateway.strict", "targets": [], "params": params}
+    answer = client.post("/api/changes/preview", json=body, headers=POST)
+    assert answer.status_code == 200, answer.json()
+    change = answer.json()
+    assert "Strict mode on for github" in change["after"][0]["note"]
+    applied = client.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
+    assert applied["state"] == "verified", applied
+    assert json.loads(path.read_text())["rules"]["global"]["github"] == {"mode": "strict"}
+    undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
+    assert undone["state"] == "undone", undone
+    assert path.read_bytes() == before

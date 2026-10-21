@@ -16,6 +16,7 @@ from kitden.local_gateway.project import project_chain
 from kitden.local_gateway.settings import (
     CLIENT,
     SETTINGS_FILE,
+    allowed_tools,
     deciding_project,
     load_settings,
     load_tools,
@@ -24,6 +25,8 @@ from kitden.local_gateway.settings import (
     rule_step,
     save_tools,
     state_in,
+    strict_mode,
+    strict_step,
 )
 from kitden.model import Change, Enabled, Item, Scope, Source, SourceKind, Step
 from kitden.views.setup_server import setup_server_state
@@ -104,6 +107,7 @@ def tools_view(settings: dict, tools: dict, server: str, chain: list[str]) -> di
     return {
         "server": server,
         **_states(settings, server, None, chain),
+        "strict": strict_mode(settings, server),
         "tools": [
             {
                 "name": tool["name"],
@@ -134,6 +138,30 @@ def rule_steps(home: Path, params: dict, projects: dict[str, str]) -> list[Step]
     return [rule_step(home, projects.get(project), server, tool, state)]
 
 
+def strict_steps(home: Path, params: dict, tools: dict[str, list[dict]]) -> list[Step]:
+    """The change the strict switch makes: `params` has server and state ("on" or "off").
+
+    On writes the mode and an on for every tool offered now without its own global on, so
+    those stay on; a new tool then waits. Off removes the mode only."""
+    server, state = params.get("server"), params.get("state")
+    settings = load_settings(home)
+    if not isinstance(server, str) or server not in settings["servers"]:
+        raise ValueError("Choose a server in the Kitden gateway.")
+    if state not in ("on", "off"):
+        raise ValueError("Choose on or off.")
+    if state == "off":
+        return [strict_step(home, server, False)]
+    offered = allowed_tools(settings, tools, []).get(server, [])
+    return [
+        strict_step(home, server, True),
+        *(
+            rule_step(home, None, server, t["name"], "on")
+            for t in offered
+            if own_state(settings["rules"]["global"], server, t["name"]) != "on"
+        ),
+    ]
+
+
 def rule_of(change: Change | None) -> dict | None:
     """A tool rule change's parts for the Changes page: the project's folder (None: all
     projects), the server, the tool (None: the whole server) and the new state (None: follows
@@ -145,7 +173,7 @@ def rule_of(change: Change | None) -> dict | None:
         return None
     try:
         project, server, tool = rule_parts(edit.key)
-    except IndexError:  # a key too short to be a rule
+    except (IndexError, ValueError):  # a key too short to be a rule, or not a rule
         return None
     state = edit.after if edit.after in ("on", "off") else None
     folder = Path(project).name if project else None

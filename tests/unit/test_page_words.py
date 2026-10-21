@@ -795,3 +795,10 @@ def test_gateway_show_all_hands_focus_to_the_first_new_row():
 def test_agents_lede_says_held_servers_add_their_tools():
     text = script("agents.js")
     assert "Servers moved into the gateway add their tools, which do what those servers do." in text
+
+
+def test_the_tool_list_has_a_strict_switch():
+    panel = script("panel.js")
+    assert "Strict: only tools you turned on" in panel
+    assert "Set for all projects" in panel
+    assert 'action: "gateway.strict"' in panel

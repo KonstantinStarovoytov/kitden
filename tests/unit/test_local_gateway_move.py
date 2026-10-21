@@ -465,7 +465,9 @@ def test_codex_and_claude_rules_carry_over(home):
         "global": {
             "aseprite": {
                 "server": "off",  # Codex had it turned off
-                "tools": {"delete_all": "off", "layers": "off", "export": "off"},
+                # Codex kept only some tools on: strict mode, and those tools on.
+                "tools": {"draw": "on", "delete_all": "off", "layers": "off", "export": "off"},
+                "mode": "strict",
             }
         },
         "projects": {
@@ -851,8 +853,8 @@ def test_a_codex_entry_that_keeps_some_tools_on_has_its_tools_read_first(home):
         ]
         applied = page.post(f"/api/changes/{answer.json()['id']}/apply", headers=POST).json()
         assert applied["state"] == "verified"
-    off = {"clash": "off", "refuse": "off", "slow": "off", "where": "off"}
-    assert load_settings(home)["rules"]["global"] == {"echo": {"tools": off}}
+    tools = {"echo": "on", "clash": "off", "refuse": "off", "slow": "off", "where": "off"}
+    assert load_settings(home)["rules"]["global"] == {"echo": {"tools": tools, "mode": "strict"}}
 
 
 def test_header_values_stay_out_of_the_review_and_the_log(home):
@@ -878,3 +880,24 @@ def test_without_the_kitden_command_the_page_says_to_install_it(home):
         answer = preview(page, home, ("cursor", "n8n-mcp"))
     assert answer.status_code == 422
     assert answer.json()["detail"] == "Install the tool first: uv tool install <this folder>"
+
+
+def test_a_codex_allowlist_turns_strict_on(home):
+    add_codex(home, "github", 'command = "npx"\nenabled_tools = ["list_issues"]')
+    save_tools(home, "github", [tool("list_issues"), tool("create_issue")])
+    steps = move(home, ("codex", "github"))
+    rules = [(s.edit.key, s.edit.after) for s in steps if s.edit and s.edit.key[0] == "rules"]
+    assert rules == [
+        (("rules", "global", "github", "tools", "list_issues"), "on"),
+        (("rules", "global", "github", "tools", "create_issue"), "off"),
+        (("rules", "global", "github", "mode"), "strict"),
+    ]
+    _, change = apply(home, steps)
+    assert servers_on(load_settings(home), []) == ["github"]
+
+
+def test_a_codex_entry_without_an_allowlist_does_not_turn_strict_on(home):
+    add_codex(home, "github", 'command = "npx"\ndisabled_tools = ["create_issue"]')
+    save_tools(home, "github", [tool("list_issues"), tool("create_issue")])
+    keys = [s.edit.key for s in move(home, ("codex", "github")) if s.edit]
+    assert ("rules", "global", "github", "mode") not in keys

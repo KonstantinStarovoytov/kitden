@@ -130,3 +130,60 @@ def test_an_update_move_names_the_kept_switches(tmp_path, monkeypatch):
     change, inv = _move_change(home, monkeypatch, ("claude_code", "files"))
     note = after_words(change, inv, home=home)[0]["note"]
     assert "keeps its" in note and "do not carry over" in note
+
+
+GUARANTEE = "For a real guarantee, give github a token that can only read."
+
+
+def _strict_note(tmp_path, monkeypatch, on, tools):
+    import kitden.clients.base as base
+    from kitden.local_gateway.settings import save_tools
+    from kitden.local_gateway.views import strict_steps
+    from kitden.views.inventory import build_inventory
+    from tests.unit.test_local_gateway_move import gateway_file, new_home, tool, write_json
+
+    monkeypatch.setattr(base, "read_command_version", lambda client: None)
+    home = new_home(tmp_path)
+    rules = {} if on else {"global": {"github": {"mode": "strict"}}}
+    write_json(gateway_file(home), {"servers": {"github": {"command": "npx"}}, "rules": rules})
+    if tools:
+        save_tools(home, "github", [tool("list_issues")])
+    params = {"server": "github", "state": "on" if on else "off"}
+    steps = strict_steps(home, params, {"github": [tool("list_issues")]} if tools else {})
+    change = Change(action="gateway.strict", steps=steps)
+    return after_words(change, build_inventory(home), home=home)[0]["note"]
+
+
+def test_strict_on_says_only_turned_on_tools_are_offered(tmp_path, monkeypatch):
+    note = _strict_note(tmp_path, monkeypatch, True, True)
+    assert note.startswith(
+        "Strict mode on for github: only tools you turned on are offered; a new tool waits "
+        f"until you turn it on. {GUARANTEE}"
+    )
+
+
+def test_strict_off_says_a_tool_without_a_rule_is_on(tmp_path, monkeypatch):
+    note = _strict_note(tmp_path, monkeypatch, False, True)
+    assert note.startswith("Strict mode off for github: a tool without a rule is on.")
+
+
+def test_strict_on_without_a_tool_list_says_its_tools_show_as_off(tmp_path, monkeypatch):
+    note = _strict_note(tmp_path, monkeypatch, True, False)
+    assert note.startswith(
+        f"Strict mode on for github: its tools show as off until you turn them on. {GUARANTEE}"
+    )
+
+
+def test_a_move_with_a_codex_allowlist_says_strict_mode_not_server_off(tmp_path, monkeypatch):
+    from kitden.local_gateway.settings import save_tools
+    from tests.unit.test_local_gateway_move import add_codex, new_home, tool
+
+    home = new_home(tmp_path)
+    add_codex(home, "github", 'command = "npx"\nenabled_tools = ["list_issues"]')
+    save_tools(home, "github", [tool("list_issues"), tool("create_issue")])
+    change, inv = _move_change(home, monkeypatch, ("codex", "github"))
+    note = after_words(change, inv, home=home)[0]["note"]
+    assert "Strict mode on for github" in note
+    assert "github will be off" not in note and "github stays off" not in note
+    assert "is on only in" not in note
+    assert "will offer its tools through Kitden" in note

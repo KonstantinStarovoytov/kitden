@@ -29,7 +29,7 @@ function element(tag) {
   return node;
 }
 globalThis.document = { createElement: element };
-const { banner, changeTitle, clientCheck, gatewayName, morphSocket, opens, socket } = await import('../../src/kitden/web/static/js/parts.js');
+const { banner, changeTitle, clientCheck, gatewayName, morphSocket, opens, socket, strictText } = await import('../../src/kitden/web/static/js/parts.js');
 
 test('a row that opens Details ends with a chevron for the eye and words for a screen reader', () => {
   const node = opens();
@@ -180,4 +180,10 @@ test('the scan line names what is still read, and how far it got', () => {
   assert.equal(scanLine({ ready: true, steps: steps([0, 1, 2, 3, 4]) }), null);
   assert.deepEqual(scanLine({ ready: false, steps: steps([0]) }), { text: 'Reading Codex and Cursor…', share: 0.2 });
   assert.deepEqual(scanLine({ ready: true, steps: steps([0, 1, 2]) }), { text: 'Still checking Codex plugins and marketplaces…', share: 0.6 });
+});
+
+test('the strict switch names its server, in the review and in the log', () => {
+  assert.deepEqual(strictText({ server: 'github', state: 'on' }), { title: 'Turn strict mode on for github', done: 'Turned strict mode on for github' });
+  const steps = [{ client: 'kitden', name: 'github' }, { client: 'kitden', name: 'list_issues' }];
+  assert.equal(changeTitle({ action: 'gateway.strict', steps }), 'Changed strict mode for github · Kitden gateway');
 });

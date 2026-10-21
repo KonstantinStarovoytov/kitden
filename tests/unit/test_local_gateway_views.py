@@ -16,10 +16,11 @@ from starlette.testclient import TestClient
 import kitden.clients.base as base
 import kitden.web.app as page_app
 from kitden import mcp_server
+from kitden.changes.json_splice import ABSENT
 from kitden.gateways import data_dir
 from kitden.local_gateway import proxy
 from kitden.local_gateway.settings import SETTINGS_FILE, load_settings, load_tools, save_tools
-from kitden.local_gateway.views import gateway_items, refresh_tools
+from kitden.local_gateway.views import gateway_items, refresh_tools, strict_steps, tools_view
 from kitden.views.gateway_view import gateway_view
 from kitden.views.inventory import build_inventory
 from kitden.web.app import create_app
@@ -352,7 +353,7 @@ def test_a_rule_line_with_a_broken_record_stays_as_it_is(home):
         change = rule_preview(page, server="echo", tool="slow", state="off", project=None).json()
         assert page.post(f"/api/changes/{change['id']}/apply", headers=POST).status_code == 200
     record = data_dir(home) / "changes" / change["id"] / "change.json"
-    for key in (["rules"], ["rules", "global", "echo"]):
+    for key in (["rules"], ["rules", "global", "echo"], ["rules", "global", "echo", "mode"]):
         saved = json.loads(record.read_text())
         saved["steps"][0]["edit"]["key"] = key
         record.write_text(json.dumps(saved))
@@ -798,3 +799,47 @@ def test_unreadable_gateway_settings_are_a_problem_not_an_empty_gateway(home):
     hold(home, {"files": FILES})
     with page_for(home) as page:
         assert "problem" not in page.get("/api/gateway-view").json()["gateways"][0]
+
+
+def test_strict_on_writes_the_mode_and_an_on_for_every_offered_tool(home):
+    rules = {"global": {"github": {"tools": {"create_issue": "off"}}}}
+    hold(home, {"github": echo(), "notion": echo()}, rules)
+    save_tools(home, "github", [tool("list_issues"), tool("create_issue")])
+    steps = strict_steps(home, {"server": "github", "state": "on"}, load_tools(home))
+    assert [(s.edit.key[-1], s.edit.after) for s in steps] == [
+        ("mode", "strict"),
+        ("list_issues", "on"),
+    ]
+
+
+def test_strict_on_without_a_tool_list_writes_the_mode_only(home):
+    hold(home, {"notion": echo()})
+    steps = strict_steps(home, {"server": "notion", "state": "on"}, {})
+    assert [s.edit.key[-1] for s in steps] == ["mode"]
+
+
+def test_strict_off_removes_the_mode_only(home):
+    hold(home, {"github": echo()}, {"global": {"github": {"mode": "strict"}}})
+    save_tools(home, "github", [tool("list_issues")])
+    steps = strict_steps(home, {"server": "github", "state": "off"}, load_tools(home))
+    assert [s.edit.key for s in steps] == [("rules", "global", "github", "mode")]
+    assert steps[0].edit.after is ABSENT
+
+
+def test_strict_steps_refuse_a_wrong_server_or_state(home):
+    hold(home, {"github": echo()})
+    for params, words in (
+        ({"server": "nope", "state": "on"}, "Choose a server in the Kitden gateway."),
+        ({"server": "github", "state": "maybe"}, "Choose on or off."),
+    ):
+        with pytest.raises(ValueError, match=words):
+            strict_steps(home, params, {})
+
+
+def test_tools_view_says_strict(home):
+    rules = {"global": {"github": {"mode": "strict"}}}
+    hold(home, {"github": echo()}, rules)
+    save_tools(home, "github", [tool("list_issues")])
+    assert tools_view(load_settings(home), load_tools(home), "github", [])["strict"] is True
+    hold(home, {"github": echo()})
+    assert tools_view(load_settings(home), load_tools(home), "github", [])["strict"] is False

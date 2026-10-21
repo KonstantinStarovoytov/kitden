@@ -3,14 +3,16 @@
 import os
 from pathlib import Path
 
-from kitden.changes.actions import claude_allows_kitden
+from kitden.changes.actions import GATEWAY_RULE, GATEWAY_STRICT, claude_allows_kitden
 from kitden.changes.json_splice import ABSENT
 from kitden.clients.base import SETUP_NAME
 from kitden.local_gateway.project import project_chain
 from kitden.local_gateway.settings import CLIENT as KITDEN
 from kitden.local_gateway.settings import (
     deciding_project,
+    is_mode_key,
     load_settings,
+    load_tools,
     moved_in,
     own_state,
     rule_parts,
@@ -43,6 +45,8 @@ WORDS = {
     "setup_server.update": ("on", "Updated"),
 }
 CURSOR_SWITCHES = "Cursor's own switches for these tools do not carry over."
+# Strict mode only hides tools; the server's own token decides what it can do.
+GUARANTEE = "For a real guarantee, give {server} a token that can only read."
 
 
 def _other_copy_loads(inventory, client: str, name: str) -> bool:
@@ -113,15 +117,39 @@ def _is(words: list[str]) -> str:
 
 def _kitden_rules(change: Change) -> dict[str, dict]:
     """The gateway rules a move writes: server -> (project, tool) -> (state, the clients it
-    comes from). None stands for all projects or for the whole server."""
+    comes from). None stands for all projects or for the whole server. Strict mode is not a
+    rule; see `_strict_servers`."""
     rules: dict[str, dict] = {}
     for step in change.steps:
         key = step.edit.key if step.client == KITDEN and step.edit is not None else ()
-        if key[:1] != ("rules",):
+        if key[:1] != ("rules",) or is_mode_key(key):
             continue
         project, server, tool = rule_parts(key)
         rules.setdefault(server, {})[(project, tool)] = (step.edit.after, step.carried_from)
     return rules
+
+
+def _strict_servers(change: Change) -> list[str]:
+    """The servers a change puts in strict mode."""
+    return [
+        step.edit.key[2]
+        for step in change.steps
+        if step.client == KITDEN
+        and step.edit is not None
+        and is_mode_key(step.edit.key)
+        and step.edit.after == "strict"
+    ]
+
+
+def _strict_line(server: str, on: bool, known: bool) -> str:
+    """What strict mode on or off does to a server; `known`: Kitden knows its tools."""
+    if not on:
+        return f"Strict mode off for {server}: a tool without a rule is on."
+    if known:
+        what = "only tools you turned on are offered; a new tool waits until you turn it on"
+    else:
+        what = "its tools show as off until you turn them on"
+    return f"Strict mode on for {server}: {what}. {GUARANTEE.format(server=server)}"
 
 
 def _had_on(change: Change, name: str, project: str | None) -> set[str]:
@@ -213,6 +241,7 @@ def _kitden_move_words(change: Change, inventory, home: Path | None) -> list[dic
     known = [p.path for p in inventory.projects]
     settings = load_settings(home) if home is not None else None
     rules = _kitden_rules(change)
+    strict = _strict_servers(change)
     said, offered = [], []
     held = {*updated, *kept}
     for name in servers:
@@ -221,6 +250,8 @@ def _kitden_move_words(change: Change, inventory, home: Path | None) -> list[dic
         else:
             words, off = _server_words(change, name, rules.get(name, {}))
         said += words
+        if name in strict:  # a move carries strict mode only with the server's tools known
+            said.append(_strict_line(name, True, True))
         if not off:
             offered.append(name)
     out = []
@@ -342,6 +373,22 @@ def _rule_words(change: Change, inventory, home: Path) -> list[dict]:
     return out
 
 
+def _strict_words(change: Change, inventory, home: Path) -> list[dict]:
+    """The strict switch of a held server: one line that says what strict mode does, for each
+    client that offers the gateway's tools."""
+    edit = change.steps[0].edit
+    assert edit is not None
+    server, on = edit.key[2], edit.after == "strict"
+    line = _strict_line(server, on, server in load_tools(home))
+    clients = [c for c in CLIENTS if c in _offering(inventory)]
+    if not clients:
+        return [{"note": f"{line} No client uses the Kitden gateway yet."}]
+    word = "Strict" if on else "Not strict"
+    out = [{"client": c, "state": "gw", "word": word} for c in clients]
+    out[0]["note"] = f"{line} Applies to new sessions."
+    return out
+
+
 def after_words(
     change: Change,
     inventory,
@@ -358,8 +405,10 @@ def after_words(
     """
     if change.action in ("skill.install", "plugin.skills") and change.steps:
         return _skill_words(change, inventory, skills or [])
-    if change.action == "gateway.rule" and home is not None:
+    if change.action == GATEWAY_RULE and home is not None:
         return _rule_words(change, inventory, home)
+    if change.action == GATEWAY_STRICT and home is not None:
+        return _strict_words(change, inventory, home)
     # A move into a registered gateway has that gateway's own step; one into the Kitden
     # gateway has none, also when the gateway holds the server already.
     if change.action == "gateway.move" and not any(

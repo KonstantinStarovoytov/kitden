@@ -29,6 +29,7 @@ from kitden.local_gateway.settings import (
     load_tools,
     rule_step,
     settings_step,
+    strict_step,
 )
 from kitden.model import GATEWAY_CLIENT, FileEdit, Gateway, GatewayEdit, Item, Scope, Step
 
@@ -388,6 +389,7 @@ def move_steps(
 
 KITDEN_GATEWAY = "kitden"  # the gateway inside `kitden mcp`, on this Mac
 GATEWAY_RULE = "gateway.rule"  # one switch of the Kitden gateway: a server or a tool on or off
+GATEWAY_STRICT = "gateway.strict"  # a held server's strict mode on or off: new tools wait
 # Codex waits 10 s for a server to start and 60 s for a tool call (checked 2026-10-21). The
 # Kitden gateway may take up to 20 s to list a server and 300 s for one call.
 CODEX_TIMEOUTS = {"startup_timeout_sec": 30, "tool_timeout_sec": 300}
@@ -608,13 +610,15 @@ def _carried_rules(
     home: Path,
     denies: dict[str | None, list[str]],
     project_offs: dict[str, list[str]],
-) -> Rules:
+) -> tuple[Rules, bool]:
     """The server's rules from what the clients had: (project or None, tool or None) ->
-    (state, the clients it comes from).
+    (state, the clients it comes from); and whether a Codex `enabled_tools` list was carried,
+    which turns strict mode on.
 
     Codex `enabled`, `enabled_tools` and `disabled_tools`, Claude Code deny rules and servers
     Claude Code turned off in a project turn things off; a Claude Code local-scope entry turns
-    the server on in its project only. A rule has no per-client form, so off wins.
+    the server on in its project only. The tools an `enabled_tools` list keeps are on, so they
+    stay on in strict mode. A rule has no per-client form, so off wins.
     """
     rules: Rules = {}
 
@@ -626,7 +630,7 @@ def _carried_rules(
             rules[(project, tool)] = (state, {client})
 
     known = [t["name"] for t in load_tools(home).get(name, [])]
-    codex_off = False
+    codex_off = strict = False
     for item, entry in found:
         if item.client != "codex":
             continue
@@ -634,9 +638,9 @@ def _carried_rules(
             codex_off = True
             rule(None, None, "off", "codex")
         kept = entry.get("enabled_tools")
+        strict = strict or isinstance(kept, list)
         for tool in known if isinstance(kept, list) else []:
-            if tool not in kept:
-                rule(None, tool, "off", "codex")
+            rule(None, tool, "on" if tool in kept else "off", "codex")
         off = entry.get("disabled_tools")
         for tool in off if isinstance(off, list) else []:
             if isinstance(tool, str):
@@ -656,7 +660,7 @@ def _carried_rules(
         rule(None, None, "off", "claude_code")
         for project in local:
             rule(project, None, "on", "claude_code")
-    return rules
+    return rules, strict
 
 
 def _codex_timeout_steps(adapters: dict[str, ClientAdapter]) -> list[Step]:
@@ -773,7 +777,7 @@ def local_move_steps(
     denies = _claude_denies(home, known_projects)
     project_offs = _claude_project_offs(home)
     for name in servers:
-        rules = _carried_rules(name, found[name], home, denies, project_offs)
+        rules, strict = _carried_rules(name, found[name], home, denies, project_offs)
         if name in held:
             # The gateway's own rules for it stay; the review names the clients whose own
             # switches for it do not carry over.
@@ -784,6 +788,10 @@ def local_move_steps(
         for (project, tool), (state, clients) in rules.items():
             step = rule_step(home, project, name, tool, state)
             step.carried_from = tuple(sorted(clients))
+            steps.append(step)
+        if strict:
+            step = strict_step(home, name, True)
+            step.carried_from = ("codex",)
             steps.append(step)
     steps += removes
     if lacking:

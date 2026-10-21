@@ -185,10 +185,18 @@ def strict_step(home: Path, server: str, on: bool) -> Step:
     )
 
 
+def is_mode_key(key: tuple[str, ...]) -> bool:
+    """True for the key of a server's strict mode, as strict_step makes it."""
+    return len(key) == 4 and key[:2] == ("rules", "global") and key[3] == "mode"
+
+
 def rule_parts(key: tuple[str, ...]) -> tuple[str | None, str, str | None]:
     """The project, server and tool of a rule's key, as rule_step makes it. None stands for
-    all projects or for the whole server."""
+    all projects or for the whole server. Raises ValueError for a key that is not a rule, such
+    as a server's strict mode, and IndexError for one too short."""
     project, rest = (None, key[2:]) if key[1] == "global" else (key[2], key[3:])
+    if rest[1] not in ("server", "tools"):
+        raise ValueError("Not a rule")
     return project, rest[0], (rest[2] if rest[1] == "tools" else None)
 
 

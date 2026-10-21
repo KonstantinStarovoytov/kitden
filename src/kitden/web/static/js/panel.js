@@ -4,7 +4,7 @@ import { $, $$, button, el, joinWords, plural, reportError, shortPath, shortPath
 import { loadLibrary, morphOnNextRender, onOpenItem, rowTitle, shownRow } from "./library.js";
 import { finishTransition, fold, transition } from "./motion.js";
 import { about, addButton, addOptions, whyNoAction } from "./offer.js";
-import { CLIENT_NAMES, diffCounts, flag, GATEWAY_NOTE, gatewayName, kitdenMove, mark, movedNames, notesSection, ruleText, skeleton, socket, stepText } from "./parts.js";
+import { CLIENT_NAMES, diffCounts, flag, GATEWAY_NOTE, gatewayName, kitdenMove, mark, movedNames, notesSection, ruleText, skeleton, socket, stepText, strictText } from "./parts.js";
 import { busy, current as currentModel, currentError, data, reload, render, setBusy, state } from "./store.js";
 
 const KIND_WORDS = {
@@ -434,11 +434,33 @@ export function toolsSection(server, again, next = {}) {
     return review({ action: "gateway.rule", targets: [], params }, { back });
   };
 
+  // Strict mode is set for all projects: with a project picked the switch only shows it.
+  const strictRow = (answer, flip) => {
+    const row = el("div", "layer tool whole");
+    const middle = el("div");
+    middle.append(el("div", "name", "Strict"), el("div", "why", "Only tools you turned on are offered; a new tool waits."));
+    const back = ({ error = null, verified = false } = {}) => again({ focus: "strict", error, flip: verified ? "strict" : null });
+    const params = { server, state: answer.strict ? "off" : "on" };
+    const toggle = switchNode(Boolean(answer.strict), () => review({ action: "gateway.strict", targets: [], params }, { back }));
+    toggle.setAttribute("aria-label", "Strict: only tools you turned on");
+    toggle.dataset.focus = "strict";
+    if (flip === "strict") toggle.classList.add("flipped");
+    if (state.project) {
+      toggle.disabled = true;
+      toggle.title = "Set for all projects";
+    }
+    row.append(middle, toggle);
+    const stack = el("div", "stack");
+    stack.append(row);
+    return stack;
+  };
+
   const draw = (answer, { error = null, flip = null }) => {
     const nodes = [];
     if (error) nodes.push(callout(error, "error"));
     if (answer.problem) nodes.push(callout(answer.problem));
     if (answer.state === "off") nodes.push(el("p", "muted", `${server} is off in ${where || "all projects"}, so none of its tools are offered there.`));
+    nodes.push(strictRow(answer, flip));
     const stack = el("div", "stack");
     for (const row of toolRows(answer, where)) {
       const node = el("div", row.tool === null ? "layer tool whole" : "layer tool");
@@ -623,6 +645,10 @@ export function changeWords(change, previewBody) {
   if (change.action === "gateway.rule") {
     const params = (previewBody && previewBody.params) || {};
     return ruleText(params, params.project ? projectLabel(params.project) : null);
+  }
+  if (change.action === "gateway.strict") {
+    const params = (previewBody && previewBody.params) || {};
+    return strictText(params);
   }
   // A move names the servers it takes; the Kitden gateway's own steps are not a client.
   const kitden = kitdenMove(change);
