@@ -13,6 +13,9 @@ from typing import Any
 from mcp.server.mcpserver import MCPServer
 from mcp_types import ToolAnnotations
 
+from kitden.clients.claude_code import ClaudeCodeAdapter
+from kitden.clients.codex import CodexAdapter
+from kitden.clients.cursor import CursorAdapter
 from kitden.command import installed_command
 from kitden.gateways import load_gateways
 from kitden.local_gateway import proxy
@@ -152,11 +155,21 @@ def run(home: Path | None = None) -> None:
     if not load_settings(root)["servers"]:
         server.run()
         return
+    proxy.run(root, server, lambda: known_projects(root))
 
-    def known() -> list[str]:
-        return [p.path for p in build_inventory(root, quick=True).projects]
 
-    proxy.run(root, server, known)
+def known_projects(home: Path) -> list[str]:
+    """The project folders the clients know, read from their files: no client command runs."""
+
+    def no_version() -> None:
+        return None
+
+    adapters = [
+        ClaudeCodeAdapter(home, read_version=no_version),
+        CodexAdapter(home, read_version=no_version),
+        CursorAdapter(home, read_version=no_version),
+    ]
+    return [p.path for p in build_inventory(home, adapters, apps=[]).projects]
 
 
 __all__ = ["DESKTOP", "create_server", "installed_command", "resolve_project", "run"]

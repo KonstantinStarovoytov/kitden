@@ -12,7 +12,9 @@ import time
 from pathlib import Path
 
 import anyio
+from mcp import MCPError
 from mcp.server.mcpserver import MCPServer
+from mcp_types import INVALID_PARAMS
 
 
 def main() -> None:
@@ -39,6 +41,10 @@ def main() -> None:
     @server.tool(description="Say which server answers.")
     def clash() -> str:
         return name
+
+    @server.tool(description="Answer with a JSON-RPC error that holds the reason.")
+    def refuse(reason: str) -> str:
+        raise MCPError(code=INVALID_PARAMS, message=reason)
 
     @server.tool(description="Where the server runs: folder, arguments and env names.")
     def where() -> dict:

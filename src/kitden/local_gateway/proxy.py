@@ -37,6 +37,12 @@ from mcp.server.context import ServerRequestContext
 from mcp.server.mcpserver import MCPServer
 from mcp.server.stdio import stdio_server
 from mcp_types import (
+    CONNECTION_CLOSED,
+    INTERNAL_ERROR,
+    INVALID_REQUEST,
+    METHOD_NOT_FOUND,
+    PARSE_ERROR,
+    REQUEST_TIMEOUT,
     CallToolRequestParams,
     CallToolResult,
     InputRequiredResult,
@@ -57,10 +63,18 @@ from kitden.local_gateway.settings import (
     servers_on,
 )
 
-START_TIMEOUT = 20  # seconds for a server to start and list its tools; Claude Code waits 30
+# Seconds for a server to start and list its tools; Claude Code waits 30 (checked 2026-10-21).
+START_TIMEOUT = 20
 CALL_TIMEOUT = 300  # seconds for one tool call
 ROOTS_TIMEOUT = 5  # seconds for the client to name its roots
-NAME_LIMIT = 54  # Cursor allows 60 characters for server and tool; the entry is named "kitden"
+# Cursor allows 60 characters for server and tool (checked 2026-10-21); the entry is "kitden".
+NAME_LIMIT = 54
+# Error codes the SDK makes itself (mcp 2.3.0, checked 2026-10-21): a closed connection or a
+# timeout on any transport; and over HTTP the transport turns HTTP failures into JSON-RPC errors
+# too, and the one for a refused redirect names the other address. A server's own error with any
+# other code is its answer, and it goes to the model as it is.
+SDK_CODES = {CONNECTION_CLOSED, REQUEST_TIMEOUT}
+HTTP_CODES = SDK_CODES | {PARSE_ERROR, INVALID_REQUEST, METHOD_NOT_FOUND, INTERNAL_ERROR}
 PLACEHOLDERS = ("${workspaceFolder}", "${CLAUDE_PROJECT_DIR}", "${CLAUDE_PROJECT_DIR:-.}")
 
 # The HTTP library logs each request with its full address, and the MCP client logs some failures
@@ -75,8 +89,9 @@ def exposed_names(
     """The name each allowed tool is offered under → (server, tool).
 
     Servers go in name order. A tool keeps its name unless an earlier server has it or the name is
-    `taken` (Kitden's own tools); then it gets `<server>_` in front. A name over 54 characters
-    becomes its first 45 characters, "_" and the first 8 hex characters of its SHA-1.
+    `taken` (Kitden's own tools); then it gets `<server>_` in front. A name over 54 characters, or
+    a `<server>_<tool>` that is in use too, becomes its first 45 characters, "_" and the first 8
+    hex characters of its SHA-1. So no name is given twice.
     """
     names: dict[str, tuple[str, str]] = {}
     used = set(taken)
@@ -85,7 +100,7 @@ def exposed_names(
             name = tool["name"]
             if name in used:
                 name = f"{server}_{name}"
-            if len(name) > NAME_LIMIT:
+            if len(name) > NAME_LIMIT or name in used:
                 digest = hashlib.sha1(name.encode(), usedforsecurity=False).hexdigest()
                 name = f"{name[:45]}_{digest[:8]}"
             names[name] = (server, tool["name"])
@@ -102,9 +117,13 @@ def _say(text: str) -> None:
     print(text, file=sys.stderr, flush=True)
 
 
+def _answer(text: str) -> CallToolResult:
+    return CallToolResult(content=[TextContent(type="text", text=text)], is_error=True)
+
+
 def _error(text: str) -> CallToolResult:
     _say(text)
-    return CallToolResult(content=[TextContent(type="text", text=text)], is_error=True)
+    return _answer(text)
 
 
 def _fill(arg: str, folder: str) -> str:
@@ -119,6 +138,8 @@ class Upstreams:
     Use it as `async with Upstreams(home, settings) as upstreams:`. A server starts on its first
     use and runs until the block ends. Set `project` before the first use: a local server runs in
     that folder (or the home folder), and it fills the project placeholders in the arguments.
+    The block is a task group: an error raised in it comes out in an ExceptionGroup, so catch
+    UpstreamError inside the block.
     """
 
     def __init__(self, home: Path, settings: dict, project: str | None = None) -> None:
@@ -134,15 +155,22 @@ class Upstreams:
         await self._group.__aenter__()
         return self
 
-    async def __aexit__(self, *exc_info: object) -> None:
-        self._group.cancel_scope.cancel()
-        await self._group.__aexit__(None, None, None)
+    async def __aexit__(self, *exc_info: Any) -> bool | None:
+        group, self._group = self._open(), None
+        group.cancel_scope.cancel()
+        return await group.__aexit__(*exc_info)
+
+    def _open(self) -> TaskGroup:
+        if self._group is None:
+            raise RuntimeError("Use Upstreams in an `async with` block.")
+        return self._group
 
     async def list_tools(self, server: str) -> list[dict]:
         """The server's tools as it lists them, within START_TIMEOUT seconds.
 
         Raises UpstreamError when the server does not start or answer.
         """
+        self._open()
         try:
             with anyio.fail_after(START_TIMEOUT):
                 client = await self._client(server)
@@ -168,7 +196,9 @@ class Upstreams:
         raise UpstreamError(sentence)
 
     async def call(self, server: str, tool: str, arguments: dict[str, Any]) -> CallToolResult:
-        """Call one tool. When that fails, the result is an error with one plain sentence."""
+        """Call one tool. The server's own error answer comes back as it is; when the call
+        fails in any other way, the result is an error with one plain sentence."""
+        self._open()
         try:
             with anyio.fail_after(START_TIMEOUT):
                 client = await self._client(server)
@@ -181,9 +211,17 @@ class Upstreams:
                 return await client.call_tool(tool, arguments)
         except TimeoutError:
             return _error(f"{server} did not answer in {CALL_TIMEOUT} seconds.")
+        except MCPError as refused:
+            if refused.code not in (HTTP_CODES if self._remote(server) else SDK_CODES):
+                return _answer(refused.message)  # the server's own answer
+            return _error(f"The call to {server} failed.")
         except Exception:
             # The text of an error may hold the server's address; say it plainly instead.
             return _error(f"The call to {server} failed.")
+
+    def _remote(self, server: str) -> bool:
+        entry = self.settings["servers"].get(server)
+        return isinstance(entry, dict) and bool(entry.get("url"))
 
     async def _client(self, server: str) -> Client:
         """The server's connection; the first use opens it. Only one opens at a time."""
@@ -191,10 +229,9 @@ class Upstreams:
             client = self._clients.get(server)
             if client is None:
                 try:
-                    client = await self._group.start(self._serve, server)
+                    client = await self._open().start(self._serve, server)
                 except Exception:
-                    entry = self.settings["servers"].get(server)
-                    verb = "reach" if isinstance(entry, dict) and entry.get("url") else "start"
+                    verb = "reach" if self._remote(server) else "start"
                     raise UpstreamError(f"Kitden could not {verb} {server}.") from None
             return client
 
@@ -342,7 +379,10 @@ class _Gateway:
         try:
             return self.known()
         except Exception:
-            _say("Kitden could not read the projects; it offers the tools of all projects.")
+            _say(
+                "Kitden could not read the known projects; "
+                "this session gets the global set of tools."
+            )
             return []
 
     async def _learn(self, server: str, tools: dict[str, list[dict]]) -> None:

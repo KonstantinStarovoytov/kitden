@@ -6,6 +6,7 @@ settings hold the fake server in tests/fixtures/fake_mcp.
 
 import hashlib
 import json
+import subprocess
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -17,12 +18,16 @@ from mcp import Client, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp_types import ListRootsResult, Root
 
+import kitden.clients.base as base
+import kitden.clients.codex as codex
+from kitden import mcp_server
 from kitden.gateways import data_dir
 from kitden.local_gateway import proxy
-from kitden.local_gateway.proxy import exposed_names
-from kitden.local_gateway.settings import SETTINGS_FILE, load_tools, save_tools
+from kitden.local_gateway.proxy import Upstreams, exposed_names
+from kitden.local_gateway.settings import SETTINGS_FILE, load_settings, load_tools, save_tools
 from kitden.mcp_server import create_server
-from tests.conftest import make_home
+from kitden.views.inventory import build_inventory
+from tests.conftest import make_home, write_cursor_fixture_state
 
 ECHO = Path(__file__).parents[1] / "fixtures/fake_mcp/echo_server.py"
 READ_ONLY = {"show_setup", "list_findings", "explain_item", "list_projects"}
@@ -90,13 +95,40 @@ async def test_upstream_tools_are_offered_beside_the_read_only_ones(home, tmp_pa
     async with gateway(home, mode="auto") as client:
         tools = {t.name: t for t in (await client.list_tools()).tools}
 
-    assert set(tools) == READ_ONLY | {"echo", "slow", "clash", "where", "from_cache"}
+    assert set(tools) == READ_ONLY | {"echo", "slow", "clash", "refuse", "where", "from_cache"}
     assert tools["echo"].input_schema["required"] == ["text"]
     # A known list is offered from the cache, and the server is not started for it.
     assert tools["from_cache"].description == "Kept in the cache"
     assert not started.exists()
     # A server whose list was not known yet was asked at once, and its list was kept.
-    assert [t["name"] for t in load_tools(home)["echo"]] == ["echo", "slow", "clash", "where"]
+    listed = [t["name"] for t in load_tools(home)["echo"]]
+    assert listed == ["echo", "slow", "clash", "refuse", "where"]
+
+
+def test_the_gateway_reads_known_projects_without_client_commands(tmp_path, monkeypatch):
+    home = make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2", "cursor/3.21.16")
+    write_cursor_fixture_state(home)
+    write_settings(home, {"echo": echo("echo")})
+    served, ran = {}, []
+
+    def record(args, *rest, **options):
+        ran.append(args)
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    # Every client command would be found and run, and nothing is remembered from other tests.
+    monkeypatch.setattr(subprocess, "run", record)
+    monkeypatch.setattr(base, "version_command", lambda client: ["/bin/false"])
+    monkeypatch.setattr(codex, "version_command", lambda client: ["/bin/false"])
+    monkeypatch.setattr(base, "_VERSION_CACHE", {})
+    monkeypatch.setattr(proxy, "run", lambda home, own, known: served.update(known=known))
+
+    mcp_server.run(home)
+    known = served["known"]()
+
+    assert ran == []
+    monkeypatch.setattr(base, "read_command_version", lambda client: None)
+    assert sorted(known) == sorted(p.path for p in build_inventory(home).projects)
+    assert str(home / "work/website") in known
 
 
 async def test_without_servers_kitden_mcp_is_unchanged(home):
@@ -134,6 +166,10 @@ async def test_project_rules_decide_the_tools_of_a_session(home):
     assert await offered(cwd=inside) == {"echo", "slow"}
     # Started in the home folder: no project, so the global rules.
     assert await offered() == {"echo", "clash"}
+    # Started in a folder Kitden does not know (a Codex chat folder): the global rules too.
+    chat = home.parent / "codex-chats/chat-1"
+    chat.mkdir(parents=True)
+    assert await offered(cwd=chat) == {"echo", "clash"}
 
 
 async def test_a_call_reaches_the_upstream_server(home):
@@ -141,15 +177,22 @@ async def test_a_call_reaches_the_upstream_server(home):
     entry = echo("echo", "${workspaceFolder}", "${CLAUDE_PROJECT_DIR}", "${CLAUDE_PROJECT_DIR:-.}")
     entry["env"] = {"ECHO_TOKEN": "SENTINEL_SECRET_GATEWAY_ENV"}
     write_settings(home, {"echo": entry}, path="/usr/bin:/bin")
-    save_tools(home, "echo", [tool("echo"), tool("where")])
+    save_tools(home, "echo", [tool("echo"), tool("where"), tool("refuse")])
     env = {"CLAUDE_PROJECT_DIR": str(website), "LANG": "en_US.UTF-8", "KITDEN_OTHER": "x"}
 
     async with gateway(home, env=env) as client:
         await client.list_tools()
         said = await client.call_tool("echo", {"text": "hello"})
         where = json.loads(text(await client.call_tool("where", {})))
+        refused = await client.call_tool("refuse", {"reason": "Give the text to look for."})
+        projects = await client.call_tool("list_projects", {})
 
     assert not said.is_error and text(said) == "hello"
+    # The server's own error answer reaches the model as it is, so the model can fix its call.
+    assert refused.is_error and text(refused) == "Give the text to look for."
+    # Kitden's read-only tools answer as they do without servers.
+    assert not projects.is_error
+    assert str(website) in {p["path"] for p in projects.structured_content["projects"]}
     # The server runs in the project, with the project in its arguments.
     assert Path(where["cwd"]).resolve() == website.resolve()
     assert where["args"][1:] == [str(website)] * 3
@@ -248,6 +291,22 @@ def test_exposed_names_stay_within_cursors_limit():
     assert exposed_names(dict(reversed(allowed.items())), taken={"list_projects"}) == names
 
 
+def test_a_prefixed_name_never_replaces_another_tool():
+    allowed = {
+        "atlassian": [tool("jira_search"), tool("search")],
+        "jira": [tool("search")],
+    }
+
+    names = exposed_names(allowed)
+
+    jira_search = "jira_search_" + hashlib.sha1(b"jira_search").hexdigest()[:8]
+    assert names == {
+        "jira_search": ("atlassian", "jira_search"),
+        "search": ("atlassian", "search"),
+        jira_search: ("jira", "search"),
+    }
+
+
 class FailingServer(ThreadingHTTPServer):
     """An MCP address that answers every request with an error, and notes what it got."""
 
@@ -315,3 +374,90 @@ async def test_secrets_stay_out_of_errors_and_logs(home, tmp_path):
     ):
         assert f"{line}\n" in printed
     assert "SENTINEL" not in printed + json.dumps([text(a) for a in answers])
+
+
+async def test_unreadable_projects_give_the_global_set(home, capsys):
+    write_settings(home, {"echo": echo("echo")}, {"global": {"echo": {"tools": {"slow": "off"}}}})
+    save_tools(home, "echo", [tool("echo"), tool("slow")])
+
+    def unreadable():
+        raise OSError("unreadable")
+
+    server = proxy.gateway_server(home, create_server(lambda: None), known=unreadable)
+    async with Client(server, mode="legacy") as client:
+        assert await names_offered(client) - READ_ONLY == {"echo"}
+    line = "Kitden could not read the known projects; this session gets the global set of tools."
+    assert f"{line}\n" in capsys.readouterr().err
+
+
+async def test_upstreams_work_only_inside_async_with(home):
+    upstreams = Upstreams(home, load_settings(home) | {"servers": {"echo": echo("echo")}})
+    with pytest.raises(RuntimeError, match="async with"):
+        await upstreams.list_tools("echo")
+    with pytest.raises(RuntimeError, match="async with"):
+        await upstreams.call("echo", "echo", {"text": "hi"})
+
+    # An error in the block reaches the task group, as with any task group.
+    with pytest.raises(ExceptionGroup) as raised:
+        async with Upstreams(home, load_settings(home)):
+            raise ValueError("in the block")
+    assert raised.group_contains(ValueError)
+
+
+class FakeHttpServer(ThreadingHTTPServer):
+    """A streamable HTTP MCP server: it starts, answers `refuse` with its own JSON-RPC error and
+    `moved` with a redirect to another address."""
+
+    def __init__(self, moved_to):
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                if "id" not in body:  # a notification
+                    return self.answer(202)
+                if body["method"] == "initialize":
+                    version = body["params"]["protocolVersion"]
+                    info = {"name": "fake", "version": "1"}
+                    reply = {"protocolVersion": version, "capabilities": {}, "serverInfo": info}
+                    return self.answer(200, {"result": reply}, body["id"])
+                if body["params"]["name"] == "moved":
+                    return self.answer(307, location=moved_to)
+                error = {"code": -32602, "message": "Give the text to look for."}
+                return self.answer(200, {"error": error}, body["id"])
+
+            def do_GET(self):
+                self.answer(405)
+
+            do_DELETE = do_GET
+
+            def answer(self, status, message=None, id=None, location=None):
+                data = (
+                    json.dumps({"jsonrpc": "2.0", "id": id, **message}).encode() if message else b""
+                )
+                self.send_response(status)
+                if location:
+                    self.send_header("Location", location)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+
+            def log_message(self, *args):
+                pass
+
+        super().__init__(("127.0.0.1", 0), Handler)
+        threading.Thread(target=self.serve_forever, daemon=True).start()
+
+
+async def test_a_servers_own_error_passes_but_a_transport_error_stays_plain(home):
+    remote = FakeHttpServer("http://127.0.0.1:9/elsewhere?key=SENTINEL_SECRET_GATEWAY_REDIRECT")
+    settings = {"servers": {"remote": {"url": f"http://127.0.0.1:{remote.server_port}/mcp"}}}
+    try:
+        async with Upstreams(home, settings) as upstreams:
+            refused = await upstreams.call("remote", "refuse", {})
+            moved = await upstreams.call("remote", "moved", {})
+    finally:
+        remote.shutdown()
+
+    assert (refused.is_error, text(refused)) == (True, "Give the text to look for.")
+    # The HTTP layer makes its own errors, and a refused redirect names the other address.
+    assert (moved.is_error, text(moved)) == (True, "The call to remote failed.")
