@@ -25,7 +25,14 @@ from kitden import mcp_server
 from kitden.gateways import data_dir
 from kitden.local_gateway import proxy
 from kitden.local_gateway.proxy import Upstreams, exposed_names
-from kitden.local_gateway.settings import SETTINGS_FILE, load_settings, load_tools, save_tools
+from kitden.local_gateway.settings import (
+    CALLS_FILE,
+    SETTINGS_FILE,
+    load_calls,
+    load_settings,
+    load_tools,
+    save_tools,
+)
 from kitden.mcp_server import create_server
 from kitden.views.inventory import build_inventory
 from kitden.web.app import create_app
@@ -670,3 +677,28 @@ async def test_a_servers_own_error_passes_but_a_transport_error_stays_plain(home
     assert (refused.is_error, text(refused)) == (True, "Give the text to look for.")
     # The HTTP layer makes its own errors, and a refused redirect names the other address.
     assert (moved.is_error, text(moved)) == (True, "The call to remote failed.")
+
+
+async def test_a_call_is_counted(home):
+    write_settings(home, {"echo": echo("echo")})
+    save_tools(home, "echo", [tool("echo")])
+    async with gateway(home) as client:
+        await client.list_tools()
+        await client.call_tool("echo", {"text": "hello"})
+        await client.call_tool("list_projects", {})
+    assert load_calls(home)["echo"]["echo"]["count"] == 1
+    assert set(load_calls(home)) == {"echo"}
+    assert "hello" not in (data_dir(home) / CALLS_FILE).read_text()
+
+
+async def test_a_broken_calls_file_does_not_stop_a_call(home, tmp_path):
+    write_settings(home, {"echo": echo("echo")})
+    save_tools(home, "echo", [tool("echo")])
+    (data_dir(home) / CALLS_FILE).mkdir()  # a folder: the write fails
+    log = tmp_path / "stderr.txt"
+    with log.open("w") as errlog:
+        async with gateway(home, errlog=errlog) as client:
+            await client.list_tools()
+            answer = await client.call_tool("echo", {"text": "hello"})
+    assert not answer.is_error and text(answer) == "hello"
+    assert "Kitden could not count the call to echo." in log.read_text()

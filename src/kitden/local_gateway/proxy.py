@@ -66,6 +66,7 @@ from kitden.local_gateway.settings import (
     SETTINGS_FILE,
     START_TIME,
     allowed_tools,
+    count_call,
     is_allowed,
     load_settings,
     load_tools,
@@ -390,13 +391,22 @@ class _Gateway:
                 )
                 if not await anyio.to_thread.run_sync(allowed):
                     return _answer(f"{params.name} is turned off in Kitden.")
-                return await self.upstreams.call(*target, arguments)
+                answer = await self.upstreams.call(*target, arguments)
+                await self._count(*target)
+                return answer
         try:
             return await self.own.call_tool(params.name, arguments)
         except MCPError:
             raise
         except Exception as exc:  # as MCPServer answers for its own tools
             return CallToolResult(content=[TextContent(type="text", text=str(exc))], is_error=True)
+
+    async def _count(self, server: str, tool: str) -> None:
+        """Count a call that went to the server. A count that cannot be written is only said."""
+        try:
+            await anyio.to_thread.run_sync(count_call, self.home, server, tool)
+        except OSError:
+            _say(f"Kitden could not count the call to {server}.")
 
     async def _offered(self, ctx: ServerRequestContext) -> list[Tool]:
         """The upstream tools of this session, found once."""

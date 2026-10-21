@@ -2,6 +2,7 @@
 
 import json
 import stat
+from datetime import UTC, datetime
 
 import pytest
 
@@ -10,10 +11,13 @@ from kitden.changes.engine import ChangeRefusedError, Engine
 from kitden.changes.json_splice import ABSENT
 from kitden.gateways import data_dir
 from kitden.local_gateway.settings import (
+    CALLS_FILE,
     SETTINGS_FILE,
     TOOLS_FILE,
     allowed_tools,
+    count_call,
     is_allowed,
+    load_calls,
     load_settings,
     load_tools,
     rule_step,
@@ -416,3 +420,17 @@ def test_is_allowed_uses_the_fallback_when_the_file_cannot_be_read(tmp_path):
     path.unlink()
     assert is_allowed(tmp_path, [], "github", "echo") is False
     assert is_allowed(tmp_path, [], "github", "echo", fallback=off) is False
+
+
+def test_count_call_adds_one_and_keeps_the_last_time(tmp_path):
+    now = datetime(2026, 10, 21, 14, 2, 30, tzinfo=UTC)
+    count_call(tmp_path, "github", "echo", now)
+    count_call(tmp_path, "github", "echo", now)
+    assert load_calls(tmp_path) == {"github": {"echo": {"count": 2, "last": "2026-10-21T14:02Z"}}}
+    assert stat.S_IMODE(data_dir(tmp_path).stat().st_mode) == 0o700
+
+
+def test_a_broken_calls_file_reads_as_empty(tmp_path):
+    data_dir(tmp_path).mkdir(parents=True)
+    (data_dir(tmp_path) / CALLS_FILE).write_text("[1")
+    assert load_calls(tmp_path) == {}

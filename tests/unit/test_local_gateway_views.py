@@ -236,6 +236,7 @@ def test_tools_api_marks_project_differences(home):
         assert everywhere["tools"][0] == {
             "name": "echo",
             "description": "The echo tool",
+            "calls": None,
             "new": False,
             "state": "on",
             "differs": False,
@@ -970,3 +971,11 @@ def test_rules_steps_check_what_the_switch_checks(home):
     ):
         with pytest.raises(ValueError, match=words):
             rules_steps(home, {**base, **change}, {})
+
+
+def test_tools_view_carries_the_calls(home):
+    hold(home, {"github": echo()})
+    save_tools(home, "github", [tool("list_issues"), tool("other")])
+    calls = {"github": {"list_issues": {"count": 3, "last": "2026-10-21T14:02Z"}}}
+    tools = tools_view(load_settings(home), load_tools(home), "github", [], calls)["tools"]
+    assert [t["calls"] for t in tools] == [calls["github"]["list_issues"], None]

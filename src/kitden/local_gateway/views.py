@@ -141,12 +141,16 @@ def tool_hint(tool: dict) -> tuple[str, str | None]:
     return "unknown", None
 
 
-def tools_view(settings: dict, tools: dict, server: str, chain: list[str]) -> dict:
+def tools_view(
+    settings: dict, tools: dict, server: str, chain: list[str], calls: dict | None = None
+) -> dict:
     """A held server's state and its known tools, each with its state, along the picked
     project's chain (empty: all projects). A tool is new when the server is strict and no rule
-    of the chain or for all projects has a state for it: it waits, off, until someone decides."""
+    of the chain or for all projects has a state for it: it waits, off, until someone decides.
+    `calls` is what `load_calls` gives; each tool carries its count and last time, or None."""
     strict = strict_mode(settings, server)
     scopes = _scopes(settings, chain)
+    counted = (calls or {}).get(server, {})
     return {
         "server": server,
         **_states(settings, server, None, chain),
@@ -156,6 +160,7 @@ def tools_view(settings: dict, tools: dict, server: str, chain: list[str]) -> di
                 "name": tool["name"],
                 **dict(zip(("hint", "hint_from"), tool_hint(tool), strict=True)),
                 "description": tool.get("description") or "",
+                "calls": counted.get(tool["name"]),
                 "new": strict and all(own_state(r, server, tool["name"]) is None for r in scopes),
                 **_states(settings, server, tool["name"], chain),
             }

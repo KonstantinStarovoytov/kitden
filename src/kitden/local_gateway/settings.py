@@ -11,16 +11,18 @@ the next, then the global rule; with no rule a server or a tool is on.
 
 import json
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from kitden.changes.atomic import write_atomic
+from kitden.changes.atomic import RefusedWriteError, write_atomic
 from kitden.changes.json_splice import ABSENT
 from kitden.gateways import data_dir
 from kitden.model import Change, FileEdit, Scope, Step
 
 SETTINGS_FILE = "gateway.json"
 TOOLS_FILE = "gateway-tools.json"
+CALLS_FILE = "gateway-calls.json"
 CLIENT = "kitden"
 STATES = ("on", "off")
 # A Codex entry's own start time; the move carries it and the gateway waits that long.
@@ -94,6 +96,35 @@ def save_tools(home: Path, server: str, tools: list[dict]) -> None:
         for tool in tools
     ]
     write_atomic(folder / TOOLS_FILE, json.dumps(cache, indent=2).encode())
+
+
+def load_calls(home: Path) -> dict[str, dict[str, dict]]:
+    """How often each tool was called through the gateway: {server: {tool: {count, last}}}, with
+    `last` as a UTC minute. A missing or broken file reads as empty."""
+    return {
+        server: {t: c for t, c in tools.items() if isinstance(c, dict)}
+        for server, tools in _read(data_dir(home) / CALLS_FILE).items()
+        if isinstance(tools, dict)
+    }
+
+
+def count_call(home: Path, server: str, tool: str, now: datetime | None = None) -> None:
+    """Add one call to a tool's count. Only the count and the time are kept, never what was sent
+    or answered. Like the tool cache, no lock: the write is atomic and a count lost in a race
+    does not matter. Raises OSError only."""
+    folder = data_dir(home)
+    folder.mkdir(parents=True, exist_ok=True)
+    folder.chmod(0o700)
+    calls = load_calls(home)
+    entry = calls.setdefault(server, {}).get(tool, {})
+    count = entry.get("count")
+    count = count if isinstance(count, int) and not isinstance(count, bool) else 0
+    last = (now or datetime.now(UTC)).astimezone(UTC).strftime("%Y-%m-%dT%H:%MZ")
+    calls[server][tool] = {"count": count + 1, "last": last}
+    try:
+        write_atomic(folder / CALLS_FILE, json.dumps(calls, indent=2).encode())
+    except RefusedWriteError as refused:
+        raise OSError(str(refused)) from refused
 
 
 def own_state(rules: Any, server: str, tool: str | None) -> str | None:

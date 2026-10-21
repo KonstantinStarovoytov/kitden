@@ -379,12 +379,25 @@ export function toolRows(answer, where) {
     const follows = entry.follows || "all projects";
     const hint = tool === null ? null : entry.hint || null;
     const hintFrom = tool === null ? null : entry.hint_from || null;
-    return { key, tool, name, description, on, hint, hintFrom, flag: entry.new ? "New" : null, differs: Boolean(entry.differs), follows, label: `Turn ${on ? "off" : "on"} ${what} in ${place}…` };
+    return { key, tool, name, description, on, hint, hintFrom, calls: tool === null ? null : callsText(entry.calls), flag: entry.new ? "New" : null, differs: Boolean(entry.differs), follows, label: `Turn ${on ? "off" : "on"} ${what} in ${place}…` };
   };
   return [
     row("server", null, "Whole server", `Turns every tool of ${answer.server} on or off.`, answer),
     ...answer.tools.map((t) => row(`tool:${t.name}`, t.name, t.name, t.description, t)),
   ];
+}
+
+// What the tool row says when hovered: how often the gateway forwarded a call and when last. The
+// file keeps UTC minutes; the time shown is the browser's.
+export function callsText(calls, now = new Date()) {
+  if (!calls || !calls.count) return null;
+  const last = new Date(calls.last);
+  const pad = (n) => String(n).padStart(2, "0");
+  const time = `${pad(last.getHours())}:${pad(last.getMinutes())}`;
+  const today = last.toDateString() === now.toDateString();
+  const day = today ? "today" : `${last.getDate()} ${last.toLocaleString("en-GB", { month: "short" })}`;
+  const times = calls.count === 1 ? "once" : `${calls.count} times`;
+  return `Called ${times}, last ${day} ${time}`;
 }
 
 // The tools the batch switch turns off: those that are on and write, or may write by their name.
@@ -486,6 +499,7 @@ export function toolsSection(server, again, next = {}) {
     const stack = el("div", "stack");
     for (const row of toolRows(answer, where)) {
       const node = el("div", row.tool === null ? "layer tool whole" : "layer tool");
+      if (row.calls) node.title = row.calls;
       const middle = el("div");
       const title = el("div", row.tool === null ? "name" : "name mono", row.name);
       if (row.hintFrom) {

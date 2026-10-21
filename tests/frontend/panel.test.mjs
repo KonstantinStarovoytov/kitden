@@ -5,7 +5,7 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; panel.js must load there too.
 delete globalThis.navigator;
-const { afterParts, changeOutcome, changeWords, footerActions, leftOutText, loadsLede, moveFor, moveTargets, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
+const { afterParts, changeOutcome, callsText, changeWords, footerActions, leftOutText, loadsLede, moveFor, moveTargets, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
 const { addOptions, whyNoAction } = await import('../../src/kitden/web/static/js/offer.js');
 const { data } = await import('../../src/kitden/web/static/js/store.js');
 
@@ -393,4 +393,12 @@ test('the batch review counts the tools and names the project', () => {
   const one = { ...body, params: { ...body.params, tools: ['a'], project: null } };
   assert.deepEqual(changeWords(change, one), { title: 'Turn off 1 tool of github in all projects', done: 'Turned off 1 tool of github in all projects' });
   data.projects = null;
+});
+
+test('calls text says how many and when', () => {
+  process.env.TZ = 'UTC'; // the times are shown in local time
+  const now = new Date('2026-10-21T15:00:00Z');
+  assert.equal(callsText({ count: 12, last: '2026-10-21T14:02Z' }, now), 'Called 12 times, last today 14:02');
+  assert.equal(callsText({ count: 1, last: '2026-10-20T09:15Z' }, now), 'Called once, last 20 Oct 09:15');
+  assert.equal(callsText(null, now), null);
 });

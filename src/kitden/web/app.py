@@ -54,6 +54,7 @@ from kitden.gateways import add_gateway, data_dir, load_gateways
 from kitden.local_gateway.project import project_chain
 from kitden.local_gateway.settings import CLIENT as KITDEN
 from kitden.local_gateway.settings import (
+    load_calls,
     load_settings,
     load_tools,
     moved_in,
@@ -644,7 +645,7 @@ def create_app(
         if server not in settings["servers"]:
             return _error("Unknown server.", 404)
         path = project["path"] if project else None
-        answer = tools_view(settings, load_tools(home), server, _chain(path))
+        answer = tools_view(settings, load_tools(home), server, _chain(path), load_calls(home))
         return JSONResponse({**answer, "problem": tool_problems.get(server)})
 
     async def gateway_tools_refresh(request: Request) -> JSONResponse:
