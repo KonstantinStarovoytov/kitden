@@ -13,6 +13,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from kitden.changes.copy_folder import copy_folder
 from kitden.redact import redact, redact_text
 
 KEEP_DAYS = 30
@@ -72,6 +73,17 @@ class ChangeStore:
         record = {"change": change_id, "files": manifest}
         _write_private(folder / "manifest.json", json.dumps(record, indent=2).encode())
         return saved
+
+    def backup_folder(self, change_id: str, path: str) -> Path:
+        """Copy a folder that a change removes into the change's private folder."""
+        folder = self._change_folder(change_id)
+        target = folder / f"folder-{Path(path).name}"
+        count = 1
+        while target.exists():  # two folders of one name in one change
+            count += 1
+            target = folder / f"folder-{Path(path).name}-{count}"
+        copy_folder(path, target)  # keeps each file's mode
+        return target
 
     def save(self, change_id: str, record: dict) -> None:
         """Keep what undo needs. Lives next to the backup and is just as private."""

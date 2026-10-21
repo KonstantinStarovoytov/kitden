@@ -18,12 +18,14 @@ from kitden.clients.base import (
     PLUGIN_REMOVE,
     REMOVE_DIRECT,
     SETUP_NAME,
+    SKILL_REMOVE,
     ClientAdapter,
     Reader,
     Scan,
     check_toggle,
     file_source,
     is_direct_entry,
+    is_own_skill,
     mcp_item,
     project,
     skill_items,
@@ -172,6 +174,8 @@ class CodexAdapter(ClientAdapter):
             and item.source.read_status is ReadStatus.OK
         ):
             return (*toggle_action(item), PLUGIN_REMOVE)
+        if is_own_skill(item, CLIENT):
+            return (SKILL_REMOVE,)
         return ()
 
     def plugin_step(self, item: Item, enable: bool) -> Step:

@@ -307,3 +307,17 @@ def skill_catalog(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
             row["installed"].setdefault(client, "Via plugin")
         row["routes"] = {c: r for c, r in row["routes"].items() if c not in row["installed"]}
     return sorted(rows.values(), key=lambda r: (r["name"].lower(), r["from"].lower()))
+
+
+def skill_readers(inventory, item) -> list[str]:
+    """The clients that read the folder of a skill item, in CLIENTS order. A folder in
+    ~/.agents/skills is read by Codex and Cursor, for example."""
+    real = os.path.realpath(item.source.path)
+    readers = {
+        i.client
+        for i in inventory.items
+        if i.kind is ItemKind.SKILL
+        and i.source.path is not None
+        and os.path.realpath(i.source.path) == real
+    }
+    return [c for c in CLIENTS if c in readers]

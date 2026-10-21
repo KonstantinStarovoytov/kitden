@@ -3,16 +3,27 @@
 import json
 import os
 import stat
+from pathlib import Path
 
 import pytest
 
 from kitden.changes import json_splice, toml_edit
 from kitden.changes.backup import ChangeStore
 from kitden.changes.client_cli import CommandResult
+from kitden.changes.copy_folder import digest
 from kitden.changes.engine import ChangeRefusedError, Engine
 from kitden.changes.json_splice import ABSENT
 from kitden.gateway_api import MetaMcpClient
-from kitden.model import GATEWAY_CLIENT, ChangeState, FileEdit, Gateway, GatewayEdit, Scope, Step
+from kitden.model import (
+    GATEWAY_CLIENT,
+    ChangeState,
+    FileEdit,
+    FolderRemoval,
+    Gateway,
+    GatewayEdit,
+    Scope,
+    Step,
+)
 from tests.unit.fake_metamcp import FakeMetaMcp
 
 CONFIG = """# my Codex settings
@@ -639,3 +650,117 @@ def test_a_change_with_nothing_to_do_names_the_client_in_plain_words():
     assert "nothing to change" in str(error)
     assert refusal_words(error) == "Codex has this already. Nothing to change."
     assert refusal_words(ValueError("Choose at least one client")) == "Choose at least one client"
+
+
+# Removing a skill folder (spec 3.2) --------------------------------------------------------
+
+
+def removal_step(folder):
+    removal = FolderRemoval(path=str(folder), readers=["codex", "cursor"])
+    return Step(
+        client="codex", scope=Scope.USER, name="tidy", mechanism="remove_folder", removal=removal
+    )
+
+
+def tidy_folder(tmp_path):
+    folder = tmp_path / "skills/tidy"
+    folder.mkdir(parents=True)
+    (folder / "SKILL.md").write_text("tidy\n")
+    return folder
+
+
+def test_a_folder_removal_is_backed_up_and_undone(tmp_path):
+    folder = tidy_folder(tmp_path)
+    before = digest(folder)
+    engine = make_engine(tmp_path)
+    change = engine.preview("skill.remove", [removal_step(folder)])
+    assert change.steps[0].removal.masked_diff == "-SKILL.md"
+    assert engine.apply(change.id).state is ChangeState.VERIFIED
+    assert not folder.exists()
+    backup = Path(change.steps[0].removal.backup_path)
+    assert backup.is_relative_to(tmp_path / "data/changes") and digest(backup) == before
+    assert engine.store.entries()[0]["steps"][0]["reaches"] == ["codex", "cursor"]
+    assert engine.undo(change.id).state is ChangeState.UNDONE
+    assert digest(folder) == before
+
+
+def test_a_removal_survives_a_restart_of_kitden(tmp_path):
+    folder = tidy_folder(tmp_path)
+    engine = make_engine(tmp_path)
+    change = engine.preview("skill.remove", [removal_step(folder)])
+    engine.apply(change.id)
+    again = make_engine(tmp_path)
+    assert again.undo(change.id).state is ChangeState.UNDONE
+    assert (folder / "SKILL.md").read_text() == "tidy\n"
+
+
+def test_a_failed_step_after_a_removal_puts_the_folder_back(tmp_path, claude_json):
+    folder = tidy_folder(tmp_path)
+    engine = make_engine(tmp_path, run=FakeClaude(claude_json, wrong_value=True))
+    value = {"type": "http", "url": "http://127.0.0.1:12008/mcp"}
+    command = ["claude", "mcp", "add-json", "-s", "user", "gw", json.dumps(value)]
+    steps = [removal_step(folder), claude_step(claude_json, "gw", value, command)]
+    change = engine.preview("skill.remove", steps)
+    engine.apply(change.id)
+    assert change.state is ChangeState.RESTORED and folder.is_dir()
+    assert (folder / "SKILL.md").read_text() == "tidy\n"
+
+
+def test_a_removal_of_a_link_is_refused(tmp_path):
+    real = tmp_path / "elsewhere/tidy"
+    real.mkdir(parents=True)
+    (real / "SKILL.md").write_text("x")
+    link = tmp_path / "skills/tidy"
+    link.parent.mkdir()
+    link.symlink_to(real)
+    with pytest.raises(ChangeRefusedError, match="is a link; Kitden removes only real folders"):
+        make_engine(tmp_path).preview("skill.remove", [removal_step(link)])
+    assert link.is_symlink() and (real / "SKILL.md").exists()
+
+
+def test_a_missing_or_twice_listed_folder_is_refused(tmp_path):
+    engine = make_engine(tmp_path)
+    with pytest.raises(ChangeRefusedError, match="is not a folder"):
+        engine.preview("skill.remove", [removal_step(tmp_path / "skills/none")])
+    folder = tidy_folder(tmp_path)
+    with pytest.raises(ChangeRefusedError, match="would be removed twice in one change"):
+        engine.preview("skill.remove", [removal_step(folder), removal_step(folder)])
+
+
+def test_a_folder_changed_since_preview_is_stale(tmp_path):
+    folder = tidy_folder(tmp_path)
+    engine = make_engine(tmp_path)
+    change = engine.preview("skill.remove", [removal_step(folder)])
+    (folder / "notes.md").write_text("new\n")
+    assert engine.apply(change.id).state is ChangeState.STALE
+    assert (folder / "notes.md").exists()
+    gone = engine.preview("skill.remove", [removal_step(folder)])
+    for path in folder.iterdir():
+        path.unlink()
+    folder.rmdir()
+    assert engine.apply(gone.id).state is ChangeState.STALE
+    assert gone.error == f"{folder} is gone since preview; review the change again"
+
+
+def test_undo_leaves_a_folder_that_came_back(tmp_path):
+    folder = tidy_folder(tmp_path)
+    engine = make_engine(tmp_path)
+    change = engine.preview("skill.remove", [removal_step(folder)])
+    engine.apply(change.id)
+    folder.mkdir(parents=True)
+    (folder / "notes.md").write_text("mine\n")
+    assert engine.undo(change.id).state is ChangeState.UNDO_BLOCKED
+    assert "is back" in change.error and (folder / "notes.md").read_text() == "mine\n"
+
+
+def test_undo_without_the_backup_changes_nothing(tmp_path):
+    import shutil
+
+    folder = tidy_folder(tmp_path)
+    engine = make_engine(tmp_path)
+    change = engine.preview("skill.remove", [removal_step(folder)])
+    engine.apply(change.id)
+    shutil.rmtree(change.steps[0].removal.backup_path)
+    assert engine.undo(change.id).state is ChangeState.UNDO_BLOCKED
+    assert change.error == f"the backup of {folder} is gone, so nothing was changed"
+    assert not folder.exists()

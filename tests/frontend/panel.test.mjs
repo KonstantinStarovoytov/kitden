@@ -5,7 +5,7 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; panel.js must load there too.
 delete globalThis.navigator;
-const { afterParts, changeOutcome, callsText, changeWords, footerActions, leftOutText, loadsLede, moveFor, moveTargets, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
+const { afterParts, changeOutcome, callsText, changeWords, footerActions, offerLabel, leftOutText, loadsLede, moveFor, moveTargets, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
 const { addOptions, whyNoAction } = await import('../../src/kitden/web/static/js/offer.js');
 const { data } = await import('../../src/kitden/web/static/js/store.js');
 
@@ -73,6 +73,23 @@ test('a plugin removal names the plugin and the client', () => {
   const change = { action: 'plugin.remove', steps: [{ client: 'claude_code', name: 'superpowers@claude-plugins-official' }] };
   assert.equal(changeWords(change).title, 'Remove superpowers from Claude Code');
   assert.equal(changeWords(change).done, 'Removed superpowers from Claude Code');
+});
+
+test('a skill removal names the skill and every client that reads its folder', () => {
+  const change = { action: 'skill.remove', steps: [{ client: 'codex', name: 'tidy', reaches: ['codex', 'cursor'] }] };
+  assert.equal(changeWords(change).title, 'Remove tidy from Codex and Cursor');
+  assert.equal(changeWords(change).done, 'Removed tidy from Codex and Cursor');
+});
+
+test('two Remove buttons of one client name their folder', () => {
+  const at = (folder) => ({ def: { id: folder, client: 'codex', scope: 'user', source: `/Users/me/${folder}/docker-expert/SKILL.md` }, action: 'skill.remove' });
+  const offers = [at('.agents/skills'), at('.codex/skills')];
+  assert.equal(offerLabel(offers[0], offers), 'Remove from Codex (~/.agents/skills)…');
+  assert.equal(offerLabel(offers[1], offers), 'Remove from Codex (~/.codex/skills)…');
+  // One button stays plain; twins in different scopes keep the scope words.
+  assert.equal(offerLabel(offers[0], offers.slice(0, 1)), 'Remove from Codex…');
+  const project = { def: { id: 'p', client: 'codex', scope: 'project', project: '/w/api', source: '/w/api/.agents/skills/x/SKILL.md' }, action: 'skill.remove' };
+  assert.equal(offerLabel(project, [offers[0], project]), 'Remove from Codex (project api)…');
 });
 
 test('a server to add in the gateway by hand first keeps a lone Remove plain', () => {

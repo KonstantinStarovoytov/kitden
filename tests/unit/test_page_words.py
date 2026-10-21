@@ -96,6 +96,7 @@ def test_plugin_switch_opens_a_review_and_does_not_flip_itself():
 def test_details_offer_remove_for_plugins_and_skills():
     text = script("panel.js")
     assert '"plugin.remove": (client) => `Remove from ${client}…`' in text
+    assert '"skill.remove": (client) => `Remove from ${client}…`' in text
 
 
 # Motion pass 2 (2026-10-18): each page keeps the parts the design brief asked for.

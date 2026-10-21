@@ -95,6 +95,7 @@ def _cell(column: str, loaded: list[Item], present: list[Item], winners: set[str
 DUPLICATE_FIXES = {
     ItemKind.PLUGIN: ("Remove one copy to keep the other.", "plugin.remove"),
     ItemKind.MCP_SERVER: ("Remove one entry to keep the other.", "mcp.remove_direct"),
+    ItemKind.SKILL: ("Remove one copy to keep the other.", "skill.remove"),
 }
 
 

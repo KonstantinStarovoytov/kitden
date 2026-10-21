@@ -40,6 +40,7 @@ from kitden.changes.actions import (
     remove_plugin_steps,
     remove_steps,
     setup_server_steps,
+    skill_remove_steps,
     skill_steps,
     switch_steps,
     tools_to_read,
@@ -54,6 +55,7 @@ from kitden.clients.base import (
     PLUGIN_REMOVE,
     REMOVE_DIRECT,
     SETUP_SERVER,
+    SKILL_REMOVE,
 )
 from kitden.command import installed_command
 from kitden.gateway_api import GatewayError, MetaMcpClient, ObotClient
@@ -94,7 +96,7 @@ from kitden.views.library import KINDS, SHOWS, library
 from kitden.views.load_map import load_map, map_dict
 from kitden.views.overview import overview
 from kitden.views.setup_server import is_old_entry, setup_server_state
-from kitden.views.skills import skill_catalog
+from kitden.views.skills import skill_catalog, skill_readers
 from kitden.watch import Watcher
 from kitden.web.security import SecurityMiddleware
 
@@ -152,11 +154,20 @@ def _step_path(step) -> str | None:
         return step.edit.path
     if step.gateway:
         return step.gateway.url
+    if step.removal:
+        return step.removal.path
     return step.copy.target if step.copy else None
 
 
+def _readers(step) -> list[str] | None:
+    """The clients that read a copied or removed skill folder."""
+    if step.copy:
+        return step.copy.readers
+    return step.removal.readers if step.removal else None
+
+
 def _step_diff(step) -> str:
-    part = step.edit or step.gateway or step.copy
+    part = step.edit or step.gateway or step.copy or step.removal
     return part.masked_diff if part else ""
 
 
@@ -177,7 +188,7 @@ def change_dict(change: Change) -> dict:
                 "mechanism": s.mechanism,
                 "path": _step_path(s),
                 "diff": _step_diff(s),
-                "reaches": s.copy.readers if s.copy else None,
+                "reaches": _readers(s),
                 "command": redact_text(" ".join(s.command)) if s.command else None,
                 "restart_note": s.restart_note,
                 "login_note": s.login_note,
@@ -869,6 +880,13 @@ def create_app(
                 if not items or any(i is None for i in items):
                     return _error("Choose a known server.", 422)
                 steps = move_steps(adapters, items, gateway)
+            elif action == SKILL_REMOVE:
+                ids = [t.get("item") for t in targets if isinstance(t, dict)]
+                items = [_item(str(i)) for i in ids]
+                if len(items) != 1 or items[0] is None:
+                    return _error("Choose one known item.", 422)
+                readers = skill_readers(state.inventory, items[0])
+                steps = skill_remove_steps(adapters, items[0], readers)
             elif action in (REMOVE_DIRECT, PLUGIN_ENABLE, PLUGIN_DISABLE, PLUGIN_REMOVE):
                 ids = [t.get("item") for t in targets if isinstance(t, dict)]
                 items = [_item(str(i)) for i in ids]

@@ -16,6 +16,7 @@ const ACTION_BUTTONS = {
   "plugin.enable": (client) => `Turn on in ${client}…`,
   "mcp.remove_direct": (client) => `Remove from ${client}…`,
   "plugin.remove": (client) => `Remove from ${client}…`,
+  "skill.remove": (client) => `Remove from ${client}…`,
 };
 // Node before 21 (the tests) has no navigator.
 const APPLY_KEY = typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "⌘ Enter to apply" : "Ctrl Enter to apply";
@@ -252,6 +253,24 @@ function moreButton(buttons) {
 // A Details footer from footerActions: the lead is the primary button and the rest, then
 // `commands`, wait under More. Without a lead every action is plain, after the commands.
 // `draw(option, look)` gives an option's nodes.
+// A button's words. When one client has more than one definition that can change, the label
+// names the scope too, or the folder when the scopes are the same (one skill in two folders).
+export function offerLabel({ def, action }, offers) {
+  const twins = offers.filter((o) => o.def.client === def.client && o.def.id !== def.id);
+  let where = "";
+  if (twins.length) {
+    const same = twins.some((o) => scopeWords(o.def) === scopeWords(def));
+    where = ` (${same ? placeWords(def) : scopeWords(def).toLowerCase()})`;
+  }
+  return ACTION_BUTTONS[action](`${clientName(def.client)}${where}`);
+}
+
+// The folder a definition sits in: a skill's skills folder, or the file of any other entry.
+function placeWords(def) {
+  const source = String(def.source || "");
+  return shortPath(source.endsWith("/SKILL.md") ? source.split("/").slice(0, -2).join("/") : source);
+}
+
 export function footerButtons({ lead, rest }, draw, commands = []) {
   if (lead) {
     const others = [...rest.flatMap((o) => draw(o, "btn")), ...commands];
@@ -602,11 +621,8 @@ function showDetails(row, definitions, offer = null, toolsNext = {}) {
 
   const withCommands = definitions.filter((d) => d.kind === "plugin" || d.kind === "marketplace");
   const commands = withCommands.length ? [button("Commands…", () => showCommands(row, withCommands), "btn")] : [];
-  // Name the scope too when one client has more than one definition that can change.
   const buttonFor = ({ def, action }, look) => {
-    const twins = offers.filter((o) => o.def.client === def.client).length > 1;
-    const where = twins ? ` (${scopeWords(def).toLowerCase()})` : "";
-    const label = ACTION_BUTTONS[action](`${clientName(def.client)}${where}`);
+    const label = offerLabel({ def, action }, offers);
     return button(label, () => review({ action, targets: [{ item: def.id }], params: {} }), look);
   };
   // A plain action names what else it changes; the primary one stands alone.
@@ -676,6 +692,7 @@ export function openChange(title, body, onUndo) {
 
 const DONE_WORDS = {
   "plugin.disable": "Turned off", "plugin.enable": "Turned on", "mcp.remove_direct": "Removed", "plugin.remove": "Removed",
+  "skill.remove": "Removed",
   "gateway.connect": "Connected the gateway", "setup_server.register": "Added show my setup",
   "setup_server.update": "Updated show my setup to Kitden", "gateway.move": "Moved",
   "gateway.switch": "Switched the gateway", "plugin.install": "Added", "marketplace.add": "Added the marketplace",
@@ -683,7 +700,7 @@ const DONE_WORDS = {
 };
 
 // Actions whose words say "from" a client.
-const REMOVES = ["mcp.remove_direct", "plugin.remove"];
+const REMOVES = ["mcp.remove_direct", "plugin.remove", "skill.remove"];
 
 // The review title names the exact entry; the toast uses the short name ("superpowers").
 // `previewBody` is what the review asked for; Add skills names its plugin and a tool rule its
@@ -718,6 +735,7 @@ export function changeWords(change, previewBody) {
     "plugin.enable": `Turn on ${names} in ${clients}`,
     "mcp.remove_direct": `Remove ${names} from ${clients}`,
     "plugin.remove": `Remove ${short} from ${clients}`,
+    "skill.remove": `Remove ${names} from ${clients}`,
     "gateway.connect": `Connect the gateway to ${clients}`,
     "plugin.install": `Add ${joinWords([...new Set(steps.filter((s) => s.name.includes("@")).map((s) => s.name))])} to ${clients}`,
     "marketplace.add": `Add the ${names} marketplace to ${clients}`,

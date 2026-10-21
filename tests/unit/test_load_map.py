@@ -113,12 +113,12 @@ def test_two_copies_of_a_plugin_in_one_client_offer_to_turn_one_off():
     ]
 
 
-def test_a_duplicate_skill_names_the_fix_without_an_action(home):
+def test_a_duplicate_skill_names_the_fix_and_its_action(home):
     row = rows_by(load_map(build_inventory(home), None), "skill", "docker-expert")
     flag = next(f for f in row.flags if f["client"] == "codex")
     assert flag["text"] == "Codex loads it twice"
     assert flag["fix"] == "Remove one copy to keep the other."
-    assert flag["fix_action"] is None
+    assert flag["fix_action"] == "skill.remove"
 
 
 def test_cross_loaded_cells_say_via_which_client(home):

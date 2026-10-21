@@ -16,12 +16,14 @@ from kitden.changes.json_splice import ABSENT
 from kitden.clients.base import (
     REMOVE_DIRECT,
     SETUP_NAME,
+    SKILL_REMOVE,
     ClientAdapter,
     Reader,
     Scan,
     bearer_header,
     file_source,
     is_direct_entry,
+    is_own_skill,
     mcp_item,
     project,
     skill_items,
@@ -83,8 +85,9 @@ class CursorAdapter(ClientAdapter):
     skill_note = RESTART
 
     def item_actions(self, item: Item) -> tuple[str, ...]:
-        direct = is_direct_entry(item, CLIENT, {Scope.USER, Scope.PROJECT})
-        return (REMOVE_DIRECT,) if direct else ()
+        if is_direct_entry(item, CLIENT, {Scope.USER, Scope.PROJECT}):
+            return (REMOVE_DIRECT,)
+        return (SKILL_REMOVE,) if is_own_skill(item, CLIENT) else ()
 
     def reads_other_clients(self) -> bool:
         """Include Third-Party Plugins is on (the default): Cursor also reads ~/.claude/skills

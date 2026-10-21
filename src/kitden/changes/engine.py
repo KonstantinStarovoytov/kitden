@@ -36,14 +36,24 @@ from kitden.changes.copy_folder import (
 )
 from kitden.changes.json_splice import ABSENT, PRESENT, UnrecognizedFormatError
 from kitden.gateway_api import GatewayError
-from kitden.model import Change, ChangeState, FileEdit, FolderCopy, GatewayEdit, Scope, Step
+from kitden.model import (
+    Change,
+    ChangeState,
+    FileEdit,
+    FolderCopy,
+    FolderRemoval,
+    GatewayEdit,
+    Scope,
+    Step,
+)
 from kitden.redact import redact
 
 EDITORS = {"json": json_splice, "toml": toml_edit}
 CLIENT_CLI = "client_cli"
 FILE_EDIT = "format_preserving_edit"
 GATEWAY_API = "gateway_api"  # a step that adds a server to a gateway (feature 006)
-# A step that copies a skill folder has mechanism model.COPY_FOLDER.
+# A step that copies a skill folder has mechanism model.COPY_FOLDER; one that removes a skill
+# folder has model.REMOVE_FOLDER.
 
 Runner = Callable[[list[str], str | None], CommandResult]
 # Opens a signed-in client for the gateway a step names; used as a context manager.
@@ -67,12 +77,21 @@ class _ApplyError(Exception):
 
 
 def _step_path(step: Step) -> str | None:
-    """Where a step writes: the file, the gateway address or the copied folder."""
+    """Where a step writes: the file, the gateway address, the copied or the removed folder."""
     if step.edit is not None:
         return step.edit.path
     if step.gateway is not None:
         return step.gateway.url
+    if step.removal is not None:
+        return step.removal.path
     return step.copy.target if step.copy is not None else None
+
+
+def _readers(step: Step) -> list[str] | None:
+    """The clients that read a copied or removed folder; None for other steps."""
+    if step.copy is not None:
+        return step.copy.readers
+    return step.removal.readers if step.removal is not None else None
 
 
 def _sha(data: bytes | None) -> str | None:
@@ -201,6 +220,10 @@ def _copy_record(copy: FolderCopy | None) -> dict | None:
     return None if copy is None else dict(copy.__dict__)
 
 
+def _removal_record(removal: FolderRemoval | None) -> dict | None:
+    return None if removal is None else dict(removal.__dict__)
+
+
 def _record(change: Change) -> dict:
     steps = []
     for step in change.steps:
@@ -219,6 +242,7 @@ def _record(change: Change) -> dict:
                 "edit": _edit_record(step.edit),
                 "gateway": _gateway_record(step.gateway),
                 "copy": _copy_record(step.copy),
+                "removal": _removal_record(step.removal),
             }
         )
     return {
@@ -252,6 +276,8 @@ def _from_record(record: dict) -> Change:
         gateway = GatewayEdit(**g) if g is not None else None
         c = raw.get("copy")
         copy = FolderCopy(**c) if c is not None else None
+        r = raw.get("removal")
+        removal = FolderRemoval(**r) if r is not None else None
         steps.append(
             Step(
                 client=raw["client"],
@@ -260,6 +286,7 @@ def _from_record(record: dict) -> Change:
                 edit=edit,
                 gateway=gateway,
                 copy=copy,
+                removal=removal,
                 mechanism=raw["mechanism"],
                 command=raw["command"],
                 undo_command=raw.get("undo_command"),
@@ -311,6 +338,7 @@ class Engine:
         """
         self._preview_gateway([s for s in steps if s.gateway is not None])
         self._preview_copies([s for s in steps if s.copy is not None])
+        self._preview_removals([s for s in steps if s.removal is not None])
         targets: list[tuple[str, tuple]] = []
         for step in steps:
             edit = step.edit
@@ -395,6 +423,29 @@ class Engine:
                 raise ChangeRefusedError(f"{copy.source} holds no files")
             copy.masked_diff = "\n".join(f"+{f}" for f in files)
 
+    def _preview_removals(self, steps: list[Step]) -> None:
+        """Read each folder to remove. Only a real folder of regular files is removed."""
+        seen: set[str] = set()
+        for step in steps:
+            removal = step.removal
+            assert removal is not None
+            if os.path.islink(removal.path):
+                raise ChangeRefusedError(
+                    f"{removal.path} is a link; Kitden removes only real folders"
+                )
+            removal.path = os.path.realpath(removal.path)
+            if not os.path.isdir(removal.path):
+                raise ChangeRefusedError(f"{removal.path} is not a folder")
+            if removal.path in seen:
+                raise ChangeRefusedError(f"{removal.path} would be removed twice in one change")
+            seen.add(removal.path)
+            try:
+                files = list_files(removal.path)
+                removal.content_hash = digest(removal.path)
+            except (CopyRefusedError, OSError) as error:
+                raise ChangeRefusedError(f"{step.name}: {error}") from None
+            removal.masked_diff = "\n".join(f"-{f}" for f in files)
+
     def cancel(self, change_id: str) -> Change:
         change = self.changes[change_id]
         change.move_to(ChangeState.CANCELLED)
@@ -467,9 +518,11 @@ class Engine:
         file_steps = [s for s in change.steps if s.edit is not None]
         gateway_steps = [s for s in change.steps if s.gateway is not None]
         copy_steps = [s for s in change.steps if s.copy is not None]
+        removal_steps = [s for s in change.steps if s.removal is not None]
         current = {step.edit.path: _read(step.edit.path) for step in file_steps}
         reasons = [self._stale(s, current[s.edit.path]) for s in file_steps]
         reasons += [self._stale_copy(s) for s in copy_steps]
+        reasons += [self._stale_removal(s) for s in removal_steps]
         for reason in reasons:
             if reason:
                 change.move_to(ChangeState.STALE)
@@ -486,11 +539,15 @@ class Engine:
         tick = self._counter(change)
         ran: list[Step] = []
         copied: list[Step] = []
+        removed: list[Step] = []
         try:
             # The gateway side first: a server that cannot be added leaves the files alone.
             self._apply_gateway(gateway_steps, tick)
             for step in copy_steps:
                 self._apply_copy(step, copied)
+                tick()
+            for step in removal_steps:
+                self._apply_removal(change.id, step, removed)
                 tick()
             # Steps on one file run in order, each on the result of the one before.
             working = dict(current)
@@ -527,6 +584,12 @@ class Engine:
             for path, data in current.items():
                 if path not in by_command and _read(path) != data:
                     self._write(path, data)
+            # A removed folder comes back from its backup, unless something is at the path.
+            for step in reversed(removed):
+                removal = step.removal
+                with contextlib.suppress(CopyRefusedError, OSError):
+                    if not os.path.lexists(removal.path):
+                        copy_folder(removal.backup_path, removal.path)
             for step in reversed(copied):
                 with contextlib.suppress(OSError):
                     remove_folder(step.copy.target)
@@ -563,6 +626,28 @@ class Engine:
         copied.append(step)
         if digest(copy.target) != copy.content_hash:
             raise _ApplyError(f"{copy.target}: the copy did not read back like the source")
+
+    def _stale_removal(self, step: Step) -> str | None:
+        removal = step.removal
+        if not os.path.lexists(removal.path):
+            return f"{removal.path} is gone since preview; review the change again"
+        try:
+            same = not os.path.islink(removal.path) and digest(removal.path) == removal.content_hash
+        except (CopyRefusedError, OSError):
+            same = False
+        return None if same else f"{removal.path} changed since preview; review the change again"
+
+    def _apply_removal(self, change_id: str, step: Step, removed: list[Step]) -> None:
+        """Copy the folder into the change's backup folder, then remove it.
+
+        The step joins `removed`, what a failed change puts back, once the backup is made.
+        """
+        removal = step.removal
+        removal.backup_path = str(self.store.backup_folder(change_id, removal.path))
+        removed.append(step)
+        remove_folder(removal.path)
+        if os.path.lexists(removal.path):
+            raise _ApplyError(f"{removal.path}: the folder is still there after removing it")
 
     def _counter(self, change: Change) -> Callable[[], None]:
         """A function that counts one more step done and tells `on_progress`."""
@@ -659,6 +744,20 @@ class Engine:
                 self._finish(change)
                 return change
 
+        removals = [s for s in change.steps if s.removal is not None]
+        for step in removals:
+            removal = step.removal
+            if os.path.lexists(removal.path):
+                reason = f"{removal.path} is back; undo would overwrite it, so nothing was changed"
+            elif not removal.backup_path or not os.path.isdir(removal.backup_path):
+                reason = f"the backup of {removal.path} is gone, so nothing was changed"
+            else:
+                continue
+            change.move_to(ChangeState.UNDO_BLOCKED)
+            change.error = reason
+            self._finish(change)
+            return change
+
         # The gateway side goes first: if it cannot be reached, the files stay as they are.
         tick = self._counter(change)
         try:
@@ -672,6 +771,9 @@ class Engine:
             return change
         for step in reversed(copies):
             remove_folder(step.copy.target)
+            tick()
+        for step in reversed(removals):
+            copy_folder(step.removal.backup_path, step.removal.path)
             tick()
         # Inverse commands, last step first. An entry already gone needs no command.
         for step in reversed(change.steps):
@@ -696,6 +798,8 @@ class Engine:
                 raise RuntimeError(f"{step.edit.path}: undo did not read back as expected")
             if step.copy and os.path.lexists(step.copy.target):
                 raise RuntimeError(f"{step.copy.target}: undo did not remove the copy")
+            if step.removal and digest(step.removal.path) != step.removal.content_hash:
+                raise RuntimeError(f"{step.removal.path}: undo did not copy the folder back")
         self.on_progress(change.id, len(change.steps), len(change.steps))
         change.move_to(ChangeState.UNDONE)
         if gone:
@@ -720,7 +824,7 @@ class Engine:
                         "name": s.name,
                         "path": _step_path(s),
                         "mechanism": s.mechanism,
-                        "reaches": s.copy.readers if s.copy else None,
+                        "reaches": _readers(s),
                         "restart_note": s.restart_note,
                         "login_note": s.login_note,
                         "before_hash": s.edit.before_hash if s.edit else None,

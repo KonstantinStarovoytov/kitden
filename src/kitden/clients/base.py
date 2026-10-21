@@ -15,10 +15,12 @@ from typing import Any
 from kitden.clients.versions import is_supported, parse_version, version_command
 from kitden.model import (
     COPY_FOLDER,
+    REMOVE_FOLDER,
     Client,
     ClientStatus,
     Enabled,
     FolderCopy,
+    FolderRemoval,
     Gateway,
     GatewayAuth,
     Item,
@@ -106,7 +108,7 @@ def skill_name(skill_md: Path) -> str:
 
 
 def skills_in(folder: Path) -> list[tuple[str, Path, Path | None]]:
-    """(name, real SKILL.md path, link path if the skill folder is a symlink)."""
+    """(name, real SKILL.md path, link path if the skill folder or its SKILL.md is a symlink)."""
     if not folder.is_dir():
         return []
     found = []
@@ -114,7 +116,7 @@ def skills_in(folder: Path) -> list[tuple[str, Path, Path | None]]:
         skill_md = entry / "SKILL.md"
         if entry.name.startswith(".") or not skill_md.is_file():
             continue
-        link = entry if entry.is_symlink() else None
+        link = entry if entry.is_symlink() or skill_md.is_symlink() else None
         found.append((skill_name(skill_md), Path(os.path.realpath(skill_md)), link))
     return found
 
@@ -305,6 +307,25 @@ class ClientAdapter(ABC):
             restart_note=self.skill_note or None,
         )
 
+    def skill_remove_step(self, item: Item, readers: list[str]) -> Step:
+        """Remove one skill folder of this client; Undo copies it back from the backup.
+
+        `readers` are the clients that read that folder; the review names them.
+        """
+        if SKILL_REMOVE not in self.item_actions(item) or item.source.path is None:
+            raise ValueError(f"{item.name} cannot be removed here")
+        removal = FolderRemoval(path=str(Path(item.source.path).parent), readers=list(readers))
+        return Step(
+            client=self.id,
+            scope=item.scope,
+            name=item.name,
+            mechanism=REMOVE_FOLDER,
+            removal=removal,
+            cwd=item.project if item.scope is Scope.PROJECT else None,  # runs nothing; names it
+            restart_note=self.skill_note or None,
+            shared_file=item.scope is Scope.PROJECT,
+        )
+
 
 REMOVE_DIRECT = "mcp.remove_direct"
 PLUGIN_ENABLE = "plugin.enable"
@@ -312,6 +333,20 @@ SETUP_SERVER = "setup_server.register"
 SETUP_NAME = "kitden"
 PLUGIN_DISABLE = "plugin.disable"
 PLUGIN_REMOVE = "plugin.remove"
+SKILL_REMOVE = "skill.remove"
+
+
+def is_own_skill(item: Item, client: str) -> bool:
+    """A real skill folder in one of the client's own skills folders, global or a project's."""
+    return (
+        item.kind is ItemKind.SKILL
+        and item.client == client
+        and item.scope in (Scope.USER, Scope.PROJECT)
+        and item.source.kind is SourceKind.FOLDER
+        and item.source.owner_client == client
+        and item.source.link_path is None
+        and item.source.path is not None
+    )
 
 
 def toggle_action(item: Item) -> tuple[str, ...]:

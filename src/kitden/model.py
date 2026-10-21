@@ -238,21 +238,41 @@ class FolderCopy:
     masked_diff: str = ""
 
 
+REMOVE_FOLDER = "remove_folder"  # the mechanism of a step that removes a skill folder
+
+
+@dataclass
+class FolderRemoval:
+    """A skill folder removed from a client's skills folder.
+
+    The folder is copied into the change's backup folder first. Undo copies it back only when
+    nothing is at the path.
+    """
+
+    path: str
+    readers: list[str] = field(default_factory=list)  # clients that read the folder
+    content_hash: str | None = None  # at preview; Apply refuses a folder that changed since
+    backup_path: str | None = None  # the copy in the change's backup folder, made at Apply
+    masked_diff: str = ""
+
+
 @dataclass
 class Step:
     """One target of a change: one client, scope and entry, written by one mechanism.
 
-    A step has a file edit, a gateway edit or a folder copy; a gateway step's client is
-    "gateway".
+    A step has a file edit, a gateway edit, a folder copy or a folder removal; a gateway
+    step's client is "gateway".
     """
 
     client: str
     scope: Scope
     name: str
     edit: FileEdit | None = None
-    mechanism: str = "format_preserving_edit"  # or "client_cli", "gateway_api", "copy_folder"
+    # or "client_cli", "gateway_api", "copy_folder", "remove_folder"
+    mechanism: str = "format_preserving_edit"
     gateway: GatewayEdit | None = None
     copy: FolderCopy | None = None
+    removal: FolderRemoval | None = None
     command: list[str] | None = None
     undo_command: list[str] | None = None  # the inverse command; Undo runs it, no file restore
     cwd: str | None = None

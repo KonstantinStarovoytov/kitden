@@ -221,6 +221,7 @@ const ACTION_WORDS = {
   "plugin.enable": "Turned on",
   "plugin.disable": "Turned off",
   "plugin.remove": "Removed",
+  "skill.remove": "Removed",
   "setup_server.register": "Added show my setup",
   "setup_server.update": "Updated show my setup to Kitden",
   "gateway.rule": "Changed the rule for",
