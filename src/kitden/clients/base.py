@@ -307,21 +307,27 @@ class ClientAdapter(ABC):
             restart_note=self.skill_note or None,
         )
 
-    def skill_remove_step(self, item: Item, readers: list[str]) -> Step:
+    def skill_remove_step(
+        self, item: Item, readers: list[str], keeps: list[str] | None = None
+    ) -> Step:
         """Remove one skill folder of this client; Undo copies it back from the backup.
 
-        `readers` are the clients that read that folder; the review names them.
+        `readers` are the clients that read that folder; `keeps` those of them that load
+        another copy still. The review names them.
         """
         if SKILL_REMOVE not in self.item_actions(item) or item.source.path is None:
             raise ValueError(f"{item.name} cannot be removed here")
-        removal = FolderRemoval(path=str(Path(item.source.path).parent), readers=list(readers))
+        removal = FolderRemoval(
+            path=str(Path(item.source.path).parent),
+            readers=list(readers),
+            keeps=list(keeps or []),
+        )
         return Step(
             client=self.id,
             scope=item.scope,
             name=item.name,
             mechanism=REMOVE_FOLDER,
             removal=removal,
-            cwd=item.project if item.scope is Scope.PROJECT else None,  # runs nothing; names it
             restart_note=self.skill_note or None,
             shared_file=item.scope is Scope.PROJECT,
         )

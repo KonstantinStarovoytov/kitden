@@ -96,7 +96,7 @@ from kitden.views.library import KINDS, SHOWS, library
 from kitden.views.load_map import load_map, map_dict
 from kitden.views.overview import overview
 from kitden.views.setup_server import is_old_entry, setup_server_state
-from kitden.views.skills import skill_catalog, skill_readers
+from kitden.views.skills import skill_catalog, skill_keepers, skill_readers
 from kitden.watch import Watcher
 from kitden.web.security import SecurityMiddleware
 
@@ -189,6 +189,7 @@ def change_dict(change: Change) -> dict:
                 "path": _step_path(s),
                 "diff": _step_diff(s),
                 "reaches": _readers(s),
+                "keeps": s.removal.keeps if s.removal else None,
                 "command": redact_text(" ".join(s.command)) if s.command else None,
                 "restart_note": s.restart_note,
                 "login_note": s.login_note,
@@ -886,7 +887,8 @@ def create_app(
                 if len(items) != 1 or items[0] is None:
                     return _error("Choose one known item.", 422)
                 readers = skill_readers(state.inventory, items[0])
-                steps = skill_remove_steps(adapters, items[0], readers)
+                keeps = skill_keepers(state.inventory, items[0], readers)
+                steps = skill_remove_steps(adapters, items[0], readers, keeps)
             elif action in (REMOVE_DIRECT, PLUGIN_ENABLE, PLUGIN_DISABLE, PLUGIN_REMOVE):
                 ids = [t.get("item") for t in targets if isinstance(t, dict)]
                 items = [_item(str(i)) for i in ids]

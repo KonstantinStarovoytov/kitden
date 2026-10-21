@@ -4,7 +4,7 @@ import { $, $$, button, el, joinWords, plural, reportError, shortPath, shortPath
 import { loadLibrary, morphOnNextRender, onOpenItem, rowTitle, shownRow } from "./library.js";
 import { finishTransition, fold, transition } from "./motion.js";
 import { about, addButton, addOptions, whyNoAction } from "./offer.js";
-import { CLIENT_NAMES, diffCounts, flag, GATEWAY_NOTE, gatewayName, kitdenMove, mark, movedNames, notesSection, ruleText, rulesText, skeleton, socket, stepText, strictText } from "./parts.js";
+import { CLIENT_NAMES, diffCounts, skillRemoval, flag, GATEWAY_NOTE, gatewayName, kitdenMove, mark, movedNames, notesSection, ruleText, rulesText, skeleton, socket, stepText, strictText } from "./parts.js";
 import { busy, current as currentModel, currentError, data, reload, render, setBusy, state } from "./store.js";
 
 const KIND_WORDS = {
@@ -729,13 +729,12 @@ export function changeWords(change, previewBody) {
   reached.sort((a, b) => CLIENT_ORDER.indexOf(a) - CLIENT_ORDER.indexOf(b));
   const clients = joinWords(reached.map(clientName));
   const plugin = ((previewBody && previewBody.params && previewBody.params.plugin) || "the plugin").split("@")[0];
-  const title = {
+  let title = {
     "gateway.move": kitden ? `Move ${names} into the Kitden gateway` : `Move ${names} into the gateway`,
     "plugin.disable": `Turn off ${names} in ${clients}`,
     "plugin.enable": `Turn on ${names} in ${clients}`,
     "mcp.remove_direct": `Remove ${names} from ${clients}`,
     "plugin.remove": `Remove ${short} from ${clients}`,
-    "skill.remove": `Remove ${names} from ${clients}`,
     "gateway.connect": `Connect the gateway to ${clients}`,
     "plugin.install": `Add ${joinWords([...new Set(steps.filter((s) => s.name.includes("@")).map((s) => s.name))])} to ${clients}`,
     "marketplace.add": `Add the ${names} marketplace to ${clients}`,
@@ -748,6 +747,13 @@ export function changeWords(change, previewBody) {
   }[change.action] || change.action;
   const verb = DONE_WORDS[change.action] || change.action;
   let what = `${verb} ${short} ${REMOVES.includes(change.action) ? "from" : "in"} ${clients}`;
+  // Never "removed" alone for a client that still loads another copy of the skill.
+  if (change.action === "skill.remove") {
+    const { clients: lose, oneCopy } = skillRemoval(steps);
+    const words = `${oneCopy ? "one copy of " : ""}${names} from ${joinWords(lose.map(clientName))}`;
+    title = `Remove ${words}`;
+    what = `${verb} ${words}`;
+  }
   if (change.action === "plugin.install") {
     what = `${verb} ${joinWords([...new Set(steps.filter((s) => s.name.includes("@")).map((s) => s.name.split("@")[0]))])} to ${clients}`;
   } else if (change.action === "marketplace.add" || change.action === "skill.install") {

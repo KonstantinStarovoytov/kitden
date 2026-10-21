@@ -764,3 +764,46 @@ def test_undo_without_the_backup_changes_nothing(tmp_path):
     assert engine.undo(change.id).state is ChangeState.UNDO_BLOCKED
     assert change.error == f"the backup of {folder} is gone, so nothing was changed"
     assert not folder.exists()
+
+
+def test_a_removal_that_stops_halfway_is_put_back_whole(tmp_path, monkeypatch):
+    import kitden.changes.engine as engine_module
+
+    folder = tidy_folder(tmp_path)
+    (folder / "notes.md").write_text("notes\n")
+    before = digest(folder)
+
+    real_remove = engine_module.remove_folder
+    calls = []
+
+    def half(path):  # the first call removes one file, then fails
+        calls.append(path)
+        if len(calls) > 1:
+            return real_remove(path)
+        (Path(path) / "notes.md").unlink()
+        raise OSError("disk trouble")
+
+    engine = make_engine(tmp_path)
+    change = engine.preview("skill.remove", [removal_step(folder)])
+    monkeypatch.setattr(engine_module, "remove_folder", half)
+    assert engine.apply(change.id).state is ChangeState.RESTORED
+    assert digest(folder) == before
+    assert change.error.endswith("The original settings were restored.")
+
+
+def test_a_folder_that_cannot_be_put_back_is_named_with_its_backup(tmp_path):
+    folder = tidy_folder(tmp_path)
+    locked = folder / "locked"
+    locked.mkdir()
+    (locked / "a.md").write_text("a\n")
+    locked.chmod(0o555)  # rmtree cannot empty it
+    try:
+        engine = make_engine(tmp_path)
+        change = engine.preview("skill.remove", [removal_step(folder)])
+        assert engine.apply(change.id).state is ChangeState.RESTORED
+        backup = change.steps[0].removal.backup_path
+        assert "restored" not in change.error
+        assert f"tidy could not be put back; its backup is in {backup}." in change.error
+        assert digest(backup) == change.steps[0].removal.content_hash
+    finally:
+        locked.chmod(0o755)

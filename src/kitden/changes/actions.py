@@ -239,13 +239,13 @@ def remove_plugin_steps(adapters: dict[str, ClientAdapter], item: Item) -> list[
 
 
 def skill_remove_steps(
-    adapters: dict[str, ClientAdapter], item: Item, readers: list[str]
+    adapters: dict[str, ClientAdapter], item: Item, readers: list[str], keeps: list[str]
 ) -> list[Step]:
     """Remove one skill folder from its client; Undo copies it back (spec 3.2)."""
     adapter = adapters.get(item.client)
     if adapter is None or SKILL_REMOVE not in item.actions:
         raise ValueError(f"{item.name} cannot be removed here")
-    return [adapter.skill_remove_step(item, readers)]
+    return [adapter.skill_remove_step(item, readers, keeps)]
 
 
 def plugin_steps(adapters: dict[str, ClientAdapter], item: Item, enable: bool) -> list[Step]:

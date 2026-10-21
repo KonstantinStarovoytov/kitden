@@ -49,7 +49,7 @@ def test_removing_a_skill_backs_it_up_and_undo_copies_it_back(client):
         ["claude_code", "cursor"],
         None,
     )
-    assert step["path"] == str(folder) and step["diff"] == "-SKILL.md"
+    assert step["path"] == str(folder) and step["diff"] == "-SKILL.md" and step["keeps"] == []
     assert change["after"] == [
         {"client": "claude_code", "state": "off", "word": "Removed"},
         {"client": "cursor", "state": "off", "word": "Removed"},
@@ -140,6 +140,7 @@ def test_a_duplicate_skill_keeps_one(client):
         client, "codex", "docker-expert", where=str(client.home / ".codex/skills/docker-expert")
     )
     change = _remove(client, own["id"]).json()
+    assert change["steps"][0]["keeps"] == ["codex", "cursor"]
     # Cursor reads ~/.codex/skills too (Include Third-Party Plugins is on in the fixture). Both
     # still load the copy in ~/.agents/skills, so neither loses the skill.
     assert change["after"] == [
@@ -157,6 +158,7 @@ def test_a_duplicate_skill_keeps_one(client):
         },
     ]
     client.post(f"/api/changes/{change['id']}/apply", headers=POST)
+    assert client.get("/api/changes").json()[0]["steps"][0]["keeps"] == ["codex", "cursor"]
     assert not [f for f in _row(client, "docker-expert")["flags"] if f["level"] == "warning"]
 
 

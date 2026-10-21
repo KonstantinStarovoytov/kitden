@@ -18,7 +18,7 @@ from kitden.local_gateway.settings import (
     rule_parts,
     state_in,
 )
-from kitden.model import GATEWAY_CLIENT, Change, Enabled, ItemKind, Scope, SourceKind
+from kitden.model import GATEWAY_CLIENT, Change, ItemKind, Scope, SourceKind
 from kitden.views.effective import effective_view
 from kitden.views.setup_server import CLIENTS, kitden_on, setup_server_state
 
@@ -134,30 +134,17 @@ def _skill_words(change: Change, inventory, skills: list[dict]) -> list[dict]:
     return out
 
 
-def _skill_remove_words(change: Change, inventory) -> list[dict]:
+def _skill_remove_words(change: Change) -> list[dict]:
     """Every client that reads the removed folder. One that still loads another copy of the
     skill, from another folder or a plugin, says so: it does not lose the skill."""
     step = change.steps[0]
     removal = step.removal
     assert removal is not None
-    gone = os.path.realpath(removal.path)
-    project = step.cwd if step.scope is Scope.PROJECT else None
     out = []
     for client in SKILL_CLIENTS:
         if client not in removal.readers:
             continue
-        others = [
-            i
-            for i in inventory.items
-            if i.client == client
-            and i.kind is ItemKind.SKILL
-            and i.name == step.name
-            and i.enabled is not Enabled.OFF
-            and i.source.path is not None
-            and os.path.dirname(os.path.realpath(i.source.path)) != gone
-            and (i.scope in (Scope.USER, Scope.PLUGIN) or (project and i.project == project))
-        ]
-        if others:
+        if client in removal.keeps:
             note = f"{CLIENT_WORDS[client]} still loads another copy of {step.name}."
             out.append({"client": client, "state": "on", "word": "Loads once", "note": note})
         else:
@@ -519,7 +506,7 @@ def after_words(
     gateway reads.
     """
     if change.action == "skill.remove" and change.steps:
-        return _skill_remove_words(change, inventory)
+        return _skill_remove_words(change)
     if change.action in ("skill.install", "plugin.skills") and change.steps:
         return _skill_words(change, inventory, skills or [])
     if change.action == GATEWAY_RULE and home is not None:

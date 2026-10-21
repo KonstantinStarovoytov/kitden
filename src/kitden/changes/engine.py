@@ -584,18 +584,24 @@ class Engine:
             for path, data in current.items():
                 if path not in by_command and _read(path) != data:
                     self._write(path, data)
-            # A removed folder comes back from its backup, unless something is at the path.
+            # A removed folder comes back from its backup. What a removal that stopped halfway
+            # left is part of that backup, so it goes first.
+            lost = []
             for step in reversed(removed):
-                removal = step.removal
-                with contextlib.suppress(CopyRefusedError, OSError):
-                    if not os.path.lexists(removal.path):
-                        copy_folder(removal.backup_path, removal.path)
+                if not self._put_folder_back(step.removal):
+                    lost.append(
+                        f"{step.name} could not be put back; its backup is in "
+                        f"{step.removal.backup_path}."
+                    )
             for step in reversed(copied):
                 with contextlib.suppress(OSError):
                     remove_folder(step.copy.target)
             self._remove_from_gateway(gateway_steps, best_effort=True)
             change.move_to(ChangeState.RESTORED)
-            change.error = f"{error} The original settings were restored."
+            if lost:
+                change.error = f"{error} {' '.join(lost)}"
+            else:
+                change.error = f"{error} The original settings were restored."
             self._finish(change)
             return change
 
@@ -648,6 +654,21 @@ class Engine:
         remove_folder(removal.path)
         if os.path.lexists(removal.path):
             raise _ApplyError(f"{removal.path}: the folder is still there after removing it")
+
+    def _put_folder_back(self, removal: FolderRemoval) -> bool:
+        """Copy a removed folder back from its backup after a failed Apply. False when it
+        could not be put back."""
+        try:
+            if os.path.islink(removal.path):
+                return False  # not what the removal left
+            if os.path.lexists(removal.path):
+                if digest(removal.path) == removal.content_hash:
+                    return True
+                remove_folder(removal.path)
+            copy_folder(removal.backup_path, removal.path)
+            return digest(removal.path) == removal.content_hash
+        except (CopyRefusedError, OSError):
+            return False
 
     def _counter(self, change: Change) -> Callable[[], None]:
         """A function that counts one more step done and tells `on_progress`."""
@@ -825,6 +846,7 @@ class Engine:
                         "path": _step_path(s),
                         "mechanism": s.mechanism,
                         "reaches": _readers(s),
+                        "keeps": s.removal.keeps if s.removal else None,
                         "restart_note": s.restart_note,
                         "login_note": s.login_note,
                         "before_hash": s.edit.before_hash if s.edit else None,

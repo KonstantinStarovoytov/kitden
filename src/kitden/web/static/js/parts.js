@@ -252,6 +252,16 @@ export function strictText({ server, state }) {
   return { title: `Turn strict mode ${state} for ${server}`, done: `Turned strict mode ${state} for ${server}` };
 }
 
+// The clients a skill removal takes the skill from: those that read the folder and load no
+// other copy. When every one of them keeps another copy, the words say "one copy" instead.
+export function skillRemoval(steps) {
+  const reached = [...new Set(steps.flatMap((s) => s.reaches || [s.client]))];
+  const keeps = new Set(steps.flatMap((s) => s.keeps || []));
+  const lose = reached.filter((c) => !keeps.has(c));
+  const clients = (lose.length ? lose : reached).sort((a, b) => CLIENT_ORDER.indexOf(a) - CLIENT_ORDER.indexOf(b));
+  return { clients, oneCopy: !lose.length };
+}
+
 // One line for a change log entry: what, which entries, which clients. Plugins go by their
 // short name ("superpowers"); the review named the exact entry before Apply.
 export function changeTitle(entry) {
@@ -274,6 +284,10 @@ export function changeTitle(entry) {
   const reached = [...new Set(steps.flatMap((s) => s.reaches || [s.client]))];
   reached.sort((a, b) => CLIENT_ORDER.indexOf(a) - CLIENT_ORDER.indexOf(b));
   const clients = reached.map((c) => CLIENT_NAMES[c] || c);
+  if (entry.action === "skill.remove") {
+    const { clients: lose, oneCopy } = skillRemoval(steps);
+    return `${verb}${oneCopy ? " one copy of" : ""} ${names.join(", ")} · ${lose.map((c) => CLIENT_NAMES[c] || c).join(", ")}`;
+  }
   // A plugin's skills can be many; the line counts them, the change lists them.
   if (entry.action === "plugin.skills") return `${verb} ${plural(names.length, "skill", "skills")} · ${clients.join(", ")}`;
   const whole = ["gateway.connect", "gateway.switch", "setup_server.register", "setup_server.update"].includes(entry.action);

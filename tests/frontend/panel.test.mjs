@@ -81,6 +81,15 @@ test('a skill removal names the skill and every client that reads its folder', (
   assert.equal(changeWords(change).done, 'Removed tidy from Codex and Cursor');
 });
 
+test('a skill removal names only the clients that lose the skill', () => {
+  const some = { action: 'skill.remove', steps: [{ client: 'claude_code', name: 'tidy', reaches: ['claude_code', 'cursor'], keeps: ['cursor'] }] };
+  assert.equal(changeWords(some).title, 'Remove tidy from Claude Code');
+  assert.equal(changeWords(some).done, 'Removed tidy from Claude Code');
+  const all = { action: 'skill.remove', steps: [{ client: 'codex', name: 'docker-expert', reaches: ['codex', 'cursor'], keeps: ['codex', 'cursor'] }] };
+  assert.equal(changeWords(all).title, 'Remove one copy of docker-expert from Codex and Cursor');
+  assert.equal(changeWords(all).done, 'Removed one copy of docker-expert from Codex and Cursor');
+});
+
 test('two Remove buttons of one client name their folder', () => {
   const at = (folder) => ({ def: { id: folder, client: 'codex', scope: 'user', source: `/Users/me/${folder}/docker-expert/SKILL.md` }, action: 'skill.remove' });
   const offers = [at('.agents/skills'), at('.codex/skills')];

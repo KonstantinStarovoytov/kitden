@@ -321,3 +321,22 @@ def skill_readers(inventory, item) -> list[str]:
         and os.path.realpath(i.source.path) == real
     }
     return [c for c in CLIENTS if c in readers]
+
+
+def skill_keepers(inventory, item, readers: list[str]) -> list[str]:
+    """The readers that still load another copy of the skill once its folder is gone: from
+    another folder, a plugin that is on, or a folder of the same project."""
+    gone = os.path.dirname(os.path.realpath(item.source.path))
+    project = item.project if item.scope is Scope.PROJECT else None
+    keeps = {
+        i.client
+        for i in inventory.items
+        if i.client in readers
+        and i.kind is ItemKind.SKILL
+        and i.name == item.name
+        and i.enabled is not Enabled.OFF
+        and i.source.path is not None
+        and os.path.dirname(os.path.realpath(i.source.path)) != gone
+        and (i.scope in (Scope.USER, Scope.PLUGIN) or (project and i.project == project))
+    }
+    return [c for c in CLIENTS if c in keeps]

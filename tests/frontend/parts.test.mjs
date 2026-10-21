@@ -148,6 +148,13 @@ test('a skill removal on the Changes page names every client that read the folde
   assert.equal(changeTitle({ action: 'skill.remove', steps: [{ client: 'codex', name: 'tidy', reaches: ['codex', 'cursor'] }] }), 'Removed tidy · Codex, Cursor');
 });
 
+test('a skill removal on the Changes page never says removed where a copy still loads', () => {
+  const all = { action: 'skill.remove', steps: [{ client: 'codex', name: 'docker-expert', reaches: ['codex', 'cursor'], keeps: ['codex', 'cursor'] }] };
+  assert.equal(changeTitle(all), 'Removed one copy of docker-expert · Codex, Cursor');
+  const some = { action: 'skill.remove', steps: [{ client: 'claude_code', name: 'tidy', reaches: ['claude_code', 'cursor'], keeps: ['cursor'] }] };
+  assert.equal(changeTitle(some), 'Removed tidy · Claude Code');
+});
+
 test('the Changes page names what moved into the Kitden gateway and which rule changed', () => {
   const steps = [
     { client: 'kitden', name: 'files' }, { client: 'kitden', name: 'PATH' },

@@ -251,6 +251,7 @@ class FolderRemoval:
 
     path: str
     readers: list[str] = field(default_factory=list)  # clients that read the folder
+    keeps: list[str] = field(default_factory=list)  # readers that load another copy still
     content_hash: str | None = None  # at preview; Apply refuses a folder that changed since
     backup_path: str | None = None  # the copy in the change's backup folder, made at Apply
     masked_diff: str = ""
