@@ -402,3 +402,17 @@ def test_is_allowed_follows_strict_mode(tmp_path):
     write_settings(tmp_path, {"servers": {"github": {}}, "rules": rules})
     assert is_allowed(tmp_path, [], "github", "echo") is True
     assert is_allowed(tmp_path, [], "github", "other") is False
+
+
+def test_is_allowed_uses_the_fallback_when_the_file_cannot_be_read(tmp_path):
+    off = {"servers": {"github": {}}, "rules": {"global": {"github": {"tools": {"echo": "off"}}}}}
+    on = {"servers": {"github": {}}, "rules": {"global": {}}}
+    path = write_settings(tmp_path, on)
+    path.write_text("{ not json")
+    assert is_allowed(tmp_path, [], "github", "echo", fallback=off) is False
+    assert is_allowed(tmp_path, [], "github", "echo", fallback=on) is True
+    # Without a fallback a broken or missing file allows nothing.
+    assert is_allowed(tmp_path, [], "github", "echo") is False
+    path.unlink()
+    assert is_allowed(tmp_path, [], "github", "echo") is False
+    assert is_allowed(tmp_path, [], "github", "echo", fallback=off) is False

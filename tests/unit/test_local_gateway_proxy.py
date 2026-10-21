@@ -259,6 +259,21 @@ async def test_a_tool_turned_off_during_a_session_is_refused_on_its_next_call(ho
     assert {"echo", "where"} <= offered
 
 
+async def test_a_broken_rules_file_keeps_the_rules_the_session_started_with(home):
+    off = {"global": {"echo": {"tools": {"echo": "off"}}}}
+    write_settings(home, {"echo": echo("echo")}, off)
+    save_tools(home, "echo", [tool("echo"), tool("where")])
+
+    async with gateway(home) as client:
+        await client.list_tools()
+        (data_dir(home) / SETTINGS_FILE).write_text("{ not json")
+        refused = await client.call_tool("echo", {"text": "hi"})
+        works = await client.call_tool("where", {})
+
+    assert refused.is_error
+    assert not works.is_error
+
+
 async def test_the_gateway_says_once_that_the_tool_list_changed(home):
     write_settings(home, {"echo": echo("echo")})
     save_tools(home, "echo", [tool("echo"), tool("where")])

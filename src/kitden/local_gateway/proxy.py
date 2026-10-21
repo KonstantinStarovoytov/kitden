@@ -27,6 +27,7 @@ import re
 import sys
 from collections.abc import Callable, Iterable
 from contextlib import AsyncExitStack, asynccontextmanager
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -383,7 +384,11 @@ class _Gateway:
             if target is not None:
                 await self._tell_new_list(ctx)
                 # The rules are read again on each call: a tool turned off is refused at once.
-                if not await anyio.to_thread.run_sync(is_allowed, self.home, self.chain, *target):
+                # When the file cannot be read, the rules the session started with decide.
+                allowed = partial(
+                    is_allowed, self.home, self.chain, *target, fallback=self.settings
+                )
+                if not await anyio.to_thread.run_sync(allowed):
                     return _answer(f"{params.name} is turned off in Kitden.")
                 return await self.upstreams.call(*target, arguments)
         try:

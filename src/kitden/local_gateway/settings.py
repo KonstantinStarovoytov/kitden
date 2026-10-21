@@ -42,7 +42,10 @@ def _read(path: Path) -> dict:
 
 def load_settings(home: Path) -> dict:
     """The gateway's servers and rules; a missing or unreadable file reads as empty."""
-    data = _read(data_dir(home) / SETTINGS_FILE)
+    return _settings(_read(data_dir(home) / SETTINGS_FILE))
+
+
+def _settings(data: dict) -> dict:
     rules = _dict(data.get("rules"))
     return {
         **data,
@@ -130,10 +133,19 @@ def state_in(settings: dict, chain: Sequence[str], server: str, tool: str | None
     return "on" if _is_on(_scopes(settings, chain), server, tool, strict) else "off"
 
 
-def is_allowed(home: Path, chain: Sequence[str], server: str, tool: str) -> bool:
+def is_allowed(
+    home: Path, chain: Sequence[str], server: str, tool: str, *, fallback: dict | None = None
+) -> bool:
     """Whether a tool can be called now: the settings file is read again, and the server and
-    the tool must both be on along the chain."""
-    settings = load_settings(home)
+    the tool must both be on along the chain. When the file is missing or unreadable, the rules
+    of `fallback` decide; with no fallback, nothing is allowed."""
+    try:
+        data = json.loads((data_dir(home) / SETTINGS_FILE).read_text())
+    except (OSError, ValueError):
+        data = None
+    settings = _settings(data) if isinstance(data, dict) else fallback
+    if settings is None:
+        return False
     return state_in(settings, chain, server, None) == "on" and (
         state_in(settings, chain, server, tool) == "on"
     )
