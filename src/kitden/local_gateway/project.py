@@ -28,13 +28,31 @@ def main_checkout(path: Path) -> Path:
     return path
 
 
+def _real(path: str | Path) -> Path:
+    return Path(os.path.realpath(path))
+
+
+def _worktree_main(folder: Path, stops: tuple[Path, ...]) -> Path:
+    """The main checkout when `folder` is in a git worktree, otherwise `folder` itself.
+
+    Walks up to the first folder that holds a `.git`, never into the home folder or `/`.
+    """
+    for parent in (folder, *folder.parents):
+        if parent in stops:
+            break
+        if (parent / ".git").exists():
+            main = main_checkout(parent)
+            return folder if main == parent else main
+    return folder
+
+
 def _file_uri_path(uri: str) -> str | None:
     parsed = urlparse(uri)
     return unquote(parsed.path) if parsed.scheme == "file" else None
 
 
 def _candidates(
-    env: Mapping[str, str], roots: list[str], cwd: Path, home: Path
+    env: Mapping[str, str], roots: list[str], cwd: Path, stops: tuple[Path, ...]
 ) -> Iterator[str | None]:
     # Facts below were checked on 2026-10-21.
     # Claude Code passes CLAUDE_PROJECT_DIR to stdio servers (in a Desktop worktree session it is
@@ -47,7 +65,7 @@ def _candidates(
     # Codex sends no roots and clears the env: it starts the server in the session folder (a
     # project, a worktree or a per-chat folder). Cursor starts user-level servers in the home
     # folder, so the home folder says nothing.
-    yield None if cwd in (home, Path("/")) else str(cwd)
+    yield None if _real(cwd) in stops else str(cwd)
 
 
 def find_project(
@@ -56,11 +74,17 @@ def find_project(
     """The known project (a path from `known`) the session works in, or None.
 
     The first candidate wins. It is mapped to its main checkout, and the known project that is
-    that folder or contains it (the longest one) is the answer.
+    that folder or contains it (the longest one) is the answer. Paths are compared by their real
+    path; the answer is the `known` string as given. The home folder and `/` match only
+    themselves: they must not claim the folders under them (a Codex chat folder is one).
     """
-    start = next((c for c in _candidates(env, roots, cwd, home) if c), None)
+    stops = (_real(home), Path("/"))
+    start = next((c for c in _candidates(env, roots, cwd, stops) if c), None)
     if start is None:
         return None
-    folder = main_checkout(Path(start))
-    matches = [k for k in known if Path(k) == folder or Path(k) in folder.parents]
-    return max(matches, key=lambda k: len(Path(k).parts), default=None)
+    folder = _real(_worktree_main(_real(start), stops))
+    real = {k: _real(k) for k in known}
+    matches = [
+        k for k, r in real.items() if r == folder or (r not in stops and r in folder.parents)
+    ]
+    return max(matches, key=lambda k: len(real[k].parts), default=None)

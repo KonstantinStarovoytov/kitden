@@ -116,3 +116,69 @@ def test_cursor_workspace_paths_are_read(tmp_path):
     a, b = project(tmp_path, "a"), project(tmp_path, "b")
     env = {"WORKSPACE_FOLDER_PATHS": f"{b},{a}"}
     assert find(tmp_path, [a, b], env, cwd=tmp_path / "home") == str(b)
+
+
+def test_a_known_home_or_root_matches_only_itself(tmp_path):
+    home = tmp_path / "home"
+    chat = home / "Documents" / "Codex" / "2026-10-21" / "chat"
+    chat.mkdir(parents=True)
+    assert find(tmp_path, [home], cwd=chat, home=home) is None
+    assert find(tmp_path, [home], {"CLAUDE_PROJECT_DIR": str(chat)}, home=home) is None
+    assert find(tmp_path, [home], {"CLAUDE_PROJECT_DIR": str(home)}, home=home) == str(home)
+    assert find(tmp_path, ["/"], {"CLAUDE_PROJECT_DIR": str(chat)}) is None
+    assert find(tmp_path, ["/"], {"CLAUDE_PROJECT_DIR": "/"}) == "/"
+
+
+def test_a_project_inside_a_known_home_still_wins(tmp_path):
+    home = tmp_path / "home"
+    app = project(home, "app")
+    assert find(tmp_path, [home, app], cwd=app / "src", home=home) == str(app)
+
+
+def test_a_symlinked_folder_matches_its_real_path(tmp_path):
+    app = project(tmp_path)
+    link = tmp_path / "link"
+    link.symlink_to(app)
+    sub = app / "src"
+    sub.mkdir()
+    # Known through the link, session in the real folder: the answer is the known string.
+    assert find(tmp_path, [link], cwd=app) == str(link)
+    assert find(tmp_path, [link], {"CLAUDE_PROJECT_DIR": str(sub)}) == str(link)
+    # Known by its real path, session through the link.
+    assert find(tmp_path, [app], {"CLAUDE_PROJECT_DIR": str(link)}) == str(app)
+    assert find(tmp_path, [app], roots=[(link / "src").as_uri()]) == str(app)
+
+
+def test_a_symlinked_home_is_still_the_home(tmp_path):
+    real_home = tmp_path / "real-home"
+    real_home.mkdir()
+    home = tmp_path / "home"
+    home.symlink_to(real_home)
+    assert find(tmp_path, [home], cwd=real_home, home=home) is None
+    assert find(tmp_path, [real_home], cwd=real_home, home=home) is None
+
+
+def test_a_subfolder_of_a_worktree_maps_to_the_main_checkout(tmp_path):
+    app = project(tmp_path)
+    wt = worktree(tmp_path, app)
+    sub = wt / "packages" / "web"
+    sub.mkdir(parents=True)
+    assert find(tmp_path, [app], {"CLAUDE_PROJECT_DIR": str(sub)}) == str(app)
+    assert find(tmp_path, [app], roots=[sub.as_uri()]) == str(app)
+    assert find(tmp_path, [app], cwd=sub) == str(app)
+
+
+def test_the_walk_up_stops_at_the_first_git_folder(tmp_path):
+    app = project(tmp_path)
+    wt = worktree(tmp_path, app)
+    nested = wt / "vendor" / "lib"
+    (nested / ".git").mkdir(parents=True)
+    assert find(tmp_path, [app], cwd=nested / "src") is None
+
+
+def test_the_walk_up_never_goes_past_the_home_folder(tmp_path):
+    app = project(tmp_path)
+    home = worktree(tmp_path, app, "home")  # a home folder that holds a worktree's .git file
+    chat = home / "Documents" / "chat"
+    chat.mkdir(parents=True)
+    assert find(tmp_path, [app], cwd=chat, home=home) is None
