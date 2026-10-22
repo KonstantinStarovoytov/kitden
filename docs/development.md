@@ -114,8 +114,13 @@ project, with a server that has a token:
     item; `security -i` reads the quoted `add-generic-password` line as the code expects; `find ... -w`
     prints a non-ASCII value back unchanged; a long value (for example 4 KB) is stored and read
     back unchanged.
+22. With Claude Code open, "Put back in Claude Code…" a held server that has a token. Kitden
+    writes `~/.claude.json` itself (no `claude mcp add-json`, so the token is never in a
+    command's arguments). Use Claude Code for a minute, then check the entry is still there and
+    a new session has the server. Undo; the entry is gone and the rest of the file is kept.
 
-Not run yet for steps 17 to 21: Part 5 was built and tested with a fake `security` only.
+Not run yet for steps 17 to 22: Part 5 was built and tested with a fake `security` only, and
+step 22 with a fake `claude`.
 
 ## Release
 
