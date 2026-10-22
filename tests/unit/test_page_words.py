@@ -849,3 +849,10 @@ def test_a_project_can_be_aligned_in_one_review():
     assert "Add missing…" in library and '"add:missing"' in library
     panel = script("panel.js")
     assert "Not the same; not touched" in panel and '"project.align"' in panel
+
+
+def test_a_failed_change_does_not_claim_a_restore_on_the_page():
+    # The engine's error says "The original settings were restored." only when it is true.
+    assert "were put back" not in script("panel.js")
+    assert '"The change did not check out."' in script("panel.js")
+    assert "Failed, put back" not in script("changes.js")

@@ -2,7 +2,7 @@
 import { button, el, shortPath, shortPaths } from "./dom.js";
 import { entrance } from "./motion.js";
 import { closePanel, openChange, undoChange } from "./panel.js";
-import { banner, changeTitle, latestChanges, mark, notesSection, opens, skeleton } from "./parts.js";
+import { banner, changeTitle, failedWord, latestChanges, mark, notesSection, opens, skeleton } from "./parts.js";
 import { data, retry } from "./store.js";
 
 // The state in words. Rows that no longer change anything are plain grey text, not badges.
@@ -10,7 +10,7 @@ const STATE_BADGES = {
   verified: ["Applied", "badge win"],
   undone: ["Undone", "faint"],
   stale: ["Not applied: the file changed before Apply", "badge warn"],
-  restored: ["Failed, put back", "badge warn"],
+  restored: ["Failed", "badge warn"],
   undo_blocked: ["Can't undo: the file changed after this", "badge warn"],
   cancelled: ["Cancelled", "faint"],
   previewed: ["Preview only", "badge"],
@@ -52,7 +52,8 @@ export function renderChanges(main) {
 
 function changeRow(entry) {
   const li = el("li", OVER.includes(entry.state) ? "over" : null);
-  const [word, look] = STATE_BADGES[entry.state] || [entry.state, "badge"];
+  let [word, look] = STATE_BADGES[entry.state] || [entry.state, "badge"];
+  if (entry.state === "restored") word = failedWord(entry.error);
   const actions = el("span", "row-actions");
   if (entry.state === "verified") actions.append(button("Undo", () => undoChange(entry)));
   li.append(el("span", "muted", when(entry.time)), el("span", null, changeTitle(entry)), el("span", look, word), actions, opens());

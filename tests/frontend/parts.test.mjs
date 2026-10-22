@@ -221,3 +221,11 @@ test('Add missing on the Changes page names every client it reached', () => {
   const steps = [{ client: 'codex', name: 'github' }, { client: 'codex', name: 'brandkit', reaches: ['codex', 'cursor'] }];
   assert.equal(changeTitle({ action: 'project.align', steps }), 'Added missing items · Codex, Cursor');
 });
+
+const { failedWord } = await import('../../src/kitden/web/static/js/parts.js');
+
+test('a failed change says "put back" only when the engine restored everything', () => {
+  assert.equal(failedWord('`claude mcp add` failed: x The original settings were restored.'), 'Failed, put back');
+  assert.equal(failedWord('boom `claude plugin install a` failed; a was not put back.'), 'Failed');
+  assert.equal(failedWord(null), 'Failed');
+});

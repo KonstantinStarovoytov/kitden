@@ -807,3 +807,133 @@ def test_a_folder_that_cannot_be_put_back_is_named_with_its_backup(tmp_path):
         assert digest(backup) == change.steps[0].removal.content_hash
     finally:
         locked.chmod(0o755)
+
+
+# One file with both a client command and a direct edit (final review of part 3) -------------
+
+
+class FakeCodexCli:
+    """Acts like `codex plugin add/remove` on config.toml, and keeps a cache folder like Codex."""
+
+    def __init__(self, config, cache, fail_on=()):
+        self.config = config
+        self.cache = cache
+        self.fail_on = fail_on
+        self.calls = []
+
+    def __call__(self, command, cwd):
+        self.calls.append(command)
+        if command in self.fail_on:
+            return CommandResult(returncode=1, output="refused")
+        text = self.config.read_text()
+        plugin = command[3]
+        if command[1:3] == ["plugin", "add"]:
+            text = toml_edit.set_value(text, ("plugins", plugin, "enabled"), True)
+            (self.cache / plugin).mkdir(parents=True)
+        elif command[1:3] == ["plugin", "remove"]:
+            text = toml_edit.delete_value(text, ("plugins", plugin))
+            (self.cache / plugin).rmdir()
+        self.config.write_text(text)
+        return CommandResult(returncode=0, output="{}")
+
+
+def codex_add(config, plugin):
+    edit = FileEdit(
+        path=str(config), fmt="toml", key=("plugins", plugin, "enabled"), after=True, check="entry"
+    )
+    return Step(
+        client="codex",
+        scope=Scope.USER,
+        name=plugin,
+        edit=edit,
+        mechanism="client_cli",
+        command=["codex", "plugin", "add", plugin, "--json"],
+        undo_command=["codex", "plugin", "remove", plugin],
+    )
+
+
+def test_undo_runs_the_inverse_command_on_a_file_with_a_direct_edit_too(tmp_path, config):
+    cli = FakeCodexCli(config, tmp_path / "cache")
+    engine = make_engine(tmp_path, run=cli)
+    steps = [codex_add(config, "lint@tools"), toml_step(config, ("mcp_servers", "gw"), GATEWAY)]
+    change = engine.preview("align", steps)
+    assert engine.apply(change.id).state is ChangeState.VERIFIED
+    assert engine.undo(change.id).state is ChangeState.UNDONE
+    assert cli.calls[-1] == ["codex", "plugin", "remove", "lint@tools"]
+    assert config.read_text() == CONFIG
+    assert not (tmp_path / "cache/lint@tools").exists()
+
+
+def test_a_failed_apply_runs_the_inverse_command_on_a_file_with_a_direct_edit_too(tmp_path, config):
+    fails = [["codex", "plugin", "add", "fmt@tools", "--json"]]
+    cli = FakeCodexCli(config, tmp_path / "cache", fail_on=fails)
+    engine = make_engine(tmp_path, run=cli)
+    steps = [
+        codex_add(config, "lint@tools"),
+        toml_step(config, ("mcp_servers", "gw"), GATEWAY),
+        codex_add(config, "fmt@tools"),
+    ]
+    change = engine.preview("align", steps)
+    assert engine.apply(change.id).state is ChangeState.RESTORED
+    assert cli.calls[-1] == ["codex", "plugin", "remove", "lint@tools"]
+    assert config.read_text() == CONFIG
+    assert not (tmp_path / "cache/lint@tools").exists()
+    assert change.error.endswith("The original settings were restored.")
+
+
+def test_a_failed_inverse_command_is_named_and_nothing_claims_a_restore(tmp_path, settings):
+    settings.write_text(json.dumps({"enabledPlugins": {"lint@tools": True, "fmt@tools": True}}))
+    cli = FakePluginCli(settings, fail_on="fmt@tools")
+    real = cli.__call__
+
+    def run(command, cwd):  # the reinstall of lint@tools fails too
+        if command[1:4] == ["plugin", "install", "lint@tools"]:
+            return CommandResult(returncode=1, output="offline")
+        return real(command, cwd)
+
+    engine = make_engine(tmp_path, run=run)
+    steps = [removal(settings, "lint@tools"), removal(settings, "fmt@tools")]
+    change = engine.preview("plugin.remove", steps)
+    assert engine.apply(change.id).state is ChangeState.RESTORED
+    assert "restored" not in change.error
+    assert (
+        "`claude plugin install lint@tools -s user --json` failed; lint@tools was not put back."
+        in change.error
+    )
+
+
+def test_a_backup_that_does_not_match_the_folder_removes_nothing(tmp_path, monkeypatch):
+    folder = tidy_folder(tmp_path)
+    before = digest(folder)
+    engine = make_engine(tmp_path)
+    real = engine.store.backup_folder
+
+    def bad_backup(change_id, path):
+        target = real(change_id, path)
+        (target / "SKILL.md").write_text("half\n")
+        return target
+
+    monkeypatch.setattr(engine.store, "backup_folder", bad_backup)
+    change = engine.preview("skill.remove", [removal_step(folder)])
+    assert engine.apply(change.id).state is ChangeState.RESTORED
+    assert digest(folder) == before
+    assert "the backup did not read back like the folder" in change.error
+
+
+def test_undo_stops_plainly_when_the_entry_cannot_be_set_back(tmp_path, settings):
+    settings.write_text(json.dumps({"enabledPlugins": {"lint@tools": False}}))
+    cli = FakePluginCli(settings)
+    engine = make_engine(tmp_path, run=cli)
+    change = engine.preview("plugin.remove", [removal(settings, "lint@tools")])
+    assert engine.apply(change.id).state is ChangeState.VERIFIED
+
+    def broken(command, cwd):  # the install leaves a file that is not JSON
+        cli(command, cwd)
+        settings.write_text("{not json")
+        return CommandResult(returncode=0, output="{}")
+
+    engine.run = broken
+    assert engine.undo(change.id).state is ChangeState.UNDO_BLOCKED
+    assert change.error == (
+        f"lint@tools is back, but {settings} could not be set as it was before. Check it by hand."
+    )

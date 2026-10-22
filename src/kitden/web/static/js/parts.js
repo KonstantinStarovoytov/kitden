@@ -266,6 +266,12 @@ export function skillRemoval(steps) {
   return { clients, oneCopy: !lose.length };
 }
 
+// The badge of a change that did not check out. The engine's error ends with this sentence
+// only when everything was put back as it was.
+export function failedWord(error) {
+  return (error || "").endsWith("The original settings were restored.") ? "Failed, put back" : "Failed";
+}
+
 // One line for a change log entry: what, which entries, which clients. Plugins go by their
 // short name ("superpowers"); the review named the exact entry before Apply.
 export function changeTitle(entry) {

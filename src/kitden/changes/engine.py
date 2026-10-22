@@ -164,14 +164,25 @@ def _undo_entries(steps: list[Step], data: bytes | None) -> bytes | None:
     return text.encode()
 
 
+def _by_command(step: Step) -> bool:
+    return step.mechanism == CLIENT_CLI and bool(step.undo_command)
+
+
 def _command_paths(steps: list[Step]) -> set[str]:
-    """Files whose every step is taken back by an inverse command, not by restoring bytes."""
+    """Files whose every step is taken back by an inverse command, not by restoring bytes.
+
+    On a file with both kinds of step, the inverse commands run first (an install leaves more
+    than the file behind), then the file gets its planned bytes.
+    """
     paths: dict[str, bool] = {}
     for step in steps:
         if step.edit is not None:
-            ok = step.mechanism == CLIENT_CLI and bool(step.undo_command)
-            paths[step.edit.path] = paths.get(step.edit.path, True) and ok
+            paths[step.edit.path] = paths.get(step.edit.path, True) and _by_command(step)
     return {path for path, ok in paths.items() if ok}
+
+
+def _shown(command: list[str]) -> str:
+    return " ".join(masked_command(command))
 
 
 def _encode(value: Any) -> dict:
@@ -571,23 +582,28 @@ class Engine:
             UnrecognizedFormatError,
         ) as error:
             # A step with an inverse command is taken back by that command (an install leaves
-            # more than the file behind); every other file gets its original bytes.
+            # more than the file behind); then every other file gets its original bytes.
             by_command = _command_paths(file_steps)
+            lost = []
             for step in reversed(ran):
-                if step.edit.path in by_command:
-                    if self.run(step.undo_command, step.cwd).returncode != 0:
-                        continue
-                    # A failure here must not stop the rest of the restore.
-                    with contextlib.suppress(
-                        OSError, RefusedWriteError, UnicodeDecodeError, UnrecognizedFormatError
-                    ):
-                        self._put_entry_back(step)
+                if not _by_command(step):
+                    continue
+                if self.run(step.undo_command, step.cwd).returncode != 0:
+                    shown = _shown(step.undo_command)
+                    lost.append(f"`{shown}` failed; {step.name} was not put back.")
+                    continue
+                if step.edit.path not in by_command:
+                    continue
+                # A failure here must not stop the rest of the restore.
+                try:
+                    self._put_entry_back(step)
+                except (OSError, RefusedWriteError, UnicodeDecodeError, UnrecognizedFormatError):
+                    lost.append(f"{step.name} could not be set as it was in {step.edit.path}.")
             for path, data in current.items():
                 if path not in by_command and _read(path) != data:
                     self._write(path, data)
             # A removed folder comes back from its backup. What a removal that stopped halfway
             # left is part of that backup, so it goes first.
-            lost = []
             for step in reversed(removed):
                 if not self._put_folder_back(step.removal):
                     lost.append(
@@ -651,6 +667,8 @@ class Engine:
         """
         removal = step.removal
         removal.backup_path = str(self.store.backup_folder(change_id, removal.path))
+        if digest(removal.backup_path) != removal.content_hash:
+            raise _ApplyError(f"{removal.path}: the backup did not read back like the folder")
         removed.append(step)
         remove_folder(removal.path)
         if os.path.lexists(removal.path):
@@ -726,7 +744,7 @@ class Engine:
         if change.state is not ChangeState.VERIFIED:
             change.move_to(ChangeState.UNDONE)  # raises: only a verified change can be undone
         by_command = _command_paths(change.steps)
-        by_path: dict[str, list[Step]] = {}
+        by_path: dict[str, list[Step]] = {}  # files that get planned bytes, after any command
         for step in change.steps:
             if step.edit is not None and step.edit.path not in by_command:
                 by_path.setdefault(step.edit.path, []).append(step)
@@ -797,20 +815,30 @@ class Engine:
         for step in reversed(removals):
             copy_folder(step.removal.backup_path, step.removal.path)
             tick()
-        # Inverse commands, last step first. An entry already gone needs no command.
+        # Inverse commands, last step first. An entry already gone needs no command. A file
+        # that also has direct edits gets its planned bytes afterwards.
         for step in reversed(change.steps):
-            if step.edit is None or step.edit.path not in by_command:
+            if step.edit is None or not _by_command(step):
                 continue
             if _value(step.edit, _read(step.edit.path)) is ABSENT and step.edit.before is ABSENT:
                 continue
             result = self.run(step.undo_command, step.cwd)
             if result.returncode != 0:
                 change.move_to(ChangeState.UNDO_BLOCKED)
-                shown = " ".join(step.undo_command[:4])
-                change.error = f"`{shown}` failed: {result.output}"
+                change.error = f"`{_shown(step.undo_command)}` failed: {result.output}"
                 self._finish(change)
                 return change
-            self._put_entry_back(step)
+            if step.edit.path in by_command:
+                try:
+                    self._put_entry_back(step)
+                except (OSError, RefusedWriteError, UnicodeDecodeError, UnrecognizedFormatError):
+                    change.move_to(ChangeState.UNDO_BLOCKED)
+                    change.error = (
+                        f"{step.name} is back, but {step.edit.path} could not be set as it was "
+                        "before. Check it by hand."
+                    )
+                    self._finish(change)
+                    return change
             self.on_write(step.edit.path, _sha(_read(step.edit.path)))
             tick()
         for path, data in plans.items():

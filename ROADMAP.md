@@ -48,6 +48,8 @@ What Kitden does today and what comes next. Ideas and bugs:
   reference where that client reads one.
 - **Add into one project:** a skill, or a Claude Code plugin, for that project only.
 - **Add missing:** in a project, one review adds what one client loads there and another lacks.
+- **Honest Undo:** Undo of a mixed change runs the client's own commands too, and a failed
+  Apply says what it could not put back.
 
 ### 0.2.0
 

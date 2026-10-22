@@ -1045,7 +1045,7 @@ function checkMark() {
 
 const STOPPED = {
   stale: "A file changed after the preview, so nothing was written. Preview again to see the current state.",
-  restored: "The change did not check out, so the original settings were put back.",
+  restored: "The change did not check out.",
 };
 // The states a change can end in after each verb. Read back in any other state it has not
 // ended, so the page cannot say how it went.
