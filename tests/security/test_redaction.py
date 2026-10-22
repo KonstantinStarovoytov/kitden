@@ -227,3 +227,26 @@ def test_redact_lines_hides_a_private_key_body():
     assert out[2] == SECRET and out[3] == SECRET
     # The end can be past the lines shown: the body is still hidden.
     assert redact_lines(lines[:3])[2] == SECRET
+
+
+@pytest.mark.parametrize(
+    "lines",
+    [
+        ["Admin password:", "hunter2hunter2", "Next."],
+        ["passwords:", "- hunter2hunter2", "- hunter3hunter3", "Next."],
+        ["**Password:**", "", "hunter2hunter2", "Next."],
+        ["token: |2", "  hunter2hunter2", "Next."],
+        ["  password: |", "\thunter2hunter2", "\thunter3hunter3", "Next."],
+        ["\tpassword: |", "\t\thunter2hunter2", "Next."],
+        [
+            "-----BEGIN PGP PRIVATE KEY BLOCK-----",
+            "hunter2hunter2",
+            "-----END PGP PRIVATE KEY BLOCK-----",
+            "Next.",
+        ],
+    ],
+)
+def test_redact_lines_hides_the_value_on_the_next_lines(lines):
+    out = redact_lines(lines)
+    assert not any("hunter" in line for line in out)
+    assert out[-1] == "Next."

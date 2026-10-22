@@ -146,9 +146,9 @@ _LINE_PAIR = re.compile(
 )
 _URL_USER = re.compile(r"(?i)\b([a-z][a-z0-9+.-]*://)[^\s/@]+@")
 # A value that goes on in the lines below: empty, or a YAML block marker.
-_BLOCK_START = re.compile(r"[|>][-+]?")
-_KEY_BEGIN = re.compile(r"-----BEGIN [A-Z0-9 ]*KEY-----")
-_KEY_END = re.compile(r"-----END [A-Z0-9 ]*KEY-----")
+_BLOCK_START = re.compile(r"[|>][-+0-9]*")
+_KEY_BEGIN = re.compile(r"-----BEGIN [A-Z0-9 ]*KEY( BLOCK)?-----")
+_KEY_END = re.compile(r"-----END [A-Z0-9 ]*KEY( BLOCK)?-----")
 
 
 def redact_line(line: str) -> str:
@@ -165,33 +165,46 @@ def redact_line(line: str) -> str:
 
 
 def _indent(line: str) -> int:
+    line = line.expandtabs(4)
     return len(line) - len(line.lstrip())
 
 
 def redact_lines(lines: list[str]) -> list[str]:
     """redact_line on each line, and values that span lines: the indented lines under a
     secret name with an empty value or a YAML block marker (`|`, `>-`), and the body of a
-    `-----BEGIN ... KEY-----` block, even when its end is not among the lines."""
+    `-----BEGIN ... KEY-----` block, even when its end is not among the lines. After an empty
+    value (or only `**`), the next line with text is hidden whatever its indent, and list
+    items (`- x`) at the name's indent go on hiding."""
     out = []
     block: int | None = None  # the indent of the secret name whose value goes on below
+    take_next = False  # the next line with text is the value
     in_key = False
     for line in lines:
         if in_key:
             in_key = not _KEY_END.search(line)
             out.append(line if not in_key else SECRET)
             continue
-        if block is not None and (not line.strip() or _indent(line) > block):
-            out.append(line if not line.strip() else SECRET)
+        if block is not None and not line.strip():
+            out.append(line)
             continue
-        block = None
+        if block is not None and (
+            take_next
+            or _indent(line) > block
+            or (_indent(line) == block and line.lstrip().startswith("- "))
+        ):
+            out.append(SECRET)
+            take_next = False
+            continue
+        block, take_next = None, False
         if _KEY_BEGIN.search(line):
             in_key = True
             out.append(line)
             continue
         m = _LINE_PAIR.search(line)
         value = m.group("value").strip() if m else ""
-        if m and (not value or _BLOCK_START.fullmatch(value)):
+        if m and (not value.strip("*_ ") or _BLOCK_START.fullmatch(value)):
             block = _indent(line)
+            take_next = not value.strip("*_ ")
         out.append(redact_line(line))
     return out
 
