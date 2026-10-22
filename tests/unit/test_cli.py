@@ -1,5 +1,11 @@
+import os
 import re
+import select
+import shutil
+import signal
 import socket
+import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -71,9 +77,6 @@ def test_serve_exits_2_without_a_free_port(monkeypatch):
 
 def test_start_link_is_visible_to_a_program_reading_the_output(tmp_path):
     """The link must be flushed even when stdout is a pipe, not a terminal."""
-    import subprocess
-    import sys
-
     process = subprocess.Popen(
         [sys.executable, "-m", "kitden", "serve", "--no-browser", "--home", str(tmp_path)],
         stdout=subprocess.PIPE,
@@ -273,11 +276,6 @@ def test_serve_removes_a_record_left_by_a_page_that_ended(tmp_path, monkeypatch)
 
 @pytest.mark.parametrize("signal_name", ["SIGTERM", "SIGINT"])
 def test_a_stopped_page_exits_cleanly_and_removes_its_record(tmp_path, signal_name):
-    import signal
-    import subprocess
-    import sys
-    import time
-
     process = subprocess.Popen(  # noqa: S603
         [sys.executable, "-m", "kitden", "serve", "--no-browser", "--home", str(tmp_path)],
         stdout=subprocess.DEVNULL,
@@ -418,15 +416,14 @@ def test_demo_takes_only_the_three_sizes():
     assert stopped.value.code == 2
 
 
-def test_a_second_ctrl_c_does_not_stop_the_delete(monkeypatch):
-    # `uv run` and `uvx` pass the program a second Ctrl+C a moment after the terminal's.
-    import shutil
-    import signal
-
+def test_a_second_stop_does_not_stop_the_delete(monkeypatch):
+    # `uv run` and `uvx` pass the program a second Ctrl+C about 200 ms after the terminal's
+    # (uv 0.10.10, checked 2026-10-22).
     seen, stopped = {}, []
     real = shutil.rmtree
 
     def rmtree(path, *args, **options):
+        seen["sigterm"] = signal.getsignal(signal.SIGTERM)
         try:
             signal.raise_signal(signal.SIGINT)
         except KeyboardInterrupt:
@@ -436,10 +433,51 @@ def test_a_second_ctrl_c_does_not_stop_the_delete(monkeypatch):
 
     monkeypatch.setattr(shutil, "rmtree", rmtree)
     _demo_run(monkeypatch, seen)
-    handler = signal.getsignal(signal.SIGINT)
+    handlers = signal.getsignal(signal.SIGINT), signal.getsignal(signal.SIGTERM)
     assert main(["demo", "--no-browser", "--size", "small"]) == 0
-    assert stopped == [] and not seen["home"].parent.exists()
-    assert signal.getsignal(signal.SIGINT) is handler
+    assert stopped == [] and seen["sigterm"] is signal.SIG_IGN
+    assert not seen["home"].parent.exists()
+    assert (signal.getsignal(signal.SIGINT), signal.getsignal(signal.SIGTERM)) == handlers
+
+
+def test_a_stop_while_the_sample_is_built_still_deletes_it(monkeypatch):
+    seen = {}
+    real = kitden.demo.build_demo_home
+
+    def build(root, size):
+        seen["home"] = real(root, size)
+        stop = signal.getsignal(signal.SIGTERM)
+        stop(signal.SIGTERM, None)  # what a SIGTERM does now
+        return seen["home"]
+
+    _demo_run(monkeypatch, seen, lambda *a, **kw: pytest.fail("served after a stop"))
+    monkeypatch.setattr(kitden.demo, "build_demo_home", build)
+    before = signal.getsignal(signal.SIGTERM)
+    with pytest.raises(SystemExit) as stopped:
+        main(["demo", "--no-browser", "--size", "small"])
+    assert stopped.value.code == 0
+    assert not seen["home"].parent.exists()
+    assert signal.getsignal(signal.SIGTERM) is before
+
+
+def test_a_folder_that_cannot_be_deleted_is_named(monkeypatch, capsys):
+    seen = {}
+    real = shutil.rmtree
+    monkeypatch.setattr(shutil, "rmtree", lambda path, **options: None)
+    _demo_run(monkeypatch, seen)
+    try:
+        assert main(["demo", "--no-browser", "--size", "small"]) == 0
+        folder = seen["home"].parent
+        assert capsys.readouterr().err == f"The sample folder was not deleted: {folder}\n"
+    finally:
+        real(seen["home"].parent)
+
+
+def _first_line(process, seconds=20):
+    """The program's first line, or a failure after `seconds`, not a hang."""
+    ready, _, _ = select.select([process.stdout], [], [], seconds)
+    assert ready, "the program printed nothing"
+    return process.stdout.readline()
 
 
 def _listening(port, seconds=20):
@@ -455,11 +493,6 @@ def _listening(port, seconds=20):
 
 @pytest.mark.parametrize("signal_name", ["SIGTERM", "SIGINT"])
 def test_a_stopped_demo_exits_cleanly_and_deletes_its_folder(tmp_path, signal_name):
-    import os
-    import signal
-    import subprocess
-    import sys
-
     process = subprocess.Popen(  # noqa: S603
         [sys.executable, "-m", "kitden", "demo", "--no-browser", "--size", "small"],
         stdout=subprocess.PIPE,
@@ -468,7 +501,7 @@ def test_a_stopped_demo_exits_cleanly_and_deletes_its_folder(tmp_path, signal_na
         env={**os.environ, "TMPDIR": str(tmp_path)},  # the sample is made here
     )
     try:
-        port = int(re.search(r"127\.0\.0\.1:(\d+)/", process.stdout.readline()).group(1))
+        port = int(re.search(r"127\.0\.0\.1:(\d+)/", _first_line(process)).group(1))
         assert [p.name[:12] for p in tmp_path.iterdir()] == ["kitden-demo-"]
         assert _listening(port)
         process.send_signal(getattr(signal, signal_name))

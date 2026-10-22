@@ -12,7 +12,7 @@ import tempfile
 import time
 import webbrowser
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 from kitden import __version__, page
@@ -70,20 +70,29 @@ def run_server(
     )
     # uvicorn shuts down on Ctrl+C or SIGTERM, then sends the signal again to the handler that was
     # there before. Make that a clean exit, so the caller's cleanup runs and the exit code is 0.
-    previous = signal.getsignal(signal.SIGTERM)
-    with contextlib.suppress(ValueError):  # only the main thread may set handlers
-        signal.signal(signal.SIGTERM, _exit_cleanly)
-    try:
+    with _signals({signal.SIGTERM: _exit_cleanly}), contextlib.suppress(KeyboardInterrupt):
         Server(config).run()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        with contextlib.suppress(ValueError):
-            signal.signal(signal.SIGTERM, previous)
 
 
 def _exit_cleanly(signum, frame) -> None:
     raise SystemExit(0)
+
+
+@contextlib.contextmanager
+def _signals(handlers: dict) -> Iterator[None]:
+    """Use these signal handlers for a while, then the old ones again. Only the main thread may
+    set handlers; elsewhere nothing changes."""
+    previous = {}
+    try:
+        for signum, handler in handlers.items():
+            previous[signum] = signal.signal(signum, handler)
+    except ValueError:
+        pass
+    try:
+        yield
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
 
 
 def _home(args: argparse.Namespace) -> Path | None:
@@ -168,52 +177,50 @@ def _demo(args: argparse.Namespace) -> int:
     from kitden import demo  # looked up here, so tests can stand in for the builder
     from kitden.web.app import create_app
 
-    # Resolved: on macOS the temp folder is under /var, a link to /private/var.
-    folder = Path(tempfile.mkdtemp(prefix="kitden-demo-")).resolve()
-    try:
-        home = demo.build_demo_home(folder, args.size)
-        port = pick_port(DEMO_PORT)
-        if port is None:
-            print(f"No free port from {DEMO_PORT}.", file=sys.stderr)
-            return EXIT_NO_PORT
-        token = secrets.token_urlsafe(32)
-        app = create_app(
-            demo.demo_build(home),
-            token=token,
-            port=port,
-            watch_folders=[home / name for name in WATCHED],
-            flat_folders=[home],
-            home=home,
-            first_scan_later=True,
-            quick_first=True,
-            demo=True,
-        )
-        url = f"http://{HOST}:{port}/?token={token}"
-        print(f"Kitden demo is running on a sample setup. Open: {url}", flush=True)
-        print("Press Ctrl+C to stop. The sample folder is deleted then.", flush=True)
+    # A SIGTERM at any point, also while the sample is built, ends here cleanly: the folder goes.
+    with _signals({signal.SIGTERM: _exit_cleanly}):
+        # Resolved: on macOS the temp folder is under /var, a link to /private/var.
+        folder = Path(tempfile.mkdtemp(prefix="kitden-demo-")).resolve()
+        try:
+            home = demo.build_demo_home(folder, args.size)
+            port = pick_port(DEMO_PORT)
+            if port is None:
+                print(f"No free port from {DEMO_PORT}.", file=sys.stderr)
+                return EXIT_NO_PORT
+            token = secrets.token_urlsafe(32)
+            app = create_app(
+                demo.demo_build(home),
+                token=token,
+                port=port,
+                watch_folders=[home / name for name in WATCHED],
+                flat_folders=[home],
+                home=home,
+                first_scan_later=True,
+                quick_first=True,
+                demo=True,
+            )
+            url = f"http://{HOST}:{port}/?token={token}"
+            print(f"Kitden demo is running on a sample setup. Open: {url}", flush=True)
+            print("Press Ctrl+C to stop. The sample folder is deleted then.", flush=True)
 
-        def started() -> None:
-            if not args.no_browser:
-                webbrowser.open(url)
+            def started() -> None:
+                if not args.no_browser:
+                    webbrowser.open(url)
 
-        run_server(app, HOST, port, on_started=started)
-        return 0
-    finally:
-        _delete(folder)
+            run_server(app, HOST, port, on_started=started)
+            return 0
+        finally:
+            _delete(folder)
 
 
 def _delete(folder: Path) -> None:
-    """Delete the demo's folder. A Ctrl+C meanwhile does not stop it: `uv run` and `uvx` pass the
-    program a second one a moment after the terminal's."""
-    try:
-        previous = signal.signal(signal.SIGINT, signal.SIG_IGN)
-    except ValueError:  # only the main thread may set handlers
-        previous = None
-    try:
+    """Delete the demo's folder; a second Ctrl+C or a SIGTERM meanwhile does not stop it.
+    `uv run` and `uvx` pass the program a second Ctrl+C about 200 ms after the terminal's
+    (uv 0.10.10, checked 2026-10-22). A folder that stays is named."""
+    with _signals({signal.SIGINT: signal.SIG_IGN, signal.SIGTERM: signal.SIG_IGN}):
         shutil.rmtree(folder, ignore_errors=True)
-    finally:
-        if previous is not None:
-            signal.signal(signal.SIGINT, previous)
+    if folder.exists():
+        print(f"The sample folder was not deleted: {folder}", file=sys.stderr)
 
 
 def _print_summary(inventory: Inventory) -> None:
