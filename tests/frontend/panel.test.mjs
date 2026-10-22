@@ -5,7 +5,7 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; panel.js must load there too.
 delete globalThis.navigator;
-const { afterParts, alignGroups, countedDefinition, changeOutcome, chosenKeys, callsText, changeWords, footerActions, heldActions, offerLabel, layerState, leftOutText, kindWord, loadsLede, moveFor, moveTargets, plainSecrets, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
+const { afterParts, alignGroups, canShowReview, countedDefinition, changeOutcome, chosenKeys, callsText, changeWords, footerActions, heldActions, offerLabel, layerState, leftOutText, kindWord, loadsLede, moveFor, moveTargets, plainSecrets, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
 const { addOptions, whyNoAction } = await import('../../src/kitden/web/static/js/offer.js');
 const { data } = await import('../../src/kitden/web/static/js/store.js');
 
@@ -535,4 +535,12 @@ test('Details shows the tool count once, from a definition in the Kitden gateway
   assert.equal(countedDefinition([direct, held, { ...held, client: 'claude_code' }]), held);
   assert.equal(countedDefinition([direct]), null);
   assert.equal(countedDefinition([{ ...held, tools: null }]), null);
+});
+
+test('an Add missing list with nothing chosen shows as a review, not an error', () => {
+  assert.equal(canShowReview({ ok: true, data: { id: 'c1', steps: [] } }), true);
+  assert.equal(canShowReview({ ok: true, data: { action: 'project.align', steps: [], after: [], align: { candidates: [] } } }), true);
+  assert.equal(canShowReview({ ok: true, data: { steps: [] } }), false);
+  assert.equal(canShowReview({ ok: false, data: { detail: 'Unknown project.' } }), false);
+  assert.equal(canShowReview(null), false);
 });

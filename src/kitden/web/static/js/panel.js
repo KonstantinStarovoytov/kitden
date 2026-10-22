@@ -949,9 +949,16 @@ export function leftOutText(leftOut) {
 // `note` shows as a callout above the result, for example that an add is for every project.
 // `back({ error, verified })` returns to the Details the review came from (a tool switch):
 // after Cancel, after Apply is verified, or with the reason the preview was refused.
+// A preview answer the review can show: a change, or an Add missing list with nothing chosen
+// (no change yet, so no id; Apply waits for a box).
+export function canShowReview(result) {
+  const data = result && result.ok ? result.data : null;
+  return Boolean(data && (data.id || (data.align && Array.isArray(data.steps))));
+}
+
 export async function review(previewBody, { note = null, back = null } = {}) {
   const result = await postJson("/api/changes/preview", previewBody);
-  if (!result.ok || !result.data || !result.data.id) {
+  if (!canShowReview(result)) {
     const reason = (result.data && result.data.detail) || `Could not prepare this change (${result.status}).`;
     if (back) {
       await back({ error: reason });
