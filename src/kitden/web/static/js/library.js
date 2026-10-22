@@ -425,6 +425,12 @@ function toolbar(kind, answer) {
     toggle.dataset.focus = "filter:attention";
     bar.append(toggle);
   }
+  // In a project: one review that adds what one client loads there and another lacks.
+  if (state.project) {
+    const missing = button("Add missing…", () => review({ action: "project.align", targets: [], params: { project: state.project, chosen: null } }), "btn small");
+    missing.dataset.focus = "add:missing";
+    bar.append(missing);
+  }
   if (kind === "marketplace") {
     const add = button("Add a marketplace…", () => marketplaceForm(), "btn small");
     add.dataset.focus = "add:marketplace";

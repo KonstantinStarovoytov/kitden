@@ -877,6 +877,7 @@ def put_back_steps(
 
 
 MCP_ADD = "mcp.add"  # a direct server one client has, added to other clients
+PROJECT_ALIGN = "project.align"  # what one client loads in a project, added to the others
 
 
 def add_server_steps(

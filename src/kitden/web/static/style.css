@@ -195,6 +195,7 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .checks { display: flex; gap: 14px; align-items: center; border: 0; padding: 0; margin: 0; }
 .checks legend { color: var(--ink-3); font-size: 12px; padding: 0; margin-bottom: 4px; }
 .checks label { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; cursor: pointer; }
+.checks.list { flex-direction: column; align-items: flex-start; gap: 2px; margin-bottom: 10px; }
 /* A note on its own line between the clients and Preview. It stays in the page so a screen reader
    hears it change; empty, it is a zero-width item that takes back its gap. */
 .form .also { flex: 1 0 100%; margin: 0; }

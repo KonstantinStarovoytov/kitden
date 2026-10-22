@@ -230,6 +230,7 @@ const ACTION_WORDS = {
   "gateway.remove": "Removed",
   "gateway.put_back": "Put back",
   "mcp.add": "Added",
+  "project.align": "Added missing items",
 };
 
 // A Kitden gateway rule in words: "slow of echo in website", as the review's after line says
@@ -294,7 +295,7 @@ export function changeTitle(entry) {
   }
   // A plugin's skills can be many; the line counts them, the change lists them.
   if (entry.action === "plugin.skills") return `${verb} ${plural(names.length, "skill", "skills")} · ${clients.join(", ")}`;
-  const whole = ["gateway.connect", "gateway.switch", "setup_server.register", "setup_server.update"].includes(entry.action);
+  const whole = ["gateway.connect", "gateway.switch", "setup_server.register", "setup_server.update", "project.align"].includes(entry.action);
   const what = whole ? "" : ` ${names.join(", ")}`;
   if (kitden) return `${verb}${what} into the Kitden gateway · ${clients.join(", ")}`;
   return `${verb}${what} · ${clients.join(", ")}`;

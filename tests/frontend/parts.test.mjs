@@ -216,3 +216,8 @@ test('the Changes page names a server removed from or put back from the Kitden g
 test('the Changes page names a server added to another client', () => {
   assert.equal(changeTitle({ action: 'mcp.add', steps: [{ client: 'codex', name: 'github' }] }), 'Added github · Codex');
 });
+
+test('Add missing on the Changes page names every client it reached', () => {
+  const steps = [{ client: 'codex', name: 'github' }, { client: 'codex', name: 'brandkit', reaches: ['codex', 'cursor'] }];
+  assert.equal(changeTitle({ action: 'project.align', steps }), 'Added missing items · Codex, Cursor');
+});

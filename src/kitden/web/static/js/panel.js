@@ -798,6 +798,11 @@ export function changeWords(change, previewBody) {
     what = `${verb} ${server} back in ${clients}`;
   } else if (change.action === "plugin.skills") {
     what = `${verb} ${plural(steps.length, "skill", "skills")} to ${clients}`;
+  } else if (change.action === "project.align") {
+    const folder = projectLabel(previewBody && previewBody.params && previewBody.params.project);
+    const chosen = ((change.align && change.align.candidates) || []).filter((c) => c.chosen);
+    title = `Add what ${folder} is missing`;
+    what = `Added ${plural(chosen.length, "item", "items")} for ${folder}`;
   }
   // An add into one project says which.
   const into = previewBody && previewBody.params && previewBody.params.project;
@@ -809,6 +814,69 @@ export function changeWords(change, previewBody) {
     .map((note) => note.replace(/,? for this to take effect\.?$/, ""));
   const after = notes.length > 1 ? [`Restart or reload ${clients}`] : notes;
   return { title, done: [what, ...after].join(" · ") };
+}
+
+// Add missing: the candidates as checkboxes, one group per client that lacks them, in client
+// order. Each label says what, from which client, and where it goes.
+const PLACE_WORDS = { project: "this project", all: "all projects" };
+export function alignGroups(align) {
+  return CLIENT_ORDER.map((client) => ({
+    client,
+    name: clientName(client),
+    items: align.candidates.filter((c) => c.to === client).map((c) => ({
+      key: c.key,
+      label: `${c.name} · ${KIND_WORDS[c.kind]} · from ${clientName(c.from)} · ${PLACE_WORDS[c.place]}`,
+      chosen: c.chosen,
+    })),
+  })).filter((group) => group.items.length);
+}
+
+// The chosen keys once one box changes, in candidate order.
+export function chosenKeys(align, key, checked) {
+  return align.candidates.filter((c) => (c.key === key ? checked : c.chosen)).map((c) => c.key);
+}
+
+// The Add missing checklist. A change cancels this preview and asks for a new one with the new
+// choice; with nothing chosen there is nothing to preview, so Apply waits for a box.
+function alignSection(change, previewBody, note, apply) {
+  const section = el("section", "align");
+  for (const group of alignGroups(change.align)) {
+    const set = el("fieldset", "checks list");
+    set.append(el("legend", null, `Add to ${group.name}`));
+    for (const item of group.items) {
+      const label = el("label");
+      const box = el("input");
+      box.type = "checkbox";
+      box.checked = item.chosen;
+      box.dataset.key = item.key;
+      box.addEventListener("change", async () => {
+        const chosen = chosenKeys(change.align, item.key, box.checked);
+        cancelPreview();
+        apply.disabled = true;
+        change.align.candidates = change.align.candidates.map((c) => ({ ...c, chosen: chosen.includes(c.key) }));
+        change.state = "cancelled";
+        if (!chosen.length) {
+          if (!section.querySelector(".none")) section.append(el("p", "note none", "Choose at least one item."));
+          return;
+        }
+        await review({ ...previewBody, params: { ...previewBody.params, chosen } }, { note });
+        const again = $$("#drawer input[type=checkbox]").find((b) => b.dataset.key === item.key);
+        if (again) again.focus();
+      });
+      label.append(box, el("span", null, item.label));
+      set.append(label);
+    }
+    section.append(set);
+  }
+  const notSame = change.align.not_same || [];
+  if (notSame.length) {
+    const list = el("ul", "checklist");
+    for (const n of notSame) list.append(el("li", null, `${n.name} · ${KIND_WORDS[n.kind]} · ${n.clients.map(clientName).join(", ")}`));
+    section.append(el("h2", null, "Not the same; not touched"), list);
+  }
+  const leftOut = leftOutText(change.align.left_out);
+  if (leftOut) section.append(el("p", "muted", leftOut));
+  return section;
 }
 
 // What Add skills does not copy, as one plain line; empty when it copies every skill.
@@ -886,6 +954,8 @@ function showReview(change, previewBody, note, back = null) {
   if (note) body.append(callout(note));
   if (change.after && change.after.length) body.append(afterLine(change.after));
   if (change.shared_file_warning) body.append(callout("This edits a project file that is usually shared through git."));
+  const apply = el("button", "btn primary apply");
+  if (change.align) body.append(alignSection(change, previewBody, note, apply));
   // The result comes first; the file change and the command wait behind one summary.
   const files = el("details", "file-change");
   const summary = el("summary", null, change.steps.length > 1 ? "Show file changes" : "Show file change");
@@ -922,7 +992,6 @@ function showReview(change, previewBody, note, back = null) {
     cancelPreview();
     return back();
   }, "btn");
-  const apply = el("button", "btn primary apply");
   apply.type = "button";
   const label = el("span", "label", "Apply");
   apply.append(label);
@@ -943,6 +1012,7 @@ function brokeAfterAnswer(error) {
 function lockReview(locked, apply, cancel) {
   apply.disabled = locked;
   cancel.disabled = locked;
+  for (const box of $$("#drawer .align input")) box.disabled = locked;
   cancel.hidden = locked;
   const close = $("#drawer header .top button");
   if (close) {
@@ -1049,6 +1119,7 @@ async function applyChange(change, { apply, cancel, label, body }) {
     meter.remove();
   }
   const { after, failure } = outcome;
+  if (after && change.align) after.align = change.align;
   if (after && current) current.change = after;
 
   if (!after || after.state !== "verified") {

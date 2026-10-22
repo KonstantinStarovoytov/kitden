@@ -5,7 +5,7 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; panel.js must load there too.
 delete globalThis.navigator;
-const { afterParts, changeOutcome, callsText, changeWords, footerActions, heldActions, offerLabel, leftOutText, loadsLede, moveFor, moveTargets, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
+const { afterParts, alignGroups, changeOutcome, chosenKeys, callsText, changeWords, footerActions, heldActions, offerLabel, leftOutText, loadsLede, moveFor, moveTargets, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
 const { addOptions, whyNoAction } = await import('../../src/kitden/web/static/js/offer.js');
 const { data } = await import('../../src/kitden/web/static/js/store.js');
 
@@ -469,4 +469,20 @@ test('removing from or putting back from the Kitden gateway is named', () => {
 
 test('a server added to another client is named', () => {
   assert.deepEqual(changeWords({ action: 'mcp.add', steps: [{ client: 'codex', name: 'github' }] }), { title: 'Add github to Codex', done: 'Added github to Codex' });
+});
+
+test('the align review groups what each client lacks and keeps the choice', () => {
+  const align = { candidates: [
+    { key: 'mcp_server:github:codex', kind: 'mcp_server', name: 'github', from: 'claude_code', to: 'codex', place: 'all', chosen: true },
+    { key: 'skill:brandkit:cursor', kind: 'skill', name: 'brandkit', from: 'claude_code', to: 'cursor', place: 'project', chosen: false },
+  ], not_same: [], left_out: [] };
+  assert.deepEqual(alignGroups(align), [
+    { client: 'codex', name: 'Codex', items: [{ key: 'mcp_server:github:codex', label: 'github · MCP server · from Claude Code · all projects', chosen: true }] },
+    { client: 'cursor', name: 'Cursor', items: [{ key: 'skill:brandkit:cursor', label: 'brandkit · Skill · from Claude Code · this project', chosen: false }] },
+  ]);
+  assert.deepEqual(chosenKeys(align, 'skill:brandkit:cursor', true), ['mcp_server:github:codex', 'skill:brandkit:cursor']);
+  assert.deepEqual(chosenKeys(align, 'mcp_server:github:codex', false), []);
+  data.projects = [{ id: 'p1', path: '/Users/me/work/website' }];
+  assert.deepEqual(changeWords({ action: 'project.align', steps: [{ client: 'codex', name: 'github' }], align }, { params: { project: 'p1' } }), { title: 'Add what website is missing', done: 'Added 1 item for website' });
+  data.projects = null;
 });

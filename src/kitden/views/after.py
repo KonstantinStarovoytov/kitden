@@ -1,6 +1,7 @@
 """What each client shows after a change: the first line of the review (feature 004)."""
 
 import os
+from dataclasses import replace
 from pathlib import Path
 
 from kitden.changes.actions import (
@@ -10,6 +11,7 @@ from kitden.changes.actions import (
     GATEWAY_RULES,
     GATEWAY_STRICT,
     MCP_ADD,
+    PROJECT_ALIGN,
     claude_allows_kitden,
 )
 from kitden.changes.json_splice import ABSENT
@@ -574,6 +576,20 @@ def _add_server_words(change: Change, home: Path) -> list[dict]:
     return out
 
 
+def _align_words(change: Change, inventory, skills: list[dict]) -> list[dict]:
+    """Add missing: each client a step writes to, or a copied skill folder reaches, loads what
+    it gets. A client that then reads a skill in two folders says so, as for a single copy."""
+    reached = {s.client for s in change.steps}
+    reached |= {c for s in change.steps if s.copy for c in s.copy.readers}
+    copies = replace(change, steps=[s for s in change.steps if s.copy])
+    twice = {e["client"]: e for e in _skill_words(copies, inventory, skills) if "note" in e}
+    return [
+        twice.get(c, {"client": c, "state": "on", "word": "Loads"})
+        for c in SKILL_CLIENTS
+        if c in reached
+    ]
+
+
 def after_words(
     change: Change,
     inventory,
@@ -604,6 +620,8 @@ def after_words(
         return _put_back_words(change, inventory, home)
     if change.action == MCP_ADD and home is not None:
         return _add_server_words(change, home)
+    if change.action == PROJECT_ALIGN:
+        return _align_words(change, inventory, skills or [])
     # A move into a registered gateway has that gateway's own step; one into the Kitden
     # gateway has none, also when the gateway holds the server already.
     if change.action == "gateway.move" and not any(

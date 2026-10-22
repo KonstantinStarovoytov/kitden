@@ -30,6 +30,7 @@ from kitden.changes.actions import (
     MCP_ADD,
     PLUGIN_INSTALL,
     PLUGIN_SKILLS,
+    PROJECT_ALIGN,
     SETUP_SERVER_UPDATE,
     SKILL_INSTALL,
     add_server_steps,
@@ -51,6 +52,7 @@ from kitden.changes.actions import (
     tools_to_read,
     update_steps,
 )
+from kitden.changes.align import align_steps
 from kitden.changes.backup import ChangeStore
 from kitden.changes.client_cli import CommandRunner
 from kitden.changes.engine import ChangeRefusedError, Engine, NothingToChangeError, Runner
@@ -769,6 +771,7 @@ def create_app(
         params = body.get("params") if isinstance(body.get("params"), dict) else {}
         left_out = None
         copied = None  # the skill list's rows a skill copy takes, for the review's first line
+        align = None  # Add missing: what each client lacks, for the review's checkboxes
         try:
             if action == GATEWAY_CONNECT:
                 gateway = next(
@@ -898,6 +901,17 @@ def create_app(
                     return _error("Choose a known server.", 422)
                 clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
                 steps = add_server_steps(adapters, item, clients)
+            elif action == PROJECT_ALIGN:
+                folder = _project_param(params)
+                if folder is None:
+                    return _error("Unknown project.", 422)
+                found = {c["id"] for c in state.data["clients"] if c["status"] == "found"}
+                wanted = params.get("chosen")
+                chosen = [str(k) for k in wanted] if isinstance(wanted, list) else None
+                steps, align = await asyncio.to_thread(
+                    align_steps, state.inventory, adapters, folder, found, chosen
+                )
+                copied = skill_catalog(state.inventory, adapters)
             elif action == GATEWAY_MOVE:
                 gateway = next(
                     (g for g in load_gateways(home) if g.id == params.get("gateway")), None
@@ -945,6 +959,8 @@ def create_app(
         answer = {**change_dict(change), "after": after}
         if left_out is not None:
             answer["left_out"] = left_out
+        if align is not None:
+            answer["align"] = align
         return JSONResponse(answer)
 
     async def change_action(request: Request) -> JSONResponse:
