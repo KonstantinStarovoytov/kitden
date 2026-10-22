@@ -208,9 +208,12 @@ def test_commands_in_sub_folders_are_named_with_a_colon(tmp_path, no_version):
     assert names == {"review", "frontend:component", "deploy"}
 
 
-def test_the_home_folder_as_a_project_gives_no_project_rows(tmp_path, no_version):
+def test_the_home_folder_as_a_project_keeps_only_its_root_files(tmp_path, no_version):
     home = make_home(tmp_path, FIXTURE)
+    (home / "CLAUDE.md").write_text("x")
+    (home / "CLAUDE.local.md").write_text("x")
     state = json.loads((home / ".claude.json").read_text())
     state["projects"][str(home)] = {}
     (home / ".claude.json").write_text(json.dumps(state))
-    assert str(home) not in {i[3] for i in _instructions(home, no_version)}
+    in_home = {(i[1], i[2]) for i in _instructions(home, no_version) if i[3] == str(home)}
+    assert in_home == {("CLAUDE.md", "instructions"), ("CLAUDE.local.md", "instructions")}

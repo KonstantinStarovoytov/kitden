@@ -153,6 +153,7 @@ def expand(folder: Path, category: str, glob: str = "*.md") -> list[tuple[Path, 
 
     The name is the path inside `folder` without the extension, sub-folders joined by ":"
     (`frontend/component.md` -> `frontend:component`). Hidden files and folders are skipped.
+    Symlinked sub-folders are not followed, so a link loop cannot hang the scan.
     """
     if not folder.is_dir():
         return []
@@ -165,8 +166,8 @@ def expand(folder: Path, category: str, glob: str = "*.md") -> list[tuple[Path, 
 
 
 def is_home(folder: Path, home: Path) -> bool:
-    """True when a project folder is the home folder: its instruction files are the user's own,
-    so project readers skip it (as project_chain does)."""
+    """True when a project folder is the home folder. Project readers then skip the files that
+    are already read for the user (for example `~/.claude/CLAUDE.md`)."""
     return os.path.realpath(folder) == os.path.realpath(home)
 
 

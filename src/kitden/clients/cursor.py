@@ -423,13 +423,9 @@ class CursorAdapter(ClientAdapter):
         )
         for path in workspaces:
             root = Path(path)
-            if is_home(root, self.home):
-                continue
-            files = [
-                *expand(root / ".cursor/rules", "instructions", "*.mdc"),
-                (root / ".cursorrules", "instructions"),
-                (root / "AGENTS.md", "instructions"),
-            ]
+            files = [(root / ".cursorrules", "instructions"), (root / "AGENTS.md", "instructions")]
+            if not is_home(root, self.home):  # the home folder's rules are the user's own
+                files += expand(root / ".cursor/rules", "instructions", "*.mdc")
             items += instruction_items(CLIENT, files, Scope.PROJECT, CLIENT, project=path)
         return items
 

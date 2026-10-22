@@ -501,15 +501,13 @@ class ClaudeCodeAdapter(ClientAdapter):
             )
         items += self._hooks(settings, settings_path, Scope.PROJECT, project=path)
         items += skill_items(CLIENT, root / ".claude/skills", Scope.PROJECT, CLIENT, project=path)
+        # checked 2026-10-22 (code.claude.com/docs/en/memory): a project's CLAUDE.md and
+        # CLAUDE.local.md at its root, besides the files in its `.claude` folder. When the
+        # project is the home folder, its `.claude` files are the user's own and are skipped.
+        files = [(root / "CLAUDE.md", "instructions"), (root / "CLAUDE.local.md", "instructions")]
         if not is_home(root, self.home):
-            # checked 2026-10-22 (code.claude.com/docs/en/memory): a project's CLAUDE.md and
-            # CLAUDE.local.md at its root, besides the files in its `.claude` folder.
-            files = [
-                (root / "CLAUDE.md", "instructions"),
-                (root / "CLAUDE.local.md", "instructions"),
-                *_instruction_files(root / ".claude"),
-            ]
-            items += instruction_items(CLIENT, files, Scope.PROJECT, CLIENT, project=path)
+            files += _instruction_files(root / ".claude")
+        items += instruction_items(CLIENT, files, Scope.PROJECT, CLIENT, project=path)
         return items
 
     def _plugin_parts(self, read: Reader, root: Path, enabled: Enabled) -> list[Item]:

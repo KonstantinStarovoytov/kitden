@@ -26,7 +26,6 @@ from kitden.clients.base import (
     file_source,
     instruction_items,
     is_direct_entry,
-    is_home,
     is_own_skill,
     mcp_item,
     project,
@@ -431,9 +430,9 @@ class CodexAdapter(ClientAdapter):
             scan.projects.append(project(path, CLIENT))
             trusted = _dict(settings).get("trust_level") == "trusted"
             scan.items += self._project(read, Path(path), trusted)
-            if not is_home(Path(path), self.home):
-                files = _agents_md(Path(path))
-                scan.items += instruction_items(CLIENT, files, Scope.PROJECT, CLIENT, project=path)
+            # The user's file lives in codex_home, so a home-folder project's files are its own.
+            files = _agents_md(Path(path))
+            scan.items += instruction_items(CLIENT, files, Scope.PROJECT, CLIENT, project=path)
 
         scan.problems = read.problems
         return scan

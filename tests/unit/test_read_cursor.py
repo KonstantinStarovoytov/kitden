@@ -204,10 +204,14 @@ def test_scan_reads_rules_cursorrules_and_agents_md(tmp_path, no_version):
     }
 
 
-def test_the_home_folder_as_a_cursor_project_gives_no_project_rows(tmp_path, no_version):
+def test_the_home_folder_as_a_cursor_project_skips_only_the_user_rules(tmp_path, no_version):
     home = make_home(tmp_path, FIXTURE)
     (home / "AGENTS.md").write_text("x")
+    (home / ".cursorrules").write_text("x")
+    (home / ".cursor/rules").mkdir()
+    (home / ".cursor/rules/mine.mdc").write_text("x")
     write_cursor_fixture_state(home, {INSTALLED_PREFIX + f"123|file://{home}": []})
     scan = CursorAdapter(home, read_version=no_version).scan()
-    assert str(home) in {p.path for p in scan.projects}
-    assert str(home) not in {i[3] for i in _instructions(scan)}
+    in_home = {i[1] for i in _instructions(scan) if i[3] == str(home)}
+    assert in_home == {"AGENTS.md", ".cursorrules"}
+    assert (Scope.USER, "mine") in {(i[0], i[1]) for i in _instructions(scan)}
