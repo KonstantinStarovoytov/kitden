@@ -44,7 +44,7 @@ Every client mark is the same rounded tile (24 px, radius 6, raised-panel backgr
 
 Preserve the compact information layout. Use restrained neutral panels, fine borders and the existing 6–10 px corner radii. Primary actions use the action fill. Selected navigation uses a tinted background, accent text and a brand-colored inset bar. Tabs and selected filters use the same accent family. Tables, drawer, forms, loading, toast and empty states inherit shared tokens; no page-specific blue accents.
 
-On Overview, an option ("Can improve") is a quiet card: `.issue.suggestion` has no warning border and a plain button, not the primary one.
+On Overview, an option ("Can improve") is a quiet card: `.issue.suggestion` has no warning border and a plain button, not the primary one. A card with no button (a file Kitden could not read) keeps its title and sentence in the wide column.
 
 A row that opens Details ends with a quiet › and the hidden words "Open details" (`opens()` in `parts.js`). The chevron turns accent on hover and keyboard focus; it does not move. The search box names what it searches: "Search your setup and marketplaces…". In `kitden demo` a quiet "Demo" flag (`.flag.info`) follows the wordmark; its hover text says the setup is a sample in a temporary folder. The page reads `/api/about` once to know.
 

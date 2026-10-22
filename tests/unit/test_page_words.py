@@ -894,3 +894,10 @@ def test_a_demo_says_so_quietly_in_the_rail():
     hover = "A sample setup in a temporary folder. Your own settings are not read or changed."
     assert hover in parts
     assert "Demo" not in INDEX  # only a demo's answer adds it
+
+
+def test_an_issue_card_without_a_button_keeps_its_words_in_the_wide_column():
+    # An unreadable file has no action; left to the grid, its title fell into a 0 px column.
+    for selector in (".issue h3", ".issue p"):
+        rule = re.search(rf"^{re.escape(selector)} \{{([^}}]*)\}}", CSS, re.MULTILINE)
+        assert rule and "grid-column: 1;" in rule.group(1), selector
