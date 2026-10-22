@@ -94,7 +94,8 @@ one tool on or off for that project, or for all projects. A project's switches a
 folders and git worktrees, unless they have their own. In a folder Kitden does not know as a
 project, the All projects switches apply. Claude Code and Codex can turn a tool
 off in one project, Cursor cannot (checked 2026-10-21); the gateway gives the same control in all
-three. A held server's Details offer "Remove from the Kitden gateway…", which takes its switches
+three. A server in the gateway shows how many tools it adds, once Kitden has asked it. A held
+server's Details offer "Remove from the Kitden gateway…", which takes its switches
 too and makes open sessions refuse its tools at once, and "Put back in <client>…", which writes its
 entry into that client again.
 
@@ -144,7 +145,7 @@ a change to take effect.
 ### Let your agents ask
 
 **Agents** adds the Kitden MCP server to Claude Code, Codex or Cursor, so you can ask your agent
-"show my setup". Kitden's own tools only read.
+"show my setup" or "which instruction files does this project have". Kitden's own tools only read.
 Servers moved into the gateway add their tools, which do what those servers do.
 
 ## Install
