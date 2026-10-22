@@ -14,8 +14,9 @@ names it its own way:
 
 - Claude Code sets CLAUDE_PROJECT_DIR in the server's environment, so a user-scope entry
   must write `${CLAUDE_PROJECT_DIR:-.}` (checked 2026-10-22, code.claude.com/docs/en/mcp).
-- Cursor fills in `${workspaceFolder}` in command, args, env, url and headers (checked
-  2026-10-22, cursor.com/docs/context/mcp).
+- Cursor fills in `${workspaceFolder}` in command, args, env, url and headers, as the folder
+  that holds the mcp.json file (checked 2026-10-22, cursor.com/docs/context/mcp). In the user
+  file ~/.cursor/mcp.json that is the home folder, not the project, so such an entry is refused.
 - Codex has no project folder variable in an MCP entry, only a fixed `cwd` (checked
   2026-10-22, learn.chatgpt.com/docs/extend/mcp), so such an entry is refused.
 """
@@ -27,7 +28,7 @@ from kitden.changes.actions import CLIENT_WORDS, _gateway_entry, _reads_elsewher
 from kitden.local_gateway.settings import PLACEHOLDERS, START_TIME
 
 UNREADABLE = "The entry could not be read."
-PROJECT_FOLDER = {"claude_code": "${CLAUDE_PROJECT_DIR:-.}", "cursor": "${workspaceFolder}"}
+PROJECT_FOLDER = {"claude_code": "${CLAUDE_PROJECT_DIR:-.}"}
 # The longest first, so `${CLAUDE_PROJECT_DIR:-.}` is not read as `${CLAUDE_PROJECT_DIR}`.
 _PLACEHOLDER = re.compile("|".join(re.escape(p) for p in sorted(PLACEHOLDERS, key=len)[::-1]))
 

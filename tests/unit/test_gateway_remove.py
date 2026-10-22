@@ -203,11 +203,16 @@ def test_put_back_needs_a_client_and_a_held_server(home):
     assert codex.json()["detail"] == "claude_desktop_code_tab cannot take an MCP entry"
 
 
-def test_put_back_refuses_a_project_folder_codex_cannot_fill(home):
+def test_put_back_refuses_a_project_folder_codex_or_cursor_cannot_fill(home):
     hold(home, {"p": {"command": "npx", "args": ["p-mcp", "${workspaceFolder}"]}})
     with page_for(home) as page:
-        answer = _put_back(page, "p", "codex")
-        cursor = _put_back(page, "p", "cursor").json()
-    assert answer.status_code == 422
-    assert answer.json()["detail"].startswith("Codex cannot fill in the project folder")
-    assert "${workspaceFolder}" in cursor["steps"][0]["diff"]
+        codex = _put_back(page, "p", "codex")
+        cursor = _put_back(page, "p", "cursor")
+    assert (codex.status_code, codex.json()["detail"]) == (
+        422,
+        "Codex cannot fill in the project folder this server needs.",
+    )
+    assert (cursor.status_code, cursor.json()["detail"]) == (
+        422,
+        "Cursor cannot fill in the project folder this server needs.",
+    )

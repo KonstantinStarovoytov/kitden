@@ -48,6 +48,9 @@ def test_a_project_folder_takes_the_clients_own_form():
             "p-mcp",
             "${CLAUDE_PROJECT_DIR:-.}/src",
         ]
-        assert translate_entry(entry, "cursor")["args"] == ["p-mcp", "${workspaceFolder}/src"]
-        with pytest.raises(ValueError, match="^Codex cannot fill in the project folder"):
-            translate_entry(entry, "codex")
+        # Cursor's ${workspaceFolder} in its user file is the home folder, not the project.
+        for client, words in (("codex", "Codex"), ("cursor", "Cursor")):
+            with pytest.raises(
+                ValueError, match=f"^{words} cannot fill in the project folder this server needs.$"
+            ):
+                translate_entry(entry, client)
