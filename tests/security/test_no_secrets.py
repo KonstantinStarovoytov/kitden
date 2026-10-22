@@ -4,20 +4,25 @@ Runs every output path with fixtures full of SENTINEL_SECRET_ values: page respo
 change previews of entries that hold secrets), the change log and backup manifests,
 `scan --json`, and every MCP tool. No sentinel may appear, and the tool's own process must not
 open a network connection. Client commands the tool starts (for example `--version`) are separate
-programs and are replaced by stand-ins here.
+programs and are replaced by stand-ins here. The same sweep runs on each size of the demo's sample,
+whose fake secrets all start with `DEMO_SECRET_`.
 """
 
 import json
 import socket
+from urllib.parse import quote
 
 import pytest
 from mcp import Client
 from starlette.testclient import TestClient
 
 import kitden.cli as cli
+from kitden.demo import DEMO_SECRET, SIZES, build_demo_home, demo_build
 from kitden.gateways import data_dir
+from kitden.local_gateway.settings import load_settings
 from kitden.mcp_server import create_server
 from kitden.views.inventory import build_inventory, default_adapters
+from kitden.views.library import KINDS
 from kitden.web.app import create_app
 from tests.conftest import make_home, write_cursor_fixture_state
 from tests.unit.test_api_changes import FakeClaude
@@ -167,8 +172,9 @@ def _page_outputs(home) -> list[str]:
     return outputs
 
 
-async def _mcp_outputs(home) -> list[str]:
-    server = create_server(lambda: build_inventory(home), cwd=lambda: str(home))
+async def _mcp_outputs(build, home, names) -> list[str]:
+    """Every MCP tool's answer on what `build` reads, with `explain_item` asked for `names`."""
+    server = create_server(build, cwd=lambda: str(home))
     outputs = []
     async with Client(server) as client:
         projects = (await client.call_tool("list_projects", {})).structured_content["projects"]
@@ -178,7 +184,7 @@ async def _mcp_outputs(home) -> list[str]:
                 ("show_setup", {"project_path": project["path"]}),
                 ("list_findings", {"project_path": project["path"]}),
             ]
-        for name in ["github", "local-db", "langfuse-data", "n8n-mcp", "CLAUDE.md"]:
+        for name in names:
             calls.append(("explain_item", {"name": name}))
         for tool, arguments in calls:
             result = await client.call_tool(tool, arguments)
@@ -203,13 +209,100 @@ async def test_no_secret_in_any_output_and_no_network(home, network_attempts, ca
     cli.main(["scan", "--json", "--home", str(home)])
     outputs.append(capsys.readouterr().out)
 
-    outputs += await _mcp_outputs(home)
+    names = ["github", "local-db", "langfuse-data", "n8n-mcp", "CLAUDE.md"]
+    outputs += await _mcp_outputs(lambda: build_inventory(home), home, names)
 
     leaked = [text for text in outputs if "SENTINEL" in text]
     assert leaked == []
     # The instruction file holds a sentinel on its secret line, and it never shows.
     assert "SENTINEL_SECRET_INSTRUCTIONS" in (home / ".claude/CLAUDE.md").read_text()
     assert not any("SENTINEL_SECRET_INSTRUCTIONS" in text for text in outputs)
+    assert network_attempts == []
+
+
+def _demo_outputs(home) -> list[str]:
+    """Every page answer of the demo on a sample: the reads for all projects and each one, every
+    Library tab, Details of each item with a secret and each instruction file, the held servers'
+    tools, and the changes that show an entry with a secret (remove, and moving to the Keychain)."""
+    outputs: list[str] = []
+    app = create_app(demo_build(home), token="tok", port=47800, home=home, demo=True)
+    with TestClient(app, base_url=ORIGIN, follow_redirects=False) as page:
+        page.get("/?token=tok")
+
+        def get(path):
+            response = page.get(path)
+            assert response.status_code == 200, (path, response.text)
+            outputs.append(response.text)
+            return response.json()
+
+        def post(path, body=None):
+            response = page.post(path, json=body, headers=POST)
+            assert response.status_code == 200, (path, response.text)
+            outputs.append(response.text)
+            return response.json()
+
+        for path in ["/api/clients", "/api/items", "/api/projects", "/api/problems"]:
+            get(path)
+        for path in ["/api/changes", "/api/gateways", "/api/about"]:
+            get(path)
+        projects = page.get("/api/projects").json()
+        for project in [None, *projects]:
+            query = f"?project={project['id']}" if project else ""
+            for path in ["/api/overview", "/api/map", "/api/gateway-view"]:
+                get(path + query)
+            get("/api/findings" + (f"?project={quote(project['path'])}" if project else ""))
+        for kind in KINDS:
+            for project in [None, projects[0]]:
+                get(f"/api/library?kind={kind}" + (f"&project={project['id']}" if project else ""))
+        items = page.get("/api/items").json()
+        explained = {
+            (i["name"], i["kind"])
+            for i in items
+            if i["secret_present"] or i["kind"] == "instructions"
+        }
+        for name, kind in sorted(explained):
+            get(f"/api/explain?name={quote(name)}&kind={kind}")
+        held = load_settings(home)["servers"]
+        for server in held:
+            get(f"/api/gateway/tools?server={quote(server)}")
+        changes = []
+        for item in page.get("/api/items?kind=mcp_server").json():
+            user_level = item["client"] != "claude_code" or item["scope"] == "user"
+            if item["secret_present"] and "mcp.remove_direct" in item["actions"] and user_level:
+                body = {"action": "mcp.remove_direct", "targets": [{"item": item["id"]}]}
+                changes.append(post("/api/changes/preview", {**body, "params": {}}))
+        assert changes
+        for change in changes:
+            assert post(f"/api/changes/{change['id']}/apply")["state"] == "verified"
+            assert post(f"/api/changes/{change['id']}/undo")["state"] == "undone"
+        if "files" in held:  # medium and large: its token is kept plain
+            body = {"action": "gateway.keychain", "targets": [], "params": {"server": "files"}}
+            post("/api/changes/preview", body)
+    return outputs
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("size", SIZES)
+async def test_no_demo_secret_in_any_output_of_a_sample(tmp_path, size, network_attempts):
+    home = build_demo_home(tmp_path, size)
+    written = "".join(
+        p.read_text(errors="ignore")
+        for p in tmp_path.rglob("*")
+        if p.is_file() and not p.is_symlink()
+    )
+    assert written.count(DEMO_SECRET) >= {"small": 2, "medium": 6, "large": 6}[size]
+    outputs = _demo_outputs(home)
+    store = data_dir(home)
+    outputs.append((store / "changes.log").read_text())
+    outputs += [p.read_text() for p in store.glob("changes/*/manifest.json")]
+    for record in store.glob("changes/*/change.json"):
+        outputs.append(json.dumps([s["command"] for s in json.loads(record.read_text())["steps"]]))
+    build = demo_build(home)
+    names = sorted(
+        {i.name for i in build().items if i.secret_present or str(i.kind) == "instructions"}
+    )
+    outputs += await _mcp_outputs(build, home, names)
+    assert [text for text in outputs if DEMO_SECRET in text] == []
     assert network_attempts == []
 
 
