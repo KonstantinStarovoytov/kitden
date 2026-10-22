@@ -50,6 +50,10 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Add missing:** in a project, one review adds what one client loads there and another lacks.
 - **Honest Undo:** Undo of a mixed change runs the client's own commands too, and a failed
   Apply says what it could not put back.
+- **Versions in the background:** the page reads the clients' versions from a file on disk and
+  checks them after it opens, so it never waits for a client to start.
+- **Measured start:** a script reports the time to the first usable page and to complete data on a
+  large sandbox setup: 0.1 s and 0.2 s on an M4 Max.
 
 ### 0.2.0
 
@@ -90,8 +94,6 @@ and a master plan with one plan per part,
 [docs/superpowers/plans/2026-10-21-review-follow-up.md](docs/superpowers/plans/2026-10-21-review-follow-up.md).
 The parts, in order:
 
-4. **Fast to open, and measured:** versions read in the background with a disk cache; a script
-   that reports time to the first usable view and to complete data.
 5. **Secrets have a lifecycle:** gateway secrets in the Keychain; backups say when they hold a
    secret; logins in one place, so OAuth servers move into the gateway too.
 6. **The whole picture:** an Instructions tab (CLAUDE.md, AGENTS.md, Cursor rules, commands,

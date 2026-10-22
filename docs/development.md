@@ -34,6 +34,25 @@ framework, no bundler, nothing loaded from another site. How it looks and moves:
 | `kitden scan --json` | Prints what the page shows and exits |
 | `kitden mcp` | The "show my setup" server that clients start; it also offers the tools of servers moved into the Kitden gateway |
 
+## Speed
+
+`uv run python scripts/measure-start.py` builds a sandbox home with 40 MCP servers, 10 plugins
+and 20 skills and fake `claude`, `codex` and `cursor` commands, then starts the page twice on a
+free port. It prints two numbers:
+
+- **first usable**: time to the first answer of `/api/overview` while Codex's plugin list takes
+  10 seconds. The start line must then say "Still checking Codex plugins". Budget: 2 s.
+- **complete**: time until every step of the first scan is done, with the list answering at
+  once. Budget: 5 s.
+
+A missed budget gives exit code 1. Times start with the page; Python's own start and a `uvx` cold
+start are not counted. The client versions are known before each run, as on every start after the
+first: the page reads them from `versions.json` in the data folder
+(`~/Library/Application Support/kitden`) and runs a client's version command only in the
+background, when its binary is new or changed.
+
+Measured: first usable 0.1 s, complete 0.2 s (checked 2026-10-22, Apple M4 Max, macOS 26.6.2).
+
 ## Check before a release
 
 The tests use fake servers. Before a release that touches the Kitden gateway, check it once by

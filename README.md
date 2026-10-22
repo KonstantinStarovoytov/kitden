@@ -180,7 +180,8 @@ Linux and Windows are not supported yet.
 </p>
 
 1. Kitden reads your agents' settings files.
-2. It shows them on one page in your browser, at `127.0.0.1` only.
+2. It shows them on one page in your browser, at `127.0.0.1` only. With 40 servers, 10 plugins
+   and 20 skills the page has its data in under a second; a slow answer comes after.
 3. You press Apply. Kitden backs the file up, writes the change and checks it. Undo brings the old
    file back. Backups stay for 30 days, and the newest 100 changes always keep theirs.
 
