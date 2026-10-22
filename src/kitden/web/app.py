@@ -501,10 +501,14 @@ def create_app(
         keychain_run = stand_ins.DemoKeychain(stand_ins.keychain_file(home))
         sign_in = stand_ins.no_sign_in
 
+    def _registered() -> list[Gateway]:
+        """The registered gateways; none in the demo, which never goes online."""
+        return load_gateways(home) if home is not None and not demo else []
+
     def build_marked(**options) -> Inventory:
         inventory = build(**options)
         if home is not None:
-            mark_gateways(inventory, load_gateways(home))
+            mark_gateways(inventory, _registered())
             inventory.items += gateway_items(inventory, load_settings(home), home)
         return inventory
 
@@ -537,7 +541,7 @@ def create_app(
                 watcher_ref[0].expect(Path(path), sha)
 
         def gateway_client(edit: GatewayEdit) -> MetaMcpClient | ObotClient:
-            found = next((g for g in load_gateways(home) if g.id == edit.gateway_id), None)
+            found = next((g for g in _registered() if g.id == edit.gateway_id), None)
             if found is None:
                 raise GatewayError("This gateway is no longer registered")
             return ObotClient(found) if found.kind == "obot" else MetaMcpClient(found)
@@ -694,9 +698,6 @@ def create_app(
             raise _UnknownProject
         return found
 
-    def _registered() -> list:
-        return load_gateways(home) if home is not None else []
-
     def _chain(path: str | None) -> list[str]:
         """The known projects whose gateway rules apply in the picked project, as the gateway
         finds them for a session there (see `project_chain`); empty for all projects."""
@@ -805,7 +806,7 @@ def create_app(
         if home is None:
             return JSONResponse([])
         if request.method == "GET":
-            return JSONResponse([gateway_dict(g) for g in load_gateways(home)])
+            return JSONResponse([gateway_dict(g) for g in _registered()])
         if stand_ins:
             return _error(stand_ins.NOT_IN_DEMO, 422)
         body = await _body(request)
@@ -888,9 +889,7 @@ def create_app(
         align = None  # Add missing: what each client lacks, for the review's checkboxes
         try:
             if action == GATEWAY_CONNECT:
-                gateway = next(
-                    (g for g in load_gateways(home) if g.id == params.get("gateway")), None
-                )
+                gateway = next((g for g in _registered() if g.id == params.get("gateway")), None)
                 if gateway is None:
                     return _error("Register the gateway first.", 422)
                 clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
@@ -945,9 +944,7 @@ def create_app(
                 clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
                 steps = marketplace_steps(adapters, found, clients)
             elif action == GATEWAY_SWITCH:
-                gateway = next(
-                    (g for g in load_gateways(home) if g.id == params.get("gateway")), None
-                )
+                gateway = next((g for g in _registered() if g.id == params.get("gateway")), None)
                 if gateway is None:
                     return _error("Register the gateway first.", 422)
                 mcp = [i for i in state.inventory.items if i.kind is ItemKind.MCP_SERVER]
@@ -1044,9 +1041,7 @@ def create_app(
                     return JSONResponse(listing)
                 copied = skill_catalog(state.inventory, adapters)
             elif action == GATEWAY_MOVE:
-                gateway = next(
-                    (g for g in load_gateways(home) if g.id == params.get("gateway")), None
-                )
+                gateway = next((g for g in _registered() if g.id == params.get("gateway")), None)
                 if gateway is None:
                     return _error("Register the gateway first.", 422)
                 ids = [str(t.get("item")) for t in targets if isinstance(t, dict)]
@@ -1186,7 +1181,7 @@ def create_app(
             return JSONResponse({"commands": [c.__dict__ for c in listed]})
         if home is None or action != "gateway.login" or not item.via_gateway:
             return _error("No command for this item and action.", 404)
-        gateway = next((g for g in load_gateways(home) if g.id == item.via_gateway), None)
+        gateway = next((g for g in _registered() if g.id == item.via_gateway), None)
         adapter = adapters.get(item.client)
         if gateway is None or adapter is None or gateway.auth is not GatewayAuth.OAUTH:
             return _error("No login is needed.", 404)

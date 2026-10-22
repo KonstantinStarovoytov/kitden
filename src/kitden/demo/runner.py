@@ -8,9 +8,9 @@ entry each change checks, in the sample home, keeping the file's format:
 - `codex plugin add <id> --json` and `codex plugin remove <id>`.
 
 Anything else, such as adding a marketplace, and any folder outside the sample, answers
-NOT_IN_DEMO and writes nothing. A user-scope plugin install writes only `enabledPlugins`: the
-change checks out, but Claude Code lists its plugins from `installed_plugins.json`, so the
-plugin does not show after Rescan.
+NOT_IN_DEMO and writes nothing; a value or a file it cannot read or edit answers FAILED. A
+user-scope plugin install writes only `enabledPlugins`: the change checks out, but Claude Code
+lists its plugins from `installed_plugins.json`, so the plugin does not show after Rescan.
 """
 
 import json
@@ -25,6 +25,7 @@ from kitden.changes.json_splice import ABSENT
 
 NOT_IN_DEMO = "Not part of the demo."
 REFUSED = CommandResult(1, NOT_IN_DEMO)
+FAILED = CommandResult(1, "The demo could not make this change.")
 # What each plugin command leaves in `enabledPlugins`; ABSENT removes the key.
 PLUGIN_VALUES = {"install": True, "enable": True, "disable": False, "uninstall": ABSENT}
 
@@ -42,6 +43,12 @@ class DemoRunner:
             folder = Path(os.path.realpath(cwd))
             if folder != self.home and self.home not in folder.parents:
                 return REFUSED
+        try:
+            return self._run(command, folder)
+        except (OSError, ValueError):  # a value or a file that is not JSON or TOML, say
+            return FAILED
+
+    def _run(self, command: list[str], folder: Path | None) -> CommandResult:
         found = self._entry(command, folder)
         if found is None:
             return REFUSED

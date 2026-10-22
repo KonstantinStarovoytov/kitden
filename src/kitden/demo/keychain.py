@@ -4,7 +4,9 @@
 It knows only what Kitden runs (see `kitden.local_gateway.keychain`): `-i` with
 `add-generic-password -U -s S -a "A" -X HEX` lines on stdin, `find-generic-password -w` and
 `delete-generic-password`. It repeats the rules of `tests/fixtures/fake_security.py`, which the
-package cannot import: a missing item exits 44, and an option without its value exits 2.
+package cannot import: a missing item exits 44, and an option without its value exits 2. A file
+it cannot read or write, or one that is not a JSON object, exits 1, so Kitden says it could not
+reach the Keychain.
 """
 
 import json
@@ -27,6 +29,8 @@ def _options(words: list[str]) -> dict[str, str | None]:
 
 
 def _command(items: dict[str, str], words: list[str]) -> tuple[int, str]:
+    if not words:
+        return 1, ""
     name, flags = words[0], _options(words[1:])
     if None in flags.values():
         return USAGE, ""
@@ -50,7 +54,15 @@ class DemoKeychain:
         self.path = Path(path)
 
     def __call__(self, args: list[str], stdin: str | None = None) -> tuple[int, str]:
+        try:
+            return self._run(args, stdin)
+        except (OSError, ValueError):
+            return 1, ""
+
+    def _run(self, args: list[str], stdin: str | None) -> tuple[int, str]:
         items = json.loads(self.path.read_text()) if self.path.exists() else {}
+        if not isinstance(items, dict):
+            raise ValueError("not a JSON object")
         before = dict(items)
         code, out = 0, ""
         if args == ["-i"]:

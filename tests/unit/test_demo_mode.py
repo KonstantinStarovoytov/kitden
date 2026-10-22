@@ -21,10 +21,12 @@ from kitden.demo import (
     demo_build,
     keychain_file,
 )
-from kitden.gateways import data_dir
+from kitden.gateways import add_gateway, data_dir
 from kitden.local_gateway.settings import load_settings
+from kitden.model import Gateway
 from kitden.views import inventory as inventory_module
 from kitden.views.inventory import Inventory, build_inventory
+from kitden.web import app as page_app
 from kitden.web.app import create_app
 from tests.conftest import make_home
 
@@ -33,9 +35,9 @@ POST = {"Origin": ORIGIN, "X-Tool-Request": "1"}
 
 
 @contextmanager
-def demo_page(root, size="medium"):
+def demo_page(root, size="medium", **options):
     home = build_demo_home(root, size)
-    app = create_app(demo_build(home), token="tok", port=47800, home=home, demo=True)
+    app = create_app(demo_build(home), token="tok", port=47800, home=home, demo=True, **options)
     with TestClient(app, base_url=ORIGIN, follow_redirects=False) as page:
         page.get("/?token=tok")
         page.home = home
@@ -47,6 +49,12 @@ def until(ready, seconds=5.0):
     while not ready():
         assert time.monotonic() < end, "gave up waiting"
         time.sleep(0.05)
+
+
+def scan_done(page):
+    """The first scan and everything after it (versions, marketplaces) are done."""
+    view = page.get("/api/progress").json()
+    return view["ready"] and all(step["done"] for step in view["steps"])
 
 
 def preview(page, action, targets, params):
@@ -76,8 +84,12 @@ def test_about_answers_before_the_first_scan(tmp_path):
     app = create_app(slow, token="tok", port=47800, first_scan_later=True)
     with TestClient(app, base_url=ORIGIN) as page:
         page.get("/?token=tok")
-        assert page.get("/api/about").json()["demo"] is False
-        gate.set()
+        try:
+            assert page.get("/api/about").json()["demo"] is False
+            # The scan is still waiting: had /api/about waited for it, it would be done now.
+            assert page.get("/api/progress").json()["ready"] is False
+        finally:
+            gate.set()
 
 
 def test_a_demo_needs_the_sample_home():
@@ -86,13 +98,23 @@ def test_a_demo_needs_the_sample_home():
 
 
 def test_the_demo_shows_the_sample_versions_and_reads_none(tmp_path, monkeypatch):
-    def never(*args, **kwargs):
-        raise AssertionError("the demo read a version on this computer")
+    # Recorded, not raised: the page swallows an error of the version read.
+    calls = []
 
-    monkeypatch.setattr(version_cache, "refresh_versions", never)
-    monkeypatch.setattr(version_cache, "cached_version", never)
-    with demo_page(tmp_path) as page:
+    def recorder(name):
+        def called(*args, **kwargs):
+            calls.append(name)
+            return {}
+
+        return called
+
+    for name in ("stale_clients", "refresh_versions", "cached_version"):
+        monkeypatch.setattr(version_cache, name, recorder(name))
+    # As `kitden serve` starts the page: the scan, then the versions, in the background.
+    with demo_page(tmp_path, first_scan_later=True, quick_first=True) as page:
+        until(lambda: scan_done(page))
         assert {c["id"]: c["version"] for c in page.get("/api/clients").json()} == VERSIONS
+    assert calls == []
 
 
 def test_the_demo_ignores_codex_home(tmp_path, monkeypatch):
@@ -136,6 +158,25 @@ def test_a_marketplace_and_a_registered_gateway_are_not_part_of_the_demo(tmp_pat
         )
     for answer in (market, gateway):
         assert (answer.status_code, answer.json()) == (422, {"detail": NOT_IN_DEMO})
+
+
+def test_the_demo_shows_no_registered_gateway(tmp_path, monkeypatch):
+    def never(*args, **kwargs):
+        raise AssertionError("the demo reached a gateway")
+
+    monkeypatch.setattr(page_app, "MetaMcpClient", never)
+    monkeypatch.setattr(page_app, "ObotClient", never)
+    with demo_page(tmp_path) as page:
+        gateway = add_gateway(page.home, Gateway(url="http://127.0.0.1:12008/metamcp/team/mcp"))
+        assert page.get("/api/gateways").json() == []
+        assert page.get(f"/api/gateways/{gateway.id}/servers").status_code == 404
+        body = {
+            "action": "gateway.connect",
+            "targets": [{"client": "cursor"}],
+            "params": {"gateway": gateway.id, "name": "team"},
+        }
+        answer = page.post("/api/changes/preview", json=body, headers=POST)
+    assert (answer.status_code, answer.json()) == (422, {"detail": "Register the gateway first."})
 
 
 def test_moving_a_remote_server_in_uses_the_stand_ins(tmp_path):
