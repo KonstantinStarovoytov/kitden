@@ -7,7 +7,7 @@ globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
 const { afterParts, alignGroups, canShowReview, closeForProject, countedDefinition, changeOutcome, chosenKeys, callsText, changeWords, footerActions, heldActions, isPanelOpen, offerLabel, layerState, leftOutText, kindWord, loadsLede, moveFor, moveTargets, openPanel, plainSecrets, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
 const { addOptions, whyNoAction } = await import('../../src/kitden/web/static/js/offer.js');
-const { data, state } = await import('../../src/kitden/web/static/js/store.js');
+const { busy, data, state } = await import('../../src/kitden/web/static/js/store.js');
 
 const github = { kind: 'mcp_server', name: 'github' };
 const direct = { name: 'github', items: ['entry-1', 'entry-2'] };
@@ -582,6 +582,27 @@ test('picking another project closes the panel, so a switch never acts on a proj
     closeForProject();
     assert.equal(isPanelOpen(), true);
   } finally {
+    state.project = '';
+    delete globalThis.document;
+  }
+});
+
+test('Details drawn again after an Apply belongs to the project picked during it', () => {
+  fakePanelPage();
+  try {
+    state.project = 'atlas';
+    openPanel([]);
+    busy.change = true; // the change is being written: the panel stays
+    state.project = 'web';
+    closeForProject();
+    assert.equal(isPanelOpen(), true);
+    openPanel([]); // verified: Details is drawn again, for web
+    busy.change = false;
+    state.project = 'atlas'; // Back
+    closeForProject();
+    assert.equal(isPanelOpen(), false);
+  } finally {
+    busy.change = false;
     state.project = '';
     delete globalThis.document;
   }

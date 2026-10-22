@@ -35,7 +35,7 @@ const WRITING = "Writing the change. It can't stop halfway: if a step fails, Kit
 let current = null;
 let opener = null;
 let openerKey = null;
-// The project the open panel was opened in: its switches and reviews are for that project.
+// The project the panel's content was drawn in: its switches and reviews are for that project.
 let openedIn = null;
 
 const clientName = (id) => CLIENT_NAMES[id] || id;
@@ -51,13 +51,14 @@ function swapContent(content) {
   if (isPanelOpen() && !drawer.contains(document.activeElement)) drawer.focus();
 }
 
-// Put content in the panel and slide it in. Keyboard opens are instant.
+// Put content in the panel and slide it in. Keyboard opens are instant. New content belongs to
+// the project picked now: Details drawn again after an Apply is for the project picked during it.
 export function openPanel(content, { instant = false } = {}) {
   finishTransition();
   const drawer = $("#drawer");
+  openedIn = state.project;
   if (isPanelOpen()) { swapContent(content); return; }
   drawer.replaceChildren(...content);
-  openedIn = state.project;
   opener = document.activeElement;
   const row = opener && opener.closest ? opener.closest("tr[data-key]") : null;
   openerKey = row ? row.dataset.key : state.selected;
