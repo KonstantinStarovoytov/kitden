@@ -1,6 +1,8 @@
 """Shared test helpers: fake home folders built from tests/fixtures."""
 
 import json
+import os
+import shlex
 import shutil
 import sqlite3
 from pathlib import Path
@@ -16,7 +18,23 @@ def _never_the_real_home(tmp_path_factory, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("real-home")))
 
 
-CLIENT_BINARIES = {"claude", "codex", "cursor"}
+CLIENT_BINARIES = {"claude", "codex", "cursor"}  # compared in lower case, so "Cursor" too
+WRAPPERS = {"env", "sh", "bash", "zsh", "dash"}
+
+
+def _words(args) -> list[str]:
+    """The words of a command that could name the program it runs: every word of a shell
+    string, every word behind a wrapper such as env or sh -c, else only the first."""
+    if isinstance(args, str | bytes):
+        args = os.fsdecode(args)
+        try:
+            return shlex.split(args)
+        except ValueError:
+            return args.split()
+    words = [os.fsdecode(args)] if isinstance(args, os.PathLike) else [os.fsdecode(a) for a in args]
+    if not words or Path(words[0]).name not in WRAPPERS:
+        return words[:1]
+    return [w for word in words for w in _words(word)]
 
 
 @pytest.fixture(autouse=True)
@@ -33,10 +51,10 @@ def _no_client_commands(tmp_path_factory, monkeypatch):
 
     class Guarded(subprocess.Popen):
         def __init__(self, args, *rest, **options):
-            first = args if isinstance(args, str | Path) else args[0]
-            path = Path(first).resolve() if Path(first).is_absolute() else Path(first)
-            if path.name in CLIENT_BINARIES and not path.is_relative_to(sandbox):
-                raise AssertionError(f"a test tried to run a real client: {first}")
+            for word in _words(args):
+                path = Path(word).resolve() if Path(word).is_absolute() else Path(word)
+                if path.name.lower() in CLIENT_BINARIES and not path.is_relative_to(sandbox):
+                    raise AssertionError(f"a test tried to run a real client: {word}")
             super().__init__(args, *rest, **options)
 
     monkeypatch.setattr(subprocess, "Popen", Guarded)
