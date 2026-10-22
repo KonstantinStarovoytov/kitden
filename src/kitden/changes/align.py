@@ -96,6 +96,11 @@ def _build(
     return [adapters[client].skill_copy_step(folder, readers, into)]
 
 
+def _words(clients: list[str]) -> str:
+    names = [CLIENT_WORDS[c] for c in clients]
+    return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
+
+
 def _not_same(views: dict[str, list[Item]]) -> list[dict]:
     """Names two clients load from different sources: a plugin from another marketplace, a
     skill from another folder, an MCP server with another command or address."""
@@ -123,7 +128,8 @@ def align_steps(
 ) -> tuple[list[Step], dict]:
     """Every plugin, skill and MCP server one found client loads in `project` and another
     lacks, as candidates; the steps add the chosen ones. Names match exactly. A client that
-    has an item turned off keeps it off: it is not offered."""
+    has an item turned off keeps it off: it is not offered. With `chosen` None, an add that
+    makes a duplicate (a name in another case, or a skill a reader already has) is unchecked."""
     clients = [c for c in CLIENTS if c in found and c in adapters]
     views = {
         c: [i for i in effective_view(inventory, c, project).items if i.kind in KINDS]
@@ -179,10 +185,18 @@ def align_steps(
                         for k, n in has[client]
                         if k is kind and n != key[1] and n.lower() == key[1].lower()
                     )
-                    note = None
+                    # A skill copy reaches every client that reads its folder (_skill_readers);
+                    # one that already has the skill would load it twice.
+                    readers = [r for s in steps if s.copy is not None for r in s.copy.readers]
+                    twice = [r for r in readers if r != client and key[:2] in has[r]]
+                    notes = []
                     if alike:
                         who = CLIENT_WORDS[client]
-                        note = f"{who} already has {alike[0]}; this adds {key[1]} beside it."
+                        notes.append(f"{who} already has {alike[0]}; this adds {key[1]} beside it.")
+                    if twice:
+                        notes.append(f"{_words(twice)} would load it twice.")
+                    # Such an add makes a duplicate: it starts unchecked.
+                    default = not notes
                     candidates.append(
                         {
                             "key": name,
@@ -191,8 +205,8 @@ def align_steps(
                             "from": source,
                             "to": client,
                             "place": place,
-                            "note": note,
-                            "chosen": chosen is None or name in chosen,
+                            "note": " ".join(notes) or None,
+                            "chosen": default if chosen is None else name in chosen,
                         }
                     )
                     built.append(steps)
@@ -218,8 +232,9 @@ def align_steps(
                 marketplaces.add((step.client, step.name))
             steps.append(step)
     listing = {"candidates": candidates, "not_same": _not_same(views), "left_out": left_out}
-    if not steps:
-        if not candidates:
-            raise ValueError(f"Nothing is missing in {Path(project).name}.")
+    if not candidates:
+        raise ValueError(f"Nothing is missing in {Path(project).name}.")
+    # The first review may check nothing (every add makes a duplicate); it still lists them.
+    if not steps and chosen is not None:
         raise ValueError("Choose at least one item.")
     return steps, listing

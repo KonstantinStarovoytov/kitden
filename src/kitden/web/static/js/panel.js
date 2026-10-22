@@ -870,7 +870,7 @@ export function changeWords(change, previewBody) {
 
 // Add missing: the candidates as checkboxes, one group per client that lacks them, in client
 // order. Each label says what, from which client, and where it goes; `note` says when the
-// client has the name in another case.
+// client has the name in another case, or a client would load it twice. Those start unchecked.
 const PLACE_WORDS = { project: "this project", all: "all projects" };
 export function alignGroups(align) {
   return CLIENT_ORDER.map((client) => ({
@@ -922,6 +922,11 @@ function alignSection(change, previewBody, note, apply) {
       set.append(label);
     }
     section.append(set);
+  }
+  // Every add would make a duplicate, so none starts checked: Apply waits for a box.
+  if (!change.align.candidates.some((c) => c.chosen)) {
+    apply.disabled = true;
+    section.append(el("p", "note none", "Choose at least one item."));
   }
   const notSame = change.align.not_same || [];
   if (notSame.length) {

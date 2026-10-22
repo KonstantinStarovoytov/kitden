@@ -1,6 +1,7 @@
 """Add what a project is missing: one review for every client (spec 3.5)."""
 
 import json
+import shutil
 import tomllib
 
 import pytest
@@ -55,7 +56,6 @@ def test_add_missing_lists_what_each_client_lacks(home):
     with page_for(home, run=runner(home)) as page:
         listing = _align(page, project_id(page, api)).json()["align"]
     keys = {c["key"]: c for c in listing["candidates"]}
-    assert all(c["chosen"] for c in listing["candidates"])
     assert keys["mcp_server:github:codex"]["from"] == "claude_code"
     assert keys["mcp_server:github:cursor"]["from"] == "claude_code"
     assert keys["mcp_server:langfuse-data:claude_code"]["from"] == "codex"
@@ -217,4 +217,50 @@ def test_a_skill_copy_does_not_hide_a_server_of_the_same_name(home):
         assert [(s["client"], s["name"]) for s in change["steps"]] == [
             ("codex", "notion"),
             ("cursor", "notion"),
+        ]
+
+
+def test_an_add_that_makes_a_duplicate_starts_unchecked(home):
+    api = str(home / "work/api")
+    with page_for(home, run=runner(home)) as page:
+        change = _align(page, project_id(page, api)).json()
+        keys = {c["key"]: c for c in change["align"]["candidates"]}
+        # A twin whose name differs only in case keeps its note and starts unchecked.
+        twin = keys["mcp_server:Neon:codex"]
+        assert (twin["chosen"], twin["note"]) == (
+            False,
+            "Codex already has neon; this adds Neon beside it.",
+        )
+        # A Claude Code copy reaches Cursor, which has the skill already.
+        twice = keys["skill:docker-expert:claude_code"]
+        assert (twice["chosen"], twice["note"]) == (False, "Cursor would load it twice.")
+        assert keys["skill:brandkit:codex"]["chosen"] is False
+        # The others start checked.
+        assert keys["mcp_server:github:codex"]["chosen"] is True
+        assert keys["skill:api-style:claude_code"]["chosen"] is True
+        # With the defaults no client loads anything twice.
+        assert "Loads twice" not in [a["word"] for a in change["after"]]
+        chosen = [c["key"] for c in change["align"]["candidates"] if c["chosen"]]
+        assert "docker-expert" not in [s["name"] for s in change["steps"]]
+        # Checked by hand, the review warns as before.
+        again = _align(page, project_id(page, api), [*chosen, twice["key"]]).json()
+        cursor = next(a for a in again["after"] if a["client"] == "cursor")
+        assert cursor["word"] == "Loads twice"
+
+
+def test_when_every_add_makes_a_duplicate_the_review_still_lists_them(tmp_path):
+    home = make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2")
+    api = home / "work/api"
+    api.mkdir(parents=True, exist_ok=True)
+    claude = {"projects": {str(api): {}}, "mcpServers": {"neon": {"url": "https://a.invalid/mcp"}}}
+    (home / ".claude.json").write_text(json.dumps(claude))
+    (home / ".codex/config.toml").write_text('[mcp_servers.Neon]\nurl = "https://b.invalid/mcp"\n')
+    for folder in (".claude/skills", ".agents/skills", ".codex/skills", ".claude/plugins"):
+        shutil.rmtree(home / folder, ignore_errors=True)
+    with page_for(home, run=runner(home)) as page:
+        change = _align(page, project_id(page, str(api))).json()
+        assert change["steps"] == []
+        assert [(c["key"], c["chosen"]) for c in change["align"]["candidates"]] == [
+            ("mcp_server:neon:codex", False),
+            ("mcp_server:Neon:claude_code", False),
         ]
