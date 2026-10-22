@@ -125,6 +125,8 @@ def test_codex_merges_project_fields_and_loads_both_same_name_skills(tmp_path):
         ("skill", "docker-expert", "user"),
         ("skill", "langfuse", "user"),
         ("skill", "api-style", "project"),
+        ("instructions", "AGENTS.md", "user"),
+        ("instructions", "AGENTS.md", "project"),
     }
     assert shadows(view) == {("mcp_server", "neon", "project", "user", "merged")}
     assert len([i for i in view.items if i.name == "docker-expert"]) == 2
@@ -153,6 +155,8 @@ def test_cursor_project_wins_and_imported_items_load(tmp_path):
         ("hook", "afterFileEdit", "user"),
         ("hook", "PreToolUse: Bash", "user"),
         ("marketplace", "team-mkt", "user"),
+        ("instructions", "style", "project"),
+        ("instructions", ".cursorrules", "project"),
     }
     assert shadows(view) == set()
 

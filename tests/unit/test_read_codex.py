@@ -2,7 +2,7 @@ import shutil
 from pathlib import Path
 
 from kitden.clients.codex import CodexAdapter
-from kitden.model import UnknownReason
+from kitden.model import ItemKind, Scope, UnknownReason
 from tests.conftest import all_text, make_home, rows
 
 FIXTURE = "codex/0.159.2"
@@ -22,6 +22,8 @@ EXPECTED = {
     ("codex", "skill", "docker-expert", "user", "on", None),
     ("codex", "skill", "langfuse", "user", "on", None),
     ("codex", "skill", "api-style", "project", "on", "work/api"),
+    ("codex", "instructions", "AGENTS.md", "user", "on", None),
+    ("codex", "instructions", "AGENTS.md", "project", "on", "work/api"),
 }
 
 
@@ -160,3 +162,56 @@ def test_a_git_marketplace_is_read_from_the_copy_codex_keeps(tmp_path, no_versio
     (clone / ".claude-plugin/marketplace.json").write_text('{"name": "claude-plugins-official"}')
     roots = CodexAdapter(home, read_version=no_version).marketplace_roots()
     assert roots["claude-plugins-official"] == clone
+
+
+def _instructions(scan):
+    return {
+        (i.scope, i.name, dict(i.summary)["category"], i.project, i.source.path)
+        for i in scan.items
+        if i.kind is ItemKind.INSTRUCTIONS
+    }
+
+
+def test_scan_reads_agents_md_for_the_user_and_each_project(tmp_path, no_version):
+    home = make_home(tmp_path, FIXTURE)
+    api = home / "work/api"
+    (api / "AGENTS.override.md").write_text("x")
+    (home / ".codex/AGENTS.override.md").write_text("x")
+    scan = CodexAdapter(home, read_version=no_version).scan()
+    assert _instructions(scan) == {
+        (Scope.USER, "AGENTS.md", "instructions", None, str(home / ".codex/AGENTS.md")),
+        (
+            Scope.USER,
+            "AGENTS.override.md",
+            "instructions",
+            None,
+            str(home / ".codex/AGENTS.override.md"),
+        ),
+        (Scope.PROJECT, "AGENTS.md", "instructions", str(api), str(api / "AGENTS.md")),
+        (
+            Scope.PROJECT,
+            "AGENTS.override.md",
+            "instructions",
+            str(api),
+            str(api / "AGENTS.override.md"),
+        ),
+    }
+
+
+def test_the_user_agents_md_follows_codex_home(tmp_path, no_version):
+    home = make_home(tmp_path, FIXTURE)
+    moved = tmp_path / "codex-home"
+    (home / ".codex").rename(moved)
+    scan = CodexAdapter(home, read_version=no_version, codex_home=moved).scan()
+    paths = {i[4] for i in _instructions(scan) if i[0] is Scope.USER}
+    assert paths == {str(moved / "AGENTS.md")}
+
+
+def test_the_home_folder_as_a_codex_project_gives_no_project_rows(tmp_path, no_version):
+    home = make_home(tmp_path, FIXTURE)
+    (home / "AGENTS.md").write_text("x")
+    config = home / ".codex/config.toml"
+    config.write_text(config.read_text() + f'\n[projects."{home}"]\ntrust_level = "trusted"\n')
+    scan = CodexAdapter(home, read_version=no_version).scan()
+    assert str(home) in {p.path for p in scan.projects}
+    assert str(home) not in {i[3] for i in _instructions(scan)}

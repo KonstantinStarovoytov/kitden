@@ -24,7 +24,9 @@ from kitden.clients.base import (
     Scan,
     check_toggle,
     file_source,
+    instruction_items,
     is_direct_entry,
+    is_home,
     is_own_skill,
     mcp_item,
     project,
@@ -68,6 +70,19 @@ def _dict(value: Any) -> dict:
 
 def _on(value: Any) -> Enabled:
     return Enabled.OFF if value is False else Enabled.ON
+
+
+def _agents_md(folder: Path) -> list[tuple[Path, str]]:
+    """The instruction files Codex looks for in one folder.
+
+    checked 2026-10-22 (learn.chatgpt.com/docs/agent-configuration/agents-md): in CODEX_HOME
+    (default ~/.codex) Codex reads AGENTS.override.md if it exists, else AGENTS.md; in a project
+    it walks from the project root down to the working folder and reads the same two names in
+    each folder (plus names set in `project_doc_fallback_filenames`, not read here). Kitden
+    lists both files when both exist. The docs do not say whether an untrusted project's
+    AGENTS.md is read (not checked); Kitden lists it either way.
+    """
+    return [(folder / "AGENTS.override.md", "instructions"), (folder / "AGENTS.md", "instructions")]
 
 
 class CodexAdapter(ClientAdapter):
@@ -410,10 +425,15 @@ class CodexAdapter(ClientAdapter):
                 off = item.source.path in disabled_skills
                 scan.items.append(replace(item, enabled=Enabled.OFF if off else Enabled.ON))
 
+        scan.items += instruction_items(CLIENT, _agents_md(self.codex_home), Scope.USER, CLIENT)
+
         for path, settings in _dict(config.get("projects")).items():
             scan.projects.append(project(path, CLIENT))
             trusted = _dict(settings).get("trust_level") == "trusted"
             scan.items += self._project(read, Path(path), trusted)
+            if not is_home(Path(path), self.home):
+                files = _agents_md(Path(path))
+                scan.items += instruction_items(CLIENT, files, Scope.PROJECT, CLIENT, project=path)
 
         scan.problems = read.problems
         return scan

@@ -30,6 +30,8 @@ def test_items_can_be_filtered_by_project(client):
     assert found == {
         ("cursor", "site-db"),
         ("cursor", "langfuse@cursor-public"),
+        ("cursor", "style"),
+        ("cursor", ".cursorrules"),
     }
 
 

@@ -21,8 +21,11 @@ from kitden.clients.base import (
     Reader,
     Scan,
     bearer_header,
+    expand,
     file_source,
+    instruction_items,
     is_direct_entry,
+    is_home,
     is_own_skill,
     mcp_item,
     project,
@@ -191,6 +194,7 @@ class CursorAdapter(ClientAdapter):
         for path in workspaces:
             scan.items += self._skills(Path(path), Scope.PROJECT, path, third_party)
 
+        scan.items += self._instructions(workspaces)
         scan.items += self._plugins(installed)
         if third_party and import_claude_plugins:
             scan.items += self._claude_plugins(read)
@@ -401,6 +405,32 @@ class CursorAdapter(ClientAdapter):
         items = []
         for folder, owner, kind in folders:
             items += skill_items(CLIENT, folder, scope, owner, kind=kind, project=project_path)
+        return items
+
+    def _instructions(self, workspaces: list[str]) -> list[Item]:
+        """Rule files and AGENTS.md.
+
+        checked 2026-10-22 (cursor.com/docs/context/rules): project rules are `.mdc` files in
+        `.cursor/rules`, sub-folders too; a plain `.md` file there is not a rule. Cursor reads
+        AGENTS.md in the project root and in sub-folders (Kitden reads the root one).
+        checked 2026-10-22 (cursor.com/help/customization/rules): `.cursorrules` in the project
+        root is legacy and will be deprecated; user rule files live in `~/.cursor/rules` (the
+        docs name no extension there; Kitden reads `.mdc` as in projects). User rules made in
+        Customize → Rules sync with the Cursor account and are not files, so they are not read.
+        """
+        items = instruction_items(
+            CLIENT, expand(self.home / ".cursor/rules", "instructions", "*.mdc"), Scope.USER, CLIENT
+        )
+        for path in workspaces:
+            root = Path(path)
+            if is_home(root, self.home):
+                continue
+            files = [
+                *expand(root / ".cursor/rules", "instructions", "*.mdc"),
+                (root / ".cursorrules", "instructions"),
+                (root / "AGENTS.md", "instructions"),
+            ]
+            items += instruction_items(CLIENT, files, Scope.PROJECT, CLIENT, project=path)
         return items
 
     def _claude_plugins(self, read: Reader) -> list[Item]:

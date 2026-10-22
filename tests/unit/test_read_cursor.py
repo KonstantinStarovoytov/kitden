@@ -1,5 +1,5 @@
 from kitden.clients.cursor import INSTALLED_PREFIX, REACTIVE_KEY, CursorAdapter
-from kitden.model import SourceKind, UnknownReason
+from kitden.model import ItemKind, Scope, SourceKind, UnknownReason
 from tests.conftest import (
     CURSOR_DB,
     all_text,
@@ -23,6 +23,8 @@ OWN = {
     ("cursor", "plugin", "langfuse@cursor-public", "project", "on", "work/site"),
     ("cursor", "marketplace", "team-mkt", "user", "on", None),
     ("cursor", "hook", "afterFileEdit", "user", "on", None),
+    ("cursor", "instructions", "style", "project", "on", "work/site"),
+    ("cursor", "instructions", ".cursorrules", "project", "on", "work/site"),
 }
 CROSS_LOADED = {
     ("cursor", "skill", "brandkit", "user", "on", None),
@@ -164,3 +166,48 @@ def test_broken_state_database_is_reported_and_cache_still_read(tmp_path, no_ver
     assert ("cursor", "plugin", "langfuse@cursor-public", "user", "unknown", None) in rows(
         scan.items, home
     )
+
+
+def _instructions(scan):
+    return {
+        (i.scope, i.name, dict(i.summary)["category"], i.project, i.source.path)
+        for i in scan.items
+        if i.kind is ItemKind.INSTRUCTIONS
+    }
+
+
+def test_scan_reads_rules_cursorrules_and_agents_md(tmp_path, no_version):
+    home = make_home(tmp_path, FIXTURE)
+    site = home / "work/site"
+    rules = site / ".cursor/rules"
+    (rules / "frontend").mkdir()
+    (rules / "frontend/components.mdc").write_text("x")
+    (rules / "notes.md").write_text("x")  # a plain .md in the rules folder is not a rule
+    (site / "AGENTS.md").write_text("x")
+    (home / ".cursor/rules").mkdir()
+    (home / ".cursor/rules/mine.mdc").write_text("x")
+    write_cursor_fixture_state(home)
+    scan = CursorAdapter(home, read_version=no_version).scan()
+    p = str(site)
+    assert _instructions(scan) == {
+        (Scope.USER, "mine", "instructions", None, str(home / ".cursor/rules/mine.mdc")),
+        (Scope.PROJECT, "style", "instructions", p, str(rules / "style.mdc")),
+        (
+            Scope.PROJECT,
+            "frontend:components",
+            "instructions",
+            p,
+            str(rules / "frontend/components.mdc"),
+        ),
+        (Scope.PROJECT, ".cursorrules", "instructions", p, str(site / ".cursorrules")),
+        (Scope.PROJECT, "AGENTS.md", "instructions", p, str(site / "AGENTS.md")),
+    }
+
+
+def test_the_home_folder_as_a_cursor_project_gives_no_project_rows(tmp_path, no_version):
+    home = make_home(tmp_path, FIXTURE)
+    (home / "AGENTS.md").write_text("x")
+    write_cursor_fixture_state(home, {INSTALLED_PREFIX + f"123|file://{home}": []})
+    scan = CursorAdapter(home, read_version=no_version).scan()
+    assert str(home) in {p.path for p in scan.projects}
+    assert str(home) not in {i[3] for i in _instructions(scan)}
