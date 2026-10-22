@@ -15,6 +15,7 @@ from starlette.responses import FileResponse, JSONResponse, StreamingResponse
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
+from kitden import __version__
 from kitden.changes.actions import (
     CLIENT_WORDS,
     GATEWAY_CONNECT,
@@ -439,6 +440,10 @@ def refusal_words(error: ValueError) -> str:
     return str(error)
 
 
+# The API calls that answer before the first scan is done.
+NO_WAIT = ("/api/events", "/api/progress", "/api/about")
+
+
 class WaitForFirstScan:
     """API calls wait for the first scan; the page itself and its event stream do not."""
 
@@ -448,7 +453,7 @@ class WaitForFirstScan:
 
     async def __call__(self, scope, receive, send) -> None:
         path = scope.get("path", "")
-        waits = path.startswith("/api/") and path not in ("/api/events", "/api/progress")
+        waits = path.startswith("/api/") and path not in NO_WAIT
         if scope["type"] == "http" and waits:
             await self.state.ready.wait()
         await self.app(scope, receive, send)
@@ -472,12 +477,29 @@ def create_app(
     first_scan_later: bool = False,
     quick_first: bool = False,
     version_refresh: Callable[[], dict[str, str | None]] | None = None,
+    demo: bool = False,
 ) -> Starlette:
     """The page. Changes are available only when `home` is given (the folder being shown).
     `version_refresh` reads the clients' versions after the first scan; by default the ones
-    the disk cache does not know yet (tests pass a fake, so no client command runs)."""
+    the disk cache does not know yet (tests pass a fake, so no client command runs).
+
+    With `demo`, `home` is the sample's, and stand-ins keep everything inside it: no client
+    command, Keychain, MCP server, version read or network. What would go online is refused.
+    """
     events = Broadcaster()
     watcher_ref: list[Watcher] = []
+    make_adapters = default_adapters
+    stand_ins = keychain_run = sign_in = None
+    if demo:
+        if home is None:
+            raise ValueError("Demo mode needs the sample's home folder.")
+        from kitden import demo as stand_ins  # loaded only for a demo
+
+        make_adapters = stand_ins.demo_adapters
+        run = run or stand_ins.DemoRunner(home)
+        setup_command = setup_command or (lambda: stand_ins.demo_command(home))
+        keychain_run = stand_ins.DemoKeychain(stand_ins.keychain_file(home))
+        sign_in = stand_ins.no_sign_in
 
     def build_marked(**options) -> Inventory:
         inventory = build(**options)
@@ -486,7 +508,7 @@ def create_app(
             inventory.items += gateway_items(inventory, load_settings(home), home)
         return inventory
 
-    adapters = {a.id: a for a in default_adapters(home)} if home is not None else {}
+    adapters = {a.id: a for a in make_adapters(home)} if home is not None else {}
 
     def warm(inventory: Inventory) -> None:
         """Read the marketplaces' plugins and skills once, so the first Library read is quick."""
@@ -497,7 +519,7 @@ def create_app(
         stale = version_cache.stale_clients(home, version_cache.CLIENTS)
         return version_cache.refresh_versions(home, stale) if stale else {}
 
-    if version_refresh is None and home is not None:
+    if version_refresh is None and home is not None and not demo:
         version_refresh = read_versions
     state = State(
         build_marked,
@@ -524,8 +546,9 @@ def create_app(
             ChangeStore(data_dir(home)),
             run or CommandRunner(home),
             on_write,
-            gateway_client,
+            None if demo else gateway_client,
             roots=lambda: (home, writable_roots(home, state.inventory)),
+            keychain_run=keychain_run,
         )
     write_lock = asyncio.Lock()
     # The Kitden gateway's tool lists: a refresh runs in the background, one at a time. A server
@@ -538,8 +561,10 @@ def create_app(
 
     async def _refresh() -> None:
         try:
+            # Picked as the pass runs, so tests can patch refresh_tools.
+            ask = stand_ins.canned_refresh if stand_ins else refresh_tools
             async with refresh_lock:
-                found = await refresh_tools(home, waiting.pop("names"))
+                found = await ask(home, waiting.pop("names"))
             for name, problem in found.items():
                 if problem:
                     tool_problems[name] = problem
@@ -603,6 +628,10 @@ def create_app(
     async def progress(request: Request) -> JSONResponse:
         """What the first scan still reads; answers before that scan is done."""
         return JSONResponse(state.progress.view())
+
+    async def about(request: Request) -> JSONResponse:
+        """Kitden's version, and whether this is the demo; answers before the first scan."""
+        return JSONResponse({"version": __version__, "demo": demo})
 
     async def clients(request: Request) -> JSONResponse:
         return JSONResponse(state.data["clients"])
@@ -777,6 +806,8 @@ def create_app(
             return JSONResponse([])
         if request.method == "GET":
             return JSONResponse([gateway_dict(g) for g in load_gateways(home)])
+        if stand_ins:
+            return _error(stand_ins.NOT_IN_DEMO, 422)
         body = await _body(request)
         try:
             gateway = Gateway(
@@ -826,6 +857,8 @@ def create_app(
 
     async def _read_tools(name: str, server: dict) -> list[dict] | None:
         """The server's tools, asked as the gateway asks; None when it does not answer."""
+        if stand_ins:
+            return list(stand_ins.CANNED_TOOLS)
         proxy = await load_proxy()  # the MCP SDK loads only here: the page starts without it
         async with proxy.Upstreams(home, {"servers": {name: server}}) as upstreams:
             try:
@@ -903,6 +936,8 @@ def create_app(
                 left_out = plugin_skills_left_out(plugin_id, skills, client)
                 copied = [s for s in skills if s["plugin"] == plugin_id]
             elif action == MARKETPLACE_ADD:
+                if stand_ins:
+                    return _error(stand_ins.NOT_IN_DEMO, 422)
                 try:
                     found = await asyncio.to_thread(read_marketplace, str(params.get("source", "")))
                 except LinkError as error:
@@ -960,7 +995,15 @@ def create_app(
                     save_tools(home, name, tools)
                 # It may ask a remote server whether it signs in, so not on the event loop.
                 steps = await asyncio.to_thread(
-                    local_move_steps, adapters, items, home, known, command, added_clients=added
+                    local_move_steps,
+                    adapters,
+                    items,
+                    home,
+                    known,
+                    command,
+                    added_clients=added,
+                    sign_in=sign_in,
+                    keychain_run=keychain_run,
                 )
             elif action == GATEWAY_RULE:
                 projects = {p["id"]: p["path"] for p in state.data["projects"]}
@@ -975,7 +1018,7 @@ def create_app(
             elif action == GATEWAY_PUT_BACK:
                 clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
                 server = str(params.get("server", ""))
-                steps = put_back_steps(adapters, home, server, clients)
+                steps = put_back_steps(adapters, home, server, clients, keychain_run)
             elif action == GATEWAY_KEYCHAIN:
                 steps = keychain_steps(home, str(params.get("server", "")))
             elif action == MCP_ADD:
@@ -1196,6 +1239,7 @@ def create_app(
             Route("/api/gateway-view", _read_model(_gateway_view)),
             Route("/api/events", stream),
             Route("/api/progress", progress),
+            Route("/api/about", about),
             Mount("/static", StaticFiles(directory=STATIC), name="static"),
         ],
         middleware=[

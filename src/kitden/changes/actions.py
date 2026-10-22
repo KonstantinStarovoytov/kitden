@@ -8,6 +8,7 @@ import re
 import tomllib
 import urllib.error
 import urllib.request
+from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -24,7 +25,7 @@ from kitden.clients.base import (
     ClientAdapter,
 )
 from kitden.gateway_api import gateway_name
-from kitden.local_gateway.keychain import KeychainError, resolve_entry
+from kitden.local_gateway.keychain import KeychainError, Runner, resolve_entry, run_security
 from kitden.local_gateway.settings import (
     PLACEHOLDERS,
     START_TIME,
@@ -768,6 +769,8 @@ def local_move_steps(
     command: str | None,
     *,
     added_clients: set[str],
+    sign_in: Callable[[str, dict], bool] | None = None,
+    keychain_run: Runner | None = None,
 ) -> list[Step]:
     """Move direct entries into the Kitden gateway, in one change.
 
@@ -780,6 +783,9 @@ def local_move_steps(
     A server the gateway holds already keeps its rules: a different entry replaces the held one
     (a new token, say), and the same entry only leaves the clients. A client's removal step is
     marked (`switches_left`) when that client had tools or the server off, which do not carry.
+
+    `sign_in` asks a remote server whether it signs in, and `keychain_run` reads the Keychain;
+    None is `needs_sign_in` and the real Keychain (the demo passes its stand-ins).
     """
     if not items:
         raise ValueError("Choose a server to move.")
@@ -815,7 +821,7 @@ def local_move_steps(
         if "url" not in server:
             continue
         try:
-            oauth = needs_sign_in(server["url"], server.get("headers") or {})
+            oauth = (sign_in or needs_sign_in)(server["url"], server.get("headers") or {})
         except OSError:
             raise ValueError(f"Kitden could not reach {name}.") from None
         if oauth:
@@ -824,7 +830,7 @@ def local_move_steps(
     steps = [
         step
         for n, s in servers.items()
-        if (step := _server_step(home, n, s, held.get(n))) is not None
+        if (step := _server_step(home, n, s, held.get(n), keychain_run)) is not None
     ]
     path = os.environ.get("PATH")
     if steps and path and not settings.get("path"):  # with a server entry written
@@ -881,7 +887,9 @@ def secrets_out(name: str, server: dict) -> tuple[dict, list[KeychainItem]]:
     return entry, items
 
 
-def _server_step(home: Path, name: str, server: dict, old: Any) -> Step | None:
+def _server_step(
+    home: Path, name: str, server: dict, old: Any, keychain_run: Runner | None = None
+) -> Step | None:
     """The gateway settings step for a moved server, with its secrets as Keychain items.
 
     A server the gateway holds already is compared with its references read from the
@@ -893,7 +901,7 @@ def _server_step(home: Path, name: str, server: dict, old: Any) -> Step | None:
         if not all(isinstance(old.get(f) or {}, dict) for f in SECRET_FIELDS):
             raise ValueError(f"{name} in the gateway settings could not be read.")
         try:
-            values = resolve_entry(old)
+            values = resolve_entry(old, run=keychain_run or run_security)
         except KeychainError:
             values = None  # an item is missing: write them all again
         if values == server:
@@ -934,10 +942,15 @@ def _refuse_if_present(step: Step, client: str, name: str) -> None:
 
 
 def put_back_steps(
-    adapters: dict[str, ClientAdapter], home: Path, server: str, clients: list[str]
+    adapters: dict[str, ClientAdapter],
+    home: Path,
+    server: str,
+    clients: list[str],
+    keychain_run: Runner | None = None,
 ) -> list[Step]:
     """Write a held server's entry into each chosen client, as a user-scope MCP entry, in that
-    client's format. The gateway keeps the server; the review says it then loads twice."""
+    client's format. The gateway keeps the server; the review says it then loads twice.
+    `keychain_run` reads the Keychain; None is the real one."""
     from kitden.changes.server_entry import translate_entry  # it reads helpers of this module
 
     if not clients:
@@ -946,7 +959,8 @@ def put_back_steps(
     if held is None:
         raise ValueError("Choose a server in the Kitden gateway.")
     try:
-        entry = resolve_entry(held)  # the client gets the values, not the references
+        # The client gets the values, not the references.
+        entry = resolve_entry(held, run=keychain_run or run_security)
     except KeychainError as error:
         raise ValueError(str(error)) from None
     steps = []

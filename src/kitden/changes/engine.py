@@ -413,6 +413,7 @@ class Engine:
         gateway_clients: GatewayClients | None = None,
         *,
         roots: Roots | None = None,
+        keychain_run: keychain.Runner | None = None,
     ) -> None:
         self.store = store
         self.run = run
@@ -420,6 +421,8 @@ class Engine:
         self.gateway_clients = gateway_clients
         # The home folder and the folders a change may write in; None checks nothing.
         self.roots = roots
+        # Runs the Keychain's `security`; None is the real one (the demo has a stand-in).
+        self.keychain_run = keychain_run
         # Called as each step of an Apply or Undo is done: (change id, steps done, all steps).
         # The page shows "Applying 2 of 5" from it; it runs in the worker thread.
         self.on_progress: Callable[[str, int, int], None] = lambda change_id, done, total: None
@@ -524,12 +527,16 @@ class Engine:
             lines = json.dumps({g.name: shown}, indent=2, ensure_ascii=False).splitlines()
             g.masked_diff = f"{g.url}\n" + "\n".join(f"+{line}" for line in lines)
 
+    def _security(self) -> keychain.Runner:
+        """The stand-in when one was given, else the real `security`."""
+        return self.keychain_run or keychain.run_security
+
     def _preview_keychain(self, steps: list[Step]) -> None:
         """Read whether each Keychain item is there already: Undo deletes only new ones."""
         try:
             for step in steps:
                 for item in step.keychain:
-                    item.existed = keychain.read(item.ref) is not None
+                    item.existed = keychain.read(item.ref, run=self._security()) is not None
         except KeychainError as error:
             raise ChangeRefusedError(str(error)) from None
 
@@ -751,7 +758,7 @@ class Engine:
                     lost.append(f"{item.server}/{item.key} in your Keychain keeps the new value.")
                     continue
                 try:
-                    keychain.delete(item.ref)
+                    keychain.delete(item.ref, run=self._security())
                 except KeychainError:
                     lost.append(f"{item.server}/{item.key} stays in your Keychain.")
             self._mark_secret(change, file_steps)
@@ -782,7 +789,7 @@ class Engine:
         for step in change.steps:
             for item in step.keychain:
                 stored.append(item)  # first: a write that fails halfway is taken back too
-                keychain.store(item.server, item.key, item.value)
+                keychain.store(item.server, item.key, item.value, run=self._security())
 
     @staticmethod
     def _forget_secrets(change: Change) -> None:
@@ -969,7 +976,7 @@ class Engine:
         created = [i for i in items if not i.existed]
         try:
             for item in created:
-                keychain.read(item.ref)
+                keychain.read(item.ref, run=self._security())
         except KeychainError:
             change.move_to(ChangeState.UNDO_BLOCKED)
             change.error = "Kitden could not reach the Keychain; nothing was changed."
@@ -1033,7 +1040,7 @@ class Engine:
                 raise RuntimeError(f"{step.removal.path}: undo did not copy the folder back")
         for item in reversed(created):
             try:
-                keychain.delete(item.ref)
+                keychain.delete(item.ref, run=self._security())
             except KeychainError:
                 kept.append(f"{item.server}/{item.key} stays in your Keychain.")
         self.on_progress(change.id, len(change.steps), len(change.steps))
