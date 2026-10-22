@@ -25,6 +25,7 @@ OWN = {
     ("cursor", "hook", "afterFileEdit", "user", "on", None),
     ("cursor", "instructions", "style", "project", "on", "work/site"),
     ("cursor", "instructions", ".cursorrules", "project", "on", "work/site"),
+    ("cursor", "instructions", "AGENTS.md", "project", "on", "work/site"),
 }
 CROSS_LOADED = {
     ("cursor", "skill", "brandkit", "user", "on", None),

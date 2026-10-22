@@ -11,14 +11,17 @@ import { freshness, go, projectPath, render, retry, state } from "./store.js";
 
 const KINDS = [
   ["mcp_server", "MCP servers"], ["plugin", "Plugins"], ["skill", "Skills"],
-  ["hook", "Hooks"], ["marketplace", "Marketplaces"],
+  ["hook", "Hooks"], ["marketplace", "Marketplaces"], ["instructions", "Instructions"],
 ];
 // Tabs with something to add; the others show only what is on this computer.
 const CATALOG = ["plugin", "skill"];
+// Tabs where Kitden adds nothing: no "Add missing…" and no line about where an add goes.
+const NO_ADDS = ["instructions"];
+export const hasAdds = (kind) => !NO_ADDS.includes(kind);
 const SHOW = [["mine", "Installed"], ["new", "New"], ["all", "All"]];
 const KIND_WORDS = { plugin: "Plugin", skill: "Skill" };
 // The tab's name inside a sentence: "No MCP servers in any client", "No plugins to add".
-const KIND_NOUNS = { mcp_server: "MCP servers", plugin: "plugins", skill: "skills", hook: "hooks", marketplace: "marketplaces" };
+const KIND_NOUNS = { mcp_server: "MCP servers", plugin: "plugins", skill: "skills", hook: "hooks", marketplace: "marketplaces", instructions: "instruction files" };
 // Typing waits this long after the last key before asking the server.
 const TYPING_MS = 200;
 // A tab or filter waits this long for its rows before it changes the page; a slower answer
@@ -111,9 +114,9 @@ export function addName(row, client, add, project) {
   return `${to}${project ? " for all projects" : ""}`;
 }
 
-// A quiet line above the table: in a project, where an Add goes.
-export function scopeLine(project, rows) {
-  if (!project || rows.length === 0) return null;
+// A quiet line above the table: in a project, where an Add goes. Null on a tab with no adds.
+export function scopeLine(project, rows, kind = null) {
+  if (!project || rows.length === 0 || !hasAdds(kind)) return null;
   const asks = rows.some((r) => Object.values(r.cells || {}).some((c) => c.add && c.add.project_place));
   return asks ? "An Add asks: this project, or all your projects. Adds without that choice go to all of them."
     : "Adding puts an item in all your projects.";
@@ -349,7 +352,7 @@ export function renderLibrary(main) {
   const table = buildTable(columns, answer.rows, groups, morphNext);
   const scroller = el("div", "table-scroll");
   scroller.append(table);
-  const line = scopeLine(state.project, answer.rows);
+  const line = scopeLine(state.project, answer.rows, asked.kind);
   if (line) main.append(el("p", "group-note", line));
   main.append(scroller);
   finish(answer.rows);
@@ -426,7 +429,7 @@ function toolbar(kind, answer) {
     bar.append(toggle);
   }
   // In a project: one review that adds what one client loads there and another lacks.
-  if (state.project) {
+  if (state.project && hasAdds(kind)) {
     const missing = button("Add missing…", () => review({ action: "project.align", targets: [], params: { project: state.project, chosen: null } }), "btn small");
     missing.dataset.focus = "add:missing";
     bar.append(missing);

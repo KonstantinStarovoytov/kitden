@@ -5,7 +5,7 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; panel.js must load there too.
 delete globalThis.navigator;
-const { afterParts, alignGroups, changeOutcome, chosenKeys, callsText, changeWords, footerActions, heldActions, offerLabel, leftOutText, loadsLede, moveFor, moveTargets, plainSecrets, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
+const { afterParts, alignGroups, changeOutcome, chosenKeys, callsText, changeWords, footerActions, heldActions, offerLabel, leftOutText, kindWord, loadsLede, moveFor, moveTargets, plainSecrets, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
 const { addOptions, whyNoAction } = await import('../../src/kitden/web/static/js/offer.js');
 const { data } = await import('../../src/kitden/web/static/js/store.js');
 
@@ -501,4 +501,14 @@ test('the align review groups what each client lacks and keeps the choice', () =
   data.projects = [{ id: 'p1', path: '/Users/me/work/website' }];
   assert.deepEqual(changeWords({ action: 'project.align', steps: [{ client: 'codex', name: 'github' }], align }, { params: { project: 'p1' } }), { title: 'Add what website is missing', done: 'Added 1 item for website' });
   data.projects = null;
+});
+
+test('an instruction file never says Loads', () => {
+  const columns = [{ id: 'codex', name: 'Codex' }, { id: 'cursor', name: 'Cursor' }];
+  const row = { kind: 'instructions', category: 'instructions', cells: { codex: { state: 'on' }, cursor: { state: 'on' } } };
+  assert.equal(loadsLede(row, columns), 'Codex and Cursor have it.');
+  assert.equal(loadsLede({ ...row, cells: { codex: { state: 'on' }, cursor: { state: 'none' } } }, columns), 'Codex has it.');
+  assert.equal(kindWord(row), 'Instruction file');
+  assert.equal(kindWord({ kind: 'instructions', category: 'agent' }), 'Agent');
+  assert.equal(kindWord({ kind: 'skill' }), 'Skill');
 });

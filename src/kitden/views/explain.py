@@ -6,6 +6,7 @@ from typing import Any
 from kitden.model import Enabled, Item, ItemKind
 from kitden.views.effective import effective_view
 from kitden.views.findings import base_name
+from kitden.views.load_map import category as category_of
 
 
 def summary_line(item: Item) -> str:
@@ -42,7 +43,49 @@ def brief(item: Item) -> dict[str, Any]:
         "secret_present": item.secret_present,
         "actions": list(item.actions),
         "summary": summary_line(item) or None,
+        "category": category_of(item),
     }
+
+
+def reads(item: Item, items: list[Item]) -> str:
+    """When the client reads an instruction file, where its docs say so; else what it is.
+
+    checked 2026-10-22 (code.claude.com/docs/en/memory): CLAUDE.md files and rules without
+    `paths` load at launch; a rule with `paths` loads when Claude works with matching files.
+    checked 2026-10-22 (learn.chatgpt.com/docs/agent-configuration/agents-md): Codex reads
+    AGENTS.override.md instead of AGENTS.md in the same folder.
+    checked 2026-10-22 (cursor.com/docs/context/rules): a rule applies always, by its
+    description, for matching files, or when you @-mention it; AGENTS.md in the project root.
+    checked 2026-10-22 (cursor.com/help/customization/rules): `.cursorrules` is legacy.
+    """
+    kind = category_of(item)
+    path = item.source.path or ""
+    if kind == "command":
+        return f"A command: it runs when you type /{item.name}."
+    if kind == "agent":
+        return "An agent: it runs when a task calls for it or you ask for it."
+    if item.client == "codex":
+        override = any(
+            i.client == "codex"
+            and i.name == "AGENTS.override.md"
+            and i.source.path == path.replace("AGENTS.md", "AGENTS.override.md")
+            for i in items
+        )
+        if item.name == "AGENTS.md" and override:
+            return "Codex reads AGENTS.override.md in this folder instead."
+        return "Codex reads it when a session starts."
+    if item.client == "cursor":
+        if path.endswith(".mdc"):
+            return (
+                "Cursor uses it by its rule type: always, when it fits, for some files, "
+                "or when you mention it."
+            )
+        if item.name == ".cursorrules":
+            return "An older rules file. Cursor plans to stop reading it."
+        return "Cursor reads it in each chat in this project."
+    if "/rules/" in path:
+        return "Read when a session starts. A rule that names paths is read only for those files."
+    return "Read when a session starts."
 
 
 def why(item: Item, view, loaded: set[str]) -> str:
@@ -69,12 +112,17 @@ def _matches(item: Item, name: str) -> bool:
     return item.name == name or (item.kind is ItemKind.PLUGIN and base_name(item) == name)
 
 
-def explain(inventory, name: str, kind: str | None, project: str | None) -> list[dict]:
-    """Every definition of `name` (plugins also by base name), with how it loads and why."""
+def explain(
+    inventory, name: str, kind: str | None, project: str | None, category: str | None = None
+) -> list[dict]:
+    """Every definition of `name` (plugins also by base name), with how it loads and why.
+    `category` narrows instruction files to one (a command and an agent may share a name)."""
     definitions = []
     views: dict[str, Any] = {}
     for item in inventory.items:
         if not _matches(item, name) or (kind is not None and str(item.kind) != kind):
+            continue
+        if category is not None and category_of(item) != category:
             continue
         if item.project is not None and project is not None and item.project != project:
             continue
@@ -89,7 +137,11 @@ def explain(inventory, name: str, kind: str | None, project: str | None) -> list
                 "loads": item.id in loaded,
                 "overridden": beaten.get(item.id) == "override",
                 "merged": beaten.get(item.id) == "merged",
-                "why": why(item, view, loaded),
+                "why": (
+                    reads(item, inventory.items)
+                    if item.kind is ItemKind.INSTRUCTIONS
+                    else why(item, view, loaded)
+                ),
             }
         )
     return definitions

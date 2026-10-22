@@ -10,7 +10,7 @@ from starlette.testclient import TestClient
 
 from kitden.clients.cursor import REACTIVE_KEY
 from kitden.model import Gateway
-from kitden.views.findings import mark_gateways
+from kitden.views.findings import find_findings, mark_gateways
 from kitden.views.inventory import build_inventory, default_adapters
 from kitden.views.library import library
 from kitden.web.app import create_app
@@ -347,7 +347,14 @@ def test_show_mine_new_and_all(home):
         1,
         10,
     )
-    assert set(mine["counts"]) == {"mcp_server", "plugin", "skill", "hook", "marketplace"}
+    assert set(mine["counts"]) == {
+        "mcp_server",
+        "plugin",
+        "skill",
+        "hook",
+        "marketplace",
+        "instructions",
+    }
     # Tabs without a catalog always show what is on this computer.
     assert _library(home, "hook", show="new")["rows"] == _library(home, "hook")["rows"]
     assert _library(home, "hook")["categories"] == []
@@ -640,3 +647,45 @@ def test_library_and_offer_let_other_requests_run_meanwhile(home, monkeypatch):
                 assert client.get("/api/clients").status_code == 200
                 release.set()
                 assert slow_read.result().status_code == 200, path
+
+
+# Instructions ---------------------------------------------------------------------------------
+
+
+def test_the_instructions_tab_lists_files_per_client(home):
+    answer = _library(home, "instructions")
+    names = {(r["name"], r["category"]) for r in answer["rows"]}
+    assert {
+        ("CLAUDE.md", "instructions"),
+        ("AGENTS.md", "instructions"),
+        ("review", "command"),
+        ("reviewer", "agent"),
+    } <= names
+    cells = [c for r in answer["rows"] for c in r["cells"].values()]
+    assert all(c["add"] is None for c in cells)
+    # Presence, not loading: commands and agents run on demand.
+    assert {c["word"] for c in cells if c["state"] != "none"} == {"Has it"}
+    assert answer["categories"] == []
+
+
+def test_agents_md_is_one_row_for_codex_and_cursor_without_a_flag(home):
+    site = str(home / "work/site")
+    inventory = build_inventory(home)
+    assert not [f for f in find_findings(inventory, site) if "AGENTS.md" in f.names]
+    answer = library(
+        inventory,
+        {a.id: a for a in default_adapters(home)},
+        site,
+        gateway_registered=False,
+        kind="instructions",
+    )
+    (row,) = [r for r in answer["rows"] if r["name"] == "AGENTS.md"]
+    assert (row["cells"]["codex"]["word"], row["cells"]["cursor"]["word"]) == ("Has it", "Has it")
+    assert row["flags"] == []
+
+
+def test_a_command_and_an_agent_with_one_name_are_two_rows(home):
+    _write(home / ".claude/agents/review.md", "---\nname: review\n---\nReview code.\n")
+    rows = [r for r in _library(home, "instructions")["rows"] if r["name"] == "review"]
+    assert sorted(r["category"] for r in rows) == ["agent", "command"]
+    assert len({r["key"] for r in rows}) == 2

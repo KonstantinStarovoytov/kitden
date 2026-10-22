@@ -68,3 +68,22 @@ def test_merged_definitions_are_not_marked_overridden(home):
     found = explain(build_inventory(home), "neon", "mcp_server", str(home / "work/api"))
     user = next(d for d in found if d["scope"] == "user")
     assert (user["merged"], user["overridden"]) == (True, False)
+
+
+def test_one_row_with_two_claude_md_files_lists_both_paths(home):
+    website = home / "work/website"
+    (website / ".claude/CLAUDE.md").write_text("# More rules\n")
+    found = explain(build_inventory(home), "CLAUDE.md", "instructions", str(website))
+    sources = {d["source"] for d in found if d["scope"] == "project"}
+    assert sources == {str(website / "CLAUDE.md"), str(website / ".claude/CLAUDE.md")}
+    assert {d["category"] for d in found} == {"instructions"}
+    assert all("Loads" not in d["why"] for d in found)
+    assert "session starts" in found[0]["why"]
+
+
+def test_explain_can_pick_one_category(home):
+    (home / ".claude/agents/review.md").write_text("Review code.\n")
+    both = explain(build_inventory(home), "review", "instructions", None)
+    agents = explain(build_inventory(home), "review", "instructions", None, category="agent")
+    assert sorted(d["category"] for d in both) == ["agent", "command"]
+    assert [d["category"] for d in agents] == ["agent"]

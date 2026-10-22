@@ -19,6 +19,16 @@ from kitden.watch import Watcher, is_relevant
         ("/h/.codex/shell_snapshots/snap.sh", False),
         ("/h/.claude/projects/-Users-x/abc.jsonl", False),
         ("/h/.claude/skills/brandkit/notes.txt", False),
+        ("/h/.claude/CLAUDE.md", True),
+        ("/h/CLAUDE.local.md", True),
+        ("/h/.codex/AGENTS.md", True),
+        ("/h/.codex/AGENTS.override.md", True),
+        ("/h/p/.cursorrules", True),
+        ("/h/.claude/commands/git/push.md", True),
+        ("/h/.claude/agents/reviewer.md", True),
+        ("/h/.cursor/rules/style.mdc", True),
+        ("/h/.claude/rules/style.md", True),
+        ("/h/.claude/plans/notes.md", False),
     ],
 )
 def test_only_setup_files_trigger_a_rescan(path, want):

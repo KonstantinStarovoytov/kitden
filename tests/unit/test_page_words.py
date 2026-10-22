@@ -875,3 +875,8 @@ def test_the_clients_card_hears_when_versions_arrive():
 def test_a_change_whose_backup_holds_a_secret_says_so():
     assert "This change's backup or record holds a secret." in script("parts.js")
     assert "backupNote(entry)" in script("changes.js")
+
+
+def test_library_has_an_instructions_tab():
+    text = script("library.js")
+    assert '["instructions", "Instructions"]' in text

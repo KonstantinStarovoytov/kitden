@@ -1,7 +1,8 @@
 """The load map: one row per item, one column per client (portal redesign).
 
 Rows group items by kind and name. A plugin is one row per marketplace ("figma@a" and
-"figma@b" are two rows named "figma"); other kinds group by name.
+"figma@b" are two rows named "figma"); an instruction file per category (a command and an agent
+named "review" are two rows); other kinds group by name.
 Each cell says what that client does with the item in the chosen project: loads it, has it but
 does not load it, routes it through the gateway, or does not know. The Claude Desktop Code tab
 has no column of its own: its extra items show in the Claude Code column as "Desktop app".
@@ -50,12 +51,21 @@ class Row:
     name: str
     source: str | None  # the marketplace of a plugin id, else None
     lookup: str  # the full item name that /api/explain takes
+    category: str | None = None  # an instruction file's: "instructions", "command" or "agent"
     cells: dict[str, Cell] = field(default_factory=dict)
     flags: list[dict] = field(default_factory=list)
 
 
+def category(item: Item) -> str | None:
+    """An instruction file's category; None for other kinds."""
+    return dict(item.summary).get("category") if item.kind is ItemKind.INSTRUCTIONS else None
+
+
 def row_key(item: Item) -> str:
-    """The row an item belongs to: a plugin per full id, anything else per name."""
+    """The row an item belongs to: a plugin per full id, an instruction file per category and
+    name, anything else per name."""
+    if item.kind is ItemKind.INSTRUCTIONS:
+        return _hash(item.kind, category(item) or "", item.name)
     return _hash(item.kind, item.name if item.kind is ItemKind.PLUGIN else base_name(item))
 
 
@@ -170,6 +180,7 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
                 name=base_name(item),
                 source=marketplace or None,
                 lookup=item.name,
+                category=category(item),
             )
         return rows[key]
 
@@ -232,6 +243,7 @@ def map_dict(inventory, rows: list[Row]) -> dict:
                 "name": r.name,
                 "source": r.source,
                 "lookup": r.lookup,
+                "category": r.category,
                 "cells": {
                     c: {
                         "state": cell.state,

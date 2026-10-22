@@ -44,7 +44,8 @@ The clients Kitden found sit on the right, and a card says whether the Kitden ga
 
 **Library** is one page for what each client loads and what you can add to it. Each row is an
 item and each column is a client on this computer; the "−" on a column head hides that client,
-and "Show" brings it back. Tabs split MCP servers, plugins, skills, hooks and marketplaces. On
+and "Show" brings it back. Tabs split MCP servers, plugins, skills, hooks, marketplaces and
+instructions (CLAUDE.md, AGENTS.md, rules, commands and agents). On
 plugins and skills, choose Installed, New (not on this computer yet) or All, and filter by
 category. Pick a project at the top to see what loads in that folder.
 

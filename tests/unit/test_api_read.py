@@ -32,6 +32,7 @@ def test_items_can_be_filtered_by_project(client):
         ("cursor", "langfuse@cursor-public"),
         ("cursor", "style"),
         ("cursor", ".cursorrules"),
+        ("cursor", "AGENTS.md"),
     }
 
 

@@ -23,7 +23,7 @@ from kitden.views.gateway_view import group_of
 from kitden.views.load_map import COLUMNS, MARKS, NAMES, Row, load_map
 from kitden.views.skills import skill_catalog
 
-KINDS = ("mcp_server", "plugin", "skill", "hook", "marketplace")
+KINDS = ("mcp_server", "plugin", "skill", "hook", "marketplace", "instructions")
 # Tabs with something to add; the others show only what is on this computer.
 CATALOG_KINDS = ("plugin", "skill")
 SHOWS = ("mine", "new", "all")
@@ -31,6 +31,9 @@ VIA_CLAUDE_CODE = "Cursor loads Claude Code's plugins. Add it to Claude Code."
 SKILL_VIA_CLAUDE_CODE = "Cursor loads Claude Code's plugins. Add the plugin to Claude Code."
 OUTSIDE_FOLDER = "This skill uses files outside its folder, so it can't be copied."
 SHARE_IN_GATEWAY = "Move it into the gateway to share it."
+# An instruction file's cell says the client has it, not that it loads: commands and agents run
+# on demand, and some rules apply only to some files. Details says when each client reads it.
+HAS_IT = "Has it"
 # Where a plugin goes into one project when Kitden cannot put it there.
 # checked 2026-10-22 (learn.chatgpt.com/docs/plugins): Codex installs a plugin for its whole
 # environment; the docs show no per-project install.
@@ -173,9 +176,28 @@ def _map_rows(
             if why and not cell["add"]:
                 cell["reason"] = why(r, client)
         row = _row(
-            r.key, kind, r.name, r.source, cells, mine=bool(holders), lookup=r.lookup, flags=r.flags
+            r.key,
+            kind,
+            r.name,
+            r.source,
+            cells,
+            mine=bool(holders),
+            lookup=r.lookup,
+            flags=r.flags,
+            category=r.category,
         )
         out.append((row, holders))
+    return out
+
+
+def _instruction_rows(map_rows: list[Row], found: list[str]) -> Built:
+    """Instruction files, commands and agents: the load map rows, each cell that has the file
+    saying so. Kitden adds none, so a dash has no reason."""
+    out = _map_rows(map_rows, "instructions", found)
+    for row, _ in out:
+        for cell in row["cells"].values():
+            if cell["state"] not in ("none", "missing"):
+                cell["word"] = HAS_IT
     return out
 
 
@@ -616,6 +638,7 @@ def library(
         # Kitden adds no hooks, so a hook's dash has no reason.
         "hook": _map_rows(map_rows, "hook", found),
         "marketplace": _map_rows(map_rows, "marketplace", found, _marketplace_why(offers)),
+        "instructions": _instruction_rows(map_rows, found),
     }
     rows = {}
     for k, pairs in built.items():

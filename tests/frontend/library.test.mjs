@@ -38,7 +38,7 @@ const requests = [];
 globalThis.fetch = (url) => new Promise((resolve) => {
   requests.push({ url, answer: (body) => resolve({ ok: true, status: 200, json: async () => body }) });
 });
-const { addChoices, addName, scopeLine, cellNode, emptyState, hiddenClients, hiddenLine, hideButton, loadLibrary, loadLibraryFor, metaText, moreLine, nameCell, noteFor, previewFor, setHidden } = await import('../../src/kitden/web/static/js/library.js');
+const { addChoices, addName, hasAdds, scopeLine, cellNode, emptyState, hiddenClients, hiddenLine, hideButton, loadLibrary, loadLibraryFor, metaText, moreLine, nameCell, noteFor, previewFor, setHidden } = await import('../../src/kitden/web/static/js/library.js');
 const { data, freshness, hashFor, parseHash, state } = await import('../../src/kitden/web/static/js/store.js');
 const later = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -405,4 +405,14 @@ test('the scope line needs a project and rows', () => {
   assert.equal(scopeLine('p1', [{}]), 'Adding puts an item in all your projects.');
   assert.equal(scopeLine('p1', []), null);
   assert.equal(scopeLine(null, [{}]), null);
+});
+
+test('an instructions row shows its category as the quiet word', () => {
+  assert.equal(metaText({ kind: 'instructions', name: 'review', category: 'command', source: null }), 'command');
+});
+test('the Instructions tab has no adds and no scope line', () => {
+  assert.equal(hasAdds('instructions'), false);
+  assert.equal(hasAdds('skill'), true);
+  assert.equal(scopeLine('p1', [{}], 'instructions'), null);
+  assert.equal(scopeLine('p1', [{}], 'skill'), 'Adding puts an item in all your projects.');
 });

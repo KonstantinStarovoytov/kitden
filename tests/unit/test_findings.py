@@ -278,3 +278,10 @@ def test_direct_entries_beside_a_held_server_keep_their_note(tmp_path):
     add_entry(home, "cursor", "github", {"command": "npx"})
     names = cross_client_names(home, with_held=True)
     assert any(n == ("github", "github") for n in names)
+
+
+def test_instruction_files_in_two_clients_are_not_a_finding():
+    codex = item("codex", ItemKind.INSTRUCTIONS, "AGENTS.md", "/h/.codex/AGENTS.md")
+    cursor = item("cursor", ItemKind.INSTRUCTIONS, "AGENTS.md", "/h/p/AGENTS.md")
+    rules = item("cursor", ItemKind.INSTRUCTIONS, "AGENTS.md", "/h/q/AGENTS.md")
+    assert find_findings(Inventory(items=[codex, cursor, rules])) == []

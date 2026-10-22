@@ -28,14 +28,26 @@ SETUP_FILES = {
     "plugin.json",
     "marketplace.json",
     "SKILL.md",
+    # Instruction files.
+    "CLAUDE.md",
+    "CLAUDE.local.md",
+    "AGENTS.md",
+    "AGENTS.override.md",
+    ".cursorrules",
 }
+# Commands, agents and rules are any .md or .mdc file inside these folders.
+INSTRUCTION_FOLDERS = {"commands", "agents", "rules"}
 NOISY_FOLDERS = {"sessions", "archived_sessions", "logs", "log", "shell_snapshots"}
 EXPECT_SECONDS = 10.0  # how long a planned own write is remembered
 
 
 def is_relevant(path: str) -> bool:
     parts = Path(path).parts
-    return parts[-1] in SETUP_FILES and not NOISY_FOLDERS.intersection(parts)
+    if NOISY_FOLDERS.intersection(parts):
+        return False
+    if parts[-1] in SETUP_FILES:
+        return True
+    return parts[-1].endswith((".md", ".mdc")) and bool(INSTRUCTION_FOLDERS.intersection(parts))
 
 
 def _sha(path: str) -> str | None:

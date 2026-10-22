@@ -10,6 +10,13 @@ import { busy, current as currentModel, currentError, data, reload, render, setB
 const KIND_WORDS = {
   mcp_server: "MCP server", plugin: "Plugin", skill: "Skill", hook: "Hook", marketplace: "Marketplace",
 };
+const CATEGORY_WORDS = { instructions: "Instruction file", command: "Command", agent: "Agent" };
+
+// The Details kicker: the kind, or for an instruction file its category.
+export function kindWord(row) {
+  if (row.kind === "instructions") return CATEGORY_WORDS[row.category] || "Instruction file";
+  return KIND_WORDS[row.kind] || row.kind;
+}
 const CLIENT_ORDER = ["claude_code", "claude_desktop_code_tab", "codex", "cursor"];
 const WRITABLE = ["claude_code", "codex", "cursor"];
 const ACTION_BUTTONS = {
@@ -124,6 +131,8 @@ export async function openItem(row, { instant = false, tools: toolsNext = {} } =
   let definitions;
   try {
     const params = { name: row.lookup || row.name, kind: row.kind, project: state.project };
+    // A command and an agent may share a name: ask for this row's one.
+    if (row.category && row.kind === "instructions") params.category = row.category;
     definitions = (await getJson(`/api/explain${query(params)}`)).definitions;
   } catch {
     if (current && current.row === row) {
@@ -143,11 +152,15 @@ export async function openItem(row, { instant = false, tools: toolsNext = {} } =
 }
 
 // The line under the Details title: the clients that load the item, then those where the page
-// cannot tell whether it is on.
+// cannot tell whether it is on. An instruction file says which clients have it, never "Loads".
 export function loadsLede(row, columns) {
   const names = (states) => columns
     .filter((c) => states.includes(row.cells[c.id] && row.cells[c.id].state))
     .map((c) => c.name);
+  if (row.kind === "instructions") {
+    const has = names(["on", "unk"]);
+    return has.length ? `${joinWords(has)} ${has.length > 1 ? "have" : "has"} it.` : "No client has it here.";
+  }
   const loads = names(["on", "gw"]);
   const maybe = names(["unk"]);
   const lines = [];
@@ -159,7 +172,7 @@ export function loadsLede(row, columns) {
 // The title names the source too when two rows share the name ("superpowers · cursor-public").
 function itemHeader(row) {
   const map = currentModel("map");
-  return header(KIND_WORDS[row.kind] || row.kind, rowTitle(row), loadsLede(row, map ? map.columns : []), "Close", true);
+  return header(kindWord(row), rowTitle(row), loadsLede(row, map ? map.columns : []), "Close", true);
 }
 
 // The warning names the fix; the server sends both (load_map.py).
@@ -345,7 +358,7 @@ function layer(def) {
     look = "unk";
     badge = "Unknown";
     why = UNKNOWN_WORDS[def.unknown_reason] || "This page cannot tell whether it is on.";
-  } else if (def.loads) { look = def.via_gateway ? "gw" : "on"; badge = "Loads"; }
+  } else if (def.loads) { look = def.via_gateway ? "gw" : "on"; badge = def.kind === "instructions" ? "Has it" : "Loads"; }
   else if (def.merged) badge = "Merged";
   else if (def.overridden) { look = "over"; badge = "Overridden"; }
   else if (def.enabled === "off") badge = "Off";

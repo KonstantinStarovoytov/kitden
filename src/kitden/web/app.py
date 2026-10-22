@@ -708,7 +708,9 @@ def create_app(
         if not name:
             return _error("Say which item to explain.", 422)
         kind = request.query_params.get("kind") or None
-        return JSONResponse({"definitions": explain(state.inventory, name, kind, path)})
+        category = request.query_params.get("category") or None
+        definitions = explain(state.inventory, name, kind, path, category)
+        return JSONResponse({"definitions": definitions})
 
     def _overview(request, project, path):
         held, problem = _kitden(path)

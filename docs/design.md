@@ -54,12 +54,12 @@ The Library has one row per item and one column per client found on this compute
 | --- | --- |
 | Row, line one | The name in mono, then quiet muted text: the category, and the source only when two rows share a name. The quiet text gives way first when the line is tight. The › comes last. |
 | Row, line two | Flags first, then what it does, in muted text, one line, cut with "…". With no description the flags have the line to themselves; a row with neither has one line. |
-| Cell state | A dot and a word. "Via Claude Code" is an empty gray ring, like Off: Cursor does not have it yet, and loads it through Claude Code once Claude Code has it. "Has its skills" (the client has every skill in the plugin, copied here or from another plugin) is a filled green dot, like Loads. On plugins and skills, a dash says why in its hover text. |
+| Cell state | A dot and a word. "Via Claude Code" is an empty gray ring, like Off: Cursor does not have it yet, and loads it through Claude Code once Claude Code has it. "Has its skills" (the client has every skill in the plugin, copied here or from another plugin) is a filled green dot, like Loads. On Instructions every cell that has the file says "Has it" (a filled green dot), never "Loads": commands and agents run on demand; Details says when each client reads it. On plugins and skills, a dash says why in its hover text. |
 | Cell button | A small outlined button in the accent family ("+ Add", "+ Add skills", "+ Add the plugin") in place of a state. It opens the review for that one client; the rest of the row opens Details. |
 | Column head | The client's tile and name, and a small "−" in quiet gray that hides the column; it darkens on hover and keyboard focus. The last shown column has none. |
 | Hidden line | One quiet line above the table: "Hidden: Cursor · Show". Show brings every column back. |
 | Group line | With All: "Installed", then "New", each on a quiet band. |
-| Add missing | In a project, a small plain "Add missing…" in the toolbar. Its review lists what each client lacks as checkboxes, one group per client; each line says where it goes. A change previews again; with none checked, Apply waits. Names loaded from another source are listed under "Not the same; not touched". |
+| Add missing | In a project, a small plain "Add missing…" in the toolbar (not on Instructions, where Kitden adds nothing). Its review lists what each client lacks as checkboxes, one group per client; each line says where it goes. A change previews again; with none checked, Apply waits. Names loaded from another source are listed under "Not the same; not touched". |
 
 Every pressable area is at least 24 px tall and wide (WCAG 2.2 AA target size, checked 2026-10-19). The plugin switch keeps its 34 x 20 track inside a 24 px button, and a client checkbox is pressed through its 24 px label.
 

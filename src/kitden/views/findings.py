@@ -112,8 +112,13 @@ def find_findings(inventory, project: str | None = None) -> list[Finding]:
                     )
                 )
             elif item.source.owner_client == client:
-                # Kitden's own entry and servers it holds are meant to be in every client.
-                if is_own_entry(item) or item.via_gateway == KITDEN_GATEWAY:
+                # Kitden's own entry and servers it holds are meant to be in every client, and
+                # one AGENTS.md read by two clients is expected.
+                if (
+                    is_own_entry(item)
+                    or item.via_gateway == KITDEN_GATEWAY
+                    or item.kind is ItemKind.INSTRUCTIONS
+                ):
                     continue
                 own[(item.kind, item.name)][client] = item
 

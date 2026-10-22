@@ -165,3 +165,10 @@ def test_kitden_mcp_reads_versions_from_the_cache_and_runs_no_command(home, tmp_
     assert {c.version for c in built["inventory"].clients if c.id != "claude_desktop_code_tab"} == {
         None
     }
+
+
+def test_the_server_names_instruction_files():
+    from kitden.views.inventory import Inventory
+
+    server = create_server(lambda: Inventory())
+    assert "instruction files" in server.instructions

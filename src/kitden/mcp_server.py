@@ -36,8 +36,9 @@ NO_EDITS = (
 )
 NO_CHANGES = "Read-only: this tool cannot change settings. " + NO_EDITS
 ABOUT = (
-    "Shows which MCP servers, skills, plugins, hooks and marketplaces Claude Code, Codex and "
-    "Cursor load on this computer, where each comes from, and problems such as duplicates. "
+    "Shows which MCP servers, skills, plugins, hooks, marketplaces and instruction files "
+    "(CLAUDE.md, AGENTS.md, rules, commands, agents) Claude Code, Codex and Cursor have on this "
+    "computer, where each comes from, and problems such as duplicates. "
 )
 INSTRUCTIONS = ABOUT + NO_CHANGES
 # With servers in the Kitden gateway, the same server also offers their tools.
@@ -83,7 +84,8 @@ def create_server(
         annotations=READ_ONLY,
         description=(
             "Show what each AI coding client loads for a project: MCP servers, skills, plugins, "
-            "hooks and marketplaces, with source, scope and on/off state. project_path defaults "
+            "hooks, marketplaces and instruction files, with source, scope and on/off state. "
+            "project_path defaults "
             "to the current folder; client (claude_code, claude_desktop_code_tab, codex, cursor) "
             "defaults to all. " + NO_CHANGES
         ),
@@ -128,7 +130,7 @@ def create_server(
         description=(
             "Explain one name: every definition across clients and scopes, which one loads in "
             "the project, and why. kind is optional (mcp_server, skill, plugin, hook, "
-            "marketplace). " + NO_CHANGES
+            "marketplace, instructions). " + NO_CHANGES
         ),
     )
     def explain_item(

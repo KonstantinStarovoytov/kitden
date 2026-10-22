@@ -157,6 +157,7 @@ def test_cursor_project_wins_and_imported_items_load(tmp_path):
         ("marketplace", "team-mkt", "user"),
         ("instructions", "style", "project"),
         ("instructions", ".cursorrules", "project"),
+        ("instructions", "AGENTS.md", "project"),
     }
     assert shadows(view) == set()
 
