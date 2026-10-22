@@ -190,6 +190,11 @@ def test_every_mcp_server_outside_the_gateway_is_flagged_with_its_kind():
     assert "/h/codex.json" in findings["neon"].explanation
 
 
+def test_kitdens_own_entry_is_not_flagged():
+    items = [mcp("codex", "kitden", command="kitden"), mcp("codex", "n8n", command="npx")]
+    assert [f.names for f in find_bypasses(Inventory(items=items))] == [("n8n",)]
+
+
 def test_entries_that_point_to_a_registered_gateway_are_marked_and_not_flagged():
     gateway = Gateway(url=GATEWAY_URL)
     inventory = Inventory(

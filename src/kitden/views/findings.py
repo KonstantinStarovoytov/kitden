@@ -212,11 +212,14 @@ def bypass_kind(item: Item) -> str:
 
 
 def find_bypasses(inventory, project: str | None = None) -> list[Finding]:
-    """Every MCP server that loads without going through a registered gateway (FR-039)."""
+    """Every MCP server that loads without going through a registered gateway (FR-039), except
+    Kitden's own entry."""
     findings = []
     for client in sorted({i.client for i in inventory.items}):
         for item in effective_view(inventory, client, project).items:
             if item.kind is not ItemKind.MCP_SERVER or item.via_gateway or item.client != client:
+                continue
+            if is_own_entry(item):  # Kitden's own read-only server, not a tool server
                 continue
             text = (
                 f"{client}: {item.name} {bypass_kind(item)} and does not go through the "
