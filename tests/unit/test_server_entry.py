@@ -100,9 +100,15 @@ def test_a_reference_the_client_cannot_read_is_refused_with_the_spec_words():
         translate_entry(shelled, "codex")
     with pytest.raises(
         ValueError,
-        match=r"^Cursor cannot read `\$\{TOKEN:-x\}` from your shell; put the value in\.$",
+        match=r"^Cursor cannot read `\$\{TOKEN\}` from your shell; put the value in\.$",
     ):
         translate_entry({"url": "https://a.invalid/mcp", "headers": {"A": "${TOKEN:-x}"}}, "cursor")
+    # A default may hold a secret: the reason names only the variable.
+    secret = "sk-live-SENTINEL_SECRET_DEFAULT_0123456789"
+    for client in ("cursor", "codex"):
+        with pytest.raises(ValueError) as refused:
+            translate_entry({"command": "npx", "args": [f"--key=${{TOKEN:-{secret}}}"]}, client)
+        assert secret not in str(refused.value) and "`${TOKEN}`" in str(refused.value)
     with pytest.raises(ValueError, match=r"^Codex cannot read `\$\{OTHER\}` from your shell"):
         translate_entry({"command": "npx", "env": {"KEY": "${OTHER}"}}, "codex")
 
@@ -200,4 +206,38 @@ def test_sse_and_a_start_folder_are_kept_where_the_client_has_them():
     assert translate_entry({"command": "npx", "cwd": "/opt/app"}, "codex") == {
         "command": "npx",
         "cwd": "/opt/app",
+    }
+
+
+def test_cursors_own_variables_stay_in_cursor():
+    for variable in ("userHome", "workspaceFolder", "workspaceFolderBasename", "pathSeparator"):
+        entry = {"command": "npx", "args": [f"${{{variable}}}/data"]}
+        for client, words in (("claude_code", "Claude Code"), ("codex", "Codex")):
+            with pytest.raises(ValueError) as refused:
+                translate_entry(entry, client, source="cursor")
+            assert str(refused.value) == (
+                f"The entry uses a Cursor variable (`${{{variable}}}`) that {words} cannot read."
+            )
+    env = {"command": "npx", "env": {"KEY": "${env:KEY}"}}
+    assert translate_entry(env, "codex", source="cursor") == {"command": "npx", "env_vars": ["KEY"]}
+
+
+def test_a_codex_literal_stays_plain_text():
+    entry = {"command": "npx", "env": {"PASS": "a${B}c", "KEY": "${KEY}"}}
+    # Codex fills in nothing, so `${KEY}` is text there, not a reference.
+    assert translate_entry(entry, "cursor", source="codex") == entry
+    with pytest.raises(ValueError) as refused:
+        translate_entry(entry, "claude_code", source="codex")
+    assert (
+        str(refused.value) == "The entry holds `${B}` as plain text; Claude Code would fill it in."
+    )
+    with pytest.raises(ValueError, match="Cursor would fill it in"):
+        translate_entry({"command": "npx", "args": ["${userHome}"]}, "cursor", source="codex")
+    # Codex's own reference keys are still references.
+    assert translate_entry(
+        {"command": "npx", "env_vars": ["K"]}, "claude_code", source="codex"
+    ) == {
+        "type": "stdio",
+        "command": "npx",
+        "env": {"K": "${K}"},
     }

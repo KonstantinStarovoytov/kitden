@@ -884,7 +884,8 @@ def add_server_steps(
         adapter = adapters.get(client)
         if adapter is None or client not in CLIENT_WORDS:
             raise ValueError(f"{client} cannot take an MCP entry")
-        step = adapter.add_server_step(item.name, translate_entry(entry, client))
+        value = translate_entry(entry, client, source=item.client)
+        step = adapter.add_server_step(item.name, value)
         _refuse_if_present(step, client, item.name)
         steps.append(step)
     return steps

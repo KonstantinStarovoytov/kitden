@@ -19,6 +19,12 @@ chosen client writes a user-scope entry:
   entry serves both streamable HTTP and SSE; no WebSocket and no start folder setting is
   documented (checked 2026-10-22, cursor.com/docs/context/mcp).
 
+An entry copied from Cursor may use Cursor's own variables (`${userHome}`,
+`${workspaceFolder}` and others); no other client has them, so they are refused. Codex fills
+in no `${...}` text, so in an entry copied from Codex it is plain text; it is refused where
+the new client would fill it in. A refusal names only the variable, never a `:-default`, which
+may hold a secret.
+
 A project folder (settings.PLACEHOLDERS) is not a shell value; each client names it its own way:
 
 - Claude Code sets CLAUDE_PROJECT_DIR in the server's environment, so a user-scope entry
@@ -42,6 +48,13 @@ PROJECT_FOLDER = {"claude_code": "${CLAUDE_PROJECT_DIR:-.}"}
 _PLACEHOLDER = re.compile("|".join(re.escape(p) for p in sorted(PLACEHOLDERS, key=len)[::-1]))
 # `${VAR}`, `${VAR:-default}`, and Cursor's `${env:VAR}`.
 _REFERENCE = re.compile(r"\$\{(env:)?([A-Za-z_][A-Za-z0-9_]*)(:-[^}]*)?\}")
+# Cursor's own variables, such as `${userHome}` and `${workspaceFolder}`: no other client has them.
+_CURSOR_VARIABLE = re.compile(r"\$\{(?!env:)([^}:]*)")
+# Text Codex keeps as it is: `${` stands for itself there, so it is marked while it is copied.
+_LITERAL = "\x00{"
+_MARKED = re.compile(r"\x00\{([^}:]*)")
+# What Cursor fills in from a `${...}` in its files (checked 2026-10-22).
+_CURSOR_FILLS = re.compile(r"\$\{(env:|userHome\}|workspaceFolder|pathSeparator\}|/\})")
 _BEARER = re.compile(r"Bearer \$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 TOOL_TIME = "tool_timeout_sec"
 _HELPERS = ("envFile", "http_headers_helper", "headersHelper")
@@ -96,9 +109,10 @@ _CHECKS = {
 }
 
 
-def _canonical(entry: Any) -> dict:
+def _canonical(entry: Any, client: str, source: str | None) -> dict:
     """The entry in one shape: references as `${VAR}`, Codex's own forms read back into
-    headers and env. Refuses what cannot be copied as it is."""
+    headers and env. Refuses what cannot be copied as it is. `source` is the client the entry
+    comes from, or None for the Kitden gateway's own entry."""
     if not isinstance(entry, dict):
         raise ValueError(UNREADABLE)
     if any(key in entry for key in _HELPERS):
@@ -120,7 +134,18 @@ def _canonical(entry: Any) -> dict:
     if not isinstance(entry.get("command") or entry.get("url"), str):
         raise ValueError(UNREADABLE)
 
-    def plain(text: str) -> str:  # Cursor's `${env:VAR}` is `${VAR}` here
+    if source == "cursor" and client != "cursor":
+        for text in _texts({k: entry.get(k) for k in ("command", "args", "env", "url", "headers")}):
+            if found := _CURSOR_VARIABLE.search(text):
+                raise ValueError(
+                    f"The entry uses a Cursor variable (`${{{found.group(1)}}}`) that "
+                    f"{CLIENT_WORDS[client]} cannot read."
+                )
+
+    def plain(text: str) -> str:
+        if source == "codex":  # Codex fills in nothing: `${X}` there is plain text
+            return text.replace("${", _LITERAL)
+        # Cursor's `${env:VAR}` is `${VAR}` here.
         return _REFERENCE.sub(lambda m: m.group(0).replace("${env:", "${"), text)
 
     out: dict = {}
@@ -164,9 +189,10 @@ def _each_string(server: dict, change) -> dict:
     return out
 
 
-def _refuse_reference(client: str, text: str) -> None:
+def _refuse_reference(client: str, name: str) -> None:
+    """Names only the variable: a `:-default` may hold a secret."""
     raise ValueError(
-        f"{CLIENT_WORDS[client]} cannot read `{text}` from your shell; put the value in."
+        f"{CLIENT_WORDS[client]} cannot read `${{{name}}}` from your shell; put the value in."
     )
 
 
@@ -177,15 +203,15 @@ def _texts(server: dict) -> list[str]:
     return found
 
 
-def _references(server: dict) -> list[str]:
-    return [m.group(0) for t in _texts(server) for m in _REFERENCE.finditer(t)]
+def _references(server: dict) -> list[re.Match]:
+    return [m for t in _texts(server) for m in _REFERENCE.finditer(t)]
 
 
 def _cursor(server: dict) -> dict:
     """References as Cursor writes them: `${env:VAR}`; it has no default form."""
-    for text in _references(server):
-        if ":-" in text:
-            _refuse_reference("cursor", text)
+    for found in _references(server):
+        if found.group(3):
+            _refuse_reference("cursor", found.group(2))
 
     return _each_string(server, lambda t: _REFERENCE.sub(lambda m: f"${{env:{m.group(2)}}}", t))
 
@@ -223,17 +249,36 @@ def _codex(server: dict) -> dict:
         if key in server:
             out[key] = server[key]
     # A reference left in plain text would reach the server as it is.
-    for text in _references(out):
-        _refuse_reference("codex", text)
+    for found in _references(out):
+        _refuse_reference("codex", found.group(2))
     return out
 
 
-def translate_entry(entry: dict, client: str) -> dict:
-    """The entry as `client` writes it. Raises ValueError with a plain reason when it cannot."""
+def translate_entry(entry: dict, client: str, *, source: str | None = None) -> dict:
+    """The entry as `client` writes it. Raises ValueError with a plain reason when it cannot.
+    `source` is the client the entry comes from; None is the Kitden gateway's own entry."""
     if client not in CLIENT_WORDS:
         raise ValueError(f"{client} cannot take an MCP entry")
+    return _unmarked(_render(_canonical(entry, client, source), client), client)
+
+
+def _unmarked(server: dict, client: str) -> dict:
+    """Codex's plain `${` text back as it was, where the client keeps it as plain text."""
+    for text in _texts(server):
+        found = _MARKED.search(text)
+        if found and (
+            client == "claude_code" or _CURSOR_FILLS.search(text.replace(_LITERAL, "${"))
+        ):
+            raise ValueError(
+                f"The entry holds `${{{found.group(1)}}}` as plain text; "
+                f"{CLIENT_WORDS[client]} would fill it in."
+            )
+    return _each_string(server, lambda t: t.replace(_LITERAL, "${"))
+
+
+def _render(server: dict, client: str) -> dict:
+    """The entry in one shape, written as `client` writes it."""
     words = CLIENT_WORDS[client]
-    server = _canonical(entry)
     kind = str(server.pop("type", "")).lower()
     if not kind and server.get("url", "").rstrip("/").endswith("/sse"):
         kind = "sse"

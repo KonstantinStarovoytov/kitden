@@ -7,6 +7,7 @@ import pytest
 
 import kitden.clients.base as base
 from kitden.gateways import data_dir
+from kitden.views.inventory import default_adapters
 from tests.conftest import make_home, write_cursor_fixture_state
 from tests.unit.test_api_changes import FakeClaude
 from tests.unit.test_local_gateway_move import add_claude, add_cursor
@@ -170,3 +171,33 @@ def test_a_name_the_client_has_is_refused(home):
         answer = _add(page, _item(page, "claude_code", "github")["id"], "cursor")
     assert (answer.status_code, answer.json()["detail"]) == (422, "Cursor already has github.")
     assert (home / ".cursor/mcp.json").read_bytes() == before
+
+
+def test_a_cursor_variable_is_not_copied(home):
+    add_cursor(home, "notes", {"command": "npx", "args": ["notes-mcp", "${userHome}/notes"]})
+    with page_for(home) as page:
+        notes = _item(page, "cursor", "notes")["id"]
+        for client, words in (("claude_code", "Claude Code"), ("codex", "Codex")):
+            answer = _add(page, notes, client)
+            assert (answer.status_code, answer.json()["detail"]) == (
+                422,
+                f"The entry uses a Cursor variable (`${{userHome}}`) that {words} cannot read.",
+            )
+
+
+def test_a_refusal_never_shows_a_default_value(home):
+    secret = "sk-live-SENTINEL_SECRET_DEFAULT_0123456789"
+    add_claude(
+        home, "keyed", {"type": "stdio", "command": "npx", "args": [f"${{TOKEN:-{secret}}}"]}
+    )
+    with page_for(home) as page:
+        answer = _add(page, _item(page, "claude_code", "keyed")["id"], "codex")
+    assert answer.status_code == 422
+    assert "SENTINEL" not in answer.text and "`${TOKEN}`" in answer.json()["detail"]
+
+
+@pytest.mark.parametrize("client", ["claude_code", "codex", "cursor"])
+def test_each_clients_add_step_is_a_file_edit(home, client):
+    adapter = next(a for a in default_adapters(home) if a.id == client)
+    step = adapter.add_server_step("files", {"command": "npx"})
+    assert step.edit is not None and step.edit.after == {"command": "npx"}
