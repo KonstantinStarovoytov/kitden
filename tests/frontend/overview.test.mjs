@@ -18,3 +18,13 @@ test('without a gateway the card offers Set up', () => {
 test('an unreadable settings file is said on the card', () => {
   assert.equal(gatewayCardWords({ kind: 'kitden', name: 'Kitden gateway', servers: 0, clients: [], lacking: [], problem: 'Kitden could not read the gateway settings.' }).line, 'Kitden could not read the gateway settings.');
 });
+
+const { allClearWords } = await import('../../src/kitden/web/static/js/overview.js');
+
+test('the all-clear names untested versions only when every found client has a version', () => {
+  const full = 'No duplicates, no unreadable files, no untested versions.';
+  const short = 'No duplicates, no unreadable files.';
+  assert.equal(allClearWords([{ status: 'found', version: '2.1.300' }, { status: 'not_found', version: null }]), full);
+  assert.equal(allClearWords([{ status: 'found', version: '2.1.300' }, { status: 'found', version: null }]), short);
+  assert.equal(allClearWords([]), full);
+});

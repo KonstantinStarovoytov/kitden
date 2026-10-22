@@ -38,7 +38,7 @@ export function renderOverview(main) {
     blocks.push(article);
   }
   if (!model.attention.length) {
-    const clear = el("div", "all-clear", "No duplicates, no unreadable files, no untested versions.");
+    const clear = el("div", "all-clear", allClearWords(data.clients || []));
     left.append(clear);
     blocks.push(clear);
   }
@@ -66,6 +66,13 @@ export function renderOverview(main) {
   grid.append(side);
   main.append(grid);
   entrance("overview", [...blocks, ...side.children]);
+}
+
+// "No untested versions" only once every found client has a version; while one is still being
+// checked, or cannot be read, the page says less.
+export function allClearWords(clients) {
+  const unknown = clients.some((c) => c.status === "found" && !c.version);
+  return unknown ? "No duplicates, no unreadable files." : "No duplicates, no unreadable files, no untested versions.";
 }
 
 // One card per problem or option: a short title, one sentence, one button that names the action.
@@ -181,7 +188,7 @@ async function showNote(finding) {
 }
 
 // The clients' versions came in the background: the Clients card reads them and redraws only
-// itself, keeping focus on the same row.
+// itself, keeping focus on the same row; the all-clear line follows.
 globalThis.document?.addEventListener("kitden:versions", async () => {
   let clients;
   try { clients = await getJson("/api/clients"); } catch { return; }
@@ -189,6 +196,8 @@ globalThis.document?.addEventListener("kitden:versions", async () => {
   const model = current("overview");
   if (!model) return;
   model.clients = clients.map((c) => ({ id: c.id, name: c.display_name, version: c.version, tested: c.version_supported, status: c.status }));
+  const clear = document.querySelector(".all-clear");
+  if (clear) clear.textContent = allClearWords(clients);
   const old = document.querySelector('[data-part="clients"]');
   if (!old) return;
   const key = old.contains(document.activeElement) ? focusKey(document.activeElement) : null;
