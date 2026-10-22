@@ -311,10 +311,12 @@ export function offerLabel({ def, action }, offers) {
   return ACTION_BUTTONS[action](`${clientName(def.client)}${where}`);
 }
 
-// The folder a definition sits in: a skill's skills folder, or the file of any other entry.
+// The folder a definition sits in, by its last two parts so the label stays short: a skill's
+// skills folder (".agents/skills"), or the file of any other entry (".cursor/mcp.json").
 function placeWords(def) {
-  const source = String(def.source || "");
-  return shortPath(source.endsWith("/SKILL.md") ? source.split("/").slice(0, -2).join("/") : source);
+  const parts = String(def.source || "").split("/").filter(Boolean);
+  const place = parts[parts.length - 1] === "SKILL.md" ? parts.slice(0, -2) : parts;
+  return place.slice(-2).join("/");
 }
 
 export function footerButtons({ lead, rest }, draw, commands = []) {
@@ -689,7 +691,11 @@ function showDetails(row, definitions, offer = null, toolsNext = {}) {
   const commands = withCommands.length ? [button("Commands…", () => showCommands(row, withCommands), "btn")] : [];
   const buttonFor = ({ def, action }, look) => {
     const label = offerLabel({ def, action }, offers);
-    return button(label, () => review({ action, targets: [{ item: def.id }], params: {} }), look);
+    const node = button(null, () => review({ action, targets: [{ item: def.id }], params: {} }), look);
+    // A narrow panel cuts the words with "…"; the whole label stays in the hover text.
+    node.title = label;
+    node.append(el("span", "cut", label));
+    return node;
   };
   // A plain action names what else it changes; the primary one stands alone.
   const draw = (o, look) => {

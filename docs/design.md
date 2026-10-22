@@ -48,6 +48,8 @@ On Overview, an option ("Can improve") is a quiet card: `.issue.suggestion` has 
 
 A row that opens Details ends with a quiet › and the hidden words "Open details" (`opens()` in `parts.js`). The chevron turns accent on hover and keyboard focus; it does not move. The search box names what it searches: "Search your setup and marketplaces…".
 
+A Details footer button never grows past the panel: long words end in "…", and the whole label stays in its hover text. When one client has two Remove buttons for the same scope, each names its folder by the last two parts: "Remove from Codex (.agents/skills)…".
+
 The Library has one row per item and one column per client found on this computer.
 
 | Part | Look |

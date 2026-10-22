@@ -444,6 +444,8 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .drawer header .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .drawer .body { flex: 1; padding: 16px 20px; overflow: auto; display: grid; gap: 18px; align-content: start; }
 .drawer footer { padding: 12px 20px; border-top: 1px solid var(--wire); display: flex; gap: 8px; justify-content: flex-end; align-items: center; flex-wrap: wrap; }
+.drawer footer .btn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.drawer footer .btn > .cut { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .drawer footer .note { margin-right: auto; color: var(--ink-3); font-size: 12px; }
 .drawer footer .note.side { margin-right: 0; margin-left: auto; text-align: right; }
 .title-mono { font-family: var(--mono); font-size: 17px; font-weight: 600; letter-spacing: -0.01em; overflow-wrap: anywhere; }

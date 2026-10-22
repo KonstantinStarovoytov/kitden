@@ -93,8 +93,16 @@ test('a skill removal names only the clients that lose the skill', () => {
 test('two Remove buttons of one client name their folder', () => {
   const at = (folder) => ({ def: { id: folder, client: 'codex', scope: 'user', source: `/Users/me/${folder}/docker-expert/SKILL.md` }, action: 'skill.remove' });
   const offers = [at('.agents/skills'), at('.codex/skills')];
-  assert.equal(offerLabel(offers[0], offers), 'Remove from Codex (~/.agents/skills)…');
-  assert.equal(offerLabel(offers[1], offers), 'Remove from Codex (~/.codex/skills)…');
+  assert.equal(offerLabel(offers[0], offers), 'Remove from Codex (.agents/skills)…');
+  assert.equal(offerLabel(offers[1], offers), 'Remove from Codex (.codex/skills)…');
+  // A home outside /Users still gives a short label.
+  const deep = (folder) => ({ def: { id: folder, client: 'codex', scope: 'user', source: `/var/sandbox/home/${folder}/x/SKILL.md` }, action: 'skill.remove' });
+  const sandbox = [deep('.agents/skills'), deep('.codex/skills')];
+  assert.equal(offerLabel(sandbox[0], sandbox), 'Remove from Codex (.agents/skills)…');
+  // Another entry names its file the same way.
+  const file = (path) => ({ def: { id: path, client: 'cursor', scope: 'user', source: `/Users/me/${path}` }, action: 'mcp.remove_direct' });
+  const files = [file('.cursor/mcp.json'), file('work/.cursor/mcp.json')];
+  assert.equal(offerLabel(files[0], files), 'Remove from Cursor (.cursor/mcp.json)…');
   // One button stays plain; twins in different scopes keep the scope words.
   assert.equal(offerLabel(offers[0], offers.slice(0, 1)), 'Remove from Codex…');
   const project = { def: { id: 'p', client: 'codex', scope: 'project', project: '/w/api', source: '/w/api/.agents/skills/x/SKILL.md' }, action: 'skill.remove' };
