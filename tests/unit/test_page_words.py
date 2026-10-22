@@ -856,3 +856,11 @@ def test_a_failed_change_does_not_claim_a_restore_on_the_page():
     assert "were put back" not in script("panel.js")
     assert '"The change did not check out."' in script("panel.js")
     assert "Failed, put back" not in script("changes.js")
+
+
+def test_the_clients_card_hears_when_versions_arrive():
+    assert 'addEventListener("versions"' in script("app.js")
+    assert "kitden:versions" in script("app.js")
+    overview = script("overview.js")
+    assert "kitden:versions" in overview and "/api/clients" in overview
+    assert "versionWords(" in overview and '"version unknown"' not in overview

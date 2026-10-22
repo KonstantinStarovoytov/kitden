@@ -25,6 +25,7 @@ export const freshness = { reloadStartedAt: 0, lastGoodRead: null, lastReadFaile
 // errorScope: the project each failed read was for.
 export const data = {
   clients: null, projects: null, overview: null, map: null, gateway: null, changes: null, setupServer: null,
+  progress: null, // where the first scan is, from /api/progress and its events
   errors: {}, scope: {}, readAt: {}, errorScope: {},
 };
 

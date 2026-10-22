@@ -167,6 +167,7 @@ function drawScan() {
 
 function showScan(view) {
   const bar = $("#topbar");
+  data.progress = view;
   scanning = scanLine(view);
   if (scanning) {
     if (bar.classList.contains("progress")) drawScan();
@@ -218,6 +219,9 @@ function listen() {
   // A refresh of the Kitden gateway's tool lists ended, also after a failure: an open tool
   // list reads them again.
   events.addEventListener("gateway_tools", () => document.dispatchEvent(new CustomEvent("kitden:tools")));
+  // The clients' versions were read in the background, also after a failure: the Clients card
+  // reads them again.
+  events.addEventListener("versions", () => document.dispatchEvent(new CustomEvent("kitden:versions")));
   events.addEventListener("rescan_finished", () => {
     $("#topbar").classList.remove("scanning");
     liveRefresh();

@@ -1,5 +1,6 @@
 """One page per home folder: the lock and the page record (feature 002, FR-009, FR-010)."""
 
+import re
 import stat
 import subprocess
 import sys
@@ -345,3 +346,223 @@ def test_the_page_does_not_load_the_mcp_sdk():
     code = "import sys, kitden.web.app, kitden.cli; print('mcp' in sys.modules)"
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)  # noqa: S603
     assert out.stdout.strip() == "False"
+
+
+# Versions arrive in the background, after the first scan (spec 4.1) -------------------------
+
+
+def _client(client_id, version, found=True):
+    from kitden.model import Client, ClientStatus
+
+    status = ClientStatus.FOUND if found else ClientStatus.NOT_FOUND
+    return Client(id=client_id, display_name=client_id, status=status, version=version)
+
+
+def _sent(queue):
+    out = []
+    while not queue.empty():
+        event = queue.get_nowait()
+        out.append(event if isinstance(event, tuple) else (event, None))
+    return out
+
+
+def test_versions_come_after_the_first_scan_and_the_page_is_told():
+    from starlette.testclient import TestClient
+
+    from kitden.views.inventory import Inventory
+    from kitden.web.app import create_app
+
+    known: dict[str, str] = {}
+    calls = []
+
+    def build(quick=False, on_step=None, on_slow_answer=None):
+        calls.append(dict(known))
+        return Inventory(clients=[_client("claude_code", known.get("claude_code"))])
+
+    def refresh():
+        known["claude_code"] = "2.1.300"
+        return dict(known)
+
+    app = create_app(
+        build,
+        token="tok",
+        port=47800,
+        first_scan_later=True,
+        quick_first=True,
+        version_refresh=refresh,
+    )
+    queue = app.state.events.subscribe()
+    with TestClient(app, base_url="http://127.0.0.1:47800", follow_redirects=False) as client:
+        client.get("/?token=tok")
+        early = client.get("/api/progress").json()
+        names = [s["name"] for s in early["steps"]]
+        assert names[-2:] == ["Codex plugins", "client versions"]
+        _progress_done(client)
+        assert client.get("/api/clients").json()[0]["version"] == "2.1.300"
+    assert calls == [{}, {"claude_code": "2.1.300"}]  # one more scan, with the new version
+    events = [name for name, _ in _sent(queue)]
+    assert events.count("versions") == 1
+    assert events.index("versions") > events.index("rescan_finished")
+
+
+def test_the_same_versions_bring_no_more_scans():
+    from starlette.testclient import TestClient
+
+    from kitden.views.inventory import Inventory
+    from kitden.web.app import create_app
+
+    calls = []
+
+    def build(quick=False, on_step=None, on_slow_answer=None):
+        calls.append(1)
+        return Inventory(clients=[_client("codex", "0.159.2")])
+
+    app = create_app(
+        build,
+        token="tok",
+        port=47800,
+        first_scan_later=True,
+        quick_first=True,
+        version_refresh=lambda: {"codex": "0.159.2", "cursor": None},
+    )
+    with TestClient(app, base_url="http://127.0.0.1:47800", follow_redirects=False) as client:
+        client.get("/?token=tok")
+        _progress_done(client)
+    assert calls == [1]
+
+
+def test_a_failed_refresh_keeps_unknown_and_says_so_once(capsys):
+    from starlette.testclient import TestClient
+
+    from kitden.views.inventory import Inventory
+    from kitden.web.app import create_app
+
+    def refresh():
+        raise OSError("no such file")
+
+    app = create_app(
+        lambda quick=False, on_step=None, on_slow_answer=None: Inventory(
+            clients=[_client("claude_code", None)]
+        ),
+        token="tok",
+        port=47800,
+        first_scan_later=True,
+        quick_first=True,
+        version_refresh=refresh,
+    )
+    queue = app.state.events.subscribe()
+    with TestClient(app, base_url="http://127.0.0.1:47800", follow_redirects=False) as client:
+        client.get("/?token=tok")
+        _progress_done(client)
+        assert client.get("/api/clients").json()[0]["version"] is None
+    err = capsys.readouterr().err
+    assert err.count("Reading the client versions failed (OSError).") == 1
+    assert "no such file" not in err
+    assert [name for name, _ in _sent(queue)].count("versions") == 1
+
+
+def test_a_plain_first_scan_also_reads_the_versions():
+    from starlette.testclient import TestClient
+
+    from kitden.views.inventory import Inventory
+    from kitden.web.app import create_app
+
+    asked = []
+
+    def refresh():
+        asked.append(1)
+        return {}
+
+    app = create_app(
+        lambda: Inventory(), token="tok", port=47800, first_scan_later=True, version_refresh=refresh
+    )
+    with TestClient(app, base_url="http://127.0.0.1:47800", follow_redirects=False) as client:
+        client.get("/?token=tok")
+        client.get("/api/clients")
+        for _ in range(60):
+            if asked:
+                break
+            time.sleep(0.05)
+    assert asked == [1]
+
+
+def test_codex_plugins_are_checked_again_once_its_version_is_known():
+    import threading
+
+    from starlette.testclient import TestClient
+
+    from kitden.views.inventory import Inventory
+    from kitden.web.app import create_app
+
+    known: dict[str, str] = {}
+
+    def build(quick=False, on_step=None, on_slow_answer=None):
+        inventory = Inventory(clients=[_client("codex", known.get("codex"))])
+        if known and not hasattr(build, "asked"):  # the version is known: the list is asked
+            build.asked = True
+            inventory.partial = True
+            threading.Timer(0.2, on_slow_answer).start()
+        return inventory
+
+    def refresh():
+        known["codex"] = "0.159.2"
+        return dict(known)
+
+    app = create_app(
+        build,
+        token="tok",
+        port=47800,
+        first_scan_later=True,
+        quick_first=True,
+        version_refresh=refresh,
+    )
+    queue = app.state.events.subscribe()
+    with TestClient(app, base_url="http://127.0.0.1:47800", follow_redirects=False) as client:
+        client.get("/?token=tok")
+        _progress_done(client)
+    plugins = [
+        next(s["done"] for s in data["steps"] if s["name"] == "Codex plugins")
+        for name, data in _sent(queue)
+        if name == "scan_progress"
+    ]
+    # Done after the first scan, open again while Codex answers, done at the end.
+    assert re.search(r"1+0+1+$", "".join("1" if done else "0" for done in plugins))
+
+
+def test_a_client_found_only_by_its_command_is_found_once_the_versions_are_read(
+    tmp_path, monkeypatch
+):
+    from starlette.testclient import TestClient
+
+    from kitden.clients import version_cache
+    from kitden.views.inventory import build_inventory
+    from kitden.web.app import create_app
+    from tests.conftest import fake_client_command
+
+    home = tmp_path / "home"
+    home.mkdir()
+    claude = fake_client_command(tmp_path, "claude", "echo '2.1.300 (Claude Code)'")
+    monkeypatch.setattr(
+        version_cache,
+        "version_command",
+        lambda client: [str(claude), "--version"] if client == "claude_code" else None,
+    )
+
+    def status():
+        found = client.get("/api/clients").json()
+        return next((c["status"], c["version"]) for c in found if c["id"] == "claude_code")
+
+    app = create_app(
+        lambda **options: build_inventory(home, **options),
+        token="tok",
+        port=47800,
+        home=home,
+        first_scan_later=True,
+        quick_first=True,
+    )
+    with TestClient(app, base_url="http://127.0.0.1:47800", follow_redirects=False) as client:
+        client.get("/?token=tok")
+        client.get("/api/clients")
+        _progress_done(client)
+        assert status() == ("found", "2.1.300")
+    assert version_cache.cached_version(home, "claude_code") == "2.1.300"

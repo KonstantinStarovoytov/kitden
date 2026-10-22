@@ -56,6 +56,7 @@ from kitden.changes.align import align_steps
 from kitden.changes.backup import ChangeStore
 from kitden.changes.client_cli import CommandRunner
 from kitden.changes.engine import ChangeRefusedError, Engine, NothingToChangeError, Runner
+from kitden.clients import version_cache
 from kitden.clients.base import (
     PLUGIN_DISABLE,
     PLUGIN_ENABLE,
@@ -226,6 +227,7 @@ def _error(text: str, status: int) -> JSONResponse:
 # What the first scan reads, step by step, so the page can say what it still waits for.
 CLIENT_STEPS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
 SLOW_STEP = "Codex plugins"
+VERSION_STEP = "client versions"
 WARM_STEP = "marketplaces"
 
 
@@ -249,6 +251,15 @@ class Progress:
         for step in self.steps:
             if step["name"] in names:
                 step["done"] = True
+        self._publish()
+
+    def reopen(self, *names: str) -> None:
+        """Steps that wait again, such as Codex plugins once Codex's version is known."""
+        if not any(s["name"] in names and s["done"] for s in self.steps):
+            return
+        for step in self.steps:
+            if step["name"] in names:
+                step["done"] = False
         self._publish()
 
     def mark_ready(self, *names: str) -> None:
@@ -277,7 +288,8 @@ class State:
     so `kitden open` does not wait for it; API calls wait for `ready` instead. With
     `quick_first` every scan is quick: a slow answer (Codex's plugin list) comes in the
     background and brings one more scan. After the first scan, `warm` reads the marketplaces,
-    so the Library opens at once.
+    so the Library opens at once, and `versions` reads the clients' versions that are not known
+    yet; a new version brings one more scan.
     """
 
     def __init__(
@@ -287,11 +299,13 @@ class State:
         scan_now: bool = True,
         quick_first: bool = False,
         warm: Callable[[Inventory], None] | None = None,
+        versions: Callable[[], dict[str, str | None]] | None = None,
     ) -> None:
         self.build = build
         self.events = events
         self.quick_first = quick_first
         self.warm = warm
+        self.versions = versions
         self.progress = Progress(events)
         self.loop: asyncio.AbstractEventLoop | None = None
         self.follow_ups: set[asyncio.Task] = set()
@@ -327,6 +341,8 @@ class State:
                 await self._quick_first_scan()
             else:
                 await self.rescan()
+                self.ready.set()
+                await self._read_versions()
         except Exception as error:  # noqa: BLE001 - the page must answer even if the scan fails
             print(f"The first scan failed: {error}", file=sys.stderr, flush=True)
             self.progress.finish()
@@ -336,7 +352,8 @@ class State:
                 self.progress.finish()
 
     async def _quick_first_scan(self) -> None:
-        later = [SLOW_STEP] + ([WARM_STEP] if self.warm else [])
+        later = [SLOW_STEP]
+        later += ([VERSION_STEP] if self.versions else []) + ([WARM_STEP] if self.warm else [])
         self.progress.start(list(CLIENT_STEPS.values()), later)
         loop = asyncio.get_running_loop()
 
@@ -352,7 +369,26 @@ class State:
         # Every client step ends here, also for a client the build did not report.
         done = list(CLIENT_STEPS.values()) + ([] if self.inventory.partial else [SLOW_STEP])
         self.progress.mark_ready(*done)
-        await self._warm()
+        await asyncio.gather(self._read_versions(), self._warm())
+
+    async def _read_versions(self) -> None:
+        """Read the versions not known yet, once; scan again when one is new. No retry."""
+        if self.versions is None:
+            return
+        try:
+            found = await asyncio.to_thread(self.versions)
+            held = {client.id: client.version for client in self.inventory.clients}
+            if any(version and version != held.get(client) for client, version in found.items()):
+                await self.rescan()
+                # Codex asks for its plugin list only once its version is known.
+                if self.inventory.partial:
+                    self.progress.reopen(SLOW_STEP)
+        except Exception as error:  # noqa: BLE001 - the page keeps working without versions
+            kind = type(error).__name__
+            print(f"Reading the client versions failed ({kind}).", file=sys.stderr, flush=True)
+        finally:
+            self.progress.done(VERSION_STEP)
+            self.events.publish("versions")
 
     async def _warm(self) -> None:
         if self.warm is None:
@@ -417,8 +453,11 @@ def create_app(
     setup_command: Callable[[], str | None] | None = None,
     first_scan_later: bool = False,
     quick_first: bool = False,
+    version_refresh: Callable[[], dict[str, str | None]] | None = None,
 ) -> Starlette:
-    """The page. Changes are available only when `home` is given (the folder being shown)."""
+    """The page. Changes are available only when `home` is given (the folder being shown).
+    `version_refresh` reads the clients' versions after the first scan; by default the ones
+    the disk cache does not know yet (tests pass a fake, so no client command runs)."""
     events = Broadcaster()
     watcher_ref: list[Watcher] = []
 
@@ -436,12 +475,19 @@ def create_app(
         catalog(inventory, adapters)
         skill_catalog(inventory, adapters)
 
+    def read_versions() -> dict[str, str | None]:
+        stale = version_cache.stale_clients(home, version_cache.CLIENTS)
+        return version_cache.refresh_versions(home, stale) if stale else {}
+
+    if version_refresh is None and home is not None:
+        version_refresh = read_versions
     state = State(
         build_marked,
         events,
         scan_now=not first_scan_later,
         quick_first=quick_first,
         warm=warm if home is not None else None,
+        versions=version_refresh,
     )
     engine = None
     if home is not None:

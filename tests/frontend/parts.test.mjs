@@ -197,6 +197,18 @@ test('the scan line names what is still read, and how far it got', () => {
   assert.deepEqual(scanLine({ ready: true, steps: steps([0, 1, 2]) }), { text: 'Still checking Codex plugins and marketplaces…', share: 0.6 });
 });
 
+// A client's version on the Clients card: while the versions are still read, never "unknown".
+const { versionWords } = await import('../../src/kitden/web/static/js/parts.js');
+
+test('the version says checking while the client versions step is open', () => {
+  const progress = (done) => ({ ready: true, steps: [{ name: 'Codex plugins', done: true, later: true }, { name: 'client versions', done, later: true }] });
+  assert.equal(versionWords('2.1.300', progress(false)), '2.1.300');
+  assert.equal(versionWords(null, progress(false)), 'Checking the version…');
+  assert.equal(versionWords(null, progress(true)), 'version unknown');
+  assert.equal(versionWords(null, null), 'version unknown');
+  assert.equal(versionWords(null, { ready: true, steps: [] }), 'version unknown');
+});
+
 test('the strict switch names its server, in the review and in the log', () => {
   assert.deepEqual(strictText({ server: 'github', state: 'on' }), { title: 'Turn strict mode on for github', done: 'Turned strict mode on for github' });
   const steps = [{ client: 'kitden', name: 'github' }, { client: 'kitden', name: 'list_issues' }];

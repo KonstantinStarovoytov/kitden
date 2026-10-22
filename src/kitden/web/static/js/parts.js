@@ -18,6 +18,14 @@ export function scanLine(view) {
   return { text: `${view.ready ? "Still checking" : "Reading"} ${joinWords(words)}…`, share };
 }
 
+// A client's version, or what is known of it: while the versions are still read in the
+// background, "Checking the version…", never a false "version unknown".
+export function versionWords(version, progress) {
+  if (version) return version;
+  const step = ((progress && progress.steps) || []).find((s) => s.name === "client versions");
+  return step && !step.done ? "Checking the version…" : "version unknown";
+}
+
 // "gateway" is a registered gateway's own step; "kitden" is the Kitden gateway's settings file.
 export const CLIENT_MARKS = {
   claude_code: "CC", codex: "CX", cursor: "CU", claude_desktop_code_tab: "CD", gateway: "GW", kitden: "GW",

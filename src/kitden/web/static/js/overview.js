@@ -1,11 +1,11 @@
 // Overview: what needs attention first, then the clients and, without a gateway, how to get one.
 import { getJson, query } from "./api.js";
-import { button, el, plural } from "./dom.js";
+import { button, el, focusKey, plural } from "./dom.js";
 import { kitdenClients, SETUP_NOTE } from "./gateway.js";
 import { loadLibraryFor, openSelectedOnRender } from "./library.js";
 import { entrance, fly } from "./motion.js";
 import { review, toast } from "./panel.js";
-import { banner, CLIENT_NAMES, flag, mark, skeleton, socket, staleNote } from "./parts.js";
+import { banner, CLIENT_NAMES, flag, mark, skeleton, socket, staleNote, versionWords } from "./parts.js";
 import { current, currentError, data, go, loadMap, projectPath, render, retry } from "./store.js";
 
 let notesOpen = false;
@@ -180,15 +180,34 @@ async function showNote(finding) {
   else toast("Could not find this item in the Library.");
 }
 
+// The clients' versions came in the background: the Clients card reads them and redraws only
+// itself, keeping focus on the same row.
+globalThis.document?.addEventListener("kitden:versions", async () => {
+  let clients;
+  try { clients = await getJson("/api/clients"); } catch { return; }
+  data.clients = clients;
+  const model = current("overview");
+  if (!model) return;
+  model.clients = clients.map((c) => ({ id: c.id, name: c.display_name, version: c.version, tested: c.version_supported, status: c.status }));
+  const old = document.querySelector('[data-part="clients"]');
+  if (!old) return;
+  const key = old.contains(document.activeElement) ? focusKey(document.activeElement) : null;
+  const card = clientsCard(model.clients);
+  old.replaceWith(card);
+  const same = key && [...card.querySelectorAll("[data-focus]")].find((node) => node.dataset.focus === key);
+  if (same) same.focus({ preventScroll: true });
+});
+
 function clientsCard(clients) {
   const card = el("section", "card");
+  card.dataset.part = "clients";
   card.append(el("h2", null, "Clients"));
   const map = current("map");
   const columns = new Set((map ? map.columns : []).map((c) => c.id).concat(["claude_code", "codex", "cursor"]));
   for (const client of clients) {
     const row = el("div", "client-row");
     const info = el("div");
-    info.append(el("div", "name", client.name), el("div", "meta", client.version ? client.version : "version unknown"));
+    info.append(el("div", "name", client.name), el("div", "meta", versionWords(client.version, data.progress)));
     const tile = mark(client.id);
     row.append(tile, info);
     // A status only when something is wrong: not installed, or a version Kitden has not tested.
@@ -201,6 +220,7 @@ function clientsCard(clients) {
     // The whole row is the switch; the counts slide open under it.
     row.classList.add("expandable");
     row.tabIndex = 0;
+    row.dataset.focus = `client:${client.id}`;
     row.setAttribute("role", "button");
     const more = el("div", "client-more");
     const inner = el("div");
