@@ -132,8 +132,8 @@ A few servers stay direct for now, and the page says why:
 
 Every change opens a review first: the clients it reaches (Cursor too, when an added
 plugin or skill reaches it) and the exact file change, with secrets hidden. Apply keeps a backup,
-writes the change and checks it. **Changes** keeps the history, with Undo and what to restart for
-a change to take effect.
+writes the change and checks it. Kitden writes only in your home folder and your known projects.
+**Changes** keeps the history, with Undo and what to restart for a change to take effect.
 
 <p align="center">
   <picture>
@@ -155,6 +155,8 @@ macOS. With [uv](https://docs.astral.sh/uv/):
 ```bash
 uvx kitden
 ```
+
+To try it first on a sample setup, with nothing on your computer read or changed: `uvx kitden demo`.
 
 Without uv, one line installs uv and Kitden, then opens the page:
 
@@ -185,8 +187,9 @@ Linux and Windows are not supported yet.
 </p>
 
 1. Kitden reads your agents' settings files.
-2. It shows them on one page in your browser, at `127.0.0.1` only. With 40 servers, 10 plugins
-   and 20 skills the page has its data in under a second; a slow answer comes after.
+2. It shows them on one page in your browser, at `127.0.0.1` only. On the large sample setup
+   (`kitden demo --size large`, about 500 items) the page has its data in under a second; a slow
+   answer comes after.
 3. You press Apply. Kitden backs the file up, writes the change and checks it. Undo brings the old
    file back. Backups stay for 30 days, and the newest 100 changes always keep theirs.
 

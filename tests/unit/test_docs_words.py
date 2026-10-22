@@ -39,3 +39,11 @@ def test_readme_names_the_management_actions():
     check = (ROOT / "docs/development.md").read_text()
     for words in ("Remove", "Put back", "Add missing", "Add to this project"):
         assert words in check, words
+
+
+def test_docs_name_the_demo_and_the_write_boundary():
+    readme = " ".join((ROOT / "README.md").read_text().split())
+    assert "uvx kitden demo" in readme
+    assert "Kitden writes only in your home folder and your known projects." in readme
+    development = (ROOT / "docs/development.md").read_text()
+    assert "kitden demo" in development and "build_demo_home" in development
