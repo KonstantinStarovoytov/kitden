@@ -453,6 +453,7 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .layer.wins { background: var(--wire-soft); }
 .layer .name { overflow-wrap: anywhere; }
 .layer .why { color: var(--ink-3); font-size: 12px; overflow-wrap: anywhere; }
+.layer pre.preview { margin: 6px 0 0; padding: 8px 10px; background: var(--inset); border: 1px solid var(--wire-soft); border-radius: 6px; color: var(--ink-2); font: 12px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 .drawer section { display: grid; gap: 8px; min-width: 0; }
 /* The tools of a server in the Kitden gateway: a switch each; the whole server first. */
 .tools-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }

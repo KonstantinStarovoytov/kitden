@@ -151,6 +151,13 @@ def _page_outputs(home) -> list[str]:
             outputs.append(page.get(path).text)
         for item in page.get("/api/items?kind=mcp_server").json():
             outputs.append(page.get(f"/api/explain?name={item['name']}&kind=mcp_server").text)
+        # Instruction files: Details shows their first lines.
+        outputs.append(page.get("/api/library?kind=instructions").text)
+        projects = [f"&project={p['id']}" for p in page.get("/api/projects").json()]
+        for query in ["", *projects]:
+            explained = page.get(f"/api/explain?name=CLAUDE.md&kind=instructions{query}").text
+            assert "[secret]" in explained  # the preview is there, masked
+            outputs.append(explained)
         for project in page.get("/api/projects").json():
             outputs.append(page.get(f"/api/projects/{project['id']}/effective").text)
             outputs.append(page.get(f"/api/findings?project={project['path']}").text)
@@ -171,7 +178,7 @@ async def _mcp_outputs(home) -> list[str]:
                 ("show_setup", {"project_path": project["path"]}),
                 ("list_findings", {"project_path": project["path"]}),
             ]
-        for name in ["github", "local-db", "langfuse-data", "n8n-mcp"]:
+        for name in ["github", "local-db", "langfuse-data", "n8n-mcp", "CLAUDE.md"]:
             calls.append(("explain_item", {"name": name}))
         for tool, arguments in calls:
             result = await client.call_tool(tool, arguments)
@@ -200,4 +207,7 @@ async def test_no_secret_in_any_output_and_no_network(home, network_attempts, ca
 
     leaked = [text for text in outputs if "SENTINEL" in text]
     assert leaked == []
+    # The instruction file holds a sentinel on its secret line, and it never shows.
+    assert "SENTINEL_SECRET_INSTRUCTIONS" in (home / ".claude/CLAUDE.md").read_text()
+    assert not any("SENTINEL_SECRET_INSTRUCTIONS" in text for text in outputs)
     assert network_attempts == []

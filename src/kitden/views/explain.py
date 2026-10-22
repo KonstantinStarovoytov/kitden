@@ -1,9 +1,11 @@
 """Every definition of one name, which one loads, and why (page side panel and MCP server)."""
 
 import json
+from pathlib import Path
 from typing import Any
 
 from kitden.model import Enabled, Item, ItemKind
+from kitden.redact import redact_line
 from kitden.views.effective import effective_view
 from kitden.views.findings import base_name
 from kitden.views.load_map import category as category_of
@@ -45,6 +47,26 @@ def brief(item: Item) -> dict[str, Any]:
         "summary": summary_line(item) or None,
         "category": category_of(item),
     }
+
+
+# Details shows this many first lines of an instruction file, each cut at this many characters.
+PREVIEW_LINES = 12
+PREVIEW_WIDTH = 200
+PREVIEW_READ = 64_000
+
+
+def preview(item: Item) -> list[str] | None:
+    """The first lines of an instruction file, secrets hidden; None when it cannot be read."""
+    if item.kind is not ItemKind.INSTRUCTIONS or not item.source.path:
+        return None
+    try:
+        with Path(item.source.path).open(encoding="utf-8", errors="replace") as file:
+            text = file.read(PREVIEW_READ)  # a file with no line breaks is not read whole
+    except OSError:
+        return None
+    lines = text.splitlines()[:PREVIEW_LINES]
+    # Hide secrets before cutting, so a cut never leaves part of a secret behind.
+    return [redact_line(line)[:PREVIEW_WIDTH] for line in lines]
 
 
 def reads(item: Item, items: list[Item]) -> str:
@@ -137,6 +159,9 @@ def explain(
                 "loads": item.id in loaded,
                 "overridden": beaten.get(item.id) == "override",
                 "merged": beaten.get(item.id) == "merged",
+                # With no project picked, only global files show their first lines; a project's
+                # files show theirs when that project is picked.
+                "preview": preview(item) if item.project is None or project else None,
                 "why": (
                     reads(item, inventory.items)
                     if item.kind is ItemKind.INSTRUCTIONS

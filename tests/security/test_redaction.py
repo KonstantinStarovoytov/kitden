@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from kitden.redact import SECRET, redact, redact_text
+from kitden.redact import SECRET, redact, redact_line, redact_text
 
 GITHUB_LIKE = "ghp_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8"
 
@@ -166,3 +166,21 @@ def test_tokens_inside_longer_strings_are_hidden():
     redacted, found = redact({"args": [f"CONFIG={jwt}"], "command": f"run --x {GITHUB_LIKE}"})
     assert redacted == {"args": [f"CONFIG={SECRET}"], "command": f"run --x {SECRET}"}
     assert found
+
+
+@pytest.mark.parametrize(
+    ("line", "want"),
+    [
+        ("PASSWORD=hunter2hunter2", f"PASSWORD={SECRET}"),
+        ("export API_KEY=abc123", f"export API_KEY={SECRET}"),
+        ("password: correct horse", f"password: {SECRET}"),
+        ("- token: SENTINEL_SECRET_X", f"- token: {SECRET}"),
+        ("db at postgres://admin:s3cret@localhost/app", f"db at postgres://{SECRET}@localhost/app"),
+        (f"use {GITHUB_LIKE} here", f"use {SECRET} here"),
+        ("API_KEY=${API_KEY}", "API_KEY=${API_KEY}"),
+        ("Run `make test` before each commit.", "Run `make test` before each commit."),
+        ("See https://example.com/docs for more.", "See https://example.com/docs for more."),
+    ],
+)
+def test_redact_line_hides_secrets_in_free_text(line, want):
+    assert redact_line(line) == want

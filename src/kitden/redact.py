@@ -135,6 +135,27 @@ def redact_text(text: str) -> str:
     return text
 
 
+# In free text: `NAME=value` or `name: value` whose name says secret, and a URL's user:password.
+_LINE_PAIR = re.compile(
+    rf"(?<![A-Za-z0-9_.-])(?P<name>[A-Za-z0-9_.-]*{_SECRET_WORD}[A-Za-z0-9_.-]*)"
+    r"(?P<sep>\s*[:=]\s*)(?P<value>\S.*)",
+    re.I,
+)
+_URL_USER = re.compile(r"(?i)\b([a-z][a-z0-9+.-]*://)[^\s/@]+@")
+
+
+def redact_line(line: str) -> str:
+    """Hide secrets in one line of free text, such as an instruction file: token shapes, a
+    URL's user and password, and the rest of the line after a secret-looking name and `=` or
+    `:`. A few harmless words may be hidden too."""
+    line = _URL_USER.sub(lambda m: f"{m.group(1)}{SECRET}@", line)
+    line = redact_text(line)
+    m = _LINE_PAIR.search(line)
+    if m and not _is_reference(m.group("value")) and m.group("value") != SECRET:
+        line = f"{line[: m.start('value')]}{SECRET}"
+    return line
+
+
 def masked_command(command: list[str]) -> list[str]:
     """A client command as the page, the change record and the log keep it: an argument that
     holds an entry as JSON (`claude mcp add-json <name> <json>`) is redacted. The command that

@@ -374,6 +374,8 @@ function layer(def) {
   middle.append(where);
   if (def.summary) middle.append(el("div", "why mono", def.summary));
   if (why) middle.append(el("div", "why", why));
+  // An instruction file's first lines, secrets hidden by the server.
+  if (def.preview && def.preview.length) middle.append(el("pre", "preview", def.preview.join("\n")));
   // Every plugin with a known state gets the same switch; one the page cannot change from
   // here (its on/off lives in the client's account) is shown locked, with the reason.
   const toggle = !unknown && def.kind === "plugin" && def.actions.find((a) => a === "plugin.disable" || a === "plugin.enable");

@@ -45,9 +45,9 @@ The clients Kitden found sit on the right, and a card says whether the Kitden ga
 **Library** is one page for what each client loads and what you can add to it. Each row is an
 item and each column is a client on this computer; the "−" on a column head hides that client,
 and "Show" brings it back. Tabs split MCP servers, plugins, skills, hooks, marketplaces and
-instructions (CLAUDE.md, AGENTS.md, rules, commands and agents). On
-plugins and skills, choose Installed, New (not on this computer yet) or All, and filter by
-category. Pick a project at the top to see what loads in that folder.
+instructions (CLAUDE.md, AGENTS.md, rules, commands and agents; Details shows the first lines,
+secrets hidden). On plugins and skills, choose Installed, New (not on this computer yet) or All,
+and filter by category. Pick a project at the top to see what loads in that folder.
 
 The action sits in the client's cell. "+ Add" adds a plugin or skill to that client. "+ Add
 skills" copies the skills of a plugin that work on their own into a client that cannot install the

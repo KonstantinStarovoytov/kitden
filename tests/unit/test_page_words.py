@@ -880,3 +880,8 @@ def test_a_change_whose_backup_holds_a_secret_says_so():
 def test_library_has_an_instructions_tab():
     text = script("library.js")
     assert '["instructions", "Instructions"]' in text
+
+
+def test_details_shows_an_instruction_files_first_lines():
+    assert 'el("pre", "preview"' in script("panel.js")
+    assert "pre.preview" in (STATIC / "style.css").read_text()

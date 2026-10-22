@@ -87,3 +87,35 @@ def test_explain_can_pick_one_category(home):
     agents = explain(build_inventory(home), "review", "instructions", None, category="agent")
     assert sorted(d["category"] for d in both) == ["agent", "command"]
     assert [d["category"] for d in agents] == ["agent"]
+
+
+def _user_file(definitions: list[dict], home) -> dict:
+    return next(d for d in definitions if d["source"] == str(home / ".claude/CLAUDE.md"))
+
+
+def test_the_preview_is_short_and_survives_bytes(home):
+    path = home / ".claude/CLAUDE.md"
+    path.write_bytes(b"# rules\n" + b"x" * 500 + b"\n" + b"\xff\xfe\n" + b"line\n" * 20)
+    definitions = explain(build_inventory(home), "CLAUDE.md", "instructions", None)
+    preview = _user_file(definitions, home)["preview"]
+    assert len(preview) == 12 and len(preview[1]) == 200 and "\ufffd" in preview[2]
+
+
+def test_the_preview_hides_a_secret_line(home):
+    definitions = explain(build_inventory(home), "CLAUDE.md", "instructions", None)
+    preview = _user_file(definitions, home)["preview"]
+    assert any("[secret]" in line for line in preview)
+    assert not any("SENTINEL_SECRET" in line for d in definitions for line in d["preview"] or [])
+
+
+def test_project_files_show_a_preview_only_in_their_project(home):
+    website = str(home / "work/website")
+    everywhere = explain(build_inventory(home), "CLAUDE.md", "instructions", None)
+    project = next(d for d in everywhere if d["project"] == website)
+    assert project["preview"] is None and project["source"].endswith("website/CLAUDE.md")
+    inside = explain(build_inventory(home), "CLAUDE.md", "instructions", website)
+    assert next(d for d in inside if d["project"] == website)["preview"]
+
+
+def test_other_kinds_have_no_preview(home):
+    assert explain(build_inventory(home), "Neon", "mcp_server", None)[0]["preview"] is None
