@@ -16,12 +16,30 @@ def _never_the_real_home(tmp_path_factory, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("real-home")))
 
 
+CLIENT_BINARIES = {"claude", "codex", "cursor"}
+
+
 @pytest.fixture(autouse=True)
-def _no_client_commands(monkeypatch):
-    """No test finds or runs a real client command; a test that needs one points this at a fake."""
-    from kitden.clients import version_cache
+def _no_client_commands(tmp_path_factory, monkeypatch):
+    """No test finds or runs a real client; a test that needs one uses a fake in its tmp folder."""
+    import subprocess
+
+    from kitden.clients import codex, version_cache
 
     monkeypatch.setattr(version_cache, "version_command", lambda client: None)
+    monkeypatch.setattr(codex, "version_command", lambda client: None)
+    monkeypatch.setattr(codex, "_LIST_CACHE", {})
+    sandbox = tmp_path_factory.getbasetemp().resolve()
+
+    class Guarded(subprocess.Popen):
+        def __init__(self, args, *rest, **options):
+            first = args if isinstance(args, str | Path) else args[0]
+            path = Path(first).resolve() if Path(first).is_absolute() else Path(first)
+            if path.name in CLIENT_BINARIES and not path.is_relative_to(sandbox):
+                raise AssertionError(f"a test tried to run a real client: {first}")
+            super().__init__(args, *rest, **options)
+
+    monkeypatch.setattr(subprocess, "Popen", Guarded)
 
 
 CURSOR_DB = "Library/Application Support/Cursor/User/globalStorage/state.vscdb"
