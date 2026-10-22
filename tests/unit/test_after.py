@@ -1,5 +1,8 @@
 """The review's first line: what each client shows after the change (feature 004)."""
 
+import os
+
+from kitden.changes.json_splice import ABSENT
 from kitden.model import (
     Change,
     Client,
@@ -13,7 +16,7 @@ from kitden.model import (
     SourceKind,
     Step,
 )
-from kitden.views.after import after_words
+from kitden.views.after import _had_on, after_words
 from kitden.views.inventory import Inventory
 
 
@@ -30,6 +33,20 @@ def step(client, name):
 def inventory(*items):
     clients = [Client(id=c, display_name=c, status=ClientStatus.FOUND) for c in ("claude_code",)]
     return Inventory(clients=clients, items=list(items))
+
+
+def test_a_local_entry_counts_in_a_project_recorded_through_a_link(tmp_path):
+    # Preview pins a command's folder to its real path; the project key is as recorded.
+    website = tmp_path / "work/website"
+    website.mkdir(parents=True)
+    link = tmp_path / "website-link"
+    link.symlink_to(website)
+    key = ("projects", str(link), "mcpServers", "files")
+    edit = FileEdit(path="/h/.claude.json", fmt="json", key=key, after=ABSENT, before={})
+    local = Step("claude_code", Scope.LOCAL, "files", edit=edit, cwd=os.path.realpath(website))
+    change = Change(action="gateway.move", steps=[local])
+    assert _had_on(change, "files", str(link)) == {"claude_code"}
+    assert _had_on(change, "files", None) == set()
 
 
 def test_turning_off_a_plugin_says_off():

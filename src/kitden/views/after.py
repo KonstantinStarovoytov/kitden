@@ -215,7 +215,9 @@ def _strict_line(server: str, on: bool, known: bool) -> str:
 
 def _had_on(change: Change, name: str, project: str | None) -> set[str]:
     """The clients whose moved entry had the server on there: a user entry that was on (Codex
-    can turn one off), or a local-scope entry of that project."""
+    can turn one off), or a local-scope entry of that project. Preview pins a step's folder to
+    its real path, so the recorded project is compared by its real path too."""
+    here = None if project is None else os.path.realpath(project)
     clients = set()
     for step in change.steps:
         edit = step.edit
@@ -224,7 +226,7 @@ def _had_on(change: Change, name: str, project: str | None) -> set[str]:
             continue
         on = not (isinstance(edit.before, dict) and edit.before.get("enabled") is False)
         where = step.cwd if step.scope is Scope.LOCAL else None
-        if on and where in (None, project):
+        if on and where in (None, here):
             clients.add(step.client)
     return clients
 
