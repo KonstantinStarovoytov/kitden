@@ -47,3 +47,12 @@ def test_docs_name_the_demo_and_the_write_boundary():
     assert "Kitden writes only in your home folder and your known projects." in readme
     development = (ROOT / "docs/development.md").read_text()
     assert "kitden demo" in development and "build_demo_home" in development
+
+
+def test_walkthrough_script_one_has_the_seven_tasks_and_a_results_table():
+    text = (ROOT / "docs/research/walkthrough-script-1.md").read_text()
+    assert "kitden demo --size medium" in text
+    assert all(f"## Task {n}:" in text for n in range(1, 8)) and "## Task 8" not in text
+    assert "| Task | Done | Wrong turns | Time | What was confusing |" in text
+    assert '"Loads" or "Available"' in text
+    assert '"On" and "Off" or "Allowed" and "Blocked"' in text
