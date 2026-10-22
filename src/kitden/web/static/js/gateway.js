@@ -3,7 +3,7 @@ import { getJson, postJson } from "./api.js";
 import { busyWhile, button, el, joinWords, plural, reportError, webLink } from "./dom.js";
 import { entrance, fold, reducedMotion } from "./motion.js";
 import { heldActions, heldButtons, moveInto, moveTargets, openInfo, openItem, review, toast, toolsSection } from "./panel.js";
-import { banner, CLIENT_ICONS, CLIENT_NAMES, clientCheck, DARK_ICONS, flag, GATEWAY_NOTE, gatewayName, kindOf, mark, skeleton, staleNote } from "./parts.js";
+import { banner, CLIENT_ICONS, CLIENT_NAMES, clientCheck, DARK_ICONS, flag, GATEWAY_NOTE, gatewayName, kindOf, mark, skeleton, staleNote, toolsWord } from "./parts.js";
 import { current, currentError, data, freshness, loadMap, reload, render, retry, state } from "./store.js";
 
 const WRITABLE = ["claude_code", "codex", "cursor"];
@@ -324,6 +324,8 @@ function kitdenHeld(gateway) {
     const name = el("span", "mono", server.name);
     name.title = server.name;
     what.append(name, flag({ text: server.kind === "local" ? "Local" : "Remote", level: "info" }));
+    const count = toolsWord(server);
+    if (count) what.append(el("small", "meta", count));
     // Its state where the project picker points: off for all projects, or in this project.
     if (server.state === "off") what.append(flag({ text: "Off", level: "info" }));
     const actions = el("span", "row-actions");
@@ -342,6 +344,8 @@ function showKitdenServer(server, next = {}) {
   const row = el("div", "layer");
   const middle = el("div");
   middle.append(el("div", "name", `In the Kitden gateway · ${server.kind === "local" ? "Runs on this Mac" : "Remote"}`));
+  const count = toolsWord(server);
+  if (count) middle.append(el("div", "why", count));
   row.append(mark("kitden"), middle);
   const stack = el("div", "stack");
   stack.append(row);

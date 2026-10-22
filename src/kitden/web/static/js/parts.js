@@ -282,6 +282,11 @@ export function skillRemoval(steps) {
   return { clients, oneCopy: !lose.length };
 }
 
+// How many tools a server in the Kitden gateway adds, when Kitden knows: "12 tools".
+export function toolsWord(server) {
+  return server.tools ? plural(server.tools, "tool", "tools") : null;
+}
+
 // The badge of a change that did not check out. The engine's error ends with this sentence
 // only when everything was put back as it was.
 export function failedWord(error) {

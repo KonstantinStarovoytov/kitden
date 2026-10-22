@@ -88,10 +88,16 @@ def _states(settings: dict, server: str, tool: str | None, chain: list[str]) -> 
     }
 
 
-def held_servers(settings: dict, chain: list[str]) -> list[dict]:
+def tool_count(tools: dict | None, server: str) -> int | None:
+    """How many tools the cache knows for a held server; None when it knows none."""
+    return len((tools or {}).get(server) or []) or None
+
+
+def held_servers(settings: dict, chain: list[str], tools: dict | None = None) -> list[dict]:
     """Every server in the Kitden gateway, for its card: name, local or remote, and its state
-    along the picked project's chain (empty: all projects), and whether its entry still holds
-    a plain secret the Keychain could keep. Commands, addresses and env stay out."""
+    along the picked project's chain (empty: all projects), whether its entry still holds a
+    plain secret the Keychain could keep, and how many tools `tools` (the cache) knows for it.
+    Commands, addresses and env stay out."""
     cards = []
     for name, server in sorted(settings["servers"].items(), key=lambda pair: pair[0].lower()):
         states = _states(settings, name, None, chain)
@@ -103,6 +109,7 @@ def held_servers(settings: dict, chain: list[str]) -> list[dict]:
                 "state": states["state"],
                 "differs": states["differs"],
                 "plain_secrets": held and bool(secrets_out(name, server)[1]),
+                "tools": tool_count(tools, name),
             }
         )
     return cards

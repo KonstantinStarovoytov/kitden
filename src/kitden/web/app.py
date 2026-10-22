@@ -709,7 +709,8 @@ def create_app(
             return _error("Say which item to explain.", 422)
         kind = request.query_params.get("kind") or None
         category = request.query_params.get("category") or None
-        definitions = explain(state.inventory, name, kind, path, category)
+        tools = load_tools(home) if home is not None else None
+        definitions = explain(state.inventory, name, kind, path, category, tools)
         return JSONResponse({"definitions": definitions})
 
     def _overview(request, project, path):
@@ -718,8 +719,10 @@ def create_app(
 
     def _kitden(path):
         """The servers the Kitden gateway holds, and why its settings could not be read."""
-        held = held_servers(load_settings(home), _chain(path)) if home is not None else None
-        problem = UNREADABLE if home is not None and settings_unreadable(home) else None
+        if home is None:
+            return None, None
+        held = held_servers(load_settings(home), _chain(path), load_tools(home))
+        problem = UNREADABLE if settings_unreadable(home) else None
         return held, problem
 
     def _gateway_view(request, project, path):

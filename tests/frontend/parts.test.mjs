@@ -263,3 +263,12 @@ test('a failed change says "put back" only when the engine restored everything',
   assert.equal(failedWord('boom `claude plugin install a` failed; a was not put back.'), 'Failed');
   assert.equal(failedWord(null), 'Failed');
 });
+
+const { toolsWord } = await import('../../src/kitden/web/static/js/parts.js');
+
+test('a held server says how many tools when it knows', () => {
+  assert.equal(toolsWord({ name: 'github', tools: 12 }), '12 tools');
+  assert.equal(toolsWord({ name: 'github', tools: 1 }), '1 tool');
+  assert.equal(toolsWord({ name: 'github', tools: null }), null);
+  assert.equal(toolsWord({ name: 'github' }), null);
+});

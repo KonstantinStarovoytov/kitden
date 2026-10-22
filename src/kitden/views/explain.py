@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from kitden.changes.actions import KITDEN_GATEWAY
+from kitden.local_gateway.views import tool_count
 from kitden.model import Enabled, Item, ItemKind
 from kitden.redact import redact_lines
 from kitden.views.effective import effective_view
@@ -137,10 +139,17 @@ def _matches(item: Item, name: str) -> bool:
 
 
 def explain(
-    inventory, name: str, kind: str | None, project: str | None, category: str | None = None
+    inventory,
+    name: str,
+    kind: str | None,
+    project: str | None,
+    category: str | None = None,
+    tools: dict | None = None,
 ) -> list[dict]:
     """Every definition of `name` (plugins also by base name), with how it loads and why.
-    `category` narrows instruction files to one (a command and an agent may share a name)."""
+    `category` narrows instruction files to one (a command and an agent may share a name).
+    `tools` is the Kitden gateway's tool cache: a server in that gateway says how many tools
+    it knows. A direct server gets no count, since another server may have the same name."""
     definitions = []
     views: dict[str, Any] = {}
     for item in inventory.items:
@@ -164,6 +173,9 @@ def explain(
                 # With no project picked, only global files show their first lines; a project's
                 # files show theirs when that project is picked.
                 "preview": preview(item) if item.project is None or project else None,
+                "tools": (
+                    tool_count(tools, item.name) if item.via_gateway == KITDEN_GATEWAY else None
+                ),
                 "why": (
                     reads(item, inventory.items)
                     if item.kind is ItemKind.INSTRUCTIONS

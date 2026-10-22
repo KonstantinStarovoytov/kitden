@@ -27,6 +27,7 @@ from kitden.local_gateway.settings import (
 )
 from kitden.local_gateway.views import (
     gateway_items,
+    held_servers,
     refresh_tools,
     rules_steps,
     strict_steps,
@@ -167,6 +168,7 @@ def test_the_kitden_gateway_is_listed_and_local_servers_can_move(home):
                 "state": "on",
                 "differs": False,
                 "plain_secrets": True,
+                "tools": None,
             }
         ],
     }
@@ -194,13 +196,28 @@ def test_the_kitden_card_lists_every_held_server_with_its_state_in_the_project(h
         "projects": {website: {"files": {"server": "on"}}},
     }
     hold(home, {"files": FILES, "docs": docs}, rules)
+    save_tools(home, "docs", [tool("search"), tool("read")])
 
     with page_for(home) as page:
         everywhere = page.get("/api/gateway-view").json()["gateways"][0]["servers"]
         there = page.get(f"/api/gateway-view?project={project_id(page, website)}").json()
     assert everywhere == [
-        {"name": "docs", "kind": "remote", "state": "on", "differs": False, "plain_secrets": False},
-        {"name": "files", "kind": "local", "state": "off", "differs": False, "plain_secrets": True},
+        {
+            "name": "docs",
+            "kind": "remote",
+            "state": "on",
+            "differs": False,
+            "plain_secrets": False,
+            "tools": 2,
+        },
+        {
+            "name": "files",
+            "kind": "local",
+            "state": "off",
+            "differs": False,
+            "plain_secrets": True,
+            "tools": None,
+        },
     ]
     assert there["gateways"][0]["servers"][1] == {
         "name": "files",
@@ -208,8 +225,38 @@ def test_the_kitden_card_lists_every_held_server_with_its_state_in_the_project(h
         "state": "on",
         "differs": True,
         "plain_secrets": True,
+        "tools": None,
     }
     assert "SENTINEL_SECRET_FILES" not in json.dumps(there)
+
+
+SETTINGS = {
+    "servers": {"github": {"url": "https://example.com/mcp"}, "notion": {"command": "notion"}},
+    "rules": {"global": {}, "projects": {}},
+}
+
+
+def test_held_rows_count_known_tools():
+    rows = held_servers(SETTINGS, [], {"github": [tool("a"), tool("b")]})
+    assert {r["name"]: r["tools"] for r in rows} == {"github": 2, "notion": None}
+
+
+def test_an_empty_tool_list_shows_no_count():
+    assert held_servers(SETTINGS, [], {"github": []})[0]["tools"] is None
+
+
+def test_details_count_tools_only_for_servers_in_the_kitden_gateway(home):
+    hold(home, {"files": FILES})
+    add_kitden(home, "cursor")
+    # Neon is a direct server: a name in the cache says nothing about it.
+    save_tools(home, "files", [tool("read"), tool("write"), tool("list")])
+    save_tools(home, "Neon", [tool("query")])
+
+    with page_for(home) as page:
+        files = page.get("/api/explain?name=files&kind=mcp_server").json()["definitions"]
+        neon = page.get("/api/explain?name=Neon&kind=mcp_server").json()["definitions"]
+    assert files and {d["tools"] for d in files} == {3}
+    assert neon and {d["tools"] for d in neon} == {None}
 
 
 def test_tools_api_marks_project_differences(home):

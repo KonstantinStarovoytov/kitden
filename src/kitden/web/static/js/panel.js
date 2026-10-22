@@ -4,7 +4,7 @@ import { $, $$, button, el, joinWords, plural, reportError, shortPath, shortPath
 import { loadLibrary, morphOnNextRender, onOpenItem, rowTitle, shownRow } from "./library.js";
 import { finishTransition, fold, transition } from "./motion.js";
 import { about, addButton, addOptions, whyNoAction } from "./offer.js";
-import { CLIENT_NAMES, diffCounts, skillRemoval, flag, GATEWAY_NOTE, gatewayName, kitdenMove, mark, movedNames, notesSection, ruleText, rulesText, skeleton, socket, stepText, strictText } from "./parts.js";
+import { CLIENT_NAMES, diffCounts, skillRemoval, flag, GATEWAY_NOTE, gatewayName, kitdenMove, mark, movedNames, notesSection, ruleText, rulesText, skeleton, socket, stepText, strictText, toolsWord } from "./parts.js";
 import { busy, current as currentModel, currentError, data, reload, render, setBusy, state } from "./store.js";
 
 const KIND_WORDS = {
@@ -383,6 +383,8 @@ function layer(def) {
   where.title = def.source || "";
   middle.append(where);
   if (def.summary) middle.append(el("div", "why mono", def.summary));
+  const count = toolsWord(def);
+  if (count) middle.append(el("div", "why", count));
   if (why) middle.append(el("div", "why", why));
   // An instruction file's first lines, secrets hidden by the server.
   if (def.preview && def.preview.length) middle.append(el("pre", "preview", def.preview.join("\n")));
