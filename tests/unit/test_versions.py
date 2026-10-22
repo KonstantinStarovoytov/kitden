@@ -70,6 +70,7 @@ def test_version_commands_are_cached_for_a_while(monkeypatch):
     import subprocess
 
     import kitden.clients.base as base
+    import kitden.clients.version_cache as version_cache
 
     runs = []
 
@@ -78,8 +79,8 @@ def test_version_commands_are_cached_for_a_while(monkeypatch):
         return subprocess.CompletedProcess(command, 0, stdout="codex-cli 0.159.2\n")
 
     now = [1000.0]
-    monkeypatch.setattr(base, "version_command", lambda client: ["/bin/codex", "--version"])
-    monkeypatch.setattr(base.subprocess, "run", fake_run)
+    monkeypatch.setattr(version_cache, "version_command", lambda c: ["/bin/codex", "--version"])
+    monkeypatch.setattr(version_cache.subprocess, "run", fake_run)
     monkeypatch.setattr(base.time, "monotonic", lambda: now[0])
     base._VERSION_CACHE.clear()
 

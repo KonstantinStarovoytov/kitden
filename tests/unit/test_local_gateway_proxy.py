@@ -21,6 +21,7 @@ from starlette.testclient import TestClient
 
 import kitden.clients.base as base
 import kitden.clients.codex as codex
+import kitden.clients.version_cache as version_cache
 from kitden import mcp_server
 from kitden.gateways import data_dir
 from kitden.local_gateway import proxy
@@ -127,7 +128,7 @@ def test_the_gateway_reads_known_projects_without_client_commands(tmp_path, monk
 
     # Every client command would be found and run, and nothing is remembered from other tests.
     monkeypatch.setattr(subprocess, "run", record)
-    monkeypatch.setattr(base, "version_command", lambda client: ["/bin/false"])
+    monkeypatch.setattr(version_cache, "version_command", lambda client: ["/bin/false"])
     monkeypatch.setattr(codex, "version_command", lambda client: ["/bin/false"])
     monkeypatch.setattr(base, "_VERSION_CACHE", {})
     monkeypatch.setattr(proxy, "run", lambda home, own, known: served.update(known=known))

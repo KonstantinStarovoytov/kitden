@@ -3,7 +3,6 @@
 import json
 import os
 import re
-import subprocess
 import time
 import tomllib
 from abc import ABC, abstractmethod
@@ -12,7 +11,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from kitden.clients.versions import is_supported, parse_version, version_command
+from kitden.clients.version_cache import run_version_command
+from kitden.clients.versions import is_supported
 from kitden.model import (
     COPY_FOLDER,
     REMOVE_FOLDER,
@@ -191,17 +191,7 @@ def read_command_version(client: str) -> str | None:
     cached = _VERSION_CACHE.get(client)
     if cached and time.monotonic() < cached[1]:
         return cached[0]
-    version = None
-    command = version_command(client)
-    if command:
-        try:
-            # The command is our own fixed client path plus "--version"; no user input.
-            out = subprocess.run(  # noqa: S603
-                command, capture_output=True, text=True, timeout=20, check=False
-            ).stdout
-            version = parse_version(client, out)
-        except (OSError, subprocess.SubprocessError):
-            version = None
+    version = run_version_command(client)
     _VERSION_CACHE[client] = (version, time.monotonic() + VERSION_CACHE_SECONDS)
     return version
 
