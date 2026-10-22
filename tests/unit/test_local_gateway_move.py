@@ -1074,3 +1074,94 @@ def test_moving_a_held_server_again_with_a_new_token_updates_the_item(home, fake
     engine.undo(change.id)
     assert str(change.state) == "undone", change.error
     assert change.error == "files/FILES_TOKEN in your Keychain keeps the new value."
+
+
+class FailingClaude(FakeClaude):
+    """FakeClaude, but `claude mcp <verb>` fails."""
+
+    def __init__(self, home, verb):
+        super().__init__(home)
+        self.verb = verb
+
+    def __call__(self, command, cwd):
+        if command[1:3] == ["mcp", self.verb]:
+            return CommandResult(1, "it failed")
+        return super().__call__(command, cwd)
+
+
+def security_that_cannot_delete(folder, monkeypatch, real):
+    """The stand-in `security`, except that every delete fails."""
+    binary = folder / "no-delete/security"
+    binary.parent.mkdir(parents=True)
+    binary.write_text(
+        f'#!/bin/sh\n[ "$1" = delete-generic-password ] && exit 1\nexec "{real}" "$@"\n'
+    )
+    binary.chmod(0o755)
+    monkeypatch.setenv("KITDEN_SECURITY", str(binary))
+
+
+def test_an_undo_that_stops_at_an_inverse_command_keeps_the_keychain_items(home, fake_keychain):
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    steps = move(home, ("claude_code", "files"))
+    # Give the client's step an inverse command, as plugin steps have, and let it fail.
+    step = next(s for s in steps if s.client == "claude_code")
+    step.undo_command = ["claude", "mcp", "add-json", "files", json.dumps(FILES)]
+    engine, change = apply(home, steps)
+    after = client_files(home)
+    engine.run = FailingClaude(home, "add-json")
+    engine.undo(change.id)
+    assert str(change.state) == "undo_blocked"
+    assert client_files(home) == after
+    # gateway.json still names the item, so it stays.
+    assert keychain_items(fake_keychain) == {"kitden files/FILES_TOKEN": "SENTINEL_SECRET_FILES"}
+
+
+def test_a_keychain_item_that_cannot_be_deleted_after_undo_is_named(
+    home, fake_keychain, tmp_path, monkeypatch
+):
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    before = client_files(home)
+    engine, change = apply(home, move(home, ("claude_code", "files")))
+    security_that_cannot_delete(tmp_path, monkeypatch, tmp_path / "keychain/bin/security")
+    engine.undo(change.id)
+    assert str(change.state) == "undone", change.error
+    assert change.error == "files/FILES_TOKEN stays in your Keychain."
+    assert client_files(home) == before
+
+
+def test_a_restore_says_an_item_that_was_there_keeps_the_new_value(home, fake_keychain):
+    fake_keychain.write_text(json.dumps({"kitden files/FILES_TOKEN": "OLD"}))
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    before = client_files(home)
+    engine = Engine(ChangeStore(data_dir(home)), run=FailingClaude(home, "remove"))
+    change = engine.preview("gateway.move", move(home, ("claude_code", "files")))
+    engine.apply(change.id)
+    assert str(change.state) == "restored"
+    assert change.error.endswith(" files/FILES_TOKEN in your Keychain keeps the new value.")
+    assert "The original settings were restored." not in change.error
+    assert client_files(home) == before
+
+
+def test_an_empty_value_is_no_secret_and_stays_in_the_entry(home, fake_keychain):
+    entry = {**FILES, "env": {"EMPTY": "", "FILES_TOKEN": "SENTINEL_SECRET_FILES"}}
+    add_claude(home, "files", {"type": "stdio", **entry})
+    steps = move(home, ("claude_code", "files"))
+    apply(home, steps)
+    assert load_settings(home)["servers"]["files"]["env"] == {"EMPTY": "", "FILES_TOKEN": REFERENCE}
+    assert keychain_items(fake_keychain) == {"kitden files/FILES_TOKEN": "SENTINEL_SECRET_FILES"}
+
+
+def test_a_held_entry_whose_env_is_not_a_map_is_refused(home):
+    write_json(gateway_file(home), {"servers": {"files": {**FILES, "env": ["x"]}}, "rules": {}})
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    refused(home, ("claude_code", "files"), "files in the gateway settings could not be read.")
+
+
+def test_a_stale_apply_forgets_the_values(home):
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    engine = Engine(ChangeStore(data_dir(home)), run=FakeClaude(home))
+    change = engine.preview("gateway.move", move(home, ("claude_code", "files")))
+    add_claude(home, "files", {**FILES, "args": ["other"]})  # changed since preview
+    engine.apply(change.id)
+    assert str(change.state) == "stale"
+    assert [i.value for s in change.steps for i in s.keychain] == [""]

@@ -110,9 +110,10 @@ project, with a server that has a token:
 19. Undo the move. The Keychain item is gone.
 20. Move a server in, edit `gateway.json` to hold a plain token for it, and open its Details:
     "Move secrets to the Keychain…" moves the token and leaves a reference.
-21. Confirm three `security` facts by hand: `find-generic-password` exits with 44 for a missing
+21. Confirm four `security` facts by hand: `find-generic-password` exits with 44 for a missing
     item; `security -i` reads the quoted `add-generic-password` line as the code expects; `find ... -w`
-    prints a non-ASCII value back unchanged.
+    prints a non-ASCII value back unchanged; a long value (for example 4 KB) is stored and read
+    back unchanged.
 
 Not run yet for steps 17 to 21: Part 5 was built and tested with a fake `security` only.
 
@@ -139,7 +140,7 @@ with trusted publishing and creates the GitHub release with the notes file as it
   was sent. Only `gateway.json` changes through review and Undo; the other two are found data that
   the gateway and Rescan write. The gateway reads `gateway.json` again on each call, so a tool
   turned off is refused at once; if the file cannot be read, the rules it started with apply. It
-  keeps references, not secrets: each env value or header that would be hidden is a Keychain item
+  keeps references, not secrets: each non-empty env value or header that would be hidden is a Keychain item
   (service `kitden`, account `<server>/<key>`), and `gateway.json` holds `{"keychain": "<server>/<key>"}`.
   The gateway reads the items when it starts a server. Kitden calls `/usr/bin/security`; the
   env variable `KITDEN_SECURITY` replaces that path, as a test hook only. `kitden mcp` finds the project once, at start: the `CLAUDE_PROJECT_DIR` variable, then

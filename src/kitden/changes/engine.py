@@ -549,6 +549,12 @@ class Engine:
 
     def apply(self, change_id: str) -> Change:
         change = self.changes[change_id]
+        try:
+            return self._apply(change)
+        finally:
+            self._forget_secrets(change)  # the values are needed only until Apply ends
+
+    def _apply(self, change: Change) -> Change:
         if change.state is not ChangeState.PREVIEWED:
             change.move_to(ChangeState.APPLYING)  # raises: only a previewed change applies
         file_steps = [s for s in change.steps if s.edit is not None]
@@ -644,12 +650,13 @@ class Engine:
             self._remove_from_gateway(gateway_steps, best_effort=True)
             for item in reversed(stored):
                 if item.existed:
-                    continue  # its old value is recorded nowhere
+                    # Its old value is recorded nowhere.
+                    lost.append(f"{item.server}/{item.key} in your Keychain keeps the new value.")
+                    continue
                 try:
                     keychain.delete(item.ref)
                 except KeychainError:
                     lost.append(f"{item.server}/{item.key} stays in your Keychain.")
-            self._forget_secrets(change)
             self._mark_secret(change, file_steps)
             change.move_to(ChangeState.RESTORED)
             if lost:
@@ -661,7 +668,6 @@ class Engine:
 
         for step in file_steps:
             step.edit.after_hash = _sha(_read(step.edit.path))
-        self._forget_secrets(change)
         self._mark_secret(change, file_steps)
         change.move_to(ChangeState.VERIFIED)
         self._finish(change)
@@ -683,7 +689,7 @@ class Engine:
 
     @staticmethod
     def _forget_secrets(change: Change) -> None:
-        """The values are needed only until Apply ends."""
+        """Clear the values held in memory."""
         for step in change.steps:
             for item in step.keychain:
                 item.value = ""
@@ -858,13 +864,15 @@ class Engine:
             self._finish(change)
             return change
 
-        # The Keychain goes first: if it cannot be reached, nothing else changes. An item the
-        # change only updated keeps its new value: the old one is recorded nowhere.
+        # The Keychain is checked first: if it cannot be reached, nothing else changes. The
+        # items the change created are deleted last, once the files read back as before, so a
+        # blocked Undo leaves no setting naming a deleted item. An item the change only updated
+        # keeps its new value: the old one is recorded nowhere.
         items = [i for s in change.steps for i in s.keychain]
+        created = [i for i in items if not i.existed]
         try:
-            for item in items:
-                if not item.existed:
-                    keychain.delete(item.ref)
+            for item in created:
+                keychain.read(item.ref)
         except KeychainError:
             change.move_to(ChangeState.UNDO_BLOCKED)
             change.error = "Kitden could not reach the Keychain; nothing was changed."
@@ -926,6 +934,11 @@ class Engine:
                 raise RuntimeError(f"{step.copy.target}: undo did not remove the copy")
             if step.removal and digest(step.removal.path) != step.removal.content_hash:
                 raise RuntimeError(f"{step.removal.path}: undo did not copy the folder back")
+        for item in reversed(created):
+            try:
+                keychain.delete(item.ref)
+            except KeychainError:
+                kept.append(f"{item.server}/{item.key} stays in your Keychain.")
         self.on_progress(change.id, len(change.steps), len(change.steps))
         change.move_to(ChangeState.UNDONE)
         notes = [f"{', '.join(gone)} had already been removed from the gateway."] if gone else []

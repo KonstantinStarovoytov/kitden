@@ -864,7 +864,7 @@ SECRET_FIELDS = ("env", "headers")  # the gateway entry's maps whose values may 
 
 def secrets_out(name: str, server: dict) -> tuple[dict, list[KeychainItem]]:
     """The entry with each env or header value that `redact` hides replaced by a Keychain
-    reference, and those values as Keychain items."""
+    reference, and those values as Keychain items. An empty value is no secret: it stays."""
     entry = dict(server)
     items = []
     for field in SECRET_FIELDS:
@@ -873,7 +873,7 @@ def secrets_out(name: str, server: dict) -> tuple[dict, list[KeychainItem]]:
             continue
         entry[field] = {}
         for key, value in values.items():
-            if isinstance(value, str) and redact({field: {key: value}})[1]:
+            if isinstance(value, str) and value and redact({field: {key: value}})[1]:
                 item = KeychainItem(name, key, value)
                 items.append(item)
                 value = item.ref
@@ -890,6 +890,8 @@ def _server_step(home: Path, name: str, server: dict, old: Any) -> Step | None:
     """
     entry, items = secrets_out(name, server)
     if isinstance(old, dict):
+        if not all(isinstance(old.get(f) or {}, dict) for f in SECRET_FIELDS):
+            raise ValueError(f"{name} in the gateway settings could not be read.")
         try:
             values = resolve_entry(old)
         except KeychainError:

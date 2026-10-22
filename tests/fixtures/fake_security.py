@@ -5,7 +5,8 @@
 It keeps generic password items in ITEMS_FILE, a JSON object of "service account" → value.
 It knows only what Kitden runs: `-i` with `add-generic-password` lines on stdin,
 `find-generic-password -w` and `delete-generic-password`. Like the real one, a missing item
-exits with 44, and `-i` exits with 0 even when a line fails.
+exits with 44, and `-i` exits with 0 even when a line fails. An option without its value
+(`-X` at the end of a line) is a usage error: it exits with 2, also under `-i`.
 """
 
 import json
@@ -14,18 +15,22 @@ import sys
 from pathlib import Path
 
 NOT_FOUND = 44
+USAGE = 2
 
 
-def options(words: list[str]) -> dict[str, str]:
-    """-s, -a and -X take a value; any other word is a flag on its own."""
+def options(words: list[str]) -> dict[str, str | None]:
+    """-s, -a and -X take a value (None when it is missing); any other word is a flag."""
     found, rest = {}, iter(words)
     for word in rest:
-        found[word] = next(rest, "") if word in ("-s", "-a", "-X") else ""
+        found[word] = next(rest, None) if word in ("-s", "-a", "-X") else ""
     return found
 
 
 def command(items: dict, words: list[str]) -> int:
     name, flags = words[0], options(words[1:])
+    if None in flags.values():
+        print("security: an option needs a value", file=sys.stderr)
+        return USAGE
     key = f"{flags.get('-s')} {flags.get('-a')}"
     if name == "add-generic-password":
         if key in items and "-U" not in flags:
@@ -49,8 +54,8 @@ def main() -> int:
     before = dict(items)
     if args == ["-i"]:
         for line in sys.stdin:
-            if line.strip():
-                command(items, shlex.split(line))
+            if line.strip() and command(items, shlex.split(line)) == USAGE:
+                return USAGE  # nothing is written
         code = 0
     else:
         code = command(items, args)
