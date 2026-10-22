@@ -1,9 +1,17 @@
 import re
 import socket
+import time
+from pathlib import Path
+
+import pytest
+from starlette.testclient import TestClient
 
 import kitden
 import kitden.cli as cli
+import kitden.demo
+from kitden import page
 from kitden.cli import main, pick_port
+from kitden.demo import VERSIONS
 
 
 def test_version_prints_name_and_version_and_exits_zero(capsys):
@@ -117,16 +125,10 @@ def test_every_command_copies_the_old_data_folder_once(tmp_path, capsys):
 
 
 def test_tests_never_see_the_real_home():
-    from pathlib import Path
-
     assert "real-home" in str(Path.home())
 
 
 # kitden open and one page per home folder (feature 002, T011) --------------------------------
-
-import pytest  # noqa: E402
-
-from kitden import page  # noqa: E402
 
 
 def _hold_page(home, port=47899, token="tok"):
@@ -324,3 +326,155 @@ def test_serve_lets_the_page_listen_before_the_first_scan(tmp_path, monkeypatch)
     monkeypatch.setattr(cli, "run_server", lambda *a, **kw: None)
     main(["serve", "--no-browser", "--home", str(tmp_path)])
     assert seen["first_scan_later"] is True
+
+
+# kitden demo (visual management, Part 1) ---------------------------------------------------
+
+
+def _demo_run(monkeypatch, seen, server=None):
+    real = kitden.demo.build_demo_home
+    monkeypatch.setattr(
+        kitden.demo,
+        "build_demo_home",
+        lambda root, size: seen.setdefault("home", real(root, size)),
+    )
+    monkeypatch.setattr(cli, "pick_port", lambda start, tries=20: start)
+    monkeypatch.setattr(cli, "run_server", server or (lambda app, host, port, **kw: None))
+
+
+def test_demo_serves_the_sample_and_deletes_it_on_exit(monkeypatch, capsys):
+    seen = {}
+
+    def server(app, host, port, **kw):
+        home = seen["home"]
+        assert home.is_dir() and port == cli.DEMO_PORT
+        assert home == home.resolve()  # macOS: /var is a link to /private/var
+        link = re.search(r"http://127\.0\.0\.1:\d+/\?token=\S+", capsys.readouterr().out)
+        with TestClient(app, base_url=f"http://127.0.0.1:{port}") as tab:
+            tab.get(link.group(0))
+            assert tab.get("/api/about").json()["demo"] is True
+            assert {c["id"]: c["version"] for c in tab.get("/api/clients").json()} == VERSIONS
+
+    _demo_run(monkeypatch, seen, server)
+    assert main(["demo", "--no-browser"]) == 0
+    assert not seen["home"].parent.exists()
+
+
+def test_demo_says_it_runs_a_sample_and_how_to_stop(monkeypatch, capsys):
+    _demo_run(monkeypatch, {})
+    main(["demo", "--no-browser", "--size", "small"])
+    lines = capsys.readouterr().out.splitlines()
+    assert re.fullmatch(
+        r"Kitden demo is running on a sample setup\. Open: "
+        r"http://127\.0\.0\.1:47900/\?token=[A-Za-z0-9_-]{40,}",
+        lines[0],
+    )
+    assert lines[1] == "Press Ctrl+C to stop. The sample folder is deleted then."
+
+
+def test_demo_deletes_its_folder_when_the_server_fails(monkeypatch):
+    seen = {}
+
+    def server(app, host, port, **kw):
+        raise RuntimeError("the server broke")
+
+    _demo_run(monkeypatch, seen, server)
+    with pytest.raises(RuntimeError):
+        main(["demo", "--no-browser", "--size", "small"])
+    assert not seen["home"].parent.exists()
+
+
+def test_demo_exits_2_without_a_free_port(monkeypatch, capsys):
+    seen = {}
+    _demo_run(monkeypatch, seen, lambda *a, **kw: pytest.fail("served without a port"))
+    monkeypatch.setattr(cli, "pick_port", lambda start, tries=20: None)
+    assert main(["demo", "--no-browser", "--size", "small"]) == 2
+    assert "No free port from 47900." in capsys.readouterr().err
+    assert not seen["home"].parent.exists()
+
+
+def test_demo_never_touches_the_real_home(monkeypatch):
+    real = Path.home()  # the fake home conftest gives every test
+    old = real / "Library/Application Support/agentsetup/settings.json"
+    old.parent.mkdir(parents=True)
+    old.write_text("{}")
+    before = sorted(p.relative_to(real) for p in real.rglob("*"))
+    _demo_run(monkeypatch, {})
+    assert main(["demo", "--no-browser", "--size", "small"]) == 0
+    assert sorted(p.relative_to(real) for p in real.rglob("*")) == before
+
+
+def test_demo_opens_the_browser_once_started(monkeypatch):
+    opened = []
+    _demo_run(monkeypatch, {}, lambda app, host, port, on_started, **kw: on_started())
+    monkeypatch.setattr(cli.webbrowser, "open", opened.append)
+    main(["demo", "--size", "small"])
+    assert len(opened) == 1 and opened[0].startswith("http://127.0.0.1:47900/?token=")
+
+
+def test_demo_takes_only_the_three_sizes():
+    with pytest.raises(SystemExit) as stopped:
+        main(["demo", "--size", "huge"])
+    assert stopped.value.code == 2
+
+
+def test_a_second_ctrl_c_does_not_stop_the_delete(monkeypatch):
+    # `uv run` and `uvx` pass the program a second Ctrl+C a moment after the terminal's.
+    import shutil
+    import signal
+
+    seen, stopped = {}, []
+    real = shutil.rmtree
+
+    def rmtree(path, *args, **options):
+        try:
+            signal.raise_signal(signal.SIGINT)
+        except KeyboardInterrupt:
+            stopped.append(path)
+            return  # a real delete stops here
+        real(path, *args, **options)
+
+    monkeypatch.setattr(shutil, "rmtree", rmtree)
+    _demo_run(monkeypatch, seen)
+    handler = signal.getsignal(signal.SIGINT)
+    assert main(["demo", "--no-browser", "--size", "small"]) == 0
+    assert stopped == [] and not seen["home"].parent.exists()
+    assert signal.getsignal(signal.SIGINT) is handler
+
+
+def _listening(port, seconds=20):
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        try:
+            socket.create_connection(("127.0.0.1", port), timeout=1).close()
+            return True
+        except OSError:
+            time.sleep(0.1)
+    return False
+
+
+@pytest.mark.parametrize("signal_name", ["SIGTERM", "SIGINT"])
+def test_a_stopped_demo_exits_cleanly_and_deletes_its_folder(tmp_path, signal_name):
+    import os
+    import signal
+    import subprocess
+    import sys
+
+    process = subprocess.Popen(  # noqa: S603
+        [sys.executable, "-m", "kitden", "demo", "--no-browser", "--size", "small"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env={**os.environ, "TMPDIR": str(tmp_path)},  # the sample is made here
+    )
+    try:
+        port = int(re.search(r"127\.0\.0\.1:(\d+)/", process.stdout.readline()).group(1))
+        assert [p.name[:12] for p in tmp_path.iterdir()] == ["kitden-demo-"]
+        assert _listening(port)
+        process.send_signal(getattr(signal, signal_name))
+        _, err = process.communicate(timeout=15)
+    finally:
+        process.kill()
+    assert process.returncode == 0, err
+    assert "Traceback" not in err
+    assert list(tmp_path.iterdir()) == []

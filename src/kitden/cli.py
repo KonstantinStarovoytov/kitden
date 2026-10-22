@@ -1,12 +1,14 @@
-"""Command line entry point: kitden, open, serve, scan, mcp."""
+"""Command line entry point: kitden, open, serve, demo, scan, mcp."""
 
 import argparse
 import contextlib
 import json
 import secrets
+import shutil
 import signal
 import socket
 import sys
+import tempfile
 import time
 import webbrowser
 from collections import Counter
@@ -19,6 +21,8 @@ from kitden.views.inventory import Inventory, build_inventory, inventory_dict
 
 HOST = "127.0.0.1"
 DEFAULT_PORT = 47800
+# The demo's own ports, so its browser storage (theme, hidden columns) never mixes with the page's.
+DEMO_PORT = 47900
 EXIT_NO_PORT = 2
 EXIT_UNREADABLE = 3
 EXIT_NOT_STARTED = 4
@@ -158,6 +162,60 @@ def _serve(args: argparse.Namespace) -> int:
         lock.release()
 
 
+def _demo(args: argparse.Namespace) -> int:
+    """Run the page on a sample setup in a temporary folder; the folder is deleted when the page
+    stops. No page lock, no page record, no data-folder copy: nothing of the real home is used."""
+    from kitden import demo  # looked up here, so tests can stand in for the builder
+    from kitden.web.app import create_app
+
+    # Resolved: on macOS the temp folder is under /var, a link to /private/var.
+    folder = Path(tempfile.mkdtemp(prefix="kitden-demo-")).resolve()
+    try:
+        home = demo.build_demo_home(folder, args.size)
+        port = pick_port(DEMO_PORT)
+        if port is None:
+            print(f"No free port from {DEMO_PORT}.", file=sys.stderr)
+            return EXIT_NO_PORT
+        token = secrets.token_urlsafe(32)
+        app = create_app(
+            demo.demo_build(home),
+            token=token,
+            port=port,
+            watch_folders=[home / name for name in WATCHED],
+            flat_folders=[home],
+            home=home,
+            first_scan_later=True,
+            quick_first=True,
+            demo=True,
+        )
+        url = f"http://{HOST}:{port}/?token={token}"
+        print(f"Kitden demo is running on a sample setup. Open: {url}", flush=True)
+        print("Press Ctrl+C to stop. The sample folder is deleted then.", flush=True)
+
+        def started() -> None:
+            if not args.no_browser:
+                webbrowser.open(url)
+
+        run_server(app, HOST, port, on_started=started)
+        return 0
+    finally:
+        _delete(folder)
+
+
+def _delete(folder: Path) -> None:
+    """Delete the demo's folder. A Ctrl+C meanwhile does not stop it: `uv run` and `uvx` pass the
+    program a second one a moment after the terminal's."""
+    try:
+        previous = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    except ValueError:  # only the main thread may set handlers
+        previous = None
+    try:
+        shutil.rmtree(folder, ignore_errors=True)
+    finally:
+        if previous is not None:
+            signal.signal(signal.SIGINT, previous)
+
+
 def _print_summary(inventory: Inventory) -> None:
     counts = Counter((i.client, str(i.kind)) for i in inventory.items)
     for client in inventory.clients:
@@ -183,6 +241,8 @@ def _scan(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from kitden.demo import SIZES
+
     parser = argparse.ArgumentParser(prog="kitden")
     parser.add_argument("--version", action="store_true", help="print the version and exit")
     parser.add_argument("--no-browser", action="store_true", help="do not open the browser")
@@ -193,10 +253,12 @@ def main(argv: list[str] | None = None) -> int:
     opener = commands.add_parser("open", help="open the page; start it in the background if needed")
     serve = commands.add_parser("serve", help="run the page here until Ctrl+C")
     serve.add_argument("--background", action="store_true", help=argparse.SUPPRESS)
+    demo = commands.add_parser("demo", help="run the page on a sample setup until Ctrl+C")
+    demo.add_argument("--size", choices=SIZES, default="medium", help="how big the sample is")
     scan = commands.add_parser("scan", help="print what each client loads, then exit")
     scan.add_argument("--json", action="store_true", help="print JSON instead of a summary")
     mcp = commands.add_parser("mcp", help="run the Kitden MCP server and gateway over stdio")
-    for sub in (opener, serve):
+    for sub in (opener, serve, demo):
         sub.add_argument(
             "--no-browser", action="store_true", default=keep, help="only print the link"
         )
@@ -210,6 +272,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.version:
         print(f"kitden {__version__}")
         return 0
+    if args.command == "demo":
+        return _demo(args)
     from kitden.gateways import ensure_data_folder
 
     note = ensure_data_folder(Path(args.home).expanduser() if args.home else Path.home())

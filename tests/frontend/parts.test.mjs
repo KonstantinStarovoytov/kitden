@@ -29,7 +29,7 @@ function element(tag) {
   return node;
 }
 globalThis.document = { createElement: element };
-const { backupNote, banner, changeTitle, clientCheck, gatewayName, morphSocket, opens, socket, strictText } = await import('../../src/kitden/web/static/js/parts.js');
+const { backupNote, banner, changeTitle, clientCheck, demoTag, gatewayName, morphSocket, opens, socket, strictText } = await import('../../src/kitden/web/static/js/parts.js');
 
 test('a row that opens Details ends with a chevron for the eye and words for a screen reader', () => {
   const node = opens();
@@ -284,4 +284,13 @@ test('the tool count is drawn when it is a number and left out when it is not', 
   assert.equal(details.className, 'why');
   assert.equal(toolsNode({ name: 'github', tools: null }, true), null);
   assert.equal(toolsNode({ name: 'github' }), null);
+});
+
+test('a demo shows a quiet Demo flag; a real page shows none', () => {
+  const tag = demoTag({ version: '0.2.0', demo: true });
+  assert.equal(tag.textContent, 'Demo');
+  assert.equal(tag.className, 'flag info');
+  assert.equal(tag.attributes.title, 'A sample setup in a temporary folder. Your own settings are not read or changed.');
+  assert.equal(demoTag({ version: '0.2.0', demo: false }), null);
+  assert.equal(demoTag(null), null);
 });

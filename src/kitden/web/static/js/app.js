@@ -8,7 +8,7 @@ import { renderGateway } from "./gateway.js";
 import { loadLibrary, loadLibraryFor, morphOnNextRender, raceSlow, renderLibrary, settleRows, snapshotRows } from "./library.js";
 import { renderOverview } from "./overview.js";
 import { closePanel, initPanel, isPanelOpen } from "./panel.js";
-import { latestChanges, scanLine, versionsOpened } from "./parts.js";
+import { demoTag, latestChanges, scanLine, versionsOpened } from "./parts.js";
 import {
   busy, current, data, followAddress, freshness, go, loadShared, OLD_VIEWS, onIdle, parseHash, reload, setRenderer, setState, state, VIEWS,
 } from "./store.js";
@@ -299,6 +299,13 @@ function start() {
   initPanel();
 
   renderPlace();
+  // Once per start: whether this is the demo. It answers before the first scan.
+  getJson("/api/about")
+    .then((about) => {
+      const tag = demoTag(about);
+      if (tag) $(".brand").append(tag);
+    })
+    .catch(() => {});
   loadShared()
     .then(refresh)
     .catch(reportError);

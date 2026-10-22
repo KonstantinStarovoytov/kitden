@@ -885,3 +885,12 @@ def test_library_has_an_instructions_tab():
 def test_details_shows_an_instruction_files_first_lines():
     assert 'el("pre", "preview"' in script("panel.js")
     assert "pre.preview" in (STATIC / "style.css").read_text()
+
+
+def test_a_demo_says_so_quietly_in_the_rail():
+    assert 'getJson("/api/about")' in script("app.js")
+    parts = script("parts.js")
+    assert '"Demo"' in parts
+    hover = "A sample setup in a temporary folder. Your own settings are not read or changed."
+    assert hover in parts
+    assert "Demo" not in INDEX  # only a demo's answer adds it

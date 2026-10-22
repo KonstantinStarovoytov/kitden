@@ -46,7 +46,7 @@ Preserve the compact information layout. Use restrained neutral panels, fine bor
 
 On Overview, an option ("Can improve") is a quiet card: `.issue.suggestion` has no warning border and a plain button, not the primary one.
 
-A row that opens Details ends with a quiet › and the hidden words "Open details" (`opens()` in `parts.js`). The chevron turns accent on hover and keyboard focus; it does not move. The search box names what it searches: "Search your setup and marketplaces…".
+A row that opens Details ends with a quiet › and the hidden words "Open details" (`opens()` in `parts.js`). The chevron turns accent on hover and keyboard focus; it does not move. The search box names what it searches: "Search your setup and marketplaces…". In `kitden demo` a quiet "Demo" flag (`.flag.info`) follows the wordmark; its hover text says the setup is a sample in a temporary folder. The page reads `/api/about` once to know.
 
 A Details footer button never grows past the panel: long words end in "…", and the whole label stays in its hover text. When one client has two Remove buttons for the same scope, each names its folder by the last two parts: "Remove from Codex (.agents/skills)…".
 

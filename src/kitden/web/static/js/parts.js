@@ -181,6 +181,14 @@ export function flag({ text, level }) {
   return el("span", level === "warning" ? "flag" : "flag info", text);
 }
 
+// In `kitden demo`, a quiet flag after the wordmark; its hover text says what the sample is.
+export function demoTag(about) {
+  if (!about?.demo) return null;
+  const tag = el("span", "flag info", "Demo");
+  tag.setAttribute("title", "A sample setup in a temporary folder. Your own settings are not read or changed.");
+  return tag;
+}
+
 // The end of a row that opens Details: a chevron for the eye, words for a screen reader.
 export function opens() {
   const node = el("span", "opens");

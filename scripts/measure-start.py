@@ -6,6 +6,8 @@ and `cursor` commands:
   takes `--slow` seconds; the start line must then say it still checks "Codex plugins";
 - complete: the time until every step of the first scan is done, with the list answering at once.
 The client versions are read once before each run, as on any start after the first.
+A third run times `kitden demo` on the medium sample: from building it to the first answer of
+/api/overview.
 
 Usage: uv run python scripts/measure-start.py [--slow 10]
 """
@@ -30,12 +32,13 @@ from tests.conftest import fake_client_command  # noqa: E402
 
 from kitden.cli import WATCHED  # noqa: E402
 from kitden.clients import version_cache  # noqa: E402
-from kitden.demo import build_demo_home  # noqa: E402
+from kitden.demo import build_demo_home, demo_build  # noqa: E402
 from kitden.views.inventory import build_inventory  # noqa: E402
 from kitden.web.app import create_app  # noqa: E402
 
 FIRST_USABLE_BUDGET = 2.0  # seconds, even while Codex's plugin list is slow
 COMPLETE_BUDGET = 5.0  # seconds, with every answer at once
+DEMO_BUDGET = 2.0  # seconds, from building the medium sample to its first overview
 GIVE_UP_SECONDS = 60
 SLOW_STEP = "Codex plugins"
 
@@ -109,6 +112,36 @@ def measure(home: Path, slow: float) -> dict:
     return found
 
 
+def measure_demo(root: Path) -> float:
+    """Build the medium sample in `root` and start the demo page on it, as `kitden demo` does;
+    return seconds from before the build to the first answer of /api/overview."""
+    started = time.monotonic()
+    home = build_demo_home(root, "medium")
+    port, token = _free_port(), secrets.token_urlsafe(16)
+    app = create_app(
+        demo_build(home),
+        token=token,
+        port=port,
+        watch_folders=[home / name for name in WATCHED],
+        flat_folders=[home],
+        home=home,
+        first_scan_later=True,
+        quick_first=True,
+        demo=True,
+    )
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    try:
+        with httpx.Client(base_url=f"http://127.0.0.1:{port}", timeout=GIVE_UP_SECONDS) as http:
+            _poll(lambda: http.get("/", params={"token": token}).status_code == 303)
+            _poll(lambda: "headline" in _json(http.get("/api/overview")))
+            return time.monotonic() - started
+    finally:
+        server.should_exit = True
+        thread.join(timeout=10)
+
+
 def _json(response: httpx.Response) -> dict:
     return response.json() if response.status_code == 200 else {}
 
@@ -137,13 +170,15 @@ def main() -> int:
             slow_run = measure(slow_home, args.slow)
             quick_home = build_sandbox(Path(folder) / "quick", slow=0)
             quick_run = measure(quick_home, 0)
+            demo = measure_demo(Path(folder) / "demo")
     finally:
         os.environ.update(HOME=real_home or "", PATH=real_path or "")
     first, complete = slow_run["first_usable"], quick_run["complete"]
     print(f"first usable: {first:.1f} s (budget {FIRST_USABLE_BUDGET:g} s)")
     print(f"  the start line then said: Still checking {', '.join(slow_run['still_checking'])}")
     print(f"complete: {complete:.1f} s (budget {COMPLETE_BUDGET:g} s)")
-    missed = first > FIRST_USABLE_BUDGET or complete > COMPLETE_BUDGET
+    print(f"demo (medium): {demo:.1f} s (budget {DEMO_BUDGET:g} s)")
+    missed = first > FIRST_USABLE_BUDGET or complete > COMPLETE_BUDGET or demo > DEMO_BUDGET
     if missed:
         print("A budget is missed.")
     return 1 if missed else 0
