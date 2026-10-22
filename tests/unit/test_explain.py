@@ -1,8 +1,12 @@
 """Where an item comes from and why it loads or not (redesign plan, Task 2)."""
 
+from pathlib import Path
+
 import pytest
 
-from kitden.views.explain import explain
+from kitden.clients.base import file_source
+from kitden.model import Item, ItemKind, Scope
+from kitden.views.explain import explain, reads
 from kitden.views.inventory import build_inventory
 from tests.conftest import make_home, write_cursor_fixture_state
 
@@ -119,3 +123,28 @@ def test_project_files_show_a_preview_only_in_their_project(home):
 
 def test_other_kinds_have_no_preview(home):
     assert explain(build_inventory(home), "Neon", "mcp_server", None)[0]["preview"] is None
+
+
+def test_the_preview_drops_a_bom_and_a_line_cut_by_the_read_limit(home):
+    path = home / ".claude/CLAUDE.md"
+    path.write_text("\ufeff# rules\n" + "y" * 70_000 + "\n")
+    preview = _user_file(explain(build_inventory(home), "CLAUDE.md", "instructions", None), home)
+    assert preview["preview"] == ["# rules"]
+
+
+def test_rules_words_only_for_the_rules_folder(home):
+    rules = home / ".claude/rules"
+    rules.mkdir()
+    (rules / "style.md").write_text("Short lines.\n")
+    found = explain(build_inventory(home), "style", "instructions", None)
+    assert "paths" in found[0]["why"]
+    # A project folder named rules holds a plain CLAUDE.md, not a rule.
+    plain = Item(
+        client="claude_code",
+        kind=ItemKind.INSTRUCTIONS,
+        name="CLAUDE.md",
+        source=file_source(Path("/h/work/rules/CLAUDE.md"), "claude_code"),
+        scope=Scope.PROJECT,
+        summary=(("category", "instructions"),),
+    )
+    assert "paths" not in reads(plain, [plain])

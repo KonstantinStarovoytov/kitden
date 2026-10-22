@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from kitden.redact import SECRET, redact, redact_line, redact_text
+from kitden.redact import SECRET, redact, redact_line, redact_lines, redact_text
 
 GITHUB_LIKE = "ghp_" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8"
 
@@ -178,9 +178,52 @@ def test_tokens_inside_longer_strings_are_hidden():
         ("db at postgres://admin:s3cret@localhost/app", f"db at postgres://{SECRET}@localhost/app"),
         (f"use {GITHUB_LIKE} here", f"use {SECRET} here"),
         ("API_KEY=${API_KEY}", "API_KEY=${API_KEY}"),
+        ('  "apiKey": "abc123secretvalue",', f'  "apiKey": {SECRET}'),
+        ('{"token":"abc123secretvalue"}', f'{{"token":{SECRET}'),
+        ("'password': 'hunter2hunter2'", f"'password': {SECRET}"),
+        ("DB_PASS=hunter2hunter2", f"DB_PASS={SECRET}"),
+        ("MYSQL_PWD=hunter2hunter2", f"MYSQL_PWD={SECRET}"),
+        ("PRIVATE_KEY=abc123", f"PRIVATE_KEY={SECRET}"),
+        ("cookie: session=abc123", f"cookie: {SECRET}"),
+        ("key AIza" + "B" * 35 + " here", f"key {SECRET} here"),
+        ("Bring your passport.", "Bring your passport."),
         ("Run `make test` before each commit.", "Run `make test` before each commit."),
         ("See https://example.com/docs for more.", "See https://example.com/docs for more."),
     ],
 )
 def test_redact_line_hides_secrets_in_free_text(line, want):
     assert redact_line(line) == want
+
+
+def test_redact_lines_hides_values_that_span_lines():
+    lines = [
+        "config:",
+        "  password: |",
+        "    first-secret-line",
+        "",
+        "    second-secret-line",
+        "  user: me",
+        "TOKEN=",
+        "  next-line-secret",
+        "Done.",
+    ]
+    out = redact_lines(lines)
+    assert out[0] == "config:" and out[5] == "  user: me" and out[8] == "Done."
+    assert out[3] == ""
+    assert not any("secret-line" in line or "next-line-secret" in line for line in out)
+
+
+def test_redact_lines_hides_a_private_key_body():
+    lines = [
+        "Key:",
+        "-----BEGIN OPENSSH PRIVATE KEY-----",
+        "b3BlbnNzaC1rZXktdjEAAAAA",
+        "QyNTUxOQAAACD",
+        "-----END OPENSSH PRIVATE KEY-----",
+        "After.",
+    ]
+    out = redact_lines(lines)
+    assert out[1] == lines[1] and out[4] == lines[4] and out[5] == "After."
+    assert out[2] == SECRET and out[3] == SECRET
+    # The end can be past the lines shown: the body is still hidden.
+    assert redact_lines(lines[:3])[2] == SECRET

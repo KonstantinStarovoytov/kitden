@@ -32,6 +32,7 @@ _TOKEN_SHAPES = (
         r"(sk-|sk_|ghp_|gho_|ghu_|ghs_|github_pat_|xox[baprs]-|glpat-|AKIA)[A-Za-z0-9_\-]{16,}"
     ),
     re.compile(r"eyJ[\w-]+\.[\w-]+\.[\w-]+"),
+    re.compile(r"AIza[0-9A-Za-z_-]{35}"),  # a Google API key
     re.compile(r"(?i)(bearer|basic|token)\s+(?!\$\{)[^\s\"']{8,}"),
 )
 
@@ -135,13 +136,19 @@ def redact_text(text: str) -> str:
     return text
 
 
-# In free text: `NAME=value` or `name: value` whose name says secret, and a URL's user:password.
+# In free text: `NAME=value`, `name: value` or `"name": value` whose name says secret (free
+# text also has these words), and a URL's user:password.
+_LINE_WORD = rf"({_SECRET_WORD[1:-1]}|pass\b|pwd|private[-_]?key|cookie)"
 _LINE_PAIR = re.compile(
-    rf"(?<![A-Za-z0-9_.-])(?P<name>[A-Za-z0-9_.-]*{_SECRET_WORD}[A-Za-z0-9_.-]*)"
-    r"(?P<sep>\s*[:=]\s*)(?P<value>\S.*)",
+    rf"(?<![A-Za-z0-9_.-])(?P<name>[A-Za-z0-9_.-]*{_LINE_WORD}[A-Za-z0-9_.-]*)"
+    r"(?P<sep>[\"']?\s*[:=]\s*)(?P<value>.*)",
     re.I,
 )
 _URL_USER = re.compile(r"(?i)\b([a-z][a-z0-9+.-]*://)[^\s/@]+@")
+# A value that goes on in the lines below: empty, or a YAML block marker.
+_BLOCK_START = re.compile(r"[|>][-+]?")
+_KEY_BEGIN = re.compile(r"-----BEGIN [A-Z0-9 ]*KEY-----")
+_KEY_END = re.compile(r"-----END [A-Z0-9 ]*KEY-----")
 
 
 def redact_line(line: str) -> str:
@@ -151,9 +158,42 @@ def redact_line(line: str) -> str:
     line = _URL_USER.sub(lambda m: f"{m.group(1)}{SECRET}@", line)
     line = redact_text(line)
     m = _LINE_PAIR.search(line)
-    if m and not _is_reference(m.group("value")) and m.group("value") != SECRET:
+    value = m.group("value").strip() if m else ""
+    if m and value and not _is_reference(value) and value != SECRET:
         line = f"{line[: m.start('value')]}{SECRET}"
     return line
+
+
+def _indent(line: str) -> int:
+    return len(line) - len(line.lstrip())
+
+
+def redact_lines(lines: list[str]) -> list[str]:
+    """redact_line on each line, and values that span lines: the indented lines under a
+    secret name with an empty value or a YAML block marker (`|`, `>-`), and the body of a
+    `-----BEGIN ... KEY-----` block, even when its end is not among the lines."""
+    out = []
+    block: int | None = None  # the indent of the secret name whose value goes on below
+    in_key = False
+    for line in lines:
+        if in_key:
+            in_key = not _KEY_END.search(line)
+            out.append(line if not in_key else SECRET)
+            continue
+        if block is not None and (not line.strip() or _indent(line) > block):
+            out.append(line if not line.strip() else SECRET)
+            continue
+        block = None
+        if _KEY_BEGIN.search(line):
+            in_key = True
+            out.append(line)
+            continue
+        m = _LINE_PAIR.search(line)
+        value = m.group("value").strip() if m else ""
+        if m and (not value or _BLOCK_START.fullmatch(value)):
+            block = _indent(line)
+        out.append(redact_line(line))
+    return out
 
 
 def masked_command(command: list[str]) -> list[str]:

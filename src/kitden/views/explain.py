@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from kitden.model import Enabled, Item, ItemKind
-from kitden.redact import redact_line
+from kitden.redact import redact_lines
 from kitden.views.effective import effective_view
 from kitden.views.findings import base_name
 from kitden.views.load_map import category as category_of
@@ -60,13 +60,15 @@ def preview(item: Item) -> list[str] | None:
     if item.kind is not ItemKind.INSTRUCTIONS or not item.source.path:
         return None
     try:
-        with Path(item.source.path).open(encoding="utf-8", errors="replace") as file:
+        with Path(item.source.path).open(encoding="utf-8-sig", errors="replace") as file:
             text = file.read(PREVIEW_READ)  # a file with no line breaks is not read whole
     except OSError:
         return None
-    lines = text.splitlines()[:PREVIEW_LINES]
+    lines = text.splitlines()
+    if len(text) == PREVIEW_READ and not text.endswith(("\n", "\r")):
+        lines = lines[:-1]  # the read stopped inside this line
     # Hide secrets before cutting, so a cut never leaves part of a secret behind.
-    return [redact_line(line)[:PREVIEW_WIDTH] for line in lines]
+    return [line[:PREVIEW_WIDTH] for line in redact_lines(lines[:PREVIEW_LINES])]
 
 
 def reads(item: Item, items: list[Item]) -> str:
@@ -105,7 +107,7 @@ def reads(item: Item, items: list[Item]) -> str:
         if item.name == ".cursorrules":
             return "An older rules file. Cursor plans to stop reading it."
         return "Cursor reads it in each chat in this project."
-    if "/rules/" in path:
+    if "/.claude/rules/" in path:
         return "Read when a session starts. A rule that names paths is read only for those files."
     return "Read when a session starts."
 

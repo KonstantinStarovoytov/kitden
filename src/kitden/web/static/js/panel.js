@@ -349,7 +349,9 @@ const UNKNOWN_WORDS = {
   not_documented: "The client does not document where its state is kept.",
 };
 
-function layer(def) {
+// A definition's dot, badge and line of why. An instruction file says the client has it, or
+// that it is in a project, never "Loads" or "Not loaded": its why says when it is read.
+export function layerState(def) {
   let look = "off";
   let badge = "Not loaded";
   let why = def.why === "Loads." ? "" : def.why;
@@ -358,10 +360,18 @@ function layer(def) {
     look = "unk";
     badge = "Unknown";
     why = UNKNOWN_WORDS[def.unknown_reason] || "This page cannot tell whether it is on.";
-  } else if (def.loads) { look = def.via_gateway ? "gw" : "on"; badge = def.kind === "instructions" ? "Has it" : "Loads"; }
+  } else if (def.kind === "instructions") {
+    if (def.loads) look = "on";
+    badge = def.loads ? "Has it" : def.project ? "In a project" : "";
+  } else if (def.loads) { look = def.via_gateway ? "gw" : "on"; badge = "Loads"; }
   else if (def.merged) badge = "Merged";
   else if (def.overridden) { look = "over"; badge = "Overridden"; }
   else if (def.enabled === "off") badge = "Off";
+  return { look, badge, why, unknown };
+}
+
+function layer(def) {
+  const { look, badge, why, unknown } = layerState(def);
   const wins = def.loads && !unknown;
   const row = el("div", wins ? "layer wins" : "layer");
   const dot = socket({ state: look });
@@ -380,7 +390,7 @@ function layer(def) {
   // here (its on/off lives in the client's account) is shown locked, with the reason.
   const toggle = !unknown && def.kind === "plugin" && def.actions.find((a) => a === "plugin.disable" || a === "plugin.enable");
   const known = !unknown && def.kind === "plugin" && (def.enabled === "on" || def.enabled === "off");
-  const control = toggle ? pluginSwitch(def, toggle) : known ? pluginSwitch(def, null) : el("span", wins ? "badge win" : "badge", badge);
+  const control = toggle ? pluginSwitch(def, toggle) : known ? pluginSwitch(def, null) : badge ? el("span", wins ? "badge win" : "badge", badge) : el("span");
   row.append(dot, middle, control);
   return row;
 }
