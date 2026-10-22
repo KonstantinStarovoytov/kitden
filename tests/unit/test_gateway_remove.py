@@ -150,9 +150,10 @@ def test_putting_a_server_back_writes_the_clients_entry_and_says_about_the_secre
     assert (home / ".claude.json").read_bytes() == original
     # The change record next to the backup keeps only the masked command.
     records = list((data_dir(home) / "changes").glob("*/change.json"))
-    assert records and all("SENTINEL" not in json.dumps(
-        [s["command"] for s in json.loads(r.read_text())["steps"]]
-    ) for r in records)
+    assert records and all(
+        "SENTINEL" not in json.dumps([s["command"] for s in json.loads(r.read_text())["steps"]])
+        for r in records
+    )
 
 
 def test_put_back_in_codex_and_cursor_keeps_each_clients_shape(home):
