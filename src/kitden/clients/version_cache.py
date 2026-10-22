@@ -1,6 +1,6 @@
 """Client versions kept on disk, so a scan never waits for a version command.
 
-Each entry is keyed by the path of the binary Kitden would run and its modification time.
+Each entry is keyed by the real path of the binary Kitden would run and its modification time.
 A binary that moved or changed makes its entry stale; only a refresh runs the command again.
 """
 
@@ -46,12 +46,14 @@ def load_versions(home: Path) -> dict[str, dict]:
 
 
 def _binary(client: str) -> tuple[str, int] | None:
-    """The path of the binary Kitden would run and its modification time, or None."""
+    """The real path of the binary Kitden would run and its modification time, or None.
+    The real path, so a link pointed at another binary never keeps the old version."""
     command = version_command(client)
     if not command:
         return None
     try:
-        return command[0], os.stat(command[0]).st_mtime_ns
+        path = os.path.realpath(command[0])
+        return path, os.stat(path).st_mtime_ns
     except OSError:
         return None
 

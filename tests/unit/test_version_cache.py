@@ -92,3 +92,20 @@ def test_a_refresh_keeps_the_other_clients_entries(tmp_path, monkeypatch):
     refresh_versions(tmp_path, ["codex"])
     assert cached_version(tmp_path, "claude_code") == "2.1.300"
     assert cached_version(tmp_path, "codex") == "0.159.2"
+
+
+def test_a_retargeted_link_is_never_served_the_old_version(tmp_path, monkeypatch):
+    old = fake_client_command(tmp_path / "old", "claude", "echo '2.1.300 (Claude Code)'")
+    new = fake_client_command(tmp_path / "new", "claude", "echo '2.1.301 (Claude Code)'")
+    same = old.stat().st_mtime_ns
+    os.utime(new, ns=(same, same))  # the same modification time: only the target differs
+    link = tmp_path / "claude"
+    link.symlink_to(old)
+    monkeypatch.setattr(version_cache, "version_command", lambda c: [str(link), "--version"])
+    refresh_versions(tmp_path, ["claude_code"])
+    assert cached_version(tmp_path, "claude_code") == "2.1.300"
+
+    link.unlink()
+    link.symlink_to(new)
+    assert cached_version(tmp_path, "claude_code") is None
+    assert stale_clients(tmp_path, ["claude_code"]) == ["claude_code"]
