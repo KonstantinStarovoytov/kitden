@@ -8,7 +8,7 @@ import { renderGateway } from "./gateway.js";
 import { loadLibrary, loadLibraryFor, morphOnNextRender, raceSlow, renderLibrary, settleRows, snapshotRows } from "./library.js";
 import { renderOverview } from "./overview.js";
 import { closePanel, initPanel, isPanelOpen } from "./panel.js";
-import { latestChanges, scanLine } from "./parts.js";
+import { latestChanges, scanLine, versionsOpened } from "./parts.js";
 import {
   busy, current, data, followAddress, freshness, go, loadShared, OLD_VIEWS, onIdle, parseHash, reload, setRenderer, setState, state, VIEWS,
 } from "./store.js";
@@ -167,7 +167,11 @@ function drawScan() {
 
 function showScan(view) {
   const bar = $("#topbar");
+  // The Clients card may be drawn before the first progress came: it draws again to say
+  // "Checking the version…".
+  const opened = versionsOpened(data.progress, view);
   data.progress = view;
+  if (opened) document.dispatchEvent(new CustomEvent("kitden:versions"));
   scanning = scanLine(view);
   if (scanning) {
     if (bar.classList.contains("progress")) drawScan();

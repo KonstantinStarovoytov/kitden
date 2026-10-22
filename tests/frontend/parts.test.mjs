@@ -198,15 +198,27 @@ test('the scan line names what is still read, and how far it got', () => {
 });
 
 // A client's version on the Clients card: while the versions are still read, never "unknown".
-const { versionWords } = await import('../../src/kitden/web/static/js/parts.js');
+const { versionWords, versionsOpened } = await import('../../src/kitden/web/static/js/parts.js');
 
 test('the version says checking while the client versions step is open', () => {
   const progress = (done) => ({ ready: true, steps: [{ name: 'Codex plugins', done: true, later: true }, { name: 'client versions', done, later: true }] });
-  assert.equal(versionWords('2.1.300', progress(false)), '2.1.300');
-  assert.equal(versionWords(null, progress(false)), 'Checking the version…');
-  assert.equal(versionWords(null, progress(true)), 'version unknown');
-  assert.equal(versionWords(null, null), 'version unknown');
-  assert.equal(versionWords(null, { ready: true, steps: [] }), 'version unknown');
+  assert.equal(versionWords('2.1.300', progress(false), true), '2.1.300');
+  assert.equal(versionWords(null, progress(false), true), 'Checking the version…');
+  assert.equal(versionWords(null, progress(true), true), 'version unknown');
+  assert.equal(versionWords(null, null, true), 'version unknown');
+  assert.equal(versionWords(null, { ready: true, steps: [] }, true), 'version unknown');
+  // A client that is not installed keeps its own word whatever the step says.
+  assert.equal(versionWords(null, progress(false), false), 'version unknown');
+});
+
+test('the Clients card is drawn again when the versions step first shows open', () => {
+  const progress = (done) => ({ ready: true, steps: [{ name: 'client versions', done, later: true }] });
+  assert.equal(versionsOpened(null, progress(false)), true);
+  assert.equal(versionsOpened({ ready: false, steps: [] }, progress(false)), true);
+  assert.equal(versionsOpened(progress(false), progress(false)), false);
+  assert.equal(versionsOpened(progress(false), progress(true)), false);
+  assert.equal(versionsOpened(null, progress(true)), false);
+  assert.equal(versionsOpened(null, null), false);
 });
 
 test('the strict switch names its server, in the review and in the log', () => {

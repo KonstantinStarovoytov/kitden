@@ -207,7 +207,7 @@ function clientsCard(clients) {
   for (const client of clients) {
     const row = el("div", "client-row");
     const info = el("div");
-    info.append(el("div", "name", client.name), el("div", "meta", versionWords(client.version, data.progress)));
+    info.append(el("div", "name", client.name), el("div", "meta", versionWords(client.version, data.progress, client.status === "found")));
     const tile = mark(client.id);
     row.append(tile, info);
     // A status only when something is wrong: not installed, or a version Kitden has not tested.

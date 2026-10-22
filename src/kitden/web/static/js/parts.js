@@ -19,11 +19,19 @@ export function scanLine(view) {
 }
 
 // A client's version, or what is known of it: while the versions are still read in the
-// background, "Checking the version…", never a false "version unknown".
-export function versionWords(version, progress) {
-  if (version) return version;
+// background, a found client says "Checking the version…", never a false "version unknown".
+// A client that is not installed keeps its own word.
+function versionsOpen(progress) {
   const step = ((progress && progress.steps) || []).find((s) => s.name === "client versions");
-  return step && !step.done ? "Checking the version…" : "version unknown";
+  return Boolean(step && !step.done);
+}
+export function versionWords(version, progress, found) {
+  if (version) return version;
+  return found && versionsOpen(progress) ? "Checking the version…" : "version unknown";
+}
+// The versions step shows open for the first time, so a card drawn before it knew should say so.
+export function versionsOpened(before, after) {
+  return !versionsOpen(before) && versionsOpen(after);
 }
 
 // "gateway" is a registered gateway's own step; "kitden" is the Kitden gateway's settings file.
