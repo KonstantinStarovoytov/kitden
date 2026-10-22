@@ -278,6 +278,8 @@ def _demo_outputs(home) -> list[str]:
         if "files" in held:  # medium and large: its token is kept plain
             body = {"action": "gateway.keychain", "targets": [], "params": {"server": "files"}}
             post("/api/changes/preview", body)
+        # The Changes page now lists them.
+        assert len(get("/api/changes")) >= len(changes)
     return outputs
 
 
