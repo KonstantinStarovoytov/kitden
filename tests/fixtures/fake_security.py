@@ -46,6 +46,7 @@ def command(items: dict, words: list[str]) -> int:
 def main() -> int:
     store, args = Path(sys.argv[1]), sys.argv[2:]
     items = json.loads(store.read_text()) if store.exists() else {}
+    before = dict(items)
     if args == ["-i"]:
         for line in sys.stdin:
             if line.strip():
@@ -53,7 +54,12 @@ def main() -> int:
         code = 0
     else:
         code = command(items, args)
-    store.write_text(json.dumps(items))
+    # Only a change is written, in one step: a gateway reading an item at the same time as a
+    # test changes one neither loses the change nor reads half a file.
+    if items != before:
+        temporary = store.with_suffix(".tmp")
+        temporary.write_text(json.dumps(items))
+        temporary.replace(store)
     return code
 
 

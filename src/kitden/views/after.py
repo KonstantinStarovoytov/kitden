@@ -17,6 +17,7 @@ from kitden.changes.actions import (
 )
 from kitden.changes.json_splice import ABSENT
 from kitden.clients.base import SETUP_NAME
+from kitden.local_gateway.keychain import references_in
 from kitden.local_gateway.project import project_chain
 from kitden.local_gateway.settings import CLIENT as KITDEN
 from kitden.local_gateway.settings import (
@@ -68,6 +69,7 @@ CURSOR_KEEPS = "Cursor loads Claude Code plugins, so it loses this copy and keep
 # Uninstall keeps the data folder (--keep-data) but not the plugin's saved options.
 REMOVE_NOTE = "Undo installs it again; its saved options are not brought back."
 CURSOR_SWITCHES = "Cursor's own switches for these tools do not carry over."
+TO_KEYCHAIN = "The token goes to your Keychain; the settings file keeps a reference."
 # Strict mode only hides tools; the server's own token decides what it can do.
 GUARANTEE = "For a real guarantee, give {server} a token that can only read."
 
@@ -347,6 +349,14 @@ def _kitden_move_words(change: Change, inventory, home: Path | None) -> list[dic
             and edit.after.get("url")
         ):
             line.append(f"Kitden asked {edit.key[1]} once whether it needs a sign-in.")
+    items = [i for s in change.steps for i in s.keychain]
+    line += [
+        f"{i.server}/{i.key} is already in your Keychain; its value will be replaced."
+        for i in items
+        if i.existed
+    ]
+    if items:
+        line.append(TO_KEYCHAIN)
     line.append("Applies to new sessions.")
     out[0]["note"] = " ".join(line)
     # Each client whose own switches for the servers do not carry over says so.
@@ -542,6 +552,10 @@ def _gateway_remove_words(change: Change, inventory) -> list[dict]:
         reach = "reaches" if len(other) == 1 else "reach"
         lines.append(f"{who} still {reach} {server} through another gateway.")
     first = " ".join(lines) or f"{server} is then in no client."
+    entries = [s.edit.before for s in change.steps if s.edit and s.edit.key[0] == "servers"]
+    held = entries[0] if entries else None
+    if isinstance(held, dict) and references_in(held):
+        first += " Its secrets stay in your Keychain under kitden."
     clients = [c for c in CLIENTS if c in _offering(inventory)]
     if not clients:
         return [{"note": f"{first} Undo brings it back."}]

@@ -258,6 +258,24 @@ class FolderRemoval:
 
 
 @dataclass
+class KeychainItem:
+    """A secret that a move puts in the Keychain as `<server>/<key>`.
+
+    The value lives only in memory on the previewed change; records, the log and the page keep
+    only the server, the key and whether the item was there before.
+    """
+
+    server: str
+    key: str
+    value: str = field(default="", repr=False)
+    existed: bool = False  # read at preview; Undo deletes only an item the change created
+
+    @property
+    def ref(self) -> dict:
+        return {"keychain": f"{self.server}/{self.key}"}
+
+
+@dataclass
 class Step:
     """One target of a change: one client, scope and entry, written by one mechanism.
 
@@ -285,6 +303,8 @@ class Step:
     # A client's removal step: its own switches for a server the Kitden gateway holds already do
     # not carry over. Only the review's words use it.
     switches_left: bool = False
+    # Secrets Apply writes to the Keychain before any file; the edit holds their references.
+    keychain: list[KeychainItem] = field(default_factory=list)
 
 
 @dataclass

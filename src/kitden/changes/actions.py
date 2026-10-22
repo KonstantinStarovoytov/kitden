@@ -24,6 +24,7 @@ from kitden.clients.base import (
     ClientAdapter,
 )
 from kitden.gateway_api import gateway_name
+from kitden.local_gateway.keychain import KeychainError, resolve_entry
 from kitden.local_gateway.settings import (
     PLACEHOLDERS,
     START_TIME,
@@ -33,7 +34,17 @@ from kitden.local_gateway.settings import (
     settings_step,
     strict_step,
 )
-from kitden.model import GATEWAY_CLIENT, FileEdit, Gateway, GatewayEdit, Item, Scope, Step
+from kitden.model import (
+    GATEWAY_CLIENT,
+    FileEdit,
+    Gateway,
+    GatewayEdit,
+    Item,
+    KeychainItem,
+    Scope,
+    Step,
+)
+from kitden.redact import redact
 
 GATEWAY_CONNECT = "gateway.connect"
 GATEWAY_MOVE = "gateway.move"
@@ -810,7 +821,9 @@ def local_move_steps(
             raise ValueError(f"{name} signs in with OAuth; it stays direct for now.")
 
     steps = [
-        settings_step(home, ("servers", n), s, n) for n, s in servers.items() if held.get(n) != s
+        step
+        for n, s in servers.items()
+        if (step := _server_step(home, n, s, held.get(n))) is not None
     ]
     path = os.environ.get("PATH")
     if steps and path and not settings.get("path"):  # with a server entry written
@@ -845,6 +858,58 @@ def local_move_steps(
     return steps + _codex_timeout_steps(adapters)
 
 
+SECRET_FIELDS = ("env", "headers")  # the gateway entry's maps whose values may be secrets
+
+
+def secrets_out(name: str, server: dict) -> tuple[dict, list[KeychainItem]]:
+    """The entry with each env or header value that `redact` hides replaced by a Keychain
+    reference, and those values as Keychain items."""
+    entry = dict(server)
+    items = []
+    for field in SECRET_FIELDS:
+        values = server.get(field)
+        if not isinstance(values, dict):
+            continue
+        entry[field] = {}
+        for key, value in values.items():
+            if isinstance(value, str) and redact({field: {key: value}})[1]:
+                item = KeychainItem(name, key, value)
+                items.append(item)
+                value = item.ref
+            entry[field][key] = value
+    return entry, items
+
+
+def _server_step(home: Path, name: str, server: dict, old: Any) -> Step | None:
+    """The gateway settings step for a moved server, with its secrets as Keychain items.
+
+    A server the gateway holds already is compared with its references read from the
+    Keychain: the same values need no step, and a secret whose item holds the same value
+    needs no write.
+    """
+    entry, items = secrets_out(name, server)
+    if isinstance(old, dict):
+        try:
+            values = resolve_entry(old)
+        except KeychainError:
+            values = None  # an item is missing: write them all again
+        if values == server:
+            return None
+        if values is not None:
+            items = [
+                i
+                for i in items
+                if not any(
+                    (old.get(f) or {}).get(i.key) == i.ref
+                    and (values.get(f) or {}).get(i.key) == i.value
+                    for f in SECRET_FIELDS
+                )
+            ]
+    step = settings_step(home, ("servers", name), entry, name)
+    step.keychain = items
+    return step
+
+
 def _refuse_if_present(step: Step, client: str, name: str) -> None:
     """A client that has an entry of that name already keeps it: nothing is replaced."""
     if _raw_entry(step) is not None:
@@ -863,7 +928,10 @@ def put_back_steps(
     held = load_settings(home)["servers"].get(server)
     if held is None:
         raise ValueError("Choose a server in the Kitden gateway.")
-    entry = held  # Part 5 resolves the entry's stored secrets here (resolve_entry).
+    try:
+        entry = resolve_entry(held)  # the client gets the values, not the references
+    except KeychainError as error:
+        raise ValueError(str(error)) from None
     steps = []
     for client in dict.fromkeys(clients):
         value = translate_entry(entry, client)

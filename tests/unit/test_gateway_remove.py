@@ -214,3 +214,52 @@ def test_put_back_refuses_a_project_folder_codex_or_cursor_cannot_fill(home):
         422,
         "Cursor cannot fill in the project folder this server needs.",
     )
+
+
+# Secrets in the Keychain (spec 5.1) -------------------------------------------------------
+
+HELD = {**FILES, "env": {"FILES_TOKEN": {"keychain": "files/FILES_TOKEN"}}}
+
+
+def test_put_back_writes_the_value_from_the_keychain(home, fake_keychain):
+    fake_keychain.write_text(json.dumps({"kitden files/FILES_TOKEN": "SENTINEL_SECRET_FILES"}))
+    hold(home, {"files": HELD})
+    with page_for(home, run=FakeClaude(home)) as page:
+        change = _put_back(page, "files", "claude_code").json()
+        assert "SENTINEL" not in json.dumps(change)
+        assert "[secret]" in change["steps"][0]["command"]
+        assert change["after"][0]["note"].startswith("This writes a secret into ~/.claude.json.")
+        applied = page.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
+        assert applied["state"] == "verified"
+    written = json.loads((home / ".claude.json").read_text())["mcpServers"]["files"]
+    assert written == {"type": "stdio", **FILES}
+    assert load_settings(home)["servers"]["files"] == HELD
+
+
+def test_put_back_without_the_keychain_item_is_refused(home, fake_keychain):
+    hold(home, {"files": HELD})
+    before = (home / ".claude.json").read_bytes()
+    with page_for(home) as page:
+        answer = _put_back(page, "files", "claude_code")
+    assert (answer.status_code, answer.json()["detail"]) == (
+        422,
+        "Kitden could not read a secret of files from the Keychain.",
+    )
+    assert (home / ".claude.json").read_bytes() == before
+
+
+def test_removing_a_held_server_leaves_its_keychain_items(home, fake_keychain):
+    items = json.dumps({"kitden files/FILES_TOKEN": "SENTINEL_SECRET_FILES"})
+    fake_keychain.write_text(items)
+    hold(home, {"files": HELD})
+    with page_for(home) as page:
+        change = _remove(page, "files").json()
+        assert change["after"] == [
+            {
+                "note": "files is then in no client. Its secrets stay in your Keychain under "
+                "kitden. Undo brings it back."
+            }
+        ]
+        applied = page.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
+        assert applied["state"] == "verified"
+    assert fake_keychain.read_text() == items

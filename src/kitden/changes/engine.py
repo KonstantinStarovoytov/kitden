@@ -36,6 +36,8 @@ from kitden.changes.copy_folder import (
 )
 from kitden.changes.json_splice import ABSENT, PRESENT, UnrecognizedFormatError
 from kitden.gateway_api import GatewayError
+from kitden.local_gateway import keychain
+from kitden.local_gateway.keychain import KeychainError
 from kitden.model import (
     Change,
     ChangeState,
@@ -43,6 +45,7 @@ from kitden.model import (
     FolderCopy,
     FolderRemoval,
     GatewayEdit,
+    KeychainItem,
     Scope,
     Step,
 )
@@ -235,6 +238,11 @@ def _removal_record(removal: FolderRemoval | None) -> dict | None:
     return None if removal is None else dict(removal.__dict__)
 
 
+def _keychain_record(items: list[KeychainItem]) -> list[dict]:
+    """What a record keeps of the Keychain items: never the value."""
+    return [{"server": i.server, "key": i.key, "existed": i.existed} for i in items]
+
+
 def _record(change: Change) -> dict:
     steps = []
     for step in change.steps:
@@ -255,6 +263,7 @@ def _record(change: Change) -> dict:
                 "gateway": _gateway_record(step.gateway),
                 "copy": _copy_record(step.copy),
                 "removal": _removal_record(step.removal),
+                "keychain": _keychain_record(step.keychain),
             }
         )
     return {
@@ -306,6 +315,7 @@ def _from_record(record: dict) -> Change:
                 restart_note=raw["restart_note"],
                 login_note=raw["login_note"],
                 shared_file=raw["shared_file"],
+                keychain=[KeychainItem(**k) for k in raw.get("keychain") or []],
             )
         )
     return Change(
@@ -351,6 +361,7 @@ class Engine:
         self._preview_gateway([s for s in steps if s.gateway is not None])
         self._preview_copies([s for s in steps if s.copy is not None])
         self._preview_removals([s for s in steps if s.removal is not None])
+        self._preview_keychain(steps)
         targets: list[tuple[str, tuple]] = []
         for step in steps:
             edit = step.edit
@@ -369,7 +380,9 @@ class Engine:
                 edit.before = _value(edit, data)
             except (UnrecognizedFormatError, UnicodeDecodeError) as error:
                 raise ChangeRefusedError(f"{edit.path}: {error}") from None
-            if edit.before == edit.after or (edit.after is PRESENT and edit.before is not ABSENT):
+            # A new value of a secret changes only the Keychain; the reference stays.
+            same = edit.before == edit.after and not step.keychain
+            if same or (edit.after is PRESENT and edit.before is not ABSENT):
                 raise NothingToChangeError(edit.path, step.client)
             if edit.after is PRESENT and step.mechanism != CLIENT_CLI:
                 raise ChangeRefusedError(
@@ -413,6 +426,15 @@ class Engine:
             shown = redact(g.server)[0]
             lines = json.dumps({g.name: shown}, indent=2, ensure_ascii=False).splitlines()
             g.masked_diff = f"{g.url}\n" + "\n".join(f"+{line}" for line in lines)
+
+    def _preview_keychain(self, steps: list[Step]) -> None:
+        """Read whether each Keychain item is there already: Undo deletes only new ones."""
+        try:
+            for step in steps:
+                for item in step.keychain:
+                    item.existed = keychain.read(item.ref) is not None
+        except KeychainError as error:
+            raise ChangeRefusedError(str(error)) from None
 
     def _preview_copies(self, steps: list[Step]) -> None:
         """Read each source folder; a target that already exists refuses the change."""
@@ -552,8 +574,11 @@ class Engine:
         ran: list[Step] = []
         copied: list[Step] = []
         removed: list[Step] = []
+        stored: list[KeychainItem] = []
         try:
-            # The gateway side first: a server that cannot be added leaves the files alone.
+            # The Keychain first: the settings file then names items that are there.
+            self._store_secrets(change, stored)
+            # The gateway side next: a server that cannot be added leaves the files alone.
             self._apply_gateway(gateway_steps, tick)
             for step in copy_steps:
                 self._apply_copy(step, copied)
@@ -580,6 +605,7 @@ class Engine:
             OSError,
             RefusedWriteError,
             UnrecognizedFormatError,
+            KeychainError,
         ) as error:
             # A step with an inverse command is taken back by that command (an install leaves
             # more than the file behind); then every other file gets its original bytes.
@@ -614,6 +640,14 @@ class Engine:
                 with contextlib.suppress(OSError):
                     remove_folder(step.copy.target)
             self._remove_from_gateway(gateway_steps, best_effort=True)
+            for item in reversed(stored):
+                if item.existed:
+                    continue  # its old value is recorded nowhere
+                try:
+                    keychain.delete(item.ref)
+                except KeychainError:
+                    lost.append(f"{item.server}/{item.key} stays in your Keychain.")
+            self._forget_secrets(change)
             change.move_to(ChangeState.RESTORED)
             if lost:
                 change.error = f"{error} {' '.join(lost)}"
@@ -624,9 +658,24 @@ class Engine:
 
         for step in file_steps:
             step.edit.after_hash = _sha(_read(step.edit.path))
+        self._forget_secrets(change)
         change.move_to(ChangeState.VERIFIED)
         self._finish(change)
         return change
+
+    def _store_secrets(self, change: Change, stored: list[KeychainItem]) -> None:
+        """Write each secret to the Keychain; `store` reads it back."""
+        for step in change.steps:
+            for item in step.keychain:
+                stored.append(item)  # first: a write that fails halfway is taken back too
+                keychain.store(item.server, item.key, item.value)
+
+    @staticmethod
+    def _forget_secrets(change: Change) -> None:
+        """The values are needed only until Apply ends."""
+        for step in change.steps:
+            for item in step.keychain:
+                item.value = ""
 
     def _stale_copy(self, step: Step) -> str | None:
         copy = step.copy
@@ -798,7 +847,23 @@ class Engine:
             self._finish(change)
             return change
 
-        # The gateway side goes first: if it cannot be reached, the files stay as they are.
+        # The Keychain goes first: if it cannot be reached, nothing else changes. An item the
+        # change only updated keeps its new value: the old one is recorded nowhere.
+        items = [i for s in change.steps for i in s.keychain]
+        try:
+            for item in items:
+                if not item.existed:
+                    keychain.delete(item.ref)
+        except KeychainError:
+            change.move_to(ChangeState.UNDO_BLOCKED)
+            change.error = "Kitden could not reach the Keychain; nothing was changed."
+            self._finish(change)
+            return change
+        kept = [
+            f"{i.server}/{i.key} in your Keychain keeps the new value." for i in items if i.existed
+        ]
+
+        # The gateway side goes next: if it cannot be reached, the files stay as they are.
         tick = self._counter(change)
         try:
             gone = self._remove_from_gateway(
@@ -852,8 +917,10 @@ class Engine:
                 raise RuntimeError(f"{step.removal.path}: undo did not copy the folder back")
         self.on_progress(change.id, len(change.steps), len(change.steps))
         change.move_to(ChangeState.UNDONE)
-        if gone:
-            change.error = f"{', '.join(gone)} had already been removed from the gateway"
+        notes = [f"{', '.join(gone)} had already been removed from the gateway."] if gone else []
+        notes += kept
+        if notes:
+            change.error = " ".join(notes)
         self._finish(change)
         return change
 
@@ -880,6 +947,7 @@ class Engine:
                         "login_note": s.login_note,
                         "before_hash": s.edit.before_hash if s.edit else None,
                         "after_hash": s.edit.after_hash if s.edit else None,
+                        "keychain": _keychain_record(s.keychain),
                     }
                     for s in change.steps
                 ],

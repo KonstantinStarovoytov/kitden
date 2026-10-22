@@ -34,6 +34,9 @@ from tests.conftest import make_home, write_cursor_fixture_state
 
 KITDEN = "/opt/kitden/bin/kitden"
 FILES = {"command": "npx", "args": ["files-mcp"], "env": {"FILES_TOKEN": "SENTINEL_SECRET_FILES"}}
+REFERENCE = {"keychain": "files/FILES_TOKEN"}
+HELD_FILES = {**FILES, "env": {"FILES_TOKEN": REFERENCE}}  # as the gateway keeps it
+TO_KEYCHAIN = "The token goes to your Keychain; the settings file keeps a reference."
 CODEX_FILES = """command = "npx"
 args = ["files-mcp"]
 env = { FILES_TOKEN = "SENTINEL_SECRET_FILES" }"""
@@ -109,7 +112,8 @@ def new_home(folder):
 
 
 @pytest.fixture
-def home(tmp_path):
+def home(tmp_path, fake_keychain):
+    """A sandbox home; Keychain calls go to the stand-in."""
     return new_home(tmp_path)
 
 
@@ -241,7 +245,7 @@ def test_moving_adds_the_server_removes_the_entries_and_adds_kitden_where_missin
     # The gateway holds the server as the clients had it, without client-only keys.
     path = gateway_file(home)
     assert json.loads(path.read_text()) == {
-        "servers": {"files": FILES},
+        "servers": {"files": HELD_FILES},
         "path": "/opt/tools/bin:/usr/bin:/bin",
     }
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
@@ -381,7 +385,8 @@ def test_an_oauth_server_is_refused_after_a_401(home):
         secret = {"Authorization": "Bearer SENTINEL_SECRET_PLAIN"}
         add_codex(home, "plain", f'url = "{plain.url}"\nhttp_headers = {json_inline(secret)}')
         steps = move(home, ("codex", "plain"))
-        assert steps[0].edit.after == {"url": plain.url, "headers": secret}
+        held = {"Authorization": {"keychain": "plain/Authorization"}}
+        assert steps[0].edit.after == {"url": plain.url, "headers": held}
         assert plain.got[-1]["headers"]["Authorization"] == "Bearer SENTINEL_SECRET_PLAIN"
     finally:
         stop(oauth, forbidden, plain)
@@ -548,14 +553,14 @@ def test_a_server_the_gateway_holds_is_updated_from_a_changed_direct_entry(home)
         assert "SENTINEL" not in answer.text
         assert change["after"][0]["note"] == (
             "Codex and Cursor will offer its tools through Kitden. "
-            "files in the Kitden gateway is updated. Applies to new sessions. "
+            f"files in the Kitden gateway is updated. {TO_KEYCHAIN} Applies to new sessions. "
             "Codex's own switches for files do not carry over; the gateway keeps its rules."
         )
 
         applied = page.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
         assert applied["state"] == "verified", applied
         saved = load_settings(home)
-        assert saved["servers"] == {"files": FILES}
+        assert saved["servers"] == {"files": HELD_FILES}
         assert (saved["rules"], saved["path"]) == (rules, "/bin")
         assert "files" not in cursor(home)["mcpServers"]
         assert "files" not in codex(home)["mcp_servers"]
@@ -672,15 +677,21 @@ def test_a_held_entry_keeps_the_longer_start_time(home):
     old = {**FILES, "env": {"FILES_TOKEN": "SENTINEL_SECRET_OLD"}, "startup_timeout_sec": 60}
     write_json(gateway_file(home), {"servers": {"files": old}, "rules": {}})
     add_codex(home, "files", CODEX_FILES + "\nstartup_timeout_sec = 45")
-    assert move(home, ("codex", "files"))[0].edit.after == {**FILES, "startup_timeout_sec": 60}
+    assert move(home, ("codex", "files"))[0].edit.after == {
+        **HELD_FILES,
+        "startup_timeout_sec": 60,
+    }
     add_claude(home, "files", {"type": "stdio", **FILES})
     assert move(home, ("claude_code", "files"))[0].edit.after == {
-        **FILES,
+        **HELD_FILES,
         "startup_timeout_sec": 60,
     }
     old["startup_timeout_sec"] = 30
     write_json(gateway_file(home), {"servers": {"files": old}, "rules": {}})
-    assert move(home, ("codex", "files"))[0].edit.after == {**FILES, "startup_timeout_sec": 45}
+    assert move(home, ("codex", "files"))[0].edit.after == {
+        **HELD_FILES,
+        "startup_timeout_sec": 45,
+    }
 
 
 def test_a_missing_kitden_command_is_refused(home):
@@ -706,14 +717,15 @@ def test_the_review_names_every_client_that_offers_the_tools(home):
             ("cursor", "Via Kitden gateway"),
         ]
         assert [a.get("note") for a in change["after"]] == [
-            "Claude Code and Cursor will offer its tools through Kitden. Applies to new sessions.",
+            f"Claude Code and Cursor will offer its tools through Kitden. {TO_KEYCHAIN} "
+            "Applies to new sessions.",
             SWITCHES,
         ]
 
         applied = page.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
         assert applied["state"] == "verified"
         assert load_settings(home)["servers"]["n8n-mcp"]["env"] == {
-            "N8N_API_KEY": "SENTINEL_SECRET_N8N"
+            "N8N_API_KEY": {"keychain": "n8n-mcp/N8N_API_KEY"}
         }
         undone = page.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
         assert undone["state"] == "undone"
@@ -736,7 +748,9 @@ def test_the_review_says_where_a_server_stays_on_or_off(home):
     )
 
 
-def test_the_review_says_when_a_carried_rule_turns_off_what_a_client_had_on(tmp_path):
+def test_the_review_says_when_a_carried_rule_turns_off_what_a_client_had_on(
+    tmp_path, fake_keychain
+):
     def review(home, *wanted):
         with page_for(home) as page:
             answer = preview(page, home, *wanted)
@@ -753,7 +767,8 @@ def test_the_review_says_when_a_carried_rule_turns_off_what_a_client_had_on(tmp_
         ("codex", "off", "Off"),
     ]
     assert after[0]["note"] == (
-        "files will be off in every client, as Codex had it. Applies to new sessions."
+        f"files will be off in every client, as Codex had it. {TO_KEYCHAIN} "
+        "Applies to new sessions."
     )
 
     # A tool Codex turned off will be off in Claude Code too.
@@ -764,7 +779,7 @@ def test_the_review_says_when_a_carried_rule_turns_off_what_a_client_had_on(tmp_
     assert after[0]["note"] == (
         "Claude Code and Codex will offer its tools through Kitden. "
         "search of files will be off in every client, as Codex had it. "
-        "Applies to new sessions."
+        f"{TO_KEYCHAIN} Applies to new sessions."
     )
 
     # Claude Code turned files off in one project: there it will be off in Cursor too.
@@ -779,12 +794,12 @@ def test_the_review_says_when_a_carried_rule_turns_off_what_a_client_had_on(tmp_
     assert [a.get("note") for a in after] == [
         "Claude Code and Cursor will offer its tools through Kitden. "
         "files will be off in website for every client, as Claude Code had it. "
-        "Applies to new sessions.",
+        f"{TO_KEYCHAIN} Applies to new sessions.",
         SWITCHES,
     ]
 
 
-def test_the_review_says_when_claude_code_allows_every_kitden_tool(tmp_path):
+def test_the_review_says_when_claude_code_allows_every_kitden_tool(tmp_path, fake_keychain):
     words = (
         "Claude Code allows every Kitden tool without asking; after the move that includes the "
         "tools of n8n-mcp."
@@ -821,7 +836,7 @@ def test_a_codex_entry_keeps_its_own_start_time(home):
     add_claude(home, "files", {"type": "stdio", **FILES})
     add_codex(home, "files", CODEX_FILES + "\nstartup_timeout_sec = 45")
     steps = move(home, ("claude_code", "files"), ("codex", "files"))
-    assert steps[0].edit.after == {**FILES, "startup_timeout_sec": 45}
+    assert steps[0].edit.after == {**HELD_FILES, "startup_timeout_sec": 45}
 
 
 def test_a_codex_entry_that_keeps_some_tools_on_has_its_tools_read_first(home):
@@ -851,7 +866,7 @@ def test_a_codex_entry_that_keeps_some_tools_on_has_its_tools_read_first(home):
     assert load_settings(home)["rules"]["global"] == {"echo": {"tools": tools, "mode": "strict"}}
 
 
-def test_header_values_stay_out_of_the_review_and_the_log(home):
+def test_header_values_stay_out_of_the_review_and_the_log(home, fake_keychain):
     plain = FakeRemote(200)
     secret = {"Authorization": "Bearer SENTINEL_SECRET_HEADER"}
     try:
@@ -864,7 +879,11 @@ def test_header_values_stay_out_of_the_review_and_the_log(home):
             assert applied.json()["state"] == "verified"
             assert "SENTINEL_SECRET_HEADER" not in applied.text
             assert "SENTINEL_SECRET_HEADER" not in page.get("/api/changes").text
-        assert load_settings(home)["servers"]["plain"]["headers"] == secret
+        held = load_settings(home)["servers"]["plain"]["headers"]
+        assert held == {"Authorization": {"keychain": "plain/Authorization"}}
+        assert keychain_items(fake_keychain) == {
+            "kitden plain/Authorization": "Bearer SENTINEL_SECRET_HEADER"
+        }
     finally:
         stop(plain)
 
@@ -895,3 +914,163 @@ def test_a_codex_entry_without_an_allowlist_does_not_turn_strict_on(home):
     save_tools(home, "github", [tool("list_issues"), tool("create_issue")])
     keys = [s.edit.key for s in move(home, ("codex", "github")) if s.edit]
     assert ("rules", "global", "github", "mode") not in keys
+
+
+# Secrets go to the Keychain (spec 5.1) ----------------------------------------------------
+
+REPLACED = "files/FILES_TOKEN is already in your Keychain; its value will be replaced."
+REACH = "Kitden could not reach the Keychain."
+
+
+def keychain_items(items_file):
+    return json.loads(items_file.read_text()) if items_file.exists() else {}
+
+
+def broken_security(folder, monkeypatch):
+    """A `security` that always fails, in the sandbox."""
+    binary = folder / "broken/security"
+    binary.parent.mkdir(parents=True)
+    binary.write_text("#!/bin/sh\nexit 1\n")
+    binary.chmod(0o755)
+    monkeypatch.setenv("KITDEN_SECURITY", str(binary))
+
+
+def client_files(home):
+    paths = [home / ".claude.json", home / ".codex/config.toml", home / ".cursor/mcp.json"]
+    return {path: path.read_bytes() for path in [*paths, gateway_file(home)] if path.exists()}
+
+
+def test_a_move_writes_references_and_keeps_the_values_in_memory(home):
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    steps = move(home, ("claude_code", "files"))
+    step = next(s for s in steps if s.client == "kitden" and s.edit.key[0] == "servers")
+    assert step.edit.after["env"] == {"FILES_TOKEN": REFERENCE}
+    assert [(i.server, i.key, i.value) for i in step.keychain] == [
+        ("files", "FILES_TOKEN", "SENTINEL_SECRET_FILES")
+    ]
+    assert "SENTINEL" not in repr(step.keychain)
+
+
+def test_apply_stores_the_items_and_undo_removes_them(home, fake_keychain):
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    before = client_files(home)
+    with page_for(home) as page:
+        answer = preview(page, home, ("claude_code", "files"))
+        assert answer.status_code == 200, answer.json()
+        assert TO_KEYCHAIN in answer.json()["after"][0]["note"]
+        assert "already in your Keychain" not in answer.text
+        change_id = answer.json()["id"]
+        applied = page.post(f"/api/changes/{change_id}/apply", headers=POST)
+        assert applied.json()["state"] == "verified", applied.json()
+        stored = {"kitden files/FILES_TOKEN": "SENTINEL_SECRET_FILES"}
+        assert keychain_items(fake_keychain) == stored
+        held = load_settings(home)["servers"]["files"]
+        assert held == {**FILES, "env": {"FILES_TOKEN": REFERENCE}}
+        assert "SENTINEL" not in gateway_file(home).read_text()
+        # The gateway's step keeps only references; the client's removal step keeps the entry
+        # it removed, as its backup does, so Undo can put it back.
+        record = (data_dir(home) / "changes" / change_id / "change.json").read_text()
+        step = next(s for s in json.loads(record)["steps"] if s["client"] == "kitden")
+        assert "SENTINEL" not in json.dumps(step)
+        assert step["keychain"] == [{"server": "files", "key": "FILES_TOKEN", "existed": False}]
+        assert "SENTINEL" not in (data_dir(home) / "changes.log").read_text()
+        assert "SENTINEL" not in page.get("/api/changes").text
+
+        undone = page.post(f"/api/changes/{change_id}/undo", headers=POST).json()
+        assert undone["state"] == "undone", undone
+        assert undone["error"] is None
+    assert keychain_items(fake_keychain) == {}
+    assert client_files(home) == before
+
+
+def test_an_item_already_there_is_replaced_and_keeps_the_new_value_on_undo(home, fake_keychain):
+    fake_keychain.write_text(json.dumps({"kitden files/FILES_TOKEN": "OLD"}))
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    with page_for(home) as page:
+        answer = preview(page, home, ("claude_code", "files"))
+        note = answer.json()["after"][0]["note"]
+        assert REPLACED in note and TO_KEYCHAIN in note
+        change_id = answer.json()["id"]
+        assert page.post(f"/api/changes/{change_id}/apply", headers=POST).json()["state"] == (
+            "verified"
+        )
+        undone = page.post(f"/api/changes/{change_id}/undo", headers=POST).json()
+    assert undone["state"] == "undone"
+    assert undone["error"] == "files/FILES_TOKEN in your Keychain keeps the new value."
+    assert keychain_items(fake_keychain) == {"kitden files/FILES_TOKEN": "SENTINEL_SECRET_FILES"}
+
+
+def test_apply_after_a_restart_asks_for_a_new_review(home, fake_keychain):
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    before = client_files(home)
+    with page_for(home) as page:
+        change_id = preview(page, home, ("claude_code", "files")).json()["id"]
+    with page_for(home) as page:  # the page started again: previews are not kept
+        answer = page.post(f"/api/changes/{change_id}/apply", headers=POST)
+    assert (answer.status_code, answer.json()["detail"]) == (404, "Unknown change.")
+    assert client_files(home) == before
+    assert keychain_items(fake_keychain) == {}
+
+
+def test_a_keychain_that_cannot_be_reached_refuses_the_review(home, tmp_path, monkeypatch):
+    monkeypatch.setenv("KITDEN_SECURITY", str(tmp_path / "no-security"))
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    before = client_files(home)
+    with page_for(home) as page:
+        answer = preview(page, home, ("claude_code", "files"))
+    assert (answer.status_code, answer.json()["detail"]) == (422, REACH)
+    assert client_files(home) == before
+
+
+def test_a_failing_keychain_at_apply_restores_every_file(
+    home, fake_keychain, tmp_path, monkeypatch
+):
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    before = client_files(home)
+    engine = Engine(ChangeStore(data_dir(home)), run=FakeClaude(home))
+    change = engine.preview("gateway.move", move(home, ("claude_code", "files")))
+    broken_security(tmp_path, monkeypatch)
+    engine.apply(change.id)
+    assert str(change.state) == "restored"
+    assert change.error.startswith(REACH)
+    assert client_files(home) == before
+    assert keychain_items(fake_keychain) == {}
+
+
+def test_a_keychain_item_that_cannot_be_removed_blocks_the_undo(
+    home, fake_keychain, tmp_path, monkeypatch
+):
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    engine, change = apply(home, move(home, ("claude_code", "files")))
+    after = client_files(home)
+    broken_security(tmp_path, monkeypatch)
+    engine.undo(change.id)
+    assert str(change.state) == "undo_blocked"
+    assert change.error == "Kitden could not reach the Keychain; nothing was changed."
+    assert client_files(home) == after
+
+
+def test_moving_a_held_server_again_with_a_new_token_updates_the_item(home, fake_keychain):
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    apply(home, move(home, ("claude_code", "files")))
+    held = gateway_file(home).read_bytes()
+
+    # The same token again: the gateway entry and the Keychain stay as they are.
+    add_claude(home, "files", {"type": "stdio", **FILES})
+    steps = move(home, ("claude_code", "files"))
+    assert not any(s.client == "kitden" and s.name == "files" for s in steps)
+
+    # A new token: the entry keeps its reference, the item gets the new value.
+    new = {**FILES, "env": {"FILES_TOKEN": "SENTINEL_SECRET_NEW"}}
+    add_claude(home, "files", {"type": "stdio", **new})
+    steps = move(home, ("claude_code", "files"))
+    step = next(s for s in steps if s.client == "kitden" and s.name == "files")
+    assert step.edit.after == {**FILES, "env": {"FILES_TOKEN": REFERENCE}}
+    assert [(i.key, i.value) for i in step.keychain] == [("FILES_TOKEN", "SENTINEL_SECRET_NEW")]
+    engine, change = apply(home, steps)
+    assert [(i.key, i.existed) for i in step.keychain] == [("FILES_TOKEN", True)]
+    assert keychain_items(fake_keychain) == {"kitden files/FILES_TOKEN": "SENTINEL_SECRET_NEW"}
+    assert gateway_file(home).read_bytes() == held
+    engine.undo(change.id)
+    assert str(change.state) == "undone", change.error
+    assert change.error == "files/FILES_TOKEN in your Keychain keeps the new value."
