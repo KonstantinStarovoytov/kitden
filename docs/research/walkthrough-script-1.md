@@ -10,9 +10,10 @@ it settles two words that are still a guess.
 ## Before
 
 - About 15 minutes.
-- Run `uvx kitden demo --size medium` (from the repository: `uv run kitden demo --size medium`).
-  The page opens on a sample setup in a temporary folder. Nothing on this computer is read or
-  changed, so Apply is safe. Ctrl+C at the end deletes the sample.
+- In the repository, run `uv run kitden demo --size medium` (after the next release,
+  `uvx kitden demo --size medium` works too). The page opens on a sample setup in a temporary
+  folder. Nothing on this computer is read or changed, so Apply is safe. Ctrl+C at the end
+  deletes the sample.
 - A normal desktop window.
 - Nobody explains the page first. Read each task's title aloud, nothing more. The observer only
   writes things down: no hints, no answers. After 3 minutes stuck, mark the task not done and go
