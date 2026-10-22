@@ -2,7 +2,7 @@
 // why there is none), and the forms that add one to several clients in one review. The Library
 // opens these Details for rows not on this computer; the panel's Details use the parts.
 import { busyWhile, button, el, joinWords, plural, reportError, shortPath, webLink } from "./dom.js";
-import { noteFor, previewFor, rowTitle } from "./library.js";
+import { noteFor, rowTitle, startAdd } from "./library.js";
 import { closePanel, footerActions, footerButtons, openInfo, openPanel, review } from "./panel.js";
 import { CLIENT_NAMES, clientCheck } from "./parts.js";
 import { data, go, state } from "./store.js";
@@ -170,7 +170,7 @@ export function addOptions(row, offer) {
 // A cell's add opens the same review as the cell's own button; "Add…" opens the form.
 export function addButton(option, row, offer, look) {
   if (option.form) return button(option.label, () => (row.kind === "skill" ? addSkillForm(offer) : addForm(offer, row)), look);
-  return button(option.label, () => review(previewFor(option.add, option.client), { note: noteFor(option.add, state.project) }), look);
+  return button(option.label, () => startAdd(option.add, option.client, row), look);
 }
 
 // Why Details offer nothing to do, in one line: each cell's reason once, in column order, and

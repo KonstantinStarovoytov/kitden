@@ -39,6 +39,18 @@ class FakeCli:
 
     def __call__(self, command, cwd):
         self.calls.append(command)
+        project = "-s" in command and command[command.index("-s") + 1] == "project"
+        if command[0] == "claude" and project:
+            # A project install switches the plugin on in <cwd>/.claude/settings.json.
+            path = Path(cwd) / ".claude/settings.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            text = path.read_text() if path.exists() else "{}\n"
+            if command[1:3] == ["plugin", "install"]:
+                text = json_splice.set_value(text, ("enabledPlugins", command[3]), True)
+            elif command[1:3] == ["plugin", "uninstall"]:
+                text = json_splice.delete_value(text, ("enabledPlugins", command[3]))
+            path.write_text(text)
+            return CommandResult(0, "{}")
         if command[0] == "claude":
             path = self.home / ".claude/settings.json"
             text = path.read_text()

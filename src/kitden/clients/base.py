@@ -283,32 +283,37 @@ class ClientAdapter(ABC):
         """Add a marketplace with the client's own command."""
         raise ValueError(f"{self.id} cannot add a marketplace from here")
 
-    def plugin_install_step(self, plugin_id: str) -> Step:
-        """Install a plugin for the user with the client's own command."""
+    def plugin_install_step(self, plugin_id: str, project: str | None = None) -> Step:
+        """Install a plugin with the client's own command: for the user, or into `project`."""
         raise ValueError(f"{self.id} cannot install a plugin from here")
 
     def plugin_remove_step(self, item: Item) -> Step:
         """Remove one installed plugin with the client's own command."""
         raise ValueError(f"{item.name} cannot be removed here")
 
-    def skill_copy_step(self, folder: Path, readers: list[str]) -> Step:
-        """Copy a skill folder into this client's skills folder.
+    def skill_copy_step(self, folder: Path, readers: list[str], project: str | None = None) -> Step:
+        """Copy a skill folder into this client's skills folder, or into the same folder
+        inside `project` (a file the project shares).
 
         `readers` are the clients that read that folder; the review names them.
         """
         if not self.skills_folder:
             raise ValueError(f"{self.id} has no skills folder")
-        target = self.home / self.skills_folder / folder.name
+        if project is not None and not Path(project).is_dir():
+            raise ValueError(f"the project folder {project} is missing")
+        root = Path(project) if project is not None else self.home
+        target = root / self.skills_folder / folder.name
         if target.exists() or target.is_symlink():
             raise ValueError(f"{self.display_name} already has a skill named {folder.name}")
         copy = FolderCopy(source=str(folder), target=str(target), readers=list(readers))
         return Step(
             client=self.id,
-            scope=Scope.USER,
+            scope=Scope.PROJECT if project is not None else Scope.USER,
             name=folder.name,
             mechanism=COPY_FOLDER,
             copy=copy,
             restart_note=self.skill_note or None,
+            shared_file=project is not None,
         )
 
     def skill_remove_step(

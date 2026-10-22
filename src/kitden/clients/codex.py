@@ -221,7 +221,13 @@ class CodexAdapter(ClientAdapter):
             undo_command=["codex", "plugin", "marketplace", "remove", name],
         )
 
-    def plugin_install_step(self, plugin_id: str) -> Step:
+    # checked 2026-10-22 (learn.chatgpt.com/docs/plugins): Codex installs a plugin for its
+    # whole environment; the docs show no per-project install.
+    def plugin_install_step(self, plugin_id: str, project: str | None = None) -> Step:
+        if project is not None:
+            raise ValueError(
+                "Codex has no project place for a plugin here; add it for all projects."
+            )
         edit = FileEdit(
             path=str(self.codex_home / "config.toml"),
             fmt="toml",
@@ -264,6 +270,20 @@ class CodexAdapter(ClientAdapter):
             undo_command=["codex", "plugin", "add", item.name, "--json"],
             restart_note=RESTART,
         )
+
+    def trusts(self, project: str) -> bool:
+        """config.toml marks the project as trusted."""
+        config = _dict(Reader(CLIENT).toml(self.codex_home / "config.toml"))
+        settings = _dict(_dict(config.get("projects")).get(project))
+        return settings.get("trust_level") == "trusted"
+
+    def skill_copy_step(self, folder: Path, readers: list[str], project: str | None = None) -> Step:
+        if project is not None and not self.trusts(project):
+            name = Path(project).name
+            raise ValueError(
+                f"Codex does not trust {name} yet, so it would not load the skill there."
+            )
+        return super().skill_copy_step(folder, readers, project)
 
     def marketplace_roots(self) -> dict[str, Path]:
         """Marketplaces from config.toml, plus the curated one Codex keeps in `.tmp`. A local
@@ -415,6 +435,10 @@ class CodexAdapter(ClientAdapter):
                     enabled=state,
                 )
             )
+        # checked 2026-10-22 (learn.chatgpt.com/docs/build-skills): Codex reads `.agents/skills`
+        # from the folder it starts in up to the repository root. The docs do not say whether an
+        # untrusted project's skills load; Kitden counts them only in a trusted project, as it
+        # does the project's config.toml.
         if trusted:
             items += skill_items(
                 CLIENT, root / ".agents/skills", Scope.PROJECT, CLIENT, project=str(root)

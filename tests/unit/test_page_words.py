@@ -583,8 +583,8 @@ def test_library_says_why_when_there_is_nothing_to_do():
 
 def test_a_cell_add_reviews_one_client_and_the_review_shows_its_note():
     text = script("library.js")
-    review = "review(previewFor(cell.add, client), { note: noteFor(cell.add, state.project) })"
-    assert review in text
+    assert "startAdd(cell.add, client, row)" in text
+    assert "review(previewFor(add, client), { note: noteFor(add, state.project) })" in text
     offer = script("offer.js")
     assert '"Adds for all your projects."' in offer
     # Every add in a project view says so, a marketplace too. The plugin form adds the
@@ -637,8 +637,7 @@ def test_details_show_what_the_item_is_and_every_way_to_add_it():
     assert ".catch(() => null)" in panel
     assert "body.append(...about(offer))" in panel
     # A Details button opens the same review as the cell's own button.
-    assert "review(previewFor(option.add, option.client), {" in offer
-    assert "note: noteFor(option.add, state.project) })" in offer
+    assert "startAdd(option.add, option.client, row)" in offer
     assert '"Add…"' in offer and 'button("Add…", () => addForm(offer), "btn primary")' not in offer
     # With nothing to do, the first line of the body says why, quietly.
     first = 'const body = el("div", "body");\n  if (why) body.append(el("p", "muted", why));'
@@ -775,6 +774,17 @@ def test_overview_offers_set_up_only_without_a_gateway():
 
 def test_library_says_the_add_scope_in_a_project():
     assert "Adding puts an item in all your projects." in script("library.js")
+
+
+def test_an_add_in_a_project_offers_two_choices():
+    library = script("library.js")
+    for words in (
+        '"Add to this project…"',
+        '"Add for all projects…"',
+        '"An Add asks: this project, or all your projects.',
+    ):
+        assert words in library
+    assert "startAdd(" in script("offer.js")
 
 
 def test_the_kitden_card_says_what_the_gateway_governs():

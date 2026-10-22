@@ -406,7 +406,7 @@ function pluginSwitch(def, action) {
 // Tools of a server in the Kitden gateway --------------------------------------------------
 
 // The project's folder name, as the picker at the top shows it.
-function projectLabel(id) {
+export function projectLabel(id) {
   const found = (data.projects || []).find((p) => p.id === id);
   return found ? found.path.split("/").filter(Boolean).pop() || found.path : id;
 }
@@ -798,6 +798,12 @@ export function changeWords(change, previewBody) {
     what = `${verb} ${server} back in ${clients}`;
   } else if (change.action === "plugin.skills") {
     what = `${verb} ${plural(steps.length, "skill", "skills")} to ${clients}`;
+  }
+  // An add into one project says which.
+  const into = previewBody && previewBody.params && previewBody.params.project;
+  if (into && ["skill.install", "plugin.install"].includes(change.action)) {
+    title = `${title} in ${projectLabel(into)}`;
+    what = `${what} in ${projectLabel(into)}`;
   }
   const notes = [...new Set(change.steps.map((s) => s.restart_note).filter(Boolean))]
     .map((note) => note.replace(/,? for this to take effect\.?$/, ""));

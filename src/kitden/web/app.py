@@ -750,6 +750,16 @@ def create_app(
             except proxy.UpstreamError:
                 return None
 
+    def _project_param(params: dict) -> str | None:
+        """The folder of the project an add goes into; None for all projects."""
+        wanted = params.get("project")
+        if not wanted:
+            return None
+        paths = {p["id"]: p["path"] for p in state.data["projects"]}
+        if str(wanted) not in paths:
+            raise ValueError("Unknown project.")
+        return paths[str(wanted)]
+
     async def preview(request: Request) -> JSONResponse:
         if engine is None:
             return _error("Changes are not available.", 404)
@@ -780,7 +790,7 @@ def create_app(
                 if offer is None:
                     return _error("This plugin is not in a marketplace on this computer.", 422)
                 clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
-                steps = install_steps(adapters, offer, clients)
+                steps = install_steps(adapters, offer, clients, _project_param(params))
             elif action == SKILL_INSTALL:
                 skill = next(
                     (
@@ -794,7 +804,7 @@ def create_app(
                     return _error("This skill is not on this computer.", 422)
                 clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
                 found = {c["id"] for c in state.data["clients"] if c["status"] == "found"}
-                steps = skill_steps(adapters, skill, clients, found)
+                steps = skill_steps(adapters, skill, clients, found, _project_param(params))
                 copied = [skill]
             elif action == PLUGIN_SKILLS:
                 if len(targets) != 1 or not isinstance(targets[0], dict):

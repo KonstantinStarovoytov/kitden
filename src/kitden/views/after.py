@@ -629,9 +629,10 @@ def after_words(
         if change.action == "plugin.remove" and step.client == "claude_code":
             out[-1]["note"] = REMOVE_NOTE
     to_claude = any(s.client == "claude_code" for s in change.steps)
-    if change.action == "plugin.install" and to_claude and cursor_imports:
-        out.append(dict(CURSOR_IMPORT))
     # Cursor imports only Claude Code's user plugins; with a copy of its own it still loads one.
+    user_install = any(s.client == "claude_code" and s.scope is Scope.USER for s in change.steps)
+    if change.action == "plugin.install" and user_install and cursor_imports:
+        out.append(dict(CURSOR_IMPORT))
     removal = change.steps[0] if change.action == "plugin.remove" and change.steps else None
     if removal and to_claude and cursor_imports and removal.scope is Scope.USER:
         keeps = _cursor_keeps(inventory, removal.name)

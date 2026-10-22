@@ -38,12 +38,12 @@ const requests = [];
 globalThis.fetch = (url) => new Promise((resolve) => {
   requests.push({ url, answer: (body) => resolve({ ok: true, status: 200, json: async () => body }) });
 });
-const { addName, scopeLine, cellNode, emptyState, hiddenClients, hiddenLine, hideButton, loadLibrary, loadLibraryFor, metaText, moreLine, nameCell, noteFor, previewFor, setHidden } = await import('../../src/kitden/web/static/js/library.js');
-const { freshness, hashFor, parseHash, state } = await import('../../src/kitden/web/static/js/store.js');
+const { addChoices, addName, scopeLine, cellNode, emptyState, hiddenClients, hiddenLine, hideButton, loadLibrary, loadLibraryFor, metaText, moreLine, nameCell, noteFor, previewFor, setHidden } = await import('../../src/kitden/web/static/js/library.js');
+const { data, freshness, hashFor, parseHash, state } = await import('../../src/kitden/web/static/js/store.js');
 const later = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const cell = (fields) => ({ state: 'none', where: null, items: [], word: null, add: null, reason: null, ...fields });
-const add = (fields) => ({ action: 'plugin.install', label: '+ Add', plugin: null, skill: null, marketplace: null, item: null, warn: null, ...fields });
+const add = (fields) => ({ action: 'plugin.install', label: '+ Add', plugin: null, skill: null, marketplace: null, item: null, warn: null, project_place: false, project_hint: null, ...fields });
 const row = (cells, fields = {}) => ({ key: 'plugin:1', kind: 'plugin', name: 'figma', source: 'openai-curated', same_name: false, cells, ...fields });
 
 test('a cell with an add shows its label and nothing else', () => {
@@ -370,6 +370,33 @@ test('an Add names its scope when a project is picked', () => {
   const row = { name: 'brandkit', kind: 'skill' };
   assert.ok(addName(row, 'codex', { label: '+ Add' }, 'p1').endsWith(' for all projects'));
   assert.ok(!addName(row, 'codex', { label: '+ Add' }, null).endsWith(' for all projects'));
+});
+test('in a project an add with a project place asks where it goes', () => {
+  assert.deepEqual(addChoices(add({ project_place: true }), 'website').map((c) => [c.label, c.scope, c.look]), [
+    ['Add to this project…', 'project', 'btn primary'], ['Add for all projects…', 'all', 'btn'],
+  ]);
+  state.project = 'p1';
+  assert.deepEqual(previewFor(add({ action: 'skill.install', skill: 'tidy@toolbox@x', project_place: true }), 'codex', 'project'),
+    { action: 'skill.install', targets: [{ client: 'codex' }], params: { skill: 'tidy@toolbox@x', project: 'p1' } });
+  assert.deepEqual(previewFor(add({ action: 'skill.install', skill: 'tidy@toolbox@x', project_place: true }), 'codex', 'all').params, { skill: 'tidy@toolbox@x' });
+  state.project = '';
+});
+test('the review note says the project, or where a client has no project place', () => {
+  data.projects = [{ id: 'p1', path: '/Users/me/work/website' }];
+  assert.equal(noteFor(add({ project_place: true }), 'p1', 'project'), 'Adds to website only.');
+  assert.equal(noteFor(add({ project_place: true }), 'p1', 'all'), 'Adds for all your projects.');
+  assert.equal(noteFor(add({ project_hint: 'Codex plugins are for all projects.' }), 'p1'), 'Codex plugins are for all projects.');
+  // Without a project the hint is not said: every add is for all projects then.
+  assert.equal(noteFor(add({ project_hint: 'Codex plugins are for all projects.' }), ''), null);
+  data.projects = null;
+});
+test('the scope line and the button name follow the project place', () => {
+  const row = { name: 'tidy', kind: 'skill', same_name: false };
+  assert.ok(addName(row, 'codex', add({ project_place: true }), 'p1').endsWith('…'));
+  assert.ok(addName(row, 'codex', add({}), 'p1').endsWith(' for all projects'));
+  assert.equal(addName(row, 'codex', add({ project_place: true }), null), 'Add tidy to Codex');
+  assert.equal(scopeLine('p1', [{ cells: { codex: cell({ add: add({ project_place: true }) }) } }]), 'An Add asks: this project, or all your projects. Adds without that choice go to all of them.');
+  assert.equal(scopeLine('p1', [{ cells: { codex: cell({ add: add({}) }) } }]), 'Adding puts an item in all your projects.');
 });
 test('the scope line needs a project and rows', () => {
   assert.equal(scopeLine('p1', [{}]), 'Adding puts an item in all your projects.');

@@ -161,10 +161,19 @@ class ClaudeCodeAdapter(ClientAdapter):
             undo_command=["claude", "plugin", "marketplace", "remove", name],
         )
 
-    def plugin_install_step(self, plugin_id: str) -> Step:
+    def plugin_install_step(self, plugin_id: str, project: str | None = None) -> Step:
         # No -y: a plugin that installs by running a command stops here and says so.
+        root, scope = self.home, Scope.USER
+        if project is not None:
+            # checked 2026-10-22 (`claude plugin install --help`, 2.1.283, and
+            # code.claude.com/docs/en/plugins/install): `-s project`, run in the project, puts
+            # the plugin in `enabledPlugins` of <project>/.claude/settings.json, the file the
+            # project shares; `uninstall -s project` takes it out there.
+            if not Path(project).is_dir():
+                raise ValueError(f"the project folder {project} is missing")
+            root, scope = Path(project), Scope.PROJECT
         edit = FileEdit(
-            path=str(self.home / ".claude/settings.json"),
+            path=str(root / ".claude/settings.json"),
             fmt="json",
             key=("enabledPlugins", plugin_id),
             after=True,
@@ -172,13 +181,15 @@ class ClaudeCodeAdapter(ClientAdapter):
         )
         return Step(
             client=CLIENT,
-            scope=Scope.USER,
+            scope=scope,
             name=plugin_id,
             edit=edit,
             mechanism="client_cli",
-            command=["claude", "plugin", "install", plugin_id, "-s", "user", "--json"],
-            undo_command=["claude", "plugin", "uninstall", plugin_id, "-s", "user", "--json"],
+            command=["claude", "plugin", "install", plugin_id, "-s", str(scope), "--json"],
+            undo_command=["claude", "plugin", "uninstall", plugin_id, "-s", str(scope), "--json"],
+            cwd=project,
             restart_note=RELOAD,
+            shared_file=project is not None,
         )
 
     # checked 2026-10-22 (`claude plugin uninstall --help`, 2.1.283, and

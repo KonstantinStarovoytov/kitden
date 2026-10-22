@@ -92,10 +92,14 @@ def switch_steps(
 
 
 def install_steps(
-    adapters: dict[str, ClientAdapter], offer: dict, clients: list[str]
+    adapters: dict[str, ClientAdapter],
+    offer: dict,
+    clients: list[str],
+    project: str | None = None,
 ) -> list[Step]:
-    """Install one catalog plugin in the chosen clients. A client that does not know
-    the plugin's marketplace first adds it, from the source another client uses."""
+    """Install one catalog plugin in the chosen clients, for the user or into `project`. A
+    client that does not know the plugin's marketplace first adds it (for the user), from the
+    source another client uses."""
     if not clients:
         raise ValueError("Choose at least one client")
     steps = []
@@ -119,18 +123,36 @@ def install_steps(
             if source is None:
                 raise ValueError(f"The source of {offer['marketplace']} is not known")
             steps.append(adapter.marketplace_add_step(offer["marketplace"], source))
-        steps.append(adapter.plugin_install_step(offer["id"]))
+        steps.append(adapter.plugin_install_step(offer["id"], project))
     return steps
 
 
-def skill_steps(
-    adapters: dict[str, ClientAdapter], skill: dict, clients: list[str], found: set[str]
-) -> list[Step]:
-    """Copy one catalog skill so each chosen client loads it once.
+def _skill_readers(client: str, adapters: dict[str, ClientAdapter], found: set[str]) -> list[str]:
+    """The clients that read the skills folder of `client`, in the user's home or a project.
 
-    Claude Code reads ~/.claude/skills; Codex and Cursor both read ~/.agents/skills, so one
-    copy there serves both; Cursor alone gets ~/.cursor/skills. With Include Third-Party
-    Plugins on, Cursor also reads ~/.claude/skills, so a copy for Claude Code reaches it too.
+    Claude Code reads .claude/skills; Codex and Cursor both read .agents/skills; Cursor alone
+    reads .cursor/skills. With Include Third-Party Plugins on, Cursor also reads .claude/skills.
+    """
+    cursor = adapters.get("cursor") if "cursor" in found else None
+    if client == "claude_code":
+        return ["claude_code"] + (["cursor"] if cursor and cursor.reads_other_clients() else [])
+    if client == "codex":
+        return ["codex"] + (["cursor"] if cursor else [])
+    return [client]
+
+
+def skill_steps(
+    adapters: dict[str, ClientAdapter],
+    skill: dict,
+    clients: list[str],
+    found: set[str],
+    project: str | None = None,
+) -> list[Step]:
+    """Copy one catalog skill so each chosen client loads it once, for the user or into the
+    same folders inside `project`.
+
+    One copy in .agents/skills serves Codex and Cursor; a copy for Claude Code reaches Cursor
+    too when Cursor reads Claude Code's folder (_skill_readers).
     """
     if not clients:
         raise ValueError("Choose at least one client")
@@ -143,18 +165,14 @@ def skill_steps(
             raise ValueError(f"{words} already has {skill['name']}")
         if skill["routes"].get(client) is None or client not in adapters:
             raise ValueError(f"{words} cannot get {skill['name']}")
-    cursor = adapters.get("cursor") if "cursor" in found else None
-    via_claude = bool(cursor and cursor.reads_other_clients())
     folder = Path(skill["path"])
     steps = []
-    if "claude_code" in chosen:
-        readers = ["claude_code"] + (["cursor"] if via_claude else [])
-        steps.append(adapters["claude_code"].skill_copy_step(folder, readers))
-    if "codex" in chosen:
-        readers = ["codex"] + (["cursor"] if cursor else [])
-        steps.append(adapters["codex"].skill_copy_step(folder, readers))
-    elif "cursor" in chosen and not ("claude_code" in chosen and via_claude):
-        steps.append(adapters["cursor"].skill_copy_step(folder, ["cursor"]))
+    for client in ("claude_code", "codex"):
+        if client in chosen:
+            readers = _skill_readers(client, adapters, found)
+            steps.append(adapters[client].skill_copy_step(folder, readers, project))
+    if "cursor" in chosen and not any("cursor" in s.copy.readers for s in steps if s.copy):
+        steps.append(adapters["cursor"].skill_copy_step(folder, ["cursor"], project))
     return steps
 
 

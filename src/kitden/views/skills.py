@@ -5,6 +5,15 @@ Where each client reads the user's skills (checked 2026-10-19: Claude Code 2.1.2
 0.163, Cursor 3.21): Claude Code ~/.claude/skills; Codex ~/.agents/skills and ~/.codex/skills;
 Cursor ~/.cursor/skills and ~/.agents/skills, plus ~/.claude/skills and ~/.codex/skills when
 Include Third-Party Plugins is on.
+
+Inside a project the folders are the same, under the project folder (checked 2026-10-22):
+Claude Code <project>/.claude/skills (code.claude.com/docs/en/skills); Codex
+<project>/.agents/skills, up to the repository root (learn.chatgpt.com/docs/build-skills; the
+docs do not say whether an untrusted project's skills load, so Kitden adds there only in a
+trusted project); Cursor <project>/.cursor/skills and <project>/.agents/skills, plus
+<project>/.claude/skills and <project>/.codex/skills "for compatibility" (cursor.com/docs/skills;
+the docs name no switch for those, and Kitden keeps reading them only with Include Third-Party
+Plugins on).
 """
 
 import os

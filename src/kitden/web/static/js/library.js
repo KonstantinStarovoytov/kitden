@@ -5,7 +5,7 @@ import { getJson, query } from "./api.js";
 import { button, el, tabKeys } from "./dom.js";
 import { animate, entrance, glide, land, reducedMotion, rollTo, spring } from "./motion.js";
 import { marketplaceForm, projectNote, showOffer, showSkill } from "./offer.js";
-import { openInfo, review } from "./panel.js";
+import { openInfo, projectLabel, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, mark, morphSocket, opens, skeleton, socket, staleNote } from "./parts.js";
 import { freshness, go, projectPath, render, retry, state } from "./store.js";
 
@@ -59,36 +59,71 @@ export function moreLine(answer, show) {
   return `${answer.more} more ${show === "mine" ? "in New" : "installed"} · Show all`;
 }
 
-// What a cell's add asks the review for: that one client.
-export function previewFor(add, client) {
+// What a cell's add asks the review for: that one client, and with scope "project" only the
+// project picked at the top.
+export function previewFor(add, client, scope = "all") {
   const params = add.action === "skill.install" ? { skill: add.skill }
     : add.action === "mcp.add" ? { item: add.item } : { plugin: add.plugin };
+  if (scope === "project") params.project = state.project;
   return { action: add.action, targets: [{ client }], params };
 }
 
-// The review's note: a twin it would load as well, and in a project that it is for every project.
-export function noteFor(add, project) {
-  return [add.warn, projectNote(project)].filter(Boolean).join(" ") || null;
+// The review's note: a twin it would load as well, and in a project where the add goes: that
+// project only, every project, or where the client keeps it instead (`project_hint`).
+export function noteFor(add, project, scope = "all") {
+  if (scope === "project") return `Adds to ${projectLabel(project)} only.`;
+  const where = project ? add.project_hint || projectNote(project) : null;
+  return [add.warn, where].filter(Boolean).join(" ") || null;
+}
+
+// The two places an add with a project place can go, the project first (as the move choice).
+export function addChoices(add, folder) {
+  return [
+    { label: "Add to this project…", scope: "project", look: "btn primary" },
+    { label: "Add for all projects…", scope: "all", look: "btn" },
+  ];
+}
+
+// An add: in a project, one that can go into the project asks where first; any other opens the
+// review at once.
+export function startAdd(add, client, row) {
+  if (!state.project || !add.project_place) {
+    return review(previewFor(add, client), { note: noteFor(add, state.project) });
+  }
+  const folder = projectLabel(state.project);
+  const body = el("div", "body");
+  body.append(el("p", "muted", `${CLIENT_NAMES[client] || client} can load it in ${folder} only, or in all your projects.`));
+  // The primary button sits last, as the move choice draws it.
+  const choices = addChoices(add, folder).map((choice) => button(choice.label, () => review(
+    previewFor(add, client, choice.scope), { note: noteFor(add, state.project, choice.scope) },
+  ), choice.look));
+  openInfo("Add", rowTitle(row), body, choices.reverse());
+  return null;
 }
 
 // What a screen reader hears for a cell's button: its words first, then what, from where (when
-// names repeat) and to which client.
+// names repeat) and to which client. In a project an add that asks where ends with "…".
 export function addName(row, client, add, project) {
   const name = row.same_name && row.source ? `${row.name} (${row.source})` : row.name;
   const what = { "+ Add skills": `Add skills from ${name}`, "+ Add the plugin": `Add the plugin with ${name}` }[add.label] || `Add ${name}`;
-  return `${what} to ${CLIENT_NAMES[client] || client}${project ? " for all projects" : ""}`;
+  const to = `${what} to ${CLIENT_NAMES[client] || client}`;
+  if (project && add.project_place) return `${to}…`;
+  return `${to}${project ? " for all projects" : ""}`;
 }
 
-// A quiet line above the table: in a project, an Add still reaches every project.
+// A quiet line above the table: in a project, where an Add goes.
 export function scopeLine(project, rows) {
-  return project && rows.length > 0 ? "Adding puts an item in all your projects." : null;
+  if (!project || rows.length === 0) return null;
+  const asks = rows.some((r) => Object.values(r.cells || {}).some((c) => c.add && c.add.project_place));
+  return asks ? "An Add asks: this project, or all your projects. Adds without that choice go to all of them."
+    : "Adding puts an item in all your projects.";
 }
 
 // One cell: a button for the one action, a state, or a dash that says why not.
 export function cellNode(row, client) {
   const cell = row.cells[client];
   if (cell.add) {
-    const node = button(cell.add.label, () => review(previewFor(cell.add, client), { note: noteFor(cell.add, state.project) }), "btn small add");
+    const node = button(cell.add.label, () => startAdd(cell.add, client, row), "btn small add");
     node.setAttribute("aria-label", addName(row, client, cell.add, state.project));
     node.dataset.focus = `add:${row.key}:${client}`;
     return node;

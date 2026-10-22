@@ -30,6 +30,16 @@ VIA_CLAUDE_CODE = "Cursor loads Claude Code's plugins. Add it to Claude Code."
 SKILL_VIA_CLAUDE_CODE = "Cursor loads Claude Code's plugins. Add the plugin to Claude Code."
 OUTSIDE_FOLDER = "This skill uses files outside its folder, so it can't be copied."
 SHARE_IN_GATEWAY = "Move it into the gateway to share it."
+# Where a plugin goes into one project when Kitden cannot put it there.
+# checked 2026-10-22 (learn.chatgpt.com/docs/plugins): Codex installs a plugin for its whole
+# environment; the docs show no per-project install.
+CODEX_PROJECT = "Codex plugins are for all projects."
+# checked 2026-10-22 (cursor.com/docs/plugins): in Customize an install is for the user or a
+# project; the plugin's menu there says Add to Project (spike S1, Cursor 3.21). Cursor keeps it
+# in its own database, so Kitden writes nothing.
+CURSOR_PROJECT = (
+    "To add a plugin to one project, use Add to Project in Cursor: Customize → Plugins."
+)
 
 
 def _cell(
@@ -58,7 +68,11 @@ def _add(
     marketplace: str | None = None,
     warn: str | None = None,
     item: str | None = None,
+    project_place: bool = False,
+    project_hint: str | None = None,
 ) -> dict:
+    """One add. `project_place`: with a project picked it can go into that project only.
+    `project_hint`: where it goes instead, said in a project view."""
     return {
         "action": action,
         "label": label,
@@ -67,7 +81,24 @@ def _add(
         "marketplace": marketplace,
         "item": item,
         "warn": warn,
+        "project_place": project_place,
+        "project_hint": project_hint,
     }
+
+
+def _plugin_add(
+    client: str, label: str, plugin_id: str, marketplace: str | None, warn: str | None = None
+) -> dict:
+    """A plugin install: Claude Code can put it into one project; Codex cannot."""
+    return _add(
+        PLUGIN_INSTALL,
+        label,
+        plugin_id,
+        marketplace=marketplace,
+        warn=warn,
+        project_place=client == "claude_code",
+        project_hint=CODEX_PROJECT if client == "codex" else None,
+    )
 
 
 def _row(
@@ -258,9 +289,7 @@ def _plugin_cell(
     if offer and route:
         marketplace = offer["marketplace"] if route == "add_marketplace" else None
         warn = f"{who} already has {name} from {twin}. It will load both." if twin else None
-        return _cell(
-            add=_add(PLUGIN_INSTALL, "+ Add", plugin_id, marketplace=marketplace, warn=warn)
-        )
+        return _cell(add=_plugin_add(client, "+ Add", plugin_id, marketplace, warn))
     # When Claude Code has the plugin, the load map already shows Cursor's copy; when it shows
     # none (an account plugin), Cursor does not import it.
     if client == "cursor" and cursor_imports and "claude_code" in routes:
@@ -284,12 +313,22 @@ def _plugin_cell(
     return _cell(reason=f"{who} can't install this plugin, and {why}.")
 
 
+def _cursor_in_project(cell: dict) -> dict:
+    """A Cursor plugin cell in a project view: say where a plugin goes into one project."""
+    if cell["add"]:
+        cell["add"]["project_hint"] = f"Adds its skills for all your projects. {CURSOR_PROJECT}"
+    else:
+        cell["reason"] = " ".join(filter(None, [cell["reason"], CURSOR_PROJECT]))
+    return cell
+
+
 def _plugin_rows(
     map_rows: list[Row],
     offers: list[dict],
     skills: list[dict],
     found: list[str],
     cursor_imports: bool,
+    in_project: bool = False,
 ) -> Built:
     """Plugins on this computer and plugins in its marketplaces, one row per
     name@marketplace: a load map row and an offer with the same id are one row."""
@@ -330,6 +369,8 @@ def _plugin_rows(
                 cursor_imports,
                 others[0] if others else None,
             )
+            if client == "cursor" and in_project:
+                _cursor_in_project(cells[client])
         installed = offer["installed"] if offer else []
         holders = {c for c in found if _has(row, c) or c in installed}
         built = _row(
@@ -368,16 +409,14 @@ def _skill_cell(
         # "Via Claude Code" -> "via Claude Code", as the load map says it.
         return _cell("on", where=word[:1].lower() + word[1:])
     if client in skill["routes"]:
-        return _cell(add=_add(SKILL_INSTALL, "+ Add", skill=skill["id"]))
+        return _cell(add=_add(SKILL_INSTALL, "+ Add", skill=skill["id"], project_place=True))
     # A found client without the skill and without a route: it does not work alone.
     if skill["plugin"] is None:
         return _cell(reason=OUTSIDE_FOLDER)
     route = plugin_routes.get(client)
     if route:
         marketplace = skill["marketplace"] if route == "add_marketplace" else None
-        return _cell(
-            add=_add(PLUGIN_INSTALL, "+ Add the plugin", skill["plugin"], marketplace=marketplace)
-        )
+        return _cell(add=_plugin_add(client, "+ Add the plugin", skill["plugin"], marketplace))
     if client == "cursor" and cursor_imports and "claude_code" in plugin_routes:
         return _cell("via", word="Via Claude Code", reason=SKILL_VIA_CLAUDE_CODE)
     return _cell(reason=f"{NAMES[client]} can't install the plugin this skill needs.")
@@ -551,7 +590,9 @@ def library(
             _server_why(map_rows, found, inventory.items),
             _server_add(found, inventory.items),
         ),
-        "plugin": _plugin_rows(map_rows, offers, skills, found, cursor_imports),
+        "plugin": _plugin_rows(
+            map_rows, offers, skills, found, cursor_imports, in_project=project is not None
+        ),
         "skill": _skill_rows(map_rows, offers, skills, found, cursor_imports),
         # Kitden adds no hooks, so a hook's dash has no reason.
         "hook": _map_rows(map_rows, "hook", found),

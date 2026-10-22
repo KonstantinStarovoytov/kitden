@@ -161,6 +161,16 @@ test('a tool rule review names the tool, its server and the project', () => {
   data.projects = null;
 });
 
+test('an add into one project names the project', () => {
+  data.projects = [{ id: 'p1', path: '/Users/me/work/website' }];
+  const change = { action: 'skill.install', steps: [{ client: 'codex', name: 'tidy', reaches: ['codex'] }] };
+  assert.deepEqual(changeWords(change, { params: { skill: 'x', project: 'p1' } }), { title: 'Add tidy to Codex in website', done: 'Added tidy to Codex in website' });
+  assert.deepEqual(changeWords(change, { params: { skill: 'x' } }), { title: 'Add tidy to Codex', done: 'Added tidy to Codex' });
+  const plugin = { action: 'plugin.install', steps: [{ client: 'claude_code', name: 'linter@official' }] };
+  assert.equal(changeWords(plugin, { params: { plugin: 'linter@official', project: 'p1' } }).title, 'Add linter@official to Claude Code in website');
+  data.projects = null;
+});
+
 test('an after entry with only a note draws no client chip', () => {
   const note = 'slow of echo will be off in website. No client uses the Kitden gateway yet.';
   assert.deepEqual(afterParts([{ note }]), { chips: [], notes: [note] });

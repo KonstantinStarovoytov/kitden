@@ -100,7 +100,19 @@ def _cell(state="none", word=None, add=None, reason=None) -> dict:
     return {"state": state, "where": None, "items": [], "word": word, "add": add, "reason": reason}
 
 
-def _add(action, label, plugin=None, skill=None, marketplace=None, warn=None) -> dict:
+CODEX_HINT = "Codex plugins are for all projects."
+
+
+def _add(
+    action,
+    label,
+    plugin=None,
+    skill=None,
+    marketplace=None,
+    warn=None,
+    project_place=False,
+    project_hint=None,
+) -> dict:
     return {
         "action": action,
         "label": label,
@@ -109,6 +121,8 @@ def _add(action, label, plugin=None, skill=None, marketplace=None, warn=None) ->
         "marketplace": marketplace,
         "item": None,
         "warn": warn,
+        "project_place": project_place,
+        "project_hint": project_hint,
     }
 
 
@@ -177,7 +191,9 @@ def test_cursor_gets_via_claude_code_for_a_claude_plugin(home, tmp_path):
         word="Via Claude Code",
         reason="Cursor loads Claude Code's plugins. Add it to Claude Code.",
     )
-    assert toolbox["cells"]["claude_code"] == _cell(add=_add("plugin.install", "+ Add", PLUGIN))
+    assert toolbox["cells"]["claude_code"] == _cell(
+        add=_add("plugin.install", "+ Add", PLUGIN, project_place=True)
+    )
     # Cursor does not import the plugins of Claude's account.
     account = _row(_library(home), "Claude account plugins and connectors")
     assert account["cells"]["claude_code"]["state"] == "unk"
@@ -269,11 +285,11 @@ def test_skill_that_needs_its_plugin_offers_add_the_plugin(home):
     rooted = _row(answer, "rooted")
     assert rooted["offer"] == f"rooted@{PLUGIN}" and rooted["source"] == PLUGIN
     assert rooted["cells"]["claude_code"] == _cell(
-        add=_add("plugin.install", "+ Add the plugin", PLUGIN)
+        add=_add("plugin.install", "+ Add the plugin", PLUGIN, project_place=True)
     )
     # Codex first adds the marketplace the plugin comes from.
     assert rooted["cells"]["codex"]["add"] == _add(
-        "plugin.install", "+ Add the plugin", PLUGIN, marketplace=OFFICIAL
+        "plugin.install", "+ Add the plugin", PLUGIN, marketplace=OFFICIAL, project_hint=CODEX_HINT
     )
     # Cursor loads the plugin once Claude Code has it.
     assert rooted["cells"]["cursor"] == _cell(
@@ -283,7 +299,7 @@ def test_skill_that_needs_its_plugin_offers_add_the_plugin(home):
     )
     tidy = _row(answer, "tidy")
     assert tidy["cells"]["codex"] == _cell(
-        add=_add("skill.install", "+ Add", skill=f"tidy@{PLUGIN}")
+        add=_add("skill.install", "+ Add", skill=f"tidy@{PLUGIN}", project_place=True)
     )
 
 
@@ -458,7 +474,13 @@ def test_one_marketplace_note_per_client_and_marketplace(home):
     # toolbox and superpowers both come from a marketplace Codex does not have yet.
     for name in ("toolbox", "superpowers"):
         add = _row(every, name, OFFICIAL)["cells"]["codex"]["add"]
-        assert add == _add("plugin.install", "+ Add", f"{name}@{OFFICIAL}", marketplace=OFFICIAL)
+        assert add == _add(
+            "plugin.install",
+            "+ Add",
+            f"{name}@{OFFICIAL}",
+            marketplace=OFFICIAL,
+            project_hint=CODEX_HINT,
+        )
     assert every["notes"] == [
         "Codex gets the claude-plugins-official marketplace the first time you add one of its "
         "plugins."
