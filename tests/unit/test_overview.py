@@ -230,3 +230,18 @@ def test_overview_duplicate_points_at_a_row_the_map_has(home):
     )
     assert card["target"]["row"] == row_key(by_id[twice.items[0]])
     assert card["target"]["row"] in {r.key for r in load_map(inventory, None)}
+
+
+def test_a_server_without_a_removable_entry_is_not_counted(home):
+    # The Gateway page shows "Move into the gateway…" only on rows Kitden can remove, so the
+    # Overview counts only those rows too.
+    inventory = build_inventory(home)
+    gateway = Gateway(url="https://mcp.neon.tech/mcp")
+    mark_gateways(inventory, [gateway])
+    rows = gateway_view(inventory, [gateway], None)["groups"]["move"]
+    kept = rows[0]["name"]
+    for index, item in enumerate(inventory.items):
+        if item.name == kept:
+            inventory.items[index] = replace(item, actions=())
+    [card] = overview(inventory, [gateway], None)["suggestions"]
+    assert card["title"].startswith(f"{len(rows) - 1} MCP server")

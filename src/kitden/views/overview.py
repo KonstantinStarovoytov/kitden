@@ -155,6 +155,7 @@ def overview(
 
     # Direct servers are an option, not a problem. The count is the Gateway page's rows, so a
     # server in two clients counts once; with the Kitden gateway, local servers can move too.
+    # Only rows with an entry Kitden can remove count: the Gateway page offers the move on those.
     gateway = None
     suggestions = []
     kitden = None if held is None else _kitden_card(inventory, held, problem)
@@ -162,7 +163,7 @@ def overview(
         view = gateway_view(inventory, gateways, project, kitden=held if kitden else None)
         groups = view["groups"]
         rows = groups["move"] + (groups["local"] if kitden else [])
-        moves = len({row["name"] for row in rows})
+        moves = len({row["name"] for row in rows if row["items"]})
         gateway = kitden or {"name": urlsplit(gateways[0].url).netloc or "Gateway"}
         if moves:
             into = "the Kitden gateway" if kitden else "the gateway"
