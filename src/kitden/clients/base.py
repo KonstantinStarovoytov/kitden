@@ -164,6 +164,12 @@ def expand(folder: Path, category: str, glob: str = "*.md") -> list[tuple[Path, 
     return found
 
 
+def is_home(folder: Path, home: Path) -> bool:
+    """True when a project folder is the home folder: its instruction files are the user's own,
+    so project readers skip it (as project_chain does)."""
+    return os.path.realpath(folder) == os.path.realpath(home)
+
+
 def instruction_items(
     client: str,
     files: list[tuple[Path, str] | tuple[Path, str, str]],

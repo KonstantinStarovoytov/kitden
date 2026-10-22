@@ -1,5 +1,7 @@
+import json
+
 from kitden.clients.claude_code import ClaudeCodeAdapter
-from kitden.model import ClientStatus, Enabled, UnknownReason
+from kitden.model import ClientStatus, Enabled, ItemKind, Scope, UnknownReason
 from kitden.views.inventory import build_inventory
 from tests.conftest import all_text, make_home, rows
 
@@ -30,6 +32,11 @@ EXPECTED = {
     ("claude_code", "hook", "PreToolUse: Bash", "user", "on", None),
     ("claude_code", "marketplace", "claude-plugins-official", "user", "on", None),
     ("claude_desktop_code_tab", "mcp_server", "metamcp-local", "user", "on", None),
+    ("claude_code", "instructions", "CLAUDE.md", "user", "on", None),
+    ("claude_code", "instructions", "review", "user", "on", None),
+    ("claude_code", "instructions", "reviewer", "user", "on", None),
+    ("claude_code", "instructions", "CLAUDE.md", "project", "on", "work/website"),
+    ("claude_code", "instructions", "deploy", "project", "on", "work/website"),
 }
 
 
@@ -133,3 +140,77 @@ def test_the_desktop_tab_keeps_its_folder_version_in_a_scan(tmp_path):
     clients = {c.id: c for c in build_inventory(home).clients}
     assert clients["claude_desktop_code_tab"].version == "2.1.299"
     assert clients["claude_code"].version is None
+
+
+def _instructions(home, no_version):
+    return {
+        (i.scope, i.name, dict(i.summary)["category"], i.project)
+        for i in ClaudeCodeAdapter(home, read_version=no_version).scan().items
+        if i.kind is ItemKind.INSTRUCTIONS
+    }
+
+
+def test_scan_reads_instructions_commands_and_agents(tmp_path, no_version):
+    home = make_home(tmp_path, FIXTURE)
+    site = str(home / "work/website")
+    assert _instructions(home, no_version) == {
+        (Scope.USER, "CLAUDE.md", "instructions", None),
+        (Scope.USER, "review", "command", None),
+        (Scope.USER, "reviewer", "agent", None),
+        (Scope.PROJECT, "CLAUDE.md", "instructions", site),
+        (Scope.PROJECT, "deploy", "command", site),
+    }
+
+
+def test_scan_reads_every_project_instruction_file_and_rules(tmp_path, no_version):
+    home = make_home(tmp_path, FIXTURE)
+    site = home / "work/website"
+    (site / ".claude/CLAUDE.md").write_text("x")
+    (site / "CLAUDE.local.md").write_text("x")
+    (site / ".claude/agents").mkdir()
+    (site / ".claude/agents/tester.md").write_text("x")
+    (site / ".claude/rules/frontend").mkdir(parents=True)
+    (site / ".claude/rules/frontend/css.md").write_text("x")
+    (home / ".claude/rules").mkdir()
+    (home / ".claude/rules/style.md").write_text("x")
+    found = {(i[0], i[1], i[2]) for i in _instructions(home, no_version)}
+    assert {
+        (Scope.PROJECT, "CLAUDE.md", "instructions"),
+        (Scope.PROJECT, "CLAUDE.local.md", "instructions"),
+        (Scope.PROJECT, "tester", "agent"),
+        (Scope.PROJECT, "frontend:css", "instructions"),
+        (Scope.USER, "style", "instructions"),
+    } <= found
+    paths = {
+        i.source.path
+        for i in ClaudeCodeAdapter(home, read_version=no_version).scan().items
+        if i.kind is ItemKind.INSTRUCTIONS and i.name == "CLAUDE.md"
+    }
+    assert str(site / ".claude/CLAUDE.md") in paths and str(site / "CLAUDE.md") in paths
+
+
+def test_a_missing_project_gives_no_instruction_rows(tmp_path, no_version):
+    home = make_home(tmp_path, FIXTURE)
+    state = json.loads((home / ".claude.json").read_text())
+    state["projects"][str(home / "work/gone")] = {}
+    (home / ".claude.json").write_text(json.dumps(state))
+    projects = {i[3] for i in _instructions(home, no_version)}
+    assert projects == {None, str(home / "work/website")}
+
+
+def test_commands_in_sub_folders_are_named_with_a_colon(tmp_path, no_version):
+    home = make_home(tmp_path, FIXTURE)
+    commands = home / ".claude/commands"
+    (commands / "notes.txt").write_text("x")
+    (commands / "frontend").mkdir()
+    (commands / "frontend/component.md").write_text("x")
+    names = {i[1] for i in _instructions(home, no_version) if i[2] == "command"}
+    assert names == {"review", "frontend:component", "deploy"}
+
+
+def test_the_home_folder_as_a_project_gives_no_project_rows(tmp_path, no_version):
+    home = make_home(tmp_path, FIXTURE)
+    state = json.loads((home / ".claude.json").read_text())
+    state["projects"][str(home)] = {}
+    (home / ".claude.json").write_text(json.dumps(state))
+    assert str(home) not in {i[3] for i in _instructions(home, no_version)}

@@ -19,8 +19,11 @@ from kitden.clients.base import (
     Scan,
     bearer_header,
     check_toggle,
+    expand,
     file_source,
+    instruction_items,
     is_direct_entry,
+    is_home,
     is_own_skill,
     mcp_item,
     project,
@@ -55,6 +58,23 @@ DESKTOP_CONFIG = "Library/Application Support/Claude/claude_desktop_config.json"
 DESKTOP_BUNDLED = "Library/Application Support/Claude/claude-code"
 # Plugins that come from these places have no install to remove (plugins/loading docs).
 NOT_INSTALLED = ("@synced", "@inline", "@skills-dir")
+
+
+def _instruction_files(folder: Path) -> list:
+    """Instruction files, rules, commands and agents in a `.claude` folder.
+
+    checked 2026-10-22 (code.claude.com/docs/en/memory, /en/claude-directory): Claude Code reads
+    `~/.claude/CLAUDE.md`, `<project>/.claude/CLAUDE.md` and `rules/*.md` in both folders,
+    sub-folders too. checked 2026-10-22 (/en/slash-commands, /en/claude-directory):
+    `commands/*.md` in both folders; a file in a sub-folder is named `<folder>:<name>`.
+    checked 2026-10-22 (/en/sub-agents): `agents/*.md` in both folders, sub-folders too.
+    """
+    return [
+        (folder / "CLAUDE.md", "instructions"),
+        *expand(folder / "rules", "instructions"),
+        *expand(folder / "commands", "command"),
+        *expand(folder / "agents", "agent"),
+    ]
 
 
 def _on(value: bool | None) -> Enabled:
@@ -406,6 +426,9 @@ class ClaudeCodeAdapter(ClientAdapter):
 
         # Skills, hooks and marketplaces.
         scan.items += skill_items(CLIENT, self.home / ".claude/skills", Scope.USER, CLIENT)
+        scan.items += instruction_items(
+            CLIENT, _instruction_files(self.home / ".claude"), Scope.USER, CLIENT
+        )
         scan.items += self._hooks(settings, settings_path, Scope.USER)
         marketplaces_path = self.home / ".claude/plugins/known_marketplaces.json"
         for name in _dict(read.json(marketplaces_path)):
@@ -478,6 +501,15 @@ class ClaudeCodeAdapter(ClientAdapter):
             )
         items += self._hooks(settings, settings_path, Scope.PROJECT, project=path)
         items += skill_items(CLIENT, root / ".claude/skills", Scope.PROJECT, CLIENT, project=path)
+        if not is_home(root, self.home):
+            # checked 2026-10-22 (code.claude.com/docs/en/memory): a project's CLAUDE.md and
+            # CLAUDE.local.md at its root, besides the files in its `.claude` folder.
+            files = [
+                (root / "CLAUDE.md", "instructions"),
+                (root / "CLAUDE.local.md", "instructions"),
+                *_instruction_files(root / ".claude"),
+            ]
+            items += instruction_items(CLIENT, files, Scope.PROJECT, CLIENT, project=path)
         return items
 
     def _plugin_parts(self, read: Reader, root: Path, enabled: Enabled) -> list[Item]:

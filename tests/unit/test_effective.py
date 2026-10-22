@@ -35,6 +35,11 @@ def test_claude_project_view_applies_overrides_and_turned_off_plugins(tmp_path):
         ("skill", "site-style", "project"),
         ("hook", "PreToolUse: Bash", "user"),
         ("marketplace", "claude-plugins-official", "user"),
+        ("instructions", "CLAUDE.md", "user"),
+        ("instructions", "review", "user"),
+        ("instructions", "reviewer", "user"),
+        ("instructions", "CLAUDE.md", "project"),
+        ("instructions", "deploy", "project"),
     }
     # superpowers is on for the user but off in this project, so its skills do not load here.
     assert shadows(view) == {
