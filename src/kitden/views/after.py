@@ -5,6 +5,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from kitden.changes.actions import (
+    GATEWAY_KEYCHAIN,
     GATEWAY_PUT_BACK,
     GATEWAY_REMOVE,
     GATEWAY_RULE,
@@ -70,6 +71,7 @@ CURSOR_KEEPS = "Cursor loads Claude Code plugins, so it loses this copy and keep
 REMOVE_NOTE = "Undo installs it again; its saved options are not brought back."
 CURSOR_SWITCHES = "Cursor's own switches for these tools do not carry over."
 TO_KEYCHAIN = "The token goes to your Keychain; the settings file keeps a reference."
+MOVE_SECRETS = "The secrets of {server} go to your Keychain; the settings file keeps references."
 # Strict mode only hides tools; the server's own token decides what it can do.
 GUARANTEE = "For a real guarantee, give {server} a token that can only read."
 
@@ -350,11 +352,7 @@ def _kitden_move_words(change: Change, inventory, home: Path | None) -> list[dic
         ):
             line.append(f"Kitden asked {edit.key[1]} once whether it needs a sign-in.")
     items = [i for s in change.steps for i in s.keychain]
-    line += [
-        f"{i.server}/{i.key} is already in your Keychain; its value will be replaced."
-        for i in items
-        if i.existed
-    ]
+    line += _replaced(items)
     if items:
         line.append(TO_KEYCHAIN)
     line.append("Applies to new sessions.")
@@ -564,6 +562,22 @@ def _gateway_remove_words(change: Change, inventory) -> list[dict]:
     return out
 
 
+def _replaced(items) -> list[str]:
+    """A line for each Keychain item that is there already."""
+    return [
+        f"{i.server}/{i.key} is already in your Keychain; its value will be replaced."
+        for i in items
+        if i.existed
+    ]
+
+
+def _keychain_words(change: Change) -> list[dict]:
+    """A held server's secrets go to the Keychain. The clients see no change."""
+    items = [i for s in change.steps for i in s.keychain]
+    lines = [*_replaced(items), MOVE_SECRETS.format(server=change.steps[0].name)]
+    return [{"note": " ".join(lines)}]
+
+
 def _put_back_words(change: Change, inventory, home: Path) -> list[dict]:
     """A held server written into clients: each loads it, and says when the entry holds a
     secret, and when it then also gets the server through the Kitden gateway."""
@@ -673,6 +687,8 @@ def after_words(
         return _strict_words(change, inventory, home)
     if change.action == GATEWAY_REMOVE and change.steps:
         return _gateway_remove_words(change, inventory)
+    if change.action == GATEWAY_KEYCHAIN and change.steps:
+        return _keychain_words(change)
     if change.action == GATEWAY_PUT_BACK and home is not None:
         return _put_back_words(change, inventory, home)
     if change.action == MCP_ADD and home is not None:

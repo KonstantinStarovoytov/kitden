@@ -10,7 +10,7 @@ from collections.abc import Iterable
 from dataclasses import replace
 from pathlib import Path
 
-from kitden.changes.actions import GATEWAY_RULE, KITDEN_GATEWAY
+from kitden.changes.actions import GATEWAY_RULE, KITDEN_GATEWAY, secrets_out
 from kitden.clients.base import mcp_item
 from kitden.gateways import data_dir
 from kitden.local_gateway.project import project_chain
@@ -90,14 +90,20 @@ def _states(settings: dict, server: str, tool: str | None, chain: list[str]) -> 
 
 def held_servers(settings: dict, chain: list[str]) -> list[dict]:
     """Every server in the Kitden gateway, for its card: name, local or remote, and its state
-    along the picked project's chain (empty: all projects). Commands, addresses and env stay
-    out."""
+    along the picked project's chain (empty: all projects), and whether its entry still holds
+    a plain secret the Keychain could keep. Commands, addresses and env stay out."""
     cards = []
     for name, server in sorted(settings["servers"].items(), key=lambda pair: pair[0].lower()):
         states = _states(settings, name, None, chain)
-        kind = "remote" if isinstance(server, dict) and "url" in server else "local"
+        held = isinstance(server, dict)
         cards.append(
-            {"name": name, "kind": kind, "state": states["state"], "differs": states["differs"]}
+            {
+                "name": name,
+                "kind": "remote" if held and "url" in server else "local",
+                "state": states["state"],
+                "differs": states["differs"],
+                "plain_secrets": held and bool(secrets_out(name, server)[1]),
+            }
         )
     return cards
 

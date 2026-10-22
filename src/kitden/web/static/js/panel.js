@@ -243,15 +243,24 @@ function moveButton({ items, gateways }, look, name) {
 }
 
 // A server in the Kitden gateway can leave it, or be written back into a client as its own
-// entry. `clients` are the found clients Kitden can write.
-export function heldActions(server, clients) {
+// entry. `clients` are the found clients Kitden can write. With `plain` (its entry still holds
+// a secret) its secrets can move to the Keychain.
+export function heldActions(server, clients, plain = false) {
   return [
     { label: "Remove from the Kitden gateway…", body: { action: "gateway.remove", targets: [], params: { server } } },
     ...clients.map((client) => ({
       label: `Put back in ${CLIENT_NAMES[client]}…`,
       body: { action: "gateway.put_back", targets: [{ client }], params: { server } },
     })),
+    ...(plain ? [{ label: "Move secrets to the Keychain…", body: { action: "gateway.keychain", targets: [], params: { server } } }] : []),
   ];
+}
+
+// Whether the Kitden gateway's entry for `server` still holds a plain secret, as the Gateway
+// page read it.
+export function plainSecrets(model, server) {
+  const kitden = model && (model.gateways || []).find((g) => g.kind === "kitden");
+  return Boolean(kitden && (kitden.servers || []).some((s) => s.name === server && s.plain_secrets));
 }
 
 // heldActions as plain buttons, for both Details of a held server.
@@ -656,7 +665,7 @@ function showDetails(row, definitions, offer = null, toolsNext = {}) {
     return [addButton(o, row, offer, look)];
   };
   const footer = el("footer");
-  const held = definitions.some((d) => d.via_gateway === "kitden") ? heldButtons(heldActions(row.name, writableClients())) : [];
+  const held = definitions.some((d) => d.via_gateway === "kitden") ? heldButtons(heldActions(row.name, writableClients(), plainSecrets(currentModel("gateway"), row.name))) : [];
   footer.append(...held, ...footerButtons(actions, draw, commands));
   swapContent([itemHeader(row), body, footer]);
 }
@@ -723,6 +732,7 @@ const DONE_WORDS = {
   "gateway.switch": "Switched the gateway", "plugin.install": "Added", "marketplace.add": "Added the marketplace",
   "skill.install": "Added", "plugin.skills": "Added",
   "gateway.remove": "Removed", "gateway.put_back": "Put", "mcp.add": "Added",
+  "gateway.keychain": "Moved",
 };
 
 // Actions whose words say "from" a client.
@@ -774,6 +784,7 @@ export function changeWords(change, previewBody) {
     "setup_server.update": `Update “show my setup” to Kitden in ${clients}`,
     "gateway.remove": `Remove ${server} from the Kitden gateway`,
     "gateway.put_back": `Put ${server} back in ${clients}`,
+    "gateway.keychain": `Move the secrets of ${server} to the Keychain`,
   }[change.action] || change.action;
   const verb = DONE_WORDS[change.action] || change.action;
   let what = `${verb} ${short} ${REMOVES.includes(change.action) ? "from" : "in"} ${clients}`;
@@ -796,6 +807,8 @@ export function changeWords(change, previewBody) {
     what = `${verb} ${server} from the Kitden gateway`;
   } else if (change.action === "gateway.put_back") {
     what = `${verb} ${server} back in ${clients}`;
+  } else if (change.action === "gateway.keychain") {
+    what = `${verb} the secrets of ${server} to the Keychain`;
   } else if (change.action === "plugin.skills") {
     what = `${verb} ${plural(steps.length, "skill", "skills")} to ${clients}`;
   } else if (change.action === "project.align") {

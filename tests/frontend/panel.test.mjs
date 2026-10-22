@@ -5,7 +5,7 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; panel.js must load there too.
 delete globalThis.navigator;
-const { afterParts, alignGroups, changeOutcome, chosenKeys, callsText, changeWords, footerActions, heldActions, offerLabel, leftOutText, loadsLede, moveFor, moveTargets, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
+const { afterParts, alignGroups, changeOutcome, chosenKeys, callsText, changeWords, footerActions, heldActions, offerLabel, leftOutText, loadsLede, moveFor, moveTargets, plainSecrets, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
 const { addOptions, whyNoAction } = await import('../../src/kitden/web/static/js/offer.js');
 const { data } = await import('../../src/kitden/web/static/js/store.js');
 
@@ -457,6 +457,22 @@ test('a held server offers Remove and Put back in each found client', () => {
   assert.deepEqual(actions.map((a) => a.label), ['Remove from the Kitden gateway…', 'Put back in Claude Code…', 'Put back in Cursor…']);
   assert.deepEqual(actions[0].body, { action: 'gateway.remove', targets: [], params: { server: 'files' } });
   assert.deepEqual(actions[2].body, { action: 'gateway.put_back', targets: [{ client: 'cursor' }], params: { server: 'files' } });
+});
+
+test('a held server with plain secrets also offers to move them to the Keychain', () => {
+  const actions = heldActions('files', ['codex'], true);
+  assert.deepEqual(actions.map((a) => a.label), ['Remove from the Kitden gateway…', 'Put back in Codex…', 'Move secrets to the Keychain…']);
+  assert.deepEqual(actions[2].body, { action: 'gateway.keychain', targets: [], params: { server: 'files' } });
+  const model = { gateways: [{ kind: 'kitden', servers: [{ name: 'files', plain_secrets: true }, { name: 'docs', plain_secrets: false }] }] };
+  assert.equal(plainSecrets(model, 'files'), true);
+  assert.equal(plainSecrets(model, 'docs'), false);
+  assert.equal(plainSecrets(model, 'nope'), false);
+  assert.equal(plainSecrets(null, 'files'), false);
+});
+
+test('moving the secrets of a held server is named', () => {
+  const change = { action: 'gateway.keychain', steps: [{ client: 'kitden', name: 'files' }] };
+  assert.deepEqual(changeWords(change, { params: { server: 'files' } }), { title: 'Move the secrets of files to the Keychain', done: 'Moved the secrets of files to the Keychain' });
 });
 
 test('removing from or putting back from the Kitden gateway is named', () => {

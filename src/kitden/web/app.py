@@ -18,6 +18,7 @@ from starlette.staticfiles import StaticFiles
 from kitden.changes.actions import (
     CLIENT_WORDS,
     GATEWAY_CONNECT,
+    GATEWAY_KEYCHAIN,
     GATEWAY_MOVE,
     GATEWAY_PUT_BACK,
     GATEWAY_REMOVE,
@@ -36,6 +37,7 @@ from kitden.changes.actions import (
     add_server_steps,
     connect_steps,
     install_steps,
+    keychain_steps,
     local_move_steps,
     marketplace_steps,
     move_steps,
@@ -959,6 +961,8 @@ def create_app(
                 clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
                 server = str(params.get("server", ""))
                 steps = put_back_steps(adapters, home, server, clients)
+            elif action == GATEWAY_KEYCHAIN:
+                steps = keychain_steps(home, str(params.get("server", "")))
             elif action == MCP_ADD:
                 item = _item(str(params.get("item", "")))
                 if item is None:

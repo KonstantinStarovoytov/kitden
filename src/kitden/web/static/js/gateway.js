@@ -346,7 +346,7 @@ function showKitdenServer(server, next = {}) {
   const stack = el("div", "stack");
   stack.append(row);
   body.append(stack, toolsSection(server.name, (again) => showKitdenServer(server, again), next));
-  openInfo("MCP server", server.name, body, heldButtons(heldActions(server.name, foundClients())));
+  openInfo("MCP server", server.name, body, heldButtons(heldActions(server.name, foundClients(), server.plain_secrets)));
 }
 
 function gatewayCard(gateway, model) {

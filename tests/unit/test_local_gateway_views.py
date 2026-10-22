@@ -160,7 +160,15 @@ def test_the_kitden_gateway_is_listed_and_local_servers_can_move(home):
         "name": "Kitden gateway",
         "where": "On this Mac",
         "movable": True,
-        "servers": [{"name": "files", "kind": "local", "state": "on", "differs": False}],
+        "servers": [
+            {
+                "name": "files",
+                "kind": "local",
+                "state": "on",
+                "differs": False,
+                "plain_secrets": True,
+            }
+        ],
     }
     assert view["connections"]["kitden"] == {"claude_code": [], "codex": [], "cursor": ["files"]}
     assert view["used"] == ["kitden"]
@@ -191,14 +199,15 @@ def test_the_kitden_card_lists_every_held_server_with_its_state_in_the_project(h
         everywhere = page.get("/api/gateway-view").json()["gateways"][0]["servers"]
         there = page.get(f"/api/gateway-view?project={project_id(page, website)}").json()
     assert everywhere == [
-        {"name": "docs", "kind": "remote", "state": "on", "differs": False},
-        {"name": "files", "kind": "local", "state": "off", "differs": False},
+        {"name": "docs", "kind": "remote", "state": "on", "differs": False, "plain_secrets": False},
+        {"name": "files", "kind": "local", "state": "off", "differs": False, "plain_secrets": True},
     ]
     assert there["gateways"][0]["servers"][1] == {
         "name": "files",
         "kind": "local",
         "state": "on",
         "differs": True,
+        "plain_secrets": True,
     }
     assert "SENTINEL_SECRET_FILES" not in json.dumps(there)
 

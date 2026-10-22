@@ -442,6 +442,7 @@ GATEWAY_STRICT = "gateway.strict"  # a held server's strict mode on or off: new 
 GATEWAY_RULES = "gateway.rules"  # several tools of one server on or off in one review
 GATEWAY_REMOVE = "gateway.remove"  # a held server and its rules leave the Kitden gateway
 GATEWAY_PUT_BACK = "gateway.put_back"  # a held server's entry written into a client
+GATEWAY_KEYCHAIN = "gateway.keychain"  # a held server's plain secrets moved to the Keychain
 # Codex waits 10 s for a server to start and 60 s for a tool call (checked 2026-10-21). The
 # Kitden gateway may take up to 20 s to list a server and 300 s for one call.
 CODEX_TIMEOUTS = {"startup_timeout_sec": 30, "tool_timeout_sec": 300}
@@ -908,6 +909,20 @@ def _server_step(home: Path, name: str, server: dict, old: Any) -> Step | None:
     step = settings_step(home, ("servers", name), entry, name)
     step.keychain = items
     return step
+
+
+def keychain_steps(home: Path, server: str) -> list[Step]:
+    """Move the plain env and header values of a held server to the Keychain: one step that
+    writes the entry with references, carrying the values for Apply to store."""
+    held = load_settings(home)["servers"].get(server)
+    if not isinstance(held, dict):
+        raise ValueError("Choose a server in the Kitden gateway.")
+    entry, items = secrets_out(server, held)
+    if not items:
+        raise ValueError(f"{server} keeps no secret in the settings file.")
+    step = settings_step(home, ("servers", server), entry, server)
+    step.keychain = items
+    return [step]
 
 
 def _refuse_if_present(step: Step, client: str, name: str) -> None:

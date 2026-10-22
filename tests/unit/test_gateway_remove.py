@@ -263,3 +263,66 @@ def test_removing_a_held_server_leaves_its_keychain_items(home, fake_keychain):
         applied = page.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
         assert applied["state"] == "verified"
     assert fake_keychain.read_text() == items
+
+
+def _to_keychain(page, server):
+    body = {"action": "gateway.keychain", "targets": [], "params": {"server": server}}
+    return page.post("/api/changes/preview", json=body, headers=POST)
+
+
+MOVE_NOTE = "The secrets of files go to your Keychain; the settings file keeps references."
+
+
+def test_a_held_server_with_plain_secrets_says_so_and_can_move_them(home, fake_keychain):
+    docs = {"url": "https://docs.example.com/mcp"}
+    hold(home, {"files": FILES, "docs": docs, "kept": {**HELD}})
+    path = data_dir(home) / SETTINGS_FILE
+    before = path.read_bytes()
+
+    def plain(page):
+        servers = page.get("/api/gateway-view").json()["gateways"][0]["servers"]
+        return {s["name"]: s["plain_secrets"] for s in servers}
+
+    with page_for(home) as page:
+        assert plain(page) == {"docs": False, "files": True, "kept": False}
+        change = _to_keychain(page, "files").json()
+        assert [(s["client"], s["name"]) for s in change["steps"]] == [("kitden", "files")]
+        assert "SENTINEL" not in json.dumps(change)
+        assert change["after"] == [{"note": MOVE_NOTE}]
+        applied = page.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
+        assert applied["state"] == "verified"
+        ref = {"keychain": "files/FILES_TOKEN"}
+        assert load_settings(home)["servers"]["files"] == {**FILES, "env": {"FILES_TOKEN": ref}}
+        stored = {"kitden files/FILES_TOKEN": "SENTINEL_SECRET_FILES"}
+        assert json.loads(fake_keychain.read_text()) == stored
+        assert plain(page)["files"] is False
+        assert "SENTINEL" not in page.get("/api/changes").text
+        undone = page.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
+        assert undone["state"] == "undone"
+    assert path.read_bytes() == before
+    assert json.loads(fake_keychain.read_text()) == {}
+    assert "SENTINEL" not in (data_dir(home) / "changes.log").read_text()
+
+
+def test_moving_secrets_warns_of_an_item_already_in_the_keychain(home, fake_keychain):
+    fake_keychain.write_text(json.dumps({"kitden files/FILES_TOKEN": "old"}))
+    hold(home, {"files": FILES})
+    with page_for(home) as page:
+        change = _to_keychain(page, "files").json()
+    replaced = "files/FILES_TOKEN is already in your Keychain; its value will be replaced."
+    assert change["after"] == [{"note": f"{replaced} {MOVE_NOTE}"}]
+
+
+def test_moving_secrets_needs_a_held_server_with_a_plain_secret(home, fake_keychain):
+    hold(home, {"kept": HELD})
+    with page_for(home) as page:
+        none = _to_keychain(page, "kept")
+        unknown = _to_keychain(page, "nope")
+    assert (none.status_code, none.json()["detail"]) == (
+        422,
+        "kept keeps no secret in the settings file.",
+    )
+    assert (unknown.status_code, unknown.json()["detail"]) == (
+        422,
+        "Choose a server in the Kitden gateway.",
+    )

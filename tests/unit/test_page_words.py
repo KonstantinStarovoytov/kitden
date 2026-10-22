@@ -838,6 +838,12 @@ def test_a_held_server_can_be_removed_or_put_back():
     assert "heldActions(" in script("gateway.js")
 
 
+def test_a_held_server_can_move_its_secrets_to_the_keychain():
+    assert '"Move secrets to the Keychain…"' in script("panel.js")
+    assert "server.plain_secrets" in script("gateway.js")
+    assert "plainSecrets(currentModel(\"gateway\"), row.name)" in script("panel.js")
+
+
 def test_a_server_can_be_added_to_another_client():
     assert '"mcp.add": `Add ${names} to ${clients}`' in script("panel.js")
     assert '"mcp.add": "Added"' in script("parts.js")
