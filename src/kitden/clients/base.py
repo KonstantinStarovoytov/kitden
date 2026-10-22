@@ -417,6 +417,14 @@ def is_direct_entry(item: Item, client: str, scopes: set[Scope]) -> bool:
     )
 
 
+def plain_source(source: str, client: str) -> str:
+    """A marketplace source to pass as a command argument. Arguments are visible to `ps`, so a
+    source that holds a password or token (a URL's user part, a token shape) is refused."""
+    if redact(source)[1]:
+        raise ValueError(f"Its source holds a password or token; add it in {client} by hand.")
+    return source
+
+
 def bearer_header(gateway: Gateway, reference: str) -> dict[str, str]:
     """Authorization header that names the key's variable, never its value (FR-035)."""
     if gateway.auth is not GatewayAuth.ENV_KEY:

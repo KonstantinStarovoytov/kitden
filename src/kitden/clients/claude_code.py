@@ -29,6 +29,7 @@ from kitden.clients.base import (
     is_home,
     is_own_skill,
     mcp_item,
+    plain_source,
     project,
     skill_items,
     toggle_action,
@@ -166,6 +167,7 @@ class ClaudeCodeAdapter(ClientAdapter):
         return sources
 
     def marketplace_add_step(self, name: str, source: str) -> Step:
+        plain_source(source, "Claude Code")  # the source goes into the arguments
         # Checked 2026-10-19 (2.1.283): `marketplace add` records the source under
         # extraKnownMarketplaces in ~/.claude/settings.json; `remove` takes it out.
         edit = FileEdit(

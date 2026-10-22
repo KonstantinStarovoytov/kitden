@@ -229,3 +229,31 @@ def test_no_client_command_carries_a_secret(home, entry):
         assert step.edit is not None and step.edit.after == entry
         for command in (step.command, step.undo_command):
             assert "SENTINEL" not in json.dumps(command), adapter.id
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "https://me:SENTINEL_SECRET_PW@git.example.test/market.git",
+        "https://git.example.test/market.git?token=SENTINEL_SECRET_Q",
+        "https://x-access-token:ghp_SENTINELSECRETTOKEN0123@github.com/team/market",
+    ],
+)
+def test_a_marketplace_source_with_a_secret_is_not_put_in_a_command(home, source):
+    """`marketplace add <source>` shows its source to `ps`: one with a secret is refused."""
+    for adapter in default_adapters(home, quick=True):
+        if adapter.id not in ("claude_code", "codex"):
+            continue
+        words = "Claude Code" if adapter.id == "claude_code" else "Codex"
+        reason = f"Its source holds a password or token; add it in {words} by hand."
+        with pytest.raises(ValueError) as refused:
+            adapter.marketplace_add_step("market", source)
+        assert str(refused.value) == reason
+        assert "SENTINEL" not in reason
+
+
+def test_a_plain_marketplace_source_still_runs_the_command(home):
+    for adapter in default_adapters(home, quick=True):
+        if adapter.id in ("claude_code", "codex"):
+            step = adapter.marketplace_add_step("market", "team/market")
+            assert step.command is not None and "team/market" in step.command

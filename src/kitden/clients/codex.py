@@ -28,6 +28,7 @@ from kitden.clients.base import (
     is_direct_entry,
     is_own_skill,
     mcp_item,
+    plain_source,
     project,
     skill_items,
     toggle_action,
@@ -216,6 +217,7 @@ class CodexAdapter(ClientAdapter):
         return sources
 
     def marketplace_add_step(self, name: str, source: str) -> Step:
+        plain_source(source, "Codex")  # the source goes into the arguments
         # Checked 2026-10-19 (0.163): these commands touch only their own tables in config.toml;
         # comments and order stay, and `remove` gives back the exact bytes.
         edit = FileEdit(
