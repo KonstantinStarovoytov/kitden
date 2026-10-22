@@ -17,7 +17,7 @@ from starlette.testclient import TestClient
 import kitden.cli as cli
 from kitden.gateways import data_dir
 from kitden.mcp_server import create_server
-from kitden.views.inventory import build_inventory
+from kitden.views.inventory import build_inventory, default_adapters
 from kitden.web.app import create_app
 from tests.conftest import make_home, write_cursor_fixture_state
 from tests.unit.test_api_changes import FakeClaude
@@ -211,3 +211,21 @@ async def test_no_secret_in_any_output_and_no_network(home, network_attempts, ca
     assert "SENTINEL_SECRET_INSTRUCTIONS" in (home / ".claude/CLAUDE.md").read_text()
     assert not any("SENTINEL_SECRET_INSTRUCTIONS" in text for text in outputs)
     assert network_attempts == []
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        {"command": "npx", "args": ["files-mcp"], "env": {"FILES_TOKEN": "SENTINEL_SECRET_ENV"}},
+        {"type": "http", "url": "https://x.test/mcp", "headers": {"X-Key": "SENTINEL_SECRET_H"}},
+        {"command": "npx", "args": ["files-mcp", "--token", "SENTINEL_SECRET_ARG"]},
+        {"type": "http", "url": "https://x.test/mcp?api_key=SENTINEL_SECRET_URL"},
+    ],
+)
+def test_no_client_command_carries_a_secret(home, entry):
+    """A command's arguments are visible to `ps` while it runs: a secret never goes there."""
+    for adapter in default_adapters(home, quick=True):
+        step = adapter.add_server_step("files", entry)
+        assert step.edit is not None and step.edit.after == entry
+        for command in (step.command, step.undo_command):
+            assert "SENTINEL" not in json.dumps(command), adapter.id

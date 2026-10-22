@@ -1,7 +1,9 @@
 """Claude Code (CLI and the Claude Desktop Code tab). Research R3, write-matrix.md.
 
-Writes go through `claude mcp add-json` and `claude mcp remove` (FR-021). Claude Code rewrites
-`~/.claude.json` during normal use, so changes to that file compare only the edited entry.
+Writes go through `claude mcp add-json` and `claude mcp remove` (FR-021). An entry that holds a
+secret is written to `~/.claude.json` directly instead: `add-json` takes the entry as an argument,
+and `ps` shows a process's arguments. Claude Code rewrites `~/.claude.json` during normal use, so
+changes to that file compare only the edited entry.
 """
 
 import json
@@ -47,6 +49,7 @@ from kitden.model import (
     Step,
     UnknownReason,
 )
+from kitden.redact import redact
 
 CLIENT = "claude_code"
 WRITABLE_SCOPES = {Scope.USER, Scope.LOCAL, Scope.PROJECT}
@@ -279,7 +282,8 @@ class ClaudeCodeAdapter(ClientAdapter):
         return self._add_entry(name, entry)
 
     def _add_entry(self, name: str, value: dict[str, Any], login: str | None = None) -> Step:
-        """A user-scope MCP entry, added with `claude mcp add-json` (FR-021, FR-024)."""
+        """A user-scope MCP entry, added with `claude mcp add-json` (FR-021, FR-024), or written
+        directly when it holds a secret."""
         edit = FileEdit(
             path=str(self.home / ".claude.json"),
             fmt="json",
@@ -287,6 +291,19 @@ class ClaudeCodeAdapter(ClientAdapter):
             after=value,
             check="entry",
         )
+        # checked 2026-10-22 (code.claude.com/docs/en/mcp): `claude mcp add-json <name> '<json>'`
+        # takes the JSON only as an argument, with no stdin or file option, and editing
+        # ~/.claude.json directly is a documented way to add a server. A secret in the arguments
+        # is visible to `ps` while the command runs, so an entry with one is edited directly.
+        if redact(value)[1]:
+            return Step(
+                client=CLIENT,
+                scope=Scope.USER,
+                name=name,
+                edit=edit,
+                restart_note=NEW_SESSION,
+                login_note=login,
+            )
         return Step(
             client=CLIENT,
             scope=Scope.USER,

@@ -123,8 +123,9 @@ def test_putting_a_server_back_writes_the_clients_entry_and_says_about_the_secre
     with page_for(home, run=FakeClaude(home)) as page:
         change = _put_back(page, "files", "claude_code").json()
         assert [(s["client"], s["name"]) for s in change["steps"]] == [("claude_code", "files")]
-        assert change["steps"][0]["command"].startswith("claude mcp add-json -s user files ")
-        assert "[secret]" in change["steps"][0]["command"]
+        # The entry holds a secret: it is written directly, not passed to `claude mcp add-json`.
+        assert change["steps"][0]["command"] is None
+        assert change["steps"][0]["mechanism"] == "format_preserving_edit"
         assert "[secret]" in change["steps"][0]["diff"]
         assert "SENTINEL" not in json.dumps(change)
         assert change["after"] == [
@@ -227,7 +228,8 @@ def test_put_back_writes_the_value_from_the_keychain(home, fake_keychain):
     with page_for(home, run=FakeClaude(home)) as page:
         change = _put_back(page, "files", "claude_code").json()
         assert "SENTINEL" not in json.dumps(change)
-        assert "[secret]" in change["steps"][0]["command"]
+        assert change["steps"][0]["command"] is None  # the value is written directly
+        assert "[secret]" in change["steps"][0]["diff"]
         assert change["after"][0]["note"].startswith("This writes a secret into ~/.claude.json.")
         applied = page.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
         assert applied["state"] == "verified"
