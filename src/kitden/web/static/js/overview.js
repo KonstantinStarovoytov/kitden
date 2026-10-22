@@ -130,7 +130,16 @@ function notesBlock(count) {
 const LOAD_KINDS = [
   ["mcp_server", "MCP server", "MCP servers"], ["plugin", "plugin", "plugins"],
   ["skill", "skill", "skills"], ["hook", "hook", "hooks"],
+  ["instructions", "instruction file", "instruction files"],
 ];
+
+// [kind, count, words] for each kind the client loads or has here; empty when it has nothing.
+export function loadCounts(rows, clientId) {
+  return LOAD_KINDS.map(([kind, one, many]) => {
+    const n = rows.filter((r) => r.kind === kind && ["on", "gw"].includes(r.cells[clientId] && r.cells[clientId].state)).length;
+    return [kind, n, plural(n, one, many)];
+  }).filter(([, n]) => n);
+}
 const openClients = new Set();
 
 // A count opens that Library tab; the client's tile flies to its column there. The tab is read
@@ -145,10 +154,7 @@ function loadsLine(clientId, tile) {
     loadMap().then(() => (current("map") ? line.replaceWith(loadsLine(clientId, tile)) : failed())).catch(failed);
     return line;
   }
-  const counts = LOAD_KINDS.map(([kind, one, many]) => {
-    const n = map.rows.filter((r) => r.kind === kind && ["on", "gw"].includes(r.cells[clientId] && r.cells[clientId].state)).length;
-    return [kind, n, plural(n, one, many)];
-  }).filter(([, n]) => n);
+  const counts = loadCounts(map.rows, clientId);
   if (!counts.length) line.append(el("span", "muted", "Loads nothing here."));
   for (const [kind, , words] of counts) {
     line.append(button(words, async () => {

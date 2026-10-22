@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // overview.js needs only this from a browser to load.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { gatewayCardWords } = await import('../../src/kitden/web/static/js/overview.js');
+const { gatewayCardWords, loadCounts } = await import('../../src/kitden/web/static/js/overview.js');
 
 test('the Kitden gateway card says servers, clients and the client to set up', () => {
   const words = gatewayCardWords({ kind: 'kitden', name: 'Kitden gateway', servers: 2, clients: ['claude_code', 'cursor'], lacking: ['codex'], problem: null });
@@ -27,4 +27,13 @@ test('the all-clear names untested versions only when every found client has a v
   assert.equal(allClearWords([{ status: 'found', version: '2.1.300' }, { status: 'not_found', version: null }]), full);
   assert.equal(allClearWords([{ status: 'found', version: '2.1.300' }, { status: 'found', version: null }]), short);
   assert.equal(allClearWords([]), full);
+});
+
+test('a client with only instruction files does not load nothing', () => {
+  const rows = [
+    { kind: 'instructions', cells: { codex: { state: 'on' }, cursor: { state: 'none' } } },
+    { kind: 'skill', cells: { codex: { state: 'off' }, cursor: { state: 'none' } } },
+  ];
+  assert.deepEqual(loadCounts(rows, 'codex'), [['instructions', 1, '1 instruction file']]);
+  assert.deepEqual(loadCounts(rows, 'cursor'), []);
 });
