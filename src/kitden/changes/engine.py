@@ -19,7 +19,7 @@ from collections.abc import Callable
 from contextlib import AbstractContextManager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import tomlkit
 
@@ -53,6 +53,9 @@ from kitden.model import (
 )
 from kitden.redact import masked_command, redact
 
+if TYPE_CHECKING:
+    from kitden.views.inventory import Inventory
+
 EDITORS = {"json": json_splice, "toml": toml_edit}
 CLIENT_CLI = "client_cli"
 FILE_EDIT = "format_preserving_edit"
@@ -63,6 +66,8 @@ GATEWAY_API = "gateway_api"  # a step that adds a server to a gateway (feature 0
 Runner = Callable[[list[str], str | None], CommandResult]
 # Opens a signed-in client for the gateway a step names; used as a context manager.
 GatewayClients = Callable[[GatewayEdit], AbstractContextManager]
+# The home folder and the folders a change may write in (see `writable_roots`).
+Roots = Callable[[], tuple[Path, list[Path]]]
 
 
 class ChangeRefusedError(ValueError):
@@ -88,44 +93,63 @@ def _real(path: str | Path) -> Path:
     return Path(os.path.realpath(path))
 
 
-def writable_roots(home: Path, inventory) -> list[Path]:
+def writable_roots(home: Path, inventory: "Inventory") -> list[Path]:
     """The folders a change may write in, as real paths, each once and in this order: the home
     folder, Kitden's data folder, every known project of the inventory (there or not) and the
     settings folders of each found client (Codex's CODEX_HOME can sit elsewhere).
 
-    Known projects come from the clients' own files and can sit on another disk. A client
+    Known projects come from the clients' own files and can sit on another disk; an empty or
+    relative path there is left out (`realpath("")` is the folder Kitden runs in). A client
     folder linked out of the home folder stays writable (its real path is a root); a single
     settings file linked out does not. `/` and the folders that hold the home folder count only
-    for themselves (see `_inside`).
+    for a command's own folder (see `_allowed`).
     """
-    places = [home, data_dir(home), *(p.path for p in inventory.projects)]
+    known = [p.path for p in inventory.projects]
     for client in inventory.clients:
         if client.status is ClientStatus.FOUND:
-            places += client.config_roots
+            known += client.config_roots
+    places = [home, data_dir(home), *(p for p in known if os.path.isabs(p))]
     return list(dict.fromkeys(_real(p) for p in places))
 
 
-def _inside(path: Path, roots: list[Path]) -> bool:
-    """`path` is a root or inside one. The first root is the home folder (see `writable_roots`).
+def _identity(path: Path) -> tuple[int, int] | None:
+    try:
+        found = os.stat(path)
+    except OSError:
+        return None
+    return found.st_dev, found.st_ino
 
-    `/` and the folders that hold the home folder match only themselves, as in `project_chain`:
-    Claude Code records a project for any folder it started in, and such a project must not
-    make every path writable.
+
+def _stops(home: Path, roots: list[Path]) -> set[Path]:
+    """The roots that are `/` or hold the home folder, found by file identity, not by text:
+    APFS ignores letter case (`/users`) and `/System/Volumes/Data/Users` is `/Users`."""
+    above = {_identity(p) for p in (Path("/"), *_real(home).parents)} - {None}
+    return {r for r in roots if _identity(r) in above}
+
+
+def _allowed(path: Path, roots: list[Path], stops: set[Path], folder: bool) -> bool:
+    """`path` is a root or inside one.
+
+    A root that is `/` or holds the home folder (one of `stops`) counts only as the very folder
+    a command runs in, as `project_chain` matches such folders only to themselves: Claude Code
+    records a project for any folder it started in, and that must not make every path writable.
     """
-    stops = {Path("/"), *roots[0].parents} if roots else set()
-    return any(path == root or (root not in stops and root in path.parents) for root in roots)
+    for root in roots:
+        if root in stops:
+            if folder and path == root:
+                return True
+        elif path == root or root in path.parents:
+            return True
+    return False
 
 
 def _places(step: Step) -> list[str]:
-    """The files and folders a step writes in, and the folder its command runs in.
-
-    A gateway address and a Keychain item are not paths.
-    """
+    """The files and folders a step writes. A gateway address and a Keychain item are not
+    paths; the folder a command runs in is checked on its own."""
     places = [
         step.edit.path if step.edit is not None else None,
         step.copy.target if step.copy is not None else None,
         step.removal.path if step.removal is not None else None,
-        step.cwd,
     ]
     return [p for p in places if p]
 
@@ -388,13 +412,13 @@ class Engine:
         on_write: Callable[[str, str | None], None] | None = None,
         gateway_clients: GatewayClients | None = None,
         *,
-        roots: Callable[[], list[Path]] | None = None,
+        roots: Roots | None = None,
     ) -> None:
         self.store = store
         self.run = run
         self.on_write = on_write or (lambda path, sha: None)
         self.gateway_clients = gateway_clients
-        # The folders a change may write in (see `writable_roots`); None checks nothing.
+        # The home folder and the folders a change may write in; None checks nothing.
         self.roots = roots
         # Called as each step of an Apply or Undo is done: (change id, steps done, all steps).
         # The page shows "Applying 2 of 5" from it; it runs in the worker thread.
@@ -417,11 +441,11 @@ class Engine:
         """
         if not steps:
             raise ChangeRefusedError("Nothing to change.")
+        for step in steps:
+            if step.cwd:  # Apply must not follow a link changed after the review
+                step.cwd = os.path.realpath(step.cwd)
         if self.roots is not None:
-            roots = self.roots()
-            places = [_real(p) for s in steps for p in _places(s)]
-            if not all(_inside(p, roots) for p in places):
-                raise ChangeRefusedError(OUTSIDE)
+            self._check_places(steps, *self.roots())
         self._preview_gateway([s for s in steps if s.gateway is not None])
         self._preview_copies([s for s in steps if s.copy is not None])
         self._preview_removals([s for s in steps if s.removal is not None])
@@ -457,6 +481,15 @@ class Engine:
         change = Change(action=action, steps=steps)
         self.changes[change.id] = change
         return change
+
+    def _check_places(self, steps: list[Step], home: Path, roots: list[Path]) -> None:
+        """Refuse the change when a step writes, or runs a command, outside the roots."""
+        stops = _stops(home, roots)
+        for step in steps:
+            written = [_allowed(_real(p), roots, stops, folder=False) for p in _places(step)]
+            ran = not step.cwd or _allowed(Path(step.cwd), roots, stops, folder=True)
+            if not all(written) or not ran:
+                raise ChangeRefusedError(OUTSIDE)
 
     def _client(self, gateway: GatewayEdit) -> AbstractContextManager:
         if self.gateway_clients is None:
@@ -509,6 +542,8 @@ class Engine:
             copy.source = os.path.realpath(copy.source)
             if os.path.lexists(copy.target):
                 raise ChangeRefusedError(f"{copy.target} already exists; nothing is copied")
+            # Apply must not follow a link changed after the review.
+            copy.target = os.path.realpath(copy.target)
             if copy.target in seen:
                 raise ChangeRefusedError(f"{copy.target} would be written twice in one change")
             seen.add(copy.target)

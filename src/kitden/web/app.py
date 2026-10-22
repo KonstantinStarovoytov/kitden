@@ -525,7 +525,7 @@ def create_app(
             run or CommandRunner(home),
             on_write,
             gateway_client,
-            roots=lambda: writable_roots(home, state.inventory),
+            roots=lambda: (home, writable_roots(home, state.inventory)),
         )
     write_lock = asyncio.Lock()
     # The Kitden gateway's tool lists: a refresh runs in the background, one at a time. A server

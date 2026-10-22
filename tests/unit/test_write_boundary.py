@@ -14,10 +14,12 @@ from kitden.clients.claude_code import ClaudeCodeAdapter
 from kitden.clients.codex import CodexAdapter
 from kitden.gateways import data_dir
 from kitden.model import (
+    REMOVE_FOLDER,
     ChangeState,
     Client,
     ClientStatus,
     FileEdit,
+    FolderRemoval,
     Project,
     Scope,
     Step,
@@ -37,6 +39,23 @@ def no_run(command, cwd):
     raise AssertionError("no command in this test")
 
 
+def edit_at(path):
+    edit = FileEdit(path=str(path), fmt="json", key=("mcpServers", "x"), after={"url": "u"})
+    return Step(client="cursor", scope=Scope.USER, name="x", edit=edit)
+
+
+def command_in(folder):
+    command = ["claude", "mcp", "list"]  # never run: preview runs no command
+    return Step(
+        "claude_code", Scope.PROJECT, "x", mechanism=CLIENT_CLI, command=command, cwd=str(folder)
+    )
+
+
+def removal_of(folder):
+    removal = FolderRemoval(path=str(folder))
+    return Step("claude_code", Scope.PROJECT, "x", mechanism=REMOVE_FOLDER, removal=removal)
+
+
 def test_writable_roots_are_home_data_projects_and_found_client_folders(tmp_path):
     home, other = tmp_path / "home", tmp_path / "disk2/atlas"
     home.mkdir()
@@ -51,16 +70,49 @@ def test_writable_roots_are_home_data_projects_and_found_client_folders(tmp_path
     ]
 
 
+def test_an_empty_or_relative_path_is_no_root(tmp_path):
+    # realpath("") is the folder Kitden runs in.
+    home = tmp_path / "home"
+    home.mkdir()
+    odd = Client("codex", "Codex", ClientStatus.FOUND, config_roots=("", ".codex"))
+    projects = [Project(path="", exists=False), Project(path="atlas", exists=False)]
+    inventory = Inventory(clients=[odd], projects=projects)
+    assert writable_roots(home, inventory) == [real(home), real(data_dir(home))]
+
+
 def test_a_path_outside_every_root_is_refused_before_it_is_read(tmp_path):
     home, outside = tmp_path / "home", tmp_path / "elsewhere/settings.json"
     home.mkdir()
     outside.parent.mkdir()
     outside.write_text("not json")  # a read would fail differently
-    engine = Engine(ChangeStore(tmp_path / "store"), no_run, roots=lambda: [real(home)])
-    edit = FileEdit(path=str(outside), fmt="json", key=("mcpServers", "x"), after={"url": "u"})
+    engine = Engine(ChangeStore(tmp_path / "store"), no_run, roots=lambda: (home, [real(home)]))
     with pytest.raises(ChangeRefusedError) as refused:
-        engine.preview("mcp.add", [Step(client="cursor", scope=Scope.USER, name="x", edit=edit)])
+        engine.preview("mcp.add", [edit_at(outside)])
     assert str(refused.value) == OUTSIDE
+
+
+def test_each_kind_of_place_outside_is_refused(tmp_path):
+    home = make_home(tmp_path, "claude_code/2.1.283")
+    project, sibling = tmp_path / "atlas", tmp_path / "atlas2"
+    project.mkdir()
+    (sibling / "skill").mkdir(parents=True)
+    (sibling / "skill/SKILL.md").write_text("# Skill\n")
+    inventory = Inventory(projects=[Project(path=str(project), exists=True)])
+    engine = Engine(
+        ChangeStore(data_dir(home)), no_run, roots=lambda: (home, writable_roots(home, inventory))
+    )
+    brandkit = home / ".claude/skills/brandkit"
+    outside = [
+        ClaudeCodeAdapter(home).skill_copy_step(brandkit, ["claude_code"], str(sibling)),
+        removal_of(sibling / "skill"),
+        edit_at(sibling / ".mcp.json"),  # a known project's name is no prefix
+        edit_at(f"{project}/../atlas2/.mcp.json"),  # `..` leaves the project
+        command_in(sibling),
+    ]
+    for step in outside:
+        with pytest.raises(ChangeRefusedError) as refused:
+            engine.preview("x", [step])
+        assert str(refused.value) == OUTSIDE
 
 
 def test_a_known_project_outside_home_stays_writable(tmp_path):
@@ -69,7 +121,7 @@ def test_a_known_project_outside_home_stays_writable(tmp_path):
     project.mkdir(parents=True)
     inventory = Inventory(projects=[Project(path=str(project), exists=True)])
     engine = Engine(
-        ChangeStore(data_dir(home)), no_run, roots=lambda: writable_roots(home, inventory)
+        ChangeStore(data_dir(home)), no_run, roots=lambda: (home, writable_roots(home, inventory))
     )
     step = ClaudeCodeAdapter(home).skill_copy_step(
         home / ".claude/skills/brandkit", ["claude_code"], str(project)
@@ -88,7 +140,7 @@ def test_a_link_out_of_home_is_refused_and_one_inside_is_not(tmp_path):
     settings.unlink()
     settings.symlink_to(kept)
     engine = Engine(
-        ChangeStore(data_dir(home)), no_run, roots=lambda: writable_roots(home, Inventory())
+        ChangeStore(data_dir(home)), no_run, roots=lambda: (home, writable_roots(home, Inventory()))
     )
 
     def turn_off():
@@ -105,6 +157,28 @@ def test_a_link_out_of_home_is_refused_and_one_inside_is_not(tmp_path):
     with pytest.raises(ChangeRefusedError) as refused:
         engine.preview("plugin.disable", turn_off())
     assert str(refused.value) == OUTSIDE
+
+
+def test_preview_pins_the_real_copy_target_and_command_folder(tmp_path):
+    home = make_home(tmp_path, "claude_code/2.1.283")
+    project, elsewhere = home / "work/atlas", tmp_path / "elsewhere"
+    project.mkdir(parents=True)
+    elsewhere.mkdir()
+    link = home / "atlas-link"
+    link.symlink_to(project)
+    engine = Engine(
+        ChangeStore(data_dir(home)), no_run, roots=lambda: (home, writable_roots(home, Inventory()))
+    )
+    step = ClaudeCodeAdapter(home).skill_copy_step(
+        home / ".claude/skills/brandkit", ["claude_code"], str(link)
+    )
+    change = engine.preview("skill.install", [step])
+    assert engine.preview("mcp.add", [command_in(link)]).steps[0].cwd == str(real(project))
+    link.unlink()
+    link.symlink_to(elsewhere)  # changed after the review
+    assert engine.apply(change.id).state is ChangeState.VERIFIED
+    assert (project / ".claude/skills/brandkit/SKILL.md").is_file()
+    assert not (elsewhere / ".claude").exists()
 
 
 def test_a_codex_home_outside_home_stays_writable(tmp_path):
@@ -124,26 +198,30 @@ def test_a_project_at_the_top_or_above_home_counts_only_for_itself(tmp_path):
     outside.write_text("{}")
     known = [Project(path="/", exists=True), Project(path=str(tmp_path), exists=True)]
     roots = writable_roots(home, Inventory(projects=known))
-    engine = Engine(ChangeStore(tmp_path / "store"), no_run, roots=lambda: roots)
-    edit = FileEdit(path=str(outside), fmt="json", key=("mcpServers", "x"), after={"url": "u"})
+    engine = Engine(ChangeStore(tmp_path / "store"), no_run, roots=lambda: (home, roots))
     with pytest.raises(ChangeRefusedError) as refused:
-        engine.preview("mcp.add", [Step(client="cursor", scope=Scope.USER, name="x", edit=edit)])
+        engine.preview("mcp.add", [edit_at(outside)])
     assert str(refused.value) == OUTSIDE
+    engine.preview("mcp.add", [command_in(tmp_path)])  # a command may run in the folder itself
+    for step in (command_in(outside.parent), removal_of(tmp_path)):
+        with pytest.raises(ChangeRefusedError) as refused:
+            engine.preview("mcp.add", [step])
+        assert str(refused.value) == OUTSIDE
 
-    def command_in(folder):
-        command = ["claude", "mcp", "list"]  # never run: preview runs no command
-        return Step(
-            "claude_code",
-            Scope.PROJECT,
-            "x",
-            mechanism=CLIENT_CLI,
-            command=command,
-            cwd=str(folder),
-        )
 
-    engine.preview("mcp.add", [command_in(tmp_path)])  # the folder itself still counts
-    with pytest.raises(ChangeRefusedError):
-        engine.preview("mcp.add", [command_in(outside.parent)])
+def test_a_folder_above_home_spelled_in_other_letters_counts_only_for_itself(tmp_path):
+    home, alias = tmp_path / "Box/home", tmp_path / "box"
+    home.mkdir(parents=True)
+    if not alias.exists():
+        pytest.skip("this disk tells upper and lower case apart")
+    assert real(alias) != real(tmp_path / "Box")  # another text for the same folder
+    (alias / "elsewhere").mkdir()
+    (alias / "elsewhere/settings.json").write_text("{}")
+    roots = writable_roots(home, Inventory(projects=[Project(path=str(alias), exists=True)]))
+    engine = Engine(ChangeStore(tmp_path / "store"), no_run, roots=lambda: (home, roots))
+    with pytest.raises(ChangeRefusedError) as refused:
+        engine.preview("mcp.add", [edit_at(alias / "elsewhere/settings.json")])
+    assert str(refused.value) == OUTSIDE
 
 
 def test_the_page_refuses_a_change_outside_with_the_sentence(tmp_path, monkeypatch):
