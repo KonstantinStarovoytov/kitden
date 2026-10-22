@@ -5,6 +5,7 @@ import os
 import shlex
 import shutil
 import sqlite3
+import sys
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,7 @@ def _never_the_real_home(tmp_path_factory, monkeypatch):
 
 
 CLIENT_BINARIES = {"claude", "codex", "cursor"}  # compared in lower case, so "Cursor" too
+KEYCHAIN_BINARIES = {"security"}  # macOS's Keychain command
 WRAPPERS = {"env", "sh", "bash", "zsh", "dash"}
 
 
@@ -53,11 +55,45 @@ def _no_client_commands(tmp_path_factory, monkeypatch):
         def __init__(self, args, *rest, **options):
             for word in _words(args):
                 path = Path(word).resolve() if Path(word).is_absolute() else Path(word)
-                if path.name.lower() in CLIENT_BINARIES and not path.is_relative_to(sandbox):
+                if path.is_relative_to(sandbox):
+                    continue
+                if path.name.lower() in CLIENT_BINARIES:
                     raise AssertionError(f"a test tried to run a real client: {word}")
+                if path.name.lower() in KEYCHAIN_BINARIES:
+                    raise AssertionError(f"a test tried to run the real Keychain: {word}")
             super().__init__(args, *rest, **options)
 
     monkeypatch.setattr(subprocess, "Popen", Guarded)
+
+
+@pytest.fixture(autouse=True)
+def _never_the_real_keychain(tmp_path_factory, monkeypatch):
+    """Kitden's Keychain calls go to a path that does not exist, unless a test uses
+    `fake_keychain`. Child processes such as `kitden mcp` get the same env."""
+    missing = tmp_path_factory.getbasetemp().resolve() / "no-security"
+    monkeypatch.setenv("KITDEN_SECURITY", str(missing))
+
+
+def install_fake_security(folder: Path) -> Path:
+    """Put a `security` stand-in in folder/bin and return the JSON file that holds its items."""
+    items = folder / "fake-keychain.json"
+    binary = folder / "bin" / "security"
+    binary.parent.mkdir(parents=True, exist_ok=True)
+    script = FIXTURES / "fake_security.py"
+    binary.write_text(
+        f'#!/bin/sh\nexec {shlex.join([sys.executable, str(script), str(items)])} "$@"\n'
+    )
+    binary.chmod(0o755)
+    return items
+
+
+@pytest.fixture
+def fake_keychain(tmp_path, monkeypatch) -> Path:
+    """Kitden's Keychain calls, in this process and its children, go to the stand-in.
+    Returns the JSON file of its items."""
+    items = install_fake_security(tmp_path / "keychain")
+    monkeypatch.setenv("KITDEN_SECURITY", str(tmp_path / "keychain/bin/security"))
+    return items
 
 
 CURSOR_DB = "Library/Application Support/Cursor/User/globalStorage/state.vscdb"

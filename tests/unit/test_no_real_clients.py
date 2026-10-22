@@ -45,3 +45,12 @@ def test_a_fake_client_in_the_test_folder_may_run(tmp_path):
 def test_other_commands_that_only_mention_a_client_still_run():
     done = subprocess.run(["echo", "codex"], capture_output=True, text=True, check=False)
     assert done.stdout == "codex\n"
+
+
+@pytest.mark.parametrize(
+    "args",
+    [["/usr/bin/security", "find-generic-password"], "security -h", ["sh", "-c", "security"]],
+)
+def test_the_real_security_command_is_refused(args):
+    with pytest.raises(AssertionError, match="real Keychain"):
+        subprocess.run(args, shell=isinstance(args, str), capture_output=True, check=False)

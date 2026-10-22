@@ -10,6 +10,7 @@ tests/fixtures/
 ├── codex/<version>/         # for example 0.163.0/
 ├── cursor/<version>/        # for example 3.21.16/
 ├── fake_mcp/                # a tiny MCP server that the gateway tests start
+├── fake_security.py         # a stand-in for macOS `security`, so no test uses the Keychain
 └── sandbox-home/            # a full fake home folder for end-to-end checks
 ```
 
