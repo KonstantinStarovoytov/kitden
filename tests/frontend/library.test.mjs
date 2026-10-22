@@ -385,6 +385,9 @@ test('the review note says the project, or where a client has no project place',
   data.projects = [{ id: 'p1', path: '/Users/me/work/website' }];
   assert.equal(noteFor(add({ project_place: true }), 'p1', 'project'), 'Adds to website only.');
   assert.equal(noteFor(add({ project_place: true }), 'p1', 'all'), 'Adds for all your projects.');
+  // A twin it would load as well is still said for a project add.
+  const warn = 'Claude Code already has tidy from toolbox. It will load both.';
+  assert.equal(noteFor(add({ project_place: true, warn }), 'p1', 'project'), `${warn} Adds to website only.`);
   assert.equal(noteFor(add({ project_hint: 'Codex plugins are for all projects.' }), 'p1'), 'Codex plugins are for all projects.');
   // Without a project the hint is not said: every add is for all projects then.
   assert.equal(noteFor(add({ project_hint: 'Codex plugins are for all projects.' }), ''), null);

@@ -6,6 +6,7 @@ that client, or why there is none. Columns are the clients found on this compute
 """
 
 from collections.abc import Callable
+from pathlib import Path
 
 from kitden.changes.actions import (
     CLIENT_WORDS,
@@ -34,11 +35,11 @@ SHARE_IN_GATEWAY = "Move it into the gateway to share it."
 # checked 2026-10-22 (learn.chatgpt.com/docs/plugins): Codex installs a plugin for its whole
 # environment; the docs show no per-project install.
 CODEX_PROJECT = "Codex plugins are for all projects."
-# checked 2026-10-22 (cursor.com/docs/plugins): in Customize an install is for the user or a
-# project; the plugin's menu there says Add to Project (spike S1, Cursor 3.21). Cursor keeps it
-# in its own database, so Kitden writes nothing.
+# checked 2026-10-22 (cursor.com/docs/plugins): in Customize you select Install and choose a
+# project or user scope. Cursor keeps it in its own database, so Kitden writes nothing.
 CURSOR_PROJECT = (
-    "To add a plugin to one project, use Add to Project in Cursor: Customize → Plugins."
+    "To add a plugin to one project in Cursor: Customize → Plugins, Install, "
+    "then choose the project scope."
 )
 
 
@@ -399,9 +400,11 @@ def _skill_cell(
     row: Row | None,
     plugin_routes: dict[str, str],
     cursor_imports: bool,
+    no_place: dict[str, str] | None = None,
 ) -> dict:
     """The scan's state when it has one; else how the skill list says the client gets it, or
-    what the client can add."""
+    what the client can add. `no_place`: clients that cannot take a copy in the picked project,
+    with what to say instead."""
     if _has(row, client):
         return _map_cell(row, client)
     word = skill["installed"].get(client)
@@ -409,7 +412,9 @@ def _skill_cell(
         # "Via Claude Code" -> "via Claude Code", as the load map says it.
         return _cell("on", where=word[:1].lower() + word[1:])
     if client in skill["routes"]:
-        return _cell(add=_add(SKILL_INSTALL, "+ Add", skill=skill["id"], project_place=True))
+        hint = (no_place or {}).get(client)
+        add = _add(SKILL_INSTALL, "+ Add", skill=skill["id"], project_place=hint is None)
+        return _cell(add={**add, "project_hint": hint})
     # A found client without the skill and without a route: it does not work alone.
     if skill["plugin"] is None:
         return _cell(reason=OUTSIDE_FOLDER)
@@ -422,12 +427,24 @@ def _skill_cell(
     return _cell(reason=f"{NAMES[client]} can't install the plugin this skill needs.")
 
 
+def _no_skill_place(adapters, project: str | None) -> dict[str, str]:
+    """Codex loads a project's skills only when it trusts the project (codex.py), so in an
+    untrusted one its skill add goes to all projects and says why."""
+    codex = adapters.get("codex")
+    if project is None or codex is None or codex.trusts(project):
+        return {}
+    name = Path(project).name
+    hint = f"Adds for all your projects. To add it to {name} only, trust {name} in Codex first."
+    return {"codex": hint}
+
+
 def _skill_rows(
     map_rows: list[Row],
     offers: list[dict],
     skills: list[dict],
     found: list[str],
     cursor_imports: bool,
+    no_place: dict[str, str] | None = None,
 ) -> Built:
     """Every skill in the skill catalog, plus skills the load map has that it does not.
 
@@ -450,7 +467,7 @@ def _skill_rows(
             "skill",
             skill["name"],
             skill["from"],
-            {c: _skill_cell(c, skill, row, plugin_routes, cursor_imports) for c in found},
+            {c: _skill_cell(c, skill, row, plugin_routes, cursor_imports, no_place) for c in found},
             mine=bool(holders),
             lookup=row.lookup if row else None,
             offer=skill["id"],
@@ -593,7 +610,9 @@ def library(
         "plugin": _plugin_rows(
             map_rows, offers, skills, found, cursor_imports, in_project=project is not None
         ),
-        "skill": _skill_rows(map_rows, offers, skills, found, cursor_imports),
+        "skill": _skill_rows(
+            map_rows, offers, skills, found, cursor_imports, _no_skill_place(adapters, project)
+        ),
         # Kitden adds no hooks, so a hook's dash has no reason.
         "hook": _map_rows(map_rows, "hook", found),
         "marketplace": _map_rows(map_rows, "marketplace", found, _marketplace_why(offers)),

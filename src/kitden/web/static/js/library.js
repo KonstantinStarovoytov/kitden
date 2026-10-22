@@ -71,8 +71,8 @@ export function previewFor(add, client, scope = "all") {
 // The review's note: a twin it would load as well, and in a project where the add goes: that
 // project only, every project, or where the client keeps it instead (`project_hint`).
 export function noteFor(add, project, scope = "all") {
-  if (scope === "project") return `Adds to ${projectLabel(project)} only.`;
-  const where = project ? add.project_hint || projectNote(project) : null;
+  const where = scope === "project" ? `Adds to ${projectLabel(project)} only.`
+    : project ? add.project_hint || projectNote(project) : null;
   return [add.warn, where].filter(Boolean).join(" ") || null;
 }
 

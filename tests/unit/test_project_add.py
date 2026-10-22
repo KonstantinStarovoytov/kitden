@@ -137,8 +137,8 @@ def test_the_cells_say_which_adds_have_a_project_place(client):
     website = pid(client, str(client.home / "work/website"))
     skills = client.get(f"/api/library?kind=skill&show=new&project={website}").json()["rows"]
     tidy = next(r for r in skills if r["name"] == "tidy")
-    assert all(tidy["cells"][c]["add"]["project_place"] is True for c in ("claude_code", "codex"))
-    assert tidy["cells"]["cursor"]["add"]["project_place"] is True
+    # Codex does not trust website (see the test below); the others can add into it.
+    assert all(tidy["cells"][c]["add"]["project_place"] is True for c in ("claude_code", "cursor"))
     plugins = client.get(f"/api/library?kind=plugin&show=new&project={website}").json()["rows"]
     linter = next(r for r in plugins if r["name"] == "linter")
     claude, codex = linter["cells"]["claude_code"]["add"], linter["cells"]["codex"]["add"]
@@ -161,7 +161,7 @@ def test_cursor_plugin_cells_say_where_to_add_per_project(client):
     assert cursor
     for cell in cursor:
         said = (cell["add"] or {}).get("project_hint") or cell["reason"] or ""
-        assert "Customize → Plugins" in said, cell
+        assert "Customize → Plugins, Install, then choose the project scope." in said, cell
     everywhere = client.get("/api/library?kind=plugin&show=all").json()["rows"]
     for row in everywhere:
         cell = row["cells"]["cursor"]
@@ -172,3 +172,18 @@ def test_an_add_without_a_project_stays_for_all_projects(client):
     change = _preview(client, "skill.install", ["claude_code"], {"skill": TIDY}).json()
     assert change["steps"][0]["path"] == f"{client.home}/.claude/skills/tidy"
     assert change["steps"][0]["scope"] == "user"
+
+
+def test_codex_offers_no_project_place_in_a_project_it_does_not_trust(client):
+    """website is not trusted by Codex: its skill add goes to all projects and says why."""
+    website = pid(client, str(client.home / "work/website"))
+    rows = client.get(f"/api/library?kind=skill&show=new&project={website}").json()["rows"]
+    add = next(r for r in rows if r["name"] == "tidy")["cells"]["codex"]["add"]
+    assert (add["project_place"], add["project_hint"]) == (
+        False,
+        "Adds for all your projects. To add it to website only, trust website in Codex first.",
+    )
+    api = pid(client, str(client.home / "work/api"))
+    rows = client.get(f"/api/library?kind=skill&show=new&project={api}").json()["rows"]
+    add = next(r for r in rows if r["name"] == "tidy")["cells"]["codex"]["add"]
+    assert (add["project_place"], add["project_hint"]) == (True, None)
