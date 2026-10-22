@@ -22,7 +22,9 @@ DEMO_SECRET = "DEMO_SECRET_"  # noqa: S105 - the prefix of every fake secret
 SAMPLE_PATH = "/usr/local/bin:/usr/bin:/bin"
 MARKET = "demo-market"
 CURSOR_TEAM = "123"
-UI_KIT_HASH = "9c1d2e3"  # the folder of the downloaded version, a commit hash in Cursor
+# The folder of the downloaded version: a commit hash in Cursor (checked on a real Cursor
+# install, 2026-10-20; see `plugin_folders` in src/kitden/clients/cursor.py).
+UI_KIT_HASH = "9c1d2e3"
 WRITTEN_AT = "2026-10-01T00:00:00Z"
 # Added to some names in the large sample, so the page always has a name to cut short.
 LONG = "-with-a-name-long-enough-that-the-page-cuts-it-short"
@@ -483,8 +485,9 @@ def _bulk(home: Path) -> None:
     _json(settings_file, settings)
     _json(tools_file, tools)
 
-    # In the cache with no config.toml entry: only `codex plugin list` knows whether it is on, so
-    # a scan asks for that list (the slow step scripts/measure-start.py measures).
+    # In the cache with no config.toml entry: only `codex plugin list` knows whether it is on
+    # (checked 2026-10-17 with Codex CLI 0.159.2: spike S4, in the dev-notes-2026-10-19 tag),
+    # so a scan asks for that list (the slow step scripts/measure-start.py measures).
     calendar = home / ".codex/plugins/cache/openai-curated-remote/calendar"
     record = {"schema_version": 1, "remote_plugin_id": "plugin_demo_calendar"}
     _json(calendar / ".codex-remote-plugin-install.json", record)
