@@ -10,7 +10,7 @@ from tests.conftest import make_home, write_cursor_fixture_state
 from tests.unit.test_api_changes import FakeClaude
 from tests.unit.test_api_plugin_install import FakeCli
 from tests.unit.test_catalog import add_marketplaces
-from tests.unit.test_local_gateway_move import add_claude
+from tests.unit.test_local_gateway_move import add_claude, add_codex
 from tests.unit.test_local_gateway_views import POST, page_for, project_id
 from tests.unit.test_skills_catalog import add_skills_marketplace
 
@@ -72,6 +72,11 @@ def test_add_missing_lists_what_each_client_lacks(home):
     assert "mcp_server:neon:codex" not in keys
     assert keys["mcp_server:neon:cursor"]["from"] == "claude_code"
     assert keys["mcp_server:Neon:codex"]["from"] == "cursor"
+    # A name in another case is said on the item.
+    beside = "already has {}; this adds {} beside it."
+    assert keys["mcp_server:Neon:codex"]["note"] == "Codex " + beside.format("neon", "Neon")
+    assert keys["mcp_server:neon:cursor"]["note"] == "Cursor " + beside.format("Neon", "neon")
+    assert keys["mcp_server:github:codex"]["note"] is None
     # Cursor loads brandkit from Claude Code's folder, and Codex has pixel-art turned off.
     assert "skill:brandkit:cursor" not in keys
     assert "skill:pixel-art:codex" not in keys
@@ -121,6 +126,8 @@ def test_add_missing_is_one_change_and_undo_takes_it_all_back(home):
             ("codex", "Loads"),
             ("cursor", "Loads twice"),  # it reads brandkit in Claude Code's folder already
         ]
+        # langfuse-data's header holds a secret: the copy says so, as a single add does.
+        assert after[0]["note"] == "This makes a second copy of a secret in ~/.claude.json."
         assert "SENTINEL" not in json.dumps(change)
         applied = page.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
         assert applied["state"] == "verified"
@@ -194,5 +201,22 @@ def test_plugins_go_where_each_client_can_take_them(home):
         assert keys["plugin:linter@claude-plugins-official:codex"]["place"] == "all"
         assert {
             "name": "linter@claude-plugins-official",
-            "why": "Cursor cannot get it",
+            "why": "Cursor loads Claude Code's plugins only when they are for all projects",
         } in change["align"]["left_out"]
+
+
+def test_a_skill_copy_does_not_hide_a_server_of_the_same_name(home):
+    # Claude Code has a skill named notion; Codex has an MCP server named notion. The skill's copy
+    # for Codex reaches Cursor, but Cursor still gets the server.
+    skill = home / ".claude/skills/notion/SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text("---\nname: notion\ndescription: Notes.\n---\n# Notion\n")
+    add_codex(home, "notion", 'url = "https://notion.invalid/mcp"')
+    api = str(home / "work/api")
+    with page_for(home, run=runner(home)) as page:
+        chosen = ["skill:notion:codex", "mcp_server:notion:cursor"]
+        change = _align(page, project_id(page, api), chosen).json()
+        assert [(s["client"], s["name"]) for s in change["steps"]] == [
+            ("codex", "notion"),
+            ("cursor", "notion"),
+        ]

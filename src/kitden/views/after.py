@@ -563,31 +563,63 @@ def _put_back_words(change: Change, inventory, home: Path) -> list[dict]:
     return out
 
 
+def _second_secret(step, home: Path) -> str | None:
+    """The note for a copied MCP entry that holds a secret, else None."""
+    edit = step.edit
+    assert edit is not None
+    if redact(edit.after)[1]:
+        return f"This makes a second copy of a secret in {home_path(edit.path, home)}."
+    return None
+
+
 def _add_server_words(change: Change, home: Path) -> list[dict]:
     """A server copied into clients: each loads it, and says when the copy holds a secret."""
     out = []
     for step in change.steps:
-        edit = step.edit
-        assert edit is not None
         entry = {"client": step.client, "state": "on", "word": "Loads"}
-        if redact(edit.after)[1]:
-            entry["note"] = f"This makes a second copy of a secret in {home_path(edit.path, home)}."
+        note = _second_secret(step, home)
+        if note:
+            entry["note"] = note
         out.append(entry)
     return out
 
 
-def _align_words(change: Change, inventory, skills: list[dict]) -> list[dict]:
+MCP_KEYS = ("mcpServers", "mcp_servers")  # the first key of an MCP entry in each client file
+
+
+def _align_words(
+    change: Change, inventory, skills: list[dict], home: Path | None, cursor_imports: bool
+) -> list[dict]:
     """Add missing: each client a step writes to, or a copied skill folder reaches, loads what
-    it gets. A client that then reads a skill in two folders says so, as for a single copy."""
+    it gets. As for the single adds: a client that then reads a skill in two folders says so, a
+    copied MCP entry with a secret says so, and Cursor gets a Claude Code user plugin too."""
     reached = {s.client for s in change.steps}
     reached |= {c for s in change.steps if s.copy for c in s.copy.readers}
     copies = replace(change, steps=[s for s in change.steps if s.copy])
     twice = {e["client"]: e for e in _skill_words(copies, inventory, skills) if "note" in e}
-    return [
-        twice.get(c, {"client": c, "state": "on", "word": "Loads"})
-        for c in SKILL_CLIENTS
-        if c in reached
-    ]
+    notes: dict[str, list[str]] = {}
+    for step in change.steps:
+        if home is not None and step.edit is not None and step.edit.key[0] in MCP_KEYS:
+            note = _second_secret(step, home)
+            if note:
+                notes.setdefault(step.client, []).append(note)
+    plugin = any(
+        s.client == "claude_code" and "@" in s.name and s.scope is Scope.USER and s.copy is None
+        for s in change.steps
+    )
+    if plugin and cursor_imports:
+        reached.add("cursor")
+        notes.setdefault("cursor", []).append(CURSOR_IMPORT["note"])
+    out = []
+    for client in SKILL_CLIENTS:
+        if client not in reached:
+            continue
+        entry = dict(twice.get(client, {"client": client, "state": "on", "word": "Loads"}))
+        said = list(dict.fromkeys([entry.get("note"), *notes.get(client, [])]))
+        if any(said):
+            entry["note"] = " ".join(n for n in said if n)
+        out.append(entry)
+    return out
 
 
 def after_words(
@@ -621,7 +653,7 @@ def after_words(
     if change.action == MCP_ADD and home is not None:
         return _add_server_words(change, home)
     if change.action == PROJECT_ALIGN:
-        return _align_words(change, inventory, skills or [])
+        return _align_words(change, inventory, skills or [], home, cursor_imports)
     # A move into a registered gateway has that gateway's own step; one into the Kitden
     # gateway has none, also when the gateway holds the server already.
     if change.action == "gateway.move" and not any(

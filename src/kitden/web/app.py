@@ -951,7 +951,8 @@ def create_app(
             return _error(refusal_words(error), 422)
         events.publish("change_state")
         # Only an added or removed plugin reaches Cursor through Claude Code.
-        cursor = _found_cursor() if action in (PLUGIN_INSTALL, PLUGIN_REMOVE) else None
+        plugins = (PLUGIN_INSTALL, PLUGIN_REMOVE, PROJECT_ALIGN)
+        cursor = _found_cursor() if action in plugins else None
         imports = bool(cursor and cursor.imports_claude_plugins())
         after = after_words(
             change, state.inventory, cursor_imports=imports, skills=copied, home=home

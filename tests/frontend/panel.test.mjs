@@ -474,11 +474,11 @@ test('a server added to another client is named', () => {
 test('the align review groups what each client lacks and keeps the choice', () => {
   const align = { candidates: [
     { key: 'mcp_server:github:codex', kind: 'mcp_server', name: 'github', from: 'claude_code', to: 'codex', place: 'all', chosen: true },
-    { key: 'skill:brandkit:cursor', kind: 'skill', name: 'brandkit', from: 'claude_code', to: 'cursor', place: 'project', chosen: false },
+    { key: 'skill:brandkit:cursor', kind: 'skill', name: 'brandkit', from: 'claude_code', to: 'cursor', place: 'project', chosen: false, note: 'Cursor already has Brandkit; this adds brandkit beside it.' },
   ], not_same: [], left_out: [] };
   assert.deepEqual(alignGroups(align), [
-    { client: 'codex', name: 'Codex', items: [{ key: 'mcp_server:github:codex', label: 'github · MCP server · from Claude Code · all projects', chosen: true }] },
-    { client: 'cursor', name: 'Cursor', items: [{ key: 'skill:brandkit:cursor', label: 'brandkit · Skill · from Claude Code · this project', chosen: false }] },
+    { client: 'codex', name: 'Codex', items: [{ key: 'mcp_server:github:codex', label: 'github · MCP server · from Claude Code · all projects', note: null, chosen: true }] },
+    { client: 'cursor', name: 'Cursor', items: [{ key: 'skill:brandkit:cursor', label: 'brandkit · Skill · from Claude Code · this project', note: 'Cursor already has Brandkit; this adds brandkit beside it.', chosen: false }] },
   ]);
   assert.deepEqual(chosenKeys(align, 'skill:brandkit:cursor', true), ['mcp_server:github:codex', 'skill:brandkit:cursor']);
   assert.deepEqual(chosenKeys(align, 'mcp_server:github:codex', false), []);

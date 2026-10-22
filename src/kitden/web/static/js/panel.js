@@ -817,7 +817,8 @@ export function changeWords(change, previewBody) {
 }
 
 // Add missing: the candidates as checkboxes, one group per client that lacks them, in client
-// order. Each label says what, from which client, and where it goes.
+// order. Each label says what, from which client, and where it goes; `note` says when the
+// client has the name in another case.
 const PLACE_WORDS = { project: "this project", all: "all projects" };
 export function alignGroups(align) {
   return CLIENT_ORDER.map((client) => ({
@@ -826,6 +827,7 @@ export function alignGroups(align) {
     items: align.candidates.filter((c) => c.to === client).map((c) => ({
       key: c.key,
       label: `${c.name} · ${KIND_WORDS[c.kind]} · from ${clientName(c.from)} · ${PLACE_WORDS[c.place]}`,
+      note: c.note || null,
       chosen: c.chosen,
     })),
   })).filter((group) => group.items.length);
@@ -864,6 +866,7 @@ function alignSection(change, previewBody, note, apply) {
         if (again) again.focus();
       });
       label.append(box, el("span", null, item.label));
+      if (item.note) label.append(el("span", "muted", ` · ${item.note}`));
       set.append(label);
     }
     section.append(set);

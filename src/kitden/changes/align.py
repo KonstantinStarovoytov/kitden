@@ -24,6 +24,9 @@ KINDS = (ItemKind.MCP_SERVER, ItemKind.PLUGIN, ItemKind.SKILL)
 # What makes two MCP entries one server; "type" is only how each client spells it.
 SERVER_FIELDS = ("command", "args", "url")
 NO_OFFER = "not in a marketplace on this computer"
+# Cursor loads Claude Code's user plugins (Include Third-Party Plugins and the import on), so it
+# has no plugin of its own to get; Add missing puts a Claude Code plugin into the project.
+CURSOR_VIA = "Cursor loads Claude Code's plugins only when they are for all projects"
 
 
 def _is_source(item: Item, client: str) -> bool:
@@ -70,9 +73,10 @@ def _build(
     offers: dict[str, dict],
     found: set[str],
     project: str,
+    imports: bool,
 ) -> list[Step]:
     """The steps of one add, as the single add makes them. Raises ValueError with the reason
-    when the client cannot get it."""
+    when the client cannot get it. `imports`: Cursor loads Claude Code's plugins."""
     into = project if place == "project" else None
     if item.kind is ItemKind.MCP_SERVER:
         return add_server_steps(adapters, item, [client])
@@ -80,6 +84,8 @@ def _build(
         offer = offers.get(item.name)
         if offer is None:
             raise ValueError(NO_OFFER)
+        if client == "cursor" and imports:
+            raise ValueError(CURSOR_VIA)
         if client not in offer["routes"]:
             raise ValueError(f"{CLIENT_WORDS[client]} cannot get it")
         return install_steps(adapters, offer, [client], into)
@@ -137,6 +143,8 @@ def align_steps(
             if client in has:
                 has[client].add((ItemKind.SKILL, skill["name"]))
     offers = {o["id"]: o for o in catalog(inventory, adapters)}
+    cursor = adapters.get("cursor")
+    imports = "cursor" in clients and cursor is not None and cursor.imports_claude_plugins()
 
     candidates: list[dict] = []
     built: list[list[Step]] = []
@@ -156,13 +164,25 @@ def align_steps(
                     seen.add(key)
                     place = _place(item, client, adapters, project)
                     try:
-                        steps = _build(item, client, place, adapters, offers, found, project)
+                        steps = _build(
+                            item, client, place, adapters, offers, found, project, imports
+                        )
                     except ValueError as error:
                         why = {"name": item.name, "why": str(error)}
                         if why not in left_out:
                             left_out.append(why)
                         continue
                     name = f"{kind.value}:{item.name}:{client}"
+                    # Names match exactly; one that differs only in case is said, not merged.
+                    alike = sorted(
+                        n
+                        for k, n in has[client]
+                        if k is kind and n != key[1] and n.lower() == key[1].lower()
+                    )
+                    note = None
+                    if alike:
+                        who = CLIENT_WORDS[client]
+                        note = f"{who} already has {alike[0]}; this adds {key[1]} beside it."
                     candidates.append(
                         {
                             "key": name,
@@ -171,6 +191,7 @@ def align_steps(
                             "from": source,
                             "to": client,
                             "place": place,
+                            "note": note,
                             "chosen": chosen is None or name in chosen,
                         }
                     )
@@ -178,13 +199,13 @@ def align_steps(
 
     steps: list[Step] = []
     marketplaces: set[tuple] = set()
-    # Skill name -> the clients a copy made here reaches, and that copy's place.
+    # A skill -> the clients a copy made here reaches, and that copy's place.
     reached: dict[str, tuple[list[str], str]] = {}
     for candidate, add in zip(candidates, built, strict=True):
         if not candidate["chosen"]:
             continue
         readers, place = reached.get(candidate["name"], ([], ""))
-        if candidate["to"] in readers:
+        if candidate["kind"] == "skill" and candidate["to"] in readers:
             candidate["place"] = place  # it loads the copy made for another client
             continue
         for step in add:

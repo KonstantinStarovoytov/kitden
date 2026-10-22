@@ -314,3 +314,19 @@ def test_removing_one_of_two_claude_code_copies_says_cursor_keeps_the_other():
         cursor_imports=True,
     )
     assert words[1]["note"].endswith("keeps its own.")
+
+
+def test_add_missing_names_cursor_for_a_claude_code_user_plugin():
+    change = Change(action="project.align", steps=[step("claude_code", "notes@official")])
+    assert after_words(change, inventory(), cursor_imports=True) == [
+        {"client": "claude_code", "state": "on", "word": "Loads"},
+        {
+            "client": "cursor",
+            "state": "on",
+            "word": "Loads",
+            "note": "Cursor loads Claude Code plugins, so it gets this one too.",
+        },
+    ]
+    assert after_words(change, inventory()) == [
+        {"client": "claude_code", "state": "on", "word": "Loads"}
+    ]
