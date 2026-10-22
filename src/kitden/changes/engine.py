@@ -36,11 +36,13 @@ from kitden.changes.copy_folder import (
 )
 from kitden.changes.json_splice import ABSENT, PRESENT, UnrecognizedFormatError
 from kitden.gateway_api import GatewayError
+from kitden.gateways import data_dir
 from kitden.local_gateway import keychain
 from kitden.local_gateway.keychain import KeychainError
 from kitden.model import (
     Change,
     ChangeState,
+    ClientStatus,
     FileEdit,
     FolderCopy,
     FolderRemoval,
@@ -77,6 +79,55 @@ class NothingToChangeError(ChangeRefusedError):
 
 class _ApplyError(Exception):
     pass
+
+
+OUTSIDE = "Kitden writes only in your home folder and your known projects."
+
+
+def _real(path: str | Path) -> Path:
+    return Path(os.path.realpath(path))
+
+
+def writable_roots(home: Path, inventory) -> list[Path]:
+    """The folders a change may write in, as real paths, each once and in this order: the home
+    folder, Kitden's data folder, every known project of the inventory (there or not) and the
+    settings folders of each found client (Codex's CODEX_HOME can sit elsewhere).
+
+    Known projects come from the clients' own files and can sit on another disk. A client
+    folder linked out of the home folder stays writable (its real path is a root); a single
+    settings file linked out does not. `/` and the folders that hold the home folder count only
+    for themselves (see `_inside`).
+    """
+    places = [home, data_dir(home), *(p.path for p in inventory.projects)]
+    for client in inventory.clients:
+        if client.status is ClientStatus.FOUND:
+            places += client.config_roots
+    return list(dict.fromkeys(_real(p) for p in places))
+
+
+def _inside(path: Path, roots: list[Path]) -> bool:
+    """`path` is a root or inside one. The first root is the home folder (see `writable_roots`).
+
+    `/` and the folders that hold the home folder match only themselves, as in `project_chain`:
+    Claude Code records a project for any folder it started in, and such a project must not
+    make every path writable.
+    """
+    stops = {Path("/"), *roots[0].parents} if roots else set()
+    return any(path == root or (root not in stops and root in path.parents) for root in roots)
+
+
+def _places(step: Step) -> list[str]:
+    """The files and folders a step writes in, and the folder its command runs in.
+
+    A gateway address and a Keychain item are not paths.
+    """
+    places = [
+        step.edit.path if step.edit is not None else None,
+        step.copy.target if step.copy is not None else None,
+        step.removal.path if step.removal is not None else None,
+        step.cwd,
+    ]
+    return [p for p in places if p]
 
 
 def _step_path(step: Step) -> str | None:
@@ -336,11 +387,15 @@ class Engine:
         run: Runner,
         on_write: Callable[[str, str | None], None] | None = None,
         gateway_clients: GatewayClients | None = None,
+        *,
+        roots: Callable[[], list[Path]] | None = None,
     ) -> None:
         self.store = store
         self.run = run
         self.on_write = on_write or (lambda path, sha: None)
         self.gateway_clients = gateway_clients
+        # The folders a change may write in (see `writable_roots`); None checks nothing.
+        self.roots = roots
         # Called as each step of an Apply or Undo is done: (change id, steps done, all steps).
         # The page shows "Applying 2 of 5" from it; it runs in the worker thread.
         self.on_progress: Callable[[str, int, int], None] = lambda change_id, done, total: None
@@ -362,6 +417,11 @@ class Engine:
         """
         if not steps:
             raise ChangeRefusedError("Nothing to change.")
+        if self.roots is not None:
+            roots = self.roots()
+            places = [_real(p) for s in steps for p in _places(s)]
+            if not all(_inside(p, roots) for p in places):
+                raise ChangeRefusedError(OUTSIDE)
         self._preview_gateway([s for s in steps if s.gateway is not None])
         self._preview_copies([s for s in steps if s.copy is not None])
         self._preview_removals([s for s in steps if s.removal is not None])

@@ -57,7 +57,13 @@ from kitden.changes.actions import (
 from kitden.changes.align import align_steps
 from kitden.changes.backup import ChangeStore
 from kitden.changes.client_cli import CommandRunner
-from kitden.changes.engine import ChangeRefusedError, Engine, NothingToChangeError, Runner
+from kitden.changes.engine import (
+    ChangeRefusedError,
+    Engine,
+    NothingToChangeError,
+    Runner,
+    writable_roots,
+)
 from kitden.clients import version_cache
 from kitden.clients.base import (
     PLUGIN_DISABLE,
@@ -515,7 +521,11 @@ def create_app(
             return ObotClient(found) if found.kind == "obot" else MetaMcpClient(found)
 
         engine = Engine(
-            ChangeStore(data_dir(home)), run or CommandRunner(home), on_write, gateway_client
+            ChangeStore(data_dir(home)),
+            run or CommandRunner(home),
+            on_write,
+            gateway_client,
+            roots=lambda: writable_roots(home, state.inventory),
         )
     write_lock = asyncio.Lock()
     # The Kitden gateway's tool lists: a refresh runs in the background, one at a time. A server

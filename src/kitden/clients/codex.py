@@ -35,6 +35,7 @@ from kitden.clients.base import (
 )
 from kitden.clients.versions import version_command
 from kitden.model import (
+    Client,
     Enabled,
     FileEdit,
     Gateway,
@@ -111,6 +112,10 @@ class CodexAdapter(ClientAdapter):
         env_home = os.environ.get("CODEX_HOME")
         self.codex_home = codex_home or (Path(env_home) if env_home else home / ".codex")
         self._list_plugins = list_plugins or self._run_plugin_list
+
+    def detect(self) -> Client:
+        """The base answer; the settings folder is CODEX_HOME, which can sit elsewhere."""
+        return replace(super().detect(), config_roots=(str(self.codex_home),))
 
     def _list_key(self) -> tuple:
         config = self.codex_home / "config.toml"
