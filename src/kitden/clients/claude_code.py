@@ -1,9 +1,10 @@
 """Claude Code (CLI and the Claude Desktop Code tab). Research R3, write-matrix.md.
 
 Writes go through `claude mcp add-json` and `claude mcp remove` (FR-021). An entry that holds a
-secret is written to `~/.claude.json` directly instead: `add-json` takes the entry as an argument,
-and `ps` shows a process's arguments. Claude Code rewrites `~/.claude.json` during normal use, so
-changes to that file compare only the edited entry.
+secret is written to `~/.claude.json` (where Claude Code keeps user-scope servers) instead:
+`add-json` takes the entry as an argument, and `ps` shows a process's arguments. Claude Code
+rewrites `~/.claude.json` during normal use, so changes to that file compare only the edited
+entry.
 """
 
 import json
@@ -291,10 +292,11 @@ class ClaudeCodeAdapter(ClientAdapter):
             after=value,
             check="entry",
         )
-        # checked 2026-10-22 (code.claude.com/docs/en/mcp): `claude mcp add-json <name> '<json>'`
-        # takes the JSON only as an argument, with no stdin or file option, and editing
-        # ~/.claude.json directly is a documented way to add a server. A secret in the arguments
-        # is visible to `ps` while the command runs, so an entry with one is edited directly.
+        # checked 2026-10-22 (code.claude.com/docs/en/mcp): the docs show `claude mcp add-json
+        # <name> '<json>'` with the JSON as an argument and no stdin or file option, and say
+        # Claude Code keeps user-scope servers in ~/.claude.json. They do not describe editing
+        # that file by hand. A secret in the arguments is visible to `ps` while the command
+        # runs, so Kitden writes an entry with one into the file itself, with a backup.
         if redact(value)[1]:
             return Step(
                 client=CLIENT,
