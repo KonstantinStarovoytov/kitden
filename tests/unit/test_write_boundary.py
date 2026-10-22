@@ -224,6 +224,24 @@ def test_a_folder_above_home_spelled_in_other_letters_counts_only_for_itself(tmp
     assert str(refused.value) == OUTSIDE
 
 
+def test_a_folder_that_holds_home_by_another_path_counts_only_for_itself(tmp_path):
+    # `/System/Volumes/Data` is not `/`, yet `/System/Volumes/Data/Users` is `/Users`. Here a
+    # link inside `data` stands in for that: data/<home's whole path> is the home folder.
+    home, data = real(tmp_path) / "home", real(tmp_path) / "data"
+    home.mkdir()
+    inner = data / home.relative_to("/")
+    inner.parent.mkdir(parents=True)
+    inner.symlink_to(home)
+    (data / "elsewhere").mkdir()
+    (data / "elsewhere/settings.json").write_text("{}")
+    roots = writable_roots(home, Inventory(projects=[Project(path=str(data), exists=True)]))
+    engine = Engine(ChangeStore(tmp_path / "store"), no_run, roots=lambda: (home, roots))
+    with pytest.raises(ChangeRefusedError) as refused:
+        engine.preview("mcp.add", [edit_at(data / "elsewhere/settings.json")])
+    assert str(refused.value) == OUTSIDE
+    engine.preview("mcp.add", [command_in(data)])  # a command may run in the folder itself
+
+
 def test_the_page_refuses_a_change_outside_with_the_sentence(tmp_path, monkeypatch):
     home = make_home(tmp_path, "claude_code/2.1.283")
     data_dir(home).mkdir(parents=True, exist_ok=True)

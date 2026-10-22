@@ -122,9 +122,16 @@ def _identity(path: Path) -> tuple[int, int] | None:
 
 def _stops(home: Path, roots: list[Path]) -> set[Path]:
     """The roots that are `/` or hold the home folder, found by file identity, not by text:
-    APFS ignores letter case (`/users`) and `/System/Volumes/Data/Users` is `/Users`."""
-    above = {_identity(p) for p in (Path("/"), *_real(home).parents)} - {None}
-    return {r for r in roots if _identity(r) in above}
+    APFS ignores letter case (`/users`), `/System/Volumes/Data/Users` is `/Users`, and
+    `/System/Volumes/Data` is not `/` but holds `Users/<name>` (checked 2026-10-23, macOS 26)."""
+    real_home = _real(home)
+    above = {_identity(p) for p in (Path("/"), *real_home.parents)} - {None}
+    me, below = _identity(real_home), real_home.relative_to("/")
+
+    def stop(root: Path) -> bool:
+        return _identity(root) in above or (me is not None and _identity(root / below) == me)
+
+    return {r for r in roots if stop(r)}
 
 
 def _allowed(path: Path, roots: list[Path], stops: set[Path], folder: bool) -> bool:
