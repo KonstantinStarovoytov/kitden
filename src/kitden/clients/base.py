@@ -148,6 +148,49 @@ def skill_items(
     return items
 
 
+def expand(folder: Path, category: str, glob: str = "*.md") -> list[tuple[Path, str, str]]:
+    """(path, category, name) for each file matching `glob` in `folder` and its sub-folders.
+
+    The name is the path inside `folder` without the extension, sub-folders joined by ":"
+    (`frontend/component.md` -> `frontend:component`). Hidden files and folders are skipped.
+    """
+    if not folder.is_dir():
+        return []
+    found = []
+    for path in sorted(folder.rglob(glob)):
+        parts = path.relative_to(folder).with_suffix("").parts
+        if path.is_file() and not any(p.startswith(".") for p in parts):
+            found.append((path, category, ":".join(parts)))
+    return found
+
+
+def instruction_items(
+    client: str,
+    files: list[tuple[Path, str] | tuple[Path, str, str]],
+    scope: Scope,
+    owner: str,
+    project: str | None = None,
+) -> list[Item]:
+    """One item for each file that exists. A file is (path, category) or, from `expand`,
+    (path, category, name); without a name the item is named by the file name."""
+    items = []
+    for path, category, *name in files:
+        if not path.is_file():
+            continue
+        items.append(
+            Item(
+                client=client,
+                kind=ItemKind.INSTRUCTIONS,
+                name=name[0] if name else path.name,
+                source=file_source(path, owner),
+                scope=scope,
+                project=project,
+                summary=(("category", category),),
+            )
+        )
+    return items
+
+
 def mcp_item(
     client: str,
     name: str,

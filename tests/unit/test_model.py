@@ -1,5 +1,6 @@
 import pytest
 
+from kitden.clients.base import expand, instruction_items
 from kitden.model import (
     Change,
     ChangeState,
@@ -115,3 +116,40 @@ def test_gateway_key_must_be_a_variable_name_not_a_secret():
         )
     with pytest.raises(ValueError, match="variable name"):
         Gateway(url="http://localhost:12008/mcp", auth=GatewayAuth.ENV_KEY)
+
+
+def test_instruction_items_name_files_and_stems(tmp_path):
+    (tmp_path / "CLAUDE.md").write_text("# rules\n")
+    (tmp_path / "commands").mkdir()
+    (tmp_path / "commands/review.md").write_text("x")
+    (tmp_path / "commands/notes.txt").write_text("x")
+    files = [(tmp_path / "CLAUDE.md", "instructions"), *expand(tmp_path / "commands", "command")]
+    items = instruction_items("claude_code", files, Scope.USER, "claude_code")
+    assert [(i.name, dict(i.summary)["category"]) for i in items] == [
+        ("CLAUDE.md", "instructions"),
+        ("review", "command"),
+    ]
+    assert all(i.kind is ItemKind.INSTRUCTIONS for i in items)
+    assert items[0].source.path == str(tmp_path / "CLAUDE.md")
+
+
+def test_instruction_items_skip_missing_files(tmp_path):
+    items = instruction_items(
+        "codex", [(tmp_path / "AGENTS.md", "instructions")], Scope.USER, "codex"
+    )
+    assert items == []
+    assert expand(tmp_path / "missing", "command") == []
+
+
+def test_expand_takes_a_glob_and_names_sub_folder_files_with_a_colon(tmp_path):
+    rules = tmp_path / "rules"
+    (rules / "frontend").mkdir(parents=True)
+    (rules / "style.mdc").write_text("x")
+    (rules / "frontend/components.mdc").write_text("x")
+    (rules / "readme.md").write_text("x")
+    (rules / ".hidden.mdc").write_text("x")
+    found = expand(rules, "instructions", "*.mdc")
+    assert [(name, category) for _, category, name in found] == [
+        ("frontend:components", "instructions"),
+        ("style", "instructions"),
+    ]

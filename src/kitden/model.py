@@ -53,6 +53,7 @@ class ItemKind(StrEnum):
     PLUGIN = "plugin"
     HOOK = "hook"
     MARKETPLACE = "marketplace"
+    INSTRUCTIONS = "instructions"  # instruction files, commands, agents and rules
 
 
 class Enabled(StrEnum):
