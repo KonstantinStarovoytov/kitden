@@ -21,6 +21,8 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Categories:** filter plugins and skills by category. The category shows quietly in each row.
 - **Quick start:** the page has its data in about two seconds. Codex's slow plugin list comes in
   the background, and a line shows what is still read.
+- **Rescan:** also checks the client versions, so a client updated while the page runs shows
+  its new version.
 - **Kitden gateway:** on the Gateway page, pick a project and turn a whole MCP server or single
   tools on or off for it, in every client; its folders and worktrees follow it. Local servers
   move in too, and moving a server the gateway holds again updates it, for a new token. Each
