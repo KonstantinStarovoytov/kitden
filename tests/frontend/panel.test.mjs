@@ -5,9 +5,9 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; panel.js must load there too.
 delete globalThis.navigator;
-const { afterParts, alignGroups, canShowReview, countedDefinition, changeOutcome, chosenKeys, callsText, changeWords, footerActions, heldActions, offerLabel, layerState, leftOutText, kindWord, loadsLede, moveFor, moveTargets, plainSecrets, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
+const { afterParts, alignGroups, canShowReview, closeForProject, countedDefinition, changeOutcome, chosenKeys, callsText, changeWords, footerActions, heldActions, isPanelOpen, offerLabel, layerState, leftOutText, kindWord, loadsLede, moveFor, moveTargets, openPanel, plainSecrets, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
 const { addOptions, whyNoAction } = await import('../../src/kitden/web/static/js/offer.js');
-const { data } = await import('../../src/kitden/web/static/js/store.js');
+const { data, state } = await import('../../src/kitden/web/static/js/store.js');
 
 const github = { kind: 'mcp_server', name: 'github' };
 const direct = { name: 'github', items: ['entry-1', 'entry-2'] };
@@ -543,4 +543,46 @@ test('an Add missing list with nothing chosen shows as a review, not an error', 
   assert.equal(canShowReview({ ok: true, data: { steps: [] } }), false);
   assert.equal(canShowReview({ ok: false, data: { detail: 'Unknown project.' } }), false);
   assert.equal(canShowReview(null), false);
+});
+
+// Just enough of a page for the panel to open and close: the drawer and its scrim.
+function fakePanelPage() {
+  const node = () => {
+    const classes = new Set();
+    return {
+      classList: {
+        add: (name) => classes.add(name),
+        remove: (name) => classes.delete(name),
+        toggle: (name, on) => (on ? classes.add(name) : classes.delete(name)),
+        contains: (name) => classes.has(name),
+      },
+      replaceChildren() {}, focus() {}, contains: () => false,
+    };
+  };
+  const nodes = { '#drawer': node(), '#scrim': node() };
+  globalThis.document = {
+    activeElement: null,
+    documentElement: { classList: { remove() {} } },
+    querySelector: (selector) => nodes[selector] ?? null,
+    querySelectorAll: () => [],
+  };
+}
+
+test('picking another project closes the panel, so a switch never acts on a project it does not name', () => {
+  fakePanelPage();
+  try {
+    state.project = 'atlas';
+    openPanel([]);
+    closeForProject();
+    assert.equal(isPanelOpen(), true); // the same project keeps it open
+    state.project = 'web';
+    closeForProject();
+    assert.equal(isPanelOpen(), false);
+    openPanel([]); // opened again, it belongs to the project now picked
+    closeForProject();
+    assert.equal(isPanelOpen(), true);
+  } finally {
+    state.project = '';
+    delete globalThis.document;
+  }
 });

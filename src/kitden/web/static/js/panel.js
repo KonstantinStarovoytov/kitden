@@ -35,6 +35,8 @@ const WRITING = "Writing the change. It can't stop halfway: if a step fails, Kit
 let current = null;
 let opener = null;
 let openerKey = null;
+// The project the open panel was opened in: its switches and reviews are for that project.
+let openedIn = null;
 
 const clientName = (id) => CLIENT_NAMES[id] || id;
 
@@ -55,6 +57,7 @@ export function openPanel(content, { instant = false } = {}) {
   const drawer = $("#drawer");
   if (isPanelOpen()) { swapContent(content); return; }
   drawer.replaceChildren(...content);
+  openedIn = state.project;
   opener = document.activeElement;
   const row = opener && opener.closest ? opener.closest("tr[data-key]") : null;
   openerKey = row ? row.dataset.key : state.selected;
@@ -79,6 +82,12 @@ export function closePanel({ instant = false, keepSelection = false, focus = tru
     for (const row of $$('tr[aria-selected="true"]')) row.setAttribute("aria-selected", "false");
   }
   if (focus) restoreFocus();
+}
+
+// Another project picked (at the top, or by Back or an edited address) closes the panel, and an
+// open review is cancelled as Cancel does: a switch in it never acts on a project it does not name.
+export function closeForProject() {
+  if (isPanelOpen() && openedIn !== state.project) closePanel({ focus: false });
 }
 
 // A review left without Apply: the server forgets its preview.

@@ -7,7 +7,7 @@ import { renderChanges } from "./changes.js";
 import { renderGateway } from "./gateway.js";
 import { loadLibrary, loadLibraryFor, morphOnNextRender, raceSlow, renderLibrary, settleRows, snapshotRows } from "./library.js";
 import { renderOverview } from "./overview.js";
-import { closePanel, initPanel, isPanelOpen } from "./panel.js";
+import { closeForProject, closePanel, initPanel, isPanelOpen } from "./panel.js";
 import { demoTag, latestChanges, scanLine, versionsOpened } from "./parts.js";
 import {
   busy, current, data, followAddress, freshness, go, loadShared, OLD_VIEWS, onIdle, parseHash, reload, setRenderer, setState, state, VIEWS,
@@ -244,6 +244,7 @@ function fromAddress() {
   const same = ["view", "project", "kind", "show", "category", "attention", "q"].every((key) => next[key] === state[key]);
   const newProject = next.project !== state.project;
   if (!same) followAddress(next);
+  closeForProject();
   if (old) setState({});
   if (!same && newProject) refresh().catch(reportError);
 }
@@ -270,6 +271,7 @@ function start() {
   });
   $("#where").addEventListener("change", (event) => {
     setState({ project: event.target.value, selected: null });
+    closeForProject();
     // On the Library, each cell turns into its state in the new scope instead of jumping.
     if (state.view === "library") morphOnNextRender();
     // The old project's page stays until the new one is read, faded and marked as waiting.

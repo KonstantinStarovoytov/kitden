@@ -393,6 +393,14 @@ def test_the_rail_time_follows_every_render_not_only_a_refresh():
     assert "#scanned" not in refresh
 
 
+def test_another_project_closes_the_panel():
+    # Picked at the top, or by Back or an edited address (panel.test.mjs tests closeForProject).
+    app = script("app.js")
+    picker = app.split('$("#where").addEventListener("change"')[1].split("\n  });\n")[0]
+    address = app.split("function fromAddress()")[1].split("\n}\n")[0]
+    assert "closeForProject();" in picker and "closeForProject();" in address
+
+
 def test_a_project_switch_marks_the_old_page_as_waiting():
     app = script("app.js")
     assert 'main.classList.add("pending")' in app
