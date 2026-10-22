@@ -25,7 +25,7 @@ import tomlkit
 
 from kitden.changes import json_splice, toml_edit
 from kitden.changes.atomic import RefusedWriteError, write_atomic
-from kitden.changes.backup import ChangeStore, file_holds_secret, holds_secret
+from kitden.changes.backup import ChangeStore, holds_secret
 from kitden.changes.client_cli import CommandResult
 from kitden.changes.copy_folder import (
     CopyRefusedError,
@@ -567,9 +567,6 @@ class Engine:
                 return change
 
         saved = self.store.backup(change.id, current)
-        change.holds_secret = any(
-            file_holds_secret(data) for data in current.values() if data is not None
-        ) or any(holds_secret(s.edit.before) or holds_secret(s.edit.after) for s in file_steps)
         for step in file_steps:
             copy = saved[step.edit.path]
             step.edit.backup_path = str(copy) if copy else None
@@ -653,6 +650,7 @@ class Engine:
                 except KeychainError:
                     lost.append(f"{item.server}/{item.key} stays in your Keychain.")
             self._forget_secrets(change)
+            self._mark_secret(change, file_steps)
             change.move_to(ChangeState.RESTORED)
             if lost:
                 change.error = f"{error} {' '.join(lost)}"
@@ -664,9 +662,17 @@ class Engine:
         for step in file_steps:
             step.edit.after_hash = _sha(_read(step.edit.path))
         self._forget_secrets(change)
+        self._mark_secret(change, file_steps)
         change.move_to(ChangeState.VERIFIED)
         self._finish(change)
         return change
+
+    def _mark_secret(self, change: Change, file_steps: list[Step]) -> None:
+        """Once every backup exists: whether a backup, or an entry the record keeps (an old
+        or a new value), holds a secret."""
+        change.holds_secret = self.store.backup_holds_secret(change.id) or any(
+            holds_secret(s.edit.before) or holds_secret(s.edit.after) for s in file_steps
+        )
 
     def _store_secrets(self, change: Change, stored: list[KeychainItem]) -> None:
         """Write each secret to the Keychain; `store` reads it back."""

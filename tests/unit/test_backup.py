@@ -2,7 +2,7 @@ import json
 import stat
 from datetime import UTC, datetime, timedelta
 
-from kitden.changes.backup import ChangeStore
+from kitden.changes.backup import ChangeStore, file_holds_secret
 
 SECRET_LINE = b'token = "SENTINEL_SECRET_BACKUP"\n'
 
@@ -94,3 +94,16 @@ def test_a_backup_of_a_file_with_a_secret_is_flagged_in_the_manifest(tmp_path):
         "/x/notes.txt": False,
         "/x/new.json": False,
     }
+
+
+def test_a_dotenv_file_holds_a_secret_and_a_folder_backup_is_checked(tmp_path):
+    assert file_holds_secret(b"export API_KEY=plain\n", ".env") is True
+    assert file_holds_secret(b"# nothing\n", ".env") is False
+    store = ChangeStore(tmp_path / "data")
+    store.backup("1", {})
+    assert store.backup_holds_secret("1") is False
+    skill = tmp_path / "skill"
+    skill.mkdir()
+    (skill / ".env.local").write_text("TOKEN=plain\n")
+    store.backup_folder("1", str(skill))
+    assert store.backup_holds_secret("1") is True

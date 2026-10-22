@@ -715,6 +715,26 @@ def test_a_folder_removal_is_backed_up_and_undone(tmp_path):
     assert digest(folder) == before
 
 
+def test_a_removed_folder_with_a_secret_flags_the_change(tmp_path):
+    from kitden.web.app import change_dict
+
+    folder = tidy_folder(tmp_path)
+    engine = make_engine(tmp_path)
+    plain = engine.preview("skill.remove", [removal_step(folder)])
+    engine.apply(plain.id)
+    assert plain.holds_secret is False
+    engine.undo(plain.id)
+    (folder / ".env").write_text("API_KEY=SENTINEL_SECRET_SKILL\n")
+    change = engine.preview("skill.remove", [removal_step(folder)])
+    assert engine.apply(change.id).state is ChangeState.VERIFIED
+    assert change.holds_secret is True
+    assert engine.store.entries()[0]["holds_secret"] is True
+    record = (tmp_path / "data/changes" / change.id / "change.json").read_text()
+    log = (tmp_path / "data/changes.log").read_text()
+    page = json.dumps(change_dict(change))
+    assert "SENTINEL" not in record + log + page
+
+
 def test_a_removal_survives_a_restart_of_kitden(tmp_path):
     folder = tidy_folder(tmp_path)
     engine = make_engine(tmp_path)

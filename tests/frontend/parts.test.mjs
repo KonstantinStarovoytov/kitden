@@ -242,7 +242,7 @@ test('the Changes page names a held server whose secrets moved to the Keychain',
 });
 
 test('a change whose backup holds a secret says so', () => {
-  assert.equal(backupNote({ holds_secret: true }), 'The backup and record hold a secret.');
+  assert.equal(backupNote({ holds_secret: true }), "This change's backup or record holds a secret.");
   assert.equal(backupNote({ holds_secret: false }), null);
   assert.equal(backupNote({}), null);
 });

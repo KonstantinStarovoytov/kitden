@@ -61,9 +61,22 @@ def holds_secret(value: Any) -> bool:
     return redact(_without_references(value))[1]
 
 
-def file_holds_secret(data: bytes) -> bool:
-    """Whether a file's bytes hold a secret: read as JSON, then as TOML, else as plain text."""
+def _dotenv(text: str) -> dict[str, str]:
+    """The `NAME=value` lines of a .env file."""
+    pairs = {}
+    for line in text.splitlines():
+        name, sep, value = line.strip().removeprefix("export ").partition("=")
+        if sep and not name.startswith("#"):
+            pairs[name.strip()] = value.strip()
+    return pairs
+
+
+def file_holds_secret(data: bytes, name: str = "") -> bool:
+    """Whether a file's bytes hold a secret: a .env file's values are env values; other files
+    are read as JSON, then as TOML, else as plain text."""
     text = data.decode("utf-8", errors="replace")
+    if name.startswith(".env") or name.endswith(".env"):
+        return holds_secret({"env": _dotenv(text)})
     for parse in (json.loads, tomllib.loads):
         try:
             return holds_secret(parse(text))
@@ -92,7 +105,7 @@ class ChangeStore:
             entry: dict[str, Any] = {
                 "path": path,
                 "existed": data is not None,
-                "secret": data is not None and file_holds_secret(data),
+                "secret": data is not None and file_holds_secret(data, Path(path).name),
             }
             saved[path] = None
             if data is not None:
@@ -115,6 +128,26 @@ class ChangeStore:
             target = folder / f"folder-{Path(path).name}-{count}"
         copy_folder(path, target)  # keeps each file's mode
         return target
+
+    def backup_holds_secret(self, change_id: str) -> bool:
+        """Whether a change's backups hold a secret: each file as its manifest marks it, and
+        each file of a folder the change removed."""
+        folder = self.folder / change_id
+        try:
+            files = json.loads((folder / "manifest.json").read_text())["files"]
+        except (OSError, ValueError, KeyError):
+            files = []
+        if any(entry.get("secret") for entry in files):
+            return True
+        for copy in folder.glob("folder-*"):
+            for path in copy.rglob("*"):
+                if path.is_file() and not path.is_symlink():
+                    try:
+                        if file_holds_secret(path.read_bytes(), path.name):
+                            return True
+                    except OSError:
+                        continue
+        return False
 
     def save(self, change_id: str, record: dict) -> None:
         """Keep what undo needs. Lives next to the backup and is just as private."""

@@ -292,7 +292,7 @@ export function failedWord(error) {
 // short name ("superpowers"); the review named the exact entry before Apply.
 // A change whose backup or record keeps a secret says so on the Changes page.
 export function backupNote(entry) {
-  return entry.holds_secret ? "The backup and record hold a secret." : null;
+  return entry.holds_secret ? "This change's backup or record holds a secret." : null;
 }
 
 export function changeTitle(entry) {
