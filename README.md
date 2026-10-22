@@ -46,13 +46,20 @@ The clients Kitden found sit on the right, and a card says whether the Kitden ga
 item and each column is a client on this computer; the "−" on a column head hides that client,
 and "Show" brings it back. Tabs split MCP servers, plugins, skills, hooks and marketplaces. On
 plugins and skills, choose Installed, New (not on this computer yet) or All, and filter by
-category. Pick a project at the top to see what loads in that folder; an Add still puts the item
-in all your projects.
+category. Pick a project at the top to see what loads in that folder.
 
 The action sits in the client's cell. "+ Add" adds a plugin or skill to that client. "+ Add
 skills" copies the skills of a plugin that work on their own into a client that cannot install the
 plugin itself. "+ Add the plugin" is for a skill that needs its plugin. On plugins and skills, a
 cell with nothing to do says why. You can also add a marketplace from a folder or a GitHub link.
+
+Details of a plugin or a skill offer "Remove from <client>…", with Undo; Undo installs a plugin
+again, but not its saved options. "+ Add" on an MCP server copies its entry to another client; a
+`${VAR}` reference stays a reference where that client can read one, and the review says when a
+secret gets a second copy. With a project picked, "+ Add" on a skill or a Claude Code plugin asks
+"Add to this project…" or "Add for all projects…". "Add missing…" lists what one client loads in
+the project and another lacks, as one review with checkboxes; an item with the same name from
+another source is listed as not the same and left alone.
 
 <p align="center">
   <picture>
@@ -86,7 +93,9 @@ one tool on or off for that project, or for all projects. A project's switches a
 folders and git worktrees, unless they have their own. In a folder Kitden does not know as a
 project, the All projects switches apply. Claude Code and Codex can turn a tool
 off in one project, Cursor cannot (checked 2026-10-21); the gateway gives the same control in all
-three.
+three. A held server's Details offer "Remove from the Kitden gateway…", which takes its switches
+too and makes open sessions refuse its tools at once, and "Put back in <client>…", which writes its
+entry into that client again.
 
 It holds local servers (a command) and remote ones (an address). Each switch is a review with a
 backup and Undo. Moving a server in for the first time keeps the tools Claude Code and Codex had

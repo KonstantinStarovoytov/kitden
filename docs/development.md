@@ -56,6 +56,22 @@ command line does not (checked 2026-10-21).
 Not run yet for steps 5 to 7: they need the real clients, and Part 2 was built and tested with
 fake servers only.
 
+Before a release that adds, removes or puts back items, also check these once by hand, on the
+same test project:
+
+8. Remove a plugin in Claude Code, then in Codex. A new session does not have it. Undo; a new
+   session has it again.
+9. Remove a skill. A new session does not have it. Undo; its folder is back.
+10. "Put back in <client>…" a held server, then remove it from the Kitden gateway. A new session
+    reaches it directly; an open session's call to it through the gateway is refused.
+11. "+ Add" a server whose header reads a `${VAR}` from Claude Code into Cursor and Codex. A new
+    session in each reaches it.
+12. With the test project picked, "Add to this project…" a skill and a Claude Code plugin. A
+    session in that folder has them; one in another folder does not.
+13. "Add missing…" on the test project, Apply, check a new session in each client, then Undo.
+
+Not run yet for steps 8 to 13: Part 3 was built and tested with fake client commands only.
+
 ## Release
 
 1. `uv version X.Y.Z`, and the same number in `src/kitden/__init__.py`,

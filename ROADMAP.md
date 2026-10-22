@@ -38,6 +38,16 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Reads and writes:** each tool shows a quiet word, from the server or its name.
   "Turn off every writing tool…" is one review, with the token advice.
 - **Calls counted:** hover a tool to see how often it was called and when last.
+- **Remove a plugin:** "Remove from <client>…" in its Details. Undo installs it again, but not
+  its saved options.
+- **Remove a skill:** its folder goes to the backup, and Undo puts it back.
+- **Remove from the Kitden gateway:** a held server leaves with its switches; open sessions refuse
+  its tools at once.
+- **Put back:** a held server's entry goes into a client again.
+- **Add an MCP server to another client:** "+ Add" copies the entry; a `${VAR}` reference stays a
+  reference where that client reads one.
+- **Add into one project:** a skill, or a Claude Code plugin, for that project only.
+- **Add missing:** in a project, one review adds what one client loads there and another lacks.
 
 ### 0.2.0
 
@@ -78,9 +88,6 @@ and a master plan with one plan per part,
 [docs/superpowers/plans/2026-10-21-review-follow-up.md](docs/superpowers/plans/2026-10-21-review-follow-up.md).
 The parts, in order:
 
-3. **Complete management:** remove a plugin, a skill or a gateway server; put a held server back
-   in a client; add an MCP server to another client; add into one project; align a project
-   across clients in one review.
 4. **Fast to open, and measured:** versions read in the background with a disk cache; a script
    that reports time to the first usable view and to complete data.
 5. **Secrets have a lifecycle:** gateway secrets in the Keychain; backups say when they hold a

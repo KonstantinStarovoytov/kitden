@@ -23,3 +23,19 @@ def test_readme_says_what_an_unknown_folder_gets():
     readme = " ".join((ROOT / "README.md").read_text().split())
     words = "In a folder Kitden does not know as a project, the All projects switches apply."
     assert words in readme
+
+
+def test_readme_names_the_management_actions():
+    readme = " ".join((ROOT / "README.md").read_text().split())
+    for words in (
+        "Remove from",  # a plugin or a skill, with Undo
+        '"+ Add" on an MCP server copies its entry to another client',
+        "Add to this project…",
+        "Add missing…",
+        "Put back in",
+        "Remove from the Kitden gateway…",
+    ):
+        assert words in readme, words
+    check = (ROOT / "docs/development.md").read_text()
+    for words in ("Remove", "Put back", "Add missing", "Add to this project"):
+        assert words in check, words
