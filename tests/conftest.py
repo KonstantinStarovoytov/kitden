@@ -69,9 +69,14 @@ def _no_client_commands(tmp_path_factory, monkeypatch):
 @pytest.fixture(autouse=True)
 def _never_the_real_keychain(tmp_path_factory, monkeypatch):
     """Kitden's Keychain calls go to a path that does not exist, unless a test uses
-    `fake_keychain`. Child processes such as `kitden mcp` get the same env."""
+    `fake_keychain`. Child processes such as `kitden mcp` get the same env: the MCP SDK starts a
+    stdio server with only a few env values of this process, so KITDEN_SECURITY joins them."""
+    from mcp.client import stdio
+
     missing = tmp_path_factory.getbasetemp().resolve() / "no-security"
     monkeypatch.setenv("KITDEN_SECURITY", str(missing))
+    inherited = [*stdio.DEFAULT_INHERITED_ENV_VARS, "KITDEN_SECURITY"]
+    monkeypatch.setattr(stdio, "DEFAULT_INHERITED_ENV_VARS", inherited)
 
 
 def install_fake_security(folder: Path) -> Path:

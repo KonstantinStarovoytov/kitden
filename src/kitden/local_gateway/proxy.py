@@ -60,6 +60,7 @@ from mcp_types import (
 )
 
 from kitden.gateways import data_dir
+from kitden.local_gateway.keychain import KeychainError, resolve_entry
 from kitden.local_gateway.project import project_chain, session_folder
 from kitden.local_gateway.settings import (
     PLACEHOLDERS,
@@ -260,6 +261,8 @@ class Upstreams:
             if client is None:
                 try:
                     client = await self._open().start(self._serve, server)
+                except UpstreamError:
+                    raise
                 except Exception:
                     verb = "reach" if self._remote(server) else "start"
                     raise UpstreamError(f"Kitden could not {verb} {server}.") from None
@@ -270,7 +273,11 @@ class Upstreams:
 
         It runs in the group's own task: a connection must close in the task that opened it.
         """
-        entry = self.settings["servers"][server]
+        try:
+            # Secrets in env and headers are Keychain references until the server starts.
+            entry = await anyio.to_thread.run_sync(resolve_entry, self.settings["servers"][server])
+        except KeychainError as problem:
+            raise UpstreamError(str(problem)) from None
         ready = False
         try:
             async with AsyncExitStack() as stack:

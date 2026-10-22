@@ -1,9 +1,10 @@
 """A tiny stdio MCP server for gateway tests.
 
-    python echo_server.py NAME [--mark FILE] [--hang]
+    python echo_server.py NAME [--mark FILE] [--save-env KEY FILE] [--hang]
 
 NAME is what `clash` answers, so two copies can be told apart. `--mark` writes FILE when the
-process starts; `--hang` never answers, like a server stuck at start.
+process starts; `--save-env` writes the value of env KEY to FILE; `--hang` never answers, like a
+server stuck at start.
 """
 
 import os
@@ -22,6 +23,9 @@ def main() -> None:
     name = args[0] if args else "echo"
     if "--mark" in args:
         Path(args[args.index("--mark") + 1]).write_text(name)
+    if "--save-env" in args:
+        at = args.index("--save-env")
+        Path(args[at + 2]).write_text(os.environ.get(args[at + 1], ""))
     if "--hang" in args:
         time.sleep(3600)
 

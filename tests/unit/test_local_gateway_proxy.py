@@ -23,7 +23,7 @@ import kitden.clients.codex as codex
 import kitden.clients.version_cache as version_cache
 from kitden import mcp_server
 from kitden.gateways import data_dir
-from kitden.local_gateway import proxy
+from kitden.local_gateway import keychain, proxy
 from kitden.local_gateway.proxy import Upstreams, exposed_names
 from kitden.local_gateway.settings import (
     CALLS_FILE,
@@ -726,3 +726,67 @@ async def test_a_broken_calls_file_does_not_stop_a_call(home, tmp_path):
             answer = await client.call_tool("echo", {"text": "hello"})
     assert not answer.is_error and text(answer) == "hello"
     assert "Kitden could not count the call to echo." in log.read_text()
+
+
+async def test_a_plain_entry_runs_without_the_keychain(home, tmp_path):
+    # No stand-in here: KITDEN_SECURITY points at nothing, so any Keychain call would fail.
+    saved = tmp_path / "note.txt"
+    entry = echo("echo", "--save-env", "NOTE", str(saved))
+    entry["env"] = {"NOTE": "plain"}
+    write_settings(home, {"echo": entry})
+    save_tools(home, "echo", [tool("echo")])
+    async with gateway(home) as client:
+        await client.list_tools()
+        answer = await client.call_tool("echo", {"text": "hello"})
+    assert not answer.is_error and text(answer) == "hello"
+    assert saved.read_text() == "plain"
+
+
+async def test_a_reference_is_resolved_before_the_server_starts(home, tmp_path, fake_keychain):
+    keychain.store("echo", "NOTE", "SENTINEL_SECRET_NOTE")
+    saved = tmp_path / "note.txt"
+    entry = echo("echo", "--save-env", "NOTE", str(saved))
+    entry["env"] = {"NOTE": {"keychain": "echo/NOTE"}, "PLAIN": "x"}
+    write_settings(home, {"echo": entry})
+    save_tools(home, "echo", [tool("echo"), tool("where")])
+    log = tmp_path / "stderr.txt"
+    with log.open("w") as errlog:
+        async with gateway(home, errlog=errlog) as client:
+            await client.list_tools()
+            where = json.loads(text(await client.call_tool("where", {})))
+    # The server got the value from the Keychain; gateway.json holds only the reference.
+    assert saved.read_text() == "SENTINEL_SECRET_NOTE"
+    assert {"NOTE", "PLAIN"} <= set(where["env"])
+    assert "SENTINEL" not in (data_dir(home) / SETTINGS_FILE).read_text() + log.read_text()
+
+
+async def test_a_missing_keychain_item_gives_a_plain_sentence(
+    home, tmp_path, fake_keychain, capsys
+):
+    started = tmp_path / "started"
+    entry = echo("echo", "--mark", str(started))
+    entry["env"] = {"NOTE": {"keychain": "echo/NOTE"}}
+    async with Upstreams(home, {"servers": {"echo": entry}}) as upstreams:
+        answer = await upstreams.call("echo", "echo", {"text": "hello"})
+        with pytest.raises(proxy.UpstreamError) as listed:
+            await upstreams.list_tools("echo")
+    line = "Kitden could not read a secret of echo from the Keychain."
+    assert (answer.is_error, text(answer)) == (True, line)
+    assert str(listed.value) == line
+    assert not started.exists()
+    # Said once for the call and once for the list, and nothing else.
+    assert capsys.readouterr().err == f"{line}\n{line}\n"
+
+
+@pytest.mark.parametrize("env", [None, {"LANG": "en_US.UTF-8"}])
+async def test_kitden_mcp_in_a_test_never_reaches_the_real_keychain(home, env):
+    # Without the stand-in, the child process gets the path that does not exist; the real
+    # `security` would answer "not found" instead.
+    entry = echo("echo")
+    entry["env"] = {"NOTE": {"keychain": "echo/NOTE"}}
+    write_settings(home, {"echo": entry})
+    save_tools(home, "echo", [tool("echo")])
+    async with gateway(home, env=env) as client:
+        await client.list_tools()
+        answer = await client.call_tool("echo", {"text": "hello"})
+    assert (answer.is_error, text(answer)) == (True, "Kitden could not reach the Keychain.")
