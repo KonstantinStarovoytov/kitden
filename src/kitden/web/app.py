@@ -289,7 +289,7 @@ class State:
     `quick_first` every scan is quick: a slow answer (Codex's plugin list) comes in the
     background and brings one more scan. After the first scan, `warm` reads the marketplaces,
     so the Library opens at once, and `versions` reads the clients' versions that are not known
-    yet; a new version brings one more scan.
+    yet; a new version brings one more scan. Each later Rescan reads them again in the background.
     """
 
     def __init__(
@@ -309,6 +309,7 @@ class State:
         self.progress = Progress(events)
         self.loop: asyncio.AbstractEventLoop | None = None
         self.follow_ups: set[asyncio.Task] = set()
+        self.reading_versions = False
         self.ready = asyncio.Event()
         self.inventory = build() if scan_now else Inventory()
         self.data = inventory_dict(self.inventory)
@@ -371,10 +372,18 @@ class State:
         self.progress.mark_ready(*done)
         await asyncio.gather(self._read_versions(), self._warm())
 
+    def read_versions_later(self) -> asyncio.Task | None:
+        """Read the versions again in the background, so an updated client gets its new one.
+        Cheap when no binary changed; None while a read is running."""
+        if self.versions is None or self.reading_versions:
+            return None
+        return asyncio.ensure_future(self._read_versions())
+
     async def _read_versions(self) -> None:
-        """Read the versions not known yet, once; scan again when one is new. No retry."""
-        if self.versions is None:
+        """Read the versions not known yet; scan again when one is new. One read at a time."""
+        if self.versions is None or self.reading_versions:
             return
+        self.reading_versions = True
         try:
             found = await asyncio.to_thread(self.versions)
             held = {client.id: client.version for client in self.inventory.clients}
@@ -387,6 +396,7 @@ class State:
             kind = type(error).__name__
             print(f"Reading the client versions failed ({kind}).", file=sys.stderr, flush=True)
         finally:
+            self.reading_versions = False
             self.progress.done(VERSION_STEP)
             self.events.publish("versions")
 
@@ -546,10 +556,18 @@ def create_app(
         refreshing.add(task)
         task.add_done_callback(refreshing.discard)
 
+    def read_versions_later() -> None:
+        """After a rescan: a client updated while the page runs gets its new version."""
+        task = state.read_versions_later()
+        if task is not None:
+            refreshing.add(task)
+            task.add_done_callback(refreshing.discard)
+
     async def on_files_changed() -> None:
         # Never starts a server: only the Rescan button refreshes the tool lists.
         events.publish("files_changed")
         await state.rescan()
+        read_versions_later()
 
     @contextlib.asynccontextmanager
     async def lifespan(app: Starlette) -> AsyncIterator[None]:
@@ -1108,9 +1126,10 @@ def create_app(
         return JSONResponse({"command": adapter.gateway_step(gateway, item.name).login_note})
 
     async def rescan(request: Request) -> JSONResponse:
-        """The Rescan button: read every client again and refresh the gateway's tool lists."""
+        """The Rescan button: read every client again, then its version and the gateway's tools."""
         data = await state.rescan()
         refresh_later()
+        read_versions_later()
         return JSONResponse({"items": len(data["items"]), "problems": len(data["problems"])})
 
     async def stream(request: Request) -> StreamingResponse:

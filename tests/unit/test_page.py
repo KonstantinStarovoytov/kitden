@@ -1,5 +1,6 @@
 """One page per home folder: the lock and the page record (feature 002, FR-009, FR-010)."""
 
+import os
 import re
 import stat
 import subprocess
@@ -566,3 +567,118 @@ def test_a_client_found_only_by_its_command_is_found_once_the_versions_are_read(
         _progress_done(client)
         assert status() == ("found", "2.1.300")
     assert version_cache.cached_version(home, "claude_code") == "2.1.300"
+
+
+POST = {"Origin": "http://127.0.0.1:47800", "X-Tool-Request": "1"}
+
+
+def _wait_for(check, tries=80):
+    for _ in range(tries):
+        if check():
+            return
+        time.sleep(0.05)
+    raise AssertionError("waited too long")
+
+
+def test_rescan_reads_the_version_of_a_client_updated_while_the_page_runs(tmp_path, monkeypatch):
+    from starlette.testclient import TestClient
+
+    from kitden.clients import version_cache
+    from kitden.views.inventory import build_inventory
+    from kitden.web.app import create_app
+    from tests.conftest import fake_client_command
+
+    home = tmp_path / "home"
+    home.mkdir()
+    claude = fake_client_command(tmp_path, "claude", "echo '2.1.300 (Claude Code)'")
+    monkeypatch.setattr(
+        version_cache,
+        "version_command",
+        lambda client: [str(claude), "--version"] if client == "claude_code" else None,
+    )
+
+    def status():
+        found = client.get("/api/clients").json()
+        return next((c["status"], c["version"]) for c in found if c["id"] == "claude_code")
+
+    app = create_app(
+        lambda **options: build_inventory(home, **options),
+        token="tok",
+        port=47800,
+        home=home,
+        first_scan_later=True,
+        quick_first=True,
+    )
+    with TestClient(app, base_url="http://127.0.0.1:47800", follow_redirects=False) as client:
+        client.get("/?token=tok")
+        client.get("/api/clients")
+        _progress_done(client)
+        assert status() == ("found", "2.1.300")
+
+        # The client updates itself: a new binary with a new modification time.
+        claude.write_text("#!/bin/sh\necho '2.1.301 (Claude Code)'\n")
+        later = claude.stat().st_mtime_ns + 5_000_000_000
+        os.utime(claude, ns=(later, later))
+        assert client.post("/api/rescan", headers=POST).status_code == 200
+        _wait_for(lambda: status() == ("found", "2.1.301"))
+    assert version_cache.cached_version(home, "claude_code") == "2.1.301"
+
+
+def test_a_changed_file_also_reads_the_versions(tmp_path):
+    from starlette.testclient import TestClient
+
+    from kitden.views.inventory import Inventory
+    from kitden.web.app import create_app
+
+    asked = []
+
+    def refresh():
+        asked.append(1)
+        return {}
+
+    config = tmp_path / "config.toml"
+    config.write_text("a = 1\n")
+    app = create_app(
+        lambda: Inventory(),
+        token="tok",
+        port=47800,
+        watch_folders=[tmp_path],
+        debounce_ms=100,
+        version_refresh=refresh,
+    )
+    with TestClient(app, base_url="http://127.0.0.1:47800", follow_redirects=False):
+        time.sleep(0.5)
+        config.write_text("a = 2\n")
+        _wait_for(lambda: asked, tries=160)
+    assert asked
+
+
+def test_rescans_never_read_the_versions_twice_at_once():
+    import threading
+
+    from starlette.testclient import TestClient
+
+    from kitden.views.inventory import Inventory
+    from kitden.web.app import create_app
+
+    running = []
+    most = []
+    gate = threading.Event()
+
+    def refresh():
+        running.append(1)
+        most.append(len(running))
+        gate.wait(2)
+        running.pop()
+        return {}
+
+    app = create_app(lambda: Inventory(), token="tok", port=47800, version_refresh=refresh)
+    with TestClient(app, base_url="http://127.0.0.1:47800", follow_redirects=False) as client:
+        client.get("/?token=tok")
+        for _ in range(3):
+            assert client.post("/api/rescan", headers=POST).status_code == 200
+        _wait_for(lambda: most)
+        gate.set()
+        _wait_for(lambda: not running)
+    assert max(most) == 1
+    assert len(most) == 1  # the rescans while one read ran started no other
