@@ -330,3 +330,28 @@ def test_add_missing_names_cursor_for_a_claude_code_user_plugin():
     assert after_words(change, inventory()) == [
         {"client": "claude_code", "state": "on", "word": "Loads"}
     ]
+
+
+def server(client, name, via=None):
+    source = Source(kind=SourceKind.FILE, path=f"/h/{client}.json", owner_client=client)
+    return Item(
+        client=client,
+        kind=ItemKind.MCP_SERVER,
+        name=name,
+        source=source,
+        scope=Scope.USER,
+        via_gateway=via,
+    )
+
+
+def test_removing_from_the_kitden_gateway_counts_a_client_on_another_gateway():
+    # Codex reaches files through a registered gateway, so "then in no client" is untrue.
+    inv = inventory(server("codex", "files", via="gw-1"), server("cursor", "files", via="kitden"))
+    edit = FileEdit(path="/h/settings.json", fmt="json", key=("servers", "files"), after=0)
+    change = Change(
+        action="gateway.remove",
+        steps=[Step(client="kitden", scope=Scope.USER, name="files", edit=edit)],
+    )
+    assert after_words(change, inv) == [
+        {"note": "Codex still reaches files through another gateway. Undo brings it back."}
+    ]

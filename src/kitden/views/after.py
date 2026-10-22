@@ -10,6 +10,7 @@ from kitden.changes.actions import (
     GATEWAY_RULE,
     GATEWAY_RULES,
     GATEWAY_STRICT,
+    KITDEN_GATEWAY,
     MCP_ADD,
     PROJECT_ALIGN,
     claude_allows_kitden,
@@ -512,25 +513,35 @@ def home_path(path: str, home: Path) -> str:
 
 def _gateway_remove_words(change: Change, inventory) -> list[dict]:
     """A server leaves the Kitden gateway: each client that offers the gateway's tools loses
-    it. The note says whether a client still has its own entry for it."""
+    it. The note says whether a client still has its own entry for it, or still reaches it
+    through a registered gateway."""
     server = change.steps[0].name
-    direct = [
-        c
-        for c in CLIENTS
-        if any(
-            i.client == c
-            and i.kind is ItemKind.MCP_SERVER
-            and i.name == server
-            and i.via_gateway is None
-            for i in inventory.items
-        )
-    ]
+
+    def having(via) -> list[str]:
+        return [
+            c
+            for c in CLIENTS
+            if any(
+                i.client == c
+                and i.kind is ItemKind.MCP_SERVER
+                and i.name == server
+                and via(i.via_gateway)
+                for i in inventory.items
+            )
+        ]
+
+    direct = having(lambda g: g is None)
+    other = having(lambda g: g not in (None, KITDEN_GATEWAY))
+    lines = []
     if direct:
         who = _join([CLIENT_WORDS[c] for c in direct])
         own = "has its own entry" if len(direct) == 1 else "have their own entries"
-        first = f"{who} still {own} for {server}."
-    else:
-        first = f"{server} is then in no client."
+        lines.append(f"{who} still {own} for {server}.")
+    if other:
+        who = _join([CLIENT_WORDS[c] for c in other])
+        reach = "reaches" if len(other) == 1 else "reach"
+        lines.append(f"{who} still {reach} {server} through another gateway.")
+    first = " ".join(lines) or f"{server} is then in no client."
     clients = [c for c in CLIENTS if c in _offering(inventory)]
     if not clients:
         return [{"note": f"{first} Undo brings it back."}]

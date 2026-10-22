@@ -69,8 +69,18 @@ same test project:
 12. With the test project picked, "Add to this project…" a skill and a Claude Code plugin. A
     session in that folder has them; one in another folder does not.
 13. "Add missing…" on the test project, Apply, check a new session in each client, then Undo.
+14. Remove a plugin that is turned off. Undo; it is back and still off.
+15. Remove a Claude Code plugin that is on for the test project only. Kitden runs
+    `claude plugin uninstall <name> -s project` in the project folder. A session there no longer
+    has it; Undo puts it back for that project only.
+16. In Codex, remove a plugin, then Undo. `codex plugin remove <id>` should delete its
+    `[plugins."<id>"]` table in `~/.codex/config.toml`, and `codex plugin add <id> --json` should
+    write it back and fetch the plugin again. This is assumed from `codex plugin --help` (0.163,
+    2026-10-19); Codex's docs do not say it (checked 2026-10-22). Then "Add missing…" a Codex
+    plugin and a Codex server together and Undo: the plugin is gone from Codex's `/plugins` too,
+    not only from the file.
 
-Not run yet for steps 8 to 13: Part 3 was built and tested with fake client commands only.
+Not run yet for steps 8 to 16: Part 3 was built and tested with fake client commands only.
 
 ## Release
 
