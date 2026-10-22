@@ -27,10 +27,12 @@ from kitden.changes.actions import (
     GATEWAY_SWITCH,
     KITDEN_GATEWAY,
     MARKETPLACE_ADD,
+    MCP_ADD,
     PLUGIN_INSTALL,
     PLUGIN_SKILLS,
     SETUP_SERVER_UPDATE,
     SKILL_INSTALL,
+    add_server_steps,
     connect_steps,
     install_steps,
     local_move_steps,
@@ -880,6 +882,12 @@ def create_app(
                 clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
                 server = str(params.get("server", ""))
                 steps = put_back_steps(adapters, home, server, clients)
+            elif action == MCP_ADD:
+                item = _item(str(params.get("item", "")))
+                if item is None:
+                    return _error("Choose a known server.", 422)
+                clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+                steps = add_server_steps(adapters, item, clients)
             elif action == GATEWAY_MOVE:
                 gateway = next(
                     (g for g in load_gateways(home) if g.id == params.get("gateway")), None

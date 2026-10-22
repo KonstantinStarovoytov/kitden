@@ -9,6 +9,7 @@ from kitden.changes.actions import (
     GATEWAY_RULE,
     GATEWAY_RULES,
     GATEWAY_STRICT,
+    MCP_ADD,
     claude_allows_kitden,
 )
 from kitden.changes.json_splice import ABSENT
@@ -560,6 +561,19 @@ def _put_back_words(change: Change, inventory, home: Path) -> list[dict]:
     return out
 
 
+def _add_server_words(change: Change, home: Path) -> list[dict]:
+    """A server copied into clients: each loads it, and says when the copy holds a secret."""
+    out = []
+    for step in change.steps:
+        edit = step.edit
+        assert edit is not None
+        entry = {"client": step.client, "state": "on", "word": "Loads"}
+        if redact(edit.after)[1]:
+            entry["note"] = f"This makes a second copy of a secret in {home_path(edit.path, home)}."
+        out.append(entry)
+    return out
+
+
 def after_words(
     change: Change,
     inventory,
@@ -588,6 +602,8 @@ def after_words(
         return _gateway_remove_words(change, inventory)
     if change.action == GATEWAY_PUT_BACK and home is not None:
         return _put_back_words(change, inventory, home)
+    if change.action == MCP_ADD and home is not None:
+        return _add_server_words(change, home)
     # A move into a registered gateway has that gateway's own step; one into the Kitden
     # gateway has none, also when the gateway holds the server already.
     if change.action == "gateway.move" and not any(

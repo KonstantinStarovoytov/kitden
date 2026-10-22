@@ -456,3 +456,7 @@ test('removing from or putting back from the Kitden gateway is named', () => {
   const back = { action: 'gateway.put_back', steps: [{ client: 'claude_code', name: 'files', restart_note: 'Start a new Claude Code session (or a new Code tab chat) for this to take effect.' }] };
   assert.deepEqual(changeWords(back, { params: { server: 'files' } }), { title: 'Put files back in Claude Code', done: 'Put files back in Claude Code · Start a new Claude Code session (or a new Code tab chat)' });
 });
+
+test('a server added to another client is named', () => {
+  assert.deepEqual(changeWords({ action: 'mcp.add', steps: [{ client: 'codex', name: 'github' }] }), { title: 'Add github to Codex', done: 'Added github to Codex' });
+});

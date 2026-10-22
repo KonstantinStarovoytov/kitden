@@ -43,7 +43,7 @@ const { freshness, hashFor, parseHash, state } = await import('../../src/kitden/
 const later = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const cell = (fields) => ({ state: 'none', where: null, items: [], word: null, add: null, reason: null, ...fields });
-const add = (fields) => ({ action: 'plugin.install', label: '+ Add', plugin: null, skill: null, marketplace: null, warn: null, ...fields });
+const add = (fields) => ({ action: 'plugin.install', label: '+ Add', plugin: null, skill: null, marketplace: null, item: null, warn: null, ...fields });
 const row = (cells, fields = {}) => ({ key: 'plugin:1', kind: 'plugin', name: 'figma', source: 'openai-curated', same_name: false, cells, ...fields });
 
 test('a cell with an add shows its label and nothing else', () => {
@@ -97,6 +97,12 @@ test('a cell add asks for a review of that one client', () => {
     { action: 'plugin.skills', targets: [{ client: 'claude_code' }], params: { plugin: 'documents@openai-curated' } });
   assert.deepEqual(previewFor(add({ action: 'skill.install', skill: 'tidy@toolbox@x' }), 'cursor'),
     { action: 'skill.install', targets: [{ client: 'cursor' }], params: { skill: 'tidy@toolbox@x' } });
+  assert.deepEqual(previewFor(add({ action: 'mcp.add', item: 'item-1' }), 'codex'),
+    { action: 'mcp.add', targets: [{ client: 'codex' }], params: { item: 'item-1' } });
+});
+
+test('a server add names the server and the client', () => {
+  assert.equal(addName({ kind: 'mcp_server', name: 'github' }, 'codex', add({ action: 'mcp.add', item: 'item-1' }), null), 'Add github to Codex');
 });
 
 test('the review note warns about a twin and says a project add is for every project', () => {

@@ -229,6 +229,7 @@ const ACTION_WORDS = {
   "gateway.rules": "Changed the rules for",
   "gateway.remove": "Removed",
   "gateway.put_back": "Put back",
+  "mcp.add": "Added",
 };
 
 // A Kitden gateway rule in words: "slow of echo in website", as the review's after line says

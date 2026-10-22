@@ -122,7 +122,18 @@ def _page_outputs(home) -> list[str]:
             "params": {"server": "held-files"},
         }
         changes.append(post("/api/changes/preview", body))
-        assert len(changes) >= 6
+        # A server copied to another client: the diff, the log and the record hold its entry.
+        items = page.get("/api/items?kind=mcp_server").json()
+        copies = (("claude_code", "github", "codex"), ("codex", "langfuse-data", "claude_code"))
+        for who, name, client in copies:
+            item = next(i for i in items if (i["client"], i["name"]) == (who, name))
+            body = {
+                "action": "mcp.add",
+                "targets": [{"client": client}],
+                "params": {"item": item["id"]},
+            }
+            changes.append(post("/api/changes/preview", body))
+        assert len(changes) >= 8
         for change in changes:
             post(f"/api/changes/{change['id']}/apply")
             post(f"/api/changes/{change['id']}/undo")

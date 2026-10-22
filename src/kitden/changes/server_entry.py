@@ -1,16 +1,25 @@
-"""An MCP entry the Kitden gateway holds, written as a client writes it (spec 3.3).
+"""An MCP entry written as a client writes it (spec 3.3, 3.4).
 
-The gateway holds `command`, `args`, `env` or `url`, `headers`, and maybe a Codex start time.
-Each client writes a user-scope entry its own way:
+The entry may come from the Kitden gateway or from any client's file. It is read into one
+shape (command, args, env or url, headers; references as `${VAR}`), then written the way the
+chosen client writes a user-scope entry:
 
-- Claude Code (~/.claude.json): `type` "stdio" with command, args, env; or `type` "http" with
-  url, headers.
-- Codex (~/.codex/config.toml): command, args, env; or url with `http_headers`; it keeps
-  `startup_timeout_sec`.
-- Cursor (~/.cursor/mcp.json): the same fields as the gateway, without a type.
+- Claude Code (~/.claude.json): `type` "stdio" with command, args, env; or `type` "http",
+  "sse" or "ws" with url, headers. It has no start folder setting. It fills in `${VAR}` and
+  `${VAR:-default}` in command, args, env, url and headers, also in user-scope entries in
+  ~/.claude.json (checked 2026-10-22, code.claude.com/docs/en/mcp, "Environment variable
+  expansion").
+- Codex (~/.codex/config.toml): command, args, env, `env_vars` (names it passes on from your
+  shell), `cwd`; or url with `http_headers`, `bearer_token_env_var` (a variable sent as
+  `Authorization: Bearer`) and `env_http_headers` (header name to variable name). A remote
+  server is streamable HTTP only, no SSE. No `${VAR}` form is documented, so any other
+  reference is refused (checked 2026-10-22, learn.chatgpt.com/docs/extend/mcp).
+- Cursor (~/.cursor/mcp.json): the same fields as the gateway, without a type. It fills in
+  `${env:VAR}` in command, args, env, url and headers; no default form is documented. A url
+  entry serves both streamable HTTP and SSE; no WebSocket and no start folder setting is
+  documented (checked 2026-10-22, cursor.com/docs/context/mcp).
 
-A project folder in the arguments (settings.PLACEHOLDERS) is not a shell value; each client
-names it its own way:
+A project folder (settings.PLACEHOLDERS) is not a shell value; each client names it its own way:
 
 - Claude Code sets CLAUDE_PROJECT_DIR in the server's environment, so a user-scope entry
   must write `${CLAUDE_PROJECT_DIR:-.}` (checked 2026-10-22, code.claude.com/docs/en/mcp).
@@ -24,13 +33,35 @@ names it its own way:
 import re
 from typing import Any
 
-from kitden.changes.actions import CLIENT_WORDS, _gateway_entry, _reads_elsewhere
+from kitden.changes.actions import CLIENT_WORDS
 from kitden.local_gateway.settings import PLACEHOLDERS, START_TIME
 
 UNREADABLE = "The entry could not be read."
 PROJECT_FOLDER = {"claude_code": "${CLAUDE_PROJECT_DIR:-.}"}
 # The longest first, so `${CLAUDE_PROJECT_DIR:-.}` is not read as `${CLAUDE_PROJECT_DIR}`.
 _PLACEHOLDER = re.compile("|".join(re.escape(p) for p in sorted(PLACEHOLDERS, key=len)[::-1]))
+# `${VAR}`, `${VAR:-default}`, and Cursor's `${env:VAR}`.
+_REFERENCE = re.compile(r"\$\{(env:)?([A-Za-z_][A-Za-z0-9_]*)(:-[^}]*)?\}")
+_BEARER = re.compile(r"Bearer \$\{([A-Za-z_][A-Za-z0-9_]*)\}")
+TOOL_TIME = "tool_timeout_sec"
+_HELPERS = ("envFile", "http_headers_helper", "headersHelper")
+_TOOL_LISTS = ("enabled_tools", "disabled_tools")
+_KNOWN = {
+    "type",
+    "command",
+    "args",
+    "env",
+    "url",
+    "headers",
+    "http_headers",
+    "bearer_token_env_var",
+    "env_http_headers",
+    "env_vars",
+    "cwd",
+    "enabled",
+    START_TIME,
+    TOOL_TIME,
+}
 
 
 def _strings(value: Any) -> bool:
@@ -39,46 +70,192 @@ def _strings(value: Any) -> bool:
     )
 
 
-def _shape(entry: Any) -> dict:
-    """The held entry's fields, checked; anything else raises "The entry could not be read."."""
+def _text_list(value: Any) -> bool:
+    return isinstance(value, list) and all(isinstance(a, str) for a in value)
+
+
+def _number(value: Any) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool)
+
+
+_CHECKS = {
+    "type": lambda v: isinstance(v, str),
+    "command": lambda v: isinstance(v, str),
+    "args": _text_list,
+    "env": _strings,
+    "url": lambda v: isinstance(v, str),
+    "headers": _strings,
+    "http_headers": _strings,
+    "bearer_token_env_var": lambda v: isinstance(v, str),
+    "env_http_headers": _strings,
+    "env_vars": _text_list,
+    "cwd": lambda v: isinstance(v, str),
+    "enabled": lambda v: isinstance(v, bool),
+    START_TIME: _number,
+    TOOL_TIME: _number,
+}
+
+
+def _canonical(entry: Any) -> dict:
+    """The entry in one shape: references as `${VAR}`, Codex's own forms read back into
+    headers and env. Refuses what cannot be copied as it is."""
     if not isinstance(entry, dict):
         raise ValueError(UNREADABLE)
-    checks = {
-        "command": lambda v: isinstance(v, str),
-        "args": lambda v: isinstance(v, list) and all(isinstance(a, str) for a in v),
-        "env": _strings,
-        "url": lambda v: isinstance(v, str),
-        "headers": _strings,
-        START_TIME: lambda v: isinstance(v, int | float) and not isinstance(v, bool),
-    }
-    if any(key in entry and not check(entry[key]) for key, check in checks.items()):
+    if any(key in entry for key in _HELPERS):
+        raise ValueError(
+            "The entry reads values from a file or a helper program; put the values in."
+        )
+    if entry.get("enabled") is False:
+        raise ValueError("The entry is turned off; turn it on first.")
+    if any(key in entry for key in _TOOL_LISTS):
+        raise ValueError(
+            "The entry keeps some tools off. "
+            "Move it into the gateway to share it with its switches."
+        )
+    for key in entry:
+        if key not in _KNOWN:
+            raise ValueError(f"Kitden does not know the setting {key}.")
+    if any(key in entry and not check(entry[key]) for key, check in _CHECKS.items()):
         raise ValueError(UNREADABLE)
     if not isinstance(entry.get("command") or entry.get("url"), str):
         raise ValueError(UNREADABLE)
-    return entry
+
+    def plain(text: str) -> str:  # Cursor's `${env:VAR}` is `${VAR}` here
+        return _REFERENCE.sub(lambda m: m.group(0).replace("${env:", "${"), text)
+
+    out: dict = {}
+    for key in ("command", "url"):
+        if entry.get(key):
+            out[key] = plain(entry[key])
+    if entry.get("args"):
+        out["args"] = [plain(a) for a in entry["args"]]
+    env = {k: plain(v) for k, v in (entry.get("env") or {}).items()}
+    for name in entry.get("env_vars") or []:
+        env.setdefault(name, f"${{{name}}}")
+    headers = {
+        k: plain(v) for k, v in (entry.get("headers") or entry.get("http_headers") or {}).items()
+    }
+    if entry.get("bearer_token_env_var"):
+        headers["Authorization"] = f"Bearer ${{{entry['bearer_token_env_var']}}}"
+    for header, name in (entry.get("env_http_headers") or {}).items():
+        headers[header] = f"${{{name}}}"
+    if env:
+        out["env"] = env
+    if headers:
+        out["headers"] = headers
+    for key in ("type", "cwd", START_TIME, TOOL_TIME):
+        if key in entry:
+            out[key] = entry[key]
+    return out
+
+
+def _each_string(server: dict, change) -> dict:
+    """The entry with `change` applied to each text: values, list items and map values."""
+    out: dict = {}
+    for key, value in server.items():
+        if isinstance(value, str):
+            out[key] = change(value)
+        elif isinstance(value, list):
+            out[key] = [change(v) for v in value]
+        elif isinstance(value, dict):
+            out[key] = {k: change(v) for k, v in value.items()}
+        else:
+            out[key] = value
+    return out
+
+
+def _refuse_reference(client: str, text: str) -> None:
+    raise ValueError(
+        f"{CLIENT_WORDS[client]} cannot read `{text}` from your shell; put the value in."
+    )
+
+
+def _texts(server: dict) -> list[str]:
+    """Every text in the entry: values, list items and map values."""
+    found: list[str] = []
+    _each_string(server, lambda t: found.append(t) or t)
+    return found
+
+
+def _references(server: dict) -> list[str]:
+    return [m.group(0) for t in _texts(server) for m in _REFERENCE.finditer(t)]
+
+
+def _cursor(server: dict) -> dict:
+    """References as Cursor writes them: `${env:VAR}`; it has no default form."""
+    for text in _references(server):
+        if ":-" in text:
+            _refuse_reference("cursor", text)
+
+    return _each_string(server, lambda t: _REFERENCE.sub(lambda m: f"${{env:{m.group(2)}}}", t))
+
+
+def _codex(server: dict) -> dict:
+    """References as Codex writes them: only a whole value, in its own keys."""
+    out = {key: server[key] for key in ("command", "args") if key in server}
+    env, names = {}, []
+    for key, value in server.get("env", {}).items():
+        if _REFERENCE.fullmatch(value) and value == f"${{{key}}}":
+            names.append(key)
+        else:
+            env[key] = value
+    if env:
+        out["env"] = env
+    if names:
+        out["env_vars"] = names
+    if "url" in server:
+        out["url"] = server["url"]
+    plain_headers, from_env = {}, {}
+    for header, value in server.get("headers", {}).items():
+        whole = _REFERENCE.fullmatch(value)
+        bearer = _BEARER.fullmatch(value)
+        if header == "Authorization" and bearer:
+            out["bearer_token_env_var"] = bearer.group(1)
+        elif whole and not whole.group(1) and not whole.group(3):
+            from_env[header] = whole.group(2)
+        else:
+            plain_headers[header] = value
+    if plain_headers:
+        out["http_headers"] = plain_headers
+    if from_env:
+        out["env_http_headers"] = from_env
+    for key in ("cwd", START_TIME, TOOL_TIME):
+        if key in server:
+            out[key] = server[key]
+    # A reference left in plain text would reach the server as it is.
+    for text in _references(out):
+        _refuse_reference("codex", text)
+    return out
 
 
 def translate_entry(entry: dict, client: str) -> dict:
     """The entry as `client` writes it. Raises ValueError with a plain reason when it cannot."""
     if client not in CLIENT_WORDS:
         raise ValueError(f"{client} cannot take an MCP entry")
-    held = _shape(entry)
-    server = _gateway_entry(held)  # command, args, env or url, headers; the type is dropped
-    if _reads_elsewhere(held, server):
-        raise ValueError("The entry reads values from your shell; put the values in.")
-    args = server.get("args")
-    if args and any(_PLACEHOLDER.search(a) for a in args):
+    words = CLIENT_WORDS[client]
+    server = _canonical(entry)
+    kind = str(server.pop("type", "")).lower()
+    if not kind and server.get("url", "").rstrip("/").endswith("/sse"):
+        kind = "sse"
+    if kind in ("sse", "ws") and (client == "codex" or (client == "cursor" and kind == "ws")):
+        connection = "an SSE" if kind == "sse" else "a WebSocket"
+        raise ValueError(f"{words} cannot use {connection} connection from here.")
+    if "cwd" in server and client != "codex":
+        raise ValueError(f"{words} has no setting for a start folder.")
+    if client != "codex":
+        server.pop(START_TIME, None)
+        server.pop(TOOL_TIME, None)
+
+    if any(_PLACEHOLDER.search(t) for t in _texts(server)):
         folder = PROJECT_FOLDER.get(client)
         if folder is None:
-            raise ValueError(
-                f"{CLIENT_WORDS[client]} cannot fill in the project folder this server needs."
-            )
-        server["args"] = [_PLACEHOLDER.sub(lambda _: folder, a) for a in args]
+            raise ValueError(f"{words} cannot fill in the project folder this server needs.")
+        server = _each_string(server, lambda t: _PLACEHOLDER.sub(lambda _: folder, t))
+
     if client == "claude_code":
-        return {"type": "http" if "url" in server else "stdio", **server}
-    if client == "codex":
-        if "headers" in server:
-            server["http_headers"] = server.pop("headers")
-        if START_TIME in held:
-            server[START_TIME] = held[START_TIME]
-    return server
+        if kind not in ("sse", "ws"):
+            kind = "http" if "url" in server else "stdio"
+        return {"type": kind, **server}
+    if client == "cursor":
+        return _cursor(server)
+    return _codex(server)

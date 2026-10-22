@@ -7,9 +7,16 @@ that client, or why there is none. Columns are the clients found on this compute
 
 from collections.abc import Callable
 
-from kitden.changes.actions import KITDEN_GATEWAY, PLUGIN_INSTALL, PLUGIN_SKILLS, SKILL_INSTALL
-from kitden.clients.base import REMOVE_DIRECT
-from kitden.model import ClientStatus, Item, ItemKind, _hash
+from kitden.changes.actions import (
+    CLIENT_WORDS,
+    KITDEN_GATEWAY,
+    MCP_ADD,
+    PLUGIN_INSTALL,
+    PLUGIN_SKILLS,
+    SKILL_INSTALL,
+)
+from kitden.clients.base import REMOVE_DIRECT, SETUP_NAME, is_direct_entry
+from kitden.model import ClientStatus, Item, ItemKind, Scope, _hash
 from kitden.views.catalog import catalog, search
 from kitden.views.gateway_view import group_of
 from kitden.views.load_map import COLUMNS, MARKS, NAMES, Row, load_map
@@ -50,6 +57,7 @@ def _add(
     skill: str | None = None,
     marketplace: str | None = None,
     warn: str | None = None,
+    item: str | None = None,
 ) -> dict:
     return {
         "action": action,
@@ -57,6 +65,7 @@ def _add(
         "plugin": plugin,
         "skill": skill,
         "marketplace": marketplace,
+        "item": item,
         "warn": warn,
     }
 
@@ -105,11 +114,19 @@ def _map_cell(row: Row, client: str) -> dict:
 Built = list[tuple[dict, set[str]]]
 # Why a client has a dash in a load map row, or None when no reason is true.
 Why = Callable[[Row, str], str | None]
+# The add a client with a dash in a load map row gets, or None.
+Add = Callable[[Row, str], dict | None]
 
 
-def _map_rows(map_rows: list[Row], kind: str, found: list[str], why: Why | None = None) -> Built:
-    """MCP servers, hooks and marketplaces: the load map rows as they are, and a reason on a
-    dash where `why` has one."""
+def _map_rows(
+    map_rows: list[Row],
+    kind: str,
+    found: list[str],
+    why: Why | None = None,
+    add: Add | None = None,
+) -> Built:
+    """MCP servers, hooks and marketplaces: the load map rows as they are, an add on a dash
+    where `add` has one, else a reason where `why` has one."""
     out = []
     for r in map_rows:
         if str(r.kind) != kind:
@@ -117,7 +134,11 @@ def _map_rows(map_rows: list[Row], kind: str, found: list[str], why: Why | None 
         holders = {c for c in found if _has(r, c)}
         cells = {c: _map_cell(r, c) for c in found}
         for client, cell in cells.items():
-            if why and cell["state"] == "none":
+            if cell["state"] != "none":
+                continue
+            if add:
+                cell["add"] = add(r, client)
+            if why and not cell["add"]:
                 cell["reason"] = why(r, client)
         row = _row(
             r.key, kind, r.name, r.source, cells, mine=bool(holders), lookup=r.lookup, flags=r.flags
@@ -126,10 +147,39 @@ def _map_rows(map_rows: list[Row], kind: str, found: list[str], why: Why | None 
     return out
 
 
+def _server_add(found: list[str], items: list[Item]) -> Add:
+    """A direct user-scope server one client loads: the other clients Kitden writes can add
+    it. The source is the first such entry in column order. A row a gateway serves has none."""
+    by_id = {i.id: i for i in items}
+
+    def source(row: Row) -> str | None:
+        for client in found:
+            if row.cells[client].state != "on":
+                continue
+            for i in row.cells[client].items:
+                item = by_id.get(i)
+                if (
+                    item is not None
+                    and is_direct_entry(item, item.client, {Scope.USER})
+                    and item.name != SETUP_NAME
+                    and REMOVE_DIRECT in item.actions
+                ):
+                    return item.id
+        return None
+
+    def add(row: Row, client: str) -> dict | None:
+        if client not in CLIENT_WORDS or any(row.cells[c].state == "gw" for c in found):
+            return None
+        item = source(row)
+        return _add(MCP_ADD, "+ Add", item=item) if item else None
+
+    return add
+
+
 def _server_why(map_rows: list[Row], found: list[str], items: list[Item]) -> Why:
     """A gateway entry: connect the client. A direct server another client loads: move it into
-    the gateway this client reaches. Kitden copies no server entry from one client to another,
-    so other dashes have no reason."""
+    the gateway this client reaches, when the client gets no add (_server_add). Other dashes
+    have no reason."""
     by_id = {i.id: i for i in items}
     servers = [r for r in map_rows if r.kind is ItemKind.MCP_SERVER]
     on_gateway = {c for r in servers for c in found if r.cells[c].state == "gw"}
@@ -495,7 +545,11 @@ def library(
     skills = skill_catalog(inventory, adapters)
     built = {
         "mcp_server": _map_rows(
-            map_rows, "mcp_server", found, _server_why(map_rows, found, inventory.items)
+            map_rows,
+            "mcp_server",
+            found,
+            _server_why(map_rows, found, inventory.items),
+            _server_add(found, inventory.items),
         ),
         "plugin": _plugin_rows(map_rows, offers, skills, found, cursor_imports),
         "skill": _skill_rows(map_rows, offers, skills, found, cursor_imports),

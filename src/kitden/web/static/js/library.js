@@ -61,7 +61,8 @@ export function moreLine(answer, show) {
 
 // What a cell's add asks the review for: that one client.
 export function previewFor(add, client) {
-  const params = add.action === "skill.install" ? { skill: add.skill } : { plugin: add.plugin };
+  const params = add.action === "skill.install" ? { skill: add.skill }
+    : add.action === "mcp.add" ? { item: add.item } : { plugin: add.plugin };
   return { action: add.action, targets: [{ client }], params };
 }
 

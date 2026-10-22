@@ -212,3 +212,7 @@ test('the Changes page names a server removed from or put back from the Kitden g
   assert.equal(changeTitle({ action: 'gateway.remove', steps: [{ client: 'kitden', name: 'files' }] }), 'Removed files from the Kitden gateway');
   assert.equal(changeTitle({ action: 'gateway.put_back', steps: [{ client: 'codex', name: 'files' }] }), 'Put back files · Codex');
 });
+
+test('the Changes page names a server added to another client', () => {
+  assert.equal(changeTitle({ action: 'mcp.add', steps: [{ client: 'codex', name: 'github' }] }), 'Added github · Codex');
+});

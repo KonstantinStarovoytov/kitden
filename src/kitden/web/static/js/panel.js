@@ -722,7 +722,7 @@ const DONE_WORDS = {
   "setup_server.update": "Updated show my setup to Kitden", "gateway.move": "Moved",
   "gateway.switch": "Switched the gateway", "plugin.install": "Added", "marketplace.add": "Added the marketplace",
   "skill.install": "Added", "plugin.skills": "Added",
-  "gateway.remove": "Removed", "gateway.put_back": "Put",
+  "gateway.remove": "Removed", "gateway.put_back": "Put", "mcp.add": "Added",
 };
 
 // Actions whose words say "from" a client.
@@ -766,6 +766,7 @@ export function changeWords(change, previewBody) {
     "plugin.install": `Add ${joinWords([...new Set(steps.filter((s) => s.name.includes("@")).map((s) => s.name))])} to ${clients}`,
     "marketplace.add": `Add the ${names} marketplace to ${clients}`,
     "skill.install": `Add ${names} to ${clients}`,
+    "mcp.add": `Add ${names} to ${clients}`,
     "plugin.skills": `Add ${plugin}'s skills to ${clients}`,
     // Each client's last step adds the new entry; it is named after the gateway.
     "gateway.switch": `Use ${steps.length ? steps[steps.length - 1].name : "the new gateway"} in ${clients}`,
@@ -785,7 +786,7 @@ export function changeWords(change, previewBody) {
   }
   if (change.action === "plugin.install") {
     what = `${verb} ${joinWords([...new Set(steps.filter((s) => s.name.includes("@")).map((s) => s.name.split("@")[0]))])} to ${clients}`;
-  } else if (change.action === "marketplace.add" || change.action === "skill.install") {
+  } else if (["marketplace.add", "skill.install", "mcp.add"].includes(change.action)) {
     what = `${verb} ${short} to ${clients}`;
   } else if (["gateway.connect", "gateway.switch", "setup_server.register", "setup_server.update"].includes(change.action)) {
     what = `${verb} ${["setup_server.update", "gateway.switch"].includes(change.action) ? "in" : "to"} ${clients}`;

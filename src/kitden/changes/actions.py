@@ -856,3 +856,35 @@ def put_back_steps(
         _refuse_if_present(step, client, server)
         steps.append(step)
     return steps
+
+
+MCP_ADD = "mcp.add"  # a direct server one client has, added to other clients
+
+
+def add_server_steps(
+    adapters: dict[str, ClientAdapter], item: Item, clients: list[str]
+) -> list[Step]:
+    """Write a direct server one client has into each chosen client, as a user-scope MCP
+    entry in that client's format. The first client keeps its own entry."""
+    from kitden.changes.server_entry import translate_entry  # it reads helpers of this module
+
+    if item.scope in (Scope.PROJECT, Scope.LOCAL):
+        raise ValueError("It is already per project; copy the file into the project instead.")
+    if item.name == SETUP_NAME:
+        raise ValueError("Kitden's own entry stays in each client.")
+    if item.via_gateway or REMOVE_DIRECT not in item.actions:
+        raise ValueError(f"{item.name} is not a direct entry.")
+    entry = _raw_entry(remove_steps(adapters, item)[0])
+    if entry is None:
+        raise ValueError(f"{item.name} could not be read from its file.")
+    if not clients:
+        raise ValueError("Choose at least one client")
+    steps = []
+    for client in dict.fromkeys(clients):
+        adapter = adapters.get(client)
+        if adapter is None or client not in CLIENT_WORDS:
+            raise ValueError(f"{client} cannot take an MCP entry")
+        step = adapter.add_server_step(item.name, translate_entry(entry, client))
+        _refuse_if_present(step, client, item.name)
+        steps.append(step)
+    return steps

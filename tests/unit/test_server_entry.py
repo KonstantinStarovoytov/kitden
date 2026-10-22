@@ -1,4 +1,6 @@
-"""A held entry written as each client writes it (spec 3.3)."""
+"""An entry written as each client writes it (spec 3.3, 3.4)."""
+
+import re
 
 import pytest
 
@@ -54,3 +56,148 @@ def test_a_project_folder_takes_the_clients_own_form():
                 ValueError, match=f"^{words} cannot fill in the project folder this server needs.$"
             ):
                 translate_entry(entry, client)
+
+
+API = {
+    "type": "http",
+    "url": "https://api.invalid/mcp",
+    "headers": {"Authorization": "Bearer ${API_KEY}"},
+}
+
+
+def test_a_reference_is_kept_where_the_client_can_read_it():
+    assert translate_entry(API, "claude_code") == API
+    assert translate_entry(API, "cursor") == {
+        "url": API["url"],
+        "headers": {"Authorization": "Bearer ${env:API_KEY}"},
+    }
+    assert translate_entry(API, "codex") == {"url": API["url"], "bearer_token_env_var": "API_KEY"}
+    other = {"url": API["url"], "headers": {"X-Key": "${X_KEY}"}}
+    assert translate_entry(other, "codex") == {
+        "url": API["url"],
+        "env_http_headers": {"X-Key": "X_KEY"},
+    }
+    env = {"command": "npx", "args": ["x"], "env": {"HOME_TOKEN": "${HOME_TOKEN}"}}
+    assert translate_entry(env, "codex") == {
+        "command": "npx",
+        "args": ["x"],
+        "env_vars": ["HOME_TOKEN"],
+    }
+    assert translate_entry(env, "cursor") == {
+        "command": "npx",
+        "args": ["x"],
+        "env": {"HOME_TOKEN": "${env:HOME_TOKEN}"},
+    }
+    with_default = {"command": "npx", "args": ["${DIR:-/tmp}"]}
+    assert translate_entry(with_default, "claude_code") == {"type": "stdio", **with_default}
+
+
+def test_a_reference_the_client_cannot_read_is_refused_with_the_spec_words():
+    shelled = {"command": "npx", "args": ["x", "${TOKEN}"]}
+    with pytest.raises(
+        ValueError, match=r"^Codex cannot read `\$\{TOKEN\}` from your shell; put the value in\.$"
+    ):
+        translate_entry(shelled, "codex")
+    with pytest.raises(
+        ValueError,
+        match=r"^Cursor cannot read `\$\{TOKEN:-x\}` from your shell; put the value in\.$",
+    ):
+        translate_entry({"url": "https://a.invalid/mcp", "headers": {"A": "${TOKEN:-x}"}}, "cursor")
+    with pytest.raises(ValueError, match=r"^Codex cannot read `\$\{OTHER\}` from your shell"):
+        translate_entry({"command": "npx", "env": {"KEY": "${OTHER}"}}, "codex")
+
+
+def test_the_other_clients_forms_are_read_into_the_canonical_shape():
+    codex = {
+        "url": "https://t.invalid/mcp",
+        "bearer_token_env_var": "TOKEN",
+        "env_http_headers": {"X": "X_KEY"},
+    }
+    assert translate_entry(codex, "claude_code") == {
+        "type": "http",
+        "url": codex["url"],
+        "headers": {"Authorization": "Bearer ${TOKEN}", "X": "${X_KEY}"},
+    }
+    assert translate_entry({"command": "npx", "env_vars": ["HOME_TOKEN"]}, "claude_code") == {
+        "type": "stdio",
+        "command": "npx",
+        "env": {"HOME_TOKEN": "${HOME_TOKEN}"},
+    }
+    cursor = {"command": "npx", "env": {"KEY": "${env:KEY}"}}
+    assert translate_entry(cursor, "claude_code") == {
+        "type": "stdio",
+        "command": "npx",
+        "env": {"KEY": "${KEY}"},
+    }
+    assert translate_entry(cursor, "codex") == {"command": "npx", "env_vars": ["KEY"]}
+    timed = {"command": "npx", "startup_timeout_sec": 20, "tool_timeout_sec": 90, "enabled": True}
+    assert translate_entry(timed, "codex") == {k: v for k, v in timed.items() if k != "enabled"}
+    assert translate_entry(timed, "cursor") == {"command": "npx"}
+
+
+@pytest.mark.parametrize(
+    "entry, client, words",
+    [
+        (
+            {"command": "npx", "envFile": "/opt/app/.env"},
+            "codex",
+            "The entry reads values from a file or a helper program; put the values in.",
+        ),
+        (
+            {"url": "https://h.invalid/mcp", "headersHelper": "/opt/h"},
+            "cursor",
+            "The entry reads values from a file or a helper program; put the values in.",
+        ),
+        (
+            {"command": "uv", "args": ["run"], "enabled": False},
+            "claude_code",
+            "The entry is turned off; turn it on first.",
+        ),
+        (
+            {"command": "uv", "enabled_tools": ["draw"]},
+            "cursor",
+            "The entry keeps some tools off. Move it into the gateway to share it with its "
+            "switches.",
+        ),
+        (
+            {"type": "sse", "url": "https://s.invalid/sse"},
+            "codex",
+            "Codex cannot use an SSE connection from here.",
+        ),
+        (
+            {"url": "https://s.invalid/sse"},
+            "codex",
+            "Codex cannot use an SSE connection from here.",
+        ),
+        (
+            {"type": "ws", "url": "wss://w.invalid/mcp"},
+            "cursor",
+            "Cursor cannot use a WebSocket connection from here.",
+        ),
+        (
+            {"command": "npx", "cwd": "/opt/app"},
+            "cursor",
+            "Cursor has no setting for a start folder.",
+        ),
+        (
+            {"command": "npx", "cwd": "/opt/app"},
+            "claude_code",
+            "Claude Code has no setting for a start folder.",
+        ),
+        ({"command": "npx", "mystery": 1}, "codex", "Kitden does not know the setting mystery."),
+    ],
+)
+def test_what_cannot_be_copied_is_refused_with_the_reason(entry, client, words):
+    with pytest.raises(ValueError, match=f"^{re.escape(words)}$"):
+        translate_entry(entry, client)
+
+
+def test_sse_and_a_start_folder_are_kept_where_the_client_has_them():
+    sse = {"type": "sse", "url": "https://s.invalid/sse"}
+    assert translate_entry(sse, "claude_code") == sse
+    # Cursor reads SSE from a url entry; it has no type for it.
+    assert translate_entry(sse, "cursor") == {"url": sse["url"]}
+    assert translate_entry({"command": "npx", "cwd": "/opt/app"}, "codex") == {
+        "command": "npx",
+        "cwd": "/opt/app",
+    }

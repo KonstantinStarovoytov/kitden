@@ -107,6 +107,7 @@ def _add(action, label, plugin=None, skill=None, marketplace=None, warn=None) ->
         "plugin": plugin,
         "skill": skill,
         "marketplace": marketplace,
+        "item": None,
         "warn": warn,
     }
 
@@ -505,14 +506,37 @@ def _server_reasons(home: Path, gateway: bool) -> dict:
     }
 
 
+def _server_adds(home: Path, gateway: bool) -> dict:
+    """Per MCP server row, the action of each dash's add, or None."""
+    inventory = build_inventory(home)
+    if gateway:
+        mark_gateways(inventory, [Gateway(url="https://mcp.neon.tech/mcp")])
+    adapters = {a.id: a for a in default_adapters(home)}
+    answer = library(inventory, adapters, None, gateway_registered=gateway, kind="mcp_server")
+    return {
+        r["name"]: {
+            c: (cell["add"] or {}).get("action")
+            for c, cell in r["cells"].items()
+            if cell["state"] == "none"
+        }
+        for r in answer["rows"]
+    }
+
+
 def test_a_server_dash_says_how_the_gateway_would_share_it(home):
     # Codex and Cursor reach the gateway through their neon entries; Claude Code does not.
     reasons = _server_reasons(home, gateway=True)
     connect = "Connect Claude Code to the gateway on the Gateway page."
     share = "Move it into the gateway to share it."
     assert reasons["neon"] == {"claude_code": connect, "cursor": None}
-    assert reasons["github"] == {"codex": share, "cursor": share}
-    assert reasons["langfuse-data"] == {"claude_code": None, "cursor": share}
+    # A direct server another client lacks is copied there; the add replaces the share reason.
+    assert reasons["github"] == {"codex": None, "cursor": None}
+    assert reasons["langfuse-data"] == {"claude_code": None, "cursor": None}
+    adds = _server_adds(home, gateway=True)
+    assert adds["github"] == {"codex": "mcp.add", "cursor": "mcp.add"}
+    # A row a gateway serves: Claude Code is told to connect, not offered a copy.
+    assert adds["neon"]["claude_code"] is None
+    assert share not in {r for row in reasons.values() for r in row.values()}
     # A server that runs on this computer does not move.
     assert reasons["n8n-mcp"] == {"claude_code": None, "codex": None}
     without = _server_reasons(home, gateway=False)

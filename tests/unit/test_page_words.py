@@ -826,3 +826,9 @@ def test_a_held_server_can_be_removed_or_put_back():
     assert '"Remove from the Kitden gateway…"' in panel
     assert "`Put back in ${CLIENT_NAMES[client]}…`" in panel
     assert "heldActions(" in script("gateway.js")
+
+
+def test_a_server_can_be_added_to_another_client():
+    assert '"mcp.add": `Add ${names} to ${clients}`' in script("panel.js")
+    assert '"mcp.add": "Added"' in script("parts.js")
+    assert 'add.action === "mcp.add" ? { item: add.item }' in script("library.js")
