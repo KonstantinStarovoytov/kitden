@@ -115,6 +115,13 @@ def test_preview_writes_nothing_and_hides_secrets(tmp_path, config):
     assert "neon" in diff and "[secret]" in diff and "SENTINEL" not in diff
 
 
+def test_preview_refuses_an_empty_change(tmp_path):
+    engine = make_engine(tmp_path)
+    with pytest.raises(ChangeRefusedError, match="Nothing to change"):
+        engine.preview("project.align", [])
+    assert engine.changes == {}
+
+
 def test_apply_writes_verifies_keeps_comments_and_logs(tmp_path, config):
     written = []
     engine = make_engine(tmp_path, written=written)

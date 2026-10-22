@@ -360,6 +360,8 @@ class Engine:
         Several steps may edit one file (research R2 of feature 002), but never the same entry
         or an entry inside another one.
         """
+        if not steps:
+            raise ChangeRefusedError("Nothing to change.")
         self._preview_gateway([s for s in steps if s.gateway is not None])
         self._preview_copies([s for s in steps if s.copy is not None])
         self._preview_removals([s for s in steps if s.removal is not None])

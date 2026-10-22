@@ -259,7 +259,10 @@ def test_when_every_add_makes_a_duplicate_the_review_still_lists_them(tmp_path):
         shutil.rmtree(home / folder, ignore_errors=True)
     with page_for(home, run=runner(home)) as page:
         change = _align(page, project_id(page, str(api))).json()
+        # Nothing is chosen, so there is no change: no id, nothing kept or logged.
+        assert "id" not in change
         assert change["steps"] == []
+        assert page.get("/api/changes").json() == []
         assert [(c["key"], c["chosen"]) for c in change["align"]["candidates"]] == [
             ("mcp_server:neon:codex", False),
             ("mcp_server:Neon:claude_code", False),

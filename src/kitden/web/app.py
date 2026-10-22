@@ -984,6 +984,11 @@ def create_app(
                 steps, align = await asyncio.to_thread(
                     align_steps, state.inventory, adapters, folder, found, chosen
                 )
+                if not steps:
+                    # Every add would make a duplicate, so none is chosen: the list only, with
+                    # no change to apply.
+                    listing = {"action": action, "steps": [], "after": [], "align": align}
+                    return JSONResponse(listing)
                 copied = skill_catalog(state.inventory, adapters)
             elif action == GATEWAY_MOVE:
                 gateway = next(
