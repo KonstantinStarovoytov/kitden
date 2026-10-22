@@ -69,3 +69,28 @@ def test_prune_never_removes_recent_changes(tmp_path):
         store.backup(change_id, {"/x/a.json": b"{}"})
     store.prune(now)
     assert len(list((tmp_path / "data/changes").iterdir())) == 120
+
+
+def test_a_backup_of_a_file_with_a_secret_is_flagged_in_the_manifest(tmp_path):
+    store = ChangeStore(tmp_path / "data")
+    ref = {"keychain": "a/KEY"}
+    files = {
+        "/x/config.toml": b'[mcp_servers.neon.env]\nNEON_KEY = "plain"\n',  # any literal value
+        "/x/refs.json": json.dumps({"mcpServers": {"a": {"env": {"KEY": ref}}}}).encode(),
+        "/x/plain.json": json.dumps({"mcpServers": {"a": {"command": "npx"}}}).encode(),
+        "/x/broken.json": b"{ not json ghp_a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6",
+        "/x/notes.txt": b"nothing here {",
+        "/x/new.json": None,
+    }
+    store.backup("20261017T100000Z-abc123", files)
+    manifest = json.loads(
+        (tmp_path / "data/changes/20261017T100000Z-abc123/manifest.json").read_text()
+    )
+    assert {f["path"]: f["secret"] for f in manifest["files"]} == {
+        "/x/config.toml": True,
+        "/x/refs.json": False,
+        "/x/plain.json": False,
+        "/x/broken.json": True,
+        "/x/notes.txt": False,
+        "/x/new.json": False,
+    }

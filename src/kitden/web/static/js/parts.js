@@ -290,6 +290,11 @@ export function failedWord(error) {
 
 // One line for a change log entry: what, which entries, which clients. Plugins go by their
 // short name ("superpowers"); the review named the exact entry before Apply.
+// A change whose backup or record keeps a secret says so on the Changes page.
+export function backupNote(entry) {
+  return entry.holds_secret ? "The backup and record hold a secret." : null;
+}
+
 export function changeTitle(entry) {
   // A tool rule names its tool, server, project and new state (the server adds them).
   if (entry.action === "gateway.rule" && entry.rule) return ruleText(entry.rule, entry.rule.project).done;

@@ -2,7 +2,7 @@
 import { button, el, shortPath, shortPaths } from "./dom.js";
 import { entrance } from "./motion.js";
 import { closePanel, openChange, undoChange } from "./panel.js";
-import { banner, changeTitle, failedWord, latestChanges, mark, notesSection, opens, skeleton } from "./parts.js";
+import { backupNote, banner, changeTitle, failedWord, latestChanges, mark, notesSection, opens, skeleton } from "./parts.js";
 import { data, retry } from "./store.js";
 
 // The state in words. Rows that no longer change anything are plain grey text, not badges.
@@ -90,6 +90,8 @@ function show(entry) {
   const history = data.changes.filter((e) => e.id === entry.id).reverse();
   body.append(el("p", "muted", history.map((e) => `${when(e.time)} ${(STATE_BADGES[e.state] || [e.state])[0]}`).join(" → ")));
   if (entry.error) body.append(el("p", "muted", shortPaths(entry.error)));
+  const secret = backupNote(entry);
+  if (secret) body.append(el("p", "muted", secret));
   // Undo from the panel closes it; the page then shows the undone row.
   const undo = () => { closePanel({ focus: false }); return undoChange(entry); };
   openChange(changeTitle(entry), body, entry.state === "verified" ? undo : null);

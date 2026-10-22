@@ -25,7 +25,7 @@ import tomlkit
 
 from kitden.changes import json_splice, toml_edit
 from kitden.changes.atomic import RefusedWriteError, write_atomic
-from kitden.changes.backup import ChangeStore
+from kitden.changes.backup import ChangeStore, file_holds_secret, holds_secret
 from kitden.changes.client_cli import CommandResult
 from kitden.changes.copy_folder import (
     CopyRefusedError,
@@ -271,6 +271,7 @@ def _record(change: Change) -> dict:
         "action": change.action,
         "state": str(change.state),
         "error": change.error,
+        "holds_secret": change.holds_secret,
         "steps": steps,
     }
 
@@ -324,6 +325,7 @@ def _from_record(record: dict) -> Change:
         id=record["id"],
         steps=steps,
         error=record["error"],
+        holds_secret=record.get("holds_secret", False),
     )
 
 
@@ -565,6 +567,9 @@ class Engine:
                 return change
 
         saved = self.store.backup(change.id, current)
+        change.holds_secret = any(
+            file_holds_secret(data) for data in current.values() if data is not None
+        ) or any(holds_secret(s.edit.before) or holds_secret(s.edit.after) for s in file_steps)
         for step in file_steps:
             copy = saved[step.edit.path]
             step.edit.backup_path = str(copy) if copy else None
@@ -934,6 +939,7 @@ class Engine:
                 "action": change.action,
                 "state": str(change.state),
                 "error": change.error,
+                "holds_secret": change.holds_secret,
                 "steps": [
                     {
                         "client": s.client,

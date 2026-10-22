@@ -870,3 +870,8 @@ def test_the_clients_card_hears_when_versions_arrive():
     overview = script("overview.js")
     assert "kitden:versions" in overview and "/api/clients" in overview
     assert "versionWords(" in overview and '"version unknown"' not in overview
+
+
+def test_a_change_whose_backup_holds_a_secret_says_so():
+    assert "The backup and record hold a secret" in script("parts.js")
+    assert "backupNote(entry)" in script("changes.js")

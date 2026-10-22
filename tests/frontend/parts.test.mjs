@@ -29,7 +29,7 @@ function element(tag) {
   return node;
 }
 globalThis.document = { createElement: element };
-const { banner, changeTitle, clientCheck, gatewayName, morphSocket, opens, socket, strictText } = await import('../../src/kitden/web/static/js/parts.js');
+const { backupNote, banner, changeTitle, clientCheck, gatewayName, morphSocket, opens, socket, strictText } = await import('../../src/kitden/web/static/js/parts.js');
 
 test('a row that opens Details ends with a chevron for the eye and words for a screen reader', () => {
   const node = opens();
@@ -239,6 +239,12 @@ test('the Changes page names a server removed from or put back from the Kitden g
 
 test('the Changes page names a held server whose secrets moved to the Keychain', () => {
   assert.equal(changeTitle({ action: 'gateway.keychain', steps: [{ client: 'kitden', name: 'files' }] }), 'Moved the secrets of files to the Keychain');
+});
+
+test('a change whose backup holds a secret says so', () => {
+  assert.equal(backupNote({ holds_secret: true }), 'The backup and record hold a secret.');
+  assert.equal(backupNote({ holds_secret: false }), null);
+  assert.equal(backupNote({}), null);
 });
 
 test('the Changes page names a server added to another client', () => {

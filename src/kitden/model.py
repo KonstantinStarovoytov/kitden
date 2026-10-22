@@ -314,6 +314,8 @@ class Change:
     id: str = field(default_factory=_new_change_id)
     steps: list[Step] = field(default_factory=list)
     error: str | None = None
+    # Set at Apply: the backup or the record keeps a secret (an old or new entry's value).
+    holds_secret: bool = False
 
     def move_to(self, new: ChangeState) -> None:
         if new not in _TRANSITIONS.get(self.state, set()):

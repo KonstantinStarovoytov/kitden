@@ -326,3 +326,16 @@ def test_moving_secrets_needs_a_held_server_with_a_plain_secret(home, fake_keych
         422,
         "Choose a server in the Kitden gateway.",
     )
+
+
+def test_the_changes_api_says_holds_secret(home, fake_keychain):
+    fake_keychain.write_text(json.dumps({"kitden kept/T": "SENTINEL_SECRET_KEPT"}))
+    hold(home, {"files": FILES, "kept": {"command": "x", "env": {"T": {"keychain": "kept/T"}}}})
+    with page_for(home) as page:
+        for preview in (_to_keychain(page, "files"), _remove(page, "kept")):
+            change = preview.json()
+            applied = page.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
+            assert applied["state"] == "verified"
+        entries = page.get("/api/changes").json()
+    # The move's backup holds the plain value; the removal's holds only references.
+    assert [e["holds_secret"] for e in entries] == [False, True]

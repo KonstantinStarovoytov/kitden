@@ -1,19 +1,21 @@
 """Backups and the change log (research R7, FR-017, FR-022).
 
 Folders are 0700 and files 0600. A backup holds the original bytes, which may contain secrets;
-the manifest and the log never do. A backup is removed only when it is older than 30 days and not
-one of the newest 100 changes.
+the manifest and the log never do, but they say when a backup does. A backup is removed only when
+it is older than 30 days and not one of the newest 100 changes.
 """
 
 import hashlib
 import json
 import os
 import shutil
+import tomllib
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 from kitden.changes.copy_folder import copy_folder
+from kitden.local_gateway.keychain import is_reference
 from kitden.redact import redact, redact_text
 
 KEEP_DAYS = 30
@@ -45,6 +47,31 @@ def _hide_text(value: Any) -> Any:
     return value
 
 
+def _without_references(value: Any) -> Any:
+    """The value without its Keychain references: a reference is not a secret."""
+    if isinstance(value, dict):
+        return {k: _without_references(v) for k, v in value.items() if not is_reference(v)}
+    if isinstance(value, list):
+        return [_without_references(v) for v in value if not is_reference(v)]
+    return value
+
+
+def holds_secret(value: Any) -> bool:
+    """Whether a value, such as an entry a record keeps, holds what `redact` hides."""
+    return redact(_without_references(value))[1]
+
+
+def file_holds_secret(data: bytes) -> bool:
+    """Whether a file's bytes hold a secret: read as JSON, then as TOML, else as plain text."""
+    text = data.decode("utf-8", errors="replace")
+    for parse in (json.loads, tomllib.loads):
+        try:
+            return holds_secret(parse(text))
+        except ValueError:  # JSONDecodeError and TOMLDecodeError are both ValueErrors
+            continue
+    return redact_text(text) != text
+
+
 class ChangeStore:
     def __init__(self, root: Path) -> None:
         self.root = Path(root)
@@ -62,7 +89,11 @@ class ChangeStore:
         saved: dict[str, Path | None] = {}
         manifest = []
         for index, (path, data) in enumerate(files.items()):
-            entry: dict[str, Any] = {"path": path, "existed": data is not None}
+            entry: dict[str, Any] = {
+                "path": path,
+                "existed": data is not None,
+                "secret": data is not None and file_holds_secret(data),
+            }
             saved[path] = None
             if data is not None:
                 copy = folder / f"{index}-{Path(path).name}"

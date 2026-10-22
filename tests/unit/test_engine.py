@@ -254,6 +254,37 @@ def test_applied_changes_can_be_undone_after_a_restart(tmp_path, config):
     assert config.read_text() == CONFIG
 
 
+def test_a_change_knows_when_its_backup_holds_a_secret(tmp_path, config):
+    engine = make_engine(tmp_path)
+    change = engine.preview("gateway.connect", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)])
+    assert change.holds_secret is False  # nothing is saved before Apply
+    engine.apply(change.id)
+    assert change.holds_secret is True  # the backup of config.toml has NEON_KEY
+    assert engine.store.entries()[0]["holds_secret"] is True
+    engine.undo(change.id)
+    assert engine.store.entries()[0]["holds_secret"] is True
+    assert make_engine(tmp_path).changes[change.id].holds_secret is True  # from the record
+
+
+def _json_step(path, after):
+    edit = FileEdit(path=str(path), fmt="json", key=("mcpServers", "a"), after=after)
+    return Step(client="cursor", scope=Scope.USER, name="a", edit=edit)
+
+
+def test_a_change_knows_when_only_its_record_holds_a_secret(tmp_path):
+    path = tmp_path / "mcp.json"
+    path.write_text(json.dumps({"mcpServers": {}}))
+    engine = make_engine(tmp_path)
+    plain = engine.preview("mcp.add", [_json_step(path, {"command": "npx", "env": {"K": "v"}})])
+    engine.apply(plain.id)
+    assert plain.holds_secret is True  # the record keeps the value Apply wrote
+    engine.undo(plain.id)
+    ref = {"command": "npx", "env": {"K": {"keychain": "a/K"}}}
+    held = engine.preview("mcp.add", [_json_step(path, ref)])
+    engine.apply(held.id)
+    assert held.holds_secret is False  # a Keychain reference is not a secret
+
+
 def test_change_reports_restarts_and_shared_files(tmp_path, config):
     step = toml_step(
         config, ("mcp_servers", "gw"), GATEWAY, restart_note="Restart Codex.", shared_file=True
