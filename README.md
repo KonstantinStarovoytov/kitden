@@ -46,8 +46,8 @@ The clients Kitden found sit on the right, and a card says whether the Kitden ga
 item and each column is a client on this computer; the "−" on a column head hides that client,
 and "Show" brings it back. Tabs split MCP servers, plugins, skills, hooks, marketplaces and
 instructions (CLAUDE.md, AGENTS.md, rules, commands and agents; Details shows the first lines,
-secrets hidden). On plugins and skills, choose Installed, New (not on this computer yet) or All,
-and filter by category. Pick a project at the top to see what loads in that folder.
+common secret shapes hidden). On plugins and skills, choose Installed, New (not on this computer
+yet) or All, and filter by category. Pick a project at the top to see what loads in that folder.
 
 The action sits in the client's cell. "+ Add" adds a plugin or skill to that client. "+ Add
 skills" copies the skills of a plugin that work on their own into a client that cannot install the
@@ -94,7 +94,7 @@ one tool on or off for that project, or for all projects. A project's switches a
 folders and git worktrees, unless they have their own. In a folder Kitden does not know as a
 project, the All projects switches apply. Claude Code and Codex can turn a tool
 off in one project, Cursor cannot (checked 2026-10-21); the gateway gives the same control in all
-three. A server in the gateway shows how many tools it adds, once Kitden has asked it. A held
+three. A server in the gateway shows how many tools it has, once Kitden has asked it. A held
 server's Details offer "Remove from the Kitden gateway…", which takes its switches
 too and makes open sessions refuse its tools at once, and "Put back in <client>…", which writes its
 entry into that client again.

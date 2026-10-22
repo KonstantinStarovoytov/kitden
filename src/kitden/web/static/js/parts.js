@@ -287,6 +287,12 @@ export function toolsWord(server) {
   return server.tools ? plural(server.tools, "tool", "tools") : null;
 }
 
+// The tool count as a quiet node: small text in a row, a line in Details. Null when unknown.
+export function toolsNode(server, inRow = false) {
+  const word = toolsWord(server);
+  return word ? el(inRow ? "small" : "div", inRow ? "meta" : "why", word) : null;
+}
+
 // The badge of a change that did not check out. The engine's error ends with this sentence
 // only when everything was put back as it was.
 export function failedWord(error) {

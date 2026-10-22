@@ -113,6 +113,15 @@ async def test_explain_item_lists_every_definition_and_the_winner(home):
     assert any("overrides" in d["why"] for d in claude)
 
 
+async def test_explain_item_leaves_out_file_lines(home):
+    # An agent's answer leaves this computer: a file's first lines stay on the local page.
+    data = await call(server_for(home), "explain_item", name="CLAUDE.md")
+    assert data["definitions"]
+    assert all(d.get("preview") is None for d in data["definitions"])
+    assert "Answer in short sentences." in (home / ".claude/CLAUDE.md").read_text()
+    assert "Answer in short sentences." not in json.dumps(data)
+
+
 async def test_list_projects(home):
     data = await call(server_for(home), "list_projects")
     paths = {p["path"] for p in data["projects"]}

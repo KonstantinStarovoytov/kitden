@@ -139,7 +139,8 @@ def create_server(
         inventory = build()
         project = project_for(inventory, project_path)
         path = project.path if project else None
-        definitions = explain(inventory, name, kind, path)
+        # An agent's answer leaves this computer: a file's first lines stay on the local page.
+        definitions = [{**d, "preview": None} for d in explain(inventory, name, kind, path)]
         return {"project": _project_dict(project), "name": name, "definitions": definitions}
 
     @server.tool(

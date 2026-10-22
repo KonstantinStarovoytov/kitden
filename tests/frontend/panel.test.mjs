@@ -5,7 +5,7 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; panel.js must load there too.
 delete globalThis.navigator;
-const { afterParts, alignGroups, changeOutcome, chosenKeys, callsText, changeWords, footerActions, heldActions, offerLabel, layerState, leftOutText, kindWord, loadsLede, moveFor, moveTargets, plainSecrets, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
+const { afterParts, alignGroups, countedDefinition, changeOutcome, chosenKeys, callsText, changeWords, footerActions, heldActions, offerLabel, layerState, leftOutText, kindWord, loadsLede, moveFor, moveTargets, plainSecrets, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
 const { addOptions, whyNoAction } = await import('../../src/kitden/web/static/js/offer.js');
 const { data } = await import('../../src/kitden/web/static/js/store.js');
 
@@ -519,4 +519,12 @@ test('an instruction file layer never says Loads or Not loaded', () => {
   assert.equal(layerState({ ...def, loads: false, project: '/h/work/site' }).badge, 'In a project');
   assert.equal(layerState({ ...def, loads: false, project: null }).badge, '');
   assert.equal(layerState({ kind: 'skill', enabled: 'on', loads: false, why: 'x' }).badge, 'Not loaded');
+});
+
+test('Details shows the tool count once, from a definition in the Kitden gateway', () => {
+  const direct = { client: 'codex', via_gateway: null, tools: null };
+  const held = { client: 'cursor', via_gateway: 'kitden', tools: 3 };
+  assert.equal(countedDefinition([direct, held, { ...held, client: 'claude_code' }]), held);
+  assert.equal(countedDefinition([direct]), null);
+  assert.equal(countedDefinition([{ ...held, tools: null }]), null);
 });
