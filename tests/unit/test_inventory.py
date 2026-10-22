@@ -1,6 +1,7 @@
 import time
 from pathlib import Path
 
+from kitden.clients import version_cache
 from kitden.clients.base import ClientAdapter, Scan
 from kitden.clients.codex import CodexAdapter
 from kitden.model import (
@@ -13,6 +14,7 @@ from kitden.model import (
     SourceKind,
 )
 from kitden.views.inventory import build_inventory, default_adapters
+from tests.conftest import fake_client_command, make_home, write_cursor_fixture_state
 
 
 def _item(client, name):
@@ -108,3 +110,34 @@ def test_an_inventory_says_when_a_client_still_waits_for_a_slow_answer():
     waiting.skipped = True
     assert build_inventory(adapters=[FakeAdapter("claude_code"), waiting]).partial is True
     assert build_inventory(adapters=[FakeAdapter("claude_code")]).partial is False
+
+
+def test_the_first_scan_runs_no_version_command(tmp_path, monkeypatch):
+    home = make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2", "cursor/3.21.16")
+    write_cursor_fixture_state(home)
+    ran = tmp_path / "ran"
+    hang = fake_client_command(tmp_path, "client", f"echo ran >> '{ran}'; exec sleep 3")
+    monkeypatch.setattr(version_cache, "version_command", lambda client: [str(hang), "--version"])
+    started = time.monotonic()
+    inventory = build_inventory(home)
+    assert time.monotonic() - started < 1
+    assert not ran.exists()
+    clients = {c.id: c for c in inventory.clients}
+    assert clients["claude_code"].version is None
+    assert not clients["claude_code"].version_supported
+    assert str(clients["claude_code"].status) == "found"
+
+
+def test_the_scan_shows_the_cached_version(tmp_path, monkeypatch):
+    home = make_home(tmp_path, "codex/0.159.2")
+    codex = fake_client_command(tmp_path, "codex", "echo codex-cli 0.159.2")
+    commands = {"codex": [str(codex), "--version"]}
+    monkeypatch.setattr(version_cache, "version_command", commands.get)
+    version_cache.refresh_versions(home, ["codex"])
+    clients = {c.id: c for c in build_inventory(home).clients}
+    assert (clients["codex"].version, clients["codex"].version_supported) == ("0.159.2", True)
+
+
+def test_a_missing_client_stays_not_found_with_the_cache(tmp_path):
+    inventory = build_inventory(make_home(tmp_path, "codex/0.159.2"))
+    assert {c.id: str(c.status) for c in inventory.clients}["cursor"] == "not_found"

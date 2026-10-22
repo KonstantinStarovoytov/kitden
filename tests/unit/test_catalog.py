@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-import kitden.clients.base as base
 from kitden.views.catalog import catalog, search
 from kitden.views.inventory import build_inventory, default_adapters
 from tests.conftest import make_home
@@ -88,7 +87,6 @@ def add_marketplaces(home: Path) -> Path:
 
 @pytest.fixture
 def home(tmp_path, monkeypatch):
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
     return add_marketplaces(make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2"))
 
 

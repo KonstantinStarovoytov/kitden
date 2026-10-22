@@ -15,7 +15,6 @@ from mcp import Client
 from starlette.testclient import TestClient
 
 import kitden.cli as cli
-import kitden.clients.base as base
 from kitden.gateways import data_dir
 from kitden.mcp_server import create_server
 from kitden.views.inventory import build_inventory
@@ -58,7 +57,6 @@ def network_attempts(monkeypatch):
 
 @pytest.fixture
 def home(tmp_path, monkeypatch):
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
     home = make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2", "cursor/3.21.16")
     write_cursor_fixture_state(home)
     return home

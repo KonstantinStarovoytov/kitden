@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 
-import kitden.clients.base as base
 from kitden.changes.actions import setup_server_steps
 from kitden.model import Client, ClientStatus, Enabled, Item, ItemKind, Scope, Source, SourceKind
 from kitden.views.inventory import Inventory, build_inventory, default_adapters
@@ -14,11 +13,6 @@ from kitden.views.setup_server import is_own_entry, setup_server_state
 from tests.conftest import make_home
 
 COMMAND = "/Users/me/.local/bin/kitden"
-
-
-@pytest.fixture(autouse=True)
-def _no_versions(monkeypatch):
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
 
 
 def test_each_client_gets_a_stdio_entry_with_the_absolute_path(tmp_path):

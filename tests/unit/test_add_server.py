@@ -5,7 +5,6 @@ import tomllib
 
 import pytest
 
-import kitden.clients.base as base
 from kitden.gateways import data_dir
 from kitden.views.inventory import default_adapters
 from tests.conftest import make_home, write_cursor_fixture_state
@@ -16,7 +15,6 @@ from tests.unit.test_local_gateway_views import POST, add_kitden, page_for
 
 @pytest.fixture
 def home(tmp_path, monkeypatch):
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
     home = make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2", "cursor/3.21.16")
     write_cursor_fixture_state(home)
     return home

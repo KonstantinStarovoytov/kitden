@@ -89,14 +89,12 @@ def test_a_skill_a_client_loads_from_a_plugin_counts_whatever_the_path(tmp_path)
 
 
 def _move_change(home, monkeypatch, *wanted):
-    import kitden.clients.base as base
     from kitden.changes.backup import ChangeStore
     from kitden.changes.engine import Engine
     from kitden.gateways import data_dir
     from kitden.views.inventory import build_inventory
     from tests.unit.test_local_gateway_move import FakeClaude, move
 
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
     change = Engine(ChangeStore(data_dir(home)), run=FakeClaude(home)).preview(
         "gateway.move", move(home, *wanted)
     )
@@ -136,14 +134,12 @@ GUARANTEE = "For a real guarantee, give github a token that can only read."
 
 
 def _strict_note(tmp_path, monkeypatch, on, tools):
-    import kitden.clients.base as base
     from kitden.local_gateway.settings import save_tools
     from kitden.local_gateway.views import strict_steps
     from kitden.views.inventory import build_inventory
     from tests.unit.test_local_gateway_move import gateway_file, new_home, tool, write_json
     from tests.unit.test_local_gateway_views import KITDEN, add_entry
 
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
     home = new_home(tmp_path)
     add_entry(home, "cursor", "kitden", {"command": KITDEN, "args": ["mcp"]})
     rules = {} if on else {"global": {"github": {"mode": "strict"}}}
@@ -196,13 +192,11 @@ def test_a_move_with_a_codex_allowlist_says_strict_mode_not_server_off(tmp_path,
 
 
 def _rule_note(tmp_path, monkeypatch, on):
-    import kitden.clients.base as base
     from kitden.local_gateway.settings import rule_step
     from kitden.views.inventory import build_inventory
     from tests.unit.test_local_gateway_move import gateway_file, new_home, write_json
     from tests.unit.test_local_gateway_views import KITDEN, add_entry
 
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
     home = new_home(tmp_path)
     add_entry(home, "cursor", "kitden", {"command": KITDEN, "args": ["mcp"]})
     write_json(gateway_file(home), {"servers": {"github": {"command": "npx"}}, "rules": {}})
@@ -221,14 +215,12 @@ def test_a_rule_says_a_tool_turned_off_is_refused_at_once(tmp_path, monkeypatch)
 
 
 def test_turning_off_several_tools_names_them_and_says_names_are_a_guess(tmp_path, monkeypatch):
-    import kitden.clients.base as base
     from kitden.local_gateway.settings import save_tools
     from kitden.local_gateway.views import rules_steps
     from kitden.views.inventory import build_inventory
     from tests.unit.test_local_gateway_move import gateway_file, new_home, tool, write_json
     from tests.unit.test_local_gateway_views import KITDEN, add_entry
 
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
     home = new_home(tmp_path)
     add_entry(home, "cursor", "kitden", {"command": KITDEN, "args": ["mcp"]})
     write_json(gateway_file(home), {"servers": {"github": {"command": "npx"}}, "rules": {}})
@@ -249,14 +241,12 @@ def test_turning_off_several_tools_names_them_and_says_names_are_a_guess(tmp_pat
 def test_turning_off_tools_for_all_projects_names_projects_that_keep_them_on(tmp_path, monkeypatch):
     from pathlib import Path
 
-    import kitden.clients.base as base
     from kitden.local_gateway.settings import save_tools
     from kitden.local_gateway.views import rules_steps
     from kitden.views.inventory import build_inventory
     from tests.unit.test_local_gateway_move import gateway_file, new_home, tool, write_json
     from tests.unit.test_local_gateway_views import KITDEN, add_entry
 
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
     home = new_home(tmp_path)
     add_entry(home, "cursor", "kitden", {"command": KITDEN, "args": ["mcp"]})
     inventory = build_inventory(home)

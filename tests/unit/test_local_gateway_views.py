@@ -13,7 +13,6 @@ import pytest
 from mcp import Client
 from starlette.testclient import TestClient
 
-import kitden.clients.base as base
 import kitden.web.app as page_app
 from kitden import mcp_server
 from kitden.changes.json_splice import ABSENT
@@ -47,11 +46,6 @@ POST = {"Origin": ORIGIN, "X-Tool-Request": "1"}
 ECHO = Path(__file__).parents[1] / "fixtures/fake_mcp/echo_server.py"
 ECHO_TOOLS = ["clash", "echo", "refuse", "slow", "where"]
 WAIT = 30  # seconds a background refresh may take in a test
-
-
-@pytest.fixture(autouse=True)
-def _no_versions(monkeypatch):
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
 
 
 @pytest.fixture

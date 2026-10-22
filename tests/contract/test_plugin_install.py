@@ -14,7 +14,6 @@ from pathlib import Path
 
 import pytest
 
-import kitden.clients.base as base
 from kitden.changes.client_cli import find_command
 from kitden.views.inventory import build_inventory
 from kitden.views.setup_server import setup_server_state
@@ -30,7 +29,6 @@ ENTRY = json.loads((ROOT / "plugins/kitden/.mcp.json").read_text())["mcpServers"
 def home(tmp_path, monkeypatch):
     for name in ("CLAUDE_CONFIG_DIR", "CODEX_HOME"):
         monkeypatch.delenv(name, raising=False)
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
     return make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2")
 
 

@@ -3,7 +3,6 @@
 import pytest
 from starlette.testclient import TestClient
 
-import kitden.clients.base as base
 from kitden.changes.client_cli import CommandResult
 from kitden.changes.copy_folder import digest
 from kitden.clients.cursor import REACTIVE_KEY
@@ -28,7 +27,6 @@ def _no_run(command, cwd):
 
 
 def _client(tmp_path, monkeypatch, third_party=True):
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
     home = make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2", "cursor/3.21.16")
     flags = {} if third_party else {REACTIVE_KEY: {"thirdPartyExtensibilityEnabled": False}}
     write_cursor_fixture_state(home, flags)

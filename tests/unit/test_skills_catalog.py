@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-import kitden.clients.base as base
 from kitden.views.catalog import search
 from kitden.views.inventory import build_inventory, default_adapters
 from kitden.views.skills import front_matter, read_skill, skill_catalog
@@ -71,7 +70,6 @@ def add_skills_marketplace(home: Path) -> Path:
 
 @pytest.fixture
 def home(tmp_path, monkeypatch):
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
     home = make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2", "cursor/3.21.16")
     write_cursor_fixture_state(home)
     return add_skills_marketplace(home)

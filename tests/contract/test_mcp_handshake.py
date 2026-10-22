@@ -12,7 +12,6 @@ import subprocess
 import pytest
 from mcp import Client, StdioServerParameters
 
-import kitden.clients.base as base
 from kitden.changes.actions import setup_server_steps
 from kitden.changes.backup import ChangeStore
 from kitden.changes.client_cli import CommandRunner, find_command
@@ -41,7 +40,6 @@ def home(tmp_path, monkeypatch):
         pytest.skip("needs codex, claude and the kitden command")
     for name in ("CLAUDE_CONFIG_DIR", "CODEX_HOME"):
         monkeypatch.delenv(name, raising=False)
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
     return make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2")
 
 

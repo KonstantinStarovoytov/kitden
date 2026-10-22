@@ -19,7 +19,6 @@ from mcp.client.stdio import stdio_client
 from mcp_types import ListRootsResult, Root
 from starlette.testclient import TestClient
 
-import kitden.clients.base as base
 import kitden.clients.codex as codex
 import kitden.clients.version_cache as version_cache
 from kitden import mcp_server
@@ -126,18 +125,16 @@ def test_the_gateway_reads_known_projects_without_client_commands(tmp_path, monk
         ran.append(args)
         return subprocess.CompletedProcess(args, 0, "", "")
 
-    # Every client command would be found and run, and nothing is remembered from other tests.
+    # Every client command would be found and run.
     monkeypatch.setattr(subprocess, "run", record)
     monkeypatch.setattr(version_cache, "version_command", lambda client: ["/bin/false"])
     monkeypatch.setattr(codex, "version_command", lambda client: ["/bin/false"])
-    monkeypatch.setattr(base, "_VERSION_CACHE", {})
     monkeypatch.setattr(proxy, "run", lambda home, own, known: served.update(known=known))
 
     mcp_server.run(home)
     known = served["known"]()
 
     assert ran == []
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
     assert sorted(known) == sorted(p.path for p in build_inventory(home).projects)
     assert str(home / "work/website") in known
 
@@ -196,7 +193,6 @@ async def test_kitdens_own_tools_see_the_servers_in_the_gateway(home, monkeypatc
     }
     write_settings(home, {"files": echo("files")}, rules)
     # `kitden mcp` as a client starts it, in this process so no client command runs.
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
     served = {}
     monkeypatch.setattr(proxy, "run", lambda home, own, known: served.update(own=own))
     mcp_server.run(home)

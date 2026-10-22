@@ -14,7 +14,6 @@ from pathlib import Path
 import pytest
 from starlette.testclient import TestClient
 
-import kitden.clients.base as base
 from kitden.changes import json_splice
 from kitden.changes.actions import KITDEN_GATEWAY, local_move_steps, needs_sign_in
 from kitden.changes.backup import ChangeStore
@@ -101,11 +100,6 @@ def stop(*servers):
     for server in servers:
         server.shutdown()
         server.server_close()
-
-
-@pytest.fixture(autouse=True)
-def _no_versions(monkeypatch):
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
 
 
 def new_home(folder):

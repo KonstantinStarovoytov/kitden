@@ -4,7 +4,6 @@ import json
 
 import pytest
 
-import kitden.clients.base as base
 from kitden.changes.actions import (
     connect_steps,
     plugin_skill_steps,
@@ -20,11 +19,6 @@ from tests.unit.test_skills_catalog import PLUGIN, add_skills_marketplace
 
 URL = "http://127.0.0.1:12008/metamcp/dev/mcp"
 KEYED = Gateway(url=URL, auth=GatewayAuth.ENV_KEY, key_env_var="GW_KEY")
-
-
-@pytest.fixture(autouse=True)
-def _no_versions(monkeypatch):
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
 
 
 @pytest.fixture

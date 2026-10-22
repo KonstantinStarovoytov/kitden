@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-import kitden.clients.base as base
 from kitden.changes import json_splice, toml_edit
 from kitden.changes.actions import plugin_steps
 from kitden.changes.backup import ChangeStore
@@ -15,11 +14,6 @@ from kitden.clients.codex import CodexAdapter
 from kitden.model import ChangeState
 from kitden.views.inventory import build_inventory, default_adapters
 from tests.conftest import make_home, write_cursor_fixture_state
-
-
-@pytest.fixture(autouse=True)
-def _no_versions(monkeypatch):
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
 
 
 @pytest.fixture

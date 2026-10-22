@@ -16,6 +16,14 @@ def _never_the_real_home(tmp_path_factory, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("real-home")))
 
 
+@pytest.fixture(autouse=True)
+def _no_client_commands(monkeypatch):
+    """No test finds or runs a real client command; a test that needs one points this at a fake."""
+    from kitden.clients import version_cache
+
+    monkeypatch.setattr(version_cache, "version_command", lambda client: None)
+
+
 CURSOR_DB = "Library/Application Support/Cursor/User/globalStorage/state.vscdb"
 CURSOR_WORKSPACES = "Library/Application Support/Cursor/User/workspaceStorage"
 
@@ -88,3 +96,12 @@ def _no_real_client_homes(monkeypatch):
 @pytest.fixture
 def no_version():
     return lambda: None
+
+
+def fake_client_command(folder: Path, name: str, body: str) -> Path:
+    """A shell script in the sandbox that stands in for a client command (never the real one)."""
+    binary = folder / "bin" / name
+    binary.parent.mkdir(parents=True, exist_ok=True)
+    binary.write_text(f"#!/bin/sh\n{body}\n")
+    binary.chmod(0o755)
+    return binary

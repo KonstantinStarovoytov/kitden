@@ -2,15 +2,9 @@
 
 import pytest
 
-import kitden.clients.base as base
 from kitden.views.explain import explain
 from kitden.views.inventory import build_inventory
 from tests.conftest import make_home, write_cursor_fixture_state
-
-
-@pytest.fixture(autouse=True)
-def _no_versions(monkeypatch):
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
 
 
 @pytest.fixture

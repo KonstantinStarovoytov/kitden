@@ -2,7 +2,6 @@
 
 import pytest
 
-import kitden.clients.base as base
 from kitden.model import (
     Client,
     ClientStatus,
@@ -20,11 +19,6 @@ from kitden.views.load_map import COLUMNS, load_map, map_dict
 from tests.conftest import make_home, write_cursor_fixture_state
 
 EVIL = '<img src=x onerror="alert(1)">'
-
-
-@pytest.fixture(autouse=True)
-def _no_versions(monkeypatch):
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
 
 
 @pytest.fixture

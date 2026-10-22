@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 from starlette.testclient import TestClient
 
-import kitden.clients.base as base
 from kitden.changes import json_splice, toml_edit
 from kitden.changes.client_cli import CommandResult
 from kitden.clients.cursor import REACTIVE_KEY
@@ -100,7 +99,6 @@ class FakeCli:
 
 def _client(tmp_path, monkeypatch, cursor_flags=None):
     """Claude Code and Codex; with `cursor_flags`, also Cursor with those switches."""
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
     fixtures = ["claude_code/2.1.283", "codex/0.159.2"]
     if cursor_flags is not None:
         fixtures.append("cursor/3.21.16")

@@ -3,16 +3,17 @@ import json
 
 import pytest
 
-import kitden.clients.base as base
 from kitden.cli import main
-from tests.conftest import make_home, write_cursor_fixture_state
+from kitden.clients import version_cache
+from kitden.clients.version_cache import VERSIONS_FILE, cached_version
+from kitden.gateways import data_dir
+from tests.conftest import fake_client_command, make_home, write_cursor_fixture_state
 
 ALL = ("claude_code/2.1.283", "codex/0.159.2", "cursor/3.21.16")
 
 
 @pytest.fixture
 def home(tmp_path, monkeypatch):
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
     home = make_home(tmp_path, *ALL)
     write_cursor_fixture_state(home)
     return home
@@ -47,3 +48,14 @@ def test_scan_changes_no_file(home, capsys):
     before = _snapshot(home)
     main(["scan", "--json", "--home", str(home)])
     assert _snapshot(home) == before
+
+
+def test_scan_reads_versions_first_and_keeps_them(home, tmp_path, monkeypatch, capsys):
+    codex = fake_client_command(tmp_path, "codex", "echo codex-cli 0.159.2")
+    commands = {"codex": [str(codex), "--version"]}
+    monkeypatch.setattr(version_cache, "version_command", commands.get)
+    assert main(["scan", "--json", "--home", str(home)]) == 0
+    clients = {c["id"]: c for c in json.loads(capsys.readouterr().out)["clients"]}
+    assert clients["codex"]["version"] == "0.159.2"
+    assert (data_dir(home) / VERSIONS_FILE).exists()
+    assert cached_version(home, "codex") == "0.159.2"

@@ -14,6 +14,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from kitden import __version__, page
+from kitden.clients.version_cache import CLIENTS, refresh_versions
 from kitden.views.inventory import Inventory, build_inventory, inventory_dict
 
 HOST = "127.0.0.1"
@@ -170,7 +171,9 @@ def _print_summary(inventory: Inventory) -> None:
 
 
 def _scan(args: argparse.Namespace) -> int:
-    inventory = build_inventory(Path(args.home).expanduser() if args.home else None)
+    home = Path(args.home).expanduser() if args.home else None
+    refresh_versions(home or Path.home(), CLIENTS)  # a one-off scan waits for the versions
+    inventory = build_inventory(home)
     if args.json:
         json.dump(inventory_dict(inventory), sys.stdout, indent=2)
         print()

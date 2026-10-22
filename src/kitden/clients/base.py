@@ -3,7 +3,6 @@
 import json
 import os
 import re
-import time
 import tomllib
 from abc import ABC, abstractmethod
 from collections.abc import Callable
@@ -11,7 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from kitden.clients.version_cache import run_version_command
+from kitden.clients import version_cache
 from kitden.clients.versions import is_supported
 from kitden.model import (
     COPY_FOLDER,
@@ -182,25 +181,12 @@ def project(path: str, known_by: str) -> Project:
     return Project(path=path, exists=Path(path).is_dir(), known_by=(known_by,))
 
 
-# Version commands can be slow (Cursor starts Electron), so results are reused for a while.
-VERSION_CACHE_SECONDS = 600.0
-_VERSION_CACHE: dict[str, tuple[str | None, float]] = {}
-
-
-def read_command_version(client: str) -> str | None:
-    cached = _VERSION_CACHE.get(client)
-    if cached and time.monotonic() < cached[1]:
-        return cached[0]
-    version = run_version_command(client)
-    _VERSION_CACHE[client] = (version, time.monotonic() + VERSION_CACHE_SECONDS)
-    return version
-
-
 class ClientAdapter(ABC):
     """Reads one client's setup from files under `home`.
 
     `home` is the user's home folder in real use and a sandbox folder in tests.
-    `read_version` returns the installed version, or None if the client command is missing.
+    `read_version` returns the installed version, or None when it is not known yet. By default
+    it reads the disk cache (version_cache), so a scan never runs a client command.
     """
 
     id: str
@@ -212,7 +198,7 @@ class ClientAdapter(ABC):
 
     def __init__(self, home: Path, read_version: Callable[[], str | None] | None = None) -> None:
         self.home = home
-        self._read_version = read_version or (lambda: read_command_version(self.id))
+        self._read_version = read_version or (lambda: version_cache.cached_version(home, self.id))
 
     def detect(self) -> Client:
         version = self._read_version()

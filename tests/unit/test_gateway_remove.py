@@ -5,7 +5,6 @@ import tomllib
 
 import pytest
 
-import kitden.clients.base as base
 from kitden.gateways import data_dir
 from kitden.local_gateway.settings import SETTINGS_FILE, load_settings, load_tools, save_tools
 from tests.conftest import make_home, write_cursor_fixture_state
@@ -25,7 +24,6 @@ NOTE = "files is then in no client. Undo brings it back."
 
 @pytest.fixture
 def home(tmp_path, monkeypatch):
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
     home = make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2", "cursor/3.21.16")
     write_cursor_fixture_state(home)
     return home

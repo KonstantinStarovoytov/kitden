@@ -11,7 +11,6 @@ import subprocess
 
 import pytest
 
-import kitden.clients.base as base
 from kitden.changes.actions import connect_steps, remove_steps
 from kitden.changes.backup import ChangeStore
 from kitden.changes.client_cli import CommandRunner, find_command
@@ -40,7 +39,6 @@ def home(tmp_path, monkeypatch):
         pytest.skip("needs the claude and codex commands")
     for name in ("CLAUDE_CONFIG_DIR", "CODEX_HOME"):
         monkeypatch.delenv(name, raising=False)
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
     home = make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2", "cursor/3.21.16")
     write_cursor_fixture_state(home)
     return home

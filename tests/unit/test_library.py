@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 from starlette.testclient import TestClient
 
-import kitden.clients.base as base
 from kitden.clients.cursor import REACTIVE_KEY
 from kitden.model import Gateway
 from kitden.views.findings import mark_gateways
@@ -70,11 +69,6 @@ def _home(base_dir: Path, cursor_flags: dict | None = None) -> Path:
     add_cursor_plugin(home)
     install_in_cursor(home, GLEAN)
     return home
-
-
-@pytest.fixture(autouse=True)
-def _no_client_commands(monkeypatch):
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
 
 
 @pytest.fixture

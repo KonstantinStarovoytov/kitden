@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 from starlette.testclient import TestClient
 
-import kitden.clients.base as base
 from kitden.changes import json_splice
 from kitden.changes.client_cli import CommandResult
 from kitden.gateways import data_dir
@@ -58,7 +57,6 @@ def _app_client(home):
 
 
 def _home(tmp_path, monkeypatch):
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
     home = make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2", "cursor/3.21.16")
     write_cursor_fixture_state(home)
     return home

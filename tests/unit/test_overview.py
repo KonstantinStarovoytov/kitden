@@ -5,7 +5,7 @@ from dataclasses import replace
 
 import pytest
 
-import kitden.clients.base as base
+from kitden.clients import version_cache
 from kitden.model import FindingType, Gateway
 from kitden.views.findings import find_findings, mark_gateways
 from kitden.views.gateway_view import gateway_view
@@ -13,11 +13,6 @@ from kitden.views.inventory import build_inventory
 from kitden.views.load_map import load_map, row_key
 from kitden.views.overview import overview
 from tests.conftest import CURSOR_DB, make_home, write_cursor_fixture_state
-
-
-@pytest.fixture(autouse=True)
-def _no_versions(monkeypatch):
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
 
 
 @pytest.fixture
@@ -72,7 +67,7 @@ def test_unreadable_file_becomes_an_attention_card(tmp_path):
 
 def test_untested_version_is_an_attention_card(home, monkeypatch):
     monkeypatch.setattr(
-        base, "read_command_version", lambda client: "2.0.0" if client == "claude_code" else None
+        version_cache, "cached_version", lambda home, c: "2.0.0" if c == "claude_code" else None
     )
     first = overview(build_inventory(home), [], None)["attention"][0]
     assert first["title"] == "Claude Code 2.0.0 is not tested"

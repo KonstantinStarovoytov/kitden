@@ -1,15 +1,7 @@
-import pytest
-
-import kitden.clients.base as base
 from kitden.model import Enabled, Item, ItemKind, Scope, Source, SourceKind
 from kitden.views.effective import effective_view
 from kitden.views.inventory import Inventory, build_inventory
 from tests.conftest import make_home, write_cursor_fixture_state
-
-
-@pytest.fixture(autouse=True)
-def _no_versions(monkeypatch):
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
 
 
 def loaded(view):

@@ -4,17 +4,11 @@ import json
 
 import pytest
 
-import kitden.clients.base as base
 from kitden.model import Client, ClientStatus, Gateway, Item, ItemKind, Scope, Source, SourceKind
 from kitden.views.findings import mark_gateways
 from kitden.views.gateway_view import gateway_view
 from kitden.views.inventory import Inventory, build_inventory
 from tests.conftest import make_home, write_cursor_fixture_state
-
-
-@pytest.fixture(autouse=True)
-def _no_versions(monkeypatch):
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
 
 
 @pytest.fixture

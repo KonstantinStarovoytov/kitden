@@ -1,5 +1,6 @@
 from kitden.clients.claude_code import ClaudeCodeAdapter
 from kitden.model import ClientStatus, Enabled, UnknownReason
+from kitden.views.inventory import build_inventory
 from tests.conftest import all_text, make_home, rows
 
 FIXTURE = "claude_code/2.1.283"
@@ -124,3 +125,11 @@ def test_no_desktop_client_without_claude_desktop(tmp_path, no_version):
 def test_detect_without_files_or_command_is_not_found(tmp_path, no_version):
     client = ClaudeCodeAdapter(tmp_path / "empty", read_version=no_version).detect()
     assert client.status is ClientStatus.NOT_FOUND
+
+
+def test_the_desktop_tab_keeps_its_folder_version_in_a_scan(tmp_path):
+    home = make_home(tmp_path, FIXTURE)
+    (home / "Library/Application Support/Claude/claude-code/2.1.299").mkdir(parents=True)
+    clients = {c.id: c for c in build_inventory(home).clients}
+    assert clients["claude_desktop_code_tab"].version == "2.1.299"
+    assert clients["claude_code"].version is None

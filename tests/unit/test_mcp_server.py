@@ -7,11 +7,12 @@ import pytest
 from mcp import Client
 from starlette.testclient import TestClient
 
-import kitden.clients.base as base
+from kitden import mcp_server
+from kitden.clients import version_cache
 from kitden.mcp_server import create_server
 from kitden.views.inventory import build_inventory
 from kitden.web.app import create_app
-from tests.conftest import all_text, make_home, write_cursor_fixture_state
+from tests.conftest import all_text, fake_client_command, make_home, write_cursor_fixture_state
 
 TOOLS = {"show_setup", "list_findings", "explain_item", "list_projects"}
 pytestmark = pytest.mark.anyio
@@ -20,11 +21,6 @@ pytestmark = pytest.mark.anyio
 @pytest.fixture
 def anyio_backend():
     return "asyncio"
-
-
-@pytest.fixture(autouse=True)
-def _no_versions(monkeypatch):
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
 
 
 @pytest.fixture
@@ -147,3 +143,25 @@ def test_server_is_named_kitden_and_points_to_kitden_open(home):
     server = server_for(home)
     assert server.name == "kitden"
     assert "kitden open" in server.instructions
+
+
+def test_kitden_mcp_reads_versions_from_the_cache_and_runs_no_command(home, tmp_path, monkeypatch):
+    ran = tmp_path / "ran"
+    client = fake_client_command(tmp_path, "client", f"echo ran >> '{ran}'; echo 9.9.9")
+    monkeypatch.setattr(version_cache, "version_command", lambda c: [str(client), "--version"])
+    built = {}
+
+    class Server:
+        def run(self):
+            built["inventory"] = built["build"]()
+
+    def create(build, **options):
+        built["build"] = build
+        return Server()
+
+    monkeypatch.setattr(mcp_server, "create_server", create)
+    mcp_server.run(home)
+    assert not ran.exists()
+    assert {c.version for c in built["inventory"].clients if c.id != "claude_desktop_code_tab"} == {
+        None
+    }

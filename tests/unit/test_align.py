@@ -5,7 +5,6 @@ import tomllib
 
 import pytest
 
-import kitden.clients.base as base
 from tests.conftest import make_home, write_cursor_fixture_state
 from tests.unit.test_api_changes import FakeClaude
 from tests.unit.test_api_plugin_install import FakeCli
@@ -19,7 +18,6 @@ MARKETPLACE = ".claude/plugins/marketplaces/claude-plugins-official/.claude-plug
 
 @pytest.fixture
 def home(tmp_path, monkeypatch):
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
     home = make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2", "cursor/3.21.16")
     write_cursor_fixture_state(home)
     add_skills_marketplace(home)

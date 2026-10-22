@@ -1,7 +1,6 @@
 import pytest
 from starlette.testclient import TestClient
 
-import kitden.clients.base as base
 from kitden.views.inventory import build_inventory
 from kitden.web.app import create_app
 from tests.conftest import make_home, write_cursor_fixture_state
@@ -11,7 +10,6 @@ ORIGIN = "http://127.0.0.1:47800"
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
     home = make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2", "cursor/3.21.16")
     write_cursor_fixture_state(home)
     app = create_app(lambda: build_inventory(home), token="tok", port=47800)

@@ -3,7 +3,6 @@
 import pytest
 from starlette.testclient import TestClient
 
-import kitden.clients.base as base
 from kitden.views.inventory import build_inventory
 from kitden.web.app import create_app
 from tests.conftest import make_home, write_cursor_fixture_state
@@ -24,7 +23,6 @@ def _app(home):
 
 @pytest.fixture
 def home(tmp_path, monkeypatch):
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
     home = make_home(tmp_path, "cursor/3.21.16", "claude_code/2.1.283", "codex/0.159.2")
     write_cursor_fixture_state(home)
     return home

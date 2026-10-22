@@ -12,7 +12,6 @@ from pathlib import Path
 import pytest
 from starlette.testclient import TestClient
 
-import kitden.clients.base as base
 from kitden.changes.client_cli import find_command
 from kitden.views.inventory import build_inventory
 from kitden.web.app import create_app
@@ -30,7 +29,6 @@ def client(tmp_path, monkeypatch):
         pytest.skip("needs the claude and codex commands")
     for name in ("CLAUDE_CONFIG_DIR", "CODEX_HOME"):
         monkeypatch.delenv(name, raising=False)
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
     home = make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2")
     app = create_app(lambda: build_inventory(home), token="tok", port=47800, home=home)
     with TestClient(app, base_url=ORIGIN, follow_redirects=False) as c:

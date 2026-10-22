@@ -64,29 +64,3 @@ def test_version_command_falls_back_to_bundled_codex():
 
 def test_version_command_is_none_when_client_missing():
     assert version_command("cursor", which=lambda n: None, exists=lambda p: False) is None
-
-
-def test_version_commands_are_cached_for_a_while(monkeypatch):
-    import subprocess
-
-    import kitden.clients.base as base
-    import kitden.clients.version_cache as version_cache
-
-    runs = []
-
-    def fake_run(command, **kwargs):
-        runs.append(command)
-        return subprocess.CompletedProcess(command, 0, stdout="codex-cli 0.159.2\n")
-
-    now = [1000.0]
-    monkeypatch.setattr(version_cache, "version_command", lambda c: ["/bin/codex", "--version"])
-    monkeypatch.setattr(version_cache.subprocess, "run", fake_run)
-    monkeypatch.setattr(base.time, "monotonic", lambda: now[0])
-    base._VERSION_CACHE.clear()
-
-    assert base.read_command_version("codex") == "0.159.2"
-    assert base.read_command_version("codex") == "0.159.2"
-    assert len(runs) == 1
-    now[0] += base.VERSION_CACHE_SECONDS + 1
-    base.read_command_version("codex")
-    assert len(runs) == 2

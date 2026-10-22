@@ -4,16 +4,10 @@ import json
 
 import pytest
 
-import kitden.clients.base as base
 from kitden.changes import json_splice, toml_edit
 from kitden.views.inventory import build_inventory
 from kitden.views.setup_server import setup_server_state
 from tests.conftest import make_home, write_cursor_fixture_state
-
-
-@pytest.fixture(autouse=True)
-def _no_versions(monkeypatch):
-    monkeypatch.setattr(base, "read_command_version", lambda client: None)
 
 
 def _add_json(path, key, value):
