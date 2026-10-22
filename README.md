@@ -102,8 +102,11 @@ backup and Undo. Moving a server in for the first time keeps the tools Claude Co
 turned off; Cursor's own tool switches do not carry over. Moving a server the gateway holds again
 updates it, for example with a new token, and keeps the gateway's switches for it; the clients'
 own switches do not carry over then. A tool you turn off is refused at once, even in a session
-that is already open; other changes apply to new sessions, so start a new one in your client. A moved server's env values and headers are kept in the gateway's settings file, which only
-you can read and which stays on this Mac.
+that is already open; other changes apply to new sessions, so start a new one in your client.
+A moved server's env values and headers that would be hidden go to your macOS Keychain, not
+the gateway's settings file, which keeps only a reference. The review says so, and warns if an
+item is already there and will be replaced. Undo removes only the items the move created. If a
+server is removed from the gateway, its secrets stay in your Keychain under `kitden`.
 
 For a server you do not trust with new tools, turn on "Strict: only tools you turned on". It
 applies to all projects: the server offers only the tools you turned on, and a tool it adds later

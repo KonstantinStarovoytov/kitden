@@ -101,6 +101,21 @@ same test project:
 
 Not run yet for steps 8 to 16: Part 3 was built and tested with fake client commands only.
 
+Before a release that touches secrets, also check the Keychain once by hand, on the same test
+project, with a server that has a token:
+
+17. Move the server into the gateway. A Keychain item (service `kitden`, account `<server>/<key>`)
+    appears, and `gateway.json` holds a reference, not the token.
+18. Start a new session. The server's tools work.
+19. Undo the move. The Keychain item is gone.
+20. Move a server in, edit `gateway.json` to hold a plain token for it, and open its Details:
+    "Move secrets to the Keychain…" moves the token and leaves a reference.
+21. Confirm three `security` facts by hand: `find-generic-password` exits with 44 for a missing
+    item; `security -i` reads the quoted `add-generic-password` line as the code expects; `find ... -w`
+    prints a non-ASCII value back unchanged.
+
+Not run yet for steps 17 to 21: Part 5 was built and tested with a fake `security` only.
+
 ## Release
 
 1. `uv version X.Y.Z`, and the same number in `src/kitden/__init__.py`,
@@ -124,8 +139,10 @@ with trusted publishing and creates the GitHub release with the notes file as it
   was sent. Only `gateway.json` changes through review and Undo; the other two are found data that
   the gateway and Rescan write. The gateway reads `gateway.json` again on each call, so a tool
   turned off is refused at once; if the file cannot be read, the rules it started with apply. It
-  also holds the env values and headers of moved servers; only you can read it, and it stays on
-  this Mac. `kitden mcp` finds the project once, at start: the `CLAUDE_PROJECT_DIR` variable, then
+  keeps references, not secrets: each env value or header that would be hidden is a Keychain item
+  (service `kitden`, account `<server>/<key>`), and `gateway.json` holds `{"keychain": "<server>/<key>"}`.
+  The gateway reads the items when it starts a server. Kitden calls `/usr/bin/security`; the
+  env variable `KITDEN_SECURITY` replaces that path, as a test hook only. `kitden mcp` finds the project once, at start: the `CLAUDE_PROJECT_DIR` variable, then
   the client's roots, then `WORKSPACE_FOLDER_PATHS`, then its start folder. Codex keeps a tool
   list for up to 30 minutes and ignores "list changed" (checked 2026-10-21), so the offered list
   is fixed for a session; a tool turned off is still refused at once.
