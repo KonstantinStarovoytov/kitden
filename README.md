@@ -187,9 +187,9 @@ Linux and Windows are not supported yet.
 </p>
 
 1. Kitden reads your agents' settings files.
-2. It shows them on one page in your browser, at `127.0.0.1` only. On the large sample setup
-   (`kitden demo --size large`, about 500 items) the page has its data in under a second; a slow
-   answer comes after.
+2. It shows them on one page in your browser, at `127.0.0.1` only. With a large setup (about 500
+   items, like the sample `kitden demo --size large` opens) the page has its data in under a
+   second; a slow answer comes after.
 3. You press Apply. Kitden backs the file up, writes the change and checks it. Undo brings the old
    file back. Backups stay for 30 days, and the newest 100 changes always keep theirs.
 

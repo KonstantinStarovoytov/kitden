@@ -33,7 +33,7 @@ framework, no bundler, nothing loaded from another site. How it looks and moves:
 | --- | --- |
 | `kitden` / `kitden open` | Opens the page; it stops 10 minutes after its last tab closes |
 | `kitden serve` | Runs the page in the terminal until Ctrl+C |
-| `kitden demo [--size small\|medium\|large]` | Opens the page on a sample setup (medium if no size is given) in a temporary folder; it runs no client, starts no server, uses no Keychain and stays offline; the folder is deleted when it stops |
+| `kitden demo [--size small\|medium\|large]` | Opens the page on a sample setup (medium if no size is given) in a temporary folder; it runs no client, starts no MCP server, uses no Keychain and stays offline; the folder is deleted when it stops |
 | `kitden scan --json` | Prints what the page shows and exits |
 | `kitden mcp` | The "show my setup" server that clients start; it also offers the tools of servers moved into the Kitden gateway |
 
@@ -52,11 +52,11 @@ numbers:
 - **demo (medium)**: time from building the medium sample to the first answer of
   `/api/overview`. Budget: 2 s.
 
-A missed budget gives exit code 1. Times start with the page; Python's own start and a `uvx` cold
-start are not counted. The client versions are known before each run, as on every start after the
-first: the page reads them from `versions.json` in the data folder
-(`~/Library/Application Support/kitden`) and runs a client's version command only in the
-background, when its binary is new or changed.
+A missed budget gives exit code 1. Times start with the page, and the demo's with building its
+sample; Python's own start and a `uvx` cold start are not counted. The client versions are known
+before each run, as on every start after the first: the page reads them from `versions.json` in
+the data folder (`~/Library/Application Support/kitden`) and runs a client's version command
+only in the background, when its binary is new or changed.
 
 Measured: first usable 0.1 s, complete 0.1 to 0.2 s, demo under 0.1 s (checked 2026-10-23,
 Apple M4 Max, macOS 26.6.2). With Python's own start, `uv run kitden demo` has its first overview

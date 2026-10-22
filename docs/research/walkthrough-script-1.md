@@ -30,7 +30,7 @@ it settles two words that are still a guess.
 | `atlas` | The project `~/work/atlas`; the project `web` (`~/work/atlas/web`) sits inside it |
 | `api-style` | A skill only in Atlas, `~/work/atlas/.agents/skills/api-style`: Codex and Cursor load it, Claude Code does not |
 | `docs` | Two servers with one name: Claude Code's is an address (`https://docs.example.test/mcp`), Codex's runs `npx docs-mcp`. In Atlas, `~/work/atlas/.mcp.json` replaces Claude Code's with `http://localhost:9000/mcp` |
-| `files` | In the Kitden gateway, with `read_file`, `write_file`, `delete_file` and `search_files`. Atlas turns `write_file` off, so `web` has it off too; `web` turns `search_files` off itself. `search_files` has no hint, so its kind is unknown |
+| `files` | In the Kitden gateway, with `read_file`, `write_file`, `delete_file` and `search_files`. `delete_file` is off for all projects. Atlas turns `write_file` off, so `web` has it off too; `web` turns `search_files` off itself. `search_files` has no hint, so its kind is unknown |
 | `files` in Cursor | Cursor does not use the gateway. It has its own direct `files` entry |
 | `tracker` | In the gateway, strict: only tools turned on are offered, so the new tool `export_report` waits, off |
 | `~/work/website/.cursor/mcp.json` | Cut short, so it cannot be read; Overview shows it |
@@ -64,8 +64,8 @@ it settles two words that are still a guess.
 - Start from: Overview, project Global.
 - Done when: says it applies to Atlas and its folder `web`, and to new calls, not to a call
   already running.
-- Watch for: a Details panel keeps the project it was opened with ("Tools · atlas"), even when
-  the project at the top changes.
+- Watch for: the panel names its project ("Tools · atlas") and closes when another project is
+  picked. Note whether they pick Atlas before they turn the tool off.
 
 ## Task 6: Explain why Cursor still reaches `files` around the gateway
 
