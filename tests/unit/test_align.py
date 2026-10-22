@@ -267,3 +267,19 @@ def test_when_every_add_makes_a_duplicate_the_review_still_lists_them(tmp_path):
             ("mcp_server:neon:codex", False),
             ("mcp_server:Neon:claude_code", False),
         ]
+
+
+def test_two_adds_whose_names_differ_only_in_case_keep_the_first_checked(tmp_path):
+    # Codex has neon and Cursor has Neon; Claude Code has neither.
+    home = make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2", "cursor/3.21.16")
+    write_cursor_fixture_state(home)
+    website = str(home / "work/website")
+    with page_for(home, run=runner(home)) as page:
+        change = _align(page, project_id(page, website)).json()
+        keys = {c["key"]: c for c in change["align"]["candidates"]}
+        first, second = keys["mcp_server:neon:claude_code"], keys["mcp_server:Neon:claude_code"]
+        assert (first["chosen"], first["note"]) == (True, None)
+        assert second["chosen"] is False
+        assert second["note"] == "This list also adds neon; this adds Neon beside it."
+        added = [s["name"] for s in change["steps"] if s["client"] == "claude_code"]
+        assert "neon" in added and "Neon" not in added

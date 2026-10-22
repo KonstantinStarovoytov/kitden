@@ -129,7 +129,8 @@ def align_steps(
     """Every plugin, skill and MCP server one found client loads in `project` and another
     lacks, as candidates; the steps add the chosen ones. Names match exactly. A client that
     has an item turned off keeps it off: it is not offered. With `chosen` None, an add that
-    makes a duplicate (a name in another case, or a skill a reader already has) is unchecked."""
+    makes a duplicate (a name in another case, here or earlier in the list, or a skill a reader
+    already has) is unchecked."""
     clients = [c for c in CLIENTS if c in found and c in adapters]
     views = {
         c: [i for i in effective_view(inventory, c, project).items if i.kind in KINDS]
@@ -156,6 +157,7 @@ def align_steps(
     built: list[list[Step]] = []
     left_out: list[dict] = []
     seen: set[tuple] = set()
+    firsts: dict[tuple, str] = {}  # (kind, client, name in lower case) -> the first name added
     for source in clients:
         for kind in KINDS:
             items = sorted(
@@ -193,6 +195,10 @@ def align_steps(
                     if alike:
                         who = CLIENT_WORDS[client]
                         notes.append(f"{who} already has {alike[0]}; this adds {key[1]} beside it.")
+                    # Two adds for one client whose names differ only in case: the first stays.
+                    first = firsts.setdefault((kind, client, key[1].lower()), key[1])
+                    if first != key[1] and not alike:
+                        notes.append(f"This list also adds {first}; this adds {key[1]} beside it.")
                     if twice:
                         notes.append(f"{_words(twice)} would load it twice.")
                     # Such an add makes a duplicate: it starts unchecked.
