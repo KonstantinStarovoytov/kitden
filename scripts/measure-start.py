@@ -1,17 +1,16 @@
-"""Measure how fast the page opens on a large sandbox setup (never the real home folder).
+"""Measure how fast the page opens on the large sample setup (never the real home folder).
 
-Two runs, each on its own sandbox home with fake `claude`, `codex` and `cursor` commands:
+Two runs, each on its own copy of the large sample (`kitden.demo`) with fake `claude`, `codex`
+and `cursor` commands:
 - first usable: the time to the first answer of /api/overview while Codex's plugin list
   takes `--slow` seconds; the start line must then say it still checks "Codex plugins";
 - complete: the time until every step of the first scan is done, with the list answering at once.
 The client versions are read once before each run, as on any start after the first.
 
-Usage: uv run python scripts/measure-start.py
-         [--servers 40] [--plugins 10] [--skills 20] [--slow 10]
+Usage: uv run python scripts/measure-start.py [--slow 10]
 """
 
 import argparse
-import json
 import os
 import secrets
 import socket
@@ -27,10 +26,11 @@ import uvicorn
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from tests.conftest import fake_client_command, make_home, write_cursor_fixture_state  # noqa: E402
+from tests.conftest import fake_client_command  # noqa: E402
 
 from kitden.cli import WATCHED  # noqa: E402
 from kitden.clients import version_cache  # noqa: E402
+from kitden.demo import build_demo_home  # noqa: E402
 from kitden.views.inventory import build_inventory  # noqa: E402
 from kitden.web.app import create_app  # noqa: E402
 
@@ -40,48 +40,10 @@ GIVE_UP_SECONDS = 60
 SLOW_STEP = "Codex plugins"
 
 
-def build_sandbox(root: Path, servers: int, plugins: int, skills: int, slow: float) -> Path:
-    """A fixture home with extra servers, plugins and skills, and fake clients in root/bin."""
-    home = make_home(root, "cursor/3.21.16", "codex/0.159.2", "claude_code/2.1.283")
-    write_cursor_fixture_state(home)
-
-    claude_file, cursor_file = home / ".claude.json", home / ".cursor/mcp.json"
-    claude, cursor = json.loads(claude_file.read_text()), json.loads(cursor_file.read_text())
-    codex = []
-    for n in range(servers):
-        name = f"bench-server-{n:02d}"
-        entry = {"command": "uvx", "args": [name]}
-        if n % 2:
-            entry = {"url": f"https://example.test/{name}"}
-        if n % 3 == 0:
-            claude["mcpServers"][name] = entry
-        elif n % 3 == 1:
-            codex.append(f'\n[mcp_servers.{name}]\nurl = "https://example.test/{name}"\n')
-        else:
-            cursor["mcpServers"][name] = entry
-    claude_file.write_text(json.dumps(claude, indent=2))
-    cursor_file.write_text(json.dumps(cursor, indent=2))
-    with (home / ".codex/config.toml").open("a") as config:
-        config.write("".join(codex))
-
-    installed_file = home / ".claude/plugins/installed_plugins.json"
-    installed = json.loads(installed_file.read_text())
-    for n in range(plugins):
-        name = f"plugin-{n:02d}"
-        folder = home / f".claude/plugins/cache/bench-market/{name}/1.0.0"
-        manifest = folder / ".claude-plugin/plugin.json"
-        manifest.parent.mkdir(parents=True)
-        manifest.write_text(json.dumps({"name": name, "version": "1.0.0"}))
-        _skill(folder / "skills", f"{name}-skill")
-        installed["plugins"][f"{name}@bench-market"] = [
-            {"scope": "user", "installPath": str(folder), "version": "1.0.0"}
-        ]
-    installed_file.write_text(json.dumps(installed, indent=2))
-
-    folders = [".claude/skills", ".agents/skills", ".cursor/skills"]
-    for n in range(skills):
-        _skill(home / folders[n % 3], f"bench-skill-{n:02d}")
-
+def build_sandbox(root: Path, slow: float) -> Path:
+    """The large sample in root/home, and fake clients in root/bin; Codex's plugin list takes
+    `slow` seconds."""
+    home = build_demo_home(root, "large")
     fake_client_command(root, "claude", 'echo "2.1.290 (Claude Code)"')
     fake_client_command(root, "cursor", 'echo "3.21.16"')
     fake_client_command(
@@ -94,12 +56,6 @@ def build_sandbox(root: Path, servers: int, plugins: int, skills: int, slow: flo
         "esac",
     )
     return home
-
-
-def _skill(folder: Path, name: str) -> None:
-    path = folder / name / "SKILL.md"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(f"---\nname: {name}\ndescription: A skill for the measurement.\n---\n")
 
 
 def _free_port() -> int:
@@ -172,18 +128,14 @@ def _poll(ready) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Measure how fast the page opens.")
-    parser.add_argument("--servers", type=int, default=40)
-    parser.add_argument("--plugins", type=int, default=10)
-    parser.add_argument("--skills", type=int, default=20)
     parser.add_argument("--slow", type=float, default=10)
     args = parser.parse_args()
-    sizes = (args.servers, args.plugins, args.skills)
     real_home, real_path = os.environ.get("HOME"), os.environ.get("PATH")
     try:
         with tempfile.TemporaryDirectory(prefix="kitden-measure-") as folder:
-            slow_home = build_sandbox(Path(folder) / "slow", *sizes, slow=args.slow)
+            slow_home = build_sandbox(Path(folder) / "slow", slow=args.slow)
             slow_run = measure(slow_home, args.slow)
-            quick_home = build_sandbox(Path(folder) / "quick", *sizes, slow=0)
+            quick_home = build_sandbox(Path(folder) / "quick", slow=0)
             quick_run = measure(quick_home, 0)
     finally:
         os.environ.update(HOME=real_home or "", PATH=real_path or "")

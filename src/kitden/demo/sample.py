@@ -24,6 +24,16 @@ MARKET = "demo-market"
 CURSOR_TEAM = "123"
 UI_KIT_HASH = "9c1d2e3"  # the folder of the downloaded version, a commit hash in Cursor
 WRITTEN_AT = "2026-10-01T00:00:00Z"
+# Added to some names in the large sample, so the page always has a name to cut short.
+LONG = "-with-a-name-long-enough-that-the-page-cuts-it-short"
+BULK_TOOLS = (
+    ("list_items", "List the items.", {"readOnlyHint": True}),
+    ("get_item", "Show one item.", {"readOnlyHint": True}),
+    ("create_item", "Add an item.", None),
+    ("summarize", "Sum up the items.", None),
+    ("delete_item", "Delete an item.", {"destructiveHint": True}),
+    ("export_items", "Export the items.", None),
+)
 
 
 def demo_command(home: Path) -> str:
@@ -49,6 +59,8 @@ def build_demo_home(root: Path, size: str) -> Path:
         _codex(home)
         _cursor(home)
     _gateway(home, medium)
+    if size == "large":
+        _bulk(home)
     return home
 
 
@@ -62,8 +74,8 @@ def _text(path: Path, text: str) -> None:
     path.write_text(text)
 
 
-def _toml(value: str) -> str:
-    """A TOML basic string; its escapes are the same as JSON's."""
+def _toml(value: str | list[str]) -> str:
+    """A TOML string or list of strings: TOML writes them as JSON does, escapes too."""
     return json.dumps(value)
 
 
@@ -165,6 +177,11 @@ def _claude_plugin(plugins: Path, name: str, version: str) -> list[dict]:
     """A plugin in Claude Code's cache, and its record for installed_plugins.json."""
     folder = plugins / "cache" / MARKET / name / version
     _plugin_files(folder, name, version)
+    return _record(folder, version)
+
+
+def _record(folder: Path, version: str) -> list[dict]:
+    """A user install of the plugin in `folder`, as installed_plugins.json keeps it."""
     return [
         {
             "scope": "user",
@@ -403,3 +420,72 @@ def _gateway(home: Path, medium: bool) -> None:
         },
     )
     _json(keychain_file(home), {"kitden tracker/Authorization": "Bearer DEMO_SECRET_TRACKER"})
+
+
+def _bulk(home: Path) -> None:
+    """The large sample's extra items, written over the medium sample: 150 MCP servers (50 in
+    each client), 30 Claude Code plugins, 120 skills, 12 projects, 10 held servers with their
+    tools, and one Codex plugin whose on/off only Codex's plugin list knows. Some names are long
+    (`LONG`). Nothing here holds a secret."""
+    claude = json.loads((home / ".claude.json").read_text())
+    cursor = json.loads((home / ".cursor/mcp.json").read_text())
+    codex = []
+    for n in range(150):
+        name = f"bench-server-{n:03d}" + (LONG if n % 10 == 0 else "")
+        remote = n % 2 == 1
+        entry = (
+            {"url": f"https://example.test/{name}"}
+            if remote
+            else {"command": "uvx", "args": [name]}
+        )
+        if n % 3 == 0:
+            claude["mcpServers"][name] = {"type": "http", **entry} if remote else entry
+        elif n % 3 == 1:
+            fields = "".join(f"{key} = {_toml(value)}\n" for key, value in entry.items())
+            codex.append(f"\n[mcp_servers.{name}]\n{fields}")
+        else:
+            cursor["mcpServers"][name] = entry
+    for n in range(12):
+        folder = home / "work" / (f"bench-project-{n:02d}" + (LONG if n % 4 == 0 else ""))
+        server = f"bench-project-server-{n:02d}"
+        _json(folder / ".mcp.json", {"mcpServers": {server: {"command": "uvx", "args": [server]}}})
+        claude["projects"][str(folder)] = {
+            "mcpServers": {},
+            "enabledMcpjsonServers": [server],
+            "hasTrustDialogAccepted": True,
+        }
+    _json(home / ".claude.json", claude)
+    _json(home / ".cursor/mcp.json", cursor)
+    with (home / ".codex/config.toml").open("a") as config:
+        config.write("".join(codex))
+
+    installed_file = home / ".claude/plugins/installed_plugins.json"
+    installed = json.loads(installed_file.read_text())
+    for n in range(30):
+        name = f"plugin-{n:02d}"
+        folder = home / ".claude/plugins/cache/bench-market" / name / "1.0.0"
+        _json(folder / ".claude-plugin/plugin.json", {"name": name, "version": "1.0.0"})
+        _skill(folder / "skills", f"{name}-skill")
+        installed["plugins"][f"{name}@bench-market"] = _record(folder, "1.0.0")
+    _json(installed_file, installed)
+
+    folders = (".claude/skills", ".agents/skills", ".cursor/skills")
+    for n in range(120):
+        _skill(home / folders[n % 3], f"bench-skill-{n:03d}")
+
+    settings_file, tools_file = data_dir(home) / SETTINGS_FILE, data_dir(home) / TOOLS_FILE
+    settings, tools = json.loads(settings_file.read_text()), json.loads(tools_file.read_text())
+    for n in range(10):
+        name = f"bench-held-{n:02d}" + (LONG if n == 0 else "")
+        remote = {"url": f"https://example.test/{name}"}
+        settings["servers"][name] = remote if n % 2 else {"command": "uvx", "args": [name]}
+        tools[name] = [_tool(*tool) for tool in BULK_TOOLS[: 4 + n % 3]]
+    _json(settings_file, settings)
+    _json(tools_file, tools)
+
+    # In the cache with no config.toml entry: only `codex plugin list` knows whether it is on, so
+    # a scan asks for that list (the slow step scripts/measure-start.py measures).
+    calendar = home / ".codex/plugins/cache/openai-curated-remote/calendar"
+    record = {"schema_version": 1, "remote_plugin_id": "plugin_demo_calendar"}
+    _json(calendar / ".codex-remote-plugin-install.json", record)
+    _json(calendar / "1.0.0/.codex-plugin/plugin.json", {"name": "calendar"})

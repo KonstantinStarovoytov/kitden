@@ -142,7 +142,41 @@ def test_the_small_sample_keeps_its_own_path_and_an_empty_keychain(tmp_path):
     assert json.loads(keychain_file(home).read_text()) == {}
 
 
-@pytest.mark.parametrize("size", ["small", "medium"])
+def test_the_large_sample_has_hundreds_of_items_long_names_and_many_projects(tmp_path):
+    home = build_demo_home(tmp_path, "large")
+    inventory = demo_build(home)()
+    assert len(inventory.items) >= 300
+    assert len(inventory.projects) > 10
+    assert max(len(i.name) for i in inventory.items) >= 60
+    assert max(len(Path(p.path).name) for p in inventory.projects) >= 60
+    servers = [
+        i
+        for i in inventory.items
+        if i.kind is ItemKind.MCP_SERVER and i.name.startswith("bench-server-")
+    ]
+    assert len(servers) == 150 and {i.client for i in servers} == {"claude_code", "codex", "cursor"}
+    plugins = [
+        i
+        for i in inventory.items
+        if i.kind is ItemKind.PLUGIN
+        and i.client == "claude_code"
+        and i.name.endswith("@bench-market")
+    ]
+    assert len(plugins) == 30
+    folders = (".claude/skills", ".agents/skills", ".cursor/skills")
+    skills = [p for f in folders for p in (home / f).glob("bench-skill-*/SKILL.md")]
+    assert len(skills) == 120 and all(list((home / f).glob("bench-skill-*")) for f in folders)
+    direct = {
+        i.name for i in inventory.items if i.kind is ItemKind.MCP_SERVER and i.via_gateway is None
+    }
+    held = load_settings(home)["servers"]
+    assert len(direct) > 6 and len(held) > 6
+    assert {"files", "tracker"} <= set(held)  # medium's cases stay
+    assert max(len(name) for name in held) > 40
+    assert all(load_tools(home).get(name) for name in held)
+
+
+@pytest.mark.parametrize("size", ["small", "medium", "large"])
 def test_a_sample_holds_demo_secrets_and_no_sentinel(tmp_path, size):
     build_demo_home(tmp_path, size)
     files = [p for p in tmp_path.rglob("*") if p.is_file() and not p.is_symlink()]
