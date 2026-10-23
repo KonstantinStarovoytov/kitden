@@ -17,11 +17,13 @@ def affects(inventory, item: Item) -> dict:
     reached = {item.client}
     notes: list[str] = []
     if item.kind is ItemKind.SKILL and item.source.path:
+        # The folder's owner; ~/.agents/skills ("shared") is no client's, so it gets no note.
+        owner = CLIENT_WORDS.get(item.source.owner_client)
         for reader in skill_readers(inventory, item):
             if reader != item.client:
                 reached.add(reader)
-                owner = CLIENT_WORDS.get(item.client, item.client)
-                notes.append(READS_FOLDER.format(reader=CLIENT_WORDS[reader], owner=owner))
+                if owner:
+                    notes.append(READS_FOLDER.format(reader=CLIENT_WORDS[reader], owner=owner))
     elif item.kind is ItemKind.PLUGIN and item.scope is Scope.USER:
         # Only Cursor lists another client's plugin as its own item: its import of Claude Code's
         # user plugins. (It reads Claude Code's hooks too, but Kitden changes no hook.)

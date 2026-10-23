@@ -11,13 +11,12 @@ from urllib.parse import urlsplit, urlunsplit
 from kitden.clients.base import ClientAdapter
 from kitden.model import Item, ItemKind, Scope
 from kitden.redact import redact_text
+from kitden.views.words import LOADS_PLUGINS
 
 CLAUDE = "claude_code"
 CODEX = "codex"
 CURSOR = "cursor"
-CURSOR_LOADS_CLAUDE = (
-    "Cursor loads Claude Code's plugins when Include Third-Party Plugins is on in Cursor Settings."
-)
+CURSOR_LOADS_CLAUDE = f"{LOADS_PLUGINS} when Include Third-Party Plugins is on in Cursor Settings."
 CURSOR_ADD = "In Cursor: Customize → Plugins, find the plugin and choose Add to Cursor."
 
 

@@ -295,24 +295,35 @@ const FROM_WORDS = {
   user: "from all projects", plugin: ROUTE_WORDS.plugin, managed: "from your organization", account: "from your Claude account",
 };
 
-// Where a client loads a definition from, for the Why: the route first, then the scope.
-// `here` is the picked project's path, or null for All projects.
-export function originWords(def, here) {
-  const route = routeWords(def);
-  if (route) return route;
+// Where a definition applies, as the Why says it: "from this project", "from all projects".
+function scopeOrigin(def, here) {
   if (def.scope === "project" || def.scope === "local") {
     return def.project && def.project === here ? "from this project" : `from ${folderName(def.project)}`;
   }
   return FROM_WORDS[def.scope] || `from ${def.scope}`;
 }
 
+// Where a client loads a definition from, for the Why: the route first, then the scope.
+// `here` is the picked project's path, or null for All projects.
+export function originWords(def, here) {
+  return routeWords(def) || scopeOrigin(def, here);
+}
+
 const inClientOrder = (definitions) => [...definitions].sort((a, b) => CLIENT_ORDER.indexOf(a.client) - CLIENT_ORDER.indexOf(b.client));
 const clientsOf = (definitions) => [...new Set(definitions.map((d) => clientName(d.client)))];
 
-// The Why: at most two quiet lines. First where each client loads it from, grouped by where
-// ("Codex and Cursor load it from all projects."). Then the first rule that decides: one folder
-// several clients read, an override, a merge, turned off, a state Kitden cannot read, or only in
-// other projects. None for instruction files: their own lines say when each client reads them.
+// What a definition's own line would say that the Why says instead, so a fact shows once:
+// turned off, or only in another project (with All projects picked). The layer and the Why
+// both ask these.
+const standsAlone = (def) => def.kind !== "instructions" && !def.loads && !def.overridden && !def.merged;
+const turnedOff = (def) => standsAlone(def) && def.enabled === "off";
+const inAnotherProject = (def, here) => standsAlone(def) && def.enabled === "on" && Boolean(def.project) && def.project !== here;
+
+// The Why: one or two quiet lines. First where each client loads it from, grouped by where
+// ("Codex and Cursor load it from all projects."). Then what decides, in one line: one folder
+// several clients read, or one definition over another of the same client; what is turned off;
+// the projects it is in when it does not load here. None for instruction files: their own
+// lines say when each client reads them. An unknown state's reason stays on its layer.
 export function whyLines(definitions, here) {
   if (!definitions.length || definitions.some((d) => d.kind === "instructions")) return [];
   const defs = inClientOrder(definitions);
@@ -327,50 +338,83 @@ export function whyLines(definitions, here) {
     const verb = i ? "" : names.length > 1 ? " load it" : " loads it";
     return `${joinWords(names)}${verb} ${origin}`;
   });
-  const rule = ruleLine(defs, here);
-  return [...(parts.length ? [`${parts.join("; ")}.`] : []), ...(rule ? [rule] : [])];
+  const rules = [sharedFolder(defs) || heldRule(defs, here) || overRule(defs, here)].filter(Boolean);
+  const off = clientsOf(defs.filter(turnedOff));
+  if (off.length) rules.push(`Turned off in ${joinWords(off)}.`);
+  const away = defs.filter((d) => inAnotherProject(d, here));
+  if (away.length) {
+    const count = plural(new Set(away.map((d) => d.project)).size, "project", "projects");
+    rules.push(parts.length ? `It is also in ${count}.` : `It is in ${count}; it loads only there.`);
+  }
+  return [...(parts.length ? [`${parts.join("; ")}.`] : []), ...(rules.length ? [rules.join(" ")] : [])];
 }
 
-// The Why's second line: the first rule that applies, or null.
-function ruleLine(defs, here) {
+// One skill folder that several clients read.
+function sharedFolder(defs) {
   const folders = new Map(); // a skill's folder -> the definitions read from it
   for (const def of defs.filter((d) => d.kind === "skill" && String(d.source || "").includes("/"))) {
     folders.set(def.source, [...(folders.get(def.source) || []), def]);
   }
   const shared = [...folders.values()].find((list) => clientsOf(list).length > 1);
-  if (shared) return `One folder, read by ${joinWords(clientsOf(shared))}.`;
-  // The definition of the same client that `beaten` gives way to: one that loads, else the
-  // first that is not beaten itself.
-  const winner = (beaten) => {
-    const others = defs.filter((d) => d.client === beaten.client && d !== beaten && !d.overridden && !d.merged);
-    return others.find((d) => d.loads) || others[0];
-  };
-  const over = defs.find((d) => d.overridden && winner(d));
-  if (over) return `In ${clientName(over.client)}, the one ${originWords(winner(over), here)} overrides the one ${originWords(over, here)}.`;
-  const merged = defs.find((d) => d.merged && winner(d));
-  if (merged) return `In ${clientName(merged.client)}, the ones ${originWords(winner(merged), here)} and ${originWords(merged, here)} are merged.`;
-  const loads = new Set(defs.filter((d) => d.loads).map((d) => d.client));
-  const off = clientsOf(defs.filter((d) => d.enabled === "off" && !loads.has(d.client)));
-  if (off.length) return `Turned off in ${joinWords(off)}.`;
-  const unknown = clientsOf(defs.filter((d) => d.enabled === "unknown"));
-  if (unknown.length) return `${joinWords(unknown)} ${unknown.length > 1 ? "keep their" : "keeps its"} on/off state where Kitden cannot read it.`;
-  if (!here && !loads.size && defs.every((d) => d.project)) {
-    return `It is in ${plural(new Set(defs.map((d) => d.project)).size, "project", "projects")}; it loads only there.`;
-  }
-  return null;
+  return shared ? `One folder, read by ${joinWords(clientsOf(shared))}.` : null;
 }
 
-// The evidence under "Technical details": one row per definition with a file path, a file key,
-// a command or first lines, in client order, titled in file words ("Cursor · Global settings").
+// The definition of the same client that `beaten` gives way to: one that loads, else the first
+// that is not beaten itself.
+function winnerOf(defs, beaten) {
+  const others = defs.filter((d) => d.client === beaten.client && d !== beaten && !d.overridden && !d.merged);
+  return others.find((d) => d.loads) || others[0];
+}
+
+// A server in the Kitden gateway with a switch of its own in the project: said plainly, since
+// both definitions come through the gateway.
+function heldRule(defs, here) {
+  const held = defs.filter((d) => {
+    const winner = (d.overridden || d.merged) && d.via_gateway === "kitden" && winnerOf(defs, d);
+    return winner && winner.via_gateway === "kitden" && winner.project;
+  });
+  if (!held.length) return null;
+  const winner = winnerOf(defs, held[0]);
+  const whose = winner.project === here ? "this project's" : `${folderName(winner.project)}'s`;
+  const names = clientsOf(held);
+  return `${joinWords(names)} ${names.length > 1 ? "use" : "uses"} ${whose} switch for ${winner.name} in the Kitden gateway.`;
+}
+
+// One definition over another of the same client. When both come the same way, their scopes
+// tell them apart; when those match too, it says so.
+function overRule(defs, here) {
+  const beaten = defs.find((d) => d.overridden && winnerOf(defs, d)) || defs.find((d) => d.merged && winnerOf(defs, d));
+  if (!beaten) return null;
+  const winner = winnerOf(defs, beaten);
+  const client = clientName(beaten.client);
+  let [a, b] = [originWords(winner, here), originWords(beaten, here)];
+  if (a === b) [a, b] = [scopeOrigin(winner, here), scopeOrigin(beaten, here)];
+  if (a === b) return `In ${client}, two of them come ${a}; ${beaten.merged ? "they are merged" : "only one loads"}.`;
+  return beaten.merged ? `In ${client}, the ones ${a} and ${b} are merged.` : `In ${client}, the one ${a} overrides the one ${b}.`;
+}
+
+// The evidence under "Technical details", in client order: one row per file, file key,
+// command and first lines, titled with every client that reads it and the file words
+// ("Codex and Cursor · Global settings"). A held server's entry is the Kitden gateway's own.
 export function techRows(definitions) {
-  return inClientOrder(definitions).map((def) => ({
-    client: def.client,
-    title: `${clientName(def.client)} · ${fileScopeWords(def)}`,
-    path: String(def.source || "").includes("/") ? def.source : null,
-    key: def.key || null,
-    summary: def.summary || null,
-    preview: def.preview && def.preview.length ? def.preview : null,
-  })).filter((r) => r.path || r.key || r.summary || r.preview);
+  const rows = new Map(); // the same evidence -> one row and its definitions
+  for (const def of inClientOrder(definitions)) {
+    const row = {
+      client: def.client,
+      path: String(def.source || "").includes("/") ? def.source : null,
+      key: def.key || null,
+      summary: def.summary || null,
+      preview: def.preview && def.preview.length ? def.preview : null,
+    };
+    if (!row.path && !row.key && !row.summary && !row.preview) continue;
+    const id = JSON.stringify([row.path, row.key, row.summary, row.preview]);
+    if (!rows.has(id)) rows.set(id, { row, defs: [] });
+    rows.get(id).defs.push(def);
+  }
+  return [...rows.values()].map(({ row, defs }) => {
+    const who = defs[0].via_gateway === "kitden" ? CLIENT_NAMES.kitden : joinWords(clientsOf(defs));
+    return { ...row, title: `${who} · ${fileScopeWords(defs[0])}` };
+  });
 }
 
 // The evidence, folded: per definition its file (the whole path in the hover text), file key,
@@ -424,14 +468,15 @@ function staleWords(at) {
 // A definition's dot, badge and line of why. An instruction file says it is available, or
 // that it is in a project, never "Not loaded": its why says when it is read. A definition kept
 // from the last good read also says when (`stale`).
-export function layerState(def) {
+export function layerState(def, here = null) {
   let look = "off";
   let badge = "Not loaded";
   // The server's why is written for agents ("Loads. It overrides the user definition."). The
-  // badge says Available, and the Why lines say which definition overrides or merges with
-  // which, once, in page words; so a definition in such a rule has no line of its own.
+  // badge says Available, and the Why lines say once, in page words, which definition
+  // overrides or merges with which, what is turned off and what is only in other projects;
+  // such a definition has no line of its own.
   const ruled = def.kind !== "instructions" && (def.loads || def.overridden || def.merged);
-  let why = ruled ? "" : def.why || "";
+  let why = ruled || turnedOff(def) || inAnotherProject(def, here) ? "" : def.why || "";
   const unknown = def.enabled === "unknown";
   if (unknown) {
     look = "unk";
@@ -449,7 +494,7 @@ export function layerState(def) {
 }
 
 function layer(def) {
-  const { look, badge, why, unknown, stale } = layerState(def);
+  const { look, badge, why, unknown, stale } = layerState(def, projectPath());
   const wins = def.loads && !unknown;
   const row = el("div", wins ? "layer wins" : "layer");
   const dot = socket({ state: look });

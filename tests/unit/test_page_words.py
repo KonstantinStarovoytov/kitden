@@ -90,6 +90,17 @@ def test_python_and_page_state_words_agree():
         assert f'{state}: "{word}"' in parts, state
 
 
+def test_one_phrase_says_cursor_loads_claude_codes_plugins():
+    from kitden.views import after, commands
+    from kitden.views.words import LOADS_PLUGINS
+
+    notes = (after.CURSOR_IMPORT["note"], after.CURSOR_REMOVE["note"], after.CURSOR_KEEPS)
+    for text in (*notes, commands.CURSOR_LOADS_CLAUDE):
+        assert text.startswith(f"{LOADS_PLUGINS},") or text.startswith(f"{LOADS_PLUGINS} "), text
+    # Built on the one phrase, not a copy of it.
+    assert "Claude Code's plugins" not in Path(commands.__file__).read_text()
+
+
 def test_python_and_page_route_words_agree():
     parts = script("parts.js")
     for route, words in ROUTE_WORDS.items():

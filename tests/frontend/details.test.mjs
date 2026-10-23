@@ -34,7 +34,8 @@ test('why says where it loads from and the rule that decides', () => {
   assert.deepEqual(whyLines([def({ client: 'claude_code', kind: 'plugin' }), def({ client: 'cursor', kind: 'plugin', owner_client: 'claude_code' })], null),
     ["Claude Code loads it from all projects; Cursor through Claude Code's folder."]);
   assert.deepEqual(whyLines([def({ client: 'codex', loads: false, enabled: 'off' })], null), ['Turned off in Codex.']);
-  assert.deepEqual(whyLines([def({ client: 'codex', loads: false, enabled: 'unknown' })], null), ['Codex keeps its on/off state where Kitden cannot read it.']);
+  // An unknown state: the layer gives its own reason, so the Why adds nothing.
+  assert.deepEqual(whyLines([def({ client: 'codex', loads: false, enabled: 'unknown' })], null), []);
   assert.deepEqual(whyLines([def({ client: 'claude_code', scope: 'project', project: '/a/site', loads: false }), def({ client: 'claude_code', scope: 'project', project: '/a/api', loads: false })], null),
     ['It is in 2 projects; it loads only there.']);
   assert.deepEqual(whyLines([def({ client: 'codex', kind: 'instructions' })], null), []);
@@ -44,18 +45,39 @@ test('why names a folder that several clients read, in words', () => {
   const folder = '/Users/me/.agents/skills/code-review/SKILL.md';
   assert.deepEqual(whyLines([def({ client: 'codex', source: folder }), def({ client: 'cursor', owner_client: 'shared', source: folder })], null),
     ['Codex and Cursor load it from all projects.', 'One folder, read by Codex and Cursor.']);
+  // Turned off in one of them: both facts.
+  assert.deepEqual(whyLines([def({ client: 'codex', source: folder, loads: false, enabled: 'off' }), def({ client: 'cursor', owner_client: 'shared', source: folder })], null),
+    ['Cursor loads it from all projects.', 'One folder, read by Codex and Cursor. Turned off in Codex.']);
   // Two folders, one per client: nothing shared to say.
   assert.deepEqual(whyLines([def({ client: 'codex', source: folder }), def({ client: 'cursor', source: '/Users/me/.cursor/skills/code-review/SKILL.md' })], null),
     ['Codex and Cursor load it from all projects.']);
 });
 
-test('why says a merge, a server in the Kitden gateway and a stand-in for unknown states', () => {
+test('why says a merge and a server in the Kitden gateway', () => {
   assert.deepEqual(whyLines([def({ client: 'claude_code', kind: 'mcp_server', scope: 'project', project: site }), def({ client: 'claude_code', kind: 'mcp_server', loads: false, merged: true })], site),
     ['Claude Code loads it from this project.', 'In Claude Code, the ones from this project and from all projects are merged.']);
-  const held = (client) => def({ client, kind: 'mcp_server', owner_client: 'kitden', via_gateway: 'kitden' });
+  const held = (client, fields = {}) => def({ client, kind: 'mcp_server', name: 'files', owner_client: 'kitden', via_gateway: 'kitden', ...fields });
   assert.deepEqual(whyLines([held('claude_code'), held('cursor')], null), ['Claude Code and Cursor load it through the Kitden gateway.']);
-  assert.deepEqual(whyLines([def({ client: 'codex', loads: false, enabled: 'unknown' }), def({ client: 'cursor', loads: false, enabled: 'unknown' })], null),
-    ['Codex and Cursor keep their on/off state where Kitden cannot read it.']);
+  assert.deepEqual(whyLines([def({ client: 'codex', loads: false, enabled: 'unknown' }), def({ client: 'cursor', loads: false, enabled: 'unknown' })], null), []);
+});
+
+test('two definitions that come the same way are told apart, or said plainly', () => {
+  // A held server with a switch of its own in this project: Codex merges, Claude Code overrides.
+  const held = (client, fields = {}) => def({ client, kind: 'mcp_server', name: 'files', owner_client: 'kitden', via_gateway: 'kitden', ...fields });
+  const mine = { scope: 'project', project: site };
+  assert.deepEqual(whyLines([held('claude_code', mine), held('claude_code', { loads: false, overridden: true }), held('codex', mine), held('codex', { loads: false, merged: true })], site),
+    ["Claude Code and Codex load it through the Kitden gateway.", "Claude Code and Codex use this project's switch for files in the Kitden gateway."]);
+  // Both through Claude Code's folder: the scope tells them apart.
+  const imported = (fields) => def({ client: 'cursor', kind: 'plugin', owner_client: 'claude_code', ...fields });
+  assert.deepEqual(whyLines([imported(mine), imported({ loads: false, overridden: true })], site),
+    ["Cursor loads it through Claude Code's folder.", 'In Cursor, the one from this project overrides the one from all projects.']);
+  // Two plugins with a server of one name: nothing tells them apart.
+  const fromPlugin = (fields) => def({ client: 'claude_code', kind: 'mcp_server', scope: 'plugin', ...fields });
+  assert.deepEqual(whyLines([fromPlugin({}), fromPlugin({ loads: false, overridden: true })], null),
+    ['Claude Code loads it from a plugin.', 'In Claude Code, two of them come from a plugin; only one loads.']);
+  // The project's own setting turns it off over the one for all projects.
+  assert.deepEqual(whyLines([def({ client: 'claude_code', kind: 'plugin', ...mine, loads: false, enabled: 'off' }), def({ client: 'claude_code', kind: 'plugin', loads: false, overridden: true })], site),
+    ['In Claude Code, the one from this project overrides the one from all projects. Turned off in Claude Code.']);
 });
 
 test('the origin uses the route words, then the scope', () => {
@@ -78,14 +100,19 @@ test('a section title names only a known client as the owner of a folder', () =>
   assert.equal(fileScopeWords({ scope: 'local', client: 'claude_code', owner_client: 'claude_code', project: site }), 'Only on this Mac · website');
 });
 
-test('a layer leaves the rule to the Why: no override sentence under it', () => {
+test('a layer leaves to the Why what the Why says', () => {
   const loaded = { kind: 'mcp_server', enabled: 'on', loads: true };
   assert.equal(layerState({ ...loaded, why: 'Loads. It overrides the user definition.' }).why, '');
   assert.equal(layerState({ kind: 'plugin', enabled: 'on', loads: false, overridden: true, why: 'Does not load: the project definition overrides it.' }).why, '');
   assert.equal(layerState({ kind: 'mcp_server', enabled: 'on', loads: false, merged: true, why: 'Merged with the project definition; its fields win.' }).why, '');
-  // What is not a rule between two definitions stays.
-  const elsewhere = 'Does not load here: it belongs to another project.';
-  assert.equal(layerState({ kind: 'skill', enabled: 'on', loads: false, why: elsewhere }).why, elsewhere);
+  // Turned off, and only in other projects: the Why says these too.
+  assert.equal(layerState({ kind: 'plugin', enabled: 'off', loads: false, why: 'Does not load: it is turned off.' }).why, '');
+  const elsewhere = { kind: 'skill', enabled: 'on', loads: false, project: '/a/api', why: 'Does not load here: it belongs to another project.' };
+  assert.equal(layerState(elsewhere, null).why, '');
+  // What the Why does not say stays: a plugin that is not loaded, and an unknown state's reason.
+  const part = 'Does not load here: its plugin is not loaded.';
+  assert.equal(layerState({ kind: 'mcp_server', enabled: 'on', loads: false, project: site, why: part }, site).why, part);
+  assert.equal(layerState({ kind: 'plugin', enabled: 'unknown', unknown_reason: 'stored_in_account', loads: false }).why, 'Its on/off state is kept in your Claude account, not on this Mac.');
   assert.equal(layerState({ kind: 'instructions', enabled: 'on', loads: true, why: 'Read when a session starts.' }).why, 'Read when a session starts.');
 });
 
@@ -101,4 +128,17 @@ test('technical details keep the path, the key, the command and the first lines'
   ]);
   assert.equal(rows[1].title, 'Cursor · Global settings');
   assert.deepEqual(techRows([{ client: 'claude_code', scope: 'account', source: 'account' }]), []);
+});
+
+test('technical details show one file once, for every client that reads it', () => {
+  const gateway = '/Users/me/Library/Application Support/kitden/gateway.json';
+  const held = (client) => ({ client, scope: 'user', project: null, owner_client: 'kitden', via_gateway: 'kitden', source: gateway, key: 'servers.files', summary: 'npx files-mcp', preview: null });
+  const own = { client: 'cursor', scope: 'user', project: null, owner_client: 'cursor', source: '/Users/me/.cursor/mcp.json', key: 'mcpServers.files', summary: 'npx files-mcp', preview: null };
+  assert.deepEqual(techRows([held('cursor'), held('claude_code'), held('codex'), own]).map((r) => [r.title, r.path, r.key]), [
+    ['Kitden gateway · Global settings', gateway, 'servers.files'],
+    ['Cursor · Global settings', '/Users/me/.cursor/mcp.json', 'mcpServers.files'],
+  ]);
+  const skill = '/Users/me/.agents/skills/code-review/SKILL.md';
+  assert.deepEqual(techRows([def({ client: 'cursor', owner_client: 'shared', source: skill }), def({ client: 'codex', source: skill })]).map((r) => r.title),
+    ['Codex and Cursor · Global settings']);
 });
