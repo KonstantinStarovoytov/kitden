@@ -38,6 +38,7 @@ that server into.
 
 **Overview** lists what needs attention, such as an item that loads twice, and what can improve,
 such as servers that could move into your gateway. Each one has a button that opens its fix.
+Notes, which need no fix, are grouped by item, with the clients each is about.
 The clients Kitden found sit on the right, and a card says whether the Kitden gateway is set up.
 
 ### See what each client has, and add what it lacks
@@ -48,19 +49,32 @@ and "Show" brings it back. Tabs split MCP servers, plugins, skills, hooks, marke
 instructions (CLAUDE.md, AGENTS.md, rules, commands and agents; Details shows the first lines,
 common secret shapes hidden). On plugins and skills, choose Installed, New (not on this computer
 yet) or All, and filter by category. Pick a project at the top to see what loads in that folder.
+All projects shows what every project shares. In a project, each cell that has the item also says
+where it applies: "all projects", "this project" or "project override". How a client gets it,
+such as "through Claude Code's folder", is in the cell's hover text. The address keeps the
+project and the item you opened, so a link or Back returns to it.
 
-The action sits in the client's cell. "+ Add" adds a plugin or skill to that client. "+ Add
-skills" copies the skills of a plugin that work on their own into a client that cannot install the
-plugin itself. "+ Add the plugin" is for a skill that needs its plugin. On plugins and skills, a
-cell with nothing to do says why. You can also add a marketplace from a folder or a GitHub link.
+A cell says "Available" when the client has the item and "Off" when it has it turned off.
+"Unknown" means Kitden could not read it, so it may or may not be available; it never means
+missing. Either a file could not be read, or the client keeps the on/off state where Kitden
+cannot see it, such as your Claude account. "Needs review" means another client has an item with
+the same name from another source. That row offers no "+ Add", because an add would copy only one
+side.
+
+The action sits in the client's cell. Where Kitden can add an item to that client, the cell says
+"+ Add". "+ Add skills" copies the skills of a plugin that work on their own into a client that
+cannot install the plugin itself. "+ Add the plugin" is for a skill that needs its plugin. On
+plugins and skills, a cell with nothing to do says why. You can also add a marketplace from a
+folder or a GitHub link.
 
 Details of a plugin or a skill offer "Remove from <client>…", with Undo; Undo installs a plugin
 again, but not its saved options. "+ Add" on an MCP server copies its entry to another client; a
 `${VAR}` reference stays a reference where that client can read one, and the review says when a
 secret gets a second copy. With a project picked, "+ Add" on a skill or a Claude Code plugin asks
-"Add to this project…" or "Add for all projects…". "Add missing…" lists what one client loads in
-the project and another lacks, as one review with checkboxes; an item with the same name from
-another source is listed as not the same and left alone.
+"Add to this project…" or "Add for all projects…"; a skill only this project has adds into this
+project. "Add missing…" lists what one client loads in the project and another lacks, as one
+review with checkboxes; an item with the same name from another source is listed as not the same
+and left alone.
 
 <p align="center">
   <picture>

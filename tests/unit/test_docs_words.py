@@ -25,6 +25,24 @@ def test_readme_says_what_an_unknown_folder_gets():
     assert words in readme
 
 
+def test_readme_says_unknown_is_not_missing():
+    readme = " ".join((ROOT / "README.md").read_text().split())
+    assert (
+        '"Unknown" means Kitden could not read it, so it may or may not be available; '
+        "it never means missing"
+    ) in readme
+    # Both meanings: a file that could not be read, and an on/off state out of Kitden's sight.
+    assert "Either a file could not be read, or the client keeps the on/off state" in readme
+
+
+def test_readme_says_what_a_project_view_adds():
+    readme = " ".join((ROOT / "README.md").read_text().split())
+    assert '"all projects", "this project" or "project override"' in readme
+    assert "is in the cell's hover text" in readme
+    assert '"Needs review" means another client has an item with the same name' in readme
+    assert "a skill only this project has adds into this project" in readme
+
+
 def test_readme_names_the_management_actions():
     readme = " ".join((ROOT / "README.md").read_text().split())
     for words in (
