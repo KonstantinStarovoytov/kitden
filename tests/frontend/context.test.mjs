@@ -94,7 +94,8 @@ test("the person's own pick wins over an arrival that comes late", async () => {
 test('the Gateway opens a held server in its own panel, and never over a panel', async () => {
   goTo('gateway', files);
   assert.equal((await arrivalServer(model)).held.name, 'files');
-  // After "No gateway yet" the arrival waits; the review that adds a gateway drops it.
+  // After "No gateway yet" the arrival waits; a panel the person opens drops it, and so does
+  // saving a gateway (save() in gateway.js, pinned in test_page_words.py).
   goTo('gateway', files);
   openPanel([]);
   closePanel({ focus: false, keepSelection: true });

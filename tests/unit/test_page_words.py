@@ -997,3 +997,9 @@ def test_the_gateway_opens_and_keeps_the_selected_server():
     assert 'setState({ selected: { kind: "mcp_server", name: server.name } })' in text
     assert 'setState({ selected: { kind: "mcp_server", name } })' in text
     assert "takeArrival()" in text
+
+
+def test_saving_a_gateway_drops_an_arrival_still_waiting():
+    # The person's own action wins: a server picked by Back must not open after the save.
+    save = script("gateway.js").split("async function save() {")[1].split("\n  }\n")[0]
+    assert "arrival.pending = false;" in save

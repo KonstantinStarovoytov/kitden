@@ -674,6 +674,8 @@ function addForm() {
   submit.type = "submit";
   form.append(urlField, uiField, field("Login", login), keyField, emailField, passwordField, submit, message);
   async function save() {
+    // The person's own action wins over an arrival still waiting (store.js).
+    arrival.pending = false;
     {
       const result = await postJson("/api/gateways", {
         url: state.url.trim(),
