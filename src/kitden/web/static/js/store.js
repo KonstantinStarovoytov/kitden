@@ -30,8 +30,15 @@ export const data = {
 };
 
 // A project's data only while that project is shown, so another project's data never shows.
+// A project no longer on the list shows none.
 export function current(name) {
-  return data.scope[name] === state.project ? data[name] : null;
+  return data.scope[name] === state.project && !projectGone() ? data[name] : null;
+}
+
+// The picked project is no longer on the list Kitden read. It stays picked, and the page says
+// so: it is never silently swapped for All projects.
+export function projectGone() {
+  return Boolean(state.project) && data.projects !== null && !data.projects.some((p) => p.id === state.project);
 }
 
 // The same for a failed read: another project's error is not this project's.
@@ -135,10 +142,6 @@ export async function loadShared() {
     guarded("projects", "/api/projects", (v) => { data.projects = v; }),
     guarded("changes", "/api/changes", (v) => { data.changes = v; }),
   ]);
-  if (state.project && !(data.projects || []).some((p) => p.id === state.project)) {
-    state.project = "";
-    writeHash();
-  }
 }
 
 export async function loadOverview() {
@@ -160,15 +163,17 @@ export async function loadChanges() {
   await guarded("changes", "/api/changes", (v) => { data.changes = v; });
 }
 
-// Everything the current place shows, after a scan or a change.
 export async function loadSetupServer() {
   await guarded("setupServer", "/api/setup-server", (v) => { data.setupServer = v; });
 }
 
+// Everything the current place shows, after a scan or a change. Nothing is read for a project
+// no longer on the list.
 export async function reload() {
   freshness.reloadStartedAt = performance.now();
   await loadShared();
-  await Promise.all([loadOverview(), loadMap(), loadGateway(), loadSetupServer()]);
+  const reads = projectGone() ? [] : [loadOverview(), loadMap(), loadGateway()];
+  await Promise.all([...reads, loadSetupServer()]);
   freshness.lastReadFailed = Object.keys(data.errors).length > 0;
   if (!freshness.lastReadFailed) freshness.lastGoodRead = Date.now();
 }

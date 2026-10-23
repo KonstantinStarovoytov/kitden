@@ -7,7 +7,7 @@ import { animate, entrance, glide, land, reducedMotion, rollTo, spring } from ".
 import { marketplaceForm, projectNote, showOffer, showSkill } from "./offer.js";
 import { openInfo, projectLabel, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, mark, morphSocket, opens, skeleton, socket, staleNote } from "./parts.js";
-import { freshness, go, projectPath, render, retry, state } from "./store.js";
+import { freshness, go, projectGone, projectPath, render, retry, state } from "./store.js";
 
 const KINDS = [
   ["mcp_server", "MCP servers"], ["plugin", "Plugins"], ["skill", "Skills"],
@@ -95,7 +95,7 @@ export function startAdd(add, client, row) {
   }
   const folder = projectLabel(state.project);
   const body = el("div", "body");
-  body.append(el("p", "muted", `${CLIENT_NAMES[client] || client} can load it in ${folder} only, or in all your projects.`));
+  body.append(el("p", "muted", `${CLIENT_NAMES[client] || client} can load it in ${folder} only, or in all projects.`));
   // The primary button sits last, as the move choice draws it.
   const choices = addChoices(add, folder).map((choice) => button(choice.label, () => review(
     previewFor(add, client, choice.scope), { note: noteFor(add, state.project, choice.scope) },
@@ -118,8 +118,8 @@ export function addName(row, client, add, project) {
 export function scopeLine(project, rows, kind = null) {
   if (!project || rows.length === 0 || !hasAdds(kind)) return null;
   const asks = rows.some((r) => Object.values(r.cells || {}).some((c) => c.add && c.add.project_place));
-  return asks ? "An Add asks: this project, or all your projects. Adds without that choice go to all of them."
-    : "Adding puts an item in all your projects.";
+  return asks ? "An Add asks: this project, or all projects. Adds without that choice go to all projects."
+    : "Adding puts an item in all projects.";
 }
 
 // One cell: a button for the one action, a state, or a dash that says why not.
@@ -291,8 +291,9 @@ async function choose(params, pressed = null) {
 
 // For a caller that draws the page itself once the shown tab is read (a reload, a change or a
 // project switch), so the cells morph then and not before. Call it right after reload() starts.
+// Nothing is read for a project no longer on the list.
 export function loadLibrary() {
-  if (state.view !== "library") return Promise.resolve();
+  if (state.view !== "library" || projectGone()) return Promise.resolve();
   clearTimeout(timer);
   return read({});
 }
@@ -300,7 +301,7 @@ export function loadLibrary() {
 // Read the tab another place is about to open, so it is drawn inside the place change and a
 // client tile can fly to its column there (Overview counts and cards).
 export function loadLibraryFor(choice) {
-  return read(choice);
+  return projectGone() ? Promise.resolve() : read(choice);
 }
 
 export function renderLibrary(main) {

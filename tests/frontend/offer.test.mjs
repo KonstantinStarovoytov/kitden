@@ -67,7 +67,7 @@ test('a client is checked for you only when it is the one choice', () => {
 });
 
 test('an add in a project view says it is for every project', () => {
-  assert.equal(projectNote('p1'), 'Adds for all your projects.');
+  assert.equal(projectNote('p1'), 'Adds for all projects.');
   assert.equal(projectNote(''), null);
 });
 
@@ -80,6 +80,6 @@ test('the Add form passes the warning of each checked client, as its cell does',
   } };
   assert.equal(formNote(row, ['claude_code'], ''), null);
   assert.equal(formNote(row, ['claude_code', 'codex'], ''), warn);
-  assert.equal(formNote(row, ['codex'], 'p1'), `${warn} Adds for all your projects.`);
-  assert.equal(formNote(row, ['claude_code'], 'p1'), 'Adds for all your projects.');
+  assert.equal(formNote(row, ['codex'], 'p1'), `${warn} Adds for all projects.`);
+  assert.equal(formNote(row, ['claude_code'], 'p1'), 'Adds for all projects.');
 });

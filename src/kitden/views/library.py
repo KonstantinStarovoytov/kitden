@@ -361,7 +361,7 @@ def _plugin_cell(
 def _cursor_in_project(cell: dict) -> dict:
     """A Cursor plugin cell in a project view: say where a plugin goes into one project."""
     if cell["add"]:
-        cell["add"]["project_hint"] = f"Adds its skills for all your projects. {CURSOR_PROJECT}"
+        cell["add"]["project_hint"] = f"Adds its skills for all projects. {CURSOR_PROJECT}"
     else:
         cell["reason"] = " ".join(filter(None, [cell["reason"], CURSOR_PROJECT]))
     return cell
@@ -508,7 +508,7 @@ def _no_skill_place(adapters, project: str | None) -> dict[str, str]:
     if project is None or codex is None or codex.trusts(project):
         return {}
     name = Path(project).name
-    hint = f"Adds for all your projects. To add it to {name} only, trust {name} in Codex first."
+    hint = f"Adds for all projects. To add it to {name} only, trust {name} in Codex first."
     return {"codex": hint}
 
 

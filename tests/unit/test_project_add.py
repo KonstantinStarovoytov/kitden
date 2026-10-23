@@ -179,9 +179,23 @@ def test_codex_offers_no_project_place_in_a_project_it_does_not_trust(client):
     add = next(r for r in rows if r["name"] == "tidy")["cells"]["codex"]["add"]
     assert (add["project_place"], add["project_hint"]) == (
         False,
-        "Adds for all your projects. To add it to website only, trust website in Codex first.",
+        "Adds for all projects. To add it to website only, trust website in Codex first.",
     )
     api = pid(client, str(client.home / "work/api"))
     rows = client.get(f"/api/library?kind=skill&show=new&project={api}").json()["rows"]
     add = next(r for r in rows if r["name"] == "tidy")["cells"]["codex"]["add"]
     assert (add["project_place"], add["project_hint"]) == (True, None)
+
+
+def test_a_skill_add_into_a_known_project_on_another_disk_previews(client, tmp_path):
+    site = tmp_path / "other-disk/site"  # outside the home folder
+    site.mkdir(parents=True)
+    settings_path = client.home / ".claude.json"
+    settings = json.loads(settings_path.read_text())
+    settings.setdefault("projects", {})[str(site)] = {"hasTrustDialogAccepted": True}
+    settings_path.write_text(json.dumps(settings))
+    client.post("/api/rescan", headers=POST)  # a fixture home: no held servers to ask
+    params = {"skill": TIDY, "project": pid(client, str(site))}
+    change = _preview(client, "skill.install", ["claude_code"], params)
+    assert change.status_code == 200
+    assert all(step["path"].startswith(str(site)) for step in change.json()["steps"])

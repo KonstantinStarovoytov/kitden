@@ -4,6 +4,8 @@ import { reducedMotion } from "./motion.js";
 
 // The shared baseline: the picker's first choice, and the scope of what is set for every project.
 export const ALL_PROJECTS = "All projects";
+// A picked project that left the list: it stays picked, and the place says this instead.
+export const GONE_PROJECT = "This project is no longer on the list.";
 // The twin of views/words.py STATE_WORDS.
 export const STATE_WORDS = {
   on: "Available", off: "Off", over: "Overridden", unk: "Unknown", review: "Needs review", gw: "Via gateway",
@@ -225,6 +227,16 @@ export function banner(what, onRetry) {
     (main.querySelector(".banner button") || main.querySelector(CONTROLS) || main).focus();
   }));
   return node;
+}
+
+// A quiet note in the page, or an error that stays until the next action.
+export function callout(text, level = "warn") {
+  const box = el("div", level === "error" ? "callout error" : "callout");
+  box.setAttribute("role", level === "error" ? "alert" : "note");
+  const icon = el("span", null, "⚠");
+  icon.setAttribute("aria-hidden", "true");
+  box.append(icon, el("span", null, text));
+  return box;
 }
 
 // Above a page whose latest read failed: the page still shows the read from that time.

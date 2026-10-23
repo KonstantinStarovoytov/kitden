@@ -20,7 +20,7 @@ const ALSO_LOADS = {
   skill: "Cursor will also load it from Claude Code's folder.",
   shared: "Cursor will also load it from the shared skills folder.",
 };
-const PROJECT_NOTE = "Adds for all your projects.";
+const PROJECT_NOTE = "Adds for all projects.";
 
 // In a project view an add still goes to the user's settings; the review says so.
 export function projectNote(project) {

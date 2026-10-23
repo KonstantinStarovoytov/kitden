@@ -170,6 +170,14 @@ def test_codex_plugin_offers_add_skills_to_claude_code(home):
     assert row["cells"]["cursor"]["add"]["label"] == "+ Add skills"
 
 
+def test_cursor_add_skills_in_a_project_says_it_is_for_all_projects(home):
+    inventory, adapters = build_inventory(home), {a.id: a for a in default_adapters(home)}
+    website = str(home / "work/website")
+    answer = library(inventory, adapters, website, gateway_registered=False, kind="plugin")
+    hint = _row(answer, "documents")["cells"]["cursor"]["add"]["project_hint"]
+    assert hint.startswith("Adds its skills for all projects. To add a plugin to one project")
+
+
 def test_cursor_plugin_offers_add_skills_to_claude_code_and_codex(home):
     # A second Cursor plugin with no skills, and a third whose only skill needs the plugin.
     cache = home / ".cursor/plugins/cache/cursor-public"

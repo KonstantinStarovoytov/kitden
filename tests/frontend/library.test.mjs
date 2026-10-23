@@ -125,8 +125,8 @@ test('the review note warns about a twin and says a project add is for every pro
   const warn = 'Codex already has figma from claude-plugins-official. It will load both.';
   assert.equal(noteFor(add({}), ''), null);
   assert.equal(noteFor(add({ warn }), ''), warn);
-  assert.equal(noteFor(add({}), 'p1'), 'Adds for all your projects.');
-  assert.equal(noteFor(add({ warn }), 'p1'), `${warn} Adds for all your projects.`);
+  assert.equal(noteFor(add({}), 'p1'), 'Adds for all projects.');
+  assert.equal(noteFor(add({ warn }), 'p1'), `${warn} Adds for all projects.`);
 });
 
 test('meta text shows the source only when names repeat', () => {
@@ -400,7 +400,7 @@ test('in a project an add with a project place asks where it goes', () => {
 test('the review note says the project, or where a client has no project place', () => {
   data.projects = [{ id: 'p1', path: '/Users/me/work/website' }];
   assert.equal(noteFor(add({ project_place: true }), 'p1', 'project'), 'Adds to website only.');
-  assert.equal(noteFor(add({ project_place: true }), 'p1', 'all'), 'Adds for all your projects.');
+  assert.equal(noteFor(add({ project_place: true }), 'p1', 'all'), 'Adds for all projects.');
   // A twin it would load as well is still said for a project add.
   const warn = 'Claude Code already has tidy from toolbox. It will load both.';
   assert.equal(noteFor(add({ project_place: true, warn }), 'p1', 'project'), `${warn} Adds to website only.`);
@@ -414,11 +414,11 @@ test('the scope line and the button name follow the project place', () => {
   assert.ok(addName(row, 'codex', add({ project_place: true }), 'p1').endsWith('…'));
   assert.ok(addName(row, 'codex', add({}), 'p1').endsWith(' for all projects'));
   assert.equal(addName(row, 'codex', add({ project_place: true }), null), 'Add tidy to Codex');
-  assert.equal(scopeLine('p1', [{ cells: { codex: cell({ add: add({ project_place: true }) }) } }]), 'An Add asks: this project, or all your projects. Adds without that choice go to all of them.');
-  assert.equal(scopeLine('p1', [{ cells: { codex: cell({ add: add({}) }) } }]), 'Adding puts an item in all your projects.');
+  assert.equal(scopeLine('p1', [{ cells: { codex: cell({ add: add({ project_place: true }) }) } }]), 'An Add asks: this project, or all projects. Adds without that choice go to all projects.');
+  assert.equal(scopeLine('p1', [{ cells: { codex: cell({ add: add({}) }) } }]), 'Adding puts an item in all projects.');
 });
 test('the scope line needs a project and rows', () => {
-  assert.equal(scopeLine('p1', [{}]), 'Adding puts an item in all your projects.');
+  assert.equal(scopeLine('p1', [{}]), 'Adding puts an item in all projects.');
   assert.equal(scopeLine('p1', []), null);
   assert.equal(scopeLine(null, [{}]), null);
 });
@@ -430,7 +430,7 @@ test('the Instructions tab has no adds and no scope line', () => {
   assert.equal(hasAdds('instructions'), false);
   assert.equal(hasAdds('skill'), true);
   assert.equal(scopeLine('p1', [{}], 'instructions'), null);
-  assert.equal(scopeLine('p1', [{}], 'skill'), 'Adding puts an item in all your projects.');
+  assert.equal(scopeLine('p1', [{}], 'skill'), 'Adding puts an item in all projects.');
 });
 
 test('a cell kept from the last good read is marked and says when', () => {

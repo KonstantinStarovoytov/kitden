@@ -1,6 +1,6 @@
 // Entry point: the shell (rail, top bar), routing, theme, rescan and live updates.
 import { getJson, postJson } from "./api.js";
-import { $, $$, busyWhile, focusKey, reportError } from "./dom.js";
+import { $, $$, busyWhile, el, focusKey, reportError } from "./dom.js";
 import { glide, rollTo, transition } from "./motion.js";
 import { renderAgents } from "./agents.js";
 import { renderChanges } from "./changes.js";
@@ -8,9 +8,9 @@ import { renderGateway } from "./gateway.js";
 import { loadLibrary, loadLibraryFor, morphOnNextRender, raceSlow, renderLibrary, settleRows, snapshotRows } from "./library.js";
 import { renderOverview } from "./overview.js";
 import { closeForProject, closePanel, initPanel, isPanelOpen } from "./panel.js";
-import { ALL_PROJECTS, demoTag, latestChanges, scanLine, versionsOpened } from "./parts.js";
+import { ALL_PROJECTS, callout, demoTag, GONE_PROJECT, latestChanges, scanLine, versionsOpened } from "./parts.js";
 import {
-  busy, current, data, followAddress, freshness, go, loadShared, OLD_VIEWS, onIdle, parseHash, reload, setRenderer, setState, state, VIEWS,
+  busy, current, data, followAddress, freshness, go, loadShared, OLD_VIEWS, onIdle, parseHash, projectGone, reload, setRenderer, setState, state, VIEWS,
 } from "./store.js";
 
 const PLACES = {
@@ -24,6 +24,9 @@ const PLACES = {
 let shownView = null;
 // What a redraw can hand focus back to: controls with a data-focus key, and table rows.
 const FOCUSABLE = "[data-focus], tr[data-key]";
+// Places that show one project's setup. For a picked project no longer on the list they say so
+// instead; Changes and Agents draw as usual.
+const PROJECT_PLACES = ["overview", "library", "gateway"];
 
 function renderPlace() {
   if (shownView !== state.view && isPanelOpen()) closePanel({ instant: true, keepSelection: true, focus: false });
@@ -37,7 +40,8 @@ function renderPlace() {
   // A redraw of the same place notes where its rows were, so they can move from there.
   const before = samePlace && place.snapshot ? place.snapshot() : null;
   main.replaceChildren();
-  place.render(main);
+  if (PROJECT_PLACES.includes(state.view) && projectGone()) main.append(el("h1", null, place.title), callout(GONE_PROJECT));
+  else place.render(main);
   if (place.settle) place.settle(before);
   if (key) {
     const same = $$(FOCUSABLE, main).find((node) => focusKey(node) === key);
@@ -64,10 +68,12 @@ function renderShell() {
   const time = lastGoodRead ? new Date(lastGoodRead).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "…";
   $("#scanned").textContent = `${time}${lastReadFailed ? " · could not refresh" : ""}`;
 
-  // Keep the picker compact; full paths are available on hover.
+  // Keep the picker compact; full paths are available on hover. A picked project no longer on
+  // the list keeps one option of its own, so the picker never shows All projects for it.
   const where = $("#where");
   const projects = data.projects || [];
-  const signature = JSON.stringify(projects.map(({ id, path, exists }) => [id, path, exists]));
+  const gone = projectGone() ? state.project : "";
+  const signature = JSON.stringify([projects.map(({ id, path, exists }) => [id, path, exists]), gone]);
   if (where.dataset.projects !== signature) {
     where.replaceChildren(new Option(ALL_PROJECTS, ""));
     for (const project of projects) {
@@ -76,9 +82,10 @@ function renderShell() {
       option.title = project.path;
       where.append(option);
     }
+    if (gone) where.append(new Option("No longer on the list", gone));
     where.dataset.projects = signature;
   }
-  where.title = projects.find((project) => project.id === state.project)?.path || ALL_PROJECTS;
+  where.title = projects.find((project) => project.id === state.project)?.path || (gone ? GONE_PROJECT : ALL_PROJECTS);
   where.value = state.project;
   where.closest(".where-box").classList.toggle("project", Boolean(state.project));
   if ($("#q") !== document.activeElement) $("#q").value = state.q;

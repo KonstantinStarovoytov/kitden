@@ -4,7 +4,7 @@ import { $, $$, button, el, joinWords, plural, reportError, shortPath, shortPath
 import { loadLibrary, morphOnNextRender, onOpenItem, rowTitle, shownRow } from "./library.js";
 import { finishTransition, fold, transition } from "./motion.js";
 import { about, addButton, addOptions, whyNoAction } from "./offer.js";
-import { ALL_PROJECTS, CLIENT_NAMES, diffCounts, skillRemoval, flag, GATEWAY_NOTE, gatewayName, kitdenMove, mark, movedNames, notesSection, ruleText, rulesText, skeleton, socket, STATE_WORDS, stepText, strictText, toolsNode } from "./parts.js";
+import { ALL_PROJECTS, callout, CLIENT_NAMES, diffCounts, skillRemoval, flag, GATEWAY_NOTE, gatewayName, kitdenMove, mark, movedNames, notesSection, ruleText, rulesText, skeleton, socket, STATE_WORDS, stepText, strictText, toolsNode } from "./parts.js";
 import { busy, current as currentModel, currentError, data, projectPath, reload, render, setBusy, state } from "./store.js";
 
 const KIND_WORDS = {
@@ -116,15 +116,6 @@ function header(kicker, title, lede, closeLabel = "Close", mono = false) {
   head.append(top, h1);
   if (lede) head.append(el("p", "muted", lede));
   return head;
-}
-
-function callout(text, level = "warn") {
-  const box = el("div", level === "error" ? "callout error" : "callout");
-  box.setAttribute("role", level === "error" ? "alert" : "note");
-  const icon = el("span", null, "⚠");
-  icon.setAttribute("aria-hidden", "true");
-  box.append(icon, el("span", null, text));
-  return box;
 }
 
 // Item details ---------------------------------------------------------------------------
@@ -798,6 +789,22 @@ const DONE_WORDS = {
 
 // Actions whose words say "from" a client.
 const REMOVES = ["mcp.remove_direct", "plugin.remove", "skill.remove"];
+// Actions that add an item: the review names where it goes before the click.
+export const ADDS = ["mcp.add", "skill.install", "plugin.install", "plugin.skills"];
+const LEDE = "Nothing is written until you press Apply. A backup is kept, so you can undo.";
+
+// Where an add goes, as its title ends: " in website" or " for all projects"; null for an
+// action that is not an add.
+export function addScope(action, into) {
+  if (!ADDS.includes(action)) return null;
+  return into ? ` in ${projectLabel(into)}` : " for all projects";
+}
+
+// The review's lede. With All projects picked an add says it is for all projects; in a project
+// the note above the result says where it goes.
+export function reviewLede(action, picked) {
+  return `${ADDS.includes(action) && !picked ? "Adds for all projects. " : ""}${LEDE}`;
+}
 
 // The review title names the exact entry; the toast uses the short name ("superpowers").
 // `previewBody` is what the review asked for; Add skills names its plugin and a tool rule its
@@ -878,11 +885,11 @@ export function changeWords(change, previewBody) {
     title = `Add what ${folder} is missing`;
     what = `Added ${plural(chosen.length, "item", "items")} for ${folder}`;
   }
-  // An add into one project says which.
-  const into = previewBody && previewBody.params && previewBody.params.project;
-  if (into && ["skill.install", "plugin.install"].includes(change.action)) {
-    title = `${title} in ${projectLabel(into)}`;
-    what = `${what} in ${projectLabel(into)}`;
+  // An add says where it goes: into one project, or for all projects.
+  const scope = addScope(change.action, previewBody && previewBody.params && previewBody.params.project);
+  if (scope) {
+    title = `${title}${scope}`;
+    what = `${what}${scope}`;
   }
   const notes = [...new Set(change.steps.map((s) => s.restart_note).filter(Boolean))]
     .map((note) => note.replace(/,? for this to take effect\.?$/, ""));
@@ -979,7 +986,14 @@ export function canShowReview(result) {
 }
 
 export async function review(previewBody, { note = null, back = null } = {}) {
+  const asked = state.project;
   const result = await postJson("/api/changes/preview", previewBody);
+  // Another project was picked while it was prepared: it opens nothing, and the server forgets it.
+  if (state.project !== asked) {
+    const id = result && result.data && result.data.id;
+    if (id) postJson(`/api/changes/${encodeURIComponent(id)}/cancel`).catch(() => {});
+    return;
+  }
   if (!canShowReview(result)) {
     const reason = (result.data && result.data.detail) || `Could not prepare this change (${result.status}).`;
     if (back) {
@@ -1086,7 +1100,7 @@ function showReview(change, previewBody, note, back = null) {
   apply.append(label);
   apply.addEventListener("click", () => applyChange(change, { apply, cancel, label, body }).catch(brokeAfterAnswer));
   footer.append(cancel, apply);
-  openPanel([header("Review change", words.title, "Nothing is written until you press Apply. A backup is kept, so you can undo.", null), body, footer]);
+  openPanel([header("Review change", words.title, reviewLede(change.action, state.project), null), body, footer]);
 }
 
 // Something broke after the server answered (a render, the toast). The answer stands, so

@@ -5,7 +5,9 @@ import { beforeEach, test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 let answers = {};
 let failing = null;
+const asked = []; // every url read, in order
 globalThis.fetch = async (url) => {
+  asked.push(url);
   if (url === failing) throw new Error(`${url}: offline`);
   const body = url === '/api/projects' ? [{ id: 'a' }, { id: 'b' }] : (answers[url] ?? {});
   return { ok: true, status: 200, json: async () => body };
@@ -14,7 +16,7 @@ function fetchAnswers(map) { answers = map; failing = null; }
 function fetchFails(url) { failing = url; }
 const ALL_OK = {};
 
-const { current, currentError, data, freshness, loadMap, reload, retry, setRenderer, state } = await import('../../src/kitden/web/static/js/store.js');
+const { current, currentError, data, freshness, loadMap, projectGone, reload, retry, setRenderer, state } = await import('../../src/kitden/web/static/js/store.js');
 
 beforeEach(() => { state.project = ''; });
 
@@ -81,4 +83,19 @@ test('an error for one project is not an error for the next one', async () => {
   assert.equal(currentError('map'), null);
   await pending;
   assert.equal(currentError('map'), null);
+});
+
+test('a project no longer on the list stays picked and is said', async () => {
+  fetchAnswers(ALL_OK);
+  asked.length = 0;
+  state.project = 'gone';
+  await reload();
+  assert.equal(state.project, 'gone');
+  assert.equal(projectGone(), true);
+  assert.ok(!asked.some((url) => url.includes('project=gone')));
+  assert.ok(asked.includes('/api/setup-server'));
+  // Nothing read earlier for it shows either.
+  assert.equal(current('overview'), null);
+  state.project = 'a';
+  assert.equal(projectGone(), false);
 });

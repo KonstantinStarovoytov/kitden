@@ -5,7 +5,7 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; panel.js must load there too.
 delete globalThis.navigator;
-const { afterParts, alignGroups, canShowReview, closeForProject, countedDefinition, changeOutcome, chosenKeys, callsText, changeWords, footerActions, heldActions, isPanelOpen, offerLabel, layerState, leftOutText, kindWord, loadsLede, moveFor, moveTargets, openPanel, plainSecrets, scopeWords, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
+const { addScope, afterParts, alignGroups, canShowReview, closeForProject, countedDefinition, changeOutcome, chosenKeys, callsText, changeWords, footerActions, heldActions, isPanelOpen, offerLabel, layerState, leftOutText, kindWord, loadsLede, moveFor, moveTargets, openPanel, plainSecrets, review, reviewLede, scopeWords, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
 const { addOptions, whyNoAction } = await import('../../src/kitden/web/static/js/offer.js');
 const { busy, data, state } = await import('../../src/kitden/web/static/js/store.js');
 
@@ -173,9 +173,28 @@ test('an add into one project names the project', () => {
   data.projects = [{ id: 'p1', path: '/Users/me/work/website' }];
   const change = { action: 'skill.install', steps: [{ client: 'codex', name: 'tidy', reaches: ['codex'] }] };
   assert.deepEqual(changeWords(change, { params: { skill: 'x', project: 'p1' } }), { title: 'Add tidy to Codex in website', done: 'Added tidy to Codex in website' });
-  assert.deepEqual(changeWords(change, { params: { skill: 'x' } }), { title: 'Add tidy to Codex', done: 'Added tidy to Codex' });
+  assert.deepEqual(changeWords(change, { params: { skill: 'x' } }), { title: 'Add tidy to Codex for all projects', done: 'Added tidy to Codex for all projects' });
   const plugin = { action: 'plugin.install', steps: [{ client: 'claude_code', name: 'linter@official' }] };
   assert.equal(changeWords(plugin, { params: { plugin: 'linter@official', project: 'p1' } }).title, 'Add linter@official to Claude Code in website');
+  data.projects = null;
+});
+
+test('an add names its scope in the title and, with All projects, in the lede', () => {
+  const add = { action: 'skill.install', steps: [{ client: 'codex', name: 'tidy' }] };
+  assert.deepEqual(changeWords(add, { params: { skill: 'x' } }), { title: 'Add tidy to Codex for all projects', done: 'Added tidy to Codex for all projects' });
+  assert.equal(changeWords({ action: 'mcp.add', steps: [{ client: 'codex', name: 'github' }] }).title, 'Add github to Codex for all projects');
+  assert.equal(reviewLede('mcp.add', ''), 'Adds for all projects. Nothing is written until you press Apply. A backup is kept, so you can undo.');
+  assert.equal(reviewLede('mcp.add', 'p1'), 'Nothing is written until you press Apply. A backup is kept, so you can undo.');
+  assert.equal(reviewLede('plugin.disable', ''), 'Nothing is written until you press Apply. A backup is kept, so you can undo.');
+  // Only an add names a scope; a removal or a switch says its place another way.
+  assert.equal(addScope('plugin.disable', ''), null);
+  assert.equal(addScope('plugin.skills', ''), ' for all projects');
+});
+
+test('an add into a known project on another disk names that project', () => {
+  data.projects = [{ id: 'p9', path: '/Volumes/Other/site' }];
+  const add = { action: 'skill.install', steps: [{ client: 'codex', name: 'tidy' }] };
+  assert.equal(changeWords(add, { params: { skill: 'x', project: 'p9' } }).title, 'Add tidy to Codex in site');
   data.projects = null;
 });
 
@@ -329,9 +348,9 @@ const added = { action: 'plugin.skills', steps: [copy('tidy', ['claude_code', 'c
 
 test('the review of Add skills names the plugin and every client the copies reach', () => {
   const words = changeWords(added, { params: { plugin: 'toolbox@claude-plugins-official' } });
-  assert.equal(words.title, "Add toolbox's skills to Claude Code and Cursor");
-  assert.equal(words.done, 'Added 2 skills to Claude Code and Cursor');
-  assert.equal(changeWords({ ...added, steps: [added.steps[0]] }).done, 'Added 1 skill to Claude Code and Cursor');
+  assert.equal(words.title, "Add toolbox's skills to Claude Code and Cursor for all projects");
+  assert.equal(words.done, 'Added 2 skills to Claude Code and Cursor for all projects');
+  assert.equal(changeWords({ ...added, steps: [added.steps[0]] }).done, 'Added 1 skill to Claude Code and Cursor for all projects');
 });
 
 test('what Add skills leaves out is one plain line, or nothing', () => {
@@ -500,7 +519,7 @@ test('removing from or putting back from the Kitden gateway is named', () => {
 });
 
 test('a server added to another client is named', () => {
-  assert.deepEqual(changeWords({ action: 'mcp.add', steps: [{ client: 'codex', name: 'github' }] }), { title: 'Add github to Codex', done: 'Added github to Codex' });
+  assert.deepEqual(changeWords({ action: 'mcp.add', steps: [{ client: 'codex', name: 'github' }] }), { title: 'Add github to Codex for all projects', done: 'Added github to Codex for all projects' });
 });
 
 test('the align review groups what each client lacks and keeps the choice', () => {
@@ -617,6 +636,55 @@ test('Details drawn again after an Apply belongs to the project picked during it
     busy.change = false;
     state.project = '';
     delete globalThis.document;
+  }
+});
+
+test('a review that answers after the project changed is dropped', async () => {
+  fakePanelPage();
+  const posted = [];
+  let answer;
+  globalThis.fetch = (url) => {
+    posted.push(url);
+    if (url.endsWith('/preview')) return new Promise((resolve) => { answer = resolve; });
+    return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
+  };
+  try {
+    state.project = 'atlas';
+    const pending = review({ action: 'mcp.add', targets: [{ client: 'codex' }], params: {} });
+    state.project = 'web';
+    answer({ ok: true, status: 200, json: async () => ({ id: 'c1', action: 'mcp.add', steps: [{ client: 'codex', name: 'github' }], after: [] }) });
+    await pending;
+    assert.equal(isPanelOpen(), false);
+    assert.deepEqual(posted.filter((url) => url.includes('/cancel')), ['/api/changes/c1/cancel']);
+  } finally {
+    state.project = '';
+    delete globalThis.document;
+    delete globalThis.fetch;
+  }
+});
+
+test('a refused review that answers after the project changed goes nowhere', async () => {
+  fakePanelPage();
+  const posted = [];
+  let answer;
+  let backs = 0;
+  globalThis.fetch = (url) => {
+    posted.push(url);
+    return new Promise((resolve) => { answer = resolve; });
+  };
+  try {
+    state.project = 'atlas';
+    const pending = review({ action: 'gateway.rule', targets: [], params: {} }, { back: async () => { backs += 1; } });
+    state.project = '';
+    answer({ ok: false, status: 422, json: async () => ({ detail: 'No.' }) });
+    await pending;
+    assert.equal(isPanelOpen(), false);
+    assert.equal(backs, 0);
+    assert.deepEqual(posted, ['/api/changes/preview']);
+  } finally {
+    state.project = '';
+    delete globalThis.document;
+    delete globalThis.fetch;
   }
 });
 

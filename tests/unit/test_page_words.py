@@ -618,7 +618,7 @@ def test_a_cell_add_reviews_one_client_and_the_review_shows_its_note():
     assert "startAdd(cell.add, client, row)" in text
     assert "review(previewFor(add, client), { note: noteFor(add, state.project) })" in text
     offer = script("offer.js")
-    assert '"Adds for all your projects."' in offer
+    assert '"Adds for all projects."' in offer
     # Every add in a project view says so, a marketplace too. The plugin form adds the
     # warnings of the checked clients, as their cells do.
     assert offer.count("{ note: projectNote(state.project) }") == 2
@@ -807,7 +807,26 @@ def test_overview_offers_set_up_only_without_a_gateway():
 
 
 def test_library_says_the_add_scope_in_a_project():
-    assert "Adding puts an item in all your projects." in script("library.js")
+    assert "Adding puts an item in all projects." in script("library.js")
+    assert "all your projects" not in script("library.js") + script("offer.js")
+
+
+def test_an_add_review_names_its_scope():
+    panel = script("panel.js")
+    # With All projects picked the lede says it; in a project the note callout says it.
+    assert '"Adds for all projects. "' in panel
+    assert "reviewLede(change.action, state.project)" in panel
+    assert '" for all projects"' in panel
+
+
+def test_a_project_no_longer_on_the_list_is_said_not_swapped():
+    assert 'export const GONE_PROJECT = "This project is no longer on the list.";' in script(
+        "parts.js"
+    )
+    app = script("app.js")
+    assert '"No longer on the list"' in app and "projectGone()" in app
+    shared = script("store.js").split("export async function loadShared()")[1].split("\n}\n")[0]
+    assert 'state.project = ""' not in shared
 
 
 def test_an_add_in_a_project_offers_two_choices():
@@ -815,7 +834,8 @@ def test_an_add_in_a_project_offers_two_choices():
     for words in (
         '"Add to this project…"',
         '"Add for all projects…"',
-        '"An Add asks: this project, or all your projects.',
+        '"An Add asks: this project, or all projects.',
+        "only, or in all projects.`",
     ):
         assert words in library
     assert "startAdd(" in script("offer.js")
