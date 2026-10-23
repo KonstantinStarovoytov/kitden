@@ -260,7 +260,7 @@ def test_the_page_and_the_log_say_the_same_clients_and_places():
     from kitden.web import app
 
     # One function each, so a preview, an answer and the Changes page cannot drift apart.
-    assert (app._readers, app._step_path) == (engine._readers, engine._step_path)
+    assert (app.step_readers, app.step_path) == (engine.step_readers, engine.step_path)
 
 
 def test_a_hand_edit_between_preview_and_apply_stops_the_change(client):

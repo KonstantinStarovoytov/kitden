@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 
 from kitden.changes.actions import PLUGIN_INSTALL
+from kitden.changes.engine import step_readers
 from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, PLUGIN_REMOVE
 from kitden.model import Change, Item, Scope, Step
 from kitden.views.affects import affects
@@ -75,13 +76,7 @@ def _alone(project: str, projects: list[str]) -> bool:
 def _touched(step: Step) -> list[str]:
     """The clients a step changes: the readers of a copied or removed folder, every client a
     plugin step reaches, else (also with no reader listed) its own client."""
-    if step.copy is not None:
-        readers = step.copy.readers
-    elif step.removal is not None:
-        readers = step.removal.readers
-    else:
-        readers = step.reaches
-    return readers or [step.client]
+    return step_readers(step) or [step.client]
 
 
 def _plugin_command(step: Step) -> bool:

@@ -64,8 +64,8 @@ from kitden.changes.engine import (
     Engine,
     NothingToChangeError,
     Runner,
-    _readers,
-    _step_path,
+    step_path,
+    step_readers,
     writable_roots,
 )
 from kitden.clients import version_cache
@@ -200,9 +200,9 @@ def change_dict(change: Change) -> dict:
                 "scope": str(s.scope),
                 "name": s.name,
                 "mechanism": s.mechanism,
-                "path": _step_path(s),
+                "path": step_path(s),
                 "diff": _step_diff(s),
-                "reaches": _readers(s),
+                "reaches": step_readers(s),
                 "keeps": s.removal.keeps if s.removal else None,
                 "command": redact_text(" ".join(masked_command(s.command))) if s.command else None,
                 "restart_note": s.restart_note,

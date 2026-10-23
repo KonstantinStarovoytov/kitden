@@ -161,7 +161,7 @@ def _places(step: Step) -> list[str]:
     return [p for p in places if p]
 
 
-def _step_path(step: Step) -> str | None:
+def step_path(step: Step) -> str | None:
     """Where a step writes: the file, the gateway address, the copied or the removed folder."""
     if step.edit is not None:
         return step.edit.path
@@ -172,7 +172,7 @@ def _step_path(step: Step) -> str | None:
     return step.copy.target if step.copy is not None else None
 
 
-def _readers(step: Step) -> list[str] | None:
+def step_readers(step: Step) -> list[str] | None:
     """The clients that read a copied or removed folder, or that a plugin step reaches; None for
     other steps."""
     if step.copy is not None:
@@ -1101,9 +1101,9 @@ class Engine:
                         "client": s.client,
                         "scope": str(s.scope),
                         "name": s.name,
-                        "path": _step_path(s),
+                        "path": step_path(s),
                         "mechanism": s.mechanism,
-                        "reaches": _readers(s),
+                        "reaches": step_readers(s),
                         "keeps": s.removal.keeps if s.removal else None,
                         "restart_note": s.restart_note,
                         "login_note": s.login_note,

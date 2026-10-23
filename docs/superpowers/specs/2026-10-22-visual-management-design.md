@@ -228,7 +228,7 @@ Concept §8 and the §9 states.
    the Why says so in those words ("One folder, read by Codex and Cursor"): walkthrough 1, F1.
 3. **Affects:** before any action, the clients and projects the lead action would change, for
    example "Changes Codex and Cursor (Cursor reads Codex's folder). All projects." (from the same
-   reader logic the review uses: `_readers`, `CURSOR_IMPORT`). A Remove button that reaches more
+   reader logic the review uses: `step_readers`, `CURSOR_IMPORT`). A Remove button that reaches more
    than one client names them all ("Remove from Codex and Cursor…"): walkthrough 1, F1.
 4. The lead action and the rest under More (as today).
 5. **Technical details**, folded: paths, commands, file keys, the instruction preview.
