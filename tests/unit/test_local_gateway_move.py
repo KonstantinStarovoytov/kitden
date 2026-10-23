@@ -582,9 +582,7 @@ def test_a_server_the_gateway_holds_as_it_is_only_leaves_the_clients(home):
         assert answer.status_code == 200, answer.json()
         change = answer.json()
         assert [(s["client"], s["name"]) for s in change["steps"]] == [("cursor", "files")]
-        assert [(a["client"], a["word"]) for a in change["after"]] == [
-            ("cursor", "Via Kitden gateway")
-        ]
+        assert [(a["client"], a["word"]) for a in change["after"]] == [("cursor", "Via gateway")]
         assert change["after"][0]["note"] == (
             "Cursor will offer its tools through Kitden. files is in the Kitden gateway "
             "already. Applies to new sessions. " + SWITCHES
@@ -617,17 +615,17 @@ def test_a_held_server_keeps_the_gateways_rules_and_says_the_clients_switches_go
         assert [(a["client"], a["word"], a.get("note")) for a in change["after"]] == [
             (
                 "claude_code",
-                "Via Kitden gateway",
+                "Via gateway",
                 "Claude Code, Codex and Cursor will offer its tools through Kitden. files is in "
                 "the Kitden gateway already. Applies to new sessions. Claude Code's own switches "
                 "for files do not carry over; the gateway keeps its rules.",
             ),
             (
                 "codex",
-                "Via Kitden gateway",
+                "Via gateway",
                 "Codex's own switches for files do not carry over; the gateway keeps its rules.",
             ),
-            ("cursor", "Via Kitden gateway", None),
+            ("cursor", "Via gateway", None),
         ]
         applied = page.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
         assert applied["state"] == "verified", applied
@@ -654,7 +652,7 @@ def test_a_held_server_review_says_where_the_gateway_has_it_on(home):
         (
             "cursor",
             "gw",
-            "Via Kitden gateway",
+            "Via gateway",
             "Cursor will offer its tools through Kitden. files is in the Kitden gateway already. "
             "files is on only in website. Applies to new sessions. " + SWITCHES,
         )
@@ -713,8 +711,8 @@ def test_the_review_names_every_client_that_offers_the_tools(home):
         change = answer.json()
         assert "SENTINEL" not in json.dumps(change)
         assert [(a["client"], a["word"]) for a in change["after"]] == [
-            ("claude_code", "Via Kitden gateway"),
-            ("cursor", "Via Kitden gateway"),
+            ("claude_code", "Via gateway"),
+            ("cursor", "Via gateway"),
         ]
         assert [a.get("note") for a in change["after"]] == [
             f"Claude Code and Cursor will offer its tools through Kitden. {TO_KEYCHAIN} "
@@ -738,8 +736,8 @@ def test_the_review_says_where_a_server_stays_on_or_off(home):
         wanted = (("claude_code", "local-db"), ("codex", "aseprite"))
         change = preview(page, home, *wanted).json()
     assert [(a["client"], a["word"]) for a in change["after"]] == [
-        ("claude_code", "Via Kitden gateway"),
-        ("codex", "Via Kitden gateway"),
+        ("claude_code", "Via gateway"),
+        ("codex", "Via gateway"),
     ]
     assert change["after"][0]["note"] == (
         "Claude Code and Codex will offer the tools of local-db through Kitden. "

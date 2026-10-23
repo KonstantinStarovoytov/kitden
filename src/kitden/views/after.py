@@ -316,7 +316,7 @@ def _kitden_move_words(change: Change, inventory, home: Path | None) -> list[dic
     out = []
     for client in CLIENTS:
         if client in offering:
-            word = "Via Kitden gateway" if offered else "Off"
+            word = STATE_WORDS["gw"] if offered else STATE_WORDS["off"]
             out.append({"client": client, "state": "gw" if offered else "off", "word": word})
         elif client in removed:
             out.append({"client": client, "state": "off", "word": "Removed"})
