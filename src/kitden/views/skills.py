@@ -20,7 +20,7 @@ import os
 import re
 from pathlib import Path
 
-from kitden.changes.copy_folder import CopyRefusedError, list_files
+from kitden.changes.copy_folder import CopyRefusedError, digest, list_files
 from kitden.clients.base import ClientAdapter
 from kitden.model import ClientStatus, Enabled, ItemKind, Scope
 from kitden.views.catalog import (
@@ -180,6 +180,26 @@ def read_skill(folder: Path) -> dict:
     info = _read_skill(folder)
     _CACHE[str(folder)] = (signature, info)
     return info
+
+
+_DIGESTS: dict[str, tuple[tuple, str | None]] = {}
+
+
+def skill_digest(folder: Path) -> str | None:
+    """One hash of the skill's files (copy_folder.digest), so a copy is the same skill; read
+    again only when a file in it changed. None when a link inside stops the read, or the folder
+    cannot be read."""
+    folder = Path(os.path.realpath(folder))
+    signature = _signature(folder)
+    cached = _DIGESTS.get(str(folder))
+    if cached and cached[0] == signature:
+        return cached[1]
+    try:
+        value = digest(folder)
+    except (CopyRefusedError, OSError):
+        value = None
+    _DIGESTS[str(folder)] = (signature, value)
+    return value
 
 
 def _row(

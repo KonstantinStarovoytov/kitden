@@ -945,5 +945,10 @@ def test_a_cell_kept_from_the_last_good_read_has_a_dashed_dot():
     assert ".socket.stale .dot { border-style: dashed; }" in CSS
 
 
+def test_needs_review_is_an_amber_ring_with_a_small_dot():
+    assert ".s-review { color: var(--lamp-warn); }" in CSS
+    assert ".s-review .dot::after { transform: scale(0.5); border-radius: 50%; }" in CSS
+
+
 def test_details_says_when_a_kept_definition_was_read_in_the_server_words():
     assert STALE.format("${") in script("panel.js")

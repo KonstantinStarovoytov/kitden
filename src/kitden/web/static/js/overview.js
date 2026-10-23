@@ -134,9 +134,10 @@ const LOAD_KINDS = [
 ];
 
 // [kind, count, words] for each kind the client loads or has here; empty when it has nothing.
+// An item that needs review loads too: only its source is in question.
 export function loadCounts(rows, clientId) {
   return LOAD_KINDS.map(([kind, one, many]) => {
-    const n = rows.filter((r) => r.kind === kind && ["on", "gw"].includes(r.cells[clientId] && r.cells[clientId].state)).length;
+    const n = rows.filter((r) => r.kind === kind && ["on", "review", "gw"].includes(r.cells[clientId] && r.cells[clientId].state)).length;
     return [kind, n, plural(n, one, many)];
   }).filter(([, n]) => n);
 }

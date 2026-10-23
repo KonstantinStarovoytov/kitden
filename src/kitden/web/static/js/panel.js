@@ -161,16 +161,19 @@ export async function openItem(row, { instant = false, tools: toolsNext = {} } =
   showDetails(row, definitions, offer, toolsNext);
 }
 
-// The line under the Details title: the clients that have the item, then those where the page
-// cannot tell whether it is on. The same words for every kind, instruction files included.
+// The line under the Details title: the clients that have the item, those whose item of that
+// name comes from another source, then those where the page cannot tell whether it is on. The
+// same words for every kind, instruction files included.
 export function loadsLede(row, columns) {
   const names = (states) => columns
     .filter((c) => states.includes(row.cells[c.id] && row.cells[c.id].state))
     .map((c) => c.name);
   const available = names(["on", "gw"]);
+  const review = names(["review"]);
   const unknown = names(["unk"]);
   const lines = [];
   if (available.length) lines.push(`Available in ${joinWords(available)}.`);
+  if (review.length) lines.push(`Needs review in ${joinWords(review)}: same name, another source.`);
   if (unknown.length) lines.push(`Unknown in ${joinWords(unknown)}.`);
   return lines.join(" ") || "Not available here.";
 }

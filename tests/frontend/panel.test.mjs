@@ -421,6 +421,7 @@ test('the Details lede says where it loads, and where it may', () => {
   assert.equal(lede({ codex: 'unk' }), 'Unknown in Codex.');
   assert.equal(lede({ claude_code: 'on', codex: 'unk' }), 'Available in Claude Code. Unknown in Codex.');
   assert.equal(lede({ claude_code: 'off', cursor: 'via' }), 'Not available here.');
+  assert.equal(lede({ claude_code: 'on', codex: 'review' }), 'Available in Claude Code. Needs review in Codex: same name, another source.');
 });
 
 test('Details names the scope with the same phrases as the cells', () => {

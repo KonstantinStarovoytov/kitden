@@ -6,7 +6,7 @@ import { reducedMotion } from "./motion.js";
 export const ALL_PROJECTS = "All projects";
 // The twin of views/words.py STATE_WORDS.
 export const STATE_WORDS = {
-  on: "Available", off: "Off", over: "Overridden", unk: "Unknown", gw: "Via gateway",
+  on: "Available", off: "Off", over: "Overridden", unk: "Unknown", review: "Needs review", gw: "Via gateway",
   missing: "Not installed", none: "—", via: "Via Claude Code", done: "Has its skills",
   unread: "Could not read",
 };

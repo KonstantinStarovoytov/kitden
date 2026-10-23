@@ -919,3 +919,39 @@ def test_a_definition_kept_from_the_last_good_read_cannot_be_changed(home):
         422,
         {"detail": "Kitden can't change this until it reads .claude.json again."},
     )
+
+
+def test_a_marketplace_skill_named_like_a_clients_own_is_not_shown_as_loaded(home):
+    add_skills_marketplace(home)
+    _skill(home / ".codex/skills", "tidy", "Not the toolbox one.")
+    tidy = _row(_library(home, "skill", show="all"), "tidy")
+    assert tidy["cells"]["codex"]["state"] == "review" and tidy["cells"]["codex"]["add"] is None
+    assert tidy["cells"]["codex"]["reason"] == "Same name, another source."
+
+
+def test_a_plugin_skill_is_not_review_after_the_marketplace_moves_on(home):
+    # The marketplace copy says "Think first."; Claude Code's cache copy is another version.
+    row = _row(_library(home, "skill", show="all"), "brainstorming", f"superpowers@{OFFICIAL}")
+    assert (row["cells"]["claude_code"]["state"], row["cells"]["claude_code"]["route"]) == (
+        "on",
+        "from a plugin",
+    )
+
+
+def test_review_rows_on_the_medium_sample_offer_no_add(tmp_path):
+    home = build_demo_home(tmp_path, "medium")
+    answer = library(
+        build_inventory(home),
+        {a.id: a for a in default_adapters(home)},
+        None,
+        gateway_registered=False,
+        kind="mcp_server",
+    )
+    docs = _row(answer, "docs")["cells"]  # Part 1: same name, two sources; a tie keeps Claude Code
+    assert (docs["claude_code"]["state"], docs["codex"]["state"]) == ("on", "review")
+    assert (docs["cursor"]["add"], docs["cursor"]["reason"]) == (
+        None,
+        "Same name, another source: decide first.",
+    )
+    review = [c for r in answer["rows"] for c in r["cells"].values() if c["state"] == "review"]
+    assert all(c["add"] is None for c in review)

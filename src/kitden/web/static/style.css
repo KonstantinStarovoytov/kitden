@@ -229,6 +229,8 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .s-off { color: var(--lamp-off); }
 .s-over { color: var(--ink-3); } .s-over .dot { background: linear-gradient(135deg, transparent 44%, currentColor 45% 55%, transparent 56%); }
 .s-unk { color: var(--lamp-warn); } .s-unk .dot { border-style: dashed; }
+/* Needs review: an amber ring with a small dot, apart from Unknown's dashed ring. */
+.s-review { color: var(--lamp-warn); } .s-review .dot::after { transform: scale(0.5); border-radius: 50%; }
 /* Kept from the last good read: the state's own colour, with a dashed ring. */
 .socket.stale .dot { border-style: dashed; }
 .s-none, .s-missing { color: var(--ink-4); }

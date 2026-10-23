@@ -6,9 +6,9 @@ not load, and parts of a Claude Code plugin load only when that plugin loads.
 """
 
 from dataclasses import dataclass, field
-from pathlib import PurePath
 
 from kitden.model import Enabled, Item, ItemKind, Scope
+from kitden.views.match import plugin_of
 
 DESKTOP = "claude_desktop_code_tab"
 DESKTOP_RANK = 99  # claude_desktop_config.json wins on a name clash
@@ -50,15 +50,6 @@ class EffectiveView:
     project: str | None
     items: list[Item] = field(default_factory=list)
     shadowed: list[tuple[Item, Item, str]] = field(default_factory=list)
-
-
-def plugin_of(item: Item) -> str | None:
-    """'superpowers@claude-plugins-official' for a file inside that plugin's cache folder."""
-    parts = PurePath(item.source.path or "").parts
-    for i in range(len(parts) - 3):
-        if parts[i] == "plugins" and parts[i + 1] == "cache":
-            return f"{parts[i + 3]}@{parts[i + 2]}"
-    return None
 
 
 def _ranked(item: Item, base: str) -> int | None:

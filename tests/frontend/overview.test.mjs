@@ -40,6 +40,11 @@ test('a client with only instruction files does not load nothing', () => {
 
 const { clientStatus } = await import('../../src/kitden/web/static/js/overview.js');
 
+test('a client whose same-name item needs review still counts it', () => {
+  const rows = [{ kind: 'mcp_server', cells: { codex: { state: 'review' } } }];
+  assert.deepEqual(loadCounts(rows, 'codex'), [['mcp_server', 1, '1 MCP server']]);
+});
+
 test('a client that could not be read says so, not Not installed', () => {
   assert.deepEqual(clientStatus({ status: 'unreadable' }), { state: 'unk', word: 'Could not read' });
   assert.deepEqual(clientStatus({ status: 'not_found' }), { state: 'missing' });

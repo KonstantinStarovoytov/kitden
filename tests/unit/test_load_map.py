@@ -1,5 +1,6 @@
 """Load map: items in rows, the three clients in columns (redesign plan, Task 1)."""
 
+import shutil
 from dataclasses import replace
 
 import pytest
@@ -20,6 +21,7 @@ from kitden.views.findings import mark_gateways
 from kitden.views.inventory import Inventory, build_inventory
 from kitden.views.load_map import COLUMNS, load_map, map_dict
 from tests.conftest import make_home, write_cursor_fixture_state
+from tests.unit.test_local_gateway_move import add_claude, add_cursor
 
 EVIL = '<img src=x onerror="alert(1)">'
 
@@ -323,3 +325,53 @@ def test_a_kept_cell_keeps_its_scope_word_and_route(home):
     assert cell.stale_at == "2026-10-22T14:02:00+00:00"
     assert cell.reason.startswith("From the last good read at ")
     assert row.flags[0] == {"text": cell.reason, "level": "info"}
+
+
+def test_a_same_name_server_from_another_source_needs_review(home):
+    add_claude(home, "neon", {"type": "http", "url": "https://other.invalid/mcp"})
+    neon = rows_by(load_map(build_inventory(home), None), "mcp_server", "neon")
+    assert (neon.cells["claude_code"].state, neon.cells["codex"].state) == ("on", "review")
+    assert neon.cells["codex"].reason == "Same name, another source."
+
+
+def test_the_two_that_agree_stay_and_the_odd_one_needs_review(home):
+    add_claude(home, "neon", {"type": "http", "url": "https://other.invalid/mcp"})
+    add_cursor(
+        home, "neon", {"url": "https://mcp.neon.tech/mcp"}
+    )  # loads: not turned off in Cursor
+    neon = rows_by(load_map(build_inventory(home), None), "mcp_server", "neon")
+    assert {c: neon.cells[c].state for c in COLUMNS} == {
+        "claude_code": "review",
+        "codex": "on",
+        "cursor": "on",
+    }
+
+
+def test_a_copied_skill_is_the_same_skill(home):
+    shutil.copytree(home / ".claude/skills/brandkit", home / ".codex/skills/brandkit")
+    row = rows_by(load_map(build_inventory(home), None), "skill", "brandkit")
+    assert "review" not in {c.state for c in row.cells.values()}
+
+
+def test_a_same_name_skill_with_other_files_needs_review(home):
+    folder = home / ".codex/skills/brandkit"
+    folder.mkdir(parents=True)
+    (folder / "SKILL.md").write_text("---\nname: brandkit\n---\nSomething else.\n")
+    row = rows_by(load_map(build_inventory(home), None), "skill", "brandkit")
+    assert row.cells["codex"].state == "review"
+
+
+def test_a_duplicate_in_one_client_is_not_review(home):
+    row = rows_by(load_map(build_inventory(home), None), "skill", "docker-expert")
+    assert "review" not in {c.state for c in row.cells.values()}
+
+
+def test_review_keeps_the_scope_word_and_route(tmp_path):
+    home = build_demo_home(tmp_path, "medium")  # Part 1: Claude Code's docs is an address
+    rows = load_map(build_inventory(home), str(home / "work/atlas"))
+    codex = rows_by(rows, "mcp_server", "docs").cells["codex"]
+    assert (codex.state, codex.where, codex.reason) == (
+        "review",
+        "all projects",
+        "Same name, another source.",
+    )

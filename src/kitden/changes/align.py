@@ -3,7 +3,6 @@
 Each add is built by the same step builders as a single add from the Library.
 """
 
-import os
 from pathlib import Path
 
 from kitden.changes.actions import (
@@ -17,12 +16,11 @@ from kitden.model import Item, ItemKind, Scope, Step
 from kitden.views.catalog import catalog
 from kitden.views.effective import effective_view
 from kitden.views.findings import base_name
+from kitden.views.match import odd_ones, source_keys
 from kitden.views.skills import read_skill, skill_catalog
 
 CLIENTS = ("claude_code", "codex", "cursor")
 KINDS = (ItemKind.MCP_SERVER, ItemKind.PLUGIN, ItemKind.SKILL)
-# What makes two MCP entries one server; "type" is only how each client spells it.
-SERVER_FIELDS = ("command", "args", "url")
 NO_OFFER = "not in a marketplace on this computer"
 # Cursor loads Claude Code's user plugins (Include Third-Party Plugins and the import on), so it
 # has no plugin of its own to get; Add missing puts a Claude Code plugin into the project.
@@ -40,15 +38,6 @@ def _is_source(item: Item, client: str) -> bool:
     # A skill in the client's own folder; ~/.agents/skills is Cursor's own folder too.
     own = item.source.owner_client in (client, "shared")
     return own and item.source.link_path is None and item.source.path is not None
-
-
-def _source(item: Item) -> object:
-    """Where an item comes from: two items with the same name and source are the same."""
-    if item.kind is ItemKind.MCP_SERVER:
-        return tuple(pair for pair in item.summary if pair[0] in SERVER_FIELDS)
-    if item.kind is ItemKind.SKILL:
-        return os.path.realpath(item.source.path or "")
-    return item.name
 
 
 def _place(item: Item, client: str, adapters: dict[str, ClientAdapter], project: str) -> str:
@@ -102,18 +91,19 @@ def _words(clients: list[str]) -> str:
 
 
 def _not_same(views: dict[str, list[Item]]) -> list[dict]:
-    """Names two clients load from different sources: a plugin from another marketplace, a
-    skill from another folder, an MCP server with another command or address."""
-    sources: dict[tuple, dict[str, set]] = {}
+    """Names a client loads from another source than the others (match.py): a plugin from
+    another marketplace, a skill with other files, an MCP server with another command or
+    address. A copy with the same files is the same skill."""
+    sources: dict[tuple, dict[str, frozenset]] = {}
     for client, items in views.items():
         for item in items:
             own = item.via_gateway is None and item.name != SETUP_NAME
             if own and item.scope is not Scope.ACCOUNT:
-                key = (item.kind, base_name(item))
-                sources.setdefault(key, {}).setdefault(client, set()).add(_source(item))
+                by_client = sources.setdefault((item.kind, base_name(item)), {})
+                by_client[client] = by_client.get(client, frozenset()) | source_keys(item)
     out = []
     for (kind, name), by_client in sources.items():
-        if len(by_client) > 1 and len({frozenset(s) for s in by_client.values()}) > 1:
+        if odd_ones(by_client):
             clients = [c for c in CLIENTS if c in by_client]
             out.append({"kind": kind.value, "name": name, "clients": clients})
     return sorted(out, key=lambda n: (KINDS.index(ItemKind(n["kind"])), n["name"]))

@@ -3,7 +3,8 @@
 Rows join the load map (what is on this computer) with the plugin and skill catalogs (what the
 marketplaces on this computer offer). Each cell already says the state, or the one action for
 that client, or why there is none. Columns are the clients found on this computer, and those
-Kitden could not read: their cells say Unknown and offer no add.
+Kitden could not read: their cells say Unknown and offer no add. A row where a client's item has
+the name but another source says "Needs review" there and offers no add.
 """
 
 from collections.abc import Callable
@@ -22,10 +23,13 @@ from kitden.model import ClientStatus, Item, ItemKind, Scope, _hash
 from kitden.views.catalog import catalog, search
 from kitden.views.gateway_view import group_of
 from kitden.views.load_map import COLUMNS, MARKS, NAMES, Row, load_map
+from kitden.views.match import catalog_keys, source_keys
 from kitden.views.skills import skill_catalog
 from kitden.views.words import (
     CLIENT_UNREAD,
+    NO_ADD_REVIEW,
     NO_ADD_UNREAD,
+    NOT_SAME,
     NOT_SHOWN,
     ORIGIN_WORDS,
     ROUTE_WORDS,
@@ -256,7 +260,10 @@ def _server_why(map_rows: list[Row], found: list[str], items: list[Item]) -> Why
     def movable(row: Row) -> bool:
         # The same entries the Gateway page offers to move.
         loaded = [
-            i for c in found if row.cells[c].state in ("on", "unk") for i in row.cells[c].items
+            i
+            for c in found
+            if row.cells[c].state in ("on", "review", "unk")
+            for i in row.cells[c].items
         ]
         return any(
             group_of(by_id[i]) == "move" and REMOVE_DIRECT in by_id[i].actions
@@ -475,6 +482,20 @@ def _skill_cell(
     return _cell(reason=f"{NAMES[client]} can't install the plugin this skill needs.")
 
 
+def _not_this_skill(cells: dict[str, dict], skill: dict, items: dict[str, Item]) -> None:
+    """A plugin's skill against the client's own of that name: when they share no files and no
+    plugin, the client has another skill, so its cell needs review."""
+    on = [c for c, cell in cells.items() if cell["state"] == "on" and cell["items"]]
+    if not on or skill["plugin"] is None:
+        return
+    keys = catalog_keys(skill)
+    for client in on:
+        ids = cells[client]["items"]
+        theirs = frozenset().union(*(source_keys(items[i]) for i in ids if i in items))
+        if keys.isdisjoint(theirs):
+            cells[client].update(state="review", reason=NOT_SAME)
+
+
 def _no_skill_place(adapters, project: str | None) -> dict[str, str]:
     """Codex loads a project's skills only when it trusts the project (codex.py), so in an
     untrusted one its skill add goes to all projects and says why."""
@@ -492,14 +513,15 @@ def _skill_rows(
     skills: list[dict],
     found: list[str],
     cursor_imports: bool,
+    items: dict[str, Item],
     no_place: dict[str, str] | None = None,
     in_project: bool = False,
 ) -> Built:
     """Every skill in the skill catalog, plus skills the load map has that it does not.
 
     A catalog row takes the cells, flags and lookup of the load map row with its name, where
-    that row has them. The first one also takes its key, so links from the Overview still find
-    it; keys stay unique.
+    that row has them; a plugin's skill that is not the one a client loads needs review there.
+    The first one also takes its key, so links from the Overview still find it; keys stay unique.
     """
     mapped = {r.name: r for r in map_rows if r.kind is ItemKind.SKILL}
     routes = {o["id"]: o["routes"] for o in offers}
@@ -514,15 +536,17 @@ def _skill_rows(
         used.add(key)
         plugin_routes = {c: r for c, r in routes.get(skill["plugin"], {}).items() if c in found}
         holders = {c for c in found if _has(row, c) or c in skill["installed"]}
+        cells = {
+            c: _skill_cell(c, skill, row, plugin_routes, cursor_imports, no_place, where)
+            for c in found
+        }
+        _not_this_skill(cells, skill, items)
         built = _row(
             key,
             "skill",
             skill["name"],
             skill["from"],
-            {
-                c: _skill_cell(c, skill, row, plugin_routes, cursor_imports, no_place, where)
-                for c in found
-            },
+            cells,
             mine=bool(holders),
             lookup=row.lookup if row else None,
             offer=skill["id"],
@@ -597,6 +621,19 @@ def _add_file(adapters, client: str, add: dict, project: str | None) -> str | No
     except ValueError:
         return None
     return step.edit.path if step.edit else None
+
+
+def _no_add_in_review(rows: list[dict]) -> None:
+    """In an MCP server or skill row with a Needs review cell no cell offers an add: it would
+    copy one side without asking."""
+    for row in rows:
+        cells = row["cells"].values()
+        if row["kind"] not in ("mcp_server", "skill") or all(c["state"] != "review" for c in cells):
+            continue
+        for cell in cells:
+            if cell["add"]:
+                cell["add"] = None
+                cell["reason"] = NO_ADD_REVIEW
 
 
 def _hold_adds(rows: list[dict], adapters, broken: set[str], project: str | None) -> None:
@@ -764,6 +801,7 @@ def library(
             skills,
             found,
             cursor_imports,
+            {i.id: i for i in inventory.items},
             _no_skill_place(adapters, project),
             in_project=project is not None,
         ),
@@ -791,6 +829,7 @@ def library(
     _unread_cells(rows[kind], by_key, columns, found)
     broken = {p.path for p in inventory.problems if p.path}
     _hold_adds(rows[kind], adapters, broken, project)
+    _no_add_in_review(rows[kind])
 
     def show_for(k: str) -> str:
         return show if k in CATALOG_KINDS else "mine"

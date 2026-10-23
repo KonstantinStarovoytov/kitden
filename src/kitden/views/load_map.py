@@ -5,7 +5,8 @@ Rows group items by kind and name. A plugin is one row per marketplace ("figma@a
 named "review" are two rows); other kinds group by name.
 Each cell says what that client does with the item in the chosen project: has it available,
 has it but off, routes it through the gateway, or does not know (a client Kitden could not read
-says why). A cell kept from the last good read says when it was read. In a project a cell also
+says why). A client whose item has the name of another client's but another source needs review
+(match.py). A cell kept from the last good read says when it was read. In a project a cell also
 says where it applies, and every cell keeps how the client gets the item (its route) for the
 hover text. The Claude Desktop Code tab has no column of its own: its extra items show in the
 Claude Code column, with the route "from the Desktop app".
@@ -15,6 +16,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from kitden.changes.actions import KITDEN_GATEWAY
+from kitden.clients.base import SETUP_NAME
 from kitden.model import (
     ClientStatus,
     Enabled,
@@ -24,9 +26,10 @@ from kitden.model import (
     Scope,
     _hash,
 )
-from kitden.views.effective import DESKTOP, effective_view, plugin_of
+from kitden.views.effective import DESKTOP, effective_view
 from kitden.views.findings import base_name, bypass_kind, find_bypasses, find_findings
-from kitden.views.words import CLIENT_UNREAD, ORIGIN_WORDS, ROUTE_WORDS, STALE
+from kitden.views.match import odd_ones, plugin_of, source_keys
+from kitden.views.words import CLIENT_UNREAD, NOT_SAME, ORIGIN_WORDS, ROUTE_WORDS, STALE
 
 COLUMNS = ("claude_code", "codex", "cursor")
 MARKS = {"claude_code": "CC", "codex": "CX", "cursor": "CU"}
@@ -35,7 +38,9 @@ NAMES = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
 
 @dataclass
 class Cell:
-    state: str  # "on", "off", "gw", "unk", "none" or "missing" (client not installed)
+    # "on", "off", "gw", "unk", "review" (same name, another source), "none" or "missing"
+    # (client not installed)
+    state: str
     where: str | None = None  # in a project, ORIGIN_WORDS[origin]; with All projects, None
     origin: str | None = None  # None (all projects), "project" or "override"
     route: str | None = None  # how the client gets it, from ROUTE_WORDS; None when plain
@@ -153,6 +158,37 @@ def _cell(
     )
 
 
+def _compared(item: Item) -> bool:
+    """An entry of the client's own: a server the gateway holds, Kitden's own entry, an account
+    item and the Desktop app's are left out."""
+    return (
+        item.via_gateway is None
+        and item.name != SETUP_NAME
+        and item.scope is not Scope.ACCOUNT
+        and item.client != DESKTOP
+    )
+
+
+def _review(row: Row, items: dict[str, Item]) -> None:
+    """Same name, another source: of two or more Available cells, those whose items share no
+    command, address or skill files with the most common ones need review. Only the state and
+    the reason change."""
+    if row.kind not in (ItemKind.MCP_SERVER, ItemKind.SKILL):
+        return
+    on = [c for c in COLUMNS if row.cells[c].state == "on"]
+    if len(on) < 2:
+        return
+    keys = {}
+    for column in on:
+        compared = [items[i] for i in row.cells[column].items if i in items]
+        union = frozenset().union(*(source_keys(i) for i in compared if _compared(i)))
+        if union:
+            keys[column] = union
+    for column in odd_ones(keys):
+        row.cells[column].state = "review"
+        row.cells[column].reason = NOT_SAME
+
+
 # What fixes a duplicate, and the action that does it where the page has one.
 DUPLICATE_FIXES = {
     ItemKind.PLUGIN: ("Remove one copy to keep the other.", "plugin.remove"),
@@ -266,6 +302,7 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
         if first.kind is ItemKind.PLUGIN:
             plugins.setdefault(column, {})[first.name] = first
 
+    items_by_id = {i.id: i for i in inventory.items}
     for row in rows.values():
         for column in COLUMNS:
             read = status.get(column)
@@ -285,6 +322,7 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
             if read is ClientStatus.UNREADABLE and cell.state == "none":
                 cell = Cell("unk", reason=CLIENT_UNREAD.format(NAMES[column]))
             row.cells[column] = cell
+        _review(row, items_by_id)
         # Kept from the last good read: the row's first flag says when.
         stale = min((c.stale_at for c in row.cells.values() if c.stale_at), default=None)
         if stale:
@@ -293,7 +331,6 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
     item_rows = {
         item_id: row for row in rows.values() for c in row.cells.values() for item_id in c.items
     }
-    items_by_id = {i.id: i for i in inventory.items}
     for finding in find_findings(inventory, project) + find_bypasses(inventory, project):
         for item_id in finding.items:
             row, item = item_rows.get(item_id), items_by_id.get(item_id)
