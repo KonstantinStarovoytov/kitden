@@ -120,6 +120,31 @@ export function kitdenMove(change) {
 // A direct server, when no gateway here can take it: the Gateway page and Details say the same.
 export const GATEWAY_NOTE = "Add the server in the gateway first, then remove its direct entry here.";
 
+// The clients the Kitden gateway can reach.
+const KITDEN_CLIENTS = ["claude_code", "codex", "cursor"];
+
+// The Kitden gateway reaches a client through the client's `kitden` entry, when that entry is
+// on (`linked`); an entry that is there but off is `off`. A client without the entry is offered
+// to set it up; an old entry is updated. `entries` is the answer of /api/setup-server; without
+// it (`known` false) the card says nothing about who connects. The Gateway card, Overview and
+// the Affects line of a move use it.
+export function kitdenClients(entries) {
+  const linked = [];
+  const off = [];
+  const setup = [];
+  for (const entry of entries || []) {
+    if (!KITDEN_CLIENTS.includes(entry.client)) continue;
+    if (entry.state === "added" || entry.state === "plugin") (entry.enabled === false ? off : linked).push(entry.client);
+    const label = `Set up in ${CLIENT_NAMES[entry.client]}…`;
+    if (entry.state === "missing") {
+      setup.push({ client: entry.client, label, body: { action: "setup_server.register", targets: [{ client: entry.client }], params: {} } });
+    } else if (entry.state === "old") {
+      setup.push({ client: entry.client, label, body: { action: "setup_server.update", targets: [{ item: entry.item }], params: {} } });
+    }
+  }
+  return { linked, setup, off, known: Boolean(entries) };
+}
+
 // `label` is what a screen reader hears for a dash: why nothing can be done, when known.
 export function socket({ state, where, word, label, stale = false }) {
   // `stale`: kept from the last good read, drawn with a dashed dot.

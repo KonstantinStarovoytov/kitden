@@ -5,7 +5,7 @@ import { loadLibraryFor, raceSlow, rowSel, rowTitle, shownRow } from "./library.
 import { fold } from "./motion.js";
 import { about, addButton, addOptions, addReach, mcpRows, whyNoAction } from "./offer.js";
 import { closePanel, header, openInfo, openPanel, panelState, swapContent } from "./panel.js";
-import { ALL_PROJECTS, callout, CLIENT_NAMES, CLIENT_ORDER, GATEWAY_NOTE, gatewayName, mark, ROUTE_WORDS, socket, STATE_WORDS, toolsNode } from "./parts.js";
+import { ALL_PROJECTS, callout, CLIENT_NAMES, CLIENT_ORDER, GATEWAY_NOTE, gatewayName, kitdenClients, mark, ROUTE_WORDS, socket, STATE_WORDS, toolsNode } from "./parts.js";
 import { review } from "./review.js";
 import { current as currentModel, currentError, data, goTo, libraryChoice, projectPath, state } from "./store.js";
 import { toolsSection } from "./tools.js";
@@ -240,12 +240,12 @@ const inOrder = (clients) => [...new Set(clients)].sort((a, b) => CLIENT_ORDER.i
 // projects but the picked one, whose own definition of that one client wins over this one.
 // `asks`: an add that asks "this project or all projects" next; it names only what both choices
 // reach. `project` in the context is the picked project's path, "" for All projects; `found`, the
-// clients on this computer; `connections`, the Gateway page's servers per gateway and client.
-// Null when nothing leads, for the Add form, and when the server sent no reach for the
-// definition.
-export function affectsFor(lead, { definitions = [], move = null, connections = {}, inherits = NO_INHERITS, found = [], project = "" } = {}) {
+// clients on this computer; `connections`, the Gateway page's servers per gateway and client;
+// `kitdenLinked`, the clients whose kitden entry is on (null when not read). Null when nothing
+// leads, for the Add form, and when the server sent no reach for the definition.
+export function affectsFor(lead, { definitions = [], move = null, connections = {}, kitdenLinked = null, inherits = NO_INHERITS, found = [], project = "" } = {}) {
   if (!lead || lead.form) return null;
-  if (lead === "move") return moveAffects(definitions, move, connections);
+  if (lead === "move") return moveAffects(definitions, move, connections, kitdenLinked);
   if (lead.def) return offerAffects(lead.def, definitions, project);
   if (lead.add) {
     const only = Boolean(lead.add.project_only);
@@ -272,13 +272,15 @@ function offerAffects(def, definitions, here) {
 }
 
 // Move into the gateway: every entry it takes, and every client that reaches the gateway already,
-// which then offers the server too (the review's "Via gateway" chips). With two gateways to
-// choose from, only the clients every choice reaches. One project only when all the entries are
-// in that project's files.
-function moveAffects(definitions, move, connections = {}) {
+// which then offers the server too (the review's "Via gateway" chips). The Kitden gateway reaches
+// each client whose kitden entry is on, also before it holds any server (`kitdenLinked`); another
+// gateway, the clients with a server through it. With two gateways to choose from, only the
+// clients every choice reaches. One project only when all the entries are in that project's files.
+function moveAffects(definitions, move, connections = {}, kitdenLinked = null) {
   const defs = definitions.filter((d) => move && move.items.includes(d.id) && d.affects);
   if (!defs.length) return null;
-  const reach = (gateway) => Object.entries((connections || {})[gateway.id] || {}).filter(([, names]) => names.length).map(([client]) => client);
+  const connected = (gateway) => Object.entries((connections || {})[gateway.id] || {}).filter(([, names]) => names.length).map(([client]) => client);
+  const reach = (gateway) => (gateway.kind === "kitden" && kitdenLinked ? kitdenLinked : connected(gateway));
   const [first = [], ...others] = move.gateways.map(reach);
   const every = first.filter((client) => others.every((list) => list.includes(client)));
   const notes = [...new Set(defs.map((d) => d.affects.note).filter(Boolean))];
@@ -760,7 +762,8 @@ function showDetails(row, definitions, offer = null, toolsNext = {}, inherits = 
   // What the lead action changes, before any action.
   const here = projectPath();
   const gateway = currentModel("gateway");
-  const reach = { definitions, move, connections: gateway ? gateway.connections : {}, inherits, found: writableClients(), project: here };
+  const kitdenLinked = data.setupServer ? kitdenClients(data.setupServer).linked : null;
+  const reach = { definitions, move, connections: gateway ? gateway.connections : {}, kitdenLinked, inherits, found: writableClients(), project: here };
   const affects = affectsText(affectsFor(actions.lead, reach), here);
   if (affects) next.push(el("p", "affects", affects));
   // With nothing to do, say why, quietly.

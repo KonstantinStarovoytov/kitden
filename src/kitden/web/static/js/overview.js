@@ -1,11 +1,11 @@
 // Overview: what needs attention first, then the clients and, without a gateway, how to get one.
 import { getJson, query } from "./api.js";
 import { button, el, focusKey, plural } from "./dom.js";
-import { kitdenClients, SETUP_NOTE } from "./gateway.js";
+import { SETUP_NOTE } from "./gateway.js";
 import { loadLibraryFor } from "./library.js";
 import { entrance, fly } from "./motion.js";
 import { review, toast } from "./panel.js";
-import { banner, CLIENT_NAMES, flag, mark, skeleton, socket, STATE_WORDS, staleNote, versionWords } from "./parts.js";
+import { banner, CLIENT_NAMES, flag, kitdenClients, mark, skeleton, socket, STATE_WORDS, staleNote, versionWords } from "./parts.js";
 import { current, currentError, data, go, goTo, libraryChoice, loadMap, projectPath, render, retry } from "./store.js";
 
 let notesOpen = false;

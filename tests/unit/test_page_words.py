@@ -785,8 +785,11 @@ def test_add_a_marketplace_sits_where_the_filters_sit_on_other_tabs():
 def test_the_kitden_gateway_card_comes_first_and_sets_up_missing_clients():
     text = script("gateway.js")
     assert text.index("kitdenCard(kitden, model)") < text.index("gatewayCard(gateway, model)")
-    assert "`Set up in ${CLIENT_NAMES[entry.client]}…`" in text
-    assert '"setup_server.register"' in text and '"setup_server.update"' in text
+    # Who it reaches and the setup offers: one rule in parts.js (the Affects line uses it too).
+    parts = script("parts.js")
+    assert "`Set up in ${CLIENT_NAMES[entry.client]}…`" in parts
+    assert '"setup_server.register"' in parts and '"setup_server.update"' in parts
+    assert "kitdenClients(data.setupServer)" in text
     assert "Nothing yet. Move a server from the lists below." in text
     # Local servers can move into it: it runs on this Mac.
     assert '"Run on this Mac"' in text and "Only the Kitden gateway can hold them" in text
@@ -1024,6 +1027,10 @@ def test_details_say_what_the_lead_changes_and_link_to_the_other_pages():
     ):
         assert words in details, words
     assert "affectsText(affectsFor(" in details
+    # A move into the Kitden gateway names the clients whose kitden entry is on, by the rule the
+    # Gateway card uses, without details.js reading gateway.js.
+    assert "kitdenClients(data.setupServer).linked" in details
+    assert 'from "./gateway.js"' not in details
     assert ".affects" in CSS and ".links" in CSS
     # A link closes the panel first, reads the Library's rows like the rail, then goes there.
     follow = details.split("export async function followLink(link)")[1].split("\n}\n")[0]

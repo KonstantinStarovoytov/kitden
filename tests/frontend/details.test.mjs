@@ -225,6 +225,16 @@ test('a move into a gateway also names every client that reaches the gateway alr
   assert.equal(affectsText(affectsFor('move', { definitions: [github], move: move([kitden]) }), null), 'Changes Claude Code. All projects.');
 });
 
+test('the first move into the Kitden gateway names every client whose kitden entry is on', () => {
+  // It holds no server yet, so no client reaches a server through it; Codex's entry is on.
+  const github = { id: 'g1', client: 'claude_code', project: null, affects: { clients: ['claude_code'], scope: 'all', note: null } };
+  const move = { items: ['g1'], gateways: [{ id: 'kitden', kind: 'kitden' }] };
+  const empty = { kitden: { claude_code: [], codex: [], cursor: [] } };
+  assert.equal(affectsText(affectsFor('move', { definitions: [github], move, connections: empty, kitdenLinked: ['codex'] }), null), 'Changes Claude Code and Codex. All projects.');
+  // The entries were not read: what the gateway page shows.
+  assert.equal(affectsText(affectsFor('move', { definitions: [github], move, connections: empty, kitdenLinked: null }), null), 'Changes Claude Code. All projects.');
+});
+
 test('an add names what its copy reaches, and says when the place is chosen next', () => {
   const inherits = { plugin: true, skill: true };
   const found = ['claude_code', 'codex', 'cursor'];

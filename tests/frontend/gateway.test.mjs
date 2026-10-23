@@ -4,7 +4,8 @@ import { test } from 'node:test';
 // gateway.js needs only this from a browser to load; the tests call its pure parts.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { heldServer, kitdenClients, kitdenLinks, offersSwitch, serverFor, visibleRows } = await import('../../src/kitden/web/static/js/gateway.js');
+const { heldServer, kitdenLinks, offersSwitch, serverFor, visibleRows } = await import('../../src/kitden/web/static/js/gateway.js');
+const { kitdenClients } = await import('../../src/kitden/web/static/js/parts.js');
 
 const entry = (client, state, fields = {}) => ({ client, state, item: null, enabled: true, ...fields });
 

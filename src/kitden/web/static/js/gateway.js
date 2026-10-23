@@ -3,7 +3,7 @@ import { getJson, postJson } from "./api.js";
 import { busyWhile, button, el, joinWords, plural, reportError, webLink } from "./dom.js";
 import { entrance, fold, reducedMotion } from "./motion.js";
 import { contextLinks, heldActions, heldButtons, isPanelOpen, linksRow, moveInto, moveTargets, openInfo, openItem, review, toast, toolsSection } from "./panel.js";
-import { banner, CLIENT_ICONS, CLIENT_NAMES, clientCheck, DARK_ICONS, flag, GATEWAY_NOTE, gatewayName, kindOf, mark, skeleton, staleNote, toolsNode } from "./parts.js";
+import { banner, CLIENT_ICONS, CLIENT_NAMES, clientCheck, DARK_ICONS, flag, GATEWAY_NOTE, gatewayName, kindOf, kitdenClients, mark, skeleton, staleNote, toolsNode } from "./parts.js";
 import { arrival, current, currentError, data, freshness, loadMap, reload, render, retry, sameSel, setState, state, takeArrival } from "./store.js";
 
 const WRITABLE = ["claude_code", "codex", "cursor"];
@@ -25,27 +25,6 @@ const ENTRY_NAME = "gateway";
 
 function foundClients() {
   return (data.clients || []).filter((c) => WRITABLE.includes(c.id) && c.status === "found").map((c) => c.id);
-}
-
-// The Kitden gateway reaches a client through the client's `kitden` entry, when that entry is
-// on (`linked`); an entry that is there but off is `off`. A client without the entry is offered
-// to set it up; an old entry is updated. `entries` is the answer of /api/setup-server; without
-// it (`known` false) the card says nothing about who connects.
-export function kitdenClients(entries) {
-  const linked = [];
-  const off = [];
-  const setup = [];
-  for (const entry of entries || []) {
-    if (!WRITABLE.includes(entry.client)) continue;
-    if (entry.state === "added" || entry.state === "plugin") (entry.enabled === false ? off : linked).push(entry.client);
-    const label = `Set up in ${CLIENT_NAMES[entry.client]}…`;
-    if (entry.state === "missing") {
-      setup.push({ client: entry.client, label, body: { action: "setup_server.register", targets: [{ client: entry.client }], params: {} } });
-    } else if (entry.state === "old") {
-      setup.push({ client: entry.client, label, body: { action: "setup_server.update", targets: [{ item: entry.item }], params: {} } });
-    }
-  }
-  return { linked, setup, off, known: Boolean(entries) };
 }
 
 // "Use this gateway…" moves the clients from another registered gateway to this one. The
