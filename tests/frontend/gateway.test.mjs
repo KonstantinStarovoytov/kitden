@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js needs only this from a browser to load; the tests call its pure parts.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { kitdenClients, offersSwitch, visibleRows } = await import('../../src/kitden/web/static/js/gateway.js');
+const { heldServer, kitdenClients, offersSwitch, serverFor, visibleRows } = await import('../../src/kitden/web/static/js/gateway.js');
 
 const entry = (client, state, fields = {}) => ({ client, state, item: null, enabled: true, ...fields });
 
@@ -52,4 +52,20 @@ test('a group shows six rows and says how many more there are', () => {
   assert.deepEqual(visibleRows(rows, false), { shown: rows.slice(0, 6), cut: 1 });
   assert.deepEqual(visibleRows(rows.slice(0, 6), false), { shown: rows.slice(0, 6), cut: 0 });
   assert.deepEqual(visibleRows(rows, true), { shown: rows, cut: 0 });
+});
+
+test('the Gateway opens only a selected server', () => {
+  const map = { rows: [{ kind: 'mcp_server', name: 'github' }, { kind: 'skill', name: 'github' }] };
+  assert.equal(serverFor(map, { kind: 'mcp_server', name: 'github' }), map.rows[0]);
+  assert.equal(serverFor(map, { kind: 'skill', name: 'github' }), null);
+  assert.equal(serverFor(map, { kind: 'mcp_server', name: 'gone' }), null);
+  assert.equal(serverFor(null, { kind: 'mcp_server', name: 'github' }), null);
+});
+
+test('a selected server the Kitden gateway holds opens in its own panel', () => {
+  const model = { gateways: [{ kind: 'kitden', servers: [{ name: 'files' }] }, { kind: 'metamcp', servers: [{ name: 'x' }] }] };
+  assert.equal(heldServer(model, { kind: 'mcp_server', name: 'files' }).name, 'files');
+  assert.equal(heldServer(model, { kind: 'mcp_server', name: 'x' }), null);
+  assert.equal(heldServer(model, { kind: 'skill', name: 'files' }), null);
+  assert.equal(heldServer(null, { kind: 'mcp_server', name: 'files' }), null);
 });

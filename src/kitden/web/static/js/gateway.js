@@ -4,7 +4,7 @@ import { busyWhile, button, el, joinWords, plural, reportError, webLink } from "
 import { entrance, fold, reducedMotion } from "./motion.js";
 import { heldActions, heldButtons, moveInto, moveTargets, openInfo, openItem, review, toast, toolsSection } from "./panel.js";
 import { banner, CLIENT_ICONS, CLIENT_NAMES, clientCheck, DARK_ICONS, flag, GATEWAY_NOTE, gatewayName, kindOf, mark, skeleton, staleNote, toolsNode } from "./parts.js";
-import { current, currentError, data, freshness, loadMap, reload, render, retry, state } from "./store.js";
+import { current, currentError, data, freshness, loadMap, reload, render, retry, sameSel, setState, state, takeArrival } from "./store.js";
 
 const WRITABLE = ["claude_code", "codex", "cursor"];
 const GROUPS = [
@@ -62,6 +62,37 @@ export const FOLD_AT = 6;
 export function visibleRows(rows, expanded, limit = FOLD_AT) {
   if (expanded || rows.length <= limit) return { shown: rows, cut: 0 };
   return { shown: rows.slice(0, limit), cut: rows.length - limit };
+}
+
+// The load map's row for a selected MCP server, or null for another kind, no map or no row.
+export function serverFor(map, selected) {
+  if (!map || !selected || selected.kind !== "mcp_server") return null;
+  return map.rows.find((r) => r.kind === "mcp_server" && r.name === selected.name) || null;
+}
+
+// A selected MCP server that the Kitden gateway holds, or null.
+export function heldServer(model, selected) {
+  if (!model || !selected || selected.kind !== "mcp_server") return null;
+  const kitden = model.gateways.find((g) => g.kind === "kitden");
+  return ((kitden && kitden.servers) || []).find((s) => s.name === selected.name) || null;
+}
+
+// Arriving with a selected server (a rail link, Back or a link) opens its Details once: in the
+// Kitden gateway's own panel when it holds it, else as in the Library. Anything else opens
+// nothing and stays in the address for the next page.
+async function openArrival(model) {
+  const selected = takeArrival();
+  if (!selected) return;
+  const server = heldServer(model, selected);
+  if (server) {
+    showKitdenServer(server);
+    return;
+  }
+  if (selected.kind !== "mcp_server") return;
+  if (!current("map")) await loadMap();
+  const row = serverFor(current("map"), selected);
+  // Another place or item may have been picked while the map was read.
+  if (row && state.view === "gateway" && sameSel(state.selected, selected)) await openItem(row);
 }
 
 export function renderGateway(main) {
@@ -150,6 +181,7 @@ export function renderGateway(main) {
   more.append(el("summary", null, "Add another gateway"), addForm());
   main.append(fold(more));
   entrance("gateway", blocks);
+  openArrival(model).catch(reportError);
 }
 
 function gatewayHead(gateway, model) {
@@ -338,8 +370,9 @@ function kitdenHeld(gateway) {
 }
 
 // Details of a server in the Kitden gateway: what it is, then its tools for the project picked
-// at the top. `next` goes to the tool list (see toolsSection).
+// at the top. `next` goes to the tool list (see toolsSection). The address keeps the server.
 function showKitdenServer(server, next = {}) {
+  setState({ selected: { kind: "mcp_server", name: server.name } });
   const body = el("div", "body");
   const row = el("div", "layer");
   const middle = el("div");
@@ -531,12 +564,17 @@ function groupRow(row, group, targets, focus = null) {
   return node;
 }
 
+// A server outside the gateway opens the Library's Details; the address keeps it.
 async function showServer(name) {
   if (!current("map")) await loadMap();
   const map = current("map");
   const row = ((map && map.rows) || []).find((r) => r.kind === "mcp_server" && r.name === name);
-  if (row) await openItem(row);
-  else toast("Could not find this server in the Library.");
+  if (!row) {
+    toast("Could not find this server in the Library.");
+    return;
+  }
+  setState({ selected: { kind: "mcp_server", name } });
+  await openItem(row);
 }
 
 function field(label, control) {
