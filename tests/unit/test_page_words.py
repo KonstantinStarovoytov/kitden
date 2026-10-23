@@ -215,6 +215,12 @@ def test_overview_notes_are_rows_with_a_details_button():
     assert "shortPaths" not in text
 
 
+def test_note_flags_wrap_under_the_name_and_not_under_details():
+    # An item with several notes puts the flags that do not fit on a second line.
+    rule = next(line for line in CSS.splitlines() if line.startswith(".list-row .what {"))
+    assert "flex-wrap: wrap;" in rule
+
+
 # Feature 006: the gateway is managed from here --------------------------------------------
 
 

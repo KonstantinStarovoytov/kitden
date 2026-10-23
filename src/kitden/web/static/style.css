@@ -429,7 +429,7 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .list:has(.list-row:hover) .list-row:first-child:hover { border-top-left-radius: 8px; border-top-right-radius: 8px; }
 .list-row .chip { gap: 4px; min-width: 24px; }
 .list-row .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.list-row .what { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 7px 0; }
+.list-row .what { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; padding: 7px 0; }
 .list-row .what .meta { color: var(--ink-3); font-size: 12px; white-space: nowrap; }
 .list-row .row-actions { display: inline-flex; align-items: center; gap: 6px; }
 .list-row .from { color: var(--ink-3); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
