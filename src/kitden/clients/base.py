@@ -9,6 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from kitden.clients import version_cache
 from kitden.clients.versions import is_supported
@@ -225,6 +226,42 @@ def mcp_item(
         secret_present=secret,
         summary=summary,
     )
+
+
+# A git address written as `git@github.com:owner/repo.git`.
+_SCP = re.compile(r"[\w.-]+@([\w.-]+):(.+)")
+
+
+def marketplace_source(entry: Any) -> str | None:
+    """Where a marketplace comes from, spelled one way so two clients' entries compare: a git
+    address or GitHub repo as host/path ("github.com/owner/repo"), a folder as its real path.
+    None when the entry names no source.
+
+    Claude Code keeps {"source": "github", "repo": ...}, {"source": "git", "url": ...} or
+    {"source": "directory", "path": ...} in known_marketplaces.json (2.1.283 fixture); Codex
+    keeps `source_type` "git" or "local" and `source` in config.toml (seen with 0.163.0,
+    2026-10-20). An `owner/repo` source is a GitHub repo, as Kitden passes Claude Code's repo to
+    `codex plugin marketplace add`."""
+    if not isinstance(entry, dict):
+        return None
+    if "source_type" in entry:
+        kind, value = entry.get("source_type"), entry.get("source")
+    else:
+        kind = entry.get("source")
+        value = entry.get("repo") or entry.get("url") or entry.get("path")
+    if not isinstance(value, str) or not value.strip():
+        return None
+    value = value.strip()
+    if kind in ("local", "directory") or value.startswith(("/", "~", ".")):
+        return os.path.realpath(os.path.expanduser(value))
+    if "://" in value:
+        parts = urlsplit(value)
+        host, path = parts.hostname or "", parts.path
+    elif found := _SCP.fullmatch(value):
+        host, path = found.groups()
+    else:
+        host, path = "github.com", value
+    return f"{host.lower()}/{path.strip('/').removesuffix('.git')}"
 
 
 def project(path: str, known_by: str) -> Project:

@@ -7,6 +7,7 @@ import pytest
 
 from kitden.clients import version_cache
 from kitden.demo import build_demo_home
+from kitden.gateways import add_gateway
 from kitden.model import FindingType, Gateway
 from kitden.views.findings import find_findings, mark_gateways
 from kitden.views.gateway_view import gateway_view
@@ -14,6 +15,7 @@ from kitden.views.inventory import build_inventory
 from kitden.views.load_map import load_map, row_key
 from kitden.views.overview import overview
 from tests.conftest import CURSOR_DB, make_home, write_cursor_fixture_state
+from tests.unit.test_local_gateway_views import page_for
 
 
 @pytest.fixture
@@ -251,3 +253,13 @@ def test_a_server_without_a_removable_entry_is_not_counted(home):
 def test_notes_count_items_not_findings(tmp_path):
     home = build_demo_home(tmp_path, "medium")  # 16 notes about 14 names: docs has three
     assert overview(build_inventory(home), [], None)["notes"] == 14
+
+
+def test_the_notes_count_is_the_rows_the_page_draws_also_with_a_gateway(home):
+    add_gateway(home, Gateway(url="https://gw.example.test/mcp"))
+    with page_for(home) as page:
+        count = page.get("/api/overview").json()["notes"]
+        findings = page.get("/api/findings").json()
+    names = {n for f in findings if f["severity"] == "info" for n in f["names"]}
+    assert any(f["type"] == "bypasses_gateway" for f in findings)
+    assert count == len(names)

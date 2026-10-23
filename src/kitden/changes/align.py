@@ -16,7 +16,7 @@ from kitden.model import Item, ItemKind, Scope, Step
 from kitden.views.catalog import catalog
 from kitden.views.effective import effective_view
 from kitden.views.findings import base_name
-from kitden.views.match import odd_ones, source_keys
+from kitden.views.match import Copies, is_compared, odd_sources, plugin_copies
 from kitden.views.skills import read_skill, skill_catalog
 
 CLIENTS = ("claude_code", "codex", "cursor")
@@ -90,20 +90,19 @@ def _words(clients: list[str]) -> str:
     return names[0] if len(names) == 1 else f"{', '.join(names[:-1])} and {names[-1]}"
 
 
-def _not_same(views: dict[str, list[Item]]) -> list[dict]:
+def _not_same(views: dict[str, list[Item]], copies: Copies) -> list[dict]:
     """Names a client loads from another source than the others (match.py): a plugin from
     another marketplace, a skill with other files, an MCP server with another command or
     address. A copy with the same files is the same skill."""
-    sources: dict[tuple, dict[str, frozenset]] = {}
+    sources: dict[tuple, dict[str, list[Item]]] = {}
     for client, items in views.items():
         for item in items:
-            own = item.via_gateway is None and item.name != SETUP_NAME
-            if own and item.scope is not Scope.ACCOUNT:
-                by_client = sources.setdefault((item.kind, base_name(item)), {})
-                by_client[client] = by_client.get(client, frozenset()) | source_keys(item)
+            if is_compared(item):
+                key = (item.kind, base_name(item))
+                sources.setdefault(key, {}).setdefault(client, []).append(item)
     out = []
     for (kind, name), by_client in sources.items():
-        if odd_ones(by_client):
+        if odd_sources(by_client, copies):
             clients = [c for c in CLIENTS if c in by_client]
             out.append({"kind": kind.value, "name": name, "clients": clients})
     return sorted(out, key=lambda n: (KINDS.index(ItemKind(n["kind"])), n["name"]))
@@ -227,7 +226,8 @@ def align_steps(
                     continue
                 marketplaces.add((step.client, step.name))
             steps.append(step)
-    listing = {"candidates": candidates, "not_same": _not_same(views), "left_out": left_out}
+    not_same = _not_same(views, plugin_copies(inventory))
+    listing = {"candidates": candidates, "not_same": not_same, "left_out": left_out}
     if not candidates:
         raise ValueError(f"Nothing is missing in {Path(project).name}.")
     # The first review may check nothing (every add makes a duplicate); it still lists them.

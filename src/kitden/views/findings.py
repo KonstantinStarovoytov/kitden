@@ -26,7 +26,7 @@ from kitden.model import (
     normalize_url,
 )
 from kitden.views.effective import DESKTOP, effective_view
-from kitden.views.match import odd_ones, source_keys
+from kitden.views.match import odd_sources, plugin_copies
 from kitden.views.setup_server import is_own_entry
 
 # Kinds where two copies are a problem. Hooks all run by design; marketplaces are just sources.
@@ -154,20 +154,23 @@ def find_findings(inventory, project: str | None = None) -> list[Finding]:
                     )
                 )
 
+    copies = plugin_copies(inventory)
     for (kind, name), by_client in own.items():
         if len(by_client) < 2:
             continue
         where = ", ".join(sorted(by_client))
-        if not odd_ones({c: source_keys(i) for c, i in by_client.items()}):
+        odd = sorted(odd_sources({c: [i] for c, i in by_client.items()}, copies))
+        if not odd:
             found, text = (
                 FindingType.SAME_IN_OTHER_CLIENTS,
                 f"{kind.replace('_', ' ')} '{name}' is set up separately in {where}",
             )
         else:
+            whose = " and ".join(f"{c}'s" for c in odd)
             found, text = (
                 FindingType.SAME_NAME_OTHER_SOURCE,
-                f"{kind.replace('_', ' ')} '{name}' has the same name in {where} but comes from "
-                "another source",
+                f"{kind.replace('_', ' ')} '{name}' has the same name in {where}, but {whose} "
+                f"{name} {'comes' if len(odd) == 1 else 'come'} from another source",
             )
         findings.append(
             _finding(

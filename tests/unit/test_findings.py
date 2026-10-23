@@ -128,7 +128,8 @@ def test_a_same_name_from_another_source_is_its_own_note():
     )
     assert finding_dict(finding)["clients"] == ["claude_code", "codex"]
     assert finding.explanation == (
-        "mcp server 'docs' has the same name in claude_code, codex but comes from another source"
+        "mcp server 'docs' has the same name in claude_code, codex, "
+        "but codex's docs comes from another source"
     )
 
 
@@ -322,3 +323,43 @@ def test_instruction_files_in_two_clients_are_not_a_finding():
 
 def test_every_finding_names_its_clients(tmp_path):
     assert all(f.clients for f in find_findings(build_inventory(real_home(tmp_path))))
+
+
+def _marketplace(client, source=None):
+    found = item(client, ItemKind.MARKETPLACE, "tools", f"/h/{client}/marketplaces")
+    return replace(found, summary=(("source", source),) if source else ())
+
+
+def test_marketplaces_with_one_name_are_one_item_only_from_one_source():
+    def note(*items):
+        (finding,) = find_findings(Inventory(items=list(items)))
+        return str(finding.type)
+
+    same = [
+        _marketplace("claude_code", "github.com/a/tools"),
+        _marketplace("codex", "github.com/a/tools"),
+    ]
+    assert note(*same) == "same_in_other_clients"
+    other = [
+        _marketplace("claude_code", "github.com/a/tools"),
+        _marketplace("codex", "github.com/b/tools"),
+    ]
+    assert note(*other) == "same_name_other_source"
+    # Cursor does not say where a marketplace comes from: nothing to compare.
+    assert note(_marketplace("claude_code", "github.com/a/tools"), _marketplace("cursor")) == (
+        "same_in_other_clients"
+    )
+
+
+def test_a_marketplace_codex_cloned_from_another_repo_is_another_source(tmp_path):
+    home = real_home(tmp_path)
+    config = home / ".codex/config.toml"
+    git = '\n[marketplaces.claude-plugins-official]\nsource_type = "git"\nsource = "{}"\n'
+    config.write_text(config.read_text() + git.format("https://github.com/me/fork.git"))
+    names = {f.type: f.names for f in find_findings(build_inventory(home))}
+    assert names[FindingType.SAME_NAME_OTHER_SOURCE] == ("claude-plugins-official",) * 2
+    config.write_text(config.read_text().replace("me/fork", "anthropics/claude-plugins-official"))
+    found = [
+        f for f in find_findings(build_inventory(home)) if "claude-plugins-official" in f.names
+    ]
+    assert [str(f.type) for f in found] == ["same_in_other_clients"]

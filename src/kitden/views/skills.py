@@ -232,6 +232,37 @@ def _row(
     }
 
 
+def plugin_skill_folders(
+    adapters: dict[str, ClientAdapter],
+) -> list[tuple[str, str, Path, str | None]]:
+    """(plugin id, marketplace, skill folder, category) of each skill in the plugins of the
+    marketplaces on this computer, then in the plugins Cursor keeps in its own cache (it has
+    no marketplace file to read)."""
+    found: list[tuple[str, str, Path, str | None]] = []
+
+    def add(plugin_id: str, marketplace: str, folder: Path, category: str | None) -> None:
+        for skill_dir in sorted(p.parent for p in folder.glob("skills/*/SKILL.md")):
+            found.append((plugin_id, marketplace, skill_dir, category))
+
+    for client in INSTALLERS:
+        if client not in adapters:
+            continue
+        for marketplace, root in adapters[client].marketplace_roots().items():
+            listed = _first(root, MARKETPLACE_FILES) or {}
+            for entry in listed.get("plugins") or []:
+                if not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
+                    continue
+                folder = _plugin_dir(root, entry.get("source"))
+                if folder is None:
+                    continue
+                category = _category_name(entry.get("category"))
+                add(f"{entry['name']}@{marketplace}", marketplace, folder, category)
+    cursor = adapters.get("cursor")
+    for plugin_id, folder in (cursor.plugin_folders() if cursor else {}).items():
+        add(plugin_id, plugin_id.split("@", 1)[1], folder, None)
+    return found
+
+
 def skill_catalog(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
     """Every skill on this computer, once, with what each client does with it.
 
@@ -266,44 +297,15 @@ def skill_catalog(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
                 plugins_on.setdefault(item.name, set()).add(item.client)
 
     rows: dict[str, dict] = {}
-
-    def add_plugin_skills(plugin_id: str, marketplace: str, folder: Path, category: str | None):
-        for skill_dir in sorted(p.parent for p in folder.glob("skills/*/SKILL.md")):
-            row_id = f"{skill_dir.name}@{plugin_id}"
-            if row_id in rows:
-                continue
-            info = read_skill(skill_dir)
-            installed = dict(loads.get(info["name"], {}))
-            rows[row_id] = _row(
-                row_id,
-                info,
-                skill_dir,
-                plugin_id,
-                plugin_id,
-                marketplace,
-                category,
-                installed,
-                found,
-            )
-
-    for client in INSTALLERS:
-        if client not in adapters:
+    for plugin_id, marketplace, skill_dir, category in plugin_skill_folders(adapters):
+        row_id = f"{skill_dir.name}@{plugin_id}"
+        if row_id in rows:
             continue
-        for marketplace, root in adapters[client].marketplace_roots().items():
-            listed = _first(root, MARKETPLACE_FILES) or {}
-            for entry in listed.get("plugins") or []:
-                if not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
-                    continue
-                folder = _plugin_dir(root, entry.get("source"))
-                if folder is None:
-                    continue
-                category = _category_name(entry.get("category"))
-                add_plugin_skills(f"{entry['name']}@{marketplace}", marketplace, folder, category)
-
-    # Cursor keeps the plugins it installs in its own cache, with no marketplace file to read.
-    cursor = adapters.get("cursor")
-    for plugin_id, folder in (cursor.plugin_folders() if cursor else {}).items():
-        add_plugin_skills(plugin_id, plugin_id.split("@", 1)[1], folder, None)
+        info = read_skill(skill_dir)
+        installed = dict(loads.get(info["name"], {}))
+        rows[row_id] = _row(
+            row_id, info, skill_dir, plugin_id, plugin_id, marketplace, category, installed, found
+        )
 
     # A skill in a client's own folder that no plugin here holds: it can go to another client.
     plugin_names = {r["name"] for r in rows.values()}

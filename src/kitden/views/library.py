@@ -23,7 +23,7 @@ from kitden.model import ClientStatus, Item, ItemKind, Scope, _hash
 from kitden.views.catalog import catalog, search
 from kitden.views.gateway_view import group_of
 from kitden.views.load_map import COLUMNS, MARKS, NAMES, Row, load_map
-from kitden.views.match import catalog_keys, source_keys
+from kitden.views.match import Copies, catalog_keys, plugin_copies, plugin_keys, source_keys
 from kitden.views.skills import skill_catalog
 from kitden.views.words import (
     CLIENT_UNREAD,
@@ -482,17 +482,22 @@ def _skill_cell(
     return _cell(reason=f"{NAMES[client]} can't install the plugin this skill needs.")
 
 
-def _not_this_skill(cells: dict[str, dict], skill: dict, items: dict[str, Item]) -> None:
+def _not_this_skill(
+    cells: dict[str, dict], skill: dict, items: dict[str, Item], copies: Copies
+) -> None:
     """A plugin's skill against the client's own of that name: when they share no files and no
-    plugin, the client has another skill, so its cell needs review."""
+    plugin, the client has another skill, so its cell needs review. A part of this plugin is
+    this skill without reading its files."""
     on = [c for c, cell in cells.items() if cell["state"] == "on" and cell["items"]]
     if not on or skill["plugin"] is None:
         return
-    keys = catalog_keys(skill)
+    keys = None
     for client in on:
-        ids = cells[client]["items"]
-        theirs = frozenset().union(*(source_keys(items[i]) for i in ids if i in items))
-        if keys.isdisjoint(theirs):
+        theirs = [items[i] for i in cells[client]["items"] if i in items]
+        if f"plugin:{skill['plugin']}" in frozenset().union(*map(plugin_keys, theirs)):
+            continue
+        keys = keys or catalog_keys(skill)
+        if keys.isdisjoint(frozenset().union(*(source_keys(i, copies) for i in theirs))):
             cells[client].update(state="review", reason=NOT_SAME)
 
 
@@ -514,6 +519,7 @@ def _skill_rows(
     found: list[str],
     cursor_imports: bool,
     items: dict[str, Item],
+    copies: Copies,
     no_place: dict[str, str] | None = None,
     in_project: bool = False,
 ) -> Built:
@@ -540,7 +546,7 @@ def _skill_rows(
             c: _skill_cell(c, skill, row, plugin_routes, cursor_imports, no_place, where)
             for c in found
         }
-        _not_this_skill(cells, skill, items)
+        _not_this_skill(cells, skill, items, copies)
         built = _row(
             key,
             "skill",
@@ -802,6 +808,7 @@ def library(
             found,
             cursor_imports,
             {i.id: i for i in inventory.items},
+            plugin_copies(inventory),
             _no_skill_place(adapters, project),
             in_project=project is not None,
         ),

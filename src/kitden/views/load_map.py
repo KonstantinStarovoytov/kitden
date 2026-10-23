@@ -16,7 +16,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from kitden.changes.actions import KITDEN_GATEWAY
-from kitden.clients.base import SETUP_NAME
 from kitden.model import (
     ClientStatus,
     Enabled,
@@ -28,7 +27,7 @@ from kitden.model import (
 )
 from kitden.views.effective import DESKTOP, effective_view
 from kitden.views.findings import base_name, bypass_kind, find_bypasses, find_findings
-from kitden.views.match import odd_ones, plugin_of, source_keys
+from kitden.views.match import Copies, is_compared, odd_sources, plugin_copies, plugin_of
 from kitden.views.words import CLIENT_UNREAD, NOT_SAME, ORIGIN_WORDS, ROUTE_WORDS, STALE
 
 COLUMNS = ("claude_code", "codex", "cursor")
@@ -158,33 +157,18 @@ def _cell(
     )
 
 
-def _compared(item: Item) -> bool:
-    """An entry of the client's own: a server the gateway holds, Kitden's own entry, an account
-    item and the Desktop app's are left out."""
-    return (
-        item.via_gateway is None
-        and item.name != SETUP_NAME
-        and item.scope is not Scope.ACCOUNT
-        and item.client != DESKTOP
-    )
-
-
-def _review(row: Row, items: dict[str, Item]) -> None:
+def _review(row: Row, items: dict[str, Item], copies: Copies) -> None:
     """Same name, another source: of two or more Available cells, those whose items share no
-    command, address or skill files with the most common ones need review. Only the state and
-    the reason change."""
+    command, address, skill files or plugin with the most common ones need review. Only the
+    state and the reason change."""
     if row.kind not in (ItemKind.MCP_SERVER, ItemKind.SKILL):
         return
-    on = [c for c in COLUMNS if row.cells[c].state == "on"]
-    if len(on) < 2:
-        return
-    keys = {}
-    for column in on:
-        compared = [items[i] for i in row.cells[column].items if i in items]
-        union = frozenset().union(*(source_keys(i) for i in compared if _compared(i)))
-        if union:
-            keys[column] = union
-    for column in odd_ones(keys):
+    compared = {
+        c: [items[i] for i in row.cells[c].items if i in items and is_compared(items[i])]
+        for c in COLUMNS
+        if row.cells[c].state == "on"
+    }
+    for column in odd_sources({c: group for c, group in compared.items() if group}, copies):
         row.cells[column].state = "review"
         row.cells[column].reason = NOT_SAME
 
@@ -303,6 +287,7 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
             plugins.setdefault(column, {})[first.name] = first
 
     items_by_id = {i.id: i for i in inventory.items}
+    copies = plugin_copies(inventory)
     for row in rows.values():
         for column in COLUMNS:
             read = status.get(column)
@@ -322,7 +307,7 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
             if read is ClientStatus.UNREADABLE and cell.state == "none":
                 cell = Cell("unk", reason=CLIENT_UNREAD.format(NAMES[column]))
             row.cells[column] = cell
-        _review(row, items_by_id)
+        _review(row, items_by_id, copies)
         # Kept from the last good read: the row's first flag says when.
         stale = min((c.stale_at for c in row.cells.values() if c.stale_at), default=None)
         if stale:

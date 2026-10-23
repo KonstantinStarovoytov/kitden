@@ -3,9 +3,18 @@ its files or its plugin."""
 
 import shutil
 from dataclasses import replace
+from pathlib import Path
 
-from kitden.model import Item, ItemKind, Scope, Source, SourceKind
+from kitden.changes.server_entry import translate_entry
+from kitden.clients.base import file_source, marketplace_source, mcp_item
+from kitden.model import Client, ClientStatus, Item, ItemKind, Scope, Source, SourceKind
+from kitden.views import match
+from kitden.views.findings import find_findings
+from kitden.views.inventory import Inventory
+from kitden.views.load_map import load_map
 from kitden.views.match import odd_ones, plugin_of, source_keys
+
+CLIENTS = ("claude_code", "codex", "cursor")
 
 
 def _item(kind, name, path, summary=(), scope=Scope.USER):
@@ -59,3 +68,66 @@ def test_a_skill_is_known_by_its_files(tmp_path):
     ]
     assert keys[0] == keys[1]
     assert keys[0].isdisjoint(keys[2])
+
+
+# Each entry as its client writes it.
+ENTRIES = [
+    ("claude_code", {"type": "stdio", "command": "zed-mcp", "args": [], "env": {}}),
+    ("codex", {"command": "zed-mcp", "args": []}),
+    ("cursor", {"command": "zed-mcp", "args": [], "env": {}}),
+    ("cursor", {"command": "npx", "args": ["--dir", "${env:HOME}/data"]}),
+    ("claude_code", {"type": "stdio", "command": "npx", "args": ["--dir", "${HOME}/data"]}),
+    ("claude_code", {"type": "http", "url": "https://docs.example.test/mcp/"}),
+]
+
+
+def test_a_server_kitden_copied_is_the_same_server():
+    copied = 0
+    for source, entry in ENTRIES:
+        for target in CLIENTS:
+            if target == source:
+                continue
+            try:
+                copy = translate_entry(entry, target, source=source)
+            except ValueError:  # Codex cannot read a reference in an argument
+                continue
+            one = mcp_item(source, "x", entry, file_source(Path("/h/a"), source), Scope.USER)
+            two = mcp_item(target, "x", copy, file_source(Path("/h/b"), target), Scope.USER)
+            assert not source_keys(one).isdisjoint(source_keys(two)), (source, target, entry)
+            copied += 1
+    assert copied == 10
+
+
+def test_a_marketplace_is_known_by_its_source():
+    github = marketplace_source({"source": "github", "repo": "anthropics/claude-plugins-official"})
+    clone = marketplace_source(
+        {
+            "source_type": "git",
+            "source": "https://github.com/anthropics/claude-plugins-official.git",
+        }
+    )
+    other = marketplace_source({"source_type": "git", "source": "https://github.com/me/fork.git"})
+    assert github == clone == "github.com/anthropics/claude-plugins-official"
+    assert other != github
+    folder = marketplace_source({"source": "directory", "path": "/m/demo/"})
+    assert folder == marketplace_source({"source_type": "local", "source": "/m/demo"})
+    assert marketplace_source({}) is None
+
+
+def _plugin_skill(client, version):
+    path = f"/h/.{client}/plugins/cache/m/p/{version}/skills/x/SKILL.md"
+    source = Source(kind=SourceKind.PLUGIN, path=path, owner_client=client)
+    return Item(client=client, kind=ItemKind.SKILL, name="x", scope=Scope.PLUGIN, source=source)
+
+
+def test_parts_of_one_plugin_are_the_same_without_reading_their_files(monkeypatch):
+    def no_read(folder):
+        raise AssertionError(f"read {folder}")
+
+    monkeypatch.setattr(match, "skill_digest", no_read)
+    clients = [Client(id=c, display_name=c, status=ClientStatus.FOUND) for c in CLIENTS]
+    items = [_plugin_skill("codex", "1.0.0"), _plugin_skill("cursor", "2.0.0")]
+    inventory = Inventory(clients=clients, items=items)
+    (row,) = load_map(inventory, None)
+    assert (row.cells["codex"].state, row.cells["cursor"].state) == ("on", "on")
+    assert [str(f.type) for f in find_findings(inventory)] == ["same_in_other_clients"]

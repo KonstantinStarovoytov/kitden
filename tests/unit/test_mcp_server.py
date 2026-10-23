@@ -182,3 +182,13 @@ def test_the_server_names_instruction_files():
 
     server = create_server(lambda: Inventory())
     assert "instruction files" in server.instructions
+
+
+async def test_a_same_name_note_names_the_client_with_another_source(home):
+    from tests.unit.test_local_gateway_move import add_claude
+
+    add_claude(home, "neon", {"type": "http", "url": "https://other.invalid/mcp"})
+    data = await call(server_for(home), "list_findings")
+    (note,) = [f for f in data["findings"] if f["type"] == "same_name_other_source"]
+    assert note["clients"] == ["claude_code", "codex"]
+    assert note["explanation"].endswith("but codex's neon comes from another source")

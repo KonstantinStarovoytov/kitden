@@ -28,6 +28,7 @@ from kitden.clients.base import (
     is_direct_entry,
     is_home,
     is_own_skill,
+    marketplace_source,
     mcp_item,
     plain_source,
     project,
@@ -452,7 +453,8 @@ class ClaudeCodeAdapter(ClientAdapter):
         )
         scan.items += self._hooks(settings, settings_path, Scope.USER)
         marketplaces_path = self.home / ".claude/plugins/known_marketplaces.json"
-        for name in _dict(read.json(marketplaces_path)):
+        for name, entry in _dict(read.json(marketplaces_path)).items():
+            where = marketplace_source(_dict(entry).get("source"))
             scan.items.append(
                 Item(
                     client=CLIENT,
@@ -460,6 +462,7 @@ class ClaudeCodeAdapter(ClientAdapter):
                     name=name,
                     source=file_source(marketplaces_path, CLIENT, name),
                     scope=Scope.USER,
+                    summary=(("source", where),) if where else (),
                 )
             )
 

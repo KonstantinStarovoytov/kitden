@@ -182,9 +182,8 @@ def overview(
                 }
             )
 
-    info = [f for f in findings if f.severity is Severity.INFO]
-    if not gateways:
-        info += find_bypasses(inventory, project)
+    # The notes the page lists: the info findings of /api/findings, gateway bypasses too.
+    info = [f for f in findings + find_bypasses(inventory, project) if f.severity is Severity.INFO]
     n = len(attention)
     headline = "All clear" if not n else f"{_count(n, 'thing needs', 'things need')} attention"
     return {

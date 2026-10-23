@@ -1,6 +1,7 @@
 """The Library: what each client has on this computer and what it can add, in one list."""
 
 import json
+import shutil
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -12,7 +13,7 @@ from kitden.clients.claude_code import ClaudeCodeAdapter
 from kitden.clients.codex import CodexAdapter
 from kitden.clients.cursor import REACTIVE_KEY, CursorAdapter
 from kitden.demo import build_demo_home
-from kitden.model import Gateway
+from kitden.model import FindingType, Gateway
 from kitden.views.findings import find_findings, mark_gateways
 from kitden.views.inventory import LastGood, build_inventory, default_adapters, keep_last_good
 from kitden.views.library import library
@@ -955,3 +956,27 @@ def test_review_rows_on_the_medium_sample_offer_no_add(tmp_path):
     )
     review = [c for r in answer["rows"] for c in r["cells"].values() if c["state"] == "review"]
     assert all(c["add"] is None for c in review)
+
+
+@pytest.mark.parametrize("folder", [".agents/skills", ".codex/skills"])
+def test_a_plugin_skill_kitden_copied_is_still_that_plugins_skill(home, folder):
+    # Kitden's "+ Add" copies the marketplace's folder; Claude Code loads its own cache copy.
+    market = home / ".claude/plugins/marketplaces/claude-plugins-official/plugins/superpowers"
+    shutil.copytree(market / "skills/brainstorming", home / folder / "brainstorming")
+    inventory = build_inventory(home)
+    row = next(r for r in load_map(inventory, None) if r.name == "brainstorming")
+    assert "review" not in {c.state for c in row.cells.values()}
+    shown = _row(_library(home, "skill", show="all"), "brainstorming", f"superpowers@{OFFICIAL}")
+    assert "review" not in {c["state"] for c in shown["cells"].values()}
+    notes = {f.type for f in find_findings(inventory) if "brainstorming" in f.names}
+    assert FindingType.SAME_NAME_OTHER_SOURCE not in notes
+
+
+def test_a_review_skill_row_offers_no_add_in_its_other_cells(home):
+    # Claude Code loads superpowers' brainstorming, not the toolbox one.
+    row = _row(_library(home, "skill", show="all"), "brainstorming", f"toolbox@{OFFICIAL}")
+    assert row["cells"]["claude_code"]["state"] == "review"
+    assert (row["cells"]["codex"]["add"], row["cells"]["codex"]["reason"]) == (
+        None,
+        "Same name, another source: decide first.",
+    )

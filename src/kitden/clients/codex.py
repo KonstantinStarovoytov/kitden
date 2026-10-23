@@ -27,6 +27,7 @@ from kitden.clients.base import (
     instruction_items,
     is_direct_entry,
     is_own_skill,
+    marketplace_source,
     mcp_item,
     plain_source,
     project,
@@ -406,7 +407,8 @@ class CodexAdapter(ClientAdapter):
             scan.items += self._plugin_servers(read, self._plugin_folder(plugin_id), enabled)
         scan.items += self._cached_plugins(set(configured))
 
-        for name in _dict(config.get("marketplaces")):
+        for name, entry in _dict(config.get("marketplaces")).items():
+            where = marketplace_source(_dict(entry))
             scan.items.append(
                 Item(
                     client=CLIENT,
@@ -414,6 +416,7 @@ class CodexAdapter(ClientAdapter):
                     name=name,
                     source=file_source(config_path, CLIENT, f"marketplaces.{name}"),
                     scope=Scope.USER,
+                    summary=(("source", where),) if where else (),
                 )
             )
 

@@ -22,6 +22,7 @@ from kitden.model import (
     SourceKind,
     UnknownReason,
 )
+from kitden.views.skills import plugin_skill_folders
 
 
 @dataclass
@@ -31,6 +32,9 @@ class Inventory:
     projects: list[Project] = field(default_factory=list)
     problems: list[Source] = field(default_factory=list)
     partial: bool = False  # a quick scan left out a slow answer; a new scan follows when it is in
+    # (plugin id, skill folder) of each skill in a marketplace's plugins or in Cursor's plugin
+    # folders: a skill copied from one is still that plugin's (match.py).
+    plugin_skills: list[tuple[str, str]] = field(default_factory=list)
 
 
 @dataclass
@@ -158,6 +162,9 @@ def build_inventory(
             )
     inventory.projects = sorted(projects.values(), key=lambda p: p.path)
     inventory.partial = any(adapter.skipped for adapter in adapters)
+    with contextlib.suppress(Exception):  # only to match copies; never lose the scan
+        folders = plugin_skill_folders({a.id: a for a in adapters})
+        inventory.plugin_skills = [(plugin, str(folder)) for plugin, _, folder, _ in folders]
     return inventory
 
 
