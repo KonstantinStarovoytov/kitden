@@ -312,20 +312,21 @@ export function originWords(def, here) {
 const inClientOrder = (definitions) => [...definitions].sort((a, b) => CLIENT_ORDER.indexOf(a.client) - CLIENT_ORDER.indexOf(b.client));
 const clientsOf = (definitions) => [...new Set(definitions.map((d) => clientName(d.client)))];
 
-// What a definition's own line would say that the Why says instead, so a fact shows once:
-// turned off, or only in another project (with All projects picked). The layer and the Why
-// both ask these.
+// A definition no rule ties to another one, that does not load: the Why may say why instead
+// of its own line (turned off, or only in another project).
 const standsAlone = (def) => def.kind !== "instructions" && !def.loads && !def.overridden && !def.merged;
-const turnedOff = (def) => standsAlone(def) && def.enabled === "off";
-const inAnotherProject = (def, here) => standsAlone(def) && def.enabled === "on" && Boolean(def.project) && def.project !== here;
+const elsewhere = (def, here) => Boolean(def.project) && def.project !== here;
 
-// The Why: one or two quiet lines. First where each client loads it from, grouped by where
-// ("Codex and Cursor load it from all projects."). Then what decides, in one line: one folder
-// several clients read, or one definition over another of the same client; what is turned off;
-// the projects it is in when it does not load here. None for instruction files: their own
-// lines say when each client reads them. An unknown state's reason stays on its layer.
-export function whyLines(definitions, here) {
-  if (!definitions.length || definitions.some((d) => d.kind === "instructions")) return [];
+// The Why: one or two quiet lines (whyLines), and `said`, the definitions whose own line it
+// replaces, so a fact shows once (layerState). First where each client loads it from, grouped
+// by where ("Codex and Cursor load it from all projects."). Then what decides, in one line: one
+// folder several clients read, or one definition over another of the same client; the projects
+// it is in when it does not load here; what is turned off, by client, or by project for another
+// project's copy. None for instruction files: their own lines say when each client reads them.
+// An unknown state's reason stays on its layer.
+export function whyParts(definitions, here) {
+  const said = new Set();
+  if (!definitions.length || definitions.some((d) => d.kind === "instructions")) return { lines: [], said };
   const defs = inClientOrder(definitions);
   const groups = new Map(); // where it loads from -> the clients
   for (const def of defs.filter((d) => d.loads && d.enabled !== "unknown")) {
@@ -338,15 +339,27 @@ export function whyLines(definitions, here) {
     const verb = i ? "" : names.length > 1 ? " load it" : " loads it";
     return `${joinWords(names)}${verb} ${origin}`;
   });
-  const rules = [sharedFolder(defs) || heldRule(defs, here) || overRule(defs, here)].filter(Boolean);
-  const off = clientsOf(defs.filter(turnedOff));
-  if (off.length) rules.push(`Turned off in ${joinWords(off)}.`);
-  const away = defs.filter((d) => inAnotherProject(d, here));
-  if (away.length) {
+  const rules = [sharedFolder(defs) || heldRule(defs, here, said) || overRule(defs, here)].filter(Boolean);
+  const away = defs.filter((d) => standsAlone(d) && elsewhere(d, here) && (d.enabled === "on" || d.enabled === "off"));
+  if (away.some((d) => d.enabled === "on")) {
     const count = plural(new Set(away.map((d) => d.project)).size, "project", "projects");
     rules.push(parts.length ? `It is also in ${count}.` : `It is in ${count}; it loads only there.`);
+    for (const d of away.filter((x) => x.enabled === "on")) said.add(d);
   }
-  return [...(parts.length ? [`${parts.join("; ")}.`] : []), ...(rules.length ? [rules.join(" ")] : [])];
+  // Turned off: a copy in another project, or a client that loads no other copy.
+  const loading = new Set(defs.filter((d) => d.loads).map((d) => d.client));
+  const off = defs.filter((d) => standsAlone(d) && d.enabled === "off" && !said.has(d) && (elsewhere(d, here) || !loading.has(d.client)));
+  if (off.length) {
+    const where = off.map((d) => (elsewhere(d, here) ? folderName(d.project) : clientName(d.client)));
+    rules.push(`Turned off in ${joinWords([...new Set(where)])}.`);
+    for (const d of off) said.add(d);
+  }
+  const lines = [...(parts.length ? [`${parts.join("; ")}.`] : []), ...(rules.length ? [rules.join(" ")] : [])];
+  return { lines, said };
+}
+
+export function whyLines(definitions, here) {
+  return whyParts(definitions, here).lines;
 }
 
 // One skill folder that several clients read.
@@ -367,17 +380,22 @@ function winnerOf(defs, beaten) {
 }
 
 // A server in the Kitden gateway with a switch of its own in the project: said plainly, since
-// both definitions come through the gateway.
-function heldRule(defs, here) {
+// both definitions come through the gateway. The switch is one for every client: when it is off
+// for all of them, the line says so once and stands for each client's "turned off" (`said`).
+function heldRule(defs, here, said) {
   const held = defs.filter((d) => {
     const winner = (d.overridden || d.merged) && d.via_gateway === "kitden" && winnerOf(defs, d);
     return winner && winner.via_gateway === "kitden" && winner.project;
   });
   if (!held.length) return null;
-  const winner = winnerOf(defs, held[0]);
-  const whose = winner.project === here ? "this project's" : `${folderName(winner.project)}'s`;
-  const names = clientsOf(held);
-  return `${joinWords(names)} ${names.length > 1 ? "use" : "uses"} ${whose} switch for ${winner.name} in the Kitden gateway.`;
+  const winners = held.map((d) => winnerOf(defs, d));
+  const whose = winners[0].project === here ? "this project's" : `${folderName(winners[0].project)}'s`;
+  if (winners.every((w) => w.enabled === "off")) {
+    for (const w of winners) said.add(w);
+    return `In the Kitden gateway, ${whose} switch for ${winners[0].name} is off.`;
+  }
+  const names = clientsOf(held.filter((d, i) => winners[i].enabled !== "off"));
+  return `${joinWords(names)} ${names.length > 1 ? "use" : "uses"} ${whose} switch for ${winners[0].name} in the Kitden gateway.`;
 }
 
 // One definition over another of the same client. When both come the same way, their scopes
@@ -468,15 +486,15 @@ function staleWords(at) {
 // A definition's dot, badge and line of why. An instruction file says it is available, or
 // that it is in a project, never "Not loaded": its why says when it is read. A definition kept
 // from the last good read also says when (`stale`).
-export function layerState(def, here = null) {
+export function layerState(def, said = new Set()) {
   let look = "off";
   let badge = "Not loaded";
   // The server's why is written for agents ("Loads. It overrides the user definition."). The
-  // badge says Available, and the Why lines say once, in page words, which definition
-  // overrides or merges with which, what is turned off and what is only in other projects;
-  // such a definition has no line of its own.
+  // badge says Available, and the Why lines say in page words which definition overrides or
+  // merges with which; such a definition has no line of its own. Nor has one whose line the
+  // Why says instead (`said`, from whyParts): turned off, or only in another project.
   const ruled = def.kind !== "instructions" && (def.loads || def.overridden || def.merged);
-  let why = ruled || turnedOff(def) || inAnotherProject(def, here) ? "" : def.why || "";
+  let why = ruled || said.has(def) ? "" : def.why || "";
   const unknown = def.enabled === "unknown";
   if (unknown) {
     look = "unk";
@@ -493,8 +511,8 @@ export function layerState(def, here = null) {
   return { look, badge, why, unknown, stale };
 }
 
-function layer(def) {
-  const { look, badge, why, unknown, stale } = layerState(def, projectPath());
+function layer(def, said) {
+  const { look, badge, why, unknown, stale } = layerState(def, said);
   const wins = def.loads && !unknown;
   const row = el("div", wins ? "layer wins" : "layer");
   const dot = socket({ state: look });
@@ -574,7 +592,7 @@ function showDetails(row, definitions, offer = null, toolsNext = {}) {
   const blocks = new Map(); // a DETAILS_ORDER id -> its nodes
   if (warnings.length) blocks.set("warnings", warnings.map((f) => callout(warningText(f))));
   if (offer) blocks.set("about", about(offer));
-  const lines = whyLines(definitions, projectPath());
+  const { lines, said } = whyParts(definitions, projectPath());
   if (lines.length) {
     const box = el("div", "why-lines");
     box.append(...lines.map((line) => el("p", null, line)));
@@ -595,7 +613,7 @@ function showDetails(row, definitions, offer = null, toolsNext = {}) {
     const title = el("div", "chip");
     title.append(mark(client), el("h2", null, clientName(client)));
     const stack = el("div", "stack");
-    for (const def of byClient.get(client)) stack.append(layer(def));
+    for (const def of byClient.get(client)) stack.append(layer(def, said));
     section.append(title, stack);
     const hints = covered.has(client) ? [] : new Set(byClient.get(client).filter((d) => d.change_hint && !d.actions.length && d.change_hint !== why).map((d) => d.change_hint));
     for (const hint of hints) section.append(el("p", "muted", hint));

@@ -998,7 +998,7 @@ def test_details_answer_in_order_and_fold_the_evidence():
     assert "`One folder, read by ${joinWords(" in details
     assert "ROUTE_WORDS.folder" in details and "ROUTE_WORDS.kitden" in details
     # A layer shows no path, command or file lines of its own: they wait in the fold.
-    layer = details.split("function layer(def)")[1].split("\n}\n")[0]
+    layer = details.split("function layer(def, said)")[1].split("\n}\n")[0]
     assert "shortPath" not in layer and "def.summary" not in layer and "preview" not in layer
 
 

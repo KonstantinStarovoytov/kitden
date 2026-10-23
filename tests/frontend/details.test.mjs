@@ -6,7 +6,7 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; details.js must load there too.
 delete globalThis.navigator;
-const { DETAILS_ORDER, detailsOrder, fileScopeWords, layerState, originWords, scopeWords, techRows, whyLines } = await import('../../src/kitden/web/static/js/details.js');
+const { DETAILS_ORDER, detailsOrder, fileScopeWords, layerState, originWords, scopeWords, techRows, whyLines, whyParts } = await import('../../src/kitden/web/static/js/details.js');
 
 const def = (fields) => ({ kind: 'skill', scope: 'user', project: null, enabled: 'on', owner_client: fields.client, loads: true, overridden: false, merged: false, ...fields });
 const site = '/Users/me/work/website';
@@ -75,6 +75,10 @@ test('two definitions that come the same way are told apart, or said plainly', (
   const fromPlugin = (fields) => def({ client: 'claude_code', kind: 'mcp_server', scope: 'plugin', ...fields });
   assert.deepEqual(whyLines([fromPlugin({}), fromPlugin({ loads: false, overridden: true })], null),
     ['Claude Code loads it from a plugin.', 'In Claude Code, two of them come from a plugin; only one loads.']);
+  // The project's switch is off: said once, as the switch's state, not as each client's.
+  const off = { scope: 'project', project: site, loads: false, enabled: 'off' };
+  assert.deepEqual(whyLines([held('claude_code', off), held('claude_code', { loads: false, overridden: true }), held('codex', off), held('codex', { loads: false, merged: true })], site),
+    ["In the Kitden gateway, this project's switch for files is off."]);
   // The project's own setting turns it off over the one for all projects.
   assert.deepEqual(whyLines([def({ client: 'claude_code', kind: 'plugin', ...mine, loads: false, enabled: 'off' }), def({ client: 'claude_code', kind: 'plugin', loads: false, overridden: true })], site),
     ['In Claude Code, the one from this project overrides the one from all projects. Turned off in Claude Code.']);
@@ -100,18 +104,39 @@ test('a section title names only a known client as the owner of a folder', () =>
   assert.equal(fileScopeWords({ scope: 'local', client: 'claude_code', owner_client: 'claude_code', project: site }), 'Only on this Mac · website');
 });
 
+test('a copy that is off says so only where the client loads nothing else', () => {
+  // Two plugins of one name from two marketplaces, one of them off: Claude Code still loads it.
+  const two = [def({ client: 'claude_code', kind: 'plugin', name: 'superpowers@a' }), def({ client: 'claude_code', kind: 'plugin', name: 'superpowers@b', loads: false, enabled: 'off', why: 'Does not load: it is turned off.' })];
+  assert.deepEqual(whyLines(two, null), ['Claude Code loads it from all projects.']);
+  assert.equal(layerState(two[1], whyParts(two, null).said).why, 'Does not load: it is turned off.');
+  // A Codex skill in two folders, one turned off.
+  assert.deepEqual(whyLines([def({ client: 'codex', source: '/h/.agents/skills/a/SKILL.md' }), def({ client: 'codex', source: '/h/.codex/skills/a/SKILL.md', loads: false, enabled: 'off' })], null),
+    ['Codex loads it from all projects.']);
+});
+
+test('with All projects picked, a project that has it off is named', () => {
+  const site = def({ client: 'claude_code', scope: 'project', project: '/a/site', loads: false });
+  const api = def({ client: 'claude_code', scope: 'project', project: '/a/api', loads: false, enabled: 'off' });
+  assert.deepEqual(whyLines([site, api], null), ['It is in 2 projects; it loads only there. Turned off in api.']);
+  const user = def({ client: 'claude_code' });
+  assert.deepEqual(whyLines([user, api], null), ['Claude Code loads it from all projects.', 'Turned off in api.']);
+});
+
 test('a layer leaves to the Why what the Why says', () => {
   const loaded = { kind: 'mcp_server', enabled: 'on', loads: true };
   assert.equal(layerState({ ...loaded, why: 'Loads. It overrides the user definition.' }).why, '');
   assert.equal(layerState({ kind: 'plugin', enabled: 'on', loads: false, overridden: true, why: 'Does not load: the project definition overrides it.' }).why, '');
   assert.equal(layerState({ kind: 'mcp_server', enabled: 'on', loads: false, merged: true, why: 'Merged with the project definition; its fields win.' }).why, '');
-  // Turned off, and only in other projects: the Why says these too.
-  assert.equal(layerState({ kind: 'plugin', enabled: 'off', loads: false, why: 'Does not load: it is turned off.' }).why, '');
-  const elsewhere = { kind: 'skill', enabled: 'on', loads: false, project: '/a/api', why: 'Does not load here: it belongs to another project.' };
-  assert.equal(layerState(elsewhere, null).why, '');
+  // Turned off, and only in other projects: the Why says these, so the layers do not.
+  const off = def({ client: 'codex', kind: 'plugin', loads: false, enabled: 'off', why: 'Does not load: it is turned off.' });
+  assert.equal(layerState(off, whyParts([off], null).said).why, '');
+  assert.equal(layerState(off).why, 'Does not load: it is turned off.');
+  const elsewhere = def({ client: 'claude_code', loads: false, scope: 'project', project: '/a/api', why: 'Does not load here: it belongs to another project.' });
+  assert.equal(layerState(elsewhere, whyParts([elsewhere], null).said).why, '');
   // What the Why does not say stays: a plugin that is not loaded, and an unknown state's reason.
   const part = 'Does not load here: its plugin is not loaded.';
-  assert.equal(layerState({ kind: 'mcp_server', enabled: 'on', loads: false, project: site, why: part }, site).why, part);
+  const notLoaded = def({ client: 'claude_code', kind: 'mcp_server', loads: false, scope: 'plugin', why: part });
+  assert.equal(layerState(notLoaded, whyParts([notLoaded], site).said).why, part);
   assert.equal(layerState({ kind: 'plugin', enabled: 'unknown', unknown_reason: 'stored_in_account', loads: false }).why, 'Its on/off state is kept in your Claude account, not on this Mac.');
   assert.equal(layerState({ kind: 'instructions', enabled: 'on', loads: true, why: 'Read when a session starts.' }).why, 'Read when a session starts.');
 });
