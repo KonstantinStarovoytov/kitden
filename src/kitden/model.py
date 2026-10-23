@@ -308,6 +308,10 @@ class Step:
     # A client's removal step: its own switches for a server the Kitden gateway holds already do
     # not carry over. Only the review's words use it.
     switches_left: bool = False
+    # A plugin step: every client it changes, also through another client's import (Cursor
+    # loads Claude Code's user plugins), as Details' Affects names them. Only the review's
+    # words use it.
+    reaches: list[str] | None = None
     # Secrets Apply writes to the Keychain before any file; the edit holds their references.
     keychain: list[KeychainItem] = field(default_factory=list)
 

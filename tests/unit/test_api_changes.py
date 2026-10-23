@@ -188,6 +188,30 @@ def test_preview_says_what_each_client_shows_after(client):
     assert change["after"] == [{"client": "cursor", "state": "off", "word": "Removed"}]
 
 
+def test_a_preview_names_its_target(client):
+    servers = client.get("/api/items?client=claude_code&kind=mcp_server").json()
+    local = next(i for i in servers if i["name"] == "local-db")
+    body = {"action": "mcp.remove_direct", "targets": [{"item": local["id"]}], "params": {}}
+    answer = client.post("/api/changes/preview", json=body, headers=POST).json()
+    # No other known project lies inside work/website, or around it, in the base fixture.
+    assert answer["target"] == {
+        "scope": "project",
+        "project": str(client.home / "work/website"),
+        "others_unchanged": True,
+    }
+    assert answer["undo_note"] is None
+    client.post(f"/api/changes/{answer['id']}/cancel", headers=POST)
+    # A user entry goes for all projects.
+    neon = next(
+        i
+        for i in client.get("/api/items?client=codex&kind=mcp_server").json()
+        if i["name"] == "neon" and i["scope"] == "user"
+    )
+    body = {"action": "mcp.remove_direct", "targets": [{"item": neon["id"]}], "params": {}}
+    answer = client.post("/api/changes/preview", json=body, headers=POST).json()
+    assert answer["target"] == {"scope": "all", "project": None, "others_unchanged": False}
+
+
 def test_a_hand_edit_between_preview_and_apply_stops_the_change(client):
     gateway = _register(client).json()
     change = _connect(client, gateway["id"], clients=["codex"]).json()

@@ -6,6 +6,7 @@ import tomllib
 import pytest
 
 from kitden.clients.cursor import CURSOR_HINT
+from kitden.views.words import REMOVE_NOTE
 from tests.unit.test_api_plugin_install import LINTER, POST, _client, _preview
 
 SUPERPOWERS = "superpowers@claude-plugins-official"
@@ -49,12 +50,7 @@ def test_removing_a_claude_code_plugin_runs_uninstall_and_undo_installs_it_again
     )
     # Cursor loads this copy from Claude Code and has one of its own, which stays.
     assert change["after"] == [
-        {
-            "client": "claude_code",
-            "state": "off",
-            "word": "Removed",
-            "note": "Undo installs it again; its saved options are not brought back.",
-        },
+        {"client": "claude_code", "state": "off", "word": "Removed"},
         {
             "client": "cursor",
             "state": "on",
@@ -62,6 +58,10 @@ def test_removing_a_claude_code_plugin_runs_uninstall_and_undo_installs_it_again
             "note": "Cursor loads Claude Code's plugins, so it loses this copy and keeps its own.",
         },
     ]
+    # The Undo limit is said once, in the review's lede; Cursor keeps a copy, so the title
+    # names Claude Code only, as Details' Affects does.
+    assert change["undo_note"] == REMOVE_NOTE
+    assert change["steps"][0]["reaches"] == ["claude_code"]
     assert client.post(f"/api/changes/{change['id']}/apply", headers=POST).json()["state"] == (
         "verified"
     )
@@ -80,12 +80,7 @@ def test_cursor_loses_a_claude_code_plugin_it_only_imports(client):
     )
     change = _remove(client, _item(client, LINTER)["id"]).json()
     assert change["after"] == [
-        {
-            "client": "claude_code",
-            "state": "off",
-            "word": "Removed",
-            "note": "Undo installs it again; its saved options are not brought back.",
-        },
+        {"client": "claude_code", "state": "off", "word": "Removed"},
         {
             "client": "cursor",
             "state": "off",
@@ -93,19 +88,19 @@ def test_cursor_loses_a_claude_code_plugin_it_only_imports(client):
             "note": "Cursor loads Claude Code's plugins, so it loses this one too.",
         },
     ]
+    assert change["undo_note"] == REMOVE_NOTE
+    # The review's title names Cursor too, as Details' Affects and Remove button do; so does
+    # the line after Apply.
+    assert change["steps"][0]["reaches"] == ["claude_code", "cursor"]
+    applied = client.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
+    assert applied["steps"][0]["reaches"] == ["claude_code", "cursor"]
 
 
 def test_undo_of_removing_an_off_plugin_leaves_it_off(plain):
     before = (plain.home / ".claude/settings.json").read_text()
     change = _remove(plain, _item(plain, OFF)["id"]).json()
-    assert change["after"] == [
-        {
-            "client": "claude_code",
-            "state": "off",
-            "word": "Removed",
-            "note": "Undo installs it again; its saved options are not brought back.",
-        }
-    ]
+    assert change["after"] == [{"client": "claude_code", "state": "off", "word": "Removed"}]
+    assert change["undo_note"] == REMOVE_NOTE
     assert plain.post(f"/api/changes/{change['id']}/apply", headers=POST).json()["state"] == (
         "verified"
     )
@@ -122,6 +117,8 @@ def test_removing_a_codex_plugin_keeps_the_rest_of_the_file(plain):
     change = _remove(plain, _item(plain, BROWSER, "codex")["id"]).json()
     assert change["steps"][0]["command"] == f"codex plugin remove {BROWSER}"
     assert change["after"] == [{"client": "codex", "state": "off", "word": "Removed"}]
+    # Codex's own Undo has no such limit to name.
+    assert change["undo_note"] is None
     plain.post(f"/api/changes/{change['id']}/apply", headers=POST)
     text = (plain.home / ".codex/config.toml").read_text()
     assert BROWSER not in tomllib.loads(text).get("plugins", {})
@@ -151,6 +148,8 @@ def test_a_project_plugin_is_removed_from_its_project(client):
     # A project's file is shared, and Cursor imports only user plugins.
     assert change["shared_file_warning"] is True
     assert [e["client"] for e in change["after"]] == ["claude_code"]
+    assert step["reaches"] == ["claude_code"]
+    assert change["target"]["project"] == item["project"]
 
 
 def test_plugins_without_a_file_entry_cannot_be_removed(client):

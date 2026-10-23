@@ -183,9 +183,9 @@ test('an add names its scope in the title and, with All projects, in the lede', 
   const add = { action: 'skill.install', steps: [{ client: 'codex', name: 'tidy' }] };
   assert.deepEqual(changeWords(add, { params: { skill: 'x' } }), { title: 'Add tidy to Codex for all projects', done: 'Added tidy to Codex for all projects' });
   assert.equal(changeWords({ action: 'mcp.add', steps: [{ client: 'codex', name: 'github' }] }).title, 'Add github to Codex for all projects');
-  assert.equal(reviewLede('mcp.add', ''), 'Adds for all projects. Nothing is written until you press Apply. A backup is kept, so you can undo.');
-  assert.equal(reviewLede('mcp.add', 'p1'), 'Nothing is written until you press Apply. A backup is kept, so you can undo.');
-  assert.equal(reviewLede('plugin.disable', ''), 'Nothing is written until you press Apply. A backup is kept, so you can undo.');
+  assert.equal(reviewLede({ action: 'mcp.add' }, ''), 'Adds for all projects. Nothing is written until you press Apply. A backup is kept.');
+  assert.equal(reviewLede({ action: 'mcp.add' }, 'p1'), 'Nothing is written until you press Apply. A backup is kept.');
+  assert.equal(reviewLede({ action: 'plugin.disable' }, ''), 'Nothing is written until you press Apply. A backup is kept.');
   // Only an add names a scope; a removal or a switch says its place another way.
   assert.equal(addScope('plugin.disable', ''), null);
   assert.equal(addScope('plugin.skills', ''), ' for all projects');
@@ -194,19 +194,19 @@ test('an add names its scope in the title and, with All projects, in the lede', 
   assert.deepEqual(changeWords(market), { title: 'Add the acme marketplace to Codex for all projects', done: 'Added the marketplace acme to Codex for all projects' });
   const setup = { action: 'setup_server.register', steps: [{ client: 'cursor', name: 'kitden' }] };
   assert.deepEqual(changeWords(setup), { title: 'Add “show my setup” to Cursor for all projects', done: 'Added show my setup to Cursor for all projects' });
-  assert.equal(reviewLede('marketplace.add', ''), 'Adds for all projects. Nothing is written until you press Apply. A backup is kept, so you can undo.');
-  assert.equal(reviewLede('setup_server.register', ''), 'Adds for all projects. Nothing is written until you press Apply. A backup is kept, so you can undo.');
+  assert.equal(reviewLede({ action: 'marketplace.add' }, ''), 'Adds for all projects. Nothing is written until you press Apply. A backup is kept.');
+  assert.equal(reviewLede({ action: 'setup_server.register' }, ''), 'Adds for all projects. Nothing is written until you press Apply. A backup is kept.');
   // Connecting a gateway and putting a server back write each client's own entry: for all
   // projects. The page and the server agree on the adds (test_api_changes.py).
   const connect = { action: 'gateway.connect', steps: [{ client: 'codex', name: 'gateway' }] };
   assert.equal(changeWords(connect, { params: { gateway: 'g1', name: 'gateway' } }).title, 'Connect the gateway to Codex for all projects');
-  assert.equal(reviewLede('gateway.put_back', ''), 'Adds for all projects. Nothing is written until you press Apply. A backup is kept, so you can undo.');
+  assert.equal(reviewLede({ action: 'gateway.put_back' }, ''), 'Adds for all projects. Nothing is written until you press Apply. A backup is kept.');
   // Add missing names its project in the title; an update changes an entry where it is.
   const align = { action: 'project.align', steps: [{ client: 'codex', name: 'tidy' }], align: { candidates: [] } };
   assert.ok(changeWords(align, { params: { project: '/w/site' } }).title.endsWith(' is missing'));
   assert.equal(addScope('project.align', '/w/site'), null);
   assert.equal(addScope('setup_server.update', ''), null);
-  assert.equal(reviewLede('setup_server.update', ''), 'Nothing is written until you press Apply. A backup is kept, so you can undo.');
+  assert.equal(reviewLede({ action: 'setup_server.update' }, ''), 'Nothing is written until you press Apply. A backup is kept.');
 });
 
 test('an add into a known project on another disk names that project', () => {

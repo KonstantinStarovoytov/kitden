@@ -53,8 +53,6 @@ CURSOR_REMOVE = {
     "note": f"{LOADS_PLUGINS}, so it loses this one too.",
 }
 CURSOR_KEEPS = LOADS_PLUGINS + ", so it loses this copy and keeps {}."
-# Uninstall keeps the data folder (--keep-data) but not the plugin's saved options.
-REMOVE_NOTE = "Undo installs it again; its saved options are not brought back."
 CURSOR_SWITCHES = "Cursor's own switches for these tools do not carry over."
 TO_KEYCHAIN = "The token goes to your Keychain; the settings file keeps a reference."
 MOVE_SECRETS = "The secrets of {server} go to your Keychain; the settings file keeps references."
@@ -717,8 +715,6 @@ def after_words(
         ):
             state, word = "on", "Loads once"
         out.append({"client": step.client, "state": state, "word": word})
-        if change.action == "plugin.remove" and step.client == "claude_code":
-            out[-1]["note"] = REMOVE_NOTE
     to_claude = any(s.client == "claude_code" for s in change.steps)
     # Cursor imports only Claude Code's user plugins; with a copy of its own it still loads one.
     user_install = any(s.client == "claude_code" and s.scope is Scope.USER for s in change.steps)

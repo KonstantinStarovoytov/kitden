@@ -10,6 +10,7 @@ from kitden.views.words import (
     ROUTE_WORDS,
     STALE,
     STATE_WORDS,
+    UNCHANGED,
 )
 
 STATIC = Path(__file__).parents[2] / "src/kitden/web/static"
@@ -875,8 +876,21 @@ def test_an_add_review_names_its_scope():
     code = panel()
     # With All projects picked the lede says it; in a project the note callout says it.
     assert '"Adds for all projects. "' in code
-    assert "reviewLede(change.action, state.project)" in code
+    assert "reviewLede(change, state.project)" in code
     assert '" for all projects"' in code
+
+
+def test_the_review_leads_with_the_outcome_and_keeps_undo_honest():
+    review = script("review.js")
+    assert "Other projects are unchanged." in review and "A backup is kept." in review
+    # One words table: the page's sentence is the twin of views/words.py's.
+    assert f'const UNCHANGED = "{UNCHANGED} ";' in review
+    assert "so you can undo" not in panel()
+    # The applied change keeps the target, so the toast says the same place as the title.
+    assert "after.target = change.target" in review
+    # The Undo limit comes from the server (views/words.py REMOVE_NOTE), said once.
+    assert "saved options" not in panel()
+    assert "change.undo_note" in review
 
 
 def test_a_project_no_longer_on_the_list_is_said_not_swapped():

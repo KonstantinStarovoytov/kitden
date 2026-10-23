@@ -121,6 +121,7 @@ from kitden.views.inventory import (
 from kitden.views.library import KINDS, SHOWS, library
 from kitden.views.load_map import load_map, map_dict
 from kitden.views.overview import overview
+from kitden.views.review import change_target, mark_reach, undo_note
 from kitden.views.setup_server import is_old_entry, setup_server_state
 from kitden.views.skills import project_skills, skill_catalog, skill_keepers, skill_readers
 from kitden.views.words import CHANGE_UNREAD, KEPT_UNREAD, NO_ADD_UNREAD, ONLY_IN_PROJECT
@@ -187,10 +188,10 @@ def _step_path(step) -> str | None:
 
 
 def _readers(step) -> list[str] | None:
-    """The clients that read a copied or removed skill folder."""
+    """The clients that read a copied or removed skill folder, or that a plugin step reaches."""
     if step.copy:
         return step.copy.readers
-    return step.removal.readers if step.removal else None
+    return step.removal.readers if step.removal else step.reaches
 
 
 def _step_diff(step) -> str:
@@ -1148,10 +1149,19 @@ def create_app(
         plugins = (PLUGIN_INSTALL, PLUGIN_REMOVE, PROJECT_ALIGN)
         cursor = _found_cursor() if action in plugins else None
         imports = bool(cursor and cursor.imports_claude_plugins())
+        switched = items[0] if action in (PLUGIN_REMOVE, PLUGIN_ENABLE, PLUGIN_DISABLE) else None
+        mark_reach(change, state.inventory, switched, imports)
         after = after_words(
             change, state.inventory, cursor_imports=imports, skills=copied, home=home
         )
-        answer = {**change_dict(change), "after": after}
+        # The review's first sentence: where the steps go, and what Undo cannot bring back.
+        known = [p.path for p in state.inventory.projects]
+        answer = {
+            **change_dict(change),
+            "after": after,
+            "target": change_target(change, known),
+            "undo_note": undo_note(change),
+        }
         if left_out is not None:
             answer["left_out"] = left_out
         if align is not None:

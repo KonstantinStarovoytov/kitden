@@ -32,19 +32,39 @@ const REMOVES = ["mcp.remove_direct", "plugin.remove", "skill.remove"];
 // ADD_ACTIONS has two more: Add missing names its project in its title already, and
 // setup_server.update changes an entry where it is.
 export const ADDS = ["mcp.add", "skill.install", "plugin.install", "plugin.skills", "marketplace.add", "setup_server.register", "gateway.connect", "gateway.put_back"];
-const LEDE = "Nothing is written until you press Apply. A backup is kept, so you can undo.";
+// Actions whose title names its place already, or has none: the scope words are not added.
+export const PLACE_IN_TITLE = ["gateway.rule", "gateway.rules", "gateway.strict", "project.align", "setup_server.update", "gateway.remove", "gateway.keychain"];
+// No promise of Undo for every change: the server names the known limit (`undo_note`).
+const LEDE = "Nothing is written until you press Apply. A backup is kept.";
+// The twin of views/words.py UNCHANGED; said only when the server guarantees it.
+const UNCHANGED = "Other projects are unchanged. ";
 
 // Where an add goes, as its title ends: " in website" or " for all projects"; null for an
-// action that is not an add.
+// action that is not an add. For a change from before the server named its target.
 export function addScope(action, into) {
   if (!ADDS.includes(action)) return null;
   return into ? ` in ${projectLabel(into)}` : " for all projects";
 }
 
-// The review's lede. With All projects picked an add says it is for all projects; in a project
-// the note above the result says where it goes.
-export function reviewLede(action, picked) {
-  return `${ADDS.includes(action) && !picked ? "Adds for all projects. " : ""}${LEDE}`;
+// Where the steps go (`target`, from the server), as the title ends: " in website" (`folder`,
+// the project's folder name), " for all projects", or "" when they go to several places.
+export function targetWords(target, folder) {
+  if (!target) return "";
+  if (target.scope === "project") return ` in ${folder}`;
+  return target.scope === "all" ? " for all projects" : "";
+}
+
+// The review's lede. With All projects picked an add says it is for all projects (in a project
+// the note above the result says where it goes); a change in one project says other projects
+// are unchanged, only when the server guarantees it. Then the backup, and what Undo cannot bring
+// back, when the server knows.
+export function reviewLede(change, picked) {
+  const target = change.target || null;
+  const everywhere = !target || target.scope === "all";
+  let first = "";
+  if (ADDS.includes(change.action) && !picked && everywhere) first = "Adds for all projects. ";
+  else if (target && target.others_unchanged) first = UNCHANGED;
+  return `${first}${LEDE}${change.undo_note ? ` ${change.undo_note}` : ""}`;
 }
 
 // The review title names the exact entry; the toast uses the short name ("superpowers").
@@ -126,8 +146,11 @@ export function changeWords(change, previewBody) {
     title = `Add what ${folder} is missing`;
     what = `Added ${plural(chosen.length, "item", "items")} for ${folder}`;
   }
-  // An add says where it goes: into one project, or for all projects.
-  const scope = addScope(change.action, previewBody && previewBody.params && previewBody.params.project);
+  // The title says where the steps go: into one project, or for all projects. A title that
+  // names its place keeps it once; a change from before the server said so names an add's.
+  const target = change.target && !PLACE_IN_TITLE.includes(change.action) ? change.target : null;
+  const place = target && target.project ? target.project.split("/").filter(Boolean).pop() : "";
+  const scope = target ? targetWords(target, place) : addScope(change.action, previewBody && previewBody.params && previewBody.params.project);
   if (scope) {
     title = `${title}${scope}`;
     what = `${what}${scope}`;
@@ -341,7 +364,7 @@ function showReview(change, previewBody, note, back = null) {
   apply.append(label);
   apply.addEventListener("click", () => applyChange(change, { apply, cancel, label, body }).catch(brokeAfterAnswer));
   footer.append(cancel, apply);
-  openPanel([header("Review change", words.title, reviewLede(change.action, state.project), null), body, footer]);
+  openPanel([header("Review change", words.title, reviewLede(change, state.project), null), body, footer]);
 }
 
 // Something broke after the server answered (a render, the toast). The answer stands, so
@@ -454,6 +477,8 @@ async function applyChange(change, { apply, cancel, label, body }) {
   }
   const { after, failure } = outcome;
   if (after && change.align) after.align = change.align;
+  // The toast says the same place as the title.
+  if (after) after.target = change.target;
   if (after && panelState.current) panelState.current.change = after;
 
   if (!after || after.state !== "verified") {

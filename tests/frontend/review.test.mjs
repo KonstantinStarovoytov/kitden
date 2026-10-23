@@ -1,0 +1,59 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+
+// review.js needs only this from a browser to load; the tests call its pure parts.
+globalThis.matchMedia = () => ({ matches: false });
+// Node before 21 has no navigator; review.js must load there too.
+delete globalThis.navigator;
+const { PLACE_IN_TITLE, changeWords, reviewLede, targetWords } = await import('../../src/kitden/web/static/js/review.js');
+
+const target = (scope, project = null, others = false) => ({ scope, project, others_unchanged: others });
+const remove = { action: 'mcp.remove_direct', steps: [{ client: 'codex', name: 'neon' }] };
+const add = { action: 'skill.install', steps: [{ client: 'codex', name: 'tidy', reaches: ['codex'] }] };
+const NOTE = 'Undo installs it again; its saved options are not brought back.';
+
+test('the title names the scope the steps target', () => {
+  assert.deepEqual(changeWords({ ...remove, target: target('project', '/Users/me/work/website', true) }), { title: 'Remove neon from Codex in website', done: 'Removed neon from Codex in website' });
+  assert.equal(changeWords({ ...remove, target: target('all') }).title, 'Remove neon from Codex for all projects');
+  assert.equal(changeWords(remove).title, 'Remove neon from Codex'); // no target (an old change): today's words
+  // The steps decide over the request: a mix says no scope, even for an add.
+  assert.equal(changeWords({ ...add, target: target('mixed') }, { params: { skill: 'x' } }).title, 'Add tidy to Codex');
+  assert.equal(changeWords(add, { params: { skill: 'x' } }).title, 'Add tidy to Codex for all projects'); // no target: Part 2's addScope
+  // A title that names its place keeps it once.
+  const rule = { action: 'gateway.rule', steps: [{ client: 'kitden', name: 'slow' }], target: target('all') };
+  assert.equal(changeWords(rule, { params: { server: 'echo', tool: 'slow', state: 'off', project: null } }).title, 'Turn off slow of echo in all projects');
+});
+
+test('a title that names its place, or has none, gets no scope words', () => {
+  for (const action of ['gateway.rule', 'gateway.rules', 'gateway.strict', 'project.align', 'setup_server.update', 'gateway.remove', 'gateway.keychain']) {
+    assert.ok(PLACE_IN_TITLE.includes(action), action);
+  }
+  const update = { action: 'setup_server.update', steps: [{ client: 'claude_code', name: 'kitden' }], target: target('all') };
+  assert.equal(changeWords(update).title, 'Update “show my setup” to Kitden in Claude Code');
+  const keychain = { action: 'gateway.keychain', steps: [{ client: 'kitden', name: 'files' }], target: target('all') };
+  assert.equal(changeWords(keychain, { params: { server: 'files' } }).title, 'Move the secrets of files to the Keychain');
+  const gone = { action: 'gateway.remove', steps: [{ client: 'kitden', name: 'files' }], target: target('mixed') };
+  assert.equal(changeWords(gone, { params: { server: 'files' } }).done, 'Removed files from the Kitden gateway');
+});
+
+test('the scope words are the folder, all projects, or none', () => {
+  assert.equal(targetWords(target('project', '/Users/me/work/website'), 'website'), ' in website');
+  assert.equal(targetWords(target('all'), ''), ' for all projects');
+  assert.equal(targetWords(target('mixed'), ''), '');
+  assert.equal(targetWords(null, ''), '');
+});
+
+test('the title names every client the change reaches, as Details does', () => {
+  // Cursor loads Claude Code's plugins: the server says the step reaches it too.
+  const plugin = { action: 'plugin.remove', steps: [{ client: 'claude_code', name: 'linter@official', reaches: ['claude_code', 'cursor'] }], target: target('all') };
+  assert.deepEqual(changeWords(plugin), { title: 'Remove linter from Claude Code and Cursor for all projects', done: 'Removed linter from Claude Code and Cursor for all projects' });
+});
+
+test('the lede promises only the Undo it can keep', () => {
+  assert.equal(reviewLede({ ...remove, target: target('project', '/a/web', true), undo_note: null }, 'p1'), 'Other projects are unchanged. Nothing is written until you press Apply. A backup is kept.');
+  assert.equal(reviewLede({ action: 'plugin.remove', target: target('all'), undo_note: NOTE }, ''), `Nothing is written until you press Apply. A backup is kept. ${NOTE}`);
+  assert.equal(reviewLede({ ...add, target: target('all'), undo_note: null }, ''), 'Adds for all projects. Nothing is written until you press Apply. A backup is kept.');
+  assert.equal(reviewLede(remove, ''), 'Nothing is written until you press Apply. A backup is kept.');
+  // In one project, but another known project is inside it or around it: no promise.
+  assert.equal(reviewLede({ ...remove, target: target('project', '/a/web', false) }, 'p1'), 'Nothing is written until you press Apply. A backup is kept.');
+});

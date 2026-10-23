@@ -298,13 +298,9 @@ def test_removing_one_of_two_claude_code_copies_says_cursor_keeps_the_other():
         imported("x@b"),
     )
     change = Change(action="plugin.remove", steps=[step("claude_code", "x@a")])
+    # The Undo limit is the review's lede (views/review.py), not a chip's note.
     assert after_words(change, inv, cursor_imports=True) == [
-        {
-            "client": "claude_code",
-            "state": "on",
-            "word": "Loads once",
-            "note": "Undo installs it again; its saved options are not brought back.",
-        },
+        {"client": "claude_code", "state": "on", "word": "Loads once"},
         {
             "client": "cursor",
             "state": "on",

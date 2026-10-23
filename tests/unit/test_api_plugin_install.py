@@ -208,12 +208,15 @@ def test_adding_to_claude_code_says_cursor_loads_it_too(cursor_client):
         "word": "Available",
         "note": "Cursor loads Claude Code's plugins, so it gets this one too.",
     }
+    # The title names Cursor too, as Details' Affects does before the click.
+    assert [s["reaches"] for s in change["steps"]] == [["claude_code", "cursor"]]
     assert _offer(cursor_client)["inherits"] == {"plugin": True, "skill": True}
 
 
 def test_with_cursor_import_off_the_review_does_not_name_cursor(strict_cursor_client):
     change = _preview(strict_cursor_client, LINTER, ["claude_code"])
     assert [e["client"] for e in change.json()["after"]] == ["claude_code"]
+    assert [s["reaches"] for s in change.json()["steps"]] == [None]
     assert _offer(strict_cursor_client)["inherits"] == {"plugin": False, "skill": True}
 
 

@@ -64,6 +64,13 @@ ORIGIN_WORDS: dict[str | None, str] = {
 READS_FOLDER = "{reader} reads {owner}'s folder"
 LOADS_PLUGINS = "Cursor loads Claude Code's plugins"
 
+# What Undo of a removed Claude Code plugin cannot bring back: uninstall keeps the data folder
+# (--keep-data) but not the plugin's saved options. The review's lede says it once.
+REMOVE_NOTE = "Undo installs it again; its saved options are not brought back."
+# The review's lede, when every step is in one project and no other known project lies inside
+# or around it (views/review.py `others_unchanged`). The twin of review.js UNCHANGED.
+UNCHANGED = "Other projects are unchanged."
+
 # How a client gets an item: the hover text and Details say it, never the cell's word slot.
 ROUTE_WORDS: dict[str, str] = {
     "desktop": "from the Desktop app",
