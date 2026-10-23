@@ -38,7 +38,7 @@ const requests = [];
 globalThis.fetch = (url) => new Promise((resolve) => {
   requests.push({ url, answer: (body) => resolve({ ok: true, status: 200, json: async () => body }) });
 });
-const { addChoices, addName, hasAdds, scopeLine, cellHint, cellNode, emptyState, hiddenClients, hiddenLine, hideButton, loadLibrary, loadLibraryFor, metaText, moreLine, nameCell, noClients, noteFor, previewFor, setHidden, startAdd } = await import('../../src/kitden/web/static/js/library.js');
+const { addChoices, addName, hasAdds, scopeLine, cellHint, cellNode, emptyState, hiddenClients, hiddenLine, hideButton, loadLibrary, loadLibraryFor, metaText, moreLine, nameCell, noClients, noteFor, showSources, previewFor, setHidden, startAdd } = await import('../../src/kitden/web/static/js/library.js');
 const { data, freshness, hashFor, loadShared, parseHash, state } = await import('../../src/kitden/web/static/js/store.js');
 const later = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -194,6 +194,37 @@ test('no clients: the Library says what Kitden looks for, the folders and the de
   // On the Overview itself, no link to it.
   assert.deepEqual(words(noClients({ overview: false })), ['Kitden found no AI coding clients.', 'It looks for Claude Code, Codex and Cursor.', 'Details']);
   assert.equal(noClients().className, 'empty');
+});
+
+test('a source line shows with the top bar line, on its own tab, and fades in place when it goes', () => {
+  const LINE = "Codex plugins are still being read, so Codex's column may change.";
+  const progress = (done) => ({ ready: true, steps: [{ name: 'Codex plugins', done, later: true }] });
+  const saved = { view: state.view, kind: state.kind };
+  const box = element('div');
+  let drawnBox = null;
+  box.replaceWith = (node) => { drawnBox = node; };
+  drawn['#main .source-lines'] = box;
+  try {
+    Object.assign(state, { view: 'library', kind: 'plugin' });
+    // app.js hands the progress over once the top bar shows its line: the line comes then.
+    assert.equal(showSources(progress(false)), true);
+    assert.deepEqual(drawnBox.children.map((c) => [c.className, c.textContent]), [['note', LINE]]);
+    // The same lines: nothing is drawn again.
+    drawnBox = null;
+    assert.equal(showSources(progress(false)), false);
+    assert.equal(drawnBox, null);
+    // The source ends: the line fades and keeps its place until the page draws again.
+    assert.equal(showSources(progress(true)), true);
+    assert.equal(drawnBox, null);
+    assert.ok(box.classList.contains('gone'));
+    // Another tab has no line for it.
+    state.kind = 'mcp_server';
+    assert.equal(showSources(progress(false)), false);
+  } finally {
+    showSources(null);
+    Object.assign(state, saved);
+    delete drawn['#main .source-lines'];
+  }
 });
 
 test('an empty tab names its kind the way the tab does', () => {

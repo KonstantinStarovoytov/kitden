@@ -924,9 +924,11 @@ def test_no_clients_says_what_kitden_looks_for_and_offers_the_demo():
     # The folders and the command sit behind Details (AGENTS.md).
     assert '"What Kitden looks for"' in library and "lookFor(" in library
     assert '"kitden demo"' in library
-    assert "noClients({ overview: false })" in script("overview.js")
-    # A source still read: a quiet line on the tab it changes, drawn again in place.
-    assert "sourceLines(" in library and "sourceLines(" in script("app.js")
+    overview = script("overview.js")
+    assert "noClients({ overview: false })" in overview and '"No clients found"' in overview
+    # A source still read: a quiet line on the tab it changes, shown with the top bar's line
+    # and drawn again in place.
+    assert "sourceLines(" in library and "showSources(data.progress)" in script("app.js")
 
 
 def test_a_project_no_longer_on_the_list_is_said_not_swapped():

@@ -5,10 +5,10 @@ import { glide, rollTo, transition } from "./motion.js";
 import { renderAgents } from "./agents.js";
 import { renderChanges } from "./changes.js";
 import { renderGateway } from "./gateway.js";
-import { loadLibrary, loadLibraryFor, morphOnNextRender, raceSlow, redrawSourceLines, renderLibrary, settleRows, snapshotRows } from "./library.js";
+import { loadLibrary, loadLibraryFor, morphOnNextRender, raceSlow, renderLibrary, settleRows, showSources, snapshotRows } from "./library.js";
 import { renderOverview } from "./overview.js";
 import { closeForProject, closePanel, initPanel, isPanelOpen } from "./panel.js";
-import { ALL_PROJECTS, callout, demoTag, GONE_PROJECT, latestChanges, scanLine, sourceLines, versionsOpened } from "./parts.js";
+import { ALL_PROJECTS, callout, demoTag, GONE_PROJECT, latestChanges, scanLine, versionsOpened } from "./parts.js";
 import {
   arrival, busy, current, data, followHash, freshness, go, loadShared, OLD_VIEWS, onIdle, parseHash, projectGone, reload, setRenderer, setState, state,
 } from "./store.js";
@@ -165,11 +165,13 @@ const SCAN_LINE_END_MS = 400;
 let scanLineTimer = null;
 let scanning = null; // the last line, while the first scan still reads something
 
+// The Library's lines about sources still read show and change with this line (library.js).
 function drawScan() {
   const bar = $("#topbar");
   bar.style.setProperty("--scan-done", String(scanning.share));
   $("#scan-status").textContent = scanning.text;
   bar.classList.add("progress");
+  showSources(data.progress);
 }
 
 function showScan(view) {
@@ -177,12 +179,8 @@ function showScan(view) {
   // The Clients card may be drawn before the first progress came: it draws again to say
   // "Checking the version…".
   const opened = versionsOpened(data.progress, view);
-  // A source that ends or starts again changes the Library's lines above the table.
-  const lines = (progress) => sourceLines(progress, state.kind).join("\n");
-  const changed = state.view === "library" && lines(data.progress) !== lines(view);
   data.progress = view;
   if (opened) document.dispatchEvent(new CustomEvent("kitden:versions"));
-  if (changed) redrawSourceLines();
   scanning = scanLine(view);
   if (scanning) {
     if (bar.classList.contains("progress")) drawScan();
@@ -196,6 +194,7 @@ function showScan(view) {
   }
   clearTimeout(scanLineTimer);
   scanLineTimer = null;
+  showSources(view);
   if (!bar.classList.contains("progress")) return;
   bar.style.setProperty("--scan-done", "1");
   setTimeout(() => {

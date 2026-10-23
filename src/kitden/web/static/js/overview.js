@@ -19,12 +19,9 @@ export function renderOverview(main) {
     return;
   }
 
-  main.append(el("h1", null, model.headline));
-  const found = (data.clients || []).filter((c) => c.status === "found").length;
-  const projects = (data.projects || []).length;
-  main.append(el("p", "lede", model.attention.length
-    ? `Everything else looks fine: ${plural(found, "client", "clients")} found, ${plural(projects, "project", "projects")}.`
-    : `${plural(found, "client", "clients")} found, ${plural(projects, "project", "projects")}. Nothing needs your attention.`));
+  const { none, headline, lede } = overviewHead(model, data.clients, (data.projects || []).length);
+  main.append(el("h1", null, headline));
+  if (lede) main.append(el("p", "lede", lede));
   if (currentError("overview")) main.append(staleNote(data.readAt.overview));
 
   const grid = el("div", "overview");
@@ -33,7 +30,6 @@ export function renderOverview(main) {
   left.setAttribute("aria-label", "Needs attention");
   const blocks = [];
   // No client found: what Kitden looks for comes first, in place of the all-clear line.
-  const none = Array.isArray(data.clients) && !data.clients.some((c) => c.status === "found");
   if (none) {
     const box = noClients({ overview: false });
     left.append(box);
@@ -73,6 +69,18 @@ export function renderOverview(main) {
   grid.append(side);
   main.append(grid);
   entrance("overview", [...blocks, ...side.children]);
+}
+
+// The page's title and lede. With no client found (once the clients are read) the title says
+// so and there is no lede: "nothing needs your attention" would promise too much, and the
+// counts would say the title again. The box below says what Kitden looks for.
+export function overviewHead(model, clients, projects) {
+  const none = Array.isArray(clients) && !clients.some((c) => c.status === "found");
+  if (none) return { none, headline: "No clients found", lede: null };
+  const found = (clients || []).filter((c) => c.status === "found").length;
+  const counts = `${plural(found, "client", "clients")} found, ${plural(projects, "project", "projects")}`;
+  const lede = model.attention.length ? `Everything else looks fine: ${counts}.` : `${counts}. Nothing needs your attention.`;
+  return { none, headline: model.headline, lede };
 }
 
 // "No untested versions" only once every found client has a version; while one is still being

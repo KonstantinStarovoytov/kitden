@@ -84,3 +84,17 @@ test('a note row opens the item it names, not the first name of its note', () =>
   assert.equal(noteItemRow(second, rows).key, 'rb');
   assert.equal(noteItemRow(second, rows.slice(0, 1)), null);
 });
+
+const { overviewHead } = await import('../../src/kitden/web/static/js/overview.js');
+
+test('with no client found the Overview says so and promises nothing', () => {
+  const clear = { headline: 'All clear', attention: [] };
+  const none = [{ status: 'not_found' }, { status: 'not_found' }];
+  assert.deepEqual(overviewHead(clear, none, 0), { none: true, headline: 'No clients found', lede: null });
+  // Found clients: the server's headline and today's lede.
+  const found = [{ status: 'found' }, { status: 'not_found' }];
+  assert.deepEqual(overviewHead(clear, found, 2), { none: false, headline: 'All clear', lede: '1 client found, 2 projects. Nothing needs your attention.' });
+  assert.deepEqual(overviewHead({ headline: '1 thing needs attention', attention: [{}] }, found, 1), { none: false, headline: '1 thing needs attention', lede: 'Everything else looks fine: 1 client found, 1 project.' });
+  // Clients not read yet: not "no clients".
+  assert.equal(overviewHead(clear, undefined, 0).none, false);
+});

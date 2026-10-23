@@ -376,6 +376,9 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .btn.toggle[aria-pressed="true"] { background: var(--route-soft); border-color: color-mix(in srgb, var(--route) 40%, var(--wire)); color: var(--route); font-weight: 600; }
 /* One quiet line each above the table: a marketplace an add brings in first, a source still read, matches a choice hides. */
 .page > .note, .page > .source-lines > .note, .page > .more { margin: 0 0 8px; color: var(--ink-3); font-size: 12px; }
+/* A source line that goes fades and keeps its place until the page draws again. */
+.source-lines { transition: opacity var(--t-fast) ease, visibility 0s linear var(--t-fast); }
+.source-lines.gone { opacity: 0; visibility: hidden; }
 .more { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; }
 .more .btn { color: var(--route); padding: 0 4px; }
 .empty .more { justify-content: center; margin: 6px 0 0; }

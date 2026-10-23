@@ -572,19 +572,32 @@ function showLookFor() {
   openInfo("Clients", "What Kitden looks for", body, [], { mono: false });
 }
 
-// The first scan's sources still read that change this tab (parts.js), one quiet line each
-// above the table, after the files Kitden could not read.
+// The first scan's progress while the top bar shows its line (app.js), else null: a source
+// line shows with that line and after the same wait, so a quick start never blinks one here.
+let sources = null;
+
+// The sources still read that change this tab (parts.js), one quiet line each above the table,
+// after the files Kitden could not read.
 function sourceBox() {
   const box = el("div", "source-lines");
-  for (const line of sourceLines(data.progress, currentKind())) box.append(el("p", "note", line));
+  for (const line of sourceLines(sources, currentKind())) box.append(el("p", "note", line));
   return box;
 }
 
-// A source ended or started again (app.js showScan): only its lines are drawn again, so no row
-// slides and nothing else on the page changes.
-export function redrawSourceLines() {
+// The top bar's line shows, changes or goes (app.js showScan). When this tab's lines change,
+// only they are drawn again, so no row slides. A line that goes fades and keeps its place until
+// the page next draws (a rescan comes with every source that ends), so the table does not jump
+// for it. True when this tab's lines changed.
+export function showSources(progress) {
+  const kind = currentKind();
+  const before = sourceLines(sources, kind);
+  const after = sourceLines(progress, kind);
+  sources = progress;
+  if (state.view !== "library" || after.join("\n") === before.join("\n")) return false;
   const box = document.querySelector("#main .source-lines");
-  if (box) box.replaceWith(sourceBox());
+  if (box && after.length) box.replaceWith(sourceBox());
+  else if (box) box.classList.add("gone");
+  return true;
 }
 
 export function emptyState(asked, more) {
