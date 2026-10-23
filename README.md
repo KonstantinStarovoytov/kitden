@@ -61,14 +61,21 @@ cannot see it, such as your Claude account. "Needs review" means another client 
 the same name from another source. That row offers no "+ Add", because an add would copy only one
 side.
 
+A row opens its **Details**. They say why each client loads the item, for example "One folder,
+read by Codex and Cursor.", and which clients and projects its main action changes, before you
+press it. Paths, commands and an instruction file's first lines wait under Technical details.
+"Compare across clients" opens the same item in the Library, and "Manage tools" opens a server of
+the Kitden gateway on the Gateway page.
+
 The action sits in the client's cell. Where Kitden can add an item to that client, the cell says
 "+ Add". "+ Add skills" copies the skills of a plugin that work on their own into a client that
 cannot install the plugin itself. "+ Add the plugin" is for a skill that needs its plugin. On
 plugins and skills, a cell with nothing to do says why. You can also add a marketplace from a
 folder or a GitHub link.
 
-Details of a plugin or a skill offer "Remove from <client>…", with Undo; Undo installs a plugin
-again, but not its saved options. "+ Add" on an MCP server copies its entry to another client; a
+Details of a plugin or a skill offer a Remove, with Undo. It names every client it reaches:
+"Remove from Codex and Cursor…" for a skill in a folder both read. Undo installs a plugin again,
+but not its saved options. "+ Add" on an MCP server copies its entry to another client; a
 `${VAR}` reference stays a reference where that client can read one, and the review says when a
 secret gets a second copy. With a project picked, "+ Add" on a skill or a Claude Code plugin asks
 "Add to this project…" or "Add for all projects…"; a skill only this project has adds into this
@@ -144,10 +151,14 @@ A few servers stay direct for now, and the page says why:
 
 ### Check every change before it is written
 
-Every change opens a review first: the clients it reaches (Cursor too, when an added
-plugin or skill reaches it) and the exact file change, with secrets hidden. Apply keeps a backup,
-writes the change and checks it. Kitden writes only in your home folder and your known projects.
-**Changes** keeps the history, with Undo and what to restart for a change to take effect.
+Every change opens a review first. It starts with what will happen, where, and in which clients
+(Cursor too, when an added plugin or skill reaches it), then shows the exact file change, with
+secrets hidden. It says "Other projects are unchanged." only when that is sure, and it names
+what Undo cannot bring back, such as a plugin's saved options. Apply keeps a backup, writes the
+change and checks it. If the settings change while the review is open, it says "Settings changed
+since this preview." and offers Preview again. Cancel goes back to the Details it came from.
+Kitden writes only in your home folder and your known projects. **Changes** keeps the history,
+with Undo and what to restart for a change to take effect.
 
 <p align="center">
   <picture>

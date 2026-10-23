@@ -42,6 +42,9 @@ test('why says where it loads from and the rule that decides', () => {
   assert.deepEqual(whyLines([def({ client: 'claude_code', scope: 'project', project: '/a/site', loads: false }), def({ client: 'claude_code', scope: 'project', project: '/a/api', loads: false })], null),
     ['It is in 2 projects; it loads only there.']);
   assert.deepEqual(whyLines([def({ client: 'codex', kind: 'instructions' })], null), []);
+  // It loads here and is also in another project.
+  assert.deepEqual(whyLines([def({ client: 'claude_code' }), def({ client: 'claude_code', scope: 'project', project: '/a/api', loads: false })], null),
+    ['Claude Code loads it from all projects.', 'It is also in 1 project.']);
 });
 
 test('why names a folder that several clients read, in words', () => {
@@ -70,6 +73,9 @@ test('two definitions that come the same way are told apart, or said plainly', (
   const mine = { scope: 'project', project: site };
   assert.deepEqual(whyLines([held('claude_code', mine), held('claude_code', { loads: false, overridden: true }), held('codex', mine), held('codex', { loads: false, merged: true })], site),
     ["Claude Code and Codex load it through the Kitden gateway.", "Claude Code and Codex use this project's switch for files in the Kitden gateway."]);
+  // One client, one verb.
+  assert.deepEqual(whyLines([held('claude_code', mine), held('claude_code', { loads: false, overridden: true })], site),
+    ['Claude Code loads it through the Kitden gateway.', "Claude Code uses this project's switch for files in the Kitden gateway."]);
   // Both through Claude Code's folder: the scope tells them apart.
   const imported = (fields) => def({ client: 'cursor', kind: 'plugin', owner_client: 'claude_code', ...fields });
   assert.deepEqual(whyLines([imported(mine), imported({ loads: false, overridden: true })], site),
@@ -105,6 +111,7 @@ test('a section title names only a known client as the owner of a folder', () =>
   assert.equal(fileScopeWords({ scope: 'user', client: 'cursor', owner_client: 'shared' }), 'Global settings');
   assert.equal(fileScopeWords({ scope: 'user', client: 'cursor', owner_client: 'claude_code' }), 'Global settings · via Claude Code');
   assert.equal(fileScopeWords({ scope: 'local', client: 'claude_code', owner_client: 'claude_code', project: site }), 'Only on this Mac · website');
+  assert.equal(fileScopeWords({ scope: 'project', client: 'claude_code', owner_client: 'claude_code', project: site }), 'Project website');
 });
 
 test('a copy that is off says so only where the client loads nothing else', () => {

@@ -923,6 +923,7 @@ def test_no_clients_says_what_kitden_looks_for_and_offers_the_demo():
     assert "It looks for Claude Code, Codex and Cursor." in library
     # The folders and the command sit behind Details (AGENTS.md).
     assert '"What Kitden looks for"' in library and "lookFor(" in library
+    assert "It finds a client by that folder or by its command." in library
     assert '"kitden demo"' in library
     overview = script("overview.js")
     assert "noClients({ overview: false })" in overview and '"No clients found"' in overview

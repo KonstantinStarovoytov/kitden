@@ -131,6 +131,16 @@ project, with a server that has a token:
 Not run yet for steps 17 to 22: Part 5 was built and tested with a fake `security` only, and
 step 22 with a fake `claude`.
 
+Before a release that touches Details or reviews, also check this once by hand, on the same test
+project, with a Claude Code plugin that is on:
+
+23. Open a review (Remove for a Claude Code plugin) and do not press Apply. Then turn that plugin
+    off in Claude Code itself. The page rescans on its own; press Rescan if it does not. The
+    review says "Settings changed since this preview." and offers "Preview again"; Apply is gone.
+    Press "Preview again": a new review opens for the plugin as it is now.
+
+Not run yet for step 23: Part 3 of visual management was tested with sandbox files only.
+
 ## Release
 
 1. `uv version X.Y.Z`, and the same number in `src/kitden/__init__.py`,

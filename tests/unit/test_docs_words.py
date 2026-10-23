@@ -67,6 +67,41 @@ def test_docs_name_the_demo_and_the_write_boundary():
     assert "kitden demo" in development and "build_demo_home" in development
 
 
+def test_readme_says_what_details_and_a_review_start_with():
+    readme = " ".join((ROOT / "README.md").read_text().split())
+    words = (
+        "Technical details",
+        "Compare across clients",
+        "Manage tools",
+        "One folder, read by Codex and Cursor.",
+        "Remove from Codex and Cursor…",
+        "Other projects are unchanged.",
+        "Settings changed since this preview.",
+        "Preview again",
+    )
+    # The page says each of them too, so the README cannot drift from it.
+    page = " ".join(
+        [(ROOT / "src/kitden/views/words.py").read_text()]
+        + [p.read_text() for p in (ROOT / "src/kitden/web/static/js").glob("*.js")]
+    )
+    for text in words:
+        assert text in readme, text
+    for text in ("Technical details", "Compare across clients", "Manage tools"):
+        assert f'"{text}"' in page, text
+    for text in ("Other projects are unchanged.", "Settings changed since this preview."):
+        assert text in page, text
+    assert '"Preview again"' in page and "`One folder, read by ${joinWords(" in page
+
+
+def test_the_check_before_a_release_has_the_changed_settings_step():
+    development = " ".join((ROOT / "docs/development.md").read_text().split())
+    assert "23. Open a review (Remove for a Claude Code plugin)" in development
+    assert 'The review says "Settings changed since this preview." and offers "Preview again"' in (
+        development
+    )
+    assert "Not run yet for step 23:" in development
+
+
 def test_walkthrough_script_one_has_the_seven_tasks_and_a_results_table():
     text = (ROOT / "docs/research/walkthrough-script-1.md").read_text()
     assert "kitden demo --size medium" in text
