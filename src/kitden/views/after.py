@@ -95,14 +95,25 @@ def _skill_words(change: Change, inventory, skills: list[dict]) -> list[dict]:
 
     `skills` are the skill list's rows of the copied skills. A client they say loads one from a
     plugin has one copy already: the scan has no items for the skills inside Cursor's plugins.
+    A copy into a project also meets the copies the clients load from that project.
     """
     names = list(dict.fromkeys(step.name for step in change.steps))
+    # <project>/<client folder>/skills/<name>: the project of each copy into one.
+    projects = {
+        os.path.realpath(Path(step.copy.target).parents[2])
+        for step in change.steps
+        if step.copy and step.scope is Scope.PROJECT
+    }
     loads: dict[str, dict[str, int]] = {}  # client -> skill -> how many copies it loads
     for item in inventory.items:
+        here = item.scope is Scope.PROJECT and item.project is not None
         loads_now = (
             item.kind is ItemKind.SKILL
-            and item.scope in (Scope.USER, Scope.PLUGIN)
             and item.name in names
+            and (
+                item.scope in (Scope.USER, Scope.PLUGIN)
+                or (here and os.path.realpath(item.project) in projects)
+            )
         )
         if loads_now:
             loads.setdefault(item.client, {})[item.name] = 1

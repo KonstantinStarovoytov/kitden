@@ -212,6 +212,7 @@ def _row(
     category: str | None,
     installed: dict[str, str],
     found: set[str],
+    project: str | None = None,
 ) -> dict:
     can = info["self_contained"]
     return {
@@ -224,6 +225,7 @@ def _row(
         "marketplace": marketplace,
         "category": category,
         "path": str(folder),
+        "project": project,
         "files": info["files"],
         "self_contained": can,
         "needs": info["needs"],
@@ -338,6 +340,45 @@ def skill_catalog(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
             row["installed"].setdefault(client, "Via plugin")
         row["routes"] = {c: r for c, r in row["routes"].items() if c not in row["installed"]}
     return sorted(rows.values(), key=lambda r: (r["name"].lower(), r["from"].lower()))
+
+
+def project_skills(inventory, adapters: dict[str, ClientAdapter], project: str) -> list[dict]:
+    """The skills clients load from `project` itself, one row per name, like skill_catalog's.
+
+    The id is "project/<name>": a folder name has no "/", so it never meets a catalog id. The
+    source is the first such folder; a copy goes into the same project.
+    """
+    found = {c.id for c in inventory.clients if c.status is ClientStatus.FOUND and c.id in CLIENTS}
+    folders: dict[str, Path] = {}
+    installed: dict[str, dict[str, str]] = {}
+    for item in inventory.items:
+        here = (
+            item.kind is ItemKind.SKILL
+            and item.scope is Scope.PROJECT
+            and item.project == project
+            and item.client in CLIENTS
+            and item.source.path is not None
+        )
+        if here:
+            folders.setdefault(item.name, Path(item.source.path).parent)
+            installed.setdefault(item.name, {})[item.client] = "Installed"
+    source = Path(project).name
+    rows = [
+        _row(
+            f"project/{name}",
+            read_skill(folder),
+            folder,
+            source,
+            None,
+            None,
+            None,
+            installed[name],
+            found,
+            project,
+        )
+        for name, folder in folders.items()
+    ]
+    return sorted(rows, key=lambda r: r["name"].lower())
 
 
 def skill_readers(inventory, item) -> list[str]:

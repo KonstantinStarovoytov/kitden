@@ -87,9 +87,12 @@ export function addChoices(add, folder) {
   ];
 }
 
-// An add: in a project, one that can go into the project asks where first; any other opens the
-// review at once.
+// An add: in a project, one that can go into the project asks where first; a project's own
+// skill goes into the project with no choice; any other opens the review at once.
 export function startAdd(add, client, row) {
+  if (add.project_only) {
+    return review(previewFor(add, client, "project"), { note: noteFor(add, state.project, "project") });
+  }
   if (!state.project || !add.project_place) {
     return review(previewFor(add, client), { note: noteFor(add, state.project) });
   }
@@ -105,11 +108,13 @@ export function startAdd(add, client, row) {
 }
 
 // What a screen reader hears for a cell's button: its words first, then what, from where (when
-// names repeat) and to which client. In a project an add that asks where ends with "…".
+// names repeat) and to which client. In a project an add that asks where ends with "…"; a
+// project's own skill names the project.
 export function addName(row, client, add, project) {
   const name = row.same_name && row.source ? `${row.name} (${row.source})` : row.name;
   const what = { "+ Add skills": `Add skills from ${name}`, "+ Add the plugin": `Add the plugin with ${name}` }[add.label] || `Add ${name}`;
   const to = `${what} to ${CLIENT_NAMES[client] || client}`;
+  if (add.project_only) return `${to} in ${projectLabel(project)}`;
   if (project && add.project_place) return `${to}…`;
   return `${to}${project ? " for all projects" : ""}`;
 }
@@ -117,9 +122,11 @@ export function addName(row, client, add, project) {
 // A quiet line above the table: in a project, where an Add goes. Null on a tab with no adds.
 export function scopeLine(project, rows, kind = null) {
   if (!project || rows.length === 0 || !hasAdds(kind)) return null;
-  const asks = rows.some((r) => Object.values(r.cells || {}).some((c) => c.add && c.add.project_place));
-  return asks ? "An Add asks: this project, or all projects. Adds without that choice go to all projects."
+  const adds = rows.flatMap((r) => Object.values(r.cells || {}).map((c) => c.add).filter(Boolean));
+  const line = adds.some((add) => add.project_place)
+    ? "An Add asks: this project, or all projects. Adds without that choice go to all projects."
     : "Adding puts an item in all projects.";
+  return adds.some((add) => add.project_only) ? `${line} This project's own skills add into this project.` : line;
 }
 
 // One cell: a button for the one action, a state, or a dash that says why not.

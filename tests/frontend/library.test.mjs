@@ -38,7 +38,7 @@ const requests = [];
 globalThis.fetch = (url) => new Promise((resolve) => {
   requests.push({ url, answer: (body) => resolve({ ok: true, status: 200, json: async () => body }) });
 });
-const { addChoices, addName, hasAdds, scopeLine, cellHint, cellNode, emptyState, hiddenClients, hiddenLine, hideButton, loadLibrary, loadLibraryFor, metaText, moreLine, nameCell, noteFor, previewFor, setHidden } = await import('../../src/kitden/web/static/js/library.js');
+const { addChoices, addName, hasAdds, scopeLine, cellHint, cellNode, emptyState, hiddenClients, hiddenLine, hideButton, loadLibrary, loadLibraryFor, metaText, moreLine, nameCell, noteFor, previewFor, setHidden, startAdd } = await import('../../src/kitden/web/static/js/library.js');
 const { data, freshness, hashFor, parseHash, state } = await import('../../src/kitden/web/static/js/store.js');
 const later = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -416,6 +416,36 @@ test('the scope line and the button name follow the project place', () => {
   assert.equal(addName(row, 'codex', add({ project_place: true }), null), 'Add tidy to Codex');
   assert.equal(scopeLine('p1', [{ cells: { codex: cell({ add: add({ project_place: true }) }) } }]), 'An Add asks: this project, or all projects. Adds without that choice go to all projects.');
   assert.equal(scopeLine('p1', [{ cells: { codex: cell({ add: add({}) }) } }]), 'Adding puts an item in all projects.');
+});
+test("a project's own skill adds into the project, with no choice", () => {
+  state.project = 'p1';
+  data.projects = [{ id: 'p1', path: '/w/atlas' }];
+  const own = add({ action: 'skill.install', skill: 'project/api-style', project_only: true });
+  const style = { kind: 'skill', name: 'api-style' };
+  assert.deepEqual(previewFor(own, 'claude_code', 'project').params, { skill: 'project/api-style', project: 'p1' });
+  assert.equal(addName(style, 'claude_code', own, 'p1'), 'Add api-style to Claude Code in atlas');
+  assert.ok(scopeLine('p1', [{ cells: { claude_code: cell({ add: own }) } }]).endsWith(" This project's own skills add into this project."));
+  assert.ok(!scopeLine('p1', [{ cells: { claude_code: cell({ add: add({}) }) } }]).includes("own skills"));
+  state.project = '';
+  data.projects = null;
+});
+test("a project's own skill opens its review at once, into the project", () => {
+  const asked = globalThis.fetch;
+  const sent = [];
+  globalThis.fetch = (url, options) => { sent.push([url, JSON.parse(options.body)]); return new Promise(() => {}); };
+  try {
+    state.project = 'p1';
+    data.projects = [{ id: 'p1', path: '/w/atlas' }];
+    const own = add({ action: 'skill.install', skill: 'project/api-style', project_only: true });
+    assert.equal(startAdd(own, 'claude_code', { kind: 'skill', name: 'api-style' }) instanceof Promise, true);
+    assert.deepEqual(sent, [['/api/changes/preview', {
+      action: 'skill.install', targets: [{ client: 'claude_code' }], params: { skill: 'project/api-style', project: 'p1' },
+    }]]);
+  } finally {
+    globalThis.fetch = asked;
+    state.project = '';
+    data.projects = null;
+  }
 });
 test('the scope line needs a project and rows', () => {
   assert.equal(scopeLine('p1', [{}]), 'Adding puts an item in all projects.');

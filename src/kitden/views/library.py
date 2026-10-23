@@ -24,14 +24,16 @@ from kitden.views.catalog import catalog, search
 from kitden.views.gateway_view import group_of
 from kitden.views.load_map import COLUMNS, MARKS, NAMES, Row, load_map
 from kitden.views.match import Copies, catalog_keys, plugin_copies, plugin_keys, source_keys
-from kitden.views.skills import skill_catalog
+from kitden.views.skills import project_skills, skill_catalog
 from kitden.views.words import (
     CLIENT_UNREAD,
     NO_ADD_REVIEW,
     NO_ADD_UNREAD,
+    NO_PROJECT_SERVER,
     NOT_SAME,
     NOT_SHOWN,
     ORIGIN_WORDS,
+    PROJECT_TRUST,
     ROUTE_WORDS,
     STATE_WORDS,
 )
@@ -90,9 +92,11 @@ def _add(
     item: str | None = None,
     project_place: bool = False,
     project_hint: str | None = None,
+    project_only: bool = False,
 ) -> dict:
     """One add. `project_place`: with a project picked it can go into that project only.
-    `project_hint`: where it goes instead, said in a project view."""
+    `project_hint`: where it goes instead, said in a project view. `project_only`: it goes into
+    the picked project, with no choice (a skill only that project has)."""
     return {
         "action": action,
         "label": label,
@@ -103,6 +107,7 @@ def _add(
         "warn": warn,
         "project_place": project_place,
         "project_hint": project_hint,
+        "project_only": project_only,
     }
 
 
@@ -251,8 +256,9 @@ def _server_add(found: list[str], items: list[Item]) -> Add:
 
 def _server_why(map_rows: list[Row], found: list[str], items: list[Item]) -> Why:
     """A gateway entry: connect the client. A direct server another client loads: move it into
-    the gateway this client reaches, when the client gets no add (_server_add). Other dashes
-    have no reason."""
+    the gateway this client reaches, when the client gets no add (_server_add). A server only
+    this project has: Kitden adds MCP servers for all projects only. Other dashes have no
+    reason."""
     by_id = {i.id: i for i in items}
     servers = [r for r in map_rows if r.kind is ItemKind.MCP_SERVER]
     on_gateway = {c for r in servers for c in found if r.cells[c].state == "gw"}
@@ -280,14 +286,20 @@ def _server_why(map_rows: list[Row], found: list[str], items: list[Item]) -> Why
             if i in by_id
         )
 
+    def only_here(row: Row) -> bool:
+        """Every item of the row is set in a project: no all-projects entry to add from."""
+        loaded = [by_id[i] for c in found for i in row.cells[c].items if i in by_id]
+        return bool(loaded) and all(i.project is not None for i in loaded)
+
     def why(row: Row, client: str) -> str | None:
         if client in on_gateway:
-            return SHARE_IN_GATEWAY if movable(row) else None
-        if any(row.cells[c].state == "gw" for c in found):
+            if movable(row):
+                return SHARE_IN_GATEWAY
+        elif any(row.cells[c].state == "gw" for c in found):
             if held(row):
                 return f"Set up the Kitden gateway in {NAMES[client]} on the Gateway page."
             return f"Connect {NAMES[client]} to the gateway on the Gateway page."
-        return None
+        return NO_PROJECT_SERVER if only_here(row) else None
 
     return why
 
@@ -459,13 +471,18 @@ def _skill_cell(
 ) -> dict:
     """The scan's state when it has one; else how the skill list says the client gets it, or
     what the client can add. `no_place`: clients that cannot take a copy in the picked project,
-    with what to say instead. `where`: the scope word of an installed one (its items apply in
-    all projects), None with All projects picked."""
+    with what to say instead. `where`: the scope word of an installed one, None with All
+    projects picked. A skill only the picked project has adds into that project, or says why
+    not."""
     if _has(row, client):
         return _map_cell(row, client)
     word = skill["installed"].get(client)
     if word:
         return _cell("on", where=where, route=_installed_route(word))
+    if client in skill["routes"] and skill["project"]:
+        if client in (no_place or {}):
+            return _cell(reason=PROJECT_TRUST.format(name=Path(skill["project"]).name))
+        return _cell(add=_add(SKILL_INSTALL, "+ Add", skill=skill["id"], project_only=True))
     if client in skill["routes"]:
         hint = (no_place or {}).get(client)
         add = _add(SKILL_INSTALL, "+ Add", skill=skill["id"], project_place=hint is None)
@@ -522,8 +539,10 @@ def _skill_rows(
     copies: Copies,
     no_place: dict[str, str] | None = None,
     in_project: bool = False,
+    project_rows: list[dict] | tuple = (),
 ) -> Built:
-    """Every skill in the skill catalog, plus skills the load map has that it does not.
+    """Every skill in the skill catalog, then the picked project's own skills the catalog has
+    no row of that name for (`project_rows`), plus skills the load map has that neither has.
 
     A catalog row takes the cells, flags and lookup of the load map row with its name, where
     that row has them; a plugin's skill that is not the one a client loads needs review there.
@@ -531,12 +550,15 @@ def _skill_rows(
     """
     mapped = {r.name: r for r in map_rows if r.kind is ItemKind.SKILL}
     routes = {o["id"]: o["routes"] for o in offers}
-    # The skill list reads no project: its installed words come from user skills and from plugins
-    # of any scope. In a project an installed cell says all projects.
-    where = ORIGIN_WORDS[None] if in_project else None
+    catalog_names = {s["name"] for s in skills}
+    skills = skills + [s for s in project_rows if s["name"] not in catalog_names]
     used: set[str] = set()
     out = []
     for skill in skills:
+        # The skill list reads no project: its installed words come from user skills and from
+        # plugins of any scope. In a project an installed cell says all projects; a project
+        # row's says this project.
+        where = ORIGIN_WORDS["project" if skill["project"] else None] if in_project else None
         row = mapped.get(skill["name"])
         key = row.key if row and row.key not in used else _hash(ItemKind.SKILL, skill["id"])
         used.add(key)
@@ -555,7 +577,8 @@ def _skill_rows(
             cells,
             mine=bool(holders),
             lookup=row.lookup if row else None,
-            offer=skill["id"],
+            # A project's own skill is in no marketplace: Details reads what the clients load.
+            offer=None if skill["project"] else skill["id"],
             flags=row.flags if row else [],
             category=skill["category"],
             description=skill["description"],
@@ -811,6 +834,7 @@ def library(
             plugin_copies(inventory),
             _no_skill_place(adapters, project),
             in_project=project is not None,
+            project_rows=project_skills(inventory, adapters, project) if project else [],
         ),
         # Kitden adds no hooks, so a hook's dash has no reason.
         "hook": _map_rows(map_rows, "hook", found),

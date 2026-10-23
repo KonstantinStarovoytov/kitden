@@ -122,6 +122,7 @@ def _add(
     warn=None,
     project_place=False,
     project_hint=None,
+    project_only=False,
 ) -> dict:
     return {
         "action": action,
@@ -133,6 +134,7 @@ def _add(
         "warn": warn,
         "project_place": project_place,
         "project_hint": project_hint,
+        "project_only": project_only,
     }
 
 
@@ -1008,3 +1010,39 @@ def test_a_copy_made_before_a_plugin_update_does_not_flag_the_plugins_skill(home
     assert shown["cells"]["claude_code"]["state"] == "on"
     notes = {f.type for f in find_findings(inventory) if "brainstorming" in f.names}
     assert FindingType.SAME_NAME_OTHER_SOURCE not in notes
+
+
+def test_a_project_only_skill_adds_into_the_project(tmp_path):
+    home = build_demo_home(tmp_path, "medium")
+    inventory, adapters = build_inventory(home), {a.id: a for a in default_adapters(home)}
+    atlas_path = str(home / "work/atlas")
+    atlas = library(inventory, adapters, atlas_path, gateway_registered=False, kind="skill")
+    style = _row(atlas, "api-style")
+    add = style["cells"]["claude_code"]["add"]
+    assert (add["action"], add["skill"], add["project_only"]) == (
+        "skill.install",
+        "project/api-style",
+        True,
+    )
+    assert (add["project_place"], add["project_hint"]) == (False, None)
+    assert style["cells"]["codex"]["where"] == "this project"
+    assert (style["source"], style["offer"]) == ("atlas", None)
+    everywhere = library(
+        inventory, adapters, None, gateway_registered=False, kind="skill", show="all"
+    )
+    assert not any(r["name"] == "api-style" for r in everywhere["rows"])
+
+
+def test_a_project_only_server_says_why_it_has_no_add(home):
+    answer = library(
+        build_inventory(home),
+        {a.id: a for a in default_adapters(home)},
+        str(home / "work/website"),
+        gateway_registered=False,
+        kind="mcp_server",
+    )
+    docs = _row(answer, "docs")["cells"]  # only website's own .mcp.json has docs
+    assert (docs["codex"]["add"], docs["codex"]["reason"]) == (
+        None,
+        "Kitden adds MCP servers for all projects only.",
+    )

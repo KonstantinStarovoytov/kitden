@@ -28,6 +28,12 @@ KEPT_UNREAD = "Kitden can't change this until it reads {} again."
 NOT_SAME = "Same name, another source."
 NO_ADD_REVIEW = "Same name, another source: decide first."
 
+# What only one project has. Its skill adds into that project; its MCP server has no add (a
+# project MCP write needs each client's project file, checked with a date: Later).
+NO_PROJECT_SERVER = "Kitden adds MCP servers for all projects only."
+ONLY_IN_PROJECT = "This skill is in one project only. Pick that project to add it."
+PROJECT_TRUST = "To add it to {name}, trust {name} in Codex first."
+
 # Socket state and word per action, as the Library shows them after the change. "Removed",
 # "Added", "Updated" and "Via the new gateway" say what the change did, not a state.
 AFTER_WORDS: dict[str, tuple[str, str]] = {

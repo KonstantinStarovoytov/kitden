@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // offer.js needs only this from a browser to load; the tests call its pure parts.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { alsoLoads, cursorLine, formNote, projectNote, startChosen } = await import('../../src/kitden/web/static/js/offer.js');
+const { addOptions, alsoLoads, cursorLine, formNote, projectNote, startChosen } = await import('../../src/kitden/web/static/js/offer.js');
 
 const both = { plugin: true, skill: true };
 const none = { plugin: false, skill: false };
@@ -82,4 +82,10 @@ test('the Add form passes the warning of each checked client, as its cell does',
   assert.equal(formNote(row, ['claude_code', 'codex'], ''), warn);
   assert.equal(formNote(row, ['codex'], 'p1'), `${warn} Adds for all projects.`);
   assert.equal(formNote(row, ['claude_code'], 'p1'), 'Adds for all projects.');
+});
+
+test('Details offers the add the cell offers', () => {
+  const own = { action: 'skill.install', label: '+ Add', skill: 'project/api-style', project_only: true };
+  const row = { kind: 'skill', cells: { claude_code: { add: own }, codex: { add: null }, cursor: { add: null } } };
+  assert.deepEqual(addOptions(row, null).map((o) => [o.client, o.label]), [['claude_code', 'Add to Claude Code…']]);
 });

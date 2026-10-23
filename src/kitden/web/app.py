@@ -122,8 +122,8 @@ from kitden.views.library import KINDS, SHOWS, library
 from kitden.views.load_map import load_map, map_dict
 from kitden.views.overview import overview
 from kitden.views.setup_server import is_old_entry, setup_server_state
-from kitden.views.skills import skill_catalog, skill_keepers, skill_readers
-from kitden.views.words import CHANGE_UNREAD, KEPT_UNREAD, NO_ADD_UNREAD
+from kitden.views.skills import project_skills, skill_catalog, skill_keepers, skill_readers
+from kitden.views.words import CHANGE_UNREAD, KEPT_UNREAD, NO_ADD_UNREAD, ONLY_IN_PROJECT
 from kitden.watch import Watcher
 from kitden.web.security import SecurityMiddleware
 
@@ -958,19 +958,22 @@ def create_app(
                 clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
                 steps = install_steps(adapters, offer, clients, _project_param(params))
             elif action == SKILL_INSTALL:
-                skill = next(
-                    (
-                        s
-                        for s in skill_catalog(state.inventory, adapters)
-                        if s["id"] == params.get("skill")
-                    ),
-                    None,
+                # A project's own skill ("project/<name>") is read from that project only.
+                wanted = str(params.get("skill", ""))
+                project = _project_param(params)
+                if wanted.startswith("project/") and project is None:
+                    return _error(ONLY_IN_PROJECT, 422)
+                listed = (
+                    project_skills(state.inventory, adapters, project)
+                    if wanted.startswith("project/")
+                    else skill_catalog(state.inventory, adapters)
                 )
+                skill = next((s for s in listed if s["id"] == wanted), None)
                 if skill is None:
                     return _error("This skill is not on this computer.", 422)
                 clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
                 found = {c["id"] for c in state.data["clients"] if c["status"] == "found"}
-                steps = skill_steps(adapters, skill, clients, found, _project_param(params))
+                steps = skill_steps(adapters, skill, clients, found, project)
                 copied = [skill]
             elif action == PLUGIN_SKILLS:
                 if len(targets) != 1 or not isinstance(targets[0], dict):

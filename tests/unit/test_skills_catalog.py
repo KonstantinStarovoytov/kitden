@@ -7,9 +7,10 @@ from pathlib import Path
 
 import pytest
 
+from kitden.demo import build_demo_home
 from kitden.views.catalog import search
 from kitden.views.inventory import build_inventory, default_adapters
-from kitden.views.skills import front_matter, read_skill, skill_catalog
+from kitden.views.skills import front_matter, project_skills, read_skill, skill_catalog
 from tests.conftest import CURSOR_DB, make_home, write_cursor_fixture_state
 
 PLUGIN = "toolbox@claude-plugins-official"
@@ -277,3 +278,19 @@ def test_a_long_line_does_not_slow_the_skill_list(tmp_path):
     info = read_skill(skill)
     assert time.monotonic() - started < 0.5
     assert info["needs"] == ["points outside its folder: ../notes.md"]
+
+
+def test_a_project_skill_is_a_catalog_row_of_its_project(tmp_path):
+    home = build_demo_home(tmp_path, "medium")  # Part 1: atlas/.agents/skills/api-style
+    atlas = str(home / "work/atlas")
+    inventory = build_inventory(home)
+    adapters = {a.id: a for a in default_adapters(home)}
+    rows = project_skills(inventory, adapters, atlas)
+    style = next(r for r in rows if r["name"] == "api-style")
+    assert (style["id"], style["project"], style["from"]) == ("project/api-style", atlas, "atlas")
+    assert style["path"] == f"{atlas}/.agents/skills/api-style"
+    assert set(style["installed"]) == {"codex", "cursor"}
+    assert style["routes"] == {"claude_code": "ready"}
+    assert all(r["project"] is None for r in skill_catalog(inventory, adapters))
+    website = project_skills(inventory, adapters, str(home / "work/website"))
+    assert all(r["name"] != "api-style" for r in website)  # another project's skill

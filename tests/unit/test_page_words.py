@@ -811,6 +811,11 @@ def test_library_says_the_add_scope_in_a_project():
     assert "all your projects" not in script("library.js") + script("offer.js")
 
 
+def test_a_projects_own_skill_adds_into_the_project():
+    assert "add.project_only" in script("library.js")
+    assert "${line} This project's own skills add into this project.`" in script("library.js")
+
+
 def test_an_add_review_names_its_scope():
     panel = script("panel.js")
     # With All projects picked the lede says it; in a project the note callout says it.

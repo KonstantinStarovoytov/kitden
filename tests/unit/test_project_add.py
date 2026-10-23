@@ -10,12 +10,14 @@ from kitden.web.app import create_app
 from tests.conftest import make_home, write_cursor_fixture_state
 from tests.unit.test_api_plugin_install import LINTER, FakeCli
 from tests.unit.test_catalog import add_marketplaces
+from tests.unit.test_demo_mode import demo_page, scan_done, until
 from tests.unit.test_skills_catalog import PLUGIN, add_skills_marketplace
 
 ORIGIN = "http://127.0.0.1:47800"
 POST = {"Origin": ORIGIN, "X-Tool-Request": "1"}
 TIDY = f"tidy@{PLUGIN}"
 MARKETPLACE = ".claude/plugins/marketplaces/claude-plugins-official/.claude-plugin/marketplace.json"
+HOUSE = "---\nname: house-style\ndescription: Our style.\n---\nKeep it plain.\n"
 
 
 @pytest.fixture
@@ -199,3 +201,64 @@ def test_a_skill_add_into_a_known_project_on_another_disk_previews(client, tmp_p
     change = _preview(client, "skill.install", ["claude_code"], params)
     assert change.status_code == 200
     assert all(step["path"].startswith(str(site)) for step in change.json()["steps"])
+
+
+def _project_skill(client, project):
+    """A skill in the project's own Claude Code folder; Claude Code knows the project."""
+    folder = client.home / f"work/{project}/.claude/skills/house-style"
+    folder.mkdir(parents=True)
+    (folder / "SKILL.md").write_text(HOUSE)
+    settings_path = client.home / ".claude.json"
+    settings = json.loads(settings_path.read_text())
+    known = {"hasTrustDialogAccepted": True}
+    settings.setdefault("projects", {})[str(client.home / f"work/{project}")] = known
+    settings_path.write_text(json.dumps(settings))
+    client.post("/api/rescan", headers=POST)  # a fixture home: no held servers to ask
+
+
+def test_a_project_skill_copies_into_the_same_project(client):
+    _project_skill(client, "api")  # Codex trusts api
+    api = str(client.home / "work/api")
+    params = {"skill": "project/house-style", "project": pid(client, api)}
+    change = _preview(client, "skill.install", ["codex"], params)
+    assert change.json()["steps"][0]["path"] == f"{api}/.agents/skills/house-style"
+    refused = _preview(client, "skill.install", ["codex"], {"skill": "project/house-style"})
+    assert (refused.status_code, refused.json()["detail"]) == (
+        422,
+        "This skill is in one project only. Pick that project to add it.",
+    )
+    website = pid(client, str(client.home / "work/website"))
+    elsewhere = {"skill": "project/house-style", "project": website}
+    missing = _preview(client, "skill.install", ["codex"], elsewhere)
+    assert (missing.status_code, missing.json()["detail"]) == (
+        422,
+        "This skill is not on this computer.",
+    )
+
+
+def test_a_project_skill_for_codex_in_an_untrusted_project_says_trust_first(client):
+    _project_skill(client, "untrusted")
+    untrusted = pid(client, str(client.home / "work/untrusted"))
+    rows = client.get(f"/api/library?kind=skill&project={untrusted}").json()["rows"]
+    codex = next(r for r in rows if r["name"] == "house-style")["cells"]["codex"]
+    assert (codex["add"], codex["reason"]) == (
+        None,
+        "To add it to untrusted, trust untrusted in Codex first.",
+    )
+
+
+def test_a_project_skill_copy_says_when_cursor_would_load_it_twice(tmp_path):
+    # The medium sample: Codex and Cursor load atlas/.agents/skills/api-style, and Cursor reads
+    # Claude Code's project folder too, so a copy for Claude Code reaches Cursor a second time.
+    with demo_page(tmp_path) as page:
+        until(lambda: scan_done(page), 20)
+        atlas = pid(page, str(page.home / "work/atlas"))
+        params = {"skill": "project/api-style", "project": atlas}
+        change = _preview(page, "skill.install", ["claude_code"], params).json()
+        assert change["steps"][0]["reaches"] == ["claude_code", "cursor"]
+        cursor = next(e for e in change["after"] if e["client"] == "cursor")
+        assert (cursor["word"], cursor["note"]) == (
+            "Loads twice",
+            "Cursor reads two folders that hold this skill, so it loads the skill twice.",
+        )
+        page.post(f"/api/changes/{change['id']}/cancel", headers=POST)
