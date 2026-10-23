@@ -2,11 +2,13 @@
 
 The same readers the review's steps name: the clients that read a skill's folder
 (`skill_readers`, sent as a removal step's `reaches`), and Cursor's import of Claude Code's user
-plugins (the After chips' Cursor line).
+plugins (the After chips' Cursor line). A reader that keeps another copy of its own is left out,
+as the review leaves it out (`skill_keepers`, `cursor_keeps`).
 """
 
 from kitden.model import Item, ItemKind, Scope
-from kitden.views.skills import CLIENT_WORDS, CLIENTS, skill_readers
+from kitden.views.after import cursor_keeps
+from kitden.views.skills import CLIENT_WORDS, CLIENTS, skill_keepers, skill_readers
 from kitden.views.words import LOADS_PLUGINS, READS_FOLDER
 
 
@@ -19,8 +21,10 @@ def affects(inventory, item: Item) -> dict:
     if item.kind is ItemKind.SKILL and item.source.path:
         # The folder's owner; ~/.agents/skills ("shared") is no client's, so it gets no note.
         owner = CLIENT_WORDS.get(item.source.owner_client)
-        for reader in skill_readers(inventory, item):
-            if reader != item.client:
+        readers = skill_readers(inventory, item)
+        keepers = skill_keepers(inventory, item, readers)
+        for reader in readers:
+            if reader != item.client and reader not in keepers:
                 reached.add(reader)
                 if owner:
                     notes.append(READS_FOLDER.format(reader=CLIENT_WORDS[reader], owner=owner))
@@ -35,7 +39,7 @@ def affects(inventory, item: Item) -> dict:
             and i.name == item.name
             and i.source.owner_client == item.client
         }
-        if importers:
+        if importers and not cursor_keeps(inventory, item.name):
             reached |= importers
             notes.append(LOADS_PLUGINS)
     in_project = item.project and item.scope in (Scope.PROJECT, Scope.LOCAL)

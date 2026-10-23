@@ -18,6 +18,13 @@ export const ROUTE_WORDS = {
   desktop: "from the Desktop app", kitden: "through the Kitden gateway", plugin: "from a plugin",
   folder: "through {}'s folder",
 };
+// Why a change reaches Cursor too, in the server's words (views/words.py READS_FOLDER and
+// LOADS_PLUGINS): a skill copy in Codex's or Claude Code's folder, or Claude Code's plugin.
+export const REACH_NOTES = {
+  codex: "Cursor reads Codex's folder",
+  claude_code: "Cursor reads Claude Code's folder",
+  plugin: "Cursor loads Claude Code's plugins",
+};
 // The first scan's line: what is still read, and how much of the work is done (0 to 1). Before
 // the page has its data it names the clients it reads; then the slow answers still checked.
 export function scanLine(view) {

@@ -1,11 +1,10 @@
 // Details of a plugin or skill from the marketplaces on this computer, every way to add it (or
 // why there is none), and the forms that add one to several clients in one review. The Library
 // opens these Details for rows not on this computer; the panel's Details use the parts.
-import { technical } from "./details.js";
 import { busyWhile, button, el, joinWords, plural, reportError, webLink } from "./dom.js";
 import { noteFor, rowTitle, startAdd } from "./library.js";
-import { closePanel, footerActions, footerButtons, openInfo, openPanel, review } from "./panel.js";
-import { CLIENT_NAMES, clientCheck } from "./parts.js";
+import { closePanel, footerActions, footerButtons, openInfo, openPanel, review, technical } from "./panel.js";
+import { CLIENT_NAMES, clientCheck, REACH_NOTES } from "./parts.js";
 import { data, go, state } from "./store.js";
 
 // Clients whose own command line installs plugins. Cursor keeps its plugins in the account,
@@ -22,13 +21,6 @@ const ALSO_LOADS = {
   shared: "Cursor will also load it from the shared skills folder.",
 };
 const PROJECT_NOTE = "Adds for all projects.";
-// Why an add reaches Cursor too, in the server's words (views/words.py READS_FOLDER and
-// LOADS_PLUGINS).
-const REACH_NOTES = {
-  codex: "Cursor reads Codex's folder",
-  claude_code: "Cursor reads Claude Code's folder",
-  plugin: "Cursor loads Claude Code's plugins",
-};
 const SKILL_COPIES = ["skill.install", "plugin.skills"];
 
 // In a project view an add still goes to the user's settings; the review says so.
@@ -71,11 +63,12 @@ export function inside(offer) {
   add("Skills", got.skills);
   add("Commands", got.commands);
   add("Agents", got.agents);
+  // What each server runs waits under Technical details (mcpRows).
+  add("MCP servers", got.mcp_servers.map((server) => server.name));
   const out = [];
   if (got.hooks.length) {
     out.push(el("p", "callout", `Runs by itself on: ${got.hooks.join(", ")}. Hooks run commands without asking each time.`));
   }
-  for (const server of got.mcp_servers) lines.push(el("li", "mono", `MCP ${server.name}: ${server.runs}`));
   const list = el("ul", "checklist");
   list.append(...lines);
   if (lines.length) out.push(list);
@@ -83,17 +76,33 @@ export function inside(offer) {
   return out;
 }
 
+// The evidence of a plugin's entry, as rows of Technical details: what each MCP server in it
+// runs. None until the client downloads it.
+export function mcpRows(offer) {
+  const servers = (offer.inside && offer.inside.mcp_servers) || [];
+  return servers.map((server) => ({ title: `MCP server ${server.name}`, summary: server.runs }));
+}
+
+// Where a plugin's files come from (a repository, an address or a folder) and the version it is
+// pinned to, as rows of Technical details.
+export function sourceRows(offer) {
+  const source = offer.source || {};
+  const where = source.repo || source.url || source.path;
+  const rows = [];
+  if (where) rows.push({ title: "Source", summary: where + (source.path && where !== source.path ? ` · ${source.path}` : "") });
+  const pinned = [source.ref, source.sha && source.sha.slice(0, 12)].filter(Boolean).join(" · ");
+  if (pinned) rows.push({ title: "Pinned to", summary: pinned });
+  return rows;
+}
+
 // Details: what the plugin is, where it comes from, what is inside, and how each client gets it.
+// Its source, pinned version and commands wait under Technical details.
 export function showOffer(offer, row) {
   const body = el("div", "body");
   if (offer.description) body.append(el("p", null, offer.description));
   const from = [];
-  const source = offer.source || {};
-  const where = source.repo || source.url || source.path;
   from.push(el("li", null, `Marketplace: ${offer.marketplace}`));
   if (offer.author) from.push(el("li", null, `By ${offer.author}`));
-  if (where) from.push(el("li", "mono", where + (source.path && where !== source.path ? ` · ${source.path}` : "")));
-  if (source.sha || source.ref) from.push(el("li", "mono", `Pinned to ${source.ref || ""}${source.ref && source.sha ? " · " : ""}${source.sha ? source.sha.slice(0, 12) : ""}`));
   const fromList = el("ul", "checklist");
   fromList.append(...from);
   const links = offer.homepage ? [webLink(offer.homepage, "Homepage ↗")] : [];
@@ -106,6 +115,8 @@ export function showOffer(offer, row) {
   const cursor = cursorLine(offer, inherits(offer));
   if (cursor) clients.append(el("li", "muted", cursor));
   body.append(section("Clients", [clients]));
+  const rows = [...sourceRows(offer), ...mcpRows(offer)];
+  if (rows.length) body.append(technical(rows));
   openInfo("Plugin", rowTitle(row), body, addActions(row, offer, body));
 }
 

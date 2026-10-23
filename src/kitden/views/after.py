@@ -62,7 +62,7 @@ MOVE_SECRETS = "The secrets of {server} go to your Keychain; the settings file k
 GUARANTEE = "For a real guarantee, give {server} a token that can only read."
 
 
-def _cursor_keeps(inventory, name: str) -> str | None:
+def cursor_keeps(inventory, name: str) -> str | None:
     """Which copy Cursor still loads after a Claude Code plugin is removed, in words.
 
     Cursor's own copy, or another Claude Code copy it imports; None when it loads no other.
@@ -726,7 +726,7 @@ def after_words(
         out.append(dict(CURSOR_IMPORT))
     removal = change.steps[0] if change.action == "plugin.remove" and change.steps else None
     if removal and to_claude and cursor_imports and removal.scope is Scope.USER:
-        keeps = _cursor_keeps(inventory, removal.name)
+        keeps = cursor_keeps(inventory, removal.name)
         if keeps:
             note = CURSOR_KEEPS.format(keeps)
             out.append({"client": "cursor", "state": "on", "word": "Loads once", "note": note})

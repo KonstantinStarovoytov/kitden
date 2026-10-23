@@ -3,7 +3,7 @@ import { getJson, query } from "./api.js";
 import { $, button, el, joinWords, plural, reportError, shortPath } from "./dom.js";
 import { loadLibraryFor, raceSlow, rowSel, rowTitle, shownRow } from "./library.js";
 import { fold } from "./motion.js";
-import { about, addButton, addOptions, addReach, whyNoAction } from "./offer.js";
+import { about, addButton, addOptions, addReach, mcpRows, whyNoAction } from "./offer.js";
 import { closePanel, header, openInfo, openPanel, panelState, swapContent } from "./panel.js";
 import { ALL_PROJECTS, callout, CLIENT_NAMES, CLIENT_ORDER, GATEWAY_NOTE, gatewayName, mark, ROUTE_WORDS, socket, STATE_WORDS, toolsNode } from "./parts.js";
 import { review } from "./review.js";
@@ -237,14 +237,15 @@ const inOrder = (clients) => [...new Set(clients)].sort((a, b) => CLIENT_ORDER.i
 
 // What the lead action changes, before any action: the clients, why other clients are reached
 // (`note`), and where (`scope`): "all" projects, one "project" (`project`), or "others", all
-// projects but the picked one, whose own definition of that client wins over this one. `asks`:
-// an add that asks "this project or all projects" next; it names only what both choices reach.
-// `project` in the context is the picked project's path, "" for All projects; `found`, the
-// clients on this computer. Null when nothing leads, for the Add form, and when the server sent
-// no reach for the definition.
-export function affectsFor(lead, { definitions = [], move = null, inherits = NO_INHERITS, found = [], project = "" } = {}) {
+// projects but the picked one, whose own definition of that one client wins over this one.
+// `asks`: an add that asks "this project or all projects" next; it names only what both choices
+// reach. `project` in the context is the picked project's path, "" for All projects; `found`, the
+// clients on this computer; `connections`, the Gateway page's servers per gateway and client.
+// Null when nothing leads, for the Add form, and when the server sent no reach for the
+// definition.
+export function affectsFor(lead, { definitions = [], move = null, connections = {}, inherits = NO_INHERITS, found = [], project = "" } = {}) {
   if (!lead || lead.form) return null;
-  if (lead === "move") return moveAffects(definitions, move);
+  if (lead === "move") return moveAffects(definitions, move, connections);
   if (lead.def) return offerAffects(lead.def, definitions, project);
   if (lead.add) {
     const only = Boolean(lead.add.project_only);
@@ -265,20 +266,27 @@ function offerAffects(def, definitions, here) {
   if (!def.affects) return null;
   const affects = { ...def.affects, project: def.project || null, asks: false };
   const winner = def.overridden && here ? winnerOf(definitions, def) : null;
-  if (affects.scope === "all" && winner && winner.project === here) affects.scope = "others";
+  const one = affects.clients.length === 1;
+  if (affects.scope === "all" && one && winner && winner.project === here) affects.scope = "others";
   return affects;
 }
 
-// Move into the gateway: every entry it takes. One project only when all of them are in that
-// project's files.
-function moveAffects(definitions, move) {
+// Move into the gateway: every entry it takes, and every client that reaches the gateway already,
+// which then offers the server too (the review's "Via gateway" chips). With two gateways to
+// choose from, only the clients every choice reaches. One project only when all the entries are
+// in that project's files.
+function moveAffects(definitions, move, connections = {}) {
   const defs = definitions.filter((d) => move && move.items.includes(d.id) && d.affects);
   if (!defs.length) return null;
+  const reach = (gateway) => Object.entries((connections || {})[gateway.id] || {}).filter(([, names]) => names.length).map(([client]) => client);
+  const [first = [], ...others] = move.gateways.map(reach);
+  const every = first.filter((client) => others.every((list) => list.includes(client)));
   const notes = [...new Set(defs.map((d) => d.affects.note).filter(Boolean))];
   const places = new Set(defs.map((d) => (d.affects.scope === "project" ? d.project : null)));
   const [place] = places;
   const one = places.size === 1 && place ? place : null;
-  return { clients: inOrder(defs.flatMap((d) => d.affects.clients)), note: notes.join("; ") || null, scope: one ? "project" : "all", project: one, asks: false };
+  const clients = inOrder([...defs.flatMap((d) => d.affects.clients), ...every]);
+  return { clients, note: notes.join("; ") || null, scope: one ? "project" : "all", project: one, asks: false };
 }
 
 // The Affects line: "Changes Codex and Cursor (Cursor reads Codex's folder). All projects."
@@ -751,7 +759,8 @@ function showDetails(row, definitions, offer = null, toolsNext = {}, inherits = 
   const next = [];
   // What the lead action changes, before any action.
   const here = projectPath();
-  const reach = { definitions, move, inherits, found: writableClients(), project: here };
+  const gateway = currentModel("gateway");
+  const reach = { definitions, move, connections: gateway ? gateway.connections : {}, inherits, found: writableClients(), project: here };
   const affects = affectsText(affectsFor(actions.lead, reach), here);
   if (affects) next.push(el("p", "affects", affects));
   // With nothing to do, say why, quietly.
@@ -762,7 +771,8 @@ function showDetails(row, definitions, offer = null, toolsNext = {}, inherits = 
   // A link that leads is in the footer, not here too.
   const shown = links.filter((link) => link !== actions.lead);
   if (shown.length) blocks.set("links", [linksRow(shown)]);
-  const rows = techRows(definitions);
+  // What the marketplace's entry runs joins the evidence.
+  const rows = [...techRows(definitions), ...(offer ? mcpRows(offer) : [])];
   if (rows.length) blocks.set("technical", [technical(rows)]);
   const body = el("div", "body");
   for (const id of detailsOrder(new Set(blocks.keys()))) body.append(...blocks.get(id));

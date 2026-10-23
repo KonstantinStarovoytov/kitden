@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js needs only this from a browser to load; the tests call its pure parts.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { heldServer, kitdenClients, offersSwitch, serverFor, visibleRows } = await import('../../src/kitden/web/static/js/gateway.js');
+const { heldServer, kitdenClients, kitdenLinks, offersSwitch, serverFor, visibleRows } = await import('../../src/kitden/web/static/js/gateway.js');
 
 const entry = (client, state, fields = {}) => ({ client, state, item: null, enabled: true, ...fields });
 
@@ -68,4 +68,12 @@ test('a selected server the Kitden gateway holds opens in its own panel', () => 
   assert.equal(heldServer(model, { kind: 'mcp_server', name: 'x' }), null);
   assert.equal(heldServer(model, { kind: 'skill', name: 'files' }), null);
   assert.equal(heldServer(null, { kind: 'mcp_server', name: 'files' }), null);
+});
+
+test("a held server's panel links to the Library only when a client loads it through the gateway", () => {
+  const model = { connections: { kitden: { claude_code: ['files'], codex: ['files'], cursor: [] } } };
+  assert.deepEqual(kitdenLinks(model, 'files').map((l) => [l.label, l.view, l.selected]), [['Compare across clients', 'library', { kind: 'mcp_server', name: 'files' }]]);
+  // No client reaches tracker here, so the Library has no row for it.
+  assert.deepEqual(kitdenLinks(model, 'tracker'), []);
+  assert.deepEqual(kitdenLinks(null, 'files'), []);
 });

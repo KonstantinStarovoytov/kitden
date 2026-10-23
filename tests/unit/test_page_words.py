@@ -1035,19 +1035,38 @@ def test_details_say_what_the_lead_changes_and_link_to_the_other_pages():
 
 
 def test_the_page_and_the_server_say_why_an_add_reaches_cursor_alike():
-    offer = script("offer.js")
+    # The words live with the other page words, in parts.js.
+    parts, offer = script("parts.js"), script("offer.js")
     for owner in ("Codex", "Claude Code"):
-        assert f'"{READS_FOLDER.format(reader="Cursor", owner=owner)}"' in offer, owner
-    assert f'"{LOADS_PLUGINS}"' in offer
+        assert f'"{READS_FOLDER.format(reader="Cursor", owner=owner)}"' in parts, owner
+    assert f'"{LOADS_PLUGINS}"' in parts
+    assert "REACH_NOTES" in offer and "const REACH_NOTES" not in offer
     # One rule: the Add form's Cursor line asks addReach too.
     also = offer.split("export function alsoLoads(")[1].split("\n}\n")[0]
     assert "addReach(" in also
 
 
-def test_skill_details_fold_the_folder_path():
-    show = script("offer.js").split("export function showSkill(")[1].split("\n}\n")[0]
+def test_skill_and_plugin_details_fold_paths_commands_and_versions():
+    offer = script("offer.js")
+    show = offer.split("export function showSkill(")[1].split("\n}\n")[0]
     assert "technical([" in show
     assert 'el("li", "mono", shortPath(skill.path))' not in show
+    # A plugin's MCP commands, its source and its pinned version wait in the fold too; the
+    # list says only the servers' names.
+    plugin = offer.split("export function showOffer(")[1].split("\n}\n")[0]
+    assert "const rows = [...sourceRows(offer), ...mcpRows(offer)];" in plugin
+    assert "technical(rows)" in plugin
+    assert "Pinned to ${" not in plugin and '"mono", where' not in plugin
+    assert "${server.runs}" not in offer and 'add("MCP servers"' in offer
+    assert "...(offer ? mcpRows(offer) : [])" in script("details.js")
+
+
+def test_pages_import_the_side_panel_through_panel_js():
+    for name in ("gateway.js", "offer.js"):
+        assert 'from "./details.js"' not in script(name), name
+    shell = script("panel.js")
+    for word in ("contextLinks", "linksRow", "technical"):
+        assert re.search(rf"export \{{[^}}]*\b{word}\b[^}}]*\}} from \"./details.js\"", shell), word
 
 
 def test_a_demo_says_so_quietly_in_the_rail():

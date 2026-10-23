@@ -88,7 +88,8 @@ def test_explain_needs_a_name(client):
 
 
 def test_explain_says_what_a_change_reaches(client):
-    answer = client.get("/api/explain?kind=skill&name=docker-expert").json()
+    # Cursor reads pixel-art from Codex's folder only (docker-expert it also has elsewhere).
+    answer = client.get("/api/explain?kind=skill&name=pixel-art").json()
     codex = next(d for d in answer["definitions"] if d["client"] == "codex")
     assert codex["affects"]["clients"] == ["codex", "cursor"]
     assert all("key" in d for d in answer["definitions"])

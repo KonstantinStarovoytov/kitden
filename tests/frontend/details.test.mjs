@@ -193,6 +193,10 @@ test('a definition another one overrides in this project is not promised for thi
   // Overridden by another of all projects (two plugins): nothing to leave out.
   const other = def({ id: 'o', client: 'claude_code', kind: 'mcp_server', scope: 'plugin' });
   assert.equal(affectsText(affectsFor({ def: user, action: 'mcp.remove_direct' }, { definitions: [user, other], project: site }), site), 'Changes Claude Code. All projects.');
+  // It also reaches another client, whose copy nothing overrides here: all projects.
+  const shared = { ...user, client: 'codex', affects: { clients: ['codex', 'cursor'], scope: 'all', note: null } };
+  const codexHere = { ...mine, client: 'codex' };
+  assert.equal(affectsText(affectsFor({ def: shared, action: 'skill.remove' }, { definitions: [shared, codexHere], project: site }), site), 'Changes Codex and Cursor. All projects.');
 });
 
 test('a move names every client whose entry moves', () => {
@@ -204,6 +208,21 @@ test('a move names every client whose entry moves', () => {
   const p2 = { ...cx, project: site, affects: { ...cx.affects, scope: 'project' } };
   assert.equal(affectsText(affectsFor('move', { definitions: [p1, p2], move: { items: ['e1', 'e2'], gateways: [{}] } }), site), 'Changes Claude Code and Codex. In this project.');
   assert.equal(affectsText(affectsFor('move', { definitions: [p1, cx], move: { items: ['e1', 'e2'], gateways: [{}] } }), site), 'Changes Claude Code and Codex. All projects.');
+});
+
+test('a move into a gateway also names every client that reaches the gateway already', () => {
+  // github in the medium sample: Claude Code and Codex reach files through the Kitden gateway.
+  const github = { id: 'g1', client: 'claude_code', project: null, affects: { clients: ['claude_code'], scope: 'all', note: null } };
+  const kitden = { id: 'kitden', kind: 'kitden' };
+  const obot = { id: 'gw-1', movable: true };
+  const connections = { kitden: { claude_code: ['files'], codex: ['files', 'tracker'], cursor: [] }, 'gw-1': { claude_code: [], codex: ['search'], cursor: ['search'] } };
+  const move = (gateways) => ({ items: ['g1'], gateways });
+  assert.equal(affectsText(affectsFor('move', { definitions: [github], move: move([kitden]), connections }), null), 'Changes Claude Code and Codex. All projects.');
+  // Two gateways to choose from: only what every choice reaches (Cursor reaches only one).
+  assert.equal(affectsText(affectsFor('move', { definitions: [github], move: move([kitden, obot]), connections }), null), 'Changes Claude Code and Codex. All projects.');
+  assert.equal(affectsText(affectsFor('move', { definitions: [github], move: move([obot]), connections }), null), 'Changes Claude Code, Codex and Cursor. All projects.');
+  // The gateway could not be read: only the entries that move.
+  assert.equal(affectsText(affectsFor('move', { definitions: [github], move: move([kitden]) }), null), 'Changes Claude Code. All projects.');
 });
 
 test('an add names what its copy reaches, and says when the place is chosen next', () => {

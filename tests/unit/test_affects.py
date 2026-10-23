@@ -5,9 +5,9 @@ from types import SimpleNamespace
 import pytest
 
 from kitden.clients.cursor import REACTIVE_KEY
-from kitden.model import Item, ItemKind, Scope, Source, SourceKind
+from kitden.model import Client, ClientStatus, Item, ItemKind, Scope, Source, SourceKind
 from kitden.views.affects import affects
-from kitden.views.inventory import build_inventory
+from kitden.views.inventory import Inventory, build_inventory
 from tests.conftest import make_home, write_cursor_fixture_state
 
 
@@ -28,21 +28,29 @@ def _item(inventory, client, name, scope, folder=""):
 
 
 def test_a_skill_in_a_shared_folder_reaches_every_reader(inventory):
-    item = _item(inventory, "codex", "docker-expert", Scope.USER, "/.agents/skills/")
+    item = _item(inventory, "codex", "pixel-art", Scope.USER, "/.agents/skills/")
     assert affects(inventory, item) == {
         "clients": ["codex", "cursor"],
         "scope": "all",
         "note": "Cursor reads Codex's folder",
     }
+    # Cursor also loads docker-expert from ~/.codex/skills, so this copy's removal leaves it.
+    item = _item(inventory, "codex", "docker-expert", Scope.USER, "/.agents/skills/")
+    assert affects(inventory, item) == {"clients": ["codex"], "scope": "all", "note": None}
 
 
 def test_a_claude_code_user_plugin_reaches_cursor_which_loads_its_plugins(inventory):
-    item = _item(inventory, "claude_code", "superpowers@claude-plugins-official", Scope.USER)
+    item = _item(
+        inventory, "claude_code", "claude-md-management@claude-plugins-official", Scope.USER
+    )
     assert affects(inventory, item) == {
         "clients": ["claude_code", "cursor"],
         "scope": "all",
         "note": "Cursor loads Claude Code's plugins",
     }
+    # Cursor has superpowers from its own marketplace too, so it keeps that one.
+    item = _item(inventory, "claude_code", "superpowers@claude-plugins-official", Scope.USER)
+    assert affects(inventory, item) == {"clients": ["claude_code"], "scope": "all", "note": None}
 
 
 def test_a_project_plugin_does_not_reach_cursor(inventory):
@@ -89,3 +97,32 @@ def test_a_folder_no_client_owns_reaches_its_readers_without_a_note(tmp_path):
         "scope": "all",
         "note": None,
     }
+
+
+def test_a_reader_that_keeps_its_own_copy_is_not_named(tmp_path):
+    # Cursor reads Codex's folder, but it loads its own tidy too: removing Codex's leaves it.
+    shared = tmp_path / ".agents/skills/tidy/SKILL.md"
+    own = tmp_path / ".cursor/skills/tidy/SKILL.md"
+    items = [_skill(shared, "codex", "codex"), _skill(shared, "cursor", "codex")]
+    items.append(_skill(own, "cursor", "cursor"))
+    assert affects(SimpleNamespace(items=items), items[0]) == {
+        "clients": ["codex"],
+        "scope": "all",
+        "note": None,
+    }
+
+
+def _plugin(client, name, owner, kind=SourceKind.FILE):
+    source = Source(kind=kind, path=f"/h/{client}/{name}.json", owner_client=owner)
+    return Item(client=client, kind=ItemKind.PLUGIN, name=name, source=source, scope=Scope.USER)
+
+
+def test_cursor_is_not_named_for_a_plugin_it_also_has_on_its_own():
+    clients = [Client(id="claude_code", display_name="Claude Code", status=ClientStatus.FOUND)]
+    claude = _plugin("claude_code", "x@a", "claude_code")
+    imported = _plugin("cursor", "x@a", "claude_code", SourceKind.OTHER_CLIENT_FOLDER)
+    mine = _plugin("cursor", "x@cursor-public", "cursor")
+    alone = Inventory(clients=clients, items=[claude, imported])
+    assert affects(alone, claude)["clients"] == ["claude_code", "cursor"]
+    both = Inventory(clients=clients, items=[claude, imported, mine])
+    assert affects(both, claude) == {"clients": ["claude_code"], "scope": "all", "note": None}

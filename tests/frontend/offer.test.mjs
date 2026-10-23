@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // offer.js needs only this from a browser to load; the tests call its pure parts.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { addOptions, alsoLoads, cursorLine, formNote, projectNote, startChosen } = await import('../../src/kitden/web/static/js/offer.js');
+const { addOptions, alsoLoads, cursorLine, formNote, mcpRows, projectNote, sourceRows, startChosen } = await import('../../src/kitden/web/static/js/offer.js');
 
 const both = { plugin: true, skill: true };
 const none = { plugin: false, skill: false };
@@ -95,4 +95,23 @@ test('Details offers the add the cell offers', () => {
   const own = { action: 'skill.install', label: '+ Add', skill: 'project/api-style', project_only: true };
   const row = { kind: 'skill', cells: { claude_code: { add: own }, codex: { add: null }, cursor: { add: null } } };
   assert.deepEqual(addOptions(row, null).map((o) => [o.client, o.label]), [['claude_code', 'Add to Claude Code…']]);
+});
+
+test("a plugin's commands, source and pinned version wait under Technical details", () => {
+  const offer = {
+    inside: { skills: [], commands: [], agents: [], hooks: [], mcp_servers: [{ name: 'files', runs: 'npx files-mcp' }] },
+    source: { repo: 'acme/tools', path: 'plugins/files', ref: 'main', sha: '0123456789abcdef' },
+  };
+  assert.deepEqual(mcpRows(offer), [{ title: 'MCP server files', summary: 'npx files-mcp' }]);
+  assert.deepEqual(sourceRows(offer), [
+    { title: 'Source', summary: 'acme/tools · plugins/files' },
+    { title: 'Pinned to', summary: 'main · 0123456789ab' },
+  ]);
+  // Not downloaded yet, or no source given: nothing to fold.
+  assert.deepEqual(mcpRows({ inside: null }), []);
+  assert.deepEqual(sourceRows({ source: {} }), []);
+  assert.deepEqual(sourceRows({ source: { path: '/m/plugins/x', sha: 'abc' } }), [
+    { title: 'Source', summary: '/m/plugins/x' },
+    { title: 'Pinned to', summary: 'abc' },
+  ]);
 });
