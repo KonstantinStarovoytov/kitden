@@ -322,8 +322,9 @@ test('a server the Kitden gateway holds leads with Manage tools; Move waits unde
   // What the tool switches change: every client that loads it through the gateway.
   const held = (client) => def({ client, kind: 'mcp_server', name: 'files', owner_client: 'kitden', via_gateway: 'kitden' });
   const definitions = [def({ client: 'cursor', kind: 'mcp_server', name: 'files' }), held('claude_code'), held('codex')];
-  assert.equal(affectsText(affectsFor(manage, { definitions, project: '' }), ''), 'Changes Claude Code and Codex. All projects.');
-  assert.equal(affectsText(affectsFor(manage, { definitions, project: site }), site), 'Changes Claude Code and Codex. In this project.');
+  // The link changes nothing itself: the line says what its switches change.
+  assert.equal(affectsText(affectsFor(manage, { definitions, project: '' }), ''), 'Its tool switches change Claude Code and Codex. All projects.');
+  assert.equal(affectsText(affectsFor(manage, { definitions, project: site }), site), 'Its tool switches change Claude Code and Codex. In this project.');
 });
 
 test('Cancel goes back to where the review came from', () => {

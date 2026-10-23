@@ -1077,6 +1077,7 @@ def test_details_say_what_the_lead_changes_and_link_to_the_other_pages():
         '"You choose this project or all projects next."',
         '"All projects."',
         '"All projects except this one."',
+        '"Its tool switches change"',
     ):
         assert words in details, words
     assert "affectsText(affectsFor(" in details

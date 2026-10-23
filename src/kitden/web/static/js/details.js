@@ -261,10 +261,10 @@ export function affectsFor(lead, { definitions = [], move = null, connections = 
   }
   // "Manage tools": a tool switch is one for every client that loads it through the Kitden
   // gateway, set for the picked project or for all projects. Held servers carry no actions, so
-  // this reach is the page's own.
+  // this reach is the page's own. The link changes nothing itself (`tools`: its switches do).
   if (lead.view === "gateway") {
     const clients = inOrder(definitions.filter((d) => d.via_gateway === "kitden").map((d) => d.client));
-    return { clients, note: null, scope: project ? "project" : "all", project: project || null, asks: false };
+    return { clients, note: null, scope: project ? "project" : "all", project: project || null, asks: false, tools: true };
   }
   return null;
 }
@@ -300,12 +300,14 @@ function moveAffects(definitions, move, connections = {}, kitdenLinked = null) {
   return { clients, note: notes.join("; ") || null, scope: one ? "project" : "all", project: one, asks: false };
 }
 
-// The Affects line: "Changes Codex and Cursor (Cursor reads Codex's folder). All projects."
+// The Affects line: "Changes Codex and Cursor (Cursor reads Codex's folder). All projects.", or
+// under "Manage tools" "Its tool switches change Claude Code and Codex. All projects."
 // `here`: the picked project's path, "" for All projects. "" without an affects.
 export function affectsText(affects, here) {
   if (!affects) return "";
   const note = affects.note ? ` (${affects.note})` : "";
-  return `Changes ${joinWords(affects.clients.map(clientName))}${note}. ${placeText(affects, here)}`;
+  const verb = affects.tools ? "Its tool switches change" : "Changes";
+  return `${verb} ${joinWords(affects.clients.map(clientName))}${note}. ${placeText(affects, here)}`;
 }
 
 function placeText({ scope, project, asks }, here) {
