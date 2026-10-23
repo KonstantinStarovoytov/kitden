@@ -2,7 +2,7 @@
 import { getJson, query } from "./api.js";
 import { button, el, focusKey, plural } from "./dom.js";
 import { SETUP_NOTE } from "./gateway.js";
-import { loadLibraryFor } from "./library.js";
+import { loadLibraryFor, noClients } from "./library.js";
 import { entrance, fly } from "./motion.js";
 import { review, toast } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, kitdenClients, mark, skeleton, socket, STATE_WORDS, staleNote, versionWords } from "./parts.js";
@@ -32,12 +32,19 @@ export function renderOverview(main) {
   const left = el("section", "attention");
   left.setAttribute("aria-label", "Needs attention");
   const blocks = [];
+  // No client found: what Kitden looks for comes first, in place of the all-clear line.
+  const none = Array.isArray(data.clients) && !data.clients.some((c) => c.status === "found");
+  if (none) {
+    const box = noClients({ overview: false });
+    left.append(box);
+    blocks.push(box);
+  }
   for (const card of model.attention) {
     const article = issueCard(card);
     left.append(article);
     blocks.push(article);
   }
-  if (!model.attention.length) {
+  if (!model.attention.length && !none) {
     const clear = el("div", "all-clear", allClearWords(data.clients || []));
     left.append(clear);
     blocks.push(clear);

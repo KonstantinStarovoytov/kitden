@@ -5,10 +5,10 @@ import { glide, rollTo, transition } from "./motion.js";
 import { renderAgents } from "./agents.js";
 import { renderChanges } from "./changes.js";
 import { renderGateway } from "./gateway.js";
-import { loadLibrary, loadLibraryFor, morphOnNextRender, raceSlow, renderLibrary, settleRows, snapshotRows } from "./library.js";
+import { loadLibrary, loadLibraryFor, morphOnNextRender, raceSlow, redrawSourceLines, renderLibrary, settleRows, snapshotRows } from "./library.js";
 import { renderOverview } from "./overview.js";
 import { closeForProject, closePanel, initPanel, isPanelOpen } from "./panel.js";
-import { ALL_PROJECTS, callout, demoTag, GONE_PROJECT, latestChanges, scanLine, versionsOpened } from "./parts.js";
+import { ALL_PROJECTS, callout, demoTag, GONE_PROJECT, latestChanges, scanLine, sourceLines, versionsOpened } from "./parts.js";
 import {
   arrival, busy, current, data, followHash, freshness, go, loadShared, OLD_VIEWS, onIdle, parseHash, projectGone, reload, setRenderer, setState, state,
 } from "./store.js";
@@ -177,8 +177,12 @@ function showScan(view) {
   // The Clients card may be drawn before the first progress came: it draws again to say
   // "Checking the version…".
   const opened = versionsOpened(data.progress, view);
+  // A source that ends or starts again changes the Library's lines above the table.
+  const lines = (progress) => sourceLines(progress, state.kind).join("\n");
+  const changed = state.view === "library" && lines(data.progress) !== lines(view);
   data.progress = view;
   if (opened) document.dispatchEvent(new CustomEvent("kitden:versions"));
+  if (changed) redrawSourceLines();
   scanning = scanLine(view);
   if (scanning) {
     if (bar.classList.contains("progress")) drawScan();

@@ -343,8 +343,9 @@ def test_library_rows_say_what_each_client_has_or_can_add_without_details():
     assert 'el("table", "map library")' in text and '"desc"' in text
     # A category filter, fed by the counts the server sends.
     assert '"All categories"' in text and "answer.categories" in text
-    # The row opens Details, so there is no Details button on it.
-    assert '"Details"' not in text
+    # The row opens Details, so there is no Details button on it; only the box shown when no
+    # client is found has one.
+    assert text.count('"Details"') == 1 and 'button("Details", showLookFor' in text
 
 
 # Skills beside Plugins ---------------------------------------------------------------------
@@ -914,6 +915,18 @@ def test_a_review_says_when_its_settings_changed():
     assert '"kitden:rescanned"' in script("app.js") and '"kitden:rescanned"' in script("panel.js")
     review = script("review.js")
     assert "Settings changed since this preview." in review and '"Preview again"' in review
+
+
+def test_no_clients_says_what_kitden_looks_for_and_offers_the_demo():
+    library = script("library.js")
+    assert "Kitden found no AI coding clients." in library and '"Open Overview"' in library
+    assert "It looks for Claude Code, Codex and Cursor." in library
+    # The folders and the command sit behind Details (AGENTS.md).
+    assert '"What Kitden looks for"' in library and "lookFor(" in library
+    assert '"kitden demo"' in library
+    assert "noClients({ overview: false })" in script("overview.js")
+    # A source still read: a quiet line on the tab it changes, drawn again in place.
+    assert "sourceLines(" in library and "sourceLines(" in script("app.js")
 
 
 def test_a_project_no_longer_on_the_list_is_said_not_swapped():

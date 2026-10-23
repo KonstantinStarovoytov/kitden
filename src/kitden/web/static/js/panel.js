@@ -113,11 +113,12 @@ export function header(kicker, title, lede, closeLabel = "Close", mono = false) 
 }
 
 // A note in the panel, for example a server the gateway holds; `actions` go in its footer.
-export function openInfo(kicker, title, body, actions = []) {
+// The title is a name in mono, unless `mono` is false (a sentence).
+export function openInfo(kicker, title, body, actions = [], { mono = true } = {}) {
   panelState.current = { type: "info" };
   const footer = el("footer");
   footer.append(...actions);
-  openPanel([header(kicker, title, null, "Close", true), body, footer]);
+  openPanel([header(kicker, title, null, "Close", mono), body, footer]);
 }
 
 // A change from the Changes page: the Changes page builds the body (steps with their files,

@@ -280,6 +280,7 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .banner { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--wire)); background: color-mix(in srgb, var(--danger) 8%, transparent); color: var(--ink); margin-bottom: 12px; }
 .empty { padding: 32px; text-align: center; color: var(--ink-3); background: var(--panel); border: 1px dashed var(--wire-strong); border-radius: 8px; }
 .empty strong { color: var(--ink-2); display: block; margin-bottom: 4px; }
+.empty > .btn + .btn { margin-left: 6px; }
 
 /* Overview */
 .overview { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; align-items: start; }
@@ -373,8 +374,8 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .s-via { color: var(--lamp-off); }
 .s-done { color: var(--lamp-on); } .s-done .dot::after { transform: scale(1); }
 .btn.toggle[aria-pressed="true"] { background: var(--route-soft); border-color: color-mix(in srgb, var(--route) 40%, var(--wire)); color: var(--route); font-weight: 600; }
-/* One quiet line each above the table: a marketplace an add brings in first, matches a choice hides. */
-.page > .note, .page > .more { margin: 0 0 8px; color: var(--ink-3); font-size: 12px; }
+/* One quiet line each above the table: a marketplace an add brings in first, a source still read, matches a choice hides. */
+.page > .note, .page > .source-lines > .note, .page > .more { margin: 0 0 8px; color: var(--ink-3); font-size: 12px; }
 .more { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; }
 .more .btn { color: var(--route); padding: 0 4px; }
 .empty .more { justify-content: center; margin: 6px 0 0; }
@@ -514,7 +515,8 @@ pre.diff .del { color: var(--diff-del); background: color-mix(in srgb, var(--dan
 .checklist { margin: 0; padding-left: 18px; color: var(--ink-2); }
 .checklist .badge { margin-left: 6px; }
 .commands { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
-.commands pre { margin: 4px 0 0; padding: 8px 10px; background: var(--inset); border-radius: 6px; font: 12px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.looks-for { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 4px; }
+.commands pre, pre.command { margin: 4px 0 0; padding: 8px 10px; background: var(--inset); border-radius: 6px; font: 12px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* Toast with an undo countdown that pauses on hover */
 .toast { position: fixed; z-index: 30; left: 50%; bottom: 20px; transform: translate(-50%, 140%); visibility: hidden; background: var(--ink); color: var(--canvas); border-radius: 10px; padding: 8px 8px 8px 14px; display: flex; gap: 12px; align-items: center; overflow: hidden; max-width: calc(100vw - 32px); transition: transform var(--t-panel) var(--ease-out), visibility 0s linear var(--t-panel); }

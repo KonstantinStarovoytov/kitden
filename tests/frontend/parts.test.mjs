@@ -326,3 +326,27 @@ test('a folder name is the last part of its path, and / stays /', () => {
   assert.equal(folderName('/'), '/');
   assert.equal(folderName(null), '');
 });
+
+const { lookFor, sourceLines } = await import('../../src/kitden/web/static/js/parts.js');
+
+test('no clients: the page names each client and where Kitden looks', () => {
+  const client = (id, display_name, root) => ({ id, display_name, status: 'not_found', config_roots: [`/Users/me/${root}`] });
+  const clients = [client('claude_code', 'Claude Code', '.claude'), client('codex', 'Codex', '.codex'), client('cursor', 'Cursor', '.cursor'),
+    { id: 'claude_desktop_code_tab', display_name: 'Claude Desktop (Code tab)', status: 'found', config_roots: ['/x'] }];
+  assert.deepEqual(lookFor(clients), [{ name: 'Claude Code', where: '~/.claude' }, { name: 'Codex', where: '~/.codex' }, { name: 'Cursor', where: '~/.cursor' }]);
+  // In client order, whatever order they come in; none read yet, none named.
+  assert.deepEqual(lookFor([...clients].reverse()).map((c) => c.name), ['Claude Code', 'Codex', 'Cursor']);
+  assert.deepEqual(lookFor(undefined), []);
+});
+
+test('a source still being read says so on the tab it changes, not in the top bar words', () => {
+  const open = { ready: true, steps: [{ name: 'Codex plugins', done: false, later: true }, { name: 'marketplaces', done: false, later: true }] };
+  const LINE = "Codex plugins are still being read, so Codex's column may change.";
+  assert.deepEqual(sourceLines(open, 'plugin'), [LINE]);
+  assert.deepEqual(sourceLines(open, 'mcp_server'), []);
+  assert.deepEqual(sourceLines({ ready: true, steps: [{ name: 'Codex plugins', done: true, later: true }] }, 'plugin'), []);
+  assert.deepEqual(sourceLines(null, 'plugin'), []);
+  // The top bar keeps "Still checking …"; the line says what it means here, not the same words.
+  assert.ok(scanLine(open).text.startsWith('Still checking Codex plugins'));
+  assert.ok(!LINE.includes('Still checking'));
+});

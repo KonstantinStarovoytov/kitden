@@ -1,5 +1,5 @@
 // Small parts shared by every place: sockets, client marks, flags, loading and error states.
-import { $, button, el, joinWords, plural } from "./dom.js";
+import { $, button, el, joinWords, plural, shortPath } from "./dom.js";
 import { reducedMotion } from "./motion.js";
 
 // The shared baseline: the picker's first choice, and the scope of what is set for every project.
@@ -51,6 +51,27 @@ export function scanLine(view) {
   const named = open.filter((step) => Boolean(step.later) === Boolean(view.ready)).map((step) => step.name);
   const words = named.length ? named : open.map((step) => step.name);
   return { text: `${view.ready ? "Still checking" : "Reading"} ${joinWords(words)}…`, share };
+}
+
+// The first scan's later steps that change what a Library tab shows, with the line that tab
+// shows above its table while the step runs. The top bar says "Still checking …"; this line
+// says what it means here, in other words. Only Codex's plugin list changes a tab (the
+// marketplaces step only reads ahead).
+const SOURCE_LINES = {
+  "Codex plugins": { kind: "plugin", text: "Codex plugins are still being read, so Codex's column may change." },
+};
+export function sourceLines(progress, kind) {
+  const steps = (progress && progress.steps) || [];
+  return steps
+    .filter((step) => step.later && !step.done && SOURCE_LINES[step.name] && SOURCE_LINES[step.name].kind === kind)
+    .map((step) => SOURCE_LINES[step.name].text);
+}
+
+// With no client found: each client Kitden looks for and the folder it checks, in client order.
+const LOOKS_FOR = ["claude_code", "codex", "cursor"];
+export function lookFor(clients) {
+  return LOOKS_FOR.map((id) => (clients || []).find((c) => c.id === id)).filter(Boolean)
+    .map((c) => ({ name: c.display_name, where: shortPath((c.config_roots || [])[0]) }));
 }
 
 // A client's version, or what is known of it: while the versions are still read in the

@@ -38,7 +38,7 @@ const requests = [];
 globalThis.fetch = (url) => new Promise((resolve) => {
   requests.push({ url, answer: (body) => resolve({ ok: true, status: 200, json: async () => body }) });
 });
-const { addChoices, addName, hasAdds, scopeLine, cellHint, cellNode, emptyState, hiddenClients, hiddenLine, hideButton, loadLibrary, loadLibraryFor, metaText, moreLine, nameCell, noteFor, previewFor, setHidden, startAdd } = await import('../../src/kitden/web/static/js/library.js');
+const { addChoices, addName, hasAdds, scopeLine, cellHint, cellNode, emptyState, hiddenClients, hiddenLine, hideButton, loadLibrary, loadLibraryFor, metaText, moreLine, nameCell, noClients, noteFor, previewFor, setHidden, startAdd } = await import('../../src/kitden/web/static/js/library.js');
 const { data, freshness, hashFor, loadShared, parseHash, state } = await import('../../src/kitden/web/static/js/store.js');
 const later = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -186,6 +186,14 @@ test('a search the choice hides shows the more line, not an empty table', () => 
   assert.equal(all.textContent, 'Show all');
   const added = emptyState({ kind: 'skill', show: 'new', q: 'pdf' }, moreLine({ more: 1 }, 'new'));
   assert.equal(added.children[0].textContent, 'Nothing new matches “pdf”');
+});
+
+test('no clients: the Library says what Kitden looks for, the folders and the demo behind Details', () => {
+  const words = (box) => box.children.map((c) => c.textContent);
+  assert.deepEqual(words(noClients()), ['Kitden found no AI coding clients.', 'It looks for Claude Code, Codex and Cursor.', 'Details', 'Open Overview']);
+  // On the Overview itself, no link to it.
+  assert.deepEqual(words(noClients({ overview: false })), ['Kitden found no AI coding clients.', 'It looks for Claude Code, Codex and Cursor.', 'Details']);
+  assert.equal(noClients().className, 'empty');
 });
 
 test('an empty tab names its kind the way the tab does', () => {

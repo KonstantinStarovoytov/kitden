@@ -6,8 +6,8 @@ import { button, el, tabKeys } from "./dom.js";
 import { animate, entrance, glide, land, reducedMotion, rollTo, spring } from "./motion.js";
 import { marketplaceForm, projectNote, showOffer, showSkill } from "./offer.js";
 import { isPanelOpen, openInfo, projectLabel, review } from "./panel.js";
-import { banner, CLIENT_NAMES, flag, mark, morphSocket, opens, skeleton, socket, staleNote } from "./parts.js";
-import { afterShared, arrival, freshness, go, projectPath, render, retry, sameSel, setState, state, takeArrival } from "./store.js";
+import { banner, CLIENT_NAMES, flag, lookFor, mark, morphSocket, opens, skeleton, socket, sourceLines, staleNote } from "./parts.js";
+import { afterShared, arrival, data, freshness, go, projectPath, render, retry, sameSel, setState, state, takeArrival } from "./store.js";
 
 const KINDS = [
   ["mcp_server", "MCP servers"], ["plugin", "Plugins"], ["skill", "Skills"],
@@ -370,6 +370,7 @@ export function renderLibrary(main) {
   const hidden = hiddenLine(answer.columns);
   if (hidden) main.append(hidden);
   for (const note of answer.notes) main.append(el("p", "note", note));
+  main.append(sourceBox());
   const more = moreLine(answer, asked.show);
   // A selection that arrived (from another place, Back, Forward or a link) opens once its rows
   // are in.
@@ -545,10 +546,45 @@ export function hiddenLine(columns) {
   return box;
 }
 
-function noClients() {
+// No client found: which clients Kitden looks for; their folders and the demo command wait
+// behind Details, as paths and commands do on every page. The Overview leaves out its own link.
+export function noClients({ overview = true } = {}) {
   const box = el("div", "empty");
-  box.append(el("strong", null, "Kitden found no AI coding clients."), button("Open Overview", () => go("overview"), "btn"));
+  box.append(el("strong", null, "Kitden found no AI coding clients."), el("p", null, "It looks for Claude Code, Codex and Cursor."));
+  box.append(button("Details", showLookFor, "btn"));
+  if (overview) box.append(button("Open Overview", () => go("overview"), "btn"));
   return box;
+}
+
+function showLookFor() {
+  const body = el("div", "body");
+  const list = el("ul", "looks-for");
+  for (const { name, where } of lookFor(data.clients)) {
+    const item = el("li", null, `${name} · `);
+    item.append(el("span", "mono", where));
+    list.append(item);
+  }
+  const where = el("section");
+  where.append(list, el("p", "muted", "It finds a client by that folder or by its command."));
+  const demo = el("section");
+  demo.append(el("p", null, "To try Kitden on a sample setup, run this in a terminal:"), el("pre", "command", "kitden demo"));
+  body.append(where, demo);
+  openInfo("Clients", "What Kitden looks for", body, [], { mono: false });
+}
+
+// The first scan's sources still read that change this tab (parts.js), one quiet line each
+// above the table, after the files Kitden could not read.
+function sourceBox() {
+  const box = el("div", "source-lines");
+  for (const line of sourceLines(data.progress, currentKind())) box.append(el("p", "note", line));
+  return box;
+}
+
+// A source ended or started again (app.js showScan): only its lines are drawn again, so no row
+// slides and nothing else on the page changes.
+export function redrawSourceLines() {
+  const box = document.querySelector("#main .source-lines");
+  if (box) box.replaceWith(sourceBox());
 }
 
 export function emptyState(asked, more) {
