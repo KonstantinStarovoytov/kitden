@@ -1,7 +1,8 @@
 // Details of a plugin or skill from the marketplaces on this computer, every way to add it (or
 // why there is none), and the forms that add one to several clients in one review. The Library
 // opens these Details for rows not on this computer; the panel's Details use the parts.
-import { busyWhile, button, el, joinWords, plural, reportError, shortPath, webLink } from "./dom.js";
+import { technical } from "./details.js";
+import { busyWhile, button, el, joinWords, plural, reportError, webLink } from "./dom.js";
 import { noteFor, rowTitle, startAdd } from "./library.js";
 import { closePanel, footerActions, footerButtons, openInfo, openPanel, review } from "./panel.js";
 import { CLIENT_NAMES, clientCheck } from "./parts.js";
@@ -21,6 +22,14 @@ const ALSO_LOADS = {
   shared: "Cursor will also load it from the shared skills folder.",
 };
 const PROJECT_NOTE = "Adds for all projects.";
+// Why an add reaches Cursor too, in the server's words (views/words.py READS_FOLDER and
+// LOADS_PLUGINS).
+const REACH_NOTES = {
+  codex: "Cursor reads Codex's folder",
+  claude_code: "Cursor reads Claude Code's folder",
+  plugin: "Cursor loads Claude Code's plugins",
+};
+const SKILL_COPIES = ["skill.install", "plugin.skills"];
 
 // In a project view an add still goes to the user's settings; the review says so.
 export function projectNote(project) {
@@ -117,16 +126,14 @@ export function showSkill(skill, row) {
   }
   const from = el("ul", "checklist");
   from.append(el("li", null, skill.plugin ? `Plugin: ${skill.plugin}` : `In your skills: ${skill.from}`));
-  const path = el("li", "mono", shortPath(skill.path));
-  path.title = skill.path;
-  from.append(path);
   body.append(section("Where it comes from", [from]), section("What it brings", brings(skill)));
   const clients = el("ul", "checklist");
   for (const client of columns()) {
     const word = skill.installed[client] || (skill.routes[client] ? "Can add" : skill.self_contained ? "Not set up" : "Needs its plugin");
     clients.append(el("li", null, `${CLIENT_NAMES[client]}: ${word}`));
   }
-  body.append(section("Clients", [clients]));
+  // Its folder waits under Technical details, as in Details of an item on this computer.
+  body.append(section("Clients", [clients]), technical([{ title: "Skill folder", path: skill.path }]));
   openInfo("Skill", rowTitle(row), body, addActions(row, skill, body));
 }
 
@@ -218,15 +225,32 @@ export function startChosen(open) {
   return new Set(open.length === 1 ? open : []);
 }
 
-// The line naming Cursor while it would load the change without being checked, or "".
-// `open` holds the clients the form offers; Cursor is one only when it is here and lacks the item.
-// A checked Cursor is named already, so the skill lines are not needed then.
-export function alsoLoads(kind, inherits, chosen, open = []) {
-  if (kind === "plugin") return inherits.plugin && chosen.has("claude_code") ? ALSO_LOADS.plugin : "";
+// The clients an add to `client` reaches, and why, as the Affects line in Details says it. A
+// skill copy for Codex lands in .agents/skills, which Cursor reads whatever its third-party
+// switch says; a copy for Claude Code reaches Cursor when Cursor reads Claude Code's folder.
+// Cursor loads Claude Code's plugins of all projects only, so a plugin add that asks where it
+// goes (`asks`) names Claude Code alone. `found`: the clients on this computer.
+export function addReach(client, action, inherits, found, asks) {
+  const cursor = client !== "cursor" && found.includes("cursor");
+  let note = null;
+  if (cursor && SKILL_COPIES.includes(action)) {
+    if (client === "codex" || (client === "claude_code" && inherits.skill)) note = REACH_NOTES[client];
+  } else if (cursor && action === "plugin.install" && client === "claude_code" && inherits.plugin && !asks) {
+    note = REACH_NOTES.plugin;
+  }
+  return note ? { clients: [client, "cursor"], note } : { clients: [client], note: null };
+}
+
+// The line naming Cursor while it would load the change without being checked, or "": the
+// same rule as addReach. `open` holds the clients the form offers; Cursor is one only when it
+// is here and lacks the item. A checked Cursor is named already, so no line is needed then.
+// `found`: the clients on this computer, all three before they are read (as columns()).
+export function alsoLoads(kind, inherits, chosen, open = [], found = COLUMNS) {
   if (chosen.has("cursor")) return "";
-  if (inherits.skill && chosen.has("claude_code")) return ALSO_LOADS.skill;
-  // A Codex copy lands in ~/.agents/skills, which Cursor reads whatever its third-party switch says.
-  return chosen.has("codex") && open.includes("cursor") ? ALSO_LOADS.shared : "";
+  const reaches = (client, action) => chosen.has(client) && addReach(client, action, inherits, found, false).clients.includes("cursor");
+  if (kind === "plugin") return reaches("claude_code", "plugin.install") ? ALSO_LOADS.plugin : "";
+  if (reaches("claude_code", "skill.install")) return ALSO_LOADS.skill;
+  return reaches("codex", "skill.install") && open.includes("cursor") ? ALSO_LOADS.shared : "";
 }
 
 // Checkboxes for the clients that can take it, checked as `chosen` says; `onChange` hears each.
@@ -273,7 +297,7 @@ function addPanel(kicker, offer, { source, notes, checkNote, preview }) {
   // Always in the page, so a screen reader hears the line when it changes.
   const also = el("p", "also muted");
   also.setAttribute("aria-live", "polite");
-  const showAlso = () => { also.textContent = alsoLoads(offer.kind, inherits(offer), chosen, open); };
+  const showAlso = () => { also.textContent = alsoLoads(offer.kind, inherits(offer), chosen, open, columns()); };
   showAlso();
   body.append(addFormBody(clientChecks(open, chosen, checkNote, showAlso), chosen, () => preview([...chosen]), also));
   openPanel([panelHead(kicker, offer.name), body, el("footer")]);

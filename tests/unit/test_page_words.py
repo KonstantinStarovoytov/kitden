@@ -3,7 +3,14 @@
 import re
 from pathlib import Path
 
-from kitden.views.words import AFTER_WORDS, ROUTE_WORDS, STALE, STATE_WORDS
+from kitden.views.words import (
+    AFTER_WORDS,
+    LOADS_PLUGINS,
+    READS_FOLDER,
+    ROUTE_WORDS,
+    STALE,
+    STATE_WORDS,
+)
 
 STATIC = Path(__file__).parents[2] / "src/kitden/web/static"
 INDEX = (STATIC / "index.html").read_text()
@@ -148,8 +155,10 @@ def test_plugin_switch_opens_a_review_and_does_not_flip_itself():
 
 def test_details_offer_remove_for_plugins_and_skills():
     text = panel()
-    assert '"plugin.remove": (client) => `Remove from ${client}…`' in text
-    assert '"skill.remove": (client) => `Remove from ${client}…`' in text
+    # A Remove names every client it reaches: "Remove from Codex and Cursor…".
+    assert '"plugin.remove": (clients) => `Remove from ${clients}…`' in text
+    assert '"skill.remove": (clients) => `Remove from ${clients}…`' in text
+    assert "def.affects.clients" in script("details.js")
 
 
 # Motion pass 2 (2026-10-18): each page keeps the parts the design brief asked for.
@@ -357,9 +366,10 @@ def test_skill_rows_say_where_each_skill_comes_from_and_how_each_client_loads_it
     # The refusal, in the owner's words, and a way to the plugin that holds the skill.
     assert "This skill needs the rest of its plugin. Add the plugin instead." in text
     assert '"Find the plugin"' in text
-    # Details list the files and mark the scripts the agent may run; paths stay in Details.
+    # Details list the files and mark the scripts the agent may run; paths stay in Details,
+    # folded under Technical details.
     assert '"What it brings"' in text and '"script"' in text
-    assert "shortPath(skill.path)" in text
+    assert 'technical([{ title: "Skill folder", path: skill.path }])' in text
     assert '"Details"' not in text
 
 
@@ -1000,6 +1010,44 @@ def test_details_answer_in_order_and_fold_the_evidence():
     # A layer shows no path, command or file lines of its own: they wait in the fold.
     layer = details.split("function layer(def, said)")[1].split("\n}\n")[0]
     assert "shortPath" not in layer and "def.summary" not in layer and "preview" not in layer
+
+
+def test_details_say_what_the_lead_changes_and_link_to_the_other_pages():
+    details = script("details.js")
+    for words in (
+        '"Compare across clients"',
+        '"Manage tools"',
+        '"In this project."',
+        '"You choose this project or all projects next."',
+        '"All projects."',
+        '"All projects except this one."',
+    ):
+        assert words in details, words
+    assert "affectsText(affectsFor(" in details
+    assert ".affects" in CSS and ".links" in CSS
+    # A link closes the panel first, reads the Library's rows like the rail, then goes there.
+    follow = details.split("export async function followLink(link)")[1].split("\n}\n")[0]
+    assert follow.index("closePanel(") < follow.index("goTo(")
+    assert "raceSlow(loadLibraryFor(libraryChoice(" in follow
+    assert "dataset.focus = `link:${link.view}`" in details
+    # The Gateway's own panel of a held server links back to the Library.
+    assert "contextLinks(" in script("gateway.js")
+
+
+def test_the_page_and_the_server_say_why_an_add_reaches_cursor_alike():
+    offer = script("offer.js")
+    for owner in ("Codex", "Claude Code"):
+        assert f'"{READS_FOLDER.format(reader="Cursor", owner=owner)}"' in offer, owner
+    assert f'"{LOADS_PLUGINS}"' in offer
+    # One rule: the Add form's Cursor line asks addReach too.
+    also = offer.split("export function alsoLoads(")[1].split("\n}\n")[0]
+    assert "addReach(" in also
+
+
+def test_skill_details_fold_the_folder_path():
+    show = script("offer.js").split("export function showSkill(")[1].split("\n}\n")[0]
+    assert "technical([" in show
+    assert 'el("li", "mono", shortPath(skill.path))' not in show
 
 
 def test_a_demo_says_so_quietly_in_the_rail():

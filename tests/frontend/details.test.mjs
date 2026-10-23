@@ -6,7 +6,8 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; details.js must load there too.
 delete globalThis.navigator;
-const { DETAILS_ORDER, detailsOrder, fileScopeWords, layerState, originWords, scopeWords, techRows, whyLines, whyParts } = await import('../../src/kitden/web/static/js/details.js');
+const { DETAILS_ORDER, affectsFor, affectsText, contextLinks, detailsOrder, fileScopeWords, footerActions, layerState, offerLabel, originWords, scopeWords, techRows, whyLines, whyParts } = await import('../../src/kitden/web/static/js/details.js');
+const { addReach } = await import('../../src/kitden/web/static/js/offer.js');
 
 const def = (fields) => ({ kind: 'skill', scope: 'user', project: null, enabled: 'on', owner_client: fields.client, loads: true, overridden: false, merged: false, ...fields });
 const site = '/Users/me/work/website';
@@ -166,4 +167,118 @@ test('technical details show one file once, for every client that reads it', () 
   const skill = '/Users/me/.agents/skills/code-review/SKILL.md';
   assert.deepEqual(techRows([def({ client: 'cursor', owner_client: 'shared', source: skill }), def({ client: 'codex', source: skill })]).map((r) => r.title),
     ['Codex and Cursor · Global settings']);
+});
+
+// The Affects line and the links ------------------------------------------------------------
+
+const codexDef = { id: 'd1', client: 'codex', project: null, affects: { clients: ['codex', 'cursor'], scope: 'all', note: "Cursor reads Codex's folder" } };
+
+test('the Affects line names every client the lead changes, and why', () => {
+  const affects = affectsFor({ def: codexDef, action: 'skill.remove' }, { definitions: [codexDef] });
+  assert.equal(affectsText(affects, null), "Changes Codex and Cursor (Cursor reads Codex's folder). All projects.");
+});
+
+test('a project definition names its project', () => {
+  const local = { id: 'd2', client: 'claude_code', project: site, affects: { clients: ['claude_code'], scope: 'project', note: null } };
+  const affects = affectsFor({ def: local, action: 'mcp.remove_direct' }, { definitions: [local] });
+  assert.equal(affectsText(affects, site), 'Changes Claude Code. In this project.');
+  assert.equal(affectsText(affects, null), 'Changes Claude Code. In website.');
+});
+
+test('a definition another one overrides in this project is not promised for this project', () => {
+  const user = def({ id: 'u', client: 'claude_code', kind: 'mcp_server', loads: false, overridden: true, affects: { clients: ['claude_code'], scope: 'all', note: null } });
+  const mine = def({ id: 'p', client: 'claude_code', kind: 'mcp_server', scope: 'project', project: site });
+  const affects = affectsFor({ def: user, action: 'mcp.remove_direct' }, { definitions: [user, mine], project: site });
+  assert.equal(affectsText(affects, site), 'Changes Claude Code. All projects except this one.');
+  // Overridden by another of all projects (two plugins): nothing to leave out.
+  const other = def({ id: 'o', client: 'claude_code', kind: 'mcp_server', scope: 'plugin' });
+  assert.equal(affectsText(affectsFor({ def: user, action: 'mcp.remove_direct' }, { definitions: [user, other], project: site }), site), 'Changes Claude Code. All projects.');
+});
+
+test('a move names every client whose entry moves', () => {
+  const cc = { id: 'e1', client: 'claude_code', project: null, affects: { clients: ['claude_code'], scope: 'all', note: null } };
+  const cx = { id: 'e2', client: 'codex', project: null, affects: { clients: ['codex'], scope: 'all', note: null } };
+  assert.equal(affectsText(affectsFor('move', { definitions: [cc, cx], move: { items: ['e1', 'e2'], gateways: [{}] } }), null), 'Changes Claude Code and Codex. All projects.');
+  // Every entry in one project's files: that project.
+  const p1 = { ...cc, project: site, affects: { ...cc.affects, scope: 'project' } };
+  const p2 = { ...cx, project: site, affects: { ...cx.affects, scope: 'project' } };
+  assert.equal(affectsText(affectsFor('move', { definitions: [p1, p2], move: { items: ['e1', 'e2'], gateways: [{}] } }), site), 'Changes Claude Code and Codex. In this project.');
+  assert.equal(affectsText(affectsFor('move', { definitions: [p1, cx], move: { items: ['e1', 'e2'], gateways: [{}] } }), site), 'Changes Claude Code and Codex. All projects.');
+});
+
+test('an add names what its copy reaches, and says when the place is chosen next', () => {
+  const inherits = { plugin: true, skill: true };
+  const found = ['claude_code', 'codex', 'cursor'];
+  assert.deepEqual(addReach('codex', 'skill.install', inherits, found, false), { clients: ['codex', 'cursor'], note: "Cursor reads Codex's folder" });
+  assert.deepEqual(addReach('claude_code', 'plugin.skills', inherits, found, false), { clients: ['claude_code', 'cursor'], note: "Cursor reads Claude Code's folder" });
+  assert.deepEqual(addReach('claude_code', 'skill.install', { plugin: true, skill: false }, found, false), { clients: ['claude_code'], note: null });
+  assert.deepEqual(addReach('claude_code', 'plugin.install', inherits, found, false), { clients: ['claude_code', 'cursor'], note: "Cursor loads Claude Code's plugins" });
+  assert.deepEqual(addReach('claude_code', 'plugin.install', inherits, found, true), { clients: ['claude_code'], note: null });
+  assert.deepEqual(addReach('codex', 'skill.install', inherits, ['codex'], false), { clients: ['codex'], note: null });
+  assert.deepEqual(addReach('cursor', 'skill.install', inherits, found, false), { clients: ['cursor'], note: null });
+  const add = { client: 'codex', add: { action: 'skill.install', project_place: true }, label: 'Add to Codex…' };
+  assert.equal(affectsText(affectsFor(add, { definitions: [], inherits, found, project: 'p1' }), site),
+    "Changes Codex and Cursor (Cursor reads Codex's folder). You choose this project or all projects next.");
+  // A project's own skill goes into the picked project, with no choice.
+  const own = { client: 'claude_code', add: { action: 'skill.install', project_only: true, project_place: false }, label: 'Add to Claude Code…' };
+  assert.equal(affectsText(affectsFor(own, { definitions: [], inherits, found, project: site }), site),
+    "Changes Claude Code and Cursor (Cursor reads Claude Code's folder). In this project.");
+  // With All projects picked, nothing to choose.
+  assert.equal(affectsText(affectsFor(add, { definitions: [], inherits, found, project: '' }), ''),
+    "Changes Codex and Cursor (Cursor reads Codex's folder). All projects.");
+});
+
+test('nothing to lead, the Add form, or no answer from the server: no Affects line', () => {
+  assert.equal(affectsFor(null, { definitions: [] }), null);
+  assert.equal(affectsFor({ form: true, label: 'Add…' }, { definitions: [] }), null);
+  assert.equal(affectsFor({ def: { id: 'x', client: 'codex' }, action: 'plugin.disable' }, { definitions: [] }), null);
+});
+
+test('links lead to another page with the same item', () => {
+  const row = { kind: 'mcp_server', name: 'files' };
+  const held = [{ via_gateway: 'kitden' }];
+  assert.deepEqual(contextLinks(row, held, 'overview').map((l) => [l.label, l.view]), [['Compare across clients', 'library'], ['Manage tools', 'gateway']]);
+  assert.deepEqual(contextLinks(row, held, 'library').map((l) => l.label), ['Manage tools']);
+  assert.deepEqual(contextLinks(row, [{ via_gateway: null }], 'gateway').map((l) => l.label), ['Compare across clients']);
+  assert.deepEqual(contextLinks(row, held, 'overview')[0].selected, { kind: 'mcp_server', name: 'files' });
+  assert.deepEqual(contextLinks(row, held, 'library')[0].selected, { kind: 'mcp_server', name: 'files' });
+  // A plugin row goes by its full name in the Library.
+  assert.deepEqual(contextLinks({ kind: 'plugin', name: 'figma', lookup: 'figma@a' }, [], 'gateway')[0].selected, { kind: 'plugin', name: 'figma@a' });
+});
+
+test('a Remove names every client it reaches; a switch names its own client', () => {
+  const remove = { def: codexDef, action: 'skill.remove' };
+  assert.equal(offerLabel(remove, [remove]), 'Remove from Codex and Cursor…');
+  const plugin = { id: 'p', client: 'claude_code', scope: 'user', affects: { clients: ['claude_code', 'cursor'], scope: 'all', note: "Cursor loads Claude Code's plugins" } };
+  assert.equal(offerLabel({ def: plugin, action: 'plugin.remove' }, []), 'Remove from Claude Code and Cursor…');
+  assert.equal(offerLabel({ def: plugin, action: 'plugin.disable' }, []), 'Turn off in Claude Code…');
+  // Twins still name their folder after the clients.
+  const at = (folder, clients) => ({ def: { id: folder, client: 'codex', scope: 'user', source: `/Users/me/${folder}/x/SKILL.md`, affects: { clients, scope: 'all', note: null } }, action: 'skill.remove' });
+  const twins = [at('.agents/skills', ['codex', 'cursor']), at('.codex/skills', ['codex'])];
+  assert.equal(offerLabel(twins[0], twins), 'Remove from Codex and Cursor (.agents/skills)…');
+  assert.equal(offerLabel(twins[1], twins), 'Remove from Codex (.codex/skills)…');
+});
+
+test('a lone Remove gives way to an add; a lone switch still leads', () => {
+  const remove = { def: { id: 'r', client: 'codex' }, action: 'skill.remove' };
+  const add = { client: 'claude_code', add: { action: 'skill.install', project_only: true }, label: 'Add to Claude Code…' };
+  assert.deepEqual(footerActions([remove], [], null, [add]), { lead: add, rest: [remove] });
+  assert.deepEqual(footerActions([remove], [], null, []), { lead: remove, rest: [] });
+  const off = { def: { id: 'p', client: 'claude_code' }, action: 'plugin.disable' };
+  assert.deepEqual(footerActions([off], [], null, [add]), { lead: off, rest: [add] });
+});
+
+test('a server the Kitden gateway holds leads with Manage tools; Move waits under More', () => {
+  const removeCursor = { def: { id: 'c', client: 'cursor' }, action: 'mcp.remove_direct' };
+  const move = { items: ['c'], gateways: [{ kind: 'kitden' }] };
+  const manage = { label: 'Manage tools', view: 'gateway', selected: { kind: 'mcp_server', name: 'files' } };
+  assert.deepEqual(footerActions([removeCursor], [], move, [], manage), { lead: manage, rest: ['move', removeCursor] });
+  // A problem still comes first; the link then stays with the other links.
+  const duplicate = { level: 'warning', client: 'cursor', fix_action: 'mcp.remove_direct' };
+  assert.deepEqual(footerActions([removeCursor], [duplicate], move, [], manage), { lead: removeCursor, rest: ['move'] });
+  // What the tool switches change: every client that loads it through the gateway.
+  const held = (client) => def({ client, kind: 'mcp_server', name: 'files', owner_client: 'kitden', via_gateway: 'kitden' });
+  const definitions = [def({ client: 'cursor', kind: 'mcp_server', name: 'files' }), held('claude_code'), held('codex')];
+  assert.equal(affectsText(affectsFor(manage, { definitions, project: '' }), ''), 'Changes Claude Code and Codex. All projects.');
+  assert.equal(affectsText(affectsFor(manage, { definitions, project: site }), site), 'Changes Claude Code and Codex. In this project.');
 });

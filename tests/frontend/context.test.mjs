@@ -43,6 +43,7 @@ const { arrivalRow, openRow, rowSel } = await import('../../src/kitden/web/stati
 const { targetSel } = await import('../../src/kitden/web/static/js/overview.js');
 const { arrivalServer } = await import('../../src/kitden/web/static/js/gateway.js');
 const { closePanel, isPanelOpen, openPanel } = await import('../../src/kitden/web/static/js/panel.js');
+const { contextLinks, followLink } = await import('../../src/kitden/web/static/js/details.js');
 
 const github = { kind: 'mcp_server', name: 'github' };
 const files = { kind: 'mcp_server', name: 'files' };
@@ -112,4 +113,24 @@ test('the Gateway opens a held server in its own panel, and never over a panel',
   openPanel([]);
   assert.equal(await late, null);
   closePanel({ focus: false });
+});
+
+test('a link from open Details closes it first, so the other place opens the same item', async () => {
+  // Details open in the Library: "Manage tools" opens the held server on the Gateway.
+  goTo('library', files);
+  openPanel([]);
+  const [manage] = contextLinks({ kind: 'mcp_server', name: 'files' }, [{ via_gateway: 'kitden' }], state.view);
+  assert.equal(manage.label, 'Manage tools');
+  await followLink(manage);
+  assert.equal(isPanelOpen(), false);
+  assert.equal(entries[at], '#gateway?project=a&sel=mcp_server%3Afiles');
+  assert.equal((await arrivalServer(model)).held.name, 'files');
+  // Details open on the Gateway: "Compare across clients" opens the row in the Library.
+  openPanel([]);
+  const [compare] = contextLinks(rows[0], [], state.view);
+  assert.equal(compare.label, 'Compare across clients');
+  await followLink(compare);
+  assert.equal(isPanelOpen(), false);
+  assert.equal(entries[at], '#library?kind=mcp_server&project=a&sel=mcp_server%3Agithub');
+  assert.equal(arrivalRow(rows).key, 'row-github');
 });

@@ -1,5 +1,6 @@
 // Gateway: which clients reach it, and which servers are not connected to it.
 import { getJson, postJson } from "./api.js";
+import { contextLinks, linksRow } from "./details.js";
 import { busyWhile, button, el, joinWords, plural, reportError, webLink } from "./dom.js";
 import { entrance, fold, reducedMotion } from "./motion.js";
 import { heldActions, heldButtons, isPanelOpen, moveInto, moveTargets, openInfo, openItem, review, toast, toolsSection } from "./panel.js";
@@ -374,8 +375,9 @@ function kitdenHeld(gateway) {
   return box;
 }
 
-// Details of a server in the Kitden gateway: what it is, then its tools for the project picked
-// at the top. `next` goes to the tool list (see toolsSection). The address keeps the server.
+// Details of a server in the Kitden gateway: what it is, its tools for the project picked at the
+// top, then a link to the same server in the Library. `next` goes to the tool list (see
+// toolsSection). The address keeps the server.
 function showKitdenServer(server, next = {}) {
   setState({ selected: { kind: "mcp_server", name: server.name } });
   const body = el("div", "body");
@@ -387,7 +389,8 @@ function showKitdenServer(server, next = {}) {
   row.append(mark("kitden"), middle);
   const stack = el("div", "stack");
   stack.append(row);
-  body.append(stack, toolsSection(server.name, (again) => showKitdenServer(server, again), next));
+  const links = contextLinks({ kind: "mcp_server", name: server.name }, [{ via_gateway: "kitden" }], "gateway");
+  body.append(stack, toolsSection(server.name, (again) => showKitdenServer(server, again), next), linksRow(links));
   openInfo("MCP server", server.name, body, heldButtons(heldActions(server.name, foundClients(), server.plain_secrets)));
 }
 

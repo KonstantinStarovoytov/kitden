@@ -37,6 +37,13 @@ test('the plugin form names Cursor while Claude Code is checked', () => {
   assert.equal(alsoLoads('plugin', { plugin: false, skill: true }, new Set(['claude_code'])), '');
 });
 
+test('the form names Cursor only when Cursor is on this computer', () => {
+  // The same rule as the Affects line in Details (addReach): without Cursor, nothing to name.
+  assert.equal(alsoLoads('plugin', both, new Set(['claude_code']), [], ['claude_code', 'codex']), '');
+  assert.equal(alsoLoads('skill', both, new Set(['claude_code']), ['claude_code', 'codex'], ['claude_code', 'codex']), '');
+  assert.equal(alsoLoads('plugin', both, new Set(['claude_code']), [], ['claude_code', 'cursor']), 'Cursor will also load this through Claude Code.');
+});
+
 test('the skill form names Cursor only when Cursor is not checked itself', () => {
   const line = "Cursor will also load it from Claude Code's folder.";
   assert.equal(alsoLoads('skill', both, new Set(['claude_code'])), line);

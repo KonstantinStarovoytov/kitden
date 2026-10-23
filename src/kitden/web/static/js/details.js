@@ -1,13 +1,13 @@
 // Item details: what an item is, where each client loads it from, and the actions on it.
 import { getJson, query } from "./api.js";
 import { $, button, el, joinWords, plural, reportError, shortPath } from "./dom.js";
-import { rowTitle, shownRow } from "./library.js";
+import { loadLibraryFor, raceSlow, rowSel, rowTitle, shownRow } from "./library.js";
 import { fold } from "./motion.js";
-import { about, addButton, addOptions, whyNoAction } from "./offer.js";
-import { header, openInfo, openPanel, panelState, swapContent } from "./panel.js";
+import { about, addButton, addOptions, addReach, whyNoAction } from "./offer.js";
+import { closePanel, header, openInfo, openPanel, panelState, swapContent } from "./panel.js";
 import { ALL_PROJECTS, callout, CLIENT_NAMES, CLIENT_ORDER, GATEWAY_NOTE, gatewayName, mark, ROUTE_WORDS, socket, STATE_WORDS, toolsNode } from "./parts.js";
 import { review } from "./review.js";
-import { current as currentModel, currentError, data, projectPath, state } from "./store.js";
+import { current as currentModel, currentError, data, goTo, libraryChoice, projectPath, state } from "./store.js";
 import { toolsSection } from "./tools.js";
 
 export const KIND_WORDS = {
@@ -21,13 +21,17 @@ export function kindWord(row) {
   return KIND_WORDS[row.kind] || row.kind;
 }
 const WRITABLE = ["claude_code", "codex", "cursor"];
+// A switch names its own client; a Remove names every client it reaches (offerLabel).
 const ACTION_BUTTONS = {
   "plugin.disable": (client) => `Turn off in ${client}…`,
   "plugin.enable": (client) => `Turn on in ${client}…`,
-  "mcp.remove_direct": (client) => `Remove from ${client}…`,
-  "plugin.remove": (client) => `Remove from ${client}…`,
-  "skill.remove": (client) => `Remove from ${client}…`,
+  "mcp.remove_direct": (clients) => `Remove from ${clients}…`,
+  "plugin.remove": (clients) => `Remove from ${clients}…`,
+  "skill.remove": (clients) => `Remove from ${clients}…`,
 };
+const REMOVES = ["mcp.remove_direct", "plugin.remove", "skill.remove"];
+// Whether Cursor loads Claude Code's plugins and the skills in its folder, before the server says.
+const NO_INHERITS = { plugin: false, skill: false };
 
 export const clientName = (id) => CLIENT_NAMES[id] || id;
 
@@ -40,12 +44,12 @@ export async function openItem(row, { instant = false, tools: toolsNext = {} } =
   // The marketplace's entry says what the item is; read beside the definitions. Without it the
   // rest still shows.
   const entry = row.offer ? getJson(`/api/offer${query({ kind: row.kind, id: row.offer })}`).catch(() => null) : null;
-  let definitions;
+  let answer;
   try {
     const params = { name: row.lookup || row.name, kind: row.kind, project: state.project };
     // A command and an agent may share a name: ask for this row's one.
     if (row.category && row.kind === "instructions") params.category = row.category;
-    definitions = (await getJson(`/api/explain${query(params)}`)).definitions;
+    answer = await getJson(`/api/explain${query(params)}`);
   } catch {
     if (panelState.current && panelState.current.row === row) {
       body.replaceChildren(callout("Could not load the details.", "error"));
@@ -58,9 +62,10 @@ export async function openItem(row, { instant = false, tools: toolsNext = {} } =
   }
   const offer = await entry;
   if (!panelState.current || panelState.current.row !== row) return;
-  panelState.current.definitions = definitions;
-  panelState.current.offer = offer;
-  showDetails(row, definitions, offer, toolsNext);
+  const { definitions } = answer;
+  const inherits = answer.inherits || NO_INHERITS;
+  Object.assign(panelState.current, { definitions, offer, inherits });
+  showDetails(row, definitions, offer, toolsNext, inherits);
 }
 
 // The line under the Details title: the clients that have the item, those whose item of that
@@ -133,15 +138,20 @@ export function moveFor(row, model, unread = false) {
 
 // The footer's lead action and the rest, in order; "move" stands for Move into the gateway, and
 // `adds` are the ways to add the item (offer.js addOptions). A problem comes before an option:
-// the warning's fix leads, then Move, then a lone action, then the first add. With a warning no
-// button fixes, or a server to add in the gateway by hand first, nothing leads.
-export function footerActions(offers, warnings, move, adds = []) {
+// the warning's fix leads, then "Manage tools" (`tools`, the link to a server the Kitden gateway
+// already holds: its tools come before moving the rest in), then Move, then a lone action, then
+// the first add. A lone Remove gives way to an add, so the add the cell offers stays in sight; a
+// lone switch still leads. With a warning no button fixes, or a server to add in the gateway by
+// hand first, nothing leads. The link is never in `rest`: when it does not lead, it is a link.
+export function footerActions(offers, warnings, move, adds = [], tools = null) {
   const fix = offers.find((o) => warnings.some((f) => f.fix_action === o.action && f.client === o.def.client));
   const canMove = Boolean(move && move.gateways.length);
   const options = [...(canMove ? ["move"] : []), ...offers, ...adds];
+  const lone = offers.length === 1 && !(REMOVES.includes(offers[0].action) && adds.length);
   let lead = fix || null;
+  if (!lead && !warnings.length && tools) lead = tools;
   if (!lead && !warnings.length && canMove) lead = "move";
-  if (!lead && !warnings.length && !move && offers.length === 1) lead = offers[0];
+  if (!lead && !warnings.length && !move && lone) lead = offers[0];
   if (!lead && !warnings.length && adds.length) lead = adds[0];
   return { lead, rest: options.filter((o) => o !== lead) };
 }
@@ -207,7 +217,8 @@ function moreButton(buttons) {
   return more;
 }
 
-// A button's words. When one client has more than one definition that can change, the label
+// A button's words. A Remove names every client it reaches (def.affects.clients): "Remove from
+// Codex and Cursor…". When one client has more than one definition that can change, the label
 // names the scope too, or the folder when the scopes are the same (one skill in two folders).
 export function offerLabel({ def, action }, offers) {
   const twins = offers.filter((o) => o.def.client === def.client && o.def.id !== def.id);
@@ -216,7 +227,109 @@ export function offerLabel({ def, action }, offers) {
     const same = twins.some((o) => scopeWords(o.def) === scopeWords(def));
     where = ` (${same ? placeWords(def) : scopeWords(def).toLowerCase()})`;
   }
-  return ACTION_BUTTONS[action](`${clientName(def.client)}${where}`);
+  const clients = REMOVES.includes(action) && def.affects ? def.affects.clients : [def.client];
+  return ACTION_BUTTONS[action](`${joinWords(clients.map(clientName))}${where}`);
+}
+
+// The Affects line ---------------------------------------------------------------------------
+
+const inOrder = (clients) => [...new Set(clients)].sort((a, b) => CLIENT_ORDER.indexOf(a) - CLIENT_ORDER.indexOf(b));
+
+// What the lead action changes, before any action: the clients, why other clients are reached
+// (`note`), and where (`scope`): "all" projects, one "project" (`project`), or "others", all
+// projects but the picked one, whose own definition of that client wins over this one. `asks`:
+// an add that asks "this project or all projects" next; it names only what both choices reach.
+// `project` in the context is the picked project's path, "" for All projects; `found`, the
+// clients on this computer. Null when nothing leads, for the Add form, and when the server sent
+// no reach for the definition.
+export function affectsFor(lead, { definitions = [], move = null, inherits = NO_INHERITS, found = [], project = "" } = {}) {
+  if (!lead || lead.form) return null;
+  if (lead === "move") return moveAffects(definitions, move);
+  if (lead.def) return offerAffects(lead.def, definitions, project);
+  if (lead.add) {
+    const only = Boolean(lead.add.project_only);
+    const asks = Boolean(project && lead.add.project_place);
+    return { ...addReach(lead.client, lead.add.action, inherits, found, asks), scope: only ? "project" : "all", project: only ? project : null, asks };
+  }
+  // "Manage tools": a tool switch is one for every client that loads it through the Kitden
+  // gateway, set for the picked project or for all projects. Held servers carry no actions, so
+  // this reach is the page's own.
+  if (lead.view === "gateway") {
+    const clients = inOrder(definitions.filter((d) => d.via_gateway === "kitden").map((d) => d.client));
+    return { clients, note: null, scope: project ? "project" : "all", project: project || null, asks: false };
+  }
+  return null;
+}
+
+function offerAffects(def, definitions, here) {
+  if (!def.affects) return null;
+  const affects = { ...def.affects, project: def.project || null, asks: false };
+  const winner = def.overridden && here ? winnerOf(definitions, def) : null;
+  if (affects.scope === "all" && winner && winner.project === here) affects.scope = "others";
+  return affects;
+}
+
+// Move into the gateway: every entry it takes. One project only when all of them are in that
+// project's files.
+function moveAffects(definitions, move) {
+  const defs = definitions.filter((d) => move && move.items.includes(d.id) && d.affects);
+  if (!defs.length) return null;
+  const notes = [...new Set(defs.map((d) => d.affects.note).filter(Boolean))];
+  const places = new Set(defs.map((d) => (d.affects.scope === "project" ? d.project : null)));
+  const [place] = places;
+  const one = places.size === 1 && place ? place : null;
+  return { clients: inOrder(defs.flatMap((d) => d.affects.clients)), note: notes.join("; ") || null, scope: one ? "project" : "all", project: one, asks: false };
+}
+
+// The Affects line: "Changes Codex and Cursor (Cursor reads Codex's folder). All projects."
+// `here`: the picked project's path, "" for All projects. "" without an affects.
+export function affectsText(affects, here) {
+  if (!affects) return "";
+  const note = affects.note ? ` (${affects.note})` : "";
+  return `Changes ${joinWords(affects.clients.map(clientName))}${note}. ${placeText(affects, here)}`;
+}
+
+function placeText({ scope, project, asks }, here) {
+  if (asks) return "You choose this project or all projects next.";
+  if (scope === "others") return "All projects except this one.";
+  if (scope === "project") return project && project === here ? "In this project." : `In ${folderName(project)}.`;
+  return "All projects.";
+}
+
+// Links that keep context -------------------------------------------------------------------
+
+// The same item on another page; never the page shown. "Manage tools" only for a server in the
+// Kitden gateway: the only servers with tool switches (the Gateway opens a server by its name).
+// "Show on the map" joins them once the map exists (Part 6).
+export function contextLinks(row, definitions, view) {
+  const links = [];
+  if (view !== "library") links.push({ label: "Compare across clients", view: "library", selected: rowSel(row) });
+  if (view !== "gateway" && definitions.some((d) => d.via_gateway === "kitden")) {
+    links.push({ label: "Manage tools", view: "gateway", selected: { kind: "mcp_server", name: row.name } });
+  }
+  return links;
+}
+
+// Go to the item on the link's page, which opens it there. The panel closes first, so the
+// arrival opens; the Library's rows are read first, as the rail reads them. Project and
+// selection stay.
+export async function followLink(link) {
+  closePanel({ keepSelection: true, focus: false });
+  if (link.view === "library") await raceSlow(loadLibraryFor(libraryChoice(link.selected)), 300);
+  goTo(link.view, link.selected);
+}
+
+function linkButton(link, look) {
+  const node = button(link.label, () => followLink(link), look);
+  node.dataset.focus = `link:${link.view}`;
+  return node;
+}
+
+// The links in Details: one quiet row of buttons.
+export function linksRow(links) {
+  const row = el("div", "links");
+  row.append(...links.map((link) => linkButton(link, "btn small ghost")));
+  return row;
 }
 
 // The folder a definition sits in, by its last two parts so the label stays short: a skill's
@@ -437,7 +550,7 @@ export function techRows(definitions) {
 
 // The evidence, folded: per definition its file (the whole path in the hover text), file key,
 // command and first lines. It opens like "Show file change" in a review.
-function technical(rows) {
+export function technical(rows) {
   const box = el("details", "tech");
   box.append(el("summary", null, "Technical details"));
   for (const r of rows) {
@@ -582,12 +695,15 @@ export function countedDefinition(definitions) {
 
 // Details of a row on this computer, in DETAILS_ORDER: warnings, what it is (`offer`, the
 // marketplace's entry, when read), why, what each client loads, the tools, then what to do next
-// (why nothing can be done, when so) and the evidence, folded. Every action is in the footer.
-function showDetails(row, definitions, offer = null, toolsNext = {}) {
+// (what the lead action changes, or why nothing can be done), links to the item on other pages,
+// and the evidence, folded. Every action is in the footer.
+function showDetails(row, definitions, offer = null, toolsNext = {}, inherits = NO_INHERITS) {
   const warnings = row.flags.filter((x) => x.level === "warning");
   const move = moveFor(row, currentModel("gateway"), Boolean(currentError("gateway")));
   const offers = definitions.flatMap((def) => def.actions.filter((a) => ACTION_BUTTONS[a]).map((action) => ({ def, action })));
-  const actions = footerActions(offers, warnings, move, addOptions(row, offer));
+  const links = contextLinks(row, definitions, state.view);
+  const manage = links.find((link) => link.view === "gateway") || null;
+  const actions = footerActions(offers, warnings, move, addOptions(row, offer), manage);
   const why = actions.lead || actions.rest.length ? "" : whyNoAction(row, definitions);
   const blocks = new Map(); // a DETAILS_ORDER id -> its nodes
   if (warnings.length) blocks.set("warnings", warnings.map((f) => callout(warningText(f))));
@@ -633,11 +749,19 @@ function showDetails(row, definitions, offer = null, toolsNext = {}) {
     blocks.set("secret", [el("p", "muted", "This entry holds a secret. It is hidden here and never logged.")]);
   }
   const next = [];
+  // What the lead action changes, before any action.
+  const here = projectPath();
+  const reach = { definitions, move, inherits, found: writableClients(), project: here };
+  const affects = affectsText(affectsFor(actions.lead, reach), here);
+  if (affects) next.push(el("p", "affects", affects));
   // With nothing to do, say why, quietly.
   if (why) next.push(el("p", "muted", why));
   if (move && move.unread) next.push(el("p", "muted", "Could not read the gateway, so Move is not offered."));
   else if (move && !move.gateways.length) next.push(el("p", "muted", GATEWAY_NOTE));
   if (next.length) blocks.set("next", next);
+  // A link that leads is in the footer, not here too.
+  const shown = links.filter((link) => link !== actions.lead);
+  if (shown.length) blocks.set("links", [linksRow(shown)]);
   const rows = techRows(definitions);
   if (rows.length) blocks.set("technical", [technical(rows)]);
   const body = el("div", "body");
@@ -656,6 +780,7 @@ function showDetails(row, definitions, offer = null, toolsNext = {}) {
   // A plain action names what else it changes; the primary one stands alone.
   const draw = (o, look) => {
     if (o === "move") return [moveButton(move, look, row.name)];
+    if (o.view) return [linkButton(o, look)];
     if (o.def) return [...(look === "btn" ? sideEffect(o, warnings) : []), buttonFor(o, look)];
     return [addButton(o, row, offer, look)];
   };
@@ -669,7 +794,8 @@ async function showCommands(row, definitions) {
   const body = el("div", "body");
   body.append(el("p", "muted", "You run these yourself. This page never runs them."));
   const footer = el("footer");
-  footer.append(button("Back", () => showDetails(row, panelState.current.definitions, panelState.current.offer), "btn"));
+  const { definitions: all, offer, inherits } = panelState.current;
+  footer.append(button("Back", () => showDetails(row, all, offer, {}, inherits), "btn"));
   swapContent([header("Commands", row.name, null, "Close", true), body, footer]);
   const seen = new Set();
   for (const def of definitions) {

@@ -463,6 +463,9 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 /* Details: the Why in one or two quiet lines; the evidence folded under "Technical details". */
 .why-lines { display: grid; gap: 2px; color: var(--ink-2); }
 .why-lines p { margin: 0; }
+/* What the lead action changes, one line before the footer; links to the item on other pages. */
+.affects { margin: 0; color: var(--ink-2); }
+.links { display: flex; flex-wrap: wrap; gap: 4px; margin-left: -8px; }
 .tech-row { display: grid; gap: 2px; min-width: 0; }
 .tech-row .mono { color: var(--ink-3); overflow-wrap: anywhere; }
 .tech-row pre.preview { margin: 4px 0 0; padding: 8px 10px; background: var(--inset); border: 1px solid var(--wire-soft); border-radius: 6px; color: var(--ink-2); font: 12px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
