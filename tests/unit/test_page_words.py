@@ -598,8 +598,8 @@ def test_library_replaces_load_map_and_discover():
 
 def test_library_says_why_when_there_is_nothing_to_do():
     text = script("library.js")
-    # A dash names its reason; no found client points to the Overview.
-    assert "node.title = cell.reason" in text
+    # A dash names its reason, after the route; no found client points to the Overview.
+    assert '[cell.route, cell.reason].filter(Boolean).join(". ")' in text
     assert "Kitden found no AI coding clients." in text and '"Open Overview"' in text
     # Search keeps the choice and says what it hides.
     assert '"in New"' in text and '"Show all"' in text

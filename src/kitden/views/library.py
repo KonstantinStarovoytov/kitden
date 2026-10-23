@@ -22,7 +22,7 @@ from kitden.views.catalog import catalog, search
 from kitden.views.gateway_view import group_of
 from kitden.views.load_map import COLUMNS, MARKS, NAMES, Row, load_map
 from kitden.views.skills import skill_catalog
-from kitden.views.words import STATE_WORDS
+from kitden.views.words import ORIGIN_WORDS, ROUTE_WORDS, STATE_WORDS
 
 KINDS = ("mcp_server", "plugin", "skill", "hook", "marketplace", "instructions")
 # Tabs with something to add; the others show only what is on this computer.
@@ -51,10 +51,14 @@ def _cell(
     word: str | None = None,
     add: dict | None = None,
     reason: str | None = None,
+    origin: str | None = None,
+    route: str | None = None,
 ) -> dict:
     return {
         "state": state,
         "where": where,
+        "origin": origin,
+        "route": route,
         "items": items or [],
         "word": word,
         "add": add,
@@ -140,7 +144,7 @@ def _has(row: Row | None, client: str) -> bool:
 
 def _map_cell(row: Row, client: str) -> dict:
     cell = row.cells[client]
-    return _cell(cell.state, cell.where, cell.items)
+    return _cell(cell.state, cell.where, cell.items, origin=cell.origin, route=cell.route)
 
 
 # Each builder gives (row, holders): holders are the found clients that have the item.
@@ -409,6 +413,16 @@ def _plugin_rows(
 # Skills --------------------------------------------------------------------------------------
 
 
+def _installed_route(word: str) -> str | None:
+    """The route of the skill list's installed word: "Installed" has none, "Via plugin" is
+    from a plugin, "Via Claude Code" through Claude Code's folder."""
+    if word == "Via plugin":
+        return ROUTE_WORDS["plugin"]
+    if word.startswith("Via "):
+        return ROUTE_WORDS["folder"].format(word.removeprefix("Via "))
+    return None
+
+
 def _skill_cell(
     client: str,
     skill: dict,
@@ -416,16 +430,17 @@ def _skill_cell(
     plugin_routes: dict[str, str],
     cursor_imports: bool,
     no_place: dict[str, str] | None = None,
+    where: str | None = None,
 ) -> dict:
     """The scan's state when it has one; else how the skill list says the client gets it, or
     what the client can add. `no_place`: clients that cannot take a copy in the picked project,
-    with what to say instead."""
+    with what to say instead. `where`: the scope word of an installed one (its items apply in
+    all projects), None with All projects picked."""
     if _has(row, client):
         return _map_cell(row, client)
     word = skill["installed"].get(client)
     if word:
-        # "Via Claude Code" -> "via Claude Code", as the load map says it.
-        return _cell("on", where=word[:1].lower() + word[1:])
+        return _cell("on", where=where, route=_installed_route(word))
     if client in skill["routes"]:
         hint = (no_place or {}).get(client)
         add = _add(SKILL_INSTALL, "+ Add", skill=skill["id"], project_place=hint is None)
@@ -460,6 +475,7 @@ def _skill_rows(
     found: list[str],
     cursor_imports: bool,
     no_place: dict[str, str] | None = None,
+    in_project: bool = False,
 ) -> Built:
     """Every skill in the skill catalog, plus skills the load map has that it does not.
 
@@ -469,6 +485,8 @@ def _skill_rows(
     """
     mapped = {r.name: r for r in map_rows if r.kind is ItemKind.SKILL}
     routes = {o["id"]: o["routes"] for o in offers}
+    # The skill list's installed words come from all-projects items.
+    where = ORIGIN_WORDS[None] if in_project else None
     used: set[str] = set()
     out = []
     for skill in skills:
@@ -482,7 +500,10 @@ def _skill_rows(
             "skill",
             skill["name"],
             skill["from"],
-            {c: _skill_cell(c, skill, row, plugin_routes, cursor_imports, no_place) for c in found},
+            {
+                c: _skill_cell(c, skill, row, plugin_routes, cursor_imports, no_place, where)
+                for c in found
+            },
             mine=bool(holders),
             lookup=row.lookup if row else None,
             offer=skill["id"],
@@ -626,7 +647,13 @@ def library(
             map_rows, offers, skills, found, cursor_imports, in_project=project is not None
         ),
         "skill": _skill_rows(
-            map_rows, offers, skills, found, cursor_imports, _no_skill_place(adapters, project)
+            map_rows,
+            offers,
+            skills,
+            found,
+            cursor_imports,
+            _no_skill_place(adapters, project),
+            in_project=project is not None,
         ),
         # Kitden adds no hooks, so a hook's dash has no reason.
         "hook": _map_rows(map_rows, "hook", found),

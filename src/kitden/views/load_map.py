@@ -3,9 +3,11 @@
 Rows group items by kind and name. A plugin is one row per marketplace ("figma@a" and
 "figma@b" are two rows named "figma"); an instruction file per category (a command and an agent
 named "review" are two rows); other kinds group by name.
-Each cell says what that client does with the item in the chosen project: loads it, has it but
-does not load it, routes it through the gateway, or does not know. The Claude Desktop Code tab
-has no column of its own: its extra items show in the Claude Code column as "Desktop app".
+Each cell says what that client does with the item in the chosen project: has it available,
+has it but off, routes it through the gateway, or does not know. In a project a cell also says
+where it applies, and every cell keeps how the client gets the item (its route) for the hover
+text. The Claude Desktop Code tab has no column of its own: its extra items show in the Claude
+Code column, with the route "from the Desktop app".
 """
 
 from dataclasses import dataclass, field
@@ -22,24 +24,19 @@ from kitden.model import (
 )
 from kitden.views.effective import DESKTOP, effective_view
 from kitden.views.findings import base_name, bypass_kind, find_bypasses, find_findings
+from kitden.views.words import ORIGIN_WORDS, ROUTE_WORDS
 
 COLUMNS = ("claude_code", "codex", "cursor")
 MARKS = {"claude_code": "CC", "codex": "CX", "cursor": "CU"}
 NAMES = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
-SCOPE_WORDS = {
-    Scope.USER: "global settings",
-    Scope.PROJECT: "this project",
-    Scope.LOCAL: "this Mac",
-    Scope.PLUGIN: "plugin",
-    Scope.ACCOUNT: "account",
-    Scope.MANAGED: "managed",
-}
 
 
 @dataclass
 class Cell:
     state: str  # "on", "off", "gw", "unk", "none" or "missing" (client not installed)
-    where: str | None = None
+    where: str | None = None  # in a project, ORIGIN_WORDS[origin]; with All projects, None
+    origin: str | None = None  # None (all projects), "project" or "override"
+    route: str | None = None  # how the client gets it, from ROUTE_WORDS; None when plain
     items: list[str] = field(default_factory=list)
     count: int = 0
 
@@ -69,36 +66,69 @@ def row_key(item: Item) -> str:
     return _hash(item.kind, item.name if item.kind is ItemKind.PLUGIN else base_name(item))
 
 
-def _where(item: Item, column: str) -> str:
+def _route(item: Item, column: str) -> str | None:
+    """How the client gets the item, or None when it is the client's own plain entry. An
+    account, managed or local entry and a registered gateway get none: the state or Details
+    says it."""
     if item.client == DESKTOP:
-        return "Desktop app"
+        return ROUTE_WORDS["desktop"]
     if item.via_gateway == KITDEN_GATEWAY:
-        return "Kitden gateway"
+        return ROUTE_WORDS["kitden"]
     owner = item.source.owner_client
     if owner in NAMES and owner != column:
-        return f"via {NAMES[owner]}"
-    return SCOPE_WORDS.get(item.scope, str(item.scope))
+        return ROUTE_WORDS["folder"].format(NAMES[owner])
+    if item.scope is Scope.PLUGIN:
+        return ROUTE_WORDS["plugin"]
+    return None
+
+
+def _origin(items: list[Item], overrides: set[str]) -> str | None:
+    """Where the items apply: "override" when a project item wins over an all-projects one,
+    "project" when one is a project's own, else None (all projects)."""
+    if any(i.id in overrides for i in items):
+        return "override"
+    if any(i.project is not None for i in items):
+        return "project"
+    return None
 
 
 def _own_first(item: Item, column: str) -> tuple[bool, str]:
     return (item.source.owner_client in NAMES and item.source.owner_client != column, item.name)
 
 
-def _cell(column: str, loaded: list[Item], present: list[Item], winners: set[str]) -> Cell:
+def _cell(
+    column: str,
+    loaded: list[Item],
+    present: list[Item],
+    winners: set[str],
+    overrides: set[str],
+    in_project: bool,
+) -> Cell:
+    """The cell from the items the client loads, or else those it has. In a project it says
+    where they apply; the first item gives the route."""
     if loaded:
-        loaded = sorted(loaded, key=lambda i: _own_first(i, column))
-        if any(i.via_gateway for i in loaded):
+        items = sorted(loaded, key=lambda i: _own_first(i, column))
+        if any(i.via_gateway for i in items):
             state = "gw"
-        elif any(i.enabled is Enabled.UNKNOWN for i in loaded):
+        elif any(i.enabled is Enabled.UNKNOWN for i in items):
             state = "unk"
         else:
             state = "on"
-        return Cell(state, _where(loaded[0], column), [i.id for i in loaded], len(loaded))
-    if present:
-        # The definition that decides (for example a project's "off") names the place.
-        present = sorted(present, key=lambda i: (i.id not in winners, i.project is None))
-        return Cell("off", _where(present[0], column), [i.id for i in present], 0)
-    return Cell("none")
+    elif present:
+        # The definition that decides (for example a project's "off") gives the route.
+        items = sorted(present, key=lambda i: (i.id not in winners, i.project is None))
+        state = "off"
+    else:
+        return Cell("none")
+    origin = _origin(items, overrides)
+    return Cell(
+        state,
+        where=ORIGIN_WORDS[origin] if in_project else None,
+        origin=origin,
+        route=_route(items[0], column),
+        items=[i.id for i in items],
+        count=len(loaded),
+    )
 
 
 # What fixes a duplicate, and the action that does it where the page has one.
@@ -167,6 +197,13 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
     if desktop:
         loaded["claude_code"] += [i for i in desktop.items if i.client == DESKTOP]
     winners = {w.id for v in views.values() for w, _, _ in v.shadowed}
+    # Project items that win over an all-projects definition of the same name.
+    overrides = {
+        w.id
+        for v in views.values()
+        for w, loser, _ in v.shadowed
+        if w.project is not None and loser.project is None
+    }
 
     rows: dict[str, Row] = {}
 
@@ -210,6 +247,8 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
                 by_row_loaded.get((row.key, column), []),
                 by_row_present.get((row.key, column), []),
                 winners,
+                overrides,
+                project is not None,
             )
 
     item_rows = {
@@ -248,6 +287,8 @@ def map_dict(inventory, rows: list[Row]) -> dict:
                     c: {
                         "state": cell.state,
                         "where": cell.where,
+                        "origin": cell.origin,
+                        "route": cell.route,
                         "items": cell.items,
                         "count": cell.count,
                     }

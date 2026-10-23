@@ -26,3 +26,19 @@ AFTER_WORDS: dict[str, tuple[str, str]] = {
     "setup_server.register": ("on", "Added"),
     "setup_server.update": ("on", "Updated"),
 }
+
+# Where a cell's items apply, said in a project view: a project item that wins over an
+# all-projects one is a "project override". With All projects picked a cell says none.
+ORIGIN_WORDS: dict[str | None, str] = {
+    None: "all projects",
+    "project": "this project",
+    "override": "project override",
+}
+
+# How a client gets an item: the hover text and Details say it, never the cell's word slot.
+ROUTE_WORDS: dict[str, str] = {
+    "desktop": "from the Desktop app",
+    "kitden": "through the Kitden gateway",
+    "plugin": "from a plugin",
+    "folder": "through {}'s folder",
+}

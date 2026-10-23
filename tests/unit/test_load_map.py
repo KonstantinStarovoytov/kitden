@@ -2,6 +2,7 @@
 
 import pytest
 
+from kitden.demo import build_demo_home
 from kitden.model import (
     Client,
     ClientStatus,
@@ -54,15 +55,18 @@ def test_rows_group_by_kind_and_name_with_one_plugin_row_per_marketplace(home):
 def test_cell_states_for_the_website_project(home):
     rows = load_map(build_inventory(home), str(home / "work/website"))
     cell = plugin_row(rows, "superpowers@claude-plugins-official").cells["claude_code"]
-    assert (cell.state, cell.where) == ("off", "this project")
+    assert (cell.state, cell.where) == ("off", "project override")
 
 
 def test_cursor_loading_a_plugin_twice_flags_both_rows_and_each_row_has_one_cell(home):
     rows = load_map(build_inventory(home), None)
     own = plugin_row(rows, "superpowers@cursor-public")
     claudes = plugin_row(rows, "superpowers@claude-plugins-official")
-    assert (own.cells["cursor"].count, own.cells["cursor"].where) == (1, "global settings")
-    assert (claudes.cells["cursor"].count, claudes.cells["cursor"].where) == (1, "via Claude Code")
+    assert own.cells["cursor"].where is None
+    assert (claudes.cells["cursor"].count, claudes.cells["cursor"].route) == (
+        1,
+        "through Claude Code's folder",
+    )
     for row in (own, claudes):
         assert [f["text"] for f in row.flags] == ["Cursor loads it twice"]
 
@@ -117,8 +121,11 @@ def test_a_duplicate_skill_names_the_fix_and_its_action(home):
 
 def test_cross_loaded_cells_say_via_which_client(home):
     row = rows_by(load_map(build_inventory(home), None), "skill", "brandkit")
-    assert (row.cells["cursor"].state, row.cells["cursor"].where) == ("on", "via Claude Code")
-    assert row.cells["claude_code"].where == "global settings"
+    assert (row.cells["cursor"].state, row.cells["cursor"].route) == (
+        "on",
+        "through Claude Code's folder",
+    )
+    assert row.cells["claude_code"].where is None
 
 
 def test_gateway_entries_are_state_gw(home):
@@ -147,7 +154,8 @@ def test_direct_entries_are_only_info_without_a_gateway(home):
 
 def test_desktop_items_show_in_the_claude_code_column(home):
     row = rows_by(load_map(build_inventory(home), None), "mcp_server", "metamcp-local")
-    assert (row.cells["claude_code"].state, row.cells["claude_code"].where) == ("on", "Desktop app")
+    cell = row.cells["claude_code"]
+    assert (cell.state, cell.route) == ("on", "from the Desktop app")
 
 
 def test_not_installed_client_column_says_missing(tmp_path):
@@ -188,7 +196,14 @@ def test_raw_names_are_returned_unchanged(home):
     names = {r["name"] for r in data["rows"]}
     assert EVIL in names
     row = next(r for r in data["rows"] if r["name"] == EVIL)
-    assert set(row["cells"]["claude_code"]) == {"state", "where", "items", "count"}
+    assert set(row["cells"]["claude_code"]) == {
+        "state",
+        "where",
+        "origin",
+        "route",
+        "items",
+        "count",
+    }
 
 
 def test_project_only_items_are_not_rows_everywhere(home):
@@ -226,3 +241,50 @@ def test_a_name_without_a_marketplace_has_no_source(home):
     assert (stored.source, stored.lookup) == (None, "plugin 4800 (name not stored locally)")
     skill = rows_by(rows, "skill", "docker-expert")
     assert (skill.source, skill.lookup) == (None, "docker-expert")
+
+
+def test_a_project_item_says_this_project_and_a_project_win_says_project_override(home):
+    rows = load_map(build_inventory(home), str(home / "work/website"))
+    docs = rows_by(rows, "mcp_server", "docs").cells["claude_code"]
+    assert (docs.where, docs.origin) == ("this project", "project")
+    plugin = plugin_row(rows, "superpowers@claude-plugins-official").cells["claude_code"]
+    assert (plugin.state, plugin.where, plugin.origin) == ("off", "project override", "override")
+    github = rows_by(rows, "mcp_server", "github").cells["claude_code"]
+    assert (github.where, github.origin) == ("all projects", None)
+
+
+def test_every_item_cell_in_a_project_says_where_it_applies(home):
+    rows = load_map(build_inventory(home), str(home / "work/website"))
+    cells = [c for r in rows for c in r.cells.values() if c.items]
+    words = {"all projects", "this project", "project override"}
+    assert cells and {c.where for c in cells} <= words
+
+
+def test_all_projects_cells_carry_no_scope_word(home):
+    rows = load_map(build_inventory(home), None)
+    assert all(c.origin is None and c.where is None for r in rows for c in r.cells.values())
+
+
+def test_the_route_leaves_the_word_slot(home):
+    rows = load_map(build_inventory(home), None)
+    brandkit = rows_by(rows, "skill", "brandkit").cells
+    assert (brandkit["cursor"].where, brandkit["cursor"].route) == (
+        None,
+        "through Claude Code's folder",
+    )
+    assert brandkit["claude_code"].route is None
+    metamcp = rows_by(rows, "mcp_server", "metamcp-local").cells["claude_code"]
+    assert metamcp.route == "from the Desktop app"
+    assert rows_by(rows, "mcp_server", "md-index").cells["claude_code"].route == "from a plugin"
+
+
+def test_the_medium_sample_says_where_each_atlas_cell_applies(tmp_path):
+    home = build_demo_home(tmp_path, "medium")  # Part 1: atlas/.mcp.json overrides the user docs
+    rows = load_map(build_inventory(home), str(home / "work/atlas"))
+    docs = rows_by(rows, "mcp_server", "docs").cells
+    assert (docs["claude_code"].where, docs["claude_code"].origin) == (
+        "project override",
+        "override",
+    )
+    assert docs["codex"].where == "all projects"
+    assert rows_by(rows, "skill", "api-style").cells["codex"].where == "this project"

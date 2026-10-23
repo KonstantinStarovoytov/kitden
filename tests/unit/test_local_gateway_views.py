@@ -132,11 +132,11 @@ def test_held_servers_show_via_kitden_gateway_in_connected_clients(home):
     with page_for(home) as page:
         library = page.get("/api/library?kind=mcp_server")
         row = next(r for r in library.json()["rows"] if r["name"] == "files")
-        cells = {c: (cell["state"], cell["where"]) for c, cell in row["cells"].items()}
+        cells = {c: (cell["state"], cell["route"]) for c, cell in row["cells"].items()}
         assert cells == {
-            "claude_code": ("gw", "Kitden gateway"),
+            "claude_code": ("gw", "through the Kitden gateway"),
             "codex": ("none", None),
-            "cursor": ("gw", "Kitden gateway"),
+            "cursor": ("gw", "through the Kitden gateway"),
         }
         # Codex reaches it once it has the `kitden` entry: the Gateway page sets that up.
         assert row["cells"]["codex"]["reason"] == (
@@ -472,18 +472,18 @@ def test_the_library_follows_the_server_rules(home):
     def cells(page, query=""):
         rows = page.get(f"/api/library?kind=mcp_server{query}").json()["rows"]
         row = next(r for r in rows if r["name"] == "held")
-        return {c: (cell["state"], cell["where"]) for c, cell in row["cells"].items()}
+        return {c: (cell["state"], cell["route"]) for c, cell in row["cells"].items()}
 
     with page_for(home) as page:
         pid = project_id(page, website)
         assert cells(page) == {
-            c: ("off", "Kitden gateway") for c in ("claude_code", "codex", "cursor")
+            c: ("off", "through the Kitden gateway") for c in ("claude_code", "codex", "cursor")
         }
         # Codex's own `kitden` entry is off, so it stays off there.
         assert cells(page, f"&project={pid}") == {
-            "claude_code": ("gw", "Kitden gateway"),
-            "codex": ("off", "Kitden gateway"),
-            "cursor": ("gw", "Kitden gateway"),
+            "claude_code": ("gw", "through the Kitden gateway"),
+            "codex": ("off", "through the Kitden gateway"),
+            "cursor": ("gw", "through the Kitden gateway"),
         }
         findings = page.get("/api/findings", params={"project": website}).json()
         assert findings and not [f for f in findings if "held" in f["names"]]
@@ -508,7 +508,7 @@ def test_a_carried_codex_off_reads_off(home):
         assert applied["state"] == "verified", applied
         rows = page.get("/api/library?kind=mcp_server").json()["rows"]
         cell = next(r for r in rows if r["name"] == "echo")["cells"]["codex"]
-        assert (cell["state"], cell["where"]) == ("off", "Kitden gateway")
+        assert (cell["state"], cell["route"]) == ("off", "through the Kitden gateway")
 
 
 def test_watcher_rescans_never_start_servers(home, monkeypatch):

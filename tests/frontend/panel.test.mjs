@@ -427,7 +427,7 @@ test('Details names the scope with the same phrases as the cells', () => {
   assert.equal(scopeWords({ scope: 'user' }, ''), 'All projects');
   assert.equal(scopeWords({ scope: 'project', project: '/w/website' }, '/w/website'), 'This project');
   assert.equal(scopeWords({ scope: 'project', project: '/w/api' }, '/w/website'), 'Project api');
-  assert.equal(scopeWords({ scope: 'user', client: 'cursor', owner_client: 'claude_code' }, ''), 'All projects · via Claude Code');
+  assert.equal(scopeWords({ scope: 'user', client: 'cursor', owner_client: 'claude_code' }, ''), "All projects · through Claude Code's folder");
 });
 
 test('a new tool in strict mode is flagged', () => {

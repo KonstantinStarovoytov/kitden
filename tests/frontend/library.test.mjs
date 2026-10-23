@@ -38,7 +38,7 @@ const requests = [];
 globalThis.fetch = (url) => new Promise((resolve) => {
   requests.push({ url, answer: (body) => resolve({ ok: true, status: 200, json: async () => body }) });
 });
-const { addChoices, addName, hasAdds, scopeLine, cellNode, emptyState, hiddenClients, hiddenLine, hideButton, loadLibrary, loadLibraryFor, metaText, moreLine, nameCell, noteFor, previewFor, setHidden } = await import('../../src/kitden/web/static/js/library.js');
+const { addChoices, addName, hasAdds, scopeLine, cellHint, cellNode, emptyState, hiddenClients, hiddenLine, hideButton, loadLibrary, loadLibraryFor, metaText, moreLine, nameCell, noteFor, previewFor, setHidden } = await import('../../src/kitden/web/static/js/library.js');
 const { data, freshness, hashFor, parseHash, state } = await import('../../src/kitden/web/static/js/store.js');
 const later = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -88,6 +88,15 @@ test('a state cell says the state, and why when the server says', () => {
   assert.equal(done.children[1].textContent, 'Has its skills');
   const on = cellNode(row({ codex: cell({ state: 'on', where: 'project' }) }), 'codex');
   assert.deepEqual(on.children.map((c) => c.textContent), ['', 'Available', 'project']);
+});
+
+test("a cell's route is in its hover text, not beside the state", () => {
+  const node = cellNode(row({ cursor: cell({ state: 'on', where: 'all projects', route: "through Claude Code's folder" }) }), 'cursor');
+  assert.deepEqual(node.children.map((c) => c.textContent), ['', 'Available', 'all projects']);
+  assert.equal(node.title, "Through Claude Code's folder");
+  assert.equal(cellHint({ route: 'from a plugin', reason: 'From the last good read at 14:02' }), 'From a plugin. From the last good read at 14:02');
+  assert.equal(cellHint({ reason: 'Could not read Codex.' }), 'Could not read Codex.');
+  assert.equal(cellHint({}), '');
 });
 
 test('one word for a cell that has it, on every tab', () => {

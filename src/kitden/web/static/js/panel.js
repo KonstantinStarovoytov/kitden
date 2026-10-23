@@ -345,7 +345,7 @@ export function scopeWords(def, picked = projectPath()) {
     account: "Claude account",
     managed: "Managed by your organization",
   }[def.scope] || def.scope;
-  const via = def.owner_client && def.owner_client !== def.client ? ` · via ${clientName(def.owner_client)}` : "";
+  const via = def.owner_client && def.owner_client !== def.client ? ` · through ${clientName(def.owner_client)}'s folder` : "";
   return `${words}${via}`;
 }
 

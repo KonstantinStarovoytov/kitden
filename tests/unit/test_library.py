@@ -91,7 +91,16 @@ def _names(answer: dict) -> list[tuple]:
 
 
 def _cell(state="none", word=None, add=None, reason=None) -> dict:
-    return {"state": state, "where": None, "items": [], "word": word, "add": add, "reason": reason}
+    return {
+        "state": state,
+        "where": None,
+        "origin": None,
+        "route": None,
+        "items": [],
+        "word": word,
+        "add": add,
+        "reason": reason,
+    }
 
 
 CODEX_HINT = "Codex plugins are for all projects."
@@ -310,16 +319,16 @@ def test_skill_cells_keep_the_state_the_scan_found(home):
     answer = _library(home, "skill", show="all")
     # Codex has pixel-art turned off in config.toml.
     codex = _row(answer, "pixel-art")["cells"]["codex"]
-    assert (codex["state"], codex["where"]) == ("off", "global settings") and codex["items"]
+    assert (codex["state"], codex["where"]) == ("off", None) and codex["items"]
     # Details can find a skill's definitions by name.
     brandkit = _row(answer, "brandkit")
     assert (brandkit["mine"], brandkit["lookup"]) == (True, "brandkit")
-    assert brandkit["cells"]["claude_code"]["where"] == "global settings"
-    assert brandkit["cells"]["cursor"]["where"] == "via Claude Code"
+    assert brandkit["cells"]["claude_code"]["where"] is None
+    assert brandkit["cells"]["cursor"]["route"] == "through Claude Code's folder"
     assert brandkit["cells"]["codex"]["add"]["action"] == "skill.install"
     # Where the scan shows nothing, the skill list says how the client gets it.
     superpowers = _row(answer, "brainstorming", f"superpowers@{OFFICIAL}")
-    assert superpowers["cells"]["cursor"] == {**_cell("on"), "where": "via plugin"}
+    assert superpowers["cells"]["cursor"] == {**_cell("on"), "route": "from a plugin"}
 
 
 def test_show_mine_new_and_all(home):

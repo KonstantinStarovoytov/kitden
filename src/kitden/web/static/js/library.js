@@ -132,8 +132,15 @@ export function cellNode(row, client) {
     return node;
   }
   const node = socket({ state: cell.state, where: cell.where, word: cell.word, label: cell.reason });
-  if (cell.reason) node.title = cell.reason;
+  const hint = cellHint(cell);
+  if (hint) node.title = hint;
   return node;
+}
+
+// A cell's hover text: how the client gets the item, then why, as "<Route>. <reason>".
+export function cellHint(cell) {
+  const text = [cell.route, cell.reason].filter(Boolean).join(". ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 // Columns hidden on this page. The choice stays in this browser only; a store that cannot be read
