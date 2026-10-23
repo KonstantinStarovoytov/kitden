@@ -485,7 +485,8 @@ def _skill_rows(
     """
     mapped = {r.name: r for r in map_rows if r.kind is ItemKind.SKILL}
     routes = {o["id"]: o["routes"] for o in offers}
-    # The skill list's installed words come from all-projects items.
+    # The skill list reads no project: its installed words come from user skills and from plugins
+    # of any scope. In a project an installed cell says all projects.
     where = ORIGIN_WORDS[None] if in_project else None
     used: set[str] = set()
     out = []

@@ -410,7 +410,7 @@ test('Details with nothing to do say why first', () => {
   const remote = { cells: { codex: cell({ state: 'unk' }) } };
   assert.equal(whyNoAction(remote, [{ change_hint: null }, { change_hint: hint }]), hint);
   // Nothing known (an MCP server row from the scan has no reasons): no line.
-  assert.equal(whyNoAction({ cells: { codex: { state: 'on', where: 'global settings', items: [] } } }, []), '');
+  assert.equal(whyNoAction({ cells: { codex: { state: 'on', where: 'all projects', items: [] } } }, []), '');
 });
 
 test('the Details lede says where it loads, and where it may', () => {
@@ -534,6 +534,10 @@ test('an instruction file layer never says Loads or Not loaded', () => {
   assert.equal(layerState({ ...def, loads: false, project: '/h/work/site' }).badge, 'In a project');
   assert.equal(layerState({ ...def, loads: false, project: null }).badge, '');
   assert.equal(layerState({ kind: 'skill', enabled: 'on', loads: false, why: 'x' }).badge, 'Not loaded');
+  // The badge says Available; the why never says Loads again under it.
+  const loaded = { kind: 'mcp_server', enabled: 'on', loads: true };
+  assert.equal(layerState({ ...loaded, why: 'Loads.' }).why, '');
+  assert.equal(layerState({ ...loaded, why: 'Loads. It overrides the user definition.' }).why, 'It overrides the user definition.');
 });
 
 test('Details shows the tool count once, from a definition in the Kitden gateway', () => {

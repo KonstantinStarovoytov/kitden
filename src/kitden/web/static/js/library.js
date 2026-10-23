@@ -137,10 +137,11 @@ export function cellNode(row, client) {
   return node;
 }
 
-// A cell's hover text: how the client gets the item, then why, as "<Route>. <reason>".
+// A cell's hover text: where it applies (in full, where the cell may cut it), how the client
+// gets the item, then why: "Project override. Through Codex's folder. <reason>".
 export function cellHint(cell) {
-  const text = [cell.route, cell.reason].filter(Boolean).join(". ");
-  return text.charAt(0).toUpperCase() + text.slice(1);
+  return [cell.where, cell.route, cell.reason].filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(". ");
 }
 
 // Columns hidden on this page. The choice stays in this browser only; a store that cannot be read

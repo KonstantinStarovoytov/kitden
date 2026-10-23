@@ -253,6 +253,17 @@ def test_a_project_item_says_this_project_and_a_project_win_says_project_overrid
     assert (github.where, github.origin) == ("all projects", None)
 
 
+def test_a_plugin_part_applies_where_its_plugin_does(home):
+    rows = load_map(build_inventory(home), str(home / "work/website"))
+    # The website turns superpowers off over the all-projects install; its skill follows it.
+    skill = rows_by(rows, "skill", "brainstorming").cells["claude_code"]
+    assert (skill.state, skill.where, skill.origin) == ("off", "project override", "override")
+    assert skill.route == "from a plugin"
+    # claude-md-management is off for all projects, so its server is too.
+    server = rows_by(rows, "mcp_server", "md-index").cells["claude_code"]
+    assert (server.state, server.where, server.origin) == ("off", "all projects", None)
+
+
 def test_every_item_cell_in_a_project_says_where_it_applies(home):
     rows = load_map(build_inventory(home), str(home / "work/website"))
     cells = [c for r in rows for c in r.cells.values() if c.items]

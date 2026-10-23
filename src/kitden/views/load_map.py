@@ -22,7 +22,7 @@ from kitden.model import (
     Scope,
     _hash,
 )
-from kitden.views.effective import DESKTOP, effective_view
+from kitden.views.effective import DESKTOP, effective_view, plugin_of
 from kitden.views.findings import base_name, bypass_kind, find_bypasses, find_findings
 from kitden.views.words import ORIGIN_WORDS, ROUTE_WORDS
 
@@ -82,14 +82,22 @@ def _route(item: Item, column: str) -> str | None:
     return None
 
 
-def _origin(items: list[Item], overrides: set[str]) -> str | None:
+def _origin(items: list[Item], overrides: set[str], plugins: dict[str, Item]) -> str | None:
     """Where the items apply: "override" when a project item wins over an all-projects one,
-    "project" when one is a project's own, else None (all projects)."""
-    if any(i.id in overrides for i in items):
+    "project" when one is a project's own, else None (all projects). A plugin's part (a skill,
+    server or hook in it) applies where its plugin does: `plugins` holds the plugin item that
+    decides in this column, by plugin id."""
+    deciding = [plugins.get(plugin_of(i) or "", i) if i.scope is Scope.PLUGIN else i for i in items]
+    if any(i.id in overrides for i in deciding):
         return "override"
-    if any(i.project is not None for i in items):
+    if any(i.project is not None for i in deciding):
         return "project"
     return None
+
+
+def _deciding_first(item: Item, winners: set[str]) -> tuple[bool, bool]:
+    """The definition that decides first (for example a project's "off"), then project items."""
+    return (item.id not in winners, item.project is None)
 
 
 def _own_first(item: Item, column: str) -> tuple[bool, str]:
@@ -102,6 +110,7 @@ def _cell(
     present: list[Item],
     winners: set[str],
     overrides: set[str],
+    plugins: dict[str, Item],
     in_project: bool,
 ) -> Cell:
     """The cell from the items the client loads, or else those it has. In a project it says
@@ -115,12 +124,12 @@ def _cell(
         else:
             state = "on"
     elif present:
-        # The definition that decides (for example a project's "off") gives the route.
-        items = sorted(present, key=lambda i: (i.id not in winners, i.project is None))
+        # The definition that decides gives the route.
+        items = sorted(present, key=lambda i: _deciding_first(i, winners))
         state = "off"
     else:
         return Cell("none")
-    origin = _origin(items, overrides)
+    origin = _origin(items, overrides, plugins)
     return Cell(
         state,
         where=ORIGIN_WORDS[origin] if in_project else None,
@@ -237,6 +246,13 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
         if column in COLUMNS and (item.project is None or item.project == project):
             by_row_present.setdefault((row_for(item).key, column), []).append(item)
 
+    # The plugin item that decides in each column, by plugin id: its parts follow it.
+    plugins: dict[str, dict[str, Item]] = {}
+    for (_, column), items in by_row_present.items():
+        first = min(items, key=lambda i: _deciding_first(i, winners))
+        if first.kind is ItemKind.PLUGIN:
+            plugins.setdefault(column, {})[first.name] = first
+
     for row in rows.values():
         for column in COLUMNS:
             if status.get(column) is not ClientStatus.FOUND:
@@ -248,6 +264,7 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
                 by_row_present.get((row.key, column), []),
                 winners,
                 overrides,
+                plugins.get(column, {}),
                 project is not None,
             )
 

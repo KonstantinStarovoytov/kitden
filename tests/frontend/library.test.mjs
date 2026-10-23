@@ -93,7 +93,8 @@ test('a state cell says the state, and why when the server says', () => {
 test("a cell's route is in its hover text, not beside the state", () => {
   const node = cellNode(row({ cursor: cell({ state: 'on', where: 'all projects', route: "through Claude Code's folder" }) }), 'cursor');
   assert.deepEqual(node.children.map((c) => c.textContent), ['', 'Available', 'all projects']);
-  assert.equal(node.title, "Through Claude Code's folder");
+  assert.equal(node.title, "All projects. Through Claude Code's folder");
+  assert.equal(cellHint({ where: 'project override', route: "through Codex's folder", reason: 'Could not read Codex.' }), "Project override. Through Codex's folder. Could not read Codex.");
   assert.equal(cellHint({ route: 'from a plugin', reason: 'From the last good read at 14:02' }), 'From a plugin. From the last good read at 14:02');
   assert.equal(cellHint({ reason: 'Could not read Codex.' }), 'Could not read Codex.');
   assert.equal(cellHint({}), '');

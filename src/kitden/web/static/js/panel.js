@@ -363,7 +363,8 @@ const UNKNOWN_WORDS = {
 export function layerState(def) {
   let look = "off";
   let badge = "Not loaded";
-  let why = def.why === "Loads." ? "" : def.why;
+  // The server's why starts with "Loads." for agents; the badge already says Available.
+  let why = (def.why || "").replace(/^Loads\.\s*/, "");
   const unknown = def.enabled === "unknown";
   if (unknown) {
     look = "unk";
