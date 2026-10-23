@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 
 from kitden.gateways import data_dir
 from kitden.local_gateway.settings import SETTINGS_FILE, load_settings
@@ -15,7 +16,7 @@ from kitden.model import (
     Source,
     SourceKind,
 )
-from kitden.views.findings import find_bypasses, find_findings, mark_gateways
+from kitden.views.findings import find_bypasses, find_findings, finding_dict, mark_gateways
 from kitden.views.inventory import Inventory, build_inventory
 from tests.conftest import make_home, write_cursor_fixture_state
 
@@ -109,6 +110,33 @@ def test_same_server_set_up_in_two_clients_is_information():
     assert summary(find_findings(Inventory(items=[a, b]))) == {
         ("same_in_other_clients", "info", ("Neon", "Neon"))
     }
+
+
+def test_a_same_name_from_another_source_is_its_own_note():
+    a = replace(
+        item("codex", ItemKind.MCP_SERVER, "docs", "/h/.codex/config.toml"),
+        summary=(("command", "npx"),),
+    )
+    b = replace(
+        item("claude_code", ItemKind.MCP_SERVER, "docs", "/h/.claude.json"),
+        summary=(("url", "https://docs.example.test/mcp"),),
+    )
+    (finding,) = find_findings(Inventory(items=[a, b]))
+    assert (str(finding.type), finding.clients) == (
+        "same_name_other_source",
+        ("claude_code", "codex"),
+    )
+    assert finding_dict(finding)["clients"] == ["claude_code", "codex"]
+    assert finding.explanation == (
+        "mcp server 'docs' has the same name in claude_code, codex but comes from another source"
+    )
+
+
+def test_the_same_server_in_two_clients_keeps_its_note_and_names_both():
+    a = item("codex", ItemKind.MCP_SERVER, "Neon", "/h/.codex/config.toml")
+    b = item("cursor", ItemKind.MCP_SERVER, "Neon", "/h/.cursor/mcp.json")
+    (finding,) = find_findings(Inventory(items=[a, b]))
+    assert (str(finding.type), finding.clients) == ("same_in_other_clients", ("codex", "cursor"))
 
 
 def test_project_definition_overriding_user_definition_is_reported():
@@ -290,3 +318,7 @@ def test_instruction_files_in_two_clients_are_not_a_finding():
     cursor = item("cursor", ItemKind.INSTRUCTIONS, "AGENTS.md", "/h/p/AGENTS.md")
     rules = item("cursor", ItemKind.INSTRUCTIONS, "AGENTS.md", "/h/q/AGENTS.md")
     assert find_findings(Inventory(items=[codex, cursor, rules])) == []
+
+
+def test_every_finding_names_its_clients(tmp_path):
+    assert all(f.clients for f in find_findings(build_inventory(real_home(tmp_path))))

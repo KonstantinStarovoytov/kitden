@@ -102,6 +102,7 @@ async function follow(target) {
 const NOTE_WORDS = {
   cross_loaded: "Loaded from another client",
   same_in_other_clients: "Set up in more than one client",
+  same_name_other_source: "Same name, another source",
   scope_override: "One definition replaces another",
   unknown_state: "On/off state not readable",
   bypasses_gateway: "Not connected to the gateway",
@@ -120,7 +121,7 @@ function notesBlock(count) {
     box.append(list);
     getJson(`/api/findings${query({ project: projectPath() })}`).then((findings) => {
       list.replaceChildren();
-      for (const f of findings.filter((x) => x.severity === "info")) list.append(noteRow(f));
+      for (const group of noteGroups(findings.filter((x) => x.severity === "info"))) list.append(noteRow(group));
     }).catch(() => { list.replaceChildren(el("p", "muted", "Could not load the notes.")); });
   }
   return box;
@@ -168,18 +169,35 @@ function loadsLine(clientId, tile) {
   return line;
 }
 
-// One row per note: the client it is about, the item names, what kind of note, Details.
-function noteRow(finding) {
+// The notes by item: one group per name, in the order first seen. A note about several names
+// (unknown on/off state) joins each name's group. A group has the clients of all its notes, the
+// distinct note words, and its first note for Details.
+export function noteGroups(findings) {
+  const groups = new Map();
+  for (const finding of findings) {
+    const words = NOTE_WORDS[finding.type] || finding.type.replaceAll("_", " ");
+    for (const name of new Set(finding.names)) {
+      if (!groups.has(name)) groups.set(name, { name, clients: [], notes: [], first: finding });
+      const group = groups.get(name);
+      for (const client of finding.clients || []) if (!group.clients.includes(client)) group.clients.push(client);
+      if (!group.notes.includes(words)) group.notes.push(words);
+    }
+  }
+  return [...groups.values()];
+}
+
+// One row per item: the mark of every client its notes are about, the name, each note as a
+// quiet flag, Details.
+function noteRow(group) {
   const node = el("div", "list-row");
   const marks = el("span", "chip");
-  if (finding.client) marks.append(mark(finding.client));
+  for (const client of group.clients) marks.append(mark(client));
   const what = el("span", "what");
-  const names = [...new Set(finding.names)];
-  const name = el("span", "mono", names.join(", "));
-  name.title = names.join(", ");
-  what.append(name, flag({ text: NOTE_WORDS[finding.type] || finding.type.replaceAll("_", " "), level: "info" }));
+  const name = el("span", "mono", group.name);
+  name.title = group.name;
+  what.append(name, ...group.notes.map((text) => flag({ text, level: "info" })));
   const actions = el("span", "row-actions");
-  actions.append(button("Details", () => showNote(finding), "btn small ghost"));
+  actions.append(button("Details", () => showNote(group.first), "btn small ghost"));
   node.append(marks, what, actions);
   return node;
 }

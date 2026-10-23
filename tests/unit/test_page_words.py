@@ -952,3 +952,7 @@ def test_needs_review_is_an_amber_ring_with_a_small_dot():
 
 def test_details_says_when_a_kept_definition_was_read_in_the_server_words():
     assert STALE.format("${") in script("panel.js")
+
+
+def test_overview_notes_say_same_name_another_source():
+    assert 'same_name_other_source: "Same name, another source"' in script("overview.js")

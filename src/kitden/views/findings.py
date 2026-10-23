@@ -2,7 +2,9 @@
 servers that bypass the gateway.
 
 FR-011 to FR-014, FR-034, FR-039. Built on the per-project effective views, so "loads twice"
-means it really loads twice in that client and project.
+means it really loads twice in that client and project. A name set up in two clients is one item
+set up twice only when it comes from the same source (match.py); else it is the same name from
+another source. Every finding names the clients it is about.
 """
 
 from collections import defaultdict
@@ -24,6 +26,7 @@ from kitden.model import (
     normalize_url,
 )
 from kitden.views.effective import DESKTOP, effective_view
+from kitden.views.match import odd_ones, source_keys
 from kitden.views.setup_server import is_own_entry
 
 # Kinds where two copies are a problem. Hooks all run by design; marketplaces are just sources.
@@ -40,6 +43,7 @@ def _finding(
     items: Iterable[Item],
     text: str,
     client: str | None = None,
+    clients: tuple[str, ...] = (),
 ) -> Finding:
     items = list(items)
     return Finding(
@@ -49,6 +53,7 @@ def _finding(
         names=tuple(i.name for i in items),
         explanation=text,
         client=client,
+        clients=clients or ((client,) if client else ()),
     )
 
 
@@ -150,16 +155,25 @@ def find_findings(inventory, project: str | None = None) -> list[Finding]:
                 )
 
     for (kind, name), by_client in own.items():
-        if len(by_client) > 1:
-            findings.append(
-                _finding(
-                    FindingType.SAME_IN_OTHER_CLIENTS,
-                    Severity.INFO,
-                    by_client.values(),
-                    f"{kind.replace('_', ' ')} '{name}' is set up separately in "
-                    f"{', '.join(sorted(by_client))}",
-                )
+        if len(by_client) < 2:
+            continue
+        where = ", ".join(sorted(by_client))
+        if not odd_ones({c: source_keys(i) for c, i in by_client.items()}):
+            found, text = (
+                FindingType.SAME_IN_OTHER_CLIENTS,
+                f"{kind.replace('_', ' ')} '{name}' is set up separately in {where}",
             )
+        else:
+            found, text = (
+                FindingType.SAME_NAME_OTHER_SOURCE,
+                f"{kind.replace('_', ' ')} '{name}' has the same name in {where} but comes from "
+                "another source",
+            )
+        findings.append(
+            _finding(
+                found, Severity.INFO, by_client.values(), text, clients=tuple(sorted(by_client))
+            )
+        )
 
     for client in inventory.clients:
         if client.status is ClientStatus.FOUND and client.version and not client.version_supported:
@@ -186,6 +200,7 @@ def finding_dict(f: Finding) -> dict:
         "items": list(f.items),
         "names": list(f.names),
         "client": f.client,
+        "clients": list(f.clients),
         "explanation": f.explanation,
     }
 

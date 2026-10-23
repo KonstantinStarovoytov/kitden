@@ -66,6 +66,7 @@ class FindingType(StrEnum):
     DUPLICATE_IN_CLIENT = "duplicate_in_client"
     CROSS_LOADED = "cross_loaded"
     SAME_IN_OTHER_CLIENTS = "same_in_other_clients"
+    SAME_NAME_OTHER_SOURCE = "same_name_other_source"
     SCOPE_OVERRIDE = "scope_override"
     BYPASSES_GATEWAY = "bypasses_gateway"
     UNKNOWN_STATE = "unknown_state"
@@ -172,6 +173,7 @@ class Finding:
     explanation: str
     names: tuple[str, ...] = ()
     client: str | None = None
+    clients: tuple[str, ...] = ()  # every client the finding is about; not part of the id
 
     def __post_init__(self) -> None:
         if not self.items:

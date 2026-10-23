@@ -99,6 +99,7 @@ async def test_findings_include_gateway_bypasses(home):
     data = await call(server_for(home), "list_findings", project_path=str(home / "work/website"))
     types = {f["type"] for f in data["findings"]}
     assert {"bypasses_gateway", "scope_override"} <= types
+    assert all(f["clients"] for f in data["findings"])
 
 
 async def test_explain_item_lists_every_definition_and_the_winner(home):

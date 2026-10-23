@@ -6,6 +6,7 @@ from dataclasses import replace
 import pytest
 
 from kitden.clients import version_cache
+from kitden.demo import build_demo_home
 from kitden.model import FindingType, Gateway
 from kitden.views.findings import find_findings, mark_gateways
 from kitden.views.gateway_view import gateway_view
@@ -30,7 +31,7 @@ def test_headline_counts_attention(home):
         "docker-expert loads twice in Codex and Cursor",
         "superpowers loads twice in Cursor",
     ]
-    assert data["notes"] == 14  # 8 info findings + 6 direct MCP servers (no gateway yet)
+    assert data["notes"] == 14  # 14 names with notes (each note here is about another name)
 
 
 def test_duplicate_card_is_one_sentence_and_opens_the_item(home):
@@ -245,3 +246,8 @@ def test_a_server_without_a_removable_entry_is_not_counted(home):
             inventory.items[index] = replace(item, actions=())
     [card] = overview(inventory, [gateway], None)["suggestions"]
     assert card["title"].startswith(f"{len(rows) - 1} MCP server")
+
+
+def test_notes_count_items_not_findings(tmp_path):
+    home = build_demo_home(tmp_path, "medium")  # 16 notes about 14 names: docs has three
+    assert overview(build_inventory(home), [], None)["notes"] == 14

@@ -8,7 +8,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from kitden.clients.versions import MINIMUM_VERSIONS
-from kitden.model import FindingType, Gateway, Severity, UnknownReason, _hash
+from kitden.model import Finding, FindingType, Gateway, Severity, UnknownReason, _hash
 from kitden.views.findings import base_name, find_bypasses, find_findings
 from kitden.views.gateway_view import gateway_view
 from kitden.views.load_map import COLUMNS, NAMES, row_key
@@ -138,6 +138,11 @@ def _kitden_card(inventory, held: list[dict], problem: str | None) -> dict | Non
     }
 
 
+def note_count(findings: list[Finding]) -> int:
+    """The notes the page shows: one row per name, however many notes it has."""
+    return len({name for f in findings for name in f.names})
+
+
 def overview(
     inventory,
     gateways: list[Gateway],
@@ -186,7 +191,7 @@ def overview(
         "headline": headline,
         "attention": attention,
         "suggestions": suggestions,
-        "notes": len(info),
+        "notes": note_count(info),
         "clients": [
             {
                 "id": c.id,

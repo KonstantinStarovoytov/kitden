@@ -114,8 +114,9 @@ def create_server(
         annotations=READ_ONLY,
         description=(
             "List problems for a project: duplicates, items loaded from another client's folder, "
-            "overrides, unknown states, untested versions, and MCP servers that bypass the "
-            "gateway. project_path defaults to the current folder. " + NO_CHANGES
+            "the same name from another source, overrides, unknown states, untested versions, "
+            "and MCP servers that bypass the gateway. Each names its clients. project_path "
+            "defaults to the current folder. " + NO_CHANGES
         ),
     )
     def list_findings(project_path: str | None = None) -> dict[str, Any]:

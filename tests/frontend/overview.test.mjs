@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // overview.js needs only this from a browser to load.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { gatewayCardWords, loadCounts } = await import('../../src/kitden/web/static/js/overview.js');
+const { gatewayCardWords, loadCounts, noteGroups } = await import('../../src/kitden/web/static/js/overview.js');
 
 test('the Kitden gateway card says servers, clients and the client to set up', () => {
   const words = gatewayCardWords({ kind: 'kitden', name: 'Kitden gateway', servers: 2, clients: ['claude_code', 'cursor'], lacking: ['codex'], problem: null });
@@ -50,4 +50,20 @@ test('a client that could not be read says so, not Not installed', () => {
   assert.deepEqual(clientStatus({ status: 'not_found' }), { state: 'missing' });
   assert.deepEqual(clientStatus({ status: 'found', version: '1.0', tested: false }), { state: 'unk', word: 'Not tested' });
   assert.equal(clientStatus({ status: 'found', version: '1.0', tested: true }), null);
+});
+
+test('notes are grouped by item, each with its clients', () => {
+  const note = (type, names, clients) => ({ type, names, clients, items: ['i'], severity: 'info' });
+  const groups = noteGroups([
+    note('same_name_other_source', ['docs', 'docs'], ['claude_code', 'codex']),
+    note('bypasses_gateway', ['docs'], ['claude_code']),
+    note('bypasses_gateway', ['docs'], ['codex']),
+    note('unknown_state', ['a', 'b'], ['codex']),
+  ]);
+  assert.deepEqual(groups.map((g) => [g.name, g.clients, g.notes]), [
+    ['docs', ['claude_code', 'codex'], ['Same name, another source', 'Not connected to the gateway']],
+    ['a', ['codex'], ['On/off state not readable']],
+    ['b', ['codex'], ['On/off state not readable']],
+  ]);
+  assert.equal(groups[0].first.type, 'same_name_other_source');
 });
