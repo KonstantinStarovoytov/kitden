@@ -4,7 +4,7 @@
 
 <p align="center"><b>See and safely change what your AI coding agents load.</b><br>
 Claude Code, Codex and Cursor: every MCP server, skill, plugin, hook and marketplace on one local page.<br>
-Look at each change first, Apply it with a backup, Undo it any time.</p>
+Look at each change first. Apply keeps a backup for Undo.</p>
 
 <p align="center">
   <picture>

@@ -19,6 +19,13 @@ def test_readme_says_where_secrets_go_and_what_the_agents_server_does():
     )
 
 
+def test_readme_promises_no_undo_it_cannot_keep():
+    # Undo can be blocked (a file changed after Apply), and backups stay for 30 days.
+    readme = " ".join((ROOT / "README.md").read_text().split())
+    assert "Look at each change first. Apply keeps a backup for Undo." in readme
+    assert "any time" not in readme
+
+
 def test_readme_says_what_an_unknown_folder_gets():
     readme = " ".join((ROOT / "README.md").read_text().split())
     words = "In a folder Kitden does not know as a project, the All projects switches apply."
