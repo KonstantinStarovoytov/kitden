@@ -59,6 +59,11 @@ ORIGIN_WORDS: dict[str | None, str] = {
     "override": "project override",
 }
 
+# Why a change to one client's definition reaches another client too: Details says it before
+# any action, and the After chips say the plugin one.
+READS_FOLDER = "{reader} reads {owner}'s folder"
+LOADS_PLUGINS = "Cursor loads Claude Code's plugins"
+
 # How a client gets an item: the hover text and Details say it, never the cell's word slot.
 ROUTE_WORDS: dict[str, str] = {
     "desktop": "from the Desktop app",

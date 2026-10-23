@@ -309,7 +309,7 @@ def test_removing_one_of_two_claude_code_copies_says_cursor_keeps_the_other():
             "client": "cursor",
             "state": "on",
             "word": "Loads once",
-            "note": "Cursor loads Claude Code plugins, so it loses this copy and keeps "
+            "note": "Cursor loads Claude Code's plugins, so it loses this copy and keeps "
             "the other Claude Code copy.",
         },
     ]
@@ -331,7 +331,7 @@ def test_add_missing_names_cursor_for_a_claude_code_user_plugin():
             "client": "cursor",
             "state": "on",
             "word": "Available",
-            "note": "Cursor loads Claude Code plugins, so it gets this one too.",
+            "note": "Cursor loads Claude Code's plugins, so it gets this one too.",
         },
     ]
     assert after_words(change, inventory()) == [

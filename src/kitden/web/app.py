@@ -107,7 +107,7 @@ from kitden.views.after import after_words
 from kitden.views.catalog import catalog
 from kitden.views.commands import commands_for
 from kitden.views.effective import project_views
-from kitden.views.explain import explain
+from kitden.views.explain import explain, with_page_fields
 from kitden.views.findings import find_bypasses, find_findings, finding_dict, mark_gateways
 from kitden.views.gateway_view import gateway_dict, gateway_view
 from kitden.views.inventory import (
@@ -798,7 +798,13 @@ def create_app(
         category = request.query_params.get("category") or None
         tools = load_tools(home) if home is not None else None
         definitions = explain(state.inventory, name, kind, path, category, tools)
-        return JSONResponse({"definitions": definitions})
+        # What each change reaches, and whether Cursor loads Claude Code's plugins and folder.
+        return JSONResponse(
+            {
+                "definitions": with_page_fields(definitions, state.inventory),
+                "inherits": _inherits(),
+            }
+        )
 
     def _overview(request, project, path):
         held, problem = _kitden(path)

@@ -87,6 +87,18 @@ def test_explain_needs_a_name(client):
     assert client.get("/api/explain?kind=plugin").status_code == 422
 
 
+def test_explain_says_what_a_change_reaches(client):
+    answer = client.get("/api/explain?kind=skill&name=docker-expert").json()
+    codex = next(d for d in answer["definitions"] if d["client"] == "codex")
+    assert codex["affects"]["clients"] == ["codex", "cursor"]
+    assert all("key" in d for d in answer["definitions"])
+    assert all("affects" not in d for d in answer["definitions"] if not d["actions"])
+    assert set(answer["inherits"]) == {"plugin", "skill"}
+    # The file key goes with each definition, for Details' technical part.
+    entry = client.get("/api/explain?kind=mcp_server&name=Neon").json()["definitions"]
+    assert {d["client"]: d["key"] for d in entry}["cursor"] == "mcpServers.Neon"
+
+
 @pytest.mark.parametrize("path", [*ENDPOINTS, "/api/offer?kind=plugin&id=x"])
 def test_new_endpoints_need_the_session_cookie(home, path):
     with TestClient(_app(home), base_url=ORIGIN, follow_redirects=False) as anonymous:

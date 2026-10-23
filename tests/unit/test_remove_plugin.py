@@ -59,7 +59,7 @@ def test_removing_a_claude_code_plugin_runs_uninstall_and_undo_installs_it_again
             "client": "cursor",
             "state": "on",
             "word": "Loads once",
-            "note": "Cursor loads Claude Code plugins, so it loses this copy and keeps its own.",
+            "note": "Cursor loads Claude Code's plugins, so it loses this copy and keeps its own.",
         },
     ]
     assert client.post(f"/api/changes/{change['id']}/apply", headers=POST).json()["state"] == (
@@ -90,7 +90,7 @@ def test_cursor_loses_a_claude_code_plugin_it_only_imports(client):
             "client": "cursor",
             "state": "off",
             "word": "Removed",
-            "note": "Cursor loads Claude Code plugins, so it loses this one too.",
+            "note": "Cursor loads Claude Code's plugins, so it loses this one too.",
         },
     ]
 

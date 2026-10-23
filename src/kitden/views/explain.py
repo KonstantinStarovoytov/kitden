@@ -8,6 +8,7 @@ from kitden.changes.actions import KITDEN_GATEWAY
 from kitden.local_gateway.views import tool_count
 from kitden.model import Enabled, Item, ItemKind
 from kitden.redact import redact_lines
+from kitden.views.affects import affects
 from kitden.views.effective import effective_view
 from kitden.views.findings import base_name
 from kitden.views.load_map import category as category_of
@@ -186,3 +187,18 @@ def explain(
             }
         )
     return definitions
+
+
+def with_page_fields(definitions: list[dict], inventory) -> list[dict]:
+    """explain()'s definitions with what only the local page shows: each one's file key, and for
+    one Kitden can change, which clients and projects that change reaches (`affects`). The MCP
+    server sends explain() as it is."""
+    items = {i.id: i for i in inventory.items}
+    out = []
+    for definition in definitions:
+        item = items.get(definition["id"])
+        extra: dict[str, Any] = {"key": item.source.key_path if item else None}
+        if item and definition["actions"]:
+            extra["affects"] = affects(inventory, item)
+        out.append({**definition, **extra})
+    return out

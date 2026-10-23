@@ -35,7 +35,7 @@ from kitden.model import GATEWAY_CLIENT, Change, ItemKind, Scope, SourceKind
 from kitden.redact import redact
 from kitden.views.effective import effective_view
 from kitden.views.setup_server import CLIENTS, kitden_on, setup_server_state
-from kitden.views.words import AFTER_WORDS, STATE_WORDS
+from kitden.views.words import AFTER_WORDS, LOADS_PLUGINS, STATE_WORDS
 
 SKILL_CLIENTS = ("claude_code", "codex", "cursor")
 CLIENT_WORDS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
@@ -43,16 +43,16 @@ CURSOR_IMPORT = {
     "client": "cursor",
     "state": "on",
     "word": STATE_WORDS["on"],
-    "note": "Cursor loads Claude Code plugins, so it gets this one too.",
+    "note": f"{LOADS_PLUGINS}, so it gets this one too.",
 }
 
 CURSOR_REMOVE = {
     "client": "cursor",
     "state": "off",
     "word": "Removed",
-    "note": "Cursor loads Claude Code plugins, so it loses this one too.",
+    "note": f"{LOADS_PLUGINS}, so it loses this one too.",
 }
-CURSOR_KEEPS = "Cursor loads Claude Code plugins, so it loses this copy and keeps {}."
+CURSOR_KEEPS = LOADS_PLUGINS + ", so it loses this copy and keeps {}."
 # Uninstall keeps the data folder (--keep-data) but not the plugin's saved options.
 REMOVE_NOTE = "Undo installs it again; its saved options are not brought back."
 CURSOR_SWITCHES = "Cursor's own switches for these tools do not carry over."

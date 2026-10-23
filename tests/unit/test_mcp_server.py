@@ -123,6 +123,13 @@ async def test_explain_item_leaves_out_file_lines(home):
     assert "Answer in short sentences." not in json.dumps(data)
 
 
+async def test_explain_item_has_no_page_fields(home):
+    # What a change reaches and the file key are for the local page; an agent's answer stays.
+    data = await call(server_for(home), "explain_item", name="docker-expert")
+    assert data["definitions"]
+    assert all("affects" not in d and "key" not in d for d in data["definitions"])
+
+
 async def test_list_projects(home):
     data = await call(server_for(home), "list_projects")
     paths = {p["path"] for p in data["projects"]}
