@@ -39,40 +39,54 @@ class Inventory:
 
 @dataclass
 class LastGood:
-    """The last good read of each source, in memory while the page runs. `sources`: source key
-    (a file's path, or `client:<id>` for a whole client) -> (time read, items). `projects`: the
-    project list of the last read that kept nothing."""
+    """The last good read of each source, in memory while the page runs. `sources`: (client,
+    file path) -> (time read, the client's items from that file); the path "" holds all of a
+    client's items. `projects`: the project list of the last read that kept nothing."""
 
-    sources: dict[str, tuple[str, list[Item]]] = field(default_factory=dict)
+    sources: dict[tuple[str, str], tuple[str, list[Item]]] = field(default_factory=dict)
     projects: list[Project] = field(default_factory=list)
 
 
 def keep_last_good(inventory: Inventory, last: LastGood, now: str) -> Inventory:
-    """Add the last good items of each source that failed now, marked with when they were read
-    and with no action (a Remove would be refused), and remember this read's good sources.
+    """Add the last good items of each source this read could not give, marked with when they
+    were read and with no action (a Remove would be refused), and remember this read's good
+    sources.
 
-    A whole client that failed keeps its items like a file does. While a source is kept, the
-    projects of the last good read stay too, so a broken ~/.claude.json does not drop them. A
-    first read that fails keeps nothing; a file emptied on purpose keeps nothing either.
+    A source could not be given when its file failed or its whole client failed. Also, while a
+    client has a broken file, a project it no longer lists keeps its items whose files are still
+    there: Claude Code finds a project's files through ~/.claude.json, Codex through
+    config.toml. While a source is kept, the projects of the last good read stay too. A first
+    read that fails keeps nothing; a file emptied on purpose keeps nothing either.
     """
-    failed = {p.path or f"client:{p.owner_client}" for p in inventory.problems}
-    gone = {k.removeprefix("client:") for k in failed if k.startswith("client:")}
+    failed = {p.path for p in inventory.problems if p.path}
+    broken = {p.owner_client for p in inventory.problems if p.path}
+    gone = {p.owner_client for p in inventory.problems if not p.path}
+    listed = {(c, p.path) for p in inventory.projects for c in p.known_by}
+    fresh: dict[tuple[str, str], list[Item]] = {}
+    for item in inventory.items:
+        fresh.setdefault((item.client, item.source.path or ""), []).append(item)
+        fresh.setdefault((item.client, ""), []).append(item)
+
+    def unread(client: str, path: str, items: list[Item]) -> bool:
+        if path in failed or client in gone:
+            return True
+        return (
+            client in broken
+            and (client, path) not in fresh
+            and bool(path)
+            and Path(path).exists()
+            and all(i.project and (client, i.project) not in listed for i in items)
+        )
+
     have = {i.id for i in inventory.items}
     kept: dict[str, Item] = {}  # by id: a file a failed client also read gives each item once
-    for key in sorted(failed & last.sources.keys()):
-        at, items = last.sources[key]
+    carried = {k: v for k, v in last.sources.items() if unread(*k, v[1])}
+    for key in sorted(carried):
+        at, items = carried[key]
         for i in items:
             if i.id not in have:
                 kept.setdefault(i.id, replace(i, stale_at=at, actions=()))
-    fresh: dict[str, list[Item]] = {}
-    for item in inventory.items:
-        fresh.setdefault(item.source.path or "", []).append(item)
-        fresh.setdefault(f"client:{item.client}", []).append(item)
-    new = {k: (now, v) for k, v in fresh.items() if k and k not in failed}
-    for key, (at, items) in last.sources.items():  # a failed source, or a file of a failed client
-        if key in failed or (items and items[0].client in gone):
-            new.setdefault(key, (at, items))
-    last.sources = new
+    last.sources = {k: (now, v) for k, v in fresh.items() if k[1] not in failed} | carried
     inventory.items += kept.values()
     if kept:
         known = {p.path for p in inventory.projects}

@@ -1,4 +1,5 @@
 import time
+from dataclasses import replace
 from pathlib import Path
 
 from kitden.clients import version_cache
@@ -238,3 +239,44 @@ def test_projects_stay_while_another_file_was_broken_all_along():
     )
     kept = keep_last_good(Inventory(problems=[problem("/h/.claude.json"), site]), last, LATER)
     assert [p.path for p in kept.projects] == ["/h/work/api"]
+
+
+def _project_item(name, path, project, client="claude_code"):
+    return replace(item(name, str(path), client), scope=Scope.PROJECT, project=str(project))
+
+
+def test_items_of_a_project_the_client_no_longer_lists_stay_while_a_file_is_broken(tmp_path):
+    # ~/.claude.json lists the projects; while it is broken, their files are not read.
+    mcp = tmp_path / "api/.mcp.json"
+    mcp.parent.mkdir()
+    mcp.write_text("{}")
+    api = Project(str(tmp_path / "api"), True, ("claude_code",))
+    last = LastGood()
+    keep_last_good(
+        Inventory(items=[_project_item("docs", mcp, api.path)], projects=[api]), last, AT
+    )
+    broken = Inventory(problems=[problem("/h/.claude.json")])
+    kept = keep_last_good(broken, last, LATER)
+    assert [(i.name, i.stale_at, i.actions) for i in kept.items] == [("docs", AT, ())]
+    assert [p.path for p in kept.projects] == [api.path]
+    # Still broken on the next read: still kept, with the first time.
+    again = keep_last_good(Inventory(problems=[problem("/h/.claude.json")]), last, LATER)
+    assert [(i.name, i.stale_at) for i in again.items] == [("docs", AT)]
+    # Its file is gone: nothing to keep.
+    mcp.unlink()
+    assert keep_last_good(Inventory(problems=[problem("/h/.claude.json")]), last, LATER).items == []
+
+
+def test_a_file_emptied_on_purpose_stays_empty_while_another_file_is_broken(tmp_path):
+    user = tmp_path / "mcp.json"
+    mcp = tmp_path / "api/.mcp.json"
+    mcp.parent.mkdir()
+    for path in (user, mcp):
+        path.write_text("{}")
+    api = Project(str(tmp_path / "api"), True, ("claude_code",))
+    last = LastGood()
+    first = [item("github", str(user)), _project_item("docs", mcp, api.path)]
+    keep_last_good(Inventory(items=first, projects=[api]), last, AT)
+    # The user file and the project file (its project still listed) now give nothing.
+    broken = Inventory(projects=[api], problems=[problem(str(tmp_path / "settings.json"))])
+    assert keep_last_good(broken, last, LATER).items == []

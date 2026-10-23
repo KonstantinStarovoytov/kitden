@@ -892,6 +892,58 @@ def test_a_failed_client_keeps_its_rows_from_the_last_good_read(home):
     assert not any(n.startswith("Could not read") for n in answer["notes"])
 
 
+def _after_a_break(tmp_path: Path, broken: str):
+    """The medium sample read well, then read again with `broken` given a stray comma."""
+    home = build_demo_home(tmp_path, "medium")
+    last = LastGood()
+    keep_last_good(build_inventory(home), last, "2026-10-22T14:02:00+00:00")
+    path = home / broken
+    path.write_text("," + path.read_text())
+    inventory = keep_last_good(build_inventory(home), last, "2026-10-22T14:05:00+00:00")
+    adapters = {a.id: a for a in default_adapters(home)}
+
+    def cell(project: str, kind: str, name: str, client: str, source: str | None = None):
+        answer = library(
+            inventory,
+            adapters,
+            str(home / "work" / project),
+            gateway_registered=False,
+            kind=kind,
+            show="all",
+        )
+        return _row(answer, name, source)["cells"][client]
+
+    return cell
+
+
+def test_project_items_stay_while_claude_json_is_broken(tmp_path):
+    # Claude Code reads a project's files only for the projects ~/.claude.json lists.
+    cell = _after_a_break(tmp_path, ".claude.json")
+    for kind, name, source in (
+        ("plugin", "superpowers", "demo-market"),
+        ("skill", "brainstorming", "superpowers@demo-market"),
+        ("skill", "planning", "superpowers@demo-market"),
+    ):
+        off = cell("website", kind, name, "claude_code", source)
+        assert (off["state"], off["where"], off["stale_at"]) == (
+            "off",
+            "project override",
+            "2026-10-22T14:02:00+00:00",
+        ), name
+    docs = cell("atlas", "mcp_server", "docs", "claude_code")
+    assert (docs["where"], docs["stale_at"]) == ("project override", "2026-10-22T14:02:00+00:00")
+
+
+def test_project_items_stay_while_codex_config_is_broken(tmp_path):
+    # Codex reads a project's skills and AGENTS.md only for projects config.toml trusts.
+    cell = _after_a_break(tmp_path, ".codex/config.toml")
+    style = cell("atlas", "skill", "api-style", "codex")
+    assert (style["state"], style["where"]) == ("on", "this project")
+    assert style["reason"].startswith("From the last good read at ")
+    agents = cell("atlas", "instructions", "AGENTS.md", "codex")
+    assert (agents["where"], agents["stale_at"]) == ("this project", "2026-10-22T14:02:00+00:00")
+
+
 def _toolbox_cell(home: Path, project: Path) -> dict:
     inventory = build_inventory(home)
     adapters = {a.id: a for a in default_adapters(home)}

@@ -90,12 +90,15 @@ def _route(item: Item, column: str) -> str | None:
     return None
 
 
-def _origin(items: list[Item], overrides: set[str], plugins: dict[str, Item]) -> str | None:
+def _deciding(items: list[Item], plugins: dict[str, Item]) -> list[Item]:
+    """The items that decide where these apply. A plugin's part (a skill, server or hook in it)
+    follows its plugin: `plugins` holds the plugin item that decides in this column, by id."""
+    return [plugins.get(plugin_of(i) or "", i) if i.scope is Scope.PLUGIN else i for i in items]
+
+
+def _origin(deciding: list[Item], overrides: set[str]) -> str | None:
     """Where the items apply: "override" when a project item wins over an all-projects one,
-    "project" when one is a project's own, else None (all projects). A plugin's part (a skill,
-    server or hook in it) applies where its plugin does: `plugins` holds the plugin item that
-    decides in this column, by plugin id."""
-    deciding = [plugins.get(plugin_of(i) or "", i) if i.scope is Scope.PLUGIN else i for i in items]
+    "project" when one is a project's own, else None (all projects)."""
     if any(i.id in overrides for i in deciding):
         return "override"
     if any(i.project is not None for i in deciding):
@@ -128,7 +131,7 @@ def _cell(
 ) -> Cell:
     """The cell from the items the client loads, or else those it has. In a project it says
     where they apply; the first item gives the route. Items kept from the last good read say
-    when."""
+    when, and so do the parts of a plugin whose deciding item was kept."""
     if loaded:
         items = sorted(loaded, key=lambda i: _own_first(i, column))
         if any(i.via_gateway for i in items):
@@ -143,8 +146,9 @@ def _cell(
         state = "off"
     else:
         return Cell("none")
-    origin = _origin(items, overrides, plugins)
-    stale = min((i.stale_at for i in items if i.stale_at), default=None)
+    deciding = _deciding(items, plugins)
+    origin = _origin(deciding, overrides)
+    stale = min((i.stale_at for i in items + deciding if i.stale_at), default=None)
     return Cell(
         state,
         where=ORIGIN_WORDS[origin] if in_project else None,
