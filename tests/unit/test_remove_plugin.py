@@ -99,23 +99,21 @@ def test_cursor_loses_a_claude_code_plugin_it_only_imports(client):
     assert applied["steps"][0]["reaches"] == ["claude_code", "cursor"]
 
 
-def test_in_a_project_with_its_own_copy_the_change_goes_to_every_other_project(client):
+def test_a_plugin_command_is_for_all_projects_even_where_the_project_has_its_own(client):
     website = next(
         p for p in client.get("/api/projects").json() if p["path"].endswith("/work/website")
     )
     item_id = _item(client, SUPERPOWERS)["id"]
-    body = {"action": "plugin.disable", "targets": [{"item": item_id}], "params": {}}
-    # The project picked at the top has its own superpowers, which wins there.
-    picked = client.post(
-        "/api/changes/preview", json={**body, "picked": website["id"]}, headers=POST
-    )
-    assert picked.json()["target"] == {
-        "scope": "others",
-        "project": website["path"],
-        "others_unchanged": False,
-    }
-    everywhere = client.post("/api/changes/preview", json=body, headers=POST).json()
-    assert everywhere["target"]["scope"] == "all"
+    everywhere = {"scope": "all", "project": None, "others_unchanged": False}
+    for action in ("plugin.disable", "plugin.remove"):
+        body = {"action": action, "targets": [{"item": item_id}], "params": {}}
+        # website has its own superpowers, which wins there; but `claude plugin …` also works
+        # on the plugin cache every project shares, so website is not left out.
+        picked = client.post(
+            "/api/changes/preview", json={**body, "picked": website["id"]}, headers=POST
+        ).json()
+        assert picked["target"] == everywhere
+        client.post(f"/api/changes/{picked['id']}/cancel", headers=POST)
 
 
 def test_the_changes_page_keeps_the_clients_and_the_place_after_a_restart(client):

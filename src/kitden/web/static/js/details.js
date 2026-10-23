@@ -269,10 +269,12 @@ export function affectsFor(lead, { definitions = [], move = null, connections = 
   return null;
 }
 
+// A plugin change runs the client's plugin command, which also works on the plugin cache every
+// project shares, so it never leaves this project out (as the review, views/review.py).
 function offerAffects(def, definitions, here) {
   if (!def.affects) return null;
   const affects = { ...def.affects, project: def.project || null, asks: false };
-  const winner = def.overridden && here ? winnerOf(definitions, def) : null;
+  const winner = def.overridden && here && def.kind !== "plugin" ? winnerOf(definitions, def) : null;
   const one = affects.clients.length === 1;
   if (affects.scope === "all" && one && winner && winner.project === here) affects.scope = "others";
   return affects;

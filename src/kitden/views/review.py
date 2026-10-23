@@ -7,7 +7,8 @@ lies inside that folder or around it, and no step runs a client's plugin command
 rule passes down to a child project, and a client working in a parent folder may read a
 child's files too. A plugin command (`claude plugin install`, `codex plugin remove`) also works
 on the client's plugin cache, which every project shares, while Kitden checks only the settings
-file; an MCP command (`claude mcp remove -s local`) is judged by the file it edits.
+file; an MCP command (`claude mcp remove -s local`) is judged by the file it edits. For the same
+reason a plugin command is never for "all projects but the picked one".
 """
 
 import os
@@ -120,12 +121,14 @@ def change_target(
 ) -> dict:
     """Where the steps go: "project" (one known project, `project`), "all" (no step is in a
     project), "others" (all projects but the picked one, `project`, whose own definition wins
-    over `items`, the definitions the change changes, for every client the steps change), or
-    "mixed". `others_unchanged`: the review may say "Other projects are unchanged.\""""
+    over `items`, the definitions the change changes, for every client the steps change; never
+    for a plugin command), or "mixed". `others_unchanged`: the review may say "Other projects
+    are unchanged.\""""
     places = {step_project(s, projects) for s in change.steps}
+    plugin = any(_plugin_command(s) for s in change.steps)
     if len(places) == 1 and None not in places:
         [project] = places
-        alone = _alone(project, projects) and not any(_plugin_command(s) for s in change.steps)
+        alone = _alone(project, projects) and not plugin
         return {"scope": "project", "project": project, "others_unchanged": alone}
     scoped = any(
         s.scope in (Scope.PROJECT, Scope.LOCAL) or _rule_project(s) is not None
@@ -133,7 +136,8 @@ def change_target(
     )
     if scoped:
         return {"scope": "mixed", "project": None, "others_unchanged": False}
-    if inventory is not None and picked is not None and _wins_in(change, inventory, picked, items):
+    beaten = picked and inventory is not None and _wins_in(change, inventory, picked, items)
+    if beaten and not plugin:
         return {"scope": "others", "project": picked, "others_unchanged": False}
     return {"scope": "all", "project": None, "others_unchanged": False}
 

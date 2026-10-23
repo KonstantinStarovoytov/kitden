@@ -196,6 +196,34 @@ def test_only_the_changed_definition_counts_not_another_kind_with_its_name(tmp_p
     assert change_target(change, [web], inv, web, [skill])["scope"] == "all"
 
 
+def test_a_plugin_command_never_leaves_the_picked_project_out(tmp_path):
+    web = str(tmp_path / "web")
+    source = Source(
+        kind=SourceKind.FILE, path="/h/.claude/settings.json", owner_client="claude_code"
+    )
+    user, mine = (
+        Item(
+            client="claude_code",
+            kind=ItemKind.PLUGIN,
+            name="x@a",
+            source=source,
+            scope=scope,
+            project=project,
+        )
+        for scope, project in ((Scope.USER, None), (Scope.PROJECT, web))
+    )
+    off = edit(
+        tmp_path / ".claude/settings.json", Scope.USER, ("enabledPlugins", "x@a"), "claude_code"
+    )
+    off.name = "x@a"
+    change = Change(action="plugin.remove", steps=[off])
+    # web's own x@a wins there; as a plain settings edit, all projects but web.
+    assert change_target(change, [web], inventory(user, mine), web, [user])["scope"] == "others"
+    # `claude plugin uninstall` also works on the plugin cache every project shares.
+    off.command = ["claude", "plugin", "uninstall", "x@a", "-s", "user"]
+    assert change_target(change, [web], inventory(user, mine), web, [user])["scope"] == "all"
+
+
 def test_a_change_to_several_clients_leaves_the_project_out_only_when_it_wins_in_each(tmp_path):
     web = str(tmp_path / "web")
     code, cursor = server("claude_code", Scope.USER), server("cursor", Scope.USER, path="/h/c.json")

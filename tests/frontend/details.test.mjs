@@ -206,6 +206,11 @@ test('a definition another one overrides in this project is not promised for thi
   const shared = { ...user, client: 'codex', affects: { clients: ['codex', 'cursor'], scope: 'all', note: null } };
   const codexHere = { ...mine, client: 'codex' };
   assert.equal(affectsText(affectsFor({ def: shared, action: 'skill.remove' }, { definitions: [shared, codexHere], project: site }), site), 'Changes Codex and Cursor. All projects.');
+  // A plugin change runs the client's plugin command, which works on the plugin cache every
+  // project shares: this project is not left out (review.py).
+  const plugin = { ...user, kind: 'plugin' };
+  const pluginHere = { ...mine, kind: 'plugin' };
+  assert.equal(affectsText(affectsFor({ def: plugin, action: 'plugin.remove' }, { definitions: [plugin, pluginHere], project: site }), site), 'Changes Claude Code. All projects.');
 });
 
 test('a move names every client whose entry moves', () => {
