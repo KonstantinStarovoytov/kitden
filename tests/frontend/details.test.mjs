@@ -6,8 +6,9 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; details.js must load there too.
 delete globalThis.navigator;
-const { DETAILS_ORDER, affectsFor, affectsText, contextLinks, detailsOrder, fileScopeWords, footerActions, layerState, offerLabel, originWords, scopeWords, techRows, whyLines, whyParts } = await import('../../src/kitden/web/static/js/details.js');
+const { DETAILS_ORDER, affectsFor, affectsText, contextLinks, detailsOrder, fileScopeWords, focusAfterBack, footerActions, layerState, offerLabel, originWords, scopeWords, techRows, whyLines, whyParts } = await import('../../src/kitden/web/static/js/details.js');
 const { addReach } = await import('../../src/kitden/web/static/js/offer.js');
+const { cancelTarget } = await import('../../src/kitden/web/static/js/review.js');
 
 const def = (fields) => ({ kind: 'skill', scope: 'user', project: null, enabled: 'on', owner_client: fields.client, loads: true, overridden: false, merged: false, ...fields });
 const site = '/Users/me/work/website';
@@ -310,4 +311,18 @@ test('a server the Kitden gateway holds leads with Manage tools; Move waits unde
   const definitions = [def({ client: 'cursor', kind: 'mcp_server', name: 'files' }), held('claude_code'), held('codex')];
   assert.equal(affectsText(affectsFor(manage, { definitions, project: '' }), ''), 'Changes Claude Code and Codex. All projects.');
   assert.equal(affectsText(affectsFor(manage, { definitions, project: site }), site), 'Changes Claude Code and Codex. In this project.');
+});
+
+test('Cancel goes back to where the review came from', () => {
+  assert.equal(cancelTarget({ back: () => {}, from: { row: {} } }), 'back'); // a tool switch's own way back
+  assert.equal(cancelTarget({ back: null, from: { row: {} } }), 'details');
+  assert.equal(cancelTarget({ back: null, from: null }), 'close');
+});
+
+test('focus comes back to the pressed control, or to More when it was under More', () => {
+  assert.equal(focusAfterBack('offer:d1:skill.remove', ['offer:d1:skill.remove', 'more']), 'offer:d1:skill.remove');
+  assert.equal(focusAfterBack('offer:d2:plugin.disable', ['more', 'move']), 'more');
+  assert.equal(focusAfterBack(null, ['move']), null);
+  // Nothing under More and the control gone: the panel itself takes focus.
+  assert.equal(focusAfterBack('add:codex', ['move']), null);
 });

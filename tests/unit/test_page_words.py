@@ -893,6 +893,21 @@ def test_the_review_leads_with_the_outcome_and_keeps_undo_honest():
     assert "change.undo_note" in review
 
 
+def test_cancel_and_a_refused_preview_go_back_to_details():
+    review, shell, details = script("review.js"), script("panel.js"), script("details.js")
+    assert "cancelTarget(" in review and "backToDetails({ error: reason })" in review
+    assert "panelState.from = null" in shell
+    # Details keeps what it was drawn from and the control pressed, by its focus key.
+    assert "const from = { row, definitions, offer, inherits, focus: null };" in details
+    assert "panelState.from = from;" in details
+    for key in ("`offer:", '"move"', "`add:", '"add:form"', "`held:", '"more"', '"commands"'):
+        assert key in panel() + script("offer.js"), key
+    assert "`switch:${def.id}`" in details
+    # The review is cancelled once: Cancel's own request, not again when the panel closes.
+    cancel = shell.split("export function cancelPreview()")[1].split("\n}\n")[0]
+    assert 'change.state = "cancelled"' in cancel
+
+
 def test_a_project_no_longer_on_the_list_is_said_not_swapped():
     assert 'export const GONE_PROJECT = "This project is no longer on the list.";' in script(
         "parts.js"

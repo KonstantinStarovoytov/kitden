@@ -1,6 +1,6 @@
 // Item details: what an item is, where each client loads it from, and the actions on it.
 import { getJson, query } from "./api.js";
-import { $, button, el, joinWords, plural, reportError, shortPath } from "./dom.js";
+import { $, $$, button, el, joinWords, plural, reportError, shortPath, withFocusKey } from "./dom.js";
 import { loadLibraryFor, raceSlow, rowSel, rowTitle, shownRow } from "./library.js";
 import { fold } from "./motion.js";
 import { about, addButton, addOptions, addReach, mcpRows, whyNoAction } from "./offer.js";
@@ -173,7 +173,9 @@ export function moveInto(gateways, items, title) {
 }
 
 function moveButton({ items, gateways }, look, name) {
-  return button("Move into the gateway…", () => moveInto(gateways, items, name), look);
+  const node = button("Move into the gateway…", () => moveInto(gateways, items, name), look);
+  node.dataset.focus = "move";
+  return node;
 }
 
 // A server in the Kitden gateway can leave it, or be written back into a client as its own
@@ -199,7 +201,11 @@ export function plainSecrets(model, server) {
 
 // heldActions as plain buttons, for both Details of a held server.
 export function heldButtons(actions) {
-  const draw = (a, look) => [button(a.label, () => review(a.body), look)];
+  const draw = (a, look) => {
+    const node = button(a.label, () => review(a.body), look);
+    node.dataset.focus = `held:${a.label}`;
+    return [node];
+  };
   return footerButtons({ lead: null, rest: actions }, draw);
 }
 
@@ -214,6 +220,7 @@ function moreButton(buttons) {
     more.replaceWith(...buttons);
     buttons[0].focus();
   }, "btn");
+  more.dataset.focus = "more";
   return more;
 }
 
@@ -687,6 +694,7 @@ export function switchNode(on, press) {
 function pluginSwitch(def, action) {
   const on = action ? action === "plugin.disable" : def.enabled === "on";
   const node = switchNode(on, action ? () => review({ action, targets: [{ item: def.id }], params: {} }) : null);
+  node.dataset.focus = `switch:${def.id}`;
   if (!action) {
     node.disabled = true;
     node.setAttribute("aria-label", `${on ? "On" : "Off"} in ${clientName(def.client)}; not changed from here`);
@@ -708,6 +716,13 @@ export function countedDefinition(definitions) {
 // (what the lead action changes, or why nothing can be done), links to the item on other pages,
 // and the evidence, folded. Every action is in the footer.
 function showDetails(row, definitions, offer = null, toolsNext = {}, inherits = NO_INHERITS) {
+  // What a review opened from here comes back to (backToDetails), and the control pressed last.
+  const from = { row, definitions, offer, inherits, focus: null };
+  panelState.from = from;
+  const remember = (event) => {
+    const node = event.target && event.target.closest ? event.target.closest("[data-focus]") : null;
+    if (node) from.focus = node.dataset.focus;
+  };
   const warnings = row.flags.filter((x) => x.level === "warning");
   const move = moveFor(row, currentModel("gateway"), Boolean(currentError("gateway")));
   const offers = definitions.flatMap((def) => def.actions.filter((a) => ACTION_BUTTONS[a]).map((action) => ({ def, action })));
@@ -779,12 +794,15 @@ function showDetails(row, definitions, offer = null, toolsNext = {}, inherits = 
   if (rows.length) blocks.set("technical", [technical(rows)]);
   const body = el("div", "body");
   for (const id of detailsOrder(new Set(blocks.keys()))) body.append(...blocks.get(id));
+  body.addEventListener("click", remember, true);
 
   const withCommands = definitions.filter((d) => d.kind === "plugin" || d.kind === "marketplace");
   const commands = withCommands.length ? [button("Commands…", () => showCommands(row, withCommands), "btn")] : [];
+  for (const node of commands) node.dataset.focus = "commands";
   const buttonFor = ({ def, action }, look) => {
     const label = offerLabel({ def, action }, offers);
     const node = button(null, () => review({ action, targets: [{ item: def.id }], params: {} }), look);
+    node.dataset.focus = `offer:${def.id}:${action}`;
     // A narrow panel cuts the words with "…"; the whole label stays in the hover text.
     node.title = label;
     node.append(el("span", "cut", label));
@@ -800,7 +818,31 @@ function showDetails(row, definitions, offer = null, toolsNext = {}, inherits = 
   const footer = el("footer");
   const held = definitions.some((d) => d.via_gateway === "kitden") ? heldButtons(heldActions(row.name, writableClients(), plainSecrets(currentModel("gateway"), row.name))) : [];
   footer.append(...held, ...footerButtons(actions, draw, commands));
+  footer.addEventListener("click", remember, true);
   swapContent([itemHeader(row), body, footer]);
+}
+
+// Where focus goes back to in Details: the control pressed (`key`) when it is drawn again, else
+// More when that control waits under it again, else null (the panel itself).
+export function focusAfterBack(key, keys) {
+  if (!key) return null;
+  if (keys.includes(key)) return key;
+  return keys.includes("more") ? "more" : null;
+}
+
+// Back from a review to the Details it was opened from, drawn again from what Details read then
+// (no new read). `error`: why the preview was refused, first in the body. Focus goes back to
+// the control pressed.
+export function backToDetails({ error = null } = {}) {
+  const from = panelState.from;
+  if (!from) return;
+  const { row, definitions, offer, inherits, focus } = from;
+  panelState.current = { type: "item", row, definitions, offer, inherits };
+  showDetails(row, definitions, offer, {}, inherits);
+  const drawer = $("#drawer");
+  if (error) $(".body", drawer).prepend(callout(error, "error"));
+  const keys = $$("[data-focus]", drawer).map((node) => node.dataset.focus);
+  (withFocusKey(drawer, focusAfterBack(focus, keys)) || drawer).focus();
 }
 
 async function showCommands(row, definitions) {

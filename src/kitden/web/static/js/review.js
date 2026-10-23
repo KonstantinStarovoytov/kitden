@@ -1,6 +1,6 @@
 // Change review: the preview, Apply and its motion, and Undo.
 import { getJson, postJson } from "./api.js";
-import { clientName, KIND_WORDS } from "./details.js";
+import { backToDetails, clientName, KIND_WORDS } from "./details.js";
 import { $, $$, button, el, joinWords, plural, reportError, shortPath, shortPaths } from "./dom.js";
 import { loadLibrary, morphOnNextRender } from "./library.js";
 import { fold, transition } from "./motion.js";
@@ -264,6 +264,11 @@ export async function review(previewBody, { note = null, back = null } = {}) {
       await back({ error: reason });
       return;
     }
+    // From Details, the reason shows there, as for a tool switch.
+    if (panelState.from) {
+      backToDetails({ error: reason });
+      return;
+    }
     panelState.current = { type: "error" };
     const footer = el("footer");
     footer.append(button("Close", () => closePanel(), "btn"));
@@ -273,6 +278,13 @@ export async function review(previewBody, { note = null, back = null } = {}) {
     return;
   }
   showReview(result.data, previewBody, note, back);
+}
+
+// Where Cancel goes: "back" (a tool switch's own way back), "details" (the Details the review
+// was opened from) or "close".
+export function cancelTarget({ back, from }) {
+  if (back) return "back";
+  return from ? "details" : "close";
 }
 
 // The after line's client chips, and its notes, each once. An entry may have only a note (a
@@ -353,11 +365,14 @@ function showReview(change, previewBody, note, back = null) {
 
   const footer = el("footer");
   footer.append(el("span", "note", APPLY_KEY));
-  // From a tool switch, Cancel goes back to its Details; otherwise it closes the panel.
+  // Cancel goes back to where the review came from: a tool switch's Details, the Details it was
+  // opened from, or nowhere (the panel closes).
   const cancel = button("Cancel", () => {
-    if (!back) return closePanel();
     cancelPreview();
-    return back();
+    const to = cancelTarget({ back, from: panelState.from });
+    if (to === "back") return back();
+    if (to === "details") return backToDetails();
+    return closePanel();
   }, "btn");
   apply.type = "button";
   const label = el("span", "label", "Apply");

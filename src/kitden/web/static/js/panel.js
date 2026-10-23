@@ -9,12 +9,13 @@ import { finishTransition } from "./motion.js";
 import { arrival, busy, setState, state } from "./store.js";
 import { reloadTools } from "./tools.js";
 
-export { contextLinks, countedDefinition, footerActions, footerButtons, heldActions, heldButtons, kindWord, layerState, linksRow, loadsLede, moveFor, moveInto, moveTargets, offerLabel, openItem, plainSecrets, scopeWords, technical } from "./details.js";
+export { backToDetails, contextLinks, countedDefinition, footerActions, footerButtons, heldActions, heldButtons, kindWord, layerState, linksRow, loadsLede, moveFor, moveInto, moveTargets, offerLabel, openItem, plainSecrets, scopeWords, technical } from "./details.js";
 export { callsText, projectLabel, toolRows, toolsSection, writingToolsOn } from "./tools.js";
-export { ADDS, addScope, afterParts, alignGroups, canShowReview, changeOutcome, changeWords, chosenKeys, leftOutText, review, reviewLede, undoChange } from "./review.js";
+export { ADDS, addScope, afterParts, alignGroups, canShowReview, cancelTarget, changeOutcome, changeWords, chosenKeys, leftOutText, review, reviewLede, undoChange } from "./review.js";
 
 // What is open now (`current`): "item" or "review", and for a review the change and the request
-// behind it. `from` is the Details a review was opened from; nothing sets it yet.
+// behind it. `from` is the Details a review was opened from (details.js sets it): Cancel goes
+// back there. A closed panel forgets it.
 export const panelState = { current: null, from: null };
 let opener = null;
 let openerKey = null;
@@ -60,6 +61,7 @@ export function closePanel({ instant = false, keepSelection = false, focus = tru
   if (!isPanelOpen() || (busy.change && !force)) return;
   cancelPreview();
   panelState.current = null;
+  panelState.from = null;
   for (const node of [$("#drawer"), $("#scrim")]) {
     node.classList.toggle("instant", instant);
     node.classList.remove("open");
@@ -78,10 +80,14 @@ export function closeForProject() {
   if (isPanelOpen() && openedIn !== state.project) closePanel({ focus: false, keepSelection: true });
 }
 
-// A review left without Apply: the server forgets its preview.
+// A review left without Apply: the server forgets its preview. Sent once: the change is marked
+// cancelled, so a panel closed after Cancel does not send it again.
 export function cancelPreview() {
-  if (panelState.current && panelState.current.type === "review" && panelState.current.change && panelState.current.change.state === "previewed") {
-    postJson(`/api/changes/${encodeURIComponent(panelState.current.change.id)}/cancel`).catch(() => {});
+  const current = panelState.current;
+  const change = current && current.type === "review" ? current.change : null;
+  if (change && change.state === "previewed") {
+    postJson(`/api/changes/${encodeURIComponent(change.id)}/cancel`).catch(() => {});
+    change.state = "cancelled";
   }
 }
 

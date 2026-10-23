@@ -187,8 +187,12 @@ export function addOptions(row, offer) {
 
 // A cell's add opens the same review as the cell's own button; "Add…" opens the form.
 export function addButton(option, row, offer, look) {
-  if (option.form) return button(option.label, () => (row.kind === "skill" ? addSkillForm(offer) : addForm(offer, row)), look);
-  return button(option.label, () => startAdd(option.add, option.client, row), look);
+  const node = option.form
+    ? button(option.label, () => (row.kind === "skill" ? addSkillForm(offer) : addForm(offer, row)), look)
+    : button(option.label, () => startAdd(option.add, option.client, row), look);
+  // Cancel in the review brings focus back here (details.js backToDetails).
+  node.dataset.focus = option.form ? "add:form" : `add:${option.client}`;
+  return node;
 }
 
 // Why Details offer nothing to do, in one line: each cell's reason once, in column order, and

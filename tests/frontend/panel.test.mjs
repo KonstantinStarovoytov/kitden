@@ -5,7 +5,7 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; panel.js must load there too.
 delete globalThis.navigator;
-const { addScope, afterParts, alignGroups, canShowReview, closeForProject, closePanel, countedDefinition, changeOutcome, chosenKeys, callsText, changeWords, footerActions, heldActions, isPanelOpen, offerLabel, layerState, leftOutText, kindWord, loadsLede, moveFor, moveTargets, openPanel, plainSecrets, review, reviewLede, scopeWords, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
+const { addScope, afterParts, alignGroups, canShowReview, cancelPreview, closeForProject, closePanel, countedDefinition, changeOutcome, chosenKeys, callsText, changeWords, footerActions, heldActions, isPanelOpen, offerLabel, layerState, leftOutText, kindWord, loadsLede, moveFor, moveTargets, openPanel, panelState, plainSecrets, review, reviewLede, scopeWords, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
 const { addOptions, whyNoAction } = await import('../../src/kitden/web/static/js/offer.js');
 const { busy, data, state } = await import('../../src/kitden/web/static/js/store.js');
 
@@ -745,6 +745,30 @@ test('a refused review that answers after the project changed goes nowhere', asy
     assert.deepEqual(posted, ['/api/changes/preview']);
   } finally {
     state.project = '';
+    delete globalThis.document;
+    delete globalThis.fetch;
+  }
+});
+
+test('Cancel sends one cancel for the review, and a closed panel forgets the Details it came from', async () => {
+  fakePanelPage();
+  const posted = [];
+  globalThis.fetch = (url) => {
+    posted.push(url);
+    return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
+  };
+  try {
+    openPanel([]);
+    panelState.current = { type: 'review', change: { id: 'c1', state: 'previewed' } };
+    panelState.from = { row: {}, definitions: [], offer: null, inherits: {}, focus: 'move' };
+    cancelPreview(); // Cancel's own
+    closePanel({ focus: false }); // closing cancels an open review too: not twice
+    await Promise.resolve();
+    assert.deepEqual(posted, ['/api/changes/c1/cancel']);
+    assert.equal(panelState.from, null);
+  } finally {
+    panelState.current = null;
+    panelState.from = null;
     delete globalThis.document;
     delete globalThis.fetch;
   }
