@@ -654,13 +654,13 @@ def _add_file(adapters, client: str, add: dict, project: str | None) -> str | No
 
 def _no_add_in_review(rows: list[dict]) -> None:
     """In an MCP server or skill row with a Needs review cell no cell offers an add: it would
-    copy one side without asking."""
+    copy one side without asking. Every empty cell says so, unless it says why already."""
     for row in rows:
         cells = row["cells"].values()
         if row["kind"] not in ("mcp_server", "skill") or all(c["state"] != "review" for c in cells):
             continue
         for cell in cells:
-            if cell["add"]:
+            if cell["add"] or (cell["state"] == "none" and not cell["reason"]):
                 cell["add"] = None
                 cell["reason"] = NO_ADD_REVIEW
 

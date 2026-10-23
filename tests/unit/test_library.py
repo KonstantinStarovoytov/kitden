@@ -1028,6 +1028,23 @@ def test_review_rows_on_the_medium_sample_offer_no_add(tmp_path):
     assert all(c["add"] is None for c in review)
 
 
+def test_every_empty_cell_of_a_review_row_says_to_decide_first(tmp_path):
+    home = build_demo_home(tmp_path, "medium")
+    atlas = library(
+        build_inventory(home),
+        {a.id: a for a in default_adapters(home)},
+        str(home / "work/atlas"),
+        gateway_registered=False,
+        kind="mcp_server",
+    )
+    cursor = _row(atlas, "docs")["cells"]["cursor"]  # empty, with no add to take away
+    assert (cursor["state"], cursor["add"], cursor["reason"]) == (
+        "none",
+        None,
+        "Same name, another source: decide first.",
+    )
+
+
 @pytest.mark.parametrize("folder", [".agents/skills", ".codex/skills"])
 def test_a_plugin_skill_kitden_copied_is_still_that_plugins_skill(home, folder):
     # Kitden's "+ Add" copies the marketplace's folder; Claude Code loads its own cache copy.
