@@ -189,6 +189,13 @@ test('an add names its scope in the title and, with All projects, in the lede', 
   // Only an add names a scope; a removal or a switch says its place another way.
   assert.equal(addScope('plugin.disable', ''), null);
   assert.equal(addScope('plugin.skills', ''), ' for all projects');
+  // A marketplace and the setup entry are adds too, and always for all projects.
+  const market = { action: 'marketplace.add', steps: [{ client: 'codex', name: 'acme' }] };
+  assert.deepEqual(changeWords(market), { title: 'Add the acme marketplace to Codex for all projects', done: 'Added the marketplace acme to Codex for all projects' });
+  const setup = { action: 'setup_server.register', steps: [{ client: 'cursor', name: 'kitden' }] };
+  assert.deepEqual(changeWords(setup), { title: 'Add “show my setup” to Cursor for all projects', done: 'Added show my setup to Cursor for all projects' });
+  assert.equal(reviewLede('marketplace.add', ''), 'Adds for all projects. Nothing is written until you press Apply. A backup is kept, so you can undo.');
+  assert.equal(reviewLede('setup_server.register', ''), 'Adds for all projects. Nothing is written until you press Apply. A backup is kept, so you can undo.');
 });
 
 test('an add into a known project on another disk names that project', () => {

@@ -136,12 +136,26 @@ async function guarded(name, url, apply, scope) {
   }
 }
 
+// The shared read while it runs: a read for the picked project waits for it, to learn whether
+// the project is still on the list.
+let sharedRead = null;
+
 export async function loadShared() {
-  await Promise.all([
+  const read = Promise.all([
     guarded("clients", "/api/clients", (v) => { data.clients = v; }),
     guarded("projects", "/api/projects", (v) => { data.projects = v; }),
     guarded("changes", "/api/changes", (v) => { data.changes = v; }),
   ]);
+  sharedRead = read;
+  await read;
+  if (sharedRead === read) sharedRead = null;
+}
+
+// Run `read` once a shared read that is running has answered (at once when none runs), and
+// not at all for a project no longer on the list.
+export function afterShared(read) {
+  const run = () => (projectGone() ? undefined : read());
+  return sharedRead ? sharedRead.then(run) : Promise.resolve(run());
 }
 
 export async function loadOverview() {

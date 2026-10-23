@@ -20,6 +20,7 @@ import os
 import re
 from pathlib import Path
 
+from kitden.changes.actions import _skill_readers
 from kitden.changes.copy_folder import CopyRefusedError, digest, list_files
 from kitden.clients.base import ClientAdapter
 from kitden.model import ClientStatus, Enabled, ItemKind, Scope
@@ -342,11 +343,33 @@ def skill_catalog(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
     return sorted(rows.values(), key=lambda r: (r["name"].lower(), r["from"].lower()))
 
 
+def _on_disk(adapters, found: set[str], project: str, folder_name: str) -> dict[str, str]:
+    """The found clients that already read a skill folder of this name in `project`, as the
+    skill list says it. A copy for one of them would meet that folder (skill_copy_step refuses)
+    or load twice. Codex reads none in a project it does not trust."""
+    words: dict[str, str] = {}
+    for owner in CLIENTS:
+        adapter = adapters.get(owner)
+        if owner not in found or adapter is None or not adapter.skills_folder:
+            continue
+        target = Path(project) / adapter.skills_folder / folder_name
+        if not (target.exists() or target.is_symlink()):
+            continue
+        for reader in _skill_readers(owner, adapters, found):
+            if reader == "codex" and not adapters["codex"].trusts(project):
+                continue
+            # Codex's folder, .agents/skills, is Cursor's own too.
+            own = reader == owner or owner == "codex"
+            words.setdefault(reader, "Installed" if own else f"Via {CLIENT_WORDS[owner]}")
+    return words
+
+
 def project_skills(inventory, adapters: dict[str, ClientAdapter], project: str) -> list[dict]:
     """The skills clients load from `project` itself, one row per name, like skill_catalog's.
 
     The id is "project/<name>": a folder name has no "/", so it never meets a catalog id. The
-    source is the first such folder; a copy goes into the same project.
+    source is the first such folder; a copy goes into the same project. A client that already
+    reads a folder of that name there has it, whether the scan lists it or not.
     """
     found = {c.id for c in inventory.clients if c.status is ClientStatus.FOUND and c.id in CLIENTS}
     folders: dict[str, Path] = {}
@@ -361,23 +384,20 @@ def project_skills(inventory, adapters: dict[str, ClientAdapter], project: str) 
         )
         if here:
             folders.setdefault(item.name, Path(item.source.path).parent)
-            installed.setdefault(item.name, {})[item.client] = "Installed"
+            owner = item.source.owner_client
+            own = owner in (item.client, "shared")
+            word = "Installed" if own else f"Via {CLIENT_WORDS.get(owner, owner)}"
+            installed.setdefault(item.name, {})[item.client] = word
     source = Path(project).name
-    rows = [
-        _row(
-            f"project/{name}",
-            read_skill(folder),
-            folder,
-            source,
-            None,
-            None,
-            None,
-            installed[name],
-            found,
-            project,
+    rows = []
+    for name, folder in folders.items():
+        words = installed[name]
+        for client, word in _on_disk(adapters, found, project, folder.name).items():
+            words.setdefault(client, word)
+        info = read_skill(folder)
+        rows.append(
+            _row(f"project/{name}", info, folder, source, None, None, None, words, found, project)
         )
-        for name, folder in folders.items()
-    ]
     return sorted(rows, key=lambda r: r["name"].lower())
 
 

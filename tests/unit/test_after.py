@@ -339,6 +339,38 @@ def test_add_missing_names_cursor_for_a_claude_code_user_plugin():
     ]
 
 
+def test_a_project_copy_meets_the_copies_of_its_own_project(tmp_path):
+    atlas, web = str(tmp_path / "work/atlas"), str(tmp_path / "work/web")
+
+    def cursor_copy(project):
+        path = f"{project}/.agents/skills/a/SKILL.md"
+        source = Source(kind=SourceKind.FILE, path=path, owner_client="shared")
+        return Item(
+            client="cursor",
+            kind=ItemKind.SKILL,
+            name="a",
+            source=source,
+            scope=Scope.PROJECT,
+            project=project,
+        )
+
+    # The copy names its project; its folder may sit at any depth inside it.
+    target = f"{atlas}/one/two/skills/a"
+    readers = ["claude_code", "cursor"]
+    copy = FolderCopy(
+        source=f"{atlas}/.agents/skills/a", target=target, readers=readers, project=atlas
+    )
+    change = Change(
+        action="skill.install",
+        steps=[Step(client="claude_code", scope=Scope.PROJECT, name="a", copy=copy)],
+    )
+    twice = after_words(change, inventory(cursor_copy(atlas)), skills=[])
+    assert twice[-1]["word"] == "Loads twice"
+    # A copy another project has is not met.
+    once = after_words(change, inventory(cursor_copy(web)), skills=[])
+    assert once[-1] == {"client": "cursor", "state": "on", "word": "Available"}
+
+
 def server(client, name, via=None):
     source = Source(kind=SourceKind.FILE, path=f"/h/{client}.json", owner_client=client)
     return Item(

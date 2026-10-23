@@ -39,7 +39,7 @@ globalThis.fetch = (url) => new Promise((resolve) => {
   requests.push({ url, answer: (body) => resolve({ ok: true, status: 200, json: async () => body }) });
 });
 const { addChoices, addName, hasAdds, scopeLine, cellHint, cellNode, emptyState, hiddenClients, hiddenLine, hideButton, loadLibrary, loadLibraryFor, metaText, moreLine, nameCell, noteFor, previewFor, setHidden, startAdd } = await import('../../src/kitden/web/static/js/library.js');
-const { data, freshness, hashFor, parseHash, state } = await import('../../src/kitden/web/static/js/store.js');
+const { data, freshness, hashFor, loadShared, parseHash, state } = await import('../../src/kitden/web/static/js/store.js');
 const later = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const cell = (fields) => ({ state: 'none', where: null, items: [], word: null, add: null, reason: null, ...fields });
@@ -228,6 +228,32 @@ test('a tab read before the Library shows is kept for it', async () => {
   Object.assign(state, { view: 'library', kind: 'skill', show: 'mine', category: '', attention: false, q: '' });
   loadLibrary();
   assert.equal(requests.length, 1);
+});
+
+// The shared read (clients, projects, changes) answers with `projects`; a refresh starts the
+// Library's read before that answer.
+async function libraryReadsAfterShared(projects) {
+  Object.assign(state, { view: 'library', kind: 'skill', show: 'mine', category: '', attention: false, project: 'gone', q: '' });
+  data.projects = [{ id: 'gone', path: '/w/gone' }];
+  freshness.reloadStartedAt = performance.now();
+  requests.length = 0;
+  const shared = loadShared();
+  const rows = loadLibrary();
+  assert.equal(requests.length, 3);
+  for (const request of requests.slice()) request.answer(request.url === '/api/projects' ? projects : []);
+  await shared;
+  await later(2);
+  const asked = requests.filter((r) => r.url.startsWith('/api/library')).map((r) => r.url);
+  for (const request of requests.slice(3)) request.answer({ rows: [], columns: [], counts: {}, notes: [] });
+  await rows;
+  Object.assign(state, { view: 'overview', project: '' });
+  Object.assign(data, { projects: null, clients: null, changes: null });
+  return asked;
+}
+
+test('the Library reads nothing for a project that left the list', async () => {
+  assert.deepEqual(await libraryReadsAfterShared([{ id: 'a', path: '/w/a' }]), []);
+  assert.deepEqual(await libraryReadsAfterShared([{ id: 'gone', path: '/w/gone' }]), ['/api/library?project=gone&kind=skill&show=mine']);
 });
 
 const COLUMNS = [
@@ -424,8 +450,10 @@ test("a project's own skill adds into the project, with no choice", () => {
   const style = { kind: 'skill', name: 'api-style' };
   assert.deepEqual(previewFor(own, 'claude_code', 'project').params, { skill: 'project/api-style', project: 'p1' });
   assert.equal(addName(style, 'claude_code', own, 'p1'), 'Add api-style to Claude Code in atlas');
-  assert.ok(scopeLine('p1', [{ cells: { claude_code: cell({ add: own }) } }]).endsWith(" This project's own skills add into this project."));
+  assert.ok(scopeLine('p1', [{ cells: { claude_code: cell({ add: own }), codex: cell({ add: add({}) }) } }]).endsWith(" This project's own skills add into this project."));
   assert.ok(!scopeLine('p1', [{ cells: { claude_code: cell({ add: add({}) }) } }]).includes("own skills"));
+  // When every add goes into the project, the line does not say all projects.
+  assert.equal(scopeLine('p1', [{ cells: { claude_code: cell({ add: own }), codex: cell() } }]), "This project's own skills add into this project.");
   state.project = '';
   data.projects = null;
 });

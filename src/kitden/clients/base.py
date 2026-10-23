@@ -368,7 +368,9 @@ class ClientAdapter(ABC):
         target = root / self.skills_folder / folder.name
         if target.exists() or target.is_symlink():
             raise ValueError(f"{self.display_name} already has a skill named {folder.name}")
-        copy = FolderCopy(source=str(folder), target=str(target), readers=list(readers))
+        copy = FolderCopy(
+            source=str(folder), target=str(target), readers=list(readers), project=project
+        )
         return Step(
             client=self.id,
             scope=Scope.PROJECT if project is not None else Scope.USER,

@@ -240,6 +240,7 @@ class FolderCopy:
     readers: list[str] = field(default_factory=list)  # clients that read the target folder
     content_hash: str | None = None  # of the source at preview; the copy must read back the same
     masked_diff: str = ""
+    project: str | None = None  # the project the copy goes into; None for the user's folder
 
 
 REMOVE_FOLDER = "remove_folder"  # the mechanism of a step that removes a skill folder

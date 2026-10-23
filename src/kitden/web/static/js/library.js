@@ -7,7 +7,7 @@ import { animate, entrance, glide, land, reducedMotion, rollTo, spring } from ".
 import { marketplaceForm, projectNote, showOffer, showSkill } from "./offer.js";
 import { openInfo, projectLabel, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, mark, morphSocket, opens, skeleton, socket, staleNote } from "./parts.js";
-import { freshness, go, projectGone, projectPath, render, retry, state } from "./store.js";
+import { afterShared, freshness, go, projectPath, render, retry, state } from "./store.js";
 
 const KINDS = [
   ["mcp_server", "MCP servers"], ["plugin", "Plugins"], ["skill", "Skills"],
@@ -123,10 +123,12 @@ export function addName(row, client, add, project) {
 export function scopeLine(project, rows, kind = null) {
   if (!project || rows.length === 0 || !hasAdds(kind)) return null;
   const adds = rows.flatMap((r) => Object.values(r.cells || {}).map((c) => c.add).filter(Boolean));
+  const own = "This project's own skills add into this project.";
+  if (adds.length && adds.every((add) => add.project_only)) return own;
   const line = adds.some((add) => add.project_place)
     ? "An Add asks: this project, or all projects. Adds without that choice go to all projects."
     : "Adding puts an item in all projects.";
-  return adds.some((add) => add.project_only) ? `${line} This project's own skills add into this project.` : line;
+  return adds.some((add) => add.project_only) ? `${line} ${own}` : line;
 }
 
 // One cell: a button for the one action, a state, or a dash that says why not.
@@ -298,17 +300,17 @@ async function choose(params, pressed = null) {
 
 // For a caller that draws the page itself once the shown tab is read (a reload, a change or a
 // project switch), so the cells morph then and not before. Call it right after reload() starts.
-// Nothing is read for a project no longer on the list.
+// Nothing is read for a project no longer on the list (afterShared).
 export function loadLibrary() {
-  if (state.view !== "library" || projectGone()) return Promise.resolve();
+  if (state.view !== "library") return Promise.resolve();
   clearTimeout(timer);
-  return read({});
+  return afterShared(() => read({}));
 }
 
 // Read the tab another place is about to open, so it is drawn inside the place change and a
 // client tile can fly to its column there (Overview counts and cards).
 export function loadLibraryFor(choice) {
-  return projectGone() ? Promise.resolve() : read(choice);
+  return afterShared(() => read(choice));
 }
 
 export function renderLibrary(main) {

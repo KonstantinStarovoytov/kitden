@@ -98,11 +98,10 @@ def _skill_words(change: Change, inventory, skills: list[dict]) -> list[dict]:
     A copy into a project also meets the copies the clients load from that project.
     """
     names = list(dict.fromkeys(step.name for step in change.steps))
-    # <project>/<client folder>/skills/<name>: the project of each copy into one.
     projects = {
-        os.path.realpath(Path(step.copy.target).parents[2])
+        os.path.realpath(step.copy.project)
         for step in change.steps
-        if step.copy and step.scope is Scope.PROJECT
+        if step.copy and step.copy.project
     }
     loads: dict[str, dict[str, int]] = {}  # client -> skill -> how many copies it loads
     for item in inventory.items:

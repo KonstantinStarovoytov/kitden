@@ -789,8 +789,9 @@ const DONE_WORDS = {
 
 // Actions whose words say "from" a client.
 const REMOVES = ["mcp.remove_direct", "plugin.remove", "skill.remove"];
-// Actions that add an item: the review names where it goes before the click.
-export const ADDS = ["mcp.add", "skill.install", "plugin.install", "plugin.skills"];
+// Actions that add an item: the review names where it goes before the click. A marketplace and
+// the setup entry always go to all projects.
+export const ADDS = ["mcp.add", "skill.install", "plugin.install", "plugin.skills", "marketplace.add", "setup_server.register"];
 const LEDE = "Nothing is written until you press Apply. A backup is kept, so you can undo.";
 
 // Where an add goes, as its title ends: " in website" or " for all projects"; null for an

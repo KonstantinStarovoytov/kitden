@@ -542,13 +542,13 @@ def test_same_name_from_two_marketplaces_is_marked(home):
     assert other["cells"]["claude_code"]["add"]["warn"] is None
 
 
-def _server_reasons(home: Path, gateway: bool) -> dict:
+def _server_reasons(home: Path, gateway: bool, project: str | None = None) -> dict:
     """Per MCP server row, the reason of each dash."""
     inventory = build_inventory(home)
     if gateway:
         mark_gateways(inventory, [Gateway(url="https://mcp.neon.tech/mcp")])
     adapters = {a.id: a for a in default_adapters(home)}
-    answer = library(inventory, adapters, None, gateway_registered=gateway, kind="mcp_server")
+    answer = library(inventory, adapters, project, gateway_registered=gateway, kind="mcp_server")
     return {
         r["name"]: {c: cell["reason"] for c, cell in r["cells"].items() if cell["state"] == "none"}
         for r in answer["rows"]
@@ -590,6 +590,14 @@ def test_a_server_dash_says_how_the_gateway_would_share_it(home):
     assert reasons["n8n-mcp"] == {"claude_code": None, "codex": None}
     without = _server_reasons(home, gateway=False)
     assert all(r is None for row in without.values() for r in row.values())
+
+
+def test_a_project_only_server_a_gateway_client_cannot_move_says_why(home):
+    # Codex and Cursor use the gateway; website's old-search runs on this computer, so it
+    # does not move, and only website has it.
+    reasons = _server_reasons(home, gateway=True, project=str(home / "work/website"))
+    only = "Kitden adds MCP servers for all projects only."
+    assert reasons["old-search"] == {"codex": only, "cursor": only}
 
 
 def test_a_marketplace_dash_says_when_an_add_brings_it(home):

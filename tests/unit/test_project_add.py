@@ -262,3 +262,29 @@ def test_a_project_skill_copy_says_when_cursor_would_load_it_twice(tmp_path):
             "Cursor reads two folders that hold this skill, so it loads the skill twice.",
         )
         page.post(f"/api/changes/{change['id']}/cancel", headers=POST)
+
+
+def test_a_client_with_the_skill_folder_on_disk_gets_no_copy(client):
+    # site is Cursor's project only: Cursor reads site/.claude/skills, Claude Code does not list
+    # site, yet a copy for Claude Code would land on the folder that is there.
+    folder = client.home / "work/site/.claude/skills/house-style"
+    folder.mkdir(parents=True)
+    (folder / "SKILL.md").write_text(HOUSE)
+    client.post("/api/rescan", headers=POST)  # a fixture home: no held servers to ask
+    site = pid(client, str(client.home / "work/site"))
+    rows = client.get(f"/api/library?kind=skill&project={site}").json()["rows"]
+    cells = next(r for r in rows if r["name"] == "house-style")["cells"]
+    assert cells["cursor"]["state"] == "on"
+    assert (cells["claude_code"]["add"], cells["claude_code"]["state"]) == (None, "on")
+
+
+def test_cursor_gets_no_copy_of_a_skill_it_reads_from_claude_codes_project_folder(client):
+    # website/.claude/skills/site-style is Claude Code's; Cursor reads that folder too.
+    website = pid(client, str(client.home / "work/website"))
+    rows = client.get(f"/api/library?kind=skill&project={website}").json()["rows"]
+    cursor = next(r for r in rows if r["name"] == "site-style")["cells"]["cursor"]
+    assert (cursor["add"], cursor["state"], cursor["route"]) == (
+        None,
+        "on",
+        "through Claude Code's folder",
+    )
