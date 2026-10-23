@@ -13,6 +13,23 @@ def script(name: str) -> str:
     return (STATIC / "js" / name).read_text()
 
 
+PANEL = ("panel.js", "details.js", "tools.js", "review.js")
+
+
+def panel() -> str:
+    """The side panel's modules as one text, so a pin does not depend on which file holds it."""
+    return "\n".join(script(name) for name in PANEL)
+
+
+def test_the_side_panel_is_four_modules():
+    shell = script("panel.js")
+    for name in PANEL[1:]:
+        assert (STATIC / "js" / name).exists() and f'from "./{name}"' in shell, name
+    assert "function trapFocus" in shell and "function showReview" not in shell
+    assert "function showDetails" in script("details.js")
+    assert "function showReview" in script("review.js")
+
+
 def test_rail_counts_only_attention_and_changes():
     assert 'id="nav-attention"' in INDEX and 'id="nav-changes"' in INDEX
     assert "nav-items" not in INDEX and "nav-around" not in INDEX
@@ -107,13 +124,13 @@ def test_gateway_wires_do_not_fake_traffic():
 
 
 def test_plugin_switch_opens_a_review_and_does_not_flip_itself():
-    text = script("panel.js")
+    text = panel()
     assert 'setAttribute("role", "switch")' in text
     assert text.count('"aria-checked"') == 1
 
 
 def test_details_offer_remove_for_plugins_and_skills():
-    text = script("panel.js")
+    text = panel()
     assert '"plugin.remove": (client) => `Remove from ${client}…`' in text
     assert '"skill.remove": (client) => `Remove from ${client}…`' in text
 
@@ -125,7 +142,7 @@ CSS = (STATIC / "style.css").read_text()
 def test_controls_press_and_the_switch_waits_for_the_preview():
     assert ".switch.pending" in CSS
     assert ".seg button:active" in CSS and ".tabs button:active" in CSS
-    text = script("panel.js")
+    text = panel()
     assert 'classList.add("pending")' in text and 'setAttribute("aria-busy", "true")' in text
 
 
@@ -141,13 +158,13 @@ def test_client_tile_flies_to_its_library_column():
 
 
 def test_review_counts_the_diff_and_folds_the_file_change():
-    text = script("panel.js")
+    text = panel()
     assert "diffCounts" in text and "fold(files)" in text
     assert "Show file change" in text and "Show file changes" in text
 
 
 def test_apply_turns_green_only_after_verified_and_only_ok_toasts_get_a_check():
-    text = script("panel.js")
+    text = panel()
     assert text.index('after.state !== "verified"') < text.index('apply.classList.add("done")')
     assert text.count("{ ok: true }") == 2
     assert "Undone. The previous settings are back." in text
@@ -188,7 +205,7 @@ def test_reduced_motion_turns_every_animation_off():
 
 
 def test_a_plugin_the_page_cannot_change_shows_a_locked_switch():
-    text = script("panel.js")
+    text = panel()
     assert "node.disabled = true" in text
     assert "Not changed from here." in text
 
@@ -200,7 +217,7 @@ def test_library_lede_names_the_project_folder_not_its_path():
 
 
 def test_item_details_ask_for_the_full_name_so_a_plugin_shows_only_its_own_marketplace():
-    assert "name: row.lookup || row.name" in script("panel.js")
+    assert "name: row.lookup || row.name" in panel()
 
 
 def test_changes_rows_open_the_panel_and_keep_paths_off_the_page():
@@ -240,9 +257,9 @@ def test_gateway_form_never_takes_the_password_itself():
 
 def test_moves_are_named_on_changes_and_in_the_review():
     assert '"gateway.move": "Moved into the gateway"' in script("parts.js")
-    panel = script("panel.js")
-    assert "Move ${names} into the gateway" in panel
-    assert "into the gateway" in panel
+    code = panel()
+    assert "Move ${names} into the gateway" in code
+    assert "into the gateway" in code
 
 
 # Feature 007: an Obot gateway beside MetaMCP ---------------------------------------------
@@ -330,9 +347,9 @@ def test_skill_rows_say_where_each_skill_comes_from_and_how_each_client_loads_it
 
 
 def test_a_skill_copy_names_every_client_it_reaches():
-    panel = script("panel.js")
-    assert "s.reaches || [s.client]" in panel and "Add ${names} to ${clients}" in panel
-    assert "for (const note of notes) box.append(callout(note))" in panel  # Cursor loads it twice
+    code = panel()
+    assert "s.reaches || [s.client]" in code and "Add ${names} to ${clients}" in code
+    assert "for (const note of notes) box.append(callout(note))" in code  # Cursor loads it twice
     assert '"skill.install": "Added skill"' in script("parts.js")
 
 
@@ -371,7 +388,7 @@ def test_offer_details_and_add_form_follow_what_the_server_says_about_cursor():
 
 
 def test_a_lost_apply_answer_is_checked_not_guessed():
-    text = script("panel.js")
+    text = panel()
     assert "Nothing was changed by this page" not in text
     assert "Could not confirm the result. Check Changes before trying again." in text
     assert "readChange(" in text
@@ -383,7 +400,7 @@ def test_changes_and_the_library_say_saved_settings_and_scope():
     assert "To take effect" in changes and 'user: "all projects"' in changes
     assert "global settings" not in changes
     assert '"everywhere"' not in changes
-    assert "Tools · ${where || ALL_PROJECTS}" in script("panel.js")
+    assert "Tools · ${where || ALL_PROJECTS}" in panel()
     assert '"Nothing available here."' in script("overview.js")
     assert "Loads nothing" not in script("overview.js")
 
@@ -452,13 +469,13 @@ def test_direct_servers_are_options_and_details_offers_move_first():
     overview = script("overview.js")
     assert '"Can improve"' in overview and "model.suggestions" in overview
     assert ".issue.suggestion" in CSS
-    panel = script("panel.js")
-    assert "Move into the gateway…" in panel and 'action: "gateway.move"' in panel
+    code = panel()
+    assert "Move into the gateway…" in code and 'action: "gateway.move"' in code
     # Without a gateway that takes servers, the panel says the same as the Gateway page.
     assert "Add the server in the gateway first" in script("parts.js")
-    assert "GATEWAY_NOTE" in panel and "GATEWAY_NOTE" in script("gateway.js")
+    assert "GATEWAY_NOTE" in code and "GATEWAY_NOTE" in script("gateway.js")
     # A gateway that could not be read says so, instead of hiding Move.
-    assert "Could not read the gateway, so Move is not offered." in panel
+    assert "Could not read the gateway, so Move is not offered." in code
     # An option is quieter than a problem: a plain button, not the primary one.
     assert 'option ? "btn" : "btn primary"' in overview
 
@@ -485,7 +502,7 @@ def test_focus_returns_to_the_control_and_the_review_reaches_its_summary():
     assert "focusKey(" in script("app.js") and "dataset.focus" in script("dom.js")
     for key in ('"ArrowRight"', '"ArrowLeft"', '"Home"', '"End"'):
         assert key in script("dom.js")
-    trap = script("panel.js").split("function trapFocus")[1].split("\n}")[0]
+    trap = panel().split("function trapFocus")[1].split("\n}")[0]
     assert "summary" in trap and "textarea" in trap and "getClientRects" in trap
 
 
@@ -518,19 +535,19 @@ def test_client_checkboxes_come_from_one_named_part():
 
 
 def test_apply_waits_for_work_not_for_a_timer():
-    panel, css = script("panel.js"), (STATIC / "style.css").read_text()
-    assert "520 - (performance.now()" not in panel and "wait(450)" not in panel
-    assert "shake(" not in panel
+    code, css = panel(), (STATIC / "style.css").read_text()
+    assert "520 - (performance.now()" not in code and "wait(450)" not in code
+    assert "shake(" not in code
     assert ".drawer.open .body > *:nth-child(2)" not in css and "line-in" not in css
     assert "--t-panel: 240ms" in css
     assert ".socket .swap { opacity: 0; }" in css
 
 
 def test_apply_sets_its_label_at_once_and_a_failure_focuses_the_button():
-    panel = script("panel.js")
-    flow = panel.split("function brokeAfterAnswer")[1].split("function showEffect")[0]
+    code = panel()
+    flow = code.split("function brokeAfterAnswer")[1].split("function showEffect")[0]
     # No timer in the Apply flow, so a late label cannot land on a button already reset.
-    assert "setTimeout" not in flow and "const wait" not in panel
+    assert "setTimeout" not in flow and "const wait" not in code
     assert 'label.textContent = "Applying…"' in flow
     assert "next.focus()" in flow
     assert ".label.swap" not in CSS
@@ -558,16 +575,16 @@ def test_buttons_show_progress_and_the_scan_line_no_longer_blinks():
     assert 'busyWhile($("#rescan")' in script("app.js")
     # A change with several steps counts them in the Apply button, from the server's events.
     assert '"change_progress"' in script("app.js") and '"kitden:progress"' in script("app.js")
-    panel = script("panel.js")
-    assert 'stepText("Applying", done, total)' in panel and '"kitden:progress"' in panel
+    code = panel()
+    assert 'stepText("Applying", done, total)' in code and '"kitden:progress"' in code
     assert ".btn .meter" in css
     # The scan line shows only when a scan takes a while, so quick scans never blink.
     assert ".topbar.scanning::after { opacity: 1; transition-delay: 400ms;" in css
 
 
 def test_while_a_change_is_written_the_review_says_so_and_offers_nothing_to_press():
-    panel = script("panel.js")
-    lock = panel.split("function lockReview(")[1].split("\n}\n")[0]
+    code = panel()
+    lock = code.split("function lockReview(")[1].split("\n}\n")[0]
     # Cancel and the close button go away while the change is written, and come back after.
     assert "cancel.hidden = locked" in lock and "close.hidden = locked" in lock
     # The note under the buttons says what is happening instead of the Apply shortcut.
@@ -575,7 +592,7 @@ def test_while_a_change_is_written_the_review_says_so_and_offers_nothing_to_pres
     writing = (
         "Writing the change. It can't stop halfway: if a step fails, Kitden puts everything back."
     )
-    assert writing in panel
+    assert writing in code
     css = (STATIC / "style.css").read_text()
     # A button that is off never lights up on hover and says so with the pointer.
     assert ".btn:hover:not(:disabled)" in css
@@ -631,13 +648,13 @@ def test_a_cell_add_reviews_one_client_and_the_review_shows_its_note():
     # warnings of the checked clients, as their cells do.
     assert offer.count("{ note: projectNote(state.project) }") == 2
     assert "{ note: formNote(row, clients, state.project) }" in offer
-    panel = script("panel.js")
-    assert "export async function review(previewBody, { note = null, back = null } = {})" in panel
-    assert "if (note) body.append(callout(note));" in panel
+    code = panel()
+    assert "export async function review(previewBody, { note = null, back = null } = {})" in code
+    assert "if (note) body.append(callout(note));" in code
     # Preview again keeps the note, and the Details a tool switch came from.
-    assert "review(previewBody, { note, back })" in panel
+    assert "review(previewBody, { note, back })" in code
     # Details of a row with a repeated name name its source.
-    assert "rowTitle(row)" in panel
+    assert "rowTitle(row)" in code
 
 
 def test_typing_waits_before_the_library_asks_the_server():
@@ -646,7 +663,7 @@ def test_typing_waits_before_the_library_asks_the_server():
     # A newer request wins, and a change waits for the new rows before the cells morph.
     assert "order === sent && at >= cache.at" in text and "if (latest()) cache =" in text
     assert "await Promise.all([reload(), loadLibrary()]);" in script("app.js")
-    assert "await Promise.all([reload().catch(() => {}), loadLibrary()]);" in script("panel.js")
+    assert "await Promise.all([reload().catch(() => {}), loadLibrary()]);" in panel()
 
 
 def test_library_columns_hide_with_a_quiet_minus_kept_in_this_browser():
@@ -673,17 +690,17 @@ def test_library_columns_hide_with_a_quiet_minus_kept_in_this_browser():
 
 
 def test_details_show_what_the_item_is_and_every_way_to_add_it():
-    panel, offer = script("panel.js"), script("offer.js")
+    code, offer = panel(), script("offer.js")
     # The marketplace's entry is read beside the definitions; when it fails the rest still shows.
-    assert "row.offer ? getJson(`/api/offer${query({ kind: row.kind, id: row.offer })}`)" in panel
-    assert ".catch(() => null)" in panel
-    assert "body.append(...about(offer))" in panel
+    assert "row.offer ? getJson(`/api/offer${query({ kind: row.kind, id: row.offer })}`)" in code
+    assert ".catch(() => null)" in code
+    assert "body.append(...about(offer))" in code
     # A Details button opens the same review as the cell's own button.
     assert "startAdd(option.add, option.client, row)" in offer
     assert '"Add…"' in offer and 'button("Add…", () => addForm(offer), "btn primary")' not in offer
     # With nothing to do, the first line of the body says why, quietly.
     first = 'const body = el("div", "body");\n  if (why) body.append(el("p", "muted", why));'
-    assert first in panel
+    assert first in code
     assert 'if (why) body.prepend(el("p", "muted", why));' in offer
 
 
@@ -751,7 +768,7 @@ def test_the_kitden_gateway_card_comes_first_and_sets_up_missing_clients():
 
 
 def test_a_held_server_lists_its_tools_with_a_switch_each():
-    panel = script("panel.js")
+    code = panel()
     for words in (
         '"Whole server"',
         "`Differs from ${row.follows}`",
@@ -760,32 +777,32 @@ def test_a_held_server_lists_its_tools_with_a_switch_each():
         "ALL_PROJECTS",
         "Kitden does not know its tools yet.",
     ):
-        assert words in panel, words
+        assert words in code, words
     # Refresh tools waits for the server's own word that it is done, never a timer of its own.
-    assert '"/api/gateway/tools/refresh"' in panel and '"kitden:tools"' in panel
+    assert '"/api/gateway/tools/refresh"' in code and '"kitden:tools"' in code
     assert '"gateway_tools"' in script("app.js") and '"kitden:tools"' in script("app.js")
 
 
 def test_a_tool_switch_flips_only_after_the_change_is_verified():
-    panel = script("panel.js")
+    code = panel()
     # Details comes back after Apply with the switch drawn in its new state; the thumb slides once.
-    assert "await back({ verified: true })" in panel
-    assert 'toggle.classList.add("flipped")' in panel
+    assert "await back({ verified: true })" in code
+    assert 'toggle.classList.add("flipped")' in code
     assert ".switch.flipped .thumb" in CSS and "@keyframes thumb-on" in CSS
     # A refused preview stays as a callout in Details, and focus goes back to the switch.
-    assert "await back({ error: reason })" in panel
-    assert 'callout(error, "error")' in panel
+    assert "await back({ error: reason })" in code
+    assert 'callout(error, "error")' in code
 
 
 def test_tool_list_reads_again_and_keeps_focus_after_a_refresh_or_an_undo():
-    panel = script("panel.js")
+    code = panel()
     # Without the event stream the refresh still ends with the list read again.
-    assert "if (await ended) reloadTools();" in panel
+    assert "if (await ended) reloadTools();" in code
     # Undo with Details open puts focus back on the switch it changed.
-    assert "focus: tools.flipped" in panel
+    assert "focus: tools.flipped" in code
     # Only an open tool list's Details skips the page's usual effect after an Undo; a closed
     # drawer keeps its old content, so "connected" alone would reopen it.
-    assert "if (isPanelOpen() && tools && tools.section.isConnected) {" in panel
+    assert "if (isPanelOpen() && tools && tools.section.isConnected) {" in code
     # A tool's description wraps to two lines, so it can be read without a pointer.
     rule = CSS.split(".layer.tool .why {")[1].split("}")[0]
     assert "-webkit-line-clamp: 2" in rule and "nowrap" not in rule
@@ -800,10 +817,10 @@ def test_the_kitden_card_says_only_what_it_knows_about_clients():
 
 
 def test_moves_into_the_kitden_gateway_name_it():
-    panel = script("panel.js")
-    assert "Move ${names} into the Kitden gateway" in panel
+    code = panel()
+    assert "Move ${names} into the Kitden gateway" in code
     # Two gateways can take a server: the panel asks which, never picks one silently.
-    assert 'openInfo("Move into the gateway", title, body' in panel
+    assert 'openInfo("Move into the gateway", title, body' in code
     # The Changes page names the server first: "Moved files into the Kitden gateway · …".
     assert "into the Kitden gateway · ${clients.join" in script("parts.js")
 
@@ -825,11 +842,11 @@ def test_a_projects_own_skill_adds_into_the_project():
 
 
 def test_an_add_review_names_its_scope():
-    panel = script("panel.js")
+    code = panel()
     # With All projects picked the lede says it; in a project the note callout says it.
-    assert '"Adds for all projects. "' in panel
-    assert "reviewLede(change.action, state.project)" in panel
-    assert '" for all projects"' in panel
+    assert '"Adds for all projects. "' in code
+    assert "reviewLede(change.action, state.project)" in code
+    assert '" for all projects"' in code
 
 
 def test_a_project_no_longer_on_the_list_is_said_not_swapped():
@@ -881,38 +898,38 @@ def test_agents_lede_says_held_servers_add_their_tools():
 
 
 def test_the_tool_list_has_a_strict_switch():
-    panel = script("panel.js")
-    assert "Strict: only tools you turned on" in panel
-    assert "Set for all projects" in panel
-    assert 'action: "gateway.strict"' in panel
+    code = panel()
+    assert "Strict: only tools you turned on" in code
+    assert "Set for all projects" in code
+    assert 'action: "gateway.strict"' in code
 
 
 def test_all_projects_says_unknown_folders_follow_it():
-    assert "These switches also apply in folders Kitden does not know." in script("panel.js")
+    assert "These switches also apply in folders Kitden does not know." in panel()
 
 
 def test_the_tool_list_says_reads_and_writes_and_has_a_batch_switch():
-    panel = script("panel.js")
-    assert "Turn off every writing tool…" in panel
-    assert "from the server" in panel and "by its name" in panel
-    assert 'action: "gateway.rules"' in panel
+    code = panel()
+    assert "Turn off every writing tool…" in code
+    assert "from the server" in code and "by its name" in code
+    assert 'action: "gateway.rules"' in code
 
 
 def test_a_held_server_can_be_removed_or_put_back():
-    panel = script("panel.js")
-    assert '"Remove from the Kitden gateway…"' in panel
-    assert "`Put back in ${CLIENT_NAMES[client]}…`" in panel
+    code = panel()
+    assert '"Remove from the Kitden gateway…"' in code
+    assert "`Put back in ${CLIENT_NAMES[client]}…`" in code
     assert "heldActions(" in script("gateway.js")
 
 
 def test_a_held_server_can_move_its_secrets_to_the_keychain():
-    assert '"Move secrets to the Keychain…"' in script("panel.js")
+    assert '"Move secrets to the Keychain…"' in panel()
     assert "server.plain_secrets" in script("gateway.js")
-    assert 'plainSecrets(currentModel("gateway"), row.name)' in script("panel.js")
+    assert 'plainSecrets(currentModel("gateway"), row.name)' in panel()
 
 
 def test_a_server_can_be_added_to_another_client():
-    assert '"mcp.add": `Add ${names} to ${clients}`' in script("panel.js")
+    assert '"mcp.add": `Add ${names} to ${clients}`' in panel()
     assert '"mcp.add": "Added"' in script("parts.js")
     assert 'add.action === "mcp.add" ? { item: add.item }' in script("library.js")
 
@@ -920,14 +937,14 @@ def test_a_server_can_be_added_to_another_client():
 def test_a_project_can_be_aligned_in_one_review():
     library = script("library.js")
     assert "Add missing…" in library and '"add:missing"' in library
-    panel = script("panel.js")
-    assert "Not the same; not touched" in panel and '"project.align"' in panel
+    code = panel()
+    assert "Not the same; not touched" in code and '"project.align"' in code
 
 
 def test_a_failed_change_does_not_claim_a_restore_on_the_page():
     # The engine's error says "The original settings were restored." only when it is true.
-    assert "were put back" not in script("panel.js")
-    assert '"The change did not check out."' in script("panel.js")
+    assert "were put back" not in panel()
+    assert '"The change did not check out."' in panel()
     assert "Failed, put back" not in script("changes.js")
 
 
@@ -950,7 +967,7 @@ def test_library_has_an_instructions_tab():
 
 
 def test_details_shows_an_instruction_files_first_lines():
-    assert 'el("pre", "preview"' in script("panel.js")
+    assert 'el("pre", "preview"' in panel()
     assert "pre.preview" in (STATIC / "style.css").read_text()
 
 
@@ -984,7 +1001,7 @@ def test_needs_review_is_an_amber_ring_with_a_small_dot():
 
 
 def test_details_says_when_a_kept_definition_was_read_in_the_server_words():
-    assert STALE.format("${") in script("panel.js")
+    assert STALE.format("${") in panel()
 
 
 def test_overview_notes_say_same_name_another_source():

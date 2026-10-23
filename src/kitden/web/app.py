@@ -440,7 +440,7 @@ class State:
 
 
 # The actions that add something: a refusal into a file Kitden could not read says "add". The
-# page's ADDS (panel.js) names their scope in the review; it leaves out PROJECT_ALIGN and
+# page's ADDS (review.js) names their scope in the review; it leaves out PROJECT_ALIGN and
 # SETUP_SERVER_UPDATE, which say their place another way.
 ADD_ACTIONS = frozenset(
     {

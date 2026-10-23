@@ -56,6 +56,11 @@ export function focusKey(node) {
   return node.dataset.key ? `row:${node.dataset.key}` : null;
 }
 
+// The control with this data-focus key inside `box`, if there is one.
+export function withFocusKey(box, key) {
+  return key ? [...box.querySelectorAll("[data-focus]")].find((node) => node.dataset.focus === key) || null : null;
+}
+
 // The tab an arrow, Home or End moves to from tab `at` of `count`, or null for any other key.
 // The arrows wrap around.
 export function tabAfter(key, at, count) {
