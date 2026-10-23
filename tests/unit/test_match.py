@@ -131,3 +131,12 @@ def test_parts_of_one_plugin_are_the_same_without_reading_their_files(monkeypatc
     (row,) = load_map(inventory, None)
     assert (row.cells["codex"].state, row.cells["cursor"].state) == ("on", "on")
     assert [str(f.type) for f in find_findings(inventory)] == ["same_in_other_clients"]
+
+
+def test_a_plugins_skill_and_a_plain_folder_never_make_each_other_odd():
+    plugin, old = frozenset({"d1", "plugin:p@m"}), frozenset({"d0"})
+    assert odd_ones({"claude_code": plugin, "codex": old, "cursor": old}) == set()
+    assert odd_ones({"claude_code": plugin, "codex": old}) == set()
+    # Two plugins, or two plain folders, still differ.
+    assert odd_ones({"claude_code": plugin, "codex": frozenset({"d2", "plugin:q@m"})}) == {"codex"}
+    assert odd_ones({"claude_code": frozenset({"d1"}), "codex": old}) == {"codex"}

@@ -111,15 +111,26 @@ def catalog_keys(skill: dict) -> frozenset:
     return frozenset(keys)
 
 
+def _from_plugin(keys: frozenset) -> bool:
+    return any(isinstance(k, str) and k.startswith("plugin:") for k in keys)
+
+
 def odd_ones(keys: dict[str, frozenset]) -> set[str]:
     """The clients whose keys share nothing with the keys most clients have (on a tie, the
-    first client's). Empty when every client has the same keys."""
+    first client's). Empty when every client has the same keys. A plugin's skill and a plain
+    folder never make each other odd: the plugin is the source, and a copy made before the
+    plugin changed has other files."""
     values = list(keys.values())
     if len(set(values)) < 2:
         return set()
     counts = Counter(values)
     reference = max(values, key=lambda k: (counts[k], -values.index(k)))
-    return {client for client, k in keys.items() if k.isdisjoint(reference)}
+    plugin = _from_plugin(reference)
+    return {
+        client
+        for client, k in keys.items()
+        if k.isdisjoint(reference) and _from_plugin(k) == plugin
+    }
 
 
 def odd_sources(items: dict[str, list[Item]], copies: Copies | None = None) -> set[str]:

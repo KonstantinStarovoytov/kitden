@@ -980,3 +980,23 @@ def test_a_review_skill_row_offers_no_add_in_its_other_cells(home):
         None,
         "Same name, another source: decide first.",
     )
+
+
+def test_a_copy_made_before_a_plugin_update_does_not_flag_the_plugins_skill(home):
+    # Codex has a copy of Claude Code's plugin skill (Cursor reads it too); then the plugin's
+    # files change. The plugin is the source; the old copy drifted.
+    cache = home / ".claude/plugins/cache/claude-plugins-official/superpowers/7.0.0/skills"
+    shutil.copytree(cache / "brainstorming", home / ".codex/skills/brainstorming")
+    skill_md = cache / "brainstorming/SKILL.md"
+    skill_md.write_text(skill_md.read_text() + "\nA newer version.\n")
+    inventory = build_inventory(home)
+    row = next(r for r in load_map(inventory, None) if r.name == "brainstorming")
+    assert {c: row.cells[c].state for c in ("claude_code", "codex", "cursor")} == {
+        "claude_code": "on",
+        "codex": "on",
+        "cursor": "on",
+    }
+    shown = _row(_library(home, "skill", show="all"), "brainstorming", f"superpowers@{OFFICIAL}")
+    assert shown["cells"]["claude_code"]["state"] == "on"
+    notes = {f.type for f in find_findings(inventory) if "brainstorming" in f.names}
+    assert FindingType.SAME_NAME_OTHER_SOURCE not in notes
