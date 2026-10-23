@@ -2,9 +2,9 @@
 import { getJson, postJson } from "./api.js";
 import { busyWhile, button, el, joinWords, plural, reportError, webLink } from "./dom.js";
 import { entrance, fold, reducedMotion } from "./motion.js";
-import { heldActions, heldButtons, moveInto, moveTargets, openInfo, openItem, review, toast, toolsSection } from "./panel.js";
+import { heldActions, heldButtons, isPanelOpen, moveInto, moveTargets, openInfo, openItem, review, toast, toolsSection } from "./panel.js";
 import { banner, CLIENT_ICONS, CLIENT_NAMES, clientCheck, DARK_ICONS, flag, GATEWAY_NOTE, gatewayName, kindOf, mark, skeleton, staleNote, toolsNode } from "./parts.js";
-import { current, currentError, data, freshness, loadMap, reload, render, retry, sameSel, setState, state, takeArrival } from "./store.js";
+import { arrival, current, currentError, data, freshness, loadMap, reload, render, retry, sameSel, setState, state, takeArrival } from "./store.js";
 
 const WRITABLE = ["claude_code", "codex", "cursor"];
 const GROUPS = [
@@ -77,22 +77,27 @@ export function heldServer(model, selected) {
   return ((kitden && kitden.servers) || []).find((s) => s.name === selected.name) || null;
 }
 
-// Arriving with a selected server (a rail link, Back or a link) opens its Details once: in the
-// Kitden gateway's own panel when it holds it, else as in the Library. Anything else opens
-// nothing and stays in the address for the next page.
-async function openArrival(model) {
+// What an arrival with a selected server (Back, Forward or a link) opens, once: `held`, a server
+// the Kitden gateway holds, for its own panel; else `row`, its map row, for the Library's
+// Details. Null for anything else (it stays in the address for the next page), and while a panel
+// is open, so it never replaces what the person opened.
+export async function arrivalServer(model) {
   const selected = takeArrival();
-  if (!selected) return;
+  if (!selected || isPanelOpen()) return null;
   const server = heldServer(model, selected);
-  if (server) {
-    showKitdenServer(server);
-    return;
-  }
-  if (selected.kind !== "mcp_server") return;
+  if (server) return { held: server };
+  if (selected.kind !== "mcp_server") return null;
   if (!current("map")) await loadMap();
   const row = serverFor(current("map"), selected);
-  // Another place or item may have been picked while the map was read.
-  if (row && state.view === "gateway" && sameSel(state.selected, selected)) await openItem(row);
+  // The person may have picked another place, item or panel while the map was read.
+  const still = state.view === "gateway" && sameSel(state.selected, selected) && !isPanelOpen();
+  return row && still ? { row } : null;
+}
+
+async function openArrival(model) {
+  const found = await arrivalServer(model);
+  if (found && found.held) showKitdenServer(found.held);
+  else if (found) await openItem(found.row);
 }
 
 export function renderGateway(main) {
@@ -564,8 +569,10 @@ function groupRow(row, group, targets, focus = null) {
   return node;
 }
 
-// A server outside the gateway opens the Library's Details; the address keeps it.
+// A server outside the gateway opens the Library's Details; the address keeps it. The person's
+// pick wins over an arrival, also while the map is read.
 async function showServer(name) {
+  arrival.pending = false;
   if (!current("map")) await loadMap();
   const map = current("map");
   const row = ((map && map.rows) || []).find((r) => r.kind === "mcp_server" && r.name === name);

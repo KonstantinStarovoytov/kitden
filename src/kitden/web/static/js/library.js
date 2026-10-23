@@ -5,9 +5,9 @@ import { getJson, query } from "./api.js";
 import { button, el, tabKeys } from "./dom.js";
 import { animate, entrance, glide, land, reducedMotion, rollTo, spring } from "./motion.js";
 import { marketplaceForm, projectNote, showOffer, showSkill } from "./offer.js";
-import { openInfo, projectLabel, review } from "./panel.js";
+import { isPanelOpen, openInfo, projectLabel, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, mark, morphSocket, opens, skeleton, socket, staleNote } from "./parts.js";
-import { afterShared, freshness, go, projectPath, render, retry, sameSel, setState, state, takeArrival } from "./store.js";
+import { afterShared, arrival, freshness, go, projectPath, render, retry, sameSel, setState, state, takeArrival } from "./store.js";
 
 const KINDS = [
   ["mcp_server", "MCP servers"], ["plugin", "Plugins"], ["skill", "Skills"],
@@ -51,6 +51,13 @@ export function rowSel(row) {
 // The first row the selection names, or null when none does (it is gone, or on another tab).
 export function rowFor(rows, selected) {
   return (selected && rows.find((row) => sameSel(rowSel(row), selected))) || null;
+}
+
+// The row an arrival opens, once its rows are in; none while a panel is open, so it never
+// replaces what the person opened.
+export function arrivalRow(rows) {
+  const arrived = takeArrival();
+  return arrived && !isPanelOpen() ? rowFor(rows, arrived) : null;
 }
 
 // Line one's small gray text: the category, then the source only when two rows share the name.
@@ -364,8 +371,9 @@ export function renderLibrary(main) {
   if (hidden) main.append(hidden);
   for (const note of answer.notes) main.append(el("p", "note", note));
   const more = moreLine(answer, asked.show);
-  // A selection that arrived (from another place, Back or a link) opens once its rows are in.
-  const arrived = fresh ? takeArrival() : null;
+  // A selection that arrived (from another place, Back, Forward or a link) opens once its rows
+  // are in.
+  const arrived = fresh ? arrivalRow(answer.rows) : null;
   if (!answer.rows.length) {
     main.append(emptyState(asked, more));
     finish(answer.rows);
@@ -388,11 +396,10 @@ export function renderLibrary(main) {
   if (selected) requestAnimationFrame(() => selected.scrollIntoView({ block: "nearest" }));
   // An arrival: the row glows once and the clients that load it ping, so the eye lands on the
   // item the other place talked about, and its Details opens.
-  const row = rowFor(answer.rows, arrived);
-  if (row && selected) {
+  if (arrived && selected) {
     selected.classList.add("arrive");
     for (const s of selected.querySelectorAll(".socket.s-on, .socket.s-gw")) s.classList.add("pulse");
-    openRow(row, selected, "pointer");
+    openRow(arrived, selected, "pointer");
   }
 }
 
@@ -686,7 +693,9 @@ function settle(row, client, before) {
 }
 
 // The address keeps the row's selection (no new history entry), so Back and a link return to it.
-function openRow(row, tr, how) {
+// The person's pick wins: an arrival whose rows come later opens nothing.
+export function openRow(row, tr, how) {
+  arrival.pending = false;
   setState({ selected: rowSel(row) });
   for (const other of tr.parentElement.querySelectorAll('tr[aria-selected="true"]')) other.setAttribute("aria-selected", "false");
   tr.setAttribute("aria-selected", "true");

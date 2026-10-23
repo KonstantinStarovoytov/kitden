@@ -10,7 +10,7 @@ import { renderOverview } from "./overview.js";
 import { closeForProject, closePanel, initPanel, isPanelOpen } from "./panel.js";
 import { ALL_PROJECTS, callout, demoTag, GONE_PROJECT, latestChanges, scanLine, versionsOpened } from "./parts.js";
 import {
-  arrival, busy, current, data, followAddress, freshness, go, goTo, libraryChoice, loadShared, OLD_VIEWS, onIdle, parseHash, projectGone, reload, selFor, setRenderer, setState, state, VIEWS,
+  arrival, busy, current, data, followHash, freshness, go, loadShared, OLD_VIEWS, onIdle, parseHash, projectGone, reload, setRenderer, setState, state,
 } from "./store.js";
 
 const PLACES = {
@@ -205,13 +205,12 @@ function readScan() {
   getJson("/api/progress").then(showScan).catch(() => {});
 }
 
-// A rail link keeps the project and the selection: a place that shows it opens its Details. The
-// Library's rows are read first (up to a moment), so the page changes once, already full,
-// instead of a skeleton turning into a table after the change.
+// A rail link opens its place fresh: the project stays, and no Details opens. The Library's rows
+// are read first (up to a moment), so the page changes once, already full, instead of a skeleton
+// turning into a table after the change.
 async function openPlace(view) {
-  const choice = state.selected ? libraryChoice(state.selected) : {};
-  if (view === "library" && state.view !== "library") await raceSlow(loadLibraryFor(choice), 300);
-  goTo(view, state.selected);
+  if (view === "library" && state.view !== "library") await raceSlow(loadLibraryFor({}), 300);
+  go(view);
 }
 
 function listen() {
@@ -243,20 +242,13 @@ function listen() {
   $("#main").addEventListener("focusout", () => setTimeout(() => { if (!typing()) catchUp(); }, 0));
 }
 
-// Back, Forward or an edited address. Unknown places (like the skip link's #main) are ignored;
-// an old #map or #discover address opens the Library and the address says so.
+// Back, Forward or an edited address (store.js followHash). Unknown places (like the skip link's
+// #main) are ignored; another project closes the panel and is read.
 function fromAddress() {
-  const view = location.hash.replace(/^#/, "").split("?")[0];
-  const old = Boolean(OLD_VIEWS[view]);
-  if (!VIEWS.includes(view) && !old) return;
-  const next = parseHash(location.hash);
-  const same = ["view", "project", "kind", "show", "category", "attention", "q"].every((key) => next[key] === state[key])
-    && selFor(next.selected) === selFor(state.selected);
-  const newProject = next.project !== state.project;
-  if (!same) followAddress(next);
+  const change = followHash(location.hash);
+  if (!change) return;
   closeForProject();
-  if (old) setState({});
-  if (!same && newProject) refresh().catch(reportError);
+  if (!change.same && change.newProject) refresh().catch(reportError);
 }
 
 function start() {

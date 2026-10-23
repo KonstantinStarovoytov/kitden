@@ -5,7 +5,7 @@ import { loadLibrary, morphOnNextRender, onOpenItem, rowTitle, shownRow } from "
 import { finishTransition, fold, transition } from "./motion.js";
 import { about, addButton, addOptions, whyNoAction } from "./offer.js";
 import { ALL_PROJECTS, callout, CLIENT_NAMES, diffCounts, skillRemoval, flag, GATEWAY_NOTE, gatewayName, kitdenMove, mark, movedNames, notesSection, ruleText, rulesText, skeleton, socket, STATE_WORDS, stepText, strictText, toolsNode } from "./parts.js";
-import { busy, current as currentModel, currentError, data, projectPath, reload, render, setBusy, setState, state } from "./store.js";
+import { arrival, busy, current as currentModel, currentError, data, projectPath, reload, render, setBusy, setState, state } from "./store.js";
 
 const KIND_WORDS = {
   mcp_server: "MCP server", plugin: "Plugin", skill: "Skill", hook: "Hook", marketplace: "Marketplace",
@@ -53,7 +53,9 @@ function swapContent(content) {
 
 // Put content in the panel and slide it in. Keyboard opens are instant. New content belongs to
 // the project picked now: Details drawn again after an Apply is for the project picked during it.
+// A panel the person opens wins over an arrival still waiting for its page (store.js).
 export function openPanel(content, { instant = false } = {}) {
+  arrival.pending = false;
   finishTransition();
   const drawer = $("#drawer");
   openedIn = state.project;

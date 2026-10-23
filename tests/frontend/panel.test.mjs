@@ -5,7 +5,7 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; panel.js must load there too.
 delete globalThis.navigator;
-const { addScope, afterParts, alignGroups, canShowReview, closeForProject, countedDefinition, changeOutcome, chosenKeys, callsText, changeWords, footerActions, heldActions, isPanelOpen, offerLabel, layerState, leftOutText, kindWord, loadsLede, moveFor, moveTargets, openPanel, plainSecrets, review, reviewLede, scopeWords, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
+const { addScope, afterParts, alignGroups, canShowReview, closeForProject, closePanel, countedDefinition, changeOutcome, chosenKeys, callsText, changeWords, footerActions, heldActions, isPanelOpen, offerLabel, layerState, leftOutText, kindWord, loadsLede, moveFor, moveTargets, openPanel, plainSecrets, review, reviewLede, scopeWords, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
 const { addOptions, whyNoAction } = await import('../../src/kitden/web/static/js/offer.js');
 const { busy, data, state } = await import('../../src/kitden/web/static/js/store.js');
 
@@ -621,6 +621,49 @@ test('picking another project closes the panel, so a switch never acts on a proj
     assert.equal(isPanelOpen(), true);
   } finally {
     state.project = '';
+    delete globalThis.document;
+  }
+});
+
+test('a project switch closes the panel and leaves the selection to the address', () => {
+  fakePanelPage();
+  const github = { kind: 'mcp_server', name: 'github' };
+  try {
+    state.project = 'atlas';
+    state.selected = github;
+    openPanel([]);
+    state.project = 'web'; // Back to an address of another project, with its own selection
+    closeForProject();
+    assert.equal(isPanelOpen(), false);
+    assert.deepEqual(state.selected, github);
+    openPanel([]);
+    closePanel({ focus: false }); // closed by the person: nothing is selected
+    assert.equal(state.selected, null);
+  } finally {
+    state.project = '';
+    state.selected = null;
+    delete globalThis.document;
+  }
+});
+
+test('Details opened on arrival gives focus back to the selected row, not to the page', () => {
+  fakePanelPage();
+  const focused = [];
+  const row = { dataset: { key: 'row-github' }, setAttribute() {}, focus: () => focused.push('row') };
+  const body = { isConnected: true, closest: () => null, focus: () => focused.push('body') };
+  const find = document.querySelector;
+  Object.assign(document, {
+    body,
+    activeElement: body, // the button that led here is gone with the old page
+    querySelector: (selector) => (selector === 'tr[aria-selected="true"]' ? row : find(selector)),
+    querySelectorAll: (selector) => (selector === 'tr[data-key]' ? [row] : []),
+  });
+  try {
+    openPanel([]);
+    closePanel();
+    assert.deepEqual(focused, ['row']);
+  } finally {
+    state.selected = null;
     delete globalThis.document;
   }
 });

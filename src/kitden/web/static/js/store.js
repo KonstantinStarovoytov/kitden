@@ -111,8 +111,9 @@ function show(moving) {
   else renderPlace();
 }
 
-// A place opened with a selection (goTo, Back or a link) opens that item's Details once, when
-// the place has drawn it. Any other change of place or filter opens nothing.
+// A place opened with a selection (goTo, Back, Forward or a link) opens that item's Details once,
+// when the place has drawn it. Any other change of place or filter opens nothing, and a panel the
+// person opens first drops it (panel.js).
 export const arrival = { pending: false };
 
 // The selection to open now, or null. It is used up either way, so a redraw never opens Details
@@ -162,6 +163,22 @@ export function followAddress(next) {
   Object.assign(state, next);
   arrival.pending = Boolean(next.selected);
   show(moving);
+}
+
+// The same from the address itself. Null for one that is not a page (like the skip link's
+// #main); else whether it is the state shown already and whether the project changed. An old
+// #map or #discover address opens the Library and the address says so.
+export function followHash(hash) {
+  const view = String(hash || "").replace(/^#/, "").split("?")[0];
+  const old = Boolean(OLD_VIEWS[view]);
+  if (!VIEWS.includes(view) && !old) return null;
+  const next = parseHash(hash);
+  const same = ["view", "project", "kind", "show", "category", "attention", "q"].every((key) => next[key] === state[key])
+    && sameSel(next.selected, state.selected);
+  const newProject = next.project !== state.project;
+  if (!same) followAddress(next);
+  if (old) setState({});
+  return { same, newProject };
 }
 
 export function projectPath() {
