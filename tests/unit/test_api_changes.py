@@ -226,6 +226,35 @@ def test_a_preview_names_its_target(client):
     assert answer["target"] == {"scope": "all", "project": None, "others_unchanged": False}
 
 
+def test_a_server_the_picked_project_defines_itself_goes_to_every_other_project(
+    tmp_path, monkeypatch
+):
+    home = _home(tmp_path, monkeypatch)
+    # website gets its own github in Claude Code, which wins there over the user one.
+    config = home / ".claude.json"
+    data = json.loads(config.read_text())
+    data["projects"][str(home / "work/website")]["mcpServers"]["github"] = {"command": "gh-mcp"}
+    config.write_text(json.dumps(data))
+    with _app_client(home) as client:
+        client.get("/?token=tok")
+        website = next(
+            p for p in client.get("/api/projects").json() if p["path"].endswith("/work/website")
+        )
+        github = next(
+            i
+            for i in client.get("/api/items?client=claude_code&kind=mcp_server").json()
+            if i["name"] == "github" and i["scope"] == "user"
+        )
+        body = {"action": "mcp.remove_direct", "targets": [{"item": github["id"]}], "params": {}}
+        picked = {**body, "picked": website["id"]}
+        answer = client.post("/api/changes/preview", json=picked, headers=POST).json()
+    assert answer["target"] == {
+        "scope": "others",
+        "project": website["path"],
+        "others_unchanged": False,
+    }
+
+
 def test_the_page_and_the_log_say_the_same_clients_and_places():
     from kitden.changes import engine
     from kitden.web import app

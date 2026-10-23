@@ -160,20 +160,55 @@ def inventory(*items):
 def test_a_definition_the_picked_project_overrides_goes_to_all_projects_but_that_one(tmp_path):
     web = str(tmp_path / "web")
     user = edit(tmp_path / ".claude.json", Scope.USER, client="claude_code")
-    inv = inventory(server("claude_code", Scope.USER), server("claude_code", Scope.LOCAL, web))
+    db = server("claude_code", Scope.USER)
+    inv = inventory(db, server("claude_code", Scope.LOCAL, web))
     change = Change(action="mcp.remove_direct", steps=[user])
-    assert change_target(change, [web], inv, web) == {
+    assert change_target(change, [web], inv, web, [db]) == {
         "scope": "others",
         "project": web,
         "others_unchanged": False,
     }
     # With All projects picked, or a project without its own definition, it is all projects.
-    assert change_target(change, [web], inv, None)["scope"] == "all"
+    assert change_target(change, [web], inv, None, [db])["scope"] == "all"
     other = str(tmp_path / "api")
-    assert change_target(change, [web, other], inv, other)["scope"] == "all"
+    assert change_target(change, [web, other], inv, other, [db])["scope"] == "all"
+    # Without the definition it changes, no project is left out.
+    assert change_target(change, [web], inv, web)["scope"] == "all"
     # A client the step reaches that loads the user definition there still changes.
     user.reaches = ["claude_code", "cursor"]
-    assert change_target(change, [web], inv, web)["scope"] == "all"
+    assert change_target(change, [web], inv, web, [db])["scope"] == "all"
+
+
+def test_only_the_changed_definition_counts_not_another_kind_with_its_name(tmp_path):
+    web = str(tmp_path / "web")
+    folder = tmp_path / ".claude/skills/db"
+    source = Source(kind=SourceKind.FILE, path=str(folder / "SKILL.md"), owner_client="claude_code")
+    skill = Item(
+        client="claude_code", kind=ItemKind.SKILL, name="db", source=source, scope=Scope.USER
+    )
+    inv = inventory(
+        server("claude_code", Scope.USER), server("claude_code", Scope.LOCAL, web), skill
+    )
+    removal = FolderRemoval(path=str(folder), readers=["claude_code"])
+    removed = Step(client="claude_code", scope=Scope.USER, name="db", removal=removal)
+    change = Change(action="skill.remove", steps=[removed])
+    # web's own MCP server db wins over the user MCP server db, not over the skill db.
+    assert change_target(change, [web], inv, web, [skill])["scope"] == "all"
+
+
+def test_a_change_to_several_clients_leaves_the_project_out_only_when_it_wins_in_each(tmp_path):
+    web = str(tmp_path / "web")
+    code, cursor = server("claude_code", Scope.USER), server("cursor", Scope.USER, path="/h/c.json")
+    inv = inventory(code, cursor, server("claude_code", Scope.LOCAL, web))
+    steps = [
+        edit(tmp_path / ".claude.json", Scope.USER, client="claude_code"),
+        edit(tmp_path / ".cursor/mcp.json", Scope.USER, client="cursor"),
+    ]
+    change = Change(action="mcp.remove_direct", steps=steps)
+    # Cursor still loads its user db in web.
+    assert change_target(change, [web], inv, web, [code, cursor])["scope"] == "all"
+    inv.items.append(server("cursor", Scope.PROJECT, web, path=f"{web}/.cursor/mcp.json"))
+    assert change_target(change, [web], inv, web, [code, cursor])["scope"] == "others"
 
 
 def test_a_merged_definition_still_changes_the_picked_project(tmp_path):

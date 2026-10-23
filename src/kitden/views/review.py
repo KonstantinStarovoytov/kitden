@@ -88,18 +88,20 @@ def _plugin_command(step: Step) -> bool:
     return bool(step.command) and len(step.command) > 1 and step.command[1] == "plugin"
 
 
-def _wins_in(change: Change, inventory, picked: str) -> bool:
-    """For every client the steps change, the picked project's own definition of that name
-    overrides the one the step changes (a merge does not count: Codex merges a project's fields
-    over the user entry, so the change still reaches the merge there)."""
+def _wins_in(change: Change, inventory, picked: str, items: list[Item] | None) -> bool:
+    """For every client the steps change, the picked project's own definition overrides one of
+    `items`, the definitions the change changes, by that step's name (a merge does not count:
+    Codex merges a project's fields over the user entry, so the change still reaches the merge
+    there). Another kind with the same name is another definition."""
+    ids = {item.id for item in items or []}
     views: dict = {}
     for step in change.steps:
         for client in _touched(step):
             if client not in views:
                 views[client] = effective_view(inventory, client, picked)
             beaten = any(
-                loser.name == step.name
-                and loser.project is None
+                loser.id in ids
+                and loser.name == step.name
                 and winner.project == picked
                 and mode == "override"
                 for winner, loser, mode in views[client].shadowed
@@ -110,12 +112,16 @@ def _wins_in(change: Change, inventory, picked: str) -> bool:
 
 
 def change_target(
-    change: Change, projects: list[str], inventory=None, picked: str | None = None
+    change: Change,
+    projects: list[str],
+    inventory=None,
+    picked: str | None = None,
+    items: list[Item] | None = None,
 ) -> dict:
     """Where the steps go: "project" (one known project, `project`), "all" (no step is in a
     project), "others" (all projects but the picked one, `project`, whose own definition wins
-    for every client the steps change), or "mixed". `others_unchanged`: the review may say
-    "Other projects are unchanged.\""""
+    over `items`, the definitions the change changes, for every client the steps change), or
+    "mixed". `others_unchanged`: the review may say "Other projects are unchanged.\""""
     places = {step_project(s, projects) for s in change.steps}
     if len(places) == 1 and None not in places:
         [project] = places
@@ -127,7 +133,7 @@ def change_target(
     )
     if scoped:
         return {"scope": "mixed", "project": None, "others_unchanged": False}
-    if inventory is not None and picked is not None and _wins_in(change, inventory, picked):
+    if inventory is not None and picked is not None and _wins_in(change, inventory, picked, items):
         return {"scope": "others", "project": picked, "others_unchanged": False}
     return {"scope": "all", "project": None, "others_unchanged": False}
 

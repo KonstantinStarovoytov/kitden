@@ -927,6 +927,7 @@ def create_app(
         left_out = None
         copied = None  # the skill list's rows a skill copy takes, for the review's first line
         align = None  # Add missing: what each client lacks, for the review's checkboxes
+        items: list = []  # the definitions a removal, switch, move or update changes
         # A definition kept from the last good read stays as it was until its file reads well.
         named = [t.get("item") for t in targets if isinstance(t, dict)] + [params.get("item")]
         found = [_item(str(i)) for i in named if i]
@@ -1141,11 +1142,12 @@ def create_app(
             change, state.inventory, cursor_imports=imports, skills=copied, home=home
         )
         # The review's first sentence: where the steps go (also for the project picked at the
-        # top, which may have its own definition), and what Undo cannot bring back.
+        # top, which may have its own definition of what changes), and what Undo cannot bring
+        # back.
         known = [p.path for p in state.inventory.projects]
         paths = {p["id"]: p["path"] for p in state.data["projects"]}
         picked = paths.get(str(body.get("picked") or ""))
-        change.target = change_target(change, known, state.inventory, picked)
+        change.target = change_target(change, known, state.inventory, picked, items)
         answer = {**change_dict(change), "after": after, "undo_note": undo_note(change)}
         if left_out is not None:
             answer["left_out"] = left_out
