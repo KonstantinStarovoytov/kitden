@@ -61,6 +61,30 @@ def test_list_files_refuses_links_and_digest_tells_copies_apart(tmp_path):
         list_files(folder)
 
 
+def test_a_finder_file_is_not_part_of_a_skill(tmp_path):
+    # Finder leaves .DS_Store in folders it opened; two copies stay the same skill.
+    plain = make_skill(tmp_path / "a")
+    opened = make_skill(tmp_path / "b")
+    (opened / ".DS_Store").write_bytes(b"\0\0\0\1Bud1")
+    (opened / "scripts/.DS_Store").write_bytes(b"\0\0\0\1Bud1")
+    assert list_files(opened) == ["SKILL.md", "scripts/run.sh"]
+    assert digest(opened) == digest(plain)
+
+
+def test_a_copy_leaves_the_finder_file_out(tmp_path, places):
+    source, target = places
+    (source / ".DS_Store").write_bytes(b"\0\0\0\1Bud1")
+    engine = make_engine(tmp_path)
+    change = engine.preview("skill.install", [copy_step(source, target)])
+    engine.apply(change.id)
+    assert change.state is ChangeState.VERIFIED, change.error
+    assert not (target / ".DS_Store").exists()
+    # Finder opens the copy too: undo still takes it back.
+    (target / ".DS_Store").write_bytes(b"\0\0\0\1Bud1")
+    engine.undo(change.id)
+    assert not target.exists()
+
+
 def test_preview_lists_the_files_and_writes_nothing(tmp_path, places):
     source, target = places
     engine = make_engine(tmp_path)

@@ -2,7 +2,8 @@
 
 Only regular files are copied. A link or a special file stops the change before anything is
 written, so nothing outside the source folder is ever read, and nothing outside the target
-folder is ever written. Nothing in the copied files is run.
+folder is ever written. Nothing in the copied files is run. Finder's .DS_Store files are not
+part of a skill: they are not copied or compared.
 """
 
 import hashlib
@@ -10,18 +11,23 @@ import os
 import shutil
 from pathlib import Path
 
+FINDER_FILE = ".DS_Store"
+
 
 class CopyRefusedError(ValueError):
     """The folder cannot be copied as it is."""
 
 
 def list_files(folder: Path | str) -> list[str]:
-    """Relative paths of every file under `folder`, sorted. Refuses links and special files."""
+    """Relative paths of every file under `folder`, sorted, but Finder's .DS_Store. Refuses
+    links and special files."""
     root = Path(folder)
     if root.is_symlink() or not root.is_dir():
         raise CopyRefusedError(f"{root} is not a folder")
     files = []
     for path in sorted(root.rglob("*")):
+        if path.name == FINDER_FILE:
+            continue
         if path.is_symlink():
             raise CopyRefusedError(f"{path.relative_to(root)} is a link; links are not copied")
         if path.is_dir():

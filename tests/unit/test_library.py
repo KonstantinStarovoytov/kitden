@@ -1059,6 +1059,16 @@ def test_a_plugin_skill_kitden_copied_is_still_that_plugins_skill(home, folder):
     assert FindingType.SAME_NAME_OTHER_SOURCE not in notes
 
 
+def test_a_finder_file_does_not_make_a_skill_copy_need_review(home):
+    _skill(home / ".claude/skills", "lint-rules", "Lint first.")
+    _skill(home / ".codex/skills", "lint-rules", "Lint first.")
+    (home / ".codex/skills/lint-rules/.DS_Store").write_bytes(b"\0\0\0\1Bud1")
+    row = next(r for r in load_map(build_inventory(home), None) if r.name == "lint-rules")
+    assert (row.cells["claude_code"].state, row.cells["codex"].state) == ("on", "on")
+    shown = _row(_library(home, "skill"), "lint-rules")
+    assert "review" not in {c["state"] for c in shown["cells"].values()}
+
+
 def test_a_review_skill_row_offers_no_add_in_its_other_cells(home):
     # Claude Code loads superpowers' brainstorming, not the toolbox one.
     row = _row(_library(home, "skill", show="all"), "brainstorming", f"toolbox@{OFFICIAL}")
