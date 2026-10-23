@@ -12,7 +12,7 @@ from kitden.model import FindingType, Gateway
 from kitden.views.findings import find_findings, mark_gateways
 from kitden.views.gateway_view import gateway_view
 from kitden.views.inventory import build_inventory
-from kitden.views.load_map import load_map, row_key
+from kitden.views.load_map import load_map
 from kitden.views.overview import overview
 from tests.conftest import CURSOR_DB, make_home, write_cursor_fixture_state
 from tests.unit.test_local_gateway_views import page_for
@@ -231,8 +231,9 @@ def test_overview_duplicate_points_at_a_row_the_map_has(home):
     card = next(
         a for a in overview(inventory, [], None)["attention"] if a["title"].startswith("superp")
     )
-    assert card["target"]["row"] == row_key(by_id[twice.items[0]])
-    assert card["target"]["row"] in {r.key for r in load_map(inventory, None)}
+    first = by_id[twice.items[0]]
+    assert card["target"] == {"view": "map", "kind": str(first.kind), "name": first.name}
+    assert first.name in {r.lookup for r in load_map(inventory, None)}
 
 
 def test_a_server_without_a_removable_entry_is_not_counted(home):

@@ -137,7 +137,7 @@ def test_client_tile_flies_to_its_library_column():
     count = overview.split("function loadsLine")[1].split("\n}\n")[0]
     assert count.index("await loadLibraryFor(choice);") < count.index("fly(tile")
     card = overview.split("async function follow")[1].split("\n}\n")[0]
-    assert card.index("await loadLibraryFor(choice);") < card.index('go("library"')
+    assert card.index("await loadLibraryFor(libraryChoice(sel));") < card.index('goTo("library"')
 
 
 def test_review_counts_the_diff_and_folds_the_file_change():
@@ -592,8 +592,10 @@ def test_library_replaces_load_map_and_discover():
     # Old addresses open the Library; the Overview's links go there too.
     assert 'OLD_VIEWS = { map: "mine", discover: "new" }' in script("store.js")
     overview = script("overview.js")
-    assert 'kind: target.kind, show: "mine"' in overview
-    assert 'go("library", { ...choice, selected: target.row })' in overview
+    assert 'kind: selected.kind, show: "mine"' in script("store.js")
+    assert 'goTo("library", sel)' in overview
+    # A note's Details opens the item the note row names.
+    assert 'follow({ view: "map", kind: row.kind, name: row.lookup })' in overview
 
 
 def test_library_says_why_when_there_is_nothing_to_do():

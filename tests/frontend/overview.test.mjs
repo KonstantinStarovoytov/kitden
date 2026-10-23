@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // overview.js needs only this from a browser to load.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { gatewayCardWords, loadCounts, noteGroups } = await import('../../src/kitden/web/static/js/overview.js');
+const { gatewayCardWords, loadCounts, noteGroups, noteItemRow, targetSel } = await import('../../src/kitden/web/static/js/overview.js');
 
 test('the Kitden gateway card says servers, clients and the client to set up', () => {
   const words = gatewayCardWords({ kind: 'kitden', name: 'Kitden gateway', servers: 2, clients: ['claude_code', 'cursor'], lacking: ['codex'], problem: null });
@@ -66,4 +66,21 @@ test('notes are grouped by item, each with its clients', () => {
     ['b', ['codex'], ['On/off state not readable']],
   ]);
   assert.equal(groups[0].first.type, 'same_name_other_source');
+});
+
+test('a card about an item selects it by kind and name', () => {
+  assert.deepEqual(targetSel({ view: 'map', kind: 'skill', name: 'tidy' }), { kind: 'skill', name: 'tidy' });
+  assert.equal(targetSel({ view: 'agents' }), null);
+});
+
+test('a note row opens the item it names, not the first name of its note', () => {
+  const finding = { type: 'unknown_state', names: ['a', 'b'], items: ['ia', 'ib'], clients: ['codex'], severity: 'info' };
+  const rows = [
+    { key: 'ra', kind: 'plugin', name: 'a', lookup: 'a', cells: { codex: { items: ['ia'] } } },
+    { key: 'rb', kind: 'plugin', name: 'b', lookup: 'b', cells: { codex: { items: ['ib'] } } },
+  ];
+  const [first, second] = noteGroups([finding]);
+  assert.equal(noteItemRow(first, rows).key, 'ra');
+  assert.equal(noteItemRow(second, rows).key, 'rb');
+  assert.equal(noteItemRow(second, rows.slice(0, 1)), null);
 });

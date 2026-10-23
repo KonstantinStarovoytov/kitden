@@ -10,7 +10,7 @@ import { renderOverview } from "./overview.js";
 import { closeForProject, closePanel, initPanel, isPanelOpen } from "./panel.js";
 import { ALL_PROJECTS, callout, demoTag, GONE_PROJECT, latestChanges, scanLine, versionsOpened } from "./parts.js";
 import {
-  busy, current, data, followAddress, freshness, go, loadShared, OLD_VIEWS, onIdle, parseHash, projectGone, reload, setRenderer, setState, state, VIEWS,
+  arrival, busy, current, data, followAddress, freshness, go, goTo, libraryChoice, loadShared, OLD_VIEWS, onIdle, parseHash, projectGone, reload, selFor, setRenderer, setState, state, VIEWS,
 } from "./store.js";
 
 const PLACES = {
@@ -205,11 +205,13 @@ function readScan() {
   getJson("/api/progress").then(showScan).catch(() => {});
 }
 
-// A rail link: the Library's rows are read first (up to a moment), so the page changes once,
-// already full, instead of a skeleton turning into a table after the change.
+// A rail link keeps the project and the selection: a place that shows it opens its Details. The
+// Library's rows are read first (up to a moment), so the page changes once, already full,
+// instead of a skeleton turning into a table after the change.
 async function openPlace(view) {
-  if (view === "library" && state.view !== "library") await raceSlow(loadLibraryFor({}), 300);
-  go(view);
+  const choice = state.selected ? libraryChoice(state.selected) : {};
+  if (view === "library" && state.view !== "library") await raceSlow(loadLibraryFor(choice), 300);
+  goTo(view, state.selected);
 }
 
 function listen() {
@@ -248,7 +250,8 @@ function fromAddress() {
   const old = Boolean(OLD_VIEWS[view]);
   if (!VIEWS.includes(view) && !old) return;
   const next = parseHash(location.hash);
-  const same = ["view", "project", "kind", "show", "category", "attention", "q"].every((key) => next[key] === state[key]);
+  const same = ["view", "project", "kind", "show", "category", "attention", "q"].every((key) => next[key] === state[key])
+    && selFor(next.selected) === selFor(state.selected);
   const newProject = next.project !== state.project;
   if (!same) followAddress(next);
   closeForProject();
@@ -261,6 +264,8 @@ function start() {
   try { saved = localStorage.getItem(THEME_KEY) || localStorage.getItem(OLD_THEME_KEY); } catch { saved = null; }
   applyTheme(saved);
   Object.assign(state, parseHash(location.hash));
+  // A link with a selection opens that item once its place has drawn it.
+  arrival.pending = Boolean(state.selected);
   if (OLD_VIEWS[location.hash.replace(/^#/, "").split("?")[0]]) setState({});
   setRenderer(renderPlace);
 

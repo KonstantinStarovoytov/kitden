@@ -3,6 +3,8 @@ import { beforeEach, test } from 'node:test';
 
 // store.js needs only these from a browser; fetch answers from the maps below.
 globalThis.matchMedia = () => ({ matches: false });
+// A place change draws through `transition`, which scrolls #content to the top.
+globalThis.document = { getElementById: () => ({}) };
 let answers = {};
 let failing = null;
 const asked = []; // every url read, in order
@@ -16,7 +18,7 @@ function fetchAnswers(map) { answers = map; failing = null; }
 function fetchFails(url) { failing = url; }
 const ALL_OK = {};
 
-const { current, currentError, data, freshness, loadMap, projectGone, reload, retry, setRenderer, state } = await import('../../src/kitden/web/static/js/store.js');
+const { current, currentError, data, freshness, go, goTo, hashFor, loadMap, parseHash, parseSel, projectGone, reload, retry, selFor, setRenderer, state, takeArrival } = await import('../../src/kitden/web/static/js/store.js');
 
 beforeEach(() => { state.project = ''; });
 
@@ -98,4 +100,34 @@ test('a project no longer on the list stays picked and is said', async () => {
   assert.equal(current('overview'), null);
   state.project = 'a';
   assert.equal(projectGone(), false);
+});
+
+test('parseSel takes only kind:name', () => {
+  assert.deepEqual(parseSel('mcp_server:github'), { kind: 'mcp_server', name: 'github' });
+  assert.deepEqual(parseSel('mcp_server:a:b'), { kind: 'mcp_server', name: 'a:b' });
+  for (const bad of [null, '', 'nope', 'mcp_server:', 'wizard:x', ':github']) assert.equal(parseSel(bad), null);
+  assert.equal(selFor(null), '');
+  assert.equal(selFor({ kind: 'skill', name: 'tidy' }), 'skill:tidy');
+});
+
+test('every place writes the selection and the project into the address', () => {
+  const s = { ...parseHash('#gateway?project=a&sel=mcp_server%3Agithub') };
+  assert.deepEqual(s.selected, { kind: 'mcp_server', name: 'github' });
+  assert.equal(hashFor(s), '#gateway?project=a&sel=mcp_server%3Agithub');
+  assert.equal(hashFor({ ...s, view: 'library', kind: 'mcp_server', show: 'mine' }), '#library?kind=mcp_server&project=a&sel=mcp_server%3Agithub');
+});
+
+test('an arrival opens once', () => {
+  goTo('library', { kind: 'skill', name: 'tidy' });
+  assert.equal(state.kind, 'skill');
+  assert.deepEqual(takeArrival(), { kind: 'skill', name: 'tidy' });
+  assert.equal(takeArrival(), null);
+});
+
+test('a plain place change opens no selection', () => {
+  goTo('library', { kind: 'skill', name: 'tidy' });
+  go('overview');
+  go('library', { kind: 'mcp_server' });
+  assert.equal(takeArrival(), null);
+  assert.deepEqual(state.selected, { kind: 'skill', name: 'tidy' }); // it stays for the next page
 });

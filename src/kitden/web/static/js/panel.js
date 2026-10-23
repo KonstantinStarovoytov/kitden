@@ -5,7 +5,7 @@ import { loadLibrary, morphOnNextRender, onOpenItem, rowTitle, shownRow } from "
 import { finishTransition, fold, transition } from "./motion.js";
 import { about, addButton, addOptions, whyNoAction } from "./offer.js";
 import { ALL_PROJECTS, callout, CLIENT_NAMES, diffCounts, skillRemoval, flag, GATEWAY_NOTE, gatewayName, kitdenMove, mark, movedNames, notesSection, ruleText, rulesText, skeleton, socket, STATE_WORDS, stepText, strictText, toolsNode } from "./parts.js";
-import { busy, current as currentModel, currentError, data, projectPath, reload, render, setBusy, state } from "./store.js";
+import { busy, current as currentModel, currentError, data, projectPath, reload, render, setBusy, setState, state } from "./store.js";
 
 const KIND_WORDS = {
   mcp_server: "MCP server", plugin: "Plugin", skill: "Skill", hook: "Hook", marketplace: "Marketplace",
@@ -59,9 +59,12 @@ export function openPanel(content, { instant = false } = {}) {
   openedIn = state.project;
   if (isPanelOpen()) { swapContent(content); return; }
   drawer.replaceChildren(...content);
-  opener = document.activeElement;
+  // Opened on arrival from another place, nothing on this page has focus: it goes back to the
+  // selected row.
+  opener = document.activeElement === document.body ? null : document.activeElement;
   const row = opener && opener.closest ? opener.closest("tr[data-key]") : null;
-  openerKey = row ? row.dataset.key : state.selected;
+  const selected = $('tr[aria-selected="true"]');
+  openerKey = row ? row.dataset.key : selected ? selected.dataset.key : null;
   for (const node of [drawer, $("#scrim")]) {
     node.classList.toggle("instant", instant);
     node.classList.add("open");
@@ -79,7 +82,7 @@ export function closePanel({ instant = false, keepSelection = false, focus = tru
     node.classList.remove("open");
   }
   if (!keepSelection) {
-    state.selected = null;
+    setState({ selected: null });
     for (const row of $$('tr[aria-selected="true"]')) row.setAttribute("aria-selected", "false");
   }
   if (focus) restoreFocus();
@@ -87,8 +90,9 @@ export function closePanel({ instant = false, keepSelection = false, focus = tru
 
 // Another project picked (at the top, or by Back or an edited address) closes the panel, and an
 // open review is cancelled as Cancel does: a switch in it never acts on a project it does not name.
+// The selection is the caller's: the picker clears it, an address brings its own.
 export function closeForProject() {
-  if (isPanelOpen() && openedIn !== state.project) closePanel({ focus: false });
+  if (isPanelOpen() && openedIn !== state.project) closePanel({ focus: false, keepSelection: true });
 }
 
 // A review left without Apply: the server forgets its preview.

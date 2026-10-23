@@ -158,7 +158,7 @@ test('the more line names what the choice hides', () => {
 });
 
 test('old map and discover addresses open the Library', () => {
-  const library = (fields) => ({ view: 'library', kind: 'mcp_server', show: 'mine', category: '', attention: false, project: '', q: '', ...fields });
+  const library = (fields) => ({ view: 'library', kind: 'mcp_server', show: 'mine', category: '', attention: false, project: '', q: '', selected: null, ...fields });
   assert.deepEqual(parseHash('#map'), library({}));
   // The Load map's "Needs attention" filter carries over.
   assert.deepEqual(parseHash('#map?kind=plugin&only=problems&project=p1&q=git'), library({ kind: 'plugin', attention: true, project: 'p1', q: 'git' }));
@@ -387,7 +387,7 @@ test('a hide button saves the choice, asks again, then focuses the next column o
 });
 
 // Smooth changes: rows that stay slide from where they were, new rows rise in, a tab slides.
-const { raceSlow, rowMoves, tabDirection } = await import('../../src/kitden/web/static/js/library.js');
+const { raceSlow, rowFor, rowMoves, rowSel, tabDirection } = await import('../../src/kitden/web/static/js/library.js');
 
 test('rows that stay move from their old place; new rows are the ones that rise in', () => {
   const before = new Map([['a', 100], ['b', 140], ['c', 180]]);
@@ -509,4 +509,13 @@ test('no hide is offered when hiding would leave no client Kitden could read', (
 test('a kept cell asks its socket for the dashed dot, so a morph keeps it', () => {
   const node = cellNode(row({ codex: cell({ state: 'on', stale_at: '2026-10-22T14:02:00+00:00', reason: 'x' }) }), 'codex');
   assert.equal(node.className, 'socket s-on stale');
+});
+
+test('the selection finds its row by kind and full name, and nothing when it is gone', () => {
+  const rows = [{ key: 'k1', kind: 'plugin', name: 'figma', lookup: 'figma@a' }, { key: 'k2', kind: 'plugin', name: 'figma', lookup: 'figma@b' }];
+  assert.equal(rowFor(rows, { kind: 'plugin', name: 'figma@b' }).key, 'k2');
+  assert.equal(rowFor(rows, { kind: 'skill', name: 'figma@b' }), null);
+  assert.equal(rowFor(rows, { kind: 'plugin', name: 'gone@a' }), null);
+  assert.equal(rowFor(rows, null), null);
+  assert.deepEqual(rowSel(rows[0]), { kind: 'plugin', name: 'figma@a' });
 });

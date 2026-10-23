@@ -7,7 +7,7 @@ import { animate, entrance, glide, land, reducedMotion, rollTo, spring } from ".
 import { marketplaceForm, projectNote, showOffer, showSkill } from "./offer.js";
 import { openInfo, projectLabel, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, mark, morphSocket, opens, skeleton, socket, staleNote } from "./parts.js";
-import { afterShared, freshness, go, projectPath, render, retry, state } from "./store.js";
+import { afterShared, freshness, go, projectPath, render, retry, sameSel, setState, state, takeArrival } from "./store.js";
 
 const KINDS = [
   ["mcp_server", "MCP servers"], ["plugin", "Plugins"], ["skill", "Skills"],
@@ -42,9 +42,16 @@ export function morphOnNextRender() { morphNext = true; }
 let opener = null;
 export function onOpenItem(fn) { opener = fn; }
 
-// Another place (the Overview) asks for the selected row to open in the panel once drawn.
-let openNext = false;
-export function openSelectedOnRender() { openNext = true; }
+// The selection a row stands for: its kind and full name (a plugin's "figma@a"); a row only in
+// a marketplace goes by its entry there.
+export function rowSel(row) {
+  return { kind: row.kind, name: row.lookup || row.offer || row.name };
+}
+
+// The first row the selection names, or null when none does (it is gone, or on another tab).
+export function rowFor(rows, selected) {
+  return (selected && rows.find((row) => sameSel(rowSel(row), selected))) || null;
+}
 
 // Line one's small gray text: the category, then the source only when two rows share the name.
 export function metaText(row) {
@@ -357,8 +364,8 @@ export function renderLibrary(main) {
   if (hidden) main.append(hidden);
   for (const note of answer.notes) main.append(el("p", "note", note));
   const more = moreLine(answer, asked.show);
-  const wantOpen = fresh && openNext;
-  if (fresh) openNext = false;
+  // A selection that arrived (from another place, Back or a link) opens once its rows are in.
+  const arrived = fresh ? takeArrival() : null;
   if (!answer.rows.length) {
     main.append(emptyState(asked, more));
     finish(answer.rows);
@@ -379,14 +386,14 @@ export function renderLibrary(main) {
 
   const selected = table.querySelector('tr[aria-selected="true"]');
   if (selected) requestAnimationFrame(() => selected.scrollIntoView({ block: "nearest" }));
-  // Arriving from a finding: the row glows once and the clients that load it ping, so the
-  // eye lands on the place the Overview talked about.
-  if (selected && wantOpen) {
+  // An arrival: the row glows once and the clients that load it ping, so the eye lands on the
+  // item the other place talked about, and its Details opens.
+  const row = rowFor(answer.rows, arrived);
+  if (row && selected) {
     selected.classList.add("arrive");
     for (const s of selected.querySelectorAll(".socket.s-on, .socket.s-gw")) s.classList.add("pulse");
+    openRow(row, selected, "pointer");
   }
-  const row = wantOpen && answer.rows.find((r) => r.key === state.selected);
-  if (row && selected) openRow(row, selected, "pointer");
 }
 
 // Rows are drawn: the morph is used up, and the next change morphs from what they show.
@@ -588,6 +595,7 @@ function buildTable(columns, rows, groups, morph) {
   table.append(head);
 
   const body = el("tbody");
+  const chosen = rowFor(rows, state.selected);
   let group = null;
   for (const row of rows) {
     // With All, what is on this computer comes first, then what is not, each under a line.
@@ -600,17 +608,17 @@ function buildTable(columns, rows, groups, morph) {
       tr.append(td);
       body.append(tr);
     }
-    body.append(buildRow(columns, row, morph));
+    body.append(buildRow(columns, row, morph, row === chosen));
   }
   table.append(body);
   return table;
 }
 
-function buildRow(columns, row, morph) {
+function buildRow(columns, row, morph, chosen) {
   const tr = el("tr");
   tr.tabIndex = 0;
   tr.dataset.key = row.key;
-  tr.setAttribute("aria-selected", String(state.selected === row.key));
+  tr.setAttribute("aria-selected", String(chosen));
   tr.append(nameCell(row, morph));
   for (const column of columns) {
     const td = el("td");
@@ -677,8 +685,9 @@ function settle(row, client, before) {
   return old;
 }
 
+// The address keeps the row's selection (no new history entry), so Back and a link return to it.
 function openRow(row, tr, how) {
-  state.selected = row.key;
+  setState({ selected: rowSel(row) });
   for (const other of tr.parentElement.querySelectorAll('tr[aria-selected="true"]')) other.setAttribute("aria-selected", "false");
   tr.setAttribute("aria-selected", "true");
   // A row on this computer opens what each client loads; one only in a marketplace opens the
@@ -700,7 +709,7 @@ async function openOffer(row) {
     openInfo(KIND_WORDS[row.kind], rowTitle(row), body, [button("Retry", () => openOffer(row), "btn")]);
     return;
   }
-  if (state.selected !== row.key) return; // another row was chosen meanwhile
+  if (!sameSel(state.selected, rowSel(row))) return; // another row was chosen meanwhile
   (row.kind === "skill" ? showSkill : showOffer)(offer, row);
 }
 

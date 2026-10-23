@@ -1,5 +1,5 @@
 // Page state, data cache and navigation. The URL hash keeps the state, so links and Back work:
-// #library?kind=<kind>&show=<mine|new|all>&category=<name>&attention=1&project=<id>&q=<text>
+// #library?kind=<kind>&show=<mine|new|all>&category=<name>&attention=1&project=<id>&q=<text>&sel=<kind>:<name>
 import { getJson, query } from "./api.js";
 import { transition } from "./motion.js";
 
@@ -7,6 +7,9 @@ export const VIEWS = ["overview", "library", "gateway", "changes", "agents"];
 // Places the Library replaced, and the choice each one opens it on.
 export const OLD_VIEWS = { map: "mine", discover: "new" };
 const SHOWS = ["mine", "new", "all"];
+// The kinds of item the address can select: `sel=mcp_server:github`.
+export const SEL_KINDS = ["mcp_server", "plugin", "skill", "hook", "marketplace", "instructions"];
+// `selected` is the item picked on any page, { kind, name }, or null.
 export const state = {
   view: "overview", kind: "mcp_server", show: "mine", category: "", attention: false, project: "", q: "", selected: null,
 };
@@ -50,6 +53,22 @@ let renderPlace = () => {};
 export function setRenderer(fn) { renderPlace = fn; }
 export function render() { renderPlace(); }
 
+// "mcp_server:github" as { kind, name }: a known kind, then a name that is not empty (it may hold
+// ":" too). Anything else is null.
+export function parseSel(text) {
+  const [kind, ...rest] = String(text || "").split(":");
+  const name = rest.join(":");
+  return SEL_KINDS.includes(kind) && name ? { kind, name } : null;
+}
+
+export function selFor(selected) {
+  return selected ? `${selected.kind}:${selected.name}` : "";
+}
+
+export function sameSel(a, b) {
+  return selFor(a) === selFor(b);
+}
+
 // Old #map and #discover addresses open the Library on "Installed" and "New"; the Load
 // map's "Needs attention" filter (only=problems) carries over.
 export function parseHash(hash) {
@@ -67,6 +86,7 @@ export function parseHash(hash) {
     attention: params.get("attention") === "1" || (place === "map" && params.get("only") === "problems"),
     project: params.get("project") || "",
     q: params.get("q") || "",
+    selected: parseSel(params.get("sel")),
   };
 }
 
@@ -74,7 +94,7 @@ export function hashFor(s) {
   const library = s.view === "library"
     ? { kind: s.kind, show: s.show === "mine" ? "" : s.show, category: s.category, attention: s.attention ? "1" : "" }
     : {};
-  return `#${s.view}${query({ ...library, project: s.project, q: s.q })}`;
+  return `#${s.view}${query({ ...library, project: s.project, q: s.q, sel: selFor(s.selected) })}`;
 }
 
 // A new place or project gets its own history entry, so Back returns to it; tabs, filters
@@ -91,8 +111,37 @@ function show(moving) {
   else renderPlace();
 }
 
-// Change place or filters. Place changes cross-fade; filter changes are instant.
+// A place opened with a selection (goTo, Back or a link) opens that item's Details once, when
+// the place has drawn it. Any other change of place or filter opens nothing.
+export const arrival = { pending: false };
+
+// The selection to open now, or null. It is used up either way, so a redraw never opens Details
+// again and takes the focus.
+export function takeArrival() {
+  const selected = arrival.pending ? state.selected : null;
+  arrival.pending = false;
+  return selected;
+}
+
+// Change place or filters. The selection stays for the next page, but nothing opens.
 export function go(view, params = {}) {
+  arrival.pending = false;
+  place(view, params);
+}
+
+// The Library tab and choice that show a selected item: its kind, under Installed, no search.
+export function libraryChoice(selected) {
+  return { kind: selected.kind, show: "mine", category: "", attention: false, q: "" };
+}
+
+// Open a place with an item selected; the place opens its Details. The project stays.
+export function goTo(view, selected) {
+  arrival.pending = Boolean(selected);
+  place(view, { selected, ...(view === "library" && selected ? libraryChoice(selected) : {}) });
+}
+
+// Place changes cross-fade; filter changes are instant.
+function place(view, params) {
   const moving = view !== state.view;
   const newProject = params.project !== undefined && params.project !== state.project;
   Object.assign(state, { view }, params);
@@ -106,10 +155,12 @@ export function setState(params) {
   writeHash(newProject);
 }
 
-// Back, Forward or an edited address: take the state from the address without a new entry.
+// Back, Forward or an edited address: take the state from the address without a new entry. Its
+// selection opens as an arrival does.
 export function followAddress(next) {
   const moving = next.view !== state.view;
-  Object.assign(state, next, { selected: null });
+  Object.assign(state, next);
+  arrival.pending = Boolean(next.selected);
   show(moving);
 }
 

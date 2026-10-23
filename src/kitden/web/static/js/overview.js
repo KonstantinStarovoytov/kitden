@@ -2,11 +2,11 @@
 import { getJson, query } from "./api.js";
 import { button, el, focusKey, plural } from "./dom.js";
 import { kitdenClients, SETUP_NOTE } from "./gateway.js";
-import { loadLibraryFor, openSelectedOnRender } from "./library.js";
+import { loadLibraryFor } from "./library.js";
 import { entrance, fly } from "./motion.js";
 import { review, toast } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, mark, skeleton, socket, STATE_WORDS, staleNote, versionWords } from "./parts.js";
-import { current, currentError, data, go, loadMap, projectPath, render, retry } from "./store.js";
+import { current, currentError, data, go, goTo, libraryChoice, loadMap, projectPath, render, retry } from "./store.js";
 
 let notesOpen = false;
 
@@ -84,15 +84,19 @@ function issueCard(card, { option = false } = {}) {
   return article;
 }
 
-// A card about an item opens that item in the side panel; paths and the fix live there.
+// The item a card is about, for the address: its kind and name. Null for a card about a place.
 // The server still names the Load map ("map"); its rows are the Library's "Installed".
-// The tab is read first, so the Library draws its rows inside the place change.
+export function targetSel(target) {
+  return target.view === "map" ? { kind: target.kind, name: target.name } : null;
+}
+
+// A card about an item selects it and opens it in the Library's side panel; paths and the fix
+// live there. The tab is read first, so the Library draws its rows inside the place change.
 async function follow(target) {
-  if (target.view === "map") {
-    const choice = { kind: target.kind, show: "mine", category: "", attention: false, q: "" };
-    await loadLibraryFor(choice);
-    openSelectedOnRender();
-    go("library", { ...choice, selected: target.row });
+  const sel = targetSel(target);
+  if (sel) {
+    await loadLibraryFor(libraryChoice(sel));
+    goTo("library", sel);
   } else {
     go(target.view);
   }
@@ -197,18 +201,25 @@ function noteRow(group) {
   name.title = group.name;
   what.append(name, ...group.notes.map((text) => flag({ text, level: "info" })));
   const actions = el("span", "row-actions");
-  actions.append(button("Details", () => showNote(group.first), "btn small ghost"));
+  actions.append(button("Details", () => showNote(group), "btn small ghost"));
   node.append(marks, what, actions);
   return node;
 }
 
-// The note is about items on this computer; open the first one in the Library, in the panel.
-async function showNote(finding) {
+// The Library row a note row names: the row that holds one of its note's items of that name. A
+// note about several names (unknown on/off state) opens each name's own row.
+export function noteItemRow(group, rows) {
+  const { items, names } = group.first;
+  const mine = items.filter((_, i) => names[i] === group.name);
+  return rows.find((r) => Object.values(r.cells).some((cell) => (cell.items || []).some((id) => mine.includes(id)))) || null;
+}
+
+// The note is about an item on this computer: select it and open it in the Library, in the panel.
+async function showNote(group) {
   if (!current("map")) await loadMap();
   const map = current("map");
-  const rows = (map && map.rows) || [];
-  const row = rows.find((r) => Object.values(r.cells).some((cell) => (cell.items || []).some((id) => finding.items.includes(id))));
-  if (row) await follow({ view: "map", kind: row.kind, row: row.key });
+  const row = noteItemRow(group, (map && map.rows) || []);
+  if (row) await follow({ view: "map", kind: row.kind, name: row.lookup });
   else toast("Could not find this item in the Library.");
 }
 
