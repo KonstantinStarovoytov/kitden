@@ -345,9 +345,12 @@ test('a panel keeps how to draw itself again and the control pressed last', () =
   const listeners = [];
   const node = () => ({ addEventListener: (type, listener, capture) => listeners.push({ type, listener, capture }) });
   const draw = () => {};
-  const from = keepFrom(draw, [node(), node(), null]);
+  const read = async () => {};
+  const from = keepFrom(draw, [node(), node(), null], read);
   assert.equal(panelState.from, from);
-  assert.deepEqual({ draw: from.draw, focus: from.focus }, { draw, focus: null });
+  assert.deepEqual({ draw: from.draw, read: from.read, focus: from.focus }, { draw, read, focus: null });
+  // Without its own way to read again, it draws again.
+  assert.equal(keepFrom(draw, []).read, draw);
   // One capture listener on the body and one on the footer: it hears a press before the button.
   assert.deepEqual(listeners.map((l) => [l.type, l.capture]), [['click', true], ['click', true]]);
   const press = (key) => ({ target: { closest: () => (key ? { dataset: { focus: key } } : null) } });
@@ -358,22 +361,30 @@ test('a panel keeps how to draw itself again and the control pressed last', () =
   panelState.from = null;
 });
 
-test('back from a review, Details is drawn again from what it read, the reason first, focus restored', () => {
-  const focused = [];
-  const body = { children: [], prepend(node) { this.children.unshift(node); } };
-  const control = (key) => ({ dataset: { focus: key }, focus: () => focused.push(key) });
-  let controls = [];
+// A drawer in a stub page: its body, the controls a redraw puts in it, and what got focus.
+function stubDrawer() {
+  const page = { focused: [], controls: [], open: true };
+  page.body = { children: [], prepend(node) { this.children.unshift(node); } };
+  page.control = (key) => ({ dataset: { focus: key }, focus: () => page.focused.push(key) });
   const drawer = {
-    focus: () => focused.push('drawer'),
-    querySelector: (selector) => (selector === '.body' ? body : null),
-    querySelectorAll: (selector) => (selector === '[data-focus]' ? controls : []),
+    focus: () => page.focused.push('drawer'),
+    classList: { contains: (name) => name === 'open' && page.open },
+    querySelector: (selector) => (selector === '.body' ? page.body : null),
+    querySelectorAll: (selector) => (selector === '[data-focus]' ? page.controls : []),
   };
   const element = (tag) => ({ tag, className: '', textContent: '', children: [], attributes: {}, append(...nodes) { this.children.push(...nodes); }, setAttribute(name, value) { this.attributes[name] = value; } });
   globalThis.document = { createElement: element, querySelector: (selector) => (selector === '#drawer' ? drawer : null), querySelectorAll: () => [] };
+  return page;
+}
+
+test('back from a review, Details is drawn again from what it read, the reason first, focus restored', () => {
+  const page = stubDrawer();
+  const { body, control, focused } = page;
+  const controls = { set value(list) { page.controls = list; } };
   try {
     let drawn = 0;
     // The pressed Remove waits under More again once Details is drawn.
-    panelState.from = { draw: () => { drawn += 1; controls = [control('more'), control('move')]; }, focus: 'offer:d1:mcp.remove_direct' };
+    panelState.from = { draw: () => { drawn += 1; controls.value = [control('more'), control('move')]; }, focus: 'offer:d1:mcp.remove_direct' };
     backToDetails({ error: 'Choose one known item.' });
     assert.equal(drawn, 1);
     assert.equal(body.children[0].className, 'callout error');
@@ -382,9 +393,34 @@ test('back from a review, Details is drawn again from what it read, the reason f
     // Cancel: no callout; focus on the control itself when it is drawn.
     focused.length = 0;
     body.children = [];
-    panelState.from = { draw: () => { controls = [control('move')]; }, focus: 'move' };
+    panelState.from = { draw: () => { controls.value = [control('move')]; }, focus: 'move' };
     backToDetails();
     assert.deepEqual([body.children.length, focused], [0, ['move']]);
+  } finally {
+    panelState.from = null;
+    delete globalThis.document;
+  }
+});
+
+test('back from a review whose settings changed, Details reads them again', async () => {
+  const page = stubDrawer();
+  try {
+    const drawn = [];
+    const from = {
+      draw: () => drawn.push('old read'),
+      read: async () => { drawn.push('new read'); page.controls = [page.control('move')]; },
+      focus: 'move',
+      stale: true,
+    };
+    panelState.from = from;
+    await backToDetails();
+    assert.deepEqual([drawn, page.focused], [['new read'], ['move']]);
+    // Closed while it read: focus stays where the person put it.
+    page.focused.length = 0;
+    from.read = async () => { page.open = false; };
+    panelState.from = from;
+    await backToDetails();
+    assert.deepEqual(page.focused, []);
   } finally {
     panelState.from = null;
     delete globalThis.document;

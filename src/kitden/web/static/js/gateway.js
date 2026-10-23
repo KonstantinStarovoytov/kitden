@@ -2,7 +2,7 @@
 import { getJson, postJson } from "./api.js";
 import { $, busyWhile, button, el, joinWords, plural, reportError, webLink } from "./dom.js";
 import { entrance, fold, reducedMotion } from "./motion.js";
-import { contextLinks, heldActions, heldButtons, isPanelOpen, keepFrom, linksRow, moveInto, moveTargets, openInfo, openItem, review, toast, toolsSection } from "./panel.js";
+import { closePanel, contextLinks, heldActions, heldButtons, isPanelOpen, keepFrom, linksRow, moveInto, moveTargets, openInfo, openItem, review, toast, toolsSection } from "./panel.js";
 import { banner, CLIENT_ICONS, CLIENT_NAMES, clientCheck, DARK_ICONS, flag, GATEWAY_NOTE, gatewayName, kindOf, kitdenClients, mark, skeleton, staleNote, toolsNode } from "./parts.js";
 import { arrival, current, currentError, data, freshness, loadMap, reload, render, retry, sameSel, setState, state, takeArrival } from "./store.js";
 
@@ -378,8 +378,15 @@ function showKitdenServer(server, next = {}) {
   const links = kitdenLinks(current("gateway"), server.name);
   if (links.length) body.append(linksRow(links));
   openInfo("MCP server", server.name, body, heldButtons(heldActions(server.name, foundClients(), server.plain_secrets)));
-  // A review opened from here (Remove, Put back, the Keychain) comes back to this panel.
-  keepFrom(() => showKitdenServer(server), [body, $("#drawer footer")]);
+  // A review opened from here (Remove, Put back, the Keychain) comes back to this panel. When
+  // the settings changed since its preview, it is drawn from the page's latest read of the
+  // gateway (the rescan reads it again); a server gone from it closes the panel.
+  const readAgain = () => {
+    const now = heldServer(current("gateway"), { kind: "mcp_server", name: server.name });
+    if (now) showKitdenServer(now);
+    else closePanel();
+  };
+  keepFrom(() => showKitdenServer(server), [body, $("#drawer footer")], readAgain);
 }
 
 function gatewayCard(gateway, model) {

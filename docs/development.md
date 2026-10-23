@@ -137,7 +137,8 @@ project, with a Claude Code plugin that is on:
 23. Open a review (Remove for a Claude Code plugin) and do not press Apply. Then turn that plugin
     off in Claude Code itself. The page rescans on its own; press Rescan if it does not. The
     review says "Settings changed since this preview." and offers "Preview again"; Apply is gone.
-    Press "Preview again": a new review opens for the plugin as it is now.
+    Press "Preview again": a new review opens for the plugin as it is now. Press Cancel there:
+    Details comes back and shows the plugin off.
 
 Not run yet for step 23: Part 3 of visual management was tested with sandbox files only.
 

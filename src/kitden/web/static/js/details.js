@@ -4,7 +4,7 @@ import { $, $$, button, el, joinWords, plural, reportError, shortPath, withFocus
 import { loadLibraryFor, raceSlow, rowSel, rowTitle, shownRow } from "./library.js";
 import { fold } from "./motion.js";
 import { about, addButton, addOptions, addReach, mcpRows, whyNoAction } from "./offer.js";
-import { closePanel, header, openInfo, openPanel, panelState, swapContent } from "./panel.js";
+import { closePanel, header, isPanelOpen, openInfo, openPanel, panelState, swapContent } from "./panel.js";
 import { ALL_PROJECTS, callout, CLIENT_NAMES, CLIENT_ORDER, folderName, GATEWAY_NOTE, gatewayName, kitdenClients, mark, ROUTE_WORDS, socket, STATE_WORDS, toolsNode } from "./parts.js";
 import { review } from "./review.js";
 import { current as currentModel, currentError, data, goTo, libraryChoice, projectPath, state } from "./store.js";
@@ -812,19 +812,21 @@ function showDetails(row, definitions, offer = null, toolsNext = {}, inherits = 
   const footer = el("footer");
   const held = definitions.some((d) => d.via_gateway === "kitden") ? heldButtons(heldActions(row.name, writableClients(), plainSecrets(currentModel("gateway"), row.name))) : [];
   footer.append(...held, ...footerButtons(actions, draw, commands));
-  // A review opened from here comes back to this Details, drawn from what it read.
+  // A review opened from here comes back to this Details, drawn from what it read, or read
+  // again when the settings changed since the review's preview.
   keepFrom(() => {
     panelState.current = { type: "item", row, definitions, offer, inherits };
     showDetails(row, definitions, offer, {}, inherits);
-  }, [body, footer]);
+  }, [body, footer], () => openItem(shownRow(row.key) || row));
   swapContent([itemHeader(row), body, footer]);
 }
 
 // What a review opened from this panel comes back to (backToDetails): `draw()` draws the panel
-// again from what it read, and `focus` is the control pressed last, by its focus key, heard by
-// one capture click listener on each of `nodes` (the body and the footer).
-export function keepFrom(draw, nodes) {
-  const from = { draw, focus: null };
+// again from what it read, `read()` reads it again (review.js checkStale sets `stale` when the
+// settings changed since the preview), and `focus` is the control pressed last, by its focus
+// key, heard by one capture click listener on each of `nodes` (the body and the footer).
+export function keepFrom(draw, nodes, read = draw) {
+  const from = { draw, read, focus: null };
   panelState.from = from;
   const remember = (event) => {
     const node = event.target && event.target.closest ? event.target.closest("[data-focus]") : null;
@@ -843,13 +845,19 @@ export function focusAfterBack(key, keys) {
 }
 
 // Back from a review to the panel it was opened from (Details, or the Kitden gateway's own panel
-// of a held server), drawn again from what it read then (no new read). `error`: why the preview
-// was refused, first in the body. Focus goes back to the control pressed.
-export function backToDetails({ error = null } = {}) {
+// of a held server), drawn again from what it read then (no new read), or read again when the
+// settings changed since the review's preview. `error`: why the preview was refused, first in
+// the body. Focus goes back to the control pressed, unless the panel closed while it read.
+export async function backToDetails({ error = null } = {}) {
   const from = panelState.from;
   if (!from) return;
   const { focus } = from;
-  from.draw();
+  if (from.stale) {
+    await from.read();
+    if (!isPanelOpen()) return;
+  } else {
+    from.draw();
+  }
   const drawer = $("#drawer");
   const body = $(".body", drawer);
   if (error && body) body.prepend(callout(error, "error"));

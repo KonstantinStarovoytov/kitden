@@ -321,7 +321,7 @@ function diffLines(text) {
 }
 
 function showReview(change, previewBody, note, back = null, from = null) {
-  panelState.current = { type: "review", change, previewBody, note, back };
+  panelState.current = { type: "review", change, previewBody, note, back, from };
   const words = changeWords(change, previewBody);
   const body = el("div", "body");
   if (note) body.append(callout(note));
@@ -522,7 +522,8 @@ const STALE_NOTE = "Settings changed since this preview.";
 // The server compares the files with the preview's own hashes. When they changed and the same
 // review is still open, the warning comes first and stays until the next action, and Apply
 // gives way to "Preview again", which drops this preview and asks for a new one. Focus moves
-// only when it was on Apply.
+// only when it was on Apply. The Details the review came from is out of date too: Cancel, also
+// after "Preview again", reads it again (details.js backToDetails).
 export async function checkStale() {
   const current = panelState.current;
   // Apply gave way to "Preview again" already: nothing to ask.
@@ -543,6 +544,7 @@ export async function checkStale() {
   const focused = document.activeElement === apply;
   apply.replaceWith(again);
   if (focused) again.focus();
+  if (current.from) current.from.stale = true;
 }
 
 // The server said `verified`: the button turns green while the page reloads, then the panel

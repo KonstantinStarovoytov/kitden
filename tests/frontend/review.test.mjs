@@ -122,11 +122,12 @@ test('settings changed since the preview: the callout comes first and Apply give
   const page = stubPage(() => { meanwhile(); return { json: { id: 'c1', state: 'previewed', stale } }; });
   const { node, apply, body, drawn, asked } = page;
   try {
-    const review = previewed();
+    const from = { draw: () => {} };
+    const review = previewed({ from });
     // Not changed: nothing moves.
     panelState.current = review;
     await checkStale();
-    assert.deepEqual([asked.map((a) => a.url), body.children.length, apply.replacedBy], [['/api/changes/c1'], 0, undefined]);
+    assert.deepEqual([asked.map((a) => a.url), body.children.length, apply.replacedBy, from.stale], [['/api/changes/c1'], 0, undefined, undefined]);
     // Changed: the warning first, read out at once; focus follows from Apply to Preview again.
     stale = true;
     await checkStale();
@@ -136,6 +137,8 @@ test('settings changed since the preview: the callout comes first and Apply give
     assert.equal(apply.replacedBy.textContent, 'Preview again');
     assert.equal(apply.replacedBy.className, 'btn primary');
     assert.equal(globalThis.document.activeElement, apply.replacedBy);
+    // The Details it came from is out of date too: Cancel, also after Preview again, reads it again.
+    assert.equal(from.stale, true);
     // A later rescan: Apply has given way already, so the server is not asked again.
     await checkStale();
     assert.equal(asked.length, 2);
