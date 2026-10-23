@@ -24,7 +24,7 @@ built on `docs/research/visual-management-ux-concept-2026-10-22.md` ("concept §
 | --- | --- | --- | --- | --- |
 | 1 Sample setups and demo mode | `2026-10-22-visual-part1-demo.md` | `visual-part1-demo` | 9 | `kitden demo` on three sample sizes; write boundary; walkthrough 1 script |
 | — Walkthrough 1 (owner, optional) | — | — | — | `docs/research/walkthrough-<date>.md`; settles the open words |
-| 2 Shared words, scope and selection | `2026-10-22-visual-part2-words-scope.md` | `visual-part2-words` | 9 | All projects; origin label; Unknown, Needs review, last good read; scope before the click; selection in the address |
+| 2 Shared words, scope and selection | `2026-10-22-visual-part2-words-scope.md` | `visual-part2-words` | 11 | walkthrough 1 changes: "Available" and "Off", a scope word on every cell of a project view and the route in the hover text, "+ Add" wherever Kitden can add (a project's own skill into the project), Overview notes grouped by item with their clients; All projects; Unknown, Needs review, last good read; scope before the click; selection in the address |
 | 3 One Details panel, one change flow | `2026-10-22-visual-part3-details.md` | `visual-part3-details` | 9 | `panel.js` split; Details in five questions; Affects; context links; review outcome first; Cancel back; stale review; empty states |
 | 4 Compare | `2026-10-22-visual-part4-compare.md` | `visual-part4-compare` | 8 | Differences filter; project exceptions and "a project keeps its own"; Add missing in four groups |
 | 5 Access | `2026-10-22-visual-part5-access.md` | `visual-part5-access` | 8 | routes with Direct; server clients; tool origin; honest reviews; sessions line; removed-project rules; call counts |
@@ -89,9 +89,14 @@ A part that defines a name below uses it exactly; a part that uses one does not 
 | `kitden demo [--size small\|medium\|large]` | 1 | 3, 8, README | CLI command |
 | `writable_roots(home: Path, inventory) -> list[Path]` and the refusal "Kitden writes only in your home folder and your known projects." | 1 | 1, 2 | the engine's write boundary (spec 1.3) |
 | `ALL_PROJECTS = "All projects"` (JS `parts.js`) | 2 | 2, 5 | the picker's empty choice and the scope phrase |
-| `Cell.origin: str \| None` in `views/load_map.py`, values `None`, `"project"`, `"override"` | 2 | 2, 8 | spec 2.2 |
+| `Cell.origin: str \| None` in `views/load_map.py`, values `None`, `"project"`, `"override"` | 2 | 2, 8 | spec 2.2; in a project view a cell with items has `where = ORIGIN_WORDS[origin]` ("all projects", "this project", "project override"), with All projects picked none |
+| `Cell.route: str \| None` in `views/load_map.py` (Library cells `"route"`), words in `ROUTE_WORDS` (`views/words.py`) | 2 | 2, 3, 6 | how a client gets an item ("through Codex's folder", "from a plugin", "through the Kitden gateway", "from the Desktop app"): hover text and Details, never the cell's word slot (spec 2.2a) |
 | `Cell.state` values `"on" "off" "gw" "unk" "none" "missing" "review"` | 2 (adds `"review"`) | 2, 4, 6 | `"review"` = Needs review (spec 2.3) |
-| `STATE_WORDS` (JS `parts.js`, exists) and `STATE_WORDS` (Python, new `views/words.py`, taking over `views/after.py WORDS`) | 2 | 2, 6, 7 | the one table of state words per language, so a rename is one change each |
+| `STATE_WORDS` (JS `parts.js`, exists) and `STATE_WORDS` (Python, new `views/words.py`, taking over `views/after.py WORDS`) | 2 | 2, 6, 7 | the one table of state words per language, so a rename is one change each; `"on"` = "Available" (walkthrough 1), `"review"` = "Needs review", `"unread"` = "Could not read" (a column note) |
+| `kitden.views.match`: `source_keys(item) -> frozenset`, `catalog_keys(skill) -> frozenset`, `odd_ones(keys) -> set[str]` | 2 | 2, 4 | one test of "same item, same source" for Needs review, Add missing and the notes; two items are the same when their keys meet |
+| `FindingType.SAME_NAME_OTHER_SOURCE = "same_name_other_source"`; `Finding.clients: tuple[str, ...]` (not in `Finding.id`; `finding_dict` adds `"clients"`) | 2 | 2, MCP server | a same name from another source is its own note; every note names its clients (spec 2.3a) |
+| `noteGroups(findings)` in `overview.js` (Python `note_count(findings)` in `views/overview.py` counts the same groups) | 2 | 2 | Overview notes, one row per name with its clients and notes (spec 2.3a) |
+| Library add field `project_only: bool`; skill id `project/<name>` from `project_skills(inventory, adapters, project)` | 2 | 2, 3 | an add that goes into the picked project only, with no choice (spec 2.3, F6) |
 | `Item.stale_at: str \| None` | 2 | 2, 6 | ISO time of the last good read when an item is kept from it (spec 2.3) |
 | hash parameter `sel=<kind>:<name>`; JS `parseSel(text) -> {kind, name} \| null`, `selFor(selected) -> string` in `store.js` | 2 | 2–8 | selection in the address (spec 2.5) |
 | `goTo(view: string, selected: {kind, name} \| null)` in `store.js` (not `app.js`: it runs `start()` on import) | 2 | 3, 4, 6 | open a place with project and selection kept (Part 8's tour writes the address instead) |
