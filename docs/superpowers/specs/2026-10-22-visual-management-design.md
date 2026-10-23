@@ -42,13 +42,10 @@ The owner moved "Linux and Windows" (old Part 7) to Later and chose this work in
 - **Details answers five questions in order** (concept §8): what is it and its state here; why
   and from where; which clients and projects an action affects; what to do next; the technical
   evidence, folded.
-- **Compare shows differences.** A Differences filter, Needs review for unsure matches, project
-  exceptions under All projects, and an Add missing review in four honest groups.
-- **Access shows routes and origins.** Direct routes beside gateway routes, a held server's
-  clients, each tool's origin (All projects, this project, a parent project, no rule), the effect
-  of strict mode named before Apply, and the limit of what the gateway controls.
-- **A setup map** on Overview: sources, item groups and clients in a fixed layout; select a
-  client or an item to see its relationships; open the shared Details from there.
+- **Map pages** (Parts 4–6, now in
+  [2026-10-23-map-pages-design.md](2026-10-23-map-pages-design.md)): Gateway and Library as a tree
+  and a List, differences you can act on, tool origins and direct routes, Overview cards, a
+  Changes timeline.
 - **The deferred findings of Parts 1–6 are fixed or closed with a reason.**
 - **Documentation a person can try:** `kitden demo` opens the real page on a built-in sample
   setup, with a short guided tour; the README and a task guide use pictures from the demo.
@@ -255,131 +252,15 @@ known Undo limit when one applies (for example a plugin's saved options).
 Done: node tests for the Details order and the Affects line; a test for a stale review; page
 words updated.
 
-### Part 4. Compare: differences you can act on
+### Parts 4–6. Replaced by the map pages
 
-Concept §6. The Library matrix stays the main working surface.
-
-**4.1 Differences filter.** Beside Installed / New / All: "Differences" shows only rows whose
-cells differ between the found clients in the picked context (one Loads and one —, Off vs Loads,
-Needs review, Unknown). It is a hash filter like the others.
-
-**4.2 Project exceptions under All projects.** A row whose item is changed by a project (a
-project override or a project-only item with the same name) shows a quiet "2 project
-exceptions" link that opens Details listing them (concept §4). Changing an all-projects item
-never removes a project override; the review says so when one exists.
-
-**4.3 Add missing in four groups** (concept §6.3), in one review grouped by client. It follows
-the tab (walkthrough 1, F4): on Skills it reads "Add missing skills…" and lists only skills; the
-review says which kind it covers.
-
-1. **Will add**: the checkboxes, each with its target scope and the reason it is missing
-   ("Claude Code has it; Codex does not").
-2. **Already there another way**: items a client gets through a plugin, a shared folder or
-   another client, and items it has turned off on purpose, each with that reason; nothing to do.
-3. **Needs your decision**: same-name items from different sources, with a "Compare" link to
-   their Details; never added silently.
-4. **Kitden cannot add**: with the target client and the reason, one per line.
-
-It keeps today's rule: an add that would make a duplicate starts unchecked; with nothing
-checked, Apply waits.
-
-Done: tests for each group on the `medium` sample; the review leads with "Adds N items to
-<project>"; the Differences filter is in the hash and the node tests.
-
-### Part 5. Access: routes, origins and honest limits
-
-Concept §7.
-
-**5.1 Route summary.** The Gateway diagram draws the Kitden gateway's clients, its held servers,
-and each direct route as its own quiet line labelled "Direct" (not amber: direct is not a
-fault). Plugin-provided and Claude Desktop entries count. Every node is reachable by keyboard;
-lines draw once and rest (as today). The fixed limit line stays: "The gateway controls only the
-servers in it. Direct entries and terminal tools are outside it."
-
-**5.2 Server rows** show the clients that reach them through the gateway.
-
-**5.3 Tools with origin.** Each tool row keeps its switch and hint word and gains one quiet
-origin word: "All projects", "This project", "From <parent folder>", or, when no rule decides,
-"On by default" or, in strict mode, "New · waits" (in strict mode a tool with no rule is a new
-tool). The effective state
-includes the server switch (a tool of a server that is off shows off, with that reason).
-"Use <parent>" (remove this project's rule) is offered whenever the project has its own rule,
-even one equal to the inherited value. My call: the switch words stay On and Off; the origin
-word carries the "why".
-
-**5.3a The tools panel names its own scope** (walkthrough 1, F10). The owner turned a tool off
-for all projects while meaning one project: the switches followed the top picker unseen. The
-tools panel gets its own scope choice in place, "For: All projects ▾" (all projects and each
-known project), starting from the top picker's project; changing it redraws the switches for
-that scope. Every tool review's title starts with the scope ("All projects: read_file off").
-
-**5.4 Reviews that do not overstate.**
-
-- "Turn off every writing tool…" becomes a checklist: tools that write or may write are checked,
-  each with the source of its hint; tools whose behaviour is unknown are listed unchecked under
-  "Not sure"; the token advice stays.
-- Turning strict on names the tools it keeps on ("Keeps on: read, list, search.") and says new
-  tools wait. The Strict row itself stops saying "Only tools you turned on are offered" (strict
-  mode turns on the known tools for you, so that overstates): it says "Only tools that are on
-  are offered; a new tool waits."
-- Both say a call already running is not stopped.
-
-**5.5 Sessions and projects.** With a project picked, one quiet line: "A session gets these
-switches only when it runs in this project's folder." With All projects: today's line about
-unknown folders. Rules for a project that is no longer on the list show in a quiet "Rules for
-folders Kitden no longer finds" group, each with Remove (a rule step).
-
-**5.6 Call counts** become keyboard reachable (a small "12 calls" text with the last time,
-not only hover).
-
-Done: tests for origin per tool (own, parent, global, none, strict), the effective state with
-the server off, the writing-tools checklist, strict's kept list, the removed-project rules;
-the diagram's keyboard path.
-
-### Part 6. The setup map
-
-Concept §5. It lives on Overview (my call: concept §14 leaves this open; Overview is the entry
-point and the map is its picture). A "List | Map" switch in the Overview header shows the map;
-the choice is remembered on this computer. The map's code loads only when first shown
-(dynamic `import()`), so the start does not slow down.
-
-**6.1 Layout.** Three fixed columns: **Sources** (groups such as "Claude Code all projects",
-"Shared skills folder", "Plugin superpowers", "Project website", "Kitden gateway"), **Items**
-(grouped by kind with counts: "12 skills", "9 MCP servers"), **Clients** (the found ones). The
-first view fits a normal desktop window without panning. No lines are drawn until something is
-selected.
-
-**6.2 Selection.** Select a client: its sources and item groups light, the rest go quiet. Select
-an item group: it opens to its items (one group open at a time). Select an item: lines draw from
-its source(s) to it and from it to the clients that have it, each line labelled once with its
-meaning: defines, contains, available to, overrides, routes through. Details opens beside it.
-Search on the Overview goes straight to an item. Keyboard: Tab moves between nodes, Enter
-selects, Escape clears.
-
-**6.3 Data.** One new endpoint, `/api/setup-map?project=`, returns source groups, item groups,
-items with their source group and clients, and typed relations. It is built from the inventory
-already in memory (`effective_view`, `shadowed`, `plugin_of`, `via_gateway`, `skill_readers`).
-No command runs, no server starts. A shared folder read by two clients shows as one source with
-two "available to" lines, never as two copies; a real duplicate shows only when the findings say
-so.
-
-**6.4 Large setups and narrow windows.** Groups stay closed until opened; a group with more than
-30 items shows the first 30 and "Show all". Under 900 px wide the map becomes a stacked list
-(source → items → clients) with the same selection. Motion: a selected line draws once; nothing
-moves while idle; reduced motion shows it at once.
-
-**6.5 The owner's second walkthrough.** After this part, the owner runs `kitden demo` and
-tries the seven tasks of concept §12 again, now on the new page, and compares with the first
-walkthrough (1.4). The agent prepares the script and records the results in
-`docs/research/walkthrough-<date>.md`. Fixes that follow go into Part 7 before the deferred
-findings. Concept §12 says to keep the map only if it helps: if the owner finds it does not,
-Part 7 hides the "Map" switch (the code stays behind it) and the tour skips the map stop. The
-owner can skip this walkthrough.
-
-Done: the map endpoint answers in under 150 ms on the `large` sample (measured in
-`scripts/measure-start.py`, added as a third number); the first usable time stays within budget;
-node tests for the layout and the selection; a page test that the table route answers every map
-question without the map.
+The owner's final design (`docs/research/visual-redesign-final-2026-10-23.md`, frames in
+`design/kitden.pen`) replaces the Compare matrix, the Access diagram and the Overview map that
+were planned here. Parts 4–6 are now
+[2026-10-23-map-pages-design.md](2026-10-23-map-pages-design.md): the Gateway map and list, the
+Library map, list and marketplace adds, and Instructions, Overview and Changes. The pieces kept
+from this design (Differences, Add missing in four groups, tool origins, the strict words, call
+counts) are named there. The old text is in git at `d8c05cc`.
 
 ### Part 7. Leftovers
 
@@ -412,11 +293,11 @@ Done: each item fixed with a test, or closed with a reason in the part's report.
 ### Part 8. Documentation you can try
 
 **8.1 The tour.** In demo mode only, a "Tour" button in the shell starts seven short stops that
-follow concept §12: the Overview and its map; a skill shared by two clients; a server that a
-project overrides (Claude Code ranks a user skill above a project skill, so the override example is
-a server); Compare and its Differences; Add missing for one project (a real Apply
-inside the demo); the Gateway with a direct route, a parent-project rule and a new tool that
-waits; Undo. Each stop is one sentence and one highlighted place (the existing `.arrive` light),
+follow concept §12 on the map pages: the Overview and "Your setup"; a skill shared by two
+clients on the Library map; a server that a project overrides (Claude Code ranks a user skill
+above a project skill, so the override example is a server), with "This project"; the Library
+List and its Differences; Add missing for one project (a real Apply inside the demo); the Gateway
+map with a direct route, a parent-project rule and a new tool that waits; Undo on Changes. Each stop is one sentence and one highlighted place (the existing `.arrive` light),
 with Next, Back and Close; keyboard and reduced motion work; nothing is fetched from outside.
 The tour's text lives in one module, `tour.js`, loaded only in demo mode.
 
@@ -436,7 +317,7 @@ appear, because the demo home is synthetic.
 **8.5 Release notes** `docs/releases/v0.3.0.md` for everything since 0.2.0 (Parts 1–6 of the
 earlier design and Parts 1–8 here), in the format of v0.2.0.
 
-**8.6** `docs/design.md` gets the map, the origin words, the new states and the tour; the
+**8.6** `docs/design.md` gets the tour (the map pages describe themselves in Parts 4–6); the
 release hand check in `docs/development.md` gains the walkthrough tasks.
 
 Done: the tour runs end to end in a test on the demo app (each stop's target exists); README,
@@ -446,10 +327,9 @@ exists.
 ## Order
 
 1 → (walkthrough 1) → 2 → 3 → 4 → 5 → 6 → (walkthrough 2) → 7 → 8. Part 1 comes first
-because every later part tests on its samples and both walkthroughs need it. Parts 2 and 3 set the words and the panel the
-others use. Part 4 and 5 are independent of each other but share Part 2's words; run them in
-order to keep reviews small. Part 6 needs 2–5. Part 7 needs the walkthrough. Part 8 describes
-the finished page. Each part ships on its own.
+because every later part tests on its samples and both walkthroughs need it. Parts 2 and 3 set
+the words and the panel the others use. Parts 4–6 follow the map pages design and its order.
+Part 7 needs walkthrough 2. Part 8 describes the finished page. Each part ships on its own.
 
 ## Left to the builder
 
@@ -472,6 +352,10 @@ The work is done when, on the `medium` and `large` samples:
 - everything works without the map, by keyboard, in both themes, and the start stays fast.
 
 ## Every concept recommendation, and where it lives
+
+Sections 4.x, 5.x and 6.x below were replaced on 2026-10-23: Compare (4) is now map spec
+Part 5, Access (5) is map spec Part 4, and the setup map (6) is map spec S.4 and Part 6
+([2026-10-23-map-pages-design.md](2026-10-23-map-pages-design.md)).
 
 | Concept | Here |
 | --- | --- |

@@ -2,8 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** `kitden demo` has a "Tour" button that walks seven short stops over the real page on the
-sample (one sentence and one lit place each, with a real Apply and Undo inside the demo); the
+**Goal:** `kitden demo` has a "Tour" button that walks seven short stops over the real map pages on
+the sample (one sentence and one lit place each, with a real Apply and Undo inside the demo); the
 README answers the owner's three questions with pictures from the demo; `docs/guide.md` is a set
 of "I want to…" tasks with small diagrams; the pictures have a written recipe; the notes for
 0.3.0 are ready.
@@ -11,26 +11,36 @@ of "I want to…" tasks with small diagrams; the pictures have a written recipe;
 **Architecture:** One new module, `tour.js`, holds the stop table (pure data, one stop per line)
 and the box that shows it. It is loaded with `import()` the first time Tour is pressed, and Tour
 exists only when `/api/about` says `demo`. A stop moves the page by writing its address (Part 2's
-`sel=` and `project=`), then lights the element that carries `data-tour="<stop id>"`; the page
-modules draw those anchors. The tour reads only what the page already has (`data` in
-`store.js`); it fetches, stores and presses nothing. The docs are plain Markdown; the diagrams are
-Mermaid blocks that GitHub draws.
+`sel=` and `project=`, Part 4's `view=map|list`, Part 5's `show=diff`), then lights the element
+that carries `data-tour="<stop id>"`; the page modules draw those anchors. The tour reads only
+what the page already has (`data` in `store.js`); it fetches, stores and presses nothing. The docs
+are plain Markdown; the diagrams are Mermaid blocks that GitHub draws.
 
 **Tech Stack:** plain ES modules and one CSS file; Python 3.13 (Starlette test client); pytest on
 the Part 1 samples; node's test runner. No new dependency.
 
-**Spec:** `docs/superpowers/specs/2026-10-22-visual-management-design.md`, Part 8 (8.1–8.6) and
-its Done line, plus Constraints, Anti-goals and Acceptance; concept
-`docs/research/visual-management-ux-concept-2026-10-22.md` §12 (scenes and the seven tasks) and
-§10 (keyboard, narrow, motion). Master plan: `docs/superpowers/plans/2026-10-22-visual-management.md`
-(Rules; names: `data-tour="<stop id>"` defined here; `GET /api/about`, `create_app(..., demo)`,
-`kitden demo`, `build_demo_home`, `SIZES` from Part 1; `parseSel`, `selFor`, `goTo` in
-`store.js` from Part 2 — `goTo` lives in `store.js`, not `app.js`; the Details module
-`details.js` and `definitions[i].affects` from Part 3; `show=diff` and the align groups from
-Part 4; tool row `origin`/`origin_from` from Part 5; `/api/setup-map`, `renderMap` and
-`setOverviewMode` (`store.js`, the `kitden.overview` choice) from Part 6; `MAP_SWITCH`
-(`store.js`) from Part 7, only if walkthrough 2 hid the map). The medium sample's names are
-Part 1's "Sample contract".
+**Specs:** `docs/superpowers/specs/2026-10-22-visual-management-design.md`, Part 8 (8.1–8.6) and
+its Done line, plus Constraints, Anti-goals and Acceptance; and
+`docs/superpowers/specs/2026-10-23-map-pages-design.md`, "Order" (the stops on the map pages) with
+S.1 (the words "On", "This project", "Only this project"), S.3 (Details beside the page), S.5 (Map
+or List) and Parts 4–6. Concept `docs/research/visual-management-ux-concept-2026-10-22.md` §12
+(scenes and the seven tasks) and §10 (keyboard, narrow, motion). Master plan:
+`docs/superpowers/plans/2026-10-22-visual-management.md` (Rules; names: `data-tour="<stop id>"`
+defined here; `GET /api/about`, `create_app(..., demo)`, `kitden demo`, `build_demo_home`, `SIZES`
+from Part 1; `parseSel`, `selFor`, `goTo` in `store.js` from Part 2 — `goTo` lives in `store.js`,
+not `app.js`; the Details module `details.js` from Part 3). The map plans, by their names:
+- Part 4 (`2026-10-23-map-part4-gateway.md`): hash `view=map|list` (`state.mode`), `viewMode`,
+  `sel=tool:<server>/<tool>`, `drawMap` (each block is a button with
+  `data-focus="block:<id>"`; the map box has the class `map`), block ids `outside:<group>:<name>`
+  and `tool:<server>/<tool>`, `gatewayTree`, tool row `origin`/`origin_from`, `/api/gateway-view`
+  rows with `columns` and `stays`.
+- Part 5 (`2026-10-23-map-part5-library.md`): the Library tab `kind=plugin`, `show=diff`, block ids
+  `row:<key>`, the List toolbar button `data-focus="add:missing"`, the align groups `will_add`,
+  `already`, `decide`, `cannot` and the `what: "kit"` choice of `project.align`.
+- Part 6 (`2026-10-23-map-part6-overview.md`): Overview's "Your setup" tree, `/api/overview`, the
+  Changes timeline and its Undo.
+
+The medium sample's names are Part 1's "Sample contract".
 
 ## Global Constraints
 
@@ -79,12 +89,14 @@ Part 1's "Sample contract".
    or hid during the walk): the sentence stays, or Undo's own "Nothing to undo yet…" sentence
    shows; nothing is lit and nothing throws (Task 1 node test 'a stop whose place is not there
    keeps its sentence or says what to do').
-3. **Details open while the tour runs:** Tab reaches the tour's buttons (the drawer's focus loop
-   includes them), and Esc inside the tour closes only the tour, never the Details behind it
-   (Task 1 node test 'keys: arrows move, Escape closes, the rest is left alone'; Task 3
-   `test_the_drawer_lets_tab_reach_the_tour`).
-4. **The map hidden after walkthrough 2** (spec 6.5): the map stop is skipped and the box counts
-   "of 6" (Task 1 node test 'without the map the map stop is skipped').
+3. **Details open while the tour runs** (beside the page from 1024 px, a drawer under it): Tab
+   reaches the tour's buttons (the drawer's focus loop includes them), and Esc inside the tour
+   closes only the tour, never the Details behind it (Task 1 node test 'keys: arrows move, Escape
+   closes, the rest is left alone'; Task 3 `test_the_drawer_lets_tab_reach_the_tour`).
+4. **A page that opens in the other view** (the large sample opens in List, and Part 7 may make
+   List a page's first view): every stop that draws a map or a List names its view in the
+   address, so no stop lands in the wrong one (Task 1 node test 'each stop has its own address
+   with the view, the project and the selection').
 5. **The real Apply inside the demo:** Add missing's default choice in `atlas` applies, verifies
    and undoes to the same bytes, and the tour itself presses, fetches and stores nothing (Task 2
    `test_add_missing_in_atlas_applies_and_undoes_inside_the_demo`; Task 3
@@ -101,28 +113,29 @@ Part 1's "Sample contract".
 
 **Interfaces:**
 - Consumes (Part 2, `store.js`): `hashFor(state) -> string` (writes `sel` last on every view),
-  `parseSel(text) -> {kind, name} | null`, `VIEWS`. (Part 4): `"diff"` in `SHOWS`. The medium
-  sample's names (Part 1 contract): projects `~/work/atlas` and `~/work/atlas/web`; skill
-  `code-review` read by Codex and Cursor from one folder; `docs` overridden in `atlas`; held
-  `files` and `tracker`; Cursor's direct `files`; `atlas/web` taking `files.write_file` from
-  `atlas`; `tracker.export_report` waiting.
+  `parseSel(text) -> {kind, name} | null`, `VIEWS`. (Part 4): `state.mode`, the hash key
+  `view=map|list`, and `tool` in the selection kinds (`sel=tool:<server>/<tool>`). (Part 5):
+  `"diff"` in `SHOWS`, and the Library tab `kind=plugin`. The medium sample's names (Part 1
+  contract): projects `~/work/atlas` and `~/work/atlas/web`; skill `code-review` read by Codex
+  and Cursor from one folder; skill `api-style` in `atlas/.agents/skills`, which Claude Code does
+  not read; `docs` overridden in `atlas`; held `files` and `tracker`; Cursor's direct `files`;
+  `atlas/web` taking `files.write_file` from `atlas`; `tracker.export_report` waiting.
 - Produces (`tour.js`):
   - `export const STOPS` — seven objects, **one per line, each line starting `{ id: "`, string
     values in double quotes, no double quote inside a value** (Task 2's Python test reads this
-    table). Fields: `id` (also the `data-tour` value), `name`, `view`, optional `kind`, `show`,
-    `project` (a folder as the end of its path, `""` or absent for All projects), `sel`
-    (`"kind:name"`), `needs` (`"map"`), `text`, optional `ifMissing`.
+    table). Fields: `id` (also the `data-tour` value), `name`, `view`, optional `kind`, `mode`
+    (`"map"` or `"list"`; absent where the place has no choice), `show`, `project` (a folder as
+    the end of its path, `""` or absent for All projects), `sel` (`"kind:name"`), `text`,
+    optional `ifMissing`.
   - `export const NOT_FIT = "The tour needs the medium or large sample: run kitden demo --size medium."`
   - `export const FIND_MS = 1500` (how long a stop waits for its place)
   - `projectFor(projects: {id, path}[] | null, folder: string) -> string | null` — `""` for `""`;
     the id of the first project whose `path` ends with `"/" + folder`; `null` when none or no list.
   - `tourFits(stops, projects) -> boolean` — every stop's `project` resolves (`projectFor` is not
     `null`).
-  - `tourStops(stops, { map: boolean }) -> stops` — without the map, drops stops with
-    `needs === "map"`; the order stays.
-  - `stopAddress(stop, projects) -> string` — `hashFor({ view, kind: stop.kind || "mcp_server",
-    show: stop.show || "mine", category: "", attention: false, project: projectFor(...) || "",
-    q: "", selected: stop.sel ? parseSel(stop.sel) : null })`.
+  - `stopAddress(stop, projects) -> string` — `hashFor({ view, kind: stop.kind || "plugin",
+    mode: stop.mode || "", show: stop.show || "mine", category: "", attention: false,
+    project: projectFor(...) || "", q: "", selected: stop.sel ? parseSel(stop.sel) : null })`.
   - `stopText(stop, found: boolean) -> string` — `stop.text`, or `stop.ifMissing` when not found
     and the stop has one.
   - `tourTitle(at: number, count: number) -> string` — `` `Tour · ${at + 1} of ${count}` ``.
@@ -130,28 +143,33 @@ Part 1's "Sample contract".
     Enter is left to the focused button.
   - `scrollFor(reduced: boolean) -> { block: "center", behavior: "auto" | "smooth" }`.
 
-The table, exactly (concept §12, spec 8.1):
+The table, exactly (map spec "Order", spec 8.1, concept §12):
 
 | id | name | place | text |
 | --- | --- | --- | --- |
-| `map` | Map | `view "overview"`, `sel "skill:code-review"`, `needs "map"` | The map shows where each item comes from and which clients get it; select any item to see its lines. |
-| `affects` | Shared skill | `view "library"`, `kind "skill"`, `sel "skill:code-review"` | Codex and Cursor read code-review from one shared folder, so it is one copy and a change reaches both. |
-| `override` | Project override | `view "library"`, `kind "mcp_server"`, `project "atlas"` | In atlas, the project's own docs entry wins over the one for all projects, and the cell says so. |
-| `differences` | Differences | `view "library"`, `kind "mcp_server"`, `show "diff"`, `project "atlas"` | Differences keeps only the rows where your clients do not match, like the two docs servers from different sources. |
-| `add-missing` | Add missing | `view "library"`, `kind "skill"`, `project "atlas"` | Press Add missing… to see what each client lacks in atlas, then Apply: it changes the sample files, with a backup. |
-| `gateway` | Gateway | `view "gateway"`, `project "atlas/web"` | Cursor's Direct line skips the gateway; open files for a rule web takes from atlas, and tracker for a new tool that waits. |
-| `undo` | Undo | `view "changes"`; `ifMissing` "Nothing to undo yet: go Back, press Add missing… and Apply, then come back here." | Undo puts back the files this change wrote, from the backup Kitden kept. |
+| `setup` | Your setup | `view "overview"` | Your setup joins each client to the Kitden gateway and the Library; a block opens its page. |
+| `shared` | Shared skill | `view "library"`, `kind "plugin"`, `mode "map"`, `sel "skill:code-review"` | Codex and Cursor read code-review from one shared folder, so it is one copy and a change reaches both. |
+| `override` | Project override | `view "gateway"`, `mode "map"`, `project "atlas"` | In atlas, the project's own docs entry replaces the one for all projects, and its block carries the tag This project. |
+| `differences` | Differences | `view "library"`, `kind "plugin"`, `mode "list"`, `show "diff"`, `project "atlas"` | Differences keeps only the rows where your clients do not match, such as api-style, which Claude Code lacks in atlas. |
+| `add-missing` | Add missing | `view "library"`, `kind "plugin"`, `mode "list"`, `project "atlas"` | Press Add missing plugins and skills… to see what each client lacks in atlas, then Apply: it changes the sample files, with a backup. |
+| `gateway` | Gateway | `view "gateway"`, `mode "map"`, `project "atlas/web"`, `sel "tool:files/write_file"` | Cursor's amber line skips the gateway; web gets write_file off from atlas; open tracker to see a new tool that waits. |
+| `undo` | Undo | `view "changes"`; `ifMissing` "Nothing to undo yet: go Back, press Add missing plugins and skills… and Apply, then come back here." | Undo puts back the files this change wrote, from the backup Kitden kept. |
 
-Builder call: stop `override` shows the `docs` server in `atlas`, not "the same skill in a
-project": Claude Code ranks a user skill above a project one (`views/effective.py RANKS`), so a
-project skill never overrides, and Part 1's sample override is `docs`.
-Builder call: stop `affects` uses `code-review` (Codex and Cursor, one folder), the skill of Part
-1's walkthrough task 1.
-Builder call: stop `add-missing` invites the press of Add missing… and Apply, and `gateway`
-invites opening two servers; the tour never presses for the person (spec "one highlighted place"
-per stop; the parent rule and the waiting tool live in two servers' Details). Stop `map` switches
-the Overview to Map itself with Part 6's `setOverviewMode("map")`, as Part 6 planned for it: a
-view choice, not an action.
+Builder call: stop `override` shows the `docs` server in `atlas` on the Gateway, because servers
+live there now (map spec 5.2), not "the same skill in a project": Claude Code ranks a user skill
+above a project one (`views/effective.py RANKS`), so a project skill never overrides, and Part
+1's sample override is `docs`. Its place is the outside `docs` block in `atlas` (Claude Code's own
+entry, from `atlas/.mcp.json`); Part 4 gives that row the flag `override` and its block the tag
+"This project" in a project view, and the stop only reads them.
+Builder call: stop `shared` uses `code-review` (Codex and Cursor, one folder), the skill of Part
+1's walkthrough task 1; selecting it lights both clients on the Library map. Stop `differences`
+uses `api-style`, which `atlas` reads for Codex and Cursor but not Claude Code.
+Builder call: stop `add-missing` invites the press of Add missing plugins and skills… and Apply;
+stop `gateway` selects `files.write_file` in `web`, whose Details name `atlas` as the rule's
+source, and invites opening `tracker`; the tour never presses for the person (spec "one
+highlighted place" per stop; the direct route is the amber line on the map).
+Builder call: every stop that draws a map or a List writes `view=map` or `view=list` into its
+address, so Part 7 or a large sample changing a page's first view never moves a stop.
 Builder call: stop names show as the box heading, so the guide can name a stop.
 
 - [ ] **Step 1: Write the failing tests** (`tests/frontend/tour.test.mjs`; stubs as in
@@ -159,20 +177,23 @@ Builder call: stop names show as the box heading, so the guide can name a stop.
   globalThis.navigator`)
 
 ```js
-const { STOPS, NOT_FIT, projectFor, scrollFor, stopAddress, stopText, tourFits, tourKey, tourStops, tourTitle } = await import('../../src/kitden/web/static/js/tour.js');
+const { STOPS, NOT_FIT, projectFor, scrollFor, stopAddress, stopText, tourFits, tourKey, tourTitle } = await import('../../src/kitden/web/static/js/tour.js');
 const { VIEWS, parseSel } = await import('../../src/kitden/web/static/js/store.js');
 const PROJECTS = [
   { id: 'p-atlas', path: '/tmp/d/home/work/atlas' },
   { id: 'p-web', path: '/tmp/d/home/work/atlas/web' },
   { id: 'p-site', path: '/tmp/d/home/work/website' },
 ];
+// An address as its place and its fields: the order of the fields is hashFor's, not the tour's.
+const parts = (address) => [address.split('?')[0], Object.fromEntries(new URLSearchParams(address.split('?')[1] || ''))];
 
 test('seven stops in the order of the walk, each one short sentence', () => {
-  assert.deepEqual(STOPS.map((s) => s.id), ['map', 'affects', 'override', 'differences', 'add-missing', 'gateway', 'undo']);
-  assert.deepEqual(STOPS.map((s) => s.name), ['Map', 'Shared skill', 'Project override', 'Differences', 'Add missing', 'Gateway', 'Undo']);
+  assert.deepEqual(STOPS.map((s) => s.id), ['setup', 'shared', 'override', 'differences', 'add-missing', 'gateway', 'undo']);
+  assert.deepEqual(STOPS.map((s) => s.name), ['Your setup', 'Shared skill', 'Project override', 'Differences', 'Add missing', 'Gateway', 'Undo']);
   for (const stop of STOPS) {
     assert.ok(VIEWS.includes(stop.view), stop.id);
     if (stop.sel) assert.ok(parseSel(stop.sel), stop.sel);
+    if (stop.mode) assert.ok(['map', 'list'].includes(stop.mode), stop.id);
     for (const text of [stop.text, stop.ifMissing].filter(Boolean)) {
       assert.ok(text.endsWith('.') && !text.slice(0, -1).includes('. '), text);
       assert.ok(text.split(/\s+/).length <= 25 && !text.includes('"'), text);
@@ -180,17 +201,18 @@ test('seven stops in the order of the walk, each one short sentence', () => {
   }
 });
 
-test('each stop has its own address with the project and the selection', () => {
-  const at = Object.fromEntries(STOPS.map((s) => [s.id, stopAddress(s, PROJECTS)]));
+test('each stop has its own address with the view, the project and the selection', () => {
+  const at = Object.fromEntries(STOPS.map((s) => [s.id, parts(stopAddress(s, PROJECTS))]));
   assert.deepEqual(at, {
-    map: '#overview?sel=skill%3Acode-review',
-    affects: '#library?kind=skill&sel=skill%3Acode-review',
-    override: '#library?kind=mcp_server&project=p-atlas',
-    differences: '#library?kind=mcp_server&show=diff&project=p-atlas',
-    'add-missing': '#library?kind=skill&project=p-atlas',
-    gateway: '#gateway?project=p-web',
-    undo: '#changes',
+    setup: ['#overview', {}],
+    shared: ['#library', { kind: 'plugin', view: 'map', sel: 'skill:code-review' }],
+    override: ['#gateway', { view: 'map', project: 'p-atlas' }],
+    differences: ['#library', { kind: 'plugin', view: 'list', show: 'diff', project: 'p-atlas' }],
+    'add-missing': ['#library', { kind: 'plugin', view: 'list', project: 'p-atlas' }],
+    gateway: ['#gateway', { view: 'map', project: 'p-web', sel: 'tool:files/write_file' }],
+    undo: ['#changes', {}],
   });
+  assert.ok(stopAddress(STOPS.find((s) => s.id === 'gateway'), PROJECTS).endsWith('sel=tool%3Afiles%2Fwrite_file'));
 });
 
 test('a project is found by the end of its path', () => {
@@ -208,19 +230,16 @@ test('the tour fits only a sample with every project it visits', () => {
   assert.equal(NOT_FIT, 'The tour needs the medium or large sample: run kitden demo --size medium.');
 });
 
-test('without the map the map stop is skipped', () => {
-  assert.deepEqual(tourStops(STOPS, { map: true }), STOPS);
-  const six = tourStops(STOPS, { map: false });
-  assert.deepEqual(six.map((s) => s.id), STOPS.slice(1).map((s) => s.id));
-  assert.equal(tourTitle(0, six.length), 'Tour · 1 of 6');
+test('the box counts its seven stops', () => {
+  assert.equal(tourTitle(0, STOPS.length), 'Tour · 1 of 7');
   assert.equal(tourTitle(1, 7), 'Tour · 2 of 7');
 });
 
 test('a stop whose place is not there keeps its sentence or says what to do', () => {
   const undo = STOPS.find((s) => s.id === 'undo');
   assert.equal(stopText(undo, true), 'Undo puts back the files this change wrote, from the backup Kitden kept.');
-  assert.equal(stopText(undo, false), 'Nothing to undo yet: go Back, press Add missing… and Apply, then come back here.');
-  const shared = STOPS.find((s) => s.id === 'affects');
+  assert.equal(stopText(undo, false), 'Nothing to undo yet: go Back, press Add missing plugins and skills… and Apply, then come back here.');
+  const shared = STOPS.find((s) => s.id === 'shared');
   assert.equal(stopText(shared, false), shared.text);
 });
 
@@ -255,35 +274,37 @@ git commit -m "Tour: the seven stops and where each one goes"
 ### Task 2: Every stop finds its place on the demo (8.1 Done)
 
 **Files:**
-- Modify: `src/kitden/web/static/js/overview.js` (the container Overview hands to Part 6's
-  `renderMap(container, model)`: `dataset.tour = "map"`, set before the call; new `mapOffered()`),
-  `src/kitden/web/static/js/details.js` (Part 3's Affects line, `.affects`, drawn by
-  `showDetails`: `dataset.tour = "affects"`), `src/kitden/web/static/js/library.js` (the first cell
-  drawn with `cell.origin === "override"`: `"override"`; the `diff` choice of the show group:
-  `"differences"`; the "Add missing…" button: `"add-missing"`),
-  `src/kitden/web/static/js/gateway.js` (the Kitden gateway card's root: `"gateway"`),
-  `src/kitden/web/static/js/changes.js` (the Undo button of the first verified change drawn:
-  `"undo"`)
+- Modify: `src/kitden/web/static/js/overview.js` (the box Overview hands to `drawMap` for "Your
+  setup": `dataset.tour = "setup"`), `src/kitden/web/static/js/library.js` (the block `drawMap`
+  draws for the selected item of the Library map, found by its `data-focus="block:<id>"`:
+  `"shared"`; the `diff` choice of the show group, Installed | Differences: `"differences"`; the
+  List toolbar button `data-focus="add:missing"`, "Add missing plugins and skills…":
+  `"add-missing"`), `src/kitden/web/static/js/gateway.js` (the first outside block that carries
+  the tag "This project", found by its `data-focus="block:<id>"`: `"override"`, and the Gateway
+  map's own box, the `.map` box handed to `drawMap`: `"gateway"`),
+  `src/kitden/web/static/js/changes.js` (the Undo button of the first verified change drawn in
+  the timeline: `"undo"`)
 - Create: `tests/unit/test_tour.py`
 
 **Interfaces:**
 - Consumes: Task 1 `STOPS` (read from `tour.js` text); Part 1 `demo_page(root, size="medium")`
-  and `POST` from `tests/unit/test_demo_mode.py`; Part 2 `cells[client]["origin"]` on
-  `/api/library` rows; Part 3 `affects: {clients, scope, note}` on each changeable definition of
-  the `/api/explain` answer (`definitions[i].affects`);
-  Part 4 `/api/library?show=diff`, the align preview's `align.will_add` (entries with `name`,
-  `to`, `chosen`); Part 5 `/api/gateway-view` group rows' `columns`, `/api/gateway/tools` rows'
-  `origin` and `origin_from` (a folder name); Part 6 `/api/setup-map` `items` (with `kind`,
-  `name`).
+  and `POST` from `tests/unit/test_demo_mode.py`; Part 4 `/api/gateway-view` group rows'
+  `columns`, `override: bool` (Task 4) and `gatewayTree`'s outside blocks
+  (`outside:<group>:<name>`) with the tag "This project" in a project view (Task 8),
+  `/api/gateway/tools` rows' `origin` and `origin_from` (a folder name), `/api/projects`
+  `own_rules`; Part 5
+  `/api/library?kind=plugin` rows (`cells[client]["state"]`) with `show=diff`, the align preview's
+  `align.will_add` (entries with `kind`, `name`, `to`, `chosen`) and the `what: "kit"` choice of
+  `project.align`; Part 6 `/api/overview` and the Changes timeline rows.
 - Produces: one `data-tour` anchor per stop id, each set as `node.dataset.tour = "<id>"` in
-  exactly one module; `export function mapOffered(): boolean` in `overview.js` — whether Overview
-  draws the List | Map switch. Overview draws the switch only when it is true. It returns
-  `MAP_SWITCH` from `store.js` when Part 7 added it (walkthrough 2 hid the map, spec 6.5), else
-  `true`.
+  exactly one module.
 
 Builder call: there is no browser in the tests, so "each stop's target exists" is checked in two
 halves: the anchor is drawn by that place's module, and the demo app answers with the data that
 makes it drawn. Task 3 walks the real page by hand.
+Builder call: the `shared` and `override` anchors sit on blocks, found with `data-focus`, so
+`map.js` stays free of the tour; the box anchors (`setup`, `gateway`) are set where the page makes
+the box.
 
 - [ ] **Step 1: Write the failing tests** (`tests/unit/test_tour.py`)
 
@@ -298,7 +319,7 @@ from tests.unit.test_demo_mode import POST, demo_page
 
 JS = Path(__file__).parents[2] / "src/kitden/web/static/js"
 DRAWN_BY = {
-    "map": "overview.js", "affects": "details.js", "override": "library.js",
+    "setup": "overview.js", "shared": "library.js", "override": "gateway.js",
     "differences": "library.js", "add-missing": "library.js", "gateway": "gateway.js",
     "undo": "changes.js",
 }
@@ -332,32 +353,43 @@ def test_each_stop_is_lit_by_the_one_module_that_draws_its_place():
         assert [name for name, text in modules.items() if anchor in text] == [module], stop
 
 
+def overrides(page, project: str) -> list[dict]:
+    view = page.get("/api/gateway-view", params={"project": project} if project else {}).json()
+    return [r for rows in view["groups"].values() for r in rows if r["override"]]
+
+
 def test_every_stop_finds_its_place_on_the_medium_demo(tmp_path):
     stops = {s["id"]: s for s in tour_stops()}
     with demo_page(tmp_path / "demo") as page:
         at = {i: project_for(page, s.get("project", "")) for i, s in stops.items()}
-        kind, name = stops["map"]["sel"].split(":", 1)
-        items = page.get("/api/setup-map").json()["items"]
-        assert any((i["kind"], i["name"]) == (kind, name) for i in items)
-        kind, name = stops["affects"]["sel"].split(":", 1)
-        defs = page.get("/api/explain", params={"name": name, "kind": kind}).json()["definitions"]
-        assert any(set(d.get("affects", {}).get("clients", [])) == {"codex", "cursor"} for d in defs)
-        override = stops["override"]
-        rows = page.get("/api/library", params={"kind": override["kind"],
-                                                "project": at["override"]}).json()["rows"]
-        assert any(c.get("origin") == "override"
-                   for r in rows if r["name"] == "docs" for c in r["cells"].values())
+        # setup: three clients, and atlas has rules of its own for the projects line
+        found = [c for c in page.get("/api/clients").json() if c["status"] == "found"]
+        assert len(found) == 3
+        own = {Path(p["path"]).name: p["own_rules"] for p in page.get("/api/projects").json()}
+        assert own["atlas"] > 0 and page.get("/api/overview").status_code == 200
+        # shared: Codex and Cursor load code-review, Claude Code does not
+        shared = stops["shared"]
+        kind, name = shared["sel"].split(":", 1)
+        rows = page.get("/api/library", params={"kind": shared["kind"]}).json()["rows"]
+        skill = next(r for r in rows if (r["kind"], r["name"]) == (kind, name))
+        assert {c for c, cell in skill["cells"].items() if cell["state"] == "on"} == {"codex", "cursor"}
+        # override: Part 4's flag on atlas's own docs; All projects has none
+        assert [r["name"] for r in overrides(page, at["override"])] == ["docs"]
+        assert overrides(page, "") == []
+        # differences: api-style is read by Codex and Cursor in atlas, not by Claude Code
         diff = stops["differences"]
         rows = page.get("/api/library", params={"kind": diff["kind"], "show": diff["show"],
                                                 "project": at["differences"]}).json()["rows"]
-        assert "docs" in {r["name"] for r in rows}
+        assert "api-style" in {r["name"] for r in rows}
+        # gateway: Cursor's direct files, the parent's rule on write_file, the waiting tool
+        server, tool = stops["gateway"]["sel"].split(":", 1)[1].split("/", 1)
         view = page.get("/api/gateway-view", params={"project": at["gateway"]}).json()
         assert {s["name"] for s in view["gateways"][0]["servers"]} >= {"files", "tracker"}
-        assert any(r["name"] == "files" and "cursor" in r["columns"]
+        assert any(r["name"] == server and "cursor" in r["columns"]
                    for rows in view["groups"].values() for r in rows)
         files = page.get("/api/gateway/tools",
-                         params={"server": "files", "project": at["gateway"]}).json()["tools"]
-        assert {t["name"]: (t["origin"], t["origin_from"]) for t in files}["write_file"] == (
+                         params={"server": server, "project": at["gateway"]}).json()["tools"]
+        assert {t["name"]: (t["origin"], t["origin_from"]) for t in files}[tool] == (
             "parent", "atlas")
         tracker = page.get("/api/gateway/tools",
                            params={"server": "tracker", "project": at["gateway"]}).json()["tools"]
@@ -369,9 +401,11 @@ def test_add_missing_in_atlas_applies_and_undoes_inside_the_demo(tmp_path):
     with demo_page(tmp_path / "demo") as page:
         before = snapshot(page.home)
         body = {"action": "project.align", "targets": [],
-                "params": {"project": project_for(page, stop["project"]), "chosen": None}}
+                "params": {"project": project_for(page, stop["project"]), "what": "kit",
+                           "chosen": None}}
         change = page.post("/api/changes/preview", json=body, headers=POST).json()
         assert any(e["chosen"] for e in change["align"]["will_add"])
+        assert {e["kind"] for e in change["align"]["will_add"]} <= {"plugin", "skill"}
         applied = page.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
         assert applied["state"] == "verified"
         assert snapshot(page.home) != before
@@ -388,17 +422,16 @@ def test_add_missing_in_atlas_applies_and_undoes_inside_the_demo(tmp_path):
   needs a command the demo runner refuses ("Not part of the demo."), extend Part 1's `DemoRunner`
   for that command (it edits only the sample's files) with a test in
   `tests/unit/test_demo_stand_ins.py`, in this task.
-- [ ] **Step 3: Implement** the seven anchors and `mapOffered()`. `changes.js` anchors only the
-  first verified row's Undo; `library.js` only the first override cell it draws. No other change
-  to how anything looks.
+- [ ] **Step 3: Implement** the seven anchors. `changes.js` anchors only the first verified
+  row's Undo; `gateway.js` only the first tagged outside block;
+  `library.js` only the selected item's block. No other change to how anything looks.
 - [ ] **Step 4: Run** `uv run pytest tests/unit/test_tour.py tests/unit/test_page_words.py -v` and
   `node --test tests/frontend/*.test.mjs` → PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/kitden/web/static/js/overview.js src/kitden/web/static/js/details.js \
-  src/kitden/web/static/js/library.js src/kitden/web/static/js/gateway.js \
-  src/kitden/web/static/js/changes.js tests/unit/test_tour.py
+git add src/kitden/web/static/js/overview.js src/kitden/web/static/js/library.js \
+  src/kitden/web/static/js/gateway.js src/kitden/web/static/js/changes.js tests/unit/test_tour.py
 git commit -m "Tour: each page marks the place its stop lights"
 ```
 
@@ -417,17 +450,16 @@ git commit -m "Tour: each page marks the place its stop lights"
 - Test: `tests/unit/test_page_words.py`
 
 **Interfaces:**
-- Consumes: Task 1 helpers; Task 2 `mapOffered()`; `data`, `busy`, `loadShared` (still exported
-  after Part 7, which only stopped `start()` from calling it), `render` (`store.js`); Part 6
-  `setOverviewMode(mode)` (`store.js`); `closePanel`, `isPanelOpen`
+- Consumes: Task 1 helpers; `data`, `busy`, `loadShared` (still exported after Part 7, which
+  only stopped `start()` from calling it), `render` (`store.js`); `closePanel`, `isPanelOpen`
   (`panel.js`); `reducedMotion` (`motion.js`); `el` (`dom.js`).
 - Produces: `export async function startTour(opener: HTMLElement | null): Promise<void>` — the
   only entry Task 4 calls.
 
 Behaviour (the parts a node test cannot reach; keep each short):
-- Start: if `data.projects` is null, `await loadShared()`. Stops are
-  `tourStops(STOPS, { map: mapOffered() })`. One box per page: a second press focuses the open
-  box's Next. When `!tourFits(stops, data.projects)` the box shows `NOT_FIT` and Close only.
+- Start: if `data.projects` is null, `await loadShared()`. Stops are `STOPS`. One box per page: a
+  second press focuses the open box's Next. When `!tourFits(STOPS, data.projects)` the box shows
+  `NOT_FIT` and Close only.
 - The box: `section#tour.tour`, `role="dialog"`, `aria-modal="false"`,
   `aria-labelledby="tour-title"`, appended to `body` (outside `#main`, so redraws keep it):
   `p.kicker` `tourTitle(at, count)`, `h2#tour-title` the stop's `name`, `p.tour-text` with
@@ -435,10 +467,11 @@ Behaviour (the parts a node test cannot reach; keep each short):
   primary`, "Done" on the last; Done closes), Close (`btn ghost small`, `aria-label` "Close the
   tour").
 - Moving to a stop: while `busy.change` nothing moves (the review already says it is writing).
-  Close an open Details with `closePanel({ focus: false })`. A stop with `needs: "map"` first
-  calls `setOverviewMode("map")`. Then set `location.hash = stopAddress(stop, data.projects)` when
-  it differs (the page follows the address as for Back; each stop is a history entry and a real
-  link), else call `render()`. Update the title, heading and text at once.
+  Close an open Details with `closePanel({ focus: false })`. Then set `location.hash =
+  stopAddress(stop, data.projects)` when it differs (the page follows the address as for Back;
+  each stop is a history entry and a real link; its `view=` opens the map or the List, and its
+  `sel=` opens that item's Details once, as any link does), else call `render()`. Update the
+  title, heading and text at once.
 - Finding the place: while the box is open one `MutationObserver` on `body` (`childList`,
   `subtree`) looks for `[data-tour="<id>"]` after each change. When found: add `tour-on`; on the
   first find for this stop also `tour-glow` and `scrollIntoView(scrollFor(reducedMotion.matches))`.
@@ -459,15 +492,17 @@ Behaviour (the parts a node test cannot reach; keep each short):
   box-shadow: var(--shadow-pop); border-radius: 10px; padding: 12px 14px; display: grid; gap:
   8px }`; under 900 px `top: 8px; bottom: auto; left: 16px; right: 16px; width: auto`.
   `.tour-on { outline: 2px solid var(--focus); outline-offset: 3px }`,
-  `.map td.tour-on { outline-offset: -2px }` (a cell's outline stays inside the scrolling table),
+  `.map.tour-on, .treegrid .tour-on { outline-offset: -2px }` (the outline of a map box or a List
+  row stays inside its scrolling box),
   `.tour-glow { animation: arrive 1200ms var(--ease-out) 1 }` (the existing keyframe). The
   reduced-motion rule at the end of the file already stops the glow.
 
 Builder call: a stop moves by writing its address, not with `goTo`, because a stop may also change
-the project, and the address is the one path that carries view, project and selection together.
+the project, and the address is the one path that carries view, Map or List, project, tab and
+selection together.
 Builder call: the box sits above the drawer (21) and the scrim (20) and below the toast (30); at
-the bottom left it never covers the drawer's Apply, and under 900 px it sits at the top for the
-same reason.
+the bottom left it never covers the Details column (beside the page from 1024 px) or the drawer's
+Apply, and under 900 px it sits at the top for the same reason.
 Builder call: the light is the focus-colour outline plus the `.arrive` glow once per stop; a
 redraw (live rescan) re-lights without the glow, so nothing moves while idle.
 Builder call: a stop waits 1.5 s for its place (Details read `/api/explain` first); after that
@@ -506,9 +541,9 @@ Only in `kitden demo`. `tour.js` holds the seven stops and their words.
 
 | Part | Look |
 | --- | --- |
-| Box | A raised card at the bottom left of the page, left of the drawer (at the top under 900 px), above the drawer and below the toast: "Tour · 2 of 7", the stop's name, one sentence, then Back, Next ("Done" on the last stop) and Close. |
+| Box | A raised card at the bottom left of the page, left of Details and the drawer (at the top under 900 px), above the drawer and below the toast: "Tour · 2 of 7", the stop's name, one sentence, then Back, Next ("Done" on the last stop) and Close. |
 | Light | The stop's place gets a 2 px outline in the focus colour and the `.arrive` glow once. A redraw keeps the outline without the glow; reduced motion keeps only the outline. |
-| Moving | Each stop opens its place by its address, so Back and a copied link work; an open Details closes first; the Map stop switches the Overview to Map. A stop waits up to 1.5 s for its place; without it the sentence stays, unlit (Undo says what to do first). Nothing moves while a change is written. |
+| Moving | Each stop opens its place by its address, so Back and a copied link work; the address also picks Map or List; an open Details closes first. A stop waits up to 1.5 s for its place; without it the sentence stays, unlit (Undo says what to do first). Nothing moves while a change is written. |
 | Keys | Arrow keys move, Enter presses, Esc closes the tour (inside the box); Tab reaches the box while Details is open. Focus goes to Next at each stop and back to Tour at the end. |
 | Never | Fetches, stores or presses anything, or runs outside the demo. Apply and Undo stay the person's. |
 ```
@@ -518,9 +553,11 @@ Only in `kitden demo`. `tour.js` holds the seven stops and their words.
   the printed link in the built-in browser (until Task 4, start the tour from the console:
   `import("/static/js/tour.js").then((t) => t.startTour(null))`). Walk all seven stops in light
   and dark (`resize_window` with `colorScheme`), at 1280 × 800 and at 700 × 800; the first stop
-  shows the map with `code-review` selected; press Add missing… and Apply, then Undo at the last
-  stop; walk once by keyboard only, with Details open at
-  the Shared skill stop (Tab reaches Next; Esc in the box closes the tour and leaves Details).
+  lights "Your setup"; the second shows the Library map with `code-review` selected and both
+  clients lit; the third shows the `docs` block in `atlas` with its tag; press Add missing
+  plugins and skills… and Apply at the fifth, then Undo at the last stop; walk once by keyboard
+  only, with Details open at the Shared skill stop (it docks beside the map at 1280 px and is the
+  drawer at 700 px; Tab reaches Next; Esc in the box closes the tour and leaves Details).
   Note each stop's result in the task report.
 - [ ] **Step 6: Run all checks**, then commit
 
@@ -598,7 +635,7 @@ def test_demo_names_the_tour_only_for_the_samples_it_fits(monkeypatch, capsys, s
 - [ ] **Step 3: Implement** as the Interfaces say. In `docs/design.md`'s Tour table add first:
   `| Button | A small plain "Tour" after the Demo flag; `tour.js` loads the first time it is pressed. On the small sample the box says the tour needs the medium or large one. |`
 - [ ] **Step 4: Run** the same commands → PASS. Then once by hand: `uv run kitden demo` prints the
-  line; Tour opens the box at the Map stop; `uv run kitden demo --size small` → Tour says it needs
+  line; Tour opens the box at the Your setup stop; `uv run kitden demo --size small` → Tour says it needs
   the medium or large sample.
 - [ ] **Step 5: Run all checks**, then commit
 
@@ -627,11 +664,11 @@ The recipe, written into `docs/development.md` as a short intro, five rules and 
 
 | Picture | Tour stop | Scene |
 | --- | --- | --- |
-| `overview.jpg` | Map | All projects; Overview shows the map with `code-review` selected; tour closed |
-| `tour.jpg` | Shared skill | All projects; Library, Skills; `code-review`'s Details open; the tour box at this stop |
-| `library.jpg` | Differences | `atlas`; Library, MCP servers, Differences; no Details |
-| `review.jpg` | Add missing | `atlas`; the Add missing review open before Apply; file changes folded |
-| `gateway.jpg` | Gateway | `atlas/web`; Gateway; `files`' Details open, its tools showing "From atlas" |
+| `overview.jpg` | Your setup | All projects; Overview with its cards and the "Your setup" tree; tour closed |
+| `tour.jpg` | Shared skill | All projects; Library, Plugins and skills, Map; `code-review` selected, Codex and Cursor lit, its Details beside the map; the tour box at this stop |
+| `library.jpg` | Differences | `atlas`; Library, Plugins and skills, List, Differences; no Details |
+| `review.jpg` | Add missing | `atlas`; Library List; the Add missing plugins and skills… review open in the Details column before Apply; file changes folded |
+| `gateway.jpg` | Gateway | `atlas/web`; Gateway map; `write_file` selected, its Details beside the map showing "From atlas"; Cursor's amber line in view |
 
 Rules: run `uv run kitden demo --size medium --no-browser` and open the printed link in the
 built-in browser (never a real home: the sample is synthetic, so no personal path can show);
@@ -705,12 +742,12 @@ steps (3–6, page words in bold), one Mermaid block with no colours (no `style`
 
 | Heading | Steps cover (and the README sentences that move here) | Diagram (`flowchart LR`) | Tour stop |
 | --- | --- | --- | --- |
-| `## I want to see what loads where` | Overview → Map, select an item; Library tabs, a client column, a project at the top; Details' Why and Affects; "Remove from <client>…" with Undo; Unknown and Needs review | shared folder `~/.agents/skills` → `code-review` → Codex, Cursor | Map, Shared skill |
-| `## I want to find what differs in a project` | pick `atlas`; Differences; "· project override" and "· this project"; project exceptions under All projects | All projects `docs` ⇢ overridden in `atlas` by `atlas/.mcp.json docs` | Project override, Differences |
-| `## I want to add what is missing` | "Add missing…" and its four groups; "+ Add", "+ Add skills", "+ Add the plugin"; "Add to this project…" / "Add for all projects…"; '"+ Add" on an MCP server copies its entry to another client' and the `${VAR}` rule | Review → Apply (backup) → Checked → Undo | Add missing |
-| `## I want to keep a server behind the gateway` | "Set up in <client>…"; "Move into the Kitden gateway…"; secrets go to the Keychain; "Put back in <client>…"; "Remove from the Kitden gateway…"; Direct entries and the servers that stay direct, and why | Claude Code, Codex → Kitden gateway → `files`; Cursor -- Direct --> `files` | Gateway |
-| `## I want to block a tool for one project` | pick the project; Gateway → the server → its tool switch; the origin words ("This project", "From atlas", "All projects", "On by default", "New · waits"); "Use <parent>"; strict mode; "In a folder Kitden does not know as a project, the All projects switches apply."; a call already running is not stopped | All projects → `atlas` (`write_file` off) → `atlas/web` (follows `atlas`) | Gateway |
-| `## I want to undo a change` | Changes → Undo; what Undo puts back and its limits (a plugin's saved options); backups kept 30 days, the newest 100 always; what to restart | Change → Backup; Undo → Backup → files as before | Undo |
+| `## I want to see what loads where` | Overview → "Your setup"; Library → Plugins and skills → Map: select an item to light the clients that load it; the List shows the same by keyboard; a project in the project menu at the top; Details' Facts and Why; "Remove from <client>…" with Undo; Unknown and Needs review; the Instructions tab | shared folder `~/.agents/skills` → `code-review` → Codex, Cursor | Your setup, Shared skill |
+| `## I want to find what differs in a project` | pick `atlas` in the project menu (the scope bar counts the rules that differ); Library List → Differences; the tag "This project" and the group "Only this project"; the Gateway in `atlas`, where `docs` carries the tag; under All projects the menu counts each project's own rules | All projects `docs` ⇢ overridden in `atlas` by `atlas/.mcp.json docs` | Project override, Differences |
+| `## I want to add what is missing` | "Add missing plugins and skills…" in the Library List and "Add missing servers…" on the Gateway List, and the four groups; "+ Add", "+ Add skills", "+ Add the plugin"; the add panel beside Plugins and skills (search the marketplaces, click to preview on the map); "Add to this project…" / "Add for all projects…"; '"+ Add" on an MCP server copies its entry to another client' and the `${VAR}` rule | Review → Apply (backup) → Checked → Undo | Add missing |
+| `## I want to keep a server behind the gateway` | "Set up in <client>…"; "Move into the Kitden gateway…", "Move in…" in the List, or drag an outside server onto the servers and read the preview ("Show changes"); secrets go to the Keychain; "Put back in <client>…"; "Remove from the Kitden gateway…"; the group "Outside the gateway" and the servers that stay direct, and why | Claude Code, Codex → Kitden gateway → `files`; Cursor -- Direct --> `files` | Gateway |
+| `## I want to block a tool for one project` | pick the project; Gateway → unfold the server → select the tool; in the tool's Details, "Turn off in one project…" with its own project choice, which starts at the picked project; the origin words ("This project", "From atlas", "All projects", "On by default", "New · waits"); "Use the shared rule…" or "Use atlas's rule…"; strict mode; "In a folder Kitden does not know as a project, the All projects switches apply."; a call already running is not stopped | All projects → `atlas` (`write_file` off) → `atlas/web` (follows `atlas`) | Gateway |
+| `## I want to undo a change` | Changes → the day's row → Undo, or Undo in the toast; "See it on the map"; what Undo puts back and its limits (a plugin's saved options); backups kept 30 days, the newest 100 always; what to restart | Change → Backup; Undo → Backup → files as before | Undo |
 
 - [ ] **Step 1: Write the failing test**
 
@@ -723,7 +760,7 @@ GUIDE_SECTIONS = (
     "I want to block a tool for one project",
     "I want to undo a change",
 )
-STOP_NAMES = "Map|Shared skill|Project override|Differences|Add missing|Gateway|Undo"
+STOP_NAMES = "Your setup|Shared skill|Project override|Differences|Add missing|Gateway|Undo"
 
 
 def test_the_guide_has_six_tasks_each_with_steps_a_diagram_and_a_tour_stop():
@@ -767,22 +804,24 @@ git commit -m "Docs: a guide of I want to… tasks"
 Outline (simple English, under 160 lines, each picture a `<picture>` pair as today with the
 `https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/` base):
 1. Logo, title, the tagline "See and safely change what your AI coding agents load.", one line
-   naming the three questions; picture `overview` (alt: "Kitden Overview: the setup map with the
-   skill code-review selected, its shared folder and the two clients that read it").
+   naming the three questions; picture `overview` (alt: "Kitden Overview: cards for what needs
+   attention, and the Your setup tree joining the clients to the Kitden gateway and the Library").
 2. "Try it on a sample setup first, with nothing on your computer read or changed:" then
    `uvx kitden demo`, then "Press **Tour** for a short walk through it: seven stops, a real
    Apply and an Undo, all on the sample." Then "Your own setup: `uvx kitden`."
 3. `## Three questions, one page`, with three sections:
-   - `### What does each agent load, and from where?` — the map, the Library, All projects and
-     "this project", Details' Why and Affects; picture `tour` (alt: "Details of code-review: Codex
-     and Cursor read it from one folder, with the tour box at the Shared skill stop").
-   - `### What differs between my agents in a project?` — Differences, project override, Needs
-     review, Add missing in four groups; picture `library` (alt: "Library in atlas showing only the
-     differences, with the two docs servers from different sources").
-   - `### Which tools go through the gateway, and which go around it?` — the route diagram, Direct,
-     tools per project with their origin, strict mode, "a tool you turn off is refused at once";
-     picture `gateway` (alt: "Gateway in atlas/web: files' tools, one off from its parent folder
-     atlas, and Cursor's direct line").
+   - `### What does each agent load, and from where?` — the Library as a map and a List, All
+     projects and the tag "This project", Details beside the page; picture `tour` (alt: "The
+     Library map with code-review selected: Codex and Cursor light up, and its Details sit beside
+     the map, with the tour box at the Shared skill stop").
+   - `### What differs between my agents in a project?` — Differences, the tag "This project",
+     Needs review, Add missing in four groups; picture `library` (alt: "Library List in atlas
+     showing only the rows where the clients differ").
+   - `### Which tools go through the gateway, and which go around it?` — the Gateway as a map and
+     a List, "Outside the gateway" with its amber lines, tools per project with their origin,
+     strict mode, "a tool you turn off is refused at once"; picture `gateway` (alt: "Gateway map
+     in atlas/web: write_file selected, off by the rule of its parent folder atlas, and Cursor's
+     amber line around the gateway").
 4. `## Simple, fast and local` — three bold lines: **Simple and visual.** every change opens a
    review (what, which clients and projects), Apply keeps a backup and checks it, Undo puts it
    back; picture `review` (alt: "The Add missing review for atlas: what each client lacks, with
@@ -853,17 +892,35 @@ git commit -m "README: three questions, pictures from the demo, and the tour"
 **Interfaces:**
 - Consumes: `ROADMAP.md` "### Not released yet"; `git log --oneline v0.2.0..HEAD`; the earlier
   design `docs/superpowers/specs/2026-10-21-review-follow-up-design.md` Parts 1–6 (5.3 OAuth did
-  not ship; Part 7 Linux and Windows moved to Later); this spec's Parts 1–8 and each part's report.
+  not ship; Part 7 Linux and Windows moved to Later); the 2026-10-22 spec's Parts 1–3, 7 and 8,
+  the map spec's Parts 4–6 (the Gateway, Library, Instructions, Overview and Changes pages), and
+  each part's report.
 
 The format of `docs/releases/v0.2.0.md`: one opening paragraph that starts "Kitden 0.3.0", then
 `## New`, `## Better`, `## Fixed`, each a list of **bold lead.** plus one or two plain
-sentences, for users, no internal names or part numbers. New holds at least: the Library; the
-setup map; `kitden demo` and its Tour; Differences and project exceptions; Add missing; adding,
-removing and putting back items; the Kitden gateway with tools per project, strict mode, reads
-and writes, call counts; secrets in the Keychain; the Instructions tab and tool counts. Better
-holds the start numbers, versions in the background, All projects and the origin words, Unknown
-and Needs review, Details in five parts and reviews that lead with the outcome, the write
-boundary, the README and guide. Fixed holds Part 7's fixes and the fixes in the log.
+sentences, for users, no internal names or part numbers. New holds at least:
+- `kitden demo` and its Tour;
+- the Gateway as a map and a List (clients, the Kitden gateway, servers, tools), with the search
+  that finds on the page, and dragging a server in from "Outside the gateway" to see its preview
+  first;
+- tools per project, strict mode, reads and writes, call counts, and "Turn off in one project…"
+  in a tool's Details;
+- the Library as a map and a List by source, with what each plugin holds, Differences and the tag
+  "This project";
+- Add missing in four groups; adding plugins, skills and gateway servers from the marketplaces on
+  this computer, previewed on the map; turning a skill or plugin off for all projects or in one
+  project where the client has a switch; removing and putting back items;
+- secrets in the Keychain;
+- the Instructions tab as a tree with Claude Code's `@` imports, and tool counts;
+- Overview with one card per item and "Your setup"; the Changes timeline with Details and "See
+  it on the map".
+
+Better holds the start numbers, versions in the background, All projects and the words "On",
+"This project" and "Only this project", Unknown and Needs review, Details beside the page and in
+five parts, reviews that lead with the outcome, the project menu with each project's own rules,
+the write boundary, the README and guide. Fixed holds Part 7's fixes, the reads that were wrong
+(Claude Code's local settings and skill overrides, what an installed plugin holds) and the fixes
+in the log.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -873,8 +930,9 @@ def test_the_notes_for_0_3_0_are_ready():
     assert notes.startswith("Kitden 0.3.0 ")
     assert [line for line in notes.splitlines() if line.startswith("## ")] == [
         "## New", "## Better", "## Fixed"]
-    for words in ("kitden demo", "Tour", "map", "Differences", "Add missing", "Kitden gateway",
-                  "Strict", "Keychain", "Instructions", "All projects", "Undo"):
+    for words in ("kitden demo", "Tour", "map", "List", "Differences", "Add missing",
+                  "Kitden gateway", "Strict", "Keychain", "Instructions", "Your setup",
+                  "This project", "See it on the map", "All projects", "Undo"):
         assert words in notes, words
     assert "DEMO_SECRET" not in notes and "SENTINEL" not in notes and "Part " not in notes
 ```
@@ -902,16 +960,17 @@ git commit -m "Release notes for 0.3.0, ready for the owner"
 - `ROADMAP.md` only by the rule in Step 4.
 
 **Interfaces:**
-- Consumes: Part 1's `docs/research/walkthrough-script-1.md` (the seven tasks); the design words
-  Parts 2, 5 and 6 wrote.
+- Consumes: Part 6's `docs/research/walkthrough-script-2.md` (the seven tasks on the new pages,
+  the same seven as Part 1's script 1); the design words Parts 2 and 4–6 wrote.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```python
 def test_design_names_the_map_the_origin_words_the_states_and_the_tour():
     design = (ROOT / "docs/design.md").read_text()
-    for words in ("List | Map", "this project", "project override", "Unknown", "Needs review",
-                  "On by default", "New · waits", "Direct", "### Tour", "Tour light"):
+    for words in ("Map | List", "This project", "Only this project", "Unknown", "Needs review",
+                  "On by default", "New · waits", "Outside the gateway", "Differences",
+                  "Your setup", "### Tour", "Tour light"):
         assert words in design, words
 
 
@@ -925,21 +984,23 @@ def test_the_release_check_walks_the_demo():
 - [ ] **Step 3: Write the docs.**
   - `docs/development.md`, "Check before a release", a last subsection: "Before every release,
     walk the demo (about 15 minutes, no real client):" then numbered steps continuing the list:
-    run `uv run kitden demo --size medium`; "Take the tour to its end": press Add missing… and
-    Apply at its stop, then Undo at the last stop; then the seven tasks of the walkthrough script, one line
+    run `uv run kitden demo --size medium`; "Take the tour to its end": press Add missing plugins
+    and skills… and Apply at its stop, then Undo at the last stop; then the seven tasks of
+    walkthrough script 2, one line
     each (why Codex and Cursor both have `code-review`; what differs in `atlas`; add the missing
     skill to `atlas` only; the two `docs` servers; turn off `read_file` of `files` for `atlas`; why
     Cursor reaches `files` around the gateway; Undo); once by keyboard only, once in a window
     under 900 px, once in the dark theme. Anything that goes wrong is a bug before the release.
   - `docs/design.md`: add one line for each word the first test finds missing, in the section it
-    belongs to (the map with Part 6's Overview text; the origin words in the Gateway table; the
-    states in the Library table). Change nothing that is there.
+    belongs to ("Your setup" in the Overview paragraph; the tags and "Outside the gateway" in the
+    Gateway tables; "Differences" and the states in the Library table). Change nothing that is
+    there.
 - [ ] **Step 4: Roadmap.** Run `git status --short ROADMAP.md`. While it shows `M` from the
   owner's edit, do not touch it; put these lines in the part's report. Once the owner has
   committed it, add them under "### Not released yet" and move Part 8's line out of "## Planned":
-  - **Try it with a tour:** in `kitden demo`, Tour walks seven stops: the map, a shared skill, a
-    project override, Differences, Add missing with a real Apply, the gateway's routes and rules,
-    and Undo.
+  - **Try it with a tour:** in `kitden demo`, Tour walks seven stops: Your setup, a shared skill
+    on the Library map, a project override, Differences, Add missing with a real Apply, the
+    Gateway map's routes and rules, and Undo.
   - **Docs you can follow:** the README answers three questions with pictures from the sample; a
     guide of "I want to…" tasks, each with a small diagram and its tour stop; notes for 0.3.0.
 - [ ] **Step 5: Run all checks**: `uv run pytest -q && uv run ruff check . && uv run ruff format
@@ -963,10 +1024,13 @@ git commit -m "Docs: a demo walk before every release"
   recipe and pictures (Task 5). 8.5 notes (Task 8). 8.6 design.md: the tour (Tasks 3, 4), the
   map, origin words and states checked and filled (Task 9); development.md demo walk (Task 9).
   Done: the stops' places on the demo app (Task 2), docs words (Tasks 5–9), notes file (Task 8).
-- **Walkthrough 2 switch.** `mapOffered()` (Task 2) feeds `tourStops` (Tasks 1, 3).
+- **Map pages.** Each stop's address carries the new hash fields (`view=map|list`, `show=diff`,
+  `sel=tool:…`) and its anchor is a block, a box or a button that Parts 4–6 draw (Task 2),
+  including the tag "This project" that Part 4 gives the outside `docs` block in `atlas`.
 - **Names.** `data-tour="<stop id>"` equals each `STOPS[i].id`; `startTour`, `tourButton`,
-  `mapOffered`, `STOPS`, `NOT_FIT`, `FIND_MS` are the same in every task. Consumed names keep
-  their parts' spelling (`hashFor`, `parseSel`, `show=diff`, `will_add`, `origin_from`,
-  `/api/setup-map`, `/api/about`, `demoTag`, `_demo_run`, `demo_page`).
-- **Not here.** The map, origin words and states themselves (Parts 2, 5, 6 write their
+  `STOPS`, `NOT_FIT`, `FIND_MS` are the same in every task. Consumed names keep their parts'
+  spelling (`hashFor`, `parseSel`, `view=map|list`, `show=diff`, `sel=tool:…`, `will_add`,
+  `origin_from`, `data-focus="block:<id>"`, `data-focus="add:missing"`, `/api/overview`,
+  `/api/about`, `demoTag`, `_demo_run`, `demo_page`).
+- **Not here.** The map pages, origin words and states themselves (Parts 2 and 4–6 write their
   design.md lines with their page changes); the version bump and tag (the owner).
