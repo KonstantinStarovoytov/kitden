@@ -20,7 +20,7 @@ import os
 import re
 from pathlib import Path
 
-from kitden.changes.actions import _skill_readers
+from kitden.changes.actions import folder_readers
 from kitden.changes.copy_folder import CopyRefusedError, digest, list_files
 from kitden.clients.base import ClientAdapter
 from kitden.model import ClientStatus, Enabled, ItemKind, Scope
@@ -355,7 +355,7 @@ def _on_disk(adapters, found: set[str], project: str, folder_name: str) -> dict[
         target = Path(project) / adapter.skills_folder / folder_name
         if not (target.exists() or target.is_symlink()):
             continue
-        for reader in _skill_readers(owner, adapters, found):
+        for reader in folder_readers(owner, adapters, found):
             if reader == "codex" and not adapters["codex"].trusts(project):
                 continue
             # Codex's folder, .agents/skills, is Cursor's own too.

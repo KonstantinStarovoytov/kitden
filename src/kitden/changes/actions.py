@@ -139,7 +139,7 @@ def install_steps(
     return steps
 
 
-def _skill_readers(client: str, adapters: dict[str, ClientAdapter], found: set[str]) -> list[str]:
+def folder_readers(client: str, adapters: dict[str, ClientAdapter], found: set[str]) -> list[str]:
     """The clients that read the skills folder of `client`, in the user's home or a project.
 
     Claude Code reads .claude/skills; Codex and Cursor both read .agents/skills; Cursor alone
@@ -164,7 +164,7 @@ def skill_steps(
     same folders inside `project`.
 
     One copy in .agents/skills serves Codex and Cursor; a copy for Claude Code reaches Cursor
-    too when Cursor reads Claude Code's folder (_skill_readers).
+    too when Cursor reads Claude Code's folder (folder_readers).
     """
     if not clients:
         raise ValueError("Choose at least one client")
@@ -181,7 +181,7 @@ def skill_steps(
     steps = []
     for client in ("claude_code", "codex"):
         if client in chosen:
-            readers = _skill_readers(client, adapters, found)
+            readers = folder_readers(client, adapters, found)
             steps.append(adapters[client].skill_copy_step(folder, readers, project))
     if "cursor" in chosen and not any("cursor" in s.copy.readers for s in steps if s.copy):
         steps.append(adapters["cursor"].skill_copy_step(folder, ["cursor"], project))

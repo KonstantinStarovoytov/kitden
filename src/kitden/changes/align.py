@@ -7,8 +7,8 @@ from pathlib import Path
 
 from kitden.changes.actions import (
     CLIENT_WORDS,
-    _skill_readers,
     add_server_steps,
+    folder_readers,
     install_steps,
 )
 from kitden.clients.base import SETUP_NAME, ClientAdapter, is_direct_entry
@@ -81,7 +81,7 @@ def _build(
     folder = Path(item.source.path or "").parent
     if not read_skill(folder)["self_contained"]:
         raise ValueError("needs the rest of its plugin")
-    readers = _skill_readers(client, adapters, found)
+    readers = folder_readers(client, adapters, found)
     return [adapters[client].skill_copy_step(folder, readers, into)]
 
 
@@ -176,7 +176,7 @@ def align_steps(
                         for k, n in has[client]
                         if k is kind and n != key[1] and n.lower() == key[1].lower()
                     )
-                    # A skill copy reaches every client that reads its folder (_skill_readers);
+                    # A skill copy reaches every client that reads its folder (folder_readers);
                     # one that already has the skill would load it twice.
                     readers = [r for s in steps if s.copy is not None for r in s.copy.readers]
                     twice = [r for r in readers if r != client and key[:2] in has[r]]

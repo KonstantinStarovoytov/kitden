@@ -6,6 +6,7 @@ import pytest
 
 from kitden.changes.actions import (
     connect_steps,
+    folder_readers,
     plugin_skill_steps,
     plugin_skills_left_out,
     remove_steps,
@@ -221,3 +222,9 @@ def test_add_skills_refuses_when_nothing_is_left(home):
     adapters, rows = _skill_rows(home)
     with pytest.raises(ValueError, match="^Claude Code has every skill in toolbox it can use$"):
         plugin_skill_steps(adapters, PLUGIN, rows, "claude_code", ALL_FOUND)
+
+
+def test_folder_readers_is_shared_with_the_views():
+    # The Library and Add missing ask the same question; Cursor reads Codex's .agents/skills.
+    assert folder_readers("codex", {"cursor": object()}, {"codex", "cursor"}) == ["codex", "cursor"]
+    assert folder_readers("cursor", {}, {"cursor"}) == ["cursor"]
