@@ -169,13 +169,18 @@ word "global settings" stays only inside Details' technical evidence.
 
 **2.2 Origin in one short label**, only where it changes a decision (concept §4): a cell in a
 project says "· this project" when the item comes from the project, "· project override" when a
-project item wins over an all-projects one (from `load_map`'s winners), and nothing extra when
-it simply comes from all projects. My call: "From global" is not shown on every cell, to keep
-the table quiet.
+project item wins over an all-projects one (from `load_map`'s winners), and "· all projects"
+when it comes from all projects. Walkthrough 1 (F3): with only the project words shown, the owner
+could not tell what is Atlas's own, so in a project view every cell says where it applies. With
+All projects picked, cells carry no scope word (it would be the same on every row).
 
-**2.3 States.** The cell words stay "Loads" and "Off" (my call: shorter, already learned, and
-the page already says "Based on saved settings"; the owner's walkthrough after Part 6 can change
-it to "Available"). Three states become distinct:
+**2.2a One fact per slot** (walkthrough 1, F5). The cell's quiet word says only where the item
+applies. How the client gets it ("through Codex's folder", "from a plugin", "through the Kitden
+gateway") goes to the hover text and to Details, never into the same slot.
+
+**2.3 States.** The cell words are "Available" and "Off" (walkthrough 1: the owner chose
+"Available"; the page keeps "Based on saved settings"). "Available" also replaces "Has it" on the
+Instructions tab, so one word means one thing everywhere. Three states become distinct:
 
 - **Unknown** when the source was not read (a file that failed to parse, a client whose scan
   failed): its cells say Unknown with the reason, never "—" or "+ Add". A failed client keeps its
@@ -189,7 +194,14 @@ it to "Available"). Three states become distinct:
 - **—** stays for "not there, after a good read", with "+ Add" where an add is possible.
 
 No "+ Add" is shown where the preview would refuse it (the unreadable file case, the same-name
-case, a cell whose target client cannot take it).
+case, a cell whose target client cannot take it). The other way round too (walkthrough 1, F6):
+a cell Kitden can fill always shows "+ Add", and Details offers the same add; an item that exists
+only in this project adds into this project.
+
+**2.3a Notes that do not overstate** (walkthrough 1, F7, F8). Overview's notes never call two
+entries from different sources "set up in more than one client": that is "Same name, another
+source". Every note row shows the clients it is about. Notes are grouped by item: one row per
+name, with its notes inside.
 
 **2.4 Every add names its scope before the click.** With All projects picked, the add's review
 title and lede say "for all projects". A removed or unknown project is never silently replaced
@@ -212,10 +224,12 @@ Concept §8 and the §9 states.
 
 1. Kind, name, and its state here (today's lede).
 2. Why: the deciding source and rule, in one or two plain lines (built from `explain.why()`,
-   `shadowed`, origin), then the per-client sections.
+   `shadowed`, origin), then the per-client sections. When one folder serves several clients,
+   the Why says so in those words ("One folder, read by Codex and Cursor"): walkthrough 1, F1.
 3. **Affects:** before any action, the clients and projects the lead action would change, for
    example "Changes Codex and Cursor (Cursor reads Codex's folder). All projects." (from the same
-   reader logic the review uses: `_readers`, `CURSOR_IMPORT`).
+   reader logic the review uses: `_readers`, `CURSOR_IMPORT`). A Remove button that reaches more
+   than one client names them all ("Remove from Codex and Cursor…"): walkthrough 1, F1.
 4. The lead action and the rest under More (as today).
 5. **Technical details**, folded: paths, commands, file keys, the instruction preview.
 
@@ -254,7 +268,9 @@ project override or a project-only item with the same name) shows a quiet "2 pro
 exceptions" link that opens Details listing them (concept §4). Changing an all-projects item
 never removes a project override; the review says so when one exists.
 
-**4.3 Add missing in four groups** (concept §6.3), in one review grouped by client:
+**4.3 Add missing in four groups** (concept §6.3), in one review grouped by client. It follows
+the tab (walkthrough 1, F4): on Skills it reads "Add missing skills…" and lists only skills; the
+review says which kind it covers.
 
 1. **Will add**: the checkboxes, each with its target scope and the reason it is missing
    ("Claude Code has it; Codex does not").
@@ -290,6 +306,12 @@ includes the server switch (a tool of a server that is off shows off, with that 
 "Use <parent>" (remove this project's rule) is offered whenever the project has its own rule,
 even one equal to the inherited value. My call: the switch words stay On and Off; the origin
 word carries the "why".
+
+**5.3a The tools panel names its own scope** (walkthrough 1, F10). The owner turned a tool off
+for all projects while meaning one project: the switches followed the top picker unseen. The
+tools panel gets its own scope choice in place, "For: All projects ▾" (all projects and each
+known project), starting from the top picker's project; changing it redraws the switches for
+that scope. Every tool review's title starts with the scope ("All projects: read_file off").
 
 **5.4 Reviews that do not overstate.**
 

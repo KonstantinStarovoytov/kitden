@@ -125,6 +125,25 @@ The inputs most likely to bite a person, each pinned by a test in the part that 
 5. Two same-name items from different sources: never shown as equal, never added over each
    other, never counted as a duplicate unless the findings say so (Parts 2, 4, 6).
 
+## Walkthrough 1 rulings (binding for Parts 2–5)
+
+Results: `docs/research/walkthrough-2026-10-23.md`. The spec is updated (2.2, 2.2a, 2.3, 2.3a,
+3.1, 4.3, 5.3a). Each part's preflight checks its plan against these and rules on the gaps; where
+a part plan still says otherwise, these win.
+
+- Part 2: cell words "Available" and "Off" (STATE_WORDS; "Has it" on Instructions also becomes
+  "Available"); in a project view every cell carries its scope word ("all projects", "this
+  project", "project override"); the route ("through Codex's folder", "from a plugin", "through the
+  Kitden gateway") leaves the cell's word slot for the hover text and Details (F3, F5); a cell
+  Kitden can fill always shows "+ Add", Details offers the same add, a project-only item adds into
+  the project (F6); Overview notes: no "set up in more than one client" for different sources,
+  every note row shows its clients, notes grouped by item (F7, F8).
+- Part 3: the Why names a shared folder in words; a Remove that reaches more than one client names
+  them all (F1); "Manage tools" from a Library row of a held server (F9).
+- Part 4: Add missing follows the tab ("Add missing skills…", only that kind) (F4).
+- Part 5: the tools panel has its own scope choice "For: <scope> ▾"; tool reviews' titles start
+  with the scope; tool switch words stay "On" and "Off" (F10).
+
 ## Walkthroughs
 
 Part 1's last task and Part 6's last task each write `docs/research/walkthrough-script-<n>.md`:
