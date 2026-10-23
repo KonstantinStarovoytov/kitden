@@ -3,9 +3,11 @@ lede (spec 3.3).
 
 "Other projects are unchanged." is said only when the steps guarantee it: every step is in one
 known project's files, or is a Kitden gateway rule for that project, no other known project
-lies inside that folder or around it, and no step runs a client's own command. A gateway rule
-passes down to a child project, a client working in a parent folder may read a child's files
-too, and Kitden checks the file a client command writes, not all the command does.
+lies inside that folder or around it, and no step runs a client's plugin command. A gateway
+rule passes down to a child project, and a client working in a parent folder may read a
+child's files too. A plugin command (`claude plugin install`, `codex plugin remove`) also works
+on the client's plugin cache, which every project shares, while Kitden checks only the settings
+file; an MCP command (`claude mcp remove -s local`) is judged by the file it edits.
 """
 
 import os
@@ -16,7 +18,7 @@ from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, PLUGIN_REMOVE
 from kitden.model import Change, Item, Scope, Step
 from kitden.views.affects import affects
 from kitden.views.effective import effective_view
-from kitden.views.words import KEYCHAIN_UNDO, REMOVE_NOTE
+from kitden.views.words import KEYCHAIN_UNDO, KEYCHAIN_UNDO_MANY, REMOVE_NOTE
 
 
 def _real(path: str) -> Path:
@@ -71,12 +73,19 @@ def _alone(project: str, projects: list[str]) -> bool:
 
 def _touched(step: Step) -> list[str]:
     """The clients a step changes: the readers of a copied or removed folder, every client a
-    plugin step reaches, else its own client."""
+    plugin step reaches, else (also with no reader listed) its own client."""
     if step.copy is not None:
-        return step.copy.readers
-    if step.removal is not None:
-        return step.removal.readers
-    return step.reaches or [step.client]
+        readers = step.copy.readers
+    elif step.removal is not None:
+        readers = step.removal.readers
+    else:
+        readers = step.reaches
+    return readers or [step.client]
+
+
+def _plugin_command(step: Step) -> bool:
+    """`claude plugin …` or `codex plugin …`: it works on the plugin cache too."""
+    return bool(step.command) and len(step.command) > 1 and step.command[1] == "plugin"
 
 
 def _wins_in(change: Change, inventory, picked: str) -> bool:
@@ -110,7 +119,7 @@ def change_target(
     places = {step_project(s, projects) for s in change.steps}
     if len(places) == 1 and None not in places:
         [project] = places
-        alone = _alone(project, projects) and not any(s.command for s in change.steps)
+        alone = _alone(project, projects) and not any(_plugin_command(s) for s in change.steps)
         return {"scope": "project", "project": project, "others_unchanged": alone}
     scoped = any(
         s.scope in (Scope.PROJECT, Scope.LOCAL) or _rule_project(s) is not None
@@ -135,7 +144,7 @@ def undo_note(change: Change) -> str | None:
         notes.append(REMOVE_NOTE)
     kept = [f"{i.server}/{i.key}" for s in change.steps for i in s.keychain if i.existed]
     if kept:
-        notes.append(KEYCHAIN_UNDO.format(_join(kept)))
+        notes.append((KEYCHAIN_UNDO if len(kept) == 1 else KEYCHAIN_UNDO_MANY).format(_join(kept)))
     return " ".join(notes) or None
 
 

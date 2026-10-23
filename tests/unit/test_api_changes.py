@@ -202,7 +202,8 @@ def test_a_preview_names_its_target(client):
     }
     assert answer["undo_note"] is None
     client.post(f"/api/changes/{answer['id']}/cancel", headers=POST)
-    # Claude Code's own command removes local-db: Kitden checks the file, not all it does.
+    # Claude Code's `mcp remove -s local` edits website's entry in ~/.claude.json, and only it:
+    # an MCP command is judged by the file it edits.
     servers = client.get("/api/items?client=claude_code&kind=mcp_server").json()
     local = next(i for i in servers if i["name"] == "local-db")
     body = {"action": "mcp.remove_direct", "targets": [{"item": local["id"]}], "params": {}}
@@ -210,7 +211,7 @@ def test_a_preview_names_its_target(client):
     assert answer["target"] == {
         "scope": "project",
         "project": str(client.home / "work/website"),
-        "others_unchanged": False,
+        "others_unchanged": True,
     }
     client.post(f"/api/changes/{answer['id']}/cancel", headers=POST)
     # A user entry goes for all projects.
@@ -222,6 +223,14 @@ def test_a_preview_names_its_target(client):
     body = {"action": "mcp.remove_direct", "targets": [{"item": neon["id"]}], "params": {}}
     answer = client.post("/api/changes/preview", json=body, headers=POST).json()
     assert answer["target"] == {"scope": "all", "project": None, "others_unchanged": False}
+
+
+def test_the_page_and_the_log_say_the_same_clients_and_places():
+    from kitden.changes import engine
+    from kitden.web import app
+
+    # One function each, so a preview, an answer and the Changes page cannot drift apart.
+    assert (app._readers, app._step_path) == (engine._readers, engine._step_path)
 
 
 def test_a_hand_edit_between_preview_and_apply_stops_the_change(client):

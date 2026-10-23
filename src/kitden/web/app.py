@@ -64,6 +64,8 @@ from kitden.changes.engine import (
     Engine,
     NothingToChangeError,
     Runner,
+    _readers,
+    _step_path,
     writable_roots,
 )
 from kitden.clients import version_cache
@@ -175,23 +177,6 @@ async def event_lines(
             yield f"event: {name}\ndata: {json.dumps(data)}\n\n"
         except TimeoutError:
             yield ": heartbeat\n\n"
-
-
-def _step_path(step) -> str | None:
-    if step.edit:
-        return step.edit.path
-    if step.gateway:
-        return step.gateway.url
-    if step.removal:
-        return step.removal.path
-    return step.copy.target if step.copy else None
-
-
-def _readers(step) -> list[str] | None:
-    """The clients that read a copied or removed skill folder, or that a plugin step reaches."""
-    if step.copy:
-        return step.copy.readers
-    return step.removal.readers if step.removal else step.reaches
 
 
 def _step_diff(step) -> str:

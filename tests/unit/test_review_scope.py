@@ -19,7 +19,7 @@ from kitden.model import (
 from kitden.views import after
 from kitden.views.inventory import Inventory
 from kitden.views.review import change_target, step_project, undo_note
-from kitden.views.words import KEYCHAIN_UNDO, REMOVE_NOTE
+from kitden.views.words import KEYCHAIN_UNDO, KEYCHAIN_UNDO_MANY, REMOVE_NOTE
 
 
 def edit(path, scope=Scope.PROJECT, key=("mcpServers", "db"), client="cursor"):
@@ -126,10 +126,10 @@ def test_removing_a_claude_code_plugin_names_the_undo_limit(tmp_path):
     assert not hasattr(after, "REMOVE_NOTE")
 
 
-def test_a_client_command_never_promises_other_projects_are_unchanged(tmp_path):
+def test_a_plugin_command_never_promises_other_projects_are_unchanged(tmp_path):
     web = tmp_path / "web"
-    # `claude plugin uninstall -s project` runs in the project; Kitden cannot vouch for more
-    # than the file it checks.
+    # `claude plugin uninstall -s project` runs in the project and keeps plugins in a cache
+    # every project shares; Kitden checks the settings file, not all the command does.
     uninstall = edit(web / ".claude/settings.json", client="claude_code")
     uninstall.command = ["claude", "plugin", "uninstall", "x@a", "-s", "project"]
     assert target([uninstall], [web]) == {
@@ -137,6 +137,13 @@ def test_a_client_command_never_promises_other_projects_are_unchanged(tmp_path):
         "project": str(web),
         "others_unchanged": False,
     }
+    codex = edit(web / ".codex/config.toml", client="codex")
+    codex.command = ["codex", "plugin", "remove", "x@a"]
+    assert target([codex], [web])["others_unchanged"] is False
+    # An MCP command is judged by the file it edits, as a plain edit is.
+    local = edit(tmp_path / ".claude.json", Scope.LOCAL, ("projects", str(web), "mcpServers", "db"))
+    local.command = ["claude", "mcp", "remove", "-s", "local", "db"]
+    assert target([local], [web])["others_unchanged"] is True
 
 
 def server(client, scope, project=None, path="/h/.mcp.json"):
@@ -190,8 +197,20 @@ def test_a_keychain_item_that_was_there_keeps_its_new_value_after_undo(tmp_path)
     ]
     change = Change(action="gateway.keychain", steps=[step])
     assert undo_note(change) == KEYCHAIN_UNDO.format("github/TOKEN")
-    assert undo_note(change) == "Undo leaves github/TOKEN in your Keychain with the new value."
+    assert undo_note(change) == "After Undo, github/TOKEN in your Keychain keeps its new value."
     step.keychain[1].existed = True
-    assert undo_note(change).startswith("Undo leaves github/TOKEN and github/URL in your Keychain")
+    assert undo_note(change) == KEYCHAIN_UNDO_MANY.format("github/TOKEN and github/URL")
+    assert undo_note(change) == (
+        "After Undo, github/TOKEN and github/URL in your Keychain keep their new values."
+    )
     step.keychain = [KeychainItem(server="github", key="TOKEN", existed=False)]
     assert undo_note(change) is None
+
+
+def test_a_folder_no_client_reads_is_still_its_own_clients_change(tmp_path):
+    web = str(tmp_path / "web")
+    removal = FolderRemoval(path=str(tmp_path / ".claude/skills/db"), readers=[])
+    removed = Step(client="claude_code", scope=Scope.USER, name="db", removal=removal)
+    change = Change(action="skill.remove", steps=[removed])
+    # No reader listed: the step's own client counts, and nothing overrides it in web.
+    assert change_target(change, [web], inventory(), web)["scope"] == "all"
