@@ -670,6 +670,29 @@ class Engine:
         finally:
             self._forget_secrets(change)  # the values are needed only until Apply ends
 
+    def stale_reason(self, change_id: str) -> str | None:
+        """Why Apply would stop as stale now, or None. Reads the targets and changes nothing;
+        only a previewed change is checked."""
+        change = self.changes[change_id]
+        if change.state is not ChangeState.PREVIEWED:
+            return None
+        current = {s.edit.path: _read(s.edit.path) for s in change.steps if s.edit is not None}
+        return self._first_stale(change, current)
+
+    def _first_stale(self, change: Change, current: dict[str, bytes | None]) -> str | None:
+        """The first file, folder to copy or folder to remove that changed since the preview.
+        `current` holds each file's bytes as read now."""
+        for step in change.steps:
+            if step.edit is not None and (reason := self._stale(step, current[step.edit.path])):
+                return reason
+        for step in change.steps:
+            if step.copy is not None and (reason := self._stale_copy(step)):
+                return reason
+        for step in change.steps:
+            if step.removal is not None and (reason := self._stale_removal(step)):
+                return reason
+        return None
+
     def _apply(self, change: Change) -> Change:
         if change.state is not ChangeState.PREVIEWED:
             change.move_to(ChangeState.APPLYING)  # raises: only a previewed change applies
@@ -678,15 +701,12 @@ class Engine:
         copy_steps = [s for s in change.steps if s.copy is not None]
         removal_steps = [s for s in change.steps if s.removal is not None]
         current = {step.edit.path: _read(step.edit.path) for step in file_steps}
-        reasons = [self._stale(s, current[s.edit.path]) for s in file_steps]
-        reasons += [self._stale_copy(s) for s in copy_steps]
-        reasons += [self._stale_removal(s) for s in removal_steps]
-        for reason in reasons:
-            if reason:
-                change.move_to(ChangeState.STALE)
-                change.error = reason
-                self._log(change)
-                return change
+        reason = self._first_stale(change, current)
+        if reason:
+            change.move_to(ChangeState.STALE)
+            change.error = reason
+            self._log(change)
+            return change
 
         saved = self.store.backup(change.id, current)
         for step in file_steps:

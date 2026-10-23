@@ -909,6 +909,13 @@ def test_cancel_and_a_refused_preview_go_back_to_details():
     assert 'change.state = "cancelled"' in cancel
 
 
+def test_a_review_says_when_its_settings_changed():
+    # After a rescan the page asks the server about the open review (review.test.mjs).
+    assert '"kitden:rescanned"' in script("app.js") and '"kitden:rescanned"' in script("panel.js")
+    review = script("review.js")
+    assert "Settings changed since this preview." in review and '"Preview again"' in review
+
+
 def test_a_project_no_longer_on_the_list_is_said_not_swapped():
     assert 'export const GONE_PROJECT = "This project is no longer on the list.";' in script(
         "parts.js"

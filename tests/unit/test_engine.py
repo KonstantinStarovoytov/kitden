@@ -148,6 +148,26 @@ def test_a_file_changed_after_preview_blocks_apply(tmp_path, config):
     assert config.read_text() == CONFIG + "# edited by hand\n"
 
 
+def test_stale_reason_sees_a_file_changed_after_preview(tmp_path, config):
+    engine = make_engine(tmp_path)
+    change = engine.preview("gateway.connect", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)])
+    config.write_text(CONFIG + "# edited by hand\n")
+    assert "changed since preview" in engine.stale_reason(change.id)
+    assert change.state is ChangeState.PREVIEWED  # only looked
+    assert engine.store.entries() == []  # nothing logged, nothing written
+    assert config.read_text() == CONFIG + "# edited by hand\n"
+
+
+def test_an_untouched_preview_is_not_stale(tmp_path, config):
+    engine = make_engine(tmp_path)
+    change = engine.preview("gateway.connect", [toml_step(config, ("mcp_servers", "gw"), GATEWAY)])
+    assert engine.stale_reason(change.id) is None
+    # Only a previewed change is checked: a cancelled one is not stale, whatever its file says.
+    engine.cancel(change.id)
+    config.write_text(CONFIG + "# edited by hand\n")
+    assert engine.stale_reason(change.id) is None
+
+
 def test_a_failed_verify_restores_the_backup(tmp_path, claude_json):
     original = claude_json.read_bytes()
     engine = make_engine(tmp_path, run=FakeClaude(claude_json, wrong_value=True))
@@ -798,6 +818,18 @@ def test_a_folder_changed_since_preview_is_stale(tmp_path):
     folder.rmdir()
     assert engine.apply(gone.id).state is ChangeState.STALE
     assert gone.error == f"{folder} is gone since preview; review the change again"
+
+
+def test_stale_reason_sees_a_folder_changed_after_preview(tmp_path):
+    folder = tidy_folder(tmp_path)
+    engine = make_engine(tmp_path)
+    change = engine.preview("skill.remove", [removal_step(folder)])
+    assert engine.stale_reason(change.id) is None
+    (folder / "notes.md").write_text("new\n")
+    assert engine.stale_reason(change.id) == (
+        f"{folder} changed since preview; review the change again"
+    )
+    assert change.state is ChangeState.PREVIEWED and (folder / "notes.md").exists()
 
 
 def test_undo_leaves_a_folder_that_came_back(tmp_path):

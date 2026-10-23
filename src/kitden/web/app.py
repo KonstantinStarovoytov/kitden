@@ -1191,12 +1191,18 @@ def create_app(
         return JSONResponse(change_dict(change), status_code=STATUS.get(change.state, 200))
 
     async def change_view(request: Request) -> JSONResponse:
-        """One change as it stands now, so the page can check an Apply whose answer was lost."""
+        """One change as it stands now, so the page can check an Apply whose answer was lost.
+        `stale`: a previewed change whose files changed since, which Apply would stop; an open
+        review asks after each rescan. A file Kitden cannot read now counts as changed."""
         if engine is None:
             return _error("Changes are not available.", 404)
         change_id = request.path_params["change_id"]
         if change_id in engine.changes:
-            return JSONResponse(change_dict(engine.changes[change_id]))
+            try:
+                stale = await asyncio.to_thread(engine.stale_reason, change_id) is not None
+            except OSError:
+                stale = True
+            return JSONResponse({**change_dict(engine.changes[change_id]), "stale": stale})
         logged = next((e for e in engine.store.entries() if e.get("id") == change_id), None)
         if logged is None:
             return _error("Unknown change.", 404)

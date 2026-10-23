@@ -3,9 +3,10 @@
 // review.js. The names other pages imported from here before the split still come from here.
 import { postJson } from "./api.js";
 import { openItem } from "./details.js";
-import { $, $$, button, el } from "./dom.js";
+import { $, $$, button, el, reportError } from "./dom.js";
 import { onOpenItem } from "./library.js";
 import { finishTransition } from "./motion.js";
+import { checkStale } from "./review.js";
 import { arrival, busy, setState, state } from "./store.js";
 import { reloadTools } from "./tools.js";
 
@@ -216,6 +217,8 @@ export function initPanel() {
   onOpenItem((row, tr, how) => openItem(row, { instant: how === "keyboard" }));
   // A refresh of the gateway's tool lists ended: an open tool list reads them again.
   document.addEventListener("kitden:tools", reloadTools);
+  // A rescan ended: an open review checks that its files did not change since the preview.
+  document.addEventListener("kitden:rescanned", () => checkStale().catch(reportError));
   $("#scrim").addEventListener("click", () => { if (!busy.change) closePanel(); });
   document.addEventListener("keydown", trapFocus);
   document.addEventListener("keydown", (event) => {

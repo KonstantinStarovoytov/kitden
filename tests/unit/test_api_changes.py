@@ -262,15 +262,20 @@ def test_removing_a_direct_entry_and_undo(client):
     assert _files(client.home) == original
 
 
-def _apply_remove_direct(client):
-    """Preview and apply removing Codex's user-level `neon` entry. Returns the change id."""
+def _preview_remove_direct(client):
+    """Preview removing Codex's user-level `neon` entry. Returns the change."""
     neon = next(
         i
         for i in client.get("/api/items?client=codex&kind=mcp_server").json()
         if i["name"] == "neon" and i["scope"] == "user"
     )
     body = {"action": "mcp.remove_direct", "targets": [{"item": neon["id"]}], "params": {}}
-    change = client.post("/api/changes/preview", json=body, headers=POST).json()
+    return client.post("/api/changes/preview", json=body, headers=POST).json()
+
+
+def _apply_remove_direct(client):
+    """Preview and apply removing Codex's user-level `neon` entry. Returns the change id."""
+    change = _preview_remove_direct(client)
     client.post(f"/api/changes/{change['id']}/apply", headers=POST)
     return change["id"]
 
@@ -280,6 +285,26 @@ def test_a_change_can_be_read_back_by_id(client):
     answer = client.get(f"/api/changes/{change_id}")
     assert answer.status_code == 200
     assert answer.json()["id"] == change_id and answer.json()["state"] == "verified"
+    assert answer.json()["stale"] is False  # only a previewed change is checked
+
+
+def test_a_change_says_it_is_stale_once_its_file_changes(client):
+    change = _preview_remove_direct(client)
+    assert client.get(f"/api/changes/{change['id']}").json()["stale"] is False
+    config = client.home / ".codex/config.toml"
+    before = config.read_text()
+    config.write_text(before + "\n# edited by hand\n")
+    answer = client.get(f"/api/changes/{change['id']}").json()
+    assert answer["stale"] is True and answer["state"] == "previewed"  # only looked
+    assert config.read_text() == before + "\n# edited by hand\n"
+    # A file Kitden can no longer read is not the one the preview read either.
+    config.write_text(before)
+    assert client.get(f"/api/changes/{change['id']}").json()["stale"] is False
+    config.chmod(0)
+    try:
+        assert client.get(f"/api/changes/{change['id']}").json()["stale"] is True
+    finally:
+        config.chmod(0o600)
 
 
 def test_the_changes_log_keeps_each_steps_restart_note(client):

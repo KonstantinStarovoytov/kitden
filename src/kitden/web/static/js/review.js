@@ -509,6 +509,41 @@ async function applyChange(change, { apply, cancel, label, body }) {
   await showApplied(after, apply, label, previewBody, back);
 }
 
+// After a rescan, an open review asks whether its files changed since the preview. Only a
+// previewed change with an id (Add missing with nothing chosen has none), and never while a
+// change is written: that rescan is the change's own.
+export function staleCheckWanted(current, busy) {
+  const change = current && current.type === "review" ? current.change : null;
+  return Boolean(change && change.id && change.state === "previewed" && !busy.change);
+}
+
+const STALE_NOTE = "Settings changed since this preview.";
+
+// The server compares the files with the preview's own hashes. When they changed and the same
+// review is still open, the warning comes first and stays until the next action, and Apply
+// gives way to "Preview again", which drops this preview and asks for a new one. Focus moves
+// only when it was on Apply.
+export async function checkStale() {
+  const current = panelState.current;
+  if (!staleCheckWanted(current, busy)) return;
+  const read = await readChange(current.change.id);
+  if (!read || !read.stale || panelState.current !== current || !staleCheckWanted(current, busy)) return;
+  const apply = $("#drawer .apply");
+  const body = $("#drawer .body");
+  if (!apply || !body) return;
+  const warning = callout(STALE_NOTE);
+  warning.setAttribute("role", "alert");
+  body.prepend(warning);
+  const { previewBody, note, back } = current;
+  const again = button("Preview again", () => {
+    cancelPreview();
+    return review(previewBody, { note, back });
+  }, "btn primary");
+  const focused = document.activeElement === apply;
+  apply.replaceWith(again);
+  if (focused) again.focus();
+}
+
 // The server said `verified`: the button turns green while the page reloads, then the panel
 // leaves at once and the toast offers Undo. From a tool switch, its Details comes back instead,
 // with the switch flipped, and the page behind shows the new state.

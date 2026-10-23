@@ -5,7 +5,8 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; review.js must load there too.
 delete globalThis.navigator;
-const { PLACE_IN_TITLE, changeWords, reviewLede, targetWords } = await import('../../src/kitden/web/static/js/review.js');
+const { PLACE_IN_TITLE, changeWords, checkStale, reviewLede, staleCheckWanted, targetWords } = await import('../../src/kitden/web/static/js/review.js');
+const { panelState } = await import('../../src/kitden/web/static/js/panel.js');
 
 const target = (scope, project = null, others = false) => ({ scope, project, others_unchanged: others });
 const remove = { action: 'mcp.remove_direct', steps: [{ client: 'codex', name: 'neon' }] };
@@ -66,4 +67,63 @@ test('the lede promises only the Undo it can keep', () => {
   assert.equal(reviewLede(remove, ''), 'Nothing is written until you press Apply. A backup is kept.');
   // In one project, but another known project is inside it or around it: no promise.
   assert.equal(reviewLede({ ...remove, target: target('project', '/a/web', false) }, 'p1'), 'Nothing is written until you press Apply. A backup is kept.');
+});
+
+test('only an open, previewed review is checked, never while a change is written', () => {
+  const review = { type: 'review', change: { id: 'c1', state: 'previewed' } };
+  assert.equal(staleCheckWanted(review, { change: false }), true);
+  assert.equal(staleCheckWanted(review, { change: true }), false);
+  assert.equal(staleCheckWanted({ type: 'review', change: { id: 'c1', state: 'verified' } }, { change: false }), false);
+  assert.equal(staleCheckWanted({ type: 'review', change: { state: 'previewed' } }, { change: false }), false); // Add missing with nothing chosen
+  assert.equal(staleCheckWanted({ type: 'item' }, { change: false }), false);
+  assert.equal(staleCheckWanted(null, { change: false }), false);
+});
+
+test('settings changed since the preview: the callout comes first and Apply gives way to Preview again', async () => {
+  const node = (tag) => ({
+    tag, className: '', textContent: '', children: [], attributes: {}, dataset: {}, listeners: {},
+    append(...nodes) { this.children.push(...nodes); },
+    prepend(...nodes) { this.children.unshift(...nodes); },
+    setAttribute(name, value) { this.attributes[name] = value; },
+    addEventListener(type, listener) { this.listeners[type] = listener; },
+    replaceWith(other) { this.replacedBy = other; },
+    focus() { globalThis.document.activeElement = this; },
+  });
+  const apply = node('button');
+  const body = node('div');
+  const drawn = { '#drawer .apply': apply, '#drawer .body': body };
+  globalThis.document = { createElement: node, querySelector: (selector) => drawn[selector] || null, activeElement: apply };
+  const asked = [];
+  let answer = { id: 'c1', state: 'previewed', stale: true };
+  let meanwhile = () => {};
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => { asked.push(url); meanwhile(); return { ok: true, json: async () => answer }; };
+  try {
+    const review = { type: 'review', change: { id: 'c1', state: 'previewed' }, previewBody: { action: 'mcp.remove_direct' }, note: null, back: null };
+    // Not changed: nothing moves.
+    answer = { ...answer, stale: false };
+    panelState.current = review;
+    await checkStale();
+    assert.deepEqual([asked, body.children.length, apply.replacedBy], [['/api/changes/c1'], 0, undefined]);
+    // Changed: the warning first, read out at once; focus follows from Apply to Preview again.
+    answer = { ...answer, stale: true };
+    await checkStale();
+    const [warning] = body.children;
+    assert.equal(warning.attributes.role, 'alert');
+    assert.equal(warning.children[1].textContent, 'Settings changed since this preview.');
+    assert.equal(apply.replacedBy.textContent, 'Preview again');
+    assert.equal(apply.replacedBy.className, 'btn primary');
+    assert.equal(globalThis.document.activeElement, apply.replacedBy);
+    // Another review opened while the server answered: the old answer changes nothing.
+    const later = node('button');
+    drawn['#drawer .apply'] = later;
+    body.children = [];
+    meanwhile = () => { panelState.current = { ...review }; };
+    await checkStale();
+    assert.deepEqual([body.children.length, later.replacedBy], [0, undefined]);
+  } finally {
+    panelState.current = null;
+    delete globalThis.document;
+    globalThis.fetch = realFetch;
+  }
 });

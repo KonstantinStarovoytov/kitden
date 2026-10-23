@@ -234,8 +234,11 @@ function listen() {
   // The clients' versions were read in the background, also after a failure: the Clients card
   // reads them again.
   events.addEventListener("versions", () => document.dispatchEvent(new CustomEvent("kitden:versions")));
+  // An open review asks whether its files changed (review.js checkStale), also while someone
+  // types: only the page's redraw waits.
   events.addEventListener("rescan_finished", () => {
     $("#topbar").classList.remove("scanning");
+    document.dispatchEvent(new CustomEvent("kitden:rescanned"));
     liveRefresh();
   });
   onIdle(() => setTimeout(catchUp, 800));
