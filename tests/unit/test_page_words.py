@@ -933,3 +933,7 @@ def test_an_issue_card_without_a_button_keeps_its_words_in_the_wide_column():
     for selector in (".issue h3", ".issue p"):
         rule = re.search(rf"^{re.escape(selector)} \{{([^}}]*)\}}", CSS, re.MULTILINE)
         assert rule and "grid-column: 1;" in rule.group(1), selector
+
+
+def test_a_client_kitden_could_not_read_says_so_under_its_name():
+    assert "column.note" in script("library.js")

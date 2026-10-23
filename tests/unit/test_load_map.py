@@ -201,6 +201,7 @@ def test_raw_names_are_returned_unchanged(home):
         "where",
         "origin",
         "route",
+        "reason",
         "items",
         "count",
     }

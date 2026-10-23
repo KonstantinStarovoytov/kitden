@@ -4,10 +4,10 @@ Rows group items by kind and name. A plugin is one row per marketplace ("figma@a
 "figma@b" are two rows named "figma"); an instruction file per category (a command and an agent
 named "review" are two rows); other kinds group by name.
 Each cell says what that client does with the item in the chosen project: has it available,
-has it but off, routes it through the gateway, or does not know. In a project a cell also says
-where it applies, and every cell keeps how the client gets the item (its route) for the hover
-text. The Claude Desktop Code tab has no column of its own: its extra items show in the Claude
-Code column, with the route "from the Desktop app".
+has it but off, routes it through the gateway, or does not know (a client Kitden could not read
+says why). In a project a cell also says where it applies, and every cell keeps how the client
+gets the item (its route) for the hover text. The Claude Desktop Code tab has no column of its
+own: its extra items show in the Claude Code column, with the route "from the Desktop app".
 """
 
 from dataclasses import dataclass, field
@@ -24,7 +24,7 @@ from kitden.model import (
 )
 from kitden.views.effective import DESKTOP, effective_view, plugin_of
 from kitden.views.findings import base_name, bypass_kind, find_bypasses, find_findings
-from kitden.views.words import ORIGIN_WORDS, ROUTE_WORDS
+from kitden.views.words import CLIENT_UNREAD, ORIGIN_WORDS, ROUTE_WORDS
 
 COLUMNS = ("claude_code", "codex", "cursor")
 MARKS = {"claude_code": "CC", "codex": "CX", "cursor": "CU"}
@@ -37,6 +37,7 @@ class Cell:
     where: str | None = None  # in a project, ORIGIN_WORDS[origin]; with All projects, None
     origin: str | None = None  # None (all projects), "project" or "override"
     route: str | None = None  # how the client gets it, from ROUTE_WORDS; None when plain
+    reason: str | None = None  # why the state, when the page should say it (a client not read)
     items: list[str] = field(default_factory=list)
     count: int = 0
 
@@ -255,10 +256,11 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
 
     for row in rows.values():
         for column in COLUMNS:
-            if status.get(column) is not ClientStatus.FOUND:
+            read = status.get(column)
+            if read not in (ClientStatus.FOUND, ClientStatus.UNREADABLE):
                 row.cells[column] = Cell("missing")
                 continue
-            row.cells[column] = _cell(
+            cell = _cell(
                 column,
                 by_row_loaded.get((row.key, column), []),
                 by_row_present.get((row.key, column), []),
@@ -267,6 +269,10 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
                 plugins.get(column, {}),
                 project is not None,
             )
+            # A client Kitden could not read may have it: Unknown, never "—".
+            if read is ClientStatus.UNREADABLE and cell.state == "none":
+                cell = Cell("unk", reason=CLIENT_UNREAD.format(NAMES[column]))
+            row.cells[column] = cell
 
     item_rows = {
         item_id: row for row in rows.values() for c in row.cells.values() for item_id in c.items
@@ -306,6 +312,7 @@ def map_dict(inventory, rows: list[Row]) -> dict:
                         "where": cell.where,
                         "origin": cell.origin,
                         "route": cell.route,
+                        "reason": cell.reason,
                         "items": cell.items,
                         "count": cell.count,
                     }

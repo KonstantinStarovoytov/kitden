@@ -568,6 +568,8 @@ function buildTable(columns, rows, groups, morph) {
     const hide = hideButton(column, columns);
     if (hide) cap.append(hide);
     th.append(cap);
+    // A client Kitden could not read keeps its column and says so under its name.
+    if (column.note) th.append(el("div", "muted", column.note));
     headRow.append(th);
   }
   head.append(headRow);

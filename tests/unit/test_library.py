@@ -8,13 +8,18 @@ from pathlib import Path
 import pytest
 from starlette.testclient import TestClient
 
-from kitden.clients.cursor import REACTIVE_KEY
+from kitden.clients.claude_code import ClaudeCodeAdapter
+from kitden.clients.codex import CodexAdapter
+from kitden.clients.cursor import REACTIVE_KEY, CursorAdapter
+from kitden.demo import build_demo_home
 from kitden.model import Gateway
 from kitden.views.findings import find_findings, mark_gateways
 from kitden.views.inventory import build_inventory, default_adapters
 from kitden.views.library import library
+from kitden.views.load_map import load_map
 from kitden.web.app import create_app
 from tests.conftest import make_home, write_cursor_fixture_state
+from tests.unit.test_local_gateway_views import POST, page_for
 from tests.unit.test_skills_catalog import (
     PLUGIN,
     add_cursor_plugin,
@@ -133,8 +138,8 @@ def test_only_found_clients_are_columns(tmp_path):
     two = make_home(tmp_path / "two", "claude_code/2.1.283", "codex/0.159.2")
     answer = _library(two)
     assert answer["columns"] == [
-        {"id": "claude_code", "name": "Claude Code", "mark": "CC", "hidden": False},
-        {"id": "codex", "name": "Codex", "mark": "CX", "hidden": False},
+        {"id": "claude_code", "name": "Claude Code", "mark": "CC", "hidden": False, "note": None},
+        {"id": "codex", "name": "Codex", "mark": "CX", "hidden": False, "note": None},
     ]
     assert answer["rows"]
     assert all(list(r["cells"]) == ["claude_code", "codex"] for r in answer["rows"])
@@ -698,3 +703,89 @@ def test_a_command_and_an_agent_with_one_name_are_two_rows(home):
     rows = [r for r in _library(home, "instructions")["rows"] if r["name"] == "review"]
     assert sorted(r["category"] for r in rows) == ["agent", "command"]
     assert len({r["key"] for r in rows}) == 2
+
+
+# Unknown: what Kitden could not read ----------------------------------------------------------
+
+
+class _BrokenCodex(CodexAdapter):
+    def scan(self):
+        raise ValueError("a format Kitden does not know")
+
+
+def test_a_client_that_could_not_be_read_keeps_its_column_as_unknown(home):
+    inventory = build_inventory(
+        home, adapters=[ClaudeCodeAdapter(home), _BrokenCodex(home), CursorAdapter(home)]
+    )
+    rows = load_map(inventory, None)
+    assert {r.cells["codex"].state for r in rows} == {"unk"}
+    assert {r.cells["codex"].reason for r in rows} == {"Could not read Codex."}
+    adapters = {a.id: a for a in default_adapters(home)}
+    answer = library(inventory, adapters, None, gateway_registered=False, kind="mcp_server")
+    assert [(c["id"], c["note"]) for c in answer["columns"]] == [
+        ("claude_code", None),
+        ("codex", "Could not read"),
+        ("cursor", None),
+    ]
+    cells = [r["cells"]["codex"] for r in answer["rows"]]
+    assert cells and all(c["state"] == "unk" and c["add"] is None for c in cells)
+
+
+def test_no_add_goes_into_a_settings_file_that_could_not_be_read(home):
+    (home / ".cursor/mcp.json").write_text("{ not json")
+    answer = _library(home, "mcp_server")
+    github = _row(answer, "github")["cells"]
+    assert github["cursor"]["add"] is None  # its add writes into the broken file
+    assert github["cursor"]["reason"] == "Can't add while mcp.json can't be read."
+    assert github["codex"]["add"]["action"] == "mcp.add"  # Codex's own file reads well
+    assert "Could not read mcp.json; its items are not shown." in answer["notes"]
+
+
+def _preview_github_into(home, client):
+    with page_for(home) as page:
+        github = next(
+            i
+            for i in page.get("/api/items?kind=mcp_server").json()
+            if (i["client"], i["name"]) == ("claude_code", "github")
+        )
+        body = {
+            "action": "mcp.add",
+            "targets": [{"client": client}],
+            "params": {"item": github["id"]},
+        }
+        return page.post("/api/changes/preview", json=body, headers=POST)
+
+
+def test_a_preview_into_a_file_that_could_not_be_read_says_why(home):
+    (home / ".cursor/mcp.json").write_text("{ not json")
+    answer = _preview_github_into(home, "cursor")
+    assert (answer.status_code, answer.json()) == (
+        422,
+        {"detail": "Can't add while mcp.json can't be read."},
+    )
+
+
+def test_a_preview_into_a_broken_codex_config_is_refused_not_a_crash(home):
+    # Codex stays found; the file is a problem.
+    (home / ".codex/config.toml").write_text("not = [toml\n")
+    answer = _preview_github_into(home, "codex")
+    assert (answer.status_code, answer.json()) == (
+        422,
+        {"detail": "Can't add while config.toml can't be read."},
+    )
+
+
+def test_the_medium_sample_names_its_unreadable_file_above_the_table(tmp_path):
+    home = build_demo_home(tmp_path, "medium")  # Part 1: work/website/.cursor/mcp.json is cut short
+    inventory = build_inventory(home)
+    adapters = {a.id: a for a in default_adapters(home)}
+
+    def answer(project):
+        return library(inventory, adapters, project, gateway_registered=False, kind="mcp_server")
+
+    website = answer(str(home / "work/website"))
+    assert "Could not read mcp.json; its items are not shown." in website["notes"]
+    # Cursor's add of github writes into ~/.cursor/mcp.json, which reads well: it stays offered.
+    assert _row(website, "github")["cells"]["cursor"]["add"]["action"] == "mcp.add"
+    # The file belongs to website, so All projects and the other projects do not name it.
+    assert not any(n.startswith("Could not read mcp.json") for n in answer(None)["notes"])

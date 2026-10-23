@@ -5,7 +5,7 @@ import { kitdenClients, SETUP_NOTE } from "./gateway.js";
 import { loadLibraryFor, openSelectedOnRender } from "./library.js";
 import { entrance, fly } from "./motion.js";
 import { review, toast } from "./panel.js";
-import { banner, CLIENT_NAMES, flag, mark, skeleton, socket, staleNote, versionWords } from "./parts.js";
+import { banner, CLIENT_NAMES, flag, mark, skeleton, socket, STATE_WORDS, staleNote, versionWords } from "./parts.js";
 import { current, currentError, data, go, loadMap, projectPath, render, retry } from "./store.js";
 
 let notesOpen = false;
@@ -213,6 +213,15 @@ globalThis.document?.addEventListener("kitden:versions", async () => {
   if (same) same.focus({ preventScroll: true });
 });
 
+// A client's status, only when something is wrong: Kitden could not read it, it is not installed,
+// or Kitden has not tested its version. Null when all is well.
+export function clientStatus(client) {
+  if (client.status === "unreadable") return { state: "unk", word: STATE_WORDS.unread };
+  if (client.status !== "found") return { state: "missing" };
+  if (client.version && !client.tested) return { state: "unk", word: "Not tested" };
+  return null;
+}
+
 function clientsCard(clients) {
   const card = el("section", "card");
   card.dataset.part = "clients";
@@ -225,9 +234,8 @@ function clientsCard(clients) {
     info.append(el("div", "name", client.name), el("div", "meta", versionWords(client.version, data.progress, client.status === "found")));
     const tile = mark(client.id);
     row.append(tile, info);
-    // A status only when something is wrong: not installed, or a version Kitden has not tested.
-    if (client.status !== "found") row.append(socket({ state: "missing" }));
-    else if (client.version && !client.tested) row.append(socket({ state: "unk", word: "Not tested" }));
+    const status = clientStatus(client);
+    if (status) row.append(socket(status));
     if (client.status !== "found" || !columns.has(client.id)) {
       card.append(row);
       continue;

@@ -8,7 +8,15 @@ STATE_WORDS: dict[str, str] = {
     "gw": "Via gateway",
     "via": "Via Claude Code",
     "done": "Has its skills",
+    "unread": "Could not read",
 }
+
+# What Kitden could not read: a whole client, or one file on its first read. An add or a change
+# into such a file is refused, in words that follow the action.
+CLIENT_UNREAD = "Could not read {}."
+NOT_SHOWN = "Could not read {}; its items are not shown."
+NO_ADD_UNREAD = "Can't add while {} can't be read."
+CHANGE_UNREAD = "Can't change this while {} can't be read."
 
 # Socket state and word per action, as the Library shows them after the change. "Removed",
 # "Added", "Updated" and "Via the new gateway" say what the change did, not a state.

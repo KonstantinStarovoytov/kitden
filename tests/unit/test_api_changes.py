@@ -12,7 +12,7 @@ from kitden.changes.client_cli import CommandResult
 from kitden.gateways import data_dir
 from kitden.local_gateway.settings import SETTINGS_FILE
 from kitden.views.inventory import build_inventory
-from kitden.web.app import create_app
+from kitden.web.app import create_app, unread_refusal
 from tests.conftest import make_home, write_cursor_fixture_state
 from tests.unit.fake_metamcp import FakeMetaMcp
 
@@ -847,3 +847,12 @@ def test_gateway_rules_previews_one_change_with_several_steps(client):
     undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
     assert undone["state"] == "undone", undone
     assert path.read_bytes() == before
+
+
+def test_a_refusal_into_an_unreadable_file_follows_the_action():
+    assert unread_refusal("mcp.add", "/h/.cursor/mcp.json") == (
+        "Can't add while mcp.json can't be read."
+    )
+    assert unread_refusal("plugin.disable", "/h/.claude/settings.json") == (
+        "Can't change this while settings.json can't be read."
+    )

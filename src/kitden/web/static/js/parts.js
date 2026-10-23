@@ -8,6 +8,7 @@ export const ALL_PROJECTS = "All projects";
 export const STATE_WORDS = {
   on: "Available", off: "Off", over: "Overridden", unk: "Unknown", gw: "Via gateway",
   missing: "Not installed", none: "—", via: "Via Claude Code", done: "Has its skills",
+  unread: "Could not read",
 };
 // The first scan's line: what is still read, and how much of the work is done (0 to 1). Before
 // the page has its data it names the clients it reads; then the slow answers still checked.

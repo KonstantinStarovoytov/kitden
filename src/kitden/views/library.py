@@ -2,7 +2,8 @@
 
 Rows join the load map (what is on this computer) with the plugin and skill catalogs (what the
 marketplaces on this computer offer). Each cell already says the state, or the one action for
-that client, or why there is none. Columns are the clients found on this computer.
+that client, or why there is none. Columns are the clients found on this computer, and those
+Kitden could not read: their cells say Unknown and offer no add.
 """
 
 from collections.abc import Callable
@@ -22,7 +23,14 @@ from kitden.views.catalog import catalog, search
 from kitden.views.gateway_view import group_of
 from kitden.views.load_map import COLUMNS, MARKS, NAMES, Row, load_map
 from kitden.views.skills import skill_catalog
-from kitden.views.words import ORIGIN_WORDS, ROUTE_WORDS, STATE_WORDS
+from kitden.views.words import (
+    CLIENT_UNREAD,
+    NO_ADD_UNREAD,
+    NOT_SHOWN,
+    ORIGIN_WORDS,
+    ROUTE_WORDS,
+    STATE_WORDS,
+)
 
 KINDS = ("mcp_server", "plugin", "skill", "hook", "marketplace", "instructions")
 # Tabs with something to add; the others show only what is on this computer.
@@ -144,7 +152,9 @@ def _has(row: Row | None, client: str) -> bool:
 
 def _map_cell(row: Row, client: str) -> dict:
     cell = row.cells[client]
-    return _cell(cell.state, cell.where, cell.items, origin=cell.origin, route=cell.route)
+    return _cell(
+        cell.state, cell.where, cell.items, reason=cell.reason, origin=cell.origin, route=cell.route
+    )
 
 
 # Each builder gives (row, holders): holders are the found clients that have the item.
@@ -518,6 +528,84 @@ def _skill_rows(
     return out + _map_rows(extra, "skill", found)
 
 
+# What Kitden could not read -----------------------------------------------------------------
+
+
+def _unread_cells(rows: list[dict], map_rows: list[Row], columns: list[str], found: list[str]):
+    """Give each row a cell per client Kitden could not read: the load map row's cell when the
+    row has one, else Unknown. Never an add. Cells keep the column order."""
+    by_key = {r.key: r for r in map_rows}
+    unread = [c for c in columns if c not in found]
+    for row in rows:
+        known = by_key.get(row["key"])
+        for client in unread:
+            row["cells"][client] = (
+                _map_cell(known, client)
+                if known
+                else _cell("unk", reason=CLIENT_UNREAD.format(NAMES[client]))
+            )
+        row["cells"] = {c: row["cells"][c] for c in columns}
+
+
+def _read_notes(inventory, project: str | None) -> list[str]:
+    """One line per file Kitden could not read in this view: a file inside another known
+    project belongs to that project. A client not read at all has no line; its column says it."""
+    others = [Path(p.path) for p in inventory.projects if p.path != project]
+    lines: list[str] = []
+    for problem in inventory.problems:
+        if not problem.path:
+            continue
+        path = Path(problem.path)
+        line = NOT_SHOWN.format(path.name)
+        if line not in lines and not any(path.is_relative_to(f) for f in others):
+            lines.append(line)
+    return lines
+
+
+def _add_file(adapters, client: str, add: dict, project: str | None) -> str | None:
+    """The settings file an add's step edits, put in `project` (None: all projects). The client's
+    own step maker builds the step, which never runs. None for a skill copy (it writes only
+    folders), or when the client cannot make the step."""
+    adapter = adapters.get(client)
+    try:
+        if adapter is None:
+            return None
+        if add["action"] == MCP_ADD:
+            step = adapter.add_server_step("entry", {})  # the name does not change the file
+        elif add["action"] == PLUGIN_INSTALL:
+            step = adapter.plugin_install_step(add["plugin"], project)
+        else:
+            return None
+    except ValueError:
+        return None
+    return step.edit.path if step.edit else None
+
+
+def _hold_adds(rows: list[dict], adapters, broken: set[str], project: str | None) -> None:
+    """No add into a file Kitden could not read; adds into the client's other files stay. An
+    add that can go into this project or all projects is held only when both files are broken."""
+    if not broken:
+        return
+    files: dict[tuple, str | None] = {}  # one step per client, action and place
+
+    def file(client: str, add: dict, place: str | None) -> str | None:
+        key = (client, add["action"], place)
+        if key not in files:
+            files[key] = _add_file(adapters, client, add, place)
+        return files[key]
+
+    for row in rows:
+        for client, cell in row["cells"].items():
+            add = cell["add"]
+            if not add:
+                continue
+            places = [project, None] if project is not None and add["project_place"] else [None]
+            held = [f for f in (file(client, add, p) for p in places) if f in broken]
+            if len(held) == len(places):
+                cell["add"] = None
+                cell["reason"] = NO_ADD_UNREAD.format(Path(held[0]).name)
+
+
 # Filters -------------------------------------------------------------------------------------
 
 
@@ -627,6 +715,7 @@ def library(
     """
     status = {c.id: c.status for c in inventory.clients}
     found = [c for c in COLUMNS if status.get(c) is ClientStatus.FOUND]
+    columns = [c for c in COLUMNS if c in found or status.get(c) is ClientStatus.UNREADABLE]
     if hidden.issuperset(found):
         hidden = frozenset()
     visible = [c for c in found if c not in hidden]
@@ -665,6 +754,11 @@ def library(
     for k, pairs in built.items():
         _mark_same_names([r for r, _ in pairs])
         rows[k] = [r for r, holders in pairs if _in_view(r, holders, visible)]
+    # After the view: a client Kitden could not read never makes a row visible, and a held add
+    # keeps its row where it was.
+    _unread_cells(rows[kind], map_rows, columns, found)
+    broken = {p.path for p in inventory.problems if p.path}
+    _hold_adds(rows[kind], adapters, broken, project)
 
     def show_for(k: str) -> str:
         return show if k in CATALOG_KINDS else "mine"
@@ -679,7 +773,14 @@ def library(
         more = len(everything) - len(shown)
     return {
         "columns": [
-            {"id": c, "name": NAMES[c], "mark": MARKS[c], "hidden": c in hidden} for c in found
+            {
+                "id": c,
+                "name": NAMES[c],
+                "mark": MARKS[c],
+                "hidden": c in hidden,
+                "note": None if c in found else STATE_WORDS["unread"],
+            }
+            for c in columns
         ],
         "counts": {
             k: len(matched) if k == kind else len(_chosen(rows[k], k, show_for(k), q))
@@ -689,5 +790,5 @@ def library(
         "more": more,
         "attention": len(_narrowed(matched, category, True)),
         "categories": _categories(matched) if has_catalog else [],
-        "notes": _notes(shown, visible),
+        "notes": _read_notes(inventory, project) + _notes(shown, visible),
     }

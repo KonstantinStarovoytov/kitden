@@ -115,6 +115,7 @@ from kitden.views.load_map import load_map, map_dict
 from kitden.views.overview import overview
 from kitden.views.setup_server import is_old_entry, setup_server_state
 from kitden.views.skills import skill_catalog, skill_keepers, skill_readers
+from kitden.views.words import CHANGE_UNREAD, NO_ADD_UNREAD
 from kitden.watch import Watcher
 from kitden.web.security import SecurityMiddleware
 
@@ -428,6 +429,29 @@ class State:
         if not self.inventory.partial:
             self.progress.done(SLOW_STEP)
         return self.data
+
+
+# The actions that add something: a refusal into a file Kitden could not read says "add".
+ADD_ACTIONS = frozenset(
+    {
+        MCP_ADD,
+        SKILL_INSTALL,
+        PLUGIN_INSTALL,
+        PLUGIN_SKILLS,
+        PROJECT_ALIGN,
+        GATEWAY_CONNECT,
+        SETUP_SERVER,
+        SETUP_SERVER_UPDATE,
+        GATEWAY_PUT_BACK,
+    }
+)
+
+
+def unread_refusal(action: str, path: str) -> str:
+    """Why a change into a settings file Kitden could not read is refused, in words that follow
+    the action."""
+    words = NO_ADD_UNREAD if action in ADD_ACTIONS else CHANGE_UNREAD
+    return words.format(Path(path).name)
 
 
 def refusal_words(error: ValueError) -> str:
@@ -1072,6 +1096,12 @@ def create_app(
                     steps = plugin_steps(adapters, items[0], action == PLUGIN_ENABLE)
             else:
                 return _error("This action is not offered.", 422)
+            # No step into a file Kitden could not read, also for a place chosen after the add
+            # opened.
+            broken = {p.path for p in state.inventory.problems if p.path}
+            stuck = next((s.edit.path for s in steps if s.edit and s.edit.path in broken), None)
+            if stuck:
+                return _error(unread_refusal(str(action), stuck), 422)
             change = await asyncio.to_thread(engine.preview, str(action), steps)
         except ValueError as error:  # includes ChangeRefusedError
             return _error(refusal_words(error), 422)

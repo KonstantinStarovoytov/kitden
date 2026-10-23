@@ -37,3 +37,12 @@ test('a client with only instruction files does not load nothing', () => {
   assert.deepEqual(loadCounts(rows, 'codex'), [['instructions', 1, '1 instruction file']]);
   assert.deepEqual(loadCounts(rows, 'cursor'), []);
 });
+
+const { clientStatus } = await import('../../src/kitden/web/static/js/overview.js');
+
+test('a client that could not be read says so, not Not installed', () => {
+  assert.deepEqual(clientStatus({ status: 'unreadable' }), { state: 'unk', word: 'Could not read' });
+  assert.deepEqual(clientStatus({ status: 'not_found' }), { state: 'missing' });
+  assert.deepEqual(clientStatus({ status: 'found', version: '1.0', tested: false }), { state: 'unk', word: 'Not tested' });
+  assert.equal(clientStatus({ status: 'found', version: '1.0', tested: true }), null);
+});
