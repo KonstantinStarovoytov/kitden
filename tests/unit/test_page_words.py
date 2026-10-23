@@ -3,7 +3,7 @@
 import re
 from pathlib import Path
 
-from kitden.views.words import AFTER_WORDS, STALE, STATE_WORDS
+from kitden.views.words import AFTER_WORDS, ROUTE_WORDS, STALE, STATE_WORDS
 
 STATIC = Path(__file__).parents[2] / "src/kitden/web/static"
 INDEX = (STATIC / "index.html").read_text()
@@ -88,6 +88,12 @@ def test_python_and_page_state_words_agree():
     parts = script("parts.js")
     for state, word in STATE_WORDS.items():
         assert f'{state}: "{word}"' in parts, state
+
+
+def test_python_and_page_route_words_agree():
+    parts = script("parts.js")
+    for route, words in ROUTE_WORDS.items():
+        assert f'{route}: "{words}"' in parts, route
 
 
 def test_after_words_come_from_the_one_table():
@@ -694,13 +700,13 @@ def test_details_show_what_the_item_is_and_every_way_to_add_it():
     # The marketplace's entry is read beside the definitions; when it fails the rest still shows.
     assert "row.offer ? getJson(`/api/offer${query({ kind: row.kind, id: row.offer })}`)" in code
     assert ".catch(() => null)" in code
-    assert "body.append(...about(offer))" in code
+    assert 'if (offer) blocks.set("about", about(offer));' in code
     # A Details button opens the same review as the cell's own button.
     assert "startAdd(option.add, option.client, row)" in offer
     assert '"Add…"' in offer and 'button("Add…", () => addForm(offer), "btn primary")' not in offer
-    # With nothing to do, the first line of the body says why, quietly.
-    first = 'const body = el("div", "body");\n  if (why) body.append(el("p", "muted", why));'
-    assert first in code
+    # With nothing to do, the line that says why waits with the next steps, after the Why and
+    # what each client loads; a row not on this computer still says it first.
+    assert 'if (why) next.push(el("p", "muted", why));' in code
     assert 'if (why) body.prepend(el("p", "muted", why));' in offer
 
 
@@ -969,6 +975,20 @@ def test_library_has_an_instructions_tab():
 def test_details_shows_an_instruction_files_first_lines():
     assert 'el("pre", "preview"' in panel()
     assert "pre.preview" in (STATIC / "style.css").read_text()
+
+
+def test_details_answer_in_order_and_fold_the_evidence():
+    details = script("details.js")
+    assert "for (const id of detailsOrder(" in details
+    assert '"Technical details"' in details and "fold(" in details
+    assert 'el("pre", "preview"' in details  # the first lines, now inside the fold
+    assert "details.tech" in CSS and ".why-lines" in CSS
+    # The Why names a folder several clients read; the route words are Part 2's.
+    assert "`One folder, read by ${joinWords(" in details
+    assert "ROUTE_WORDS.folder" in details and "ROUTE_WORDS.kitden" in details
+    # A layer shows no path, command or file lines of its own: they wait in the fold.
+    layer = details.split("function layer(def)")[1].split("\n}\n")[0]
+    assert "shortPath" not in layer and "def.summary" not in layer and "preview" not in layer
 
 
 def test_a_demo_says_so_quietly_in_the_rail():

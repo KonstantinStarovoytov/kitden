@@ -1,10 +1,11 @@
 // Item details: what an item is, where each client loads it from, and the actions on it.
 import { getJson, query } from "./api.js";
-import { $, button, el, joinWords, reportError, shortPath } from "./dom.js";
+import { $, button, el, joinWords, plural, reportError, shortPath } from "./dom.js";
 import { rowTitle, shownRow } from "./library.js";
+import { fold } from "./motion.js";
 import { about, addButton, addOptions, whyNoAction } from "./offer.js";
 import { header, openInfo, openPanel, panelState, swapContent } from "./panel.js";
-import { ALL_PROJECTS, callout, CLIENT_NAMES, CLIENT_ORDER, GATEWAY_NOTE, gatewayName, mark, socket, STATE_WORDS, toolsNode } from "./parts.js";
+import { ALL_PROJECTS, callout, CLIENT_NAMES, CLIENT_ORDER, GATEWAY_NOTE, gatewayName, mark, ROUTE_WORDS, socket, STATE_WORDS, toolsNode } from "./parts.js";
 import { review } from "./review.js";
 import { current as currentModel, currentError, data, projectPath, state } from "./store.js";
 import { toolsSection } from "./tools.js";
@@ -206,9 +207,6 @@ function moreButton(buttons) {
   return more;
 }
 
-// A Details footer from footerActions: the lead is the primary button and the rest, then
-// `commands`, wait under More. Without a lead every action is plain, after the commands.
-// `draw(option, look)` gives an option's nodes.
 // A button's words. When one client has more than one definition that can change, the label
 // names the scope too, or the folder when the scopes are the same (one skill in two folders).
 export function offerLabel({ def, action }, offers) {
@@ -229,6 +227,9 @@ function placeWords(def) {
   return place.slice(-2).join("/");
 }
 
+// A Details footer from footerActions: the lead is the primary button and the rest, then
+// `commands`, wait under More. Without a lead every action is plain, after the commands.
+// `draw(option, look)` gives an option's nodes.
 export function footerButtons({ lead, rest }, draw, commands = []) {
   if (lead) {
     const others = [...rest.flatMap((o) => draw(o, "btn")), ...commands];
@@ -238,9 +239,19 @@ export function footerButtons({ lead, rest }, draw, commands = []) {
   return [...note, ...rest.flatMap((o) => draw(o, "btn"))];
 }
 
+const folderName = (path) => (path ? path.split("/").filter(Boolean).pop() : "");
+
+// The client whose folder or file this definition is read from, when it is another of the
+// three clients (WRITABLE). "shared" (~/.agents/skills) and the Kitden gateway are not
+// clients: the Why says a shared folder in words, and a held server's route.
+function ownerName(def) {
+  const owner = def.owner_client;
+  return owner && owner !== def.client && WRITABLE.includes(owner) ? clientName(owner) : null;
+}
+
 // Where a definition applies, in the words the cells use: the picked project is "This project".
 export function scopeWords(def, picked = projectPath()) {
-  const project = def.project ? def.project.split("/").filter(Boolean).pop() : "";
+  const project = folderName(def.project);
   const words = {
     user: ALL_PROJECTS,
     project: def.project && def.project === picked ? "This project" : `Project ${project}`,
@@ -249,8 +260,148 @@ export function scopeWords(def, picked = projectPath()) {
     account: "Claude account",
     managed: "Managed by your organization",
   }[def.scope] || def.scope;
-  const via = def.owner_client && def.owner_client !== def.client ? ` · through ${clientName(def.owner_client)}'s folder` : "";
-  return `${words}${via}`;
+  const owner = ownerName(def);
+  return owner ? `${words} · ${ROUTE_WORDS.folder.replace("{}", owner)}` : words;
+}
+
+// Where a definition's file sits, in file words. Only the technical details say these: spec
+// 2.1 keeps "global settings" there.
+export function fileScopeWords(def) {
+  const project = folderName(def.project);
+  const words = {
+    user: "Global settings",
+    project: `Project ${project}`,
+    local: project ? `Only on this Mac · ${project}` : "Only on this Mac",
+    plugin: "From a plugin",
+    account: "Claude account",
+    managed: "Managed by your organization",
+  }[def.scope] || def.scope;
+  const owner = ownerName(def);
+  return owner ? `${words} · via ${owner}` : words;
+}
+
+// How a client gets a definition, in Part 2's route words (as load_map.py `_route` picks
+// them), or null for the client's own plain entry.
+function routeWords(def) {
+  if (def.client === "claude_desktop_code_tab") return ROUTE_WORDS.desktop;
+  if (def.via_gateway === "kitden") return ROUTE_WORDS.kitden;
+  const owner = ownerName(def);
+  if (owner) return ROUTE_WORDS.folder.replace("{}", owner);
+  return def.scope === "plugin" ? ROUTE_WORDS.plugin : null;
+}
+
+// Where an entry of each other scope loads from, in the Why.
+const FROM_WORDS = {
+  user: "from all projects", plugin: ROUTE_WORDS.plugin, managed: "from your organization", account: "from your Claude account",
+};
+
+// Where a client loads a definition from, for the Why: the route first, then the scope.
+// `here` is the picked project's path, or null for All projects.
+export function originWords(def, here) {
+  const route = routeWords(def);
+  if (route) return route;
+  if (def.scope === "project" || def.scope === "local") {
+    return def.project && def.project === here ? "from this project" : `from ${folderName(def.project)}`;
+  }
+  return FROM_WORDS[def.scope] || `from ${def.scope}`;
+}
+
+const inClientOrder = (definitions) => [...definitions].sort((a, b) => CLIENT_ORDER.indexOf(a.client) - CLIENT_ORDER.indexOf(b.client));
+const clientsOf = (definitions) => [...new Set(definitions.map((d) => clientName(d.client)))];
+
+// The Why: at most two quiet lines. First where each client loads it from, grouped by where
+// ("Codex and Cursor load it from all projects."). Then the first rule that decides: one folder
+// several clients read, an override, a merge, turned off, a state Kitden cannot read, or only in
+// other projects. None for instruction files: their own lines say when each client reads them.
+export function whyLines(definitions, here) {
+  if (!definitions.length || definitions.some((d) => d.kind === "instructions")) return [];
+  const defs = inClientOrder(definitions);
+  const groups = new Map(); // where it loads from -> the clients
+  for (const def of defs.filter((d) => d.loads && d.enabled !== "unknown")) {
+    const origin = originWords(def, here);
+    const names = groups.get(origin) || [];
+    if (!names.includes(clientName(def.client))) names.push(clientName(def.client));
+    groups.set(origin, names);
+  }
+  const parts = [...groups].map(([origin, names], i) => {
+    const verb = i ? "" : names.length > 1 ? " load it" : " loads it";
+    return `${joinWords(names)}${verb} ${origin}`;
+  });
+  const rule = ruleLine(defs, here);
+  return [...(parts.length ? [`${parts.join("; ")}.`] : []), ...(rule ? [rule] : [])];
+}
+
+// The Why's second line: the first rule that applies, or null.
+function ruleLine(defs, here) {
+  const folders = new Map(); // a skill's folder -> the definitions read from it
+  for (const def of defs.filter((d) => d.kind === "skill" && String(d.source || "").includes("/"))) {
+    folders.set(def.source, [...(folders.get(def.source) || []), def]);
+  }
+  const shared = [...folders.values()].find((list) => clientsOf(list).length > 1);
+  if (shared) return `One folder, read by ${joinWords(clientsOf(shared))}.`;
+  // The definition of the same client that `beaten` gives way to: one that loads, else the
+  // first that is not beaten itself.
+  const winner = (beaten) => {
+    const others = defs.filter((d) => d.client === beaten.client && d !== beaten && !d.overridden && !d.merged);
+    return others.find((d) => d.loads) || others[0];
+  };
+  const over = defs.find((d) => d.overridden && winner(d));
+  if (over) return `In ${clientName(over.client)}, the one ${originWords(winner(over), here)} overrides the one ${originWords(over, here)}.`;
+  const merged = defs.find((d) => d.merged && winner(d));
+  if (merged) return `In ${clientName(merged.client)}, the ones ${originWords(winner(merged), here)} and ${originWords(merged, here)} are merged.`;
+  const loads = new Set(defs.filter((d) => d.loads).map((d) => d.client));
+  const off = clientsOf(defs.filter((d) => d.enabled === "off" && !loads.has(d.client)));
+  if (off.length) return `Turned off in ${joinWords(off)}.`;
+  const unknown = clientsOf(defs.filter((d) => d.enabled === "unknown"));
+  if (unknown.length) return `${joinWords(unknown)} ${unknown.length > 1 ? "keep their" : "keeps its"} on/off state where Kitden cannot read it.`;
+  if (!here && !loads.size && defs.every((d) => d.project)) {
+    return `It is in ${plural(new Set(defs.map((d) => d.project)).size, "project", "projects")}; it loads only there.`;
+  }
+  return null;
+}
+
+// The evidence under "Technical details": one row per definition with a file path, a file key,
+// a command or first lines, in client order, titled in file words ("Cursor · Global settings").
+export function techRows(definitions) {
+  return inClientOrder(definitions).map((def) => ({
+    client: def.client,
+    title: `${clientName(def.client)} · ${fileScopeWords(def)}`,
+    path: String(def.source || "").includes("/") ? def.source : null,
+    key: def.key || null,
+    summary: def.summary || null,
+    preview: def.preview && def.preview.length ? def.preview : null,
+  })).filter((r) => r.path || r.key || r.summary || r.preview);
+}
+
+// The evidence, folded: per definition its file (the whole path in the hover text), file key,
+// command and first lines. It opens like "Show file change" in a review.
+function technical(rows) {
+  const box = el("details", "tech");
+  box.append(el("summary", null, "Technical details"));
+  for (const r of rows) {
+    const part = el("div", "tech-row");
+    part.append(el("div", "name", r.title));
+    if (r.path) {
+      const where = el("div", "mono", shortPath(r.path));
+      where.title = r.path;
+      part.append(where);
+    }
+    if (r.key) part.append(el("div", "mono", r.key));
+    if (r.summary) part.append(el("div", "mono", r.summary));
+    // An instruction file's first lines, secrets hidden by the server.
+    if (r.preview) part.append(el("pre", "preview", r.preview.join("\n")));
+    box.append(part);
+  }
+  return fold(box);
+}
+
+// The five questions Details answers, in order: what it is and its state (the header), why,
+// what the lead action changes and what else to do (the footer), then the evidence. Each id is
+// a block of the body; a block with nothing to say is left out.
+export const DETAILS_ORDER = ["warnings", "about", "why", "clients", "tools", "secret", "next", "links", "technical"];
+
+export function detailsOrder(present) {
+  return DETAILS_ORDER.filter((id) => present.has(id));
 }
 
 const UNKNOWN_WORDS = {
@@ -276,8 +427,11 @@ function staleWords(at) {
 export function layerState(def) {
   let look = "off";
   let badge = "Not loaded";
-  // The server's why starts with "Loads." for agents; the badge already says Available.
-  let why = (def.why || "").replace(/^Loads\.\s*/, "");
+  // The server's why is written for agents ("Loads. It overrides the user definition."). The
+  // badge says Available, and the Why lines say which definition overrides or merges with
+  // which, once, in page words; so a definition in such a rule has no line of its own.
+  const ruled = def.kind !== "instructions" && (def.loads || def.overridden || def.merged);
+  let why = ruled ? "" : def.why || "";
   const unknown = def.enabled === "unknown";
   if (unknown) {
     look = "unk";
@@ -301,16 +455,11 @@ function layer(def) {
   const dot = socket({ state: look });
   dot.replaceChildren(dot.querySelector(".dot"));
   dot.setAttribute("aria-hidden", "true");
+  // The file, the command and the first lines wait under Technical details.
   const middle = el("div");
   middle.append(el("div", "name", scopeWords(def)));
-  const where = el("div", "why mono", shortPath(def.source));
-  where.title = def.source || "";
-  middle.append(where);
-  if (def.summary) middle.append(el("div", "why mono", def.summary));
   if (why) middle.append(el("div", "why", why));
   if (stale) middle.append(el("div", "why", stale));
-  // An instruction file's first lines, secrets hidden by the server.
-  if (def.preview && def.preview.length) middle.append(el("pre", "preview", def.preview.join("\n")));
   // Every plugin with a known state gets the same switch; one the page cannot change from
   // here (its on/off lives in the client's account) is shown locked, with the reason.
   const toggle = !unknown && def.kind === "plugin" && def.actions.find((a) => a === "plugin.disable" || a === "plugin.enable");
@@ -362,24 +511,30 @@ function pluginSwitch(def, action) {
   return node;
 }
 
-// Details of a row on this computer: why nothing can be done (when so), what it is (`offer`, the
-// marketplace's entry, when read), warnings, what each client loads, then every action.
 // The definition whose tool count Details shows once: one in the Kitden gateway with a known
 // count. Every client reaches the same held server, so the first one says it.
 export function countedDefinition(definitions) {
   return definitions.find((d) => d.via_gateway === "kitden" && d.tools) || null;
 }
 
+// Details of a row on this computer, in DETAILS_ORDER: warnings, what it is (`offer`, the
+// marketplace's entry, when read), why, what each client loads, the tools, then what to do next
+// (why nothing can be done, when so) and the evidence, folded. Every action is in the footer.
 function showDetails(row, definitions, offer = null, toolsNext = {}) {
   const warnings = row.flags.filter((x) => x.level === "warning");
   const move = moveFor(row, currentModel("gateway"), Boolean(currentError("gateway")));
   const offers = definitions.flatMap((def) => def.actions.filter((a) => ACTION_BUTTONS[a]).map((action) => ({ def, action })));
   const actions = footerActions(offers, warnings, move, addOptions(row, offer));
   const why = actions.lead || actions.rest.length ? "" : whyNoAction(row, definitions);
-  const body = el("div", "body");
-  if (why) body.append(el("p", "muted", why));
-  if (offer) body.append(...about(offer));
-  for (const f of warnings) body.append(callout(warningText(f)));
+  const blocks = new Map(); // a DETAILS_ORDER id -> its nodes
+  if (warnings.length) blocks.set("warnings", warnings.map((f) => callout(warningText(f))));
+  if (offer) blocks.set("about", about(offer));
+  const lines = whyLines(definitions, projectPath());
+  if (lines.length) {
+    const box = el("div", "why-lines");
+    box.append(...lines.map((line) => el("p", null, line)));
+    blocks.set("why", [box]);
+  }
   // A warning that already says where to change it (a copy loaded from another client)
   // replaces the hints under that client, so the fact appears once.
   const covered = new Set(warnings.filter((f) => f.via).map((f) => f.client));
@@ -389,6 +544,7 @@ function showDetails(row, definitions, offer = null, toolsNext = {}) {
     byClient.get(def.client).push(def);
   }
   const clients = [...byClient.keys()].sort((a, b) => CLIENT_ORDER.indexOf(a) - CLIENT_ORDER.indexOf(b));
+  const sections = [];
   for (const client of clients) {
     const section = el("section", "client-layers");
     const title = el("div", "chip");
@@ -398,22 +554,31 @@ function showDetails(row, definitions, offer = null, toolsNext = {}) {
     section.append(title, stack);
     const hints = covered.has(client) ? [] : new Set(byClient.get(client).filter((d) => d.change_hint && !d.actions.length && d.change_hint !== why).map((d) => d.change_hint));
     for (const hint of hints) section.append(el("p", "muted", hint));
-    body.append(section);
+    sections.push(section);
   }
-  if (!definitions.length) body.append(el("p", "muted", "No definitions found for this item here."));
+  if (!definitions.length) sections.push(el("p", "muted", "No definitions found for this item here."));
+  blocks.set("clients", sections);
   // A server in the Kitden gateway: its tools, a switch each.
   if (definitions.some((d) => d.via_gateway === "kitden")) {
     const counted = countedDefinition(definitions);
-    if (counted) body.append(toolsNode(counted));
     // Drawn again after a change with the row as the Library reads it now, so the line under
     // the title stays true.
-    body.append(toolsSection(row.name, (next) => openItem(shownRow(row.key) || row, { tools: next }), toolsNext));
+    const list = toolsSection(row.name, (next) => openItem(shownRow(row.key) || row, { tools: next }), toolsNext);
+    blocks.set("tools", [...(counted ? [toolsNode(counted)] : []), list]);
   }
   if (definitions.some((d) => d.secret_present)) {
-    body.append(el("p", "muted", "This entry holds a secret. It is hidden here and never logged."));
+    blocks.set("secret", [el("p", "muted", "This entry holds a secret. It is hidden here and never logged.")]);
   }
-  if (move && move.unread) body.append(el("p", "muted", "Could not read the gateway, so Move is not offered."));
-  else if (move && !move.gateways.length) body.append(el("p", "muted", GATEWAY_NOTE));
+  const next = [];
+  // With nothing to do, say why, quietly.
+  if (why) next.push(el("p", "muted", why));
+  if (move && move.unread) next.push(el("p", "muted", "Could not read the gateway, so Move is not offered."));
+  else if (move && !move.gateways.length) next.push(el("p", "muted", GATEWAY_NOTE));
+  if (next.length) blocks.set("next", next);
+  const rows = techRows(definitions);
+  if (rows.length) blocks.set("technical", [technical(rows)]);
+  const body = el("div", "body");
+  for (const id of detailsOrder(new Set(blocks.keys()))) body.append(...blocks.get(id));
 
   const withCommands = definitions.filter((d) => d.kind === "plugin" || d.kind === "marketplace");
   const commands = withCommands.length ? [button("Commands…", () => showCommands(row, withCommands), "btn")] : [];

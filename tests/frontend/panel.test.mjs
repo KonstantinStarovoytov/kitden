@@ -572,10 +572,11 @@ test('an instruction file layer never says Loads or Not loaded', () => {
   assert.equal(layerState({ ...def, loads: false, project: '/h/work/site' }).badge, 'In a project');
   assert.equal(layerState({ ...def, loads: false, project: null }).badge, '');
   assert.equal(layerState({ kind: 'skill', enabled: 'on', loads: false, why: 'x' }).badge, 'Not loaded');
-  // The badge says Available; the why never says Loads again under it.
+  // The badge says Available; the why never says Loads again under it, and the Why lines at
+  // the top say which definition overrides which.
   const loaded = { kind: 'mcp_server', enabled: 'on', loads: true };
   assert.equal(layerState({ ...loaded, why: 'Loads.' }).why, '');
-  assert.equal(layerState({ ...loaded, why: 'Loads. It overrides the user definition.' }).why, 'It overrides the user definition.');
+  assert.equal(layerState({ ...loaded, why: 'Loads. It overrides the user definition.' }).why, '');
 });
 
 test('Details shows the tool count once, from a definition in the Kitden gateway', () => {

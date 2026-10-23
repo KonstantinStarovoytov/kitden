@@ -460,7 +460,12 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .layer.wins { background: var(--wire-soft); }
 .layer .name { overflow-wrap: anywhere; }
 .layer .why { color: var(--ink-3); font-size: 12px; overflow-wrap: anywhere; }
-.layer pre.preview { margin: 6px 0 0; padding: 8px 10px; background: var(--inset); border: 1px solid var(--wire-soft); border-radius: 6px; color: var(--ink-2); font: 12px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Details: the Why in one or two quiet lines; the evidence folded under "Technical details". */
+.why-lines { display: grid; gap: 2px; color: var(--ink-2); }
+.why-lines p { margin: 0; }
+.tech-row { display: grid; gap: 2px; min-width: 0; }
+.tech-row .mono { color: var(--ink-3); overflow-wrap: anywhere; }
+.tech-row pre.preview { margin: 4px 0 0; padding: 8px 10px; background: var(--inset); border: 1px solid var(--wire-soft); border-radius: 6px; color: var(--ink-2); font: 12px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 .drawer section { display: grid; gap: 8px; min-width: 0; }
 /* The tools of a server in the Kitden gateway: a switch each; the whole server first. */
 .tools-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -480,8 +485,8 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .after .chip { gap: 8px; }
 .after .chip > span:nth-child(2) { color: var(--ink-2); }
 details > summary { line-height: 24px; }
-details.file-change { min-width: 0; }
-details.file-change > summary { cursor: pointer; color: var(--ink-2); font-weight: 500; }
+details.file-change, details.tech { min-width: 0; }
+details.file-change > summary, details.tech > summary { cursor: pointer; color: var(--ink-2); font-weight: 500; }
 .diff-count { font-family: var(--mono); font-size: 11px; display: inline-flex; gap: 6px; margin-left: 8px; }
 .diff-count .plus { color: var(--diff-add); }
 .diff-count .minus { color: var(--diff-del); }
@@ -489,7 +494,7 @@ details.file-change > summary { cursor: pointer; color: var(--ink-2); font-weigh
 .fold > .fold-in { overflow: hidden; min-height: 0; display: grid; gap: 10px; align-content: start; opacity: 0; transform: translateY(-4px); transition: opacity 200ms ease, transform 280ms var(--spring); }
 .fold.open { grid-template-rows: 1fr; }
 .fold.open > .fold-in { opacity: 1; transform: none; transition-delay: 40ms; }
-details.file-change .fold-in, details.connect .fold-in, details.add-more .fold-in { padding-top: 10px; }
+details.file-change .fold-in, details.tech .fold-in, details.connect .fold-in, details.add-more .fold-in { padding-top: 10px; }
 details.connect .fold-in > .form, details.add-more .fold-in > .form { margin: 0; }
 summary::-webkit-details-marker { transition: transform 200ms ease; }
 .step { border: 1px solid var(--wire); border-radius: 8px; overflow: hidden; }

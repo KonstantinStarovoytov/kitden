@@ -12,6 +12,12 @@ export const STATE_WORDS = {
   missing: "Not installed", none: "—", via: "Via Claude Code", done: "Has its skills",
   unread: "Could not read",
 };
+// The twin of views/words.py ROUTE_WORDS: how a client gets an item, said in Details and hover
+// text. "{}" is the client whose folder it is.
+export const ROUTE_WORDS = {
+  desktop: "from the Desktop app", kitden: "through the Kitden gateway", plugin: "from a plugin",
+  folder: "through {}'s folder",
+};
 // The first scan's line: what is still read, and how much of the work is done (0 to 1). Before
 // the page has its data it names the clients it reads; then the slow answers still checked.
 export function scanLine(view) {
