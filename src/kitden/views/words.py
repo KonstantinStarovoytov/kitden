@@ -70,6 +70,9 @@ REMOVE_NOTE = "Undo installs it again; its saved options are not brought back."
 # The review's lede, when every step is in one project and no other known project lies inside
 # or around it (views/review.py `others_unchanged`). The twin of review.js UNCHANGED.
 UNCHANGED = "Other projects are unchanged."
+# What Undo of a change that replaced a Keychain item's value cannot bring back: the old value is
+# recorded nowhere (engine.py undo). "{}" names the items, "github/TOKEN".
+KEYCHAIN_UNDO = "Undo leaves {} in your Keychain with the new value."
 
 # How a client gets an item: the hover text and Details say it, never the cell's word slot.
 ROUTE_WORDS: dict[str, str] = {

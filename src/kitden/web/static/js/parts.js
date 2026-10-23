@@ -6,6 +6,22 @@ import { reducedMotion } from "./motion.js";
 export const ALL_PROJECTS = "All projects";
 // A picked project that left the list: it stays picked, and the place says this instead.
 export const GONE_PROJECT = "This project is no longer on the list.";
+
+// A folder's name, the last part of its path, as the picker and Details say it; "/" stays "/".
+export const folderName = (path) => (path ? path.split("/").filter(Boolean).pop() || path : "");
+
+// Actions whose title names its place already, or has none: no place words are added.
+export const PLACE_IN_TITLE = ["gateway.rule", "gateway.rules", "gateway.strict", "project.align", "setup_server.update", "gateway.remove", "gateway.keychain"];
+
+// Where a change's steps go (`target`, from the server), as a title ends: " in website",
+// " for all projects", " for all projects except website" (that project's own definition wins
+// there), or "" when they go to several places. `folder`: the project's name.
+export function targetWords(target, folder = folderName(target && target.project)) {
+  if (!target) return "";
+  if (target.scope === "project") return ` in ${folder}`;
+  if (target.scope === "others") return ` for all projects except ${folder}`;
+  return target.scope === "all" ? " for all projects" : "";
+}
 // The twin of views/words.py STATE_WORDS.
 export const STATE_WORDS = {
   on: "Available", off: "Off", over: "Overridden", unk: "Unknown", review: "Needs review", gw: "Via gateway",
@@ -391,16 +407,18 @@ export function changeTitle(entry) {
   const reached = [...new Set(steps.flatMap((s) => s.reaches || [s.client]))];
   reached.sort((a, b) => CLIENT_ORDER.indexOf(a) - CLIENT_ORDER.indexOf(b));
   const clients = reached.map((c) => CLIENT_NAMES[c] || c);
+  // Where it went, as the review's title said it; a line from before Kitden kept it says none.
+  const place = PLACE_IN_TITLE.includes(entry.action) ? "" : targetWords(entry.target);
   if (entry.action === "skill.remove") {
     const { clients: lose, oneCopy } = skillRemoval(steps);
-    return `${verb}${oneCopy ? " one copy of" : ""} ${names.join(", ")} · ${lose.map((c) => CLIENT_NAMES[c] || c).join(", ")}`;
+    return `${verb}${oneCopy ? " one copy of" : ""} ${names.join(", ")}${place} · ${lose.map((c) => CLIENT_NAMES[c] || c).join(", ")}`;
   }
   // A plugin's skills can be many; the line counts them, the change lists them.
-  if (entry.action === "plugin.skills") return `${verb} ${plural(names.length, "skill", "skills")} · ${clients.join(", ")}`;
+  if (entry.action === "plugin.skills") return `${verb} ${plural(names.length, "skill", "skills")}${place} · ${clients.join(", ")}`;
   const whole = ["gateway.connect", "gateway.switch", "setup_server.register", "setup_server.update", "project.align"].includes(entry.action);
   const what = whole ? "" : ` ${names.join(", ")}`;
-  if (kitden) return `${verb}${what} into the Kitden gateway · ${clients.join(", ")}`;
-  return `${verb}${what} · ${clients.join(", ")}`;
+  if (kitden) return `${verb}${what} into the Kitden gateway${place} · ${clients.join(", ")}`;
+  return `${verb}${what}${place} · ${clients.join(", ")}`;
 }
 
 // How many lines a diff adds and removes: the summary says so before the diff is opened.

@@ -9,7 +9,7 @@ import { finishTransition } from "./motion.js";
 import { arrival, busy, setState, state } from "./store.js";
 import { reloadTools } from "./tools.js";
 
-export { backToDetails, contextLinks, countedDefinition, footerActions, footerButtons, heldActions, heldButtons, kindWord, layerState, linksRow, loadsLede, moveFor, moveInto, moveTargets, offerLabel, openItem, plainSecrets, scopeWords, technical } from "./details.js";
+export { backToDetails, contextLinks, countedDefinition, footerActions, footerButtons, heldActions, heldButtons, keepFrom, kindWord, layerState, linksRow, loadsLede, moveFor, moveInto, moveTargets, offerLabel, openItem, plainSecrets, scopeWords, technical } from "./details.js";
 export { callsText, projectLabel, toolRows, toolsSection, writingToolsOn } from "./tools.js";
 export { ADDS, addScope, afterParts, alignGroups, canShowReview, cancelTarget, changeOutcome, changeWords, chosenKeys, leftOutText, review, reviewLede, undoChange } from "./review.js";
 

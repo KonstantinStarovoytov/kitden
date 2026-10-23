@@ -5,7 +5,7 @@ import { loadLibraryFor, raceSlow, rowSel, rowTitle, shownRow } from "./library.
 import { fold } from "./motion.js";
 import { about, addButton, addOptions, addReach, mcpRows, whyNoAction } from "./offer.js";
 import { closePanel, header, openInfo, openPanel, panelState, swapContent } from "./panel.js";
-import { ALL_PROJECTS, callout, CLIENT_NAMES, CLIENT_ORDER, GATEWAY_NOTE, gatewayName, kitdenClients, mark, ROUTE_WORDS, socket, STATE_WORDS, toolsNode } from "./parts.js";
+import { ALL_PROJECTS, callout, CLIENT_NAMES, CLIENT_ORDER, folderName, GATEWAY_NOTE, gatewayName, kitdenClients, mark, ROUTE_WORDS, socket, STATE_WORDS, toolsNode } from "./parts.js";
 import { review } from "./review.js";
 import { current as currentModel, currentError, data, goTo, libraryChoice, projectPath, state } from "./store.js";
 import { toolsSection } from "./tools.js";
@@ -369,8 +369,6 @@ export function footerButtons({ lead, rest }, draw, commands = []) {
   return [...note, ...rest.flatMap((o) => draw(o, "btn"))];
 }
 
-const folderName = (path) => (path ? path.split("/").filter(Boolean).pop() : "");
-
 // The client whose folder or file this definition is read from, when it is another of the
 // three clients (WRITABLE). "shared" (~/.agents/skills) and the Kitden gateway are not
 // clients: the Why says a shared folder in words, and a held server's route.
@@ -716,13 +714,6 @@ export function countedDefinition(definitions) {
 // (what the lead action changes, or why nothing can be done), links to the item on other pages,
 // and the evidence, folded. Every action is in the footer.
 function showDetails(row, definitions, offer = null, toolsNext = {}, inherits = NO_INHERITS) {
-  // What a review opened from here comes back to (backToDetails), and the control pressed last.
-  const from = { row, definitions, offer, inherits, focus: null };
-  panelState.from = from;
-  const remember = (event) => {
-    const node = event.target && event.target.closest ? event.target.closest("[data-focus]") : null;
-    if (node) from.focus = node.dataset.focus;
-  };
   const warnings = row.flags.filter((x) => x.level === "warning");
   const move = moveFor(row, currentModel("gateway"), Boolean(currentError("gateway")));
   const offers = definitions.flatMap((def) => def.actions.filter((a) => ACTION_BUTTONS[a]).map((action) => ({ def, action })));
@@ -794,7 +785,6 @@ function showDetails(row, definitions, offer = null, toolsNext = {}, inherits = 
   if (rows.length) blocks.set("technical", [technical(rows)]);
   const body = el("div", "body");
   for (const id of detailsOrder(new Set(blocks.keys()))) body.append(...blocks.get(id));
-  body.addEventListener("click", remember, true);
 
   const withCommands = definitions.filter((d) => d.kind === "plugin" || d.kind === "marketplace");
   const commands = withCommands.length ? [button("Commands…", () => showCommands(row, withCommands), "btn")] : [];
@@ -818,8 +808,26 @@ function showDetails(row, definitions, offer = null, toolsNext = {}, inherits = 
   const footer = el("footer");
   const held = definitions.some((d) => d.via_gateway === "kitden") ? heldButtons(heldActions(row.name, writableClients(), plainSecrets(currentModel("gateway"), row.name))) : [];
   footer.append(...held, ...footerButtons(actions, draw, commands));
-  footer.addEventListener("click", remember, true);
+  // A review opened from here comes back to this Details, drawn from what it read.
+  keepFrom(() => {
+    panelState.current = { type: "item", row, definitions, offer, inherits };
+    showDetails(row, definitions, offer, {}, inherits);
+  }, [body, footer]);
   swapContent([itemHeader(row), body, footer]);
+}
+
+// What a review opened from this panel comes back to (backToDetails): `draw()` draws the panel
+// again from what it read, and `focus` is the control pressed last, by its focus key, heard by
+// one capture click listener on each of `nodes` (the body and the footer).
+export function keepFrom(draw, nodes) {
+  const from = { draw, focus: null };
+  panelState.from = from;
+  const remember = (event) => {
+    const node = event.target && event.target.closest ? event.target.closest("[data-focus]") : null;
+    if (node) from.focus = node.dataset.focus;
+  };
+  for (const node of nodes) if (node) node.addEventListener("click", remember, true);
+  return from;
 }
 
 // Where focus goes back to in Details: the control pressed (`key`) when it is drawn again, else
@@ -830,17 +838,17 @@ export function focusAfterBack(key, keys) {
   return keys.includes("more") ? "more" : null;
 }
 
-// Back from a review to the Details it was opened from, drawn again from what Details read then
-// (no new read). `error`: why the preview was refused, first in the body. Focus goes back to
-// the control pressed.
+// Back from a review to the panel it was opened from (Details, or the Kitden gateway's own panel
+// of a held server), drawn again from what it read then (no new read). `error`: why the preview
+// was refused, first in the body. Focus goes back to the control pressed.
 export function backToDetails({ error = null } = {}) {
   const from = panelState.from;
   if (!from) return;
-  const { row, definitions, offer, inherits, focus } = from;
-  panelState.current = { type: "item", row, definitions, offer, inherits };
-  showDetails(row, definitions, offer, {}, inherits);
+  const { focus } = from;
+  from.draw();
   const drawer = $("#drawer");
-  if (error) $(".body", drawer).prepend(callout(error, "error"));
+  const body = $(".body", drawer);
+  if (error && body) body.prepend(callout(error, "error"));
   const keys = $$("[data-focus]", drawer).map((node) => node.dataset.focus);
   (withFocusKey(drawer, focusAfterBack(focus, keys)) || drawer).focus();
 }

@@ -189,17 +189,29 @@ def test_preview_says_what_each_client_shows_after(client):
 
 
 def test_a_preview_names_its_target(client):
+    servers = client.get("/api/items?client=codex&kind=mcp_server").json()
+    docs = next(i for i in servers if i["name"] == "api-docs")
+    body = {"action": "mcp.remove_direct", "targets": [{"item": docs["id"]}], "params": {}}
+    answer = client.post("/api/changes/preview", json=body, headers=POST).json()
+    # No other known project lies inside work/api, or around it, in the base fixture, and the
+    # step edits the file itself.
+    assert answer["target"] == {
+        "scope": "project",
+        "project": str(client.home / "work/api"),
+        "others_unchanged": True,
+    }
+    assert answer["undo_note"] is None
+    client.post(f"/api/changes/{answer['id']}/cancel", headers=POST)
+    # Claude Code's own command removes local-db: Kitden checks the file, not all it does.
     servers = client.get("/api/items?client=claude_code&kind=mcp_server").json()
     local = next(i for i in servers if i["name"] == "local-db")
     body = {"action": "mcp.remove_direct", "targets": [{"item": local["id"]}], "params": {}}
     answer = client.post("/api/changes/preview", json=body, headers=POST).json()
-    # No other known project lies inside work/website, or around it, in the base fixture.
     assert answer["target"] == {
         "scope": "project",
         "project": str(client.home / "work/website"),
-        "others_unchanged": True,
+        "others_unchanged": False,
     }
-    assert answer["undo_note"] is None
     client.post(f"/api/changes/{answer['id']}/cancel", headers=POST)
     # A user entry goes for all projects.
     neon = next(

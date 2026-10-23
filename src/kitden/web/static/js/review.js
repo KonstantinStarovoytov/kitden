@@ -5,7 +5,7 @@ import { $, $$, button, el, joinWords, plural, reportError, shortPath, shortPath
 import { loadLibrary, morphOnNextRender } from "./library.js";
 import { fold, transition } from "./motion.js";
 import { cancelPreview, checkMark, closePanel, header, hideToast, isPanelOpen, openPanel, panelState, restoreFocus, toast } from "./panel.js";
-import { callout, CLIENT_ORDER, diffCounts, kitdenMove, mark, movedNames, notesSection, ruleText, rulesText, skillRemoval, socket, stepText, strictText } from "./parts.js";
+import { callout, CLIENT_ORDER, diffCounts, kitdenMove, mark, movedNames, notesSection, PLACE_IN_TITLE, ruleText, rulesText, skillRemoval, socket, stepText, strictText, targetWords } from "./parts.js";
 import { busy, reload, render, setBusy, state } from "./store.js";
 import { projectLabel, tools } from "./tools.js";
 
@@ -32,8 +32,8 @@ const REMOVES = ["mcp.remove_direct", "plugin.remove", "skill.remove"];
 // ADD_ACTIONS has two more: Add missing names its project in its title already, and
 // setup_server.update changes an entry where it is.
 export const ADDS = ["mcp.add", "skill.install", "plugin.install", "plugin.skills", "marketplace.add", "setup_server.register", "gateway.connect", "gateway.put_back"];
-// Actions whose title names its place already, or has none: the scope words are not added.
-export const PLACE_IN_TITLE = ["gateway.rule", "gateway.rules", "gateway.strict", "project.align", "setup_server.update", "gateway.remove", "gateway.keychain"];
+// Where the steps go, as the title ends (parts.js, so the Changes page says it too).
+export { PLACE_IN_TITLE, targetWords };
 // No promise of Undo for every change: the server names the known limit (`undo_note`).
 const LEDE = "Nothing is written until you press Apply. A backup is kept.";
 // The twin of views/words.py UNCHANGED; said only when the server guarantees it.
@@ -44,14 +44,6 @@ const UNCHANGED = "Other projects are unchanged. ";
 export function addScope(action, into) {
   if (!ADDS.includes(action)) return null;
   return into ? ` in ${projectLabel(into)}` : " for all projects";
-}
-
-// Where the steps go (`target`, from the server), as the title ends: " in website" (`folder`,
-// the project's folder name), " for all projects", or "" when they go to several places.
-export function targetWords(target, folder) {
-  if (!target) return "";
-  if (target.scope === "project") return ` in ${folder}`;
-  return target.scope === "all" ? " for all projects" : "";
 }
 
 // The review's lede. With All projects picked an add says it is for all projects (in a project
@@ -149,8 +141,7 @@ export function changeWords(change, previewBody) {
   // The title says where the steps go: into one project, or for all projects. A title that
   // names its place keeps it once; a change from before the server said so names an add's.
   const target = change.target && !PLACE_IN_TITLE.includes(change.action) ? change.target : null;
-  const place = target && target.project ? target.project.split("/").filter(Boolean).pop() : "";
-  const scope = target ? targetWords(target, place) : addScope(change.action, previewBody && previewBody.params && previewBody.params.project);
+  const scope = target ? targetWords(target) : addScope(change.action, previewBody && previewBody.params && previewBody.params.project);
   if (scope) {
     title = `${title}${scope}`;
     what = `${what}${scope}`;
@@ -251,7 +242,10 @@ export function canShowReview(result) {
 
 export async function review(previewBody, { note = null, back = null } = {}) {
   const asked = state.project;
-  const result = await postJson("/api/changes/preview", previewBody);
+  // The Details this review is asked from, if any: Cancel and a refusal go back only there.
+  const from = panelState.from;
+  // The project picked at the top: the server says when its own definition wins there.
+  const result = await postJson("/api/changes/preview", { ...previewBody, picked: asked || null });
   // Another project was picked while it was prepared: it opens nothing, and the server forgets it.
   if (state.project !== asked) {
     const id = result && result.data && result.data.id;
@@ -265,7 +259,7 @@ export async function review(previewBody, { note = null, back = null } = {}) {
       return;
     }
     // From Details, the reason shows there, as for a tool switch.
-    if (panelState.from) {
+    if (from && panelState.from === from) {
       backToDetails({ error: reason });
       return;
     }
@@ -277,7 +271,7 @@ export async function review(previewBody, { note = null, back = null } = {}) {
     openPanel([header("Review change", "Could not prepare this change", null, null), body, footer]);
     return;
   }
-  showReview(result.data, previewBody, note, back);
+  showReview(result.data, previewBody, note, back, from);
 }
 
 // Where Cancel goes: "back" (a tool switch's own way back), "details" (the Details the review
@@ -326,7 +320,7 @@ function diffLines(text) {
   return pre;
 }
 
-function showReview(change, previewBody, note, back = null) {
+function showReview(change, previewBody, note, back = null, from = null) {
   panelState.current = { type: "review", change, previewBody, note, back };
   const words = changeWords(change, previewBody);
   const body = el("div", "body");
@@ -369,7 +363,7 @@ function showReview(change, previewBody, note, back = null) {
   // opened from, or nowhere (the panel closes).
   const cancel = button("Cancel", () => {
     cancelPreview();
-    const to = cancelTarget({ back, from: panelState.from });
+    const to = cancelTarget({ back, from: from && panelState.from === from ? from : null });
     if (to === "back") return back();
     if (to === "details") return backToDetails();
     return closePanel();

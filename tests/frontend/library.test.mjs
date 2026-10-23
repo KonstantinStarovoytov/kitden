@@ -467,7 +467,7 @@ test("a project's own skill opens its review at once, into the project", () => {
     const own = add({ action: 'skill.install', skill: 'project/api-style', project_only: true });
     assert.equal(startAdd(own, 'claude_code', { kind: 'skill', name: 'api-style' }) instanceof Promise, true);
     assert.deepEqual(sent, [['/api/changes/preview', {
-      action: 'skill.install', targets: [{ client: 'claude_code' }], params: { skill: 'project/api-style', project: 'p1' },
+      action: 'skill.install', targets: [{ client: 'claude_code' }], params: { skill: 'project/api-style', project: 'p1' }, picked: 'p1',
     }]]);
   } finally {
     globalThis.fetch = asked;

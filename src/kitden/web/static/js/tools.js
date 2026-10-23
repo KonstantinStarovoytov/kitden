@@ -2,14 +2,14 @@
 import { getJson, postJson, query } from "./api.js";
 import { switchNode } from "./details.js";
 import { button, el, withFocusKey } from "./dom.js";
-import { ALL_PROJECTS, callout, flag, skeleton } from "./parts.js";
+import { ALL_PROJECTS, callout, flag, folderName, skeleton } from "./parts.js";
 import { review } from "./review.js";
 import { data, state } from "./store.js";
 
 // The project's folder name, as the picker at the top shows it.
 export function projectLabel(id) {
   const found = (data.projects || []).find((p) => p.id === id);
-  return found ? found.path.split("/").filter(Boolean).pop() || found.path : id;
+  return found ? folderName(found.path) : id;
 }
 
 // The rows of a held server's Details, for the project picked at the top (`where`, its folder

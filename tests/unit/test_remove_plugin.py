@@ -4,10 +4,13 @@ import json
 import tomllib
 
 import pytest
+from starlette.testclient import TestClient
 
 from kitden.clients.cursor import CURSOR_HINT
+from kitden.views.inventory import build_inventory
 from kitden.views.words import REMOVE_NOTE
-from tests.unit.test_api_plugin_install import LINTER, POST, _client, _preview
+from kitden.web.app import create_app
+from tests.unit.test_api_plugin_install import LINTER, ORIGIN, POST, _client, _preview
 
 SUPERPOWERS = "superpowers@claude-plugins-official"
 OFF = "claude-md-management@claude-plugins-official"
@@ -94,6 +97,45 @@ def test_cursor_loses_a_claude_code_plugin_it_only_imports(client):
     assert change["steps"][0]["reaches"] == ["claude_code", "cursor"]
     applied = client.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
     assert applied["steps"][0]["reaches"] == ["claude_code", "cursor"]
+
+
+def test_in_a_project_with_its_own_copy_the_change_goes_to_every_other_project(client):
+    website = next(
+        p for p in client.get("/api/projects").json() if p["path"].endswith("/work/website")
+    )
+    item_id = _item(client, SUPERPOWERS)["id"]
+    body = {"action": "plugin.disable", "targets": [{"item": item_id}], "params": {}}
+    # The project picked at the top has its own superpowers, which wins there.
+    picked = client.post(
+        "/api/changes/preview", json={**body, "picked": website["id"]}, headers=POST
+    )
+    assert picked.json()["target"] == {
+        "scope": "others",
+        "project": website["path"],
+        "others_unchanged": False,
+    }
+    everywhere = client.post("/api/changes/preview", json=body, headers=POST).json()
+    assert everywhere["target"]["scope"] == "all"
+
+
+def test_the_changes_page_keeps_the_clients_and_the_place_after_a_restart(client):
+    added = _preview(client, LINTER, ["claude_code"]).json()
+    client.post(f"/api/changes/{added['id']}/apply", headers=POST)
+    change = _remove(client, _item(client, LINTER)["id"]).json()
+    client.post(f"/api/changes/{change['id']}/apply", headers=POST)
+    everywhere = {"scope": "all", "project": None, "others_unchanged": False}
+    entry = client.get("/api/changes").json()[0]
+    assert (entry["id"], entry["steps"][0]["reaches"]) == (change["id"], ["claude_code", "cursor"])
+    assert entry["target"] == everywhere
+    home = client.home
+    app = create_app(
+        lambda: build_inventory(home), token="tok", port=47800, home=home, run=client.run
+    )
+    with TestClient(app, base_url=ORIGIN, follow_redirects=False) as again:
+        again.get("/?token=tok")
+        read = again.get(f"/api/changes/{change['id']}").json()
+    assert read["steps"][0]["reaches"] == ["claude_code", "cursor"]
+    assert read["target"] == everywhere
 
 
 def test_undo_of_removing_an_off_plugin_leaves_it_off(plain):

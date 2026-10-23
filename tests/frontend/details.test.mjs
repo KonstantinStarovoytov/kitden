@@ -6,9 +6,10 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; details.js must load there too.
 delete globalThis.navigator;
-const { DETAILS_ORDER, affectsFor, affectsText, contextLinks, detailsOrder, fileScopeWords, focusAfterBack, footerActions, layerState, offerLabel, originWords, scopeWords, techRows, whyLines, whyParts } = await import('../../src/kitden/web/static/js/details.js');
+const { DETAILS_ORDER, affectsFor, affectsText, backToDetails, contextLinks, detailsOrder, fileScopeWords, focusAfterBack, footerActions, keepFrom, layerState, offerLabel, originWords, scopeWords, techRows, whyLines, whyParts } = await import('../../src/kitden/web/static/js/details.js');
 const { addReach } = await import('../../src/kitden/web/static/js/offer.js');
 const { cancelTarget } = await import('../../src/kitden/web/static/js/review.js');
+const { panelState } = await import('../../src/kitden/web/static/js/panel.js');
 
 const def = (fields) => ({ kind: 'skill', scope: 'user', project: null, enabled: 'on', owner_client: fields.client, loads: true, overridden: false, merged: false, ...fields });
 const site = '/Users/me/work/website';
@@ -325,4 +326,54 @@ test('focus comes back to the pressed control, or to More when it was under More
   assert.equal(focusAfterBack(null, ['move']), null);
   // Nothing under More and the control gone: the panel itself takes focus.
   assert.equal(focusAfterBack('add:codex', ['move']), null);
+});
+
+test('a panel keeps how to draw itself again and the control pressed last', () => {
+  const listeners = [];
+  const node = () => ({ addEventListener: (type, listener, capture) => listeners.push({ type, listener, capture }) });
+  const draw = () => {};
+  const from = keepFrom(draw, [node(), node(), null]);
+  assert.equal(panelState.from, from);
+  assert.deepEqual({ draw: from.draw, focus: from.focus }, { draw, focus: null });
+  // One capture listener on the body and one on the footer: it hears a press before the button.
+  assert.deepEqual(listeners.map((l) => [l.type, l.capture]), [['click', true], ['click', true]]);
+  const press = (key) => ({ target: { closest: () => (key ? { dataset: { focus: key } } : null) } });
+  listeners[1].listener(press('held:Remove from the Kitden gateway…'));
+  assert.equal(from.focus, 'held:Remove from the Kitden gateway…');
+  listeners[0].listener(press(null)); // a press on plain text keeps the last control
+  assert.equal(from.focus, 'held:Remove from the Kitden gateway…');
+  panelState.from = null;
+});
+
+test('back from a review, Details is drawn again from what it read, the reason first, focus restored', () => {
+  const focused = [];
+  const body = { children: [], prepend(node) { this.children.unshift(node); } };
+  const control = (key) => ({ dataset: { focus: key }, focus: () => focused.push(key) });
+  let controls = [];
+  const drawer = {
+    focus: () => focused.push('drawer'),
+    querySelector: (selector) => (selector === '.body' ? body : null),
+    querySelectorAll: (selector) => (selector === '[data-focus]' ? controls : []),
+  };
+  const element = (tag) => ({ tag, className: '', textContent: '', children: [], attributes: {}, append(...nodes) { this.children.push(...nodes); }, setAttribute(name, value) { this.attributes[name] = value; } });
+  globalThis.document = { createElement: element, querySelector: (selector) => (selector === '#drawer' ? drawer : null), querySelectorAll: () => [] };
+  try {
+    let drawn = 0;
+    // The pressed Remove waits under More again once Details is drawn.
+    panelState.from = { draw: () => { drawn += 1; controls = [control('more'), control('move')]; }, focus: 'offer:d1:mcp.remove_direct' };
+    backToDetails({ error: 'Choose one known item.' });
+    assert.equal(drawn, 1);
+    assert.equal(body.children[0].className, 'callout error');
+    assert.equal(body.children[0].children[1].textContent, 'Choose one known item.');
+    assert.deepEqual(focused, ['more']);
+    // Cancel: no callout; focus on the control itself when it is drawn.
+    focused.length = 0;
+    body.children = [];
+    panelState.from = { draw: () => { controls = [control('move')]; }, focus: 'move' };
+    backToDetails();
+    assert.deepEqual([body.children.length, focused], [0, ['move']]);
+  } finally {
+    panelState.from = null;
+    delete globalThis.document;
+  }
 });

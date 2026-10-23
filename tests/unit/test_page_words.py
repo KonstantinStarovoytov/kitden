@@ -853,7 +853,7 @@ def test_moves_into_the_kitden_gateway_name_it():
     # Two gateways can take a server: the panel asks which, never picks one silently.
     assert 'openInfo("Move into the gateway", title, body' in code
     # The Changes page names the server first: "Moved files into the Kitden gateway · …".
-    assert "into the Kitden gateway · ${clients.join" in script("parts.js")
+    assert "into the Kitden gateway${place} · ${clients.join" in script("parts.js")
 
 
 def test_overview_offers_set_up_only_without_a_gateway():
@@ -897,9 +897,10 @@ def test_cancel_and_a_refused_preview_go_back_to_details():
     review, shell, details = script("review.js"), script("panel.js"), script("details.js")
     assert "cancelTarget(" in review and "backToDetails({ error: reason })" in review
     assert "panelState.from = null" in shell
-    # Details keeps what it was drawn from and the control pressed, by its focus key.
-    assert "const from = { row, definitions, offer, inherits, focus: null };" in details
-    assert "panelState.from = from;" in details
+    # Details, and the Kitden gateway's own panel of a held server, keep how to draw themselves
+    # again (details.test.mjs tests keepFrom and backToDetails).
+    assert "keepFrom(" in details
+    assert "keepFrom(() => showKitdenServer(server)" in script("gateway.js")
     for key in ("`offer:", '"move"', "`add:", '"add:form"', "`held:", '"more"', '"commands"'):
         assert key in panel() + script("offer.js"), key
     assert "`switch:${def.id}`" in details

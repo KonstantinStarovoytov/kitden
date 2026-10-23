@@ -173,10 +173,11 @@ def _step_path(step: Step) -> str | None:
 
 
 def _readers(step: Step) -> list[str] | None:
-    """The clients that read a copied or removed folder; None for other steps."""
+    """The clients that read a copied or removed folder, or that a plugin step reaches; None for
+    other steps."""
     if step.copy is not None:
         return step.copy.readers
-    return step.removal.readers if step.removal is not None else None
+    return step.removal.readers if step.removal is not None else step.reaches
 
 
 def _sha(data: bytes | None) -> str | None:
@@ -346,6 +347,7 @@ def _record(change: Change) -> dict:
                 "copy": _copy_record(step.copy),
                 "removal": _removal_record(step.removal),
                 "keychain": _keychain_record(step.keychain),
+                "reaches": step.reaches,
             }
         )
     return {
@@ -354,6 +356,7 @@ def _record(change: Change) -> dict:
         "state": str(change.state),
         "error": change.error,
         "holds_secret": change.holds_secret,
+        "target": change.target,
         "steps": steps,
     }
 
@@ -399,6 +402,7 @@ def _from_record(record: dict) -> Change:
                 login_note=raw["login_note"],
                 shared_file=raw["shared_file"],
                 keychain=[KeychainItem(**k) for k in raw.get("keychain") or []],
+                reaches=raw.get("reaches"),
             )
         )
     return Change(
@@ -408,6 +412,7 @@ def _from_record(record: dict) -> Change:
         steps=steps,
         error=record["error"],
         holds_secret=record.get("holds_secret", False),
+        target=record.get("target"),
     )
 
 
@@ -1070,6 +1075,7 @@ class Engine:
                 "state": str(change.state),
                 "error": change.error,
                 "holds_secret": change.holds_secret,
+                "target": change.target,
                 "steps": [
                     {
                         "client": s.client,

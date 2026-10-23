@@ -41,6 +41,16 @@ test('the scope words are the folder, all projects, or none', () => {
   assert.equal(targetWords(target('all'), ''), ' for all projects');
   assert.equal(targetWords(target('mixed'), ''), '');
   assert.equal(targetWords(null, ''), '');
+  // Without a folder given, the project's own folder name; a project at / is never "undefined".
+  assert.equal(targetWords(target('project', '/Users/me/work/website')), ' in website');
+  assert.equal(targetWords(target('project', '/')), ' in /');
+});
+
+test('a definition the picked project overrides goes to every project but that one', () => {
+  const others = { ...remove, target: target('others', '/Users/me/work/website') };
+  assert.deepEqual(changeWords(others), { title: 'Remove neon from Codex for all projects except website', done: 'Removed neon from Codex for all projects except website' });
+  // Not all projects, and not one project: the lede promises neither.
+  assert.equal(reviewLede({ ...add, target: target('others', '/a/web') }, ''), 'Nothing is written until you press Apply. A backup is kept.');
 });
 
 test('the title names every client the change reaches, as Details does', () => {

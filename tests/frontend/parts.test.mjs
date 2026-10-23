@@ -29,7 +29,7 @@ function element(tag) {
   return node;
 }
 globalThis.document = { createElement: element };
-const { backupNote, banner, changeTitle, clientCheck, demoTag, gatewayName, morphSocket, opens, socket, strictText } = await import('../../src/kitden/web/static/js/parts.js');
+const { backupNote, banner, changeTitle, clientCheck, demoTag, folderName, gatewayName, morphSocket, opens, socket, strictText } = await import('../../src/kitden/web/static/js/parts.js');
 
 test('a row that opens Details ends with a chevron for the eye and words for a screen reader', () => {
   const node = opens();
@@ -305,4 +305,24 @@ test('a socket kept from the last good read keeps its dashed dot through a morph
   } finally {
     media.matches = false;
   }
+});
+
+test('the Changes page names the place a change went, as its review did', () => {
+  const neon = { client: 'codex', name: 'neon' };
+  const at = (scope, project = null) => ({ action: 'mcp.remove_direct', steps: [neon], target: { scope, project, others_unchanged: false } });
+  assert.equal(changeTitle(at('project', '/Users/me/work/website')), 'Removed neon in website · Codex');
+  assert.equal(changeTitle(at('all')), 'Removed neon for all projects · Codex');
+  assert.equal(changeTitle(at('others', '/Users/me/work/website')), 'Removed neon for all projects except website · Codex');
+  assert.equal(changeTitle(at('mixed')), 'Removed neon · Codex');
+  // A line from before Kitden kept the place says none; a title that names its place keeps it.
+  assert.equal(changeTitle({ action: 'mcp.remove_direct', steps: [neon] }), 'Removed neon · Codex');
+  const keychain = { action: 'gateway.keychain', steps: [{ client: 'kitden', name: 'files' }], target: { scope: 'all', project: null } };
+  assert.equal(changeTitle(keychain), 'Moved the secrets of files to the Keychain');
+});
+
+test('a folder name is the last part of its path, and / stays /', () => {
+  assert.equal(folderName('/Users/me/work/website'), 'website');
+  assert.equal(folderName('/Users/me/work/website/'), 'website');
+  assert.equal(folderName('/'), '/');
+  assert.equal(folderName(null), '');
 });

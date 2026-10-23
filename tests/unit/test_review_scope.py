@@ -1,10 +1,25 @@
 """Where a change goes, for the review's first sentence, and what Undo cannot bring back
 (spec 3.3). Synthetic steps; every folder is under tmp_path."""
 
-from kitden.model import Change, FileEdit, FolderCopy, FolderRemoval, Scope, Step
+from kitden.model import (
+    Change,
+    Client,
+    ClientStatus,
+    FileEdit,
+    FolderCopy,
+    FolderRemoval,
+    Item,
+    ItemKind,
+    KeychainItem,
+    Scope,
+    Source,
+    SourceKind,
+    Step,
+)
 from kitden.views import after
+from kitden.views.inventory import Inventory
 from kitden.views.review import change_target, step_project, undo_note
-from kitden.views.words import REMOVE_NOTE
+from kitden.views.words import KEYCHAIN_UNDO, REMOVE_NOTE
 
 
 def edit(path, scope=Scope.PROJECT, key=("mcpServers", "db"), client="cursor"):
@@ -109,3 +124,74 @@ def test_removing_a_claude_code_plugin_names_the_undo_limit(tmp_path):
     assert undo_note(Change(action="plugin.remove", steps=[codex])) is None
     # The note is the review's lede now, said once: no After chip carries it.
     assert not hasattr(after, "REMOVE_NOTE")
+
+
+def test_a_client_command_never_promises_other_projects_are_unchanged(tmp_path):
+    web = tmp_path / "web"
+    # `claude plugin uninstall -s project` runs in the project; Kitden cannot vouch for more
+    # than the file it checks.
+    uninstall = edit(web / ".claude/settings.json", client="claude_code")
+    uninstall.command = ["claude", "plugin", "uninstall", "x@a", "-s", "project"]
+    assert target([uninstall], [web]) == {
+        "scope": "project",
+        "project": str(web),
+        "others_unchanged": False,
+    }
+
+
+def server(client, scope, project=None, path="/h/.mcp.json"):
+    source = Source(kind=SourceKind.FILE, path=path, owner_client=client)
+    kind = ItemKind.MCP_SERVER
+    return Item(client=client, kind=kind, name="db", source=source, scope=scope, project=project)
+
+
+def inventory(*items):
+    found = [Client(id=c, display_name=c, status=ClientStatus.FOUND) for c in ("claude_code",)]
+    return Inventory(clients=found, items=list(items))
+
+
+def test_a_definition_the_picked_project_overrides_goes_to_all_projects_but_that_one(tmp_path):
+    web = str(tmp_path / "web")
+    user = edit(tmp_path / ".claude.json", Scope.USER, client="claude_code")
+    inv = inventory(server("claude_code", Scope.USER), server("claude_code", Scope.LOCAL, web))
+    change = Change(action="mcp.remove_direct", steps=[user])
+    assert change_target(change, [web], inv, web) == {
+        "scope": "others",
+        "project": web,
+        "others_unchanged": False,
+    }
+    # With All projects picked, or a project without its own definition, it is all projects.
+    assert change_target(change, [web], inv, None)["scope"] == "all"
+    other = str(tmp_path / "api")
+    assert change_target(change, [web, other], inv, other)["scope"] == "all"
+    # A client the step reaches that loads the user definition there still changes.
+    user.reaches = ["claude_code", "cursor"]
+    assert change_target(change, [web], inv, web)["scope"] == "all"
+
+
+def test_a_merged_definition_still_changes_the_picked_project(tmp_path):
+    api = str(tmp_path / "api")
+    codex = edit(tmp_path / ".codex/config.toml", Scope.USER, client="codex")
+    found = [Client(id="codex", display_name="Codex", status=ClientStatus.FOUND)]
+    inv = Inventory(
+        clients=found,
+        items=[server("codex", Scope.USER), server("codex", Scope.PROJECT, api)],
+    )
+    change = Change(action="mcp.remove_direct", steps=[codex])
+    # Codex merges a project's fields over the user entry: removing it changes the merge there.
+    assert change_target(change, [api], inv, api)["scope"] == "all"
+
+
+def test_a_keychain_item_that_was_there_keeps_its_new_value_after_undo(tmp_path):
+    step = edit(tmp_path / ".kitden/settings.json", Scope.USER, client="kitden")
+    step.keychain = [
+        KeychainItem(server="github", key="TOKEN", existed=True),
+        KeychainItem(server="github", key="URL", existed=False),
+    ]
+    change = Change(action="gateway.keychain", steps=[step])
+    assert undo_note(change) == KEYCHAIN_UNDO.format("github/TOKEN")
+    assert undo_note(change) == "Undo leaves github/TOKEN in your Keychain with the new value."
+    step.keychain[1].existed = True
+    assert undo_note(change).startswith("Undo leaves github/TOKEN and github/URL in your Keychain")
+    step.keychain = [KeychainItem(server="github", key="TOKEN", existed=False)]
+    assert undo_note(change) is None

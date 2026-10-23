@@ -325,6 +325,9 @@ class Change:
     error: str | None = None
     # Set at Apply: the backup or the record keeps a secret (an old or new entry's value).
     holds_secret: bool = False
+    # Where the steps go (views/review.py change_target), set at preview: the review's title
+    # and the Changes page say it. Kept in the record.
+    target: dict | None = None
 
     def move_to(self, new: ChangeState) -> None:
         if new not in _TRANSITIONS.get(self.state, set()):

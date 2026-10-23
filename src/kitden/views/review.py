@@ -2,9 +2,10 @@
 lede (spec 3.3).
 
 "Other projects are unchanged." is said only when the steps guarantee it: every step is in one
-known project's files, or is a Kitden gateway rule for that project, and no other known project
-lies inside that folder or around it. A gateway rule passes down to a child project, and a
-client working in a parent folder may read a child's files too.
+known project's files, or is a Kitden gateway rule for that project, no other known project
+lies inside that folder or around it, and no step runs a client's own command. A gateway rule
+passes down to a child project, a client working in a parent folder may read a child's files
+too, and Kitden checks the file a client command writes, not all the command does.
 """
 
 import os
@@ -14,7 +15,8 @@ from kitden.changes.actions import PLUGIN_INSTALL
 from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, PLUGIN_REMOVE
 from kitden.model import Change, Item, Scope, Step
 from kitden.views.affects import affects
-from kitden.views.words import REMOVE_NOTE
+from kitden.views.effective import effective_view
+from kitden.views.words import KEYCHAIN_UNDO, REMOVE_NOTE
 
 
 def _real(path: str) -> Path:
@@ -67,28 +69,74 @@ def _alone(project: str, projects: list[str]) -> bool:
     return not any(o.is_relative_to(here) or here.is_relative_to(o) for o in others)
 
 
-def change_target(change: Change, projects: list[str]) -> dict:
+def _touched(step: Step) -> list[str]:
+    """The clients a step changes: the readers of a copied or removed folder, every client a
+    plugin step reaches, else its own client."""
+    if step.copy is not None:
+        return step.copy.readers
+    if step.removal is not None:
+        return step.removal.readers
+    return step.reaches or [step.client]
+
+
+def _wins_in(change: Change, inventory, picked: str) -> bool:
+    """For every client the steps change, the picked project's own definition of that name
+    overrides the one the step changes (a merge does not count: Codex merges a project's fields
+    over the user entry, so the change still reaches the merge there)."""
+    views: dict = {}
+    for step in change.steps:
+        for client in _touched(step):
+            if client not in views:
+                views[client] = effective_view(inventory, client, picked)
+            beaten = any(
+                loser.name == step.name
+                and loser.project is None
+                and winner.project == picked
+                and mode == "override"
+                for winner, loser, mode in views[client].shadowed
+            )
+            if not beaten:
+                return False
+    return bool(change.steps)
+
+
+def change_target(
+    change: Change, projects: list[str], inventory=None, picked: str | None = None
+) -> dict:
     """Where the steps go: "project" (one known project, `project`), "all" (no step is in a
-    project), or "mixed". `others_unchanged`: the review may say "Other projects are
-    unchanged.\""""
+    project), "others" (all projects but the picked one, `project`, whose own definition wins
+    for every client the steps change), or "mixed". `others_unchanged`: the review may say
+    "Other projects are unchanged.\""""
     places = {step_project(s, projects) for s in change.steps}
     if len(places) == 1 and None not in places:
         [project] = places
-        alone = _alone(project, projects)
+        alone = _alone(project, projects) and not any(s.command for s in change.steps)
         return {"scope": "project", "project": project, "others_unchanged": alone}
     scoped = any(
         s.scope in (Scope.PROJECT, Scope.LOCAL) or _rule_project(s) is not None
         for s in change.steps
     )
-    return {"scope": "mixed" if scoped else "all", "project": None, "others_unchanged": False}
+    if scoped:
+        return {"scope": "mixed", "project": None, "others_unchanged": False}
+    if inventory is not None and picked is not None and _wins_in(change, inventory, picked):
+        return {"scope": "others", "project": picked, "others_unchanged": False}
+    return {"scope": "all", "project": None, "others_unchanged": False}
+
+
+def _join(words: list[str]) -> str:
+    return words[0] if len(words) == 1 else f"{', '.join(words[:-1])} and {words[-1]}"
 
 
 def undo_note(change: Change) -> str | None:
     """What Undo cannot bring back, when Kitden knows: a removed Claude Code plugin's saved
-    options. None for every other change."""
+    options, and the old value of a Keychain item the change replaced. None when nothing."""
+    notes = []
     if change.action == PLUGIN_REMOVE and any(s.client == "claude_code" for s in change.steps):
-        return REMOVE_NOTE
-    return None
+        notes.append(REMOVE_NOTE)
+    kept = [f"{i.server}/{i.key}" for s in change.steps for i in s.keychain if i.existed]
+    if kept:
+        notes.append(KEYCHAIN_UNDO.format(_join(kept)))
+    return " ".join(notes) or None
 
 
 def mark_reach(change: Change, inventory, item: Item | None, cursor_imports: bool) -> None:

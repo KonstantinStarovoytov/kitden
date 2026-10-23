@@ -5,7 +5,7 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; panel.js must load there too.
 delete globalThis.navigator;
-const { addScope, afterParts, alignGroups, canShowReview, cancelPreview, closeForProject, closePanel, countedDefinition, changeOutcome, chosenKeys, callsText, changeWords, footerActions, heldActions, isPanelOpen, offerLabel, layerState, leftOutText, kindWord, loadsLede, moveFor, moveTargets, openPanel, panelState, plainSecrets, review, reviewLede, scopeWords, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
+const { addScope, afterParts, alignGroups, canShowReview, cancelPreview, closeForProject, closePanel, countedDefinition, changeOutcome, chosenKeys, callsText, changeWords, footerActions, heldActions, isPanelOpen, offerLabel, layerState, leftOutText, kindWord, loadsLede, moveFor, moveTargets, openPanel, panelState, plainSecrets, projectLabel, review, reviewLede, scopeWords, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
 const { addOptions, whyNoAction } = await import('../../src/kitden/web/static/js/offer.js');
 const { busy, data, state } = await import('../../src/kitden/web/static/js/store.js');
 
@@ -772,6 +772,67 @@ test('Cancel sends one cancel for the review, and a closed panel forgets the Det
     delete globalThis.document;
     delete globalThis.fetch;
   }
+});
+
+test('the preview names the project picked at the top, so the server can tell what it overrides', async () => {
+  let sent = null;
+  globalThis.fetch = (url, options) => {
+    sent = JSON.parse(options.body);
+    return Promise.resolve({ ok: false, status: 422, json: async () => ({ detail: 'No.' }) });
+  };
+  try {
+    state.project = 'p1';
+    await review({ action: 'plugin.disable', targets: [{ item: 'i1' }], params: {} }, { back: async () => {} });
+    assert.deepEqual(sent, { action: 'plugin.disable', targets: [{ item: 'i1' }], params: {}, picked: 'p1' });
+    state.project = '';
+    await review({ action: 'plugin.disable', targets: [{ item: 'i1' }], params: {} }, { back: async () => {} });
+    assert.equal(sent.picked, null);
+  } finally {
+    state.project = '';
+    delete globalThis.fetch;
+  }
+});
+
+// A stand-in element: enough for a panel's header, body and footer.
+function element(tag) {
+  const node = {
+    tag, className: '', textContent: '', children: [], attributes: {}, dataset: {},
+    append(...nodes) { node.children.push(...nodes); },
+    prepend(...nodes) { node.children.unshift(...nodes); },
+    setAttribute(name, value) { node.attributes[name] = value; },
+    addEventListener() {},
+  };
+  return node;
+}
+
+test('a refusal goes back only to the Details the review was asked from', async () => {
+  fakePanelPage();
+  document.createElement = element;
+  let answer;
+  globalThis.fetch = () => new Promise((resolve) => { answer = resolve; });
+  const drawn = [];
+  try {
+    panelState.from = { draw: () => drawn.push('asked from'), focus: null };
+    const pending = review({ action: 'mcp.remove_direct', targets: [], params: {} });
+    // The person opened another item's Details while the preview was prepared.
+    panelState.from = { draw: () => drawn.push('another'), focus: null };
+    answer({ ok: false, status: 422, json: async () => ({ detail: 'No.' }) });
+    await pending;
+    assert.deepEqual(drawn, []);
+    assert.equal(panelState.current.type, 'error');
+  } finally {
+    panelState.current = null;
+    panelState.from = null;
+    delete globalThis.document;
+    delete globalThis.fetch;
+  }
+});
+
+test('a project at / is named /', () => {
+  data.projects = [{ id: 'root', path: '/' }, { id: 'p1', path: '/Users/me/work/website' }];
+  assert.equal(projectLabel('root'), '/');
+  assert.equal(projectLabel('p1'), 'website');
+  data.projects = null;
 });
 
 test('a definition kept from the last good read says when, on this Mac clock', () => {

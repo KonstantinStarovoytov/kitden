@@ -314,6 +314,10 @@ def test_moving_secrets_warns_of_an_item_already_in_the_keychain(home, fake_keyc
         change = _to_keychain(page, "files").json()
     replaced = "files/FILES_TOKEN is already in your Keychain; its value will be replaced."
     assert change["after"] == [{"note": f"{replaced} {MOVE_NOTE}"}]
+    # The review's lede names what Undo cannot bring back: the old value.
+    assert change["undo_note"] == (
+        "Undo leaves files/FILES_TOKEN in your Keychain with the new value."
+    )
 
 
 def test_moving_secrets_needs_a_held_server_with_a_plain_secret(home, fake_keychain):

@@ -208,6 +208,7 @@ def change_dict(change: Change) -> dict:
         "error": change.error,
         "restart_needed": change.restart_needed,
         "shared_file_warning": change.shared_file_warning,
+        "target": change.target,
         "steps": [
             {
                 "client": s.client,
@@ -1154,14 +1155,13 @@ def create_app(
         after = after_words(
             change, state.inventory, cursor_imports=imports, skills=copied, home=home
         )
-        # The review's first sentence: where the steps go, and what Undo cannot bring back.
+        # The review's first sentence: where the steps go (also for the project picked at the
+        # top, which may have its own definition), and what Undo cannot bring back.
         known = [p.path for p in state.inventory.projects]
-        answer = {
-            **change_dict(change),
-            "after": after,
-            "target": change_target(change, known),
-            "undo_note": undo_note(change),
-        }
+        paths = {p["id"]: p["path"] for p in state.data["projects"]}
+        picked = paths.get(str(body.get("picked") or ""))
+        change.target = change_target(change, known, state.inventory, picked)
+        answer = {**change_dict(change), "after": after, "undo_note": undo_note(change)}
         if left_out is not None:
             answer["left_out"] = left_out
         if align is not None:
