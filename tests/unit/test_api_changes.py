@@ -1,6 +1,7 @@
 """Change and gateway endpoints (T047, contracts/local-api.md)."""
 
 import json
+import os
 import re
 import shutil
 from pathlib import Path
@@ -297,9 +298,12 @@ def test_a_change_says_it_is_stale_once_its_file_changes(client):
     answer = client.get(f"/api/changes/{change['id']}").json()
     assert answer["stale"] is True and answer["state"] == "previewed"  # only looked
     assert config.read_text() == before + "\n# edited by hand\n"
-    # A file Kitden can no longer read is not the one the preview read either.
+    # A file Kitden can no longer read is not the one the preview read either (root reads it
+    # anyway, so this part needs another user).
     config.write_text(before)
     assert client.get(f"/api/changes/{change['id']}").json()["stale"] is False
+    if os.geteuid() == 0:
+        return
     config.chmod(0)
     try:
         assert client.get(f"/api/changes/{change['id']}").json()["stale"] is True

@@ -525,7 +525,8 @@ const STALE_NOTE = "Settings changed since this preview.";
 // only when it was on Apply.
 export async function checkStale() {
   const current = panelState.current;
-  if (!staleCheckWanted(current, busy)) return;
+  // Apply gave way to "Preview again" already: nothing to ask.
+  if (!staleCheckWanted(current, busy) || !$("#drawer .apply")) return;
   const read = await readChange(current.change.id);
   if (!read || !read.stale || panelState.current !== current || !staleCheckWanted(current, busy)) return;
   const apply = $("#drawer .apply");

@@ -79,34 +79,56 @@ test('only an open, previewed review is checked, never while a change is written
   assert.equal(staleCheckWanted(null, { change: false }), false);
 });
 
-test('settings changed since the preview: the callout comes first and Apply gives way to Preview again', async () => {
+// A review drawn in a stub page: its body and its Apply button. `drawn` is what the page shows
+// (a replaced Apply is gone from it); `asked` lists each request; `answers(url, options)` answers.
+function stubPage(answers) {
+  const drawn = {};
   const node = (tag) => ({
     tag, className: '', textContent: '', children: [], attributes: {}, dataset: {}, listeners: {},
     append(...nodes) { this.children.push(...nodes); },
     prepend(...nodes) { this.children.unshift(...nodes); },
     setAttribute(name, value) { this.attributes[name] = value; },
     addEventListener(type, listener) { this.listeners[type] = listener; },
-    replaceWith(other) { this.replacedBy = other; },
+    replaceWith(other) {
+      this.replacedBy = other;
+      for (const key of Object.keys(drawn)) if (drawn[key] === this) drawn[key] = null;
+    },
     focus() { globalThis.document.activeElement = this; },
   });
   const apply = node('button');
   const body = node('div');
-  const drawn = { '#drawer .apply': apply, '#drawer .body': body };
+  Object.assign(drawn, { '#drawer .apply': apply, '#drawer .body': body });
   globalThis.document = { createElement: node, querySelector: (selector) => drawn[selector] || null, activeElement: apply };
   const asked = [];
-  let answer = { id: 'c1', state: 'previewed', stale: true };
-  let meanwhile = () => {};
   const realFetch = globalThis.fetch;
-  globalThis.fetch = async (url) => { asked.push(url); meanwhile(); return { ok: true, json: async () => answer }; };
+  globalThis.fetch = async (url, options = {}) => {
+    asked.push({ url, method: options.method || 'GET', body: options.body });
+    const { status = 200, json } = await answers(url, options);
+    return { ok: status < 400, status, json: async () => json };
+  };
+  const done = () => {
+    panelState.current = null;
+    delete globalThis.document;
+    globalThis.fetch = realFetch;
+  };
+  return { node, apply, body, drawn, asked, done };
+}
+
+const previewed = (fields = {}) => ({ type: 'review', change: { id: 'c1', state: 'previewed' }, previewBody: { action: 'mcp.remove_direct', targets: [{ item: 'i1' }], params: {} }, note: null, back: null, ...fields });
+
+test('settings changed since the preview: the callout comes first and Apply gives way to Preview again', async () => {
+  let stale = false;
+  let meanwhile = () => {};
+  const page = stubPage(() => { meanwhile(); return { json: { id: 'c1', state: 'previewed', stale } }; });
+  const { node, apply, body, drawn, asked } = page;
   try {
-    const review = { type: 'review', change: { id: 'c1', state: 'previewed' }, previewBody: { action: 'mcp.remove_direct' }, note: null, back: null };
+    const review = previewed();
     // Not changed: nothing moves.
-    answer = { ...answer, stale: false };
     panelState.current = review;
     await checkStale();
-    assert.deepEqual([asked, body.children.length, apply.replacedBy], [['/api/changes/c1'], 0, undefined]);
+    assert.deepEqual([asked.map((a) => a.url), body.children.length, apply.replacedBy], [['/api/changes/c1'], 0, undefined]);
     // Changed: the warning first, read out at once; focus follows from Apply to Preview again.
-    answer = { ...answer, stale: true };
+    stale = true;
     await checkStale();
     const [warning] = body.children;
     assert.equal(warning.attributes.role, 'alert');
@@ -114,6 +136,9 @@ test('settings changed since the preview: the callout comes first and Apply give
     assert.equal(apply.replacedBy.textContent, 'Preview again');
     assert.equal(apply.replacedBy.className, 'btn primary');
     assert.equal(globalThis.document.activeElement, apply.replacedBy);
+    // A later rescan: Apply has given way already, so the server is not asked again.
+    await checkStale();
+    assert.equal(asked.length, 2);
     // Another review opened while the server answered: the old answer changes nothing.
     const later = node('button');
     drawn['#drawer .apply'] = later;
@@ -122,8 +147,29 @@ test('settings changed since the preview: the callout comes first and Apply give
     await checkStale();
     assert.deepEqual([body.children.length, later.replacedBy], [0, undefined]);
   } finally {
-    panelState.current = null;
-    delete globalThis.document;
-    globalThis.fetch = realFetch;
+    page.done();
+  }
+});
+
+test('Preview again drops this preview once and asks for the same change again', async () => {
+  const page = stubPage((url) => {
+    if (url === '/api/changes/c1') return { json: { id: 'c1', state: 'previewed', stale: true } };
+    if (url === '/api/changes/c1/cancel') return { json: { id: 'c1', state: 'cancelled' } };
+    return { status: 422, json: { detail: 'Refused.' } }; // the new preview: a refusal goes back
+  });
+  try {
+    let backed;
+    const back = new Promise((resolve) => { backed = resolve; });
+    const review = previewed({ note: 'For all projects.', back: (answer) => backed(answer) });
+    panelState.current = review;
+    await checkStale();
+    page.apply.replacedBy.listeners.click({});
+    assert.deepEqual(await back, { error: 'Refused.' });
+    const posts = page.asked.filter((a) => a.method === 'POST');
+    assert.deepEqual(posts.map((a) => a.url), ['/api/changes/c1/cancel', '/api/changes/preview']);
+    assert.deepEqual(JSON.parse(posts[1].body), { ...review.previewBody, picked: null });
+    assert.equal(review.change.state, 'cancelled');
+  } finally {
+    page.done();
   }
 });
