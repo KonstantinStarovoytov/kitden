@@ -87,7 +87,13 @@ test('a state cell says the state, and why when the server says', () => {
   assert.equal(done.className, 'socket s-done');
   assert.equal(done.children[1].textContent, 'Has its skills');
   const on = cellNode(row({ codex: cell({ state: 'on', where: 'project' }) }), 'codex');
-  assert.deepEqual(on.children.map((c) => c.textContent), ['', 'Loads', 'project']);
+  assert.deepEqual(on.children.map((c) => c.textContent), ['', 'Available', 'project']);
+});
+
+test('one word for a cell that has it, on every tab', () => {
+  const word = (kind) => cellNode({ key: 'k', kind, name: 'x', cells: { codex: cell({ state: 'on' }) } }, 'codex').children[1].textContent;
+  assert.equal(word('instructions'), 'Available');
+  assert.equal(word('mcp_server'), 'Available');
 });
 
 test('a cell add asks for a review of that one client', () => {

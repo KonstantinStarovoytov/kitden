@@ -132,7 +132,7 @@ def test_putting_a_server_back_writes_the_clients_entry_and_says_about_the_secre
             {
                 "client": "claude_code",
                 "state": "on",
-                "word": "Loads",
+                "word": "Available",
                 "note": "This writes a secret into ~/.claude.json. Claude Code then loads files "
                 "twice: directly and through the Kitden gateway. Remove it from the gateway to "
                 "keep one.",
@@ -173,7 +173,7 @@ def test_put_back_in_codex_and_cursor_keeps_each_clients_shape(home):
             {
                 "client": "cursor",
                 "state": "on",
-                "word": "Loads",
+                "word": "Available",
                 "note": "This writes a secret into ~/.cursor/mcp.json.",
             }
         ]

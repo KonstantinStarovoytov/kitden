@@ -3,6 +3,8 @@
 import re
 from pathlib import Path
 
+from kitden.views.words import AFTER_WORDS, STATE_WORDS
+
 STATIC = Path(__file__).parents[2] / "src/kitden/web/static"
 INDEX = (STATIC / "index.html").read_text()
 
@@ -58,9 +60,26 @@ def test_project_picker_says_project_not_where():
     assert "Project:" in INDEX and "Where:" not in INDEX
     assert 'aria-label="Project"' in INDEX
     app = script("app.js")
-    assert 'new Option("Global", "")' in app and "No project" not in app
-    assert '<option value="">Global</option>' in INDEX
+    assert 'new Option(ALL_PROJECTS, "")' in app and "No project" not in app
+    assert '<option value="">All projects</option>' in INDEX
+    assert "Global" not in app and "Global" not in INDEX
+    assert 'export const ALL_PROJECTS = "All projects";' in script("parts.js")
     assert "outside any project" not in script("library.js")
+
+
+def test_python_and_page_state_words_agree():
+    parts = script("parts.js")
+    for state, word in STATE_WORDS.items():
+        assert f'{state}: "{word}"' in parts, state
+
+
+def test_after_words_come_from_the_one_table():
+    from kitden.views import after
+
+    assert not hasattr(after, "WORDS")
+    assert AFTER_WORDS["plugin.enable"] == ("on", "Available")
+    assert AFTER_WORDS["gateway.move"] == ("gw", STATE_WORDS["gw"])
+    assert after.CURSOR_IMPORT["word"] == "Available"
 
 
 def test_gateway_names_the_remove_action_and_draws_no_idle_wire():
@@ -355,8 +374,12 @@ def test_a_lost_apply_answer_is_checked_not_guessed():
 def test_changes_and_the_library_say_saved_settings_and_scope():
     assert "Based on saved settings." in script("library.js")
     changes = script("changes.js")
-    assert "To take effect" in changes and "global settings" in changes
+    assert "To take effect" in changes and 'user: "all projects"' in changes
+    assert "global settings" not in changes
     assert '"everywhere"' not in changes
+    assert "Tools · ${where || ALL_PROJECTS}" in script("panel.js")
+    assert '"Nothing available here."' in script("overview.js")
+    assert "Loads nothing" not in script("overview.js")
 
 
 def test_changes_show_restart_notes_only_for_changes_that_happened():
@@ -723,7 +746,7 @@ def test_a_held_server_lists_its_tools_with_a_switch_each():
         "`Differs from ${row.follows}`",
         "`Use ${row.follows}`",
         '"Refresh tools"',
-        '"All projects"',
+        "ALL_PROJECTS",
         "Kitden does not know its tools yet.",
     ):
         assert words in panel, words

@@ -78,7 +78,7 @@ def test_one_entry_per_client_even_with_two_steps():
 def test_cursor_gets_a_plugin_only_through_claude_code():
     change = Change(action="plugin.install", steps=[step("codex", "notes@official")])
     assert after_words(change, inventory(), cursor_imports=True) == [
-        {"client": "codex", "state": "on", "word": "Loads"}
+        {"client": "codex", "state": "on", "word": "Available"}
     ]
 
 
@@ -95,7 +95,7 @@ def test_a_skill_a_client_loads_from_a_plugin_counts_whatever_the_path(tmp_path)
     )
     skills = [{"path": str(tmp_path / "link/skills/a"), "installed": {"cursor": "Via plugin"}}]
     assert after_words(change, inventory(), skills=skills) == [
-        {"client": "claude_code", "state": "on", "word": "Loads"},
+        {"client": "claude_code", "state": "on", "word": "Available"},
         {
             "client": "cursor",
             "state": "on",
@@ -326,16 +326,16 @@ def test_removing_one_of_two_claude_code_copies_says_cursor_keeps_the_other():
 def test_add_missing_names_cursor_for_a_claude_code_user_plugin():
     change = Change(action="project.align", steps=[step("claude_code", "notes@official")])
     assert after_words(change, inventory(), cursor_imports=True) == [
-        {"client": "claude_code", "state": "on", "word": "Loads"},
+        {"client": "claude_code", "state": "on", "word": "Available"},
         {
             "client": "cursor",
             "state": "on",
-            "word": "Loads",
+            "word": "Available",
             "note": "Cursor loads Claude Code plugins, so it gets this one too.",
         },
     ]
     assert after_words(change, inventory()) == [
-        {"client": "claude_code", "state": "on", "word": "Loads"}
+        {"client": "claude_code", "state": "on", "word": "Available"}
     ]
 
 

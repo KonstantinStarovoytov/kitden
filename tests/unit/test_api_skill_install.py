@@ -89,15 +89,15 @@ def test_codex_and_cursor_share_one_copy(client):
     change = _preview(client, TIDY, ["codex", "cursor"]).json()
     assert _targets(change) == [("codex", ".agents/skills/tidy", ["codex", "cursor"])]
     assert change["after"] == [
-        {"client": "codex", "state": "on", "word": "Loads"},
-        {"client": "cursor", "state": "on", "word": "Loads"},
+        {"client": "codex", "state": "on", "word": "Available"},
+        {"client": "cursor", "state": "on", "word": "Available"},
     ]
 
 
 def test_cursor_reads_claude_codes_folder_so_two_copies_make_it_load_twice(client):
     one = _preview(client, TIDY, ["claude_code", "cursor"]).json()
     assert _targets(one) == [("claude_code", ".claude/skills/tidy", ["claude_code", "cursor"])]
-    assert [e["word"] for e in one["after"]] == ["Loads", "Loads"]
+    assert [e["word"] for e in one["after"]] == ["Available", "Available"]
     client.post(f"/api/changes/{one['id']}/cancel", headers=POST)
 
     both = _preview(client, TIDY, ["claude_code", "codex"]).json()
@@ -116,7 +116,7 @@ def test_with_third_party_off_cursor_gets_its_own_copy(strict_cursor):
         ("claude_code", ".claude/skills/tidy", ["claude_code"]),
         ("cursor", ".cursor/skills/tidy", ["cursor"]),
     ]
-    assert [e["word"] for e in change["after"]] == ["Loads", "Loads"]
+    assert [e["word"] for e in change["after"]] == ["Available", "Available"]
 
 
 def test_a_skill_that_needs_its_plugin_is_refused(client):
@@ -219,8 +219,8 @@ def test_add_skills_is_one_change_that_undo_removes_whole(client):
     # Claude Code loads a skill named brainstorming from the superpowers plugin already. Cursor
     # loads it from there too, and reads the shared folder the copies go to.
     assert change["after"] == [
-        {"client": "claude_code", "state": "on", "word": "Loads"},
-        {"client": "codex", "state": "on", "word": "Loads"},
+        {"client": "claude_code", "state": "on", "word": "Available"},
+        {"client": "codex", "state": "on", "word": "Available"},
         {
             "client": "cursor",
             "state": "on",
@@ -260,8 +260,8 @@ def test_add_skills_skips_what_the_client_has_and_undo_leaves_that_alone(client)
         *LEFT_OUT,
     ]
     assert change["after"] == [
-        {"client": "codex", "state": "on", "word": "Loads"},
-        {"client": "cursor", "state": "on", "word": "Loads"},
+        {"client": "codex", "state": "on", "word": "Available"},
+        {"client": "cursor", "state": "on", "word": "Available"},
     ]
     assert _apply(client, change)["state"] == "verified"
     assert (home / ".agents/skills/tidy/SKILL.md").is_file()
@@ -293,8 +293,8 @@ def test_add_skills_leaves_out_a_skill_the_client_loads_from_another_plugin(clie
         *LEFT_OUT,
     ]
     assert change["after"] == [
-        {"client": "claude_code", "state": "on", "word": "Loads"},
-        {"client": "cursor", "state": "on", "word": "Loads"},
+        {"client": "claude_code", "state": "on", "word": "Available"},
+        {"client": "cursor", "state": "on", "word": "Available"},
     ]
 
 
@@ -309,7 +309,7 @@ def test_add_skills_from_a_cursor_plugin_says_cursor_loads_them_twice(client):
         ("b", ["claude_code", "cursor"]),
     ]
     assert change["after"] == [
-        {"client": "claude_code", "state": "on", "word": "Loads"},
+        {"client": "claude_code", "state": "on", "word": "Available"},
         {
             "client": "cursor",
             "state": "on",

@@ -71,7 +71,7 @@ test('with reduced motion a changed socket shows its new word at once, never fad
     const node = socket({ state: 'off' });
     morphSocket(node, { state: 'on', where: 'global' });
     assert.equal(node.className, 'socket s-on');
-    assert.equal(node.querySelector('.word').textContent, 'Loads');
+    assert.equal(node.querySelector('.word').textContent, 'Available');
     assert.equal(node.querySelector('.where').textContent, 'global');
     assert.equal(node.querySelectorAll('.swap').length, 0);
   } finally {

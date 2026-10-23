@@ -8,7 +8,7 @@ import { renderGateway } from "./gateway.js";
 import { loadLibrary, loadLibraryFor, morphOnNextRender, raceSlow, renderLibrary, settleRows, snapshotRows } from "./library.js";
 import { renderOverview } from "./overview.js";
 import { closeForProject, closePanel, initPanel, isPanelOpen } from "./panel.js";
-import { demoTag, latestChanges, scanLine, versionsOpened } from "./parts.js";
+import { ALL_PROJECTS, demoTag, latestChanges, scanLine, versionsOpened } from "./parts.js";
 import {
   busy, current, data, followAddress, freshness, go, loadShared, OLD_VIEWS, onIdle, parseHash, reload, setRenderer, setState, state, VIEWS,
 } from "./store.js";
@@ -69,7 +69,7 @@ function renderShell() {
   const projects = data.projects || [];
   const signature = JSON.stringify(projects.map(({ id, path, exists }) => [id, path, exists]));
   if (where.dataset.projects !== signature) {
-    where.replaceChildren(new Option("Global", ""));
+    where.replaceChildren(new Option(ALL_PROJECTS, ""));
     for (const project of projects) {
       const name = project.path.split("/").filter(Boolean).pop() || project.path;
       const option = new Option(`${name}${project.exists ? "" : " (folder missing)"}`, project.id);
@@ -78,7 +78,7 @@ function renderShell() {
     }
     where.dataset.projects = signature;
   }
-  where.title = projects.find((project) => project.id === state.project)?.path || "Global setup";
+  where.title = projects.find((project) => project.id === state.project)?.path || ALL_PROJECTS;
   where.value = state.project;
   where.closest(".where-box").classList.toggle("project", Boolean(state.project));
   if ($("#q") !== document.activeElement) $("#q").value = state.q;

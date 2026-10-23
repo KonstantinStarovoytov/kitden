@@ -663,8 +663,8 @@ def test_the_instructions_tab_lists_files_per_client(home):
     } <= names
     cells = [c for r in answer["rows"] for c in r["cells"].values()]
     assert all(c["add"] is None for c in cells)
-    # Presence, not loading: commands and agents run on demand.
-    assert {c["word"] for c in cells if c["state"] != "none"} == {"Has it"}
+    # No word of its own: the page says the state word, as on every tab.
+    assert {c["word"] for c in cells if c["state"] != "none"} == {None}
     assert answer["categories"] == []
 
 
@@ -680,7 +680,7 @@ def test_agents_md_is_one_row_for_codex_and_cursor_without_a_flag(home):
         kind="instructions",
     )
     (row,) = [r for r in answer["rows"] if r["name"] == "AGENTS.md"]
-    assert (row["cells"]["codex"]["word"], row["cells"]["cursor"]["word"]) == ("Has it", "Has it")
+    assert (row["cells"]["codex"]["word"], row["cells"]["cursor"]["word"]) == (None, None)
     assert row["flags"] == []
 
 

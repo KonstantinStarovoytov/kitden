@@ -5,7 +5,7 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; panel.js must load there too.
 delete globalThis.navigator;
-const { afterParts, alignGroups, canShowReview, closeForProject, countedDefinition, changeOutcome, chosenKeys, callsText, changeWords, footerActions, heldActions, isPanelOpen, offerLabel, layerState, leftOutText, kindWord, loadsLede, moveFor, moveTargets, openPanel, plainSecrets, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
+const { afterParts, alignGroups, canShowReview, closeForProject, countedDefinition, changeOutcome, chosenKeys, callsText, changeWords, footerActions, heldActions, isPanelOpen, offerLabel, layerState, leftOutText, kindWord, loadsLede, moveFor, moveTargets, openPanel, plainSecrets, scopeWords, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
 const { addOptions, whyNoAction } = await import('../../src/kitden/web/static/js/offer.js');
 const { busy, data, state } = await import('../../src/kitden/web/static/js/store.js');
 
@@ -416,11 +416,18 @@ test('Details with nothing to do say why first', () => {
 test('the Details lede says where it loads, and where it may', () => {
   const columns = [{ id: 'claude_code', name: 'Claude Code' }, { id: 'codex', name: 'Codex' }, { id: 'cursor', name: 'Cursor' }];
   const lede = (states) => loadsLede({ cells: Object.fromEntries(Object.entries(states).map(([c, state]) => [c, cell({ state })])) }, columns);
-  assert.equal(lede({ claude_code: 'on', codex: 'gw', cursor: 'none' }), 'Loads in Claude Code and Codex.');
+  assert.equal(lede({ claude_code: 'on', codex: 'gw', cursor: 'none' }), 'Available in Claude Code and Codex.');
   // The page cannot tell whether it is on: it may load there.
-  assert.equal(lede({ codex: 'unk' }), 'May load in Codex.');
-  assert.equal(lede({ claude_code: 'on', codex: 'unk' }), 'Loads in Claude Code. May load in Codex.');
-  assert.equal(lede({ claude_code: 'off', cursor: 'via' }), 'Does not load anywhere here.');
+  assert.equal(lede({ codex: 'unk' }), 'Unknown in Codex.');
+  assert.equal(lede({ claude_code: 'on', codex: 'unk' }), 'Available in Claude Code. Unknown in Codex.');
+  assert.equal(lede({ claude_code: 'off', cursor: 'via' }), 'Not available here.');
+});
+
+test('Details names the scope with the same phrases as the cells', () => {
+  assert.equal(scopeWords({ scope: 'user' }, ''), 'All projects');
+  assert.equal(scopeWords({ scope: 'project', project: '/w/website' }, '/w/website'), 'This project');
+  assert.equal(scopeWords({ scope: 'project', project: '/w/api' }, '/w/website'), 'Project api');
+  assert.equal(scopeWords({ scope: 'user', client: 'cursor', owner_client: 'claude_code' }, ''), 'All projects · via Claude Code');
 });
 
 test('a new tool in strict mode is flagged', () => {
@@ -514,8 +521,8 @@ test('the align review groups what each client lacks and keeps the choice', () =
 test('an instruction file never says Loads', () => {
   const columns = [{ id: 'codex', name: 'Codex' }, { id: 'cursor', name: 'Cursor' }];
   const row = { kind: 'instructions', category: 'instructions', cells: { codex: { state: 'on' }, cursor: { state: 'on' } } };
-  assert.equal(loadsLede(row, columns), 'Codex and Cursor have it.');
-  assert.equal(loadsLede({ ...row, cells: { codex: { state: 'on' }, cursor: { state: 'none' } } }, columns), 'Codex has it.');
+  assert.equal(loadsLede(row, columns), 'Available in Codex and Cursor.');
+  assert.equal(loadsLede({ ...row, cells: { codex: { state: 'on' }, cursor: { state: 'none' } } }, columns), 'Available in Codex.');
   assert.equal(kindWord(row), 'Instruction file');
   assert.equal(kindWord({ kind: 'instructions', category: 'agent' }), 'Agent');
   assert.equal(kindWord({ kind: 'skill' }), 'Skill');
@@ -523,7 +530,7 @@ test('an instruction file never says Loads', () => {
 
 test('an instruction file layer never says Loads or Not loaded', () => {
   const def = { kind: 'instructions', enabled: 'on', why: 'Read when a session starts.' };
-  assert.equal(layerState({ ...def, loads: true }).badge, 'Has it');
+  assert.equal(layerState({ ...def, loads: true }).badge, 'Available');
   assert.equal(layerState({ ...def, loads: false, project: '/h/work/site' }).badge, 'In a project');
   assert.equal(layerState({ ...def, loads: false, project: null }).badge, '');
   assert.equal(layerState({ kind: 'skill', enabled: 'on', loads: false, why: 'x' }).badge, 'Not loaded');

@@ -4,8 +4,8 @@ import { $, $$, button, el, joinWords, plural, reportError, shortPath, shortPath
 import { loadLibrary, morphOnNextRender, onOpenItem, rowTitle, shownRow } from "./library.js";
 import { finishTransition, fold, transition } from "./motion.js";
 import { about, addButton, addOptions, whyNoAction } from "./offer.js";
-import { CLIENT_NAMES, diffCounts, skillRemoval, flag, GATEWAY_NOTE, gatewayName, kitdenMove, mark, movedNames, notesSection, ruleText, rulesText, skeleton, socket, stepText, strictText, toolsNode } from "./parts.js";
-import { busy, current as currentModel, currentError, data, reload, render, setBusy, state } from "./store.js";
+import { ALL_PROJECTS, CLIENT_NAMES, diffCounts, skillRemoval, flag, GATEWAY_NOTE, gatewayName, kitdenMove, mark, movedNames, notesSection, ruleText, rulesText, skeleton, socket, STATE_WORDS, stepText, strictText, toolsNode } from "./parts.js";
+import { busy, current as currentModel, currentError, data, projectPath, reload, render, setBusy, state } from "./store.js";
 
 const KIND_WORDS = {
   mcp_server: "MCP server", plugin: "Plugin", skill: "Skill", hook: "Hook", marketplace: "Marketplace",
@@ -161,22 +161,18 @@ export async function openItem(row, { instant = false, tools: toolsNext = {} } =
   showDetails(row, definitions, offer, toolsNext);
 }
 
-// The line under the Details title: the clients that load the item, then those where the page
-// cannot tell whether it is on. An instruction file says which clients have it, never "Loads".
+// The line under the Details title: the clients that have the item, then those where the page
+// cannot tell whether it is on. The same words for every kind, instruction files included.
 export function loadsLede(row, columns) {
   const names = (states) => columns
     .filter((c) => states.includes(row.cells[c.id] && row.cells[c.id].state))
     .map((c) => c.name);
-  if (row.kind === "instructions") {
-    const has = names(["on", "unk"]);
-    return has.length ? `${joinWords(has)} ${has.length > 1 ? "have" : "has"} it.` : "No client has it here.";
-  }
-  const loads = names(["on", "gw"]);
-  const maybe = names(["unk"]);
+  const available = names(["on", "gw"]);
+  const unknown = names(["unk"]);
   const lines = [];
-  if (loads.length) lines.push(`Loads in ${joinWords(loads)}.`);
-  if (maybe.length) lines.push(`May load in ${joinWords(maybe)}.`);
-  return lines.join(" ") || "Does not load anywhere here.";
+  if (available.length) lines.push(`Available in ${joinWords(available)}.`);
+  if (unknown.length) lines.push(`Unknown in ${joinWords(unknown)}.`);
+  return lines.join(" ") || "Not available here.";
 }
 
 // The title names the source too when two rows share the name ("superpowers · cursor-public").
@@ -338,11 +334,12 @@ export function footerButtons({ lead, rest }, draw, commands = []) {
   return [...note, ...rest.flatMap((o) => draw(o, "btn"))];
 }
 
-function scopeWords(def) {
+// Where a definition applies, in the words the cells use: the picked project is "This project".
+export function scopeWords(def, picked = projectPath()) {
   const project = def.project ? def.project.split("/").filter(Boolean).pop() : "";
   const words = {
-    user: "Global settings",
-    project: `Project ${project}`,
+    user: ALL_PROJECTS,
+    project: def.project && def.project === picked ? "This project" : `Project ${project}`,
     local: project ? `Only on this Mac · ${project}` : "Only on this Mac",
     plugin: "From a plugin",
     account: "Claude account",
@@ -361,8 +358,8 @@ const UNKNOWN_WORDS = {
   not_documented: "The client does not document where its state is kept.",
 };
 
-// A definition's dot, badge and line of why. An instruction file says the client has it, or
-// that it is in a project, never "Loads" or "Not loaded": its why says when it is read.
+// A definition's dot, badge and line of why. An instruction file says it is available, or
+// that it is in a project, never "Not loaded": its why says when it is read.
 export function layerState(def) {
   let look = "off";
   let badge = "Not loaded";
@@ -374,8 +371,8 @@ export function layerState(def) {
     why = UNKNOWN_WORDS[def.unknown_reason] || "This page cannot tell whether it is on.";
   } else if (def.kind === "instructions") {
     if (def.loads) look = "on";
-    badge = def.loads ? "Has it" : def.project ? "In a project" : "";
-  } else if (def.loads) { look = def.via_gateway ? "gw" : "on"; badge = "Loads"; }
+    badge = def.loads ? STATE_WORDS.on : def.project ? "In a project" : "";
+  } else if (def.loads) { look = def.via_gateway ? "gw" : "on"; badge = STATE_WORDS.on; }
   else if (def.merged) badge = "Merged";
   else if (def.overridden) { look = "over"; badge = "Overridden"; }
   else if (def.enabled === "off") badge = "Off";
@@ -535,7 +532,7 @@ export function toolsSection(server, again, next = {}) {
   const head = el("div", "tools-head");
   const refresh = button("Refresh tools", () => refreshTools(), "btn small ghost");
   refresh.dataset.focus = "tools:refresh";
-  head.append(el("h2", null, `Tools · ${where || "All projects"}`), refresh);
+  head.append(el("h2", null, `Tools · ${where || ALL_PROJECTS}`), refresh);
   const list = el("div", "tool-list");
   list.append(skeleton("line", 3));
   section.append(head);

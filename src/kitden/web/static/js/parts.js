@@ -2,8 +2,11 @@
 import { $, button, el, joinWords, plural } from "./dom.js";
 import { reducedMotion } from "./motion.js";
 
+// The shared baseline: the picker's first choice, and the scope of what is set for every project.
+export const ALL_PROJECTS = "All projects";
+// The twin of views/words.py STATE_WORDS.
 export const STATE_WORDS = {
-  on: "Loads", off: "Off", over: "Overridden", unk: "Unknown", gw: "Via gateway",
+  on: "Available", off: "Off", over: "Overridden", unk: "Unknown", gw: "Via gateway",
   missing: "Not installed", none: "—", via: "Via Claude Code", done: "Has its skills",
 };
 // The first scan's line: what is still read, and how much of the work is done (0 to 1). Before

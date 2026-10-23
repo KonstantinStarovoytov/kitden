@@ -120,8 +120,8 @@ def test_add_missing_is_one_change_and_undo_takes_it_all_back(home):
         assert [c["key"] for c in change["align"]["candidates"] if c["chosen"]] == chosen
         after = change["after"]
         assert [(a["client"], a["word"]) for a in after] == [
-            ("claude_code", "Loads"),
-            ("codex", "Loads"),
+            ("claude_code", "Available"),
+            ("codex", "Available"),
             ("cursor", "Loads twice"),  # it reads brandkit in Claude Code's folder already
         ]
         # langfuse-data's header holds a secret: the copy says so, as a single add does.

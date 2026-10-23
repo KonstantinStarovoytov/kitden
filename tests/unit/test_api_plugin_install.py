@@ -205,7 +205,7 @@ def test_adding_to_claude_code_says_cursor_loads_it_too(cursor_client):
     assert change["after"][-1] == {
         "client": "cursor",
         "state": "on",
-        "word": "Loads",
+        "word": "Available",
         "note": "Cursor loads Claude Code plugins, so it gets this one too.",
     }
     assert _offer(cursor_client)["inherits"] == {"plugin": True, "skill": True}

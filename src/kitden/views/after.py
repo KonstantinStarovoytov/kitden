@@ -35,31 +35,17 @@ from kitden.model import GATEWAY_CLIENT, Change, ItemKind, Scope, SourceKind
 from kitden.redact import redact
 from kitden.views.effective import effective_view
 from kitden.views.setup_server import CLIENTS, kitden_on, setup_server_state
+from kitden.views.words import AFTER_WORDS, STATE_WORDS
 
 SKILL_CLIENTS = ("claude_code", "codex", "cursor")
 CLIENT_WORDS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
 CURSOR_IMPORT = {
     "client": "cursor",
     "state": "on",
-    "word": "Loads",
+    "word": STATE_WORDS["on"],
     "note": "Cursor loads Claude Code plugins, so it gets this one too.",
 }
 
-# Socket state and word per action, as the Library shows them.
-WORDS = {
-    "plugin.enable": ("on", "Loads"),
-    "plugin.disable": ("off", "Off"),
-    "mcp.remove_direct": ("off", "Removed"),
-    "plugin.remove": ("off", "Removed"),
-    "skill.remove": ("off", "Removed"),
-    "gateway.connect": ("gw", "Via gateway"),
-    "gateway.move": ("gw", "Via gateway"),
-    "gateway.switch": ("gw", "Via the new gateway"),
-    "plugin.install": ("on", "Loads"),
-    "marketplace.add": ("on", "Added"),
-    "setup_server.register": ("on", "Added"),
-    "setup_server.update": ("on", "Updated"),
-}
 CURSOR_REMOVE = {
     "client": "cursor",
     "state": "off",
@@ -135,7 +121,7 @@ def _skill_words(change: Change, inventory, skills: list[dict]) -> list[dict]:
     for client in SKILL_CLIENTS:
         if not loads.get(client):
             continue
-        entry = {"client": client, "state": "on", "word": "Loads"}
+        entry = {"client": client, "state": "on", "word": STATE_WORDS["on"]}
         twice = [name for name in names if loads[client].get(name, 0) > 1]
         if twice:
             entry["word"] = "Loads twice"
@@ -589,7 +575,7 @@ def _put_back_words(change: Change, inventory, home: Path) -> list[dict]:
     for step in change.steps:
         edit = step.edit
         assert edit is not None
-        entry = {"client": step.client, "state": "on", "word": "Loads"}
+        entry = {"client": step.client, "state": "on", "word": STATE_WORDS["on"]}
         notes = []
         if redact(edit.after)[1]:
             notes.append(f"This writes a secret into {home_path(edit.path, home)}.")
@@ -617,7 +603,7 @@ def _add_server_words(change: Change, home: Path) -> list[dict]:
     """A server copied into clients: each loads it, and says when the copy holds a secret."""
     out = []
     for step in change.steps:
-        entry = {"client": step.client, "state": "on", "word": "Loads"}
+        entry = {"client": step.client, "state": "on", "word": STATE_WORDS["on"]}
         note = _second_secret(step, home)
         if note:
             entry["note"] = note
@@ -655,7 +641,9 @@ def _align_words(
     for client in SKILL_CLIENTS:
         if client not in reached:
             continue
-        entry = dict(twice.get(client, {"client": client, "state": "on", "word": "Loads"}))
+        entry = dict(
+            twice.get(client, {"client": client, "state": "on", "word": STATE_WORDS["on"]})
+        )
         said = list(dict.fromkeys([entry.get("note"), *notes.get(client, [])]))
         if any(said):
             entry["note"] = " ".join(n for n in said if n)
@@ -709,7 +697,7 @@ def after_words(
     for step in change.steps:
         if step.client == GATEWAY_CLIENT or any(e["client"] == step.client for e in out):
             continue
-        state, word = WORDS.get(change.action, ("on", "Changed"))
+        state, word = AFTER_WORDS.get(change.action, ("on", "Changed"))
         if change.action == "gateway.move" and not any(
             i.client == step.client and i.via_gateway == target for i in inventory.items
         ):

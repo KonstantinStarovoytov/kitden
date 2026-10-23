@@ -17,7 +17,7 @@ const STATE_BADGES = {
 };
 const OVER = ["undone", "cancelled"];
 
-const SCOPE_WORDS = { user: "global settings", project: "this project", local: "this Mac" };
+const SCOPE_WORDS = { user: "all projects", project: "this project", local: "this Mac" };
 
 function when(time) {
   const date = new Date(time);

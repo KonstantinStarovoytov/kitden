@@ -70,7 +70,7 @@ def test_adding_a_server_to_another_client_previews_applies_and_undoes(home):
             {
                 "client": "codex",
                 "state": "on",
-                "word": "Loads",
+                "word": "Available",
                 "note": "This makes a second copy of a secret in ~/.codex/config.toml.",
             }
         ]

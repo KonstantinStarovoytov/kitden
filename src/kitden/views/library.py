@@ -22,6 +22,7 @@ from kitden.views.catalog import catalog, search
 from kitden.views.gateway_view import group_of
 from kitden.views.load_map import COLUMNS, MARKS, NAMES, Row, load_map
 from kitden.views.skills import skill_catalog
+from kitden.views.words import STATE_WORDS
 
 KINDS = ("mcp_server", "plugin", "skill", "hook", "marketplace", "instructions")
 # Tabs with something to add; the others show only what is on this computer.
@@ -31,9 +32,6 @@ VIA_CLAUDE_CODE = "Cursor loads Claude Code's plugins. Add it to Claude Code."
 SKILL_VIA_CLAUDE_CODE = "Cursor loads Claude Code's plugins. Add the plugin to Claude Code."
 OUTSIDE_FOLDER = "This skill uses files outside its folder, so it can't be copied."
 SHARE_IN_GATEWAY = "Move it into the gateway to share it."
-# An instruction file's cell says the client has it, not that it loads: commands and agents run
-# on demand, and some rules apply only to some files. Details says when each client reads it.
-HAS_IT = "Has it"
 # Where a plugin goes into one project when Kitden cannot put it there.
 # checked 2026-10-22 (learn.chatgpt.com/docs/plugins): Codex installs a plugin for its whole
 # environment; the docs show no per-project install.
@@ -191,14 +189,9 @@ def _map_rows(
 
 
 def _instruction_rows(map_rows: list[Row], found: list[str]) -> Built:
-    """Instruction files, commands and agents: the load map rows, each cell that has the file
-    saying so. Kitden adds none, so a dash has no reason."""
-    out = _map_rows(map_rows, "instructions", found)
-    for row, _ in out:
-        for cell in row["cells"].values():
-            if cell["state"] not in ("none", "missing"):
-                cell["word"] = HAS_IT
-    return out
+    """Instruction files, commands and agents: the load map rows, with the state words of every
+    tab. Details says when each client reads a file. Kitden adds none, so a dash has no reason."""
+    return _map_rows(map_rows, "instructions", found)
 
 
 def _server_add(found: list[str], items: list[Item]) -> Add:
@@ -316,7 +309,7 @@ def _plugin_cell(
     # When Claude Code has the plugin, the load map already shows Cursor's copy; when it shows
     # none (an account plugin), Cursor does not import it.
     if client == "cursor" and cursor_imports and "claude_code" in routes:
-        return _cell("via", word="Via Claude Code", reason=VIA_CLAUDE_CODE)
+        return _cell("via", word=STATE_WORDS["via"], reason=VIA_CLAUDE_CODE)
     alone = [s for s in skills if s["self_contained"]]
     if any(client in s["routes"] for s in alone):
         warn = (
@@ -329,7 +322,7 @@ def _plugin_cell(
     if alone and all(client in s["installed"] for s in alone):
         return _cell(
             "done",
-            word="Has its skills",
+            word=STATE_WORDS["done"],
             reason=f"{who} already has every skill it can take from this plugin.",
         )
     why = "its skills need the rest of it" if skills else "it has no skills to copy"
@@ -445,7 +438,7 @@ def _skill_cell(
         marketplace = skill["marketplace"] if route == "add_marketplace" else None
         return _cell(add=_plugin_add(client, "+ Add the plugin", skill["plugin"], marketplace))
     if client == "cursor" and cursor_imports and "claude_code" in plugin_routes:
-        return _cell("via", word="Via Claude Code", reason=SKILL_VIA_CLAUDE_CODE)
+        return _cell("via", word=STATE_WORDS["via"], reason=SKILL_VIA_CLAUDE_CODE)
     return _cell(reason=f"{NAMES[client]} can't install the plugin this skill needs.")
 
 
