@@ -439,13 +439,16 @@ class State:
         return self.data
 
 
-# The actions that add something: a refusal into a file Kitden could not read says "add".
+# The actions that add something: a refusal into a file Kitden could not read says "add". The
+# page's ADDS (panel.js) names their scope in the review; it leaves out PROJECT_ALIGN and
+# SETUP_SERVER_UPDATE, which say their place another way.
 ADD_ACTIONS = frozenset(
     {
         MCP_ADD,
         SKILL_INSTALL,
         PLUGIN_INSTALL,
         PLUGIN_SKILLS,
+        MARKETPLACE_ADD,
         PROJECT_ALIGN,
         GATEWAY_CONNECT,
         SETUP_SERVER,

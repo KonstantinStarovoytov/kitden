@@ -1,6 +1,7 @@
 """Change and gateway endpoints (T047, contracts/local-api.md)."""
 
 import json
+import re
 import shutil
 from pathlib import Path
 
@@ -12,7 +13,7 @@ from kitden.changes.client_cli import CommandResult
 from kitden.gateways import data_dir
 from kitden.local_gateway.settings import SETTINGS_FILE
 from kitden.views.inventory import build_inventory
-from kitden.web.app import create_app, unread_refusal
+from kitden.web.app import ADD_ACTIONS, create_app, unread_refusal
 from tests.conftest import make_home, write_cursor_fixture_state
 from tests.unit.fake_metamcp import FakeMetaMcp
 
@@ -855,4 +856,16 @@ def test_a_refusal_into_an_unreadable_file_follows_the_action():
     )
     assert unread_refusal("plugin.disable", "/h/.claude/settings.json") == (
         "Can't change this while settings.json can't be read."
+    )
+
+
+def test_the_page_and_the_server_agree_on_what_an_add_is():
+    panel = (Path(__file__).parents[2] / "src/kitden/web/static/js/panel.js").read_text()
+    adds = set(re.findall(r'"([a-z_.]+)"', panel.split("export const ADDS = [")[1].split("]")[0]))
+    # Add missing names its project in its title; an update changes an entry where it is, so
+    # neither names a scope in the review. Both still refuse a broken file as adds.
+    assert ADD_ACTIONS - adds == {"project.align", "setup_server.update"}
+    assert adds <= ADD_ACTIONS
+    assert unread_refusal("marketplace.add", "/h/.claude/settings.json") == (
+        "Can't add while settings.json can't be read."
     )

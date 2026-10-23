@@ -795,9 +795,11 @@ const DONE_WORDS = {
 
 // Actions whose words say "from" a client.
 const REMOVES = ["mcp.remove_direct", "plugin.remove", "skill.remove"];
-// Actions that add an item: the review names where it goes before the click. A marketplace and
-// the setup entry always go to all projects.
-export const ADDS = ["mcp.add", "skill.install", "plugin.install", "plugin.skills", "marketplace.add", "setup_server.register"];
+// Actions that add an item: the review names where it goes before the click. A marketplace, the
+// setup entry, a gateway's entry and a server put back always go to all projects. app.py's
+// ADD_ACTIONS has two more: Add missing names its project in its title already, and
+// setup_server.update changes an entry where it is.
+export const ADDS = ["mcp.add", "skill.install", "plugin.install", "plugin.skills", "marketplace.add", "setup_server.register", "gateway.connect", "gateway.put_back"];
 const LEDE = "Nothing is written until you press Apply. A backup is kept, so you can undo.";
 
 // Where an add goes, as its title ends: " in website" or " for all projects"; null for an

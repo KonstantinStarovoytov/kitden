@@ -196,6 +196,17 @@ test('an add names its scope in the title and, with All projects, in the lede', 
   assert.deepEqual(changeWords(setup), { title: 'Add “show my setup” to Cursor for all projects', done: 'Added show my setup to Cursor for all projects' });
   assert.equal(reviewLede('marketplace.add', ''), 'Adds for all projects. Nothing is written until you press Apply. A backup is kept, so you can undo.');
   assert.equal(reviewLede('setup_server.register', ''), 'Adds for all projects. Nothing is written until you press Apply. A backup is kept, so you can undo.');
+  // Connecting a gateway and putting a server back write each client's own entry: for all
+  // projects. The page and the server agree on the adds (test_api_changes.py).
+  const connect = { action: 'gateway.connect', steps: [{ client: 'codex', name: 'gateway' }] };
+  assert.equal(changeWords(connect, { params: { gateway: 'g1', name: 'gateway' } }).title, 'Connect the gateway to Codex for all projects');
+  assert.equal(reviewLede('gateway.put_back', ''), 'Adds for all projects. Nothing is written until you press Apply. A backup is kept, so you can undo.');
+  // Add missing names its project in the title; an update changes an entry where it is.
+  const align = { action: 'project.align', steps: [{ client: 'codex', name: 'tidy' }], align: { candidates: [] } };
+  assert.ok(changeWords(align, { params: { project: '/w/site' } }).title.endsWith(' is missing'));
+  assert.equal(addScope('project.align', '/w/site'), null);
+  assert.equal(addScope('setup_server.update', ''), null);
+  assert.equal(reviewLede('setup_server.update', ''), 'Nothing is written until you press Apply. A backup is kept, so you can undo.');
 });
 
 test('an add into a known project on another disk names that project', () => {
@@ -522,7 +533,7 @@ test('removing from or putting back from the Kitden gateway is named', () => {
   assert.deepEqual(changeWords(remove, { params: { server: 'files' } }), { title: 'Remove files from the Kitden gateway', done: 'Removed files from the Kitden gateway' });
   assert.equal(changeWords(remove).title, 'Remove files from the Kitden gateway');
   const back = { action: 'gateway.put_back', steps: [{ client: 'claude_code', name: 'files', restart_note: 'Start a new Claude Code session (or a new Code tab chat) for this to take effect.' }] };
-  assert.deepEqual(changeWords(back, { params: { server: 'files' } }), { title: 'Put files back in Claude Code', done: 'Put files back in Claude Code · Start a new Claude Code session (or a new Code tab chat)' });
+  assert.deepEqual(changeWords(back, { params: { server: 'files' } }), { title: 'Put files back in Claude Code for all projects', done: 'Put files back in Claude Code for all projects · Start a new Claude Code session (or a new Code tab chat)' });
 });
 
 test('a server added to another client is named', () => {
