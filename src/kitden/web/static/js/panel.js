@@ -358,8 +358,17 @@ const UNKNOWN_WORDS = {
   not_documented: "The client does not document where its state is kept.",
 };
 
+// When a definition kept from the last good read was read, on this Mac's clock (the twin of
+// views/words.py STALE): "From the last good read at 14:02".
+function staleWords(at) {
+  const time = new Date(at);
+  const two = (n) => String(n).padStart(2, "0");
+  return `From the last good read at ${two(time.getHours())}:${two(time.getMinutes())}`;
+}
+
 // A definition's dot, badge and line of why. An instruction file says it is available, or
-// that it is in a project, never "Not loaded": its why says when it is read.
+// that it is in a project, never "Not loaded": its why says when it is read. A definition kept
+// from the last good read also says when (`stale`).
 export function layerState(def) {
   let look = "off";
   let badge = "Not loaded";
@@ -377,11 +386,12 @@ export function layerState(def) {
   else if (def.merged) badge = "Merged";
   else if (def.overridden) { look = "over"; badge = "Overridden"; }
   else if (def.enabled === "off") badge = "Off";
-  return { look, badge, why, unknown };
+  const stale = def.stale_at ? staleWords(def.stale_at) : null;
+  return { look, badge, why, unknown, stale };
 }
 
 function layer(def) {
-  const { look, badge, why, unknown } = layerState(def);
+  const { look, badge, why, unknown, stale } = layerState(def);
   const wins = def.loads && !unknown;
   const row = el("div", wins ? "layer wins" : "layer");
   const dot = socket({ state: look });
@@ -394,6 +404,7 @@ function layer(def) {
   middle.append(where);
   if (def.summary) middle.append(el("div", "why mono", def.summary));
   if (why) middle.append(el("div", "why", why));
+  if (stale) middle.append(el("div", "why", stale));
   // An instruction file's first lines, secrets hidden by the server.
   if (def.preview && def.preview.length) middle.append(el("pre", "preview", def.preview.join("\n")));
   // Every plugin with a known state gets the same switch; one the page cannot change from

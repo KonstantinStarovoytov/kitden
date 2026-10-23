@@ -170,6 +170,8 @@ def explain(
                 "loads": item.id in loaded,
                 "overridden": beaten.get(item.id) == "override",
                 "merged": beaten.get(item.id) == "merged",
+                # Kept from the last good read of a file that now fails: Details says when.
+                "stale_at": item.stale_at,
                 # With no project picked, only global files show their first lines; a project's
                 # files show theirs when that project is picked.
                 "preview": preview(item) if item.project is None or project else None,

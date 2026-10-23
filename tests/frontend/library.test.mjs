@@ -439,3 +439,16 @@ test('a cell kept from the last good read is marked and says when', () => {
   assert.ok(node.classList.contains('stale'));
   assert.equal(node.title, words);
 });
+
+test('no hide is offered when hiding would leave no client Kitden could read', () => {
+  // The server shows every column again when no readable one would stay, so a "−" would do nothing.
+  const unread = { id: 'codex', name: 'Codex', hidden: false, note: 'Could not read' };
+  const shown = [COLUMNS[0], unread];
+  assert.equal(hideButton(COLUMNS[0], shown), null);
+  assert.equal(hideButton(unread, shown).attributes['aria-label'], 'Hide Codex');
+});
+
+test('a kept cell asks its socket for the dashed dot, so a morph keeps it', () => {
+  const node = cellNode(row({ codex: cell({ state: 'on', stale_at: '2026-10-22T14:02:00+00:00', reason: 'x' }) }), 'codex');
+  assert.equal(node.className, 'socket s-on stale');
+});

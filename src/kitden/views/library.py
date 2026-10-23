@@ -17,7 +17,7 @@ from kitden.changes.actions import (
     PLUGIN_SKILLS,
     SKILL_INSTALL,
 )
-from kitden.clients.base import REMOVE_DIRECT, SETUP_NAME, is_direct_entry
+from kitden.clients.base import REMOVE_DIRECT, SETUP_NAME, is_direct_entry, is_home
 from kitden.model import ClientStatus, Item, ItemKind, Scope, _hash
 from kitden.views.catalog import catalog, search
 from kitden.views.gateway_view import group_of
@@ -539,10 +539,10 @@ def _skill_rows(
 # What Kitden could not read -----------------------------------------------------------------
 
 
-def _unread_cells(rows: list[dict], map_rows: list[Row], columns: list[str], found: list[str]):
+def _unread_cells(rows: list[dict], by_key: dict[str, Row], columns: list[str], found: list[str]):
     """Give each row a cell per client Kitden could not read: the load map row's cell when the
-    row has one, else Unknown. Never an add. Cells keep the column order."""
-    by_key = {r.key: r for r in map_rows}
+    row has one (Unknown, or kept from the last good read), else Unknown. Never an add. Cells
+    keep the column order."""
     unread = [c for c in columns if c not in found]
     for row in rows:
         known = by_key.get(row["key"])
@@ -555,19 +555,27 @@ def _unread_cells(rows: list[dict], map_rows: list[Row], columns: list[str], fou
         row["cells"] = {c: row["cells"][c] for c in columns}
 
 
-def _read_notes(inventory, project: str | None) -> list[str]:
-    """One line per file Kitden could not read in this view: a file inside another known
-    project belongs to that project. A client not read at all has no line; its column says it.
-    A file whose items are kept from the last good read has none either: its cells say it."""
-    others = [Path(p.path) for p in inventory.projects if p.path != project]
+def _read_notes(inventory, project: str | None, homes: list[Path]) -> list[str]:
+    """One line per file Kitden could not read in this view. A file inside known projects
+    belongs to the deepest one and shows only when it is picked; the home folder is not a
+    project here, as its own files are the user's. A client not read at all has no line (its
+    column says it), nor a file whose items are kept from the last good read (its cells say it).
+    """
+    folders = [
+        (p.path, Path(p.path))
+        for p in inventory.projects
+        if not any(is_home(Path(p.path), h) for h in homes)
+    ]
     kept = {i.source.path for i in inventory.items if i.stale_at}
     lines: list[str] = []
     for problem in inventory.problems:
         if not problem.path or problem.path in kept:
             continue
         path = Path(problem.path)
+        inside = [(name, f) for name, f in folders if path.is_relative_to(f)]
+        owner = max(inside, key=lambda pair: len(pair[1].parts))[0] if inside else None
         line = NOT_SHOWN.format(path.name)
-        if line not in lines and not any(path.is_relative_to(f) for f in others):
+        if owner in (None, project) and line not in lines:
             lines.append(line)
     return lines
 
@@ -592,8 +600,10 @@ def _add_file(adapters, client: str, add: dict, project: str | None) -> str | No
 
 
 def _hold_adds(rows: list[dict], adapters, broken: set[str], project: str | None) -> None:
-    """No add into a file Kitden could not read; adds into the client's other files stay. An
-    add that can go into this project or all projects is held only when both files are broken."""
+    """No add into a file Kitden could not read: the client may have the item there, so its
+    cell is Unknown and says why. Adds into the client's other files stay. An add that can go
+    into this project or all projects is held only when every place Kitden can add into is
+    broken."""
     if not broken:
         return
     files: dict[tuple, str | None] = {}  # one step per client, action and place
@@ -610,10 +620,11 @@ def _hold_adds(rows: list[dict], adapters, broken: set[str], project: str | None
             if not add:
                 continue
             places = [project, None] if project is not None and add["project_place"] else [None]
-            held = [f for f in (file(client, add, p) for p in places) if f in broken]
-            if len(held) == len(places):
+            usable = [f for f in (file(client, add, p) for p in places) if f]
+            if usable and all(f in broken for f in usable):
+                cell["state"] = "unk"
                 cell["add"] = None
-                cell["reason"] = NO_ADD_UNREAD.format(Path(held[0]).name)
+                cell["reason"] = NO_ADD_UNREAD.format(Path(usable[0]).name)
 
 
 # Filters -------------------------------------------------------------------------------------
@@ -729,6 +740,7 @@ def library(
     if hidden.issuperset(found):
         hidden = frozenset()
     visible = [c for c in found if c not in hidden]
+    homes = list({a.home for a in adapters.values()})
     cursor = adapters.get("cursor") if "cursor" in found else None
     cursor_imports = bool(cursor and cursor.imports_claude_plugins())
 
@@ -760,13 +772,23 @@ def library(
         "marketplace": _map_rows(map_rows, "marketplace", found, _marketplace_why(offers)),
         "instructions": _instruction_rows(map_rows, found),
     }
+    by_key = {r.key: r for r in map_rows}
+    # A shown client Kitden could not read makes a row visible only with items kept from its
+    # last good read: they are on this computer.
+    unread = [c for c in columns if c not in found and c not in hidden]
     rows = {}
     for k, pairs in built.items():
         _mark_same_names([r for r, _ in pairs])
-        rows[k] = [r for r, holders in pairs if _in_view(r, holders, visible)]
-    # After the view: a client Kitden could not read never makes a row visible, and a held add
-    # keeps its row where it was.
-    _unread_cells(rows[kind], map_rows, columns, found)
+        rows[k] = []
+        for r, holders in pairs:
+            known = by_key.get(r["key"])
+            if known and any(known.cells[c].stale_at for c in unread):
+                r["mine"] = True
+            elif not _in_view(r, holders, visible):
+                continue
+            rows[k].append(r)
+    # After the view, so a held add keeps its row where it was.
+    _unread_cells(rows[kind], by_key, columns, found)
     broken = {p.path for p in inventory.problems if p.path}
     _hold_adds(rows[kind], adapters, broken, project)
 
@@ -800,5 +822,5 @@ def library(
         "more": more,
         "attention": len(_narrowed(matched, category, True)),
         "categories": _categories(matched) if has_catalog else [],
-        "notes": _read_notes(inventory, project) + _notes(shown, visible),
+        "notes": _read_notes(inventory, project, homes) + _notes(shown, visible),
     }

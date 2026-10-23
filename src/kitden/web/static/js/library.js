@@ -131,9 +131,8 @@ export function cellNode(row, client) {
     node.dataset.focus = `add:${row.key}:${client}`;
     return node;
   }
-  const node = socket({ state: cell.state, where: cell.where, word: cell.word, label: cell.reason });
   // Kept from the last good read of a file that now fails: a dashed dot, and the hover says when.
-  if (cell.stale_at) node.classList.add("stale");
+  const node = socket({ state: cell.state, where: cell.where, word: cell.word, label: cell.reason, stale: Boolean(cell.stale_at) });
   const hint = cellHint(cell);
   if (hint) node.title = hint;
   return node;
@@ -498,10 +497,11 @@ async function chooseHidden(list, focus) {
   }
 }
 
-// A column's small "−": hides it on this page only. The last shown column has none. Focus goes to
-// the next column's "−", or to Show when there is none.
+// A column's small "−": hides it on this page only. There is none when no other client Kitden
+// could read (no `note`) would stay shown: the server would show every column again. Focus goes
+// to the next column's "−", or to Show when there is none.
 export function hideButton(column, shown) {
-  if (shown.length < 2) return null;
+  if (!shown.some((c) => !c.note && c.id !== column.id)) return null;
   const at = shown.findIndex((c) => c.id === column.id);
   const next = shown[at + 1];
   const node = button("−", () => chooseHidden([...new Set([...hiddenClients(), column.id])], [next && `hide:${next.id}`, "hidden:show"]), "btn ghost small hide-col");
@@ -662,7 +662,7 @@ function settle(row, client, before) {
   }
   const old = socket({ state: was, where: where || null });
   old.title = node.title;
-  const next = { state: cell.state, where: cell.where, word: cell.word, label: cell.reason };
+  const next = { state: cell.state, where: cell.where, word: cell.word, label: cell.reason, stale: Boolean(cell.stale_at) };
   setTimeout(() => morphSocket(old, next), reducedMotion.matches ? 0 : 260);
   return old;
 }

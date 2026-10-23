@@ -3,7 +3,7 @@
 import re
 from pathlib import Path
 
-from kitden.views.words import AFTER_WORDS, STATE_WORDS
+from kitden.views.words import AFTER_WORDS, STALE, STATE_WORDS
 
 STATIC = Path(__file__).parents[2] / "src/kitden/web/static"
 INDEX = (STATIC / "index.html").read_text()
@@ -285,8 +285,8 @@ def test_library_rows_say_what_each_client_has_or_can_add_without_details():
     text = script("library.js")
     # One cell per client: the server's state, or the one button for what it can add.
     assert (
-        "socket({ state: cell.state, where: cell.where, word: cell.word, label: cell.reason })"
-        in text
+        "socket({ state: cell.state, where: cell.where, word: cell.word, label: cell.reason, "
+        "stale: Boolean(cell.stale_at) })" in text
     )
     assert "button(cell.add.label" in text and '"btn small add"' in text
     assert 'via: "Via Claude Code", done: "Has its skills"' in script("parts.js")
@@ -648,8 +648,10 @@ def test_library_columns_hide_with_a_quiet_minus_kept_in_this_browser():
     store = text.split("export function hiddenClients")[1].split("// The kind tab shown")[0]
     assert store.count("localStorage.") == 2
     assert store.count("try {") == 2 and store.count("catch") == 2
-    # A named button per column, not drawn for the last one; the server gets the sorted list.
-    assert 'button("−"' in text and "`Hide ${column.name}`" in text and "shown.length < 2" in text
+    # A named button per column, not drawn when no other readable column would stay; the
+    # server gets the sorted list.
+    assert 'button("−"' in text and "`Hide ${column.name}`" in text
+    assert "shown.some((c) => !c.note && c.id !== column.id)" in text
     assert 'hidden: hiddenClients().sort().join(",")' in text
     assert '`Hidden: ${gone.map((c) => c.name).join(", ")} · `' in text
     # Always there, in quiet gray, so it can be found; it darkens on hover and focus.
@@ -941,3 +943,7 @@ def test_a_client_kitden_could_not_read_says_so_under_its_name():
 
 def test_a_cell_kept_from_the_last_good_read_has_a_dashed_dot():
     assert ".socket.stale .dot { border-style: dashed; }" in CSS
+
+
+def test_details_says_when_a_kept_definition_was_read_in_the_server_words():
+    assert STALE.format("${") in script("panel.js")

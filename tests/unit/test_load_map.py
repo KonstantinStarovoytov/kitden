@@ -1,5 +1,7 @@
 """Load map: items in rows, the three clients in columns (redesign plan, Task 1)."""
 
+from dataclasses import replace
+
 import pytest
 
 from kitden.demo import build_demo_home
@@ -301,3 +303,23 @@ def test_the_medium_sample_says_where_each_atlas_cell_applies(tmp_path):
     )
     assert docs["codex"].where == "all projects"
     assert rows_by(rows, "skill", "api-style").cells["codex"].where == "this project"
+
+
+def test_a_kept_cell_keeps_its_scope_word_and_route(home):
+    inventory = build_inventory(home)
+    settings = str(home / ".claude/settings.json")
+    inventory.items = [
+        replace(i, stale_at="2026-10-22T14:02:00+00:00") if i.source.path == settings else i
+        for i in inventory.items
+    ]
+    rows = load_map(inventory, str(home / "work/website"))
+    row = rows_by(rows, "hook", "PreToolUse: Bash")
+    cell = row.cells["cursor"]
+    assert (cell.state, cell.where, cell.route) == (
+        "on",
+        "all projects",
+        "through Claude Code's folder",
+    )
+    assert cell.stale_at == "2026-10-22T14:02:00+00:00"
+    assert cell.reason.startswith("From the last good read at ")
+    assert row.flags[0] == {"text": cell.reason, "level": "info"}

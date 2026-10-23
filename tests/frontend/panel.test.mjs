@@ -618,3 +618,10 @@ test('Details drawn again after an Apply belongs to the project picked during it
     delete globalThis.document;
   }
 });
+
+test('a definition kept from the last good read says when, on this Mac clock', () => {
+  const at = new Date(2026, 9, 22, 14, 2).toISOString();
+  const def = { kind: 'mcp_server', enabled: 'on', loads: true, why: '', stale_at: at };
+  assert.equal(layerState(def).stale, 'From the last good read at 14:02');
+  assert.equal(layerState({ ...def, stale_at: null }).stale, null);
+});

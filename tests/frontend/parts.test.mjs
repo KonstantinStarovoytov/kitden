@@ -294,3 +294,15 @@ test('a demo shows a quiet Demo flag; a real page shows none', () => {
   assert.equal(demoTag({ version: '0.2.0', demo: false }), null);
   assert.equal(demoTag(null), null);
 });
+
+test('a socket kept from the last good read keeps its dashed dot through a morph', () => {
+  media.matches = true;
+  try {
+    assert.equal(socket({ state: 'on', stale: true }).className, 'socket s-on stale');
+    const node = socket({ state: 'off' });
+    morphSocket(node, { state: 'on', stale: true });
+    assert.equal(node.className, 'socket s-on stale');
+  } finally {
+    media.matches = false;
+  }
+});

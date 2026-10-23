@@ -123,7 +123,7 @@ from kitden.views.load_map import load_map, map_dict
 from kitden.views.overview import overview
 from kitden.views.setup_server import is_old_entry, setup_server_state
 from kitden.views.skills import skill_catalog, skill_keepers, skill_readers
-from kitden.views.words import CHANGE_UNREAD, NO_ADD_UNREAD
+from kitden.views.words import CHANGE_UNREAD, KEPT_UNREAD, NO_ADD_UNREAD
 from kitden.watch import Watcher
 from kitden.web.security import SecurityMiddleware
 
@@ -460,6 +460,14 @@ def unread_refusal(action: str, path: str) -> str:
     the action."""
     words = NO_ADD_UNREAD if action in ADD_ACTIONS else CHANGE_UNREAD
     return words.format(Path(path).name)
+
+
+def kept_refusal(item) -> str:
+    """Why a definition kept from the last good read cannot be changed: Kitden must read its
+    file again first."""
+    path = item.source.path
+    where = Path(path).name if path else CLIENT_WORDS.get(item.client, "its settings")
+    return KEPT_UNREAD.format(where)
 
 
 def refusal_words(error: ValueError) -> str:
@@ -923,6 +931,12 @@ def create_app(
         left_out = None
         copied = None  # the skill list's rows a skill copy takes, for the review's first line
         align = None  # Add missing: what each client lacks, for the review's checkboxes
+        # A definition kept from the last good read stays as it was until its file reads well.
+        named = [t.get("item") for t in targets if isinstance(t, dict)] + [params.get("item")]
+        found = [_item(str(i)) for i in named if i]
+        kept = next((i for i in found if i is not None and i.stale_at), None)
+        if kept is not None:
+            return _error(kept_refusal(kept), 422)
         try:
             if action == GATEWAY_CONNECT:
                 gateway = next((g for g in _registered() if g.id == params.get("gateway")), None)

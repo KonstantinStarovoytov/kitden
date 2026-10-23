@@ -14,7 +14,7 @@ from kitden.clients.cursor import REACTIVE_KEY, CursorAdapter
 from kitden.demo import build_demo_home
 from kitden.model import Gateway
 from kitden.views.findings import find_findings, mark_gateways
-from kitden.views.inventory import build_inventory, default_adapters
+from kitden.views.inventory import LastGood, build_inventory, default_adapters, keep_last_good
 from kitden.views.library import library
 from kitden.views.load_map import load_map
 from kitden.web.app import create_app
@@ -737,6 +737,7 @@ def test_no_add_goes_into_a_settings_file_that_could_not_be_read(home):
     answer = _library(home, "mcp_server")
     github = _row(answer, "github")["cells"]
     assert github["cursor"]["add"] is None  # its add writes into the broken file
+    assert github["cursor"]["state"] == "unk"  # Cursor may have it in that file: never "—"
     assert github["cursor"]["reason"] == "Can't add while mcp.json can't be read."
     assert github["codex"]["add"]["action"] == "mcp.add"  # Codex's own file reads well
     assert "Could not read mcp.json; its items are not shown." in answer["notes"]
@@ -810,3 +811,111 @@ def test_a_file_that_breaks_keeps_its_items_from_the_last_good_read(home):
     neon = _row(answer, "neon")["cells"]["claude_code"]
     assert neon["add"] is None and neon["reason"] == "Can't add while .claude.json can't be read."
     assert not any(n.startswith("Could not read .claude.json") for n in answer["notes"])
+
+
+def _known_projects(home: Path, *folders: Path) -> None:
+    """Claude Code lists these folders as projects too."""
+    path = home / ".claude.json"
+    state = json.loads(path.read_text())
+    state["projects"].update({str(f): {} for f in folders})
+    path.write_text(json.dumps(state))
+
+
+def _notes(home: Path, project: Path | None) -> list[str]:
+    inventory = build_inventory(home)
+    adapters = {a.id: a for a in default_adapters(home)}
+    where = str(project) if project else None
+    answer = library(inventory, adapters, where, gateway_registered=False, kind="mcp_server")
+    return answer["notes"]
+
+
+def test_a_broken_user_file_is_named_when_the_home_folder_is_a_known_project(home):
+    # Anyone who ran claude in ~ has it in the project list; ~/.cursor/mcp.json is still the user's.
+    _known_projects(home, home)
+    (home / ".cursor/mcp.json").write_text("{ not json")
+    line = "Could not read mcp.json; its items are not shown."
+    assert line in _notes(home, None)
+    assert line in _notes(home, home / "work/website")
+
+
+def test_a_broken_project_file_belongs_to_the_deepest_project(home):
+    work, website = home / "work", home / "work/website"
+    _known_projects(home, work)
+    (website / ".claude/settings.json").write_text("{ not json")
+    line = "Could not read settings.json; its items are not shown."
+    assert line in _notes(home, website)
+    assert line not in _notes(home, work)
+    assert line not in _notes(home, None)
+
+
+def test_a_failed_client_keeps_its_rows_from_the_last_good_read(home):
+    last = LastGood()
+    keep_last_good(build_inventory(home), last, "2026-10-22T14:02:00+00:00")
+    broken = [ClaudeCodeAdapter(home), _BrokenCodex(home), CursorAdapter(home)]
+    inventory = keep_last_good(
+        build_inventory(home, adapters=broken), last, "2026-10-22T14:05:00+00:00"
+    )
+    adapters = {a.id: a for a in default_adapters(home)}
+    answer = library(inventory, adapters, None, gateway_registered=False, kind="mcp_server")
+    # Only Codex had langfuse-data: its row stays, as Codex had it at the last good read.
+    row = _row(answer, "langfuse-data")
+    assert row["mine"] is True
+    codex = row["cells"]["codex"]
+    assert (codex["state"], codex["stale_at"], codex["add"]) == (
+        "on",
+        "2026-10-22T14:02:00+00:00",
+        None,
+    )
+    assert codex["reason"].startswith("From the last good read at ")
+    # A row Codex did not have stays Unknown in its column.
+    assert _row(answer, "github")["cells"]["codex"]["state"] == "unk"
+    # The column says it; a whole client gives no line above the table.
+    assert not any(n.startswith("Could not read") for n in answer["notes"])
+
+
+def _toolbox_cell(home: Path, project: Path) -> dict:
+    inventory = build_inventory(home)
+    adapters = {a.id: a for a in default_adapters(home)}
+    answer = library(
+        inventory, adapters, str(project), gateway_registered=False, kind="plugin", show="all"
+    )
+    return _row(answer, "toolbox")["cells"]["claude_code"]
+
+
+def test_an_add_with_a_project_place_is_held_only_when_both_places_are_broken(home):
+    website = home / "work/website"
+    assert _toolbox_cell(home, website)["add"]["project_place"] is True
+    (home / ".claude/settings.json").write_text("{ not json")
+    assert _toolbox_cell(home, website)["add"]["action"] == "plugin.install"  # the project's reads
+    (website / ".claude/settings.json").write_text("{ not json")
+    held = _toolbox_cell(home, website)
+    assert (held["state"], held["add"], held["reason"]) == (
+        "unk",
+        None,
+        "Can't add while settings.json can't be read.",
+    )
+
+
+def test_a_place_kitden_cannot_add_into_does_not_keep_an_add_offered(home):
+    # The project folder is gone, so the add can go to all projects only; that file is broken.
+    (home / ".claude/settings.json").write_text("{ not json")
+    cell = _toolbox_cell(home, home / "work/deleted-project")
+    assert (cell["add"], cell["reason"]) == (None, "Can't add while settings.json can't be read.")
+
+
+def test_a_definition_kept_from_the_last_good_read_cannot_be_changed(home):
+    with page_for(home) as page:
+        (home / ".claude.json").write_text("{ broken")
+        page.post("/api/rescan", headers=POST)
+        github = next(
+            i
+            for i in page.get("/api/items?kind=mcp_server").json()
+            if (i["client"], i["name"]) == ("claude_code", "github")
+        )
+        assert github["stale_at"]
+        body = {"action": "mcp.remove_direct", "targets": [{"item": github["id"]}]}
+        answer = page.post("/api/changes/preview", json=body, headers=POST)
+    assert (answer.status_code, answer.json()) == (
+        422,
+        {"detail": "Kitden can't change this until it reads .claude.json again."},
+    )

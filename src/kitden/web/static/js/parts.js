@@ -106,8 +106,9 @@ export function kitdenMove(change) {
 export const GATEWAY_NOTE = "Add the server in the gateway first, then remove its direct entry here.";
 
 // `label` is what a screen reader hears for a dash: why nothing can be done, when known.
-export function socket({ state, where, word, label }) {
-  const node = el("span", `socket s-${state}`);
+export function socket({ state, where, word, label, stale = false }) {
+  // `stale`: kept from the last good read, drawn with a dashed dot.
+  const node = el("span", stale ? `socket s-${state} stale` : `socket s-${state}`);
   if (state === "none") {
     node.append(el("span", "word faint", "—"));
     node.setAttribute("aria-label", label || "Not set up");

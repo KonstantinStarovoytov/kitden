@@ -1,5 +1,6 @@
 """Where an item comes from and why it loads or not (redesign plan, Task 2)."""
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -148,3 +149,14 @@ def test_rules_words_only_for_the_rules_folder(home):
         summary=(("category", "instructions"),),
     )
     assert "paths" not in reads(plain, [plain])
+
+
+def test_a_definition_kept_from_the_last_good_read_says_when(home):
+    inventory = build_inventory(home)
+    at = "2026-10-22T14:02:00+00:00"
+    inventory.items = [
+        replace(i, stale_at=at) if i.name == "github" else i for i in inventory.items
+    ]
+    found = explain(inventory, "github", "mcp_server", None)
+    assert found and {d["stale_at"] for d in found} == {at}
+    assert {d["stale_at"] for d in explain(inventory, "Neon", "mcp_server", None)} == {None}
