@@ -61,12 +61,14 @@ def _cell(
     reason: str | None = None,
     origin: str | None = None,
     route: str | None = None,
+    stale_at: str | None = None,
 ) -> dict:
     return {
         "state": state,
         "where": where,
         "origin": origin,
         "route": route,
+        "stale_at": stale_at,
         "items": items or [],
         "word": word,
         "add": add,
@@ -153,7 +155,13 @@ def _has(row: Row | None, client: str) -> bool:
 def _map_cell(row: Row, client: str) -> dict:
     cell = row.cells[client]
     return _cell(
-        cell.state, cell.where, cell.items, reason=cell.reason, origin=cell.origin, route=cell.route
+        cell.state,
+        cell.where,
+        cell.items,
+        reason=cell.reason,
+        origin=cell.origin,
+        route=cell.route,
+        stale_at=cell.stale_at,
     )
 
 
@@ -549,11 +557,13 @@ def _unread_cells(rows: list[dict], map_rows: list[Row], columns: list[str], fou
 
 def _read_notes(inventory, project: str | None) -> list[str]:
     """One line per file Kitden could not read in this view: a file inside another known
-    project belongs to that project. A client not read at all has no line; its column says it."""
+    project belongs to that project. A client not read at all has no line; its column says it.
+    A file whose items are kept from the last good read has none either: its cells say it."""
     others = [Path(p.path) for p in inventory.projects if p.path != project]
+    kept = {i.source.path for i in inventory.items if i.stale_at}
     lines: list[str] = []
     for problem in inventory.problems:
-        if not problem.path:
+        if not problem.path or problem.path in kept:
             continue
         path = Path(problem.path)
         line = NOT_SHOWN.format(path.name)

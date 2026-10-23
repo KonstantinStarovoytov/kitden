@@ -132,6 +132,8 @@ export function cellNode(row, client) {
     return node;
   }
   const node = socket({ state: cell.state, where: cell.where, word: cell.word, label: cell.reason });
+  // Kept from the last good read of a file that now fails: a dashed dot, and the hover says when.
+  if (cell.stale_at) node.classList.add("stale");
   const hint = cellHint(cell);
   if (hint) node.title = hint;
   return node;

@@ -17,6 +17,9 @@ CLIENT_UNREAD = "Could not read {}."
 NOT_SHOWN = "Could not read {}; its items are not shown."
 NO_ADD_UNREAD = "Can't add while {} can't be read."
 CHANGE_UNREAD = "Can't change this while {} can't be read."
+# A cell whose items were kept from the last good read of a file that now fails; the time is
+# this Mac's clock, "14:02".
+STALE = "From the last good read at {}"
 
 # Socket state and word per action, as the Library shows them after the change. "Removed",
 # "Added", "Updated" and "Via the new gateway" say what the change did, not a state.

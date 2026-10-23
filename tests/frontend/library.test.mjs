@@ -432,3 +432,10 @@ test('the Instructions tab has no adds and no scope line', () => {
   assert.equal(scopeLine('p1', [{}], 'instructions'), null);
   assert.equal(scopeLine('p1', [{}], 'skill'), 'Adding puts an item in all your projects.');
 });
+
+test('a cell kept from the last good read is marked and says when', () => {
+  const words = 'From the last good read at 14:02';
+  const node = cellNode({ key: 'k', name: 'github', cells: { codex: cell({ state: 'on', stale_at: '2026-10-22T14:02:00+00:00', reason: words }) } }, 'codex');
+  assert.ok(node.classList.contains('stale'));
+  assert.equal(node.title, words);
+});

@@ -9,11 +9,19 @@ from kitden.model import (
     Item,
     ItemKind,
     Project,
+    ReadStatus,
     Scope,
     Source,
     SourceKind,
+    UnknownReason,
 )
-from kitden.views.inventory import build_inventory, default_adapters
+from kitden.views.inventory import (
+    Inventory,
+    LastGood,
+    build_inventory,
+    default_adapters,
+    keep_last_good,
+)
 from tests.conftest import fake_client_command, make_home, write_cursor_fixture_state
 
 
@@ -141,3 +149,92 @@ def test_the_scan_shows_the_cached_version(tmp_path, monkeypatch):
 def test_a_missing_client_stays_not_found_with_the_cache(tmp_path):
     inventory = build_inventory(make_home(tmp_path, "codex/0.159.2"))
     assert {c.id: str(c.status) for c in inventory.clients}["cursor"] == "not_found"
+
+
+# The last good read, kept in memory -----------------------------------------------------------
+
+AT, LATER = "2026-10-22T14:02:00+00:00", "2026-10-22T14:05:00+00:00"
+
+
+def item(name, path, client="claude_code"):
+    source = Source(kind=SourceKind.FILE, path=path, owner_client=client)
+    return Item(
+        client=client,
+        kind=ItemKind.MCP_SERVER,
+        name=name,
+        source=source,
+        scope=Scope.USER,
+        actions=("mcp.remove_direct",),
+    )
+
+
+def problem(path, client="claude_code"):
+    """A file the Reader could not parse; with no path, a whole client Kitden could not read."""
+    return Source(
+        kind=SourceKind.FILE if path else SourceKind.MANAGED,
+        path=path,
+        owner_client=client,
+        read_status=ReadStatus.UNKNOWN,
+        unknown_reason=UnknownReason.PARSE_ERROR,
+    )
+
+
+def test_a_source_that_fails_keeps_its_last_good_items():
+    last = LastGood()
+    keep_last_good(Inventory(items=[item("github", "/h/.claude.json")]), last, AT)
+    kept = keep_last_good(Inventory(problems=[problem("/h/.claude.json")]), last, LATER)
+    assert [(i.name, i.stale_at, i.actions) for i in kept.items] == [("github", AT, ())]
+
+
+def test_a_source_read_well_again_is_fresh():
+    last = LastGood()
+    keep_last_good(Inventory(items=[item("github", "/h/.claude.json")]), last, AT)
+    keep_last_good(Inventory(problems=[problem("/h/.claude.json")]), last, LATER)
+    again = keep_last_good(Inventory(items=[item("github", "/h/.claude.json")]), last, LATER)
+    assert [i.stale_at for i in again.items] == [None]
+
+
+def test_a_first_read_that_fails_keeps_nothing():
+    assert (
+        keep_last_good(Inventory(problems=[problem("/h/.claude.json")]), LastGood(), AT).items == []
+    )
+
+
+def test_a_file_emptied_on_purpose_does_not_come_back():
+    last = LastGood()
+    keep_last_good(Inventory(items=[item("github", "/h/.claude.json")]), last, AT)
+    keep_last_good(Inventory(), last, AT)
+    assert keep_last_good(Inventory(problems=[problem("/h/.claude.json")]), last, LATER).items == []
+
+
+def test_a_client_that_fails_keeps_its_items_and_the_projects():
+    last = LastGood()
+    keep_last_good(
+        Inventory(
+            items=[item("neon", "/h/.codex/config.toml", "codex")],
+            projects=[Project("/h/work/api", True)],
+        ),
+        last,
+        AT,
+    )
+    kept = keep_last_good(Inventory(problems=[problem(None, "codex")]), last, LATER)
+    assert [(i.name, i.stale_at) for i in kept.items] == [("neon", AT)]
+    assert [p.path for p in kept.projects] == ["/h/work/api"]
+
+
+def test_projects_stay_while_another_file_was_broken_all_along():
+    # A file that fails on every read (the medium sample has one) must not stop Kitden from
+    # remembering the projects.
+    site = problem("/h/work/site/.cursor/mcp.json", "cursor")
+    last = LastGood()
+    keep_last_good(
+        Inventory(
+            items=[item("github", "/h/.claude.json")],
+            projects=[Project("/h/work/api", True)],
+            problems=[site],
+        ),
+        last,
+        AT,
+    )
+    kept = keep_last_good(Inventory(problems=[problem("/h/.claude.json"), site]), last, LATER)
+    assert [p.path for p in kept.projects] == ["/h/work/api"]

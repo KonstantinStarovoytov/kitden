@@ -101,6 +101,7 @@ def _cell(state="none", word=None, add=None, reason=None) -> dict:
         "where": None,
         "origin": None,
         "route": None,
+        "stale_at": None,
         "items": [],
         "word": word,
         "add": add,
@@ -789,3 +790,23 @@ def test_the_medium_sample_names_its_unreadable_file_above_the_table(tmp_path):
     assert _row(website, "github")["cells"]["cursor"]["add"]["action"] == "mcp.add"
     # The file belongs to website, so All projects and the other projects do not name it.
     assert not any(n.startswith("Could not read mcp.json") for n in answer(None)["notes"])
+
+
+# The last good read, kept while the page runs ------------------------------------------------
+
+
+def test_a_file_that_breaks_keeps_its_items_from_the_last_good_read(home):
+    # This home holds no gateway servers, so the rescan starts none.
+    with page_for(home) as page:
+        before = page.get("/api/library?kind=mcp_server").json()
+        assert _row(before, "github")["cells"]["claude_code"]["state"] == "on"
+        (home / ".claude.json").write_text("{ broken")
+        page.post("/api/rescan", headers=POST)
+        answer = page.get("/api/library?kind=mcp_server").json()
+    row = _row(answer, "github")
+    assert row["cells"]["claude_code"]["state"] == "on" and row["cells"]["claude_code"]["stale_at"]
+    assert row["flags"][0]["text"].startswith("From the last good read at ")
+    # Claude Code lacks neon; its add writes .claude.json.
+    neon = _row(answer, "neon")["cells"]["claude_code"]
+    assert neon["add"] is None and neon["reason"] == "Can't add while .claude.json can't be read."
+    assert not any(n.startswith("Could not read .claude.json") for n in answer["notes"])

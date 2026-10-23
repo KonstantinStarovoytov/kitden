@@ -5,6 +5,7 @@ import contextlib
 import json
 import sys
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -109,7 +110,14 @@ from kitden.views.effective import project_views
 from kitden.views.explain import explain
 from kitden.views.findings import find_bypasses, find_findings, finding_dict, mark_gateways
 from kitden.views.gateway_view import gateway_dict, gateway_view
-from kitden.views.inventory import Inventory, default_adapters, inventory_dict, item_dict
+from kitden.views.inventory import (
+    Inventory,
+    LastGood,
+    default_adapters,
+    inventory_dict,
+    item_dict,
+    keep_last_good,
+)
 from kitden.views.library import KINDS, SHOWS, library
 from kitden.views.load_map import load_map, map_dict
 from kitden.views.overview import overview
@@ -531,6 +539,9 @@ def create_app(
 
     def build_marked(**options) -> Inventory:
         inventory = build(**options)
+        # A source that fails keeps its last good items while the page runs.
+        now = datetime.now(UTC).isoformat(timespec="seconds")
+        keep_last_good(inventory, last_good, now)
         if home is not None:
             mark_gateways(inventory, _registered())
             inventory.items += gateway_items(inventory, load_settings(home), home)
@@ -549,6 +560,7 @@ def create_app(
 
     if version_refresh is None and home is not None and not demo:
         version_refresh = read_versions
+    last_good = LastGood()  # State builds at once, so it is made first
     state = State(
         build_marked,
         events,

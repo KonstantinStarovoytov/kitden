@@ -229,6 +229,8 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .s-off { color: var(--lamp-off); }
 .s-over { color: var(--ink-3); } .s-over .dot { background: linear-gradient(135deg, transparent 44%, currentColor 45% 55%, transparent 56%); }
 .s-unk { color: var(--lamp-warn); } .s-unk .dot { border-style: dashed; }
+/* Kept from the last good read: the state's own colour, with a dashed ring. */
+.socket.stale .dot { border-style: dashed; }
 .s-none, .s-missing { color: var(--ink-4); }
 .socket .word { color: var(--ink-2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: opacity var(--t-fast) ease; }
 .socket .where { color: var(--ink-3); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: opacity var(--t-fast) ease; }

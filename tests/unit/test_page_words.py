@@ -937,3 +937,7 @@ def test_an_issue_card_without_a_button_keeps_its_words_in_the_wide_column():
 
 def test_a_client_kitden_could_not_read_says_so_under_its_name():
     assert "column.note" in script("library.js")
+
+
+def test_a_cell_kept_from_the_last_good_read_has_a_dashed_dot():
+    assert ".socket.stale .dot { border-style: dashed; }" in CSS

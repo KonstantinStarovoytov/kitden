@@ -33,6 +33,54 @@ class Inventory:
     partial: bool = False  # a quick scan left out a slow answer; a new scan follows when it is in
 
 
+@dataclass
+class LastGood:
+    """The last good read of each source, in memory while the page runs. `sources`: source key
+    (a file's path, or `client:<id>` for a whole client) -> (time read, items). `projects`: the
+    project list of the last read that kept nothing."""
+
+    sources: dict[str, tuple[str, list[Item]]] = field(default_factory=dict)
+    projects: list[Project] = field(default_factory=list)
+
+
+def keep_last_good(inventory: Inventory, last: LastGood, now: str) -> Inventory:
+    """Add the last good items of each source that failed now, marked with when they were read
+    and with no action (a Remove would be refused), and remember this read's good sources.
+
+    A whole client that failed keeps its items like a file does. While a source is kept, the
+    projects of the last good read stay too, so a broken ~/.claude.json does not drop them. A
+    first read that fails keeps nothing; a file emptied on purpose keeps nothing either.
+    """
+    failed = {p.path or f"client:{p.owner_client}" for p in inventory.problems}
+    gone = {k.removeprefix("client:") for k in failed if k.startswith("client:")}
+    have = {i.id for i in inventory.items}
+    kept: dict[str, Item] = {}  # by id: a file a failed client also read gives each item once
+    for key in sorted(failed & last.sources.keys()):
+        at, items = last.sources[key]
+        for i in items:
+            if i.id not in have:
+                kept.setdefault(i.id, replace(i, stale_at=at, actions=()))
+    fresh: dict[str, list[Item]] = {}
+    for item in inventory.items:
+        fresh.setdefault(item.source.path or "", []).append(item)
+        fresh.setdefault(f"client:{item.client}", []).append(item)
+    new = {k: (now, v) for k, v in fresh.items() if k and k not in failed}
+    for key, (at, items) in last.sources.items():  # a failed source, or a file of a failed client
+        if key in failed or (items and items[0].client in gone):
+            new.setdefault(key, (at, items))
+    last.sources = new
+    inventory.items += kept.values()
+    if kept:
+        known = {p.path for p in inventory.projects}
+        inventory.projects = sorted(
+            [*inventory.projects, *(p for p in last.projects if p.path not in known)],
+            key=lambda p: p.path,
+        )
+    else:  # nothing kept: this read's projects are the best known, even with a file broken
+        last.projects = list(inventory.projects)
+    return inventory
+
+
 def default_adapters(
     home: Path, quick: bool = False, on_slow_answer: Callable[[], None] | None = None
 ) -> list[ClientAdapter]:

@@ -5,12 +5,14 @@ Rows group items by kind and name. A plugin is one row per marketplace ("figma@a
 named "review" are two rows); other kinds group by name.
 Each cell says what that client does with the item in the chosen project: has it available,
 has it but off, routes it through the gateway, or does not know (a client Kitden could not read
-says why). In a project a cell also says where it applies, and every cell keeps how the client
-gets the item (its route) for the hover text. The Claude Desktop Code tab has no column of its
-own: its extra items show in the Claude Code column, with the route "from the Desktop app".
+says why). A cell kept from the last good read says when it was read. In a project a cell also
+says where it applies, and every cell keeps how the client gets the item (its route) for the
+hover text. The Claude Desktop Code tab has no column of its own: its extra items show in the
+Claude Code column, with the route "from the Desktop app".
 """
 
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from kitden.changes.actions import KITDEN_GATEWAY
 from kitden.model import (
@@ -24,7 +26,7 @@ from kitden.model import (
 )
 from kitden.views.effective import DESKTOP, effective_view, plugin_of
 from kitden.views.findings import base_name, bypass_kind, find_bypasses, find_findings
-from kitden.views.words import CLIENT_UNREAD, ORIGIN_WORDS, ROUTE_WORDS
+from kitden.views.words import CLIENT_UNREAD, ORIGIN_WORDS, ROUTE_WORDS, STALE
 
 COLUMNS = ("claude_code", "codex", "cursor")
 MARKS = {"claude_code": "CC", "codex": "CX", "cursor": "CU"}
@@ -38,6 +40,7 @@ class Cell:
     origin: str | None = None  # None (all projects), "project" or "override"
     route: str | None = None  # how the client gets it, from ROUTE_WORDS; None when plain
     reason: str | None = None  # why the state, when the page should say it (a client not read)
+    stale_at: str | None = None  # the earliest last good read its items were kept from
     items: list[str] = field(default_factory=list)
     count: int = 0
 
@@ -105,6 +108,11 @@ def _own_first(item: Item, column: str) -> tuple[bool, str]:
     return (item.source.owner_client in NAMES and item.source.owner_client != column, item.name)
 
 
+def _clock(at: str) -> str:
+    """The time of a last good read on this Mac's clock: "14:02"."""
+    return datetime.fromisoformat(at).astimezone().strftime("%H:%M")
+
+
 def _cell(
     column: str,
     loaded: list[Item],
@@ -115,7 +123,8 @@ def _cell(
     in_project: bool,
 ) -> Cell:
     """The cell from the items the client loads, or else those it has. In a project it says
-    where they apply; the first item gives the route."""
+    where they apply; the first item gives the route. Items kept from the last good read say
+    when."""
     if loaded:
         items = sorted(loaded, key=lambda i: _own_first(i, column))
         if any(i.via_gateway for i in items):
@@ -131,11 +140,14 @@ def _cell(
     else:
         return Cell("none")
     origin = _origin(items, overrides, plugins)
+    stale = min((i.stale_at for i in items if i.stale_at), default=None)
     return Cell(
         state,
         where=ORIGIN_WORDS[origin] if in_project else None,
         origin=origin,
         route=_route(items[0], column),
+        reason=STALE.format(_clock(stale)) if stale else None,
+        stale_at=stale,
         items=[i.id for i in items],
         count=len(loaded),
     )
@@ -273,6 +285,10 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
             if read is ClientStatus.UNREADABLE and cell.state == "none":
                 cell = Cell("unk", reason=CLIENT_UNREAD.format(NAMES[column]))
             row.cells[column] = cell
+        # Kept from the last good read: the row's first flag says when.
+        stale = min((c.stale_at for c in row.cells.values() if c.stale_at), default=None)
+        if stale:
+            row.flags.append({"text": STALE.format(_clock(stale)), "level": "info"})
 
     item_rows = {
         item_id: row for row in rows.values() for c in row.cells.values() for item_id in c.items
@@ -313,6 +329,7 @@ def map_dict(inventory, rows: list[Row]) -> dict:
                         "origin": cell.origin,
                         "route": cell.route,
                         "reason": cell.reason,
+                        "stale_at": cell.stale_at,
                         "items": cell.items,
                         "count": cell.count,
                     }

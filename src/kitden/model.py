@@ -146,6 +146,7 @@ class Item:
     via_gateway: str | None = None
     actions: tuple[str, ...] = ()
     change_hint: str | None = None  # where to change it when the tool cannot (FR-028)
+    stale_at: str | None = None  # kept from the last good read (ISO time); not part of the id
 
     @property
     def id(self) -> str:
