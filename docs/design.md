@@ -41,7 +41,7 @@ The brand mark is fixed; functional shades adapt for text contrast. Text on the 
 
 ## Client marks
 
-Every client mark is the same rounded tile (24 px, radius 6, raised-panel background, thin border), so the row of clients reads as one family. The Codex and Cursor icons fill the tile and switch to the vendor's own dark version in the dark theme; the Claude glyph sits inside it with 4 px padding and works on both. The tile grows to 28 px where the client is the headline: the Clients card on Overview and the title of a detail panel. The Gateway route diagram draws the same tile in SVG. Do not tint, recolor or shrink a vendor icon to show a state; state lives in the badge next to it.
+Every client mark is the same rounded tile (24 px, radius 6, raised-panel background, thin border), so the row of clients reads as one family. The Codex and Cursor icons fill the tile and switch to the vendor's own dark version in the dark theme; the Claude glyph sits inside it with 4 px padding and works on both. The tile grows to 28 px where the client is the headline: the Clients card on Overview and the title of a detail panel. Do not tint, recolor or shrink a vendor icon to show a state; state lives in the badge next to it.
 
 ## Components
 
@@ -53,7 +53,7 @@ Overview's notes are grouped by item: one row per name with the mark of every cl
 
 A row that opens Details ends with a quiet › and the hidden words "Open details" (`opens()` in `parts.js`). The chevron turns accent on hover and keyboard focus; it does not move. The search box names what it searches: "Search your setup and marketplaces…". The project picker is a button with the picked project's name. It opens a menu: "Find a project…" at the top, then "All projects" with "What applies in every project", then each project by folder name with "1 own rule" or "N own rules" when it has any (a folder that is gone says "Folder missing"), and no paths. Focus goes into the find box; typing narrows the projects and "All projects" stays first; Down, Up, Home and End move through the options, Enter picks one, and Escape or a click outside closes the menu (Escape gives focus back to the button). A pick opens a new history entry. A picked project that leaves the list stays picked (the menu says "No longer on the list"), while Overview, Library and Gateway say "This project is no longer on the list." and read nothing for it. Under a page head the scope bar (`scopeBar` in `parts.js`, on the Gateway first) says "Shared setup · project overrides stay separate" with All projects picked, or, in the accent family, "Project website · 2 rules differ from the shared setup" ("Project website · follows the shared setup" when none differ). A review names its scope in the title ("… for all projects", "… in website"; see Review below) and an add, with All projects picked, in the lede too. A gateway's entry and a server put back in a client are adds for all projects too. In `kitden demo` a quiet "Demo" flag (`.flag.info`) follows the wordmark; its hover text says the setup is a sample in a temporary folder. The page reads `/api/about` once to know.
 
-The address keeps the project and the selected item (`sel=<kind>:<name>`, as in `#library?kind=skill&project=a&sel=skill%3Atidy`) on every page, so Back and a copied link return to them. Arriving with a selection (an Overview card or note, Back, Forward or a link), the Library opens that row's Details once, and the Gateway opens the selected server's Details once, in the Kitden gateway's own panel for a server it holds; a redraw does not open it again. A rail link opens its place fresh. An arrival never opens over a panel that is open, and a row or Details the person opens first wins.
+The address keeps the project and the selected item (`sel=<kind>:<name>`, as in `#library?kind=skill&project=a&sel=skill%3Atidy`) on every page, so Back and a copied link return to them. Arriving with a selection (an Overview card or note, Back, Forward or a link), the Library opens that row's Details once, and the Gateway opens the selected server's Details once, in the Kitden gateway's own panel for a server it holds (a tool opens its server and the tool's switch; a client or a group is found and focused in the List); a redraw does not open it again. A rail link opens its place fresh. An arrival never opens over a panel that is open, and a row or Details the person opens first wins.
 
 A Details footer button never grows past the panel: long words end in "…", and the whole label stays in its hover text. A Remove names every client it reaches: "Remove from Codex and Cursor…" for a skill in a folder both read, but not a client that keeps another copy of its own; a switch names only its own client. When one client has two Remove buttons for the same scope, each names its folder by the last two parts: "Remove from Codex and Cursor (.agents/skills)…".
 
@@ -100,11 +100,12 @@ The Library has one row per item and one column per client found on this compute
 
 Every pressable area is at least 24 px tall and wide (WCAG 2.2 AA target size, checked 2026-10-19). The plugin switch keeps its 34 x 20 track inside a 24 px button, and a client checkbox is pressed through its 24 px label.
 
-The Gateway page lists the Kitden gateway first, then any registered gateway (Obot, MetaMCP). Its rows show a name and flags; the command and address stay in Details.
+The Gateway page shows the clients, the Kitden gateway, any registered gateway (Obot, MetaMCP) and the MCP servers they reach. Its head says "Connect your agents. Shape what they can use.", with a Map | List switch beside the title and the scope bar under it. The address keeps the choice (`view=map|list`); with none, the page opens in List past 15 servers. Rows show a name, the clients and an action; the command and address stay in Details.
 
 | Part | Look |
 | --- | --- |
-| Kitden gateway card | The kicker "Kitden gateway · On this Mac", the route diagram (a wire to each client whose `kitden` entry is on), then "In the gateway · N": a name, a Local or Remote flag, a quiet "12 tools" when Kitden knows its tools, an Off flag where it is off, and Details. Its Details, and an MCP server's Details in the Library, show the same count once; a server outside the gateway shows none. A client without the entry gets a quiet line, "Codex does not use it yet.", and "Set up in Codex…". |
+| Gateway List | A tree grid: the group "Clients" ("Connected" or "Not connected"), each gateway's own row with its "Remote" and "Local" groups, then "Outside the gateway · calls skip Kitden's rules". Columns: Name (a dot, filled when on, the name and its tag), Used by (18 px client tiles), Tools ("3 of 4 on"; a server outside the gateway shows none) and the action: ›, or "Move in…" on an outside row a move can take. An open server shows its tools: a dot, the name, and "Read" or "Write" when the server says so, "May write" when only its name suggests it. One row is in the Tab order: Down, Up, Home and End move, Right unfolds or goes in, Left folds or goes up, Enter opens Details beside the page. A click opens Details; the ▸ folds. |
+| Outside server, client and gateway Details | Cards in the Details column (`gateway-details.js`). A server outside the gateway: In (client tiles), Kind (Remote, Local or From a plugin) and Gateway "Outside · calls skip Kitden's rules", then one sentence ("Claude Code calls it directly, so Kitden's tool rules do not reach it."). Its actions: "Move into the gateway…" (or, quietly, why it stays), "Remove direct entry…" when no gateway takes a remote one, "+ Add to Codex…" while no client gets it through a gateway, and a Remove for each of its entries; its definitions come from `/api/explain`. A client: Version, Kitden entry (On, Off, Old or Not set up) and Gateway; "Set up in Codex…" and "Open ChatGPT". The Kitden gateway: Clients, Servers and Rules; "Move all N…" (every outside server a move can take, in one review) and "Add another gateway…" (the form in the column). A registered gateway: Clients, Servers (read from it live), Used or Not used; "Open Obot ↗", "Use this gateway…" and "Connect clients"; its address under Technical details. A server the Kitden gateway holds still opens its own panel with the tool switches. |
 | Tool switches | In the Details of a server in the gateway: "Tools · {project folder}" or "Tools · All projects", then "Whole server" first and one row with a switch per tool (name in mono, description cut at two lines). A project row that differs shows what it would follow without its own setting, "Differs from all projects" or "Differs from {project around it}", and a "Use all projects" or "Use {project}" button. Picking another project, also by Back or an edited address, closes the panel, cancels an open review and drops one still being prepared, except while a change is being written, so a switch never acts on a project it does not name. |
 | A switch changes | It rests half-way while the preview loads, then opens the review. The switch flips only after `verified`: Details stays open and is drawn again in the new state, the thumb slides once (`.switch.flipped`), focus is on that switch, and the toast has Undo. Cancel and a refused preview come back as Details' Cancel row says (for "Use …", focus on that button). |
 | Move choice | "Move into the gateway…" asks only when there is a choice: "Move into the Kitden gateway…" first (primary), a registered gateway second (plain). With one choice the review opens at once. A local server can go only into the Kitden gateway. |
@@ -124,7 +125,7 @@ has verified it. Calm beats bouncy: a tool that edits files must feel steady.
    only after the server says `verified`. A control under review shows a pending state, not
    the new state.
 2. **No fake activity.** Nothing loops to suggest traffic, scanning or progress Kitden cannot
-   observe. A gateway wire draws once when its connection first appears, then rests.
+   observe. A link on a map draws once when it appears, then rests.
 3. **Point, don't move.** To show where something is, light it (row glow, socket ping, lit
    rows). Layout moves only when the thing itself moves (a tile flying to its column).
 4. **Errors stay.** An error is a callout that stays until the next action; focus goes back to
@@ -179,7 +180,6 @@ All helpers live in `src/kitden/web/static/js/motion.js`.
 | Step count | `change_progress` events → "Applying 2 of 5" + `.btn .meter` | Apply of a change with several steps, from the server's own count |
 | Applied | `.btn.primary.done` (green at once, full strength) + drawn check | Review footer, after `verified` |
 | Toast check | `toast(text, undo, { ok: true })` | Only for verified and undone |
-| Route focus | `focusRoutes(clients, { wires, rows })` | Gateway diagram and lists, hover and keyboard |
 
 ### Conventions
 
@@ -198,8 +198,9 @@ All helpers live in `src/kitden/web/static/js/motion.js`.
 - `prefers-reduced-motion: reduce` turns every animation and transform transition off (one
   rule at the end of `style.css`); `animate()` and `transition()` return early; folds,
   flights and socket morphs just switch.
-- Keyboard opens and closes the panel instantly. Gateway routes are focusable and announce
-  their state. Every control keeps `:focus-visible`.
+- Keyboard opens and closes the panel instantly. The Gateway List is a tree grid: each row
+  says its level and whether it is open, and the arrow keys move (`gridKey()` in `dom.js`).
+  Every control keeps `:focus-visible`.
 - A redraw keeps keyboard focus: a tab, filter button, menu or row with a `data-focus` key (or
   a row key) gets focus back. Arrow keys, Home and End move between tabs and select (`tabKeys()`
   in `dom.js`). The review's Tab loop includes its "Show file change" summary. After a page's

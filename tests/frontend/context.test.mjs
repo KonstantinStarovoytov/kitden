@@ -34,7 +34,12 @@ globalThis.history = {
 };
 const back = () => entries[(at -= 1)];
 const rows = [{ key: 'row-github', kind: 'mcp_server', name: 'github', lookup: 'github' }];
-globalThis.fetch = async (url) => ({ ok: true, status: 200, json: async () => (url.startsWith('/api/map') ? { rows } : {}) });
+// Every URL the pages ask for, so a test can say which reads happened.
+const asked = [];
+globalThis.fetch = async (url) => {
+  asked.push(url);
+  return { ok: true, status: 200, json: async () => (url.startsWith('/api/map') ? { rows } : {}) };
+};
 // A drawn row, as openRow marks it.
 const tr = { parentElement: { querySelectorAll: () => [] }, setAttribute() {} };
 
@@ -47,7 +52,11 @@ const { contextLinks, followLink } = await import('../../src/kitden/web/static/j
 
 const github = { kind: 'mcp_server', name: 'github' };
 const files = { kind: 'mcp_server', name: 'files' };
-const model = { gateways: [{ kind: 'kitden', servers: [{ name: 'files' }] }] };
+// The Gateway's model: files in the Kitden gateway, github outside it in Claude Code.
+const model = {
+  gateways: [{ kind: 'kitden', servers: [{ name: 'files' }] }],
+  groups: { move: [{ name: 'github', clients: ['claude_code'], columns: ['claude_code'], items: ['g'], stays: null }], local: [], plugin: [] },
+};
 
 test('one project and one selection go from Overview to Library to Gateway, and Back returns', async () => {
   Object.assign(state, parseHash(entries[at]));
@@ -61,7 +70,7 @@ test('one project and one selection go from Overview to Library to Gateway, and 
   assert.equal(arrivalRow(rows), null); // a redraw keeps focus in Details
   goTo('gateway', state.selected); // a link to the Gateway keeps both
   assert.equal(entries[at], '#gateway?project=a&sel=mcp_server%3Agithub');
-  assert.equal((await arrivalServer(model)).row.name, 'github');
+  assert.deepEqual(await arrivalServer(model), { outside: model.groups.move[0], group: 'move' });
   assert.equal(followHash(back()).same, false); // Back
   assert.equal(state.view, 'library');
   assert.equal(state.project, 'a');
@@ -106,13 +115,28 @@ test('the Gateway opens a held server in its own panel, and never over a panel',
   followHash('#gateway?project=a&sel=mcp_server%3Afiles&q=x');
   assert.equal(await arrivalServer(model), null);
   closePanel({ focus: false });
-  // A panel opened while the map is read wins.
+});
+
+test('the Gateway finds a server outside it in its own model, and never reads the map', async () => {
+  asked.length = 0;
   data.scope.map = null;
   goTo('gateway', github);
-  const late = arrivalServer(model);
-  openPanel([]);
-  assert.equal(await late, null);
-  closePanel({ focus: false });
+  assert.equal((await arrivalServer(model)).outside.name, 'github');
+  assert.ok(!asked.some((url) => url.startsWith('/api/map')), asked.join(' '));
+  // A name the Gateway does not list stays in the address and opens nothing.
+  goTo('gateway', { kind: 'mcp_server', name: 'gone' });
+  assert.equal(await arrivalServer(model), null);
+});
+
+test('a selected tool opens its server, a client and a group are found in the list', async () => {
+  goTo('gateway', { kind: 'tool', name: 'files/read_file' });
+  assert.deepEqual(await arrivalServer(model), { held: model.gateways[0].servers[0], tool: 'read_file' });
+  goTo('gateway', { kind: 'client', name: 'codex' });
+  assert.deepEqual(await arrivalServer(model), { client: 'codex' });
+  goTo('gateway', { kind: 'group', name: 'outside' });
+  assert.deepEqual(await arrivalServer(model), { group: 'outside' });
+  goTo('gateway', { kind: 'tool', name: 'tracker/list_issues' });
+  assert.equal(await arrivalServer(model), null);
 });
 
 test('a link from open Details closes it first, so the other place opens the same item', async () => {

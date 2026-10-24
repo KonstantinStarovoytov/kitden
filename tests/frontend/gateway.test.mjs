@@ -4,8 +4,11 @@ import { test } from 'node:test';
 // gateway.js needs only this from a browser to load; the tests call its pure parts.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { gatewayTree, heldServer, kitdenLinks, offersSwitch, serverFor, visibleRows } = await import('../../src/kitden/web/static/js/gateway.js');
+const { gatewayTree, heldServer, kitdenLinks, listRows, serverCount } = await import('../../src/kitden/web/static/js/gateway.js');
+const { offersSwitch } = await import('../../src/kitden/web/static/js/gateway-details.js');
+const { findIn, layoutTree } = await import('../../src/kitden/web/static/js/map.js');
 const { kitdenClients } = await import('../../src/kitden/web/static/js/parts.js');
+const { viewMode } = await import('../../src/kitden/web/static/js/store.js');
 
 const entry = (client, state, fields = {}) => ({ client, state, item: null, enabled: true, ...fields });
 
@@ -48,21 +51,6 @@ test('a registered gateway offers to take the clients over only from another reg
   assert.equal(offersSwitch(model(['gw-2']), kitden), false);
 });
 
-test('a group shows six rows and says how many more there are', () => {
-  const rows = Array.from({ length: 7 }, (_, i) => ({ name: `s${i}` }));
-  assert.deepEqual(visibleRows(rows, false), { shown: rows.slice(0, 6), cut: 1 });
-  assert.deepEqual(visibleRows(rows.slice(0, 6), false), { shown: rows.slice(0, 6), cut: 0 });
-  assert.deepEqual(visibleRows(rows, true), { shown: rows, cut: 0 });
-});
-
-test('the Gateway opens only a selected server', () => {
-  const map = { rows: [{ kind: 'mcp_server', name: 'github' }, { kind: 'skill', name: 'github' }] };
-  assert.equal(serverFor(map, { kind: 'mcp_server', name: 'github' }), map.rows[0]);
-  assert.equal(serverFor(map, { kind: 'skill', name: 'github' }), null);
-  assert.equal(serverFor(map, { kind: 'mcp_server', name: 'gone' }), null);
-  assert.equal(serverFor(null, { kind: 'mcp_server', name: 'github' }), null);
-});
-
 test('a selected server the Kitden gateway holds opens in its own panel', () => {
   const model = { gateways: [{ kind: 'kitden', servers: [{ name: 'files' }] }, { kind: 'metamcp', servers: [{ name: 'x' }] }] };
   assert.equal(heldServer(model, { kind: 'mcp_server', name: 'files' }).name, 'files');
@@ -71,51 +59,176 @@ test('a selected server the Kitden gateway holds opens in its own panel', () => 
   assert.equal(heldServer(null, { kind: 'mcp_server', name: 'files' }), null);
 });
 
-// The medium sample's /api/gateway-view, cut short: held files (local) and tracker (remote);
-// docs set up twice, in Claude Code (remote) and in Codex (local); Cursor's direct files.
+// The medium sample's /api/gateway-view, cut short: held files (local, on) and tracker (remote,
+// off for all projects, on in one); docs set up twice, in Claude Code (remote) and in Codex
+// (local); github in Claude Code; Cursor's direct files.
+const tool = (name, state, hint, fields = {}) => ({ name, title: null, state, effective: state, hint, origin: 'default', origin_from: null, ...fields });
 const MEDIUM_VIEW = {
-  gateways: [{ id: 'kitden', kind: 'kitden', name: 'Kitden gateway', servers: [
-    { name: 'files', kind: 'local', state: 'on', tools: 4 },
-    { name: 'tracker', kind: 'remote', state: 'off', tools: 3 },
+  gateways: [{ id: 'kitden', kind: 'kitden', name: 'Kitden gateway', where: 'On this Mac', movable: true, servers: [
+    { name: 'files', kind: 'local', state: 'on', differs: false, origin: 'default', tools: 4, on_count: 3, on_in: 0, projects: 2, tool_list: [
+      tool('read_file', 'on', 'reads'), tool('write_file', 'on', 'writes'), tool('delete_file', 'off', 'may write', { origin: 'global' }), tool('search_files', 'on', 'unknown'),
+    ] },
+    { name: 'tracker', kind: 'remote', state: 'off', differs: false, origin: 'global', tools: 3, on_count: 0, on_in: 1, projects: 1, tool_list: [
+      tool('list_issues', 'on', 'reads', { effective: 'off', why: 'server_off' }), tool('create_issue', 'on', 'may write', { effective: 'off', why: 'server_off' }), tool('export_report', 'off', 'unknown', { origin: 'strict' }),
+    ] },
   ] }],
+  connections: { kitden: { claude_code: ['files'], codex: ['files'], cursor: [] } },
+  used: ['kitden'],
   groups: {
-    move: [{ name: 'docs', clients: ['claude_code'], items: ['a'] }],
-    local: [{ name: 'docs', clients: ['codex'], items: ['b'] }, { name: 'files', clients: ['cursor'], items: ['c'] }],
+    move: [
+      { name: 'docs', clients: ['claude_code'], columns: ['claude_code'], items: ['a'], stays: null },
+      { name: 'github', clients: ['claude_code'], columns: ['claude_code'], items: ['g'], stays: null },
+    ],
+    local: [
+      { name: 'docs', clients: ['codex'], columns: ['codex'], items: ['b'], stays: null },
+      { name: 'files', clients: ['cursor'], columns: ['cursor'], items: ['c'], stays: null },
+    ],
     plugin: [],
   },
+  own_rules: 0,
 };
 const SETUP = [entry('claude_code', 'added'), entry('codex', 'added'), entry('cursor', 'missing')];
+const CLIENTS = ['claude_code', 'codex', 'cursor'].map((id) => ({ id, status: 'found', version: '1.0', app_url: null }));
+const OPTS = { setup: SETUP, clients: CLIENTS, open: new Set(), held: new Map() };
 const keys = (tree) => tree.links.map((l) => `${l.from}>${l.to} ${l.kind}`);
+const block = (tree, id) => tree.blocks.find((b) => b.id === id);
 
-test('the probe tree joins linked clients to the gateway and each outside row to its clients', () => {
-  const tree = gatewayTree(MEDIUM_VIEW, { setup: SETUP, open: new Set() });
-  assert.deepEqual(tree.blocks.filter((b) => b.kind === 'client').map((b) => b.id), ['client:claude_code', 'client:codex', 'client:cursor']);
+test('the tree joins linked clients to the gateway and each outside row to its clients', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+  assert.deepEqual(tree.blocks.filter((b) => b.kind === 'client').map((b) => [b.id, b.meta]), [
+    ['client:claude_code', 'Connected'], ['client:codex', 'Connected'], ['client:cursor', 'Not connected']]);
   assert.ok(keys(tree).includes('client:codex>gateway:kitden on'));
   assert.ok(!keys(tree).some((k) => k.startsWith('client:cursor>gateway:')));
-  assert.ok(!keys(gatewayTree(MEDIUM_VIEW, { setup: [entry('codex', 'missing')], open: new Set() })).includes('client:codex>gateway:kitden on'));
+  assert.ok(!keys(gatewayTree(MEDIUM_VIEW, { ...OPTS, setup: [entry('codex', 'missing')] })).includes('client:codex>gateway:kitden on'));
   // Held servers sit in Remote and Local groups; an off server has no link from the gateway.
-  const files = tree.blocks.find((b) => b.id === 'held:kitden:files');
+  const files = block(tree, 'held:kitden:files');
   assert.deepEqual([files.parent, files.column, files.count], ['group:kitden:local', 'servers', 4]);
-  assert.equal(tree.blocks.find((b) => b.id === 'held:kitden:tracker').parent, 'group:kitden:remote');
+  assert.equal(block(tree, 'held:kitden:tracker').parent, 'group:kitden:remote');
   assert.ok(keys(tree).includes('gateway:kitden>held:kitden:files on'));
   assert.ok(!keys(tree).some((k) => k.startsWith('gateway:kitden>held:kitden:tracker')));
   // One name in two groups is two blocks, each joined to its own client by a direct line.
   assert.ok(keys(tree).includes('client:codex>outside:local:docs direct'));
   assert.ok(keys(tree).includes('client:claude_code>outside:move:docs direct'));
-  assert.equal(tree.blocks.find((b) => b.id === 'outside:local:files').parent, 'group:outside');
-  // No tools while folded.
-  assert.ok(!tree.blocks.some((b) => b.kind === 'tool'));
+  assert.equal(block(tree, 'outside:local:files').parent, 'group:outside');
+  assert.equal(block(tree, 'outside:local:docs').meta, 'In Codex');
 });
 
-test("an open server's tools come from its tool list, and an off tool has no link", () => {
-  const tools = { files: [{ name: 'read_file', state: 'on' }, { name: 'delete_file', state: 'off' }, { name: 'write_file', state: 'on', effective: 'off' }] };
-  const tree = gatewayTree(MEDIUM_VIEW, { setup: SETUP, open: new Set(['held:kitden:files']), tools });
-  assert.deepEqual(tree.blocks.filter((b) => b.kind === 'tool').map((b) => [b.id, b.parent, b.state]), [
-    ['tool:files/read_file', 'held:kitden:files', 'on'],
-    ['tool:files/delete_file', 'held:kitden:files', 'off'],
-    ['tool:files/write_file', 'held:kitden:files', 'off'],
+test('the Kitden block comes first, then each registered gateway, the used one first', () => {
+  const obot = { id: 'gw-1', kind: 'obot', url: 'http://127.0.0.1:8080/mcp-connect/x', movable: true, managed: true };
+  const meta = { id: 'gw-2', kind: 'metamcp', url: 'http://127.0.0.1:12008/metamcp/local/mcp', movable: true, managed: true };
+  const view = { ...MEDIUM_VIEW, gateways: [...MEDIUM_VIEW.gateways, obot, meta], used: ['gw-2', 'kitden'],
+    connections: { ...MEDIUM_VIEW.connections, 'gw-1': { claude_code: [], codex: [], cursor: [] }, 'gw-2': { claude_code: [], codex: ['x'], cursor: [] } } };
+  const held = new Map([['gw-2', { servers: [{ name: 'x', type: 'STREAMABLE_HTTP', url: 'http://h/x' }, { name: 'y', type: 'uvx', url: null }] }]]);
+  const tree = gatewayTree(view, { ...OPTS, held });
+  assert.deepEqual(tree.blocks.filter((b) => b.kind === 'gateway').map((b) => [b.id, b.name]), [
+    ['gateway:kitden', 'Kitden gateway'], ['gateway:gw-2', 'MetaMCP'], ['gateway:gw-1', 'Obot']]);
+  assert.ok(keys(tree).includes('client:codex>gateway:gw-2 on'));
+  // Its servers come from the live read, without tools: a remote one and one it hosts.
+  assert.deepEqual([block(tree, 'held:gw-2:x').parent, block(tree, 'held:gw-2:x').meta], ['group:gw-2:remote', 'Remote']);
+  assert.deepEqual([block(tree, 'held:gw-2:y').parent, block(tree, 'held:gw-2:y').meta], ['group:gw-2:local', 'Hosted']);
+  assert.ok(keys(tree).includes('gateway:gw-2>held:gw-2:x on'));
+  assert.ok(!tree.blocks.some((b) => b.parent === 'held:gw-2:x'));
+});
+
+test("every held server's tools are in the model; a folded server shows none", () => {
+  const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+  assert.deepEqual(tree.blocks.filter((b) => b.parent === 'held:kitden:files').map((b) => [b.id, b.column, b.state]), [
+    ['tool:files/read_file', 'tools', 'on'],
+    ['tool:files/write_file', 'tools', 'on'],
+    ['tool:files/delete_file', 'tools', 'off'],
+    ['tool:files/search_files', 'tools', 'on'],
   ]);
-  assert.deepEqual(keys(tree).filter((k) => k.includes('>tool:')), ['held:kitden:files>tool:files/read_file on']);
+  // A tool of a server that is off is off: `effective`, so no link.
+  assert.equal(block(tree, 'tool:tracker/list_issues').state, 'off');
+  assert.deepEqual(keys(tree).filter((k) => k.includes('>tool:files/')).length, 3);
+  assert.ok(!keys(tree).some((k) => k.includes('>tool:tracker/')));
+  assert.ok(findIn(tree, 'export').open.has('held:kitden:tracker'));
+  assert.ok(!layoutTree(tree, { open: new Set(), width: 1248 }).blocks.some((b) => b.id.startsWith('tool:')));
+});
+
+test('a held server says how many tools are on, or where it is on', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+  assert.equal(block(tree, 'held:kitden:files').meta, '3 of 4 on');
+  assert.equal(block(tree, 'held:kitden:tracker').meta, 'On in 1 project');
+  const unknown = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers: [{ name: 'n8n', kind: 'local', state: 'on', tools: null, on_count: 0, on_in: 0, tool_list: [] }] }] };
+  assert.equal(block(gatewayTree(unknown, OPTS), 'held:kitden:n8n').meta, 'Local');
+});
+
+test('tags say where a rule comes from', () => {
+  const servers = [
+    { ...MEDIUM_VIEW.gateways[0].servers[0], origin: 'project', differs: true, tool_list: [tool('write_file', 'off', 'writes', { origin: 'project' })] },
+    { ...MEDIUM_VIEW.gateways[0].servers[1], state: 'off', origin: 'project', differs: true },
+  ];
+  const view = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers }] };
+  const tree = gatewayTree(view, { ...OPTS, picked: 'atlas' });
+  assert.equal(block(tree, 'tool:files/write_file').tag, 'This project');
+  assert.equal(block(tree, 'held:kitden:files').tag, 'Only this project');
+  assert.equal(block(tree, 'held:kitden:tracker').tag, 'This project');
+  assert.equal(block(gatewayTree(MEDIUM_VIEW, OPTS), 'held:kitden:files').tag, null);
+});
+
+test('the list has clients, each gateway with Remote and Local, then the outside group', () => {
+  const rows = listRows(gatewayTree(MEDIUM_VIEW, { setup: SETUP, clients: CLIENTS, open: new Set(), held: new Map() }), new Set());
+  assert.deepEqual(rows.filter((r) => r.group).map((r) => r.name), ['Clients', 'Remote', 'Local', "Outside the gateway · calls skip Kitden's rules"]);
+  assert.deepEqual(rows.find((r) => r.id === 'held:kitden:files').tools, '3 of 4 on');
+  assert.equal(rows.find((r) => r.id === 'outside:move:github').action, 'move');
+  // Each gateway has its own row, so its Details has a keyboard path too.
+  assert.deepEqual(rows.slice(0, 5).map((r) => [r.id, r.depth, r.meta || null]), [
+    ['group:clients', 0, null], ['client:claude_code', 1, 'Connected'], ['client:codex', 1, 'Connected'], ['client:cursor', 1, 'Not connected'], ['gateway:kitden', 0, '2 servers']]);
+  assert.deepEqual(rows.find((r) => r.id === 'group:kitden:remote').parent, 'gateway:kitden');
+  // Used by: a held server's linked clients while it is on; an outside row's clients.
+  assert.deepEqual(rows.find((r) => r.id === 'held:kitden:files').usedBy, ['claude_code', 'codex']);
+  assert.deepEqual(rows.find((r) => r.id === 'held:kitden:tracker').usedBy, []);
+  assert.deepEqual(rows.find((r) => r.id === 'outside:local:docs').usedBy, ['codex']);
+  // Kitden does not know an outside server's tools.
+  assert.equal(rows.find((r) => r.id === 'outside:local:docs').tools, null);
+  // Folded, a server shows no tools.
+  assert.equal(rows.find((r) => r.id === 'held:kitden:files').expanded, false);
+  assert.ok(!rows.some((r) => r.kind === 'tool'));
+});
+
+test("under an open server, its tools: a mark, the name, and Read, Write or May write", () => {
+  const model = gatewayTree(MEDIUM_VIEW, OPTS);
+  const rows = listRows(model, new Set(['held:kitden:files']));
+  assert.equal(rows.find((r) => r.id === 'held:kitden:files').expanded, true);
+  assert.deepEqual(rows.filter((r) => r.parent === 'held:kitden:files').map((r) => [r.name, r.state, r.tag, r.depth]), [
+    ['read_file', 'on', 'Read', 3], ['write_file', 'on', 'Write', 3], ['delete_file', 'off', 'May write', 3], ['search_files', 'on', null, 3]]);
+});
+
+test('a folded group hides its rows', () => {
+  const rows = listRows(gatewayTree(MEDIUM_VIEW, OPTS), new Set(), new Set(['group:outside', 'gateway:kitden']));
+  assert.equal(rows.find((r) => r.id === 'group:outside').expanded, false);
+  assert.equal(rows.find((r) => r.id === 'gateway:kitden').expanded, false);
+  assert.ok(!rows.some((r) => r.kind === 'outside' || r.kind === 'held' || r.id === 'group:kitden:remote'));
+});
+
+test('one name in two groups is two rows', () => {
+  const ids = listRows(gatewayTree(MEDIUM_VIEW, OPTS), new Set()).map((r) => r.id);
+  assert.ok(ids.includes('outside:move:docs') && ids.includes('outside:local:docs'));
+});
+
+test('a row that stays gets no Move in…', () => {
+  const stays = "docs is in the project's own files; it stays there.";
+  const view = { ...MEDIUM_VIEW, groups: { ...MEDIUM_VIEW.groups, move: [{ ...MEDIUM_VIEW.groups.move[0], stays }, MEDIUM_VIEW.groups.move[1]], plugin: [{ name: 'linear', clients: ['claude_code'], columns: ['claude_code'], items: [], stays: 'linear comes with a plugin; it stays with the plugin.' }] } };
+  const rows = listRows(gatewayTree(view, OPTS), new Set());
+  assert.equal(rows.find((r) => r.id === 'outside:move:docs').action, 'open');
+  assert.equal(rows.find((r) => r.id === 'outside:plugin:linear').action, 'open');
+  assert.equal(rows.find((r) => r.id === 'outside:move:github').action, 'move');
+  // Without a gateway that takes it there is nothing to move into.
+  const none = listRows(gatewayTree({ ...MEDIUM_VIEW, gateways: [] }, OPTS), new Set());
+  assert.equal(none.find((r) => r.id === 'outside:move:github').action, 'open');
+});
+
+test('the large sample opens in List', () => {
+  const view = {
+    ...MEDIUM_VIEW,
+    gateways: [{ ...MEDIUM_VIEW.gateways[0], servers: Array.from({ length: 12 }, (_, i) => ({ name: `held-${i}`, kind: 'remote', state: 'on', tool_list: [] })) }],
+    groups: { move: Array.from({ length: 157 }, (_, i) => ({ name: `direct-${i}`, clients: ['codex'], columns: ['codex'], items: [], stays: null })), local: [], plugin: [] },
+  };
+  const LARGE_SERVER_COUNT = serverCount(view);
+  assert.equal(LARGE_SERVER_COUNT, 169);
+  assert.equal(viewMode({ mode: '' }, LARGE_SERVER_COUNT), 'list');
+  assert.equal(viewMode({ mode: '' }, serverCount(MEDIUM_VIEW)), 'map');
 });
 
 test("a held server's panel links to the Library only when a client loads it through the gateway", () => {

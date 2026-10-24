@@ -10,7 +10,7 @@ import { checkStale } from "./review.js";
 import { arrival, busy, setState, state } from "./store.js";
 import { reloadTools } from "./tools.js";
 
-export { backToDetails, contextLinks, countedDefinition, footerActions, footerButtons, heldActions, heldButtons, keepFrom, kindWord, layerState, linksRow, loadsLede, moveFor, moveInto, moveTargets, offerLabel, openItem, plainSecrets, scopeWords, technical } from "./details.js";
+export { backToDetails, contextLinks, countedDefinition, detailsCard, footerActions, footerButtons, heldActions, heldButtons, keepFrom, kindWord, layerState, linksRow, loadsLede, moveFor, moveInto, moveTargets, offerLabel, openItem, plainSecrets, scopeWords, techRows, technical } from "./details.js";
 export { callsText, projectLabel, toolRows, toolsSection, writingToolsOn } from "./tools.js";
 export { ADDS, addScope, afterParts, alignGroups, canShowReview, cancelTarget, changeOutcome, changeWords, chosenKeys, leftOutText, review, reviewLede, undoChange } from "./review.js";
 
@@ -146,7 +146,7 @@ export function closePanel({ instant = false, keepSelection = false, focus = tru
   docked = false;
   if (!keepSelection) {
     setState({ selected: null });
-    for (const row of $$('tr[aria-selected="true"]')) row.setAttribute("aria-selected", "false");
+    for (const row of $$('tr[aria-selected="true"], [role="row"][aria-selected="true"]')) row.setAttribute("aria-selected", "false");
   }
   if (focus) restoreFocus();
 }

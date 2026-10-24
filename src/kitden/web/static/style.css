@@ -146,6 +146,7 @@ a { color: var(--route); }
 h1 { font-size: 18px; margin: 0; letter-spacing: -0.015em; font-weight: 600; text-wrap: balance; }
 h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .lede { color: var(--ink-2); margin: 4px 0 18px; max-width: 70ch; text-wrap: pretty; }
+.page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .lede.fresh { animation: rise 320ms var(--ease-out) both; }
 
 /* Controls */
@@ -236,7 +237,7 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .client-row .client-mark, .client-row .mono-mark, .chip:has(> h2) > .client-mark, .chip:has(> h2) > .mono-mark { --tile: 28px; }
 .chip { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
 .mono-mark { font: 600 10px/1 var(--mono); color: var(--ink-2); }
-.client-mark .icon-dark, .routes .icon-dark { display: none; }
+.client-mark .icon-dark { display: none; }
 :root[data-theme="dark"] .has-dark .icon-light { display: none; }
 :root[data-theme="dark"] .has-dark .icon-dark { display: block; }
 @media (prefers-color-scheme: dark) {
@@ -412,42 +413,9 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .filter.on select { background: var(--route-soft); border-color: color-mix(in srgb, var(--route) 40%, var(--wire)); color: var(--route); font-weight: 600; }
 
 /* Gateway */
-.gw-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
-.gw-url { font-family: var(--mono); font-size: 13px; color: var(--ink); overflow-wrap: anywhere; }
 .kicker { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); font-weight: 500; }
-.routes { width: 100%; max-width: 640px; height: auto; display: block; margin: 12px 0 4px; }
-/* A wire is still: it draws once when the connection appears, then stays. No fake traffic. */
-.routes .wire { fill: none; stroke: color-mix(in srgb, var(--route) 55%, var(--wire-strong)); stroke-width: 1.5; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 0; transition: stroke 200ms ease, stroke-width 200ms ease; }
-.routes .wire.draw { animation: wire-draw 700ms var(--ease-out) both; }
-@keyframes wire-draw { from { stroke-dashoffset: 1; } }
-.routes .route { transition: opacity 200ms ease; }
-.routes .route:focus { outline: none; }
-.routes .route:focus-visible .node { stroke: var(--focus); stroke-width: 2; }
-.routes .route.clickable { cursor: pointer; }
-.routes.focusing .route:not(.focus) { opacity: 0.35; }
-.routes .route.focus .node { stroke: var(--route); }
-.routes .route.focus .wire { stroke: var(--route); stroke-width: 2.25; }
-.routes.nodes-only .route.focus .wire { stroke: color-mix(in srgb, var(--route) 55%, var(--wire-strong)); stroke-width: 1.5; opacity: 0.35; }
-.routes .node { fill: var(--panel); stroke: var(--wire-strong); transition: stroke 200ms ease; }
-.routes .node-tile { fill: var(--panel-raised); stroke: var(--wire-strong); }
-.routes .node-icon { clip-path: inset(0 round 6px); }
-.routes .hub { fill: var(--route-soft); stroke: var(--route); }
-.routes .hub-node.clickable, .routes .bypass { cursor: pointer; }
-.routes .hub { transition: fill 180ms ease; }
-.routes .hub-node:hover .hub, .routes .hub-node:focus-visible .hub { fill: color-mix(in srgb, var(--route) 22%, var(--route-soft)); }
-.routes .hub-node:focus { outline: none; }
-.routes .hub-node:focus-visible .hub { stroke-width: 2; }
-.routes .bypass:hover { text-decoration: underline; }
-.routes text { fill: var(--ink); font: 600 11px var(--mono); }
-.routes .sub { fill: var(--ink-3); font: 400 11px var(--sans); }
-.routes .bypass { fill: var(--lamp-warn); font: 500 11px var(--sans); }
 .section-title { font-size: 15px; margin: 28px 0 0; letter-spacing: -0.01em; }
-.group-title { font-size: 13px; font-weight: 600; margin: 16px 0 2px; }
 .group-note { margin: 0 0 10px; color: var(--ink-3); }
-.group-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
-.group-head .group-title { margin-right: auto; }
-.held { margin-top: 8px; }
-.setup-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 .list { background: var(--panel); border: 1px solid var(--wire); border-radius: 8px; }
 .list-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 0 12px; min-height: 40px; border-top: 1px solid var(--wire-soft); }
 .list-row:first-child { border-top: 0; }
@@ -465,6 +433,55 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .list-row .sub { color: var(--ink-3); font-size: 11px; }
 .conn { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
 .conn .cell { border: 1px solid var(--wire-soft); border-radius: 6px; padding: 10px 12px; background: var(--canvas); display: grid; gap: 6px; justify-items: start; }
+
+/* Gateway List (gateway.js): a tree grid of groups and rows, one row in the Tab order. The arrows
+   move, Right unfolds and Left folds, Enter opens Details. Columns: Name, Used by (client tiles),
+   Tools, and › or "Move in…". */
+.treegrid { --tg-cols: minmax(0, 1fr) 76px 96px 92px; margin: 0 0 12px; background: var(--panel); border: 1px solid var(--wire); border-radius: 8px; }
+.tg-head, .tg-row { display: grid; grid-template-columns: var(--tg-cols); align-items: center; }
+.tg-head { height: 34px; border-bottom: 1px solid var(--wire); color: var(--ink-3); font-size: 12px; font-weight: 500; }
+.tg-head > *, .tg-row > [role="gridcell"] { min-width: 0; padding: 0 12px; }
+.tg-row { min-height: 34px; border-top: 1px solid var(--wire-soft); cursor: pointer; transition: background-color 120ms ease; }
+.tg-head + .tg-row { border-top: 0; }
+.tg-row:last-child { border-radius: 0 0 8px 8px; }
+.tg-row:hover { background: var(--inset); }
+.tg-row:active { background: var(--wire-soft); transition-duration: 60ms; }
+.tg-row[aria-selected="true"] { background: var(--route-soft); }
+.tg-row:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.tg-row.group { min-height: 30px; background: var(--inset); color: var(--ink-3); font-size: 12px; font-weight: 500; }
+.tg-row.group > [role="gridcell"] { grid-column: 1 / -1; }
+.tg-row > .tg-name { display: flex; align-items: center; gap: 6px; padding-left: calc(8px + var(--depth, 0) * 18px); }
+.tg-name .caret { flex: none; width: 14px; color: var(--ink-3); font-size: 11px; text-align: center; transition: transform 160ms var(--ease-out); }
+.tg-name .caret.none { visibility: hidden; }
+.tg-row[aria-expanded="true"] .caret { transform: rotate(90deg); }
+.tg-name .words { min-width: 3ch; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tg-name .words.mono { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--ink); }
+.tg-name .meta { min-width: 0; color: var(--ink-3); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tg-name .tag { flex: none; color: var(--route); background: var(--route-soft); font-size: 11px; line-height: 18px; padding: 0 6px; border-radius: 10px; white-space: nowrap; }
+.tg-row .client-mark, .tg-row .mono-mark { --tile: 18px; border-radius: 5px; }
+.tg-row .client-mark[data-icon="claude"] img { padding: 3px; }
+/* A server's or a tool's dot: filled when on, hollow when off. */
+.tg-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--lamp-off); }
+.tg-dot.on { background: var(--lamp-on); border-color: var(--lamp-on); }
+.tg-used { display: flex; align-items: center; gap: 3px; }
+.tg-tools { color: var(--ink-3); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tg-action { display: flex; justify-content: flex-end; }
+.tg-row:hover .opens, .tg-row:focus-visible .opens { color: var(--route); }
+/* A narrow window keeps the name, the tools and the action; the tiles go. */
+@media (max-width: 640px) {
+  .treegrid { --tg-cols: minmax(0, 1fr) 0 84px 84px; }
+  .tg-used { visibility: hidden; }
+}
+.fact-tiles { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.fact-tiles .client-mark, .fact-tiles .mono-mark { --tile: 18px; border-radius: 5px; }
+.fact-tiles > span:last-child { margin-left: 4px; }
+/* A form under a card's actions scrolls in a short window instead of leaving the column. */
+#drawer footer:has(> .add-gateway, > details.connect) { overflow-y: auto; }
+.add-gateway h2 { margin: 0 0 4px; font-size: 13px; }
+.add-gateway .form { margin: 0; }
+
+/* A link on a map draws once, when it appears. */
+@keyframes wire-draw { from { stroke-dashoffset: 1; } }
 
 /* Map (map.js): HTML blocks over one SVG of links, each where the layout puts it. The link is the
    state; it draws once when it appears, and nothing moves while idle. */
@@ -571,8 +588,8 @@ details.file-change > summary, details.tech > summary { cursor: pointer; color: 
 .fold > .fold-in { overflow: hidden; min-height: 0; display: grid; gap: 10px; align-content: start; opacity: 0; transform: translateY(-4px); transition: opacity 200ms ease, transform 280ms var(--spring); }
 .fold.open { grid-template-rows: 1fr; }
 .fold.open > .fold-in { opacity: 1; transform: none; transition-delay: 40ms; }
-details.file-change .fold-in, details.tech .fold-in, details.connect .fold-in, details.add-more .fold-in { padding-top: 10px; }
-details.connect .fold-in > .form, details.add-more .fold-in > .form { margin: 0; }
+details.file-change .fold-in, details.tech .fold-in, details.connect .fold-in { padding-top: 10px; }
+details.connect .fold-in > .form { margin: 0; }
 summary::-webkit-details-marker { transition: transform 200ms ease; }
 .step { border: 1px solid var(--wire); border-radius: 8px; overflow: hidden; }
 .step-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; }
@@ -606,9 +623,9 @@ pre.diff .del { color: var(--diff-del); background: color-mix(in srgb, var(--dan
 .timeline .feed li:hover .opens, .timeline .feed li:focus-visible .opens { color: var(--route); }
 .timeline .row-actions { display: flex; gap: 4px; justify-content: flex-end; }
 .timeline .feed li.over, .timeline .feed li.over .muted { color: var(--ink-4); }
-details.connect, details.add-more { margin-top: 12px; }
-details.connect > summary, details.add-more > summary { cursor: pointer; color: var(--ink-2); font-weight: 500; }
-details.connect .fold > .fold-in, details.add-more .fold > .fold-in { display: block; }
+details.connect { margin-top: 4px; }
+details.connect > summary { cursor: pointer; color: var(--ink-2); font-weight: 500; }
+details.connect .fold > .fold-in { display: block; }
 
 /* Page changes and the theme switch (View Transitions, where supported) */
 ::view-transition-group(*) { animation-duration: 340ms; animation-timing-function: var(--ease-drawer); }

@@ -87,6 +87,32 @@ export function tabKeys(box) {
   });
 }
 
+// Keys on a tree grid: `rows` as shown ({ id, parent, group, expanded }), the row at `at` focused.
+// Down, Up, Home and End move. Right unfolds a closed row and goes into an open one; Left folds an
+// open row and goes from any other to its parent. Enter opens a row's Details (`details`), or
+// folds a group, which has none. Null for any other key: the browser keeps it.
+export function gridKey(rows, at, key) {
+  const row = rows[at];
+  if (!row) return null;
+  const last = rows.length - 1;
+  if (key === "ArrowDown") return { at: Math.min(at + 1, last) };
+  if (key === "ArrowUp") return { at: Math.max(at - 1, 0) };
+  if (key === "Home") return { at: 0 };
+  if (key === "End") return { at: last };
+  if (key === "ArrowRight") {
+    if (row.expanded === false) return { at, toggle: row.id };
+    const child = rows[at + 1];
+    return { at: row.expanded && child && child.parent === row.id ? at + 1 : at };
+  }
+  if (key === "ArrowLeft") {
+    if (row.expanded === true) return { at, toggle: row.id };
+    const parent = rows.findIndex((r) => r.id === row.parent);
+    return { at: parent < 0 ? at : parent };
+  }
+  if (key === "Enter") return row.group ? { at, toggle: row.id } : { at, details: row.id };
+  return null;
+}
+
 // Only http and https links are ever made clickable.
 export function webLink(url, text) {
   if (!/^https?:\/\//i.test(String(url || ""))) return el("span", null, text);

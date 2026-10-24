@@ -29,6 +29,11 @@ def panel() -> str:
     return "\n".join(script(name) for name in PANEL)
 
 
+def gw() -> str:
+    """The Gateway page's modules as one text."""
+    return script("gateway.js") + "\n" + script("gateway-details.js")
+
+
 def test_the_side_panel_is_four_modules():
     shell = script("panel.js")
     for name in PANEL[1:]:
@@ -67,7 +72,7 @@ def test_library_has_no_legend_or_counts():
 
 
 def test_gateway_has_no_entry_name_field_or_paths():
-    text = script("gateway.js")
+    text = gw()
     assert "Entry name" not in text
     assert "key in $" not in text
     assert "shortPath" not in text
@@ -165,20 +170,20 @@ def test_after_words_come_from_the_one_table():
 
 
 def test_gateway_names_the_remove_action_and_draws_no_idle_wire():
-    text = script("gateway.js")
+    text = gw()
     assert "Remove direct entry…" in text
     assert "wire idle" not in text
     assert "goes around" not in text
 
 
 def test_gateway_rows_keep_addresses_behind_a_details_button():
-    text = script("gateway.js")
-    assert '"Details"' in text
-    assert "row.summary" not in text
+    # A List row ends with the quiet chevron; its address waits in Details.
+    assert "opens()" in script("gateway.js")
+    assert "row.summary" not in gw()
 
 
 def test_gateway_says_its_lists_are_mcp_servers():
-    assert "MCP servers not in the gateway" in script("gateway.js")
+    assert '"Outside the gateway · calls skip Kitden\'s rules"' in gw()
 
 
 def test_gateway_wires_do_not_fake_traffic():
@@ -187,7 +192,7 @@ def test_gateway_wires_do_not_fake_traffic():
     assert not any(
         ("map" in line or ".routes" in line) and "infinite" in line for line in css.splitlines()
     )
-    for name in ("gateway.js", "map.js"):
+    for name in ("gateway.js", "gateway-details.js", "map.js"):
         assert "flow" not in script(name), name
 
 
@@ -272,11 +277,12 @@ def test_one_mark_slides_between_the_choices_of_a_group():
     assert "tab-ink" not in CSS and "tab-ink" not in text
 
 
-def test_gateway_routes_light_their_rows_and_take_keyboard_focus():
+def test_gateway_list_is_a_tree_grid_the_keys_move_through():
+    # The List is a tree grid: the arrows move, Right opens, Left closes (dom.js gridKey).
     text = script("gateway.js")
-    assert "node.dataset.clients" in text and '"lit"' in text
-    assert 'setAttribute("tabindex", "0")' in text
-    assert "fold(box)" in text and "fold(more)" in text
+    assert 'setAttribute("role", "treegrid")' in text and "gridKey(" in text
+    # "Connect clients" folds smoothly in a registered gateway's Details.
+    assert "fold(box)" in gw()
 
 
 def test_library_shows_one_flag_per_wording_and_resolved_flags_shrink_away():
@@ -345,15 +351,15 @@ def test_note_flags_wrap_under_the_name_and_not_under_details():
 
 
 def test_gateway_offers_move_and_keeps_the_side_door_small():
-    text = script("gateway.js")
+    text = gw()
     assert "Move into the gateway…" in text
-    assert "Move all ${movable.length}…" in text
-    assert "In the gateway" in text
-    assert 'link.classList.add("small", "ghost")' in text
+    assert "Move all ${" in text
+    # A registered gateway's own page is one plain action in its Details, never the primary one.
+    assert "`Open ${name} ↗`" in text
 
 
 def test_gateway_form_never_takes_the_password_itself():
-    text = script("gateway.js")
+    text = gw()
     assert "Password variable name (not the password)" in text
     assert 'type: "password"' not in text
 
@@ -369,7 +375,7 @@ def test_moves_are_named_on_changes_and_in_the_review():
 
 
 def test_gateway_form_takes_an_obot_key_variable_never_the_key():
-    text = script("gateway.js")
+    text = gw()
     assert 'path.startsWith("/mcp-connect/")' in script("parts.js")
     assert "Obot API key variable name (not the key)" in text
     assert "ok1-" not in text
@@ -378,23 +384,24 @@ def test_gateway_form_takes_an_obot_key_variable_never_the_key():
 
 
 def test_held_rows_say_remote_hosted_or_sse_and_keep_addresses_behind_details():
-    text = script("gateway.js")
+    text = gw()
     assert 'return "Hosted";' in text and 'return "Remote";' in text
     assert "Nothing yet. Add servers in ${gatewayName(gateway)} itself." in text
 
 
 def test_a_gateway_the_clients_do_not_use_offers_to_take_them_over():
-    text = script("gateway.js")
+    text = gw()
     assert "Use this gateway…" in text and '"gateway.switch"' in text
-    assert "model.used.includes(b.id)" in text  # the used gateway gets the card with the routes
+    # The registered gateway the clients use comes first under the Kitden one (gatewayTree).
+    assert "model.used.includes(b.id)" in script("gateway.js")
 
 
 def test_diagram_nodes_open_the_client_apps_and_the_gateway():
-    text = script("gateway.js")
+    text = gw()
     # The scheme comes from the installed app, read by the server; none is hard-coded.
     for scheme in ('"claude://"', '"codex://"', '"cursor://"'):
         assert scheme not in text
-    assert "found.app_url" in text and "if (url) opens(group" in text
+    assert "found.app_url" in text
     assert 'window.open(page, "_blank", "noopener")' in text
 
 
@@ -563,7 +570,7 @@ def test_a_project_switch_marks_the_old_page_as_waiting():
 
 
 def test_gateway_connect_form_serves_its_own_card_only():
-    text = script("gateway.js")
+    text = script("gateway-details.js")
     # The form is for the card's gateway; a client in any gateway is not offered again.
     assert "connectForm(gateway, waiting)" in text
     # The Kitden gateway holds other servers: its clients can connect to a registered one too.
@@ -579,7 +586,7 @@ def test_direct_servers_are_options_and_details_offers_move_first():
     assert "Move into the gateway…" in code and 'action: "gateway.move"' in code
     # Without a gateway that takes servers, the panel says the same as the Gateway page.
     assert "Add the server in the gateway first" in script("parts.js")
-    assert "GATEWAY_NOTE" in code and "GATEWAY_NOTE" in script("gateway.js")
+    assert "GATEWAY_NOTE" in code and "GATEWAY_NOTE" in gw()
     # A gateway that could not be read says so, instead of hiding Move.
     assert "Could not read the gateway, so Move is not offered." in code
     # An option is quieter than a problem: a plain button, not the primary one.
@@ -635,7 +642,7 @@ def test_every_control_a_render_replaces_names_itself_for_focus():
 def test_client_checkboxes_come_from_one_named_part():
     check = script("parts.js").split("export function clientCheck")[1].split("\n}")[0]
     assert 'setAttribute("aria-label"' in check and "box.value = client" in check
-    for name in ("offer.js", "gateway.js"):
+    for name in ("offer.js", "gateway-details.js"):
         text = script(name)
         assert "clientCheck(" in text and 'type = "checkbox"' not in text
 
@@ -676,7 +683,7 @@ def test_buttons_show_progress_and_the_scan_line_no_longer_blinks():
     assert ".btn.busy::after" in css and ".btn.busy { color: transparent; }" in css
     assert 'node.addEventListener("click", (event) => {' in script("dom.js")
     assert "busyWhile(node" in script("dom.js")
-    for name in ("offer.js", "gateway.js"):
+    for name in ("offer.js", "gateway-details.js"):
         assert "busyWhile(submit" in script(name)
     assert 'busyWhile($("#rescan")' in script("app.js")
     # A change with several steps counts them in the Apply button, from the server's events.
@@ -862,16 +869,14 @@ def test_add_a_marketplace_sits_where_the_filters_sit_on_other_tabs():
 
 
 def test_the_kitden_gateway_card_comes_first_and_sets_up_missing_clients():
-    text = script("gateway.js")
-    assert text.index("kitdenCard(kitden, model)") < text.index("gatewayCard(gateway, model)")
+    # The Kitden block comes first (gateway.test.mjs); a client's Details sets it up.
+    text = gw()
     # Who it reaches and the setup offers: one rule in parts.js (the Affects line uses it too).
     parts = script("parts.js")
     assert "`Set up in ${CLIENT_NAMES[entry.client]}…`" in parts
     assert '"setup_server.register"' in parts and '"setup_server.update"' in parts
-    assert "kitdenClients(data.setupServer)" in text
-    assert "Nothing yet. Move a server from the lists below." in text
-    # Local servers can move into it: it runs on this Mac.
-    assert '"Run on this Mac"' in text and "Only the Kitden gateway can hold them" in text
+    assert "kitdenClients(setup)" in text and "setup: data.setupServer" in text
+    assert "Nothing yet. Move a server in from the outside group." in text
     # Its rows show a name and what it is; commands and env stay out of the page.
     assert "server.command" not in text and "server.env" not in text
 
@@ -918,11 +923,11 @@ def test_tool_list_reads_again_and_keeps_focus_after_a_refresh_or_an_undo():
 
 
 def test_the_kitden_card_says_only_what_it_knows_about_clients():
-    text = script("gateway.js")
+    text = gw()
     assert "Kitden could not read which clients use it." in text
     # Settings it cannot read are a problem, not an empty gateway.
     assert "if (gateway.problem)" in text
-    assert "has it turned off." in text and "have it turned off." in text
+    assert "has the kitden entry turned off" in text
 
 
 def test_moves_into_the_kitden_gateway_name_it():
@@ -1032,24 +1037,9 @@ def test_an_add_in_a_project_offers_two_choices():
 
 
 def test_the_kitden_card_says_what_the_gateway_governs():
-    text = script("gateway.js")
+    text = gw()
     words = "The gateway controls only the servers in it. "
     assert words + "Direct entries and terminal tools are outside it." in text
-
-
-def test_gateway_groups_fold():
-    text = script("gateway.js")
-    assert "Show all " in text
-    assert "draft.expanded" in text
-
-
-def test_gateway_show_all_hands_focus_to_the_first_new_row():
-    text = script("gateway.js")
-    assert text.count("show:${key}") == 1
-    assert "more.dataset.focus = focus" in text
-    assert "details.dataset.focus = focus" in text
-    assert "i === FOLD_AT" in text
-    assert "limit = FOLD_AT" in text
 
 
 def test_agents_lede_says_held_servers_add_their_tools():
@@ -1200,7 +1190,7 @@ def test_skill_and_plugin_details_fold_paths_commands_and_versions():
 
 
 def test_pages_import_the_side_panel_through_panel_js():
-    for name in ("gateway.js", "offer.js"):
+    for name in ("gateway.js", "gateway-details.js", "offer.js"):
         assert 'from "./details.js"' not in script(name), name
     shell = script("panel.js")
     for word in ("contextLinks", "linksRow", "technical"):
@@ -1245,14 +1235,34 @@ def test_overview_notes_say_same_name_another_source():
 
 
 def test_the_gateway_opens_and_keeps_the_selected_server():
-    text = script("gateway.js")
-    # Details of a server, in the gateway's own panel or the Library's, puts it in the address.
+    text = gw()
+    # Details of a server, in the gateway's own panel or outside it, puts it in the address.
     assert 'setState({ selected: { kind: "mcp_server", name: server.name } })' in text
-    assert 'setState({ selected: { kind: "mcp_server", name } })' in text
+    assert 'setState({ selected: { kind: "mcp_server", name: row.name } })' in text
     assert "takeArrival()" in text
 
 
 def test_saving_a_gateway_drops_an_arrival_still_waiting():
     # The person's own action wins: a server picked by Back must not open after the save.
-    save = script("gateway.js").split("async function save() {")[1].split("\n  }\n")[0]
+    save = gw().split("async function save() {")[1].split("\n  }\n")[0]
     assert "arrival.pending = false;" in save
+
+
+def test_the_gateway_lists_by_group_and_keeps_every_action():
+    text = gw()
+    for words in (
+        '"Outside the gateway · calls skip Kitden\'s rules"',
+        '"Move in…"',
+        '"Move into the gateway…"',
+        '"Remove direct entry…"',
+        "Move all ${",
+        '"Add another gateway…"',
+        '"Use this gateway…"',
+        "Set up in",
+        '"Connect your agents. Shape what they can use."',
+        "The gateway controls only the servers in it. "
+        "Direct entries and terminal tools are outside it.",
+    ):
+        assert words in text, words
+    assert '"/api/map"' not in text and "loadMap(" not in text
+    assert 'role", "treegrid"' in script("gateway.js") and "gridKey(" in script("gateway.js")
