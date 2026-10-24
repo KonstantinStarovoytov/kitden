@@ -93,12 +93,25 @@ and left alone.
 
 ### Use one gateway for every client
 
-**Gateway** shows the gateways your clients use. The Kitden gateway comes first: it runs on your
-Mac, with no deploy and no account. [Obot](https://obot.ai) (with OAuth sign-in) and MetaMCP stay
-for teams that want a shared service. Connect your clients, see what a gateway holds and which
-servers go around it, and move direct servers into it one at a time or all at once. Switch every
-client to another Obot or MetaMCP gateway in one review. Click a client in the diagram to open its
-app. A gateway controls only the servers in it; direct entries and terminal tools stay outside it.
+**Gateway** is a tree, read from left to right: your clients, the Kitden gateway, the servers it
+holds, and their tools. A link drawn means "on"; no link means "off". Click a server to see its
+tools, and a tool to light its path from each client. A Map | List switch sits beside the title;
+the page opens as a List past 15 servers, and the address keeps your choice. Details sit beside
+the page (a drawer in a narrow window) and hold every action. A client's Details set up the
+gateway in it and can open its app.
+
+The Kitden gateway comes first: it runs on your Mac, with no deploy and no account.
+[Obot](https://obot.ai) (with OAuth sign-in) and MetaMCP stay for teams that want a shared
+service. Connect your clients, see what a gateway holds, and move servers into it one at a time
+or all at once. Switch every client to another Obot or MetaMCP gateway in one review.
+
+A server a client sets up on its own sits under "Outside the gateway · calls skip Kitden's
+rules", joined to its client by a faint amber line. Amber here marks a call that skips the
+rules, not a fault. Drag one onto the servers ("Drop to add" shows where it lands) and the Move
+preview appears on the map, with a bar to Apply, Cancel or "Show changes", which opens the full
+review in Details. Without a mouse, use "Move in…" in the List. Nothing changes until Apply, and
+a call already running is not stopped. A gateway controls only the servers in it; direct entries
+and terminal tools stay outside it.
 
 <p align="center">
   <picture>
@@ -111,15 +124,16 @@ app. A gateway controls only the servers in it; direct entries and terminal tool
 
 The Kitden gateway is the `kitden` entry that already lets agents read your setup; the page adds
 it to a client that lacks it. Move a server into it and every client that uses the Kitden gateway
-reaches it. Pick a project at the top, open a server in the gateway, and turn the whole server or
-one tool on or off for that project, or for all projects. A project's switches also apply in its
-folders and git worktrees, unless they have their own. In a folder Kitden does not know as a
-project, the All projects switches apply. Claude Code and Codex can turn a tool
-off in one project, Cursor cannot (checked 2026-10-21); the gateway gives the same control in all
-three. A server in the gateway shows how many tools it has, once Kitden has asked it. A held
-server's Details offer "Remove from the Kitden gateway…", which takes its switches
-too and makes open sessions refuse its tools at once, and "Put back in <client>…", which writes its
-entry into that client again.
+reaches it. Pick a project at the top (the menu has a find box and counts each project's own
+rules), open a server or a tool, and use its Details: "Turn off for all projects…" or "Turn off
+in one project…", and the same to turn it on. "Use the shared rule…" drops a project's own rule.
+A project's switches also apply in its folders and git worktrees, unless they have their own.
+In a folder Kitden does not know as a project, the All projects switches apply. Claude Code and
+Codex can turn a tool off in one project, Cursor cannot (checked 2026-10-21); the gateway gives
+the same control in all three. A server in the gateway shows how many tools it has, once Kitden
+has asked it. A held server's Details offer "Remove from the Kitden gateway…", which takes its
+switches too and makes open sessions refuse its tools at once, and "Put back in <client>…",
+which writes its entry into that client again.
 
 It holds local servers (a command) and remote ones (an address). Each switch is a review with a
 backup and Undo. Moving a server in for the first time keeps the tools Claude Code and Codex had
@@ -137,8 +151,8 @@ applies to all projects: the server offers only the tools that are on, and a too
 waits as "New · waits" until you decide. Each tool says what it is reported to do, from the
 server's own hint or a guess from the tool's name. "Turn off every writing tool…" turns them off
 in one review. A tool's Details say how often it was called and when last ("12 calls · last today
-14:02"); only the count and the time are kept, never what was sent. The words are a guess, so check the list; for a
-real guarantee, give the server a token that can only read.
+14:02"); only the count and the time are kept, never what was sent. The words are a guess, so
+check the list; for a real guarantee, give the server a token that can only read.
 
 A few servers stay direct for now, and the page says why:
 

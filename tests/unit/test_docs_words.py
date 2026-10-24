@@ -68,6 +68,22 @@ def test_readme_names_the_management_actions():
         assert words in check, words
 
 
+def test_readme_shows_the_gateway_as_a_tree_with_a_list():
+    readme = " ".join((ROOT / "README.md").read_text().split())
+    for words in (
+        "Map | List",
+        '"Use the shared rule…"',
+        '"Turn off in one project…"',
+        "a call already running is not stopped",
+        "Outside the gateway",
+        "Drop to add",
+        "Show changes",
+    ):
+        assert words in readme, words
+    for gone in ("route diagram", "Click a client in the diagram", "tools you turned on"):
+        assert gone not in readme, gone
+
+
 def test_docs_name_the_demo_and_the_write_boundary():
     readme = " ".join((ROOT / "README.md").read_text().split())
     assert "uvx kitden demo" in readme
