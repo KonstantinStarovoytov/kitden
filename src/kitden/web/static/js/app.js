@@ -10,7 +10,7 @@ import { leaveMap } from "./map-review.js";
 import { findChip } from "./map.js";
 import { renderOverview } from "./overview.js";
 import { closeForProject, closePanel, initPanel, isPanelOpen } from "./panel.js";
-import { callout, demoTag, GONE_PROJECT, latestChanges, projectMenu, scanLine, setHint, versionsOpened } from "./parts.js";
+import { callout, demoTag, GONE_PROJECT, latestChanges, projectButton, projectMenu, scanLine, setHint, versionsOpened } from "./parts.js";
 import {
   arrival, busy, current, data, followHash, freshness, go, loadShared, OLD_VIEWS, onIdle, parseHash, projectGone, reload, setRenderer, setState, setSwitcher, state,
   switchProject,
@@ -94,17 +94,27 @@ function drawChip(found) {
 
 // The project picker (parts.js projectMenu), drawn again when the list, a count or the pick
 // changes. A picked project no longer on the list has a row of its own, so the picker never says
-// All projects for it. While the list is unread, a picked project keeps the page's "…".
+// All projects for it. While the list is unread, a picked project keeps the page's "…". A menu
+// still fading out (a pick closes it as the page changes) finishes first. After a pick the new
+// name rolls in from the old one.
 function drawPicker() {
   const box = $("#where-box");
+  const fading = box.firstElementChild && box.firstElementChild.fading;
+  if (fading) {
+    fading.then(drawPicker);
+    return;
+  }
   box.classList.toggle("project", Boolean(state.project));
   if (data.projects === null && state.project) return;
   const projects = data.projects || [];
   const signature = JSON.stringify([projects.map(({ id, path, exists, own_rules }) => [id, path, exists, own_rules]), state.project]);
   if (box.dataset.projects === signature) return;
   box.dataset.projects = signature;
+  const name = $("#where-picked");
+  const from = name && box.dataset.pick !== undefined && box.dataset.pick !== state.project ? (name.lastElementChild || name).textContent : null;
+  box.dataset.pick = state.project;
   const had = box.contains(document.activeElement);
-  box.replaceChildren(projectMenu(projects, state.project, (id) => switchProject(id).catch(reportError)));
+  box.replaceChildren(projectMenu(projects, state.project, (id) => switchProject(id).catch(reportError), from));
   if (had) $("#where").focus({ preventScroll: true });
 }
 
@@ -140,9 +150,10 @@ function drawIcons() {
   $('.nav [data-view="changes"]').prepend(icon("history"));
   $("#theme").prepend(icon("sun-moon", 14));
   $(".search").prepend(icon("search", 14));
-  // Until the project list is read, the button keeps these; projectMenu draws its own.
-  $("#where").prepend(icon("folder", 14));
-  $("#where").append(icon("chevron-down", 13, "ic where-caret"));
+  // Until the project list is read, the button is switched off; projectMenu draws its own after.
+  const waiting = projectButton("…");
+  waiting.disabled = true;
+  $("#where").replaceWith(waiting);
 }
 
 // Theme: follows the system until the switch is used; the new theme spreads in a circle.

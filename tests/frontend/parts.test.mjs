@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { beforeEach, mock, test } from 'node:test';
 
 // parts.js needs only these from a browser to load. The stub element knows classes,
 // attributes, children and class selectors (".word, .tag"); `media` is reduced motion.
@@ -9,6 +9,8 @@ function element(tag) {
   const node = {
     tag, className: '', textContent: '', children: [], attributes: {}, dataset: {}, parent: null,
     get childNodes() { return node.children; },
+    get lastElementChild() { return node.children[node.children.length - 1] || null; },
+    remove() { if (node.parent) node.parent.children = node.parent.children.filter((c) => c !== node); },
     classList: {
       contains: (name) => node.className.split(' ').includes(name),
       add: (name) => { if (!node.classList.contains(name)) node.className = `${node.className} ${name}`.trim(); },
@@ -35,8 +37,11 @@ function element(tag) {
   };
   return node;
 }
+// Each test starts with motion on; a test that needs reduced motion sets it itself.
+beforeEach(() => { media.matches = false; });
 globalThis.document = { createElement: element, createElementNS: (namespace, tag) => element(tag) };
-const { backupNote, banner, changeTitle, checkBox, clientCheck, demoTag, folderName, gatewayName, menuItems, morphSocket, opens, optionAfter, originText, projectMenu, scopeBar, scopeText, setHint, socket, strictText, TOOL_ORIGIN_WORDS } = await import('../../src/kitden/web/static/js/parts.js');
+const { backupNote, banner, changeTitle, checkBox, clientCheck, demoTag, folderName, gatewayName, menuItems, morphSocket, opens, optionAfter, originText, projectButton, projectMenu, scopeBar, scopeText, setHint, socket, strictText, TOOL_ORIGIN_WORDS } = await import('../../src/kitden/web/static/js/parts.js');
+const { CALM } = await import('../../src/kitden/web/static/js/motion.js');
 // details.js builds the switch and loads with the same stand-in.
 const { switchNode } = await import('../../src/kitden/web/static/js/details.js');
 
@@ -487,23 +492,36 @@ test('arrows, Home and End move through the options and stop at the ends', () =>
   assert.equal(optionAfter('ArrowDown', 0, 0), null);
 });
 
-// A project menu on the stub page: `press` sends a key to the find box; `type` fills it.
-function menuOn(picked = 'm') {
+// A project menu on the stub page: `press` sends a key to the find box; `type` fills it. Motion is
+// off (reduced) unless `motion` is set, so a closed menu is hidden at once; `from` is the name the
+// button showed before a pick. The menu's animations are recorded in `moves`.
+function menuOn(picked = 'm', { motion = false, from = null } = {}) {
+  media.matches = !motion;
   const document = globalThis.document;
   const outside = {};
   document.activeElement = null;
   document.addEventListener = (type, listener) => { outside[type] = listener; };
   document.removeEventListener = (type) => { delete outside[type]; };
   const picks = [];
-  const root = projectMenu(PROJECTS, picked, (id) => picks.push(id));
+  const root = projectMenu(PROJECTS, picked, (id) => picks.push(id), from);
   const [trigger, menu] = root.children;
   const find = menu.querySelector('.where-find');
   const options = () => menu.querySelectorAll('.where-option');
   const active = () => options().findIndex((o) => o.classList.contains('active'));
   const keys = [];
+  const moves = [];
+  const running = [];
+  menu.animate = (keyframes, timing) => {
+    const move = { keyframes, timing, finished: Promise.resolve(), cancel() { running.splice(running.indexOf(move), 1); } };
+    moves.push(move);
+    running.push(move);
+    return move;
+  };
+  menu.getAnimations = () => [...running];
   return {
-    root, trigger, menu, find, picks, outside, options, active, keys,
+    root, trigger, menu, find, picks, outside, options, active, keys, moves, running,
     open: () => trigger.listeners.click(),
+    toggle: () => trigger.listeners.click(),
     press(key) {
       let stopped = false;
       find.listeners.keydown({ key, preventDefault() { stopped = true; keys.push(`default ${key}`); }, stopPropagation() { keys.push(`stop ${key}`); } });
@@ -512,6 +530,10 @@ function menuOn(picked = 'm') {
     type(text) { find.value = text; find.listeners.input(); },
   };
 }
+
+// What an option says, in order: its name, its count and its sub line.
+const words = (option) => ['.where-label', '.where-count', '.where-sub'].map((c) => option.querySelector(c)).filter(Boolean).map((n) => n.textContent);
+const iconsOf = (node) => node.querySelectorAll('svg').map((n) => n.dataset.icon);
 
 test('the project menu is a button with the picked name, closed until it is pressed', () => {
   const m = menuOn('m');
@@ -570,9 +592,9 @@ test('opening the menu moves focus into the find box, with the picked option act
   assert.equal(m.find.attributes['aria-activedescendant'], m.options()[2].id);
   assert.equal(m.menu.querySelector('.where-list').attributes.role, 'listbox');
   // A row says its count and its sub line, never a path.
-  assert.deepEqual(m.options()[3].children.map((c) => c.textContent), ['website', '3 own rules']);
-  assert.deepEqual(m.options()[0].children.map((c) => c.textContent), ['All projects', 'What applies in every project']);
-  assert.deepEqual(m.options()[1].children.map((c) => c.textContent), ['api', 'Folder missing']);
+  assert.deepEqual(words(m.options()[3]), ['website', '3 own rules']);
+  assert.deepEqual(words(m.options()[0]), ['All projects', 'What applies in every project']);
+  assert.deepEqual(words(m.options()[1]), ['api', 'Folder missing']);
 });
 
 test('Down, Up, Home and End move the active option, and Enter picks it', () => {
@@ -610,7 +632,7 @@ test('typing filters the projects, keeps All projects first and makes the first 
   const m = menuOn('');
   m.open();
   m.type('WEB');
-  assert.deepEqual(m.options().map((o) => o.children[0].textContent), ['All projects', 'website']);
+  assert.deepEqual(m.options().map((o) => words(o)[0]), ['All projects', 'website']);
   assert.equal(m.active(), 1);
   m.press('Enter');
   assert.deepEqual(m.picks, ['w']);
@@ -624,7 +646,7 @@ test('a find that matches no project leaves Enter with nothing to pick', () => {
   const m = menuOn('m');
   m.open();
   m.type('zzz');
-  assert.deepEqual(m.options().map((o) => o.children[0].textContent), ['All projects']);
+  assert.deepEqual(m.options().map((o) => words(o)[0]), ['All projects']);
   assert.equal(m.active(), -1);
   assert.equal(m.find.attributes['aria-activedescendant'], undefined);
   m.press('Enter');
@@ -672,4 +694,195 @@ test('a press on an option picks it', () => {
   m.options()[1].listeners.click();
   assert.deepEqual(m.picks, ['a']);
   assert.equal(m.menu.hidden, true);
+});
+
+test('the picked project carries a check, the others none', () => {
+  const m = menuOn('w');
+  m.open();
+  const picked = m.options().filter((o) => o.attributes['aria-selected'] === 'true');
+  assert.equal(picked.length, 1);
+  assert.deepEqual(iconsOf(picked[0]).filter((name) => name === 'check'), ['check']);
+  assert.equal(iconsOf(m.menu).filter((name) => name === 'check').length, 1);
+  // The check sits last in its row, 14 px.
+  const check = picked[0].children[picked[0].children.length - 1];
+  assert.equal(check.dataset.icon, 'check');
+  assert.equal(Number(check.attributes.width), 14);
+  // With All projects picked, the check moves to it.
+  const all = menuOn('');
+  all.open();
+  assert.equal(iconsOf(all.options()[0]).includes('check'), true);
+  assert.equal(iconsOf(all.menu).filter((name) => name === 'check').length, 1);
+});
+
+test('an option leads with layers for All projects and with a folder for a project, 14 px', () => {
+  const m = menuOn('w');
+  m.open();
+  assert.deepEqual(m.options().map((o) => iconsOf(o)[0]), ['layers', 'folder', 'folder', 'folder']);
+  for (const option of m.options()) assert.equal(Number(option.querySelector('svg').attributes.width), 14);
+  // The icon is first in its row, before the words.
+  assert.equal(m.options()[1].children[0].dataset.icon, 'folder');
+});
+
+test('the own-rules count is a part of its own, the sub line sits under the name', () => {
+  const m = menuOn('m');
+  m.open();
+  assert.deepEqual(m.options().map((o) => (o.querySelector('.where-count') || {}).textContent), [undefined, undefined, '1 own rule', '3 own rules']);
+  const tx = m.options()[1].querySelector('.where-tx');
+  assert.deepEqual(tx.children.map((c) => c.className), ['where-label', 'where-sub']);
+});
+
+test('the menu grows in over 180 ms and fades out over 140 ms, hidden by time and not by an event', () => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    const m = menuOn('m', { motion: true });
+    m.open();
+    assert.equal(m.menu.hidden, false);
+    const [grow] = m.moves;
+    assert.deepEqual(grow.keyframes, [{ opacity: 0, transform: 'translateY(-8px) scale(.96)' }, { opacity: 1, transform: 'none' }]);
+    assert.equal(grow.timing.duration, 180);
+    assert.equal(grow.timing.easing, CALM);
+    m.press('Escape');
+    // Focus is back and the button says closed at once; the menu stays while it fades.
+    assert.equal(globalThis.document.activeElement, m.trigger);
+    assert.equal(m.trigger.attributes['aria-expanded'], 'false');
+    assert.equal(m.menu.hidden, false);
+    const fade = m.moves[1];
+    assert.deepEqual(fade.keyframes, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-4px) scale(.98)' }]);
+    assert.equal(fade.timing.duration, 140);
+    assert.equal(fade.timing.easing, 'ease-in');
+    assert.equal(fade.timing.fill, 'forwards');
+    mock.timers.tick(139);
+    assert.equal(m.menu.hidden, false);
+    mock.timers.tick(1);
+    assert.equal(m.menu.hidden, true);
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test('opening again while the menu fades out keeps it open', () => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    const m = menuOn('m', { motion: true });
+    m.open();
+    m.toggle();
+    mock.timers.tick(60);
+    m.toggle();
+    // The fade is cancelled; only the new grow runs. The first fade's timer does not hide the menu.
+    assert.deepEqual(m.running, [m.moves[2]]);
+    assert.equal(m.moves[2].keyframes[0].opacity, 0);
+    assert.equal(m.menu.hidden, false);
+    mock.timers.tick(200);
+    assert.equal(m.menu.hidden, false);
+    assert.equal(m.trigger.attributes['aria-expanded'], 'true');
+    assert.equal(m.root.fading, null);
+    // A close after that fades and hides as before.
+    m.toggle();
+    mock.timers.tick(140);
+    assert.equal(m.menu.hidden, true);
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test('an earlier fade does not hide a menu that is fading out a second time', () => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    const m = menuOn('m', { motion: true });
+    m.open();
+    m.toggle(); // the first fade ends at 140 ms
+    mock.timers.tick(50);
+    m.toggle();
+    mock.timers.tick(50);
+    m.toggle(); // the second fade starts at 100 ms and ends at 240 ms
+    mock.timers.tick(40);
+    assert.equal(m.menu.hidden, false);
+    mock.timers.tick(99);
+    assert.equal(m.menu.hidden, false);
+    mock.timers.tick(1);
+    assert.equal(m.menu.hidden, true);
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test('while the menu fades out, a press on an option picks nothing more', () => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    const m = menuOn('', { motion: true });
+    m.open();
+    const [, api] = m.options();
+    api.listeners.click();
+    api.listeners.click();
+    assert.deepEqual(m.picks, ['a']);
+    mock.timers.tick(140);
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test('the picker says when its menu has faded out, so the page can draw it again after', async () => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    const m = menuOn('m', { motion: true });
+    assert.equal(m.root.fading, null);
+    m.open();
+    m.press('Escape');
+    const waiting = m.root.fading;
+    assert.ok(waiting instanceof Promise);
+    mock.timers.tick(140);
+    await waiting;
+    assert.equal(m.root.fading, null);
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test('with reduced motion the menu shows and hides at once, with no animation', () => {
+  const m = menuOn('m');
+  m.open();
+  assert.equal(m.menu.hidden, false);
+  m.press('Escape');
+  assert.equal(m.menu.hidden, true);
+  assert.equal(m.root.fading, null);
+  assert.deepEqual(m.moves, []);
+});
+
+test('after a pick the old name rolls out of the button and the new one rolls in', () => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    const m = menuOn('w', { motion: true, from: 'All projects' });
+    const name = m.trigger.querySelector('.where-name');
+    assert.equal(name.classList.contains('roll'), true);
+    assert.deepEqual(name.children.map((c) => c.textContent), ['All projects', 'website']);
+    // The old name leaves by time, not by an animation event.
+    mock.timers.tick(140);
+    assert.deepEqual(name.children.map((c) => c.textContent), ['website']);
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test('the name is plain text when nothing was picked, the name did not change, or motion is reduced', () => {
+  for (const m of [menuOn('w', { motion: true }), menuOn('w', { motion: true, from: 'website' }), menuOn('w', { from: 'All projects' })]) {
+    const name = m.trigger.querySelector('.where-name');
+    assert.equal(name.classList.contains('roll'), false);
+    assert.equal(name.textContent, 'website');
+    assert.equal(name.children.length, 0);
+  }
+});
+
+test('the project button reads the same wherever the page draws it', () => {
+  const button = projectButton('…');
+  assert.equal(button.tag, 'button');
+  assert.equal(button.className, 'where');
+  assert.equal(button.id, 'where');
+  assert.deepEqual(iconsOf(button), ['folder', 'chevron-down']);
+  const classes = (node) => node.children.map((c) => c.className || c.attributes.class);
+  assert.deepEqual(classes(button), ['ic', 'where-word', 'where-name', 'ic where-caret']);
+  assert.equal(button.querySelector('.where-name').textContent, '…');
+  assert.equal(button.attributes['aria-describedby'], button.querySelector('.where-name').id);
+  assert.equal(button.attributes['aria-label'], 'Project');
+  // projectMenu's own button is this one.
+  assert.deepEqual(classes(menuOn('m').trigger), classes(button));
 });

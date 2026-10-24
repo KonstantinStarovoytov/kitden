@@ -239,16 +239,23 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .where-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-weight: 600; }
 /* A project is open: its name takes the accent, so the scope is clear at a glance. */
 .where-box.project .where-name { color: var(--route); }
-/* The menu: a find box, then the options. Focus stays in the find box; the active option is tinted. */
-.where-menu { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; width: 300px; max-width: calc(100vw - 32px); padding: 6px; border-radius: 8px; background: var(--panel-raised); box-shadow: var(--shadow-pop); }
+/* After a pick the name rolls (parts.js): the old and the new name share one cell. */
+.where-name.roll { display: inline-grid; grid-template-columns: minmax(0, 1fr); }
+.where-name.roll > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* The menu: a find box, then the options. Focus stays in the find box; the active option is tinted,
+   the picked one sits on the accent tint with a check. It grows in from its corner (parts.js). */
+.where-menu { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; width: 300px; max-width: calc(100vw - 32px); padding: 6px; border: 1px solid var(--wire); border-radius: 10px; background: var(--panel); box-shadow: var(--shadow); transform-origin: top left; }
 .where-find { width: 100%; height: 28px; padding: 0 8px; border: 1px solid var(--wire); border-radius: 6px; background: var(--inset); color: var(--ink); }
-.where-list { max-height: 280px; margin-top: 6px; overflow-y: auto; }
-.where-option { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; }
-.where-option:hover, .where-option.active { background: var(--inset); }
-.where-option[aria-selected="true"] .where-label { color: var(--route); font-weight: 600; }
-.where-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.where-count { color: var(--ink-3); font-size: 12px; }
-.where-sub { grid-column: 1 / -1; color: var(--ink-3); font-size: 12px; }
+.where-list { max-height: 280px; margin-top: 6px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.where-option { flex: none; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 7px; color: var(--ink-2); cursor: pointer; }
+.where-option:hover, .where-option.active { background: var(--dim); }
+.where-option.active { box-shadow: inset 0 0 0 1px var(--lamp-off); }
+.where-option[aria-selected="true"] { background: var(--route-soft); color: var(--ink); }
+.where-tx { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.where-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-size: 12px; font-weight: 600; }
+.where-sub { color: var(--ink-3); font-size: 11px; }
+.where-count { flex: none; color: var(--route); font-size: 11px; white-space: nowrap; }
+.where-check { color: var(--route); }
 /* Under a page head: the shared setup, or a project and how much of it differs. */
 .scope-bar { display: flex; align-items: center; gap: 6px; margin: -6px 0 18px; color: var(--ink-3); font-size: 11px; }
 .scope-bar.project { color: var(--route); }

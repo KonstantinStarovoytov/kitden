@@ -1,6 +1,6 @@
 // Small parts shared by every place: sockets, client marks, flags, loading and error states.
 import { $, button, el, icon, joinWords, plural, shortPath } from "./dom.js";
-import { reducedMotion } from "./motion.js";
+import { animateTo, D, reducedMotion, rollTo } from "./motion.js";
 
 // The shared baseline: the picker's first choice, and the scope of what is set for every project.
 export const ALL_PROJECTS = "All projects";
@@ -59,20 +59,36 @@ export function optionAfter(key, at, count) {
   return null;
 }
 
-// The project picker: a button that reads folder icon, "Project", the picked project's name and a
-// chevron, and a menu under it with a find box and the options. Focus stays in the find box; the arrows move the active option, which
-// `aria-activedescendant` names. `onPick(id)` hears the choice ("" is All projects).
-export function projectMenu(projects, picked, onPick) {
-  const root = el("div", "where-pick");
+// The picker's button: a folder icon, "Project", the picked project's name and a chevron. The page
+// draws it, switched off, before the project list is read; projectMenu draws it again after.
+export function projectButton(label) {
   const trigger = el("button", "where");
   trigger.id = "where";
   trigger.type = "button";
-  const name = el("span", "where-name", menuItems(projects, picked).find((item) => item.picked).name);
+  const name = el("span", "where-name", label);
   name.id = "where-picked";
   trigger.append(icon("folder", 14), el("span", "where-word", "Project"), name, icon("chevron-down", 13, "ic where-caret"));
   // The label stays "Project"; the picked name is its description, so a screen reader hears both.
   for (const [key, value] of Object.entries({ "aria-label": "Project", "aria-haspopup": "listbox", "aria-expanded": "false", "aria-describedby": name.id })) {
     trigger.setAttribute(key, value);
+  }
+  return trigger;
+}
+
+// The project picker: its button and a menu under it with a find box and the options. Focus stays
+// in the find box; the arrows move the active option, which `aria-activedescendant` names.
+// `onPick(id)` hears the choice ("" is All projects). `from`: the name the button showed before a
+// pick, so the new name rolls in from it.
+export function projectMenu(projects, picked, onPick, from = null) {
+  const root = el("div", "where-pick");
+  root.fading = null; // a promise while the menu fades out, so the page can draw the picker after
+  const label = menuItems(projects, picked).find((item) => item.picked).name;
+  const trigger = projectButton(label);
+  if (from && from !== label && !reducedMotion.matches) {
+    const name = trigger.querySelector(".where-name");
+    name.classList.add("roll");
+    name.replaceChildren(el("span", null, from));
+    rollTo(name, label);
   }
 
   const menu = el("div", "where-menu");
@@ -93,14 +109,18 @@ export function projectMenu(projects, picked, onPick) {
 
   let shown = [];
   let active = -1;
+  let isOpen = false;
   const row = (item, at) => {
     const node = el("div", "where-option");
     node.id = `where-option-${at}`;
     node.setAttribute("role", "option");
     node.setAttribute("aria-selected", String(item.picked));
-    node.append(el("span", "where-label", item.name));
+    const text = el("span", "where-tx");
+    text.append(el("span", "where-label", item.name));
+    if (item.sub) text.append(el("span", "where-sub", item.sub));
+    node.append(item.id ? icon("folder", 14) : icon("layers", 14), text);
     if (item.count) node.append(el("span", "where-count", item.count));
-    if (item.sub) node.append(el("span", "where-sub", item.sub));
+    if (item.picked) node.append(icon("check", 14, "ic where-check"));
     node.addEventListener("click", () => pick(item));
     return node;
   };
@@ -125,31 +145,57 @@ export function projectMenu(projects, picked, onPick) {
   // The menu shows first: a hidden list cannot scroll the picked project into view.
   function open() {
     find.value = "";
+    isOpen = true;
     menu.hidden = false;
+    // A fade-out that is still running ends here.
+    for (const move of menu.getAnimations()) move.cancel();
     draw();
     trigger.setAttribute("aria-expanded", "true");
     document.addEventListener("pointerdown", outside);
+    animateTo(menu, [{ opacity: 0, transform: "translateY(-8px) scale(.96)" }, { opacity: 1, transform: "none" }], { dur: 180 });
     find.focus();
   }
   function close(back) {
-    menu.hidden = true;
+    if (!isOpen) return;
+    isOpen = false;
     trigger.setAttribute("aria-expanded", "false");
     document.removeEventListener("pointerdown", outside);
     if (back) trigger.focus();
+    fadeOut();
+  }
+  // The menu hides by time, not by the animation's end: a hidden tab may never finish one, and an
+  // open in between cancels it. Only the latest fade hides the menu, and only if it is still closed.
+  function fadeOut() {
+    if (!D(140)) {
+      menu.hidden = true;
+      return;
+    }
+    animateTo(menu, [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-4px) scale(.98)" }], { dur: 140, ease: "ease-in", fill: "forwards" });
+    const fade = new Promise((resolve) => {
+      setTimeout(() => {
+        if (root.fading === fade) {
+          root.fading = null;
+          if (!isOpen) menu.hidden = true;
+        }
+        resolve();
+      }, D(140));
+    });
+    root.fading = fade;
   }
   function outside(event) {
     if (!root.contains(event.target)) close(false);
   }
   function pick(item) {
+    if (!isOpen) return;
     close(true);
     onPick(item.id);
   }
 
-  trigger.addEventListener("click", () => (menu.hidden ? open() : close(true)));
+  trigger.addEventListener("click", () => (isOpen ? close(true) : open()));
   trigger.addEventListener("keydown", (event) => {
     if (event.key !== "ArrowDown") return;
     event.preventDefault();
-    if (menu.hidden) open();
+    if (!isOpen) open();
   });
   find.addEventListener("input", draw);
   find.addEventListener("keydown", (event) => {

@@ -395,6 +395,43 @@ def test_the_project_menu_keeps_paths_off_the_page_and_the_keys_in_the_find_box(
     assert ".where-box select" not in CSS
 
 
+def test_the_project_menu_looks_like_the_mockups():
+    menu = rule(".where-menu")
+    for part in (
+        "width: 300px",
+        "padding: 6px",
+        "border: 1px solid var(--wire)",
+        "border-radius: 10px",
+        "background: var(--panel)",
+        "box-shadow: var(--shadow)",
+    ):
+        assert part in menu, part
+    option = rule(".where-option")
+    for part in ("padding: 8px 10px", "border-radius: 7px", "gap: 10px", "color: var(--ink-2)"):
+        assert part in option, part
+    assert "background: var(--dim)" in rule(".where-option:hover, .where-option.active")
+    # The dim fill is faint, so the option the arrows are on also gets a ring that keeps 3:1.
+    assert "inset 0 0 0 1px var(--lamp-off)" in rule(".where-option.active")
+    picked = rule('.where-option[aria-selected="true"]')
+    assert "background: var(--route-soft)" in picked and "color: var(--ink)" in picked
+    # The count is accent at 11 px, the sub line quiet at 11 px, the check accent.
+    count = rule(".where-count")
+    assert "color: var(--route)" in count and "font-size: 11px" in count
+    sub = rule(".where-sub")
+    assert "color: var(--ink-3)" in sub and "font-size: 11px" in sub
+    assert "color: var(--route)" in rule(".where-check")
+
+
+def test_the_project_button_is_drawn_in_one_place():
+    # index.html keeps only the words for the first paint. The icons come from parts.js, for the
+    # button the page draws before the list is read and for the one projectMenu draws.
+    app, parts = script("app.js"), script("parts.js")
+    assert "export function projectButton(" in parts
+    drawn = app.split("function drawIcons")[1].split("\n}\n")[0]
+    assert "projectButton(" in drawn
+    assert '"folder"' not in drawn and '"chevron-down"' not in drawn
+
+
 def test_python_and_page_state_words_agree():
     parts = script("parts.js")
     for state, word in STATE_WORDS.items():
