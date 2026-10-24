@@ -230,36 +230,79 @@ const TODAY_1402 = (() => { const at = new Date(); at.setHours(14, 2, 0, 0); ret
 const LINKED = ['claude_code', 'codex'];
 const HELD_GITHUB = { name: 'github', kind: 'remote', state: 'on' };
 const tool = (fields) => ({ name: 'push_files', title: 'Push files', state: 'off', effective: 'off', hint: 'writes', origin: 'global', origin_from: null, ...fields });
+// The known projects, as the menu reads them, and the server's rules in each: what
+// /api/gateway/tools answers (`states`: project id -> the tool's state; `server`: the server's).
+const CHOICE = [{ id: 'a', path: '/w/atlas', own_rules: 1, exists: true }, { id: 'm', path: '/w/mcp-gateway', own_rules: 0, exists: true }, { id: 'w', path: '/w/atlas/web', own_rules: 0, exists: true }];
+const rulesFor = (states, { name = 'push_files', shared = 'on', server = {} } = {}) => ({
+  shared,
+  projects: Object.entries(states).map(([id, state]) => ({ id, server: server[id] || 'on', tools: { [name]: state } })),
+});
 
 test('a tool off for all projects offers to turn it on, for all or in one project', () => {
-  const card = toolCard(tool(), { name: 'github', kind: 'remote', state: 'on' }, { linked: ['claude_code', 'codex'], picked: '', folder: '', detail: { shared: 'off', calls: { count: 12, last: TODAY_1402 } } });
+  const rules = rulesFor({ a: 'off', m: 'off', w: 'off' });
+  const card = toolCard(tool(), { name: 'github', kind: 'remote', state: 'on' }, { linked: ['claude_code', 'codex'], picked: '', folder: '', detail: { shared: 'off', calls: { count: 12, last: TODAY_1402 } }, rules, projects: CHOICE });
   assert.deepEqual([card.kind, card.title, card.id], ['Tool', 'Push files', 'push_files']);
   assert.deepEqual(card.facts.map((f) => [f.label, typeof f.value === 'string' ? f.value : f.text]), [
     ['Server', 'github · Remote'], ['State', 'Off'], ['Comes from', 'All projects'], ['Reported', 'May write'], ['Clients', '2 clients'], ['Calls', '12 calls · last today 14:02']]);
-  assert.equal(card.why, "Claude Code and Codex can't call this tool through Kitden in any project.");
+  assert.equal(card.why, "Claude Code and Codex can't call this tool through Kitden by the shared rule.");
   assert.deepEqual(card.actions.map((a) => a.label), ['Turn on for all projects…', 'Turn on in one project…']);
   assert.deepEqual(card.actions[0].body, { action: 'gateway.rule', targets: [], params: { server: 'github', tool: 'push_files', state: 'on', project: null } });
   // "In one project" shows the project choice in the column first.
   assert.equal(typeof card.actions[1].run, 'function');
-  // Without calls there is no Calls fact; without a title the name is the title.
-  const quiet = toolCard(tool({ title: null, state: 'on', effective: 'on' }), HELD_GITHUB, { linked: LINKED, picked: '', folder: '', detail: { shared: 'on' } });
+  // Without calls there is no Calls fact; without a title the name is the title. Without the
+  // rules of each project Kitden cannot say which project a change would reach: no choice.
+  const quiet = toolCard(tool({ title: null, state: 'on', effective: 'on' }), HELD_GITHUB, { linked: LINKED, picked: '', folder: '', detail: { shared: 'on' }, projects: CHOICE });
   assert.deepEqual([quiet.title, quiet.id, facts(quiet).map(([label]) => label)], ['push_files', null, ['Server', 'State', 'Comes from', 'Reported', 'Clients']]);
-  assert.equal(quiet.why, 'Claude Code and Codex can call this tool through Kitden in any project.');
-  assert.deepEqual(labels(quiet), ['Turn off for all projects…', 'Turn off in one project…']);
+  assert.equal(quiet.why, 'Claude Code and Codex can call this tool through Kitden by the shared rule.');
+  assert.deepEqual(labels(quiet), ['Turn off for all projects…']);
+});
+
+// The medium sample with All projects: atlas turns write_file off, atlas/web follows atlas and
+// turns search_files off itself; old-app, sandbox and website follow the shared rule.
+const MEDIUM_PROJECTS = [
+  { id: 'atlas', path: '/h/work/atlas', own_rules: 1, exists: true }, { id: 'web', path: '/h/work/atlas/web', own_rules: 1, exists: true },
+  { id: 'old', path: '/h/work/old-app', own_rules: 0, exists: false }, { id: 'sand', path: '/h/work/sandbox', own_rules: 0, exists: true },
+  { id: 'site', path: '/h/work/website', own_rules: 0, exists: true },
+];
+const MEDIUM_RULES = {
+  shared: 'on',
+  projects: [['atlas', 'off', 'on'], ['web', 'off', 'off'], ['old', 'on', 'on'], ['sand', 'on', 'on'], ['site', 'on', 'on']]
+    .map(([id, write, search]) => ({ id, server: 'on', tools: { write_file: write, search_files: search } })),
+};
+const FILES_ROW = { name: 'files', kind: 'local', state: 'on' };
+const medium = (name, extra = {}) => toolCard({ name, title: null, state: 'on', effective: 'on', hint: 'writes', origin: 'default', origin_from: null }, FILES_ROW, { linked: LINKED, picked: '', folder: '', detail: { shared: 'on' }, rules: MEDIUM_RULES, projects: MEDIUM_PROJECTS, ...extra });
+
+test('in one project offers only the projects it would change, and all projects says who differs', () => {
+  const write = medium('write_file', { choosing: true });
+  assert.equal(write.why, 'Claude Code and Codex can call this tool through Kitden by the shared rule. 2 projects decide otherwise.');
+  assert.deepEqual(labels(write), ['Turn off for all projects…', 'Turn off in one project…']);
+  // atlas has write_file off already, and atlas/web follows it: neither is offered.
+  assert.deepEqual(write.after.childNodes.map(textOf), ['old-appFolder missing', 'sandbox', 'website']);
+  assert.equal(medium('search_files').why, 'Claude Code and Codex can call this tool through Kitden by the shared rule. 1 project decides otherwise.');
+  // Every project has it off already: nothing to turn off in one project.
+  const off = { ...MEDIUM_RULES, projects: MEDIUM_RULES.projects.map((p) => ({ ...p, tools: { write_file: 'off' } })) };
+  const none = medium('write_file', { rules: off });
+  assert.deepEqual(labels(none), ['Turn off for all projects…']);
+  assert.equal(none.why, 'Claude Code and Codex can call this tool through Kitden by the shared rule. 5 projects decide otherwise.');
+  // In a project the sentence names it, and says nothing about the others.
+  const atlas = toolCard({ name: 'write_file', title: null, state: 'off', effective: 'off', hint: 'writes', origin: 'project', origin_from: null }, FILES_ROW, { linked: LINKED, picked: 'atlas', folder: 'atlas', detail: { shared: 'on' }, rules: MEDIUM_RULES, projects: MEDIUM_PROJECTS });
+  assert.equal(atlas.why, "Claude Code and Codex can't call this tool through Kitden in atlas.");
+  assert.deepEqual(labels(atlas), ['Use the shared rule…', 'Turn off for all projects…', 'Turn on in one project…']);
 });
 
 test("a project's own rule leads with the shared rule, or its parent's", () => {
-  const own = toolCard(tool({ state: 'on', effective: 'on', origin: 'project' }), HELD_GITHUB, { linked: LINKED, picked: 'm', folder: 'mcp-gateway', detail: { shared: 'off', follows: null } });
+  const rules = rulesFor({ a: 'off', m: 'on', w: 'on' });
+  const own = toolCard(tool({ state: 'on', effective: 'on', origin: 'project' }), HELD_GITHUB, { linked: LINKED, picked: 'm', folder: 'mcp-gateway', detail: { shared: 'off', follows: null }, rules, projects: CHOICE });
   assert.deepEqual([own.facts[1].value, own.facts[2].value], ['On in this project', 'This project · mcp-gateway']);
   assert.equal(own.facts[2].accent, true);
   assert.deepEqual(own.actions.map((a) => a.label), ['Use the shared rule…', 'Turn on for all projects…', 'Turn off in one project…']);
   assert.deepEqual(own.actions.map((a) => Boolean(a.primary)), [true, false, false]);
   assert.deepEqual(own.actions[0].body, { action: 'gateway.rule', targets: [], params: { server: 'github', tool: 'push_files', state: null, project: 'm' } });
-  assert.equal(own.why, 'Claude Code and Codex can call this tool through Kitden in mcp-gateway. Other projects follow the shared rule.');
-  const nested = toolCard(tool({ state: 'on', effective: 'on', origin: 'project' }), HELD_GITHUB, { linked: LINKED, picked: 'w', folder: 'web', detail: { shared: 'off', follows: 'atlas' } });
+  assert.equal(own.why, 'Claude Code and Codex can call this tool through Kitden in mcp-gateway.');
+  const nested = toolCard(tool({ state: 'on', effective: 'on', origin: 'project' }), HELD_GITHUB, { linked: LINKED, picked: 'w', folder: 'web', detail: { shared: 'off', follows: 'atlas' }, rules, projects: CHOICE });
   assert.equal(nested.actions[0].label, "Use atlas's rule…");
   // A rule from a parent folder says so; with no client on the gateway the sentence says that.
-  const parent = toolCard(tool({ origin: 'parent', origin_from: 'atlas' }), HELD_GITHUB, { linked: [], picked: 'w', folder: 'web', detail: { shared: 'on' } });
+  const parent = toolCard(tool({ origin: 'parent', origin_from: 'atlas' }), HELD_GITHUB, { linked: [], picked: 'w', folder: 'web', detail: { shared: 'on' }, rules, projects: CHOICE });
   assert.deepEqual([parent.facts[1].value, parent.facts[2].value, parent.facts[4].text], ['Off', 'From atlas', 'No clients yet']);
   assert.equal(parent.why, 'No client uses the Kitden gateway yet.');
   assert.deepEqual(labels(parent), ['Turn off for all projects…', 'Turn on in one project…']);
@@ -275,6 +318,10 @@ test('a tool of a server that is off says so and offers nothing', () => {
   assert.equal(card.why, 'files is off in web, so none of its tools can be called.');
   assert.deepEqual(card.actions.map((a) => a.label), ['Open files']);
   assert.equal(typeof card.actions[0].run, 'function');
+  // With All projects: off by the shared rule, and the projects that turn the server on.
+  const rules = rulesFor({ a: 'on', m: 'on', w: 'on' }, { shared: 'off', server: { a: 'on', m: 'off', w: 'on' } });
+  const shared = toolCard(tool({ state: 'on', effective: 'off', why: 'server_off' }), { name: 'files', kind: 'local', state: 'off' }, { linked: LINKED, picked: '', folder: '', detail: { shared: 'on' }, rules });
+  assert.equal(shared.why, 'files is off by the shared rule, so none of its tools can be called. 2 projects decide otherwise.');
 });
 
 test('a tool says what it is reported to do and where its state comes from', () => {
@@ -307,10 +354,10 @@ const FILES_HELD = {
 };
 
 test('a held server holds every server action', () => {
-  const card = heldCard(FILES_HELD, { linked: LINKED, picked: '', folder: '', view: VIEW, clients: FOUND, detail: { strict: false, shared: 'on' } });
+  const card = heldCard(FILES_HELD, { linked: LINKED, picked: '', folder: '', view: VIEW, clients: FOUND, detail: { strict: false, ...MEDIUM_RULES }, projects: MEDIUM_PROJECTS });
   assert.deepEqual([card.kind, card.title, card.id], ['MCP server', 'files', 'In the Kitden gateway']);
   assert.deepEqual(facts(card), [['Kind', 'Local · runs on this Mac'], ['State', 'On'], ['Tools', '3 of 4 on'], ['Clients', '2 clients'], ['Projects', '2 projects have their own rules']]);
-  assert.equal(card.why, 'Claude Code and Codex reach it through the Kitden gateway in any project. These switches also apply in folders Kitden does not know.');
+  assert.equal(card.why, 'Claude Code and Codex reach it through the Kitden gateway by the shared rule. These switches also apply in folders Kitden does not know.');
   assert.deepEqual(labels(card), ['Turn off for all projects…', 'Turn off in one project…', 'Turn strict mode on…', 'Turn off every writing tool…', 'Refresh tools']);
   assert.deepEqual(card.actions.map((a) => Boolean(a.primary)), [true, false, false, false, false]);
   assert.deepEqual(card.actions[0].body, { action: 'gateway.rule', targets: [], params: { server: 'files', tool: null, state: 'off', project: null } });
@@ -320,26 +367,33 @@ test('a held server holds every server action', () => {
   assert.deepEqual(card.more[0].body, { action: 'gateway.remove', targets: [], params: { server: 'files' } });
   // Claude Code and Codex reach files through the Kitden gateway: the Library has its row.
   assert.ok(textOf(card.after).includes('Compare across clients'));
+  // Every project has the server on: "in one project" offers each of them.
+  const choosing = heldCard(FILES_HELD, { linked: LINKED, picked: '', folder: '', view: null, clients: FOUND, detail: { strict: false, ...MEDIUM_RULES }, projects: MEDIUM_PROJECTS, choosing: true });
+  assert.equal(choosing.after.childNodes.length, MEDIUM_PROJECTS.length);
 });
 
 test("a held server off in a project offers its parent's rule and says strict mode", () => {
   const off = { ...FILES_HELD, state: 'off', origin: 'project', on_count: 0, projects: 1 };
-  const card = heldCard(off, { linked: LINKED, picked: 'w', folder: 'web', view: VIEW, clients: FOUND, detail: { strict: true, shared: 'on', follows: 'atlas' } });
+  const rules = rulesFor({ a: 'on', m: 'on', w: 'on' }, { server: { w: 'off' } });
+  const card = heldCard(off, { linked: LINKED, picked: 'w', folder: 'web', view: VIEW, clients: FOUND, detail: { strict: true, follows: 'atlas', ...rules }, projects: CHOICE });
   assert.deepEqual(facts(card).slice(1, 3), [['State', 'Off in this project'], ['Tools', '0 of 4 on']]);
   assert.deepEqual(facts(card).at(-1), ['Projects', '1 project has its own rules']);
   assert.equal(card.why, 'It is off in web, so no client can call its tools. Strict: a new tool waits until you turn it on.');
   // While it is off no writing tool can be called: nothing to turn off.
   assert.deepEqual(labels(card), ["Use atlas's rule…", 'Turn off for all projects…', 'Turn on in one project…', 'Turn strict mode off…', 'Refresh tools']);
   assert.deepEqual(card.actions[0].body, { action: 'gateway.rule', targets: [], params: { server: 'files', tool: null, state: null, project: 'w' } });
-  // With All projects, a server off for all projects but on in some says where it is on.
-  const some = heldCard({ ...FILES_HELD, state: 'off', origin: 'global', on_in: 2, tool_list: [], tools: null }, { linked: LINKED, picked: '', folder: '', view: VIEW, clients: FOUND, detail: { strict: false, shared: 'off' } });
-  assert.deepEqual(facts(some).slice(1, 3), [['State', 'On in 2 projects'], ['Tools', 'Not known yet']]);
-  assert.equal(some.why, '2 projects turn it on; no client can call its tools anywhere else. These switches also apply in folders Kitden does not know.');
-  assert.deepEqual(labels(some).slice(0, 2), ['Turn on for all projects…', 'Turn on in one project…']);
+  // With All projects, a server off by the shared rule but on in some says how many.
+  const some = rulesFor({ a: 'on', m: 'on', w: 'on' }, { shared: 'off', server: { a: 'on', m: 'off', w: 'on' } });
+  const shared = heldCard({ ...FILES_HELD, state: 'off', origin: 'global', on_in: 2, tool_list: [], tools: null }, { linked: LINKED, picked: '', folder: '', view: VIEW, clients: FOUND, detail: { strict: false, ...some }, projects: CHOICE });
+  assert.deepEqual(facts(shared).slice(1, 3), [['State', 'On in 2 projects'], ['Tools', 'Not known yet']]);
+  assert.equal(shared.why, 'It is off by the shared rule, so no client can call its tools. 2 projects decide otherwise. These switches also apply in folders Kitden does not know.');
+  assert.deepEqual(labels(shared).slice(0, 2), ['Turn on for all projects…', 'Turn on in one project…']);
+  // Without each project's rules there is no choice to offer.
+  const unread = heldCard(FILES_HELD, { linked: LINKED, picked: '', folder: '', view: VIEW, clients: FOUND, detail: {}, projects: CHOICE });
+  assert.ok(!labels(unread).includes('Turn off in one project…'));
 });
 
-// Projects the column's choice offers: by folder name, never All projects.
-const CHOICE = [{ id: 'a', path: '/w/atlas', own_rules: 1, exists: true }, { id: 'm', path: '/w/mcp-gateway', own_rules: 0, exists: true }, { id: 'w', path: '/w/atlas/web', own_rules: 0, exists: true }];
+// The column's choice offers projects by folder name, never All projects.
 const press = (node, key) => {
   const event = { key, stopped: false, preventDefault() {}, stopPropagation() { event.stopped = true; } };
   for (const listener of node.listeners.keydown || []) listener(event);
@@ -367,4 +421,7 @@ test('the project choice starts on the picked project', () => {
   assert.equal(box.hidden, true);
   // With All projects picked it starts on the first project.
   assert.deepEqual(chosen(projectChoice(CHOICE, '', () => {})), ['atlas1 own rule']);
+  // A picked project the choice does not offer is not added to it: it starts on the first.
+  const offered = projectChoice(CHOICE.filter((p) => p.id !== 'm'), 'm', () => {});
+  assert.deepEqual([offered.childNodes.map(textOf), chosen(offered)], [['atlas1 own rule', 'web'], ['atlas1 own rule']]);
 });

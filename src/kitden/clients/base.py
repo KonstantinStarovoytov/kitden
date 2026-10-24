@@ -20,6 +20,7 @@ from kitden.model import (
     Client,
     ClientStatus,
     Enabled,
+    FileEdit,
     FolderCopy,
     FolderRemoval,
     Gateway,
@@ -337,6 +338,22 @@ class ClientAdapter(ABC):
     def setup_server_step(self, command: str, args: list[str]) -> Step:
         """The edit that adds the read-only setup server (user scope, FR-032)."""
         raise ValueError(f"the setup server cannot be added to {self.id}")
+
+    def setup_entry_step(self, key: str, value: Any) -> Step:
+        """The edit that sets one key of the client's own `kitden` entry, such as a timeout or
+        its switch. The step that would add the entry names its file and key; its command is
+        not used."""
+        place = self.setup_server_step("", [])
+        assert place.edit is not None
+        return Step(
+            client=place.client,
+            scope=Scope.USER,
+            name=SETUP_NAME,
+            edit=FileEdit(
+                path=place.edit.path, fmt=place.edit.fmt, key=(*place.edit.key, key), after=value
+            ),
+            restart_note=place.restart_note,
+        )
 
     def marketplace_sources(self) -> dict[str, str | None]:
         """Marketplace name -> a source other clients can add (None: built into this client)."""

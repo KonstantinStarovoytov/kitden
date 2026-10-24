@@ -37,7 +37,6 @@ from kitden.local_gateway.settings import (
 )
 from kitden.model import (
     GATEWAY_CLIENT,
-    FileEdit,
     Gateway,
     GatewayEdit,
     Item,
@@ -664,22 +663,12 @@ def _codex_timeout_steps(adapters: dict[str, ClientAdapter]) -> list[Step]:
     adapter = adapters.get("codex")
     if adapter is None:
         return []
-    # The step that would add the entry names its file and key; its command is not used.
-    place = adapter.setup_server_step("", [])
-    entry = _raw_entry(place)
+    # The entry as written now, where the step that would add it puts it.
+    entry = _raw_entry(adapter.setup_server_step("", []))
     if entry is None:
         return []
-    assert place.edit is not None
     return [
-        Step(
-            client=place.client,
-            scope=Scope.USER,
-            name=SETUP_NAME,
-            edit=FileEdit(
-                path=place.edit.path, fmt=place.edit.fmt, key=(*place.edit.key, key), after=value
-            ),
-            restart_note=place.restart_note,
-        )
+        adapter.setup_entry_step(key, value)
         for key, value in CODEX_TIMEOUTS.items()
         if key not in entry
     ]

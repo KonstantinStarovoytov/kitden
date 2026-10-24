@@ -1093,6 +1093,29 @@ def test_tools_view_says_the_shared_state_beside_the_projects_one(home):
     assert [t["shared"] for t in shared["tools"]] == [t["state"] for t in shared["tools"]]
 
 
+def test_the_tools_api_says_each_rule_in_every_known_project(tmp_path):
+    from tests.unit.test_demo_mode import demo_page
+
+    with demo_page(tmp_path) as page:  # medium
+        ids = {Path(p["path"]).name: p["id"] for p in page.get("/api/projects").json()}
+        answer = page.get("/api/gateway/tools?server=files").json()
+    states = {p["id"]: p for p in answer["projects"]}
+    assert set(states) == set(ids.values())
+    # atlas turns write_file off; atlas/web follows atlas; website follows all projects.
+    write = {name: states[ids[name]]["tools"]["write_file"] for name in ("atlas", "web", "website")}
+    assert write == {"atlas": "off", "web": "off", "website": "on"}
+    assert states[ids["web"]]["tools"]["search_files"] == "off"
+    assert {p["server"] for p in answer["projects"]} == {"on"}
+    # The rule state, not the server's switch: the same words as the gateway decides there.
+    assert set(states[ids["website"]]["tools"]) == {t["name"] for t in answer["tools"]}
+
+
+def test_tools_view_without_chains_names_no_project(home):
+    hold(home, {"github": echo()})
+    save_tools(home, "github", [tool("list_issues")])
+    assert tools_view(load_settings(home), load_tools(home), "github", [])["projects"] == []
+
+
 def test_tools_view_carries_the_calls(home):
     hold(home, {"github": echo()})
     save_tools(home, "github", [tool("list_issues"), tool("other")])

@@ -842,7 +842,11 @@ def create_app(
         if server not in settings["servers"]:
             return _error("Unknown server.", 404)
         path = project["path"] if project else None
-        answer = tools_view(settings, load_tools(home), server, _chain(path), load_calls(home))
+        # Every known project's chain, by its id: what "in one project" would change there.
+        ids = {p["path"]: p["id"] for p in state.data["projects"]}
+        chains = {ids[k]: chain for k, chain in _chains().items() if k in ids}
+        calls = load_calls(home)
+        answer = tools_view(settings, load_tools(home), server, _chain(path), calls, chains)
         return JSONResponse({**answer, "problem": tool_problems.get(server)})
 
     async def gateway_tools_refresh(request: Request) -> JSONResponse:

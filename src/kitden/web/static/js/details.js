@@ -393,7 +393,9 @@ export function factsBlock(rows) {
 // (`onPick(id)`), and Escape hides it and gives focus back to the action that opened it (its
 // data-focus key, `opener`).
 export function projectChoice(projects, picked, onPick, opener = null) {
-  const items = menuItems(projects, picked).filter((item) => item.id !== "");
+  // A picked project the choice does not offer stays out of it.
+  const start = projects.some((p) => p.id === picked) ? picked : "";
+  const items = menuItems(projects, start).filter((item) => item.id !== "");
   const list = el("div", "where-list choice");
   list.setAttribute("role", "listbox");
   list.setAttribute("aria-label", "Projects");

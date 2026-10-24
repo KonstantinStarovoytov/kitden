@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 
 from kitden.clients.base import SETUP_NAME, ClientAdapter
-from kitden.model import Enabled, FileEdit, Item, ItemKind, Scope, Step
+from kitden.model import Enabled, Item, ItemKind, Scope, Step
 
 CLIENTS = ("claude_code", "codex", "cursor")
 CLIENT_WORDS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
@@ -72,24 +72,7 @@ def enable_steps(adapters: dict[str, ClientAdapter], client: str) -> list[Step]:
     if client not in ENABLE_KEYS or adapter is None:
         name = CLIENT_WORDS.get(client, client)
         raise ValueError(f"Turn it on in {name}'s own MCP settings.")
-    # The step that would add the entry names its file and key; its command is not used.
-    place = adapter.setup_server_step("", [])
-    assert place.edit is not None
-    edit = FileEdit(
-        path=place.edit.path,
-        fmt=place.edit.fmt,
-        key=(*place.edit.key, ENABLE_KEYS[client]),
-        after=True,
-    )
-    return [
-        Step(
-            client=client,
-            scope=Scope.USER,
-            name=SETUP_NAME,
-            edit=edit,
-            restart_note=place.restart_note,
-        )
-    ]
+    return [adapter.setup_entry_step(ENABLE_KEYS[client], True)]
 
 
 def kitden_on(entry: dict) -> bool:

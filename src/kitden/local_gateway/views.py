@@ -251,7 +251,12 @@ def tool_hint(tool: dict) -> tuple[str, str | None]:
 
 
 def tools_view(
-    settings: dict, tools: dict, server: str, chain: list[str], calls: dict | None = None
+    settings: dict,
+    tools: dict,
+    server: str,
+    chain: list[str],
+    calls: dict | None = None,
+    chains: dict[str, list[str]] | None = None,
 ) -> dict:
     """A held server's state and its known tools, each with its state, along the picked
     project's chain (empty: all projects), and where each comes from. A tool's `state` is its
@@ -259,7 +264,10 @@ def tools_view(
     new when the server is strict and no rule of the chain or for all projects has a state for
     it: it waits, off, until someone decides. `calls` is what `load_calls` gives; each tool
     carries its count and last time, or None. `shared` is the state all projects get, which
-    "for all projects" turns the other way."""
+    "for all projects" turns the other way. `chains` maps each known project's id to its chain;
+    `projects` then says the server's and each tool's state in every one of them, as the gateway
+    decides it there (the rule state, without the server's switch on its tools), so "in one
+    project" offers only projects it would change."""
     strict = strict_mode(settings, server)
     scopes = _scopes(settings, chain)
     counted = (calls or {}).get(server, {})
@@ -282,7 +290,22 @@ def tools_view(
             }
         )
     shared = state_in(settings, [], server, None)
-    return {"server": server, **states, "shared": shared, "strict": strict, "tools": listed}
+    projects = [
+        {
+            "id": project,
+            "server": state_in(settings, each, server, None),
+            "tools": {t["name"]: state_in(settings, each, server, t["name"]) for t in listed},
+        }
+        for project, each in (chains or {}).items()
+    ]
+    return {
+        "server": server,
+        **states,
+        "shared": shared,
+        "strict": strict,
+        "tools": listed,
+        "projects": projects,
+    }
 
 
 def rule_steps(home: Path, params: dict, projects: dict[str, str]) -> list[Step]:

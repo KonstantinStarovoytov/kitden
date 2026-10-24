@@ -1068,6 +1068,9 @@ def test_tool_and_server_details_use_the_owner_words():
     ):
         assert words in text, words
     assert "Allowed" not in text and "Blocked" not in text and "Sign in" not in text
+    # With All projects a card says what the shared rule does, never "in any project":
+    # a project's own rule may decide otherwise.
+    assert "in any project" not in gw() and "Other projects follow" not in gw()
 
 
 def test_tool_and_server_details_say_what_they_know():
@@ -1077,23 +1080,22 @@ def test_tool_and_server_details_say_what_they_know():
         '"Not reported · its name suggests it writes"',
         "can call this tool through Kitden ${place}.`",
         "can't call this tool through Kitden ${place}.`",
-        "is off ${place}, so none of its tools can be called.`",
-        '" Other projects follow the shared rule."',
+        "is off ${place}, so none of its tools can be called.${others}`",
         '"No client uses the Kitden gateway yet."',
         "`Open ${server.name}`",
         '"In the Kitden gateway"',
         '"Local · runs on this Mac"',
         '"Not known yet"',
-        "reach it through the Kitden gateway ${place}.`",
-        "`It is off ${place}, so no client can call its tools.`",
-        "no client can call its tools anywhere else.`",
+        "reach it through the Kitden gateway ${place}.${others}`",
+        "`It is off ${place}, so no client can call its tools.${others}`",
+        '"by the shared rule"',
+        '` ${plural(k, "project decides", "projects decide")} otherwise.`',
         '"These switches also apply in folders Kitden does not know."',
         '"Strict: a new tool waits until you turn it on."',
         '"Turn strict mode on…"',
         '"Turn strict mode off…"',
         '"Turn off every writing tool…"',
         '"Refresh tools"',
-        '"in any project"',
     ):
         assert words in text, words
     # The kitden entry back on: a review where the docs name the key, else where to do it.
