@@ -46,7 +46,7 @@ otherwise, the mockup wins, with these exceptions:
 
 - **The mockup wins on look:**
   - Inter and JetBrains Mono, shipped as local files.
-  - Icons from one local sprite.
+  - Icons from one icon data module (`static/js/icons.js`), drawn by `icon()` with createElementNS, no innerHTML.
   - The mockup's tokens and sizes, and a small spring overshoot on presses, switches and ports.
   - Details floats over the map.
   - The mockup's lamp meanings, words, grey dotted links that skip the gateway, and timings.

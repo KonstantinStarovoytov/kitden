@@ -4,9 +4,9 @@
 
 **Goal:** Kitden looks, moves and behaves like the owner's motion mockup (version 11, 2026-10-24), everywhere the clients and Kitden's own rules allow it.
 
-**Architecture:** Keep the stack. The mockup's look moves into `style.css` tokens, local font files and one icon sprite. Its map behaviour moves into `map.js` (blocks that stay and move, links that take the pointer). Its preview tray needs one new backend piece: many tray requests become ONE change, so Apply all and Undo all stay all-or-nothing through the change engine. Pages then follow one by one: Gateway, Add panel, Library, Overview, Changes.
+**Architecture:** Keep the stack. The mockup's look moves into `style.css` tokens, local font files and one icon data module. Its map behaviour moves into `map.js` (blocks that stay and move, links that take the pointer). Its preview tray needs one new backend piece: many tray requests become ONE change, so Apply all and Undo all stay all-or-nothing through the change engine. Pages then follow one by one: Gateway, Add panel, Library, Overview, Changes.
 
-**Tech Stack:** Python 3.13, Starlette; plain ES modules, one CSS file; pytest on sandbox homes; node's test runner. New static files only: two woff2 fonts and one SVG sprite. No library, no bundler, no network at run time.
+**Tech Stack:** Python 3.13, Starlette; plain ES modules, one CSS file; pytest on sandbox homes; node's test runner. New static files only: the woff2 fonts and one icon data module. No library, no bundler, no network at run time.
 
 **Spec:** the mockup itself, `docs/mockup/kitden-motion.html` (behaviour and words), `docs/mockup/motion-spec.md` (every motion, Calm values), the frames in `design/kitden.pen` (look; the owner is moving the whole mockup there), and the owner decisions in Phase 0 below, recorded in the spec's "Owner decisions (2026-10-24, the mockup)". Older rules: `docs/superpowers/specs/2026-10-23-map-pages-design.md`, `docs/design.md`. Where they disagree with the mockup, Phase 0 says which one stands.
 
@@ -49,7 +49,7 @@ The mockup breaks several written rules. Each line gives the rule, what the mock
 | # | Today's rule (where) | Mockup | Recommended |
 |---|---|---|---|
 | D1 | System fonts (`docs/design.md:117`, spec Non-goals) | Inter + JetBrains Mono | Ship `InterVariable.woff2` (~344 KB) and `JetBrainsMono[wght].woff2` (~111 KB) in `static/fonts/` with their OFL texts |
-| D2 | 3 inline SVGs and text glyphs | ~40 lucide icons from a CDN | One local SVG `<symbol>` sprite with only the used icons (lucide is ISC) |
+| D2 | 3 inline SVGs and text glyphs | ~40 lucide icons from a CDN | One icon data module (`static/js/icons.js`) with only the used icons (lucide is ISC), drawn by `icon()` with createElementNS, no innerHTML |
 | D3 | `--wire` as rgba, `--lamp-*` names, 24 px buttons | The mockup's `:root` tokens and sizes | The mockup's tokens, renamed into Kitden's names; the contrast test decides any change |
 | D4 | `--spring` "no overshoot" (`docs/design.md:161`) | SPRING overshoots 3.4 % (press, switch knob, ports, badge, tick) | Allow it for those small parts only |
 | D5 | Details is a docked 320 px column; "a drawer has one motion" (`docs/design.md:60, 197`) | Panel floats over the map; skeleton 160 ms, then children rise | Floating panel, as the mockup; keep the narrow layout under 1024 px |
@@ -95,14 +95,14 @@ The mockup breaks several written rules. Each line gives the rule, what the mock
 
 ## Phase 1: Look and shared tokens
 
-**Files:** `src/kitden/web/static/style.css`, `static/index.html`, new `static/fonts/` and `static/icons.svg`, `static/js/motion.js`, `static/js/dom.js`, `static/js/parts.js`, `src/kitden/web/security.py` (`font-src 'self'` if needed). **Mockup:** `:root` tokens and the CSS from `.app` to `.btn`, `.seg`, `.lamp`, `.mark`, `.port`, `.chip`, `.tg`; motion-spec M0.
+**Files:** `src/kitden/web/static/style.css`, `static/index.html`, new `static/fonts/` and `static/js/icons.js`, `static/js/motion.js`, `static/js/dom.js`, `static/js/parts.js`, `src/kitden/web/security.py` (`font-src 'self'` if needed). **Mockup:** `:root` tokens and the CSS from `.app` to `.btn`, `.seg`, `.lamp`, `.mark`, `.port`, `.chip`, `.tg`; motion-spec M0.
 
-- [ ] **Task 1.1 Fonts and icons.** `@font-face` for both fonts; `icon(name, size)` in `dom.js` returns `<svg><use href="/static/icons.svg#name">`. Test: a node test that every icon name used in `static/js` exists in the sprite.
-- [ ] **Task 1.2 Tokens.** Colour, line, wire, faint, warn, out, shadow, select, preview fill/line, ok-fill, on-ok, dark and light. Test: `test_contrast.py` passes; new pairs added.
-- [ ] **Task 1.3 Motion tokens.** In `motion.js`: `CALM = 'cubic-bezier(.2,.8,.2,1)'`, `SPRING` (the `linear()` curve with its cubic-bezier fallback), `OUT3`, `IN3`, `DRAW`, `RETRACT`, `D(ms)` (0 under reduced motion), `animateTo(el, keyframes, {dur, delay, ease})` (the mockup's `A()`), `roll(el, value)` (number roll 140 + 200), `rise(els, {delay, step, y})`. Test: node tests for `D()` under reduced motion and for `roll` landing on the final text.
-- [ ] **Task 1.4 Shell.** 16 px gutter on `--out`; app frame with 12 px corners; rail 148 px with icons, 38 px items, logo 28, nav marker glides 300 CALM; top bar 66 px with "Project **All projects** ˅" and the search field; hint line at the page bottom. Keep Rescan and the agents link. **Mockup:** `.rail`, `.nav`, `.topbar`, `glideNav`, `go()`. Done when a screenshot at 1440×900 on the demo home matches frame M1·1 within the text and data differences.
-- [ ] **Task 1.5 Small parts.** Buttons (padding 7×12, press .97 SPRING, primary), pill/segmented control (glide 280 CALM), chip, lamp and mark (6 px, colour 400 ease, pop 2.2 → 1), port (9 px ring), switch (knob 340 SPRING, pending look), checkbox and radio. Test: a node test that `switchHTML(state)` returns the on, off and pending looks.
-- [ ] **Task 1.6 Project picker.** Menu grows 180 CALM from the button, icons, accent "N own rules", a check on the current one, the name rolls after a pick. **Mockup:** `projBtn` click, `setProject`.
+- [x] **Task 1.1 Fonts and icons.** `@font-face` for both fonts; `icon(name, size)` in `dom.js` draws an `<svg>` from the icon data module (`static/js/icons.js`) with createElementNS, no innerHTML. Test: every icon name used in `static/js` exists in the module.
+- [x] **Task 1.2 Tokens.** Colour, line, wire, faint, warn, out, shadow, select, preview fill/line, ok-fill, on-ok, dark and light. Test: `test_contrast.py` passes; new pairs added.
+- [x] **Task 1.3 Motion tokens.** In `motion.js`: `CALM = 'cubic-bezier(.2,.8,.2,1)'`, `SPRING` (the `linear()` curve with its cubic-bezier fallback), `OUT3`, `IN3`, `DRAW`, `RETRACT`, `D(ms)` (0 under reduced motion), `animateTo(el, keyframes, {dur, delay, ease})` (the mockup's `A()`), `roll(el, value)` (number roll 140 + 200), `rise(els, {delay, step, y})`. Test: node tests for `D()` under reduced motion and for `roll` landing on the final text.
+- [x] **Task 1.4 Shell.** 16 px gutter on `--out`; app frame with 12 px corners; rail 148 px with icons, 38 px items, logo 28, nav marker glides 300 CALM; top bar 66 px with "Project **All projects** ˅" and the search field; hint line at the page bottom. Keep Rescan and the agents link. **Mockup:** `.rail`, `.nav`, `.topbar`, `glideNav`, `go()`. Done when a screenshot at 1440×900 on the demo home matches frame M1·1 within the text and data differences.
+- [x] **Task 1.5 Small parts.** Buttons (padding 7×12, press .97 SPRING, primary), pill/segmented control (glide 280 CALM), chip, lamp and mark (6 px, colour 400 ease, pop 2.2 → 1), port (9 px ring), switch (knob 340 SPRING, pending look), checkbox and radio. Test: a node test that `switchHTML(state)` returns the on, off and pending looks.
+- [x] **Task 1.6 Project picker.** Menu grows 180 CALM from the button, icons, accent "N own rules", a check on the current one, the name rolls after a pick. **Mockup:** `projBtn` click, `setProject`.
 
 ## Phase 2: Map engine
 
