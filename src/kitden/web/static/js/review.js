@@ -430,18 +430,27 @@ const ENDED = {
   undo: ["undone", "undo_blocked"],
 };
 const LOST = "Could not confirm the result. Check Changes before trying again.";
+const NOT_ALL_BACK = "Not everything was put back. Check Changes before trying again.";
 
-// How an Apply that was not verified ended, in the same words in a review and on the map's bar:
-// why it stopped, then the engine's own words with paths shortened, then "Nothing was changed."
-// only when that is true: nothing was written (stale), or the engine put every file back (its
-// words then end "The original settings were restored."). With no change read back (`after`
-// null), only `failure`: the server's words, or that the result is not known.
-export function stoppedWords(after, failure) {
-  if (!after) return failure || LOST;
+// The engine put back everything a change that did not check out wrote: its words then end "The
+// original settings were restored.".
+function nothingChanged(after) {
+  return after.state === "stale" || (after.state === "restored" && allPutBack(after.error));
+}
+
+// How an Apply that was not verified ended, in a review and on the map's bar: why it stopped, then
+// "Nothing was changed." only when that is true: nothing was written (stale), or the engine put
+// every file back. In Details (`detail`) the engine's own words come between, paths shortened.
+// Without them (the map's bar and toast: paths and commands stay behind Details), a change the
+// engine could not wholly put back says so and points to Changes. With no change read back
+// (`after` null): in Details the server's words (`failure`), else that the result is not known.
+export function stoppedWords(after, failure, { detail = true } = {}) {
+  if (!after) return (detail && failure) || LOST;
   const reason = STOPPED[after.state] || `The change stopped: ${after.state}.`;
-  const detail = after.error ? ` (${shortPaths(after.error)})` : "";
-  const nothing = after.state === "stale" || (after.state === "restored" && allPutBack(after.error));
-  return `${reason}${detail}${nothing ? ` ${NOTHING}` : ""}`;
+  const words = detail && after.error ? ` (${shortPaths(after.error)})` : "";
+  if (nothingChanged(after)) return `${reason}${words} ${NOTHING}`;
+  if (!detail && after.state === "restored") return `${reason} ${NOT_ALL_BACK}`;
+  return `${reason}${words}`;
 }
 
 // The change as the server holds it now, or null when it cannot be read.
@@ -651,7 +660,7 @@ export async function undoChange(change) {
 // and a review bar on the canvas. `phase`: "idle", "loading" (asked), "ready", "applying" or
 // "failed". `body` is the preview request and `change` the server's preview; `done` and `total`
 // count Apply's steps; `failure` is how Apply ended: the state and the engine's words of the
-// change read back ({ state, error }), or the failure's words alone (`text`) when none was read.
+// change read back ({ state, error }), both null when none was read.
 // `refused` holds the server's words when it would not prepare it. `project` is the project it
 // was asked in, and `inDetails` says "Show changes" moved it into Details, where its own review
 // shows it.
@@ -683,16 +692,17 @@ export function outcomeLine(change) {
 }
 
 // The bar's words for a preview (mapPreview's shape): the title with its scope, one outcome line
-// and what Apply says. While Apply runs it counts the steps and Cancel waits. An error says what
-// the review in Details says for the same end (stoppedWords), and offers "Try again". A refusal
-// has no change, so only Cancel stays: trying again would be refused for the same reason.
+// and what Apply says. While Apply runs it counts the steps and Cancel waits. An error makes the
+// same "Nothing was changed." call as the review in Details (stoppedWords), without the engine's
+// own words: paths and commands stay behind Details and on Changes. It offers "Try again". A
+// refusal has no change, so only Cancel stays: trying again would be refused for the same reason.
 export function barWords({ phase, change, body, done, total, failure, refused }) {
   if (refused) return { title: REFUSED, outcome: `${refused} ${NOTHING}`, apply: null, cancelWaits: false, retry: false };
   const title = changeWords(change, body).title;
   if (phase === "applying") return { title, outcome: writingLine(change.steps), apply: stepText("Applying", done, total), cancelWaits: true, retry: false };
   if (phase === "failed") {
-    const { state: ended = null, error = null, text = null } = failure || {};
-    return { title, outcome: stoppedWords(ended ? { state: ended, error } : null, text), apply: "Try again", cancelWaits: false, retry: true };
+    const { state: ended = null, error = null } = failure || {};
+    return { title, outcome: stoppedWords(ended ? { state: ended, error } : null, null, { detail: false }), apply: "Try again", cancelWaits: false, retry: true };
   }
   return { title, outcome: outcomeLine(change), apply: "Apply", cancelWaits: false, retry: false };
 }
@@ -839,8 +849,8 @@ function barShown() {
 // goes (its block turns solid and its new link draws once) and the toast offers Undo. Any other
 // end stays in the bar with "Try again", focus on it, and the page reads again behind it. With the
 // bar no longer on the page (the person went to the List or another place meanwhile), a toast
-// with no check says the same words, with a way to Changes when the result is not known, and the
-// preview goes.
+// with no check says the same words, with a way to Changes when the result is not known or not
+// everything was put back, and the preview goes.
 export async function applyOnMap(redraw) {
   if (mapPreview.phase !== "ready" || busy.change) return;
   redrawMap = redraw;
@@ -862,7 +872,7 @@ export async function applyOnMap(redraw) {
     } finally {
       document.removeEventListener("kitden:progress", onProgress);
     }
-    const { after, failure } = outcome;
+    const { after } = outcome;
     if (after && after.state === "verified") {
       // The toast says the same place as the title.
       after.target = change.target;
@@ -874,16 +884,18 @@ export async function applyOnMap(redraw) {
       return;
     }
     change.state = after ? after.state : "unknown";
-    const ended = after ? { state: after.state, error: after.error || null } : { state: null, text: failure };
-    Object.assign(mapPreview, { phase: "failed", failure: ended });
+    Object.assign(mapPreview, { phase: "failed", failure: { state: after ? after.state : null, error: (after && after.error) || null } });
     setBusy(false);
     if (barShown()) {
       redraw();
       focusBar("apply");
     } else {
       const { title, outcome } = barWords(mapPreview);
+      // Changes holds the engine's own words: the way there when the result is not known or not
+      // everything was put back.
+      const check = !after || (after.state === "restored" && !nothingChanged(after));
       dropMapPreview();
-      toast(`${title} · ${outcome}`, after ? null : () => go("changes"), after ? {} : { label: "Open Changes" });
+      toast(`${title} · ${outcome}`, check ? () => go("changes") : null, check ? { label: "Open Changes" } : {});
     }
     reloadAll().then(render).catch(() => {});
   } finally {

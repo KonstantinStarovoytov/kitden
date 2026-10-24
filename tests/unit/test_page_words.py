@@ -1436,6 +1436,9 @@ def test_the_map_review_bar_words_and_look():
     # only when the engine put everything back. Off the map, a toast says it, with Changes.
     assert 'callout(stoppedWords(after, failure), "error")' in review
     assert "outcome: stoppedWords(" in review and "allPutBack(after.error)" in review
+    # The bar and its toast leave out the engine's words (paths, commands): they stay in Details.
+    assert "{ detail: false }" in review
+    assert '"Not everything was put back. Check Changes before trying again."' in review
     assert '{ label: "Open Changes" }' in review and 'go("changes")' in review
     # The preview block says it is a preview; it sits on the preview fill with the preview line.
     assert '"Preview"' in script("gateway.js")

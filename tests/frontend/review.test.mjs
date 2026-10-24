@@ -215,18 +215,41 @@ test('the bar names the change with its scope, and each end says what Kitden kno
   assert.deepEqual([refused.title, refused.apply], ['Could not prepare this change', null]);
 });
 
+// What the engine says when a change stops: paths, commands and Keychain names.
+const STALE_ERROR = '/Users/me/.codex/config.toml changed since preview; review the change again';
+const BACK_ERROR = '`claude mcp add` failed in /Users/me/.claude.json. The original settings were restored.';
+const LOST_ERROR = '`claude mcp add` failed. github/TOKEN in your Keychain keeps the new value.';
+
 test('a change that did not check out says nothing changed only when the engine put everything back', () => {
   const failed = (failure) => barWords({ ...IDLE, phase: 'failed', change, body: {}, failure }).outcome;
-  // Everything was put back: the engine's own words, paths shortened, then "Nothing was changed.".
-  const back = '`claude mcp add` failed in /Users/me/.claude.json. The original settings were restored.';
-  assert.equal(failed({ state: 'restored', error: back }), 'The change did not check out. (`claude mcp add` failed in ~/.claude.json. The original settings were restored.) Nothing was changed.');
-  // Something could not be put back: the engine says what, and the bar never claims nothing changed.
-  const lost = '`claude mcp add` failed. github/TOKEN in your Keychain keeps the new value.';
-  assert.equal(failed({ state: 'restored', error: lost }), 'The change did not check out. (`claude mcp add` failed. github/TOKEN in your Keychain keeps the new value.)');
-  assert.equal(failed({ state: 'restored', error: null }), 'The change did not check out.');
-  // The review in Details says the same for the same end.
-  for (const error of [back, lost]) assert.equal(failed({ state: 'restored', error }), stoppedWords({ state: 'restored', error }, null));
+  // Everything was put back: "Nothing was changed.". The engine's own words stay in Details.
+  assert.equal(failed({ state: 'restored', error: BACK_ERROR }), 'The change did not check out. Nothing was changed.');
+  assert.equal(stoppedWords({ state: 'restored', error: BACK_ERROR }, null), 'The change did not check out. (`claude mcp add` failed in ~/.claude.json. The original settings were restored.) Nothing was changed.');
+  // Something could not be put back: the bar never claims nothing changed and points to Changes;
+  // Details names what.
+  const notAll = 'The change did not check out. Not everything was put back. Check Changes before trying again.';
+  assert.equal(failed({ state: 'restored', error: LOST_ERROR }), notAll);
+  assert.equal(failed({ state: 'restored', error: null }), notAll);
+  assert.equal(stoppedWords({ state: 'restored', error: LOST_ERROR }, null), 'The change did not check out. (`claude mcp add` failed. github/TOKEN in your Keychain keeps the new value.)');
+  // Both places make the same "Nothing was changed." call through the one helper.
+  for (const after of [{ state: 'stale', error: STALE_ERROR }, { state: 'restored', error: BACK_ERROR }, { state: 'restored', error: LOST_ERROR }]) {
+    assert.equal(failed(after).endsWith('Nothing was changed.'), stoppedWords(after, null).endsWith('Nothing was changed.'));
+  }
   assert.equal(stoppedWords(null, null), 'Could not confirm the result. Check Changes before trying again.');
+});
+
+test("the bar never shows the engine's own words: no path, no command", () => {
+  const ends = [
+    { state: 'stale', error: STALE_ERROR }, { state: 'restored', error: BACK_ERROR }, { state: 'restored', error: LOST_ERROR },
+    { state: 'cancelled', error: '/Users/me/.claude.json' }, { state: null, error: null },
+  ];
+  for (const failure of ends) {
+    const words = barWords({ ...IDLE, phase: 'failed', change, body: moveBody({ id: 'kitden', kind: 'kitden' }, ['g']), failure });
+    for (const text of Object.values(words).filter((v) => typeof v === 'string')) {
+      assert.ok(!/[/~`]/.test(text) && !text.includes('review the change again'), text);
+    }
+  }
+  assert.equal(barWords({ ...IDLE, phase: 'failed', change, body: {}, failure: { state: 'stale', error: STALE_ERROR } }).outcome, 'Settings changed since this preview. Nothing was changed.');
 });
 
 test("the outcome line groups the After chips by word, else the first note's first sentence", () => {
@@ -409,27 +432,41 @@ test('a drop while a review shows in Details ends that review first; one being w
 
 test('an Apply that ends while the bar is off the page says so in a toast with no check, then the preview goes', async () => {
   const nodes = fakePage(); // the person went to the List: no bar on the page
+  // A stale end with the engine's own words, one that could not put everything back, then an
+  // answer with no body whose change cannot be read back.
+  const ends = [
+    { status: 409, json: { ...change, state: 'stale', error: STALE_ERROR } },
+    { status: 409, json: { ...change, state: 'restored', error: LOST_ERROR } },
+    { status: 500, json: null },
+  ];
   let applies = 0;
   const net = stubFetch((url) => {
     if (url === '/api/changes/preview') return { json: { ...change, state: 'previewed' } };
-    // First a stale end; then an answer with no body, and the change cannot be read back.
-    if (url === '/api/changes/c1/apply') return applies++ ? { status: 500, json: null } : { status: 409, json: { ...change, state: 'stale' } };
+    if (url === '/api/changes/c1/apply') return ends[applies++];
     if (url === '/api/changes/c1') return { status: 500, json: null };
     return { json: {} };
   });
   const toast = () => nodes['#toast'].children.filter((c) => c.className !== 'timer').map((c) => [c.tag, c.textContent]);
   const logged = console.error;
   console.error = () => {}; // the answer with no body is logged; here it is expected
+  const title = 'Move github into the Kitden gateway for all projects';
   try {
     await previewOnMap(body, () => {});
     await applyOnMap(() => {});
-    assert.deepEqual(toast(), [['span', 'Move github into the Kitden gateway for all projects · Settings changed since this preview. Nothing was changed.']]);
+    // The bar's words: no path, and nothing that competes with "Try again".
+    assert.deepEqual(toast(), [['span', `${title} · Settings changed since this preview. Nothing was changed.`]]);
     assert.equal(mapPreview.phase, 'idle');
-    // Not known: the same words as the bar, and a way to Changes.
+    // Not everything put back, or not known: a way to Changes, where the engine's words are.
     await previewOnMap(body, () => {});
     await applyOnMap(() => {});
     assert.deepEqual(toast(), [
-      ['span', 'Move github into the Kitden gateway for all projects · Could not confirm the result. Check Changes before trying again.'],
+      ['span', `${title} · The change did not check out. Not everything was put back. Check Changes before trying again.`],
+      ['button', 'Open Changes'],
+    ]);
+    await previewOnMap(body, () => {});
+    await applyOnMap(() => {});
+    assert.deepEqual(toast(), [
+      ['span', `${title} · Could not confirm the result. Check Changes before trying again.`],
       ['button', 'Open Changes'],
     ]);
     assert.equal(mapPreview.phase, 'idle');
