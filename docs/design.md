@@ -154,11 +154,11 @@ has verified it. Calm beats bouncy: a tool that edits files must feel steady.
 
 ### Tokens
 
-Defined once in `style.css`; JavaScript reads `--spring` from there.
+Defined once in `style.css`. Scripts use `CALM` from `motion.js`; the spring is CSS only.
 
 | Token | Value | Use |
 | --- | --- | --- |
-| Press | 80 ms in to 0.98, 260 ms `--spring` out | Buttons, tabs, filters, rail links, switches |
+| Press | 80 ms in to 0.98, 260 ms `--spring` out | Buttons, tabs, filters, rail links, switches, map blocks |
 | `--t-fast` | 180 ms ease | Hover colour, word fades, focus |
 | `--t-panel` | 240 ms `--ease-drawer` | Drawer, column beside the page, scrim |
 | Fold | 280 ms `--ease-out` | A `<details>` opening or closing |
@@ -171,7 +171,7 @@ Defined once in `style.css`; JavaScript reads `--spring` from there.
 | Scan line | shows after 400 ms, 1.6 s calm sweep | A rescan that takes a while |
 | Start line | shows after 1 s; fills from the left as each step of the first scan ends, then fills up and goes; a quiet note under its right end says "Reading Codex and Cursor…" or "Still checking …" | Starting Kitden |
 | `--calm` | `cubic-bezier(.2,.8,.2,1)` | The default curve for Web Animations, and for anything that moves a row, block, tile, panel, mark or dragged block |
-| `--spring` | `linear()` spring that overshoots about 3.4 %; falls back to `cubic-bezier(.3,1.25,.5,1)` | Small parts only: presses, switch knobs, ports, badges and tick draws |
+| `--spring` | `linear()` spring that overshoots about 3.4 %; falls back to `cubic-bezier(.3,1.25,.5,1)` | Small parts only: presses, the chevron, switch knobs, ports, badges and tick draws |
 
 ### Patterns
 

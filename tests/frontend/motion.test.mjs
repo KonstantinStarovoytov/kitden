@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { afterEach, test } from 'node:test';
 
 const classes = new Set();
@@ -275,21 +275,13 @@ test('glide slides the mark with the calm curve, 300 ms by default and 280 ms wh
   assert.equal(ink.style.transform, 'translate(150px, 0px)');
 });
 
-// The spring overshoots a little: only presses and small knobs may use it. Rows, blocks, tiles,
-// panels, marks and the dragged block move with CALM.
-const staticDir = new URL('../../src/kitden/web/static/', import.meta.url);
-
-test('only presses use the spring in CSS', () => {
-  const css = readFileSync(new URL('style.css', staticDir), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+// The spring overshoots a little: only presses, the chevron and small knobs may use it. Rows,
+// blocks that move, tiles, panels, marks and the dragged block move with CALM.
+test('only presses and the chevron use the spring in CSS', () => {
+  const file = new URL('../../src/kitden/web/static/style.css', import.meta.url);
+  const css = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
   const users = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
     .filter(([, , body]) => body.includes('var(--spring)'))
     .map(([, selector]) => selector.trim().replace(/\s+/g, ' '));
-  assert.deepEqual(users.sort(), ['.btn', '.nav a', '.seg button', '.switch', '.tabs button']);
-});
-
-test('no script outside motion.js moves anything with the spring', () => {
-  const jsDir = new URL('js/', staticDir);
-  for (const name of readdirSync(jsDir).filter((file) => file.endsWith('.js') && file !== 'motion.js')) {
-    assert.doesNotMatch(readFileSync(new URL(name, jsDir), 'utf8'), /\bspring\(/, name);
-  }
+  assert.deepEqual(users.sort(), ['.btn', '.chevron', '.nav a', '.seg button', '.switch', '.tabs button', 'div.map .block']);
 });

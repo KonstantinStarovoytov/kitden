@@ -372,7 +372,7 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .client-row .client-mark { transition: transform 260ms var(--calm); }
 .client-row.expandable:hover .client-mark { transform: scale(1.06); }
 .client-row.expandable:active .client-mark { transform: scale(0.94); transition-duration: 80ms; }
-.chevron { width: 8px; height: 8px; border-right: 1.5px solid var(--ink-3); border-bottom: 1.5px solid var(--ink-3); transform: rotate(-45deg); justify-self: center; transition: transform 280ms var(--calm); grid-column: 4; }
+.chevron { width: 8px; height: 8px; border-right: 1.5px solid var(--ink-3); border-bottom: 1.5px solid var(--ink-3); transform: rotate(-45deg); justify-self: center; transition: transform 280ms var(--spring); grid-column: 4; }
 .client-row[aria-expanded="true"] .chevron { transform: rotate(45deg); }
 .client-more { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 280ms var(--ease-out); }
 .client-more > div { overflow: hidden; min-height: 0; }
@@ -544,7 +544,7 @@ div.map .link.faint { opacity: 0.5; }
 div.map .link.lit { stroke: var(--route); stroke-width: 1.6; opacity: 1; }
 div.map .link.draw { stroke-dasharray: 1; animation: wire-draw 150ms var(--ease-out) both; }
 div.map .appear { animation: block-in 60ms var(--ease-out) both; }
-div.map .block { position: absolute; display: flex; align-items: center; gap: 8px; margin: 0; padding: 0 10px; border: 1px solid var(--wire-strong); border-radius: 8px; background: var(--panel); color: var(--ink); text-align: left; cursor: pointer; transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease, transform 260ms var(--calm); }
+div.map .block { position: absolute; display: flex; align-items: center; gap: 8px; margin: 0; padding: 0 10px; border: 1px solid var(--wire-strong); border-radius: 8px; background: var(--panel); color: var(--ink); text-align: left; cursor: pointer; transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease, transform 260ms var(--spring); }
 div.map .block:hover { border-color: color-mix(in srgb, var(--ink-3) 60%, transparent); }
 div.map .block:active { transform: scale(0.98); transition-duration: var(--t-fast), var(--t-fast), 80ms; }
 div.map .block:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

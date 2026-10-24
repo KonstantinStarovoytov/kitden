@@ -5,8 +5,8 @@ export const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 export const EASE_OUT = "cubic-bezier(0.23, 1, 0.32, 1)";
 export const EASE_IN_OUT = "cubic-bezier(0.77, 0, 0.175, 1)";
 
-// The motion mockup's curves. CALM is the default for Web Animations; the small parts that
-// overshoot use --spring from style.css.
+// The motion mockup's curves. CALM is the default for Web Animations. The spring (--spring in
+// style.css) is for small parts in CSS only.
 export const CALM = "cubic-bezier(.2,.8,.2,1)";
 export const DRAW = "cubic-bezier(.3,.7,.2,1)";
 export const RETRACT = "cubic-bezier(.4,0,.2,1)";
@@ -116,17 +116,6 @@ export function entrance(place, nodes) {
     node.classList.add("rise");
     node.style.animationDelay = `${index * 45}ms`;
   });
-}
-
-// The spring from style.css, for small parts only (presses, knobs, ports, badges).
-const SPRING_FALLBACK = "cubic-bezier(.3,1.25,.5,1)";
-let springEasing = null;
-export function spring() {
-  if (springEasing === null) {
-    const value = getComputedStyle(document.documentElement).getPropertyValue("--spring").trim();
-    springEasing = value || SPRING_FALLBACK;
-  }
-  return springEasing;
 }
 
 // One indicator per group (rail, tabs, filters) slides from the last active choice to the new
