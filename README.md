@@ -116,7 +116,7 @@ and terminal tools stay outside it.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/gateway-dark.jpg">
-    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/gateway.jpg" alt="Gateway: the Kitden gateway first, with Claude Code and Cursor linked to it and one server it holds, then an Obot gateway below" width="860">
+    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/gateway.jpg" alt="The Gateway map: Claude Code and Codex linked to the Kitden gateway and its two servers, with the servers outside the gateway below, each joined to its client by an amber line" width="860">
   </picture>
 </p>
 

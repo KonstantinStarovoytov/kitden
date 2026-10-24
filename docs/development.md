@@ -62,22 +62,29 @@ only in the background, when its binary is new or changed.
 
 Measured: first usable 0.1 s, complete 0.1 to 0.2 s, demo under 0.1 s (checked 2026-10-23,
 Apple M4 Max, macOS 26.6.2). With Python's own start, `uv run kitden demo` has its first overview
-in about 0.3 s (checked 2026-10-22). The gateway view took 2 ms when the map was first built and
-3 to 6 ms once each server carried its tool list; two runs on 2026-10-24 gave 5 to 7 ms.
+in about 0.3 s (checked 2026-10-22). On the large sample the gateway view took 5 and 7 ms in two
+runs (checked 2026-10-24, Apple M4 Max, macOS 26.6.2).
 
-The Gateway map has its own marks. `uv run python scripts/measure-start.py --probe` builds the
-probe sample (the medium sample with direct servers added until the Gateway has 20 servers),
-opens the page on it, prints its links and waits for Ctrl+C. In a browser, open
-`#gateway?view=map` and read two marks: `kitden:map-draw`, one drawing of the map (limit 50 ms),
-and `kitden:gateway-drawn`, the time from the start of the navigation until the Gateway is drawn.
-The node test `tests/frontend/map.test.mjs` times the layout of 20 servers and of the large
-sample (limit 16 ms).
+The Gateway map has two marks and a layout test. `uv run python scripts/measure-start.py --probe`
+builds the probe sample (the medium sample with direct servers added until the Gateway has 20
+servers), starts the page on it, prints its links and waits for Ctrl+C. It opens no browser: open
+the `#gateway?view=map` link in one and read the marks.
 
-Measured 2026-10-24 on the probe sample, in the built-in browser pane of the Claude desktop app
-(Apple M4 Max, macOS 26.6.2), on the first build of the map, 5 loads of `#gateway?view=map`:
-`kitden:map-draw` median 1.1 ms; `kitden:gateway-drawn` median 52.4 ms, against 51.2 ms for the
-cards page before the map. The layout took a median of 0.02 ms for 20 servers and 0.04 to 0.08 ms
-for the large sample.
+- `kitden:map-draw`, a `performance.measure`: building the map's blocks and links, not the
+  browser's own layout and paint. Limit 50 ms.
+- `kitden:gateway-drawn`, a `performance.mark`: the time from the start of the navigation until
+  the Gateway is drawn.
+- `tests/frontend/map.test.mjs` times the layout of 20 servers and of the large sample in node.
+  Limit 16 ms.
+
+Measured 2026-10-24 (Apple M4 Max, macOS 26.6.2):
+
+- Browser pane of the Claude desktop app, probe sample, 5 loads of `#gateway?view=map`, on the
+  first build of the map (an early build, before its Details, find and drag): `kitden:map-draw`
+  median 1.1 ms; `kitden:gateway-drawn` median 52.4 ms, against 51.2 ms for the cards page
+  before the map.
+- Node, `map.test.mjs`, on the code as it is today, 3 runs: layout median 0.03 to 0.04 ms for 20
+  servers and 0.11 to 0.12 ms for the large sample.
 
 ## Check before a release
 
