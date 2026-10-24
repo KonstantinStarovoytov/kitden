@@ -135,8 +135,9 @@ test('the Kitden gateway moves every outside server that can go, in one review',
   const card = gatewayCard(KITDEN, { view, setup: SETUP, projects: PROJECTS, clients: FOUND });
   assert.deepEqual([card.kind, card.title, card.id], ['Gateway', 'Kitden gateway', 'On this Mac']);
   assert.match(card.actions[0].label, /^Move all \d+…$/);
-  assert.deepEqual(labels(card), ['Move all 3…', 'Add another gateway…']);
-  assert.deepEqual(card.actions[0].body, { action: 'gateway.move', targets: [{ item: 'g' }, { item: 'b' }, { item: 'c' }], params: { gateway: 'kitden' } });
+  // docs is in two groups: it moves on its own, so neither of its rows is in "Move all".
+  assert.deepEqual(labels(card), ['Move all 2…', 'Add another gateway…']);
+  assert.deepEqual(card.actions[0].body, { action: 'gateway.move', targets: [{ item: 'g' }, { item: 'c' }], params: { gateway: 'kitden' } });
   assert.equal(card.actions[0].primary, true);
   assert.deepEqual(facts(card), [['Clients', '2 clients'], ['Servers', '2 servers'], ['Rules', '1 project has its own rules']]);
   assert.equal(card.why, 'The gateway controls only the servers in it. Direct entries and terminal tools are outside it.');
@@ -147,6 +148,34 @@ test('the Kitden gateway moves every outside server that can go, in one review',
   assert.deepEqual(facts(done).slice(1), [['Servers', 'Nothing yet. Move a server in from the outside group.'], ['Rules', 'No project has its own rules']]);
   // "Add another gateway…" shows the form in the column.
   assert.ok(gatewayCard(KITDEN, { view, setup: SETUP, projects: PROJECTS, clients: FOUND, adding: true }).after);
+});
+
+test("Move all leaves out a name set up differently in two clients, as the medium sample's docs", () => {
+  // The medium sample: docs is remote in Claude Code and local in Codex.
+  const view = { ...VIEW, groups: {
+    move: [row('analytics', 'codex', ['an']), DOCS, GITHUB],
+    local: [row('browser-tools', 'cursor', ['bt']), DOCS_LOCAL, FILES, row('n8n', 'cursor', ['n8'])],
+    plugin: [],
+  } };
+  const card = gatewayCard(KITDEN, { view, setup: SETUP, projects: PROJECTS, clients: FOUND });
+  assert.equal(card.actions[0].label, 'Move all 5…');
+  assert.deepEqual(card.actions[0].body.targets.map((t) => t.item), ['an', 'g', 'bt', 'c', 'n8']);
+  // Only the pair left: nothing to move all of.
+  const pair = gatewayCard(KITDEN, { view: { ...VIEW, groups: { move: [DOCS], local: [DOCS_LOCAL], plugin: [] } }, setup: SETUP, projects: PROJECTS, clients: FOUND });
+  assert.deepEqual(labels(pair), ['Add another gateway…']);
+});
+
+test('rules count projects in words, and an unread list is not known', () => {
+  const two = [...PROJECTS, { id: 'p3', path: '/w/site', own_rules: 3 }];
+  assert.deepEqual(facts(gatewayCard(KITDEN, { view: VIEW, setup: SETUP, projects: two, clients: FOUND })).at(-1), ['Rules', '2 projects have their own rules']);
+  assert.deepEqual(facts(gatewayCard(KITDEN, { view: VIEW, setup: SETUP, projects: null, clients: FOUND })).at(-1), ['Rules', 'Not known']);
+});
+
+test('a client Kitden could not read the setup for is not known, not not connected', () => {
+  const card = clientCard('codex', { setup: null, clients: CLIENTS, view: VIEW });
+  assert.deepEqual(facts(card).slice(1), [['Kitden entry', 'Not known'], ['Gateway', 'Not known']]);
+  assert.equal(card.why, 'Kitden could not read which clients use it.');
+  assert.deepEqual(labels(card), ['Open ChatGPT']);
 });
 
 test('the Kitden gateway says what it could not read', () => {

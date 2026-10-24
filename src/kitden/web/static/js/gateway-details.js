@@ -64,7 +64,7 @@ function versionText(found, progress) {
 
 // The client's kitden entry in one word.
 function entryWord(entry, known) {
-  if (!known) return STATE_WORDS.unk;
+  if (!known) return "Not known";
   if (!entry) return "Not set up";
   if (entry.state === "added" || entry.state === "plugin") return entry.enabled === false ? "Off" : "On";
   return entry.state === "old" ? "Old" : "Not set up";
@@ -82,7 +82,8 @@ export function clientCard(client, { setup, clients, progress = data.progress } 
   const facts = [
     { label: "Version", value: versionText(found, progress) },
     { label: "Kitden entry", value: entryWord(entry, known) },
-    { label: "Gateway", value: on ? "Connected" : "Not connected" },
+    // Without the setup read, Kitden does not know whether it connects.
+    { label: "Gateway", value: known ? (on ? "Connected" : "Not connected") : "Not known" },
   ];
   let why = `${name} does not use the Kitden gateway yet.`;
   if (!known) why = "Kitden could not read which clients use it.";
@@ -155,9 +156,16 @@ function kitdenCard(gateway, { view, setup, projects, adding }) {
   if (!gateway.problem) {
     facts.push({ label: "Servers", value: servers.length ? plural(servers.length, "server", "servers") : "Nothing yet. Move a server in from the outside group." });
   }
+  // Without the project list Kitden cannot count their rules.
   const ruled = (projects || []).filter((p) => p.own_rules > 0).length;
-  facts.push({ label: "Rules", value: ruled ? `${plural(ruled, "project has", "projects have")} its own rules` : "No project has its own rules" });
-  const rows = ["move", "local"].flatMap((key) => (view.groups[key] || []).filter((row) => movesTo(view, key, row).some((g) => g.id === gateway.id)));
+  let rules = ruled ? `${plural(ruled, "project has its", "projects have their")} own rules` : "No project has its own rules";
+  if (!projects) rules = "Not known";
+  facts.push({ label: "Rules", value: rules });
+  // A name in two outside groups is set up differently in two clients: a move refuses it until
+  // the person keeps one, so it moves on its own and "Move all" leaves it out.
+  const outside = Object.values(view.groups).flat();
+  const twice = (row) => outside.filter((other) => other.name === row.name).length > 1;
+  const rows = ["move", "local"].flatMap((key) => (view.groups[key] || []).filter((row) => !twice(row) && movesTo(view, key, row).some((g) => g.id === gateway.id)));
   const actions = [];
   if (rows.length) {
     const targets = rows.flatMap((row) => row.items).map((item) => ({ item }));

@@ -202,6 +202,23 @@ test('a folded group hides its rows', () => {
   assert.ok(!rows.some((r) => r.kind === 'outside' || r.kind === 'held' || r.id === 'group:kitden:remote'));
 });
 
+test('what Kitden could not read says so, never a state', () => {
+  // The setup was not read: no client is "Not connected", and no gateway has clients.
+  const rows = listRows(gatewayTree(MEDIUM_VIEW, { ...OPTS, setup: null }), new Set());
+  assert.deepEqual(rows.filter((r) => r.kind === 'client').map((r) => [r.meta, r.state]), [['Not known', 'unk'], ['Not known', 'unk'], ['Not known', 'unk']]);
+  assert.deepEqual(rows.find((r) => r.id === 'gateway:kitden').usedBy, []);
+  // The gateway's settings were not read: no "0 servers".
+  const broken = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers: [], problem: 'Could not read gateway.json.' }] };
+  assert.equal(listRows(gatewayTree(broken, OPTS), new Set()).find((r) => r.id === 'gateway:kitden').meta, 'Could not read its settings.');
+  // A registered gateway says its failed read, and nothing while it reads.
+  const obot = { id: 'gw-1', kind: 'obot', url: 'http://127.0.0.1:8080/mcp-connect/x', managed: true };
+  const view = { ...MEDIUM_VIEW, gateways: [...MEDIUM_VIEW.gateways, obot], connections: { ...MEDIUM_VIEW.connections, 'gw-1': {} } };
+  const meta = (held) => listRows(gatewayTree(view, { ...OPTS, held }), new Set()).find((r) => r.id === 'gateway:gw-1').meta;
+  assert.equal(meta(new Map([['gw-1', { servers: null, error: 'Could not read what the gateway holds.' }]])), 'Could not read what the gateway holds.');
+  assert.equal(meta(new Map([['gw-1', { loading: true }]])), null);
+  assert.equal(meta(new Map([['gw-1', { servers: [] }]])), '0 servers');
+});
+
 test('one name in two groups is two rows', () => {
   const ids = listRows(gatewayTree(MEDIUM_VIEW, OPTS), new Set()).map((r) => r.id);
   assert.ok(ids.includes('outside:move:docs') && ids.includes('outside:local:docs'));

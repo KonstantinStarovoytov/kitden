@@ -1266,3 +1266,15 @@ def test_the_gateway_lists_by_group_and_keeps_every_action():
         assert words in text, words
     assert '"/api/map"' not in text and "loadMap(" not in text
     assert 'role", "treegrid"' in script("gateway.js") and "gridKey(" in script("gateway.js")
+
+
+def test_the_gateway_says_what_it_could_not_read():
+    # A read that failed is not a state: no "Not connected", "0 servers" or "No project".
+    text = gw()
+    for words in (
+        '"Not known"',
+        '"Could not read its settings."',
+        '"project has its", "projects have their"',
+    ):
+        assert words in text, words
+    assert "projects have its" not in text

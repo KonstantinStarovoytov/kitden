@@ -156,18 +156,21 @@ function heldTag(server, on) {
 // - the servers outside every gateway, each joined to each client that has it by a direct line.
 // `picked` is the picked project ("" for All projects).
 export function gatewayTree(view, { setup, held = new Map(), picked = "" } = {}) {
-  const { linked } = kitdenClients(setup);
+  const { linked, known } = kitdenClients(setup);
   const blocks = [];
   const links = [];
   for (const id of WRITABLE) {
     const on = linked.includes(id);
-    blocks.push({ id: `client:${id}`, column: "clients", kind: "client", name: CLIENT_NAMES[id], meta: on ? "Connected" : "Not connected", state: on ? "on" : "off", client: id });
+    // Without the setup read, a client is neither connected nor not.
+    const meta = known ? (on ? "Connected" : "Not connected") : "Not known";
+    blocks.push({ id: `client:${id}`, column: "clients", kind: "client", name: CLIENT_NAMES[id], meta, state: known ? (on ? "on" : "off") : "unk", client: id });
   }
   // A gateway block joined to the clients it `reaches`, then its servers in their groups;
-  // `server(block, word)` adds what each server's block says.
-  const addGateway = (gateway, reaches, servers, kindOf, server) => {
+  // `server(block, word)` adds what each server's block says. `unread` says why Kitden does not
+  // know what it holds, so no count shows: a problem is not an empty gateway.
+  const addGateway = (gateway, reaches, servers, kindOf, server, unread = null) => {
     const id = `gateway:${gateway.id}`;
-    blocks.push({ id, column: "gateway", kind: "gateway", name: gatewayName(gateway), state: "on", gateway });
+    blocks.push({ id, column: "gateway", kind: "gateway", name: gatewayName(gateway), state: "on", gateway, unread });
     for (const client of reaches) links.push({ from: `client:${client}`, to: id, kind: "on" });
     for (const [kind, word] of KINDS) {
       const mine = servers.filter((s) => kindOf(s) === kind);
@@ -201,16 +204,18 @@ export function gatewayTree(view, { setup, held = new Map(), picked = "" } = {})
         tools.push({ id, column: "tools", parent: block.id, kind: "tool", name: tool.name, state: on ? "on" : "off", tag: tool.origin === "project" ? ORIGIN_WORDS.override : null, tool, server });
         if (on) links.push({ from: block.id, to: id, kind: "on" });
       }
-    });
+    }, kitden.problem ? "Could not read its settings." : null);
   }
   for (const other of usedFirst(view, view.gateways.filter((g) => g.kind !== "kitden"))) {
     const per = view.connections[other.id] || {};
     const answer = held.get(other.id);
     // A server the gateway runs itself (uvx, npx, a container) is local to it.
     const kindOf = (s) => (heldKind(s) === "Hosted" ? "local" : "remote");
+    // Not read yet, or not readable from here: no count, and a failed read says so.
+    const unread = answer && answer.servers ? null : (answer && answer.error) || "";
     addGateway(other, WRITABLE.filter((c) => (per[c] || []).length), (answer && answer.servers) || [], kindOf, (block) => {
       block.meta = heldKind(block.server);
-    });
+    }, unread);
   }
   blocks.push(...tools);
   const rows = OUTSIDE_GROUPS.flatMap((key) => (view.groups[key] || []).map((row) => [key, row]));
@@ -254,7 +259,9 @@ export function listRows(model, open = new Set(), folded = new Set()) {
     const linked = reaches(gateway.id);
     const count = groups.reduce((n, g) => n + (children.get(g.id) || []).length, 0);
     const expanded = groups.length ? !folded.has(gateway.id) : undefined;
-    row(gateway, null, 0, { usedBy: linked, meta: plural(count, "server", "servers"), expanded });
+    // What it holds, or why Kitden does not know ("" while a live read runs: nothing to say).
+    const meta = gateway.unread === null ? plural(count, "server", "servers") : gateway.unread || null;
+    row(gateway, null, 0, { usedBy: linked, meta, expanded });
     if (!expanded) continue;
     for (const g of groups) {
       group(g.id, g.name, gateway.id, 1, children.get(g.id) || [], (server) => {

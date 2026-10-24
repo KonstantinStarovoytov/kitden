@@ -216,3 +216,32 @@ def test_put_back_reads_the_stand_in_keychain(tmp_path):
         change = preview(page, "gateway.put_back", [{"client": "cursor"}], {"server": "tracker"})
     assert [s["client"] for s in change["steps"]] == ["cursor"]
     assert "DEMO_SECRET_" not in json.dumps(change)
+
+
+def move_all_items(view):
+    """The entries of "Move all N…" on the Kitden gateway's Details, by the card's rule written
+    again (gateway-details.js kitdenCard): every move and local row with entries and nothing that
+    keeps it out, but not a name in two outside groups, which moves on its own."""
+    rows = [row for group in view["groups"].values() for row in group]
+    twice = {row["name"] for row in rows if sum(r["name"] == row["name"] for r in rows) > 1}
+    return [
+        item
+        for key in ("move", "local")
+        for row in view["groups"][key]
+        if row["items"] and not row["stays"] and row["name"] not in twice
+        for item in row["items"]
+    ]
+
+
+def test_move_all_on_the_kitden_gateway_previews_the_medium_sample(tmp_path):
+    # docs is remote in Claude Code and local in Codex: with it, the move is refused (422).
+    with demo_page(tmp_path) as page:
+        items = move_all_items(page.get("/api/gateway-view").json())
+        assert len(items) == 5
+        targets = [{"item": item} for item in items]
+        change = preview(page, "gateway.move", targets, {"gateway": KITDEN_GATEWAY})
+    assert change["state"] == "previewed"
+    # The servers it takes out of a client (as parts.js movedNames): not the kitden entry it adds.
+    leaving = [s for s in change["steps"] if s["client"] not in ("gateway", "kitden")]
+    moved = {s["name"] for s in leaving if s["name"] != "kitden"}
+    assert moved == {"analytics", "browser-tools", "files", "github", "n8n"}
