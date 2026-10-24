@@ -97,7 +97,7 @@ export function renderGateway(main) {
   const found = state.q.trim() ? findIn(model, state.q) : null;
   if (mode === "map") gatewayMap(main, model, found);
   else gatewayList(main, view, model, found);
-  glide(seg, seg.querySelector('[aria-pressed="true"]'), "gateway-view");
+  glide(seg, seg.querySelector('[aria-pressed="true"]'), "gateway-view", { duration: 280 });
   // A performance mark for the map probe (Part 4.1): the first time the page draws with data.
   if (!performance.getEntriesByName("kitden:gateway-drawn").length) performance.mark("kitden:gateway-drawn");
   openArrival(view, model, mode).catch(reportError);

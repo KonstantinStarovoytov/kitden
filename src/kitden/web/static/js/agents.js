@@ -13,7 +13,7 @@ function update(item) {
 
 function cell(entry) {
   const box = el("div", "cell");
-  const top = el("div", "chip");
+  const top = el("div", "who");
   top.append(mark(entry.client), el("strong", null, CLIENT_NAMES[entry.client]));
   box.append(top);
   if (entry.state === "not_installed") {

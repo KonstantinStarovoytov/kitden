@@ -185,6 +185,180 @@ def test_a_narrow_window_turns_the_rail_into_a_top_row_and_hides_the_labels():
     assert re.search(r"\.page \{[^}]*padding: 16px 16px 40px", narrow)
 
 
+def test_buttons_have_the_mockups_look():
+    btn = rule(".btn")
+    for part in (
+        "padding: 7px 12px",
+        "border-radius: 7px",
+        "border: 1px solid var(--wire)",
+        "background: var(--panel-raised)",
+        "font-size: 12px",
+        "font-weight: 500",
+        "transform 260ms var(--spring)",
+    ):
+        assert part in btn, part
+    assert "color-mix(in srgb, var(--route) 40%, var(--wire))" in rule(".btn:hover:not(:disabled)")
+    assert "scale(0.97)" in rule(".btn:active:not(:disabled)")
+    assert "font-weight: 600" in rule(".btn.primary")
+    # A small button is still at least 24 px tall, though its text is 11 px.
+    small = rule(".btn.small")
+    for part in ("padding: 4px 9px", "font-size: 11px", "min-height: 24px"):
+        assert part in small, part
+    # A ghost button keeps no line on hover; Applied is green all round.
+    assert "border-color: transparent" in rule(".btn.ghost:hover:not(:disabled)")
+    assert "border-color: var(--success)" in rule(
+        ".btn.primary.done, .btn.primary.done:hover, .btn.primary.done:disabled"
+    )
+
+
+def test_the_pill_is_the_mockups_segmented_control_and_glides_in_280_ms():
+    seg = rule(".seg")
+    for part in (
+        "gap: 2px",
+        "padding: 2px",
+        "background: var(--inset)",
+        "border: 1px solid var(--wire)",
+        "border-radius: 7px",
+    ):
+        assert part in seg, part
+    choice = rule(".seg button")
+    for part in (
+        "padding: 4px 11px",
+        "border-radius: 5px",
+        "font-size: 12px",
+        "color: var(--ink-3)",
+    ):
+        assert part in choice, part
+    pressed = rule('.seg button[aria-pressed="true"]')
+    assert "color: var(--ink)" in pressed and "font-weight: 500" in pressed
+    marker = rule(".seg .ink")
+    assert "background: var(--panel-raised)" in marker and "0 1px 2px rgb(0 0 0 / .25)" in marker
+    # Every pill passes the pill time to glide (the rail and the tabs keep the 300 ms default).
+    assert len(re.findall(r"\{ duration: 280 \}", script("gateway.js"))) == 1
+    assert len(re.findall(r"\{ duration: 280 \}", script("library.js"))) == 2
+    assert '"gateway-view", { duration: 280 }' in script("gateway.js")
+    assert '"library-show", { duration: 280 }' in script("library.js")
+
+
+def test_the_chip_is_the_mockups_label_and_a_client_with_its_name_is_a_who():
+    chip = rule(".chip")
+    for part in (
+        "font-size: 11px",
+        "color: var(--ink-3)",
+        "border: 1px solid var(--wire)",
+        "border-radius: 6px",
+        "padding: 3px 8px",
+    ):
+        assert part in chip, part
+    assert "display: inline-flex" in rule(".who")
+    for name in ("agents.js", "details.js", "overview.js", "library.js", "review.js"):
+        assert '"chip"' not in script(name), name
+    assert 'el("div", "who")' in script("agents.js") and 'el("span", "who")' in script("review.js")
+
+
+def test_lamps_marks_and_ports_follow_one_lamp_language():
+    lamp = rule(".lamp, .mark")
+    for part in (
+        "width: 6px",
+        "height: 6px",
+        "border-radius: 50%",
+        "background: var(--lamp-off)",
+        "background-color 400ms ease",
+    ):
+        assert part in lamp, part
+    assert "background: var(--lamp-on)" in rule(".lamp.on, .mark.on")
+    assert "background: var(--lamp-warn)" in rule(".lamp.warn, .mark.warn")
+    preview = rule(".lamp.pv, .mark.pv")
+    assert "background: transparent" in preview and "1.5px dashed var(--route)" in preview
+    outside = rule(".lamp.out, .mark.out")
+    assert "background: transparent" in outside and "1.5px solid var(--lamp-off)" in outside
+    # A lamp that turns on pops from 2.2 times its size, on the calm curve.
+    pop = rule(".lamp.pop, .mark.pop")
+    assert "200ms var(--calm)" in pop and "lamp-pop" in pop
+    assert "@keyframes lamp-pop { from { transform: scale(2.2); } }" in CSS
+    port = rule(".port")
+    for part in (
+        "width: 9px",
+        "height: 9px",
+        "1.5px solid var(--link)",
+        "background: var(--canvas)",
+    ):
+        assert part in port, part
+    assert "scale 300ms var(--spring)" in port
+    # --lamp-off fails 4.5:1 as text: it is a fill and a line here, never a text color.
+    assert not re.search(r"[^-]color: var\(--lamp-off\)", lamp + preview + outside + port)
+
+
+def test_the_switch_is_a_34_by_20_track_in_a_24_px_button_with_a_14_px_knob():
+    button = rule(".switch")
+    for part in ("width: 34px", "height: 24px", "background: none"):
+        assert part in button, part
+    track = rule(".switch::before")
+    for part in (
+        "inset: 2px 0",
+        "border-radius: 10px",
+        "border: 1px solid var(--wire)",
+        "background: var(--inset)",
+        "background-color 250ms ease",
+    ):
+        assert part in track, part
+    knob = rule(".switch .thumb")
+    for part in (
+        "width: 14px",
+        "height: 14px",
+        "top: 5px",
+        "left: 3px",
+        "background: var(--ink-3)",
+        "transform 340ms var(--spring)",
+    ):
+        assert part in knob, part
+    on_track = rule('.switch[aria-checked="true"]::before')
+    assert "background: var(--route)" in on_track and "border-color: var(--route)" in on_track
+    on_knob = rule('.switch[aria-checked="true"] .thumb')
+    assert "translateX(14px)" in on_knob and "background: #fff" in on_knob
+    # Waiting for the preview: a dashed track on the accent tint, the knob half-way, in the accent.
+    wait_track = rule('.switch.pending::before, .switch[aria-checked="true"].pending::before')
+    for part in (
+        "border-style: dashed",
+        "background: var(--route-soft)",
+        "border-color: var(--route)",
+    ):
+        assert part in wait_track, part
+    wait_knob = rule('.switch.pending .thumb, .switch[aria-checked="true"].pending .thumb')
+    assert "translateX(7px)" in wait_knob and "background: var(--route)" in wait_knob
+    # The thumb no longer widens under a press: the knob's own move is the answer.
+    assert ".switch:active" not in CSS
+
+
+def test_checks_and_radios_follow_the_mockup():
+    chk = rule(".chk")
+    for part in (
+        "width: 16px",
+        "height: 16px",
+        "border-radius: 4px",
+        "border: 1.5px solid var(--link)",
+    ):
+        assert part in chk, part
+    tick = rule(".chk .ic")
+    for part in ("opacity: 0", "scale(0.5)", "opacity 160ms", "transform 320ms var(--spring)"):
+        assert part in tick, part
+    ticked = rule("input:checked + .chk, .pick.on .chk")
+    assert "background: var(--route)" in ticked and "border-color: var(--route)" in ticked
+    assert "opacity: 1" in rule("input:checked + .chk .ic, .pick.on .chk .ic")
+    radio = rule(".radio")
+    for part in (
+        "width: 14px",
+        "height: 14px",
+        "border-radius: 50%",
+        "border: 1.5px solid var(--link)",
+    ):
+        assert part in radio, part
+    picked = rule(".pick.on .radio")
+    assert "background: var(--route)" in picked and "inset 0 0 0 3px var(--panel)" in picked
+    # A real checkbox keeps its input for the keys; only its box is drawn. Add missing uses it too.
+    assert "checkBox(" in script("review.js") and 'type = "checkbox"' not in script("review.js")
+
+
 def test_changes_say_why_a_change_stopped():
     text = script("changes.js")
     assert "Can't undo: the file changed after this" in text

@@ -294,7 +294,8 @@ function markChoice(node) {
   if (!box) return;
   const attr = box.classList.contains("tabs") ? "aria-selected" : "aria-pressed";
   for (const choice of box.querySelectorAll(":scope > button")) choice.setAttribute(attr, String(choice === node));
-  glide(box, node, box.classList.contains("tabs") ? "library-tabs" : "library-show");
+  const tabs = box.classList.contains("tabs");
+  glide(box, node, tabs ? "library-tabs" : "library-show", tabs ? {} : { duration: 280 });
 }
 
 // A tab or filter: read its rows first, so the list changes once, already full. The last
@@ -360,7 +361,7 @@ export function renderLibrary(main) {
   const tools = toolbar(kind, answer);
   if (tools) main.append(tools);
   const seg = tools && tools.querySelector(".seg");
-  if (seg) glide(seg, seg.querySelector('[aria-pressed="true"]'), "library-show");
+  if (seg) glide(seg, seg.querySelector('[aria-pressed="true"]'), "library-show", { duration: 280 });
 
   if (!answer) {
     main.append(failed ? banner("the library", retry) : skeleton("table", 1));
@@ -634,12 +635,12 @@ function buildTable(columns, rows, groups, morph) {
   for (const column of columns) {
     const th = el("th");
     const cap = el("div", "col-head");
-    const chip = el("span", "chip");
+    const who = el("span", "who");
     const tile = mark(column.id);
     // Coming from the Overview, the client's tile flies here from its row.
     land(tile, `client-${column.id}`);
-    chip.append(tile, el("span", null, column.name));
-    cap.append(chip);
+    who.append(tile, el("span", null, column.name));
+    cap.append(who);
     const hide = hideButton(column, columns);
     if (hide) cap.append(hide);
     th.append(cap);

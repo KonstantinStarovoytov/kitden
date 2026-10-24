@@ -162,7 +162,8 @@ a { color: var(--route); }
 .rail-foot { margin-top: auto; padding: 0 8px; display: flex; flex-direction: column; gap: 14px; color: var(--ink-3); font-size: 11px; }
 .rail-foot a { display: flex; align-items: center; min-height: 24px; }
 .scan-line { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
-.rail-foot .btn { height: 24px; padding: 0 6px; margin-left: -6px; font-size: inherit; }
+/* Rescan: its words line up with the scan time above (1 px line and 9 px padding). */
+.rail-foot .btn { margin-left: -10px; }
 .appearance { align-self: flex-start; display: flex; align-items: center; gap: 8px; min-height: 24px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--ink-2); font-size: 12px; cursor: pointer; transition: color var(--t-fast) ease; }
 .appearance:hover { color: var(--ink); }
 .roll { display: inline-grid; overflow: hidden; height: 1.45em; vertical-align: bottom; }
@@ -195,16 +196,17 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .lede.fresh { animation: rise 320ms var(--ease-out) both; }
 
 /* Controls */
-.btn { position: relative; height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--wire-strong); background: var(--panel); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; text-decoration: none; color: var(--ink); transition: background-color var(--t-fast) ease, transform 260ms var(--spring), opacity var(--t-fast) ease; }
-.btn:hover:not(:disabled) { background: var(--inset); }
-.btn:active:not(:disabled) { transform: scale(0.98); transition-duration: var(--t-fast), 80ms, var(--t-fast); }
+.btn { position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 7px; border: 1px solid var(--wire); background: var(--panel-raised); color: var(--ink); font-size: 12px; font-weight: 500; white-space: nowrap; text-decoration: none; cursor: pointer; transition: background-color var(--t-fast) ease, border-color var(--t-fast) ease, color var(--t-fast) ease, transform 260ms var(--spring), opacity var(--t-fast) ease; }
+.btn:hover:not(:disabled) { border-color: color-mix(in srgb, var(--route) 40%, var(--wire)); }
+.btn:active:not(:disabled) { transform: scale(0.97); transition-duration: var(--t-fast), var(--t-fast), var(--t-fast), 80ms, var(--t-fast); }
 .btn:disabled { cursor: not-allowed; opacity: 0.5; }
 .btn.primary.apply:disabled { opacity: 1; cursor: progress; }
-.btn.primary { background: var(--action); color: var(--on-action); border-color: transparent; }
-.btn.primary:hover:not(:disabled) { background: var(--action-hover); }
+.btn.primary { background: var(--action); border-color: var(--action); color: var(--on-action); font-weight: 600; }
+.btn.primary:hover:not(:disabled) { background: var(--action-hover); border-color: var(--action-hover); }
 .btn.ghost { border-color: transparent; background: transparent; color: var(--ink-2); }
-.btn.ghost:hover:not(:disabled) { background: var(--wire-soft); color: var(--ink); }
-.btn.small { height: 24px; padding: 0 8px; font-size: 12px; }
+.btn.ghost:hover:not(:disabled) { background: var(--wire-soft); border-color: transparent; color: var(--ink); }
+/* A small button has less padding and 11 px text, but stays 24 px tall to press. */
+.btn.small { min-height: 24px; padding: 4px 9px; font-size: 11px; }
 /* Busy: a small spinner takes the words' place after a short wait; the words keep the size. */
 .btn.busy { color: transparent; }
 .btn.busy > * { visibility: hidden; }
@@ -214,7 +216,7 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 /* Apply's step meter: a thin line along the bottom edge, filled to the share of steps done. */
 .btn .meter { position: absolute; left: 6px; right: 6px; bottom: 3px; height: 2px; border-radius: 1px; background: currentColor; opacity: 0.55; transform: scaleX(0); transform-origin: left; transition: transform 240ms var(--ease-out); pointer-events: none; }
 /* Applied: green at once and at full strength, though the button is disabled. */
-.btn.primary.done, .btn.primary.done:hover, .btn.primary.done:disabled { background: var(--success); color: var(--on-success); opacity: 1; transition: none; }
+.btn.primary.done, .btn.primary.done:hover, .btn.primary.done:disabled { background: var(--success); border-color: var(--success); color: var(--on-success); opacity: 1; transition: none; }
 .toast .check { flex: none; color: var(--lamp-on); }
 .spinner { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid currentColor; border-right-color: transparent; animation: spin 600ms linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -251,12 +253,14 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 /* Under a page head: the shared setup, or a project and how much of it differs. */
 .scope-bar { display: flex; align-items: center; gap: 6px; margin: -6px 0 18px; color: var(--ink-3); font-size: 11px; }
 .scope-bar.project { color: var(--route); }
-.seg { position: relative; display: inline-flex; padding: 2px; background: var(--inset); border-radius: 7px; border: 1px solid var(--wire-soft); }
-.seg button { position: relative; z-index: 1; height: 24px; padding: 0 10px; border: 0; background: transparent; border-radius: 5px; color: var(--ink-2); cursor: pointer; transition: color var(--t-fast) ease, transform 260ms var(--spring); }
+.seg { position: relative; display: inline-flex; gap: 2px; padding: 2px; background: var(--inset); border-radius: 7px; border: 1px solid var(--wire); }
+.seg button { position: relative; z-index: 1; padding: 4px 11px; border: 0; background: transparent; border-radius: 5px; color: var(--ink-3); font-size: 12px; cursor: pointer; transition: color var(--t-fast) ease, transform 260ms var(--spring); }
 .seg button:hover { color: var(--ink); }
 .seg button:active { transform: scale(0.96); transition-duration: var(--t-fast), 80ms; }
-.seg button[aria-pressed="true"] { color: var(--route); font-weight: 600; }
-.seg .ink { border-radius: 5px; box-shadow: 0 0 0 1px var(--wire); }
+.seg button[aria-pressed="true"] { color: var(--ink); font-weight: 500; }
+.seg .ink { border-radius: 5px; background: var(--panel-raised); box-shadow: 0 1px 2px rgb(0 0 0 / .25); }
+/* A chip: a short quiet label with a line round it. */
+.chip { display: inline-block; padding: 3px 8px; border: 1px solid var(--wire); border-radius: 6px; color: var(--ink-3); font-size: 11px; white-space: nowrap; }
 .field { display: grid; gap: 4px; }
 .field > span { color: var(--ink-3); font-size: 12px; }
 .field input, .field select { height: 30px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--wire-strong); background: var(--inset); color: var(--ink); min-width: 0; transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease; }
@@ -266,7 +270,8 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .form .grow { flex: 1 1 280px; }
 .checks { display: flex; gap: 14px; align-items: center; border: 0; padding: 0; margin: 0; }
 .checks legend { color: var(--ink-3); font-size: 12px; padding: 0; margin-bottom: 4px; }
-.checks label { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; cursor: pointer; }
+.checks label { position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 24px; cursor: pointer; }
+.checks input[type="checkbox"] { position: absolute; left: 0; top: 50%; width: 16px; height: 16px; margin: -8px 0 0; opacity: 0; cursor: pointer; }
 .checks.list { flex-direction: column; align-items: flex-start; gap: 2px; margin-bottom: 10px; }
 /* A note on its own line between the clients and Preview. It stays in the page so a screen reader
    hears it change; empty, it is a zero-width item that takes back its gap. */
@@ -281,8 +286,9 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .client-mark, .mono-mark { --tile: 24px; width: var(--tile); height: var(--tile); border-radius: 6px; display: inline-grid; place-items: center; flex: none; background: var(--panel-raised); box-shadow: 0 0 0 1px var(--wire-strong); overflow: hidden; }
 .client-mark img { display: block; width: 100%; height: 100%; object-fit: contain; grid-area: 1 / 1; }
 .client-mark[data-icon="claude"] img { box-sizing: border-box; padding: 4px; }
-.client-row .client-mark, .client-row .mono-mark, .chip:has(> h2) > .client-mark, .chip:has(> h2) > .mono-mark { --tile: 28px; }
-.chip { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.client-row .client-mark, .client-row .mono-mark, .who:has(> h2) > .client-mark, .who:has(> h2) > .mono-mark { --tile: 28px; }
+/* A client's mark beside its name (or beside a row of marks). */
+.who { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
 .mono-mark { font: 600 10px/1 var(--mono); color: var(--ink-2); }
 .client-mark .icon-dark { display: none; }
 :root[data-theme="dark"] .has-dark .icon-light { display: none; }
@@ -319,25 +325,56 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .badge { font-size: 11px; padding: 0 6px; line-height: 18px; border-radius: 4px; border: 1px solid var(--wire); color: var(--ink-2); white-space: nowrap; }
 .badge.win { border-color: var(--ink-3); color: var(--ink); font-weight: 500; }
 .badge.warn { border-color: var(--lamp-warn); color: var(--lamp-warn); }
-/* The plugin switch shows the real state; pressing squeezes the thumb and opens the review.
-   It is 24 px high to press. The 34 x 20 track is painted between two clear 2 px bands. */
-.switch { position: relative; width: 34px; height: 24px; flex: none; border-radius: 10px / 12px; border: solid transparent; border-width: 2px 0; background-clip: padding-box; padding: 0; cursor: pointer; background-color: var(--wire-strong); transition: background-color 200ms ease, transform 260ms var(--spring); align-self: center; }
-.switch[aria-checked="true"] { background-color: var(--action); }
-.switch .thumb { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 8px; background: #ffffff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); transition: transform 160ms var(--ease-in-out), width 120ms var(--ease-out); }
-.switch[aria-checked="true"] .thumb { transform: translateX(14px); }
+/* The switch shows the real state; pressing it opens the review. The button is 24 px high to press.
+   Its track (34 x 20) is drawn by ::before between two clear 2 px bands, and the knob (14 px) sits
+   2 px inside the track's line. Off the knob is grey, on it is white on the accent. */
+.switch { position: relative; flex: none; align-self: center; width: 34px; height: 24px; padding: 0; border: 0; border-radius: 12px; background: none; cursor: pointer; }
+.switch::before { content: ""; position: absolute; inset: 2px 0; border-radius: 10px; border: 1px solid var(--wire); background: var(--inset); transition: background-color 250ms ease, border-color 250ms ease; }
+.switch .thumb { position: absolute; top: 5px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--ink-3); transition: transform 340ms var(--spring), background-color 250ms ease; }
 .switch:hover:not(:disabled) { filter: brightness(1.06); }
+.switch[aria-checked="true"]::before { background: var(--route); border-color: var(--route); }
+.switch[aria-checked="true"] .thumb { transform: translateX(14px); background: #fff; }
 .switch:disabled { cursor: not-allowed; opacity: 0.55; }
-.switch:disabled .thumb { width: 16px; }
-.switch:active:not(:disabled) .thumb { width: 20px; }
-.switch[aria-checked="true"]:active:not(:disabled) .thumb { transform: translateX(10px); }
-/* Waiting for the preview: the thumb rests half-way, neither on nor off, until the review opens. */
+/* Waiting for the preview: a dashed track on the accent tint, the knob half-way, neither on nor off. */
 .switch.pending { cursor: progress; }
-.switch.pending .thumb, .switch[aria-checked="true"].pending .thumb { transform: translateX(7px); width: 16px; }
-/* A tool switch after a verified change: drawn in its new state, the thumb slides there once. */
-.switch.flipped .thumb { animation: thumb-off 200ms var(--ease-in-out); }
+.switch.pending::before, .switch[aria-checked="true"].pending::before { border-style: dashed; border-color: var(--route); background: var(--route-soft); }
+.switch.pending .thumb, .switch[aria-checked="true"].pending .thumb { transform: translateX(7px); background: var(--route); }
+/* A tool switch after a verified change: drawn in its new state, the knob moves there once. */
+.switch.flipped .thumb { animation: thumb-off 340ms var(--spring); }
 .switch.flipped[aria-checked="true"] .thumb { animation-name: thumb-on; }
 @keyframes thumb-on { from { transform: none; } }
 @keyframes thumb-off { from { transform: translateX(14px); } }
+
+/* One lamp language. A lamp (beside a word) and a mark (beside a tool) are 6 px: grey is off, green
+   works, amber needs you, a dashed ring is only a preview, a grey ring works outside the gateway.
+   --lamp-off is a fill and a line, never a text color. A lamp that just turned on pops from 2.2 times. */
+.lamp, .mark { display: inline-block; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--lamp-off); transition: background-color 400ms ease; }
+.lamp.on, .mark.on { background: var(--lamp-on); }
+.lamp.warn, .mark.warn { background: var(--lamp-warn); }
+.lamp.pv, .mark.pv { background: transparent; border: 1.5px dashed var(--route); }
+.lamp.out, .mark.out { background: transparent; border: 1.5px solid var(--lamp-off); }
+.lamp.pop, .mark.pop { animation: lamp-pop 200ms var(--calm); }
+@keyframes lamp-pop { from { transform: scale(2.2); } }
+/* A port: the ring where a link meets a block, on its left or right edge. */
+.port { position: absolute; top: 50%; width: 9px; height: 9px; margin-top: -4.5px; border-radius: 50%; border: 1.5px solid var(--link); background: var(--canvas); transition: border-color 200ms ease, opacity 200ms ease, scale 300ms var(--spring); }
+.port.l { left: -5px; }
+.port.r { right: -5px; }
+
+/* Checks and radios. A check's real input stays in the page (for keys and screen readers) and the
+   box follows it. A radio, and a check in a picker row, take the row's .on. */
+.chk { display: grid; place-items: center; flex: none; width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--link); color: var(--panel); transition: background-color 200ms ease, border-color 200ms ease; }
+.chk .ic { opacity: 0; transform: scale(0.5); stroke-width: 3; transition: opacity 160ms ease, transform 320ms var(--spring); }
+input:checked + .chk, .pick.on .chk { background: var(--route); border-color: var(--route); }
+input:checked + .chk .ic, .pick.on .chk .ic { opacity: 1; transform: none; }
+input:disabled + .chk { opacity: 0.5; }
+input:focus-visible + .chk { outline: 2px solid var(--focus); outline-offset: 2px; }
+.radio { flex: none; width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--link); transition: background-color 200ms ease, border-color 200ms ease, box-shadow 200ms ease; }
+.pick.on .radio { border-color: var(--route); background: var(--route); box-shadow: inset 0 0 0 3px var(--panel); }
+/* A picker row: a client or a project to choose, with a check or a radio at its end. */
+.pick { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid var(--wire); border-radius: 8px; background: var(--panel); color: inherit; text-align: left; cursor: pointer; transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease; }
+.pick:hover:not(:disabled) { border-color: color-mix(in srgb, var(--route) 40%, var(--wire)); }
+.pick.on { background: var(--route-soft); border-color: var(--route); }
+.pick:disabled { opacity: 0.45; cursor: default; }
 
 /* Entrance used once per place */
 .rise { animation: rise 380ms var(--ease-out) both; }
@@ -470,7 +507,7 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .list-row:hover, .list-row.lit { background: var(--inset); }
 .list-row.lit { background: var(--route-soft); }
 .list:has(.list-row:hover) .list-row:first-child:hover { border-top-left-radius: 8px; border-top-right-radius: 8px; }
-.list-row .chip { gap: 4px; min-width: 24px; }
+.list-row .who { gap: 4px; min-width: 24px; }
 .list-row .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .list-row .what { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; padding: 7px 0; }
 .list-row .what .meta { color: var(--ink-3); font-size: 12px; white-space: nowrap; }
@@ -702,12 +739,12 @@ div.stack { display: grid; border: 1px solid var(--wire); border-radius: 8px; ov
 /* Reads or writes: a hint, said quietly after the tool's name. */
 .layer.tool .hint { font: 12px var(--sans); }
 .layer.tool .differs { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
-.drawer .chip h2 { margin: 0; }
+.drawer .who h2 { margin: 0; }
 .drawer .skeleton.card { height: 120px; }
 .after { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
 .after .note { color: var(--ink-3); font-size: 12px; }
-.after .chip { gap: 8px; }
-.after .chip > span:nth-child(2) { color: var(--ink-2); }
+.after .who { gap: 8px; }
+.after .who > span:nth-child(2) { color: var(--ink-2); }
 details > summary { line-height: 24px; }
 details.file-change, details.tech { min-width: 0; }
 details.file-change > summary, details.tech > summary { cursor: pointer; color: var(--ink-2); font-weight: 500; }

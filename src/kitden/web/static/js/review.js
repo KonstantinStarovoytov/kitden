@@ -5,7 +5,7 @@ import { $, $$, button, el, joinWords, plural, reportError, shortPath, shortPath
 import { loadLibrary, morphOnNextRender } from "./library.js";
 import { fold, transition } from "./motion.js";
 import { cancelPreview, checkMark, closePanel, header, hideToast, isPanelOpen, openPanel, panelState, restoreFocus, toast } from "./panel.js";
-import { allPutBack, callout, CLIENT_ORDER, diffCounts, kitdenMove, mark, movedNames, notesSection, PLACE_IN_TITLE, ruleText, rulesText, skillRemoval, socket, stepText, strictText, targetWords } from "./parts.js";
+import { allPutBack, callout, checkBox, CLIENT_ORDER, diffCounts, kitdenMove, mark, movedNames, notesSection, PLACE_IN_TITLE, ruleText, rulesText, skillRemoval, socket, stepText, strictText, targetWords } from "./parts.js";
 import { busy, reload, render, setBusy, state } from "./store.js";
 import { projectLabel, tools } from "./tools.js";
 
@@ -185,8 +185,7 @@ function alignSection(change, previewBody, note, apply) {
     set.append(el("legend", null, `Add to ${group.name}`));
     for (const item of group.items) {
       const label = el("label");
-      const box = el("input");
-      box.type = "checkbox";
+      const [box, tick] = checkBox();
       box.checked = item.chosen;
       box.dataset.key = item.key;
       box.addEventListener("change", async () => {
@@ -203,7 +202,7 @@ function alignSection(change, previewBody, note, apply) {
         const again = $$("#drawer input[type=checkbox]").find((b) => b.dataset.key === item.key);
         if (again) again.focus();
       });
-      label.append(box, el("span", null, item.label));
+      label.append(box, tick, el("span", null, item.label));
       if (item.note) label.append(el("span", "muted", ` · ${item.note}`));
       set.append(label);
     }
@@ -308,9 +307,9 @@ function afterLine(entries) {
     const line = el("div", "after");
     line.append(el("span", "note", "After:"));
     for (const entry of chips) {
-      const chip = el("span", "chip");
-      chip.append(mark(entry.client), el("span", null, clientName(entry.client)), socket({ state: entry.state, word: entry.word }));
-      line.append(chip);
+      const who = el("span", "who");
+      who.append(mark(entry.client), el("span", null, clientName(entry.client)), socket({ state: entry.state, word: entry.word }));
+      line.append(who);
     }
     box.append(line);
   }

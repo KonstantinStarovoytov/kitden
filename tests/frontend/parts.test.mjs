@@ -36,7 +36,9 @@ function element(tag) {
   return node;
 }
 globalThis.document = { createElement: element, createElementNS: (namespace, tag) => element(tag) };
-const { backupNote, banner, changeTitle, clientCheck, demoTag, folderName, gatewayName, menuItems, morphSocket, opens, optionAfter, originText, projectMenu, scopeBar, scopeText, setHint, socket, strictText, TOOL_ORIGIN_WORDS } = await import('../../src/kitden/web/static/js/parts.js');
+const { backupNote, banner, changeTitle, checkBox, clientCheck, demoTag, folderName, gatewayName, menuItems, morphSocket, opens, optionAfter, originText, projectMenu, scopeBar, scopeText, setHint, socket, strictText, TOOL_ORIGIN_WORDS } = await import('../../src/kitden/web/static/js/parts.js');
+// details.js builds the switch and loads with the same stand-in.
+const { switchNode } = await import('../../src/kitden/web/static/js/details.js');
 
 test('a row that opens Details ends with a chevron for the eye and words for a screen reader', () => {
   const node = opens();
@@ -51,8 +53,9 @@ test('a row that opens Details ends with a chevron for the eye and words for a s
 test('a client checkbox is named for its client and keeps the client id as its value', () => {
   const heard = [];
   const label = clientCheck('codex', true, null, (checked) => heard.push(checked));
-  const [box, name] = label.children;
+  const [box, tick, name] = label.children;
   assert.equal(label.tag, 'label');
+  assert.equal(tick.className, 'chk');
   assert.equal(box.type, 'checkbox');
   assert.equal(box.value, 'codex');
   assert.equal(box.checked, true);
@@ -63,9 +66,44 @@ test('a client checkbox is named for its client and keeps the client id as its v
   assert.deepEqual(heard, [false]);
 });
 
+test('a checkbox keeps its real input and draws the mockup box with a check in it', () => {
+  const [input, box] = checkBox();
+  assert.equal(input.tag, 'input');
+  assert.equal(input.type, 'checkbox');
+  assert.equal(box.className, 'chk');
+  assert.equal(box.children.length, 1);
+  assert.equal(box.children[0].dataset.icon, 'check');
+  assert.equal(box.children[0].attributes['aria-hidden'], 'true');
+});
+
+test('switch looks: off, on and pending', async () => {
+  assert.equal(switchNode(false).getAttribute('aria-checked'), 'false');
+  assert.equal(switchNode(true).getAttribute('aria-checked'), 'true');
+  assert.equal(switchNode(true).getAttribute('role'), 'switch');
+  // The knob is the .thumb; the track and the looks are drawn by CSS from the state.
+  assert.equal(switchNode(true).children[0].className, 'thumb');
+  // Pressed: pending and busy while the preview is fetched, and still not flipped.
+  let finish;
+  let presses = 0;
+  const node = switchNode(false, () => { presses += 1; return new Promise((done) => { finish = done; }); });
+  assert.equal(node.classList.contains('pending'), false);
+  node.listeners.click();
+  assert.ok(node.classList.contains('pending'));
+  assert.equal(node.getAttribute('aria-busy'), 'true');
+  assert.equal(node.getAttribute('aria-checked'), 'false');
+  // A second press while it waits does nothing.
+  node.listeners.click();
+  assert.equal(presses, 1);
+  finish();
+  await new Promise((done) => setTimeout(done, 0));
+  assert.equal(node.classList.contains('pending'), false);
+  assert.equal(node.hasAttribute('aria-busy'), false);
+  assert.equal(node.getAttribute('aria-checked'), 'false');
+});
+
 test('a note after the client name is read as part of its name', () => {
   const label = clientCheck('claude_code', false, 'adds the marketplace first');
-  const [box, name, note] = label.children;
+  const [box, , name, note] = label.children;
   assert.equal(box.checked, false);
   assert.equal(box.attributes['aria-label'], 'Claude Code · adds the marketplace first');
   assert.equal(name.textContent, 'Claude Code');

@@ -301,17 +301,26 @@ export const CLIENT_NAMES = {
   claude_code: "Claude Code", codex: "Codex", cursor: "Cursor",
   claude_desktop_code_tab: "Claude Desktop (Code tab)", gateway: "Gateway", kitden: "Kitden gateway",
 };
+// A checkbox: the real input, which keeps the keys and the screen reader, and the box drawn after
+// it (.chk, with a check that springs in). CSS ticks the box from the input; both go in a label.
+export function checkBox() {
+  const input = el("input");
+  input.type = "checkbox";
+  const box = el("span", "chk");
+  box.append(icon("check", 12));
+  return [input, box];
+}
+
 // One client's checkbox in an Add form. Its name is the client's name (and the note after it),
 // so a screen reader never says "on"; its value is the client id. `onChange` hears the new state.
 export function clientCheck(client, checked, note, onChange) {
   const label = el("label");
-  const box = el("input");
-  box.type = "checkbox";
+  const [box, tick] = checkBox();
   box.value = client;
   box.checked = checked;
   box.setAttribute("aria-label", note ? `${CLIENT_NAMES[client]} · ${note}` : CLIENT_NAMES[client]);
   box.addEventListener("change", () => { if (onChange) onChange(box.checked); });
-  label.append(box, el("span", null, CLIENT_NAMES[client]));
+  label.append(box, tick, el("span", null, CLIENT_NAMES[client]));
   if (note) label.append(el("span", "muted", ` · ${note}`));
   return label;
 }

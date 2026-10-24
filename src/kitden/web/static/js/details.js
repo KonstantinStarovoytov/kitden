@@ -851,7 +851,7 @@ function showDetails(row, definitions, offer = null, toolsNext = {}, inherits = 
   const sections = [];
   for (const client of clients) {
     const section = el("section", "client-layers");
-    const title = el("div", "chip");
+    const title = el("div", "who");
     title.append(mark(client), el("h2", null, clientName(client)));
     const stack = el("div", "stack");
     for (const def of byClient.get(client)) stack.append(layer(def, said));
@@ -983,7 +983,7 @@ async function showCommands(row, definitions) {
     seen.add(def.id);
     const twins = definitions.filter((d) => d.client === def.client).length > 1;
     const section = el("section");
-    const title = el("div", "chip");
+    const title = el("div", "who");
     title.append(mark(def.client), el("h2", null, twins ? `${clientName(def.client)} · ${scopeWords(def)}` : clientName(def.client)));
     const list = el("ul", "commands");
     list.append(el("li", "muted", "Loading…"));

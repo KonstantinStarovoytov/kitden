@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 // gateway-details.js needs only this from a browser to load; the card builders make a few
-// nodes (client tiles, the folded evidence), so a stand-in document keeps what they get.
+// nodes (client tiles, check boxes with an icon, the folded evidence), so a stand-in document keeps what they get.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
 function fakeNode(tag) {
@@ -28,7 +28,7 @@ function fakeNode(tag) {
   };
   return node;
 }
-globalThis.document = { createElement: fakeNode };
+globalThis.document = { createElement: fakeNode, createElementNS: (namespace, tag) => fakeNode(tag) };
 // Every URL asked for: the cards are built from what the page has, and never read the map.
 const asked = [];
 globalThis.fetch = async (url) => { asked.push(url); return { ok: true, status: 200, json: async () => ({}) }; };

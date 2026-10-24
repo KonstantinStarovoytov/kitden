@@ -61,6 +61,8 @@ Preserve the compact information layout. Use restrained neutral panels, fine bor
 
 The shell is one framed window (1 px line, 12 px corners) on the `--out` color, with a 16 px gutter. The rail is 148 px: the wordmark, four links with icons (Overview, Library, Gateway, Changes) and a marker that glides behind the current one; at the bottom the scan time with Rescan, "Let agents read this setup" and "Appearance", which switches light and dark (its hover text names the other theme). The top bar is 66 px: the project button ("Project" and the picked name, in the accent when a project is picked), then the search with its icon. A page starts with its title (24 px), a quiet 12 px lede and, on the Gateway, the scope bar with a layers icon (all projects) or a folder icon (a project). The hint line (`setHint` in `parts.js`) sits 14 px above the bottom of the page: an info icon and a few words, hidden when a page sets none. Details open as a panel 16 px inside the window's edge. Under 900 px the rail becomes a row on top, its words hide behind the icons (a screen reader still hears them) and the top bar wraps to two rows.
 
+Small parts (`style.css`, Controls). A button has 12 px text, a 7 px corner, a `--wire` line and the raised-panel fill; it presses to 0.97 and springs back, and on hover its line takes a light accent tint. A small button has 11 px text and is still 24 px tall; the primary button is the action color with 600 text. A pill (`.seg`) is an inset track with a `--wire` line and `--ink-3` choices, and a raised marker glides behind the pressed one (`--ink`, 500). A chip (`.chip`) is a short quiet label with a line round it; a client's mark beside its name is a `.who`. A lamp (beside words) or a mark (beside a tool) is 6 px: grey is off, green works, amber needs you, a dashed accent ring is only a preview, a grey ring works outside the gateway; a lamp that just turned on pops from 2.2 times its size. A port is the 9 px ring where a link meets a block. A switch is a 34 x 20 track with a 14 px knob inside a 24 px button: off, the knob is grey; on, it is white on the accent; while the preview loads the track is dashed on the accent tint and the knob rests half-way. A check is a 16 px box, and a radio a 14 px circle, with a `--link` line; ticked, it turns accent and the check springs in. A client's checkbox keeps its real input (for the keys and screen readers); only its box is drawn.
+
 On Overview, an option ("Can improve") is a quiet card: `.issue.suggestion` has no warning border and a plain button, not the primary one. A card with no button (a file Kitden could not read) keeps its title and sentence in the wide column. On the Clients card a client Kitden could not read says "Could not read", never "Not installed".
 
 Overview's notes are grouped by item: one row per name with the mark of every client it is about, and each note as a quiet flag. Flags that do not fit wrap under the name. "Same name, another source" says two entries differ; "Set up in more than one client" says the same one is set up twice.
@@ -160,11 +162,12 @@ Defined once in `style.css`. Scripts use `CALM` from `motion.js`; the spring is 
 
 | Token | Value | Use |
 | --- | --- | --- |
-| Press | 80 ms in to 0.98, 260 ms `--spring` out | Buttons, tabs, filters, rail links, switches, map blocks |
+| Press | 80 ms in to 0.97 (0.96 on a pill choice), 260 ms `--spring` out | Buttons, tabs, filters, rail links, map blocks: they scale in place and spring back |
 | `--t-fast` | 180 ms ease | Hover colour, word fades, focus |
 | `--t-panel` | 240 ms `--ease-drawer` | Drawer, column beside the page, scrim |
 | Fold | 280 ms `--ease-out` | A `<details>` opening or closing |
-| Glide | 300 ms `--calm` (nav) / 280 ms (pills) | The mark sliding between choices |
+| Glide | 300 ms `--calm` for the rail marker and the tabs, 280 ms `--calm` for pills | The mark sliding between choices |
+| Knob | 340 ms `--spring`; the track's colors change in 250 ms ease | A switch knob moving, and the tick of a check drawing (320 ms) |
 | Flight | 340 ms `--ease-drawer` | A shared tile between places |
 | Status | 320–380 ms `--ease-in-out` | Socket morph (dot fill, words fade) |
 | Success | check draws 320 ms, never delays the next action | Applied, Undone |
@@ -172,8 +175,8 @@ Defined once in `style.css`. Scripts use `CALM` from `motion.js`; the spring is 
 | Busy | spinner after 150 ms, in the button's own place | A button whose work takes a moment |
 | Scan line | shows after 400 ms, 1.6 s calm sweep | A rescan that takes a while |
 | Start line | shows after 1 s; fills from the left as each step of the first scan ends, then fills up and goes; a quiet note under its right end says "Reading Codex and Cursor…" or "Still checking …" | Starting Kitden |
-| `--calm` | `cubic-bezier(.2,.8,.2,1)` | The default curve for Web Animations, and for anything that moves a row, block, tile, panel, mark or dragged block |
-| `--spring` | `linear()` spring that overshoots about 3.4 %; falls back to `cubic-bezier(.3,1.25,.5,1)` | Small parts only: presses, the chevron, switch knobs, ports, badges and tick draws |
+| `--calm` | `cubic-bezier(.2,.8,.2,1)` | The default curve for Web Animations, and for anything that changes place: a row, block, tile, panel, mark or dragged block going from one spot to another |
+| `--spring` | `linear()` spring that overshoots about 3.4 %; falls back to `cubic-bezier(.3,1.25,.5,1)` | Presses and small parts that scale or turn in place: a press, the chevron, switch knobs, ports, badges and tick draws. Nothing that changes place uses it |
 
 ### Patterns
 
@@ -183,19 +186,19 @@ All helpers live in `src/kitden/web/static/js/motion.js`.
 | --- | --- | --- |
 | Place change | `transition(change, "place-change")`: only the page goes (120 ms) and the new one rises 6 px (260 ms); the rail and top bar stay still | Rail links, Back; the Library's rows are read first (up to 300 ms) |
 | Shared tile | `fly(node, name)` before `go()`, `land(twin, name)` while the new place draws | Overview count → Library column |
-| Sliding mark | `glide(box, active, key)` | Rail, Library tabs, the show choice |
+| Sliding mark | `glide(box, active, key, { duration })` (pills pass 280) | Rail, Library tabs, the show choice, Map / List |
 | Ready, then swap | `choose(params)` (library.js): read the rows first; over 300 ms the old list dims (`.table-scroll.waiting`), never a skeleton | Library tabs, Installed / New / All, category, Needs attention |
 | List settle | `snapshotRows()` before a redraw, `settleRows()` after: rows that stay slide from their old place (260 ms `--calm`), new rows rise 4 px (200 ms, 20 ms apart, first 12) | Library filters and search |
 | Tab slide | in `settleRows()`: another tab's list slides in 8 px from that tab's side (220 ms) | Library kind tabs |
 | Smooth `<details>` | `fold(details)` | File change in a review, gateway forms |
-| Rolling number | `rollTo(holder, value)` | Rail counts, Library tab counts |
+| Rolling number | `rollTo(holder, value)`: the old value leaves in 140 ms ease-in, the new one comes in over 200 ms `--calm` | Rail counts, Library tab counts |
 | Socket morph | `morphSocket(node, state)` (parts.js) | Library after Apply, Undo or a scope change |
 | Resolved flag | `.flag.gone` | Library after a verified change |
 | Arrival | `.arrive` row glow + `.pulse` socket ping | Coming from a finding |
 | Add lands | `.socket.pulse` on a cell that held a button | Library after a verified add |
 | First visit | `entrance(place, nodes)` | Every place, once |
-| Pending switch | `.switch.pending` (thumb half-way) | Plugin and tool switches while the preview loads |
-| Flipped switch | `.switch.flipped`: the thumb slides once into the verified state | Tool switch, after Apply or Undo is verified |
+| Pending switch | `.switch.pending` (dashed track on the accent tint, knob half-way) | Plugin and tool switches while the preview loads |
+| Flipped switch | `.switch.flipped`: the knob springs once into the verified state | Tool switch, after Apply or Undo is verified |
 | Busy button | `busyWhile(button, work)` (dom.js); `button()` uses it | Every button that waits on the server; quick work never shows it |
 | Step count | `change_progress` events → "Applying 2 of 5" + `.btn .meter` | Apply of a change with several steps, from the server's own count |
 | Applied | `.btn.primary.done` (green at once, full strength) + drawn check | Review footer, after `verified` |

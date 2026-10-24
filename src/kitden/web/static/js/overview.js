@@ -209,7 +209,7 @@ export function noteGroups(findings) {
 // quiet flag, Details.
 function noteRow(group) {
   const node = el("div", "list-row");
-  const marks = el("span", "chip");
+  const marks = el("span", "who");
   for (const client of group.clients) marks.append(mark(client));
   const what = el("span", "what");
   const name = el("span", "mono", group.name);
