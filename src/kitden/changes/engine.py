@@ -499,6 +499,12 @@ class Engine:
         self.changes[change.id] = change
         return change
 
+    def check(self, steps: list[Step]) -> None:
+        """Preview the steps and forget them: raises as `preview` does. Writes nothing. The
+        preview tray asks this before a change joins it."""
+        change = self.preview("check", steps)
+        del self.changes[change.id]
+
     def _check_places(self, steps: list[Step], home: Path, roots: list[Path]) -> None:
         """Refuse the change when a step writes, or runs a command, outside the roots."""
         stops = _stops(home, roots)

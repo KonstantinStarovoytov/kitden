@@ -61,7 +61,7 @@ from kitden.changes.actions import (
 )
 from kitden.changes.align import align_steps
 from kitden.changes.backup import ChangeStore
-from kitden.changes.batch import BATCH, Part, combine, part_of, requests_in
+from kitden.changes.batch import BATCH, Part, combine, first_clash, part_of, requests_in
 from kitden.changes.client_cli import CommandRunner
 from kitden.changes.engine import (
     ChangeRefusedError,
@@ -1228,9 +1228,12 @@ def create_app(
         words = _review(change, built, _picked(body))
         return JSONResponse({**change_dict(change), **words})
 
-    async def _batch(requests: list[dict]) -> tuple[Change, list[Built], list[list[int]]]:
-        """Build each request, join the steps in tray order and preview them as one change.
-        Raises _RowRefused with the words and the row they come from."""
+    async def _batch(
+        requests: list[dict], keep: bool = True
+    ) -> tuple[Change | None, list[Built], list[list[int]]]:
+        """Build each request, refuse a clash, join the steps in tray order and preview them as
+        one change; without `keep` the engine only checks them, and there is no change. Raises
+        _RowRefused with the words and the row they come from."""
         assert engine is not None
         built = []
         for request in requests:
@@ -1242,13 +1245,35 @@ def create_app(
                 raise _RowRefused("Nothing to change.", request["id"])
             built.append(made)
         parts = [Part(r["id"], r["title"], m.steps) for r, m in zip(requests, built, strict=True)]
+        clash = first_clash(parts)
+        if clash is not None:
+            raise _RowRefused(*clash)
         steps, maps = combine(parts)
         action = requests[0]["kind"] if len(requests) == 1 else BATCH
         try:
+            if not keep:
+                await asyncio.to_thread(engine.check, steps)
+                return None, built, maps
             change = await asyncio.to_thread(engine.preview, action, steps)
         except ValueError as error:  # includes ChangeRefusedError
             raise _RowRefused(refusal_words(error), None) from None
         return change, built, maps
+
+    async def batch_check(request: Request) -> JSONResponse:
+        """Whether the last request can join the ones before it in the preview tray: the same
+        checks as `batch_preview`, with nothing kept. A refusal is an answer, not an error:
+        {"ok": False, "reason", "row"}, `row` being the request that cannot join."""
+        if engine is None:
+            return _error("Changes are not available.", 404)
+        try:
+            requests = requests_in(await _body(request))
+            await _batch(requests, keep=False)
+        except ValueError as error:
+            return _error(str(error), 422)
+        except _RowRefused as refused:
+            row = refused.row or requests[-1]["id"]
+            return JSONResponse({"ok": False, "reason": refused.reason, "row": row})
+        return JSONResponse({"ok": True})
 
     async def batch_preview(request: Request) -> JSONResponse:
         """The preview tray as one change (changes/batch.py): each request's own builder, the
@@ -1265,6 +1290,7 @@ def create_app(
             change, built, maps = await _batch(requests)
         except _RowRefused as refused:
             return JSONResponse({"detail": refused.reason, "row": refused.row}, status_code=422)
+        assert change is not None
         picked = _picked(body)
         rows, answers = [], []
         for request, made, row_steps in zip(requests, built, maps, strict=True):
@@ -1425,6 +1451,7 @@ def create_app(
             Route("/api/changes", changes),
             Route("/api/changes/preview", preview, methods=["POST"]),
             Route("/api/batch/preview", batch_preview, methods=["POST"]),
+            Route("/api/batch/check", batch_check, methods=["POST"]),
             Route("/api/changes/{change_id}", change_view),
             Route("/api/changes/{change_id}/{verb}", change_action, methods=["POST"]),
             Route("/api/commands", commands),

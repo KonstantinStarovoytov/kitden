@@ -6,11 +6,11 @@ from pathlib import Path
 
 from starlette.testclient import TestClient
 
-from kitden.changes.batch import NEEDS, SAME_ID
+from kitden.changes.batch import LEAVES, NEEDS, REMOVES, SAME_ID
 from kitden.changes.client_cli import CommandResult
 from kitden.demo import DemoRunner, build_demo_home, demo_build
 from kitden.gateways import data_dir
-from kitden.local_gateway.settings import SETTINGS_FILE
+from kitden.local_gateway.settings import SETTINGS_FILE, TOOLS_FILE
 from kitden.web.app import create_app
 
 ORIGIN = "http://127.0.0.1:47800"
@@ -67,6 +67,44 @@ def _remove(row_id, item_id, title="Remove it"):
 def _rule(row_id, tool, state="off", project=None, server="files"):
     params = {"server": server, "tool": tool, "state": state, "project": project}
     return {"id": row_id, "kind": "gateway.rule", "title": f"Turn {state} {tool}", "params": params}
+
+
+def _hold(home, server, tools):
+    """The demo's Kitden gateway holds one more server, with no rules, and knows its tools."""
+    for name, value in ((SETTINGS_FILE, None), (TOOLS_FILE, [{"name": t} for t in tools])):
+        path = data_dir(home) / name
+        data = json.loads(path.read_text())
+        if value is None:
+            data["servers"][server] = {"url": f"https://{server}.example.test/mcp"}
+        else:
+            data[server] = value
+        path.write_text(json.dumps(data, indent=2))
+
+
+def _move(row_id, item_id, title="Move it into the gateway"):
+    return {
+        "id": row_id,
+        "kind": "gateway.move",
+        "title": title,
+        "targets": [{"item": item_id}],
+        "params": {"gateway": "kitden"},
+    }
+
+
+def _check(page, *requests):
+    answer = page.post("/api/batch/check", json={"requests": list(requests)}, headers=POST)
+    assert answer.status_code == 200, answer.text
+    return answer.json()
+
+
+def _events(page):
+    """The events published so far to a queue made by `page.app.state.events.subscribe()`."""
+    queue = page.queue
+    found = []
+    while not queue.empty():
+        event = queue.get_nowait()
+        found.append(event if isinstance(event, tuple) else (event, None))
+    return found
 
 
 def _preview(page, *requests):
@@ -161,3 +199,61 @@ def test_a_bad_body_is_refused_in_plain_words(tmp_path):
         assert _preview(page, untitled).json() == {"detail": NEEDS}
         twice = _preview(page, _rule("a", "read_file"), _rule("a", "write_file"))
         assert twice.status_code == 422 and twice.json() == {"detail": SAME_ID}
+
+
+def test_remove_github_and_a_github_tool_are_refused_at_check(tmp_path):
+    with _page(tmp_path) as page:
+        _hold(page.home, "github", ["create_issue", "list_issues"])
+        remove = {
+            "id": "a",
+            "kind": "gateway.remove",
+            "title": "Remove github from the gateway",
+            "params": {"server": "github"},
+        }
+        tool = {**_rule("b", "create_issue", server="github"), "title": "Turn off create_issue"}
+        leaves = LEAVES.format(other="Remove github from the gateway", server="github")
+        assert _check(page, remove, tool) == {"ok": False, "reason": leaves, "row": "b"}
+        removes = REMOVES.format(other="Turn off create_issue", server="github")
+        assert _check(page, tool, remove) == {"ok": False, "reason": removes, "row": "a"}
+        answer = _preview(page, remove, tool)
+        assert answer.status_code == 422
+        assert answer.json() == {"detail": leaves, "row": "b"}
+
+
+def test_check_says_ok_for_two_rules(tmp_path):
+    with _page(tmp_path) as page:
+        log = page.get("/api/changes").json()
+        page.queue = page.app.state.events.subscribe()
+        assert _check(page, _rule("a", "read_file"), _rule("b", "search_files")) == {"ok": True}
+        assert [name for name, _ in _events(page)] == []
+        assert page.get("/api/changes").json() == log
+
+
+def test_check_names_the_new_row_when_nothing_would_change(tmp_path):
+    with _page(tmp_path) as page:
+        # The demo's gateway has delete_file of files off for all projects already.
+        answer = _check(page, _rule("a", "read_file"), _rule("b", "delete_file"))
+        nothing = "The Kitden gateway has this already. Nothing to change."
+        assert answer == {"ok": False, "reason": nothing, "row": "b"}
+
+
+def test_two_moves_from_cursor_join(tmp_path):
+    with _page(tmp_path) as page:
+        cursor = _ids(page, "cursor")
+        a, b = _move("a", cursor["n8n"]), _move("b", cursor["browser-tools"])
+        assert _check(page, a, b) == {"ok": True}
+        answer = _preview(page, a, b)
+        assert answer.status_code == 200, answer.text
+        change = answer.json()
+        entry = [
+            i
+            for i, s in enumerate(change["steps"])
+            if (s["client"], s["name"]) == ("cursor", "kitden")
+        ]
+        assert len(entry) == 1
+        assert all(entry[0] in row["steps"] for row in change["rows"])
+        applied = _apply(page, change["id"])
+        assert applied.status_code == 200, applied.text
+        assert applied.json()["state"] == "verified"
+        servers = json.loads((page.home / ".cursor/mcp.json").read_text())["mcpServers"]
+        assert list(servers) == ["files", "kitden"]
