@@ -126,8 +126,9 @@ def test_the_shell_draws_its_icons_and_the_hint_line_sets_its_words_at_once():
     for name in ("chevron-down", "folder", "layers"):
         assert f'icon("{name}"' in parts, name
     assert 'id="hint"' in INDEX and "hidden" in INDEX.split('id="hint"')[1].split(">")[0]
-    hint = app.split("export function setHint")[1].split("\n}\n")[0]
-    assert "line.hidden = !text" in hint and 'icon("info", 13)' in hint
+    # setHint lives in parts.js, so a page can import it without a cycle (parts.test.mjs runs it).
+    assert "export function setHint" in parts and "export function setHint" not in app
+    assert re.search(r'import \{[^}]*\bsetHint\b[^}]*\} from "./parts.js"', app)
     # A page starts without its predecessor's hint.
     assert 'setHint("")' in app.split("function renderPlace")[1].split("\n}\n")[0]
     assert "pointer-events: none" in rule(".hint-dock")

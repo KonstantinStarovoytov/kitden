@@ -36,7 +36,7 @@ function element(tag) {
   return node;
 }
 globalThis.document = { createElement: element, createElementNS: (namespace, tag) => element(tag) };
-const { backupNote, banner, changeTitle, clientCheck, demoTag, folderName, gatewayName, menuItems, morphSocket, opens, optionAfter, originText, projectMenu, scopeBar, scopeText, socket, strictText, TOOL_ORIGIN_WORDS } = await import('../../src/kitden/web/static/js/parts.js');
+const { backupNote, banner, changeTitle, clientCheck, demoTag, folderName, gatewayName, menuItems, morphSocket, opens, optionAfter, originText, projectMenu, scopeBar, scopeText, setHint, socket, strictText, TOOL_ORIGIN_WORDS } = await import('../../src/kitden/web/static/js/parts.js');
 
 test('a row that opens Details ends with a chevron for the eye and words for a screen reader', () => {
   const node = opens();
@@ -413,6 +413,26 @@ test('the scope bar leads with the layers icon, or folder in a project', () => {
   assert.equal(scopeBar(null).querySelector('svg').dataset.icon, 'layers');
   assert.equal(scopeBar('website').querySelector('svg').dataset.icon, 'folder');
   assert.equal(Number(scopeBar('website').querySelector('svg').attributes.width), 14);
+});
+
+test('the hint line shows its words with an info icon, and an empty text hides it', () => {
+  const line = globalThis.document.createElement('p');
+  line.hidden = true;
+  const find = globalThis.document.getElementById;
+  globalThis.document.getElementById = (id) => (id === 'hint' ? line : null);
+  try {
+    setHint('Drag a server onto a client.');
+    assert.equal(line.hidden, false);
+    assert.deepEqual(line.children.map((c) => c.dataset.icon || c.textContent), ['info', 'Drag a server onto a client.']);
+    // New words replace the old at once.
+    setHint('Another line.');
+    assert.deepEqual(line.children.map((c) => c.dataset.icon || c.textContent), ['info', 'Another line.']);
+    setHint('');
+    assert.equal(line.hidden, true);
+    assert.equal(line.children.length, 0);
+  } finally {
+    globalThis.document.getElementById = find;
+  }
 });
 
 test('arrows, Home and End move through the options and stop at the ends', () => {

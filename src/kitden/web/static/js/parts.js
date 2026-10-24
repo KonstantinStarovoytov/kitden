@@ -195,6 +195,15 @@ export function scopeBar(folder, count) {
   return bar;
 }
 
+// The line at the bottom of the page: an info icon and a few words. The words change at once;
+// empty words hide the line.
+export function setHint(text) {
+  const line = document.getElementById("hint");
+  line.replaceChildren();
+  line.hidden = !text;
+  if (text) line.append(icon("info", 13), el("span", null, text));
+}
+
 // The twin of views/words.py STATE_WORDS.
 export const STATE_WORDS = {
   on: "On", off: "Off", over: "Overridden", unk: "Unknown", review: "Needs review", gw: "Via gateway",

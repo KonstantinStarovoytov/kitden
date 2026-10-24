@@ -10,7 +10,7 @@ import { leaveMap } from "./map-review.js";
 import { findChip } from "./map.js";
 import { renderOverview } from "./overview.js";
 import { closeForProject, closePanel, initPanel, isPanelOpen } from "./panel.js";
-import { callout, demoTag, GONE_PROJECT, latestChanges, projectMenu, scanLine, versionsOpened } from "./parts.js";
+import { callout, demoTag, GONE_PROJECT, latestChanges, projectMenu, scanLine, setHint, versionsOpened } from "./parts.js";
 import {
   arrival, busy, current, data, followHash, freshness, go, loadShared, OLD_VIEWS, onIdle, parseHash, projectGone, reload, setRenderer, setState, setSwitcher, state,
   switchProject,
@@ -130,15 +130,6 @@ function refreshForProject() {
     main.classList.remove("pending");
     main.removeAttribute("aria-busy");
   });
-}
-
-// The line at the bottom of the page: an info icon and a few words. The words change at once;
-// empty words hide the line.
-export function setHint(text) {
-  const line = $("#hint");
-  line.replaceChildren();
-  line.hidden = !text;
-  if (text) line.append(icon("info", 13), el("span", null, text));
 }
 
 // The icons of the rail, the project button and the search box. The page holds only their words.
