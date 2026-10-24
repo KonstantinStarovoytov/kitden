@@ -162,7 +162,7 @@ Defined once in `style.css`; JavaScript reads `--spring` from there.
 | `--t-fast` | 180 ms ease | Hover colour, word fades, focus |
 | `--t-panel` | 240 ms `--ease-drawer` | Drawer, column beside the page, scrim |
 | Fold | 280 ms `--ease-out` | A `<details>` opening or closing |
-| Glide | 300 ms `--spring` | The mark sliding between choices |
+| Glide | 300 ms `--calm` (nav) / 280 ms (pills) | The mark sliding between choices |
 | Flight | 340 ms `--ease-drawer` | A shared tile between places |
 | Status | 320–380 ms `--ease-in-out` | Socket morph (dot fill, words fade) |
 | Success | check draws 320 ms, never delays the next action | Applied, Undone |
@@ -170,7 +170,8 @@ Defined once in `style.css`; JavaScript reads `--spring` from there.
 | Busy | spinner after 150 ms, in the button's own place | A button whose work takes a moment |
 | Scan line | shows after 400 ms, 1.6 s calm sweep | A rescan that takes a while |
 | Start line | shows after 1 s; fills from the left as each step of the first scan ends, then fills up and goes; a quiet note under its right end says "Reading Codex and Cursor…" or "Still checking …" | Starting Kitden |
-| `--spring` | critically damped `linear()` spring, no overshoot; falls back to `--ease-out` | Everything the hand moves |
+| `--calm` | `cubic-bezier(.2,.8,.2,1)` | The default curve for Web Animations |
+| `--spring` | `linear()` spring that overshoots about 3.4 %; falls back to `cubic-bezier(.3,1.25,.5,1)` | Presses, switch knobs, ports and badges |
 
 ### Patterns
 

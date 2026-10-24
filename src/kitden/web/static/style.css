@@ -77,11 +77,12 @@
   --t-press: 120ms;
   --t-fast: 180ms;
   --t-panel: 240ms;
-  /* A critically damped spring (no overshoot: calm, for a tool that edits real files). */
-  --spring: var(--ease-out);
+  --calm: cubic-bezier(.2,.8,.2,1);
+  /* A spring that overshoots a little (about 3.4 %), for small parts only. */
+  --spring: cubic-bezier(.3,1.25,.5,1);
 }
 @supports (transition-timing-function: linear(0, 1)) {
-  :root { --spring: linear(0, 0.062 5%, 0.191 10%, 0.337 15%, 0.475 20%, 0.692 30%, 0.829 40%, 0.908 50%, 0.952 60%, 0.976 70%, 0.988 80%, 1); }
+  :root { --spring: linear(0, 0.0066, 0.0263 2.4%, 0.1061 5%, 0.2289 7.7%, 0.6235 15.9%, 0.7837 20.1%, 0.8986 24.5%, 0.9775 29.4%, 1.0122 33.2%, 1.031 37.5%, 1.0337 42.7%, 1.0242 49.5%, 1.0048 61.8%, 0.9989 75.4%, 1); }
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {

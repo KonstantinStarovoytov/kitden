@@ -5,6 +5,44 @@ export const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 export const EASE_OUT = "cubic-bezier(0.23, 1, 0.32, 1)";
 export const EASE_IN_OUT = "cubic-bezier(0.77, 0, 0.175, 1)";
 
+// The motion mockup's curves. CALM is the default for Web Animations; the small parts that
+// overshoot use --spring from style.css.
+export const CALM = "cubic-bezier(.2,.8,.2,1)";
+export const DRAW = "cubic-bezier(.3,.7,.2,1)";
+export const RETRACT = "cubic-bezier(.4,0,.2,1)";
+export const OUT3 = (t) => 1 - (1 - t) ** 3;
+export const IN3 = (t) => t ** 3;
+
+// ?slow=2 in the address makes every time twice as long (for looking at a motion; never in the UI).
+const slow = (() => {
+  if (typeof location === "undefined") return 1;
+  const value = Number(new URLSearchParams(location.search).get("slow"));
+  return Number.isFinite(value) && value > 0 ? value : 1;
+})();
+
+// A time in ms: zero under reduced motion. Read on every call, so a changed setting counts at once.
+export function D(ms) {
+  return reducedMotion.matches ? 0 : ms * slow;
+}
+
+// Animate a node and wait for the end. Under reduced motion it does nothing and is done at once.
+export function animateTo(node, keyframes, { dur = 300, delay = 0, ease = CALM, fill = "backwards" } = {}) {
+  const duration = D(dur);
+  if (!node || !node.animate || !duration) return Promise.resolve();
+  try {
+    return node.animate(keyframes, { duration, delay: D(delay), easing: ease, fill }).finished.catch(() => {});
+  } catch {
+    return Promise.resolve();
+  }
+}
+
+// Blocks fade in and lift a little, one step after the other.
+export function rise(nodes, { delay = 0, step = 0, y = 6, dur = 260 } = {}) {
+  nodes.forEach((node, index) => {
+    animateTo(node, [{ opacity: 0, transform: `translateY(${y}px)` }, { opacity: 1, transform: "none" }], { dur, delay: delay + index * step });
+  });
+}
+
 export function animate(node, keyframes, options) {
   if (reducedMotion.matches || !node || !node.animate) return null;
   return node.animate(keyframes, { easing: EASE_OUT, ...options });
@@ -52,7 +90,8 @@ export function transition(change, extraClass) {
   return t;
 }
 
-// Numbers roll: the old value slides out, the new one slides in.
+// Numbers roll: the old value leaves, then the new one comes in from the other side.
+// A bigger number goes up, a smaller one down; text always goes down.
 export function rollTo(holder, value) {
   const text = value === null || value === undefined ? "" : String(value);
   const old = holder.lastElementChild;
@@ -60,11 +99,12 @@ export function rollTo(holder, value) {
   const next = el("span", null, text);
   holder.append(next);
   if (!old) return;
-  const up = Number(text) > Number(old.textContent) ? -1 : 1;
-  animate(old, [{ transform: "translateY(0)", opacity: 1 }, { transform: `translateY(${-100 * up}%)`, opacity: 0 }], { duration: 300, fill: "forwards" });
-  animate(next, [{ transform: `translateY(${100 * up}%)`, opacity: 0 }, { transform: "translateY(0)", opacity: 1 }], { duration: 300 });
+  // The old value moves 70 % of its height away; the new one starts the same distance on the other side.
+  const out = Number(text) > Number(old.textContent) ? -70 : 70;
+  animateTo(old, [{ transform: "translateY(0)", opacity: 1 }, { transform: `translateY(${out}%)`, opacity: 0 }], { dur: 140, ease: "ease-in", fill: "forwards" });
+  animateTo(next, [{ transform: `translateY(${-out}%)`, opacity: 0 }, { transform: "translateY(0)", opacity: 1 }], { dur: 200, delay: 140 });
   // Remove by time, not by animation end: hidden tabs may never finish an animation.
-  setTimeout(() => old.remove(), reducedMotion.matches ? 0 : 320);
+  setTimeout(() => old.remove(), D(140));
 }
 
 // First visit to a place: its blocks rise in 45 ms apart. Later visits are instant.
@@ -79,11 +119,12 @@ export function entrance(place, nodes) {
 }
 
 // The spring from style.css, for animations started from here.
+const SPRING_FALLBACK = "cubic-bezier(.3,1.25,.5,1)";
 let springEasing = null;
 export function spring() {
   if (springEasing === null) {
     const value = getComputedStyle(document.documentElement).getPropertyValue("--spring").trim();
-    springEasing = value.startsWith("linear(") ? value : EASE_OUT;
+    springEasing = value || SPRING_FALLBACK;
   }
   return springEasing;
 }
@@ -91,7 +132,7 @@ export function spring() {
 // One indicator per group (rail, tabs, filters) slides from the last active choice to the new
 // one. The choice itself changes at once; only the mark behind it moves.
 const inks = new Map();
-export function glide(box, active, key, { animated = true } = {}) {
+export function glide(box, active, key, { animated = true, duration = 300 } = {}) {
   if (!box) return;
   let ink = box.querySelector(":scope > .ink");
   if (!ink) {
@@ -112,7 +153,7 @@ export function glide(box, active, key, { animated = true } = {}) {
   Object.assign(ink.style, to, { opacity: "1" });
   const from = inks.get(key);
   if (animated && from && from.box === box && from.transform !== to.transform) {
-    animate(ink, [{ transform: from.transform, width: from.width, height: from.height }, to], { duration: 300, easing: spring() });
+    animateTo(ink, [{ transform: from.transform, width: from.width, height: from.height }, to], { dur: duration, fill: "none" });
   }
   inks.set(key, { ...to, box });
 }
