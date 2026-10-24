@@ -3,6 +3,11 @@
 How the page looks and moves. `src/kitden/web/static/style.css` holds the values; this file says why.
 Quiet Den + Graphite, light and dark.
 
+**Moving to the mockup (2026-10-24).** The owner's mockup, [docs/mockup](mockup/README.md), is the
+target. The [alignment plan](superpowers/plans/2026-10-24-mockup-alignment.md) moves the pages to
+it phase by phase. Each phase rewrites the sections below that it changes, in the same commit as
+the code. Until then, this file describes the page as it is.
+
 ## Identity
 
 Kitden is a calm local home for a developer's coding tools. The mark is a soft asymmetric house with an off-center arched door. The wordmark is Kitden in the existing system sans, medium-bold, with slightly tight tracking.

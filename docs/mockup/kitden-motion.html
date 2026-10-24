@@ -1,0 +1,1351 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kitden Motion Study</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: the Kitden window (rail · top bar · page) inside a 16px gutter. Maps are fixed-coordinate trees that scroll inside their own stage. Tokens are the kd-* values from design/kitden.pen. */
+:root{
+  --out:#0D0F13; --canvas:#171A20; --panel:#20242C; --raised:#282D36; --inset:#12151A; --dim:#1B1F26;
+  --ink:#F2F3F5; --ink-2:#C1C6CF; --muted:#A5ADBA; --faint:#6B7381;
+  --line:#3B424D; --wire:#59616F; --accent:#F09A7C; --action:#B34B2D; --action-hover:#9F4025;
+  --select:#382A27; --ok:#47C27A; --ok-fill:#47C27A; --on-ok:#0B1A12; --warn:#EAC27C;
+  --preview-fill:#F09A7C10; --preview-line:#F09A7C80; --glow:240 154 124; --beam:#FFE3D6;
+  --shim:rgb(255 255 255 / .06); --shadow:0 18px 44px -14px rgb(0 0 0 / .7);
+  --font:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --spring:linear(0,0.0066,0.0263 2.4%,0.1061 5%,0.2289 7.7%,0.6235 15.9%,0.7837 20.1%,0.8986 24.5%,0.9775 29.4%,1.0122 33.2%,1.031 37.5%,1.0337 42.7%,1.0242 49.5%,1.0048 61.8%,0.9989 75.4%,1);
+  --slow:1;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){:root:not([data-theme="dark"]){
+  --out:#E4E7EC; --canvas:#F5F6F8; --panel:#FFFFFF; --raised:#FFFFFF; --inset:#F0F2F5; --dim:#EEF0F3;
+  --ink:#161A21; --ink-2:#464D5B; --muted:#646B79; --faint:#80868F;
+  --line:#E1E4E9; --wire:#C3C8D0; --accent:#A44226; --action:#B34B2D; --action-hover:#9F4025;
+  --select:#F6E8E2; --ok:#1C8A4C; --ok-fill:#177A42; --on-ok:#FFFFFF; --warn:#97590A;
+  --preview-fill:#A4422612; --preview-line:#A4422680; --glow:196 84 50; --beam:#C2502E;
+  --shim:rgb(0 0 0 / .05); --shadow:0 18px 44px -18px rgb(26 31 42 / .28); color-scheme:light}}
+:root[data-theme="light"]{
+  --out:#E4E7EC; --canvas:#F5F6F8; --panel:#FFFFFF; --raised:#FFFFFF; --inset:#F0F2F5; --dim:#EEF0F3;
+  --ink:#161A21; --ink-2:#464D5B; --muted:#646B79; --faint:#80868F;
+  --line:#E1E4E9; --wire:#C3C8D0; --accent:#A44226; --action:#B34B2D; --action-hover:#9F4025;
+  --select:#F6E8E2; --ok:#1C8A4C; --ok-fill:#177A42; --on-ok:#FFFFFF; --warn:#97590A;
+  --preview-fill:#A4422612; --preview-line:#A4422680; --glow:196 84 50; --beam:#C2502E;
+  --shim:rgb(0 0 0 / .05); --shadow:0 18px 44px -18px rgb(26 31 42 / .28); color-scheme:light}
+:root[data-theme="dark"]{color-scheme:dark}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;padding-block:16px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));background:var(--out);color:var(--ink);font:13px/1.45 var(--font);-webkit-font-smoothing:antialiased;overflow:hidden}
+button{font:inherit;color:inherit}
+.ic{flex:none;display:inline-block;vertical-align:middle}
+.app{height:100%;min-height:560px;display:grid;grid-template-columns:148px minmax(0,1fr);background:var(--canvas);border:1px solid var(--line);border-radius:12px;overflow:hidden;position:relative}
+
+/* Rail */
+.rail{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;gap:26px;padding:20px 12px 18px;min-height:0}
+.logo{display:flex;align-items:center;gap:9px;font-weight:600;font-size:19px;letter-spacing:-.015em;padding:2px 6px}
+.logo svg{width:28px;height:28px}
+.nav{position:relative;display:flex;flex-direction:column;gap:6px}
+.nav button{all:unset;cursor:pointer;display:flex;align-items:center;gap:10px;height:38px;padding:0 10px;border-radius:8px;color:var(--ink-2);position:relative;z-index:1;transition:color calc(.18s*var(--slow))}
+.nav button:hover{color:var(--ink)}
+.nav button[aria-current="page"]{color:var(--accent);font-weight:600}
+.nav button:focus-visible,.btn:focus-visible,.seg button:focus-visible,.nd:focus-visible,.appearance:focus-visible,.tg:focus-visible,.row:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.nav-mark{position:absolute;left:0;right:0;top:0;height:38px;border-radius:8px;background:var(--select);border:1px solid rgb(var(--glow) / .3);box-shadow:inset 2px 0 0 #C85835}
+.rail-foot{margin-top:auto;display:flex;flex-direction:column;gap:14px;padding:0 8px;font-size:11px;color:var(--muted)}
+.appearance{all:unset;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-2);border-radius:6px}
+
+/* Column, top bar, page */
+.col{position:relative;display:grid;grid-template-rows:66px minmax(0,1fr);min-width:0;min-height:0}
+.topbar{display:flex;align-items:center;gap:18px;padding:0 18px 0 22px;border-bottom:1px solid var(--line);background:var(--panel);min-width:0}
+.find{display:flex;align-items:center;gap:8px;flex:1;min-width:80px;color:var(--muted)}
+.find input{all:unset;flex:1;min-width:0;font-size:12px;color:var(--ink)}
+.find input::placeholder{color:var(--muted)}
+.studio{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);white-space:nowrap}
+.tg{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-radius:6px;border:1px solid var(--line);font-size:11px;color:var(--muted);transition:background-color calc(.18s*var(--slow)),color calc(.18s*var(--slow)),border-color calc(.18s*var(--slow))}
+.tg[aria-pressed="true"]{background:var(--select);color:var(--accent);border-color:rgb(var(--glow) / .45)}
+#panel-host{display:contents}
+.sw{display:inline-block}
+.itile{position:relative}
+#dots{position:absolute;left:0;right:0;top:66px;bottom:0;width:100%;height:calc(100% - 66px);pointer-events:none;z-index:0}
+main{position:relative;z-index:1;overflow:auto;padding:26px 22px 64px;min-width:0;min-height:0}
+.hintline{position:absolute;left:22px;right:22px;bottom:14px;z-index:2;display:flex;justify-content:space-between;gap:16px;font-size:11px;color:var(--muted);pointer-events:none}
+.hintline span:first-child{display:flex;gap:6px;align-items:center;min-width:0}
+.hintline span:last-child{color:var(--faint)}
+
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+h1{margin:0;font-size:24px;font-weight:600;letter-spacing:-.018em;text-wrap:balance}
+h1 .w,.lede .w{display:inline-block}
+.lede{margin:4px 0 0;font-size:12px;color:var(--muted)}
+.scope{display:flex;align-items:center;gap:6px;margin-top:12px;font-size:11px;color:var(--muted)}
+.head-acts{display:flex;align-items:center;gap:10px}
+.chip{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:3px 8px;white-space:nowrap}
+.seg{position:relative;display:flex;gap:2px;padding:2px;background:var(--inset);border:1px solid var(--line);border-radius:7px}
+.seg button{all:unset;cursor:pointer;position:relative;z-index:1;padding:4px 11px;border-radius:5px;font-size:12px;color:var(--muted);transition:color calc(.18s*var(--slow))}
+.seg button[aria-pressed="true"]{color:var(--ink);font-weight:500}
+.seg .seg-mark{position:absolute;top:2px;bottom:2px;left:2px;width:40px;border-radius:5px;background:var(--raised);box-shadow:0 1px 2px rgb(0 0 0 / .25)}
+.seg.sm button{padding:3px 8px;font-size:11px}
+
+/* Buttons */
+.btn{all:unset;cursor:pointer;position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:7px;border:1px solid var(--line);background:var(--raised);color:var(--ink);font-size:12px;font-weight:500;white-space:nowrap;transition:background-color calc(.18s*var(--slow)),border-color calc(.18s*var(--slow)),color calc(.18s*var(--slow)),scale calc(.26s*var(--slow)) var(--spring)}
+.btn:hover{border-color:color-mix(in srgb,var(--accent) 40%,var(--line))}
+.btn:active{scale:.97}
+.btn.primary{background:var(--action);border-color:var(--action);color:#fff;font-weight:600}
+.btn.primary:hover{background:var(--action-hover);border-color:var(--action-hover)}
+.btn.ok{background:var(--ok-fill);border-color:var(--ok-fill);color:var(--on-ok)}
+.btn.sm{padding:4px 9px;font-size:11px}
+.btn.xs{padding:2px 7px;font-size:11px;border-radius:6px;gap:4px}
+.btn[disabled]{opacity:.5;pointer-events:none}
+.btn .meter{position:absolute;left:0;bottom:0;height:2px;width:100%;background:rgb(255 255 255 / .75);transform:scaleX(0);transform-origin:left}
+.rich .btn.primary::after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 35%,rgb(255 255 255 / .28) 50%,transparent 65%);transform:translateX(-130%);pointer-events:none}
+.rich .btn.primary:hover::after{transform:translateX(130%);transition:transform calc(.75s*var(--slow)) ease}
+.spin{animation:rot calc(.8s*var(--slow)) linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+
+/* Map */
+.stage{position:relative;margin-top:22px;overflow-x:auto;overflow-y:hidden;padding:6px 6px 10px 6px;margin-left:-6px}
+.map{position:relative;flex:none}
+.map svg.links{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.map .layer{position:absolute;inset:0}
+.nd{position:absolute;left:0;top:0;transform-origin:center;will-change:transform}
+.cap{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);white-space:nowrap}
+.cap.grp{font-weight:600;color:var(--ink-2)}
+.blk{display:flex;align-items:center;gap:10px;padding:0 12px;background:var(--panel);border:1px solid var(--line);border-radius:8px;cursor:pointer;user-select:none;-webkit-user-select:none;transition:border-color calc(.18s*var(--slow)),background-color calc(.18s*var(--slow)),box-shadow calc(.3s*var(--slow)),filter calc(.3s*var(--slow)),scale calc(.26s*var(--slow)) var(--spring)}
+.blk:hover{border-color:color-mix(in srgb,var(--accent) 38%,var(--line))}
+.blk:active{scale:.98}
+.blk .tx{display:flex;flex-direction:column;gap:2px;min-width:0}
+.blk b{font-size:12px;font-weight:600;color:var(--ink);white-space:nowrap}
+.blk small{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);white-space:nowrap}
+.tile{width:28px;height:28px;border-radius:6px;border:1px solid var(--line);background:#12151A;object-fit:contain;flex:none;display:block}
+.tile.pad{padding:4px}
+.tile.sm{width:20px;height:20px;border-radius:5px}
+.tile.sm.pad{padding:3px}
+.itile{width:28px;height:28px;border-radius:6px;border:1px solid var(--line);background:var(--inset);display:grid;place-items:center;flex:none;color:var(--ink-2)}
+.lamp{width:6px;height:6px;border-radius:50%;background:var(--faint);display:inline-block;flex:none;transition:background-color calc(.4s*var(--slow))}
+.lamp.on{background:var(--ok)}
+.lamp.warn{background:var(--warn)}
+.port{position:absolute;top:50%;width:9px;height:9px;margin-top:-4.5px;border-radius:50%;background:var(--canvas);border:1.5px solid var(--wire);transition:border-color calc(.2s*var(--slow)),opacity calc(.2s*var(--slow)),scale calc(.3s*var(--slow)) var(--spring)}
+.port.r{right:-5px}
+.port.l{left:-5px}
+.port.amber{border-color:var(--faint)}
+.blk.lit .port:not(.amber),.blk.sel .port{border-color:var(--accent)}
+.badge{position:absolute;right:-10px;top:50%;margin-top:-10px;width:20px;height:20px;border-radius:50%;background:var(--raised);border:1px solid var(--line);display:grid;place-items:center;font-size:10px;color:var(--ink-2);transition:scale calc(.3s*var(--slow)) var(--spring),opacity calc(.2s*var(--slow))}
+.srv .port.r{opacity:0;scale:.4}
+.srv.open{border-color:var(--accent)}
+.srv.open .badge{opacity:0;scale:.3}
+.srv.open .port.r{opacity:1;scale:1;border-color:var(--accent)}
+.gw{flex-direction:column;justify-content:center;gap:1px;text-align:center;background:var(--raised);border-color:var(--accent);padding:10px}
+.gw b{font-size:13px}
+.gw .house svg{width:26px;height:26px;display:block;margin:0 auto 4px}
+.stats{display:flex;justify-content:center;gap:10px;margin-top:7px;font-size:11px;color:var(--ink-2)}
+.stats>span{display:inline-flex;align-items:center;gap:4px}
+.stats em{font-style:normal;white-space:nowrap}
+.tool{gap:9px;padding:0 10px}
+.tool span{font-size:12px;color:var(--ink)}
+.tool .kind{margin-left:auto;font-size:10.5px;color:var(--faint)}
+.mark{width:6px;height:6px;border-radius:50%;background:var(--faint);display:inline-block;flex:none;transition:background-color calc(.4s*var(--slow))}
+.mark.on{background:var(--ok)}
+.mark.pv{background:transparent;border:1.5px dashed var(--accent)}
+.out{background:var(--dim)}
+.grip{display:grid;color:var(--faint);cursor:grab;margin-right:-4px}
+.out .oic{color:var(--ink-2);display:grid}
+.blk.sel{background:var(--select);border-color:var(--accent)}
+.blk.preview{background:var(--preview-fill);border:1px dashed var(--preview-line)}
+.blk.preview small{color:var(--accent)}
+.blk.client.free{cursor:grab}
+.blk.lift{box-shadow:var(--shadow);border-color:var(--accent);cursor:grabbing;z-index:5}
+.slot{border:1px dashed var(--preview-line);border-radius:8px;background:var(--preview-fill)}
+.map.focus .nd.blk:not(.lit):not(.sel){filter:opacity(.4) saturate(.6)}
+.map.find .nd.blk.miss{filter:opacity(.3) saturate(.5) blur(1.2px)}
+.lk{fill:none;stroke:var(--wire);stroke-width:1.2;stroke-linecap:round;transition:stroke calc(.22s*var(--slow)),stroke-opacity calc(.3s*var(--slow)),stroke-width calc(.22s*var(--slow))}
+.lk.direct{stroke:var(--faint);stroke-opacity:.8;stroke-dasharray:1.5 4}
+.lk.preview{stroke:var(--accent);stroke-opacity:.65;stroke-dasharray:4 4}
+.rich .lk.preview{animation:march calc(1.1s*var(--slow)) linear infinite}
+@keyframes march{to{stroke-dashoffset:-16}}
+.lk.on{stroke:var(--accent);stroke-width:1.7}
+.lk.direct.on{stroke:var(--muted);stroke-opacity:1}
+.map.focus .lk:not(.on){stroke-opacity:.16}
+.map.find .lk{stroke-opacity:.2}
+.ov{fill:none;stroke:var(--accent);stroke-width:2.1;stroke-linecap:round}
+.beam{fill:none;stroke:var(--beam);stroke-width:2.6;stroke-linecap:round}
+.beam.amber{stroke:var(--warn)}
+/* Spotlight border and glow that follow the pointer (Magic Card / Spotlight Card) */
+.rich .blk::before,.rich .card::before{content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1px;background:radial-gradient(130px circle at var(--mx,-300px) var(--my,-300px),rgb(var(--glow) / .85),transparent 70%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0);opacity:0;transition:opacity calc(.25s*var(--slow));pointer-events:none}
+.rich .blk::after,.rich .card::after{content:"";position:absolute;inset:0;border-radius:inherit;background:radial-gradient(200px circle at var(--mx,-300px) var(--my,-300px),rgb(var(--glow) / .08),transparent 65%);opacity:0;transition:opacity calc(.25s*var(--slow));pointer-events:none}
+.rich .blk:hover::before,.rich .blk:hover::after,.rich .card:hover::before,.rich .card:hover::after{opacity:1}
+/* Border beam on a block waiting for Apply */
+@property --a{syntax:"<angle>";initial-value:0deg;inherits:false}
+.bb{display:none;position:absolute;inset:-1px;border-radius:inherit;padding:1px;background:conic-gradient(from var(--a),transparent 0 70%,rgb(var(--glow)) 86%,var(--beam) 91%,transparent 97%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0);animation:spinA calc(2.4s*var(--slow)) linear infinite;pointer-events:none}
+.rich .preview .bb{display:block}
+@keyframes spinA{to{--a:360deg}}
+.ripple{position:absolute;inset:-1px;border-radius:inherit;pointer-events:none}
+.spark{position:fixed;width:12px;height:2px;margin-top:-1px;border-radius:2px;transform-origin:0 50%;pointer-events:none;z-index:300}
+.flier{position:fixed!important;z-index:60;pointer-events:none;overflow:hidden}
+
+/* List view */
+.list{width:912px;font-size:12px}
+.lh,.lr{display:grid;grid-template-columns:minmax(0,1fr) 130px 150px 100px;align-items:center;gap:12px;padding:0 12px}
+.lh{height:30px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--line)}
+.lg{display:flex;align-items:center;gap:7px;height:30px;padding:0 12px;font-size:11px;font-weight:600;color:var(--ink-2);border-bottom:1px solid var(--line)}
+.lr{height:40px;border-bottom:1px solid var(--line);cursor:pointer;transition:background-color calc(.18s*var(--slow))}
+.lr:hover{background:var(--dim)}
+.lr.sub{height:34px;padding-left:44px}
+.lr.sel{background:var(--select)}
+.lr .nm{display:flex;align-items:center;gap:8px;font-weight:600;min-width:0}
+.lr.sub .nm{font-weight:400}
+.lr .by{display:flex;gap:4px}
+.lr .end{display:flex;justify-content:flex-end}
+
+/* Side panel, dock */
+.panel{position:absolute;right:22px;top:190px;bottom:46px;width:min(320px,calc(100% - 44px));z-index:20;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:16px;box-shadow:var(--shadow);overflow:auto}
+.p-kick{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--faint)}
+.x{all:unset;cursor:pointer;display:grid;place-items:center;width:24px;height:24px;border-radius:6px;color:var(--muted)}
+.x:hover{background:var(--dim);color:var(--ink)}
+.p-title{font-size:17px;font-weight:600;letter-spacing:-.01em}
+.p-id{font:11px/1.5 var(--mono);color:var(--muted)}
+.facts{display:grid;grid-template-columns:94px minmax(0,1fr);gap:11px 8px;margin:0;padding:12px 0;border-block:1px solid var(--line);font-size:12px}
+.facts dt{font-size:11px;color:var(--muted)}
+.facts dd{margin:0;display:flex;align-items:center;gap:6px;min-width:0}
+.p-say{margin:0;font-size:12px;color:var(--ink-2)}
+.p-acts{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.p-tech{margin-top:auto;display:flex;justify-content:space-between;align-items:center;padding-top:10px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+.p-lines{font:11px/1.6 var(--mono);color:var(--ink-2);background:var(--inset);border:1px solid var(--line);border-radius:6px;padding:10px 12px;white-space:pre-wrap}
+.p-hist{display:flex;flex-wrap:wrap;gap:6px;font-size:11px;color:var(--muted);align-items:center}
+.p-hist span.on{color:var(--ink)}
+.sk{display:block;height:10px;border-radius:5px;background:var(--raised);position:relative;overflow:hidden}
+.rich .sk::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,var(--shim),transparent);transform:translateX(-100%);animation:shim calc(1.1s*var(--slow)) ease-in-out infinite}
+@keyframes shim{to{transform:translateX(100%)}}
+.search{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:var(--inset);color:var(--muted)}
+.search input{all:unset;flex:1;min-width:0;font-size:12px;color:var(--ink)}
+.res-g{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--ink-2);margin-top:4px}
+.res{display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);cursor:pointer;transition:border-color calc(.18s*var(--slow)),background-color calc(.18s*var(--slow))}
+.res:hover{border-color:color-mix(in srgb,var(--accent) 40%,var(--line))}
+.res.on{background:var(--select);border-color:var(--accent)}
+.res.off{opacity:.55;cursor:default}
+.res.dragging{opacity:.4}
+.flier.ghost{box-shadow:var(--shadow);cursor:grabbing}
+.flier.ghost.over{border-color:var(--accent);background:var(--select)}
+.res .tx{display:flex;flex-direction:column;flex:1;min-width:0}
+.res b{font-size:12px}
+.res small{font-size:11px;color:var(--muted)}
+.res .st{font-size:11px;color:var(--faint)}
+.res.on .st{color:var(--accent)}
+.res .st.okc{color:var(--ok)}
+.dock{position:absolute;left:22px;bottom:46px;z-index:25;max-width:calc(100% - 44px)}
+.bar{display:flex;align-items:center;gap:14px;width:380px;max-width:100%;padding:14px 14px 14px 16px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow)}
+.bar.err{border-color:var(--accent)}
+.bar .tx{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}
+.bar b{font-size:13px;font-weight:600}
+.bar small{font-size:11px;color:var(--muted)}
+.bar .acts{display:flex;gap:8px}
+.toast{position:relative;overflow:hidden;display:flex;align-items:center;gap:10px;padding:9px 10px 9px 14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);white-space:nowrap;font-size:12px}
+.toast .tk{display:grid;color:var(--ok)}
+.toast .life{position:absolute;left:0;bottom:0;height:2px;width:100%;background:var(--ok);opacity:.7;transform-origin:left}
+.okc{color:var(--ok)!important}
+.acc{color:var(--accent)!important}
+.warn{color:var(--warn)!important}
+.num{display:inline-block;font-variant-numeric:tabular-nums}
+
+/* Overview */
+.ov-grid{display:grid;grid-template-columns:minmax(0,690px) minmax(0,480px);gap:40px;margin-top:20px;align-items:start}
+.ov-cap{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--ink-2);margin:14px 0 8px}
+.ov-cap:first-child{margin-top:0}
+.cards{display:flex;flex-direction:column;gap:8px}
+.card{position:relative;display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--panel);border:1px solid var(--line);border-radius:8px}
+.card .tx{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.card b{font-size:12px;font-weight:600}
+.card small{font-size:11px;color:var(--muted)}
+.card .who{display:flex;gap:4px}
+.fold{all:unset;cursor:pointer;display:flex;align-items:center;gap:6px;margin-top:12px;font-size:12px;color:var(--ink-2)}
+.fold svg{transition:rotate calc(.28s*var(--slow)) var(--spring)}
+.fold[aria-expanded="true"] svg{rotate:90deg}
+.notes{overflow:hidden}
+.note{display:flex;gap:10px;align-items:center;padding:9px 2px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line)}
+.ov-foot{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);margin-top:8px}
+
+/* Changes */
+.tl{margin-top:16px;max-width:912px}
+.day{font-size:11px;color:var(--muted);margin:14px 0 6px}
+.rows{position:relative;display:flex;flex-direction:column;gap:8px;padding-left:22px}
+.rail-line{position:absolute;left:7px;top:22px;bottom:22px;width:1px;background:var(--line);transform-origin:top}
+.row{position:relative;display:grid;grid-template-columns:52px minmax(0,1fr) auto auto auto;align-items:center;gap:12px;height:46px;padding:0 12px;background:var(--panel);border:1px solid var(--line);border-radius:8px;cursor:pointer;transition:border-color calc(.18s*var(--slow)),background-color calc(.18s*var(--slow)),opacity calc(.3s*var(--slow))}
+.row:hover{border-color:color-mix(in srgb,var(--accent) 38%,var(--line))}
+.row.sel{background:var(--select);border-color:var(--accent)}
+.row .dot{position:absolute;left:-19px;top:50%;width:9px;height:9px;margin-top:-4.5px;border-radius:50%;background:var(--canvas);border:1.5px solid var(--wire)}
+.row.sel .dot{background:var(--accent);border-color:var(--accent)}
+.row time{font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums}
+.row .t{position:relative;font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .strike{position:absolute;left:0;right:0;top:50%;height:1px;background:currentColor;transform:scaleX(0);transform-origin:left}
+.row.undone .strike{transform:scaleX(1)}
+.row.undone .t{color:var(--muted)}
+.row .who{display:flex;gap:4px}
+.row .state{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);white-space:nowrap}
+.row .state.warn{color:var(--warn)}
+
+/* Project picker, panel steps, switches, drag-out, project tags */
+.proj{all:unset;cursor:pointer;display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12px;white-space:nowrap;padding:4px 8px;margin-left:-8px;border-radius:7px;transition:background-color calc(.18s*var(--slow))}
+.proj:hover{background:var(--dim)}
+.proj b{color:var(--ink);font-weight:600;display:inline-block}
+.proj.acc-on b{color:var(--accent)}
+.proj:focus-visible,.mi:focus-visible,.pick:focus-visible,.switch:focus-visible,.lnk:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.menu{position:absolute;z-index:80;width:300px;padding:6px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:2px;transform-origin:top left}
+.menu .search{margin-bottom:4px}
+.mi{all:unset;cursor:pointer;display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;color:var(--ink-2)}
+.mi:hover{background:var(--dim)}
+.mi.on{background:var(--select);color:var(--ink)}
+.pk-tx{display:flex;flex-direction:column;flex:1;min-width:0}
+.pk-tx b{font-size:12px;font-weight:600;color:var(--ink)}
+.pk-tx small{font-size:11px;color:var(--muted)}
+.picks{display:flex;flex-direction:column;gap:6px}
+.pick{all:unset;cursor:pointer;display:flex;align-items:center;gap:10px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);transition:border-color calc(.18s*var(--slow)),background-color calc(.18s*var(--slow))}
+.pick:hover{border-color:color-mix(in srgb,var(--accent) 40%,var(--line))}
+.pick.on{background:var(--select);border-color:var(--accent)}
+.pick[disabled]{opacity:.45;cursor:default}
+.pk-ic{display:grid;color:var(--muted)}
+.radio{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--wire);flex:none;transition:background-color calc(.2s*var(--slow)),border-color calc(.2s*var(--slow)),box-shadow calc(.2s*var(--slow))}
+.pick.on .radio{border-color:var(--accent);background:var(--accent);box-shadow:inset 0 0 0 3px var(--panel)}
+.crumb{margin-right:auto;margin-left:6px}
+.p-kick .x{margin:-4px}
+.ptag{margin-left:auto;display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--muted);white-space:nowrap}
+.ptag.acc{color:var(--accent)}
+.tool .tn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.lk.direct.dpreview{stroke:var(--accent);stroke-dasharray:4 4;stroke-opacity:.65}
+.rich .lk.dpreview{animation:march calc(1.1s*var(--slow)) linear infinite}
+.lk.preview.leaving{stroke:var(--muted);stroke-opacity:.4}
+.blk.drop{border-color:var(--accent);background:var(--select);scale:1.05}
+.dragtip{position:absolute;left:0;top:0;z-index:7;padding:3px 9px;border-radius:10px;background:var(--panel);border:1px solid var(--line);color:var(--muted);font-size:11px;white-space:nowrap;pointer-events:none;box-shadow:var(--shadow)}
+.dragtip.on{background:var(--select);border-color:var(--accent);color:var(--accent)}
+.sweep{position:absolute;top:-12px;bottom:-12px;left:0;width:30%;pointer-events:none;z-index:4;background:linear-gradient(90deg,transparent,rgb(var(--glow) / .12),transparent)}
+.sw-head{font-size:11px;font-weight:600;color:var(--ink-2);margin-bottom:6px}
+.sw-list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.sw-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-top:1px solid var(--line)}
+.sw-row:first-child{border-top:0}
+.sw-row.whole{background:var(--dim)}
+.sw-tx{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.sw-tx code{font:11px/1.4 var(--mono);color:var(--ink)}
+.sw-tx b{font-size:12px}
+.sw-tx small{display:flex;align-items:center;gap:4px;flex-wrap:wrap;font-size:11px;color:var(--muted)}
+.lnk{all:unset;cursor:pointer;color:var(--accent);text-decoration:underline;text-underline-offset:2px}
+.switch{all:unset;cursor:pointer;width:34px;height:24px;display:grid;place-items:center;flex:none}
+.switch i{position:relative;display:block;width:34px;height:20px;border-radius:10px;background:var(--inset);border:1px solid var(--line);box-sizing:border-box;transition:background-color calc(.25s*var(--slow)),border-color calc(.25s*var(--slow))}
+.switch i::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--muted);transition:transform calc(.34s*var(--slow)) var(--spring),background-color calc(.25s*var(--slow))}
+.switch[aria-pressed="true"] i{background:var(--accent);border-color:var(--accent)}
+.switch[aria-pressed="true"] i::after{transform:translateX(14px);background:#fff}
+.switch.pending i{border-style:dashed;background:var(--select);border-color:var(--accent)}
+.switch.pending i::after{transform:translateX(7px);background:var(--accent)}
+.exs{display:flex;flex-direction:column;gap:6px}
+.ex-row{display:flex;align-items:center;gap:8px;font-size:12px}
+.ex-row .exn{flex:1}
+.muted{color:var(--muted)}
+.flier.morph{border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+/* Tray of changes in preview */
+.bar.tray.many{flex-direction:column;align-items:stretch;gap:10px;width:380px}
+.tray-head{display:flex;flex-direction:column;gap:3px}
+.tray-head b{font-size:13px;font-weight:600}
+.tray-head small{font-size:11px;color:var(--muted)}
+.tray-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;max-height:212px;overflow:auto}
+.tray-list li{display:flex;align-items:center;gap:10px;padding:7px 6px 7px 10px;border:1px dashed var(--preview-line);background:var(--preview-fill);border-radius:8px}
+.tray-list .ti{display:grid;color:var(--accent)}
+.tray-list .tt{display:flex;flex-direction:column;flex:1;min-width:0}
+.tray-list .tt b{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tray-list .tt small{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tray-list .ts{display:grid;place-items:center;width:14px;color:var(--muted)}
+.tray-list .ts.bad{color:var(--accent)}
+.tray .acts{justify-content:flex-end}
+.x[disabled]{opacity:.35;pointer-events:none}
+.unx{position:absolute;top:-8px;right:-8px;width:18px;height:18px;border-radius:50%;background:var(--panel);border:1px solid var(--accent);color:var(--accent);display:grid;place-items:center;opacity:0;scale:.5;pointer-events:none;z-index:2;transition:opacity calc(.18s*var(--slow)),scale calc(.32s*var(--slow)) var(--spring)}
+.blk.preview:hover .unx,.blk.preview:focus-visible .unx{opacity:1;scale:1}
+.blk.preview:hover{border-color:var(--accent)}
+/* One lamp language: green works, amber needs you, grey off, dashed in preview, grey ring works outside the gateway */
+.lamp.pv{background:transparent;border:1.5px dashed var(--accent)}
+.lamp.dir{background:transparent;border:1.5px solid var(--faint)}
+.p-head{display:flex;align-items:center;gap:12px}
+.p-head .itile svg{width:20px;height:20px}
+.chip-s{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:1px 8px;border-radius:10px;background:var(--dim);border:1px solid color-mix(in srgb,var(--warn) 45%,transparent);color:var(--ink-2)}
+.blk.gw.sel{background:var(--select)}
+/* Links you can point at */
+.map .layer{pointer-events:none}
+.map .nd{pointer-events:auto}
+.map svg .hits .hit{fill:none;stroke:transparent;stroke-width:14;pointer-events:none}
+.map svg .hits .hit.act{pointer-events:stroke;cursor:pointer}
+.lk.hov,.lk.picked{stroke:var(--accent);stroke-width:2.4;stroke-opacity:1}
+.lk.direct.hov,.lk.direct.picked{stroke:var(--warn);stroke-opacity:1}
+.map.focus .lk.hov,.map.focus .lk.picked{stroke-opacity:1}
+.edge-x{all:unset;position:absolute;left:0;top:0;width:16px;height:16px;box-sizing:border-box;border-radius:50%;display:grid;place-items:center;background:var(--panel);border:1px solid var(--accent);color:var(--accent);cursor:pointer;z-index:8;pointer-events:auto;transition:background-color calc(.12s*var(--slow)),color calc(.12s*var(--slow))}
+.edge-x::before{content:'';position:absolute;inset:-6px;border-radius:50%}
+.edge-x:hover{background:var(--accent);color:var(--panel)}
+.edge-x:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.blk.leaving{filter:opacity(.45);border-style:dashed}
+/* Checkboxes in pickers: the tick comes from the tray */
+.chk{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--wire);display:grid;place-items:center;flex:none;color:var(--panel);transition:background-color calc(.2s*var(--slow)),border-color calc(.2s*var(--slow))}
+.chk svg{opacity:0;transform:scale(.5);stroke-width:3;transition:opacity calc(.16s*var(--slow)),transform calc(.32s*var(--slow)) var(--spring)}
+.pick.on .chk{background:var(--accent);border-color:var(--accent)}
+.pick.on .chk svg{opacity:1;transform:none}
+.pick.multi.on{background:var(--select);border-color:var(--accent)}
+@media (max-width:900px){
+  body{overflow:hidden}
+  .app{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr)}
+  .rail{flex-direction:row;align-items:center;gap:10px;padding:8px 10px;border-right:0;border-bottom:1px solid var(--line);overflow-x:auto}
+  .logo span,.rail-foot div{display:none}
+  .nav{flex-direction:row;gap:2px}
+  .nav button{height:32px;padding:0 9px}
+  .nav button span{display:none}
+  .nav-mark{display:none}
+  .rail-foot{margin:0 0 0 auto;flex-direction:row;padding:0}
+  .appearance span{display:none}
+  .studio .lbl,.proj{display:none}
+  .ov-grid{grid-template-columns:minmax(0,1fr)}
+  .row{grid-template-columns:44px minmax(0,1fr) auto;height:auto;min-height:46px}
+  .row .who,.row .state{display:none}
+  .head{flex-wrap:wrap}
+}
+@media (max-width:560px){.studio .tg span{display:none}.hintline span:last-child{display:none}}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+::view-transition-old(root),::view-transition-new(root){animation:none;mix-blend-mode:normal}
+</style>
+
+<div class="app" id="app">
+  <aside class="rail">
+    <div class="logo"><svg viewBox="0 0 64 64" aria-hidden="true"><path fill="#C85835" d="M6 58C3.8 58 2 56.2 2 54V32.5C2 30.5 2.9 28.8 4.5 27.6L15.5 19.6C16.6 18.8 17.3 17.7 17.6 16.4L19.3 9.2C20.1 5.8 23.6 4.5 26.6 6.2L59 25.4C61 26.6 62 28.5 62 30.8V54C62 56.2 60.2 58 58 58H28V44C28 39.6 24.4 36 20 36S12 39.6 12 44V58Z"/></svg><span>Kitden</span></div>
+    <nav class="nav" aria-label="Main">
+      <i class="nav-mark" aria-hidden="true"></i>
+      <button data-go="overview"><i data-lucide="house" class="ic" style="width:16px;height:16px"></i><span>Overview</span></button>
+      <button data-go="library"><i data-lucide="library" class="ic" style="width:16px;height:16px"></i><span>Library</span></button>
+      <button data-go="gateway"><i data-lucide="network" class="ic" style="width:16px;height:16px"></i><span>Gateway</span></button>
+      <button data-go="changes"><i data-lucide="history" class="ic" style="width:16px;height:16px"></i><span>Changes</span></button>
+    </nav>
+    <div class="rail-foot">
+      <div>Local workspace<br>Motion study</div>
+      <button class="appearance" id="appearance"><i data-lucide="sun-moon" class="ic" style="width:14px;height:14px"></i><span>Appearance</span></button>
+    </div>
+  </aside>
+  <div class="col">
+    <header class="topbar">
+      <button class="proj" id="proj" aria-haspopup="true" aria-expanded="false"><i data-lucide="folder" class="ic" style="width:14px;height:14px"></i>Project <b id="proj-name">All projects</b><i data-lucide="chevron-down" class="ic" style="width:13px;height:13px"></i></button>
+      <label class="find"><i data-lucide="search" class="ic" style="width:14px;height:14px"></i><input id="find" type="search" placeholder="Search your setup and marketplaces…" aria-label="Search the map"></label>
+      <div class="studio" aria-label="Motion controls">
+        <span class="lbl">Motion</span>
+        <div class="seg sm" id="motion"><i class="seg-mark"></i><button data-m="rich" aria-pressed="true">Rich</button><button data-m="calm" aria-pressed="false">Calm</button></div>
+        <button class="tg" id="slow" aria-pressed="false" title="Play every animation four times slower"><i data-lucide="hourglass" class="ic" style="width:12px;height:12px"></i><span>Slow ×4</span></button>
+        <button class="tg" id="fail" aria-pressed="false" title="The next Apply stops with an error"><i data-lucide="triangle-alert" class="ic" style="width:12px;height:12px"></i><span>Fail next Apply</span></button>
+        <button class="tg" id="replay" title="Play this page's entrance again"><i data-lucide="rotate-ccw" class="ic" style="width:12px;height:12px"></i><span>Replay</span></button>
+      </div>
+    </header>
+    <canvas id="dots" aria-hidden="true"></canvas>
+    <main id="main"></main>
+    <div id="panel-host"></div>
+    <div class="dock" id="dock"></div>
+    <div class="hintline"><span id="hint"></span><span id="tag"></span></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<script>
+"use strict";
+/* ---------- basics ---------- */
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const NS='http://www.w3.org/2000/svg';
+const IMG={claude:'client-claude.png',codex:'client-codex.png',cursor:'client-cursor.png'};
+const HOUSE='<svg viewBox="0 0 64 64" aria-hidden="true"><path fill="#C85835" d="M6 58C3.8 58 2 56.2 2 54V32.5C2 30.5 2.9 28.8 4.5 27.6L15.5 19.6C16.6 18.8 17.3 17.7 17.6 16.4L19.3 9.2C20.1 5.8 23.6 4.5 26.6 6.2L59 25.4C61 26.6 62 28.5 62 30.8V54C62 56.2 60.2 58 58 58H28V44C28 39.6 24.4 36 20 36S12 39.6 12 44V58Z"/></svg>';
+const ico=(n,s=14,c='')=>`<i data-lucide="${n}" class="ic ${c}" style="width:${s}px;height:${s}px"></i>`;
+const tile=(id,sm)=>`<img class="tile${sm?' sm':''}${id==='claude'?' pad':''}" src="${IMG[id]}" alt="">`;
+function icons(){try{window.lucide&&lucide.createIcons({attrs:{'stroke-width':1.75}})}catch(e){}}
+const cap=s=>s[0].toUpperCase()+s.slice(1);
+const snake=s=>s.toLowerCase().replace(/^\//,'').replace(/[^a-z0-9]+/g,'_');
+
+/* ---------- motion core ---------- */
+const reduceMQ=matchMedia('(prefers-reduced-motion: reduce)');
+const S={rich:false,slow:1,fail:false};
+const SPRING0=getComputedStyle(document.documentElement).getPropertyValue('--spring').trim();const SPRING=SPRING0&&CSS.supports('transition-timing-function',SPRING0)?SPRING0:'cubic-bezier(.3,1.25,.5,1)';
+const CALM='cubic-bezier(.2,.8,.2,1)';
+const D=ms=>reduceMQ.matches?0:ms*S.slow;
+const E={out:t=>1-Math.pow(1-t,3),in:t=>t*t*t,lin:t=>t,spring:t=>t>=1?1:1-Math.exp(-6.2*t)*Math.cos(8*t)};
+const wait=ms=>new Promise(r=>setTimeout(r,D(ms)));
+const glow=a=>`rgb(${getComputedStyle(document.documentElement).getPropertyValue('--glow').trim()} / ${a})`;
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+function A(el,kf,o={}){const d=D(o.dur??300);if(!el||!d)return Promise.resolve();try{return el.animate(kf,{duration:d,delay:D(o.delay||0),easing:o.ease||(S.rich?SPRING:CALM),fill:o.fill||'backwards'}).finished.catch(()=>{})}catch(e){return Promise.resolve()}}
+function tween(dur,fn,{ease=E.out,delay=0}={}){dur=D(dur);delay=D(delay);return new Promise(res=>{if(dur<=0){fn(1);res();return}const t0=performance.now()+delay;const step=now=>{const t=Math.max(0,Math.min(1,(now-t0)/dur));fn(ease(t));t<1?requestAnimationFrame(step):res()};requestAnimationFrame(step)})}
+function rise(els,{delay=0,step=45,y=8,blur=true}={}){els.forEach((el,i)=>A(el,[{opacity:0,transform:`translateY(${S.rich?y:6}px)`,filter:S.rich&&blur?'blur(6px)':'none'},{opacity:1,transform:'none',filter:'none'}],{dur:S.rich?560:260,delay:delay+i*step}))}
+function splitWords(el){const t=el.textContent;el.innerHTML=t.split(/(\s+)/).map(w=>/\s/.test(w)?w:`<span class="w">${w}</span>`).join('');return $$('.w',el)}
+function blurIn(el,delay=0){if(!el)return;if(!S.rich){A(el,[{opacity:0,transform:'translateY(6px)'},{opacity:1,transform:'none'}],{dur:260,delay});return}splitWords(el).forEach((w,i)=>A(w,[{filter:'blur(10px)',opacity:0,transform:'translateY(8px)'},{filter:'blur(0px)',opacity:1,transform:'none'}],{dur:640,delay:delay+i*55,ease:'cubic-bezier(.2,.7,.2,1)'}))}
+async function roll(el,v){if(!el)return;v=String(v);if(el.textContent===v)return;if(!D(1)){el.textContent=v;return}const up=+v>+el.textContent;el.getAnimations().forEach(a=>a.cancel());await el.animate([{transform:'translateY(0)',opacity:1},{transform:`translateY(${up?-70:70}%)`,opacity:0}],{duration:D(140),easing:'ease-in',fill:'forwards'}).finished.catch(()=>{});el.textContent=v;el.getAnimations().forEach(a=>a.cancel());el.animate([{transform:`translateY(${up?70:-70}%)`,opacity:0},{transform:'translateY(0)',opacity:1}],{duration:D(S.rich?440:200),easing:S.rich?SPRING:CALM})}
+function countUp(el,to,dur=800,delay=0){if(!el)return;if(!D(1)){el.textContent=to;return}el.textContent='0';tween(dur,p=>el.textContent=Math.round(to*p),{ease:E.out,delay})}
+function ripple(el,a=.55){if(!S.rich||!D(1)||!el)return;const r=document.createElement('span');r.className='ripple';el.append(r);r.animate([{boxShadow:`0 0 0 0 ${glow(a)}`},{boxShadow:`0 0 0 16px ${glow(0)}`}],{duration:D(720),easing:'cubic-bezier(.2,.7,.2,1)'}).finished.then(()=>r.remove(),()=>r.remove())}
+function spark(el,color){if(!S.rich||!D(1)||!el)return;const r=el.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,N=12;for(let i=0;i<N;i++){const s=document.createElement('i');s.className='spark';s.style.left=cx+'px';s.style.top=cy+'px';s.style.background=color;document.body.append(s);const a=i/N*360+Math.random()*10,r0=Math.max(r.width,r.height)/2;s.animate([{transform:`rotate(${a}deg) translateX(${r0*.55}px) scaleX(1)`,opacity:1},{transform:`rotate(${a}deg) translateX(${r0+26}px) scaleX(.15)`,opacity:0}],{duration:D(560),easing:'cubic-bezier(.15,.7,.3,1)'}).finished.then(()=>s.remove(),()=>s.remove())}}
+function shake(el){if(!D(1)||!el)return;el.animate([{transform:'translateX(0)'},{transform:'translateX(-7px)'},{transform:'translateX(6px)'},{transform:'translateX(-3px)'},{transform:'translateX(0)'}],{duration:D(380),easing:'ease-out'})}
+function drawSvg(svg,dur=420,delay=0){if(!svg||!D(1))return;$$('path,circle,line,polyline',svg).forEach((p,i)=>{try{const L=p.getTotalLength();p.style.strokeDasharray=L;p.animate([{strokeDashoffset:L},{strokeDashoffset:0}],{duration:D(dur),delay:D(delay+i*120),easing:'cubic-bezier(.3,.7,.2,1)',fill:'backwards'}).finished.then(()=>p.style.strokeDasharray='',()=>{})}catch(e){}})}
+async function fold(el,open){const h=el.scrollHeight;if(open){el.hidden=false;const H=el.scrollHeight;await A(el,[{height:'0px',opacity:0},{height:H+'px',opacity:1}],{dur:S.rich?460:280,ease:S.rich?SPRING:CALM});rise([...el.children],{step:40,y:6,blur:false})}else{await A(el,[{height:h+'px',opacity:1},{height:'0px',opacity:0}],{dur:220,ease:'ease-in',fill:'forwards'});el.hidden=true;el.getAnimations().forEach(a=>a.cancel())}}
+function segGlide(seg,instant){const m=$('.seg-mark',seg),b=$('[aria-pressed="true"]',seg);if(!m||!b)return;const from={l:m.offsetLeft,w:m.offsetWidth};m.style.left=b.offsetLeft+'px';m.style.width=b.offsetWidth+'px';if(!instant&&D(1)&&from.w)m.animate([{left:from.l+'px',width:from.w+'px'},{left:b.offsetLeft+'px',width:b.offsetWidth+'px'}],{duration:D(S.rich?420:280),easing:S.rich?SPRING:CALM})}
+
+/* ---------- map engine ---------- */
+class MapView{
+  static n=0;
+  constructor(host,{w,h}){this.host=host;host.classList.add('map');host.style.width=w+'px';host.style.height=h+'px';this.fid='glow'+(++MapView.n);host.innerHTML=`<svg class="links"><defs><filter id="${this.fid}" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><g class="base"></g><g class="over"></g><g class="hits"></g></svg><div class="layer"></div>`;this.base=$('.base',host);this.over=$('.over',host);this.hits=$('.hits',host);this.layer=$('.layer',host);this.nodes=new Map();this.links=new Map();this.beamTok=0;
+    /* A link can be pointed at: a wide invisible stroke takes the pointer, an x sits on its middle */
+    const ex=this.ex=document.createElement('button');ex.className='edge-x';ex.hidden=true;ex.innerHTML=ico('x',10);this.layer.append(ex);
+    this.hits.addEventListener('pointerover',e=>{const h=e.target.closest('.hit.act');if(h)this.hoverLink(h.dataset.link)});
+    this.hits.addEventListener('pointerout',e=>{if(e.target.closest('.hit.act'))this.unhoverSoon()});
+    this.hits.addEventListener('click',e=>{const h=e.target.closest('.hit.act');if(!h)return;e.stopPropagation();this.onLinkClick&&this.onLinkClick(h.dataset.link)});
+    ex.addEventListener('pointerenter',()=>clearTimeout(this.hT));ex.addEventListener('pointerleave',()=>this.unhoverSoon());
+    ex.addEventListener('click',e=>{e.stopPropagation();const id=ex.dataset.link;if(id&&this.onLinkRemove)this.onLinkRemove(id)})}
+  hoverLink(id){clearTimeout(this.hT);const l=this.links.get(id);if(!l)return;if(this.hov&&this.hov!==id)this.links.get(this.hov)?.el.classList.remove('hov');this.hov=id;l.el.classList.add('hov');this.showX(id)}
+  unhoverSoon(){clearTimeout(this.hT);this.hT=setTimeout(()=>{if(this.hov&&this.hov!==this.picked)this.links.get(this.hov)?.el.classList.remove('hov');this.hov=null;if(this.picked)this.showX(this.picked);else this.ex.hidden=true},240)}
+  showX(id,moved){const l=this.links.get(id);if(!l){this.ex.hidden=true;return}let pt;try{const L=l.el.getTotalLength();if(!L)return;pt=l.el.getPointAtLength(L/2)}catch(e){return}const ex=this.ex,was=ex.hidden;if(!was&&ex.dataset.link===id&&!moved)return;ex.dataset.link=id;ex.style.transform=`translate(${Math.round(pt.x-8)}px,${Math.round(pt.y-8)}px)`;const tip=this.linkTip?this.linkTip(id):'Remove';ex.title=tip;ex.setAttribute('aria-label',tip);if(was){ex.hidden=false;A(ex,[{opacity:0},{opacity:1}],{dur:S.rich?180:120})}}
+  pick(id){if(this.picked&&this.picked!==id)this.links.get(this.picked)?.el.classList.remove('picked','hov');this.picked=id||null;if(id){this.links.get(id)?.el.classList.add('picked');this.showX(id)}else if(!this.hov)this.ex.hidden=true}
+  add(id,{cls='',html='',x=0,y=0,w=150,h=54,s=1,o=1,name='',title=''}){const el=document.createElement('div');el.className='nd '+cls;el.dataset.id=id;if(title)el.title=title;if(name)el.dataset.name=name.toLowerCase();el.innerHTML=html;if(cls.includes('blk')){el.tabIndex=0;el.setAttribute('role','button');if(name)el.setAttribute('aria-label',name)}el.style.width=w+'px';el.style.height=h+'px';this.layer.append(el);const n={id,el,x,y,w,h,s,o,r:0};this.nodes.set(id,n);this.place(n);return n}
+  get(id){return this.nodes.get(id)}
+  place(n){n.el.style.transform=`translate(${n.x}px,${n.y}px) rotate(${n.r||0}deg) scale(${n.s})`;n.el.style.opacity=Math.max(0,Math.min(1,n.o))}
+  remove(id){const n=this.nodes.get(id);if(!n)return;n.el.remove();this.nodes.delete(id);for(const [k,l] of this.links)if(l.a===id||l.b===id)this.unlink(k)}
+  port(n,side){const cx=n.x+n.w/2,cy=n.y+n.h/2,hw=n.w/2*n.s;return side==='r'?[cx+hw,cy]:[cx-hw,cy]}
+  link(id,a,as,b,bs,cls='',opt={}){let l=this.links.get(id);if(l){l.el.setAttribute('class','lk '+cls+(this.picked===id?' picked':''));l.hit.classList.toggle('act',!!(this.canHit&&this.canHit(id)));return l}const el=document.createElementNS(NS,'path');el.setAttribute('class','lk '+cls);this.base.append(el);const hit=document.createElementNS(NS,'path');hit.setAttribute('class','hit');hit.dataset.link=id;hit.classList.toggle('act',!!(this.canHit&&this.canHit(id)));this.hits.append(hit);l={id,a,as,b,bs,el,hit,shape:opt.shape||'curve',chan:opt.chan||20,follow:true};this.links.set(id,l);this.drawLink(l);return l}
+  unlink(id){const l=this.links.get(id);if(!l)return;const p=l.el,op=p.isConnected&&D(1)?+getComputedStyle(p).opacity:0;
+    /* A link fades out instead of blinking away */
+    if(op>0)p.animate([{opacity:op},{opacity:0}],{duration:D(S.rich?320:240),easing:'ease-out',fill:'forwards'}).finished.then(()=>p.remove(),()=>p.remove());else p.remove();l.hit&&l.hit.remove();l.ov&&l.ov.remove();this.links.delete(id);if(this.picked===id)this.pick(null);if(this.hov===id){this.hov=null;if(!this.picked)this.ex.hidden=true}}
+  d(l){const A_=this.nodes.get(l.a),B=this.nodes.get(l.b);if(!A_||!B)return'';const [x0,y0]=this.port(A_,l.as),[x1,y1]=this.port(B,l.bs);
+    if(l.shape==='step'){const xm=x0+l.chan,dy=y1-y0;if(Math.abs(dy)<1)return`M${x0},${y0}H${x1}`;const s=dy>0?1:-1,r=Math.min(8,Math.abs(dy)/2);return`M${x0},${y0}H${xm-r}Q${xm},${y0} ${xm},${y0+s*r}V${y1-s*r}Q${xm},${y1} ${xm+r},${y1}H${x1}`}
+    const k=Math.max(18,Math.abs(x1-x0)*.5);return`M${x0},${y0}C${x0+k},${y0} ${x1-k},${y1} ${x1},${y1}`}
+  drawLink(l){const d=this.d(l);l.el.setAttribute('d',d);const A_=this.nodes.get(l.a),B=this.nodes.get(l.b);const op=l.follow?Math.min(A_?A_.o:1,B?B.o:1):1;l.el.style.opacity=Math.max(0,Math.min(1,op));if(l.hit){l.hit.setAttribute('d',d);l.hit.style.display=op<.5?'none':''}if(l.ov){l.ov.setAttribute('d',d);l.ov.style.opacity=l.el.style.opacity}}
+  draw(){for(const l of this.links.values())this.drawLink(l);const x=this.picked||this.hov;if(x&&!this.ex.hidden)this.showX(x,true)}
+  move(list,{dur=520,stagger=0,ease}={}){const e=ease||(S.rich?E.spring:E.out);const tok={};const it=list.map((t,i)=>{const n=this.nodes.get(t.id);if(!n)return null;n.tok=tok;return{n,f:{x:n.x,y:n.y,s:n.s,o:n.o,r:n.r||0},t:{x:t.x??n.x,y:t.y??n.y,s:t.s??n.s,o:t.o??n.o,r:t.r??0},dl:i*stagger}}).filter(Boolean);
+    if(!it.length)return Promise.resolve();const total=dur+stagger*(it.length-1);
+    return tween(total,p=>{const now=p*total;for(const q of it){if(q.n.tok!==tok)continue;const k=e(Math.max(0,Math.min(1,(now-q.dl)/dur)));const {n,f,t}=q;n.x=f.x+(t.x-f.x)*k;n.y=f.y+(t.y-f.y)*k;n.s=f.s+(t.s-f.s)*k;n.o=f.o+(t.o-f.o)*Math.min(1,k);n.r=f.r+(t.r-f.r)*k;this.place(n)}this.draw()},{ease:E.lin})}
+  focus(nodeIds,linkIds){this.host.classList.add('focus');for(const n of this.nodes.values())n.el.classList.toggle('lit',nodeIds.includes(n.id));for(const l of this.links.values())l.el.classList.toggle('on',linkIds.includes(l.id))}
+  unfocus(){this.host.classList.remove('focus');this.pick(null);for(const n of this.nodes.values())n.el.classList.remove('lit');for(const l of this.links.values()){l.el.classList.remove('on');if(l.ov){const o=l.ov;l.ov=null;A(o,[{opacity:1},{opacity:0}],{dur:160,fill:'forwards',ease:'ease-in'}).then(()=>o.remove())}}}
+  lit(groups,nodeIds){this.unfocus();const all=groups.flat();this.focus(nodeIds,all);groups.forEach((g,gi)=>g.forEach(id=>{const l=this.links.get(id);if(!l)return;const ov=document.createElementNS(NS,'path');ov.setAttribute('class','ov');ov.setAttribute('d',l.el.getAttribute('d'));this.over.append(ov);l.ov=ov;if(S.rich&&D(1)){const L=ov.getTotalLength();ov.style.strokeDasharray=L;ov.animate([{strokeDashoffset:L},{strokeDashoffset:0}],{duration:D(280),delay:D(gi*120),easing:'cubic-bezier(.3,.7,.2,1)',fill:'backwards'}).finished.then(()=>ov.style.strokeDasharray='',()=>{})}else A(ov,[{opacity:0},{opacity:1}],{dur:180})}))}
+  async beam(groups,cls='beam'){if(!S.rich||!D(1))return;const tok=++this.beamTok;$$('.beam',this.over).forEach(b=>b.remove());for(const g of groups){if(tok!==this.beamTok)return;await Promise.all(g.map(id=>{const l=this.links.get(id);if(!l)return null;const p=document.createElementNS(NS,'path');p.setAttribute('class',cls);p.setAttribute('filter',`url(#${this.fid})`);p.setAttribute('d',l.el.getAttribute('d'));this.over.append(p);const L=p.getTotalLength(),seg=Math.min(48,L*.45);p.style.strokeDasharray=`${seg} ${L+seg}`;return p.animate([{strokeDashoffset:seg},{strokeDashoffset:-L}],{duration:D(Math.max(260,L*1.5)),easing:'cubic-bezier(.45,0,.3,1)'}).finished.then(()=>p.remove(),()=>p.remove())}))}}
+  drawIn(id,dur=440){const l=this.links.get(id);if(!l||!D(1))return Promise.resolve();const p=l.el,L=p.getTotalLength();p.style.strokeDasharray=L;return p.animate([{strokeDashoffset:L},{strokeDashoffset:0}],{duration:D(dur),easing:S.rich?'cubic-bezier(.3,.7,.1,1)':CALM,fill:'backwards'}).finished.then(()=>p.style.strokeDasharray='',()=>p.style.strokeDasharray='')}
+  /* A link turns dashed (in preview) or solid again with a short blend. While Apply writes, a link on its way out keeps its dashes. */
+  dash(id,on,...cls){const l=this.links.get(id);if(!l||(!on&&S.committing))return;const p=l.el,look=()=>{const c=getComputedStyle(p),d=c.strokeDasharray;return{strokeDasharray:d==='none'?'8 0':d,strokeOpacity:c.strokeOpacity}},a=D(1)&&look();
+    if(on)p.classList.add(...cls);else p.classList.remove(...cls);if(a)p.animate([a,look()],{duration:D(S.rich?420:300),easing:CALM})}
+  /* A solid link draws back to its start; a dashed one just fades */
+  async undraw(id){const l=this.links.get(id);if(!l)return;const p=l.el;if(D(1)&&getComputedStyle(p).strokeDasharray==='none'){const L=p.getTotalLength();p.style.strokeDasharray=L;await p.animate([{strokeDashoffset:0},{strokeDashoffset:L}],{duration:D(380),easing:'cubic-bezier(.4,0,.2,1)',fill:'forwards'}).finished.catch(()=>{})}this.unlink(id)}
+  height(h){this.host.style.height=h+'px'}
+}
+
+/* ---------- shell: panel, dock, apply ---------- */
+const main=$('#main'), panelHost=$('#panel-host'), dockEl=$('#dock');
+let panelEl=null;
+function wirePanel(p,wire){const c=$('[data-close]',p);c&&c.addEventListener('click',()=>{closePanel();wire&&wire.onClose&&wire.onClose()});wire&&wire.fn&&wire.fn(p)}
+function openPanel(html,wire){const fresh=!panelEl;if(fresh){panelEl=document.createElement('aside');panelEl.className='panel';panelHost.append(panelEl)}const p=panelEl;p._tok={};p.innerHTML=html;icons();wirePanel(p,wire);if(fresh)A(p,[{opacity:0,transform:'translateX(28px) scale(.98)',filter:S.rich?'blur(8px)':'none'},{opacity:1,transform:'none',filter:'none'}],{dur:S.rich?580:240});return p}
+function skeleton(kind){return`<div class="p-kick"><span>${kind}</span><button class="x" data-close aria-label="Close">${ico('x',14)}</button></div><div style="display:grid;gap:8px"><span class="sk" style="width:62%;height:16px"></span><span class="sk" style="width:38%"></span></div><div style="display:grid;gap:12px;padding:12px 0;border-block:1px solid var(--line)">${[70,54,80,46,60].map(w=>`<span class="sk" style="width:${w}%"></span>`).join('')}</div><span class="sk" style="width:90%"></span><span class="sk" style="width:55%;height:30px;border-radius:7px"></span>`}
+function panelLoad(kind,build,wire){const p=openPanel(skeleton(kind),wire&&{onClose:wire.onClose});const tok=p._tok={};setTimeout(()=>{if(panelEl!==p||p._tok!==tok)return;p.innerHTML=build();icons();wirePanel(p,wire);rise([...p.children],{step:S.rich?45:20,y:6})},D(S.rich?380:160));return p}
+/* Next step inside the same panel: the old content slides out, the new one slides in. */
+async function swapPanel(html,wire,dir='fwd'){if(!panelEl){openPanel(html,wire);return}const p=panelEl,tok=p._tok={};const sx=dir==='fwd'?1:-1;
+  if(D(1))await Promise.all([...p.children].map(k=>A(k,[{opacity:1,transform:'none'},{opacity:0,transform:`translateX(${-18*sx}px)`}],{dur:130,ease:'ease-in',fill:'forwards'})));
+  if(panelEl!==p||p._tok!==tok)return;p.innerHTML=html;icons();wirePanel(p,wire);[...p.children].forEach((k,i)=>A(k,[{opacity:0,transform:`translateX(${22*sx}px)`,filter:S.rich?'blur(4px)':'none'},{opacity:1,transform:'none',filter:'none'}],{dur:S.rich?460:220,delay:i*(S.rich?32:0)}))}
+async function closePanel(instant){if(!panelEl)return;const el=panelEl;panelEl=null;if(!instant)await A(el,[{opacity:1,transform:'none'},{opacity:0,transform:'translateX(22px)'}],{dur:180,ease:'ease-in',fill:'forwards'});el.remove()}
+const dock={
+  bar(title,detail,{label='Apply'}={}){dockEl.innerHTML='';const b=document.createElement('div');b.className='bar';b.innerHTML=`<div class="tx"><b>${title}</b><small>${detail}</small></div><div class="acts"><button class="btn" data-act="cancel">Cancel</button><button class="btn primary" data-act="apply"><span class="lbl">${label}</span>${ico('arrow-right',14)}<i class="meter"></i></button></div>`;dockEl.append(b);icons();A(b,[{opacity:0,transform:'translateY(18px) scale(.97)',filter:S.rich?'blur(6px)':'none'},{opacity:1,transform:'none',filter:'none'}],{dur:S.rich?540:220});return b},
+  toast(text,{undo,undoLabel='Undo',extra}={}){const old=dockEl.firstElementChild;const from=old?old.getBoundingClientRect():null;const t=document.createElement('div');t.className='toast';t.setAttribute('role','status');t.innerHTML=`<span class="tk">${ico('circle-check',16)}</span><span>${text}</span>${extra?`<button class="btn sm" data-extra>${extra.label}</button>`:''}${undo?`<button class="btn sm" data-undo>${ico('undo-2',13)} ${undoLabel}</button>`:''}<i class="life"></i>`;dockEl.innerHTML='';dockEl.append(t);icons();
+    if(from&&S.rich&&D(1)){const to=t.getBoundingClientRect();t.animate([{width:from.width+'px',height:from.height+'px',transform:`translateY(${from.bottom-to.bottom}px)`},{width:to.width+'px',height:to.height+'px',transform:'none'}],{duration:D(520),easing:SPRING});[...t.children].forEach((c,i)=>A(c,[{opacity:0,transform:'translateY(6px)'},{opacity:1,transform:'none'}],{dur:260,delay:180+i*50}))}else A(t,[{opacity:0,transform:'translateY(14px)'},{opacity:1,transform:'none'}],{dur:S.rich?480:200});
+    if(S.rich)drawSvg($('.tk svg',t),420,200);
+    const life=$('.life',t);let alive=true;const a=life.animate([{transform:'scaleX(1)'},{transform:'scaleX(0)'}],{duration:9000*S.slow,easing:'linear',fill:'forwards'});t.addEventListener('pointerenter',()=>a.pause());t.addEventListener('pointerleave',()=>a.play());a.finished.then(()=>alive&&dock.clear(t),()=>{});
+    const u=$('[data-undo]',t);u&&u.addEventListener('click',()=>{alive=false;dock.clear(t);undo()});const xb=$('[data-extra]',t);xb&&xb.addEventListener('click',()=>{alive=false;dock.clear(t);extra.fn()});return t},
+  async clear(el){const t=el||dockEl.firstElementChild;if(!t||!t.isConnected)return;await A(t,[{opacity:1,transform:'none'},{opacity:0,transform:'translateY(10px)'}],{dur:160,ease:'ease-in',fill:'forwards'});t.remove()}
+};
+function syncStudio(){$('#fail').setAttribute('aria-pressed',String(S.fail))}
+/* Apply: steps count in the button; success only after the last step (verified). */
+function runApply(bar,{steps=3,onOk,fail,onCancel}){
+  const go=async()=>{const btn=$('[data-act=apply]',bar),cancel=$('[data-act=cancel]',bar);cancel.disabled=true;btn.style.pointerEvents='none';const lbl=$('.lbl',btn),meter=$('.meter',btn);const icon=btn.querySelector('svg');if(icon){icon.outerHTML=ico('rotate-cw',14,'spin');icons()}
+    lbl.innerHTML=`Applying <span class="num">1</span> of ${steps}`;const num=$('.num',lbl);
+    for(let i=0;i<steps;i++){if(i)roll(num,i+1);meter.animate([{transform:`scaleX(${i/steps})`},{transform:`scaleX(${(i+1)/steps})`}],{duration:D(520),easing:'ease-out',fill:'forwards'});await wait(620);
+      if(S.fail&&i===steps-2){S.fail=false;syncStudio();bar.classList.add('err');shake(bar);bar.innerHTML=`<div class="tx"><b>${fail.title}</b><small>${fail.detail} Nothing was changed.</small></div><div class="acts"><button class="btn" data-act="cancel">Cancel</button><button class="btn primary" data-act="apply"><span class="lbl">Try again</span>${ico('rotate-cw',14)}<i class="meter"></i></button></div>`;icons();$('[data-act=apply]',bar).focus();runApply(bar,{steps,onOk,fail,onCancel});return}}
+    btn.classList.remove('primary');btn.classList.add('ok');lbl.textContent='Applied';const sp=btn.querySelector('svg');if(sp){sp.outerHTML=ico('check',14);icons();drawSvg(btn.querySelector('svg'),300)}spark(btn,css('--ok'));await wait(S.rich?480:200);onOk()};
+  $('[data-act=apply]',bar).addEventListener('click',go,{once:true});
+  $('[data-act=cancel]',bar).addEventListener('click',()=>{dock.clear(bar);onCancel&&onCancel()},{once:true});
+}
+
+/* ---------- pointer effects: spotlight on blocks, dot grid around the cursor ---------- */
+document.addEventListener('pointermove',e=>{const el=e.target.closest&&e.target.closest('.blk,.card');if(!el)return;const r=el.getBoundingClientRect();el.style.setProperty('--mx',(e.clientX-r.left)+'px');el.style.setProperty('--my',(e.clientY-r.top)+'px')},{passive:true});
+const dots={cv:$('#dots'),ctx:null,mx:-999,my:-999,k:0,target:0,run:false,
+  size(){const r=this.cv.getBoundingClientRect(),dp=devicePixelRatio||1;this.cv.width=r.width*dp;this.cv.height=r.height*dp;this.ctx=this.cv.getContext('2d');this.ctx.setTransform(dp,0,0,dp,0,0);this.w=r.width;this.h=r.height;this.paint()},
+  paint(){const c=this.ctx;if(!c)return;c.clearRect(0,0,this.w,this.h);if(this.k<.01)return;const R=130,G=22,col=css('--glow');const x0=Math.max(0,Math.floor((this.mx-R)/G)),x1=Math.ceil((this.mx+R)/G),y0=Math.max(0,Math.floor((this.my-R)/G)),y1=Math.ceil((this.my+R)/G);
+    for(let gx=x0;gx<=x1;gx++)for(let gy=y0;gy<=y1;gy++){const x=gx*G+11,y=gy*G+11,dx=x-this.mx,dy=y-this.my,d=Math.hypot(dx,dy);if(d>R)continue;const f=(1-d/R);const push=f*f*5;const px=x+(d?dx/d*push:0),py=y+(d?dy/d*push:0);c.beginPath();c.arc(px,py,.8+f*1.5,0,6.283);c.fillStyle=`rgb(${col} / ${(f*f*.55*this.k).toFixed(3)})`;c.fill()}},
+  loop(){this.k+=(this.target-this.k)*.16;this.paint();if(Math.abs(this.target-this.k)>.01||this.target>0&&this.moved){this.moved=false;requestAnimationFrame(()=>this.loop())}else{this.run=false;this.paint()}},
+  kick(){if(!this.run){this.run=true;requestAnimationFrame(()=>this.loop())}}};
+const colEl=$('.col');
+colEl.addEventListener('pointermove',e=>{if(!S.rich||reduceMQ.matches)return;const r=dots.cv.getBoundingClientRect();dots.mx=e.clientX-r.left;dots.my=e.clientY-r.top;dots.target=1;dots.moved=true;dots.kick()},{passive:true});
+colEl.addEventListener('pointerleave',()=>{dots.target=0;dots.kick()});
+addEventListener('resize',()=>dots.size());
+
+/* ---------- data (demo, not real) ---------- */
+const vis=a=>a.map(t=>({id:t.id,x:t.x,y:t.y,s:1,o:1}));
+const TL=a=>a.map(([name,on,kind])=>({name,on:!!on,kind}));
+const KIND=n=>/^(List|Get|Search|Read|Describe|Explain|Take|Wait|Open|Go)/.test(n)?'Read':'Write';
+const TOOLNAMES={sentry:['List issues','Get issue','Search events','Get event','List projects','Resolve issue','Assign issue','Add comment'],postgres:['Run query','List tables','Describe table','Explain query'],playwright:['Open page','Read page','Take screenshot','Wait for text','Go back','Click','Type text','Fill form','Select option','Upload file','Press key','Close page'],jira:['Search issues','Get issue','List projects','Create issue','Update issue','Add comment','Move issue','Assign issue','Log work']};
+const CLIENTS=[{id:'claude',name:'Claude Code',state:'Connected',on:true,ver:'2.1.4'},{id:'codex',name:'Codex',state:'Connected',on:true,ver:'0.48'},{id:'cursor',name:'Cursor',state:'Not connected',on:false,ver:'1.9 · not tested'}];
+const GWD={
+  servers:[{id:'github',name:'GitHub',icon:'git-branch',group:'remote',tools:TL([['Read repository',1,'Read'],['List issues',1,'Read'],['Create issue',1,'Write'],['Push files',0,'Write']])},
+    {id:'linear',name:'Linear',icon:'square-kanban',group:'remote',signin:true,tools:TL([['Search issues',1,'Read'],['Create issue',0,'Write'],['Update issue',0,'Write']])},
+    {id:'files',name:'Filesystem',icon:'folder',group:'local',tools:TL([['Read file',1,'Read'],['List folder',1,'Read'],['Write file',0,'Write'],['Delete file',0,'Write']])}],
+  outside:[{id:'browser',name:'Browser',icon:'globe',client:'cursor',note:'In Cursor',group:'local',chan:16,tools:TL([['Open page',1,'Read'],['Read page',1,'Read'],['Click element',1,'Write']])},
+    {id:'dropbox',name:'Dropbox',icon:'package-open',client:'claude',note:'In Claude Code',signed:true,group:'remote',chan:24,tools:TL([['Search files',1,'Read'],['Download file',1,'Read'],['Upload file',1,'Write']])}],
+  market:[{src:'Community marketplace',items:[{id:'sentry',name:'Sentry',icon:'bug',group:'remote',signin:true},{id:'postgres',name:'Postgres',icon:'database',group:'local'},{id:'playwright',name:'Playwright',icon:'monitor-play',group:'local'}]},
+    {src:'Team marketplace',items:[{id:'jira',name:'Jira',icon:'square-kanban',group:'remote',signin:true},{id:'github',name:'GitHub',icon:'git-branch',group:'remote',inGw:true}]}]};
+
+/* ---------- Gateway ---------- */
+const PROJECTS=[{id:'mcp-gateway',note:'This repository'},{id:'website'},{id:'api'},{id:'docs'}];
+let PROJ=null;
+const GW=JSON.parse(JSON.stringify(GWD));
+GW.servers[0].tools[2].ex={website:false};GW.servers[1].tools[1].ex={website:true};GW.servers[2].tools[2].ex={website:true};
+const eff=t=>PROJ&&t.ex&&PROJ in t.ex?t.ex[PROJ]:t.on;
+const ownRules=p=>GW.servers.reduce((n,s)=>n+s.tools.filter(t=>t.ex&&p in t.ex).length,0);
+const cname=id=>CLIENTS.find(c=>c.id===id).name;
+const sw=(k,on,label,pend)=>`<button class="switch${pend?' pending':''}" data-sw="${k}" aria-pressed="${on}" aria-label="${label}"><i></i></button>`;
+/* Steps count in the button. Resolves true once every step is written and checked. */
+async function progress(btn,steps,onStep){const lbl=$('.lbl',btn),meter=$('.meter',btn);const icon=btn.querySelector('svg');if(icon){icon.outerHTML=ico('rotate-cw',14,'spin');icons()}
+  lbl.innerHTML=`Applying <span class="num">1</span> of ${steps}`;const num=$('.num',lbl);
+  for(let i=0;i<steps;i++){if(i)roll(num,i+1);onStep&&onStep(i,'start');meter.animate([{transform:`scaleX(${i/steps})`},{transform:`scaleX(${(i+1)/steps})`}],{duration:D(480),easing:'ease-out',fill:'forwards'});await wait(560);
+    if(S.fail&&i===Math.max(0,steps-2)){S.fail=false;syncStudio();onStep&&onStep(i,'fail');return false}onStep&&onStep(i,'done')}
+  return true}
+/* The tray: every change waits here in preview until Apply all. An item knows how to leave the preview,
+   how to land after Apply, how to undo, and how to drop its data when the page goes away. */
+const tray={items:[],busy:false,
+  bar(){return dockEl.querySelector('.bar.tray')},
+  has(key){return this.items.some(x=>x.key===key)},
+  drop(key){const it=this.items.find(x=>x.key===key);if(!it)return;this.items=this.items.filter(x=>x!==it);it.onRemove&&it.onRemove()},
+  add(it){this.drop(it.key);this.items.push(it);this.render(it.key)},
+  async remove(key){if(this.busy)return;const it=this.items.find(x=>x.key===key);if(!it)return;this.items=this.items.filter(x=>x!==it);
+    const li=this.bar()?.querySelector(`[data-key="${key}"]`);if(li&&D(1))await A(li,[{opacity:1,transform:'none'},{opacity:0,transform:'translateX(18px)'}],{dur:180,fill:'forwards',ease:'ease-in'});
+    const p=it.onRemove&&it.onRemove();this.render();await p},
+  removeAll(){if(this.busy)return;const all=[...this.items].reverse();this.items=[];all.forEach(it=>it.onRemove&&it.onRemove());this.render()},
+  discard(){this.items.forEach(it=>it.revertData&&it.revertData());this.items=[];this.busy=false},
+  render(fresh){const n=this.items.length;let b=this.bar();
+    if(!n){if(b)dock.clear(b);return}
+    const prev=b?b.getBoundingClientRect():null,known=b?new Set($$('[data-key]',b).map(x=>x.dataset.key)):new Set();
+    if(!b){dockEl.innerHTML='';b=document.createElement('div');b.className='bar tray';dockEl.append(b)}
+    b.classList.remove('err');b.classList.toggle('many',n>1);const one=this.items[0];
+    b.innerHTML=n===1?`<div class="tx"><b>${one.title}</b><small>${one.detail}</small></div><div class="acts"><button class="btn" data-act="cancel">Cancel</button><button class="btn primary" data-act="apply"><span class="lbl">Apply</span>${ico('arrow-right',14)}<i class="meter"></i></button></div>`
+      :`<div class="tray-head"><b><span class="num">${n}</span> changes in preview</b><small>Nothing is written until you Apply. Click one on the map to take it out.</small></div><ul class="tray-list">${this.items.map(it=>`<li data-key="${it.key}"><span class="ti">${ico(it.icon,13)}</span><span class="tt"><b>${it.title}</b><small>${it.detail}</small></span><span class="ts"></span><button class="x" data-rm="${it.key}" aria-label="Take it out of the preview">${ico('x',13)}</button></li>`).join('')}</ul><div class="acts"><button class="btn" data-act="cancel">Cancel all</button><button class="btn primary" data-act="apply"><span class="lbl">Apply all</span>${ico('arrow-right',14)}<i class="meter"></i></button></div>`;
+    icons();
+    $('[data-act=cancel]',b).addEventListener('click',()=>this.removeAll());$('[data-act=apply]',b).addEventListener('click',()=>this.apply());$$('[data-rm]',b).forEach(x=>x.addEventListener('click',()=>this.remove(x.dataset.rm)));
+    if(!prev){A(b,[{opacity:0,transform:'translateY(18px) scale(.97)',filter:S.rich?'blur(6px)':'none'},{opacity:1,transform:'none',filter:'none'}],{dur:S.rich?540:220});return}
+    const next=b.getBoundingClientRect();if(D(1)&&(Math.abs(prev.height-next.height)>1||Math.abs(prev.width-next.width)>1))b.animate([{height:prev.height+'px',width:prev.width+'px'},{height:next.height+'px',width:next.width+'px'}],{duration:D(S.rich?480:200),easing:S.rich?SPRING:CALM});
+    $$('[data-key]',b).forEach(li=>{if(!known.has(li.dataset.key))A(li,[{opacity:0,transform:'translateY(10px) scale(.98)',filter:S.rich?'blur(4px)':'none'},{opacity:1,transform:'none',filter:'none'}],{dur:S.rich?480:200,delay:80})});
+    const num=$('.tray-head .num',b);if(num&&known.size>1&&known.size!==n){num.textContent=known.size;roll(num,n)}
+    if(fresh&&S.rich)ripple(b,.3)},
+  async apply(){if(this.busy||!this.items.length)return;this.busy=true;const b=this.bar(),items=[...this.items],btn=$('[data-act=apply]',b);$('[data-act=cancel]',b).disabled=true;btn.style.pointerEvents='none';$$('[data-rm]',b).forEach(x=>x.disabled=true);
+    const steps=items.length+1,rows=$$('[data-key]',b);
+    const ok=await progress(btn,steps,(i,phase)=>{const ts=rows[i]&&$('.ts',rows[i]);if(!ts)return;ts.innerHTML=ico(phase==='start'?'rotate-cw':phase==='done'?'check':'x',12,phase==='start'?'spin':'');ts.className='ts'+(phase==='fail'?' bad':'');icons()});
+    if(!ok){this.busy=false;b.classList.add('err');shake(b);const it=items[Math.min(items.length-1,Math.max(0,steps-2))];
+      ($('.tray-head',b)||$('.tx',b)).innerHTML=`<b>Nothing was changed</b><small>${it.who} changed while Kitden was writing. Kitden put the files back.</small>`;
+      $('.acts',b).innerHTML=`<button class="btn" data-act="cancel">Cancel${items.length>1?' all':''}</button><button class="btn primary" data-act="apply"><span class="lbl">Try again</span>${ico('rotate-cw',14)}<i class="meter"></i></button>`;icons();
+      $$('[data-rm]',b).forEach(x=>x.disabled=false);$('[data-act=cancel]',b).addEventListener('click',()=>this.removeAll());$('[data-act=apply]',b).addEventListener('click',()=>{this.render();this.apply()});$('[data-act=apply]',b).focus();return}
+    btn.classList.remove('primary');btn.classList.add('ok');$('.lbl',btn).textContent=items.length>1?'All applied':'Applied';const sp=btn.querySelector('svg');if(sp){sp.outerHTML=ico('check',14);icons();drawSvg(btn.querySelector('svg'),300)}spark(btn,css('--ok'));$$('.ts',b).forEach(x=>x.classList.add('okc'));
+    await wait(S.rich?480:200);
+    const gap=S.rich?170:60;items.forEach((it,i)=>setTimeout(()=>{S.committing=true;try{it.onCommit()}finally{S.committing=false}},D(i*gap)));this.items=[];this.busy=false;
+    const undoAll=()=>[...items].reverse().forEach((it,i)=>setTimeout(()=>it.onUndo(),D(i*120)));
+    setTimeout(()=>{if(this.items.length)return;if(items.length===1)dock.toast(items[0].toast,{undo:undoAll,extra:items[0].extra});else dock.toast(`Applied ${items.length} changes`,{undo:undoAll,undoLabel:'Undo all'})},D(items.length*gap))}
+};
+const Gateway={
+  hint:'Point at a link and press × to remove it · click anything for its Details · several changes wait in preview, then Apply all · drag a server onto a client',
+  unmount(){tray.discard()},
+  mount(root,opts={}){this.st={open:opts.open||null,sel:null,preview:null,slot:null,view:'map'};
+    root.innerHTML=head('Gateway','Connect your agents. Shape what they can use.','',true)+`<div class="stage" id="gstage"><div id="gmap"></div><div class="list" id="glist" hidden></div></div>`;this.scope(false);
+    this.m=new MapView($('#gmap'),{w:860,h:520});this.hookLinks();this.build();icons();this.wire();
+    this.enter().then(()=>{if(opts.select){const [sid,i]=opts.select;this.selectTool(sid,i)}if(opts.arrive){const n=this.m.get(opts.arrive);if(n){ripple(n.el,.7);n.el.classList.add('lit');setTimeout(()=>n.el.classList.remove('lit'),D(1600))}}})},
+  scope(anim){const el=$('#scope');if(!el)return;const n=PROJ?ownRules(PROJ):0;el.classList.toggle('acc',!!PROJ);el.innerHTML=PROJ?`${ico('folder',14)}<span>Project ${PROJ} · ${n} rule${n===1?'':'s'} differ${n===1?'s':''} from the shared setup</span>`:`${ico('layers',14)}<span>Shared setup · project overrides stay separate</span>`;icons();if(anim)A(el,[{opacity:0,transform:'translateY(4px)'},{opacity:1,transform:'none'}],{dur:320})},
+  srv(id){return GW.servers.find(s=>s.id===id)},
+  meta(s){if(s.preview)return`<i class="lamp pv"></i><span class="acc">${s.moved?'Moves in':'Preview'} · ${s.tools.length} tools</span>`;if(s.signin)return`<i class="lamp warn"></i><span class="warn">Sign in needed</span>`;const n=s.tools.filter(eff).length;return`<i class="lamp ${n?'on':''}" data-lamp="${s.id}"></i><span><span class="num" data-on="${s.id}">${n}</span> of ${s.tools.length} on</span>`},
+  syncMeta(sid){const s=this.srv(sid);if(!s)return;const n=s.tools.filter(eff).length;roll($(`[data-on="${sid}"]`,this.m.host),n);const lp=$(`[data-lamp="${sid}"]`,this.m.host);if(lp&&lp.classList.contains('on')!==n>0){lp.classList.toggle('on',n>0);A(lp,[{transform:'scale(2.2)'},{transform:'scale(1)'}],{dur:S.rich?520:200})}},
+  tag(t){const n=t.ex?Object.keys(t.ex).length:0;if(PROJ&&t.ex&&PROJ in t.ex)return`<span class="ptag acc">${ico('folder',11)} This project</span>`;if(!PROJ&&n)return`<span class="ptag">${ico('folder',11)} ${n} project${n>1?'s':''}</span>`;return''},
+  toolHTML(t){return`<i class="mark ${eff(t)?'on':''}"></i><span class="tn">${t.name}</span>${this.tag(t)}<span class="port l"></span>`},
+  spec(id){const [k,a,b]=id.split('~'),st=this.st;
+    if(k==='c'){const c=CLIENTS.find(x=>x.id===a);return{cls:'blk client'+(c.on?'':' free'),name:c.name,html:`${tile(c.id)}<div class="tx"><b>${c.name}</b><small><i class="lamp ${c.on?'on':''}"></i>${c.state}</small></div><span class="port r"></span>`}}
+    if(k==='gw')return{cls:'blk gw',name:'Kitden gateway',html:`<div class="house">${HOUSE}</div><b>Kitden gateway</b><small style="justify-content:center" title="Running"><i class="lamp on"></i>On this Mac</small><div class="stats"><span>${ico('monitor',12)}<em><span class="num" id="gw-c">${CLIENTS.filter(c=>c.on).length}</span> clients</em></span><span>${ico('server',12)}<em><span class="num" id="gw-n">${GW.servers.filter(s=>!s.preview).length}</span> servers</em></span></div><span class="port l"></span><span class="port r"></span>`};
+    if(k==='s'){const s=this.srv(a);return{cls:'blk srv'+(s.preview?' preview':'')+(st.open===s.id?' open':''),name:s.name,title:s.preview?'In preview. Click to take it out.':'',html:`<span class="itile">${ico(s.icon,15)}</span><div class="tx"><b>${s.name}</b><small>${this.meta(s)}</small></div><span class="badge">${s.tools.length}</span><span class="port l"></span><span class="port r"></span><span class="bb"></span>${s.preview?`<span class="unx" aria-hidden="true">${ico('x',11)}</span>`:''}`}}
+    if(k==='t'){const t=this.srv(a).tools[+b];return{cls:'blk tool'+(st.sel&&st.sel.sid===a&&st.sel.i===+b?' sel':''),name:t.name,html:this.toolHTML(t)}}
+    if(k==='o'){const o=GW.outside.find(x=>x.id===a);return{cls:'blk out'+(o.preview?' preview':''),name:o.name,title:o.preview?'In preview. Click to take it out.':'',html:`<span class="grip">${ico('grip-vertical',13)}</span><span class="oic">${ico(o.icon,15)}</span><div class="tx"><b>${o.name}</b><small>${o.preview?`<i class="lamp pv"></i><span class="acc">Moves to ${cname(o.client)}</span>`:`<i class="lamp dir"></i>${o.note}`}</small>${o.signed&&!o.preview?`<small>${ico('key-round',11)} Signed in there</small>`:''}</div><span class="port l amber"></span><span class="bb"></span>${o.preview?`<span class="unx" aria-hidden="true">${ico('x',11)}</span>`:''}`}}
+    if(k==='slot')return{cls:'slot',html:''};
+    const caps={clients:'Clients',gw:'Gateway',srv:`Servers <button class="btn xs" data-add>${ico('plus',12)} Add</button>`,tools:'Tools',remote:`${ico('cloud',13)} Remote`,local:`${ico('hard-drive',13)} Local`,out:`<span class="warn" style="display:grid">${ico('info',13)}</span> <b style="font-weight:600;color:var(--ink-2)">Outside the gateway</b> · drag one in`};
+    return{cls:'cap'+(['remote','local'].includes(a)?' grp':''),html:caps[a]}},
+  layout(){const st=this.st,T=[];
+    T.push({id:'cap~clients',x:0,y:0,w:150,h:18},{id:'cap~gw',x:196,y:0,w:150,h:18},{id:'cap~srv',x:396,y:-4,w:200,h:26});
+    CLIENTS.forEach((c,i)=>T.push({id:'c~'+c.id,x:0,y:124+72*i,w:150,h:54}));
+    T.push({id:'gw',x:196,y:124,w:150,h:124});
+    let y=58;for(const g of ['remote','local']){T.push({id:'cap~'+g,x:396,y,w:170,h:18});y+=23;for(const s of GW.servers.filter(s=>s.group===g)){T.push({id:'s~'+s.id,x:396,y,w:170,h:60});y+=70}if(st.slot&&st.slot.group===g){T.push({id:'slot',x:396,y,w:170,h:60});y+=70}y+=3}
+    y+=18;T.push({id:'cap~out',x:396,y,w:260,h:18});y+=21;
+    for(const o of GW.outside){const h=o.signed&&!o.preview?66:50;T.push({id:'o~'+o.id,x:396,y,w:170,h});y+=h+6}
+    if(st.open){const s=this.srv(st.open),n=T.find(t=>t.id==='s~'+st.open);if(s&&n){const cy=n.y+30,tot=s.tools.length*42-8;T.push({id:'cap~tools',x:636,y:0,w:190,h:18});s.tools.forEach((t,i)=>T.push({id:`t~${s.id}~${i}`,x:636,y:Math.max(24,cy-tot/2)+i*42,w:200,h:34}))}}
+    return T},
+  linksFor(id){const m=this.m,[k,a,b]=id.split('~');
+    if(k==='c'){const c=CLIENTS.find(x=>x.id===a);if(c.on)m.link('L~c~'+a,id,'r','gw','l')}
+    if(k==='s'){const s=this.srv(a);m.link('L~s~'+a,'gw','r',id,'l',s.preview?'preview':'');if(s.moved)m.link('L~d~'+a,'c~'+s.moved,'r',id,'l','direct',{shape:'step',chan:s.chan})}
+    if(k==='t'){if(eff(this.srv(a).tools[+b]))m.link(`L~t~${a}~${b}`,'s~'+a,'r',id,'l','')}
+    if(k==='o'){const o=GW.outside.find(x=>x.id===a);m.link('L~o~'+a,'c~'+o.client,'r',id,'l',o.preview?'direct dpreview':'direct',{shape:'step',chan:o.chan});if(o.preview)m.link('L~x~'+a,'gw','r',id,'l','preview leaving')}
+    if(k==='slot')m.link('L~slot','gw','r','slot','l','preview')},
+  origin(id){const m=this.m,[k,a]=id.split('~');if(k==='t'||id==='cap~tools'){const s=m.get('s~'+(a||this.st.open));if(s)return{x:s.x+s.w-100,y:s.y+s.h/2-17,s:.3}}if(k==='s'||k==='slot'){const g=m.get('gw');return{x:g.x+g.w-85,y:g.y+g.h/2-30,s:.4}}const n=m.get(id);return n?{x:n.x,y:n.y,s:n.s}:{x:0,y:0,s:1}},
+  build(){const m=this.m;for(const t of this.layout()){const sp=this.spec(t.id);m.add(t.id,{...sp,x:t.x,y:t.y,w:t.w,h:t.h})}for(const id of m.nodes.keys())this.linksFor(id);this.size()},
+  size(T=this.layout()){let b=0;for(const t of T)b=Math.max(b,t.y+t.h);this.m.height(Math.max(500,b+24))},
+  async relayout({dur,skip}={}){const m=this.m,T=this.layout(),want=new Set(T.map(t=>t.id)),made=[];
+    for(const t of T)if(!m.get(t.id)){const sp=this.spec(t.id),o=this.origin(t.id);m.add(t.id,{...sp,x:o.x,y:o.y,w:t.w,h:t.h,s:o.s,o:0});made.push(t.id);this.linksFor(t.id)}
+    icons();
+    const gone=[...m.nodes.keys()].filter(id=>!want.has(id)&&(id.startsWith('t~')||id==='cap~tools'||id==='slot'));
+    const outs=gone.map(id=>({id,...this.origin(id),o:0}));
+    const moves=T.filter(t=>t.id!==skip).map(t=>({id:t.id,x:t.x,y:t.y,s:1,o:1}));
+    const newTools=moves.filter(x=>made.includes(x.id)&&(x.id.startsWith('t~')||x.id==='cap~tools')),rest=moves.filter(x=>!newTools.includes(x));
+    const ps=[m.move(rest,{dur:dur||(S.rich?540:260)})];
+    if(newTools.length){if(S.rich)ps.push(m.move(newTools,{dur:580,stagger:34}));else{for(const t of newTools){const n=m.get(t.id);Object.assign(n,{x:t.x,y:t.y,s:1});m.place(n)}const ls=[...m.links.values()].filter(l=>newTools.some(t=>t.id===l.b));ls.forEach(l=>l.follow=false);m.draw();ps.push(Promise.all(ls.map(l=>m.drawIn(l.id,170))).then(()=>m.move(newTools,{dur:120,stagger:15,ease:E.out})).then(()=>ls.forEach(l=>l.follow=true)))}}
+    if(outs.length)ps.push(m.move(outs,{dur:S.rich?300:180,ease:E.in}).then(()=>gone.forEach(id=>m.remove(id))));
+    this.size(T);await Promise.all(ps)},
+  async enter(){const m=this.m,T=this.layout();
+    if(!S.rich||!D(1)){T.forEach(t=>{const n=m.get(t.id);if(n){Object.assign(n,{x:t.x,y:t.y+6,s:1,o:0});m.place(n)}});m.draw();await m.move(T.map(t=>({id:t.id,x:t.x,y:t.y,o:1})),{dur:260,stagger:22,ease:E.out});return}
+    const g=m.get('gw'),gc={x:g.x+g.w/2,y:g.y+g.h/2};
+    for(const t of T){const n=m.get(t.id);if(!n)continue;if(t.id==='gw')Object.assign(n,{x:t.x,y:t.y,s:.84,o:0});else if(t.id.startsWith('o~')||t.id==='cap~out')Object.assign(n,{x:t.x,y:t.y+28,s:1,o:0});else Object.assign(n,{x:gc.x-t.w/2,y:gc.y-t.h/2,s:.42,o:0});m.place(n)}m.draw();
+    m.move([{id:'gw',s:1,o:1}],{dur:680});setTimeout(()=>ripple(g.el,.6),D(220));await wait(120);
+    m.move(vis(T.filter(t=>t.id.startsWith('c~')||t.id==='cap~clients'||t.id==='cap~gw')),{dur:640,stagger:60});await wait(90);
+    m.move(vis(T.filter(t=>t.id.startsWith('s~')||t.id.startsWith('t~')||['cap~srv','cap~remote','cap~local','cap~tools'].includes(t.id))),{dur:660,stagger:40});await wait(300);
+    await m.move(vis(T.filter(t=>t.id.startsWith('o~')||t.id==='cap~out')),{dur:600,stagger:80});
+    for(const o of GW.outside)m.drawIn('L~o~'+o.id,520);await wait(220);
+    m.beam([CLIENTS.filter(c=>c.on).map(c=>'L~c~'+c.id),GW.servers.map(s=>'L~s~'+s.id)])},
+  wire(){const host=this.m.host,st=this.st;
+    host.addEventListener('click',e=>{if(this.dragged)return;if(e.target.closest('[data-add]')){this.openAdd();return}const el=e.target.closest('.blk');if(!el){if(!e.target.closest('button')&&this.st.sel)this.clearSel();return}const [k,a,b]=el.dataset.id.split('~');
+      if(k==='s'){const s=this.srv(a),st=this.st;if(s.preview){tray.remove((s.moved?'in~':'add~')+a);return}if(st.open===a&&!(st.sel&&st.sel.sid===a&&st.sel.i===undefined)){this.selectServer(a);this.lightServer(a);return}this.toggle(a)}else if(k==='o'){const o=GW.outside.find(x=>x.id===a);if(o&&o.preview)tray.remove('out~'+a);else if(o){if(this.st.sel&&this.st.sel.out===a)this.clearSel();else this.selectOutside(a)}}else if(k==='t')this.selectTool(a,+b);else if(k==='gw'){if(this.st.sel&&this.st.sel.gw)this.clearSel();else this.selectGateway()}else if(k==='c'){if(this.st.sel&&this.st.sel.client===a)this.clearSel();else this.selectClient(a)}});
+    host.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.classList.contains('blk')){e.preventDefault();e.target.click()}});
+    let hov=null;host.addEventListener('pointerover',e=>{const el=e.target.closest('.blk');if(el===hov)return;hov=el;if(this.drag)return;if(el&&/^(c|o)~/.test(el.dataset.id))this.hover(el.dataset.id);else if(!st.sel)this.m.unfocus()});
+    host.addEventListener('pointerleave',()=>{hov=null;if(!st.sel&&!this.drag)this.m.unfocus()});
+    host.addEventListener('pointerdown',e=>this.dragStart(e));
+    $('#viewseg').addEventListener('click',e=>{const b=e.target.closest('button');if(b)this.setView(b.dataset.view)})},
+  hover(id){const st=this.st,m=this.m;if(st.sel)return;const [k,a]=id.split('~');
+    if(k==='c'){const c=CLIENTS.find(x=>x.id===a),nodes=[id],links=[],g2=[],g3=[];if(c.on){nodes.push('gw');links.push('L~c~'+a);for(const s of GW.servers){if(s.preview&&!s.moved)continue;nodes.push('s~'+s.id);links.push('L~s~'+s.id);g2.push('L~s~'+s.id)}if(st.open){this.srv(st.open).tools.forEach((t,i)=>{if(eff(t)){nodes.push(`t~${st.open}~${i}`);links.push(`L~t~${st.open}~${i}`);g3.push(`L~t~${st.open}~${i}`)}})}}
+      for(const o of GW.outside)if(o.client===a){nodes.push('o~'+o.id);links.push('L~o~'+o.id)}
+      for(const s of GW.servers)if(s.moved===a)links.push('L~d~'+s.id);
+      m.focus(nodes,links);if(c.on)m.beam([['L~c~'+a],g2,g3]);else m.beam([GW.outside.filter(o=>o.client===a).map(o=>'L~o~'+o.id)],'beam amber')}
+    if(k==='o'){const o=GW.outside.find(x=>x.id===a);if(!o)return;m.focus([id,'c~'+o.client],['L~o~'+a]);m.beam([['L~o~'+a]],'beam amber')}},
+  /* A server: its tools unfold, its path lights, Details opens with a switch per tool */
+  async toggle(sid){const st=this.st,m=this.m,prev=st.open,closing=prev===sid;
+    st.open=closing?null:sid;if(prev)m.get('s~'+prev)?.el.classList.remove('open');
+    if(closing){this.clearSel()}else{const n=m.get('s~'+sid);n.el.classList.add('open');ripple(n.el,.35);this.selectServer(sid)}
+    await this.relayout();
+    if(st.open===sid){this.lightServer(sid);m.beam([['L~s~'+sid],this.srv(sid).tools.map((t,i)=>`L~t~${sid}~${i}`)])}},
+  lightServer(sid){const st=this.st;if(!st.sel||st.sel.i!==undefined||st.sel.sid!==sid)return;const s=this.srv(sid),on=CLIENTS.filter(c=>c.on);const tl=s.tools.map((t,i)=>`L~t~${sid}~${i}`).filter(l=>this.m.links.has(l));this.m.lit([on.map(c=>'L~c~'+c.id),['L~s~'+sid],tl],[...on.map(c=>'c~'+c.id),'gw','s~'+sid,...tl.map(l=>l.replace('L~','').replace(/^t~/,'t~'))].map(x=>x.startsWith('t~')?x:x))},
+  selectServer(sid){const st=this.st,m=this.m;st.sel={sid};$$('.sel',m.host).forEach(x=>x.classList.remove('sel'));const s=this.srv(sid);
+    const p=panelLoad('Server',()=>this.serverPanel(s),{onClose:()=>this.clearSel(),fn:p=>this.wireServerPanel(p,sid)});p.dataset.for='s~'+sid},
+  selectClient(cid){const st=this.st,m=this.m,c=CLIENTS.find(x=>x.id===cid);st.sel={client:cid};for(const n of m.nodes.values())n.el.classList.remove('sel');m.get('c~'+cid).el.classList.add('sel');
+    const g1=[],g2=[],g3=[],nodes=['c~'+cid];if(c.on){g1.push('L~c~'+cid);nodes.push('gw');for(const s of GW.servers.filter(s=>!s.preview)){g2.push('L~s~'+s.id);nodes.push('s~'+s.id)}if(st.open)this.srv(st.open)?.tools.forEach((t,i)=>{if(eff(t)){g3.push(`L~t~${st.open}~${i}`);nodes.push(`t~${st.open}~${i}`)}})}
+    const direct=GW.outside.filter(o=>o.client===cid);direct.forEach(o=>nodes.push('o~'+o.id));
+    m.lit([g1,g2,g3].filter(g=>g.length),nodes);direct.forEach(o=>m.links.get('L~o~'+o.id)?.el.classList.add('on'));
+    if(c.on)m.beam([g1,g2,g3]);else m.beam([direct.map(o=>'L~o~'+o.id)],'beam amber');ripple(m.get('c~'+cid).el,.45);
+    const p=panelLoad('Client',()=>this.clientPanel(cid),{onClose:()=>this.clearSel(),fn:p=>this.wireClientPanel(p,cid)});p.dataset.for='c~'+cid},
+  clientPanel(cid){const c=CLIENTS.find(x=>x.id===cid),via=c.on?GW.servers.filter(s=>!s.preview):[],direct=GW.outside.filter(o=>o.client===cid&&!o.preview),tools=via.reduce((n,s)=>n+s.tools.filter(eff).length,0),pend=tray.has('conn~'+cid),ver=c.ver.replace(' · not tested','');
+    return`<div class="p-kick"><span>Client</span><button class="x" data-close aria-label="Close">${ico('x',14)}</button></div><div class="p-head">${tile(cid)}<div><div class="p-title">${c.name}</div><div class="p-id" style="font-family:var(--font)">Version ${ver} · on this Mac${c.ver.includes('not tested')?' · <span class="warn">not tested with Kitden</span>':''}</div></div></div>
+      <dl class="facts"><dt>Gateway</dt><dd><i class="lamp ${c.on?'on':''}"></i> ${c.on?'Connected':'Not connected'}${pend?' · <span class="acc">change in preview</span>':''}</dd><dt>Through Kitden</dt><dd>${c.on?`${via.length} servers · ${tools} tools on`:'<span class="muted">Nothing yet</span>'}</dd><dt>On its own</dt><dd style="flex-wrap:wrap">${direct.length?direct.map(o=>`<span class="chip-s">${ico(o.icon,12)} ${o.name}</span>`).join(''):'<span class="muted">Nothing</span>'}</dd><dt>Library</dt><dd>${cid==='cursor'?'Skills through Claude Code':'2 plugins · 3 skills'}</dd><dt>Projects</dt><dd>${PROJ||'All projects'}</dd></dl>
+      <p class="p-say">${c.on?`${c.name} calls ${via.length} servers through Kitden, so Kitden's rules apply to them.`:`${c.name} does not use the Kitden gateway yet. Drag it onto the gateway to connect it.`}${direct.length?` ${direct.map(o=>o.name).join(' and ')} ${direct.length>1?'are':'is'} set up in ${c.name} on its own and skip${direct.length>1?'':'s'} those rules.`:''}</p>
+      <div class="p-acts">${c.on?`<button class="btn" data-conn="off"${pend?' disabled':''}>Disconnect from the gateway…</button>`:`<button class="btn primary" data-conn="on"${pend?' disabled':''}>${ico('plug',13)} Connect to the gateway…</button>`}<button class="btn" data-lib>See what it loads in Library</button></div>
+      <div class="p-tech">Technical details ${ico('chevron-right',14)}</div>`},
+  wireClientPanel(p,cid){$('[data-conn]',p)?.addEventListener('click',e=>this.connect(cid,e.currentTarget.dataset.conn==='on'));$('[data-lib]',p)?.addEventListener('click',()=>go('library'))},
+  connect(cid,on){const m=this.m,c=CLIENTS.find(x=>x.id===cid),key='conn~'+cid,lid='L~c~'+cid;tray.drop(key);
+    if(on){m.link(lid,'c~'+cid,'r','gw','l','preview');A(m.links.get(lid).el,[{opacity:0},{opacity:1}],{dur:300});ripple(m.get('c~'+cid).el,.45)}else m.dash(lid,true,'preview','leaving');
+    const n=GW.servers.filter(s=>!s.preview).length;
+    const clear=()=>{if(on)m.unlink(lid);else m.dash(lid,false,'preview','leaving');this.refreshPanels()};
+    tray.add({key,icon:'plug',title:`${on?'Connect':'Disconnect'} ${c.name} ${on?'to':'from'} the gateway`,detail:on?`${c.name} gets ${n} servers through Kitden. Start a new ${c.name} session after Apply.`:`${c.name} loses the ${n} servers in the gateway. Servers it sets up on its own stay.`,who:`${c.name}'s settings`,onRemove:clear,
+      onCommit:()=>this.setConn(cid,on,true),onUndo:()=>this.setConn(cid,!on,true),toast:`${on?'Connected':'Disconnected'} ${c.name} ${on?'to':'from'} the gateway`});
+    this.refreshPanels()},
+  setConn(cid,on,anim){const m=this.m,c=CLIENTS.find(x=>x.id===cid),lid='L~c~'+cid;c.on=on;c.state=on?'Connected':'Not connected';
+    const n=m.get('c~'+cid);if(n){n.el.classList.toggle('free',!on);const sm=$('small',n.el);sm.innerHTML=`<i class="lamp ${on?'on':''}"></i>${c.state}`;if(anim){A($('.lamp',sm),[{transform:'scale(2.4)'},{transform:'scale(1)'}],{dur:S.rich?560:200});ripple(n.el,.5)}}
+    if(on){m.link(lid,'c~'+cid,'r','gw','l','');m.links.get(lid).el.setAttribute('class','lk');m.drawIn(lid,S.rich?560:260).then(()=>m.beam([[lid],GW.servers.filter(s=>!s.preview).map(s=>'L~s~'+s.id)]))}else m.undraw(lid);
+    roll($('#gw-c'),CLIENTS.filter(x=>x.on).length);this.refreshPanels()},
+  refreshPanels(){if(!panelEl||$('.pick',panelEl))return;const f=panelEl.dataset.for||'';
+    if(f.startsWith('c~')){const cid=f.slice(2);panelEl.innerHTML=this.clientPanel(cid);icons();wirePanel(panelEl,{fn:p=>this.wireClientPanel(p,cid),onClose:()=>this.clearSel()})}
+    if(f==='gw'){panelEl.innerHTML=this.gwPanel();icons();wirePanel(panelEl,{fn:p=>this.wireGwPanel(p),onClose:()=>this.clearSel()})}},
+  selectGateway(){const st=this.st,m=this.m;st.sel={gw:true};for(const n of m.nodes.values())n.el.classList.remove('sel');m.get('gw').el.classList.add('sel');
+    const on=CLIENTS.filter(c=>c.on),sv=GW.servers.filter(s=>!s.preview),g1=on.map(c=>'L~c~'+c.id),g2=sv.map(s=>'L~s~'+s.id);m.lit([g1,g2],[...on.map(c=>'c~'+c.id),'gw',...sv.map(s=>'s~'+s.id)]);m.beam([g1,g2]);ripple(m.get('gw').el,.55);
+    const p=panelLoad('Gateway',()=>this.gwPanel(),{onClose:()=>this.clearSel(),fn:p=>this.wireGwPanel(p)});p.dataset.for='gw'},
+  gwPanel(){const sv=GW.servers.filter(s=>!s.preview),all=sv.reduce((n,s)=>n+s.tools.length,0),on=sv.reduce((n,s)=>n+s.tools.filter(eff).length,0),need=sv.filter(s=>s.signin).length;
+    return`<div class="p-kick"><span>Gateway</span><button class="x" data-close aria-label="Close">${ico('x',14)}</button></div><div class="p-head"><span class="itile" style="width:32px;height:32px">${HOUSE}</span><div><div class="p-title">Kitden gateway</div><div class="p-id" style="font-family:var(--font)">On this Mac</div></div></div>
+      <dl class="facts"><dt>State</dt><dd><i class="lamp on"></i> Running</dd><dt>Servers</dt><dd>${sv.length} in the gateway · ${GW.outside.filter(o=>!o.preview).length} outside</dd><dt>Tools</dt><dd>${on} of ${all} on</dd>${need?`<dt>Sign-in</dt><dd><i class="lamp warn"></i> ${need} server${need>1?'s':''} waiting</dd>`:''}<dt>New tools</dt><dd>Stay off until you turn them on</dd></dl>
+      <div><div class="sw-head">Clients</div><div class="sw-list">${CLIENTS.map(c=>{const pend=tray.has('conn~'+c.id);return`<div class="sw-row">${tile(c.id,1)}<div class="sw-tx"><b>${c.name}</b><small><i class="lamp ${c.on?'on':''}"></i>${c.on?'Connected':'Not connected'}${pend?' · <span class="acc">in preview</span>':''}</small></div><button class="btn xs" data-conn="${c.id}:${c.on?'off':'on'}"${pend?' disabled':''}>${c.on?'Disconnect…':'Connect…'}</button></div>`}).join('')}</div></div>
+      <div class="p-acts"><button class="btn" data-addsrv>${ico('plus',13)} Add a server…</button></div><div class="p-tech">Technical details ${ico('chevron-right',14)}</div>`},
+  wireGwPanel(p){$$('[data-conn]',p).forEach(b=>b.addEventListener('click',()=>{const [cid,v]=b.dataset.conn.split(':');this.connect(cid,v==='on')}));$('[data-addsrv]',p)?.addEventListener('click',()=>this.openAdd())},
+  selectOutside(oid){const st=this.st,m=this.m,o=GW.outside.find(x=>x.id===oid);if(!o)return;this.clearSel();st.sel={out:oid};m.get('o~'+oid).el.classList.add('sel');m.focus(['o~'+oid,'c~'+o.client],['L~o~'+oid]);m.beam([['L~o~'+oid]],'beam amber');ripple(m.get('o~'+oid).el,.45);
+    const p=panelLoad('Server',()=>`<div class="p-kick"><span>Server</span><button class="x" data-close aria-label="Close">${ico('x',14)}</button></div><div class="p-head"><span class="itile">${ico(o.icon,15)}</span><div><div class="p-title">${o.name}</div><div class="p-id" style="font-family:var(--font)">${cap(o.group)} · outside the gateway</div></div></div>
+      <dl class="facts"><dt>Set up in</dt><dd>${tile(o.client,1)} ${cname(o.client)}</dd><dt>Route</dt><dd><i class="lamp dir"></i> Direct, on its own</dd><dt>Tools</dt><dd>${o.tools.length} tools</dd><dt>Sign-in</dt><dd>${o.signed?`<i class="lamp on"></i> Signed in there`:'<span class="muted">None needed</span>'}</dd><dt>Kitden's rules</dt><dd class="warn">Don't reach it</dd></dl>
+      <p class="p-say">${cname(o.client)} calls ${o.name} on its own, so Kitden can't turn its tools on or off. Move it into the gateway to manage them here. ${cname(o.client)} keeps it either way.</p>
+      <div class="p-acts"><button class="btn primary" data-in>${ico('log-in',13)} Move into the gateway…</button></div><div class="p-tech">Technical details ${ico('chevron-right',14)}</div>`,
+      {onClose:()=>this.clearSel(),fn:p=>$('[data-in]',p)?.addEventListener('click',()=>this.moveIn(oid))});p.dataset.for='o~'+oid},
+  async moveIn(oid){const st=this.st,m=this.m,o=GW.outside.find(x=>x.id===oid);if(!o||o.preview)return;this.clearSel();st.slot={group:o.group};await this.relayout({skip:'o~'+oid});const sl=m.get('slot'),n=m.get('o~'+oid);if(!sl||!n)return;const target={x:sl.x,y:sl.y};st.slot=null;await this.dropIn(o,n,target)},
+  /* Links: point at one, press × to remove it, or click it for its Details */
+  hookLinks(){const m=this.m;m.canHit=id=>/^(L~(c|s|t|o|x|d)~|P~L~t~)/.test(id);m.onLinkClick=id=>this.linkClick(id);m.onLinkRemove=id=>this.linkRemove(id);m.linkTip=id=>this.linkTip(id)},
+  previewKey(id){const p=id.split('~');
+    if(p[0]==='P'&&p[2]==='t')return`tool~${p[3]}~${p[4]}`;if(p[1]==='x')return'out~'+p[2];if(p[1]==='d')return'in~'+p[2];
+    if(p[1]==='o'){const o=GW.outside.find(x=>x.id===p[2]);if(o&&o.preview)return'out~'+p[2];if(tray.has('rmo~'+p[2]))return'rmo~'+p[2]}
+    if(p[1]==='s'){const s=this.srv(p[2]);if(s&&s.preview)return(s.moved?'in~':'add~')+p[2];if(tray.has('rm~'+p[2]))return'rm~'+p[2]}
+    if(p[1]==='c'&&tray.has('conn~'+p[2]))return'conn~'+p[2];
+    if(p[1]==='t'){if(tray.has(`tool~${p[2]}~${p[3]}`))return`tool~${p[2]}~${p[3]}`;if(tray.has('srv~'+p[2]))return'srv~'+p[2]}
+    return null},
+  linkNames(id){const m=this.m,l=m.links.get(id);if(!l)return['',''];const nm=n=>m.get(n)?.el.getAttribute('aria-label')||'';return[nm(l.a),nm(l.b)]},
+  linkTip(id){if(this.previewKey(id))return'Take it out of the preview';const p=id.split('~'),[a,b]=this.linkNames(id);
+    return p[1]==='c'?`Disconnect ${a}`:p[1]==='s'?`Remove ${b} from the gateway`:p[1]==='t'?`Turn off ${b}`:p[1]==='o'?`Remove ${b} from ${a}`:'Remove'},
+  linkRemove(id){const k=this.previewKey(id);if(k){tray.remove(k);return}const p=id.split('~');
+    if(p[1]==='c')this.connect(p[2],false);else if(p[1]==='s')this.removeFromGw(p[2]);else if(p[1]==='t')this.change(p[2],+p[3],PROJ||'all',false);else if(p[1]==='o')this.removeOutside(p[2]);
+    if(panelEl&&panelEl.dataset.for==='link~'+id){panelEl.innerHTML=this.linkPanel(id);icons();wirePanel(panelEl,{fn:q=>$('[data-rmlink]',q)?.addEventListener('click',()=>this.linkRemove(id)),onClose:()=>this.clearSel()})}},
+  linkClick(id){const st=this.st,m=this.m,l=m.links.get(id);if(!l)return;if(st.sel&&st.sel.link===id){this.clearSel();return}this.clearSel();st.sel={link:id};m.focus([l.a,l.b],[id]);m.pick(id);m.beam([[id]],l.el.classList.contains('direct')?'beam amber':'beam');
+    const p=panelLoad('Connection',()=>this.linkPanel(id),{onClose:()=>this.clearSel(),fn:q=>$('[data-rmlink]',q)?.addEventListener('click',()=>this.linkRemove(id))});p.dataset.for='link~'+id},
+  linkPanel(id){const p=id.split('~'),[a,b]=this.linkNames(id),pk=this.previewKey(id),on=CLIENTS.filter(c=>c.on).length;
+    const kind={c:'Route through the gateway',s:'Held by the gateway',t:'Tool on',o:'Direct route',x:'Leaving the gateway',d:'Direct route, moving in'}[p[1]]||'Change in preview';
+    const where={c:`${a}'s settings`,s:"Kitden's gateway file",t:"Kitden's rules file",o:`${a}'s settings`}[p[1]]||'Not written yet';
+    const means=pk?'This link is a change in preview. Nothing is written until you Apply.':p[1]==='c'?`${a} calls ${GW.servers.filter(s=>!s.preview).length} servers through Kitden, so Kitden's rules apply.`:p[1]==='s'?`The gateway holds ${b} and passes its tools that are on to ${on} client${on===1?'':'s'}.`:p[1]==='t'?`${b} is on: clients can call it through ${a}.`:`${a} calls ${b} on its own. Kitden's rules don't reach it.`;
+    const rm=pk?'Take it out of the preview':this.linkTip(id)+'…';
+    return`<div class="p-kick"><span>Connection</span><button class="x" data-close aria-label="Close">${ico('x',14)}</button></div><div><div class="p-title">${a} <span class="muted">→</span> ${b}</div><div class="p-id" style="font-family:var(--font)">${kind}</div></div>
+      <dl class="facts"><dt>From</dt><dd>${a}</dd><dt>To</dt><dd>${b}</dd><dt>State</dt><dd>${pk?'<i class="lamp pv"></i> In preview':`<i class="lamp ${p[1]==='o'?'dir':'on'}"></i> In place`}</dd><dt>Written in</dt><dd>${where}</dd></dl>
+      <p class="p-say">${means}</p><div class="p-acts"><button class="btn" data-rmlink>${ico('x',13)} ${rm}</button></div><div class="p-tech">Technical details ${ico('chevron-right',14)}</div>`},
+  removeFromGw(sid){const m=this.m,s=this.srv(sid);if(!s||s.preview)return;const key='rm~'+sid,lid='L~s~'+sid;tray.drop(key);
+    m.dash(lid,true,'preview','leaving');m.get('s~'+sid)?.el.classList.add('leaving');
+    const clear=()=>{m.dash(lid,false,'preview','leaving');m.get('s~'+sid)?.el.classList.remove('leaving')},on=CLIENTS.filter(c=>c.on).length;
+    tray.add({key,icon:'x',title:`Remove ${s.name} from the gateway`,detail:`${on} client${on===1?'':'s'} lose${on===1?'s':''} its ${s.tools.length} tools. Undo puts it back as it was.`,who:"Kitden's gateway file",onRemove:clear,
+      onCommit:()=>{clear();s._idx=GW.servers.indexOf(s);if(panelEl&&(panelEl.dataset.for==='s~'+sid||panelEl.dataset.for==='link~'+lid))closePanel();this.removeServer(s)},onUndo:()=>this.restoreServer(s),toast:`Removed ${s.name} from the gateway`})},
+  restoreServer(s){const m=this.m;if(GW.servers.includes(s))return;GW.servers.splice(Math.min(s._idx??GW.servers.length,GW.servers.length),0,s);const o=this.origin('s~'+s.id);m.add('s~'+s.id,{...this.spec('s~'+s.id),x:o.x,y:o.y,w:170,h:60,s:o.s,o:0});this.linksFor('s~'+s.id);icons();
+    this.relayout().then(()=>{m.drawIn('L~s~'+s.id,480);ripple(m.get('s~'+s.id)?.el,.5)});roll($('#gw-n'),GW.servers.filter(x=>!x.preview).length)},
+  removeOutside(oid){const m=this.m,o=GW.outside.find(x=>x.id===oid);if(!o||o.preview)return;const key='rmo~'+oid,lid='L~o~'+oid;tray.drop(key);
+    m.dash(lid,true,'dpreview');m.get('o~'+oid)?.el.classList.add('leaving');
+    const clear=()=>{m.dash(lid,false,'dpreview');m.get('o~'+oid)?.el.classList.remove('leaving')};
+    tray.add({key,icon:'x',title:`Remove ${o.name} from ${cname(o.client)}`,detail:`${cname(o.client)} stops calling it. Nothing else changes.`,who:`${cname(o.client)}'s settings`,onRemove:clear,
+      onCommit:async()=>{clear();if(panelEl&&(panelEl.dataset.for==='o~'+oid||panelEl.dataset.for==='link~'+lid))closePanel();o._idx=GW.outside.indexOf(o);await m.undraw(lid);const id='o~'+oid,n=m.get(id);GW.outside=GW.outside.filter(x=>x!==o);if(n)await m.move([{id,x:n.x-24,y:n.y,s:.85,o:0}],{dur:S.rich?320:180,ease:E.in});m.remove(id);this.relayout()},
+      onUndo:()=>{if(GW.outside.includes(o))return;GW.outside.splice(Math.min(o._idx??GW.outside.length,GW.outside.length),0,o);const T=this.layout().find(t=>t.id==='o~'+oid);m.add('o~'+oid,{...this.spec('o~'+oid),x:T.x-24,y:T.y,w:T.w,h:T.h,s:.85,o:0});this.linksFor('o~'+oid);icons();this.relayout().then(()=>m.drawIn(lid,480))},
+      toast:`Removed ${o.name} from ${cname(o.client)}`})},
+  clearSel(){const st=this.st;st.sel=null;for(const n of this.m.nodes.values())n.el.classList.remove('sel');this.m.unfocus();closePanel()},
+  selectTool(sid,i){const st=this.st,m=this.m;if(st.open!==sid){if(st.open)m.get('s~'+st.open)?.el.classList.remove('open');st.open=sid;m.get('s~'+sid).el.classList.add('open');this.relayout()}
+    st.sel={sid,i};for(const n of m.nodes.values())n.el.classList.remove('sel');const tid=`t~${sid}~${i}`,tn=m.get(tid);tn&&tn.el.classList.add('sel');
+    const s=this.srv(sid),t=s.tools[i],on=CLIENTS.filter(c=>c.on);const nodes=[...on.map(c=>'c~'+c.id),'gw','s~'+sid,tid];const groups=[on.map(c=>'L~c~'+c.id),['L~s~'+sid]];if(eff(t))groups.push([`L~t~${sid}~${i}`]);
+    m.lit(groups,nodes);m.beam(groups);
+    const p=panelLoad('Tool',()=>this.toolPanel(s,t),{onClose:()=>this.clearSel(),fn:p=>this.wireToolPanel(p,sid,i)});p.dataset.for=tid},
+  toolPanel(s,t){const e=eff(t),has=PROJ&&t.ex&&PROJ in t.ex,exs=t.ex?Object.entries(t.ex):[];
+    const perm=has?`${e?'On':'Off'} in this project`:`${e?'On':'Off'}${PROJ?' · from all projects':''}`;
+    const from=has?`<span class="acc">${ico('folder',12)} This project · ${PROJ}</span>`:'All projects';
+    let say,acts;
+    if(has){say=`Claude Code and Codex ${e?'can':"can't"} call this tool in ${PROJ}. Every other project ${t.on?'has it on':'still has it off'}.`;acts=`<button class="btn primary" data-do="shared">Use the shared rule…</button><button class="btn" data-do="all-${e?'on':'off'}">Turn ${e?'on':'off'} for all projects…</button>`}
+    else if(PROJ){say=`${PROJ} follows the shared rule: ${t.on?'on':'off'}.`;acts=`<button class="btn primary" data-do="proj-${e?'off':'on'}">Turn ${e?'off':'on'} in ${PROJ}…</button><button class="btn" data-do="all-${e?'off':'on'}">Turn ${e?'off':'on'} for all projects…</button>`}
+    else{say=t.on?'Claude Code and Codex can call this tool through Kitden, in every project.':"Claude Code and Codex can't call this tool through Kitden, in any project.";if(exs.length)say+=` Except ${exs.map(([p,v])=>`${p}, where it is ${v?'on':'off'}`).join('; ')}.`;acts=`<button class="btn${t.on?'':' primary'}" data-do="all-${t.on?'off':'on'}">Turn ${t.on?'off':'on'} for all projects…</button><button class="btn" data-do="pick-${t.on?'off':'on'}">Turn ${t.on?'off':'on'} in some projects…</button>`}
+    const exRows=!PROJ&&exs.length?`<div class="exs"><div class="sw-head">Projects with a rule of their own</div>${exs.map(([p,v])=>`<div class="ex-row">${ico('folder',13)}<span class="exn">${p}</span><span class="${v?'acc':'muted'}">${v?'On':'Off'}</span><button class="btn xs" data-show="${p}">Show</button></div>`).join('')}</div>`:'';
+    return`<div class="p-kick"><span>Tool</span><button class="x" data-close aria-label="Close">${ico('x',14)}</button></div><div><div class="p-title">${t.name}</div><div class="p-id">${snake(t.name)}</div></div>
+      <dl class="facts"><dt>Server</dt><dd>${ico(s.icon,13)} ${s.name} · ${cap(s.group)}</dd><dt>Permission</dt><dd><i class="mark ${e?'on':''}"></i> ${perm}</dd><dt>Comes from</dt><dd>${from}</dd><dt>Reported</dt><dd class="${t.kind==='Write'?'warn':''}">${t.kind==='Write'?'May write':'Reads only'}</dd><dt>Clients</dt><dd>${tile('claude',1)}${tile('codex',1)} 2 clients</dd></dl>
+      ${exRows}<p class="p-say">${say}</p><div class="p-acts">${acts}</div><div class="p-tech">Technical details ${ico('chevron-right',14)}</div>`},
+  wireToolPanel(p,sid,i){$$('[data-do]',p).forEach(b=>b.addEventListener('click',()=>{const d=b.dataset.do;
+      if(d==='shared')this.change(sid,i,PROJ,null);else if(d.startsWith('all-'))this.change(sid,i,'all',d==='all-on');else if(d.startsWith('proj-'))this.change(sid,i,PROJ,d==='proj-on');else this.pickProject(sid,i,d==='pick-on')}));
+    $$('[data-show]',p).forEach(b=>b.addEventListener('click',()=>setProject(b.dataset.show)))},
+  reopenTool(sid,i,dir){const s=this.srv(sid);if(!s)return;swapPanel(this.toolPanel(s,s.tools[i]),{fn:p=>this.wireToolPanel(p,sid,i),onClose:()=>this.clearSel()},dir)},
+  /* Turn on in one project: pick the project in the panel, preview on the map, Apply */
+  pickProject(sid,i,value){const t=this.srv(sid).tools[i];
+    swapPanel(`<div class="p-kick"><button class="x" data-back aria-label="Back">${ico('arrow-left',14)}</button><span class="crumb">Tool · ${t.name}</span><button class="x" data-close aria-label="Close">${ico('x',14)}</button></div>
+      <div><div class="p-title">Turn ${value?'on':'off'} ${t.name}<br>in the projects you pick</div><p class="p-say" style="margin-top:6px">Every other project keeps the shared rule: ${t.on?'on':'off'}.</p></div>
+      <label class="search">${ico('search',14)}<input placeholder="Find a project…" aria-label="Find a project" data-pq></label>
+      <div class="picks">${PROJECTS.map(p=>{const has=t.ex&&p.id in t.ex,cur=has?t.ex[p.id]:t.on,n=ownRules(p.id),done=cur===value;return`<button class="pick multi" role="checkbox" aria-checked="false" data-p="${p.id}"${done?' disabled':''}><span class="pk-ic">${ico('folder',14)}</span><span class="pk-tx"><b>${p.id}</b><small>${p.note?p.note+' · ':''}${n?`${n} own rule${n>1?'s':''} · `:''}${done?(value?'already on':'already off'):(cur?'on now':'off now')}</small></span><i class="chk">${ico('check',12)}</i></button>`}).join('')}</div>
+      <div class="p-acts"><button class="btn" data-done>Done</button></div>
+      <div class="p-tech" style="justify-content:flex-start;gap:6px">${ico('info',13)}<span data-pcount>Tick projects. Each one waits in preview until Apply.</span></div>`,
+      {fn:p=>{$('[data-back]',p).addEventListener('click',()=>this.reopenTool(sid,i,'back'));$('[data-done]',p).addEventListener('click',()=>this.reopenTool(sid,i,'back'));
+        $('[data-pq]',p).addEventListener('input',e=>{const q=e.target.value.toLowerCase();$$('.pick',p).forEach(b=>b.hidden=!b.dataset.p.includes(q))});
+        $$('.pick',p).forEach(b=>b.addEventListener('click',()=>{const pj=b.dataset.p,key=`toolp~${sid}~${i}~${pj}`;if(tray.has(key))tray.remove(key);else this.changeProject(sid,i,pj,value);this.syncPicks(sid,i)}));this.syncPicks(sid,i,true)},onClose:()=>this.clearSel()},'fwd')},
+  /* One project's own rule for one tool. Each ticked project is its own change in the tray. */
+  changeProject(sid,i,pj,value){const s=this.srv(sid),t=s.tools[i],key=`toolp~${sid}~${i}~${pj}`,tid=`t~${sid}~${i}`;tray.drop(key);const had=!!(t.ex&&pj in t.ex),prev=had?t.ex[pj]:undefined;
+    tray.add({key,icon:'folder',title:`Turn ${value?'on':'off'} ${t.name} in ${pj}`,detail:`Only in ${pj}. Every other project keeps it ${t.on?'on':'off'}.`,who:"Kitden's rules file",
+      onRemove:()=>{this.pendTag(sid,i);this.syncPicks(sid,i)},
+      onCommit:()=>{this.applyTool(sid,i,{on:t.on,ex:{...(t.ex||{}),[pj]:value}},true);this.pendTag(sid,i);if(panelEl&&panelEl.dataset.for===tid&&$('.pick.multi',panelEl))this.reopenTool(sid,i,'back')},
+      onUndo:()=>{const ex={...(t.ex||{})};if(had)ex[pj]=prev;else delete ex[pj];this.applyTool(sid,i,{on:t.on,ex:Object.keys(ex).length?ex:undefined},true)},
+      toast:`Turned ${value?'on':'off'} ${t.name} in ${pj}`,extra:pj!==PROJ?{label:`Show ${pj}`,fn:()=>setProject(pj)}:null});
+    this.pendTag(sid,i,true)},
+  pendTag(sid,i,pop){const n=this.m.get(`t~${sid}~${i}`);if(!n)return;const t=this.srv(sid).tools[i];const ps=tray.items.filter(x=>x.key.startsWith(`toolp~${sid}~${i}~`)).map(x=>x.key.split('~')[3]);
+    n.el.innerHTML=this.toolHTML(t);if(ps.length){n.el.querySelector('.ptag')?.remove();const tg=document.createElement('span');tg.className='ptag acc pend';tg.innerHTML=`${ico('folder',11)} ${ps.length===1?ps[0]:ps.length+' projects'}`;n.el.insertBefore(tg,n.el.querySelector('.port'));if(pop){A(tg,[{opacity:0,transform:'scale(.7)'},{opacity:1,transform:'none'}],{dur:S.rich?320:180});ripple(n.el,.4)}}icons()},
+  syncPicks(sid,i,quiet){const p=panelEl;if(!p||p.dataset.for!==`t~${sid}~${i}`)return;let n=0;$$('.pick.multi',p).forEach(b=>{const on=tray.has(`toolp~${sid}~${i}~${b.dataset.p}`);if(on)n++;if(on!==b.classList.contains('on')){b.classList.toggle('on',on);b.setAttribute('aria-checked',String(on));if(on&&!quiet)A($('.chk',b),[{transform:'scale(.6)'},{transform:'scale(1)'}],{dur:S.rich?420:160})}});
+    const c=$('[data-pcount]',p);if(c)c.textContent=n?`${n} project${n>1?'s':''} in preview. Apply them from the tray.`:'Tick projects. Each one waits in preview until Apply.'},
+  /* One rule change for one tool: scope 'all' or a project; value true/false, or null for "use the shared rule" */
+  change(sid,i,scope,value,opt={}){const m=this.m,s=this.srv(sid),t=s.tools[i],tid=`t~${sid}~${i}`,lid=`L~t~${sid}~${i}`,key=`tool~${sid}~${i}`;
+    const before={on:t.on,ex:t.ex?{...t.ex}:undefined},after=JSON.parse(JSON.stringify(before));
+    if(scope==='all')after.on=value;else{after.ex=after.ex||{};if(value===null)delete after.ex[scope];else after.ex[scope]=value;if(!Object.keys(after.ex).length)delete after.ex}
+    const effOf=x=>PROJ&&x.ex&&PROJ in x.ex?x.ex[PROJ]:x.on,e0=effOf(before),e1=effOf(after);
+    tray.drop(key);const undo=[];
+    if(e0!==e1){const mk=m.get(tid)?.el.querySelector('.mark');if(mk){mk.classList.add('pv');undo.push(()=>m.get(tid)?.el.querySelector('.mark')?.classList.remove('pv'))}}
+    if(e1&&!e0&&m.get(tid)){m.link('P~'+lid,'s~'+sid,'r',tid,'l','preview');A(m.links.get('P~'+lid)?.el,[{opacity:0},{opacity:1}],{dur:240});undo.push(()=>m.unlink('P~'+lid))}
+    if(!e1&&e0){m.dash(lid,true,'preview');undo.push(()=>m.dash(lid,false,'preview'))}
+    const tn=m.get(tid);if(tn&&scope!=='all'&&scope!==PROJ){tn.el.querySelector('.ptag')?.remove();const tg=document.createElement('span');tg.className='ptag acc pend';tg.innerHTML=`${ico('folder',11)} ${scope}`;tn.el.insertBefore(tg,tn.el.querySelector('.port'));icons();A(tg,[{opacity:0,transform:'scale(.7)'},{opacity:1,transform:'none'}],{dur:280});ripple(tn.el,.4);undo.push(()=>{const n2=m.get(tid);if(n2){n2.el.innerHTML=this.toolHTML(this.srv(sid).tools[i]);icons()}})}
+    undo.push(()=>{if(panelEl&&panelEl.dataset.for==='s~'+sid)$(`.switch[data-sw="${i}"]`,panelEl)?.classList.remove('pending');if(panelEl&&panelEl.dataset.for===tid)$$('.pick.on',panelEl).forEach(x=>x.classList.remove('on'))});
+    const shared=after.on?'on':'off',where=scope==='all'?'for all projects':`in ${scope}`;
+    const title=value===null?`Use the shared rule for ${t.name} in ${scope}`:`Turn ${value?'on':'off'} ${t.name} ${where}`;
+    const detail=value===null?`${scope} goes back to ${shared}, like every other project.`:scope==='all'?`Claude Code and Codex ${value?'can call it':'stop calling it'} through Kitden${t.ex?' wherever a project has no rule of its own':''}.`:`Only in ${scope}. Every other project keeps it ${shared}.${value?' Codex: start a new session.':''}`;
+    const clear=()=>undo.forEach(f=>f());
+    tray.add({key,icon:'toggle-right',title,detail,who:"Kitden's rules file",onRemove:clear,
+      onCommit:()=>{clear();this.applyTool(sid,i,after,true);if(panelEl&&panelEl.dataset.for===tid&&$('.pick',panelEl))this.reopenTool(sid,i,'back')},
+      onUndo:()=>this.applyTool(sid,i,before,true),
+      toast:value===null?`${scope} uses the shared rule for ${t.name}`:`Turned ${value?'on':'off'} ${t.name} ${where}`,
+      extra:scope!=='all'&&scope!==PROJ?{label:`Show ${scope}`,fn:()=>setProject(scope)}:null})},
+  applyTool(sid,i,state,anim){const m=this.m,s=this.srv(sid);if(!s)return;const t=s.tools[i],tid=`t~${sid}~${i}`,lid=`L~t~${sid}~${i}`;const e0=eff(t);t.on=state.on;if(state.ex)t.ex={...state.ex};else delete t.ex;const e1=eff(t);
+    const n=m.get(tid);if(n){n.el.innerHTML=this.toolHTML(t);icons();if(anim&&e0!==e1)A($('.mark',n.el),[{transform:'scale(1.9)'},{transform:'scale(1)'}],{dur:S.rich?520:200});const tg=$('.ptag',n.el);if(anim&&tg)A(tg,[{opacity:0,transform:'scale(.7)'},{opacity:1,transform:'none'}],{dur:S.rich?480:200});if(anim)ripple(n.el,.45);
+      if(e1&&!e0){m.link(lid,'s~'+sid,'r',tid,'l',this.st.sel&&this.st.sel.sid===sid?'on':'');m.drawIn(lid,S.rich?520:260).then(()=>m.beam([[lid]]))}else if(!e1&&e0)m.undraw(lid)}
+    this.syncMeta(sid);this.scope(false);
+    if(panelEl&&panelEl.dataset.for==='s~'+sid)this.syncSwitches(sid);
+    if(panelEl&&panelEl.dataset.for===tid&&!$('.pick',panelEl)){panelEl.innerHTML=this.toolPanel(s,t);icons();wirePanel(panelEl,{fn:p=>this.wireToolPanel(p,sid,i),onClose:()=>this.clearSel()});rise([...panelEl.children].slice(2,5),{step:40,y:4})}},
+  serverPanel(s){const on=s.tools.filter(eff).length;
+    return`<div class="p-kick"><span>Server</span><button class="x" data-close aria-label="Close">${ico('x',14)}</button></div><div><div class="p-title">${s.name}</div><div class="p-id" style="font-family:var(--font)">${cap(s.group)} · in the Kitden gateway</div></div>
+      <dl class="facts"><dt>Sign-in</dt><dd>${s.signin?`<span class="warn">${ico('key-round',12)} Needed</span>`:`<span class="okc" style="display:grid">${ico('key-round',12)}</span> Signed in`}</dd><dt>Tools</dt><dd><span><span class="num" data-son>${on}</span> of ${s.tools.length} on</span></dd><dt>Comes from</dt><dd>All projects</dd><dt>Clients</dt><dd>${tile('claude',1)}${tile('codex',1)} 2 clients</dd></dl>
+      <div><div class="sw-head">Tools · ${PROJ||'All projects'}</div><div class="sw-list">
+        <div class="sw-row whole"><div class="sw-tx"><b>Whole server</b><small data-whole>${on?`${on} of ${s.tools.length} tools on`:'Every tool is off'}</small></div>${sw('all',on>0,'Whole '+s.name+' server',tray.has('srv~'+s.id))}</div>
+        ${s.tools.map((t,i)=>{const has=PROJ&&t.ex&&PROJ in t.ex;return`<div class="sw-row"><div class="sw-tx"><code>${snake(t.name)}</code><small>${t.name} · ${t.kind==='Write'?'May write':'Reads only'}</small>${has?`<small class="acc">${ico('folder',11)} Differs from all projects · <button class="lnk" data-use="${i}">Use all projects</button></small>`:''}</div>${sw(i,eff(t),t.name,tray.has(`tool~${s.id}~${i}`))}</div>`}).join('')}
+      </div></div>
+      <div class="p-acts">${s.signin?'<button class="btn primary">Sign in…</button>':''}<button class="btn" data-out>Move out of the gateway…</button></div><div class="p-tech">Technical details ${ico('chevron-right',14)}</div>`},
+  wireServerPanel(p,sid){const s=this.srv(sid);
+    $$('.switch',p).forEach(b=>b.addEventListener('click',()=>{const k=b.dataset.sw,key=k==='all'?'srv~'+sid:`tool~${sid}~${k}`;if(b.classList.contains('pending')){tray.remove(key);return}b.classList.add('pending');
+      if(k==='all')this.changeServer(sid,b.getAttribute('aria-pressed')!=='true',b);else this.change(sid,+k,PROJ||'all',!eff(s.tools[+k]),{sw:b})}));
+    $$('[data-use]',p).forEach(b=>b.addEventListener('click',()=>this.change(sid,+b.dataset.use,PROJ,null)));
+    $('[data-out]',p)?.addEventListener('click',()=>this.pickClient(sid))},
+  reopenServer(sid,dir){const s=this.srv(sid);if(!s)return;swapPanel(this.serverPanel(s),{fn:p=>this.wireServerPanel(p,sid),onClose:()=>this.clearSel()},dir)},
+  syncSwitches(sid){const p=panelEl,s=this.srv(sid);if(!p||!s)return;const n=s.tools.filter(eff).length;$$('.switch',p).forEach(b=>{const k=b.dataset.sw;b.classList.toggle('pending',tray.has(k==='all'?'srv~'+sid:`tool~${sid}~${k}`));b.setAttribute('aria-pressed',String(k==='all'?n>0:eff(s.tools[+k])))});roll($('[data-son]',p),n);const w=$('[data-whole]',p);if(w)w.textContent=n?`${n} of ${s.tools.length} tools on`:'Every tool is off'},
+  changeServer(sid,on,btn){const s=this.srv(sid),m=this.m,scope=PROJ||'all',key='srv~'+sid;tray.drop(key);const before=s.tools.map(t=>({on:t.on,ex:t.ex?{...t.ex}:undefined}));
+    const after=s.tools.map((t,i)=>{const x=JSON.parse(JSON.stringify(before[i]));const target=on?(s.lastOn?s.lastOn[i]:t.kind==='Read'):false;if(scope==='all')x.on=target;else{x.ex=x.ex||{};x.ex[scope]=target}return x});
+    if(!on)s.tools.forEach((t,i)=>m.dash(`L~t~${sid}~${i}`,true,'preview'));
+    const n=s.tools.filter(eff).length,where=scope==='all'?'for all projects':'in '+scope;
+    const clear=()=>{s.tools.forEach((t,i)=>m.dash(`L~t~${sid}~${i}`,false,'preview'));if(panelEl&&panelEl.dataset.for==='s~'+sid)$('.switch[data-sw="all"]',panelEl)?.classList.remove('pending')};
+    tray.add({key,icon:'toggle-right',title:`Turn ${on?'on':'off'} ${s.name} ${where}`,detail:on?`Claude Code and Codex can call its tools again${s.lastOn?', as they were':', the ones that only read'}.`:`Claude Code and Codex lose ${n} tool${n===1?'':'s'}. ${s.name} stays in the gateway.`,who:"Kitden's rules file",onRemove:clear,
+      onCommit:()=>{clear();if(!on)s.lastOn=s.tools.map(eff);after.forEach((x,i)=>setTimeout(()=>this.applyTool(sid,i,x,true),D(i*80)))},
+      onUndo:()=>before.forEach((x,i)=>setTimeout(()=>this.applyTool(sid,i,x,true),D(i*80))),toast:`Turned ${on?'on':'off'} ${s.name} ${where}`})},
+  /* Move a server out of the gateway into one client: drag it onto the client, or pick it here */
+  pickClient(sid){const s=this.srv(sid);
+    swapPanel(`<div class="p-kick"><button class="x" data-back aria-label="Back">${ico('arrow-left',14)}</button><span class="crumb">Server · ${s.name}</span><button class="x" data-close aria-label="Close">${ico('x',14)}</button></div>
+      <div><div class="p-title">Move ${s.name} out of the gateway</div><p class="p-say" style="margin-top:6px">Pick the client that keeps it. You can also drag ${s.name} onto a client on the map.</p></div>
+      <div class="picks">${CLIENTS.map(c=>`<button class="pick" data-c="${c.id}">${tile(c.id)}<span class="pk-tx"><b>${c.name}</b><small>${c.on?'Uses the gateway now':'Not connected to the gateway'}</small></span><i class="radio"></i></button>`).join('')}</div>
+      <div class="p-tech" style="justify-content:flex-start;gap:6px">${ico('info',13)} The other clients lose ${s.name}'s tools.</div>`,
+      {fn:p=>{$('[data-back]',p).addEventListener('click',()=>this.reopenServer(sid,'back'));$$('.pick',p).forEach(b=>b.addEventListener('click',()=>{$$('.pick',p).forEach(x=>x.classList.toggle('on',x===b));this.moveOut(sid,b.dataset.c)}))},onClose:()=>this.clearSel()},'fwd')},
+  async moveOut(sid,cid,drop){const m=this.m,s=this.srv(sid);if(!s||s.preview)return;
+    const st=this.st;if(st.open===sid)st.open=null;if(st.sel&&st.sel.sid===sid){st.sel=null;m.unfocus()}
+    const idx=GW.servers.indexOf(s);GW.servers.splice(idx,1);
+    const chan=Math.max(16,...GW.outside.map(o=>o.chan||16))+8;
+    const o={id:s.id,name:s.name,icon:s.icon,group:s.group,client:cid,note:`In ${cname(cid)}`,chan,tools:s.tools,preview:true,from:{idx,server:s}};GW.outside.push(o);
+    const old=m.get('s~'+sid),pos=drop||{x:old.x,y:old.y};m.remove('s~'+sid);
+    const T=this.layout().find(t=>t.id==='o~'+o.id);m.add('o~'+o.id,{...this.spec('o~'+o.id),x:pos.x,y:pos.y,w:T.w,h:T.h});this.linksFor('o~'+o.id);icons();
+    ['L~o~'+o.id,'L~x~'+o.id].forEach(id=>A(m.links.get(id)?.el,[{opacity:0},{opacity:1}],{dur:320}));
+    const others=CLIENTS.filter(x=>x.on&&x.id!==cid).map(x=>x.name);
+    tray.add({key:'out~'+o.id,icon:'log-out',title:`Move ${s.name} into ${cname(cid)}`,detail:`Out of the gateway. ${cname(cid)} sets it up on its own${others.length?`; ${others.join(' and ')} lose${others.length>1?'':'s'} its tools`:''}.`,who:`${cname(cid)}'s settings`,
+      onRemove:()=>this.backIn(o,false),revertData:()=>{GW.outside=GW.outside.filter(x=>x!==o);GW.servers.splice(Math.min(idx,GW.servers.length),0,s)},
+      onCommit:()=>this.commitOut(o),onUndo:()=>this.backIn(o,true),toast:`Moved ${s.name} into ${cname(cid)}`});
+    await this.relayout();ripple(m.get('o~'+o.id)?.el,.5)},
+  commitOut(o){const m=this.m,n=m.get('o~'+o.id);o.preview=false;
+    m.undraw('L~x~'+o.id);const l=m.links.get('L~o~'+o.id);if(l){l.el.setAttribute('class','lk direct');m.drawIn(l.id,S.rich?600:280).then(()=>m.beam([[l.id]],'beam amber'))}
+    if(n){n.el.className='nd blk out';n.el.removeAttribute('title');n.el.innerHTML=this.spec('o~'+o.id).html;icons();ripple(n.el,.6)}
+    roll($('#gw-n'),GW.servers.filter(x=>!x.preview).length);if(panelEl&&panelEl.dataset.for==='s~'+o.id)closePanel()},
+  async backIn(o,anim){const m=this.m;if(!GW.outside.includes(o))return;GW.outside=GW.outside.filter(x=>x!==o);o.preview=false;const s=o.from.server;GW.servers.splice(Math.min(o.from.idx,GW.servers.length),0,s);
+    const n=m.get('o~'+o.id);const at=n?{x:n.x,y:n.y}:{x:396,y:300};m.remove('o~'+o.id);m.add('s~'+s.id,{...this.spec('s~'+s.id),x:at.x,y:at.y,w:170,h:60});this.linksFor('s~'+s.id);icons();
+    $$('.panel .pick.on').forEach(x=>x.classList.remove('on'));
+    if(anim)m.drawIn('L~s~'+s.id,480);await this.relayout();roll($('#gw-n'),GW.servers.filter(x=>!x.preview).length);if(anim)ripple(m.get('s~'+s.id)?.el,.5)},
+  /* + Add: marketplace search */
+  openAdd(){this.clearSel();
+    const build=()=>`<div class="p-kick" style="font-size:15px;color:var(--ink);font-weight:600"><span>Add a server</span><button class="x" data-close aria-label="Close">${ico('x',14)}</button></div><label class="search">${ico('search',14)}<input id="mq" placeholder="Search the marketplaces…" aria-label="Search the marketplaces"></label><div class="seg sm" style="align-self:flex-start"><i class="seg-mark"></i><button aria-pressed="true">All</button><button aria-pressed="false">Community</button><button aria-pressed="false">Team</button></div><div id="mres" style="display:flex;flex-direction:column;gap:8px">${GWD.market.map(g=>`<div class="res-g">${ico('store',13)} ${g.src}</div>`+g.items.map(it=>this.resRow(it)).join('')).join('')}</div><div class="p-tech" style="justify-content:flex-start;gap:6px">${ico('info',13)} Click a server or drag it onto the map to preview it.</div>`;
+    const p=panelLoad('Add a server',build,{onClose:()=>$('[data-add]',this.m.host)?.classList.remove('primary'),fn:p=>{const sg=$('.seg',p);segGlide(sg,true);sg.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;$$('button',sg).forEach(x=>x.setAttribute('aria-pressed',String(x===b)));segGlide(sg)});
+      $('#mres',p).addEventListener('click',e=>{if(this.dragged)return;const r=e.target.closest('.res');if(r&&!r.classList.contains('off'))this.preview(r.dataset.mk,r)});$('#mres',p).addEventListener('pointerdown',e=>this.resDrag(e));
+      $('#mq',p).addEventListener('input',e=>{const q=e.target.value.trim().toLowerCase();$$('.res',p).forEach(r=>{const hit=!q||r.dataset.name.includes(q);if(hit===!r.hidden)return;if(hit){r.hidden=false;A(r,[{opacity:0,transform:'translateY(-4px)'},{opacity:1,transform:'none'}],{dur:240})}else r.hidden=true})})}});
+    p.dataset.for='add';$('[data-add]',this.m.host)?.classList.add('primary')},
+  resRow(it){const added=GW.servers.some(s=>s.id===it.id&&!s.preview),n=(TOOLNAMES[it.id]||[]).length||4,inGw=it.inGw||added,isPrev=GW.servers.some(s=>s.id===it.id&&s.preview);
+    return`<div class="res${inGw?' off':''}${isPrev?' on':''}" data-mk="${it.id}" data-name="${it.name.toLowerCase()}" role="button" tabindex="0"><span class="grip">${ico('grip-vertical',12)}</span><span class="itile" style="width:26px;height:26px">${ico(it.icon,14)}</span><div class="tx"><b>${it.name}</b><small>${cap(it.group)} · ${n} tools</small></div><span class="st${inGw&&!it.inGw?' okc':''}">${it.inGw?'In the gateway':added?'Added':isPrev?'In preview':it.signin?ico('key-round',11)+' Sign-in':''}</span></div>`},
+  preview(mkId,row,at){const st=this.st,m=this.m;if(GW.servers.some(s=>s.id===mkId&&s.preview)){tray.remove('add~'+mkId);return}if(GW.servers.some(s=>s.id===mkId))return;
+    const it=GWD.market.flatMap(g=>g.items).find(x=>x.id===mkId);const names=TOOLNAMES[mkId]||['Tool one','Tool two','Tool three','Tool four'];
+    const s={id:mkId,name:it.name,icon:it.icon,group:it.group,signin:!!it.signin,preview:true,tools:names.map(n=>({name:n,on:false,kind:KIND(n)}))};
+    if(st.open){m.get('s~'+st.open)?.el.classList.remove('open');st.open=null}
+    GW.servers.push(s);if(row){row.classList.add('on');$('.st',row).innerHTML='In preview'}
+    const T=this.layout().find(t=>t.id==='s~'+mkId);
+    if(at){m.add('s~'+mkId,{...this.spec('s~'+mkId),x:at.x,y:at.y,w:170,h:60});this.linksFor('s~'+mkId);icons();A(m.links.get('L~s~'+mkId)?.el,[{opacity:0},{opacity:1}],{dur:300});ripple(m.get('s~'+mkId).el,.5);this.relayout()}
+    else if(S.rich&&D(1)&&row){const from=row.getBoundingClientRect(),hr=m.layer.getBoundingClientRect();const fl=row.cloneNode(true);fl.classList.add('flier');Object.assign(fl.style,{left:from.left+'px',top:from.top+'px',width:from.width+'px',height:from.height+'px',margin:0,boxShadow:css('--shadow')});document.body.append(fl);
+      this.relayout({skip:'s~'+mkId});
+      fl.animate([{left:from.left+'px',top:from.top+'px',width:from.width+'px',height:from.height+'px'},{left:hr.left+T.x+'px',top:hr.top+T.y+'px',width:'170px',height:'60px'}],{duration:D(620),easing:SPRING,fill:'forwards'}).finished.then(()=>{fl.remove();const n2=m.get('s~'+mkId);if(n2&&s.preview){const T2=this.layout().find(t=>t.id==='s~'+mkId)||T;Object.assign(n2,{x:T2.x,y:T2.y,s:1,o:1});m.place(n2);m.draw();ripple(n2.el,.5);A(m.links.get('L~s~'+mkId)?.el,[{opacity:0},{opacity:1}],{dur:300})}},()=>fl.remove())}
+    else this.relayout();
+    tray.add({key:'add~'+mkId,icon:'plus',title:`Add ${s.name} to the gateway`,detail:`${cap(s.group)} · ${s.tools.length} tools, all off until you turn them on.${s.signin?' Sign in after Apply.':''}`,who:"Claude Code's settings",
+      onRemove:()=>this.unpreviewAdd(s),revertData:()=>{GW.servers=GW.servers.filter(x=>x!==s)},onCommit:()=>this.commitAdd(s),onUndo:()=>this.removeServer(s),toast:`Added ${s.name} to the gateway`})},
+  /* Drag a marketplace server from the panel: a slot opens in its group, drop it there to preview it */
+  resDrag(e){const row=e.target.closest('.res');if(!row||e.button!==0||row.classList.contains('off')||row.classList.contains('on'))return;const st=this.st,m=this.m,mk=row.dataset.mk,it=GWD.market.flatMap(g=>g.items).find(x=>x.id===mk);if(!it)return;
+    const s0={x:e.clientX,y:e.clientY},r0=row.getBoundingClientRect(),capY=m.get('cap~out').y;let moved=false,gh=null,dx=0,dy=0;try{row.setPointerCapture(e.pointerId)}catch(_){}
+    const mv=ev=>{dx=ev.clientX-s0.x;dy=ev.clientY-s0.y;if(!moved&&Math.hypot(dx,dy)<5)return;
+      if(!moved){moved=true;this.drag=true;gh=row.cloneNode(true);row.classList.add('dragging');gh.classList.add('flier','ghost');Object.assign(gh.style,{left:r0.left+'px',top:r0.top+'px',width:r0.width+'px',height:r0.height+'px',margin:0});document.body.append(gh)}
+      gh.style.transform=`translate(${dx}px,${dy}px)`;
+      const hr=m.host.getBoundingClientRect(),px=ev.clientX-hr.left,py=ev.clientY-hr.top,under=document.elementFromPoint(ev.clientX,ev.clientY);
+      const want=(!panelEl||!panelEl.contains(under))&&px>180&&px<760&&py>-20&&py<capY-4?it.group:null;gh.classList.toggle('over',!!want);
+      if(want!==(st.slot&&st.slot.group)){st.slot=want?{group:want}:null;this.lightGw(want);this.relayout({dur:S.rich?420:220})}};
+    const up=async()=>{row.removeEventListener('pointermove',mv);row.removeEventListener('pointerup',up);row.removeEventListener('pointercancel',up);if(!moved)return;
+      this.dragged=true;setTimeout(()=>{this.dragged=false;this.drag=false},0);this.lightGw(false);
+      const T=st.slot&&this.layout().find(t=>t.id==='slot'),hr=m.layer.getBoundingClientRect(),from={transform:`translate(${dx}px,${dy}px)`,width:r0.width+'px',height:r0.height+'px'};
+      if(T){await gh.animate([from,{transform:`translate(${hr.left+T.x-r0.left}px,${hr.top+T.y-r0.top}px)`,width:'170px',height:'60px'}],{duration:D(S.rich?380:200),easing:S.rich?SPRING:CALM,fill:'forwards'}).finished.catch(()=>{});
+        gh.remove();row.classList.remove('dragging');st.slot=null;m.remove('slot');this.preview(mk,row,{x:T.x,y:T.y})}
+      else{await gh.animate([from,{transform:'none'}],{duration:D(S.rich?320:180),easing:CALM,fill:'forwards'}).finished.catch(()=>{});gh.remove();row.classList.remove('dragging')}};
+    row.addEventListener('pointermove',mv);row.addEventListener('pointerup',up);row.addEventListener('pointercancel',up)},
+  async unpreviewAdd(s){const m=this.m,id='s~'+s.id;GW.servers=GW.servers.filter(x=>x!==s);s.preview=false;
+    $$('.res').forEach(r=>{if(r.dataset.mk===s.id){r.classList.remove('on');$('.st',r).innerHTML=s.signin?ico('key-round',11)+' Sign-in':'';icons()}});
+    const o=this.origin(id);m.unlink('L~s~'+s.id);await Promise.all([m.move([{id,...o,o:0}],{dur:S.rich?380:180,ease:E.in}),this.relayout({skip:id})]);m.remove(id)},
+  commitAdd(s){const m=this.m,id='s~'+s.id,n=m.get(id);s.preview=false;if(!n)return;
+    if(s.moved){m.undraw('L~d~'+s.id);s.moved=null}
+    n.el.classList.remove('preview');n.el.removeAttribute('title');$('.unx',n.el)?.remove();$('small',n.el).innerHTML=this.meta(s);icons();ripple(n.el,.7);A(n.el,[{scale:'1.06'},{scale:'1'}],{dur:S.rich?520:1});
+    const l=m.links.get('L~s~'+s.id);if(l){l.el.setAttribute('class','lk');m.drawIn(l.id,S.rich?560:280).then(()=>m.beam([[l.id]]))}
+    roll($('#gw-n'),GW.servers.filter(x=>!x.preview).length);
+    $$('.res').forEach(r=>{if(r.dataset.mk===s.id){r.classList.remove('on');r.classList.add('off');const st=$('.st',r);st.className='st okc';st.textContent='Added';A(st,[{opacity:0,transform:'translateX(6px)'},{opacity:1,transform:'none'}],{dur:280})}})},
+  async removeServer(s){const st=this.st,m=this.m,id='s~'+s.id;
+    if(s.wasOut){GW.servers=GW.servers.filter(x=>x!==s);const o=s.outData;o.preview=false;GW.outside.push(o);m.unlink('L~s~'+s.id);const n=m.get(id);const at={x:n.x,y:n.y};m.remove(id);const T=this.layout().find(t=>t.id==='o~'+o.id);m.add('o~'+o.id,{...this.spec('o~'+o.id),x:at.x,y:at.y,w:T.w,h:T.h});this.linksFor('o~'+o.id);icons();await this.relayout();m.drawIn('L~o~'+o.id,480);roll($('#gw-n'),GW.servers.filter(x=>!x.preview).length);return}
+    GW.servers=GW.servers.filter(x=>x!==s);if(st.open===s.id)st.open=null;await m.undraw('L~s~'+s.id);const o=this.origin(id);await Promise.all([m.move([{id,...o,o:0}],{dur:S.rich?360:180,ease:E.in}),this.relayout({skip:id})]);m.remove(id);roll($('#gw-n'),GW.servers.filter(x=>!x.preview).length);
+    $$('.res').forEach(r=>{if(r.dataset.mk===s.id){r.classList.remove('off');$('.st',r).textContent=s.signin?'Sign-in':''}})},
+  lightGw(on){const g=this.m.get('gw');if(!g||g.el.classList.contains('drop')===!!on)return;g.el.classList.toggle('drop',!!on);if(on)ripple(g.el,.45)},
+  /* Drag: a client not on the gateway draws a wire; drop it on the gateway to connect */
+  wireStart(e,el){const m=this.m,st=this.st,cid=el.dataset.id.split('~')[1],c=CLIENTS.find(x=>x.id===cid);if(!c||c.on||tray.has('conn~'+cid))return;
+    const n=m.get(el.dataset.id),g=m.get('gw'),s0={x:e.clientX,y:e.clientY};let moved=false,over=false,wire=null;try{el.setPointerCapture(e.pointerId)}catch(_){}
+    const mv=ev=>{if(!moved&&Math.hypot(ev.clientX-s0.x,ev.clientY-s0.y)<5)return;const hr=m.host.getBoundingClientRect(),px=ev.clientX-hr.left,py=ev.clientY-hr.top;
+      if(!moved){moved=true;this.drag=true;if(st.sel)this.clearSel();m.focus([n.id,'gw'],[]);wire=document.createElementNS(NS,'path');wire.setAttribute('class','lk preview');m.over.append(wire);this.tip=document.createElement('div');this.tip.className='dragtip';m.layer.append(this.tip)}
+      const hit=px>g.x-24&&px<g.x+g.w+24&&py>g.y-16&&py<g.y+g.h+16;if(hit!==over){over=hit;g.el.classList.toggle('drop',hit);if(hit)ripple(g.el,.45)}
+      const [x0,y0]=m.port(n,'r'),[x1,y1]=hit?m.port(g,'l'):[px,py],k=Math.max(18,Math.abs(x1-x0)*.5);wire.setAttribute('d',`M${x0},${y0}C${x0+k},${y0} ${x1-k},${y1} ${x1},${y1}`);
+      this.tip.textContent=hit?`Connect ${c.name}`:'Drop on the gateway';this.tip.classList.toggle('on',hit);this.tip.style.transform=`translate(${px+12}px,${py-30}px)`};
+    const up=()=>{el.removeEventListener('pointermove',mv);el.removeEventListener('pointerup',up);el.removeEventListener('pointercancel',up);if(!moved)return;
+      this.dragged=true;setTimeout(()=>{this.dragged=false;this.drag=false},0);g.el.classList.remove('drop');m.unfocus();if(this.tip){this.tip.remove();this.tip=null}
+      if(over){wire.remove();this.connect(cid,true)}else A(wire,[{opacity:1},{opacity:0}],{dur:180,fill:'forwards'}).then(()=>wire.remove())};
+    el.addEventListener('pointermove',mv);el.addEventListener('pointerup',up);el.addEventListener('pointercancel',up)},
+  /* Drag: a server outside the gateway into its group, or a server in the gateway onto a client */
+  dragStart(e){const ce=e.target.closest('.blk.client.free');if(ce&&e.button===0){this.wireStart(e,ce);return}const el=e.target.closest('.blk.out:not(.preview),.blk.srv:not(.preview)');if(!el||e.button!==0||e.target.closest('button'))return;const st=this.st,m=this.m,n=m.get(el.dataset.id);if(!n)return;const [k,a]=n.id.split('~'),isOut=k==='o';const o=isOut?GW.outside.find(x=>x.id===a):null,s=isOut?null:this.srv(a);if(isOut?!o:!s)return;
+    const s0={x:e.clientX,y:e.clientY,nx:n.x,ny:n.y},capY=m.get('cap~out').y;let moved=false,vx=0,lx=e.clientX;try{el.setPointerCapture(e.pointerId)}catch(_){}
+    const mv=ev=>{const dx=ev.clientX-s0.x,dy=ev.clientY-s0.y;if(!moved&&Math.hypot(dx,dy)<5)return;
+      if(!moved){moved=true;this.drag=true;el.classList.add('lift');if(st.sel)this.clearSel();m.unfocus();if(isOut)m.focus([n.id,'gw'],['L~o~'+a]);else{m.focus([n.id,...CLIENTS.map(c=>'c~'+c.id)],['L~s~'+a]);this.tip=document.createElement('div');this.tip.className='dragtip';m.layer.append(this.tip)}}
+      vx=vx*.75+(ev.clientX-lx)*.25;lx=ev.clientX;n.x=s0.nx+dx;n.y=s0.ny+dy;n.r=S.rich?Math.max(-8,Math.min(8,vx*1.2)):0;n.s=S.rich?1.05:1;m.place(n);m.draw();
+      if(isOut){const cx=n.x+n.w/2,cy=n.y+n.h/2;const want=(cx>330&&cx<700&&cy<capY-4)?o.group:null;if(want!==(st.slot&&st.slot.group)){st.slot=want?{group:want}:null;this.lightGw(want);this.relayout({skip:n.id,dur:S.rich?420:220})}}
+      else{const hr=m.host.getBoundingClientRect(),px=ev.clientX-hr.left,py=ev.clientY-hr.top;let tg=null;for(const c of CLIENTS){const cn=m.get('c~'+c.id);if(px>cn.x-24&&px<cn.x+cn.w+40&&py>cn.y-16&&py<cn.y+cn.h+16){tg=c.id;break}}
+        if(tg!==st.dropC){if(st.dropC)m.get('c~'+st.dropC).el.classList.remove('drop');st.dropC=tg;m.unlink('L~drop');if(tg){const cn=m.get('c~'+tg);cn.el.classList.add('drop');ripple(cn.el,.45);m.link('L~drop','c~'+tg,'r',n.id,'l','preview on')}}
+        this.tip.textContent=tg?`Move into ${cname(tg)}`:'Drop on a client';this.tip.classList.toggle('on',!!tg);this.tip.style.transform=`translate(${n.x+6}px,${n.y-28}px)`}};
+    const up=()=>{el.removeEventListener('pointermove',mv);el.removeEventListener('pointerup',up);el.removeEventListener('pointercancel',up);el.classList.remove('lift');m.unfocus();if(this.tip){this.tip.remove();this.tip=null}
+      if(!moved)return;this.dragged=true;setTimeout(()=>{this.dragged=false;this.drag=false},0);this.lightGw(false);m.unlink('L~drop');
+      if(isOut){if(st.slot){const sl=m.get('slot'),target={x:sl.x,y:sl.y};st.slot=null;this.dropIn(o,n,target)}else m.move([{id:n.id,x:s0.nx,y:s0.ny,s:1,r:0}],{dur:S.rich?560:220})}
+      else{const tg=st.dropC;st.dropC=null;if(tg){m.get('c~'+tg).el.classList.remove('drop');n.r=0;n.s=1;this.moveOut(a,tg,{x:n.x,y:n.y})}else m.move([{id:n.id,x:s0.nx,y:s0.ny,s:1,r:0}],{dur:S.rich?560:220})}};
+    el.addEventListener('pointermove',mv);el.addEventListener('pointerup',up);el.addEventListener('pointercancel',up)},
+  async dropIn(o,n,target){const m=this.m;
+    m.remove('slot');await m.move([{id:n.id,x:target.x,y:target.y,s:1,r:0}],{dur:S.rich?420:200});
+    GW.outside=GW.outside.filter(x=>x!==o);const s={id:o.id,name:o.name,icon:o.icon,group:o.group,tools:o.tools,preview:true,moved:o.client,chan:o.chan,wasOut:true,outData:o};
+    const gi=GW.servers.map(x=>x.group).lastIndexOf(o.group);GW.servers.splice(gi+1,0,s);
+    m.remove(n.id);m.add('s~'+s.id,{...this.spec('s~'+s.id),x:target.x,y:target.y,w:170,h:60});this.linksFor('s~'+s.id);icons();A(m.links.get('L~s~'+s.id).el,[{opacity:0},{opacity:1}],{dur:300});ripple(m.get('s~'+s.id).el,.5);
+    tray.add({key:'in~'+s.id,icon:'log-in',title:`Move ${o.name} into the gateway`,detail:`${cname(o.client)} keeps it. Its calls go through Kitden's rules.`,who:`${cname(o.client)}'s settings`,
+      onRemove:()=>{GW.servers=GW.servers.filter(x=>x!==s);return this.moveBack(s)},revertData:()=>{GW.servers=GW.servers.filter(x=>x!==s);GW.outside.push(o)},onCommit:()=>this.commitAdd(s),onUndo:()=>this.removeServer(s),toast:`Moved ${o.name} into the gateway`});
+    await this.relayout()},
+  async moveBack(s){const m=this.m,o=s.outData;GW.outside.push(o);const n=m.get('s~'+s.id);m.unlink('L~s~'+s.id);m.unlink('L~d~'+s.id);const at={x:n.x,y:n.y};m.remove('s~'+s.id);
+    const T=this.layout().find(t=>t.id==='o~'+o.id);m.add('o~'+o.id,{...this.spec('o~'+o.id),x:at.x,y:at.y,w:T.w,h:T.h});this.linksFor('o~'+o.id);icons();await this.relayout()},
+  /* Project picked: rules re-read, changed tools light up, a soft sweep crosses the map */
+  project(){const m=this.m;this.scope(true);if(S.rich&&D(1))this.sweep();
+    for(const s of GW.servers){this.syncMeta(s.id);s.tools.forEach((t,i)=>{const tid=`t~${s.id}~${i}`,lid=`L~t~${s.id}~${i}`,n=m.get(tid);if(!n)return;const was=$('.mark',n.el).classList.contains('on'),now=eff(t);n.el.innerHTML=this.toolHTML(t);icons();
+      const tg=$('.ptag',n.el);if(tg)A(tg,[{opacity:0,transform:'scale(.7)'},{opacity:1,transform:'none'}],{dur:S.rich?420:200,delay:S.rich?260:0});
+      if(was!==now){A($('.mark',n.el),[{transform:'scale(1.9)'},{transform:'scale(1)'}],{dur:S.rich?520:200,delay:S.rich?260:0});setTimeout(()=>ripple(n.el,.5),D(260));if(now){m.link(lid,'s~'+s.id,'r',tid,'l');m.drawIn(lid,S.rich?520:240)}else m.undraw(lid)}})}
+    if(panelEl&&!$('.pick',panelEl)){const [k,a,b]=(panelEl.dataset.for||'').split('~');if(k==='t')this.reopenTool(a,+b,'fwd');if(k==='s')this.reopenServer(a,'fwd')}
+    if(this.st.view==='list'){$('#glist').innerHTML=this.listHTML();icons()}},
+  sweep(){const host=this.m.host,b=document.createElement('div');b.className='sweep';host.append(b);b.animate([{transform:'translateX(-40%)',opacity:0},{opacity:1,offset:.25},{transform:'translateX(240%)',opacity:0}],{duration:D(1000),easing:'cubic-bezier(.4,0,.2,1)'}).finished.then(()=>b.remove(),()=>b.remove())},
+  /* Map ↔ List: each block grows into its row (container transform); the rest fades */
+  listHTML(){const row=(id,name,icon,by,tools,end,cls='')=>`<div class="lr ${cls}" data-id="${id}" tabindex="0"><span class="nm">${icon}${name}</span><span class="by">${by.map(c=>tile(c,1)).join('')}</span><span>${tools}</span><span class="end">${end}</span></div>`;
+    let h=`<div class="lh"><span>Name</span><span>Used by</span><span>Tools</span><span></span></div>`;
+    for(const g of ['remote','local']){h+=`<div class="lg">${ico(g==='remote'?'cloud':'hard-drive',13)} ${cap(g)}</div>`;for(const s of GW.servers.filter(s=>s.group===g&&!s.preview)){const open=s.id==='github';h+=row('s~'+s.id,s.name,ico(open?'chevron-down':'chevron-right',13),['claude','codex'],s.signin?'<span class="warn">Sign in needed</span>':`${s.tools.filter(eff).length} of ${s.tools.length} on`,s.signin?'<button class="btn sm">Sign in…</button>':ico('chevron-right',14));if(open)s.tools.forEach((t,i)=>{h+=row(`t~${s.id}~${i}`,`<i class="mark ${eff(t)?'on':''}"></i>${t.name} <span style="color:var(--faint);font-weight:400">${t.kind}</span>`,'',[],'','','sub')})}}
+    h+=`<div class="lg">${ico('info',13)} Outside the gateway · calls skip Kitden's rules</div>`;for(const o of GW.outside.filter(o=>!o.preview))h+=row('o~'+o.id,o.name,ico(o.icon,13),[o.client],`${o.tools.length} tools`,'<button class="btn sm">Move in…</button>');return h},
+  async setView(v){const st=this.st;if(st.view===v||this.morphing)return;this.morphing=true;st.view=v;const seg=$('#viewseg');$$('button',seg).forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===v)));segGlide(seg);this.clearSel();if(!tray.items.length)dock.clear();
+    const mapEl=this.m.host,list=$('#glist');
+    if(v==='list'){list.innerHTML=this.listHTML();icons();list.onclick=e=>{const r=e.target.closest('.lr.sub');if(!r)return;$$('.lr',list).forEach(x=>x.classList.toggle('sel',x===r));const [,sid,i]=r.dataset.id.split('~');const s=this.srv(sid);panelLoad('Tool',()=>this.toolPanel(s,s.tools[+i]),{fn:p=>this.wireToolPanel(p,sid,+i)}).dataset.for=r.dataset.id};
+      await this.swap(mapEl,list,()=>{mapEl.style.display='none'},()=>{list.hidden=false},true)}
+    else await this.swap(list,mapEl,()=>{list.hidden=true;list.innerHTML=''},()=>{mapEl.style.display=''},false);
+    this.morphing=false},
+  async swap(from,to,hideFrom,showTo,toList){const list=toList?to:from;
+    if(!S.rich||!D(1)){await A(from,[{opacity:1,transform:'none'},{opacity:0,transform:'translateY(-4px)'}],{dur:120,fill:'forwards',ease:'ease-in'});hideFrom();from.getAnimations().forEach(a=>a.cancel());showTo();await A(to,[{opacity:0,transform:'translateY(6px)'},{opacity:1,transform:'none'}],{dur:260,ease:CALM});return}
+    Object.assign(list.style,{position:'absolute',left:'6px',top:'6px'});showTo();to.style.visibility='hidden';
+    const pairs=(toList?$$('.lr[data-id]',to).map(r=>[this.m.get(r.dataset.id)?.el,r]):$$('.lr[data-id]',from).map(r=>[r,this.m.get(r.dataset.id)?.el])).filter(p=>p[0]&&p[1]);
+    const fl=pairs.map(([a,b],i)=>{const ra=a.getBoundingClientRect(),rb=b.getBoundingClientRect(),box=document.createElement('div');box.className='flier morph';Object.assign(box.style,{left:ra.left+'px',top:ra.top+'px',width:ra.width+'px',height:ra.height+'px'});
+      const ca=a.cloneNode(true),cb=b.cloneNode(true);for(const [c,r] of [[ca,ra],[cb,rb]]){c.classList.add('mlayer');c.removeAttribute('id');Object.assign(c.style,{position:'absolute',left:'0px',top:'0px',width:r.width+'px',height:r.height+'px',transform:'none',margin:'0',opacity:'1',visibility:'visible'})}
+      cb.style.opacity='0';box.append(ca,cb);document.body.append(box);a.style.visibility='hidden';return{box,ca,cb,ra,rb,a,b,i}});
+    const fade=A(from,[{opacity:1},{opacity:0}],{dur:200,fill:'forwards',ease:'ease-in'});
+    const blk={borderRadius:'8px',backgroundColor:css('--panel'),borderColor:css('--line')},row={borderRadius:'0px',backgroundColor:'rgba(0,0,0,0)',borderColor:'rgba(0,0,0,0)'};
+    await Promise.all(fl.map(f=>{const dl=D(f.i*20),du=D(560);f.ca.animate([{opacity:1},{opacity:0,offset:.32},{opacity:0}],{duration:du,delay:dl,fill:'forwards'});f.cb.animate([{opacity:0},{opacity:0,offset:.42},{opacity:1}],{duration:du,delay:dl,fill:'forwards'});
+      return f.box.animate([{left:f.ra.left+'px',top:f.ra.top+'px',width:f.ra.width+'px',height:f.ra.height+'px',...(toList?blk:row)},{left:f.rb.left+'px',top:f.rb.top+'px',width:f.rb.width+'px',height:f.rb.height+'px',...(toList?row:blk)}],{duration:du,delay:dl,easing:SPRING,fill:'forwards'}).finished.catch(()=>{})}));
+    await fade;hideFrom();from.getAnimations().forEach(a=>a.cancel());
+    Object.assign(list.style,{position:'',left:'',top:''});to.style.visibility='';
+    const paired=new Set(fl.map(f=>f.b)),rest=toList?[...to.children].filter(el=>!paired.has(el)):[...this.m.nodes.values()].map(n=>n.el).filter(el=>!paired.has(el));
+    rest.forEach((el,i)=>A(el,[{opacity:0},{opacity:1}],{dur:280,delay:i*(toList?22:14)}));
+    if(!toList)for(const l of this.m.links.values())this.m.drawIn(l.id,460);
+    fl.forEach(f=>{f.a.style.visibility='';f.box.remove()})},
+  filter(q){const m=this.m;m.host.classList.toggle('find',!!q);for(const n of m.nodes.values()){if(!n.el.classList.contains('blk'))continue;const hit=!q||(n.el.dataset.name||'').includes(q);n.el.classList.toggle('miss',!hit);if(q&&hit&&!n.hit)ripple(n.el,.5);n.hit=q&&hit}}
+};
+
+/* ---------- Library ---------- */
+const LBD={groups:[{id:'community',name:'Community marketplace',icon:'store',items:['devkit','docs']},{id:'team',name:'Team marketplace',icon:'store',items:['design']},{id:'yours',name:'Your skills',icon:'user-round',items:['release']}],
+  items:{devkit:{name:'Developer kit',by:['claude','codex'],inside:[['Code review','Skill'],['Test helper','Skill'],['Commit helper','Skill'],['/ship','Command']]},docs:{name:'Docs writer',by:['claude'],inside:[['Draft README','Skill'],['Changelog','Skill']]},design:{name:'Design tools',by:[],added:false,inside:[['Interface review','Skill'],['Design tokens','Skill']]},release:{name:'Release notes',by:['claude','cursor'],skill:true}},
+  files:[{id:'claude-md',name:'CLAUDE.md',meta:'Claude Code · this project',by:'claude',imports:['design','dev']},{id:'agents-md',name:'AGENTS.md',meta:'Codex · all projects',by:'codex',imports:['dev']},{id:'rules',name:'.cursor/rules',meta:'Cursor · 2 rules',by:'cursor',imports:[]}],
+  imports:[{id:'design',name:'docs/design.md'},{id:'dev',name:'docs/development.md'}]};
+const LCLIENTS=[{id:'claude',name:'Claude Code',state:'Connected',on:true},{id:'codex',name:'Codex',state:'Connected',on:true},{id:'cursor',name:'Cursor',state:'Via Claude Code',on:true}];
+const lname=id=>LCLIENTS.find(c=>c.id===id).name;
+const Library={
+  hint:'Point at a link and press × to remove it · drag a plugin onto a client to add it there · + adds it for all projects · click anything for its Details',
+  mount(root){const st=this.st=JSON.parse(JSON.stringify(LBD));st.open='devkit';st.tab='plugins';st.sel=null;for(const k in st.items){st.items[k].pend=[];st.items[k].off=[]}
+    root.innerHTML=head('Library','Follow the source. Connect only what you need.','Shared setup · project overrides stay separate',true,`<div class="seg sm" id="ltab" style="margin-top:12px;width:max-content"><i class="seg-mark"></i><button aria-pressed="true" data-tab="plugins">Plugins and skills</button><button aria-pressed="false" data-tab="files">Instructions</button></div>`)+`<div class="stage"><div id="lmap"></div></div>`;
+    this.m=new MapView($('#lmap'),{w:740,h:420});this.hookLinks();this.build();icons();segGlide($('#ltab'),true);this.wire();this.enter()},
+  unmount(){tray.discard()},
+  layout(){const st=this.st,T=[];T.push({id:'cap~clients',x:0,y:0,w:150,h:18});LCLIENTS.forEach((c,i)=>T.push({id:'c~'+c.id,x:0,y:140+72*i,w:150,h:54}));
+    if(st.tab==='plugins'){T.push({id:'cap~items',x:250,y:-4,w:200,h:26});let y=37;for(const g of st.groups){T.push({id:'g~'+g.id,x:250,y,w:200,h:18});y+=24;for(const k of g.items){const h=st.items[k].skill?34:60;T.push({id:'i~'+k,x:250,y,w:180,h});y+=h+4}y+=15}
+      if(st.open){const it=st.items[st.open],n=T.find(t=>t.id==='i~'+st.open);if(it&&it.inside&&n){const cy=n.y+30,tot=it.inside.length*42-8;T.push({id:'cap~inside',x:500,y:0,w:150,h:18});it.inside.forEach((x,i)=>T.push({id:`k~${st.open}~${i}`,x:500,y:Math.max(26,cy-tot/2)+i*42,w:200,h:34}))}}}
+    else{T.push({id:'cap~files',x:250,y:0,w:150,h:18},{id:'cap~imports',x:500,y:0,w:150,h:18});st.files.forEach((f,i)=>T.push({id:'f~'+f.id,x:250,y:140+72*i,w:190,h:54}));st.imports.forEach((x,i)=>T.push({id:'m~'+x.id,x:500,y:150+56*i,w:200,h:40}))}
+    return T},
+  spec(id){const st=this.st,[k,a,b]=id.split('~');
+    if(k==='c'){const c=LCLIENTS.find(x=>x.id===a);return{cls:'blk client',name:c.name,html:`${tile(c.id)}<div class="tx"><b>${c.name}</b><small><i class="lamp ${c.on?'on':''}"></i>${c.state}</small></div><span class="port r"></span>`}}
+    if(k==='i'){const it=st.items[a],pv=it.added===false&&it.pend.length>0,unx=pv?`<span class="unx" aria-hidden="true">${ico('x',11)}</span>`:'';
+      if(it.skill)return{cls:'blk tool',name:it.name,html:`<i class="mark on"></i><span>${it.name}</span><span class="kind">${ico('sparkles',11)} Skill</span><span class="port l"></span>`};
+      const meta=pv?`<i class="lamp pv"></i><span class="acc">Preview · ${it.pend.length>1?'for all projects':lname(it.pend[0])}</span>`:it.added===false?'<i class="lamp"></i>Not added':`<i class="lamp ${it.inside.length>it.off.length?'on':''}"></i><span><span class="num">${it.inside.length-it.off.length}</span> of ${it.inside.length} on</span>`;
+      return{cls:'blk srv'+(st.open===a?' open':'')+(pv?' preview':''),name:it.name,title:pv?'In preview. Click to take it out.':'',html:`<span class="itile">${ico('puzzle',15)}</span><div class="tx"><b>${it.name}</b><small>${meta}</small></div>${it.added!==false?`<span class="badge">${it.inside.length}</span>`:''}${it.added===false&&!pv?`<button class="btn xs" data-plus="${a}" aria-label="Add ${it.name} for all projects" style="margin-left:auto">${ico('plus',12)}</button>`:''}<span class="port l"></span><span class="port r"></span><span class="bb"></span>${unx}`}}
+    if(k==='k'){const p=st.items[a],[n,kind]=p.inside[+b];return{cls:'blk tool',name:n,html:`<i class="mark ${p.added===false||p.off.includes(+b)?'':'on'}"></i><span>${n}</span><span class="kind">${ico(kind==='Skill'?'sparkles':'square-terminal',11)} ${kind}</span><span class="port l"></span>`}}
+    if(k==='f'){const f=st.files.find(x=>x.id===a);return{cls:'blk',name:f.name,html:`<span class="itile">${ico('file-text',15)}</span><div class="tx"><b style="font-family:var(--mono);font-weight:500">${f.name}</b><small><i class="lamp on"></i>${f.meta}</small></div><span class="port l"></span><span class="port r"></span>`}}
+    if(k==='m'){const x=st.imports.find(z=>z.id===a);return{cls:'blk tool',name:x.name,html:`${ico('scroll-text',13)}<span style="font-family:var(--mono);font-size:11px">${x.name}</span><span class="port l"></span>`}}
+    if(k==='g'){const g=st.groups.find(x=>x.id===a);return{cls:'cap grp',html:`${ico(g.icon,13)} ${g.name}`}}
+    const caps={clients:'Clients',items:`Plugins and skills <button class="btn xs" data-add>${ico('plus',12)} Add</button>`,inside:'Inside',files:'Files',imports:'Imports'};return{cls:'cap',html:caps[a]}},
+  linksFor(id){const m=this.m,st=this.st,[k,a,b]=id.split('~');
+    if(k==='i'){const it=st.items[a];for(const c of it.by)m.link(`L~${c}~${a}`,'c~'+c,'r',id,'l','');for(const c of it.pend)m.link(`P~${c}~${a}`,'c~'+c,'r',id,'l','preview')}
+    if(k==='k'&&!st.items[a].off.includes(+b))m.link(`L~k~${a}~${b}`,'i~'+a,'r',id,'l',st.items[a].added===false?'preview leaving':'');
+    if(k==='f'){const f=st.files.find(x=>x.id===a);m.link('L~f~'+a,'c~'+f.by,'r',id,'l')}
+    if(k==='m'){for(const f of st.files)if(f.imports.includes(a))m.link(`L~m~${f.id}~${a}`,'f~'+f.id,'r',id,'l')}},
+  build(){const m=this.m;for(const t of this.layout()){m.add(t.id,{...this.spec(t.id),x:t.x,y:t.y,w:t.w,h:t.h})}for(const id of [...m.nodes.keys()])this.linksFor(id)},
+  async relayout(){const m=this.m,T=this.layout(),want=new Set(T.map(t=>t.id)),made=[];
+    for(const t of T)if(!m.get(t.id)){const o=this.origin(t.id);m.add(t.id,{...this.spec(t.id),x:o.x,y:o.y,w:t.w,h:t.h,s:o.s,o:0});made.push(t.id)}
+    for(const id of made)this.linksFor(id);icons();
+    const gone=[...m.nodes.keys()].filter(id=>!want.has(id));
+    await Promise.all([m.move(T.filter(t=>!made.includes(t.id)).map(t=>({id:t.id,x:t.x,y:t.y,s:1,o:1})),{dur:S.rich?540:260}),
+      m.move(T.filter(t=>made.includes(t.id)).map(t=>({id:t.id,x:t.x,y:t.y,s:1,o:1})),{dur:S.rich?600:220,stagger:S.rich?34:15}),
+      m.move(gone.map(id=>({id,...this.origin(id),o:0})),{dur:S.rich?300:160,ease:E.in}).then(()=>gone.forEach(id=>m.remove(id)))])},
+  origin(id){const m=this.m,[k,a]=id.split('~');if(k==='k'||id==='cap~inside'){const p=m.get('i~'+(a||this.st.open))||m.get('i~devkit');if(p)return{x:p.x+p.w-100,y:p.y+p.h/2-17,s:.3}}if(['i','g','f','m'].includes(k)||id.startsWith('cap~')&&id!=='cap~clients'){return{x:150,y:(m.get(id)?.y??200),s:.4}}const n=m.get(id);return n?{x:n.x,y:n.y,s:n.s}:{x:0,y:0,s:1}},
+  async enter(){const m=this.m,T=this.layout();if(!S.rich||!D(1)){T.forEach(t=>{const n=m.get(t.id);Object.assign(n,{y:t.y+6,o:0});m.place(n)});m.draw();await m.move(T.map(t=>({id:t.id,y:t.y,o:1})),{dur:260,stagger:22,ease:E.out});return}
+    for(const t of T){const n=m.get(t.id);if(t.id.startsWith('c~')||t.id==='cap~clients')Object.assign(n,{x:t.x-30,o:0,s:.9});else Object.assign(n,{x:150,y:t.y,s:.4,o:0});m.place(n)}m.draw();
+    await m.move(vis(T.filter(t=>t.id.startsWith('c~')||t.id==='cap~clients')),{dur:560,stagger:60});
+    await m.move(vis(T.filter(t=>!t.id.startsWith('c~')&&t.id!=='cap~clients')),{dur:640,stagger:36});
+    m.beam([LCLIENTS.map(c=>`L~${c.id}~devkit`).concat(['L~claude~docs','L~claude~release','L~cursor~release']),LBD.items.devkit.inside.map((x,i)=>`L~k~devkit~${i}`)])},
+  wire(){const host=this.m.host,st=this.st;
+    host.addEventListener('click',e=>{if(this.dragged)return;const plus=e.target.closest('[data-plus]');if(plus){e.stopPropagation();this.add(plus.dataset.plus,['claude','codex']);return}
+      if(e.target.closest('[data-add]')){this.add('design',['claude','codex']);return}
+      const el=e.target.closest('.blk');if(!el){if(!e.target.closest('button'))this.unsel();return}const [k,a,b]=el.dataset.id.split('~');
+      if(k==='c')return this.client(a);
+      if(k==='i'){const it=st.items[a];if(it.added===false&&it.pend.length){tray.items.filter(x=>x.key.startsWith(`lib~${a}~`)).forEach(x=>tray.remove(x.key));return}return it.skill?this.skill(a):this.plugin(a)}
+      if(k==='k')return this.select(a,+b);if(k==='f')return this.file(a);if(k==='m')return this.imp(a)});
+    host.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.classList.contains('blk')){e.preventDefault();e.target.click()}});
+    let hov=null;host.addEventListener('pointerover',e=>{const el=e.target.closest('.blk');if(el===hov)return;hov=el;if(st.sel||this.drag)return;if(el&&el.dataset.id.startsWith('c~')){const ls=[...this.m.links.values()].filter(l=>l.a===el.dataset.id&&l.id.startsWith('L~')).map(l=>l.id);this.m.focus([el.dataset.id,...ls.map(id=>this.m.links.get(id).b)],ls);this.m.beam([ls])}else this.m.unfocus()});
+    host.addEventListener('pointerleave',()=>{hov=null;if(!st.sel&&!this.drag)this.m.unfocus()});
+    host.addEventListener('pointerdown',e=>this.dragStart(e));
+    $('#ltab').addEventListener('click',e=>{const b=e.target.closest('button');if(!b||b.dataset.tab===st.tab)return;$$('#ltab button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));segGlide($('#ltab'));this.unsel();st.tab=b.dataset.tab;this.relayout().then(()=>{const ls=[...this.m.links.keys()];this.m.beam([ls.filter(l=>l.startsWith('L~f~')),ls.filter(l=>l.startsWith('L~m~'))])})});
+    $('#viewseg').addEventListener('click',e=>{const b=e.target.closest('button');if(b&&b.dataset.view==='list'){shake($('#viewseg'));dock.toast('In this mockup the List view is on Gateway.')}})},
+  /* Links: point at one, press × to remove it, or click it for its Details. Instruction files are only read. */
+  hookLinks(){const m=this.m;m.canHit=id=>/^(L~(claude|codex|cursor)~|L~k~|P~)/.test(id);m.onLinkClick=id=>this.linkClick(id);m.onLinkRemove=id=>this.linkRemove(id);m.linkTip=id=>this.linkTip(id)},
+  previewKey(id){const p=id.split('~');if(p[0]==='P'){const it=tray.items.find(x=>x.key.startsWith(`lib~${p[2]}~`)&&x.key.split('~')[2].split('+').includes(p[1]));return it?it.key:null}
+    if(p[1]==='k')return tray.has(`libk~${p[2]}~${p[3]}`)?`libk~${p[2]}~${p[3]}`:null;return tray.has(`librm~${p[2]}~${p[1]}`)?`librm~${p[2]}~${p[1]}`:null},
+  linkNames(id){const m=this.m,l=m.links.get(id);if(!l)return['',''];const nm=n=>m.get(n)?.el.getAttribute('aria-label')||'';return[nm(l.a),nm(l.b)]},
+  linkTip(id){if(this.previewKey(id))return'Take it out of the preview';const p=id.split('~'),[a,b]=this.linkNames(id);return p[1]==='k'?`Turn off ${b} in ${a}`:`Remove ${b} from ${a}`},
+  linkRemove(id){const k=this.previewKey(id);if(k){tray.remove(k);return}const p=id.split('~');if(p[1]==='k')this.offSkill(p[2],+p[3]);else this.removeFrom(p[2],p[1]);
+    if(panelEl&&panelEl.dataset.for==='link~'+id){panelEl.innerHTML=this.linkPanel(id);icons();wirePanel(panelEl,{fn:q=>$('[data-rmlink]',q)?.addEventListener('click',()=>this.linkRemove(id)),onClose:()=>this.unsel()})}},
+  linkClick(id){const st=this.st,m=this.m,l=m.links.get(id);if(!l)return;const same=this.same('link',id);this.unsel();if(same)return;st.sel={link:id};m.focus([l.a,l.b],[id]);m.pick(id);m.beam([[id]]);
+    const pnl=panelLoad('Connection',()=>this.linkPanel(id),{onClose:()=>this.unsel(),fn:q=>$('[data-rmlink]',q)?.addEventListener('click',()=>this.linkRemove(id))});pnl.dataset.for='link~'+id},
+  linkPanel(id){const p=id.split('~'),[a,b]=this.linkNames(id),pk=this.previewKey(id),inside=p[1]==='k';
+    const means=pk?'This link is a change in preview. Nothing is written until you Apply.':inside?`${b} is on inside ${a}: every client that loads ${a} gets it.`:`${a} loads ${b} in every project.`;
+    return`<div class="p-kick"><span>Connection</span><button class="x" data-close aria-label="Close">${ico('x',14)}</button></div><div><div class="p-title">${a} <span class="muted">→</span> ${b}</div><div class="p-id" style="font-family:var(--font)">${inside?'Inside the plugin':'Loaded by the client'}</div></div>
+      <dl class="facts"><dt>From</dt><dd>${a}</dd><dt>To</dt><dd>${b}</dd><dt>State</dt><dd>${pk?'<i class="lamp pv"></i> In preview':'<i class="lamp on"></i> In place'}</dd><dt>Written in</dt><dd>${inside?`${a}'s settings`:`${a}'s settings`}</dd></dl>
+      <p class="p-say">${means}</p><div class="p-acts"><button class="btn" data-rmlink>${ico('x',13)} ${pk?'Take it out of the preview':this.linkTip(id)+'…'}</button></div><div class="p-tech">Technical details ${ico('chevron-right',14)}</div>`},
+  removeFrom(a,cid){const st=this.st,m=this.m,it=st.items[a],key=`librm~${a}~${cid}`,lid=`L~${cid}~${a}`;if(!it.by.includes(cid))return;tray.drop(key);m.dash(lid,true,'preview','leaving');
+    const clear=()=>m.dash(lid,false,'preview','leaving');
+    tray.add({key,icon:'x',title:`Remove ${it.name} from ${lname(cid)}`,detail:`${lname(cid)} stops loading ${it.inside?'it and the skills inside':'it'}. Other clients keep it.`,who:`${lname(cid)}'s settings`,onRemove:clear,
+      onCommit:()=>{clear();if(panelEl&&panelEl.dataset.for==='link~'+lid)closePanel();it.by=it.by.filter(x=>x!==cid);m.undraw(lid);if(!it.by.length&&it.inside)it.added=false;this.refreshItem(a,true);this.refreshInside(a);this.refreshPlugin(a)},
+      onUndo:()=>{if(!it.by.includes(cid))it.by.push(cid);it.added=true;m.link(lid,'c~'+cid,'r','i~'+a,'l','');m.drawIn(lid,480);this.refreshItem(a,true);this.refreshInside(a);this.refreshPlugin(a)},
+      toast:`Removed ${it.name} from ${lname(cid)}`})},
+  offSkill(a,i){const st=this.st,m=this.m,it=st.items[a],key=`libk~${a}~${i}`,lid=`L~k~${a}~${i}`,name=it.inside[i][0];if(it.off.includes(i))return;tray.drop(key);m.dash(lid,true,'preview','leaving');m.get(`k~${a}~${i}`)?.el.classList.add('leaving');m.get(`k~${a}~${i}`)?.el.querySelector('.mark')?.classList.add('pv');
+    const clear=()=>{m.get(`k~${a}~${i}`)?.el.querySelector('.mark')?.classList.remove('pv');m.dash(lid,false,'preview','leaving');m.get(`k~${a}~${i}`)?.el.classList.remove('leaving')};
+    tray.add({key,icon:'toggle-right',title:`Turn off ${name} in ${it.name}`,detail:`${it.by.map(lname).join(' and ')} stop loading it. The rest of ${it.name} stays.`,who:`${lname(it.by[0]||'claude')}'s settings`,onRemove:clear,
+      onCommit:()=>{clear();if(panelEl&&panelEl.dataset.for==='link~'+lid)closePanel();it.off.push(i);m.undraw(lid);this.refreshItem(a,true);this.refreshInside(a);this.refreshPlugin(a)},
+      onUndo:()=>{it.off=it.off.filter(x=>x!==i);this.refreshItem(a,true);this.refreshInside(a);if(m.get(`k~${a}~${i}`)){m.link(lid,'i~'+a,'r',`k~${a}~${i}`,'l','');m.drawIn(lid,420)}this.refreshPlugin(a)},
+      toast:`Turned off ${name} in ${it.name}`})},
+  /* One selection at a time: a click on anything makes it the active one and lets go of the last */
+  unsel(){if(!this.st.sel)return;this.st.sel=null;$$('.sel',this.m.host).forEach(x=>x.classList.remove('sel'));this.m.unfocus();closePanel()},
+  same(key,val){const s=this.st.sel;return!!(s&&s[key]===val)},
+  markOpen(){$$('.srv',this.m.host).forEach(x=>x.classList.toggle('open',x.dataset.id==='i~'+this.st.open))},
+  client(cid){const st=this.st,m=this.m;const same=this.same('c',cid);this.unsel();if(same)return;st.sel={c:cid};m.get('c~'+cid).el.classList.add('sel');const ls=[...m.links.values()].filter(l=>l.a==='c~'+cid&&l.id.startsWith('L~')).map(l=>l.id),items=ls.map(id=>m.links.get(id).b);m.lit([ls],['c~'+cid,...items]);m.beam([ls]);ripple(m.get('c~'+cid).el,.45);const c=LCLIENTS.find(x=>x.id===cid);
+    panelLoad('Client',()=>`<div class="p-kick"><span>Client</span><button class="x" data-close aria-label="Close">${ico('x',14)}</button></div><div class="p-head">${tile(cid)}<div><div class="p-title">${c.name}</div><div class="p-id" style="font-family:var(--font)">${c.state}</div></div></div>
+      <div><div class="sw-head">Loads in every project</div><div class="sw-list">${items.map(id=>{const k=id.split('~')[1],it=st.items[k],f=st.files.find(x=>x.id===k),name=it?it.name:f?f.name:k,kind=it?(it.skill?'Skill':'Plugin'):'File';return`<div class="sw-row"><span class="itile" style="width:24px;height:24px">${ico(kind==='Plugin'?'puzzle':kind==='Skill'?'sparkles':'file-text',13)}</span><div class="sw-tx"><b>${name}</b><small>${kind}${it&&it.inside?` · ${it.inside.length} inside`:''}</small></div></div>`}).join('')||'<div class="sw-row"><div class="sw-tx"><small>Nothing yet</small></div></div>'}</div></div>
+      <p class="p-say">${cid==='cursor'?'Cursor has no plugins of its own here. It loads skills through Claude Code.':'Drag a plugin onto this client to add it here.'}</p><div class="p-tech">Technical details ${ico('chevron-right',14)}</div>`,{onClose:()=>this.unsel()})},
+  plugin(a){const st=this.st,m=this.m;const same=this.same('p',a);this.unsel();
+    if(same){if(st.open===a){st.open=null;this.markOpen();this.relayout()}return}
+    st.sel={p:a};m.get('i~'+a).el.classList.add('sel');ripple(m.get('i~'+a).el,.4);
+    if(st.open!==a){st.open=a;this.markOpen();this.relayout().then(()=>this.lightPlugin(a))}else this.lightPlugin(a);
+    const p=panelLoad('Plugin',()=>this.pluginPanel(a),{onClose:()=>this.unsel(),fn:p=>this.wirePlugin(p,a)});p.dataset.for='i~'+a},
+  lightPlugin(a){const st=this.st,m=this.m;if(!this.same('p',a))return;const it=st.items[a],g1=it.by.map(c=>`L~${c}~${a}`),g2=it.inside.map((x,i)=>`L~k~${a}~${i}`);m.lit([g1,g2],[...it.by.map(c=>'c~'+c),'i~'+a,...it.inside.map((x,i)=>`k~${a}~${i}`)]);m.beam([g1,g2])},
+  pluginPanel(a){const st=this.st,it=st.items[a],src=st.groups.find(g=>g.items.includes(a)),skills=it.inside.filter(x=>x[1]==='Skill').length,cmds=it.inside.length-skills,added=it.added!==false,missing=['claude','codex'].filter(c=>!it.by.includes(c)&&!it.pend.includes(c));
+    return`<div class="p-kick"><span>Plugin</span><button class="x" data-close aria-label="Close">${ico('x',14)}</button></div><div class="p-head"><span class="itile">${ico('puzzle',15)}</span><div><div class="p-title">${it.name}</div><div class="p-id" style="font-family:var(--font)">${src.name}</div></div></div>
+      <dl class="facts"><dt>State</dt><dd><i class="lamp ${added?'on':it.pend.length?'pv':''}"></i> ${added?'On':it.pend.length?'In preview':'Not added'}</dd><dt>Inside</dt><dd>${skills} skill${skills===1?'':'s'}${cmds?` · ${cmds} command${cmds>1?'s':''}`:''}</dd><dt>Clients</dt><dd>${it.by.length?it.by.map(c=>tile(c,1)).join('')+' '+it.by.map(lname).join(', '):'<span class="muted">None yet</span>'}</dd><dt>Comes from</dt><dd>${added?'All projects':'<span class="muted">Not added</span>'}</dd></dl>
+      <p class="p-say">${added?`${it.by.map(lname).join(' and ')} load it in every project. Cursor gets it through Claude Code.`:'Not added yet. Drag it onto a client to add it there, or add it for all projects.'}</p>
+      <div class="p-acts">${added?`${missing.length?`<button class="btn primary" data-pick>Add to ${missing.map(lname).join(' or ')}…</button>`:''}<button class="btn">Turn off for all projects…</button>`:`${missing.length===2?`<button class="btn primary" data-all>${ico('plus',13)} Add for all projects…</button>`:''}${missing.length?`<button class="btn" data-pick>Add to one client…</button>`:''}`}</div>
+      <div class="p-tech">Technical details ${ico('chevron-right',14)}</div>`},
+  wirePlugin(p,a){$('[data-all]',p)?.addEventListener('click',()=>this.add(a,['claude','codex']));$('[data-pick]',p)?.addEventListener('click',()=>this.pickClient(a))},
+  reopenPlugin(a,dir){if(!panelEl||panelEl.dataset.for!=='i~'+a)return;swapPanel(this.pluginPanel(a),{fn:p=>this.wirePlugin(p,a),onClose:()=>this.unsel()},dir)},
+  refreshPlugin(a){if(panelEl&&panelEl.dataset.for==='i~'+a&&!$('.pick',panelEl)){panelEl.innerHTML=this.pluginPanel(a);icons();wirePanel(panelEl,{fn:p=>this.wirePlugin(p,a),onClose:()=>this.unsel()})}},
+  pickClient(a){const it=this.st.items[a];
+    swapPanel(`<div class="p-kick"><button class="x" data-back aria-label="Back">${ico('arrow-left',14)}</button><span class="crumb">Plugin · ${it.name}</span><button class="x" data-close aria-label="Close">${ico('x',14)}</button></div>
+      <div><div class="p-title">Add ${it.name}<br>to the clients you pick</div><p class="p-say" style="margin-top:6px">You can also drag ${it.name} onto a client on the map.</p></div>
+      <div class="picks">${LCLIENTS.map(c=>{const has=it.by.includes(c.id),no=c.id==='cursor'||has;return`<button class="pick multi" role="checkbox" aria-checked="false" data-c="${c.id}"${no?' disabled':''}>${tile(c.id)}<span class="pk-tx"><b>${c.name}</b><small>${c.id==='cursor'?'Gets plugins through Claude Code':has?'Has it already':'Not added'}</small></span><i class="chk">${ico('check',12)}</i></button>`}).join('')}</div>
+      <div class="p-acts"><button class="btn" data-done>Done</button></div>`,
+      {fn:p=>{$('[data-back]',p).addEventListener('click',()=>this.reopenPlugin(a,'back'));$('[data-done]',p).addEventListener('click',()=>this.reopenPlugin(a,'back'));
+        $$('.pick',p).forEach(b=>b.addEventListener('click',()=>{const cid=b.dataset.c,k=this.pendKey(a,cid);if(k)tray.remove(k);else this.add(a,[cid]);this.syncLibPicks(a)}));this.syncLibPicks(a,true)},onClose:()=>this.unsel()},'fwd')},
+  pendKey(a,cid){const it=tray.items.find(x=>x.key.startsWith(`lib~${a}~`)&&x.key.split('~')[2].split('+').includes(cid));return it?it.key:null},
+  syncLibPicks(a,quiet){const p=panelEl;if(!p||p.dataset.for!=='i~'+a)return;$$('.pick.multi',p).forEach(b=>{const on=!!this.pendKey(a,b.dataset.c);if(on!==b.classList.contains('on')){b.classList.toggle('on',on);b.setAttribute('aria-checked',String(on));$('small',b).textContent=on?'In preview':b.disabled?$('small',b).textContent:'Not added';if(on&&!quiet)A($('.chk',b),[{transform:'scale(.6)'},{transform:'scale(1)'}],{dur:S.rich?420:160})}})},
+  /* Adds wait in the tray, like on Gateway */
+  add(a,cids){const st=this.st,m=this.m,it=st.items[a];cids=cids.filter(c=>!it.by.includes(c)&&!it.pend.includes(c));if(!cids.length){const n=m.get('i~'+a);n&&shake(n.el);return}
+    const key=`lib~${a}~${cids.join('+')}`;it.pend.push(...cids);this.refreshItem(a);
+    cids.forEach((c,i)=>{m.link(`P~${c}~${a}`,'c~'+c,'r','i~'+a,'l','preview');A(m.links.get(`P~${c}~${a}`).el,[{opacity:0},{opacity:1}],{dur:300,delay:i*90})});ripple(m.get('i~'+a)?.el,.5);
+    const all=cids.length>1,names=cids.map(lname).join(' and '),what=it.inside?`${it.inside.length} skills`:'it';
+    tray.add({key,icon:'plus',title:all?`Add ${it.name} for all projects`:`Add ${it.name} to ${names}`,detail:all?`${names} get ${what}. Cursor gets ${it.inside?'them':'it'} through Claude Code.`:`Only ${names}. The other clients stay as they are.`,who:`${lname(cids[0])}'s settings`,
+      onRemove:()=>{it.pend=it.pend.filter(c=>!cids.includes(c));cids.forEach(c=>m.unlink(`P~${c}~${a}`));this.refreshItem(a);this.refreshPlugin(a);this.syncLibPicks(a)},
+      onCommit:()=>{it.pend=it.pend.filter(c=>!cids.includes(c));cids.forEach(c=>m.unlink(`P~${c}~${a}`));it.added=true;cids.forEach(c=>{if(!it.by.includes(c))it.by.push(c)});this.refreshItem(a,true);this.refreshInside(a);
+        cids.forEach(c=>{m.link(`L~${c}~${a}`,'c~'+c,'r','i~'+a,'l','');m.drawIn(`L~${c}~${a}`,S.rich?520:260)});setTimeout(()=>m.beam([cids.map(c=>`L~${c}~${a}`)]),D(420));if(panelEl&&panelEl.dataset.for==='i~'+a&&$('.pick.multi',panelEl))this.reopenPlugin(a,'back');else this.refreshPlugin(a)},
+      onUndo:()=>{cids.forEach(c=>{it.by=it.by.filter(x=>x!==c);m.undraw(`L~${c}~${a}`)});if(!it.by.length&&it.inside)it.added=false;this.refreshItem(a,true);this.refreshInside(a);this.refreshPlugin(a)},
+      toast:all?`Added ${it.name} for all projects`:`Added ${it.name} to ${names}`});
+    this.refreshPlugin(a)},
+  refreshItem(a,pop){const n=this.m.get('i~'+a);if(!n)return;const sp=this.spec('i~'+a);n.el.className='nd '+sp.cls+(this.same('p',a)?' sel':'');n.el.innerHTML=sp.html;if(sp.title)n.el.title=sp.title;else n.el.removeAttribute('title');icons();if(pop){ripple(n.el,.7);A(n.el,[{scale:'1.05'},{scale:'1'}],{dur:S.rich?520:1})}},
+  refreshInside(a){const it=this.st.items[a];(it.inside||[]).forEach((x,i)=>{const n=this.m.get(`k~${a}~${i}`);if(n){n.el.innerHTML=this.spec(`k~${a}~${i}`).html;icons()}const l=this.m.links.get(`L~k~${a}~${i}`);if(l&&!l.el.classList.contains('picked'))l.el.setAttribute('class','lk'+(it.added===false?' preview leaving':''))})},
+  /* Drag a plugin or a skill onto a client to add it there */
+  dropWhy(a,cid){const it=this.st.items[a];if(cid==='cursor')return'Cursor gets plugins through Claude Code';if(it.by.includes(cid))return`Already in ${lname(cid)}`;if(it.pend.includes(cid))return'Already in preview';return null},
+  dragStart(e){const el=e.target.closest('.blk');if(!el||e.button!==0||e.target.closest('button'))return;const [k,a]=el.dataset.id.split('~');if(k!=='i')return;const st=this.st,m=this.m,n=m.get(el.dataset.id);
+    const s0={x:e.clientX,y:e.clientY,nx:n.x,ny:n.y};let moved=false,vx=0,lx=e.clientX;try{el.setPointerCapture(e.pointerId)}catch(_){}
+    const mv=ev=>{const dx=ev.clientX-s0.x,dy=ev.clientY-s0.y;if(!moved&&Math.hypot(dx,dy)<5)return;
+      if(!moved){moved=true;this.drag=true;el.classList.add('lift');this.unsel();m.focus([n.id,...LCLIENTS.map(c=>'c~'+c.id)],[]);this.tip=document.createElement('div');this.tip.className='dragtip';m.layer.append(this.tip)}
+      vx=vx*.75+(ev.clientX-lx)*.25;lx=ev.clientX;n.x=s0.nx+dx;n.y=s0.ny+dy;n.r=S.rich?Math.max(-8,Math.min(8,vx*1.2)):0;n.s=S.rich?1.05:1;m.place(n);m.draw();
+      const hr=m.host.getBoundingClientRect(),px=ev.clientX-hr.left,py=ev.clientY-hr.top;let tg=null;for(const c of LCLIENTS){const cn=m.get('c~'+c.id);if(cn&&px>cn.x-24&&px<cn.x+cn.w+40&&py>cn.y-16&&py<cn.y+cn.h+16){tg=c.id;break}}
+      const why=tg?this.dropWhy(a,tg):null;
+      if(tg!==st.dropC){if(st.dropC)m.get('c~'+st.dropC)?.el.classList.remove('drop');st.dropC=tg;m.unlink('L~drop');if(tg&&!why){const cn=m.get('c~'+tg);cn.el.classList.add('drop');ripple(cn.el,.45);m.link('L~drop','c~'+tg,'r',n.id,'l','preview on')}}
+      this.tip.textContent=!tg?'Drop on a client':why||`Add to ${lname(tg)}`;this.tip.classList.toggle('on',!!tg&&!why);this.tip.style.transform=`translate(${n.x+6}px,${n.y-28}px)`};
+    const up=()=>{el.removeEventListener('pointermove',mv);el.removeEventListener('pointerup',up);el.removeEventListener('pointercancel',up);el.classList.remove('lift');m.unfocus();if(this.tip){this.tip.remove();this.tip=null}
+      if(!moved)return;this.dragged=true;setTimeout(()=>{this.dragged=false;this.drag=false},0);const tg=st.dropC;st.dropC=null;m.unlink('L~drop');if(tg)m.get('c~'+tg)?.el.classList.remove('drop');
+      const T=this.layout().find(t=>t.id===n.id);m.move([{id:n.id,x:T.x,y:T.y,s:1,r:0}],{dur:S.rich?560:220});
+      if(tg){if(this.dropWhy(a,tg))shake(m.get('c~'+tg).el);else this.add(a,[tg])}};
+    el.addEventListener('pointermove',mv);el.addEventListener('pointerup',up);el.addEventListener('pointercancel',up)},
+  select(a,i){const st=this.st,m=this.m,it=st.items[a],added=it.added!==false;const same=this.same('k',`${a}~${i}`);this.unsel();if(same)return;st.sel={k:`${a}~${i}`};const kid=`k~${a}~${i}`;m.get(kid).el.classList.add('sel');
+    const groups=[it.by.map(c=>`L~${c}~${a}`),[`L~k~${a}~${i}`]];m.lit(groups,[...it.by.map(c=>'c~'+c),'i~'+a,kid]);m.beam(groups);const [name,kind]=it.inside[i];
+    panelLoad(kind,()=>`<div class="p-kick"><span>${kind}</span><button class="x" data-close aria-label="Close">${ico('x',14)}</button></div><div><div class="p-title">${name}</div><div class="p-id">${snake(name).replace(/_/g,'-')}</div></div>
+      <dl class="facts"><dt>Plugin</dt><dd>${ico('puzzle',13)} ${it.name}</dd><dt>State</dt><dd><i class="mark ${added?'on':''}"></i> ${added?'On':'Comes with the plugin'}</dd><dt>Comes from</dt><dd>${added?'All projects':'<span class="muted">Not added</span>'}</dd><dt>Source</dt><dd>${st.groups.find(g=>g.items.includes(a)).name}</dd><dt>Clients</dt><dd>${it.by.length?it.by.map(c=>tile(c,1)).join('')+` ${it.by.length} client${it.by.length>1?'s':''}`:'<span class="muted">None yet</span>'}</dd></dl>
+      <p class="p-say">${added?`${it.by.map(lname).join(' and ')} load this ${kind.toLowerCase()} in every project. Cursor gets it through Claude Code.`:`It comes with ${it.name}, which is not added yet.`}</p>
+      <div class="p-acts">${added?'<button class="btn">Turn off for all projects…</button><button class="btn">Turn off in one project…</button>':`<button class="btn primary" data-addp>${ico('plus',13)} Add ${it.name} for all projects…</button>`}</div><div class="p-tech">Technical details ${ico('chevron-right',14)}</div>`,
+      {onClose:()=>this.unsel(),fn:p=>$('[data-addp]',p)?.addEventListener('click',()=>this.add(a,['claude','codex']))})},
+  skill(a){const st=this.st,m=this.m,it=st.items[a];const same=this.same('s',a);this.unsel();if(same)return;st.sel={s:a};m.get('i~'+a).el.classList.add('sel');const ls=it.by.map(c=>`L~${c}~${a}`);m.lit([ls],[...it.by.map(c=>'c~'+c),'i~'+a]);m.beam([ls]);
+    panelLoad('Skill',()=>`<div class="p-kick"><span>Skill</span><button class="x" data-close aria-label="Close">${ico('x',14)}</button></div><div><div class="p-title">${it.name}</div><div class="p-id">${snake(it.name).replace(/_/g,'-')}</div></div>
+      <dl class="facts"><dt>Plugin</dt><dd class="muted">None, a skill on its own</dd><dt>State</dt><dd><i class="mark on"></i> On</dd><dt>Comes from</dt><dd>All projects</dd><dt>Source</dt><dd>${ico('user-round',13)} Your skills folder</dd><dt>Clients</dt><dd>${it.by.map(c=>tile(c,1)).join('')} ${it.by.length} clients</dd></dl>
+      <p class="p-say">The same kind of thing as Code review inside Developer kit. It sits in the second column because it comes straight from your skills folder, not from a plugin. Drag it onto Codex to add it there.</p>
+      <div class="p-acts"><button class="btn">Turn off for all projects…</button><button class="btn">Turn off in one project…</button></div><div class="p-tech">Technical details ${ico('chevron-right',14)}</div>`,{onClose:()=>this.unsel()})},
+  file(a){const f=this.st.files.find(x=>x.id===a),m=this.m;const same=this.same('f',a);this.unsel();if(same)return;this.st.sel={f:a};m.get('f~'+a).el.classList.add('sel');const ls=[...m.links.values()].filter(l=>l.b==='f~'+a||l.a==='f~'+a).map(l=>l.id);m.lit([ls.filter(l=>l.startsWith('L~f~')),ls.filter(l=>l.startsWith('L~m~'))],['f~'+a,'c~'+f.by,...f.imports.map(x=>'m~'+x)]);m.beam([ls.filter(l=>l.startsWith('L~f~')),ls.filter(l=>l.startsWith('L~m~'))]);
+    panelLoad('Instruction file',()=>`<div class="p-kick"><span>Instruction file</span><button class="x" data-close aria-label="Close">${ico('x',14)}</button></div><div><div class="p-title" style="font-family:var(--mono);font-size:15px">${f.name}</div><div class="p-id">${f.meta}</div></div>
+      <div class="p-lines"># Working on the demo project\n- Talk plainly. Keep work small.\n- Every change: preview → Apply → Undo.\n@docs/design.md\n@docs/development.md\n<span style="color:var(--faint)">… placeholder lines, not a real file</span></div>
+      <p class="p-say">Kitden only reads this file. ${f.imports.length?`It brings in ${f.imports.length} more.`:'It imports nothing.'}</p><div class="p-tech">Technical details ${ico('chevron-right',14)}</div>`,{onClose:()=>this.unsel()})},
+  imp(x){const st=this.st,m=this.m;const same=this.same('m',x);this.unsel();if(same)return;st.sel={m:x};m.get('m~'+x).el.classList.add('sel');const ls=[...m.links.values()].filter(l=>l.b==='m~'+x).map(l=>l.id),fs=ls.map(id=>m.links.get(id).a);m.lit([ls],['m~'+x,...fs]);m.beam([ls]);const im=st.imports.find(z=>z.id===x);
+    panelLoad('Imported file',()=>`<div class="p-kick"><span>Imported file</span><button class="x" data-close aria-label="Close">${ico('x',14)}</button></div><div><div class="p-title" style="font-family:var(--mono);font-size:15px">${im.name}</div><div class="p-id" style="font-family:var(--font)">Brought in by ${fs.map(f=>st.files.find(z=>'f~'+z.id===f).name).join(' and ')}</div></div>
+      <div class="p-lines">## Placeholder lines\nThe real file stays on your disk.\n<span style="color:var(--faint)">… not a real file</span></div><p class="p-say">Kitden only reads it.</p><div class="p-tech">Technical details ${ico('chevron-right',14)}</div>`,{onClose:()=>this.unsel()})},
+  filter(q){Gateway.filter.call(this,q)}
+};
+
+/* ---------- Overview ---------- */
+const Overview={
+  hint:'Hover a card · Fix… · Show notes · click Kitden gateway or Library',
+  cards:[{id:'github',sec:'need',icon:'git-branch',name:'GitHub',why:'Set up twice: in Claude Code and in the gateway.',who:['claude'],act:'Fix…',primary:true,done:'Fixed GitHub: one entry left, in the gateway',focus:{n:['c~claude','m~gw'],l:['L~claude~gw']}},
+    {id:'linear',sec:'need',icon:'square-kanban',name:'Linear',why:'Needs sign-in. Its tools stay off until then.',who:['claude','codex'],act:'Sign in…',primary:true,done:'Signed in to Linear',focus:{n:['c~claude','c~codex','m~gw'],l:['L~claude~gw','L~codex~gw']}},
+    {id:'dropbox',sec:'can',icon:'package-open',name:'Dropbox',why:"Skips the gateway, so Kitden's rules don't reach it.",who:['claude'],act:'Move in…',go:'gateway',focus:{n:['c~claude','m~gw'],l:['L~claude~gw']}},
+    {id:'cursor',sec:'can',icon:'plug',name:'Cursor',why:'Not connected to the gateway yet.',who:['cursor'],act:'Connect…',done:'Connected Cursor to the gateway',focus:{n:['c~cursor','m~gw'],l:['L~cursor~lib']}}],
+  mount(root){this.left=2;
+    root.innerHTML=`<div class="head"><div><h1 data-blur>Your setup, connected.</h1><p class="lede"><span class="num" id="need-n">2</span> <span id="need-w">things need</span> your attention. Everything else looks fine: <span class="num" id="cl-n">3</span> clients, <span class="num" id="pr-n">4</span> projects.</p><div class="scope">${ico('layers',14)}<span>All projects · 3 clients · demo workspace</span></div></div><div class="head-acts"><span class="chip">Demo data</span></div></div>
+    <div class="ov-grid"><section><div class="ov-cap"><span class="warn" style="display:grid">${ico('triangle-alert',13)}</span>Needs attention</div><div class="cards" id="need">${this.cards.filter(c=>c.sec==='need').map(c=>this.card(c)).join('')}</div><div class="ov-cap">${ico('sparkles',13)}Can improve</div><div class="cards" id="can">${this.cards.filter(c=>c.sec==='can').map(c=>this.card(c)).join('')}</div>
+      <button class="fold" id="fold" aria-expanded="false">${ico('chevron-right',14)}Show 3 notes (nothing to fix)</button><div class="notes" id="notes" hidden>${['Codex reads AGENTS.md in 2 projects.','Cursor loads 2 rules from .cursor/rules.','Developer kit has an update in the Community marketplace.'].map(t=>`<div class="note">${ico('info',13)}${t}</div>`).join('')}</div></section>
+      <section><div class="ov-cap" style="margin-top:0">Your setup</div><div class="stage" style="margin-top:4px"><div id="omap"></div></div><div class="ov-foot">${ico('folder',13)}4 projects · 1 has its own rules</div></section></div>`;
+    const m=this.m=new MapView($('#omap'),{w:470,h:250});
+    CLIENTS.forEach((c,i)=>m.add('c~'+c.id,{cls:'blk client',name:c.name,x:0,y:22+72*i,w:160,h:54,html:`${tile(c.id)}<div class="tx"><b>${c.name}</b><small><i class="lamp ${c.id==='cursor'?'warn':'on'}"></i><span class="${c.id==='cursor'?'warn':''}">${c.ver}</span></small></div><span class="port r"></span>`}));
+    m.add('m~gw',{cls:'blk',name:'Kitden gateway',x:250,y:40,w:220,h:60,html:`<span class="itile">${ico('house',15)}</span><div class="tx"><b>Kitden gateway</b><small><i class="lamp on"></i><span><span class="num" id="o-srv">4</span> servers · <span class="num" id="o-tools">11</span> tools</span></small></div><span style="margin-left:auto;color:var(--faint)">${ico('arrow-up-right',14)}</span><span class="port l"></span>`});
+    m.add('m~lib',{cls:'blk',name:'Library',x:250,y:148,w:220,h:60,html:`<span class="itile">${ico('library',15)}</span><div class="tx"><b>Library</b><small><i class="lamp on"></i><span><span class="num" id="o-pl">3</span> plugins · <span class="num" id="o-sk">6</span> skills</span></small></div><span style="margin-left:auto;color:var(--faint)">${ico('arrow-up-right',14)}</span><span class="port l"></span>`});
+    [['claude','gw'],['codex','gw'],['claude','lib'],['codex','lib'],['cursor','lib']].forEach(([c,t])=>m.link(`L~${c}~${t}`,'c~'+c,'r','m~'+t,'l'));
+    icons();this.wire();this.enter()},
+  card(c){return`<div class="card" data-card="${c.id}"><span class="itile">${ico(c.icon,15)}</span><div class="tx"><b>${c.name}</b><small>${c.why}</small></div><span class="who">${c.who.map(x=>tile(x,1)).join('')}</span><button class="btn${c.primary?' primary':''}" data-act="${c.id}">${c.act}</button></div>`},
+  enter(){const m=this.m;blurIn($('h1[data-blur]'));countUp($('#need-n'),2,700,200);countUp($('#cl-n'),3,700,260);countUp($('#pr-n'),4,700,320);countUp($('#o-srv'),4,900,500);countUp($('#o-tools'),11,900,500);countUp($('#o-pl'),3,900,560);countUp($('#o-sk'),6,900,560);
+    rise($$('.ov-cap, .card, .fold'),{delay:160,step:S.rich?70:40,y:14});
+    if(S.rich&&D(1))$$('.card .itile').slice(0,2).forEach((t,i)=>setTimeout(()=>ripple(t,.6),D(700+i*120)));
+    if(!S.rich||!D(1)){rise([$('#omap')],{delay:200});return}
+    const order=[...m.nodes.values()];order.forEach(n=>{n.o=0;n.s=.8;n.x-=n.id.startsWith('c~')?16:-16;m.place(n)});m.draw();
+    setTimeout(async()=>{await m.move(order.map(n=>({id:n.id,x:n.id.startsWith('c~')?0:250,o:1,s:1})),{dur:620,stagger:70});for(const l of m.links.keys())m.drawIn(l,520);await wait(380);m.beam([[...m.links.keys()]])},D(260))},
+  wire(){const m=this.m;
+    main.addEventListener('pointerover',this._ov=e=>{const c=e.target.closest('.card');if(c===this._hc)return;this._hc=c;if(!c){m.unfocus();return}const d=this.cards.find(x=>x.id===c.dataset.card);m.focus(d.focus.n,d.focus.l);m.beam([d.focus.l])});
+    $('#omap').addEventListener('click',e=>{const b=e.target.closest('.blk');if(!b)return;if(b.dataset.id==='m~gw')go('gateway');else if(b.dataset.id==='m~lib')go('library');else{const ls=[...m.links.values()].filter(l=>l.a===b.dataset.id).map(l=>l.id);m.focus([b.dataset.id,...ls.map(l=>m.links.get(l).b)],ls);m.beam([ls])}});
+    $('#fold').addEventListener('click',e=>{const b=e.currentTarget,open=b.getAttribute('aria-expanded')!=='true';b.setAttribute('aria-expanded',String(open));b.lastChild.textContent=open?'Hide 3 notes':'Show 3 notes (nothing to fix)';fold($('#notes'),open)});
+    $$('[data-act]',main).forEach(b=>b.addEventListener('click',()=>this.act(b)))},
+  async act(btn){const c=this.cards.find(x=>x.id===btn.dataset.act);if(c.go){go(c.go,{arrive:'o~dropbox'});return}
+    const card=btn.closest('.card');btn.style.pointerEvents='none';const w=btn.offsetWidth;btn.style.width=w+'px';btn.innerHTML=ico('rotate-cw',14,'spin');btn.style.justifyContent='center';icons();await wait(700);
+    btn.classList.remove('primary');btn.classList.add('ok');btn.innerHTML=ico('check',14);icons();drawSvg($('svg',btn),300);spark(btn,css('--ok'));await wait(S.rich?420:150);
+    const list=card.parentElement,sib=[...list.children].filter(x=>x!==card),first=sib.map(x=>x.getBoundingClientRect().top);
+    await A(card,[{opacity:1,transform:'none',filter:'blur(0)'},{opacity:0,transform:'translateX(28px)',filter:S.rich?'blur(6px)':'none'}],{dur:S.rich?320:180,ease:'ease-in',fill:'forwards'});
+    const h=card.offsetHeight;await A(card,[{height:h+'px',marginBottom:'0px'},{height:'0px',marginBottom:'-8px',paddingTop:'0px',paddingBottom:'0px',borderWidth:'0px'}],{dur:S.rich?260:160,fill:'forwards',ease:CALM});
+    card.hidden=true;card.getAnimations().forEach(a=>a.cancel());sib.forEach((x,i)=>{const d=first[i]-x.getBoundingClientRect().top;if(d)A(x,[{transform:`translateY(${d}px)`},{transform:'none'}],{dur:S.rich?520:220})});
+    if(c.sec==='need'){this.left--;roll($('#need-n'),this.left);$('#need-w').textContent=this.left===1?'thing needs':'things need'}
+    dock.toast(c.done,{undo:()=>{card.hidden=false;btn.className='btn'+(c.primary?' primary':'');btn.textContent=c.act;btn.style.cssText='';A(card,[{opacity:0,transform:'translateY(-8px) scale(.98)'},{opacity:1,transform:'none'}],{dur:S.rich?520:220});if(c.sec==='need'){this.left++;roll($('#need-n'),this.left);$('#need-w').textContent='things need'}}})},
+  unmount(){this._ov&&main.removeEventListener('pointerover',this._ov)}
+};
+
+/* ---------- Changes ---------- */
+const Changes={
+  hint:'Click a row · Undo · See it on the map',
+  rows:[{day:'Today',time:'14:02',t:'Allow Push files in mcp-gateway',who:['claude','codex'],st:'Applied',take:'Codex: start a new session',hist:['14:02 Preview','14:02 Applied','14:02 Checked'],map:['github',3]},
+    {day:'Today',time:'13:40',t:'Move Dropbox into the gateway',who:['claude'],st:'Applied',take:'Claude Code: start a new session',hist:['13:40 Preview','13:40 Applied','13:40 Checked']},
+    {day:'Today',time:'11:15',t:'Turn off Code review in mcp-gateway',who:['claude','codex'],st:'Undone',take:'Nothing to do',hist:['11:15 Applied','11:22 Undone']},
+    {day:'Yesterday',time:'18:20',t:'Add Developer kit',who:['claude','codex'],st:'Applied',take:'Both: start a new session',hist:['18:20 Preview','18:20 Applied','18:21 Checked']},
+    {day:'Yesterday',time:'17:05',t:'Connect Codex to the gateway',who:['codex'],st:'Failed',take:'Try again from Gateway',hist:['17:05 Preview','17:05 Stopped: the file changed first']}],
+  mount(root){const rows=this.rows;let h=head('Changes','Every change made from this page. Each one has a backup; Undo puts the previous file back.','All projects · 5 changes this week');h+='<div class="tl">';
+    for(const day of ['Today','Yesterday']){h+=`<div class="day">${day}</div><div class="rows"><i class="rail-line"></i>`;rows.forEach((r,i)=>{if(r.day!==day)return;h+=this.row(r,i)});h+='</div>'}
+    root.innerHTML=h+'</div>';icons();
+    $$('.row',root).forEach(el=>{el.addEventListener('click',e=>{if(e.target.closest('[data-undo]'))return;this.select(+el.dataset.i)});el.addEventListener('keydown',e=>{if(e.key==='Enter')this.select(+el.dataset.i)})});
+    $$('[data-undo]',root).forEach(b=>b.addEventListener('click',()=>this.undo(+b.dataset.undo)));
+    this.enter();this.select(0,true)},
+  row(r,i){const st=r.st==='Failed'?`<span class="state warn"><i class="lamp warn"></i>Not applied: the file changed first</span>`:`<span class="state"><i class="lamp ${r.st==='Applied'?'on':''}"></i><span class="sw">${r.st}</span></span>`;return`<div class="row${r.st==='Undone'?' undone':''}" data-i="${i}" tabindex="0"><i class="dot"></i><time>${r.time}</time><span class="t">${r.t}<i class="strike"></i></span><span class="who">${r.who.map(x=>tile(x,1)).join('')}</span>${st}<span>${r.st==='Applied'?`<button class="btn sm" data-undo="${i}">${ico('undo-2',13)} Undo</button>`:''}</span></div>`},
+  enter(){if(!S.rich||!D(1)){rise($$('.day,.row'),{step:40});return}$$('.rail-line').forEach((l,i)=>A(l,[{transform:'scaleY(0)'},{transform:'scaleY(1)'}],{dur:700,delay:120+i*260,ease:'cubic-bezier(.3,.7,.2,1)'}));
+    $$('.row').forEach((r,i)=>{A(r,[{opacity:0,transform:'translateX(-14px)',filter:'blur(5px)'},{opacity:1,transform:'none',filter:'none'}],{dur:560,delay:180+i*80});A($('.dot',r),[{transform:'scale(0)'},{transform:'scale(1)'}],{dur:520,delay:260+i*80})});rise($$('.day'),{step:260})},
+  select(i,first){const r=this.rows[i];$$('.row').forEach(x=>x.classList.toggle('sel',+x.dataset.i===i));const el=$(`.row[data-i="${i}"]`);if(!first)ripple($('.dot',el),.7);
+    panelLoad('Change',()=>`<div class="p-kick"><span>Change</span><button class="x" data-close aria-label="Close">${ico('x',14)}</button></div><div><div class="p-title">${r.t}</div><div class="p-id" style="font-family:var(--font)">${r.day} ${r.time}</div></div>
+      <dl class="facts"><dt>Project</dt><dd>${ico('folder',13)} mcp-gateway</dd><dt>State</dt><dd><i class="lamp ${r.st==='Applied'?'on':r.st==='Failed'?'warn':''}"></i> ${r.st==='Applied'?'Applied and checked':r.st==='Failed'?'Not applied':'Undone'}</dd><dt>Backup</dt><dd>Kept · Undo puts it back</dd><dt>Takes effect</dt><dd class="warn">${r.take}</dd><dt>Clients</dt><dd>${r.who.map(x=>tile(x,1)).join('')} ${r.who.length} client${r.who.length>1?'s':''}</dd></dl>
+      <div class="p-hist">${r.hist.map((h,j)=>`${j?ico('arrow-right',11):''}<span class="on">${h}</span>`).join('')}</div>
+      <div class="p-acts">${r.st==='Applied'?`<button class="btn" data-pundo>Undo</button>`:''}${r.map?'<button class="btn" data-map>See it on the map</button>':''}</div><div class="p-tech">Technical details ${ico('chevron-right',14)}</div>`,
+      {fn:p=>{if(S.rich)$$('.p-hist span',p).forEach((s,j)=>A(s,[{opacity:.2},{opacity:1}],{dur:300,delay:420+j*220}));const m=$('[data-map]',p);m&&m.addEventListener('click',()=>go('gateway',{open:r.map[0],select:r.map}));const u=$('[data-pundo]',p);u&&u.addEventListener('click',()=>this.undo(i))}})},
+  async undo(i){const r=this.rows[i],el=$(`.row[data-i="${i}"]`),b=$('[data-undo]',el);if(r.st!=='Applied')return;if(b){b.style.pointerEvents='none';b.innerHTML=ico('rotate-cw',13,'spin');icons()}await wait(600);
+    r.st='Undone';el.classList.add('undone');A($('.strike',el),[{transform:'scaleX(0)'},{transform:'scaleX(1)'}],{dur:S.rich?420:200,ease:'cubic-bezier(.6,0,.2,1)'});const lamp=$('.lamp',el);lamp.classList.remove('on');roll($('.sw',el),'Undone');
+    if(b)A(b,[{opacity:1,transform:'none'},{opacity:0,transform:'scale(.8)'}],{dur:180,fill:'forwards'}).then(()=>b.remove());
+    if($('.row.sel')===el)this.select(i,true);
+    dock.toast(`Undid “${r.t}”. The backup is back in place.`,{undoLabel:'Redo',undo:()=>{r.st='Applied';el.classList.remove('undone');lamp.classList.add('on');roll($('.sw',el),'Applied');const span=el.lastElementChild;span.innerHTML=`<button class="btn sm" data-undo="${i}">${ico('undo-2',13)} Undo</button>`;icons();$('[data-undo]',span).addEventListener('click',()=>this.undo(i));A(span.firstChild,[{opacity:0,transform:'scale(.8)'},{opacity:1,transform:'none'}],{dur:300})}})}
+};
+
+/* ---------- page head ---------- */
+function head(title,lede,scope,views,extra=''){return`<div class="head"><div><h1 data-blur>${title}</h1><p class="lede">${lede}</p>${extra}${PROJ?`<div class="scope acc" id="scope">${ico('folder',14)}<span>Project ${PROJ}</span></div>`:`<div class="scope" id="scope">${ico('layers',14)}<span>${scope}</span></div>`}</div><div class="head-acts">${views?`<div class="seg" id="viewseg"><i class="seg-mark"></i><button aria-pressed="true" data-view="map">Map</button><button aria-pressed="false" data-view="list">List</button></div>`:''}<span class="chip">Demo data</span></div></div>`}
+
+/* ---------- navigation ---------- */
+const PAGES={overview:Overview,library:Library,gateway:Gateway,changes:Changes};
+let cur=null;
+function glideNav(instant){const on=$('.nav [aria-current="page"]'),mk=$('.nav-mark');if(!on||!mk)return;const t=on.offsetTop,h=on.offsetHeight,from={t:mk.offsetTop,h:mk.offsetHeight};mk.style.top=t+'px';mk.style.height=h+'px';if(instant||!D(1)||from.t===t)return;
+  if(S.rich){const top=Math.min(from.t,t),span=Math.abs(t-from.t)+h;mk.animate([{top:from.t+'px',height:from.h+'px'},{top:top+'px',height:span+'px',offset:.45},{top:t+'px',height:h+'px'}],{duration:D(520),easing:'cubic-bezier(.4,0,.2,1)'})}else mk.animate([{top:from.t+'px'},{top:t+'px'}],{duration:D(300),easing:CALM})}
+async function go(name,opts={}){
+  closeMenu();
+  $$('.nav button').forEach(b=>b.dataset.go===name?b.setAttribute('aria-current','page'):b.removeAttribute('aria-current'));glideNav(!cur);
+  if(cur){await A(main,[{opacity:1,filter:'blur(0px)',transform:'none'},{opacity:0,filter:S.rich?'blur(6px)':'blur(0px)',transform:'translateY(-6px)'}],{dur:S.rich?170:120,ease:'ease-in',fill:'forwards'});cur.unmount&&cur.unmount()}
+  main.getAnimations().forEach(a=>a.cancel());closePanel(true);dockEl.innerHTML='';main.innerHTML='';main.scrollTop=0;$('#find').value='';
+  cur=PAGES[name];cur.mount(main,opts);icons();
+  const vs=$('#viewseg');vs&&segGlide(vs,true);
+  if(name!=='overview')blurIn($('h1[data-blur]',main));rise($$('.lede,.scope',main),{delay:120,step:60,y:6});
+  $('#hint').innerHTML=`${ico('info',13)}<span>${cur.hint}</span>`;$('#tag').textContent=`${cap(name)} · motion study · demo data`;icons();
+  try{history.replaceState(null,'','#'+name)}catch(e){}}
+$$('.nav button').forEach(b=>b.addEventListener('click',()=>go(b.dataset.go)));
+
+/* ---------- project picker ---------- */
+const projBtn=$('#proj');let menuEl=null;
+function closeMenu(){if(!menuEl)return;const m=menuEl;menuEl=null;document.removeEventListener('pointerdown',outsideMenu,true);projBtn.setAttribute('aria-expanded','false');A(m,[{opacity:1,transform:'none'},{opacity:0,transform:'translateY(-4px) scale(.98)'}],{dur:140,fill:'forwards',ease:'ease-in'}).then(()=>m.remove())}
+function outsideMenu(e){if(menuEl&&!menuEl.contains(e.target)&&!projBtn.contains(e.target))closeMenu()}
+projBtn.addEventListener('click',()=>{if(menuEl){closeMenu();return}const r=projBtn.getBoundingClientRect(),ar=$('#app').getBoundingClientRect();menuEl=document.createElement('div');menuEl.className='menu';menuEl.style.left=(r.left-ar.left)+'px';menuEl.style.top=(r.bottom-ar.top+6)+'px';
+  menuEl.innerHTML=`<label class="search">${ico('search',13)}<input id="pq" placeholder="Find a project…" aria-label="Find a project"></label><button class="mi${PROJ?'':' on'}" data-p="">${ico('layers',14)}<span class="pk-tx"><b>All projects</b><small>What applies in every project</small></span>${PROJ?'':ico('check',14,'acc')}</button>`+PROJECTS.map(p=>{const n=ownRules(p.id);return`<button class="mi${PROJ===p.id?' on':''}" data-p="${p.id}">${ico('folder',14)}<span class="pk-tx"><b>${p.id}</b>${p.note?`<small>${p.note}</small>`:''}</span><span class="acc" style="font-size:11px">${n?`${n} own rule${n>1?'s':''}`:''}</span>${PROJ===p.id?ico('check',14,'acc'):''}</button>`}).join('');
+  $('#app').append(menuEl);icons();projBtn.setAttribute('aria-expanded','true');
+  A(menuEl,[{opacity:0,transform:'translateY(-8px) scale(.96)',filter:S.rich?'blur(6px)':'none'},{opacity:1,transform:'none',filter:'none'}],{dur:S.rich?440:180});rise($$('.mi',menuEl),{step:S.rich?35:0,y:4,blur:false});
+  $$('.mi',menuEl).forEach(b=>b.addEventListener('click',()=>{closeMenu();setProject(b.dataset.p||null)}));
+  const q=$('#pq',menuEl);q.addEventListener('input',()=>{const v=q.value.toLowerCase();$$('.mi',menuEl).forEach(b=>b.hidden=!!v&&!(b.dataset.p||'all projects').includes(v))});q.focus();
+  document.addEventListener('pointerdown',outsideMenu,true)});
+function setProject(p){if(p===PROJ)return;PROJ=p;roll($('#proj-name'),p||'All projects');projBtn.classList.toggle('acc-on',!!p);
+  if(cur&&cur.project)cur.project();else{const sc=$('#scope');if(sc){sc.classList.toggle('acc',!!p);sc.innerHTML=p?`${ico('folder',14)}<span>Project ${p}</span>`:`${ico('layers',14)}<span>Shared setup · project overrides stay separate</span>`;icons()}}}
+
+/* ---------- studio controls ---------- */
+function setRich(r){S.rich=r&&!reduceMQ.matches;document.documentElement.classList.toggle('rich',S.rich);$$('#motion button').forEach(b=>b.setAttribute('aria-pressed',String((b.dataset.m==='rich')===S.rich)));segGlide($('#motion'));if(!S.rich){dots.target=0;dots.kick()}}
+$('#motion').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;setRich(b.dataset.m==='rich');replay()});
+$('#slow').addEventListener('click',e=>{S.slow=S.slow===1?4:1;e.currentTarget.setAttribute('aria-pressed',String(S.slow>1));document.documentElement.style.setProperty('--slow',S.slow)});
+$('#fail').addEventListener('click',e=>{S.fail=!S.fail;syncStudio()});
+function replay(){if(!cur)return;const name=Object.keys(PAGES).find(k=>PAGES[k]===cur);cur.unmount&&cur.unmount();cur=null;go(name)}
+$('#replay').addEventListener('click',replay);
+$('#find').addEventListener('input',e=>{const q=e.target.value.trim().toLowerCase();cur&&cur.filter&&cur.filter(q)});
+$('#appearance').addEventListener('click',e=>{const root=document.documentElement;const dark=root.dataset.theme?root.dataset.theme==='dark':!matchMedia('(prefers-color-scheme: light)').matches;const next=dark?'light':'dark';const apply=()=>{root.dataset.theme=next;dots.paint()};
+  if(!document.startViewTransition||!D(1)){apply();return}const r=e.currentTarget.getBoundingClientRect(),x=r.left+r.width/2,y=r.top+r.height/2;
+  if(!S.rich){document.startViewTransition(apply);return}const R=Math.hypot(Math.max(x,innerWidth-x),Math.max(y,innerHeight-y));const vt=document.startViewTransition(apply);vt.ready.then(()=>root.animate({clipPath:[`circle(0px at ${x}px ${y}px)`,`circle(${R}px at ${x}px ${y}px)`]},{duration:D(700),easing:'cubic-bezier(.2,.7,.1,1)',pseudoElement:'::view-transition-new(root)'})).catch(()=>{})});
+
+/* ---------- start ---------- */
+setRich(S.rich);dots.size();icons();
+const start=(location.hash||'').slice(1);go(PAGES[start]?start:'gateway');
+</script>

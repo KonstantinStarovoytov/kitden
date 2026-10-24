@@ -36,6 +36,42 @@ simple and visual, it opens fast, and it is secure and local.
 - **Sign-in (S1) waits.** Everything else is built first. No "Sign in needed", "Sign in…",
   "Signed in there" or "Sign in after Apply" for now.
 
+## Owner decisions (2026-10-24, the mockup)
+
+The owner tried a clickable mockup of these pages, [docs/mockup/kitden-motion.html](../../mockup/kitden-motion.html),
+and wants the product to look, move and behave like it, "as close to the mockup as possible, and
+not fragile". The owner accepted every call in the
+[alignment plan](../plans/2026-10-24-mockup-alignment.md) (D1–D28). Where this design says
+otherwise, the mockup wins, with these exceptions:
+
+- **The mockup wins on look:**
+  - Inter and JetBrains Mono, shipped as local files.
+  - Icons from one local sprite.
+  - The mockup's tokens and sizes, and a small spring overshoot on presses, switches and ports.
+  - Details floats over the map.
+  - The mockup's lamp meanings, words, grey dotted links that skip the gateway, and timings.
+- **The mockup wins on behaviour:**
+  - A preview tray holds several changes, with Apply all and Undo all.
+  - A click on a preview block takes it out of the tray.
+  - Several projects can be ticked at once.
+  - A free client drags a wire to the gateway.
+  - A project switch keeps the panel and the tray.
+  - The Gateway server panel has tool switches; a switch only adds a tray row.
+- **Kitden's own rules stay:**
+  - A tray row keeps "Show changes", so the full review is one click away.
+  - A check shows only after `verified`.
+  - Redo and Overview's buttons add a preview; they never write at once.
+  - No sign-in words until S1.
+  - No word or count Kitden does not know.
+  - No switch for one item inside a plugin.
+  - Cursor is never a plugin drop target.
+  - Import links only for Claude Code.
+  - Every action today's pages have stays reachable.
+  - Calm only; nothing loops.
+
+The Non-goals "no drag to connect" and "a new font" give way to this. The rest of this design
+stands where the mockup is silent.
+
 ## What changes from the 2026-10-22 design
 
 | Old part | Now |
