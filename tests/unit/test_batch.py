@@ -19,6 +19,7 @@ from kitden.changes.batch import (
     first_clash,
     requests_in,
     same_write,
+    step_rows,
 )
 from kitden.changes.client_cli import CommandResult
 from kitden.changes.engine import Engine, NothingToChangeError
@@ -227,3 +228,8 @@ def test_engine_check_keeps_no_change(tmp_path):
     with pytest.raises(NothingToChangeError):
         engine.check([rule_step(home, None, "files", "read_file", None)])
     assert engine.changes == {}
+
+
+def test_step_rows_names_the_first_row_of_a_shared_step():
+    rows = [{"id": "a", "steps": [0, 1]}, {"id": "b", "steps": [0, 2]}]
+    assert step_rows(rows) == {0: "a", 1: "a", 2: "b"}

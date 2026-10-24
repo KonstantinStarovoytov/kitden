@@ -437,9 +437,13 @@ class Engine:
         self.roots = roots
         # Runs the Keychain's `security`; None is the real one (the demo has a stand-in).
         self.keychain_run = keychain_run
-        # Called as each step of an Apply or Undo is done: (change id, steps done, all steps).
-        # The page shows "Applying 2 of 5" from it; it runs in the worker thread.
-        self.on_progress: Callable[[str, int, int], None] = lambda change_id, done, total: None
+        # Called as each step of an Apply or Undo is done: (change id, steps done, all steps,
+        # the index in the change's steps of the one just done; None for Undo's last count).
+        # The page shows "Applying 2 of 5" from it, and the tray the row of that step; it runs
+        # in the worker thread.
+        self.on_progress: Callable[[str, int, int, int | None], None] = (
+            lambda change_id, done, total, step: None
+        )
         self.changes: dict[str, Change] = {}
         for record in store.load():
             try:
@@ -734,10 +738,10 @@ class Engine:
             self._apply_gateway(gateway_steps, tick)
             for step in copy_steps:
                 self._apply_copy(step, copied)
-                tick()
+                tick(step)
             for step in removal_steps:
                 self._apply_removal(change.id, step, removed)
-                tick()
+                tick(step)
             # Steps on one file run in order, each on the result of the one before.
             working = dict(current)
             expected: dict[str, bytes | None] = {}
@@ -747,7 +751,7 @@ class Engine:
                 ran.append(step)
                 working[path] = result if result is not None else _read(path)
                 expected[path] = result
-                tick()
+                tick(step)
             for step in file_steps:
                 self._verify(step, step.edit.after, expected[step.edit.path])
         except (
@@ -899,19 +903,23 @@ class Engine:
         except (CopyRefusedError, OSError):
             return False
 
-    def _counter(self, change: Change) -> Callable[[], None]:
-        """A function that counts one more step done and tells `on_progress`."""
+    def _counter(self, change: Change) -> Callable[[Step], None]:
+        """A function that counts one more step done and tells `on_progress` which one."""
         done = 0
         total = len(change.steps)
+        # By identity: two steps may be equal as values.
+        index = {id(step): i for i, step in enumerate(change.steps)}
 
-        def tick() -> None:
+        def tick(step: Step) -> None:
             nonlocal done
             done = min(done + 1, total)
-            self.on_progress(change.id, done, total)
+            self.on_progress(change.id, done, total, index.get(id(step)))
 
         return tick
 
-    def _apply_gateway(self, steps: list[Step], tick: Callable[[], None] = lambda: None) -> None:
+    def _apply_gateway(
+        self, steps: list[Step], tick: Callable[[Step], None] = lambda step: None
+    ) -> None:
         """Add each server, then read the list back: every name must be there."""
         if not steps:
             return
@@ -919,7 +927,7 @@ class Engine:
             for step in steps:
                 g = step.gateway
                 g.server_uuid = client.add(g.name, g.server)
-                tick()
+                tick(step)
             held = {s["name"] for s in client.held()}
         missing = [s.gateway.name for s in steps if s.gateway.name not in held]
         if missing:
@@ -929,7 +937,7 @@ class Engine:
         self,
         steps: list[Step],
         best_effort: bool = False,
-        tick: Callable[[], None] = lambda: None,
+        tick: Callable[[Step], None] = lambda step: None,
     ) -> list[str]:
         """Remove the added servers, last first. Returns the names that were already gone."""
         added = [s for s in reversed(steps) if s.gateway and s.gateway.server_uuid]
@@ -941,7 +949,7 @@ class Engine:
                 for step in added:
                     if not client.remove(step.gateway.server_uuid):
                         gone.append(step.gateway.name)
-                    tick()
+                    tick(step)
         except GatewayError:
             if not best_effort:
                 raise
@@ -1039,10 +1047,10 @@ class Engine:
             return change
         for step in reversed(copies):
             remove_folder(step.copy.target)
-            tick()
+            tick(step)
         for step in reversed(removals):
             copy_folder(step.removal.backup_path, step.removal.path)
-            tick()
+            tick(step)
         # Inverse commands, last step first. An entry already gone needs no command. A file
         # that also has direct edits gets its planned bytes afterwards.
         for step in reversed(change.steps):
@@ -1068,7 +1076,7 @@ class Engine:
                     self._finish(change)
                     return change
             self.on_write(step.edit.path, _sha(_read(step.edit.path)))
-            tick()
+            tick(step)
         for path, data in plans.items():
             self._write(path, data)
         for step in change.steps:
@@ -1083,7 +1091,7 @@ class Engine:
                 keychain.delete(item.ref, run=self._security())
             except KeychainError:
                 kept.append(f"{item.server}/{item.key} stays in your Keychain.")
-        self.on_progress(change.id, len(change.steps), len(change.steps))
+        self.on_progress(change.id, len(change.steps), len(change.steps), None)
         change.move_to(ChangeState.UNDONE)
         notes = [f"{', '.join(gone)} had already been removed from the gateway."] if gone else []
         notes += kept

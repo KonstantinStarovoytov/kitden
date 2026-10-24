@@ -1,6 +1,7 @@
 """The preview tray's endpoints on the demo home: one change from many requests (Phase 3)."""
 
 import json
+import time
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -257,3 +258,99 @@ def test_two_moves_from_cursor_join(tmp_path):
         assert applied.json()["state"] == "verified"
         servers = json.loads((page.home / ".cursor/mcp.json").read_text())["mcpServers"]
         assert list(servers) == ["files", "kitden"]
+
+
+def _progress(page):
+    return [data for name, data in _events(page) if name == "change_progress"]
+
+
+def test_progress_names_each_row(tmp_path):
+    with _page(tmp_path) as page:
+        answer = _preview(
+            page,
+            _remove("a", _ids(page, "cursor")["n8n"]),
+            _remove("b", _ids(page, "codex")["docs"]),
+            _rule("c", "read_file"),
+        )
+        change = answer.json()
+        page.queue = page.app.state.events.subscribe()
+        assert _apply(page, change["id"]).json()["state"] == "verified"
+        seen = _progress(page)
+        assert {p["row"] for p in seen} == {"a", "b", "c"}
+        assert all(p["id"] == change["id"] for p in seen)
+        assert seen[-1]["done"] == seen[-1]["total"] == 3
+
+
+def test_undo_all_restores_every_file(tmp_path):
+    with _page(tmp_path) as page:
+        before = _files(page.home)
+        cursor = _ids(page, "cursor")
+        answer = _preview(
+            page,
+            _remove("a", cursor["n8n"]),
+            _remove("b", cursor["browser-tools"]),
+            _remove("c", _ids(page, "codex")["docs"]),
+            _rule("d", "read_file"),
+        )
+        change = answer.json()
+        assert _apply(page, change["id"]).json()["state"] == "verified"
+        assert _files(page.home) != before
+        page.queue = page.app.state.events.subscribe()
+        undone = _apply(page, change["id"], "undo")
+        assert undone.status_code == 200 and undone.json()["state"] == "undone"
+        assert _files(page.home) == before
+        # File entries come back together at the end: the last count names no row.
+        last = _progress(page)[-1]
+        assert last["done"] == last["total"] == 4 and last["row"] is None
+
+
+def test_a_file_changed_before_apply_all_stops_all(tmp_path):
+    with _page(tmp_path) as page:
+        answer = _preview(
+            page,
+            _remove("a", _ids(page, "cursor")["n8n"]),
+            _remove("b", _ids(page, "codex")["docs"]),
+        )
+        codex = (page.home / ".codex/config.toml").read_bytes()
+        mcp = page.home / ".cursor/mcp.json"
+        mcp.write_text(mcp.read_text().replace('"files"', '"my-files"'))
+        edited = mcp.read_bytes()
+        applied = _apply(page, answer.json()["id"])
+        assert applied.status_code == 409 and applied.json()["state"] == "stale"
+        assert (page.home / ".codex/config.toml").read_bytes() == codex
+        assert mcp.read_bytes() == edited
+
+
+def test_a_file_changed_before_undo_all_blocks_all(tmp_path):
+    with _page(tmp_path) as page:
+        answer = _preview(
+            page,
+            _remove("a", _ids(page, "cursor")["n8n"]),
+            _remove("b", _ids(page, "codex")["docs"]),
+        )
+        change_id = answer.json()["id"]
+        assert _apply(page, change_id).json()["state"] == "verified"
+        codex = (page.home / ".codex/config.toml").read_bytes()
+        mcp = page.home / ".cursor/mcp.json"
+        mcp.write_text(mcp.read_text().replace('"files"', '"my-files"'))
+        undone = _apply(page, change_id, "undo")
+        assert undone.status_code == 409 and undone.json()["state"] == "undo_blocked"
+        assert (page.home / ".codex/config.toml").read_bytes() == codex
+
+
+def test_moves_in_a_batch_get_their_tools_read(tmp_path):
+    with _page(tmp_path) as page:
+        cursor = _ids(page, "cursor")
+        change = _preview(
+            page,
+            _move("a", cursor["n8n"]),
+            _move("b", cursor["browser-tools"]),
+            _rule("c", "read_file"),
+        ).json()
+        page.queue = page.app.state.events.subscribe()
+        assert _apply(page, change["id"]).json()["state"] == "verified"
+        tools = data_dir(page.home) / TOOLS_FILE
+        end = time.monotonic() + 5
+        while not {"n8n", "browser-tools"} <= set(json.loads(tools.read_text())):
+            assert time.monotonic() < end, "the moved servers' tools were not read"
+            time.sleep(0.05)

@@ -460,13 +460,16 @@ def test_apply_and_undo_say_how_many_steps_are_done(tmp_path, fake, config):
     engine, gateway = gateway_engine(tmp_path, fake)
     change = engine.preview("gateway.move", move_steps(gateway, config))
     seen = []
-    engine.on_progress = lambda change_id, done, total: seen.append((change_id, done, total))
+    engine.on_progress = lambda change_id, done, total, step: seen.append(
+        (change_id, done, total, step)
+    )
     engine.apply(change.id)
-    assert seen == [(change.id, 1, 2), (change.id, 2, 2)]
+    # The last value is the index of the step just done, so the tray can name its row.
+    assert seen == [(change.id, 1, 2, 0), (change.id, 2, 2, 1)]
     seen.clear()
     engine.undo(change.id)
-    assert seen[-1] == (change.id, 2, 2)
-    assert all(done <= total for _, done, total in seen)
+    assert seen[0] == (change.id, 1, 2, 0) and seen[-1] == (change.id, 2, 2, None)
+    assert all(done <= total for _, done, total, _ in seen)
 
 
 def test_a_name_the_gateway_already_holds_is_refused(tmp_path, fake, config):

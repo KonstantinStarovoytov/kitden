@@ -61,7 +61,15 @@ from kitden.changes.actions import (
 )
 from kitden.changes.align import align_steps
 from kitden.changes.backup import ChangeStore
-from kitden.changes.batch import BATCH, Part, combine, first_clash, part_of, requests_in
+from kitden.changes.batch import (
+    BATCH,
+    Part,
+    combine,
+    first_clash,
+    part_of,
+    requests_in,
+    step_rows,
+)
 from kitden.changes.client_cli import CommandRunner
 from kitden.changes.engine import (
     ChangeRefusedError,
@@ -1322,10 +1330,13 @@ def create_app(
         if method is None:
             return _error("Unknown action.", 404)
         loop = asyncio.get_running_loop()
+        # A tray change names the row of each step (`row`); a row is done only once the whole
+        # change is verified.
+        rows = step_rows(engine.changes[change_id].rows or [])
 
-        def progress(change_id: str, done: int, total: int) -> None:
+        def progress(change_id: str, done: int, total: int, step: int | None) -> None:
             # The engine works in a thread; the open pages hear it on the event loop.
-            data = {"id": change_id, "done": done, "total": total}
+            data = {"id": change_id, "done": done, "total": total, "row": rows.get(step)}
             loop.call_soon_threadsafe(events.publish, "change_progress", data)
 
         async with write_lock:
@@ -1337,12 +1348,17 @@ def create_app(
             except ValueError as error:
                 return _error(str(error), 409)
             finally:
-                engine.on_progress = lambda change_id, done, total: None
+                engine.on_progress = lambda change_id, done, total, step: None
             if verb != "cancel":
                 await state.rescan()
         if verb == "apply" and change.state is ChangeState.VERIFIED:
-            # Servers just moved into the Kitden gateway: Details shows their tools soon.
-            moved = moved_in(change) if change.action == GATEWAY_MOVE else []
+            # Servers just moved into the Kitden gateway: Details shows their tools soon. In a
+            # tray change, only its move rows moved servers in.
+            if change.rows:
+                moves = [part_of(change, r) for r in change.rows if r["kind"] == GATEWAY_MOVE]
+            else:
+                moves = [change] if change.action == GATEWAY_MOVE else []
+            moved = [name for move in moves for name in moved_in(move)]
             if moved:
                 refresh_later(moved)
         events.publish("change_state")

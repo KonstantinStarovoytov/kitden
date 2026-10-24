@@ -169,6 +169,15 @@ def combine(parts: list[Part]) -> tuple[list[Step], list[list[int]]]:
     return steps, maps
 
 
+def step_rows(rows: list[dict]) -> dict[int, str]:
+    """Each step's row by index: the first row in tray order that lists it."""
+    found: dict[int, str] = {}
+    for row in rows:
+        for index in row["steps"]:
+            found.setdefault(index, row["id"])
+    return found
+
+
 def part_of(change: Change, row: dict) -> Change:
     """One row of a combined change as a change of the row's kind, sharing the steps: the
     review's words for that row read it."""
