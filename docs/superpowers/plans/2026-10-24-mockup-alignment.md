@@ -106,6 +106,8 @@ The mockup breaks several written rules. Each line gives the rule, what the mock
 
 ## Phase 2: Map engine
 
+**Carried from Phase 1:** `animateTo` swallows a throwing `animate()`: report or narrow it before the map leans on it. `.page` has `max-width: 1180px`, so the head's Map | List pill sits about 76 px left of the mockup's right edge; settle the page and map width here.
+
 **Files:** `static/js/map.js` (core), `static/js/gateway.js` and `library.js` callers, `tests/frontend/map.test.mjs`. **Mockup:** `MapView` (`place`, `move`, `link`, `draw`, `unlink`, `dash`, `undraw`, `drawIn`, `focus`, `unfocus`, `showX`, `hoverLink`); motion-spec M1–M3.
 
 - [ ] **Task 2.1 Blocks that stay.** Replace the full rebuild (`map.js:410-485`, `replaceChildren`) with keyed blocks moved by `transform`; `relayout()` tweens moved blocks 260 OUT3; new blocks enter, leaving blocks leave 180 IN3. Test: drawing twice keeps the same DOM nodes for unchanged ids.
@@ -127,6 +129,15 @@ The mockup breaks several written rules. Each line gives the rule, what the mock
 - [ ] **Task 3.6 Wire every action to the tray.** Details buttons, switches, ×, drags and cards add tray rows instead of opening a review. A click on a preview block or link takes its row out (D12). Remove the one-preview rule (`review.js:234-253`, `map-review.js:24`).
 
 ## Phase 4: Gateway page
+
+**Carried from Phase 1:**
+- `gateway.js` has its own local `icon()` and `ICONS` (~line 543). Remove them before importing `icon` from `dom.js`, or the module fails to parse.
+- Docked Details: the opaque top bar now shows a 17 px canvas notch beside the column, and the column covers the frame line. The floating panel (D5) fixes it.
+- In light, `.flag.info` text on a selected row (`--route-soft`) is 4.45:1. Give it `--ink-2` there.
+- The hint line has no fill and shares the bottom band with the review bar or tray. Decide whether a hint hides while a tray shows; set each page's hint text when its features exist.
+- The Details project choice row is always `aria-selected`, so it shows the tint and ring though it picks nothing. The tool picker's own look replaces it.
+- A plain `.btn` is 33 px beside 30 px inputs in the Add forms.
+- Split the dense "Small parts" paragraph in `docs/design.md`.
 
 **Files:** `static/js/gateway.js`, `gateway-details.js`, `gateway-drag.js`, `style.css`; backend `src/kitden/changes/actions.py`, `local_gateway/views.py`, client adapters. **Mockup:** `Gateway` (`spec`, `layout`, `toggle`, `select*`, `*Panel`, `wire*Panel`, `linkRemove`, `linkClick`, `linkPanel`, `dragStart`, `wireStart`, `connect`, `setConn`, `project`, `listHTML`, `filter`); motion-spec M2, M3, M5, M6. **Frames:** M1·1–M4·4 in `design/kitden.pen`.
 
@@ -165,6 +176,8 @@ Reuses Part 6 backend Task 5 (cards with `icon`, `name`, `clients`). **Files:** 
 - [ ] **Task 7.2 Changes.** Today / Yesterday groups with a rail and a dot per row; row = time, title, client tiles, lamp + word, Undo; undone row gets the strike line and muted title; first row selected with its panel open; Details card (Project, State, Backup, Takes effect, client tiles, history arrows, Technical details); "See it on the map"; Undo toast "Undid “…”. The backup is back in place." with "Redo…" as a fresh preview (D21).
 
 ## Phase 8: Check and finish
+
+**Carried from Phase 1:** `docs/images/how-it-works-dark.svg:47` still uses the old amber #E0A347. The active-option ring in the project menu also shows on the picked row when the menu opens by mouse; the mockup has no ring (owner to judge).
 
 - [ ] **Task 8.1 Side-by-side check.** For every frame in `design/kitden.pen`: run Kitden on the demo home (`docs/development.md`), set the same state, compare at 1440×900 in both themes. Use the Pencil MCP: `browser` `load-page` on the local Kitden URL and `return-screenshot`, next to `TakeScreenshot` of the frame. Note: Pencil's browser node swallows synthetic clicks, so set states through the page's own functions or check interactions in a normal browser.
 - [ ] **Task 8.2 Motion check.** Walk motion-spec M1–M8 with the page at "slow" (a dev-only `?slow=4` URL flag that multiplies `D()`; not shown in the UI) and confirm each duration and curve.
