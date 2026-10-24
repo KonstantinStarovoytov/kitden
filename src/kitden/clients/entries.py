@@ -4,6 +4,8 @@ The scan reads it with the entry, so the page knows which outside rows stay dire
 reading any file again. A move asks the same checks before its review.
 """
 
+import hashlib
+import json
 from typing import Any
 
 from kitden.local_gateway.settings import PLACEHOLDERS
@@ -32,6 +34,13 @@ def gateway_entry(entry: dict) -> dict:
     if headers:
         server["headers"] = headers
     return server
+
+
+def entry_key(entry: dict) -> str:
+    """Equal for two entries the Kitden gateway would run the same way, as a move compares
+    them: a hash of `gateway_entry`, so the key itself says nothing of a secret in it."""
+    text = json.dumps(gateway_entry(entry), sort_keys=True, default=str)
+    return hashlib.sha256(text.encode()).hexdigest()
 
 
 def _strings(value: Any) -> list[str]:

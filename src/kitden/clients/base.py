@@ -12,7 +12,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from kitden.clients import version_cache
-from kitden.clients.entries import entry_refusal
+from kitden.clients.entries import entry_key, entry_refusal
 from kitden.clients.versions import is_supported
 from kitden.model import (
     COPY_FOLDER,
@@ -210,8 +210,8 @@ def mcp_item(
     project: str | None = None,
     enabled: Enabled = Enabled.ON,
 ) -> Item:
-    """An MCP server item whose summary is already redacted (FR-006), and why the Kitden
-    gateway could not run it, as far as the entry itself says."""
+    """An MCP server item whose summary is already redacted (FR-006), why the Kitden gateway
+    could not run it, as far as the entry itself says, and the key a move compares it by."""
     entry = entry if isinstance(entry, dict) else {}
     redacted, secret = redact(entry)
     summary = tuple(
@@ -230,6 +230,7 @@ def mcp_item(
         secret_present=secret,
         summary=summary,
         stays_direct=entry_refusal(name, entry),
+        entry_key=entry_key(entry),
     )
 
 

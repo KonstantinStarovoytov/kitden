@@ -98,6 +98,23 @@ def test_outside_rows_name_their_columns_and_why_they_stay(tmp_path):
     assert row["stays"] == "github reads values from your shell; it stays direct for now."
 
 
+def test_a_name_set_up_differently_in_one_group_stays_with_the_moves_own_words(tmp_path):
+    with demo_page(tmp_path) as page:
+        # Codex gets files too, with one more argument than Cursor's.
+        config = page.home / ".codex/config.toml"
+        files = '\n[mcp_servers.files]\ncommand = "npx"\nargs = ["files-mcp", "--fast"]\n'
+        config.write_text(config.read_text() + files)
+        page.post("/api/rescan", headers=POST)
+        local = page.get("/api/gateway-view").json()["groups"]["local"]
+        row = next(r for r in local if r["name"] == "files")
+        targets = [{"item": item} for item in row["items"]]
+        body = {"action": "gateway.move", "targets": targets, "params": {"gateway": "kitden"}}
+        refused = page.post("/api/changes/preview", json=body, headers=POST)
+    assert row["columns"] == ["codex", "cursor"]
+    assert row["stays"] == "files is set up differently in Codex and Cursor; keep one first."
+    assert (refused.status_code, refused.json()["detail"]) == (422, row["stays"])
+
+
 def test_a_row_kept_from_the_last_good_read_stays(tmp_path):
     with demo_page(tmp_path) as page:
         (page.home / ".cursor/mcp.json").write_text("{ broken")

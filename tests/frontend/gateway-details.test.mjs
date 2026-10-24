@@ -178,6 +178,15 @@ test("Move all leaves out a name set up differently in two clients, as the mediu
   assert.deepEqual(labels(pair), ['Add another gateway…']);
 });
 
+test('Move all leaves out a name set up differently in two clients of one group', () => {
+  const stays = 'files is set up differently in Codex and Cursor; keep one first.';
+  const files = { ...row('files', 'codex', ['c', 'd']), clients: ['codex', 'cursor'], columns: ['codex', 'cursor'], stays };
+  const view = { ...VIEW, groups: { move: [GITHUB], local: [files], plugin: [] } };
+  const card = gatewayCard(KITDEN, { view, setup: SETUP, projects: PROJECTS, clients: FOUND });
+  assert.equal(card.actions[0].label, 'Move all 1…');
+  assert.deepEqual(card.actions[0].body.targets.map((t) => t.item), ['g']);
+});
+
 test('rules count projects in words, and an unread list is not known', () => {
   const two = [...PROJECTS, { id: 'p3', path: '/w/site', own_rules: 3 }];
   assert.deepEqual(facts(gatewayCard(KITDEN, { view: VIEW, setup: SETUP, projects: two, clients: FOUND })).at(-1), ['Rules', '2 projects have their own rules']);

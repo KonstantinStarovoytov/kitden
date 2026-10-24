@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from kitden.changes.actions import KITDEN_GATEWAY
+from kitden.changes.actions import KITDEN_GATEWAY, set_up_differently
 from kitden.clients.base import REMOVE_DIRECT
 from kitden.clients.entries import IN_PROJECT_FILES
 from kitden.model import Gateway, Item, ItemKind, Scope
@@ -96,7 +96,8 @@ def gateway_view(
 
     Each outside row has the client columns that load it (the Desktop Code tab counts as
     Claude Code), whether one of its entries is the project's own and replaces an all-projects
-    one (`override`), and the first reason a move would refuse it (`stays`), or None."""
+    one (`override`), and the first reason a move would refuse it (`stays`), or None. A move
+    takes the row's entries together, so two of them set up differently are such a reason."""
     ids = ([KITDEN_GATEWAY] if kitden is not None else []) + [g.id for g in gateways]
     # Per gateway and client: the servers that load in this scope and go through that gateway.
     connections: dict[str, dict[str, list[str]]] = {g: {c: [] for c in COLUMNS} for g in ids}
@@ -108,6 +109,8 @@ def gateway_view(
         "plugin": False,
     }
     loaded, overrides = loaded_mcp(inventory, project)
+    # The first entry of each row a move takes, which the others must equal.
+    firsts: dict[tuple[str, str], Item] = {}
     for item in loaded:
         if item.via_gateway:
             column = "claude_code" if item.client == DESKTOP else item.client
@@ -130,10 +133,14 @@ def gateway_view(
         )
         if item.client not in row["clients"]:
             row["clients"].append(item.client)
-        if REMOVE_DIRECT in item.actions:
-            row["items"].append(item.id)
         row["override"] = row["override"] or item.id in overrides
         row["stays"] = row["stays"] or stays(item, group)
+        if REMOVE_DIRECT in item.actions:
+            row["items"].append(item.id)
+            first = firsts.setdefault((group, item.name), item)
+            if item.entry_key != first.entry_key:
+                why = set_up_differently(item.name, first.client, item.client)
+                row["stays"] = row["stays"] or why
     for rows in groups.values():
         for row in rows.values():
             loads = {"claude_code" if c == DESKTOP else c for c in row["clients"]}

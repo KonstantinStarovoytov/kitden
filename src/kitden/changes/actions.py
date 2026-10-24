@@ -692,6 +692,14 @@ def tools_to_read(
     return wanted
 
 
+def set_up_differently(name: str, first: str, other: str) -> str:
+    """Why a move refuses a name whose entries differ: the gateway runs one entry per name.
+    `first` and `other` are the clients of the first entry and of the one that differs."""
+    a, b = CLIENT_WORDS[first], CLIENT_WORDS[other]
+    where = f"two places in {a}" if a == b else f"{a} and {b}"
+    return f"{name} is set up differently in {where}; keep one first."
+
+
 def local_move_steps(
     adapters: dict[str, ClientAdapter],
     items: list[Item],
@@ -728,10 +736,8 @@ def local_move_steps(
         remove, entry, server = _movable(adapters, item, known_projects)
         first = servers.setdefault(item.name, server)
         if server != first:
-            a = CLIENT_WORDS[found[item.name][0][0].client]
-            b = CLIENT_WORDS[item.client]
-            where = f"two places in {a}" if a == b else f"{a} and {b}"
-            raise ValueError(f"{item.name} is set up differently in {where}; keep one first.")
+            before = found[item.name][0][0].client
+            raise ValueError(set_up_differently(item.name, before, item.client))
         found.setdefault(item.name, []).append((item, entry))
         removes.append(remove)
     settings = load_settings(home)

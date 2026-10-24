@@ -334,6 +334,16 @@ test('no grip where the row stays', () => {
   assert.ok(gatewayTree({ ...view, gateways: [] }, OPTS).blocks.every((b) => !b.grip));
 });
 
+test('a name set up differently in two clients of one group has no grip and no "Move in…"', () => {
+  // The server's `stays` is the move's own refusal (gateway_view.py), so nothing offers the move.
+  const stays = 'files is set up differently in Codex and Cursor; keep one first.';
+  const files = { name: 'files', clients: ['codex', 'cursor'], columns: ['codex', 'cursor'], items: ['c', 'd'], stays, override: false };
+  const tree = gatewayTree({ ...MEDIUM_VIEW, groups: { ...MEDIUM_VIEW.groups, local: [files] } }, OPTS);
+  const shown = block(tree, 'outside:local:files');
+  assert.deepEqual([shown.grip, shown.move], [false, false]);
+  assert.equal(listRows(tree).find((r) => r.id === 'outside:local:files').action, 'open');
+});
+
 test('a Desktop Code tab entry draws its line from Claude Code', () => {
   const desk = { name: 'desk', clients: ['claude_desktop_code_tab'], columns: ['claude_code'], items: ['d'], stays: null, override: false };
   const tree = gatewayTree({ ...MEDIUM_VIEW, groups: { ...MEDIUM_VIEW.groups, move: [desk] } }, OPTS);

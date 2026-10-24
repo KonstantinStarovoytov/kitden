@@ -214,6 +214,10 @@ async def test_no_secret_in_any_output_and_no_network(home, network_attempts, ca
 
     leaked = [text for text in outputs if "SENTINEL" in text]
     assert leaked == []
+    # The key a move compares entries by is made from their secrets too: it stays server-side.
+    keys = {i.entry_key for i in build_inventory(home).items if i.entry_key}
+    assert keys
+    assert not any(key in text for text in outputs for key in [*keys, "entry_key"])
     # The instruction file holds a sentinel on its secret line, and it never shows.
     assert "SENTINEL_SECRET_INSTRUCTIONS" in (home / ".claude/CLAUDE.md").read_text()
     assert not any("SENTINEL_SECRET_INSTRUCTIONS" in text for text in outputs)

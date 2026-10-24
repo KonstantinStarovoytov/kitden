@@ -194,6 +194,7 @@ def _plain(value: Any) -> Any:
 
 def item_dict(item: Item) -> dict:
     data = _plain(asdict(item))
+    del data["entry_key"]  # derived from values that can be secrets
     data["id"] = item.id
     data["summary"] = dict(item.summary)
     data["source"]["id"] = item.source.id
