@@ -40,8 +40,8 @@
   --inset: #f0f2f5;
   --ink: #161a21;
   --ink-2: #464d5b;
-  --ink-3: #646b79;
-  --ink-4: #676d79;
+  --ink-3: #626977;
+  --ink-4: #636975;
   /* Lines are solid. --wire frames things; --link is the stroke of a map link. The soft and strong
      lines come from --wire here only, so each theme gets its own. */
   --wire: #e1e4e9;

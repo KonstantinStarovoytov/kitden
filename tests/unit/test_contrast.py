@@ -111,12 +111,8 @@ def blend(fill: str, base: str) -> str:
 
 def test_the_first_run_slot_is_readable_in_both_themes():
     # "No gateway yet" sits on --preview-fill over the canvas. Its name is --ink and its sentence
-    # --ink-2: --ink-3 is only 4.48:1 there in the light theme.
+    # --ink-2.
     assert "div.map .block.slot .block-meta { color: var(--ink-2); }" in CSS
-    assert (
-        round(contrast(LIGHT["--ink-3"], blend(LIGHT["--preview-fill"], LIGHT["--canvas"])), 2)
-        < 4.5
-    )
     for theme in (LIGHT, DARK, {**LIGHT, **DARK_AUTO}):
         fill = blend(theme["--preview-fill"], theme["--canvas"])
         for ink in ("--ink", "--ink-2"):
@@ -124,8 +120,8 @@ def test_the_first_run_slot_is_readable_in_both_themes():
 
 
 def test_a_preview_on_the_map_and_its_bar_are_readable_in_both_themes():
-    # A preview block's "Preview" is --ink-2 on the preview fill (--ink-3 is 4.48:1 there); the
-    # review bar's outcome line is --ink-2 on the raised panel.
+    # A preview block's "Preview" is --ink-2 on the preview fill; the review bar's outcome line is
+    # --ink-2 on the raised panel.
     assert "div.map .block.preview .block-meta { color: var(--ink-2); }" in CSS
     assert ".review-bar .bar-outcome { margin: 0; color: var(--ink-2);" in CSS
     for theme in (LIGHT, DARK, {**LIGHT, **DARK_AUTO}):
@@ -151,12 +147,11 @@ def test_facts_text_is_readable_on_the_details_column_in_both_themes():
 
 def test_the_find_chip_and_a_lit_list_row_are_readable_in_both_themes():
     # The chip sits on the search box (--inset); a lit List row's quiet words sit on the accent
-    # tint, where --ink-3 is only 4.48:1 in the light theme.
+    # tint and are --ink-2 there.
     assert ".tg-row.found .meta, .tg-row.found .tg-tools { color: var(--ink-2); }" in CSS
     # Only a group row's words need it: a match's own words stay --ink, never weaker than the rest.
     assert ".tg-row.group.found { color: var(--ink-2); }" in CSS
     assert ".tg-row.found { background: var(--route-soft); }" in CSS
-    assert contrast(LIGHT["--ink-3"], LIGHT["--route-soft"]) < 4.5
     for theme in (LIGHT, DARK):
         assert contrast(theme["--ink-2"], theme["--inset"]) >= 4.5
         assert contrast(theme["--ink-2"], theme["--route-soft"]) >= 4.5
@@ -167,13 +162,10 @@ FILLS = ("--canvas", "--panel", "--panel-raised", "--inset", "--dim", "--route-s
 
 
 def test_text_tokens_are_readable_on_every_fill_in_both_themes():
-    # Quiet text (--ink-3, --ink-4) is never put on the accent tint: --ink-3 is 4.48:1 there in
-    # the light theme, so a lit row uses --ink-2 (test_the_find_chip_and_a_lit_list_row...).
+    # Every text token on every fill, the selected block's tint (--route-soft) included.
     for theme in (LIGHT, DARK):
         for t in TEXT:
             for f in FILLS:
-                if f == "--route-soft" and t in ("--ink-3", "--ink-4"):
-                    continue
                 assert contrast(theme[t], theme[f]) >= 4.5, (t, f, theme[t], theme[f])
 
 

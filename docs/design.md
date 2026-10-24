@@ -28,8 +28,8 @@ Canonical asset: `src/kitden/web/static/brand/kitden.svg`. The sidebar and favic
 | Inset | #F0F2F5 | #12151A |
 | Main text | #161A21 | #F2F3F5 |
 | Secondary text | #464D5B | #C1C6CF |
-| Muted text | #646B79 | #A5ADBA |
-| Faint text (`--ink-4`) | #676D79 | #A5ADBA |
+| Muted text (`--ink-3`) | #626977 | #A5ADBA |
+| Faint text (`--ink-4`) | #636975 | #A5ADBA |
 | Line (`--wire`): borders and dividers, always solid | #E1E4E9 | #3B424D |
 | Link (`--link`): the stroke of a map link | #C3C8D0 | #59616F |
 | Action fill | #B34B2D | #B34B2D |
@@ -49,7 +49,7 @@ Canonical asset: `src/kitden/web/static/brand/kitden.svg`. The sidebar and favic
 | Off lamp (`--lamp-off`): icons, grips and hollow marks, never text | #80868F | #6B7381 |
 | Shadow (`--shadow`): a menu or card that floats | 0 18px 44px -18px rgb(26 31 42 / .28) | 0 18px 44px -14px rgb(0 0 0 / .7) |
 
-The brand mark is fixed; functional shades adapt for text contrast. Text on the action, success and dim fills, and diff text on its tint and on the drawer, keeps at least 4.5:1 in both themes (WCAG 2.2 AA, checked 2026-10-19); `tests/unit/test_contrast.py` holds the line. Icons, grips and hollow marks use `--lamp-off`, which fails 4.5:1 as text, so text uses `--ink-3` (`--ink-4` for the faintest). In the light theme `--ink-3` is 4.48:1 on the selection surface, so a lit row uses `--ink-2` there. `--ink-4` in the light theme is #676D79; the old #696F7B was 4.42:1 on the dim fill. Lines are solid colors: `--wire-soft` is `--wire` at 60%, and `--wire-strong` mixes 18% of the main text color into `--wire`. A map link takes `--link`; borders take a `--wire` line. Green text uses `--diff-add`, not the lamp color. Do not use the logo color for every small label. Success stays green, warnings amber and errors red, paired with text/shape. A server a client sets up on its own is joined to that client by a faint amber elbow (`--lamp-warn` at 55%): its calls skip Kitden's rules. Amber here marks a route outside the rules, not a fault. Vendor marks must retain their own permitted colors when verified; Claude, Cursor and Codex use local vendor icons (see `src/kitden/web/static/brand/clients/ATTRIBUTION.md`). Neutral monograms are used only for unknown clients or failed image loads.
+The brand mark is fixed; functional shades adapt for text contrast. Text on the action, success and dim fills, and diff text on its tint and on the drawer, keeps at least 4.5:1 in both themes (WCAG 2.2 AA, checked 2026-10-19); `tests/unit/test_contrast.py` holds the line. Icons, grips and hollow marks use `--lamp-off`, which fails 4.5:1 as text, so text uses `--ink-3` (`--ink-4` for the faintest). In the light theme these two are a hair darker than the mockup (#646B79) so text keeps 4.5:1 on a selected block. Lines are solid colors: `--wire-soft` is `--wire` at 60%, and `--wire-strong` mixes 18% of the main text color into `--wire`. A map link takes `--link`; borders take a `--wire` line. Green text uses `--diff-add`, not the lamp color. Do not use the logo color for every small label. Success stays green, warnings amber and errors red, paired with text/shape. A server a client sets up on its own is joined to that client by a faint amber elbow (`--lamp-warn` at 55%): its calls skip Kitden's rules. Amber here marks a route outside the rules, not a fault. Vendor marks must retain their own permitted colors when verified; Claude, Cursor and Codex use local vendor icons (see `src/kitden/web/static/brand/clients/ATTRIBUTION.md`). Neutral monograms are used only for unknown clients or failed image loads.
 
 ## Client marks
 
