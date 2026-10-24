@@ -28,10 +28,10 @@
 
     <div class="content" id="content">
       <div class="topbar" id="topbar">
-        <label class="where-box">
+        <div class="where-box" id="where-box">
           <span class="muted">Project:</span>
-          <select id="where" aria-label="Project"><option value="">All projects</option></select>
-        </label>
+          <button class="where" id="where" type="button" aria-label="Project" aria-haspopup="listbox" aria-expanded="false" disabled>…</button>
+        </div>
         <label class="search">
           <span aria-hidden="true">⌕</span>
           <input id="q" type="search" placeholder="Search your setup and marketplaces…" aria-label="Search your setup and marketplaces" autocomplete="off" spellcheck="false">

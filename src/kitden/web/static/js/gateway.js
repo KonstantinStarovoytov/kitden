@@ -4,8 +4,8 @@ import { $, busyWhile, button, el, joinWords, plural, reportError, webLink } fro
 import { drawMap, layoutTree, toggleOpen } from "./map.js";
 import { entrance, fold, reducedMotion } from "./motion.js";
 import { closePanel, contextLinks, heldActions, heldButtons, isPanelOpen, keepFrom, linksRow, moveInto, moveTargets, openInfo, openItem, review, toast, toolsSection } from "./panel.js";
-import { banner, CLIENT_ICONS, CLIENT_NAMES, clientCheck, DARK_ICONS, flag, GATEWAY_NOTE, gatewayName, kindOf, kitdenClients, mark, skeleton, staleNote, toolsNode } from "./parts.js";
-import { arrival, current, currentError, data, freshness, loadMap, reload, render, retry, sameSel, setState, state, takeArrival } from "./store.js";
+import { banner, CLIENT_ICONS, CLIENT_NAMES, clientCheck, DARK_ICONS, flag, folderName, GATEWAY_NOTE, gatewayName, kindOf, kitdenClients, mark, scopeBar, skeleton, staleNote, toolsNode } from "./parts.js";
+import { arrival, current, currentError, data, freshness, loadMap, projectPath, reload, render, retry, sameSel, setState, state, takeArrival } from "./store.js";
 
 const WRITABLE = ["claude_code", "codex", "cursor"];
 const GROUPS = [
@@ -89,6 +89,8 @@ export function renderGateway(main) {
     else main.append(skeleton("card", 2));
     return;
   }
+  // Under the head: what the page shows, the shared setup or a project's rules that differ from it.
+  main.append(scopeBar(folderName(projectPath()), model.own_rules));
   if (currentError("gateway")) main.append(staleNote(data.readAt.gateway));
   if (state.mode === "map") gatewayMap(main, model);
   else gatewayCards(main, model);

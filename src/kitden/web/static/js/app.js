@@ -8,9 +8,10 @@ import { renderGateway } from "./gateway.js";
 import { loadLibrary, loadLibraryFor, morphOnNextRender, raceSlow, renderLibrary, settleRows, showSources, snapshotRows } from "./library.js";
 import { renderOverview } from "./overview.js";
 import { closeForProject, closePanel, initPanel, isPanelOpen } from "./panel.js";
-import { ALL_PROJECTS, callout, demoTag, GONE_PROJECT, latestChanges, scanLine, versionsOpened } from "./parts.js";
+import { callout, demoTag, GONE_PROJECT, latestChanges, projectMenu, scanLine, versionsOpened } from "./parts.js";
 import {
-  arrival, busy, current, data, followHash, freshness, go, loadShared, OLD_VIEWS, onIdle, parseHash, projectGone, reload, setRenderer, setState, state,
+  arrival, busy, current, data, followHash, freshness, go, loadShared, OLD_VIEWS, onIdle, parseHash, projectGone, reload, setRenderer, setState, setSwitcher, state,
+  switchProject,
 } from "./store.js";
 
 const PLACES = {
@@ -68,27 +69,25 @@ function renderShell() {
   const time = lastGoodRead ? new Date(lastGoodRead).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "…";
   $("#scanned").textContent = `${time}${lastReadFailed ? " · could not refresh" : ""}`;
 
-  // Keep the picker compact; full paths are available on hover. A picked project no longer on
-  // the list keeps one option of its own, so the picker never shows All projects for it.
-  const where = $("#where");
-  const projects = data.projects || [];
-  const gone = projectGone() ? state.project : "";
-  const signature = JSON.stringify([projects.map(({ id, path, exists }) => [id, path, exists]), gone]);
-  if (where.dataset.projects !== signature) {
-    where.replaceChildren(new Option(ALL_PROJECTS, ""));
-    for (const project of projects) {
-      const name = project.path.split("/").filter(Boolean).pop() || project.path;
-      const option = new Option(`${name}${project.exists ? "" : " (folder missing)"}`, project.id);
-      option.title = project.path;
-      where.append(option);
-    }
-    if (gone) where.append(new Option("No longer on the list", gone));
-    where.dataset.projects = signature;
-  }
-  where.title = projects.find((project) => project.id === state.project)?.path || (gone ? GONE_PROJECT : ALL_PROJECTS);
-  where.value = state.project;
-  where.closest(".where-box").classList.toggle("project", Boolean(state.project));
+  drawPicker();
   if ($("#q") !== document.activeElement) $("#q").value = state.q;
+}
+
+// The project picker (parts.js projectMenu), drawn again when the list, a count or the pick
+// changes. A picked project no longer on the list has a row of its own, so the picker never says
+// All projects for it. While the list is unread, a picked project keeps the page's "…".
+function drawPicker() {
+  const box = $("#where-box");
+  box.classList.toggle("project", Boolean(state.project));
+  if (data.projects === null && state.project) return;
+  const projects = data.projects || [];
+  const signature = JSON.stringify([projects.map(({ id, path, exists, own_rules }) => [id, path, exists, own_rules]), state.project]);
+  if (box.dataset.projects === signature) return;
+  box.dataset.projects = signature;
+  const had = box.contains(document.activeElement);
+  // The "Project:" label stays; the button and its menu are drawn again.
+  box.replaceChildren(box.firstElementChild, projectMenu(projects, state.project, (id) => switchProject(id).catch(reportError)));
+  if (had) $("#where").focus({ preventScroll: true });
 }
 
 // A scope change cross-fades the page (the Library morphs its cells instead). The Library's
@@ -97,6 +96,22 @@ async function refresh({ fade = false } = {}) {
   await Promise.all([reload(), loadLibrary()]);
   if (fade) transition(renderPlace);
   else renderPlace();
+}
+
+// Another project is picked (store.js switchProject): Details close, the old page waits faded
+// until the new project is read, and the Library's cells turn into their new states.
+function refreshForProject() {
+  closeForProject();
+  drawPicker();
+  // On the Library, each cell turns into its state in the new scope instead of jumping.
+  if (state.view === "library") morphOnNextRender();
+  const main = $("#main");
+  main.classList.add("pending");
+  main.setAttribute("aria-busy", "true");
+  return refresh({ fade: state.view !== "library" }).catch(reportError).finally(() => {
+    main.classList.remove("pending");
+    main.removeAttribute("aria-busy");
+  });
 }
 
 // Theme: follows the system until the switch is used; the new theme spreads in a circle.
@@ -266,6 +281,7 @@ function start() {
   arrival.pending = Boolean(state.selected);
   if (OLD_VIEWS[location.hash.replace(/^#/, "").split("?")[0]]) setState({});
   setRenderer(renderPlace);
+  setSwitcher(refreshForProject);
 
   document.addEventListener("click", (event) => {
     const link = event.target.closest("a[data-view]");
@@ -278,20 +294,6 @@ function start() {
   $(".skip").addEventListener("click", (event) => {
     event.preventDefault();
     $("#main").focus();
-  });
-  $("#where").addEventListener("change", (event) => {
-    setState({ project: event.target.value, selected: null });
-    closeForProject();
-    // On the Library, each cell turns into its state in the new scope instead of jumping.
-    if (state.view === "library") morphOnNextRender();
-    // The old project's page stays until the new one is read, faded and marked as waiting.
-    const main = $("#main");
-    main.classList.add("pending");
-    main.setAttribute("aria-busy", "true");
-    refresh({ fade: state.view !== "library" }).catch(reportError).finally(() => {
-      main.classList.remove("pending");
-      main.removeAttribute("aria-busy");
-    });
   });
   $("#q").addEventListener("input", (event) => {
     const q = event.target.value.trim();

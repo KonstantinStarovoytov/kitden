@@ -90,14 +90,27 @@ def test_changes_say_why_a_change_stopped():
 
 
 def test_project_picker_says_project_not_where():
-    assert "Project:" in INDEX and "Where:" not in INDEX
-    assert 'aria-label="Project"' in INDEX
-    app = script("app.js")
-    assert 'new Option(ALL_PROJECTS, "")' in app and "No project" not in app
-    assert '<option value="">All projects</option>' in INDEX
-    assert "Global" not in app and "Global" not in INDEX
-    assert 'export const ALL_PROJECTS = "All projects";' in script("parts.js")
+    assert 'aria-label="Project"' in INDEX and "Where:" not in INDEX and "<select" not in INDEX
+    app, parts = script("app.js"), script("parts.js")
+    assert "projectMenu(" in app and "No project" not in app and "Global" not in app
+    for words in (
+        '"Find a project…"',
+        '"What applies in every project"',
+        '"own rule", "own rules"',
+        '"Folder missing"',
+        '"No longer on the list"',
+    ):
+        assert words in parts, words
+    assert 'export const ALL_PROJECTS = "All projects";' in parts
     assert "outside any project" not in script("library.js")
+
+
+def test_the_project_menu_keeps_paths_off_the_page_and_the_keys_in_the_find_box():
+    menu = script("parts.js").split("export function projectMenu")[1].split("\n}\n")[0]
+    assert "path" not in menu and "title" not in menu
+    for part in ('role", "listbox"', "aria-activedescendant", "stopPropagation()", "pointerdown"):
+        assert part in menu, part
+    assert ".where-box select" not in CSS
 
 
 def test_python_and_page_state_words_agree():
@@ -124,7 +137,9 @@ def test_python_and_page_origin_words_agree():
     assert ORIGIN_WORDS == {"override": "This project", "project": "Only this project"}
     for origin, word in ORIGIN_WORDS.items():
         assert f'{origin}: "{word}"' in parts, origin
-    assert "project override" not in parts + script("library.js") + panel()
+    # The old tag word is gone; only the scope bar's sentence (S.7) says "project overrides".
+    text = parts + script("library.js") + panel()
+    assert "project override" not in text.replace("project overrides stay separate", "")
 
 
 def test_a_cell_draws_its_tag_in_the_accent_family():
@@ -274,6 +289,15 @@ def test_scope_switch_marks_the_project_picker_and_the_lede():
     assert 'classList.toggle("project"' in script("app.js")
     assert ".where-box.project" in CSS
     assert 'classList.add("fresh")' in script("library.js")
+    # The Gateway says the scope under its head; the bar is accent with a project.
+    assert "scopeBar(" in script("gateway.js") and ".scope-bar.project" in CSS
+    parts = script("parts.js")
+    for words in (
+        '"Shared setup · project overrides stay separate"',
+        '"rule differs", "rules differ"',
+        "· follows the shared setup",
+    ):
+        assert words in parts, words
 
 
 def test_reduced_motion_turns_every_animation_off():
@@ -523,9 +547,10 @@ def test_the_rail_time_follows_every_render_not_only_a_refresh():
 def test_another_project_closes_the_panel():
     # Picked at the top, or by Back or an edited address (panel.test.mjs tests closeForProject).
     app = script("app.js")
-    picker = app.split('$("#where").addEventListener("change"')[1].split("\n  });\n")[0]
+    picker = app.split("function refreshForProject(")[1].split("\n}\n")[0]
     address = app.split("function fromAddress()")[1].split("\n}\n")[0]
     assert "closeForProject();" in picker and "closeForProject();" in address
+    assert "setSwitcher(refreshForProject)" in app
 
 
 def test_a_project_switch_marks_the_old_page_as_waiting():
@@ -989,7 +1014,7 @@ def test_a_project_no_longer_on_the_list_is_said_not_swapped():
         "parts.js"
     )
     app = script("app.js")
-    assert '"No longer on the list"' in app and "projectGone()" in app
+    assert '"No longer on the list"' in script("parts.js") and "projectGone()" in app
     shared = script("store.js").split("export async function loadShared()")[1].split("\n}\n")[0]
     assert 'state.project = ""' not in shared
 

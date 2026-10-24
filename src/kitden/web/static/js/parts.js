@@ -22,6 +22,174 @@ export function targetWords(target, folder = folderName(target && target.project
   if (target.scope === "others") return ` for all projects except ${folder}`;
   return target.scope === "all" ? " for all projects" : "";
 }
+// The project menu ---------------------------------------------------------------------------
+
+const FIND_PROJECT = "Find a project…";
+
+// The menu's rows: "All projects" first and always there, then each project by its folder name
+// (no path), narrowed by `text`. `count`: "3 own rules" when the project has rules of its own.
+// A picked project that left the list stays as a row of its own, so the menu never shows All
+// projects for it.
+export function menuItems(projects, picked, text = "") {
+  const find = text.trim().toLowerCase();
+  const all = { id: "", name: ALL_PROJECTS, sub: "What applies in every project", count: null, picked: picked === "" };
+  const named = projects
+    .map((p) => ({
+      id: p.id,
+      name: folderName(p.path),
+      sub: p.exists ? null : "Folder missing",
+      count: p.own_rules ? plural(p.own_rules, "own rule", "own rules") : null,
+      picked: p.id === picked,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  if (picked && !projects.some((p) => p.id === picked)) {
+    named.push({ id: picked, name: "No longer on the list", sub: null, count: null, picked: true });
+  }
+  return [all, ...named.filter((item) => item.name.toLowerCase().includes(find))];
+}
+
+// The option an arrow, Home or End moves to from option `at` of `count` (-1: none yet), or null
+// for any other key. It stops at the ends.
+export function optionAfter(key, at, count) {
+  if (!count) return null;
+  if (key === "ArrowDown") return Math.min(at + 1, count - 1);
+  if (key === "ArrowUp") return at < 0 ? count - 1 : Math.max(at - 1, 0);
+  if (key === "Home") return 0;
+  if (key === "End") return count - 1;
+  return null;
+}
+
+// The project picker: a button with the picked project's name, and a menu under it with a find
+// box and the options. Focus stays in the find box; the arrows move the active option, which
+// `aria-activedescendant` names. `onPick(id)` hears the choice ("" is All projects).
+export function projectMenu(projects, picked, onPick) {
+  const root = el("div", "where-pick");
+  const trigger = el("button", "where");
+  trigger.id = "where";
+  trigger.type = "button";
+  const name = el("span", "where-name", menuItems(projects, picked).find((item) => item.picked).name);
+  name.id = "where-picked";
+  const caret = el("span", "where-caret", "▾");
+  caret.setAttribute("aria-hidden", "true");
+  trigger.append(name, caret);
+  // The label stays "Project"; the picked name is its description, so a screen reader hears both.
+  for (const [key, value] of Object.entries({ "aria-label": "Project", "aria-haspopup": "listbox", "aria-expanded": "false", "aria-describedby": name.id })) {
+    trigger.setAttribute(key, value);
+  }
+
+  const menu = el("div", "where-menu");
+  menu.hidden = true;
+  const list = el("div", "where-list");
+  list.id = "where-list";
+  list.setAttribute("role", "listbox");
+  list.setAttribute("aria-label", "Projects");
+  const find = el("input", "where-find");
+  find.type = "text";
+  find.autocomplete = "off";
+  find.spellcheck = false;
+  for (const [key, value] of Object.entries({
+    placeholder: FIND_PROJECT, "aria-label": FIND_PROJECT, role: "combobox", "aria-autocomplete": "list", "aria-controls": list.id, "aria-expanded": "true",
+  })) find.setAttribute(key, value);
+  menu.append(find, list);
+  root.append(trigger, menu);
+
+  let shown = [];
+  let active = -1;
+  const row = (item, at) => {
+    const node = el("div", "where-option");
+    node.id = `where-option-${at}`;
+    node.setAttribute("role", "option");
+    node.setAttribute("aria-selected", String(item.picked));
+    node.append(el("span", "where-label", item.name));
+    if (item.count) node.append(el("span", "where-count", item.count));
+    if (item.sub) node.append(el("span", "where-sub", item.sub));
+    node.addEventListener("click", () => pick(item));
+    return node;
+  };
+  function mark(at) {
+    active = at;
+    [...list.children].forEach((node, i) => node.classList.toggle("active", i === at));
+    const node = list.children[at];
+    if (node) {
+      find.setAttribute("aria-activedescendant", node.id);
+      node.scrollIntoView({ block: "nearest" });
+    } else {
+      find.removeAttribute("aria-activedescendant");
+    }
+  }
+  // Typed text makes the first match active (All projects stays first but is not a match), and
+  // Enter has nothing to pick when none matches. With no text, the picked project is active.
+  function draw() {
+    shown = menuItems(projects, picked, find.value);
+    list.replaceChildren(...shown.map(row));
+    mark(find.value.trim() ? (shown.length > 1 ? 1 : -1) : shown.findIndex((item) => item.picked));
+  }
+  function open() {
+    find.value = "";
+    draw();
+    menu.hidden = false;
+    trigger.setAttribute("aria-expanded", "true");
+    document.addEventListener("pointerdown", outside);
+    find.focus();
+  }
+  function close(back) {
+    menu.hidden = true;
+    trigger.setAttribute("aria-expanded", "false");
+    document.removeEventListener("pointerdown", outside);
+    if (back) trigger.focus();
+  }
+  function outside(event) {
+    if (!root.contains(event.target)) close(false);
+  }
+  function pick(item) {
+    close(true);
+    onPick(item.id);
+  }
+
+  trigger.addEventListener("click", () => (menu.hidden ? open() : close(true)));
+  trigger.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowDown") return;
+    event.preventDefault();
+    if (menu.hidden) open();
+  });
+  find.addEventListener("input", draw);
+  find.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      // Only the menu closes: Escape does not reach the page's own handler for Details.
+      event.preventDefault();
+      event.stopPropagation();
+      close(true);
+    } else if (event.key === "Tab") {
+      close(false);
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (shown[active]) pick(shown[active]);
+    } else {
+      const to = optionAfter(event.key, active, shown.length);
+      if (to === null) return;
+      event.preventDefault();
+      mark(to);
+    }
+  });
+  // A press on the list must not take focus from the find box, or the menu would close first.
+  list.addEventListener("mousedown", (event) => event.preventDefault());
+  return root;
+}
+
+// The scope line under a page head: the shared setup, or a project and how many of its rules
+// differ from it. `folder` is the project's folder name, "" with All projects. `count` is the
+// project's own rules on this page. With none, the project follows the shared setup.
+export function scopeText(folder, count) {
+  if (!folder) return "Shared setup · project overrides stay separate";
+  if (count > 0) return `Project ${folder} · ${plural(count, "rule differs", "rules differ")} from the shared setup`;
+  return `Project ${folder} · follows the shared setup`;
+}
+
+export function scopeBar(folder, count) {
+  return el("p", folder ? "scope-bar project" : "scope-bar", scopeText(folder, count));
+}
+
 // The twin of views/words.py STATE_WORDS.
 export const STATE_WORDS = {
   on: "On", off: "Off", over: "Overridden", unk: "Unknown", review: "Needs review", gw: "Via gateway",

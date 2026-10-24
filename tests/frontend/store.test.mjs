@@ -18,7 +18,7 @@ function fetchAnswers(map) { answers = map; failing = null; }
 function fetchFails(url) { failing = url; }
 const ALL_OK = {};
 
-const { current, currentError, data, followHash, freshness, go, goTo, hashFor, loadMap, MAP_AT, parseHash, parseSel, projectGone, reload, retry, selFor, setRenderer, state, takeArrival, toolSel, viewMode } = await import('../../src/kitden/web/static/js/store.js');
+const { current, currentError, data, followHash, freshness, go, goTo, hashFor, loadMap, MAP_AT, parseHash, parseSel, projectGone, reload, retry, selFor, setRenderer, setSwitcher, state, switchProject, takeArrival, toolSel, viewMode } = await import('../../src/kitden/web/static/js/store.js');
 
 beforeEach(() => { state.project = ''; });
 
@@ -174,4 +174,51 @@ test('Back switches Map and List, and a mode passed to go wins over the clear', 
   goTo('gateway', { kind: 'tool', name: 'files/read_file' }, { mode: 'map' });
   assert.equal(state.mode, 'map');
   assert.deepEqual(takeArrival(), { kind: 'tool', name: 'files/read_file' });
+});
+
+test('switching a project writes a new address entry and runs the switcher once', async () => {
+  const entries = [];
+  globalThis.history = { pushState: (_, __, hash) => entries.push(['push', hash]), replaceState: (_, __, hash) => entries.push(['replace', hash]) };
+  const order = [];
+  setSwitcher(async () => { order.push(`switch ${state.project}`); });
+  setRenderer(() => order.push('render'));
+  try {
+    go('overview');
+    go('gateway'); // no Map or List choice in the address
+    entries.length = 0;
+    order.length = 0;
+    state.selected = { kind: 'mcp_server', name: 'github' };
+    await switchProject('a');
+    assert.equal(state.project, 'a');
+    assert.equal(state.selected, null);
+    assert.deepEqual(entries, [['push', '#gateway?project=a']]);
+    assert.deepEqual(order, ['switch a']);
+    // The project that is picked already: nothing is written or read again.
+    await switchProject('a');
+    assert.equal(entries.length, 1);
+    assert.deepEqual(order, ['switch a']);
+    // A project asked for with goTo is switched to first; the selection and the place come after.
+    const tool = { kind: 'tool', name: 'files/read_file' };
+    order.length = 0;
+    await goTo('library', tool, { project: 'b', mode: 'list' });
+    assert.deepEqual(order, ['switch b', 'render']);
+    assert.equal(state.project, 'b');
+    assert.equal(state.view, 'library');
+    assert.deepEqual(state.selected, tool);
+    assert.deepEqual(takeArrival(), tool);
+    // The same project, or none asked for: no switch.
+    order.length = 0;
+    await goTo('gateway', tool, { project: 'b' });
+    await goTo('gateway', tool);
+    assert.deepEqual(order, ['render', 'render']);
+    // All projects is a project too: the empty id.
+    order.length = 0;
+    await goTo('gateway', null, { project: '' });
+    assert.equal(state.project, '');
+    assert.deepEqual(order, ['switch ', 'render']);
+  } finally {
+    delete globalThis.history;
+    setSwitcher(async () => {});
+    setRenderer(() => {});
+  }
 });

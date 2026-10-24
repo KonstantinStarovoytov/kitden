@@ -13,7 +13,11 @@ function element(tag) {
       contains: (name) => node.className.split(' ').includes(name),
       add: (name) => { if (!node.classList.contains(name)) node.className = `${node.className} ${name}`.trim(); },
       remove: (name) => { node.className = node.className.split(' ').filter((c) => c !== name).join(' '); },
+      toggle: (name, on) => node.classList[on ? 'add' : 'remove'](name),
     },
+    focus() { globalThis.document.activeElement = node; },
+    contains(other) { for (let at = other; at; at = at.parent) if (at === node) return true; return false; },
+    scrollIntoView() {},
     append(...nodes) { for (const n of nodes) { n.parent = node; node.children.push(n); } },
     replaceChildren(...nodes) { node.children = []; node.append(...nodes); },
     replaceWith(other) { node.parent.children[node.parent.children.indexOf(node)] = other; other.parent = node.parent; },
@@ -29,7 +33,7 @@ function element(tag) {
   return node;
 }
 globalThis.document = { createElement: element };
-const { backupNote, banner, changeTitle, clientCheck, demoTag, folderName, gatewayName, morphSocket, opens, socket, strictText } = await import('../../src/kitden/web/static/js/parts.js');
+const { backupNote, banner, changeTitle, clientCheck, demoTag, folderName, gatewayName, menuItems, morphSocket, opens, optionAfter, projectMenu, scopeBar, scopeText, socket, strictText } = await import('../../src/kitden/web/static/js/parts.js');
 
 test('a row that opens Details ends with a chevron for the eye and words for a screen reader', () => {
   const node = opens();
@@ -349,4 +353,214 @@ test('a source still being read says so on the tab it changes, not in the top ba
   // The top bar keeps "Still checking …"; the line says what it means here, not the same words.
   assert.ok(scanLine(open).text.startsWith('Still checking Codex plugins'));
   assert.ok(!LINE.includes('Still checking'));
+});
+
+// The project menu ----------------------------------------------------------------------------
+
+const PROJECTS = [
+  { id: 'w', path: '/u/work/website', exists: true, own_rules: 3 },
+  { id: 'a', path: '/u/work/api', exists: false, own_rules: 0 },
+  { id: 'm', path: '/u/mcp-gateway', exists: true, own_rules: 1 },
+];
+
+test('the project menu lists All projects first, then projects by name with their own rules', () => {
+  assert.deepEqual(menuItems(PROJECTS, 'm').map((i) => [i.name, i.count, i.sub, i.picked]), [
+    ['All projects', null, 'What applies in every project', false], ['api', null, 'Folder missing', false],
+    ['mcp-gateway', '1 own rule', null, true], ['website', '3 own rules', null, false]]);
+  assert.deepEqual(menuItems(PROJECTS, '').map((i) => i.picked), [true, false, false, false]);
+  assert.deepEqual(menuItems(PROJECTS, '', 'WEB').map((i) => i.name), ['All projects', 'website']);
+  assert.deepEqual(menuItems([], 'gone').map((i) => i.name), ['All projects', 'No longer on the list']);
+  assert.deepEqual(menuItems([], 'gone').map((i) => [i.id, i.picked]), [['', false], ['gone', true]]);
+  // No path reaches the menu.
+  assert.ok(!JSON.stringify(menuItems(PROJECTS, 'm')).includes('/u/'));
+});
+
+test('the scope bar says what the page shows', () => {
+  assert.equal(scopeText('', 0), 'Shared setup · project overrides stay separate');
+  assert.equal(scopeText('mcp-gateway', 1), 'Project mcp-gateway · 1 rule differs from the shared setup');
+  assert.equal(scopeText('mcp-gateway', 3), 'Project mcp-gateway · 3 rules differ from the shared setup');
+  assert.equal(scopeText('api', 0), 'Project api · follows the shared setup');
+  assert.equal(scopeText('', 4), 'Shared setup · project overrides stay separate');
+  const shared = scopeBar('', 0);
+  assert.equal(shared.textContent, 'Shared setup · project overrides stay separate');
+  assert.equal(shared.classList.contains('project'), false);
+  const project = scopeBar('api', 2);
+  assert.equal(project.textContent, 'Project api · 2 rules differ from the shared setup');
+  assert.equal(project.classList.contains('project'), true);
+});
+
+test('arrows, Home and End move through the options and stop at the ends', () => {
+  assert.equal(optionAfter('ArrowDown', 0, 4), 1);
+  assert.equal(optionAfter('ArrowDown', 3, 4), 3);
+  assert.equal(optionAfter('ArrowUp', 2, 4), 1);
+  assert.equal(optionAfter('ArrowUp', 0, 4), 0);
+  assert.equal(optionAfter('Home', 3, 4), 0);
+  assert.equal(optionAfter('End', 0, 4), 3);
+  // Nothing active yet: Down starts at the first option, Up at the last.
+  assert.equal(optionAfter('ArrowDown', -1, 4), 0);
+  assert.equal(optionAfter('ArrowUp', -1, 4), 3);
+  assert.equal(optionAfter('a', 1, 4), null);
+  assert.equal(optionAfter('ArrowDown', 0, 0), null);
+});
+
+// A project menu on the stub page: `press` sends a key to the find box; `type` fills it.
+function menuOn(picked = 'm') {
+  const document = globalThis.document;
+  const outside = {};
+  document.activeElement = null;
+  document.addEventListener = (type, listener) => { outside[type] = listener; };
+  document.removeEventListener = (type) => { delete outside[type]; };
+  const picks = [];
+  const root = projectMenu(PROJECTS, picked, (id) => picks.push(id));
+  const [trigger, menu] = root.children;
+  const find = menu.querySelector('.where-find');
+  const options = () => menu.querySelectorAll('.where-option');
+  const active = () => options().findIndex((o) => o.classList.contains('active'));
+  const keys = [];
+  return {
+    root, trigger, menu, find, picks, outside, options, active, keys,
+    open: () => trigger.listeners.click(),
+    press(key) {
+      let stopped = false;
+      find.listeners.keydown({ key, preventDefault() { stopped = true; keys.push(`default ${key}`); }, stopPropagation() { keys.push(`stop ${key}`); } });
+      return stopped;
+    },
+    type(text) { find.value = text; find.listeners.input(); },
+  };
+}
+
+test('the project menu is a button with the picked name, closed until it is pressed', () => {
+  const m = menuOn('m');
+  assert.equal(m.trigger.tag, 'button');
+  assert.equal(m.trigger.attributes['aria-label'], 'Project');
+  assert.equal(m.trigger.attributes['aria-haspopup'], 'listbox');
+  assert.equal(m.trigger.attributes['aria-expanded'], 'false');
+  assert.equal(m.trigger.querySelector('.where-name').textContent, 'mcp-gateway');
+  assert.equal(m.menu.hidden, true);
+  assert.equal(m.find.attributes.placeholder, 'Find a project…');
+  assert.equal(projectMenu(PROJECTS, '', () => {}).children[0].querySelector('.where-name').textContent, 'All projects');
+  assert.equal(projectMenu([], 'gone', () => {}).children[0].querySelector('.where-name').textContent, 'No longer on the list');
+});
+
+test('the button keeps the picked name for a screen reader, which its label would hide', () => {
+  const m = menuOn('m');
+  const name = m.trigger.querySelector('.where-name');
+  assert.ok(name.id);
+  assert.equal(m.trigger.attributes['aria-describedby'], name.id);
+});
+
+test('opening the menu moves focus into the find box, with the picked option active', () => {
+  const m = menuOn('m');
+  m.open();
+  assert.equal(m.menu.hidden, false);
+  assert.equal(m.trigger.attributes['aria-expanded'], 'true');
+  assert.equal(globalThis.document.activeElement, m.find);
+  assert.deepEqual(m.options().map((o) => o.attributes.role), ['option', 'option', 'option', 'option']);
+  assert.deepEqual(m.options().map((o) => o.attributes['aria-selected']), ['false', 'false', 'true', 'false']);
+  assert.equal(m.active(), 2);
+  assert.equal(m.find.attributes['aria-activedescendant'], m.options()[2].id);
+  assert.equal(m.menu.querySelector('.where-list').attributes.role, 'listbox');
+  // A row says its count and its sub line, never a path.
+  assert.deepEqual(m.options()[3].children.map((c) => c.textContent), ['website', '3 own rules']);
+  assert.deepEqual(m.options()[0].children.map((c) => c.textContent), ['All projects', 'What applies in every project']);
+  assert.deepEqual(m.options()[1].children.map((c) => c.textContent), ['api', 'Folder missing']);
+});
+
+test('Down, Up, Home and End move the active option, and Enter picks it', () => {
+  const m = menuOn('m');
+  m.open();
+  assert.equal(m.press('ArrowDown'), true);
+  assert.equal(m.active(), 3);
+  assert.equal(m.find.attributes['aria-activedescendant'], m.options()[3].id);
+  m.press('ArrowDown');
+  assert.equal(m.active(), 3);
+  m.press('Home');
+  assert.equal(m.active(), 0);
+  m.press('ArrowUp');
+  assert.equal(m.active(), 0);
+  m.press('End');
+  assert.equal(m.active(), 3);
+  m.press('ArrowUp');
+  assert.equal(m.active(), 2);
+  assert.equal(m.press('Enter'), true);
+  assert.deepEqual(m.picks, ['m']);
+  assert.equal(m.menu.hidden, true);
+  assert.equal(globalThis.document.activeElement, m.trigger);
+  assert.equal(m.trigger.attributes['aria-expanded'], 'false');
+});
+
+test('Enter on All projects picks the empty id', () => {
+  const m = menuOn('m');
+  m.open();
+  m.press('Home');
+  m.press('Enter');
+  assert.deepEqual(m.picks, ['']);
+});
+
+test('typing filters the projects, keeps All projects first and makes the first match active', () => {
+  const m = menuOn('');
+  m.open();
+  m.type('WEB');
+  assert.deepEqual(m.options().map((o) => o.children[0].textContent), ['All projects', 'website']);
+  assert.equal(m.active(), 1);
+  m.press('Enter');
+  assert.deepEqual(m.picks, ['w']);
+  // The text is gone the next time the menu opens.
+  m.open();
+  assert.equal(m.find.value, '');
+  assert.equal(m.options().length, 4);
+});
+
+test('a find that matches no project leaves Enter with nothing to pick', () => {
+  const m = menuOn('m');
+  m.open();
+  m.type('zzz');
+  assert.deepEqual(m.options().map((o) => o.children[0].textContent), ['All projects']);
+  assert.equal(m.active(), -1);
+  assert.equal(m.find.attributes['aria-activedescendant'], undefined);
+  m.press('Enter');
+  assert.deepEqual(m.picks, []);
+  assert.equal(m.menu.hidden, false);
+});
+
+test('Escape closes the menu, gives focus back to the button and stays out of Details', () => {
+  const m = menuOn('m');
+  m.open();
+  m.press('Escape');
+  assert.equal(m.menu.hidden, true);
+  assert.equal(globalThis.document.activeElement, m.trigger);
+  assert.deepEqual(m.keys, ['default Escape', 'stop Escape']);
+  assert.deepEqual(m.picks, []);
+});
+
+test('a press outside the menu closes it, a press inside does not, and Tab lets focus go', () => {
+  const m = menuOn('m');
+  m.open();
+  assert.ok(m.outside.pointerdown);
+  m.outside.pointerdown({ target: m.options()[0] });
+  assert.equal(m.menu.hidden, false);
+  m.outside.pointerdown({ target: { parent: null } });
+  assert.equal(m.menu.hidden, true);
+  assert.equal(m.outside.pointerdown, undefined);
+  m.open();
+  m.press('Tab');
+  assert.equal(m.menu.hidden, true);
+  assert.equal(globalThis.document.activeElement, m.find);
+});
+
+test('pressing the open button closes the menu, and Down on the button opens it', () => {
+  const m = menuOn('m');
+  m.trigger.listeners.keydown({ key: 'ArrowDown', preventDefault() {} });
+  assert.equal(m.menu.hidden, false);
+  m.open();
+  assert.equal(m.menu.hidden, true);
+  assert.equal(globalThis.document.activeElement, m.trigger);
+});
+
+test('a press on an option picks it', () => {
+  const m = menuOn('');
+  m.open();
+  m.options()[1].listeners.click();
+  assert.deepEqual(m.picks, ['a']);
+  assert.equal(m.menu.hidden, true);
 });

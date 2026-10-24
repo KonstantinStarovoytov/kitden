@@ -329,7 +329,7 @@ export function loadLibraryFor(choice) {
 
 export function renderLibrary(main) {
   main.append(el("h1", null, "Library"));
-  // The project goes by its folder name; the full path stays in the project picker's hover.
+  // The project goes by its folder name, as in the project picker.
   const folder = projectPath().split("/").filter(Boolean).pop();
   const lede = el("p", "lede", folder
     ? `What each client loads in the project ${folder}, and what you can add to it. Based on saved settings.`

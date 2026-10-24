@@ -68,6 +68,18 @@ let renderPlace = () => {};
 export function setRenderer(fn) { renderPlace = fn; }
 export function render() { renderPlace(); }
 
+// What app.js does once another project is picked: close Details, read the project, draw it.
+let readProject = async () => {};
+export function setSwitcher(fn) { readProject = fn; }
+
+// Pick another project (All projects is ""). The selection goes, the address gets a new entry so
+// Back returns, and the page reads the new project. It is done when that read is.
+export async function switchProject(id) {
+  if (id === state.project) return;
+  setState({ project: id, selected: null });
+  await readProject();
+}
+
 // "mcp_server:github" as { kind, name }: a known kind, then a name that is not empty (it may hold
 // ":" too). Anything else is null.
 export function parseSel(text) {
@@ -162,9 +174,10 @@ export function libraryChoice(selected) {
   return { kind: selected.kind, show: "mine", category: "", attention: false, q: "" };
 }
 
-// Open a place with an item selected; the place opens its Details. The project stays; `mode`
-// picks Map or List there.
-export function goTo(view, selected, { mode } = {}) {
+// Open a place with an item selected; the place opens its Details. The project stays, unless
+// `project` names another one: it is switched to and read first. `mode` picks Map or List there.
+export async function goTo(view, selected, { project, mode } = {}) {
+  if (project !== undefined && project !== state.project) await switchProject(project);
   arrival.pending = Boolean(selected);
   place(view, { selected, ...(view === "library" && selected ? libraryChoice(selected) : {}), ...(mode ? { mode } : {}) });
 }
