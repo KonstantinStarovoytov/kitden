@@ -391,8 +391,12 @@ test('the scope bar says what the page shows', () => {
   assert.equal(scopeText('', 0), 'Shared setup · project overrides stay separate');
   assert.equal(scopeText('mcp-gateway', 1), 'Project mcp-gateway · 1 rule differs from the shared setup');
   assert.equal(scopeText('mcp-gateway', 3), 'Project mcp-gateway · 3 rules differ from the shared setup');
-  assert.equal(scopeText('api', 0), 'Project api · follows the shared setup');
+  // Kitden counts only the gateway's rules: none of its own is not "follows the shared setup".
+  assert.equal(scopeText('api', 0), 'Project api · no rules of its own');
+  // The gateway settings could not be read (`null`): no count.
+  assert.equal(scopeText('api', null), 'Project api · rules not known');
   assert.equal(scopeText('', 4), 'Shared setup · project overrides stay separate');
+  assert.equal(scopeText('', null), 'Shared setup · project overrides stay separate');
   const shared = scopeBar('', 0);
   assert.equal(shared.textContent, 'Shared setup · project overrides stay separate');
   assert.equal(shared.classList.contains('project'), false);

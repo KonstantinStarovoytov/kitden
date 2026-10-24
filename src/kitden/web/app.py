@@ -825,8 +825,11 @@ def create_app(
     def _gateway_view(request, project, path):
         held, problem = _kitden(path)
         view = gateway_view(state.inventory, _registered(), path, kitden=held, problem=problem)
-        # The picked project's own rules, for the scope bar; 0 for all projects.
+        # The picked project's own rules, for the scope bar; 0 for all projects, and None when
+        # the gateway settings could not be read.
         rules = own_rules(load_settings(home), _chain(path)) if home is not None else 0
+        if problem:
+            rules = None
         return JSONResponse({**view, "own_rules": rules})
 
     async def gateway_tools(request: Request) -> JSONResponse:

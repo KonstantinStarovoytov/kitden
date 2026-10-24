@@ -903,14 +903,20 @@ def test_unreadable_gateway_settings_are_a_problem_not_an_empty_gateway(home):
     path = data_dir(home) / SETTINGS_FILE
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("{ not json")
+    website = project(home, "website")
     with page_for(home) as page:
         card = page.get("/api/gateway-view").json()["gateways"][0]
+        there = page.get(f"/api/gateway-view?project={project_id(page, website)}").json()
     assert (card["id"], card["servers"]) == ("kitden", [])
     assert card["problem"] == "Kitden could not read the gateway settings."
+    # Its rules are not known either: the scope bar must not say the project has none.
+    assert there["own_rules"] is None
 
     hold(home, {"files": FILES})
     with page_for(home) as page:
         assert "problem" not in page.get("/api/gateway-view").json()["gateways"][0]
+        there = page.get(f"/api/gateway-view?project={project_id(page, website)}").json()
+    assert there["own_rules"] == 0
 
 
 def test_strict_on_writes_the_mode_and_an_on_for_every_offered_tool(home):

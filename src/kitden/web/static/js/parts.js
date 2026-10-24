@@ -179,11 +179,14 @@ export function projectMenu(projects, picked, onPick) {
 
 // The scope line under a page head: the shared setup, or a project and how many of its rules
 // differ from it. `folder` is the project's folder name, "" with All projects. `count` is the
-// project's own rules on this page. With none, the project follows the shared setup.
+// project's own rules on this page, null when Kitden could not read them. Kitden counts only
+// the rules this page has, so none is "no rules of its own": the rest of the project's setup
+// may still differ.
 export function scopeText(folder, count) {
   if (!folder) return "Shared setup · project overrides stay separate";
+  if (count === null) return `Project ${folder} · rules not known`;
   if (count > 0) return `Project ${folder} · ${plural(count, "rule differs", "rules differ")} from the shared setup`;
-  return `Project ${folder} · follows the shared setup`;
+  return `Project ${folder} · no rules of its own`;
 }
 
 export function scopeBar(folder, count) {

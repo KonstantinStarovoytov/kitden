@@ -334,10 +334,13 @@ def test_scope_switch_marks_the_project_picker_and_the_lede():
     # The Gateway says the scope under its head; the bar is accent with a project.
     assert "scopeBar(" in script("gateway.js") and ".scope-bar.project" in CSS
     parts = script("parts.js")
+    # Kitden counts only the gateway's rules: it never claims a project follows the shared setup.
+    assert "follows the shared setup" not in parts
     for words in (
         '"Shared setup · project overrides stay separate"',
         '"rule differs", "rules differ"',
-        "· follows the shared setup",
+        "· no rules of its own`",
+        "· rules not known`",
     ):
         assert words in parts, words
 
