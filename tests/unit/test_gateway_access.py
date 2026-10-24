@@ -60,6 +60,23 @@ def test_all_projects_counts_the_projects_that_turn_a_server_on():
     assert (row["state"], row["on_in"], row["projects"]) == ("off", 2, 1)
 
 
+def test_only_this_project_needs_no_other_project_that_turns_the_server_on():
+    atlas, website = "/w/atlas", "/w/website"
+    both = settings_with(
+        {"echo": {"server": "off"}},
+        {atlas: {"echo": {"server": "on"}}, website: {"echo": {"server": "on"}}},
+    )
+    chains = {atlas: [atlas], website: [website]}
+    for project in (atlas, website):
+        row = held_servers(both, [project], ECHO_TOOLS, chains)[0]
+        assert (row["state"], row["differs"], row["on_elsewhere"]) == ("on", True, 1)
+    # Atlas alone turns it on; a folder under it follows its rule, so that one counts too.
+    alone = settings_with({"echo": {"server": "off"}}, {atlas: {"echo": {"server": "on"}}})
+    assert held_servers(alone, [atlas], ECHO_TOOLS, chains)[0]["on_elsewhere"] == 0
+    web = {**chains, f"{atlas}/web": [f"{atlas}/web", atlas]}
+    assert held_servers(alone, [atlas], ECHO_TOOLS, web)[0]["on_elsewhere"] == 1
+
+
 def test_the_medium_sample_counts_tools_and_own_rules(tmp_path):
     home = build_demo_home(tmp_path, "medium")
     settings, tools = load_settings(home), load_tools(home)

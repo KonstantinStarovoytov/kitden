@@ -149,11 +149,12 @@ function heldKind(server) {
   return "Hosted";
 }
 
-// A held server's tag in a project view: "Only this project" when only this project turns it on,
-// "This project" for any other rule of its own.
+// A held server's tag in a project view: "Only this project" when this project's own rule turns
+// it on and no other known project has it on (`on_elsewhere`), "This project" for any other rule
+// of its own.
 function heldTag(server, on) {
   if (server.origin !== "project") return null;
-  return on && server.differs ? ORIGIN_WORDS.project : ORIGIN_WORDS.override;
+  return on && server.differs && !server.on_elsewhere ? ORIGIN_WORDS.project : ORIGIN_WORDS.override;
 }
 
 // The Gateway as one tree for the map (map.js) and the List, from `view` (the /api/gateway-view

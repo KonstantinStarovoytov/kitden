@@ -177,6 +177,7 @@ def test_the_kitden_gateway_is_listed_and_local_servers_can_move(home):
                 "tool_list": [],
                 "on_count": 0,
                 "on_in": 0,
+                "on_elsewhere": 0,
                 "projects": 0,
             }
         ],
@@ -235,6 +236,7 @@ def test_the_kitden_card_lists_every_held_server_with_its_state_in_the_project(h
             "tool_list": listed,
             "on_count": 2,
             "on_in": 0,
+            "on_elsewhere": 0,
             "projects": 0,
         },
         {
@@ -249,6 +251,7 @@ def test_the_kitden_card_lists_every_held_server_with_its_state_in_the_project(h
             "tool_list": [],
             "on_count": 0,
             "on_in": 1,  # website turns it on
+            "on_elsewhere": 0,
             "projects": 1,
         },
     ]
@@ -264,6 +267,7 @@ def test_the_kitden_card_lists_every_held_server_with_its_state_in_the_project(h
         "tool_list": [],
         "on_count": 0,
         "on_in": 0,
+        "on_elsewhere": 0,
         "projects": 1,
     }
     assert "SENTINEL_SECRET_FILES" not in json.dumps(there)

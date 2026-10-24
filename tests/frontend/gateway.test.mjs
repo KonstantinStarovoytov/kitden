@@ -158,8 +158,8 @@ test('a held server says how many tools are on, or where it is on', () => {
 
 test('tags say where a rule comes from', () => {
   const servers = [
-    { ...MEDIUM_VIEW.gateways[0].servers[0], origin: 'project', differs: true, tool_list: [tool('write_file', 'off', 'writes', { origin: 'project' })] },
-    { ...MEDIUM_VIEW.gateways[0].servers[1], state: 'off', origin: 'project', differs: true },
+    { ...MEDIUM_VIEW.gateways[0].servers[0], origin: 'project', differs: true, on_elsewhere: 0, tool_list: [tool('write_file', 'off', 'writes', { origin: 'project' })] },
+    { ...MEDIUM_VIEW.gateways[0].servers[1], state: 'off', origin: 'project', differs: true, on_elsewhere: 0 },
   ];
   const view = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers }] };
   const tree = gatewayTree(view, { ...OPTS, picked: 'atlas' });
@@ -167,6 +167,9 @@ test('tags say where a rule comes from', () => {
   assert.equal(block(tree, 'held:kitden:files').tag, 'Only this project');
   assert.equal(block(tree, 'held:kitden:tracker').tag, 'This project');
   assert.equal(block(gatewayTree(MEDIUM_VIEW, OPTS), 'held:kitden:files').tag, null);
+  // Another project turns it on too (website, or a folder under atlas): not only this one.
+  const shared = { ...view, gateways: [{ ...view.gateways[0], servers: [{ ...servers[0], on_elsewhere: 1 }] }] };
+  assert.equal(block(gatewayTree(shared, { ...OPTS, picked: 'atlas' }), 'held:kitden:files').tag, 'This project');
 });
 
 test('the list has clients, each gateway with Remote and Local, then the outside group', () => {

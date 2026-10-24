@@ -147,9 +147,10 @@ def held_servers(
     (the cache) knows for it. Commands, addresses and env stay out.
 
     Also its known tools with their states (`tool_list`) and how many are on (`on_count`);
-    with all projects and the server off, how many known projects turn it on (`on_in`); and
-    how many known projects have rules of their own for it (`projects`). `chains` maps every
-    known project to its chain."""
+    with all projects and the server off, how many known projects turn it on (`on_in`); with a
+    picked project, how many other known projects have it on (`on_elsewhere`, a folder under it
+    by its rule too); and how many known projects have rules of their own for it (`projects`).
+    `chains` maps every known project to its chain."""
     rules = settings["rules"]["projects"]
     known = chains or {}
     cards = []
@@ -171,9 +172,12 @@ def held_servers(
                     "origin_from": found["origin_from"],
                 }
             )
-        on_in = 0
+        on_in = on_elsewhere = 0
         if not chain and not server_on:
             on_in = sum(state_in(settings, c, name, None) == "on" for c in known.values())
+        if chain:
+            others = [c for p, c in known.items() if p != chain[0]]
+            on_elsewhere = sum(state_in(settings, c, name, None) == "on" for c in others)
         cards.append(
             {
                 "name": name,
@@ -187,6 +191,7 @@ def held_servers(
                 "tool_list": listed,
                 "on_count": sum(t["effective"] == "on" for t in listed),
                 "on_in": on_in,
+                "on_elsewhere": on_elsewhere,
                 "projects": sum(bool(_ruled(rules.get(p), name)) for p in known),
             }
         )
