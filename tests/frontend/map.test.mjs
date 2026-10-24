@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js (for its columns) needs only this from a browser to load.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { GAP, NARROW_GAP, appeared, blockOrder, findChip, findIn, foldable, isNarrow, layoutTree, litFrom, litPath, toggleOpen, unfoldDelays } = await import('../../src/kitden/web/static/js/map.js');
+const { GAP, NARROW_GAP, appeared, blockOrder, dropAt, findChip, findIn, foldable, isNarrow, layoutTree, litFrom, litPath, toggleOpen, unfoldDelays } = await import('../../src/kitden/web/static/js/map.js');
 const { cutName } = await import('../../src/kitden/web/static/js/dom.js');
 const { GATEWAY_COLUMNS } = await import('../../src/kitden/web/static/js/gateway.js');
 
@@ -242,4 +242,29 @@ test('a block folds when it holds something, also before its tools are read', ()
   // A server with no tools still folds, so it can say it is open.
   const empty = { ...m, blocks: m.blocks.map((b) => (b.id === 'held:kitden:files' ? { ...b, count: 0 } : b)) };
   assert.ok(foldable(empty).has('held:kitden:files'));
+});
+
+test('a drop names the column under the point', () => {
+  const l = layoutTree(model(3, 2), { open: new Set(), ...WIDE });
+  const servers = l.columns.find((c) => c.id === 'servers');
+  const clients = l.columns.find((c) => c.id === 'clients');
+  assert.equal(dropAt(l, servers.x + 10, l.height - 1), 'servers');
+  assert.equal(dropAt(l, clients.x + clients.w / 2, 5), 'clients');
+  // The whole height counts, also where the column has no block.
+  assert.equal(dropAt(l, servers.x + servers.w, 0), 'servers');
+  // Between two columns, above or below the map: no column.
+  assert.equal(dropAt(l, servers.x - GAP / 2, 10), null);
+  assert.equal(dropAt(l, servers.x + 10, -1), null);
+  assert.equal(dropAt(l, servers.x + 10, l.height + 1), null);
+});
+
+test('a preview or a slot in a long group always shows, after N more', () => {
+  const m = model(0, 9);
+  m.blocks.push({ id: 'preview:x', column: 'servers', parent: 'group:outside', kind: 'preview', name: 'x', state: 'preview' });
+  const l = layoutTree(m, { open: new Set(), ...WIDE });
+  const shown = l.blocks.filter((b) => b.id.startsWith('outside:') || b.id.startsWith('more:') || b.id === 'preview:x').map((b) => b.id);
+  assert.equal(shown.length, 7);
+  assert.deepEqual(shown.slice(5), ['more:group:outside', 'preview:x']);
+  // "N more" counts only what it hides.
+  assert.equal(l.blocks.find((b) => b.id === 'more:group:outside').name, '4 more');
 });

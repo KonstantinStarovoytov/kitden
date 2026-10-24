@@ -157,12 +157,17 @@ export function footerActions(offers, warnings, move, adds = [], tools = null) {
   return { lead, rest: options.filter((o) => o !== lead) };
 }
 
+// The preview request that moves `items` (entry ids) into `gateway`. A drag on the Gateway map
+// asks the same (gateway.js dropBody).
+export function moveBody(gateway, items) {
+  return { action: "gateway.move", targets: items.map((item) => ({ item })), params: { gateway: gateway.id } };
+}
+
 // Move entries into a gateway. With one gateway that can take them the review opens at once;
 // with two the panel asks which, the Kitden gateway first. A move into the Kitden gateway may
 // ask the server for its tools first, so the button that started it stays busy until then.
 export function moveInto(gateways, items, title) {
-  const targets = items.map((item) => ({ item }));
-  const preview = (gateway) => review({ action: "gateway.move", targets, params: { gateway: gateway.id } });
+  const preview = (gateway) => review(moveBody(gateway, items));
   if (gateways.length === 1) return preview(gateways[0]);
   const body = el("div", "body");
   body.append(el("p", "muted", "More than one gateway can take it. The Kitden gateway runs on this Mac and turns tools on or off per project."));

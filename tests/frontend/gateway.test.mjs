@@ -4,7 +4,8 @@ import { test } from 'node:test';
 // gateway.js needs only this from a browser to load; the tests call its pure parts.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { GATEWAY_COLUMNS, findRows, gatewayTree, heldServer, kitdenLinks, listAt, listRows, narrowFor, serverCount } = await import('../../src/kitden/web/static/js/gateway.js');
+const { GATEWAY_COLUMNS, dropBody, findRows, gatewayTree, heldServer, kitdenLinks, listAt, listRows, narrowFor, serverCount } = await import('../../src/kitden/web/static/js/gateway.js');
+const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
 const { offersSwitch } = await import('../../src/kitden/web/static/js/gateway-details.js');
 const { blockLabel, findChip, findIn, keepOpen, layoutTree, pressOpen } = await import('../../src/kitden/web/static/js/map.js');
 const { kitdenClients } = await import('../../src/kitden/web/static/js/parts.js');
@@ -458,4 +459,60 @@ test('a tool the search showed stays on the map when the search ends', () => {
   assert.equal(keepOpen(tree, mine, block(tree, 'tool:files/read_file')), mine);
   assert.equal(keepOpen(tree, mine, block(tree, 'outside:move:docs')), mine);
   assert.deepEqual([...mine], ['held:kitden:files']);
+});
+
+test("a drag's preview equals the Move preview", () => {
+  const row = MEDIUM_VIEW.groups.move.find((r) => r.name === 'github');
+  assert.deepEqual(dropBody(row, MEDIUM_VIEW), moveBody(moveTargets(MEDIUM_VIEW, 'move')[0], row.items));
+  // A drop always moves into the Kitden gateway, also with a registered gateway that takes it.
+  const obot = { id: 'gw-1', kind: 'obot', movable: true };
+  assert.deepEqual(dropBody(row, { ...MEDIUM_VIEW, gateways: [obot, ...MEDIUM_VIEW.gateways] }).params, { gateway: 'kitden' });
+  assert.equal(dropBody(row, { ...MEDIUM_VIEW, gateways: [obot] }), null);
+});
+
+test("a drag takes only its own row's entries", () => {
+  const docs = MEDIUM_VIEW.groups.local.find((r) => r.name === 'docs');
+  assert.deepEqual(dropBody(docs, MEDIUM_VIEW).targets, docs.items.map((item) => ({ item })));
+});
+
+test('a preview shows a preview block and link in the right group', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, preview: { name: 'github', kind: 'remote' } });
+  const shown = block(tree, 'preview:github');
+  assert.deepEqual([shown.parent, shown.kind, shown.state, shown.column, shown.meta], ['group:kitden:remote', 'preview', 'preview', 'servers', 'Preview']);
+  assert.equal(blockLabel(shown), 'github, Preview');
+  assert.ok(keys(tree).includes('gateway:kitden>preview:github preview'));
+  // It comes after the group's servers, before the Local group.
+  const ids = tree.blocks.filter((b) => b.column === 'servers').map((b) => b.id);
+  assert.deepEqual(ids.slice(0, 4), ['group:kitden:remote', 'held:kitden:tracker', 'preview:github', 'group:kitden:local']);
+  // The row being moved hides its direct line while the preview is there; the other docs keeps its own.
+  assert.ok(!keys(tree).includes('client:claude_code>outside:move:github direct'));
+  assert.ok(keys(tree).includes('client:claude_code>outside:move:docs direct'));
+  // One preview at a time: no grips while it shows.
+  assert.ok(tree.blocks.every((b) => !b.grip));
+  // A local server goes to Local; a group the gateway does not have yet comes with it, Remote first.
+  const local = gatewayTree(MEDIUM_VIEW, { ...OPTS, preview: { name: 'docs', kind: 'local' } });
+  assert.equal(block(local, 'preview:docs').parent, 'group:kitden:local');
+  assert.ok(!keys(local).includes('client:codex>outside:local:docs direct') && keys(local).includes('client:claude_code>outside:move:docs direct'));
+  const onlyLocal = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers: [MEDIUM_VIEW.gateways[0].servers[0]] }] };
+  const fresh = gatewayTree(onlyLocal, { ...OPTS, preview: { name: 'github', kind: 'remote' } });
+  assert.deepEqual(fresh.blocks.filter((b) => b.column === 'servers').map((b) => b.id).slice(0, 4), ['group:kitden:remote', 'preview:github', 'group:kitden:local', 'held:kitden:files']);
+  assert.equal(block(fresh, 'group:kitden:remote').name, 'Remote');
+});
+
+test('a drag opens the slot "Drop to add" in its group, and its line hides', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, drop: { name: 'github', kind: 'remote' } });
+  const slot = tree.blocks.find((b) => b.kind === 'slot');
+  assert.deepEqual([slot.name, slot.parent, slot.state, slot.column], ['Drop to add', 'group:kitden:remote', 'preview', 'servers']);
+  assert.ok(keys(tree).includes(`gateway:kitden>${slot.id} preview`));
+  assert.ok(!keys(tree).includes('client:claude_code>outside:move:github direct'));
+  assert.ok(!tree.blocks.some((b) => b.kind === 'preview'));
+  // The gateway is still a gateway block: the slot is not a first run.
+  assert.equal(block(tree, 'gateway:kitden').kind, 'gateway');
+});
+
+test('a grip shows only where the Kitden gateway can take the server', () => {
+  const obot = { id: 'gw-1', kind: 'obot', movable: true };
+  const tree = gatewayTree({ ...MEDIUM_VIEW, gateways: [obot], connections: {}, used: [] }, OPTS);
+  assert.ok(tree.blocks.filter((b) => b.kind === 'outside').every((b) => !b.grip));
+  assert.ok(block(gatewayTree(MEDIUM_VIEW, OPTS), 'outside:move:github').grip);
 });

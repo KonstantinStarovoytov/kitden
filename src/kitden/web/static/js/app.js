@@ -10,6 +10,7 @@ import { findChip } from "./map.js";
 import { renderOverview } from "./overview.js";
 import { closeForProject, closePanel, initPanel, isPanelOpen } from "./panel.js";
 import { callout, demoTag, GONE_PROJECT, latestChanges, projectMenu, scanLine, versionsOpened } from "./parts.js";
+import { leaveMap } from "./review.js";
 import {
   arrival, busy, current, data, followHash, freshness, go, loadShared, OLD_VIEWS, onIdle, parseHash, projectGone, reload, setRenderer, setState, setSwitcher, state,
   switchProject,
@@ -35,6 +36,8 @@ const MAP_PAGES = ["gateway"];
 
 function renderPlace() {
   if (shownView !== state.view && isPanelOpen()) closePanel({ instant: true, keepSelection: true, focus: false });
+  // A preview started on the Gateway map stays there: another place cancels one only previewed.
+  if (state.view !== "gateway") leaveMap();
   const samePlace = shownView === state.view;
   shownView = state.view;
   const main = $("#main");

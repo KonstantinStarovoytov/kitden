@@ -6,11 +6,11 @@ import { openItem } from "./details.js";
 import { $, $$, button, el, focusKey, reportError } from "./dom.js";
 import { onOpenItem } from "./library.js";
 import { finishTransition } from "./motion.js";
-import { checkStale } from "./review.js";
+import { checkStale, leaveMap, mapPreview } from "./review.js";
 import { arrival, busy, setState, state } from "./store.js";
 import { reloadTools } from "./tools.js";
 
-export { backToDetails, contextLinks, countedDefinition, detailsCard, footerActions, footerButtons, heldActions, heldButtons, keepFrom, kindWord, layerState, linksRow, loadsLede, moveFor, moveInto, moveTargets, offerLabel, openItem, plainSecrets, projectChoice, scopeWords, techRows, technical } from "./details.js";
+export { backToDetails, contextLinks, countedDefinition, detailsCard, footerActions, footerButtons, heldActions, heldButtons, keepFrom, kindWord, layerState, linksRow, loadsLede, moveBody, moveFor, moveInto, moveTargets, offerLabel, openItem, plainSecrets, projectChoice, scopeWords, techRows, technical } from "./details.js";
 export { callsText, projectLabel, refreshTools, toolRows, toolsSection, writingToolsOn } from "./tools.js";
 export { ADDS, addScope, afterParts, alignGroups, canShowReview, cancelTarget, changeOutcome, changeWords, chosenKeys, leftOutText, review, reviewLede, undoChange } from "./review.js";
 
@@ -153,9 +153,11 @@ export function closePanel({ instant = false, keepSelection = false, focus = tru
 
 // Another project picked (at the top, or by Back or an edited address) closes the panel, and an
 // open review is cancelled as Cancel does: a switch in it never acts on a project it does not name.
-// The selection is the caller's: the picker clears it, an address brings its own.
+// So is a preview on the Gateway map. The selection is the caller's: the picker clears it, an
+// address brings its own.
 export function closeForProject() {
   if (isPanelOpen() && openedIn !== state.project) closePanel({ focus: false, keepSelection: true });
+  if (mapPreview.project !== state.project) leaveMap();
 }
 
 // A review left without Apply: the server forgets its preview. Sent once: the change is marked

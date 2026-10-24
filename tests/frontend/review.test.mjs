@@ -5,8 +5,10 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; review.js must load there too.
 delete globalThis.navigator;
-const { PLACE_IN_TITLE, changeWords, checkStale, reviewLede, staleCheckWanted, targetWords } = await import('../../src/kitden/web/static/js/review.js');
+const { PLACE_IN_TITLE, applyOnMap, barWords, cancelOnMap, changeWords, checkStale, leaveMap, mapPreview, outcomeLine, previewOnMap, review, reviewLede, staleCheckWanted, targetWords, writingLine } = await import('../../src/kitden/web/static/js/review.js');
 const { panelState } = await import('../../src/kitden/web/static/js/panel.js');
+const { moveBody } = await import('../../src/kitden/web/static/js/details.js');
+const { busy, state } = await import('../../src/kitden/web/static/js/store.js');
 
 const target = (scope, project = null, others = false) => ({ scope, project, others_unchanged: others });
 const remove = { action: 'mcp.remove_direct', steps: [{ client: 'codex', name: 'neon' }] };
@@ -174,5 +176,166 @@ test('Preview again drops this preview once and asks for the same change again',
     assert.equal(review.change.state, 'cancelled');
   } finally {
     page.done();
+  }
+});
+
+// The map's review bar (S.8): a preview started on the map shows there, not in Details.
+const IDLE = { body: null, change: null, phase: 'idle', done: 0, total: 0, failure: null, refused: null };
+const change = { id: 'c1', action: 'gateway.move', steps: [{ client: 'kitden', name: 'github' }, { client: 'claude_code', name: 'github' }], after: [{ client: 'claude_code', state: 'gw', word: 'Via gateway' }], target: { scope: 'all' } };
+
+test('the bar says what will happen, then what is being written', () => {
+  const body = moveBody({ id: 'kitden', kind: 'kitden' }, ['i1']);
+  assert.deepEqual(barWords({ ...IDLE, phase: 'ready', change, body }).outcome, 'Claude Code: Via gateway.');
+  const applying = barWords({ ...IDLE, phase: 'applying', change, body, done: 1, total: 3 });
+  assert.deepEqual([applying.apply, applying.outcome, applying.cancelWaits], ['Applying 1 of 3', 'Writing the settings of the Kitden gateway and Claude Code. A backup is kept.', true]);
+  assert.equal(writingLine([{ client: 'claude_code' }]), "Writing Claude Code's settings. A backup is kept.");
+});
+
+test('an error stays and says nothing changed when nothing was written', () => {
+  const stale = barWords({ ...IDLE, phase: 'failed', change, body: {}, failure: { state: 'stale' } });
+  assert.ok(stale.outcome.endsWith('Nothing was changed.')); assert.equal(stale.retry, true);
+  const refused = barWords({ ...IDLE, phase: 'failed', refused: 'github signs in with OAuth; it stays direct for now.' });
+  assert.equal(refused.outcome, 'github signs in with OAuth; it stays direct for now. Nothing was changed.'); assert.equal(refused.retry, false);
+});
+
+test('the bar names the change with its scope, and each end says what Kitden knows', () => {
+  const body = moveBody({ id: 'kitden', kind: 'kitden' }, ['i1']);
+  const ready = barWords({ ...IDLE, phase: 'ready', change, body });
+  assert.deepEqual([ready.title, ready.apply, ready.cancelWaits, ready.retry], ['Move github into the Kitden gateway for all projects', 'Apply', false, false]);
+  // Before the server counts the steps, Apply says it is applying.
+  assert.equal(barWords({ ...IDLE, phase: 'applying', change, body }).apply, 'Applying…');
+  const failed = (failure) => barWords({ ...IDLE, phase: 'failed', change, body, failure });
+  assert.equal(failed({ state: 'stale' }).outcome, 'Settings changed since this preview. Nothing was changed.');
+  assert.equal(failed({ state: 'restored' }).outcome, 'The change did not check out. Nothing was changed.');
+  assert.equal(failed({ state: 'restored' }).apply, 'Try again');
+  // Unknown: it may have been written, so it never says nothing changed.
+  const lost = 'Could not confirm the result. Check Changes before trying again.';
+  assert.equal(failed({ state: null, text: lost }).outcome, lost);
+  // A refusal has no change to name or to apply: only Cancel.
+  const refused = barWords({ ...IDLE, phase: 'failed', body, refused: 'Refused.' });
+  assert.deepEqual([refused.title, refused.apply], ['Could not prepare this change', null]);
+});
+
+test("the outcome line groups the After chips by word, else the first note's first sentence", () => {
+  const after = [{ client: 'claude_code', state: 'gw', word: 'Via gateway' }, { client: 'codex', state: 'gw', word: 'Via gateway' }, { client: 'cursor', state: 'off', word: 'Removed' }];
+  assert.equal(outcomeLine({ after }), 'Claude Code and Codex: Via gateway. Cursor: Removed.');
+  assert.equal(outcomeLine({ after: [{ note: 'No client uses the Kitden gateway yet. Set one up first.' }] }), 'No client uses the Kitden gateway yet.');
+  assert.equal(outcomeLine({ after: [] }), '');
+  assert.equal(writingLine([{ client: 'kitden' }]), "Writing the Kitden gateway's settings. A backup is kept.");
+});
+
+// A fetch that answers each request by `answers(url, sent)` and records it.
+function stubFetch(answers) {
+  const asked = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options = {}) => {
+    const sent = options.body ? JSON.parse(options.body) : null;
+    asked.push({ url, method: options.method || 'GET', body: sent });
+    const { status = 200, json = {} } = (await answers(url, sent)) || {};
+    return { ok: status < 400, status, json: async () => json };
+  };
+  const done = () => {
+    globalThis.fetch = realFetch;
+    Object.assign(mapPreview, IDLE);
+    state.project = '';
+    busy.change = false;
+  };
+  return { asked, done };
+}
+const posts = (asked) => asked.filter((a) => a.method === 'POST').map((a) => a.url);
+const body = moveBody({ id: 'kitden', kind: 'kitden' }, ['g']);
+
+test("a map preview posts the move with the picked project; a refusal keeps the server's words", async () => {
+  const net = stubFetch(() => ({ status: 422, json: { detail: 'github signs in with OAuth; it stays direct for now.' } }));
+  try {
+    state.project = 'p1';
+    let drawn = 0;
+    await previewOnMap(body, () => { drawn += 1; });
+    assert.deepEqual(net.asked[0].body, { ...body, picked: 'p1' });
+    assert.deepEqual([mapPreview.phase, mapPreview.change, mapPreview.refused], ['failed', null, 'github signs in with OAuth; it stays direct for now.']);
+    // Drawn once while it is prepared and once with the answer.
+    assert.equal(drawn, 2);
+    // Cancel ends it; a refusal has nothing to cancel on the server.
+    await cancelOnMap(() => {});
+    assert.deepEqual([mapPreview.phase, posts(net.asked)], ['idle', ['/api/changes/preview']]);
+  } finally {
+    net.done();
+  }
+});
+
+test('one preview on the map at a time, and another project picked meanwhile drops it', async () => {
+  let n = 0;
+  const net = stubFetch((url) => (url === '/api/changes/preview' ? { json: { ...change, id: `c${++n}`, state: 'previewed' } } : { json: {} }));
+  try {
+    await previewOnMap(body, () => {});
+    assert.deepEqual([mapPreview.phase, mapPreview.change.id], ['ready', 'c1']);
+    // A second drop cancels the first preview on the server before it asks again.
+    await previewOnMap(body, () => {});
+    assert.deepEqual(posts(net.asked), ['/api/changes/preview', '/api/changes/c1/cancel', '/api/changes/preview']);
+    assert.equal(mapPreview.change.id, 'c2');
+    // Leaving the map cancels a preview that is only previewed.
+    leaveMap();
+    assert.deepEqual([mapPreview.phase, posts(net.asked).at(-1)], ['idle', '/api/changes/c2/cancel']);
+    // Another project picked while the server prepares it: it shows nothing, the server forgets it.
+    const asking = previewOnMap(body, () => {});
+    state.project = 'other';
+    await asking;
+    assert.equal(mapPreview.phase, 'idle');
+    assert.equal(posts(net.asked).at(-1), '/api/changes/c3/cancel');
+  } finally {
+    net.done();
+  }
+});
+
+test('Apply counts the steps; an error stays in the bar, and Cancel waits while it is written', async () => {
+  let progress = null;
+  globalThis.document = { addEventListener: (type, fn) => { if (type === 'kitden:progress') progress = fn; }, removeEventListener: () => {}, querySelector: () => null };
+  const net = stubFetch(async (url) => {
+    if (url === '/api/changes/preview') return { json: { ...change, state: 'previewed' } };
+    if (url === '/api/changes/c1/apply') {
+      progress({ detail: { id: 'c1', done: 1, total: 3 } });
+      assert.deepEqual([mapPreview.phase, mapPreview.done, mapPreview.total, busy.change], ['applying', 1, 3, true]);
+      // Cancel waits while it is written.
+      await cancelOnMap(() => {});
+      assert.equal(mapPreview.phase, 'applying');
+      return { status: 409, json: { ...change, state: 'stale' } };
+    }
+    return { json: {} };
+  });
+  try {
+    await previewOnMap(body, () => {});
+    const words = [];
+    await applyOnMap(() => words.push(barWords(mapPreview).apply));
+    assert.deepEqual(words.slice(0, 2), ['Applying…', 'Applying 1 of 3']);
+    assert.deepEqual([mapPreview.phase, mapPreview.failure.state, busy.change], ['failed', 'stale', false]);
+    assert.equal(barWords(mapPreview).outcome, 'Settings changed since this preview. Nothing was changed.');
+    // "Try again" is a new preview; the stale one is not cancelled on the server.
+    await previewOnMap(mapPreview.body, () => {});
+    assert.deepEqual([mapPreview.phase, posts(net.asked).filter((u) => u.endsWith('/cancel'))], ['ready', []]);
+  } finally {
+    net.done();
+    delete globalThis.document;
+  }
+});
+
+test('a review asked elsewhere first ends a preview on the map, and waits while one is written', async () => {
+  const net = stubFetch((url, sent) => {
+    if (url !== '/api/changes/preview') return { json: {} };
+    return sent.action === 'gateway.move' ? { json: { ...change, state: 'previewed' } } : { status: 422, json: { detail: 'Refused.' } };
+  });
+  try {
+    await previewOnMap(body, () => {});
+    const remove = { action: 'mcp.remove_direct', targets: [{ item: 'x' }], params: {} };
+    let backed = null;
+    const back = (answer) => { backed = answer; };
+    mapPreview.phase = 'applying';
+    await review(remove, { back });
+    assert.deepEqual([posts(net.asked).length, backed], [1, null]); // nothing asked while the map's change is written
+    mapPreview.phase = 'ready';
+    await review(remove, { back });
+    assert.deepEqual(posts(net.asked).slice(1), ['/api/changes/c1/cancel', '/api/changes/preview']);
+    assert.deepEqual([mapPreview.phase, backed], ['idle', { error: 'Refused.' }]);
+  } finally {
+    net.done();
   }
 });

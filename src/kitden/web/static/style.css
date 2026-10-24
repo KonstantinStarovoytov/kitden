@@ -556,8 +556,8 @@ div.map .block.selected, div.map .block.tool.selected[data-state] { background: 
 div.map .block.selected .block-meta { color: var(--ink-2); }
 div.map .block.client { gap: 6px; padding: 0 8px; }
 div.map.narrow .block.client .block-tile .client-mark, div.map.narrow .block.client .block-tile .mono-mark { --tile: 24px; }
-div.map.narrow .block.gateway, div.map.narrow .block.slot { padding: 0; }
-div.map.narrow .block.gateway .block-text, div.map.narrow .block.slot .block-text, div.map.narrow .block-action { display: none; }
+div.map.narrow .block.gateway, div.map.narrow .block.slot:not([data-state="preview"]) { padding: 0; }
+div.map.narrow .block.gateway .block-text, div.map.narrow .block.slot:not([data-state="preview"]) .block-text, div.map.narrow .block-action { display: none; }
 div.map.narrow .block[aria-expanded="true"]::after { display: none; }
 div.map .caption { position: absolute; display: block; margin: 0; padding: 4px 0 0; border: 0; background: none; color: var(--ink-3); font-size: 11px; font-weight: 600; line-height: 16px; text-align: left; overflow: hidden; }
 div.map button.caption { cursor: pointer; }
@@ -568,6 +568,32 @@ div.map .block.found { border-color: var(--route); box-shadow: 0 0 0 3px var(--r
 div.map .caption.found { color: var(--ink); }
 div.map.finding .block:not(.found), div.map.finding .caption:not(.found) { opacity: 0.35; }
 div.map.finding .link { opacity: 0.25; }
+/* A move on the map (S.8, 4.6): a block with a grip can be dragged; it lifts while it follows the
+   pointer or waits on the slot, which lights while the pointer is over Servers. A preview is drawn
+   with the preview line on the preview fill, joined to the gateway by a quiet accent link. */
+div.map .block:has(> .block-grip) { cursor: grab; touch-action: none; }
+div.map .block.dragging { z-index: 2; border-color: var(--route); background: var(--panel-raised); box-shadow: var(--shadow-pop); transition: none; }
+div.map .block.outside.dragging::before { display: none; }
+div.map.dropping .block.slot[data-state="preview"] { border-style: solid; border-color: var(--route); }
+div.map .block.preview { border: 1px solid var(--preview-line); background: var(--preview-fill); }
+div.map .block.preview .block-meta { color: var(--ink-2); }
+div.map .link.preview { stroke: var(--route); opacity: 0.6; }
+
+/* The review bar of a preview on the map (S.8): what it will do, Cancel, Apply and "Show changes".
+   It sits under the map at the left and stays in sight while the page scrolls. While Apply runs,
+   Cancel and Apply stay in place and wait. */
+.review-bar { position: sticky; bottom: 16px; z-index: 3; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; width: fit-content; max-width: 100%; margin: 0 0 12px; padding: 10px 12px 10px 14px; border-radius: 10px; background: var(--panel-raised); box-shadow: var(--shadow-pop); }
+.review-bar.failed { box-shadow: var(--shadow-pop), inset 3px 0 0 var(--danger); }
+.review-bar .bar-words { display: grid; gap: 2px; min-width: 0; max-width: 460px; }
+.review-bar .bar-title { font-size: 13px; font-weight: 600; }
+.review-bar .bar-outcome { margin: 0; color: var(--ink-2); font-size: 12px; }
+.review-bar .bar-actions { display: flex; gap: 6px; }
+.review-bar .btn[aria-disabled="true"] { cursor: progress; }
+.review-bar .btn:not(.primary)[aria-disabled="true"] { opacity: 0.5; }
+/* A drag on the map: the pointer says it holds something, and no text is selected on the way. */
+.grabbing, .grabbing * { cursor: grabbing !important; user-select: none; }
+/* A spinner that waits a moment first, so a quick answer never shows it. */
+.spinner.late { flex: none; animation: spin 600ms linear infinite, fade-in 180ms var(--ease-out) 150ms both; }
 
 /* Side panel: details and review share one surface */
 .scrim { position: fixed; inset: 0; z-index: 20; background: rgba(10, 12, 16, 0.22); opacity: 0; pointer-events: none; transition: opacity var(--t-panel) ease; }

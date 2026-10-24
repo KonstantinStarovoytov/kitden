@@ -1404,3 +1404,38 @@ def test_finding_keeps_the_place_and_the_details():
     assert "if (row.kept) return;" in text.split("function toggleRow(")[1].split("\n}\n")[0]
     find = text.split("export function findRows(")[1].split("\n}\n")[0]
     assert "postJson" not in find and "review(" not in find and "setState" not in find
+
+
+def test_the_map_review_bar_waits_for_verified():
+    review = script("review.js")
+    for words in (
+        '"Show changes"',
+        '"Try again"',
+        "Nothing was changed.",
+        "A backup is kept.",
+        "export function reviewBar(",
+        "previewOnMap(",
+    ):
+        assert words in review, words
+    assert '"Drop to add"' in gw() and "dropBody(" in gw() and "moveBody(" in script("details.js")
+    assert "Sign in after Apply" not in review
+
+
+def test_the_map_review_bar_words_and_look():
+    review = script("review.js")
+    # What is written, in the owner's words; the step count comes from the server.
+    assert "`Writing ${names[0]}'s settings. A backup is kept.`" in review
+    assert "`Writing the settings of ${joinWords(names)}. A backup is kept.`" in review
+    assert '"the Kitden gateway"' in review and 'stepText("Applying", done, total)' in review
+    # A refusal says why and keeps only Cancel; the bar is a region with a status line.
+    assert '"Could not prepare this change"' in review
+    assert 'setAttribute("role", "region")' in review and 'setAttribute("role", "status")' in review
+    # Both reviews end with the one toast that offers Undo.
+    assert "appliedToast(after, previewBody);" in review and "appliedToast(after, body);" in review
+    # The preview block says it is a preview; it sits on the preview fill with the preview line.
+    assert '"Preview"' in script("gateway.js")
+    look = r"div\.map \.block\.preview \{[^}]*var\(--preview-line\)[^}]*var\(--preview-fill\)"
+    assert re.search(look, CSS)
+    assert ".review-bar {" in CSS
+    # A drag starts after 4 px; the keyboard path stays "Move in…".
+    assert "const DRAG_START = 4;" in script("gateway.js") and '"Move in…"' in script("gateway.js")

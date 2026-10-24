@@ -2,11 +2,12 @@
 // row opens its Details beside the page (gateway-details.js).
 import { $, button, el, gridKey, joinWords, plural, reportError, withFocusKey } from "./dom.js";
 import { addForm, heldServer, liveHeld, movesTo, SETUP_NOTE, showClient, showGateway, showHeld, showOutside, showTool } from "./gateway-details.js";
-import { appeared, drawMap, findIn, isNarrow, keepOpen, layoutTree, litFrom, litPath, pressOpen, toggleOpen, wideWidth } from "./map.js";
-import { entrance, glide, reducedMotion } from "./motion.js";
-import { closePanel, isPanelOpen, moveInto, openInfo, review } from "./panel.js";
+import { appeared, drawMap, dropAt, findIn, isNarrow, keepOpen, layoutTree, litFrom, litPath, pressOpen, toggleOpen, wideWidth } from "./map.js";
+import { animate, entrance, glide, reducedMotion, spring } from "./motion.js";
+import { closePanel, isPanelOpen, moveBody, moveInto, openInfo, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, folderName, gatewayName, kitdenClients, mark, opens, ORIGIN_WORDS, scopeBar, skeleton, STATE_WORDS, staleNote } from "./parts.js";
-import { arrival, current, currentError, data, go, goTo, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
+import { applyOnMap, cancelOnMap, leaveMap, mapPreview, mapReviewLeft, previewOnMap, reviewBar, showMapReview } from "./review.js";
+import { arrival, busy, current, currentError, data, go, goTo, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
 
 // Overview sets a client up with the same note. A server the Kitden gateway holds, and its
 // links, are found where its Details are drawn.
@@ -83,9 +84,11 @@ export function renderGateway(main) {
     return;
   }
   const mode = viewMode(state, serverCount(view));
+  // A preview started on the map lives there: the List leaves one that is only previewed.
+  if (mode !== "map") leaveMap();
   const seg = modeSwitch(mode);
   head.append(seg);
-  const model = gatewayTree(view, { setup: data.setupServer, clients: data.clients, held: liveHeld(view), picked: state.project });
+  const model = gatewayTree(view, { setup: data.setupServer, clients: data.clients, held: liveHeld(view), picked: state.project, ...movingOn() });
   // The search finds here: matches light up, the rest dims, and what hides a match opens (S.6).
   // It changes nothing in a client and moves no Details.
   const found = state.q.trim() ? findIn(model, state.q) : null;
@@ -165,12 +168,22 @@ function heldTag(server, on) {
 // On a first run (no client has the kitden entry, on or off, and the Kitden gateway holds nothing)
 // the clients say they are found, with their version (`clients`, /api/clients), the gateway is a
 // slot to set up, and nothing has a grip. `picked` is the picked project ("" for All projects).
-export function gatewayTree(view, { setup, clients = [], held = new Map(), picked = "" } = {}) {
+// A move started on the map (S.8, 4.6) is `{ name, kind }` (kind "remote" or "local"): while it is
+// dragged or prepared (`drop`) the slot "Drop to add" opens in that group of the Kitden gateway,
+// and while its preview shows (`preview`) a preview block `preview:<name>` stands there; either
+// way a preview link joins it to the gateway, the outside row it moves hides its direct lines,
+// and no block has a grip: one preview at a time.
+export function gatewayTree(view, { setup, clients = [], held = new Map(), picked = "", preview = null, drop = null } = {}) {
   const { linked, off, known, setup: offers } = kitdenClients(setup);
   const kitden = view.gateways.find((g) => g.kind === "kitden");
   const first = known && !linked.length && !off.length && Boolean(kitden) && !kitden.problem && !(kitden.servers || []).length;
   const blocks = [];
   const links = [];
+  const moving = preview || drop;
+  // What the move puts in its group of the Kitden gateway.
+  let extra = null;
+  if (preview) extra = { id: `preview:${preview.name}`, column: "servers", kind: "preview", name: preview.name, meta: "Preview", stateInMeta: true, state: "preview", icon: preview.kind };
+  else if (drop) extra = { id: `slot:${drop.name}`, column: "servers", kind: "slot", name: "Drop to add", stateInMeta: true, state: "preview" };
   for (const id of WRITABLE) {
     const on = linked.includes(id);
     const found = (clients || []).find((c) => c.id === id && c.status === "found");
@@ -184,7 +197,8 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
   // A gateway block joined to the clients it `reaches` (null when not read), then its servers in
   // their groups; `server(block, word)` adds what each server's block says. `unread` says why
   // Kitden does not know what it holds, so no count shows: a problem is not an empty gateway.
-  const addGateway = (gateway, reaches, servers, kindOf, server, unread = null) => {
+  // `adds` is a block for the end of one group (`adds.kind`), which opens that group if need be.
+  const addGateway = (gateway, reaches, servers, kindOf, server, unread = null, adds = null) => {
     const id = `gateway:${gateway.id}`;
     const n = plural(servers.length, "server", "servers");
     const counts = reaches ? `${plural(reaches.length, "client", "clients")} · ${n}` : n;
@@ -192,7 +206,8 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
     for (const client of reaches || []) links.push({ from: `client:${client}`, to: id, kind: "on" });
     for (const [kind, word] of KINDS) {
       const mine = servers.filter((s) => kindOf(s) === kind);
-      if (!mine.length) continue;
+      const end = adds && adds.kind === kind ? adds.block : null;
+      if (!mine.length && !end) continue;
       const group = `group:${gateway.id}:${kind}`;
       blocks.push({ id: group, column: "servers", kind: "group", name: word, under: id });
       for (const each of mine) {
@@ -200,6 +215,10 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
         server(block, word);
         blocks.push(block);
         if (block.state === "on") links.push({ from: id, to: block.id, kind: "on" });
+      }
+      if (end) {
+        blocks.push({ ...end, parent: group });
+        links.push({ from: id, to: end.id, kind: "preview" });
       }
     }
   };
@@ -228,7 +247,7 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
         tools.push({ id, column: "tools", parent: block.id, kind: "tool", name: tool.name, state: on ? "on" : "off", tag: tool.origin === "project" ? ORIGIN_WORDS.override : null, tool, server });
         if (on) links.push({ from: block.id, to: id, kind: "on" });
       }
-    }, kitden.problem ? "Could not read its settings." : null);
+    }, kitden.problem ? "Could not read its settings." : null, extra && { kind: moving.kind, block: extra });
   }
   for (const other of usedFirst(view, view.gateways.filter((g) => g.kind !== "kitden"))) {
     const per = view.connections[other.id] || {};
@@ -244,16 +263,29 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
   blocks.push(...tools);
   const rows = OUTSIDE_GROUPS.flatMap((key) => (view.groups[key] || []).map((row) => [key, row]));
   if (rows.length) blocks.push({ id: "group:outside", column: "servers", kind: "group", name: OUTSIDE, h: OUTSIDE_H });
+  // The outside row a move on the map takes.
+  const moved = moving ? `outside:${moving.kind === "local" ? "local" : "move"}:${moving.name}` : null;
   for (const [key, row] of rows) {
     const id = `outside:${key}:${row.name}`;
     const columns = (row.columns || row.clients).filter((c) => WRITABLE.includes(c));
     const meta = `In ${joinWords(columns.map((c) => CLIENT_NAMES[c]))}`;
-    const move = movesTo(view, key, row).length > 0;
+    const targets = movesTo(view, key, row);
+    const move = targets.length > 0;
     const tag = picked && row.override ? ORIGIN_WORDS.override : null;
-    blocks.push({ id, column: "servers", parent: "group:outside", kind: "outside", name: row.name, meta, tag, state: "on", icon: OUTSIDE_ICONS[key], row, groupKey: key, columns, move, grip: move && !first });
-    for (const client of columns) links.push({ from: `client:${client}`, to: id, kind: "direct" });
+    // A drop moves into the Kitden gateway only, so a grip needs it.
+    const grip = targets.some((g) => g.kind === "kitden") && !first && !moving;
+    blocks.push({ id, column: "servers", parent: "group:outside", kind: "outside", name: row.name, meta, tag, state: "on", icon: OUTSIDE_ICONS[key], row, groupKey: key, columns, move, grip });
+    if (id !== moved) for (const client of columns) links.push({ from: `client:${client}`, to: id, kind: "direct" });
   }
   return { columns: GATEWAY_COLUMNS, blocks, links };
+}
+
+// The preview request of a server dragged onto the map's Servers column: the same as "Move into
+// the gateway…" with the Kitden gateway chosen, for the entries of its own row only. Null without
+// a Kitden gateway.
+export function dropBody(row, view) {
+  const kitden = view.gateways.find((g) => g.kind === "kitden");
+  return kitden ? moveBody(kitden, row.items) : null;
 }
 
 // The List's rows, in order, from the tree: a "Clients" group of client rows; each gateway's own
@@ -335,14 +367,19 @@ export function narrowFor(model, { window: width, box = null, docked = false }) 
 
 // The map: the blocks open and the one selected, what is drawn already, its box and the tree it
 // shows, what the search found, and the box's width as last measured. Kept across redraws of one
-// project.
-const onMap = { project: null, open: new Set(), selected: null, drawn: new Set(), seeded: false, box: null, model: null, found: null, width: null, narrow: false, watch: null };
+// project. A move started on the map: the block being dragged (`drag`), the server whose preview
+// it started (`moving`, { id, name, kind }), where its block was last shown off its place
+// (`home`), the layout drawn, the review bar and what the map showed of the move (`shows`).
+const onMap = {
+  project: null, open: new Set(), selected: null, drawn: new Set(), seeded: false, box: null, model: null, found: null, width: null, narrow: false, watch: null,
+  drag: null, moving: null, home: null, layout: null, bar: null, shows: "",
+};
 
 function gatewayMap(main, model, found) {
   if (onMap.project !== state.project) Object.assign(onMap, { project: state.project, open: new Set(), selected: null, seeded: false });
   const box = el("div");
   main.append(box);
-  Object.assign(onMap, { box, model, found });
+  Object.assign(onMap, { box, model, found, shows: JSON.stringify(movingOn()) });
   // Escape clears the selection first; open Details then close too (panel.js).
   box.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || !onMap.selected) return;
@@ -350,13 +387,17 @@ function gatewayMap(main, model, found) {
     if (!isPanelOpen()) setState({ selected: null });
     drawAgain();
   });
+  box.addEventListener("pointerdown", pressGrip);
   watchMap(box);
   drawOnMap(box, model);
+  onMap.bar = previewBar();
+  if (onMap.bar) main.append(onMap.bar);
 }
 
 // A new width of the box (the window, or Details beside the page) may change the layout: it is
 // drawn again, and links shown already do not draw again. Details closing (Escape, Close or
-// another place) clears what the map lights; the panel's class says when it closes.
+// another place) clears what the map lights; the panel's class says when it closes. A preview
+// shown in Details ends on the map when its review leaves there without Apply.
 function watchMap(box) {
   if (!onMap.watch) {
     onMap.watch = new ResizeObserver((entries) => {
@@ -366,10 +407,14 @@ function watchMap(box) {
       if (narrowNow(onMap.model) !== onMap.narrow) drawAgain();
     });
     new MutationObserver(() => {
+      if (mapReviewLeft()) {
+        redrawPreview();
+        return;
+      }
       if (isPanelOpen() || !onMap.selected) return;
       onMap.selected = null;
       drawAgain();
-    }).observe($("#drawer"), { attributes: true, attributeFilter: ["class"] });
+    }).observe($("#drawer"), { attributes: true, attributeFilter: ["class"], childList: true });
   }
   onMap.watch.disconnect();
   onMap.watch.observe(box);
@@ -410,6 +455,12 @@ function drawOnMap(box, model) {
     drawn: onMap.drawn,
     reduced: reducedMotion.matches,
   });
+  onMap.layout = layout;
+  // A block off its place stays where it is shown: with the pointer, or on the slot while its
+  // preview is prepared. Back on its place, it glides there from where it was.
+  if (onMap.drag) follow();
+  else if (mapPreview.phase === "loading" && onMap.moving) park();
+  else if (onMap.home) goHome();
 }
 
 // Draw the map again in place; focus stays on the block that had it.
@@ -424,7 +475,8 @@ function drawAgain() {
 
 // A press on a block (a held server opened or folded first, by onOpen). "N more" opens the List
 // at its group, focused there, so Details close first. The first run's slot opens the review that
-// sets every client up. Any other block is selected.
+// sets every client up; the slot of a drag does nothing. A preview opens its full review in
+// Details, as "Show changes" does. Any other block is selected.
 function pressBlock(model, id) {
   if (id.startsWith("more:")) {
     closePanel({ instant: true, focus: false });
@@ -435,7 +487,8 @@ function pressBlock(model, id) {
   const block = model.blocks.find((b) => b.id === id);
   if (!block) return;
   if (block.kind === "slot" && block.setup) review(block.setup, { note: SETUP_NOTE }).catch(reportError);
-  else selectOnMap(block);
+  else if (block.kind === "preview") showMapReview(redrawPreview);
+  else if (block.kind !== "slot" || block.gateway) selectOnMap(block);
 }
 
 // Select a block: the map lights it and is drawn again, then its Details open beside the page.
@@ -471,6 +524,208 @@ function arriveOnMap(model, found) {
   if (byId.has(id)) selectOnMap(byId.get(id));
 }
 
+// Drag a server in (4.6, S.8) ------------------------------------------------------------
+
+// How far a pointer moves on a block with a grip before the block follows it.
+const DRAG_START = 4;
+
+// What a move started on the map shows (gatewayTree's `drop` or `preview`): the slot while the
+// block is dragged or its preview is prepared, the preview block while the preview is open (also
+// from Details), else nothing.
+function movingOn() {
+  const shown = onMap.drag || onMap.moving;
+  const move = shown ? { name: shown.name, kind: shown.kind } : null;
+  if (onMap.drag) return { drop: move };
+  // A preview that ended elsewhere (the List, another place) leaves nothing to show.
+  if (mapPreview.phase === "idle") onMap.moving = null;
+  if (!onMap.moving) return {};
+  if (mapPreview.phase === "loading") return { drop: move };
+  return mapPreview.change ? { preview: move } : {};
+}
+
+// The review bar under the map, while a preview from the map is open: not while it is prepared,
+// nor while its review shows in Details.
+function previewBar() {
+  const { phase, change, body, inDetails } = mapPreview;
+  if (phase === "idle" || phase === "loading" || inDetails) return null;
+  return reviewBar(change, {
+    body,
+    onApply: () => (mapPreview.phase === "failed" ? previewOnMap(mapPreview.body, redrawPreview) : applyOnMap(redrawPreview)).catch(reportError),
+    onCancel: () => cancelOnMap(redrawPreview).catch(reportError),
+    onShow: () => showMapReview(redrawPreview),
+  });
+}
+
+// The page drawn again for a preview on the map (review.js calls it). What only the bar shows
+// (Apply's steps, an error after Apply) changes in the bar itself, so its status line is read
+// out; anything else draws the page. A preview that ended gives focus to its server where it is
+// now (in the gateway after Apply, outside after Cancel) when focus was in the bar, in Details
+// that closed, or nowhere.
+function redrawPreview() {
+  const ended = mapPreview.phase === "idle" ? onMap.moving : null;
+  if (ended) onMap.moving = null;
+  const old = onMap.bar;
+  if (!ended && old && old.isConnected && JSON.stringify(movingOn()) === onMap.shows) {
+    swapBar(old, previewBar());
+    return;
+  }
+  const active = document.activeElement;
+  const closed = !isPanelOpen() && $("#drawer").contains(active);
+  const lost = !active || [document.body, $("#main")].includes(active) || closed || Boolean(old && old.contains(active));
+  render();
+  if (!ended || !lost) return;
+  const node = [`held:kitden:${ended.name}`, ended.id].map((id) => withFocusKey($("#main"), `block:${id}`)).find(Boolean);
+  if (node) node.focus({ preventScroll: true });
+}
+
+// Put the new bar's words and buttons into the bar shown. Its status line stays the same node, so
+// a screen reader hears the new words; focus stays on the same button.
+function swapBar(old, fresh) {
+  if (!fresh) {
+    old.remove();
+    onMap.bar = null;
+    return;
+  }
+  const had = old.contains(document.activeElement) ? document.activeElement.dataset.focus : null;
+  old.className = fresh.className;
+  old.setAttribute("aria-label", fresh.getAttribute("aria-label"));
+  const [words, actions] = old.children;
+  const [newWords, newActions] = fresh.children;
+  words.firstElementChild.replaceWith(newWords.firstElementChild);
+  const said = newWords.lastElementChild.textContent;
+  if (words.lastElementChild.textContent !== said) words.lastElementChild.textContent = said;
+  actions.replaceWith(newActions);
+  const again = had ? withFocusKey(old, had) : null;
+  if (again) again.focus({ preventScroll: true });
+}
+
+// A pointer goes down on a block with a grip. Once it moves 4 px the block follows it, the slot
+// "Drop to add" opens in its group of the Kitden gateway and its amber line hides. Let go over the
+// Servers column, it starts the same preview as "Move into the gateway…"; Escape, or a drop
+// anywhere else, puts it back. Nothing is written before Apply. A click without a move selects
+// the block as before.
+function pressGrip(event) {
+  if (event.button !== 0 || busy.change || onMap.drag) return;
+  const node = event.target.closest("button.block");
+  const block = node && onMap.model.blocks.find((b) => node.dataset.focus === `block:${b.id}`);
+  if (!block || !block.grip) return;
+  const from = { x: event.clientX, y: event.clientY };
+  const box = node.getBoundingClientRect();
+  const grab = { x: from.x - box.left, y: from.y - box.top };
+  const move = (e) => {
+    const at = { x: e.clientX, y: e.clientY };
+    if (onMap.drag) {
+      onMap.drag.at = at;
+      follow();
+    } else if (Math.hypot(at.x - from.x, at.y - from.y) >= DRAG_START) {
+      onMap.drag = { id: block.id, name: block.name, kind: block.groupKey === "local" ? "local" : "remote", row: block.row, grab, at };
+      document.documentElement.classList.add("grabbing");
+      render();
+    }
+  };
+  const stop = () => {
+    document.removeEventListener("pointermove", move);
+    document.removeEventListener("pointerup", done);
+    document.removeEventListener("pointercancel", done);
+    document.removeEventListener("keydown", escape, true);
+  };
+  const done = (e) => {
+    stop();
+    if (onMap.drag) letGo(e && e.type === "pointerup" ? { x: e.clientX, y: e.clientY } : null);
+  };
+  // Escape puts the block back before Details or the map hear it.
+  const escape = (e) => {
+    if (e.key !== "Escape" || !onMap.drag) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    done(null);
+  };
+  document.addEventListener("pointermove", move);
+  document.addEventListener("pointerup", done);
+  document.addEventListener("pointercancel", done);
+  document.addEventListener("keydown", escape, true);
+}
+
+// The map's block area, and a block in it.
+const mapArea = () => (onMap.box && onMap.box.isConnected ? onMap.box.querySelector(".map-area") : null);
+const blockIn = (area, id) => (area ? withFocusKey(area, `block:${id}`) : null);
+
+// A block lifted off its place, shown at (x, y) of the map area; `home` remembers where.
+function lift(node, id, x, y) {
+  node.classList.add("dragging");
+  node.style.transform = `translate(${x - parseFloat(node.style.left)}px, ${y - parseFloat(node.style.top)}px)`;
+  onMap.home = { id, x, y };
+}
+
+// The dragged block where the pointer holds it; the slot lights while the pointer is over Servers.
+function follow() {
+  const { drag } = onMap;
+  const area = mapArea();
+  const node = blockIn(area, drag.id);
+  if (!node) return;
+  const origin = area.getBoundingClientRect();
+  lift(node, drag.id, drag.at.x - origin.left - drag.grab.x, drag.at.y - origin.top - drag.grab.y);
+  onMap.box.classList.toggle("dropping", dropAt(onMap.layout, drag.at.x - origin.left, drag.at.y - origin.top) === "servers");
+}
+
+// While its preview is prepared, the block waits on the slot (it glides there from where it was
+// let go), and after a moment a spinner says the server is asked.
+function park() {
+  const { moving, layout } = onMap;
+  const node = blockIn(mapArea(), moving.id);
+  const slot = layout.blocks.find((b) => b.id === `slot:${moving.name}`);
+  if (!node || !slot) return;
+  const from = onMap.home && onMap.home.id === moving.id ? onMap.home : null;
+  lift(node, moving.id, slot.x, slot.y);
+  node.setAttribute("aria-busy", "true");
+  node.append(el("span", "spinner late"));
+  if (from) glideFrom(node, from.x - slot.x, from.y - slot.y);
+}
+
+// Back on its place, the block glides there from where it was last shown.
+function goHome() {
+  const home = onMap.home;
+  onMap.home = null;
+  const node = blockIn(mapArea(), home.id);
+  if (node) glideFrom(node, home.x - parseFloat(node.style.left), home.y - parseFloat(node.style.top));
+}
+
+// A block glides from (dx, dy) off where it is shown; with reduced motion it is there at once.
+function glideFrom(node, dx, dy) {
+  if (dx || dy) animate(node, [{ translate: `${dx}px ${dy}px` }, { translate: "0 0" }], { duration: 260, easing: spring() });
+}
+
+// The pointer lets go at `point` (page coordinates), or Escape or a lost pointer (null). Over the
+// Servers column the preview of the move into the Kitden gateway starts; else the block goes back.
+function letGo(point) {
+  const drag = onMap.drag;
+  onMap.drag = null;
+  document.documentElement.classList.remove("grabbing");
+  if (onMap.box) onMap.box.classList.remove("dropping");
+  swallowClick();
+  const area = mapArea();
+  const origin = area ? area.getBoundingClientRect() : null;
+  const column = point && origin ? dropAt(onMap.layout, point.x - origin.left, point.y - origin.top) : null;
+  const body = column === "servers" ? dropBody(drag.row, current("gateway")) : null;
+  if (body) {
+    onMap.moving = { id: drag.id, name: drag.name, kind: drag.kind };
+    previewOnMap(body, redrawPreview).catch(reportError);
+    if (mapPreview.phase === "loading") return;
+    onMap.moving = null;
+  }
+  render();
+}
+
+// The click that ends a drag selects nothing.
+function swallowClick() {
+  const swallow = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  document.addEventListener("click", swallow, { capture: true, once: true });
+  setTimeout(() => document.removeEventListener("click", swallow, { capture: true }), 0);
+}
+
 const SVG = "http://www.w3.org/2000/svg";
 // Small line icons on a 16-unit grid, in the text color: a remote server (a globe), a local one
 // (a terminal) and one that comes with a plugin (a box).
@@ -492,10 +747,10 @@ function icon(name) {
 }
 
 // What a block shows before its name: a client's tile, the Kitden house (it keeps its own color),
-// a registered gateway's mark, or what kind of server it is.
+// a registered gateway's mark, or what kind of server it is. The slot of a drag shows nothing.
 function tile(block) {
   if (block.kind === "client") return mark(block.client);
-  if (GATEWAY_KINDS.includes(block.kind)) {
+  if (GATEWAY_KINDS.includes(block.kind) && block.gateway) {
     if (block.gateway.kind !== "kitden") return mark("gateway");
     const house = el("img", "block-house");
     house.src = "/static/brand/kitden.svg";

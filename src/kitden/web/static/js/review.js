@@ -243,6 +243,13 @@ export function canShowReview(result) {
 }
 
 export async function review(previewBody, { note = null, back = null } = {}) {
+  // One preview at a time: one on the map that is only previewed goes first; while the map's change
+  // is written nothing else is asked. Its own review in Details asks again with `mapBack`.
+  if (back !== mapBack && mapPreview.phase !== "idle") {
+    if (mapWriting()) return;
+    dropMapPreview();
+    redrawMap();
+  }
   const asked = state.project;
   // The Details this review is asked from, if any: Cancel and a refusal go back only there.
   const from = panelState.from;
@@ -322,7 +329,7 @@ function diffLines(text) {
   return pre;
 }
 
-function showReview(change, previewBody, note, back = null, from = null) {
+export function showReview(change, previewBody, note, back = null, from = null) {
   panelState.current = { type: "review", change, previewBody, note, back, from };
   const words = changeWords(change, previewBody);
   const body = el("div", "body");
@@ -554,14 +561,17 @@ export async function checkStale() {
 
 // The server said `verified`: the button turns green while the page reloads, then the panel
 // leaves at once and the toast offers Undo. From a tool switch, its Details comes back instead,
-// with the switch flipped, and the page behind shows the new state.
+// with the switch flipped, and the page behind shows the new state. A preview from the map ends
+// before the page is drawn, so the map shows the block solid and its new link draws once.
 async function showApplied(after, apply, label, previewBody, back) {
   for (const spin of apply.querySelectorAll(".spinner")) spin.remove();
   apply.prepend(checkMark());
   apply.classList.add("done");
   label.textContent = "Applied";
   await reloadAll();
-  if (back) {
+  const fromMap = back === mapBack;
+  if (fromMap) Object.assign(mapPreview, IDLE);
+  if (back && !fromMap) {
     // The change is done: this review lets its place go to the Details `back` draws again.
     if (panelState.current) panelState.current.handingBack = true;
     render();
@@ -573,6 +583,11 @@ async function showApplied(after, apply, label, previewBody, back) {
     restoreFocus();
   }
   setBusy(false);
+  appliedToast(after, previewBody);
+}
+
+// The toast after a verified change, the same for every review: what was done, and Undo.
+export function appliedToast(after, previewBody) {
   toast(changeWords(after, previewBody).done, () => undoChange(after), { ok: true });
 }
 
@@ -616,4 +631,247 @@ export async function undoChange(change) {
   } finally {
     setBusy(false);
   }
+}
+
+// The map's review (S.8) -----------------------------------------------------------------
+
+// A preview started on the map (a drag, later a marketplace result) shows there: a preview block
+// and a review bar on the canvas. `phase`: "idle", "loading" (asked), "ready", "applying" or
+// "failed". `body` is the preview request and `change` the server's preview; `done` and `total`
+// count Apply's steps; `failure` is how Apply ended ({ state, text }); `refused` holds the server's
+// words when it would not prepare it. `project` is the project it was asked in, and `inDetails`
+// says "Show changes" moved it into Details, where its own review shows it.
+const IDLE = { body: null, change: null, phase: "idle", done: 0, total: 0, failure: null, refused: null, project: "", inDetails: false };
+export const mapPreview = { ...IDLE };
+// The newest request on the map: an answer to an older one is dropped.
+let asking = 0;
+// How the page draws the map again (gateway.js), as the last call gave it.
+let redrawMap = () => {};
+
+const NOTHING = "Nothing was changed.";
+const REFUSED = "Could not prepare this change";
+// Why Apply stopped when the engine wrote nothing or put every file back.
+const BAR_STOPPED = { stale: STALE_NOTE, restored: STOPPED.restored };
+
+// Every client the steps write, as the bar says it while Apply runs. Not the one being written:
+// the engine's count names no step, and it does not write them in the preview's order.
+export function writingLine(steps) {
+  const names = [...new Set(steps.map((s) => s.client))].map((c) => (c === "kitden" ? "the Kitden gateway" : clientName(c)));
+  if (names.length === 1) return `Writing ${names[0]}'s settings. A backup is kept.`;
+  return `Writing the settings of ${joinWords(names)}. A backup is kept.`;
+}
+
+// What the change will do, in one line: the After chips by word ("Claude Code and Codex: Via
+// gateway."), or with no chip the first sentence of the first note.
+export function outcomeLine(change) {
+  const { chips, notes } = afterParts(change.after || []);
+  if (!chips.length) return notes.length ? (notes[0].match(/^.*?[.!?](?=\s|$)/) || [notes[0]])[0] : "";
+  const byWord = new Map();
+  for (const chip of chips) byWord.set(chip.word, [...(byWord.get(chip.word) || []), clientName(chip.client)]);
+  return [...byWord].map(([word, names]) => `${joinWords(names)}: ${word}.`).join(" ");
+}
+
+// The bar's words for a preview (mapPreview's shape): the title with its scope, one outcome line
+// and what Apply says. While Apply runs it counts the steps and Cancel waits. An error says
+// "Nothing was changed." only when the engine wrote nothing or put every file back, and offers
+// "Try again". A refusal has no change, so only Cancel stays: trying again would be refused for
+// the same reason.
+export function barWords({ phase, change, body, done, total, failure, refused }) {
+  if (refused) return { title: REFUSED, outcome: `${refused} ${NOTHING}`, apply: null, cancelWaits: false, retry: false };
+  const title = changeWords(change, body).title;
+  if (phase === "applying") return { title, outcome: writingLine(change.steps), apply: stepText("Applying", done, total), cancelWaits: true, retry: false };
+  if (phase === "failed") {
+    const ended = failure && failure.state;
+    let outcome = (failure && failure.text) || LOST;
+    if (BAR_STOPPED[ended]) outcome = `${BAR_STOPPED[ended]} ${NOTHING}`;
+    else if (ended) outcome = `The change stopped: ${ended}.`;
+    return { title, outcome, apply: "Try again", cancelWaits: false, retry: true };
+  }
+  return { title, outcome: outcomeLine(change), apply: "Apply", cancelWaits: false, retry: false };
+}
+
+// The review bar on the map: the title with its scope, the outcome line (read out when it
+// changes), then "Show changes" (the full review in Details), Cancel and Apply, or "Try again"
+// after an error. While Apply runs, Cancel and Apply stay in place and wait. `change` is the
+// preview (null for a refusal), `body` its request; the rest comes from mapPreview.
+export function reviewBar(change, { onApply, onCancel, onShow, body }) {
+  const words = barWords({ ...mapPreview, change, body });
+  const bar = el("section", mapPreview.phase === "failed" ? "review-bar failed" : "review-bar");
+  bar.setAttribute("role", "region");
+  bar.setAttribute("aria-label", words.title);
+  const text = el("div", "bar-words");
+  const outcome = el("p", "bar-outcome", words.outcome);
+  outcome.setAttribute("role", "status");
+  text.append(el("strong", "bar-title", words.title), outcome);
+  const actions = el("div", "bar-actions");
+  const writing = words.cancelWaits;
+  const add = (label, key, run, look) => {
+    const node = el("button", look, label);
+    node.type = "button";
+    node.dataset.focus = `bar:${key}`;
+    if (writing) node.setAttribute("aria-disabled", "true");
+    node.addEventListener("click", () => { if (!writing) run(); });
+    actions.append(node);
+  };
+  if (mapPreview.phase === "ready") add("Show changes", "show", onShow, "btn ghost");
+  add("Cancel", "cancel", onCancel, "btn");
+  if (words.apply) add(words.apply, "apply", onApply, "btn primary apply");
+  bar.append(text, actions);
+  return bar;
+}
+
+// Focus one of the bar's buttons ("apply", "cancel") once the page drew it.
+function focusBar(key) {
+  const node = typeof document !== "undefined" && document.querySelector ? document.querySelector(`[data-focus="bar:${key}"]`) : null;
+  if (node) node.focus();
+}
+
+// The map's change is being written: from the bar, or by its review in Details.
+function mapWriting() {
+  return mapPreview.phase === "applying" || (mapPreview.inDetails && busy.change);
+}
+
+// The map's preview shows in Details now, in its own review.
+function mapReviewShown() {
+  const current = panelState.current;
+  return isPanelOpen() && Boolean(current) && current.type === "review" && current.back === mapBack;
+}
+
+// Forget the preview on the map. One that is only previewed is cancelled on the server, and its
+// review leaves Details; an answer still coming is dropped.
+function dropMapPreview() {
+  const { change, inDetails } = mapPreview;
+  if (change && change.state === "previewed") {
+    postJson(`/api/changes/${encodeURIComponent(change.id)}/cancel`).catch(() => {});
+    change.state = "cancelled";
+  }
+  asking += 1;
+  Object.assign(mapPreview, IDLE);
+  if (inDetails && mapReviewShown()) closePanel({ focus: false });
+}
+
+// The map is left (another place, the List, another project): a preview on it that is only
+// previewed goes; one being written goes on and ends as usual.
+export function leaveMap() {
+  if (mapPreview.phase !== "idle" && !mapWriting()) dropMapPreview();
+}
+
+// A preview moved into Details ends when its review leaves without Apply: Escape, or other
+// Details in its place (panel.js cancels it on the server then). True when it just ended.
+export function mapReviewLeft() {
+  if (!mapPreview.inDetails || mapReviewShown() || busy.change) return false;
+  asking += 1;
+  Object.assign(mapPreview, IDLE);
+  return true;
+}
+
+// The way back from the map's review in Details (its `back`): Cancel ends the preview, and a
+// "Preview again" the server refused shows why in the bar. A verified Apply ends in showApplied.
+function mapBack({ error = null } = {}) {
+  const { body, project } = mapPreview;
+  Object.assign(mapPreview, IDLE);
+  if (error) Object.assign(mapPreview, { body, project, phase: "failed", refused: error });
+  closePanel({ focus: false });
+  redrawMap();
+  if (error) focusBar("cancel");
+}
+
+// Ask the server for a preview started on the map (`body`, with the picked project) and show it
+// there; `redraw` draws the page's map again. A preview on the map already goes first: one at a
+// time, and nothing starts while a change is written. A refusal keeps the server's words. With
+// another project picked, or the map left, meanwhile, the answer shows nothing and the server
+// forgets it. Focus goes to Apply, or to Cancel after a refusal.
+export async function previewOnMap(body, redraw) {
+  if (mapWriting() || busy.change) return;
+  redrawMap = redraw;
+  dropMapPreview();
+  const ticket = asking;
+  const asked = state.project;
+  Object.assign(mapPreview, { body, phase: "loading", project: asked });
+  redraw();
+  let result;
+  try {
+    result = await postJson("/api/changes/preview", { ...body, picked: asked || null });
+  } catch (error) {
+    reportError(error);
+    result = { ok: false, status: 0, data: null };
+  }
+  const id = result.data && result.data.id;
+  if (ticket !== asking || state.project !== asked) {
+    if (id) postJson(`/api/changes/${encodeURIComponent(id)}/cancel`).catch(() => {});
+    if (ticket === asking) {
+      Object.assign(mapPreview, IDLE);
+      redraw();
+    }
+    return;
+  }
+  if (id && canShowReview(result)) Object.assign(mapPreview, { phase: "ready", change: result.data });
+  else Object.assign(mapPreview, { phase: "failed", refused: (result.data && result.data.detail) || `${REFUSED} (${result.status}).` });
+  redraw();
+  focusBar(mapPreview.refused ? "cancel" : "apply");
+}
+
+// Cancel in the bar: the server forgets the preview. It waits while the change is written.
+export async function cancelOnMap(redraw) {
+  if (mapWriting()) return;
+  redrawMap = redraw;
+  dropMapPreview();
+  redraw();
+}
+
+// Apply in the bar: the button counts the steps as the server reports them, the bar says what is
+// written, and Cancel waits. Only `verified` ends it: the page reads everything again, the preview
+// goes (its block turns solid and its new link draws once) and the toast offers Undo. Any other
+// end stays in the bar with "Try again", focus on it, and the page reads again behind it.
+export async function applyOnMap(redraw) {
+  if (mapPreview.phase !== "ready" || busy.change) return;
+  redrawMap = redraw;
+  const { change, body } = mapPreview;
+  setBusy(true);
+  try {
+    Object.assign(mapPreview, { phase: "applying", done: 0, total: 0 });
+    redraw();
+    const onProgress = (event) => {
+      const { id, done, total } = event.detail || {};
+      if (id !== change.id || !(total > 1)) return;
+      Object.assign(mapPreview, { done, total });
+      redraw();
+    };
+    document.addEventListener("kitden:progress", onProgress);
+    let outcome;
+    try {
+      outcome = await changeOutcome(change.id, "apply");
+    } finally {
+      document.removeEventListener("kitden:progress", onProgress);
+    }
+    const { after, failure } = outcome;
+    if (after && after.state === "verified") {
+      // The toast says the same place as the title.
+      after.target = change.target;
+      await reloadAll().catch(reportError);
+      Object.assign(mapPreview, IDLE);
+      redraw();
+      setBusy(false);
+      appliedToast(after, body);
+      return;
+    }
+    change.state = after ? after.state : "unknown";
+    Object.assign(mapPreview, { phase: "failed", failure: { state: after ? after.state : null, text: failure } });
+    setBusy(false);
+    redraw();
+    focusBar("apply");
+    reloadAll().then(render).catch(() => {});
+  } finally {
+    if (busy.change) setBusy(false);
+  }
+}
+
+// "Show changes": the same preview moves into Details as its full review and the bar hides, so
+// one change never has two Apply buttons. Cancel there ends it; its Apply ends as the bar's does.
+export function showMapReview(redraw) {
+  if (mapPreview.phase !== "ready" || mapPreview.inDetails || busy.change) return;
+  redrawMap = redraw;
+  mapPreview.inDetails = true;
+  showReview(mapPreview.change, mapPreview.body, null, mapBack);
+  redraw();
 }

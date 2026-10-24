@@ -56,13 +56,18 @@ function childrenOf(model) {
   return children;
 }
 
+// What a group always shows whole: a preview and the slot of a drag are never behind "N more".
+const PINNED = ["preview", "slot"];
+
 // The children a block shows: a group's always (past GROUP_MAX the first five and a block
-// "N more", unless the group is open), any other block's only while it is open.
+// "N more", then a preview or a slot, unless the group is open), any other block's only while it
+// is open.
 function shownChildren(block, children, open) {
   if (block.kind !== "group") return open.has(block.id) ? children : [];
-  if (children.length <= GROUP_MAX || open.has(block.id)) return children;
-  const more = { id: `more:${block.id}`, column: block.column, parent: block.id, kind: "more", name: `${children.length - GROUP_MAX + 1} more` };
-  return [...children.slice(0, GROUP_MAX - 1), more];
+  const rest = children.filter((child) => !PINNED.includes(child.kind));
+  if (rest.length <= GROUP_MAX || open.has(block.id)) return children;
+  const more = { id: `more:${block.id}`, column: block.column, parent: block.id, kind: "more", name: `${rest.length - GROUP_MAX + 1} more` };
+  return [...rest.slice(0, GROUP_MAX - 1), more, ...children.filter((child) => PINNED.includes(child.kind))];
 }
 
 // Where each shown block goes, for any tree model: `{ columns: [{id, x, w}], blocks: [{id, kind,
@@ -132,6 +137,14 @@ export function layoutTree(model, { open = new Set(), width = 0, narrow = isNarr
   const blocks = [...placed.values()];
   const height = blocks.reduce((most, block) => Math.max(most, block.y + block.h), 0);
   return { columns, blocks, links, height, narrow };
+}
+
+// The column under a point of the layout (x and y from its top left): the id of the column whose
+// box, the whole height of the map, holds it; null between columns or outside the map.
+export function dropAt(layout, x, y) {
+  if (y < 0 || y > layout.height) return null;
+  const column = layout.columns.find((c) => x >= c.x && x <= c.x + c.w);
+  return column ? column.id : null;
 }
 
 // How wide the map is when it lays out wide: every column and the gaps between them.
