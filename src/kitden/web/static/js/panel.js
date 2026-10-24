@@ -247,15 +247,15 @@ export function hideToast() {
   $("#toast").classList.remove("show");
 }
 
-// A short note after a change, with Undo when it can be undone. Hides after 6 s; the
-// countdown pauses while the pointer or focus is on it.
+// A short note after a change, with Undo when it can be undone (or another action, `label`).
+// Hides after 6 s; the countdown pauses while the pointer or focus is on it.
 // A check mark only for a state the server verified (applied, undone); never for an error.
-export function toast(text, onUndo, { ok = false } = {}) {
+export function toast(text, onUndo, { ok = false, label = "Undo" } = {}) {
   const node = $("#toast");
   node.classList.remove("show");
   node.replaceChildren(el("span", null, text));
   if (ok) node.prepend(checkMark());
-  if (onUndo) node.append(button("Undo", () => onUndo()));
+  if (onUndo) node.append(button(label, () => onUndo()));
   node.append(el("span", "timer"));
   void node.offsetWidth;
   node.classList.add("show");

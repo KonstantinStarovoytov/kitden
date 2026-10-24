@@ -1432,6 +1432,11 @@ def test_the_map_review_bar_words_and_look():
     assert 'setAttribute("role", "region")' in review and 'setAttribute("role", "status")' in review
     # Both reviews end with the one toast that offers Undo.
     assert "appliedToast(after, previewBody);" in review and "appliedToast(after, body);" in review
+    # An end that is not verified reads the same in Details and on the bar; "Nothing was changed."
+    # only when the engine put everything back. Off the map, a toast says it, with Changes.
+    assert 'callout(stoppedWords(after, failure), "error")' in review
+    assert "outcome: stoppedWords(" in review and "allPutBack(after.error)" in review
+    assert '{ label: "Open Changes" }' in review and 'go("changes")' in review
     # The preview block says it is a preview; it sits on the preview fill with the preview line.
     assert '"Preview"' in script("gateway.js")
     look = r"div\.map \.block\.preview \{[^}]*var\(--preview-line\)[^}]*var\(--preview-fill\)"

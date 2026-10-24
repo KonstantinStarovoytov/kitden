@@ -5,8 +5,8 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; review.js must load there too.
 delete globalThis.navigator;
-const { PLACE_IN_TITLE, applyOnMap, barWords, cancelOnMap, changeWords, checkStale, leaveMap, mapPreview, outcomeLine, previewOnMap, review, reviewLede, staleCheckWanted, targetWords, writingLine } = await import('../../src/kitden/web/static/js/review.js');
-const { panelState } = await import('../../src/kitden/web/static/js/panel.js');
+const { PLACE_IN_TITLE, applyOnMap, barWords, cancelOnMap, changeWords, checkStale, leaveMap, mapPreview, outcomeLine, previewOnMap, review, reviewLede, staleCheckWanted, stoppedWords, targetWords, writingLine } = await import('../../src/kitden/web/static/js/review.js');
+const { hideToast, isPanelOpen, openPanel, panelState } = await import('../../src/kitden/web/static/js/panel.js');
 const { moveBody } = await import('../../src/kitden/web/static/js/details.js');
 const { busy, state } = await import('../../src/kitden/web/static/js/store.js');
 
@@ -206,14 +206,27 @@ test('the bar names the change with its scope, and each end says what Kitden kno
   assert.equal(barWords({ ...IDLE, phase: 'applying', change, body }).apply, 'Applying…');
   const failed = (failure) => barWords({ ...IDLE, phase: 'failed', change, body, failure });
   assert.equal(failed({ state: 'stale' }).outcome, 'Settings changed since this preview. Nothing was changed.');
-  assert.equal(failed({ state: 'restored' }).outcome, 'The change did not check out. Nothing was changed.');
-  assert.equal(failed({ state: 'restored' }).apply, 'Try again');
+  assert.equal(failed({ state: 'restored', error: 'x failed. The original settings were restored.' }).apply, 'Try again');
   // Unknown: it may have been written, so it never says nothing changed.
   const lost = 'Could not confirm the result. Check Changes before trying again.';
   assert.equal(failed({ state: null, text: lost }).outcome, lost);
   // A refusal has no change to name or to apply: only Cancel.
   const refused = barWords({ ...IDLE, phase: 'failed', body, refused: 'Refused.' });
   assert.deepEqual([refused.title, refused.apply], ['Could not prepare this change', null]);
+});
+
+test('a change that did not check out says nothing changed only when the engine put everything back', () => {
+  const failed = (failure) => barWords({ ...IDLE, phase: 'failed', change, body: {}, failure }).outcome;
+  // Everything was put back: the engine's own words, paths shortened, then "Nothing was changed.".
+  const back = '`claude mcp add` failed in /Users/me/.claude.json. The original settings were restored.';
+  assert.equal(failed({ state: 'restored', error: back }), 'The change did not check out. (`claude mcp add` failed in ~/.claude.json. The original settings were restored.) Nothing was changed.');
+  // Something could not be put back: the engine says what, and the bar never claims nothing changed.
+  const lost = '`claude mcp add` failed. github/TOKEN in your Keychain keeps the new value.';
+  assert.equal(failed({ state: 'restored', error: lost }), 'The change did not check out. (`claude mcp add` failed. github/TOKEN in your Keychain keeps the new value.)');
+  assert.equal(failed({ state: 'restored', error: null }), 'The change did not check out.');
+  // The review in Details says the same for the same end.
+  for (const error of [back, lost]) assert.equal(failed({ state: 'restored', error }), stoppedWords({ state: 'restored', error }, null));
+  assert.equal(stoppedWords(null, null), 'Could not confirm the result. Check Changes before trying again.');
 });
 
 test("the outcome line groups the After chips by word, else the first note's first sentence", () => {
@@ -289,7 +302,9 @@ test('one preview on the map at a time, and another project picked meanwhile dro
 
 test('Apply counts the steps; an error stays in the bar, and Cancel waits while it is written', async () => {
   let progress = null;
-  globalThis.document = { addEventListener: (type, fn) => { if (type === 'kitden:progress') progress = fn; }, removeEventListener: () => {}, querySelector: () => null };
+  // The bar is on the page while it is written.
+  const bar = {};
+  globalThis.document = { addEventListener: (type, fn) => { if (type === 'kitden:progress') progress = fn; }, removeEventListener: () => {}, querySelector: (selector) => (selector === '.review-bar' ? bar : null) };
   const net = stubFetch(async (url) => {
     if (url === '/api/changes/preview') return { json: { ...change, state: 'previewed' } };
     if (url === '/api/changes/c1/apply') {
@@ -337,5 +352,92 @@ test('a review asked elsewhere first ends a preview on the map, and waits while 
     assert.deepEqual([mapPreview.phase, backed], ['idle', { error: 'Refused.' }]);
   } finally {
     net.done();
+  }
+});
+
+// Just enough of a page for the panel and the toast: the drawer, its scrim, the shell, the toast,
+// and the map's review bar when `bar` is on the page.
+function fakePage({ bar = false } = {}) {
+  const node = (tag = 'div') => {
+    const classes = new Set();
+    return {
+      tag, className: '', textContent: '', children: [], attributes: {}, dataset: {}, listeners: {},
+      classList: { add: (n) => classes.add(n), remove: (n) => classes.delete(n), toggle: (n, on) => (on ? classes.add(n) : classes.delete(n)), contains: (n) => classes.has(n) },
+      append(...nodes) { this.children.push(...nodes); },
+      prepend(...nodes) { this.children.unshift(...nodes); },
+      replaceChildren(...nodes) { this.children = nodes; },
+      setAttribute(name, value) { this.attributes[name] = String(value); },
+      removeAttribute(name) { delete this.attributes[name]; },
+      addEventListener(type, listener) { this.listeners[type] = listener; },
+      focus() {}, contains: () => false,
+    };
+  };
+  const nodes = { '#drawer': node(), '#scrim': node(), '#toast': node(), '#main': node(), '.shell': node(), '.review-bar': bar ? node() : null };
+  globalThis.document = {
+    activeElement: null,
+    documentElement: { classList: { remove() {} } },
+    createElement: node,
+    querySelector: (selector) => nodes[selector] ?? null,
+    querySelectorAll: () => [],
+    addEventListener() {}, removeEventListener() {},
+  };
+  return nodes;
+}
+
+test('a drop while a review shows in Details ends that review first; one being written refuses it', async () => {
+  fakePage();
+  const net = stubFetch((url) => (url === '/api/changes/preview' ? { json: { ...change, state: 'previewed' } } : { json: {} }));
+  try {
+    const shown = { id: 'd1', state: 'previewed' };
+    panelState.current = { type: 'review', change: shown };
+    openPanel([]);
+    // While its change is written, the drop asks for nothing and the review stays.
+    busy.change = true;
+    await previewOnMap(body, () => {});
+    assert.deepEqual([posts(net.asked), isPanelOpen(), mapPreview.phase], [[], true, 'idle']);
+    busy.change = false;
+    // Only previewed: it is cancelled on the server and leaves, then the map's preview is asked.
+    await previewOnMap(body, () => {});
+    assert.deepEqual(posts(net.asked), ['/api/changes/d1/cancel', '/api/changes/preview']);
+    assert.deepEqual([isPanelOpen(), shown.state, mapPreview.phase], [false, 'cancelled', 'ready']);
+  } finally {
+    net.done();
+    panelState.current = null;
+    delete globalThis.document;
+  }
+});
+
+test('an Apply that ends while the bar is off the page says so in a toast with no check, then the preview goes', async () => {
+  const nodes = fakePage(); // the person went to the List: no bar on the page
+  let applies = 0;
+  const net = stubFetch((url) => {
+    if (url === '/api/changes/preview') return { json: { ...change, state: 'previewed' } };
+    // First a stale end; then an answer with no body, and the change cannot be read back.
+    if (url === '/api/changes/c1/apply') return applies++ ? { status: 500, json: null } : { status: 409, json: { ...change, state: 'stale' } };
+    if (url === '/api/changes/c1') return { status: 500, json: null };
+    return { json: {} };
+  });
+  const toast = () => nodes['#toast'].children.filter((c) => c.className !== 'timer').map((c) => [c.tag, c.textContent]);
+  const logged = console.error;
+  console.error = () => {}; // the answer with no body is logged; here it is expected
+  try {
+    await previewOnMap(body, () => {});
+    await applyOnMap(() => {});
+    assert.deepEqual(toast(), [['span', 'Move github into the Kitden gateway for all projects · Settings changed since this preview. Nothing was changed.']]);
+    assert.equal(mapPreview.phase, 'idle');
+    // Not known: the same words as the bar, and a way to Changes.
+    await previewOnMap(body, () => {});
+    await applyOnMap(() => {});
+    assert.deepEqual(toast(), [
+      ['span', 'Move github into the Kitden gateway for all projects · Could not confirm the result. Check Changes before trying again.'],
+      ['button', 'Open Changes'],
+    ]);
+    assert.equal(mapPreview.phase, 'idle');
+    assert.ok(!posts(net.asked).some((u) => u.endsWith('/cancel')));
+  } finally {
+    console.error = logged;
+    hideToast();
+    net.done();
+    delete globalThis.document;
   }
 });

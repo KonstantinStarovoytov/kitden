@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js needs only this from a browser to load; the tests call its pure parts.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { GATEWAY_COLUMNS, dropBody, findRows, gatewayTree, heldServer, kitdenLinks, listAt, listRows, narrowFor, serverCount } = await import('../../src/kitden/web/static/js/gateway.js');
+const { GATEWAY_COLUMNS, dropBody, dropTarget, findRows, gatewayTree, heldServer, kitdenLinks, listAt, listRows, narrowFor, serverCount } = await import('../../src/kitden/web/static/js/gateway.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
 const { offersSwitch } = await import('../../src/kitden/web/static/js/gateway-details.js');
 const { blockLabel, findChip, findIn, keepOpen, layoutTree, pressOpen } = await import('../../src/kitden/web/static/js/map.js');
@@ -508,6 +508,34 @@ test('a drag opens the slot "Drop to add" in its group, and its line hides', () 
   assert.ok(!tree.blocks.some((b) => b.kind === 'preview'));
   // The gateway is still a gateway block: the slot is not a first run.
   assert.equal(block(tree, 'gateway:kitden').kind, 'gateway');
+});
+
+test('a drop on its own group puts the block back; only the rest of Servers previews', () => {
+  const at = (l, id) => l.blocks.find((b) => b.id === id);
+  // Before the block leaves its group no slot opens, so a click that wobbles 4 px lands on its own
+  // group: it goes back and asks for nothing.
+  const still = gatewayTree(MEDIUM_VIEW, OPTS);
+  const before = layoutTree(still, { open: new Set(), narrow: false });
+  const home = at(before, 'outside:move:github');
+  assert.equal(dropTarget(still, before, home.x + 12, home.y + 14), null);
+  // Out of it, the slot opens and the group moves down; on the slot, or on a server in the
+  // gateway, a drop previews.
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, drop: { name: 'github', kind: 'remote' } });
+  const layout = layoutTree(tree, { open: new Set(), narrow: false });
+  const slot = at(layout, 'slot:github');
+  assert.equal(dropTarget(tree, layout, slot.x + 10, slot.y + 10), 'servers');
+  const files = at(layout, 'held:kitden:files');
+  assert.equal(dropTarget(tree, layout, files.x + 10, files.y + 10), 'servers');
+  // On the outside group as it is shown now, from its caption to its last block: back.
+  const caption = at(layout, 'group:outside');
+  const now = at(layout, 'outside:move:github');
+  const last = layout.blocks.filter((b) => b.id.startsWith('outside:')).at(-1);
+  for (const [x, y] of [[caption.x + 5, caption.y + 2], [now.x + 10, now.y + 10], [last.x + 10, last.y + last.h - 1]]) {
+    assert.equal(dropTarget(tree, layout, x, y), null);
+  }
+  // Off the Servers column: back.
+  assert.equal(dropTarget(tree, layout, 5, slot.y + 10), null);
+  assert.equal(dropTarget(tree, layout, at(layout, 'gateway:kitden').x + 5, slot.y + 10), null);
 });
 
 test('a grip shows only where the Kitden gateway can take the server', () => {

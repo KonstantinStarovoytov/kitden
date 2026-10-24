@@ -5,8 +5,8 @@ import { $, $$, button, el, joinWords, plural, reportError, shortPath, shortPath
 import { loadLibrary, morphOnNextRender } from "./library.js";
 import { fold, transition } from "./motion.js";
 import { cancelPreview, checkMark, closePanel, header, hideToast, isPanelOpen, openPanel, panelState, restoreFocus, toast } from "./panel.js";
-import { callout, CLIENT_ORDER, diffCounts, kitdenMove, mark, movedNames, notesSection, PLACE_IN_TITLE, ruleText, rulesText, skillRemoval, socket, stepText, strictText, targetWords } from "./parts.js";
-import { busy, reload, render, setBusy, state } from "./store.js";
+import { allPutBack, callout, CLIENT_ORDER, diffCounts, kitdenMove, mark, movedNames, notesSection, PLACE_IN_TITLE, ruleText, rulesText, skillRemoval, socket, stepText, strictText, targetWords } from "./parts.js";
+import { busy, go, reload, render, setBusy, state } from "./store.js";
 import { projectLabel, tools } from "./tools.js";
 
 // Node before 21 (the tests) has no navigator.
@@ -419,9 +419,10 @@ function resetApply(apply, cancel, label) {
 }
 
 const STOPPED = {
-  stale: "A file changed after the preview, so nothing was written. Preview again to see the current state.",
+  stale: "Settings changed since this preview.",
   restored: "The change did not check out.",
 };
+const NOTHING = "Nothing was changed.";
 // The states a change can end in after each verb. Read back in any other state it has not
 // ended, so the page cannot say how it went.
 const ENDED = {
@@ -429,6 +430,19 @@ const ENDED = {
   undo: ["undone", "undo_blocked"],
 };
 const LOST = "Could not confirm the result. Check Changes before trying again.";
+
+// How an Apply that was not verified ended, in the same words in a review and on the map's bar:
+// why it stopped, then the engine's own words with paths shortened, then "Nothing was changed."
+// only when that is true: nothing was written (stale), or the engine put every file back (its
+// words then end "The original settings were restored."). With no change read back (`after`
+// null), only `failure`: the server's words, or that the result is not known.
+export function stoppedWords(after, failure) {
+  if (!after) return failure || LOST;
+  const reason = STOPPED[after.state] || `The change stopped: ${after.state}.`;
+  const detail = after.error ? ` (${shortPaths(after.error)})` : "";
+  const nothing = after.state === "stale" || (after.state === "restored" && allPutBack(after.error));
+  return `${reason}${detail}${nothing ? ` ${NOTHING}` : ""}`;
+}
 
 // The change as the server holds it now, or null when it cannot be read.
 async function readChange(id) {
@@ -505,9 +519,7 @@ async function applyChange(change, { apply, cancel, label, body }) {
   if (!after || after.state !== "verified") {
     setBusy(false);
     resetApply(apply, cancel, label);
-    const reason = after ? STOPPED[after.state] || `The change stopped: ${after.state}.` : failure;
-    const detail = after && after.error ? ` (${shortPaths(after.error)})` : "";
-    body.prepend(callout(`${reason}${detail}`, "error"));
+    body.prepend(callout(stoppedWords(after, failure), "error"));
     // Focus goes to the button in Apply's place; the callout says what went wrong.
     let next = apply;
     if (after && after.state !== "previewed") {
@@ -638,9 +650,11 @@ export async function undoChange(change) {
 // A preview started on the map (a drag, later a marketplace result) shows there: a preview block
 // and a review bar on the canvas. `phase`: "idle", "loading" (asked), "ready", "applying" or
 // "failed". `body` is the preview request and `change` the server's preview; `done` and `total`
-// count Apply's steps; `failure` is how Apply ended ({ state, text }); `refused` holds the server's
-// words when it would not prepare it. `project` is the project it was asked in, and `inDetails`
-// says "Show changes" moved it into Details, where its own review shows it.
+// count Apply's steps; `failure` is how Apply ended: the state and the engine's words of the
+// change read back ({ state, error }), or the failure's words alone (`text`) when none was read.
+// `refused` holds the server's words when it would not prepare it. `project` is the project it
+// was asked in, and `inDetails` says "Show changes" moved it into Details, where its own review
+// shows it.
 const IDLE = { body: null, change: null, phase: "idle", done: 0, total: 0, failure: null, refused: null, project: "", inDetails: false };
 export const mapPreview = { ...IDLE };
 // The newest request on the map: an answer to an older one is dropped.
@@ -648,10 +662,7 @@ let asking = 0;
 // How the page draws the map again (gateway.js), as the last call gave it.
 let redrawMap = () => {};
 
-const NOTHING = "Nothing was changed.";
 const REFUSED = "Could not prepare this change";
-// Why Apply stopped when the engine wrote nothing or put every file back.
-const BAR_STOPPED = { stale: STALE_NOTE, restored: STOPPED.restored };
 
 // Every client the steps write, as the bar says it while Apply runs. Not the one being written:
 // the engine's count names no step, and it does not write them in the preview's order.
@@ -672,20 +683,16 @@ export function outcomeLine(change) {
 }
 
 // The bar's words for a preview (mapPreview's shape): the title with its scope, one outcome line
-// and what Apply says. While Apply runs it counts the steps and Cancel waits. An error says
-// "Nothing was changed." only when the engine wrote nothing or put every file back, and offers
-// "Try again". A refusal has no change, so only Cancel stays: trying again would be refused for
-// the same reason.
+// and what Apply says. While Apply runs it counts the steps and Cancel waits. An error says what
+// the review in Details says for the same end (stoppedWords), and offers "Try again". A refusal
+// has no change, so only Cancel stays: trying again would be refused for the same reason.
 export function barWords({ phase, change, body, done, total, failure, refused }) {
   if (refused) return { title: REFUSED, outcome: `${refused} ${NOTHING}`, apply: null, cancelWaits: false, retry: false };
   const title = changeWords(change, body).title;
   if (phase === "applying") return { title, outcome: writingLine(change.steps), apply: stepText("Applying", done, total), cancelWaits: true, retry: false };
   if (phase === "failed") {
-    const ended = failure && failure.state;
-    let outcome = (failure && failure.text) || LOST;
-    if (BAR_STOPPED[ended]) outcome = `${BAR_STOPPED[ended]} ${NOTHING}`;
-    else if (ended) outcome = `The change stopped: ${ended}.`;
-    return { title, outcome, apply: "Try again", cancelWaits: false, retry: true };
+    const { state: ended = null, error = null, text = null } = failure || {};
+    return { title, outcome: stoppedWords(ended ? { state: ended, error } : null, text), apply: "Try again", cancelWaits: false, retry: true };
   }
   return { title, outcome: outcomeLine(change), apply: "Apply", cancelWaits: false, retry: false };
 }
@@ -785,6 +792,9 @@ export async function previewOnMap(body, redraw) {
   if (mapWriting() || busy.change) return;
   redrawMap = redraw;
   dropMapPreview();
+  // A review in Details goes first, as when other Details take its place: one that is only
+  // previewed is cancelled on the server (panel.js). One being written refused this above.
+  if (panelState.current && panelState.current.type === "review" && isPanelOpen()) closePanel({ focus: false });
   const ticket = asking;
   const asked = state.project;
   Object.assign(mapPreview, { body, phase: "loading", project: asked });
@@ -819,10 +829,18 @@ export async function cancelOnMap(redraw) {
   redraw();
 }
 
+// The map's review bar is on the page now (not on the List or another place).
+function barShown() {
+  return typeof document !== "undefined" && Boolean(document.querySelector(".review-bar"));
+}
+
 // Apply in the bar: the button counts the steps as the server reports them, the bar says what is
 // written, and Cancel waits. Only `verified` ends it: the page reads everything again, the preview
 // goes (its block turns solid and its new link draws once) and the toast offers Undo. Any other
-// end stays in the bar with "Try again", focus on it, and the page reads again behind it.
+// end stays in the bar with "Try again", focus on it, and the page reads again behind it. With the
+// bar no longer on the page (the person went to the List or another place meanwhile), a toast
+// with no check says the same words, with a way to Changes when the result is not known, and the
+// preview goes.
 export async function applyOnMap(redraw) {
   if (mapPreview.phase !== "ready" || busy.change) return;
   redrawMap = redraw;
@@ -856,10 +874,17 @@ export async function applyOnMap(redraw) {
       return;
     }
     change.state = after ? after.state : "unknown";
-    Object.assign(mapPreview, { phase: "failed", failure: { state: after ? after.state : null, text: failure } });
+    const ended = after ? { state: after.state, error: after.error || null } : { state: null, text: failure };
+    Object.assign(mapPreview, { phase: "failed", failure: ended });
     setBusy(false);
-    redraw();
-    focusBar("apply");
+    if (barShown()) {
+      redraw();
+      focusBar("apply");
+    } else {
+      const { title, outcome } = barWords(mapPreview);
+      dropMapPreview();
+      toast(`${title} · ${outcome}`, after ? null : () => go("changes"), after ? {} : { label: "Open Changes" });
+    }
     reloadAll().then(render).catch(() => {});
   } finally {
     if (busy.change) setBusy(false);

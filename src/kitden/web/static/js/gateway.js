@@ -2,7 +2,7 @@
 // row opens its Details beside the page (gateway-details.js).
 import { $, button, el, gridKey, joinWords, plural, reportError, withFocusKey } from "./dom.js";
 import { addForm, heldServer, liveHeld, movesTo, SETUP_NOTE, showClient, showGateway, showHeld, showOutside, showTool } from "./gateway-details.js";
-import { appeared, drawMap, dropAt, findIn, isNarrow, keepOpen, layoutTree, litFrom, litPath, pressOpen, toggleOpen, wideWidth } from "./map.js";
+import { appeared, drawMap, dropAt, findIn, groupBox, isNarrow, keepOpen, layoutTree, litFrom, litPath, pressOpen, toggleOpen, wideWidth } from "./map.js";
 import { animate, entrance, glide, reducedMotion, spring } from "./motion.js";
 import { closePanel, isPanelOpen, moveBody, moveInto, openInfo, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, folderName, gatewayName, kitdenClients, mark, opens, ORIGIN_WORDS, scopeBar, skeleton, STATE_WORDS, staleNote } from "./parts.js";
@@ -280,6 +280,20 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
   return { columns: GATEWAY_COLUMNS, blocks, links };
 }
 
+// The group outside the gateway, from its caption to its last block, holds (x, y) of the map: a
+// dragged server is still at home there.
+function atHome(model, layout, x, y) {
+  const box = groupBox(model, layout, "group:outside");
+  return Boolean(box) && x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h;
+}
+
+// Where a dragged server lands at (x, y) of the map: "servers" on the Servers column, else null and
+// it goes back, as it does on its own group outside the gateway.
+export function dropTarget(model, layout, x, y) {
+  if (atHome(model, layout, x, y)) return null;
+  return dropAt(layout, x, y) === "servers" ? "servers" : null;
+}
+
 // The preview request of a server dragged onto the map's Servers column: the same as "Move into
 // the gateway…" with the Kitden gateway chosen, for the entries of its own row only. Null without
 // a Kitden gateway.
@@ -529,13 +543,13 @@ function arriveOnMap(model, found) {
 // How far a pointer moves on a block with a grip before the block follows it.
 const DRAG_START = 4;
 
-// What a move started on the map shows (gatewayTree's `drop` or `preview`): the slot while the
-// block is dragged or its preview is prepared, the preview block while the preview is open (also
-// from Details), else nothing.
+// What a move started on the map shows (gatewayTree's `drop` or `preview`): the slot once the
+// dragged block left its own group, and while its preview is prepared; the preview block while
+// the preview is open (also from Details); else nothing.
 function movingOn() {
   const shown = onMap.drag || onMap.moving;
   const move = shown ? { name: shown.name, kind: shown.kind } : null;
-  if (onMap.drag) return { drop: move };
+  if (onMap.drag) return onMap.drag.open ? { drop: move } : {};
   // A preview that ended elsewhere (the List, another place) leaves nothing to show.
   if (mapPreview.phase === "idle") onMap.moving = null;
   if (!onMap.moving) return {};
@@ -599,11 +613,12 @@ function swapBar(old, fresh) {
   if (again) again.focus({ preventScroll: true });
 }
 
-// A pointer goes down on a block with a grip. Once it moves 4 px the block follows it, the slot
-// "Drop to add" opens in its group of the Kitden gateway and its amber line hides. Let go over the
-// Servers column, it starts the same preview as "Move into the gateway…"; Escape, or a drop
-// anywhere else, puts it back. Nothing is written before Apply. A click without a move selects
-// the block as before.
+// A pointer goes down on a block with a grip. Once it moves 4 px the block follows it; once it
+// leaves its own group, the slot "Drop to add" opens in its group of the Kitden gateway and its
+// amber line hides (so a click that wobbles moves nothing on the map). Let go on the Servers
+// column, away from its own group, it starts the same preview as "Move into the gateway…";
+// Escape, or a drop anywhere else, puts it back. Nothing is written before Apply. A click without
+// a move selects the block as before; a grip press while a change is written does nothing.
 function pressGrip(event) {
   if (event.button !== 0 || busy.change || onMap.drag) return;
   const node = event.target.closest("button.block");
@@ -614,14 +629,19 @@ function pressGrip(event) {
   const grab = { x: from.x - box.left, y: from.y - box.top };
   const move = (e) => {
     const at = { x: e.clientX, y: e.clientY };
-    if (onMap.drag) {
-      onMap.drag.at = at;
-      follow();
-    } else if (Math.hypot(at.x - from.x, at.y - from.y) >= DRAG_START) {
-      onMap.drag = { id: block.id, name: block.name, kind: block.groupKey === "local" ? "local" : "remote", row: block.row, grab, at };
+    if (!onMap.drag) {
+      if (Math.hypot(at.x - from.x, at.y - from.y) < DRAG_START) return;
+      onMap.drag = { id: block.id, name: block.name, kind: block.groupKey === "local" ? "local" : "remote", row: block.row, grab, at, open: false };
       document.documentElement.classList.add("grabbing");
-      render();
     }
+    onMap.drag.at = at;
+    const point = mapPoint(at);
+    if (!onMap.drag.open && point && !atHome(onMap.model, onMap.layout, point.x, point.y)) {
+      onMap.drag.open = true;
+      render(); // the slot opens; the block follows again once it is drawn
+      return;
+    }
+    follow();
   };
   const stop = () => {
     document.removeEventListener("pointermove", move);
@@ -646,9 +666,15 @@ function pressGrip(event) {
   document.addEventListener("keydown", escape, true);
 }
 
-// The map's block area, and a block in it.
+// The map's block area, a block in it, and a point of the page (`at`) in the area's own terms.
 const mapArea = () => (onMap.box && onMap.box.isConnected ? onMap.box.querySelector(".map-area") : null);
 const blockIn = (area, id) => (area ? withFocusKey(area, `block:${id}`) : null);
+function mapPoint(at) {
+  const area = mapArea();
+  if (!area || !at) return null;
+  const origin = area.getBoundingClientRect();
+  return { x: at.x - origin.left, y: at.y - origin.top };
+}
 
 // A block lifted off its place, shown at (x, y) of the map area; `home` remembers where.
 function lift(node, id, x, y) {
@@ -657,15 +683,14 @@ function lift(node, id, x, y) {
   onMap.home = { id, x, y };
 }
 
-// The dragged block where the pointer holds it; the slot lights while the pointer is over Servers.
+// The dragged block where the pointer holds it; the slot lights while a drop there would preview.
 function follow() {
   const { drag } = onMap;
-  const area = mapArea();
-  const node = blockIn(area, drag.id);
-  if (!node) return;
-  const origin = area.getBoundingClientRect();
-  lift(node, drag.id, drag.at.x - origin.left - drag.grab.x, drag.at.y - origin.top - drag.grab.y);
-  onMap.box.classList.toggle("dropping", dropAt(onMap.layout, drag.at.x - origin.left, drag.at.y - origin.top) === "servers");
+  const node = blockIn(mapArea(), drag.id);
+  const point = mapPoint(drag.at);
+  if (!node || !point) return;
+  lift(node, drag.id, point.x - drag.grab.x, point.y - drag.grab.y);
+  onMap.box.classList.toggle("dropping", dropTarget(onMap.model, onMap.layout, point.x, point.y) === "servers");
 }
 
 // While its preview is prepared, the block waits on the slot (it glides there from where it was
@@ -695,18 +720,18 @@ function glideFrom(node, dx, dy) {
   if (dx || dy) animate(node, [{ translate: `${dx}px ${dy}px` }, { translate: "0 0" }], { duration: 260, easing: spring() });
 }
 
-// The pointer lets go at `point` (page coordinates), or Escape or a lost pointer (null). Over the
-// Servers column the preview of the move into the Kitden gateway starts; else the block goes back.
+// The pointer lets go at `point` (page coordinates), or Escape or a lost pointer (null). On the
+// Servers column, away from its own group, the preview of the move into the Kitden gateway
+// starts; else the block goes back.
 function letGo(point) {
   const drag = onMap.drag;
   onMap.drag = null;
   document.documentElement.classList.remove("grabbing");
   if (onMap.box) onMap.box.classList.remove("dropping");
   swallowClick();
-  const area = mapArea();
-  const origin = area ? area.getBoundingClientRect() : null;
-  const column = point && origin ? dropAt(onMap.layout, point.x - origin.left, point.y - origin.top) : null;
-  const body = column === "servers" ? dropBody(drag.row, current("gateway")) : null;
+  const at = mapPoint(point);
+  const target = at ? dropTarget(onMap.model, onMap.layout, at.x, at.y) : null;
+  const body = target === "servers" ? dropBody(drag.row, current("gateway")) : null;
   if (body) {
     onMap.moving = { id: drag.id, name: drag.name, kind: drag.kind };
     previewOnMap(body, redrawPreview).catch(reportError);

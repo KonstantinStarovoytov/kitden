@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js (for its columns) needs only this from a browser to load.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { GAP, NARROW_GAP, appeared, blockOrder, dropAt, findChip, findIn, foldable, isNarrow, layoutTree, litFrom, litPath, toggleOpen, unfoldDelays } = await import('../../src/kitden/web/static/js/map.js');
+const { GAP, NARROW_GAP, appeared, blockOrder, dropAt, findChip, groupBox, findIn, foldable, isNarrow, layoutTree, litFrom, litPath, toggleOpen, unfoldDelays } = await import('../../src/kitden/web/static/js/map.js');
 const { cutName } = await import('../../src/kitden/web/static/js/dom.js');
 const { GATEWAY_COLUMNS } = await import('../../src/kitden/web/static/js/gateway.js');
 
@@ -256,6 +256,19 @@ test('a drop names the column under the point', () => {
   assert.equal(dropAt(l, servers.x - GAP / 2, 10), null);
   assert.equal(dropAt(l, servers.x + 10, -1), null);
   assert.equal(dropAt(l, servers.x + 10, l.height + 1), null);
+});
+
+test('a group takes the box from its caption to its last block shown', () => {
+  const m = model(0, 9);
+  const l = layoutTree(m, { open: new Set(), ...WIDE });
+  const caption = l.blocks.find((b) => b.id === 'group:outside');
+  const more = l.blocks.find((b) => b.id === 'more:group:outside');
+  assert.deepEqual(groupBox(m, l, 'group:outside'), { x: caption.x, y: caption.y, w: caption.w, h: more.y + more.h - caption.y });
+  // Open, it reaches its last server.
+  const open = layoutTree(m, { open: new Set(['group:outside']), ...WIDE });
+  const last = open.blocks.filter((b) => b.id.startsWith('outside:')).at(-1);
+  assert.equal(groupBox(m, open, 'group:outside').h, last.y + last.h - caption.y);
+  assert.equal(groupBox(m, l, 'group:none'), null);
 });
 
 test('a preview or a slot in a long group always shows, after N more', () => {

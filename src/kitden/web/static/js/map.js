@@ -147,6 +147,16 @@ export function dropAt(layout, x, y) {
   return column ? column.id : null;
 }
 
+// The box a group of `model` takes in `layout`: from its caption to its last block shown ("N more"
+// too), as wide as its column; null when the group is not drawn.
+export function groupBox(model, layout, id) {
+  const caption = layout.blocks.find((b) => b.id === id);
+  if (!caption) return null;
+  const inside = new Set([...model.blocks.filter((b) => b.parent === id).map((b) => b.id), `more:${id}`]);
+  const bottom = layout.blocks.filter((b) => inside.has(b.id)).reduce((most, b) => Math.max(most, b.y + b.h), caption.y + caption.h);
+  return { x: caption.x, y: caption.y, w: caption.w, h: bottom - caption.y };
+}
+
 // How wide the map is when it lays out wide: every column and the gaps between them.
 export function wideWidth(model) {
   return model.columns.reduce((sum, column) => sum + column.w, 0) + GAP * (model.columns.length - 1);

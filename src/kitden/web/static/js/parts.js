@@ -577,10 +577,15 @@ export function toolsNode(server, inRow = false) {
   return word ? el(inRow ? "small" : "div", inRow ? "meta" : "why", word) : null;
 }
 
-// The badge of a change that did not check out. The engine's error ends with this sentence
-// only when everything was put back as it was.
+// The engine's error of a change that did not check out ends with this sentence only when
+// everything was put back as it was.
+export function allPutBack(error) {
+  return (error || "").endsWith("The original settings were restored.");
+}
+
+// The badge of a change that did not check out.
 export function failedWord(error) {
-  return (error || "").endsWith("The original settings were restored.") ? "Failed, put back" : "Failed";
+  return allPutBack(error) ? "Failed, put back" : "Failed";
 }
 
 // One line for a change log entry: what, which entries, which clients. Plugins go by their
