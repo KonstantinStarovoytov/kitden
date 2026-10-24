@@ -4,9 +4,9 @@ import { test } from 'node:test';
 // gateway.js needs only this from a browser to load; the tests call its pure parts.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { GATEWAY_COLUMNS, gatewayTree, heldServer, kitdenLinks, listAt, listRows, narrowFor, serverCount } = await import('../../src/kitden/web/static/js/gateway.js');
+const { GATEWAY_COLUMNS, findRows, gatewayTree, heldServer, kitdenLinks, listAt, listRows, narrowFor, serverCount } = await import('../../src/kitden/web/static/js/gateway.js');
 const { offersSwitch } = await import('../../src/kitden/web/static/js/gateway-details.js');
-const { blockLabel, findIn, layoutTree } = await import('../../src/kitden/web/static/js/map.js');
+const { blockLabel, findChip, findIn, layoutTree } = await import('../../src/kitden/web/static/js/map.js');
 const { kitdenClients } = await import('../../src/kitden/web/static/js/parts.js');
 const { viewMode } = await import('../../src/kitden/web/static/js/store.js');
 
@@ -388,4 +388,43 @@ test('the map goes narrow by the window rule, or where the wide map does not fit
   assert.equal(narrowFor(tree, { window: 1366, box: 766, docked: true }), true);
   // Before the box is measured, the window rule alone.
   assert.equal(narrowFor(tree, { window: 1440, box: null, docked: false }), false);
+});
+
+test('find lights both docs and opens what hides them', () => {
+  const found = findIn(gatewayTree(MEDIUM_VIEW, OPTS), 'docs');
+  assert.deepEqual([...found.matches].sort(), ['outside:local:docs', 'outside:move:docs']);
+  assert.equal(findChip(found), '2 matches');
+  assert.equal(findChip(findIn(gatewayTree(MEDIUM_VIEW, OPTS), 'export')), '1 match');
+  // The tool of a folded server is found; its server and group open to show it.
+  const tool = findIn(gatewayTree(MEDIUM_VIEW, OPTS), 'export');
+  assert.deepEqual([...tool.matches], ['tool:tracker/export_report']);
+  assert.ok(tool.open.has('held:kitden:tracker') && tool.open.has('group:kitden:remote'));
+});
+
+test('a match behind N more shows its group whole', () => {
+  const rows = Array.from({ length: 8 }, (_, i) => ({ name: `direct-${i}`, clients: ['codex'], columns: ['codex'], items: ['x'], stays: null, override: false }));
+  const tree = gatewayTree({ ...MEDIUM_VIEW, groups: { move: rows, local: [], plugin: [] } }, OPTS);
+  const shown = (open) => layoutTree(tree, { open, narrow: false }).blocks.map((b) => b.id);
+  assert.ok(shown(new Set()).includes('more:group:outside') && !shown(new Set()).includes('outside:move:direct-7'));
+  const found = findIn(tree, 'direct-7');
+  assert.ok(shown(found.open).includes('outside:move:direct-7') && !shown(found.open).includes('more:group:outside'));
+});
+
+test('the List lights a match and opens what holds it, without changing what the person folded', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+  const found = findIn(tree, 'search_files');
+  const open = new Set();
+  const folded = new Set(['gateway:kitden', 'group:clients']);
+  const ids = (rows) => rows.map((r) => r.id);
+  assert.ok(!ids(listRows(tree, open, folded)).includes('tool:files/search_files'));
+  const rows = findRows(tree, found, open, folded);
+  // The folded gateway shows its rows, the server shows its tools, and only the match is lit.
+  assert.ok(ids(rows).includes('held:kitden:files') && ids(rows).includes('tool:files/search_files'));
+  assert.deepEqual(rows.filter((r) => r.found).map((r) => r.id), ['tool:files/search_files']);
+  assert.deepEqual([[...open], [...folded].sort()], [[], ['gateway:kitden', 'group:clients']]);
+  // A client is found too, and its folded group opens.
+  const client = findRows(tree, findIn(tree, 'cursor'), open, folded);
+  assert.deepEqual(client.filter((r) => r.found).map((r) => r.id), ['client:cursor']);
+  // No search: the rows as they are, none lit.
+  assert.deepEqual(findRows(tree, null, open, folded), listRows(tree, open, folded));
 });

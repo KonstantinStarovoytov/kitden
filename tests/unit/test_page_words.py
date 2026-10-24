@@ -1369,3 +1369,31 @@ def test_the_gateway_says_what_it_could_not_read():
     ):
         assert words in text, words
     assert "projects have its" not in text
+
+
+def test_search_on_a_map_page_finds_on_that_page():
+    app = script("app.js")
+    assert 'MAP_PAGES = ["gateway"]' in app and 'go("library", { q })' in app
+    # The chip's words are shared by every map page, so they live in map.js.
+    assert '"match", "matches"' in script("map.js") and '"No matches"' in script("map.js")
+    assert '<span class="find-chip" id="find-chip" role="status"></span>' in INDEX
+    assert ".find-chip:empty" in CSS
+    # Matches are lit; the other blocks dim to 35% and their links to 25%, in the map and the List.
+    assert ".map.finding" in CSS
+    assert re.search(r"div\.map\.finding \.block:not\(\.found\)[^{]*\{ opacity: 0\.35; \}", CSS)
+    assert "div.map.finding .link { opacity: 0.25; }" in CSS
+    assert ".treegrid.finding .tg-row:not(.found) { opacity: 0.35; }" in CSS
+
+
+def test_finding_keeps_the_place_and_the_details():
+    app = script("app.js")
+    # Escape in the search clears it on a map page, and only then keeps Details open.
+    assert 'event.key !== "Escape" || !MAP_PAGES.includes(state.view)' in app
+    assert "event.stopPropagation();" in app.split('$("#q").addEventListener("keydown"')[1]
+    # "/" works beside docked Details, not under the modal drawer.
+    assert '!$("#drawer").classList.contains("docked")' in app
+    assert 'if (event.key === "/" && !typing && !modal) {' in app
+    # The Gateway only lights, dims and opens blocks for the view: it asks nothing of a client.
+    text = script("gateway.js")
+    find = text.split("export function findRows(")[1].split("\n}\n")[0]
+    assert "postJson" not in find and "review(" not in find and "setState" not in find

@@ -6,6 +6,7 @@ import { renderAgents } from "./agents.js";
 import { renderChanges } from "./changes.js";
 import { renderGateway } from "./gateway.js";
 import { loadLibrary, loadLibraryFor, morphOnNextRender, raceSlow, renderLibrary, settleRows, showSources, snapshotRows } from "./library.js";
+import { findChip } from "./map.js";
 import { renderOverview } from "./overview.js";
 import { closeForProject, closePanel, initPanel, isPanelOpen } from "./panel.js";
 import { callout, demoTag, GONE_PROJECT, latestChanges, projectMenu, scanLine, versionsOpened } from "./parts.js";
@@ -28,6 +29,9 @@ const FOCUSABLE = "[data-focus], tr[data-key]";
 // Places that show one project's setup. For a picked project no longer on the list they say so
 // instead; Changes and Agents draw as usual.
 const PROJECT_PLACES = ["overview", "library", "gateway"];
+// Places where the top search finds on the page itself (Part 5 adds "library"). On the others it
+// sends the search to the Library. A map page's render returns what the search found there.
+const MAP_PAGES = ["gateway"];
 
 function renderPlace() {
   if (shownView !== state.view && isPanelOpen()) closePanel({ instant: true, keepSelection: true, focus: false });
@@ -41,8 +45,9 @@ function renderPlace() {
   // A redraw of the same place notes where its rows were, so they can move from there.
   const before = samePlace && place.snapshot ? place.snapshot() : null;
   main.replaceChildren();
+  let found = null;
   if (PROJECT_PLACES.includes(state.view) && projectGone()) main.append(el("h1", null, place.title), callout(GONE_PROJECT));
-  else place.render(main);
+  else found = place.render(main);
   if (place.settle) place.settle(before);
   if (key) {
     const same = $$(FOCUSABLE, main).find((node) => focusKey(node) === key);
@@ -55,6 +60,7 @@ function renderPlace() {
   }
   glide($(".nav"), $('.nav a[aria-current="page"]'), "nav");
   renderShell();
+  drawChip(MAP_PAGES.includes(state.view) ? found : null);
 }
 
 // Rail counters and the Where list follow the data.
@@ -71,6 +77,14 @@ function renderShell() {
 
   drawPicker();
   if ($("#q") !== document.activeElement) $("#q").value = state.q;
+}
+
+// The chip in the search box says how many blocks the search found on a map page (`found`, else
+// null). It is a live region: its words are set only when they change, so a redraw is quiet.
+function drawChip(found) {
+  const chip = $("#find-chip");
+  const words = findChip(found) || "";
+  if (chip.textContent !== words) chip.textContent = words;
 }
 
 // The project picker (parts.js projectMenu), drawn again when the list, a count or the pick
@@ -295,15 +309,29 @@ function start() {
     event.preventDefault();
     $("#main").focus();
   });
+  // The search stays on the place: it replaces the address entry and draws again, and the focus
+  // stays in the box (only the page is drawn again).
   $("#q").addEventListener("input", (event) => {
     const q = event.target.value.trim();
-    // The Library searches what is set up and the marketplaces; other places send a search there.
-    if (state.view !== "library" && q) go("library", { q });
+    // A map page finds on itself and the Library searches what is set up and the marketplaces;
+    // other places send a search to the Library.
+    const here = state.view === "library" || MAP_PAGES.includes(state.view);
+    if (!here && q) go("library", { q });
     else go(state.view, { q });
+  });
+  // Escape clears a search on a map page. Details stay open: only the next Escape closes them.
+  $("#q").addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !MAP_PAGES.includes(state.view) || !state.q) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.target.value = "";
+    go(state.view, { q: "" });
   });
   document.addEventListener("keydown", (event) => {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
-    if (event.key === "/" && !typing && !isPanelOpen()) {
+    // Details beside the page leave the page usable; only the drawer over it is modal.
+    const modal = isPanelOpen() && !$("#drawer").classList.contains("docked");
+    if (event.key === "/" && !typing && !modal) {
       event.preventDefault();
       $("#q").focus();
     }

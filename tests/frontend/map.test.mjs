@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js (for its columns) needs only this from a browser to load.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { GAP, NARROW_GAP, appeared, blockOrder, foldable, layoutTree, toggleOpen, litPath, litFrom, findIn, isNarrow, unfoldDelays } = await import('../../src/kitden/web/static/js/map.js');
+const { GAP, NARROW_GAP, appeared, blockOrder, findChip, findIn, foldable, isNarrow, layoutTree, litFrom, litPath, toggleOpen, unfoldDelays } = await import('../../src/kitden/web/static/js/map.js');
 const { cutName } = await import('../../src/kitden/web/static/js/dom.js');
 const { GATEWAY_COLUMNS } = await import('../../src/kitden/web/static/js/gateway.js');
 
@@ -147,6 +147,14 @@ test('a client lights what it reaches', () => {
 test('find lights matches and opens the folded parent', () => {
   assert.deepEqual(findIn(model(3, 0, { tools: true }), ' PUSH '), { matches: new Set(['tool:github/push_files']), open: new Set(['held:kitden:github', 'group:kitden:remote']) });
   assert.deepEqual(findIn(model(3, 0), '  '), { matches: new Set(), open: new Set() });
+});
+
+test('the find chip says how many blocks match', () => {
+  const tree = model(3, 0, { tools: true });
+  assert.equal(findChip(null), null);
+  assert.equal(findChip(findIn(tree, 'zzz')), 'No matches');
+  assert.equal(findChip(findIn(tree, 'push')), '1 match');
+  assert.equal(findChip(findIn(tree, 'create_')), '3 matches');
 });
 
 test('narrow: tools unfold down inside the server; the gateway is a small tile', () => {

@@ -2,7 +2,7 @@
 // row opens its Details beside the page (gateway-details.js).
 import { $, button, el, gridKey, joinWords, plural, reportError, withFocusKey } from "./dom.js";
 import { addForm, heldServer, liveHeld, movesTo, SETUP_NOTE, showClient, showGateway, showHeld, showOutside, showTool } from "./gateway-details.js";
-import { appeared, drawMap, isNarrow, layoutTree, litFrom, litPath, toggleOpen, wideWidth } from "./map.js";
+import { appeared, drawMap, findIn, isNarrow, layoutTree, litFrom, litPath, toggleOpen, wideWidth } from "./map.js";
 import { entrance, glide, reducedMotion } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, openInfo, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, folderName, gatewayName, kitdenClients, mark, opens, ORIGIN_WORDS, scopeBar, skeleton, STATE_WORDS, staleNote } from "./parts.js";
@@ -62,6 +62,8 @@ export function serverCount(view) {
   return ((kitden && kitden.servers) || []).length + outside;
 }
 
+// Draws the page. It returns what the top search found on it (map.js findIn), or null with no
+// search or no page to search: app.js shows the chip.
 export function renderGateway(main) {
   const head = el("div", "page-head");
   head.append(el("h1", null, "Gateway"));
@@ -84,12 +86,16 @@ export function renderGateway(main) {
   const seg = modeSwitch(mode);
   head.append(seg);
   const model = gatewayTree(view, { setup: data.setupServer, clients: data.clients, held: liveHeld(view), picked: state.project });
-  if (mode === "map") gatewayMap(main, model);
-  else gatewayList(main, view, model);
+  // The search finds here: matches light up, the rest dims, and what hides a match opens (S.6).
+  // It changes nothing in a client and moves no Details.
+  const found = state.q.trim() ? findIn(model, state.q) : null;
+  if (mode === "map") gatewayMap(main, model, found);
+  else gatewayList(main, view, model, found);
   glide(seg, seg.querySelector('[aria-pressed="true"]'), "gateway-view");
   // A performance mark for the map probe (Part 4.1): the first time the page draws with data.
   if (!performance.getEntriesByName("kitden:gateway-drawn").length) performance.mark("kitden:gateway-drawn");
   openArrival(view, model, mode).catch(reportError);
+  return found;
 }
 
 function noGateway() {
@@ -303,6 +309,16 @@ export function listRows(model, open = new Set(), folded = new Set()) {
   return rows;
 }
 
+// The List's rows for a search (`found`, from findIn; null for none): a match's row is lit
+// (`found: true`), the servers above a match show their tools, and the groups and gateways above
+// one unfold. Only for this view: `open` and `folded` stay as the person left them.
+export function findRows(model, found, open, folded) {
+  if (!found) return listRows(model, open, folded);
+  const unfolded = new Set(folded);
+  for (const id of found.matches) for (const above of rowsAbove(model, id)) unfolded.delete(above);
+  return listRows(model, new Set([...open, ...found.open]), unfolded).map((row) => ({ ...row, found: found.matches.has(row.id) }));
+}
+
 // "N more" (`more:group:<id>`) and a group (`group:<id>`) open the List at that group.
 export function listAt(id) {
   return { mode: "list", selected: { kind: "group", name: id.replace(/^more:/, "").replace(/^group:/, "") } };
@@ -316,14 +332,15 @@ export function narrowFor(model, { window: width, box = null, docked = false }) 
 }
 
 // The map: the blocks open and the one selected, what is drawn already, its box and the tree it
-// shows, and the box's width as last measured. Kept across redraws of one project.
-const onMap = { project: null, open: new Set(), selected: null, drawn: new Set(), seeded: false, box: null, model: null, width: null, narrow: false, watch: null };
+// shows, what the search found, and the box's width as last measured. Kept across redraws of one
+// project.
+const onMap = { project: null, open: new Set(), selected: null, drawn: new Set(), seeded: false, box: null, model: null, found: null, width: null, narrow: false, watch: null };
 
-function gatewayMap(main, model) {
+function gatewayMap(main, model, found) {
   if (onMap.project !== state.project) Object.assign(onMap, { project: state.project, open: new Set(), selected: null, seeded: false });
   const box = el("div");
   main.append(box);
-  Object.assign(onMap, { box, model });
+  Object.assign(onMap, { box, model, found });
   // Escape clears the selection first; open Details then close too (panel.js).
   box.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || !onMap.selected) return;
@@ -361,11 +378,18 @@ function narrowNow(model) {
   return narrowFor(model, { window: innerWidth, box: onMap.width, docked });
 }
 
+// The blocks open now: those the person opened, and those a search opens to show a match (a
+// group with a match shows all its blocks). The search keeps them for the view only.
+function openNow() {
+  return onMap.found ? new Set([...onMap.open, ...onMap.found.open]) : onMap.open;
+}
+
 // Draw the map in its box as it is now. On the page's first draw (and a project's), every link and
 // block counts as drawn already, so all of it shows at once; later only what appears draws.
 function drawOnMap(box, model) {
   onMap.narrow = narrowNow(model);
-  const layout = layoutTree(model, { open: onMap.open, narrow: onMap.narrow });
+  const open = openNow();
+  const layout = layoutTree(model, { open, narrow: onMap.narrow });
   if (!onMap.seeded) {
     appeared(layout, onMap.drawn);
     onMap.seeded = true;
@@ -379,7 +403,8 @@ function drawOnMap(box, model) {
     tile,
     selected: chosen ? chosen.id : null,
     lit,
-    open: onMap.open,
+    found: onMap.found,
+    open,
     drawn: onMap.drawn,
     reduced: reducedMotion.matches,
   });
@@ -411,9 +436,18 @@ function pressBlock(model, id) {
   else selectOnMap(block);
 }
 
+// What a search opened to show `block` stays open, so the selection is still on the map when the
+// search ends. With no search it changes nothing: what holds a shown block is open already.
+function keepOpen(block) {
+  const byId = new Map(onMap.model.blocks.map((b) => [b.id, b]));
+  const now = openNow();
+  for (let at = byId.get(block.parent); at; at = byId.get(at.parent)) if (now.has(at.id)) onMap.open.add(at.id);
+}
+
 // Select a block: the map lights it and is drawn again, then its Details open beside the page.
 // The List takes the Tab key on the same row.
 function selectOnMap(block) {
+  keepOpen(block);
   onMap.selected = block.id;
   onList.current = block.id;
   drawAgain();
@@ -479,13 +513,13 @@ function tile(block) {
 // person folded, and the row that takes the Tab key, kept across redraws of one project.
 const onList = { project: null, open: new Set(), folded: new Set(), current: null };
 
-function gatewayList(main, view, model) {
+function gatewayList(main, view, model, found) {
   if (onList.project !== state.project) Object.assign(onList, { project: state.project, open: new Set(), current: null });
-  const rows = listRows(model, onList.open, onList.folded);
+  const rows = findRows(model, found, onList.open, onList.folded);
   const byId = new Map(model.blocks.map((block) => [block.id, block]));
   if (!rows.some((r) => r.id === onList.current)) onList.current = rows.length ? rows[0].id : null;
   const chosen = selectedRow(rows, byId);
-  const grid = el("div", "treegrid");
+  const grid = el("div", found ? "treegrid finding" : "treegrid");
   grid.setAttribute("role", "treegrid");
   grid.setAttribute("aria-label", "Clients, gateways and MCP servers");
   const head = el("div", "tg-head");
@@ -496,7 +530,8 @@ function gatewayList(main, view, model) {
     head.append(cell);
   }
   grid.append(head);
-  const press = { toggle: toggleRow, open: (row) => openRow(row, byId.get(row.id)) };
+  // A row a search showed stays shown when the search ends: what holds it unfolds for good.
+  const press = { toggle: toggleRow, open: (row) => { unfoldAbove(model, row.id); openRow(row, byId.get(row.id)); } };
   for (const row of rows) grid.append(listRow(row, byId.get(row.id), { current: row.id === onList.current, selected: row.id === chosen, view, press }));
   // One row takes the Tab key; the arrows move between rows, Right and Left fold, Enter opens.
   // Keys on a row's own button stay that button's.
@@ -541,6 +576,7 @@ function cell(className, text) {
 // group row folds.
 function listRow(row, block, { current, selected, view, press }) {
   const node = el("div", row.group ? "tg-row group" : `tg-row ${row.kind}`);
+  if (row.found) node.classList.add("found");
   node.setAttribute("role", "row");
   node.setAttribute("aria-level", String(row.depth + 1));
   if (row.expanded !== undefined) node.setAttribute("aria-expanded", String(row.expanded));
@@ -650,13 +686,18 @@ function rowsAbove(model, id) {
   return above;
 }
 
-// Show a row in the List and focus it, so its Details open from it and Escape comes back to it:
-// every row above it unfolds (and a group itself with `unfold`).
-function showRow(model, id, { unfold = false } = {}) {
+// Unfold every row above `id`: a server shows its tools, a group or a gateway shows its rows.
+function unfoldAbove(model, id) {
   for (const above of rowsAbove(model, id)) {
     onList.folded.delete(above);
     if (above.startsWith("held:")) onList.open.add(above);
   }
+}
+
+// Show a row in the List and focus it, so its Details open from it and Escape comes back to it:
+// every row above it unfolds (and a group itself with `unfold`).
+function showRow(model, id, { unfold = false } = {}) {
+  unfoldAbove(model, id);
   if (unfold) onList.folded.delete(id);
   onList.current = id;
   render();

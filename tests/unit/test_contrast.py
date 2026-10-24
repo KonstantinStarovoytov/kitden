@@ -135,3 +135,13 @@ def test_facts_text_is_readable_on_the_details_column_in_both_themes():
     for theme in (LIGHT, DARK):
         for ink in ("--ink-3", "--route"):
             assert contrast(theme[ink], theme["--panel-raised"]) >= 4.5, ink
+
+
+def test_the_find_chip_and_a_lit_list_row_are_readable_in_both_themes():
+    # The chip sits on the search box (--inset); a lit List row's quiet words sit on the accent
+    # tint, where --ink-3 is only 4.48:1 in the light theme.
+    assert ".tg-row.found .meta, .tg-row.found .tg-tools { color: var(--ink-2); }" in CSS
+    assert contrast(LIGHT["--ink-3"], LIGHT["--route-soft"]) < 4.5
+    for theme in (LIGHT, DARK):
+        assert contrast(theme["--ink-2"], theme["--inset"]) >= 4.5
+        assert contrast(theme["--ink-2"], theme["--route-soft"]) >= 4.5

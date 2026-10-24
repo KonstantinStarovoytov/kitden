@@ -15,7 +15,7 @@
 //   spoken. `dot`: a client's dot when it is not its state (a client found on a first run).
 // - links: [{ from, to, kind }], kind "on", "faint", "direct" or "preview". The link is the
 //   state: something on has a link, something off has none.
-import { button, cutName, el } from "./dom.js";
+import { button, cutName, el, plural } from "./dom.js";
 
 export const GAP = 46; // between two columns
 export const NARROW_GAP = 28; // between two columns in a narrow window
@@ -269,6 +269,13 @@ export function findIn(model, text) {
   return { matches, open };
 }
 
+// What the search chip says: nothing without a search (`found` null), "No matches", or how many
+// blocks match.
+export function findChip(found) {
+  if (!found) return null;
+  return found.matches.size ? plural(found.matches.size, "match", "matches") : "No matches";
+}
+
 // A part a screen reader skips: the block's label says it already.
 function quiet(node) {
   node.setAttribute("aria-hidden", "true");
@@ -320,8 +327,9 @@ export function blockLabel(block) {
 // opens or folds a block that folds (`onOpen`), then selects it (`onSelect`, which draws again).
 function blockNode(block, { selected, lit, found, folds, open, tile, onSelect, onOpen }) {
   const name = String(block.name || "");
+  const matched = Boolean(found && found.matches.has(block.id));
   if (block.kind === "group" && !block.details) {
-    const caption = el("div", "caption", name);
+    const caption = el("div", matched ? "caption found" : "caption", name);
     caption.title = name;
     return caption;
   }
@@ -337,7 +345,7 @@ function blockNode(block, { selected, lit, found, folds, open, tile, onSelect, o
   if (folding) node.setAttribute("aria-expanded", String(open.has(block.id)));
   if (block.id === selected) node.classList.add("selected");
   if (lit.has(block.id)) node.classList.add("lit");
-  if (found && found.matches.has(block.id)) node.classList.add("found");
+  if (matched) node.classList.add("found");
   node.addEventListener("click", () => {
     if (folding && onOpen) onOpen(block.id);
     if (onSelect) onSelect(block.id);
@@ -350,7 +358,9 @@ function blockNode(block, { selected, lit, found, folds, open, tile, onSelect, o
 // (blockOrder). What `drawn` does not hold yet appeared since the last draw (`appeared`): a new
 // link draws once, then new blocks fade in after it (`unfoldDelays`); with `reduced` all of it
 // shows at once. Lit links are drawn last, over the others. A click calls `onOpen(id)` on a block
-// that folds, then `onSelect(id)`. `tile(block)` gives what a block shows before its name.
+// that folds, then `onSelect(id)`. `tile(block)` gives what a block shows before its name. `found`
+// (from findIn, null for no search) lights its matches and dims the rest (`.finding`); the page
+// adds `found.open` to `open` itself.
 export function drawMap(box, model, layout, { onSelect, onOpen, onAdd, tile, selected = null, lit = new Set(), found = null, open = new Set(), drawn = new Set(), reduced = false } = {}) {
   performance.mark("kitden:map-start");
   const byId = new Map(model.blocks.map((block) => [block.id, block]));
