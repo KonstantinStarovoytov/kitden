@@ -5,8 +5,9 @@ import { postJson } from "./api.js";
 import { openItem } from "./details.js";
 import { $, $$, button, el, focusKey, reportError } from "./dom.js";
 import { onOpenItem } from "./library.js";
+import { leaveMap, mapPreview } from "./map-review.js";
 import { finishTransition } from "./motion.js";
-import { checkStale, leaveMap, mapPreview } from "./review.js";
+import { checkStale } from "./review.js";
 import { arrival, busy, setState, state } from "./store.js";
 import { reloadTools } from "./tools.js";
 

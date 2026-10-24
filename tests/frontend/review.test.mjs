@@ -5,7 +5,8 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; review.js must load there too.
 delete globalThis.navigator;
-const { PLACE_IN_TITLE, applyOnMap, barWords, cancelOnMap, changeWords, checkStale, leaveMap, mapPreview, outcomeLine, previewOnMap, review, reviewLede, staleCheckWanted, stoppedWords, targetWords, writingLine } = await import('../../src/kitden/web/static/js/review.js');
+const { PLACE_IN_TITLE, changeWords, checkStale, review, reviewLede, staleCheckWanted, stoppedWords, targetWords } = await import('../../src/kitden/web/static/js/review.js');
+const { applyOnMap, barWords, cancelOnMap, leaveMap, mapPreview, outcomeLine, previewOnMap, writingLine } = await import('../../src/kitden/web/static/js/map-review.js');
 const { hideToast, isPanelOpen, openPanel, panelState } = await import('../../src/kitden/web/static/js/panel.js');
 const { moveBody } = await import('../../src/kitden/web/static/js/details.js');
 const { busy, state } = await import('../../src/kitden/web/static/js/store.js');

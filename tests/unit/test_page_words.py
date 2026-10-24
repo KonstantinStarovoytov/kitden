@@ -31,7 +31,8 @@ def panel() -> str:
 
 def gw() -> str:
     """The Gateway page's modules as one text."""
-    return script("gateway.js") + "\n" + script("gateway-details.js")
+    names = ("gateway.js", "gateway-details.js", "gateway-drag.js")
+    return "\n".join(script(name) for name in names)
 
 
 def test_the_side_panel_is_four_modules():
@@ -192,7 +193,7 @@ def test_gateway_wires_do_not_fake_traffic():
     assert not any(
         ("map" in line or ".routes" in line) and "infinite" in line for line in css.splitlines()
     )
-    for name in ("gateway.js", "gateway-details.js", "map.js"):
+    for name in ("gateway.js", "gateway-details.js", "gateway-drag.js", "map.js"):
         assert "flow" not in script(name), name
 
 
@@ -1407,43 +1408,55 @@ def test_finding_keeps_the_place_and_the_details():
 
 
 def test_the_map_review_bar_waits_for_verified():
-    review = script("review.js")
+    review, bar = script("review.js"), script("map-review.js")
     for words in (
         '"Show changes"',
         '"Try again"',
-        "Nothing was changed.",
         "A backup is kept.",
         "export function reviewBar(",
         "previewOnMap(",
     ):
-        assert words in review, words
+        assert words in bar, words
+    # The bar says it with the one word of review.js (barWords).
+    assert '"Nothing was changed."' in review and "`${refused} ${NOTHING}`" in bar
     assert '"Drop to add"' in gw() and "dropBody(" in gw() and "moveBody(" in script("details.js")
-    assert "Sign in after Apply" not in review
+    assert "Sign in after Apply" not in review + bar
 
 
 def test_the_map_review_bar_words_and_look():
-    review = script("review.js")
+    review, bar = script("review.js"), script("map-review.js")
     # What is written, in the owner's words; the step count comes from the server.
-    assert "`Writing ${names[0]}'s settings. A backup is kept.`" in review
-    assert "`Writing the settings of ${joinWords(names)}. A backup is kept.`" in review
-    assert '"the Kitden gateway"' in review and 'stepText("Applying", done, total)' in review
+    assert "`Writing ${names[0]}'s settings. A backup is kept.`" in bar
+    assert "`Writing the settings of ${joinWords(names)}. A backup is kept.`" in bar
+    assert '"the Kitden gateway"' in bar and 'stepText("Applying", done, total)' in bar
     # A refusal says why and keeps only Cancel; the bar is a region with a status line.
-    assert '"Could not prepare this change"' in review
-    assert 'setAttribute("role", "region")' in review and 'setAttribute("role", "status")' in review
+    assert '"Could not prepare this change"' in bar
+    assert 'setAttribute("role", "region")' in bar and 'setAttribute("role", "status")' in bar
     # Both reviews end with the one toast that offers Undo.
-    assert "appliedToast(after, previewBody);" in review and "appliedToast(after, body);" in review
+    assert "appliedToast(after, previewBody);" in review and "appliedToast(after, body);" in bar
     # An end that is not verified reads the same in Details and on the bar; "Nothing was changed."
     # only when the engine put everything back. Off the map, a toast says it, with Changes.
     assert 'callout(stoppedWords(after, failure), "error")' in review
-    assert "outcome: stoppedWords(" in review and "allPutBack(after.error)" in review
+    assert "outcome: stoppedWords(" in bar and "allPutBack(after.error)" in review
     # The bar and its toast leave out the engine's words (paths, commands): they stay in Details.
-    assert "{ detail: false }" in review
+    assert "{ detail: false }" in bar
     assert '"Not everything was put back. Check Changes before trying again."' in review
-    assert '{ label: "Open Changes" }' in review and 'go("changes")' in review
+    assert '{ label: "Open Changes" }' in bar and 'go("changes")' in bar
     # The preview block says it is a preview; it sits on the preview fill with the preview line.
     assert '"Preview"' in script("gateway.js")
     look = r"div\.map \.block\.preview \{[^}]*var\(--preview-line\)[^}]*var\(--preview-fill\)"
     assert re.search(look, CSS)
     assert ".review-bar {" in CSS
     # A drag starts after 4 px; the keyboard path stays "Move in…".
-    assert "const DRAG_START = 4;" in script("gateway.js") and '"Move in…"' in script("gateway.js")
+    assert "const DRAG_START = 4;" in script("gateway-drag.js")
+    assert '"Move in…"' in script("gateway.js")
+
+
+def test_the_map_review_reads_no_gateway_module():
+    # Part 5 puts the review bar on the Library map, so it reads no Gateway module. review.js never
+    # reads it back (no import cycle): the map review tells it how they take turns.
+    bar = script("map-review.js")
+    for name in ("gateway.js", "gateway-details.js", "gateway-drag.js"):
+        assert f'from "./{name}"' not in bar, name
+    assert 'from "./map-review.js"' not in script("review.js")
+    assert "setMapReview(TURNS)" in bar and "export function setMapReview(" in script("review.js")

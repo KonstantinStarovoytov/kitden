@@ -158,7 +158,7 @@ export function footerActions(offers, warnings, move, adds = [], tools = null) {
 }
 
 // The preview request that moves `items` (entry ids) into `gateway`. A drag on the Gateway map
-// asks the same (gateway.js dropBody).
+// asks the same (gateway-drag.js dropBody).
 export function moveBody(gateway, items) {
   return { action: "gateway.move", targets: items.map((item) => ({ item })), params: { gateway: gateway.id } };
 }

@@ -4,7 +4,8 @@ import { test } from 'node:test';
 // gateway.js needs only this from a browser to load; the tests call its pure parts.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { GATEWAY_COLUMNS, dropBody, dropTarget, findRows, gatewayTree, heldServer, kitdenLinks, listAt, listRows, narrowFor, serverCount } = await import('../../src/kitden/web/static/js/gateway.js');
+const { GATEWAY_COLUMNS, findRows, gatewayTree, heldServer, kitdenLinks, listAt, listRows, narrowFor, serverCount } = await import('../../src/kitden/web/static/js/gateway.js');
+const { dropBody, dropTarget } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
 const { offersSwitch } = await import('../../src/kitden/web/static/js/gateway-details.js');
 const { blockLabel, findChip, findIn, keepOpen, layoutTree, pressOpen } = await import('../../src/kitden/web/static/js/map.js');

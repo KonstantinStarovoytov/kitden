@@ -113,8 +113,10 @@ Also pinned, from the master Review Focus: the large sample opens in List, its l
   - `panel.js` and `details.js`: `openPanel(…, { dock })`, `docksAt`, `factsBlock`,
     `detailsCard({ kind, title, id, facts, why, actions, technical, more, after })` with actions
     `{label, run?, body?, primary?}`, and `projectChoice(projects, picked, onPick)`;
-  - `review.js`: `mapPreview`, `previewOnMap(body, redraw)`, `applyOnMap`, `cancelOnMap`,
-    `showMapReview`, `barWords`, `reviewBar(change, { body, onApply, onCancel, onShow })`;
+  - `map-review.js` (it reads no Gateway module): `mapPreview`, `previewOnMap(body, redraw)`,
+    `applyOnMap`, `cancelOnMap`, `showMapReview`, `barWords`, `reviewBar(change, { body,
+    onApply, onCancel, onShow })`, and for a page's bar `previewBar(redraw)` and
+    `redrawPreview(redraw, { same, ended })`; `review.js` keeps `appliedToast`;
   - `gateway.js`: `gatewayTree(…, { preview: {name, kind} })`; `app.js`: `MAP_PAGES`, which gains
     `"library"`;
   - `clients/entries.py`: `gateway_entry`, `reads_elsewhere`; `own_rules(settings, path)`.

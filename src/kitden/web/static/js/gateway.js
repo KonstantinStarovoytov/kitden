@@ -2,12 +2,13 @@
 // row opens its Details beside the page (gateway-details.js).
 import { $, button, el, gridKey, joinWords, plural, reportError, withFocusKey } from "./dom.js";
 import { addForm, heldServer, liveHeld, movesTo, SETUP_NOTE, showClient, showGateway, showHeld, showOutside, showTool } from "./gateway-details.js";
-import { appeared, drawMap, dropAt, findIn, groupBox, isNarrow, keepOpen, layoutTree, litFrom, litPath, pressOpen, toggleOpen, wideWidth } from "./map.js";
-import { animate, entrance, glide, reducedMotion, spring } from "./motion.js";
-import { closePanel, isPanelOpen, moveBody, moveInto, openInfo, review } from "./panel.js";
+import { endedMove, movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
+import { leaveMap, mapReviewLeft, previewBar, redrawPreview, showMapReview } from "./map-review.js";
+import { appeared, drawMap, findIn, isNarrow, keepOpen, layoutTree, litFrom, litPath, pressOpen, toggleOpen, wideWidth } from "./map.js";
+import { entrance, glide, reducedMotion } from "./motion.js";
+import { closePanel, isPanelOpen, moveInto, openInfo, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, folderName, gatewayName, kitdenClients, mark, opens, ORIGIN_WORDS, scopeBar, skeleton, STATE_WORDS, staleNote } from "./parts.js";
-import { applyOnMap, cancelOnMap, leaveMap, mapPreview, mapReviewLeft, previewOnMap, reviewBar, showMapReview } from "./review.js";
-import { arrival, busy, current, currentError, data, go, goTo, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
+import { arrival, current, currentError, data, go, goTo, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
 
 // Overview sets a client up with the same note. A server the Kitden gateway holds, and its
 // links, are found where its Details are drawn.
@@ -280,28 +281,6 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
   return { columns: GATEWAY_COLUMNS, blocks, links };
 }
 
-// The group outside the gateway, from its caption to its last block, holds (x, y) of the map: a
-// dragged server is still at home there.
-function atHome(model, layout, x, y) {
-  const box = groupBox(model, layout, "group:outside");
-  return Boolean(box) && x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h;
-}
-
-// Where a dragged server lands at (x, y) of the map: "servers" on the Servers column, else null and
-// it goes back, as it does on its own group outside the gateway.
-export function dropTarget(model, layout, x, y) {
-  if (atHome(model, layout, x, y)) return null;
-  return dropAt(layout, x, y) === "servers" ? "servers" : null;
-}
-
-// The preview request of a server dragged onto the map's Servers column: the same as "Move into
-// the gateway…" with the Kitden gateway chosen, for the entries of its own row only. Null without
-// a Kitden gateway.
-export function dropBody(row, view) {
-  const kitden = view.gateways.find((g) => g.kind === "kitden");
-  return kitden ? moveBody(kitden, row.items) : null;
-}
-
 // The List's rows, in order, from the tree: a "Clients" group of client rows; each gateway's own
 // row, then its Remote and Local group rows with its servers and, under an open server (`open`),
 // its tools; then the group outside the gateway. A group or a gateway the person folded
@@ -381,12 +360,10 @@ export function narrowFor(model, { window: width, box = null, docked = false }) 
 
 // The map: the blocks open and the one selected, what is drawn already, its box and the tree it
 // shows, what the search found, and the box's width as last measured. Kept across redraws of one
-// project. A move started on the map: the block being dragged (`drag`), the server whose preview
-// it started (`moving`, { id, name, kind }), where its block was last shown off its place
-// (`home`), the layout drawn, the review bar and what the map showed of the move (`shows`).
+// project. What the map showed of a move started on it (`shows`; the move is gateway-drag.js's).
 const onMap = {
   project: null, open: new Set(), selected: null, drawn: new Set(), seeded: false, box: null, model: null, found: null, width: null, narrow: false, watch: null,
-  drag: null, moving: null, home: null, layout: null, bar: null, shows: "",
+  shows: "",
 };
 
 function gatewayMap(main, model, found) {
@@ -404,8 +381,8 @@ function gatewayMap(main, model, found) {
   box.addEventListener("pointerdown", pressGrip);
   watchMap(box);
   drawOnMap(box, model);
-  onMap.bar = previewBar();
-  if (onMap.bar) main.append(onMap.bar);
+  const bar = previewBar(redrawMove);
+  if (bar) main.append(bar);
 }
 
 // A new width of the box (the window, or Details beside the page) may change the layout: it is
@@ -422,7 +399,7 @@ function watchMap(box) {
     });
     new MutationObserver(() => {
       if (mapReviewLeft()) {
-        redrawPreview();
+        redrawMove();
         return;
       }
       if (isPanelOpen() || !onMap.selected) return;
@@ -469,12 +446,8 @@ function drawOnMap(box, model) {
     drawn: onMap.drawn,
     reduced: reducedMotion.matches,
   });
-  onMap.layout = layout;
-  // A block off its place stays where it is shown: with the pointer, or on the slot while its
-  // preview is prepared. Back on its place, it glides there from where it was.
-  if (onMap.drag) follow();
-  else if (mapPreview.phase === "loading" && onMap.moving) park();
-  else if (onMap.home) goHome();
+  // A block a move took off its place stays where it is shown (gateway-drag.js).
+  placeMoved({ box, model, layout, redraw: redrawMove });
 }
 
 // Draw the map again in place; focus stays on the block that had it.
@@ -501,7 +474,7 @@ function pressBlock(model, id) {
   const block = model.blocks.find((b) => b.id === id);
   if (!block) return;
   if (block.kind === "slot" && block.setup) review(block.setup, { note: SETUP_NOTE }).catch(reportError);
-  else if (block.kind === "preview") showMapReview(redrawPreview);
+  else if (block.kind === "preview") showMapReview(redrawMove);
   else if (block.kind !== "slot" || block.gateway) selectOnMap(block);
 }
 
@@ -538,217 +511,14 @@ function arriveOnMap(model, found) {
   if (byId.has(id)) selectOnMap(byId.get(id));
 }
 
-// Drag a server in (4.6, S.8) ------------------------------------------------------------
-
-// How far a pointer moves on a block with a grip before the block follows it.
-const DRAG_START = 4;
-
-// What a move started on the map shows (gatewayTree's `drop` or `preview`): the slot once the
-// dragged block left its own group, and while its preview is prepared; the preview block while
-// the preview is open (also from Details); else nothing.
-function movingOn() {
-  const shown = onMap.drag || onMap.moving;
-  const move = shown ? { name: shown.name, kind: shown.kind } : null;
-  if (onMap.drag) return onMap.drag.open ? { drop: move } : {};
-  // A preview that ended elsewhere (the List, another place) leaves nothing to show.
-  if (mapPreview.phase === "idle") onMap.moving = null;
-  if (!onMap.moving) return {};
-  if (mapPreview.phase === "loading") return { drop: move };
-  return mapPreview.change ? { preview: move } : {};
-}
-
-// The review bar under the map, while a preview from the map is open: not while it is prepared,
-// nor while its review shows in Details.
-function previewBar() {
-  const { phase, change, body, inDetails } = mapPreview;
-  if (phase === "idle" || phase === "loading" || inDetails) return null;
-  return reviewBar(change, {
-    body,
-    onApply: () => (mapPreview.phase === "failed" ? previewOnMap(mapPreview.body, redrawPreview) : applyOnMap(redrawPreview)).catch(reportError),
-    onCancel: () => cancelOnMap(redrawPreview).catch(reportError),
-    onShow: () => showMapReview(redrawPreview),
-  });
-}
-
-// The page drawn again for a preview on the map (review.js calls it). What only the bar shows
-// (Apply's steps, an error after Apply) changes in the bar itself, so its status line is read
-// out; anything else draws the page. A preview that ended gives focus to its server where it is
-// now (in the gateway after Apply, outside after Cancel) when focus was in the bar, in Details
-// that closed, or nowhere.
-function redrawPreview() {
-  const ended = mapPreview.phase === "idle" ? onMap.moving : null;
-  if (ended) onMap.moving = null;
-  const old = onMap.bar;
-  if (!ended && old && old.isConnected && JSON.stringify(movingOn()) === onMap.shows) {
-    swapBar(old, previewBar());
-    return;
-  }
-  const active = document.activeElement;
-  const closed = !isPanelOpen() && $("#drawer").contains(active);
-  const lost = !active || [document.body, $("#main")].includes(active) || closed || Boolean(old && old.contains(active));
-  render();
-  if (!ended || !lost) return;
-  const node = [`held:kitden:${ended.name}`, ended.id].map((id) => withFocusKey($("#main"), `block:${id}`)).find(Boolean);
-  if (node) node.focus({ preventScroll: true });
-}
-
-// Put the new bar's words and buttons into the bar shown. Its status line stays the same node, so
-// a screen reader hears the new words; focus stays on the same button.
-function swapBar(old, fresh) {
-  if (!fresh) {
-    old.remove();
-    onMap.bar = null;
-    return;
-  }
-  const had = old.contains(document.activeElement) ? document.activeElement.dataset.focus : null;
-  old.className = fresh.className;
-  old.setAttribute("aria-label", fresh.getAttribute("aria-label"));
-  const [words, actions] = old.children;
-  const [newWords, newActions] = fresh.children;
-  words.firstElementChild.replaceWith(newWords.firstElementChild);
-  const said = newWords.lastElementChild.textContent;
-  if (words.lastElementChild.textContent !== said) words.lastElementChild.textContent = said;
-  actions.replaceWith(newActions);
-  const again = had ? withFocusKey(old, had) : null;
-  if (again) again.focus({ preventScroll: true });
-}
-
-// A pointer goes down on a block with a grip. Once it moves 4 px the block follows it; once it
-// leaves its own group, the slot "Drop to add" opens in its group of the Kitden gateway and its
-// amber line hides (so a click that wobbles moves nothing on the map). Let go on the Servers
-// column, away from its own group, it starts the same preview as "Move into the gateway…";
-// Escape, or a drop anywhere else, puts it back. Nothing is written before Apply. A click without
-// a move selects the block as before; a grip press while a change is written does nothing.
-function pressGrip(event) {
-  if (event.button !== 0 || busy.change || onMap.drag) return;
-  const node = event.target.closest("button.block");
-  const block = node && onMap.model.blocks.find((b) => node.dataset.focus === `block:${b.id}`);
-  if (!block || !block.grip) return;
-  const from = { x: event.clientX, y: event.clientY };
-  const box = node.getBoundingClientRect();
-  const grab = { x: from.x - box.left, y: from.y - box.top };
-  const move = (e) => {
-    const at = { x: e.clientX, y: e.clientY };
-    if (!onMap.drag) {
-      if (Math.hypot(at.x - from.x, at.y - from.y) < DRAG_START) return;
-      onMap.drag = { id: block.id, name: block.name, kind: block.groupKey === "local" ? "local" : "remote", row: block.row, grab, at, open: false };
-      document.documentElement.classList.add("grabbing");
-    }
-    onMap.drag.at = at;
-    const point = mapPoint(at);
-    if (!onMap.drag.open && point && !atHome(onMap.model, onMap.layout, point.x, point.y)) {
-      onMap.drag.open = true;
-      render(); // the slot opens; the block follows again once it is drawn
-      return;
-    }
-    follow();
-  };
-  const stop = () => {
-    document.removeEventListener("pointermove", move);
-    document.removeEventListener("pointerup", done);
-    document.removeEventListener("pointercancel", done);
-    document.removeEventListener("keydown", escape, true);
-  };
-  const done = (e) => {
-    stop();
-    if (onMap.drag) letGo(e && e.type === "pointerup" ? { x: e.clientX, y: e.clientY } : null);
-  };
-  // Escape puts the block back before Details or the map hear it.
-  const escape = (e) => {
-    if (e.key !== "Escape" || !onMap.drag) return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    done(null);
-  };
-  document.addEventListener("pointermove", move);
-  document.addEventListener("pointerup", done);
-  document.addEventListener("pointercancel", done);
-  document.addEventListener("keydown", escape, true);
-}
-
-// The map's block area, a block in it, and a point of the page (`at`) in the area's own terms.
-const mapArea = () => (onMap.box && onMap.box.isConnected ? onMap.box.querySelector(".map-area") : null);
-const blockIn = (area, id) => (area ? withFocusKey(area, `block:${id}`) : null);
-function mapPoint(at) {
-  const area = mapArea();
-  if (!area || !at) return null;
-  const origin = area.getBoundingClientRect();
-  return { x: at.x - origin.left, y: at.y - origin.top };
-}
-
-// A block lifted off its place, shown at (x, y) of the map area; `home` remembers where.
-function lift(node, id, x, y) {
-  node.classList.add("dragging");
-  node.style.transform = `translate(${x - parseFloat(node.style.left)}px, ${y - parseFloat(node.style.top)}px)`;
-  onMap.home = { id, x, y };
-}
-
-// The dragged block where the pointer holds it; the slot lights while a drop there would preview.
-function follow() {
-  const { drag } = onMap;
-  const node = blockIn(mapArea(), drag.id);
-  const point = mapPoint(drag.at);
-  if (!node || !point) return;
-  lift(node, drag.id, point.x - drag.grab.x, point.y - drag.grab.y);
-  onMap.box.classList.toggle("dropping", dropTarget(onMap.model, onMap.layout, point.x, point.y) === "servers");
-}
-
-// While its preview is prepared, the block waits on the slot (it glides there from where it was
-// let go), and after a moment a spinner says the server is asked.
-function park() {
-  const { moving, layout } = onMap;
-  const node = blockIn(mapArea(), moving.id);
-  const slot = layout.blocks.find((b) => b.id === `slot:${moving.name}`);
-  if (!node || !slot) return;
-  const from = onMap.home && onMap.home.id === moving.id ? onMap.home : null;
-  lift(node, moving.id, slot.x, slot.y);
-  node.setAttribute("aria-busy", "true");
-  node.append(el("span", "spinner late"));
-  if (from) glideFrom(node, from.x - slot.x, from.y - slot.y);
-}
-
-// Back on its place, the block glides there from where it was last shown.
-function goHome() {
-  const home = onMap.home;
-  onMap.home = null;
-  const node = blockIn(mapArea(), home.id);
-  if (node) glideFrom(node, home.x - parseFloat(node.style.left), home.y - parseFloat(node.style.top));
-}
-
-// A block glides from (dx, dy) off where it is shown; with reduced motion it is there at once.
-function glideFrom(node, dx, dy) {
-  if (dx || dy) animate(node, [{ translate: `${dx}px ${dy}px` }, { translate: "0 0" }], { duration: 260, easing: spring() });
-}
-
-// The pointer lets go at `point` (page coordinates), or Escape or a lost pointer (null). On the
-// Servers column, away from its own group, the preview of the move into the Kitden gateway
-// starts; else the block goes back.
-function letGo(point) {
-  const drag = onMap.drag;
-  onMap.drag = null;
-  document.documentElement.classList.remove("grabbing");
-  if (onMap.box) onMap.box.classList.remove("dropping");
-  swallowClick();
-  const at = mapPoint(point);
-  const target = at ? dropTarget(onMap.model, onMap.layout, at.x, at.y) : null;
-  const body = target === "servers" ? dropBody(drag.row, current("gateway")) : null;
-  if (body) {
-    onMap.moving = { id: drag.id, name: drag.name, kind: drag.kind };
-    previewOnMap(body, redrawPreview).catch(reportError);
-    if (mapPreview.phase === "loading") return;
-    onMap.moving = null;
-  }
-  render();
-}
-
-// The click that ends a drag selects nothing.
-function swallowClick() {
-  const swallow = (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-  };
-  document.addEventListener("click", swallow, { capture: true, once: true });
-  setTimeout(() => document.removeEventListener("click", swallow, { capture: true }), 0);
+// The page drawn again for the preview of a move on the map (map-review.js and the drag call it).
+// Only the bar changes while the map shows the same of the move as when it was drawn. A move that
+// ended gives focus to its server where it is now: in the gateway after Apply, outside after
+// Cancel.
+function redrawMove() {
+  const ended = endedMove();
+  const same = !ended && JSON.stringify(movingOn()) === onMap.shows;
+  redrawPreview(redrawMove, { same, ended: ended ? [`held:kitden:${ended.name}`, ended.id] : [] });
 }
 
 const SVG = "http://www.w3.org/2000/svg";

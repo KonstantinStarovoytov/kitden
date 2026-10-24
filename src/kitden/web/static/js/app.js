@@ -6,11 +6,11 @@ import { renderAgents } from "./agents.js";
 import { renderChanges } from "./changes.js";
 import { renderGateway } from "./gateway.js";
 import { loadLibrary, loadLibraryFor, morphOnNextRender, raceSlow, renderLibrary, settleRows, showSources, snapshotRows } from "./library.js";
+import { leaveMap } from "./map-review.js";
 import { findChip } from "./map.js";
 import { renderOverview } from "./overview.js";
 import { closeForProject, closePanel, initPanel, isPanelOpen } from "./panel.js";
 import { callout, demoTag, GONE_PROJECT, latestChanges, projectMenu, scanLine, versionsOpened } from "./parts.js";
-import { leaveMap } from "./review.js";
 import {
   arrival, busy, current, data, followHash, freshness, go, loadShared, OLD_VIEWS, onIdle, parseHash, projectGone, reload, setRenderer, setState, setSwitcher, state,
   switchProject,
