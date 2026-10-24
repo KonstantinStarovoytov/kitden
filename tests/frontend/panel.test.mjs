@@ -5,7 +5,8 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; panel.js must load there too.
 delete globalThis.navigator;
-const { addScope, afterParts, alignGroups, canShowReview, cancelPreview, closeForProject, closePanel, countedDefinition, changeOutcome, chosenKeys, callsText, changeWords, footerActions, heldActions, isPanelOpen, offerLabel, layerState, leftOutText, kindWord, loadsLede, moveFor, moveTargets, openPanel, panelState, plainSecrets, projectLabel, review, reviewLede, scopeWords, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
+const { DOCK_MIN, addScope, afterParts, alignGroups, canShowReview, cancelPreview, closeForProject, closePanel, countedDefinition, changeOutcome, chosenKeys, callsText, changeWords, docksAt, footerActions, heldActions, initPanel, isPanelOpen, offerLabel, layerState, leftOutText, kindWord, loadsLede, moveFor, moveTargets, openPanel, panelState, plainSecrets, projectLabel, review, reviewLede, scopeWords, swapContent, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
+const { detailsCard, factsBlock } = await import('../../src/kitden/web/static/js/details.js');
 const { addOptions, whyNoAction } = await import('../../src/kitden/web/static/js/offer.js');
 const { busy, data, state } = await import('../../src/kitden/web/static/js/store.js');
 
@@ -595,10 +596,11 @@ test('an Add missing list with nothing chosen shows as a review, not an error', 
   assert.equal(canShowReview(null), false);
 });
 
-// Just enough of a page for the panel to open and close: the drawer and its scrim.
+// Just enough of a page for the panel to open and close: the drawer, its scrim and the shell.
 function fakePanelPage() {
   const node = () => {
     const classes = new Set();
+    const attributes = {};
     return {
       classList: {
         add: (name) => classes.add(name),
@@ -606,10 +608,13 @@ function fakePanelPage() {
         toggle: (name, on) => (on ? classes.add(name) : classes.delete(name)),
         contains: (name) => classes.has(name),
       },
+      attributes,
+      setAttribute: (name, value) => { attributes[name] = String(value); },
+      removeAttribute: (name) => { delete attributes[name]; },
       replaceChildren() {}, focus() {}, contains: () => false,
     };
   };
-  const nodes = { '#drawer': node(), '#scrim': node() };
+  const nodes = { '#drawer': node(), '#scrim': node(), '#toast': node(), '#main': node(), '.shell': node() };
   globalThis.document = {
     activeElement: null,
     documentElement: { classList: { remove() {} } },
@@ -840,4 +845,347 @@ test('a definition kept from the last good read says when, on this Mac clock', (
   const def = { kind: 'mcp_server', enabled: 'on', loads: true, why: '', stale_at: at };
   assert.equal(layerState(def).stale, 'From the last good read at 14:02');
   assert.equal(layerState({ ...def, stale_at: null }).stale, null);
+});
+
+// Details beside the page -----------------------------------------------------------------
+
+test('Details dock beside the page from 1024 px on Gateway, Library and Changes', () => {
+  assert.equal(docksAt('gateway', 1024), true);
+  assert.equal(docksAt('library', 1023), false);
+  assert.equal(docksAt('changes', 1440), true);
+  assert.equal(docksAt('overview', 1440), false);
+  assert.equal(DOCK_MIN, 1024);
+});
+
+// The window is at least 1024 px wide (`wide`), or narrower.
+const windowIs = (wide) => { globalThis.matchMedia = () => ({ matches: wide }); };
+
+// Restore what a docking test changed.
+function leaveDockTest() {
+  windowIs(false);
+  state.view = 'overview';
+  delete globalThis.document;
+}
+
+test('Details open as a column with no scrim in a wide window, and as the drawer in a narrow one', () => {
+  fakePanelPage();
+  const drawer = document.querySelector('#drawer');
+  const scrim = document.querySelector('#scrim');
+  const shell = document.querySelector('.shell');
+  try {
+    state.view = 'library';
+    windowIs(true);
+    openPanel([]);
+    assert.equal(drawer.classList.contains('docked'), true);
+    assert.equal(shell.classList.contains('docked'), true);
+    assert.equal(scrim.classList.contains('open'), false);
+    assert.equal(drawer.attributes.role, 'region');
+    assert.equal(drawer.attributes['aria-modal'], undefined);
+    closePanel({ focus: false });
+    assert.equal(shell.classList.contains('docked'), false); // the page has its room back at once
+
+    windowIs(false);
+    openPanel([]);
+    assert.equal(drawer.classList.contains('docked'), false);
+    assert.equal(shell.classList.contains('docked'), false);
+    assert.equal(scrim.classList.contains('open'), true);
+    assert.equal(drawer.attributes.role, 'dialog');
+    assert.equal(drawer.attributes['aria-modal'], 'true');
+    closePanel({ focus: false });
+
+    // Overview keeps the drawer in a wide window; a caller can ask for the column.
+    windowIs(true);
+    state.view = 'overview';
+    openPanel([]);
+    assert.equal(drawer.classList.contains('docked'), false);
+    closePanel({ focus: false });
+    openPanel([], { dock: true });
+    assert.equal(drawer.classList.contains('docked'), true);
+    closePanel({ focus: false });
+  } finally {
+    leaveDockTest();
+  }
+});
+
+test('a review opened from the column stays in the column', () => {
+  fakePanelPage();
+  const drawer = document.querySelector('#drawer');
+  try {
+    state.view = 'gateway';
+    windowIs(true);
+    openPanel([]);
+    openPanel([], { dock: false }); // a swap keeps how the panel sits
+    assert.equal(drawer.classList.contains('docked'), true);
+    assert.equal(isPanelOpen(), true);
+    closePanel({ focus: false });
+  } finally {
+    leaveDockTest();
+  }
+});
+
+// A page with the key handlers initPanel adds, and a way to press a key.
+function keyboardPage() {
+  fakePanelPage();
+  const listeners = { keydown: [] };
+  Object.assign(document, {
+    addEventListener: (type, fn) => { (listeners[type] ||= []).push(fn); },
+    body: {},
+  });
+  for (const id of ['#drawer', '#scrim']) document.querySelector(id).addEventListener = () => {};
+  document.querySelector('#drawer').querySelectorAll = () => []; // nothing to press in the panel
+  const media = { matches: true, change: null, addEventListener: (type, fn) => { media.change = fn; } };
+  globalThis.matchMedia = () => media;
+  return {
+    media,
+    press(key, extra = {}) {
+      const event = { key, shiftKey: false, prevented: false, preventDefault() { this.prevented = true; }, ...extra };
+      for (const fn of listeners.keydown) fn(event);
+      return event;
+    },
+  };
+}
+
+test('Tab is not trapped in the column, and Escape closes it', () => {
+  const page = keyboardPage();
+  const drawer = document.querySelector('#drawer');
+  try {
+    initPanel();
+    state.view = 'changes';
+    openPanel([]);
+    assert.equal(drawer.classList.contains('docked'), true);
+    assert.equal(page.press('Tab').prevented, false); // it leaves the column
+    page.press('Escape');
+    assert.equal(isPanelOpen(), false);
+
+    page.media.matches = false;
+    openPanel([]);
+    assert.equal(page.press('Tab').prevented, true); // the drawer keeps focus inside
+    page.press('Escape');
+    assert.equal(isPanelOpen(), false);
+  } finally {
+    leaveDockTest();
+  }
+});
+
+test('a window that grows or shrinks while Details are open switches the column and the drawer', () => {
+  const page = keyboardPage();
+  const drawer = document.querySelector('#drawer');
+  const scrim = document.querySelector('#scrim');
+  const shell = document.querySelector('.shell');
+  try {
+    initPanel();
+    state.view = 'library';
+    openPanel([]);
+    page.media.change({ matches: false });
+    assert.deepEqual([drawer.classList.contains('docked'), shell.classList.contains('docked'), scrim.classList.contains('open')], [false, false, true]);
+    assert.equal(drawer.attributes['aria-modal'], 'true');
+    page.media.change({ matches: true });
+    assert.deepEqual([drawer.classList.contains('docked'), shell.classList.contains('docked'), scrim.classList.contains('open')], [true, true, false]);
+    assert.equal(drawer.attributes['aria-modal'], undefined);
+    closePanel({ focus: false });
+    page.media.change({ matches: false }); // nothing is open: nothing to switch
+    assert.equal(shell.classList.contains('docked'), false);
+    assert.equal(scrim.classList.contains('open'), false);
+  } finally {
+    leaveDockTest();
+  }
+});
+
+test('Escape gives focus back to the control that opened Details, found again after a redraw', () => {
+  fakePanelPage();
+  const focused = [];
+  const named = (key, name) => ({ dataset: { focus: key }, focus: () => focused.push(name) });
+  const first = { ...named('block:github', 'first'), isConnected: true, closest: function (selector) { return selector.includes('data-focus') ? this : null; } };
+  try {
+    state.view = 'gateway';
+    windowIs(true);
+    document.activeElement = first;
+    openPanel([]);
+    first.isConnected = false; // the page was drawn again: a new node has the same key
+    document.querySelectorAll = (selector) => (selector === '[data-focus]' ? [named('block:other', 'other'), named('block:github', 'again')] : []);
+    closePanel();
+    assert.deepEqual(focused, ['again']);
+  } finally {
+    leaveDockTest();
+  }
+});
+
+test('beside the page, opening another item moves the way back to that item', () => {
+  fakePanelPage();
+  const focused = [];
+  const control = (name) => ({ isConnected: true, closest: () => null, focus: () => focused.push(name) });
+  const [first, second] = [control('first'), control('second')];
+  try {
+    state.view = 'library';
+    windowIs(true);
+    document.activeElement = first;
+    openPanel([]);
+    document.activeElement = second; // the page is usable: another row was pressed
+    openPanel([]);
+    closePanel();
+    assert.deepEqual(focused, ['second']);
+  } finally {
+    leaveDockTest();
+  }
+});
+
+test('a redraw of the open column does not take focus from the page', () => {
+  fakePanelPage();
+  const drawer = document.querySelector('#drawer');
+  const focused = [];
+  drawer.focus = () => focused.push('drawer');
+  try {
+    state.view = 'library';
+    windowIs(true);
+    openPanel([]);
+    focused.length = 0;
+    swapContent([]); // focus is on the page, not in the column
+    assert.deepEqual(focused, []);
+    let asked = 0;
+    drawer.contains = () => asked++ === 0; // focus was in the column; its old buttons are gone
+    swapContent([]);
+    assert.deepEqual(focused, ['drawer']);
+    drawer.contains = () => false;
+    document.activeElement = null;
+    windowIs(false);
+    closePanel({ focus: false });
+    openPanel([]);
+    focused.length = 0;
+    swapContent([]); // the drawer always keeps focus
+    assert.deepEqual(focused, ['drawer']);
+  } finally {
+    leaveDockTest();
+  }
+});
+
+// A stand-in element: keeps what a builder gives it and runs its click listener.
+function domNode(tag) {
+  const node = {
+    tag, className: '', textContent: '', children: [], attributes: {}, dataset: {}, parent: null, focused: false,
+    append(...nodes) { for (const child of nodes) { child.parent = node; node.children.push(child); } },
+    prepend(...nodes) { for (const child of nodes) child.parent = node; node.children.unshift(...nodes); },
+    setAttribute(name, value) { node.attributes[name] = value; },
+    addEventListener(type, fn) { node[`on${type}`] = fn; },
+    replaceWith(...nodes) {
+      const at = node.parent.children.indexOf(node);
+      node.parent.children.splice(at, 1, ...nodes);
+      for (const child of nodes) child.parent = node.parent;
+    },
+    focus() { node.focused = true; },
+  };
+  return node;
+}
+
+// The words of a node: its own text, else its children's.
+const wordsOf = (node) => node.textContent || node.children.map(wordsOf).join('');
+const words = (nodes) => nodes.map(wordsOf);
+
+test('Facts are labels and values in two columns, and a value can be a node', () => {
+  globalThis.document = { createElement: domNode };
+  try {
+    const value = domNode('span');
+    const list = factsBlock([{ label: 'State', value: 'Off in this project', accent: true }, { label: 'Clients', value }]);
+    assert.equal(list.tag, 'dl');
+    assert.equal(list.className, 'facts');
+    assert.deepEqual(list.children.map((node) => [node.tag, node.className, node.textContent]), [
+      ['dt', '', 'State'], ['dd', 'accent', 'Off in this project'], ['dt', '', 'Clients'], ['dd', '', ''],
+    ]);
+    assert.equal(list.children[3].children[0], value);
+  } finally {
+    delete globalThis.document;
+  }
+});
+
+const card = (fields) => ({ kind: 'Skill', title: 'release-notes', ...fields });
+
+test('a Details card is the header, the facts and the sentence, the stacked actions, and the folded evidence', () => {
+  globalThis.document = { createElement: domNode };
+  try {
+    const folded = domNode('details');
+    const after = domNode('div');
+    const nodes = detailsCard(card({
+      id: 'release-notes@user',
+      facts: [{ label: 'State', value: 'On' }],
+      why: 'Claude Code loads it from all projects.',
+      actions: [{ label: 'Turn off for all projects…', run() {}, primary: true }, { label: 'Add to Codex…', run() {} }],
+      more: [{ label: 'Remove from Claude Code…', run() {} }],
+      after,
+      technical: folded,
+    }));
+    const [head, body, footer, evidence] = nodes;
+    assert.deepEqual(nodes.map((node) => node.tag), ['header', 'div', 'footer', 'details']);
+    // The kind and Close, then the title, then the id quiet under it.
+    assert.deepEqual(head.children[0].children.map((node) => node.textContent), ['Skill', 'Close']);
+    assert.deepEqual(head.children.slice(1).map((node) => [node.tag, node.textContent]), [['h1', 'release-notes'], ['p', 'release-notes@user']]);
+    assert.equal(body.className, 'body');
+    assert.deepEqual(body.children.map((node) => [node.tag, node.className]), [['dl', 'facts'], ['p', 'why']]);
+    assert.equal(body.children[1].textContent, 'Claude Code loads it from all projects.');
+    // The actions in order, the primary one drawn with the action fill; More; then the quiet node.
+    assert.equal(footer.className, 'stack');
+    assert.deepEqual(words(footer.children.slice(0, 3)), ['Turn off for all projects…', 'Add to Codex…', 'More']);
+    assert.deepEqual(footer.children.slice(0, 2).map((node) => node.className), ['btn primary', 'btn']);
+    assert.equal(footer.children[3], after);
+    assert.equal(evidence, folded);
+  } finally {
+    delete globalThis.document;
+  }
+});
+
+test('a Details card with nothing to add leaves the rest out', () => {
+  globalThis.document = { createElement: domNode };
+  try {
+    const nodes = detailsCard(card({ actions: [{ label: 'Open', run() {} }] }));
+    assert.deepEqual(nodes.map((node) => node.tag), ['header', 'div', 'footer']);
+    assert.deepEqual(nodes[0].children.map((node) => node.tag), ['div', 'h1']); // no id line
+    assert.deepEqual(nodes[1].children, []);
+    assert.deepEqual(words(nodes[2].children), ['Open']); // no More, no quiet node
+    // With nothing to press and nothing quiet to say, there is no empty footer.
+    assert.deepEqual(detailsCard(card({ facts: [{ label: 'State', value: 'On' }] })).map((node) => node.tag), ['header', 'div']);
+  } finally {
+    delete globalThis.document;
+  }
+});
+
+test('More shows the other actions where it stood, before the quiet node', () => {
+  globalThis.document = { createElement: domNode };
+  try {
+    const after = domNode('div');
+    const [, , footer] = detailsCard(card({ actions: [{ label: 'One', run() {} }], more: [{ label: 'Two', run() {} }, { label: 'Three', run() {} }], after }));
+    const more = footer.children[1];
+    assert.equal(more.textContent, 'More');
+    more.onclick({});
+    return Promise.resolve().then(() => {
+      assert.deepEqual(words(footer.children), ['One', 'Two', 'Three', '']);
+      assert.equal(footer.children[3], after);
+      assert.equal(footer.children[1].focused, true);
+    });
+  } finally {
+    delete globalThis.document;
+  }
+});
+
+test('an action runs its own code, else it asks for the review of its change', async () => {
+  fakePanelPage();
+  document.createElement = domNode;
+  const calls = [];
+  const body = { action: 'skill.remove', targets: [{ item: 's1' }], params: {} };
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push([options.method || 'GET', url, options.body]);
+    return Response.json({ detail: 'No.' }, { status: 422 });
+  };
+  try {
+    const [, , footer] = detailsCard(card({ actions: [{ label: 'Own', run: () => calls.push('run') }, { label: 'Remove…', body }] }));
+    footer.children[0].onclick({});
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(calls, ['run']);
+    footer.children[1].onclick({});
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(calls[1], ['POST', '/api/changes/preview', JSON.stringify({ ...body, picked: null })]);
+    // Each action is found again by its words after the card is drawn again.
+    assert.deepEqual(footer.children.map((node) => node.dataset.focus), ['action:Own', 'action:Remove…']);
+  } finally {
+    panelState.current = null;
+    delete globalThis.document;
+    delete globalThis.fetch;
+  }
 });

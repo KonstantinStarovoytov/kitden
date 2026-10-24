@@ -14,10 +14,10 @@ function node() {
       toggle: (name, on) => (on ? classes.add(name) : classes.delete(name)),
       contains: (name) => classes.has(name),
     },
-    replaceChildren() {}, focus() {}, contains: () => false,
+    setAttribute() {}, removeAttribute() {}, replaceChildren() {}, focus() {}, contains: () => false,
   };
 }
-const nodes = { '#drawer': node(), '#scrim': node(), '#main': node() };
+const nodes = { '#drawer': node(), '#scrim': node(), '#main': node(), '.shell': node() };
 globalThis.document = {
   activeElement: null,
   createElement: () => ({}),

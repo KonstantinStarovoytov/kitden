@@ -33,8 +33,11 @@ Canonical asset: `src/kitden/web/static/brand/kitden.svg`. The sidebar and favic
 | Accent text / links | #A44226 | #F09A7C |
 | Selection surface | #F6E8E2 | #382A27 |
 | Focus | #B34B2D | #F09A7C |
+| Dim fill (`--dim`): a block outside the gateway, a tool that is off | #EEF0F3 | #1B1F26 |
+| Preview fill (`--preview-fill`): a block that is only a preview | #A4422612 | #F09A7C10 |
+| Preview line (`--preview-line`): the edge of a preview block | #A4422680 | #F09A7C80 |
 
-The brand mark is fixed; functional shades adapt for text contrast. Text on the action and success fills, and diff text on its tint and on the drawer, keeps at least 4.5:1 in both themes (WCAG 2.2 AA, checked 2026-10-19); `tests/unit/test_contrast.py` holds the line. Do not use the logo color for every small label. Success stays green, warnings amber and errors red, paired with text/shape. Gateway routes use the accent family and square state indicators. Vendor marks must retain their own permitted colors when verified; Claude, Cursor and Codex use local vendor icons (see `src/kitden/web/static/brand/clients/ATTRIBUTION.md`). Neutral monograms are used only for unknown clients or failed image loads.
+The brand mark is fixed; functional shades adapt for text contrast. Text on the action, success and dim fills, and diff text on its tint and on the drawer, keeps at least 4.5:1 in both themes (WCAG 2.2 AA, checked 2026-10-19); `tests/unit/test_contrast.py` holds the line. The frames' `kd-faint` is for icons, grips and hollow marks only (`--lamp-off`); text uses `--ink-3`. Text a frame paints `kd-ok` uses `--diff-add`. Do not use the logo color for every small label. Success stays green, warnings amber and errors red, paired with text/shape. Gateway routes use the accent family and square state indicators. Vendor marks must retain their own permitted colors when verified; Claude, Cursor and Codex use local vendor icons (see `src/kitden/web/static/brand/clients/ATTRIBUTION.md`). Neutral monograms are used only for unknown clients or failed image loads.
 
 ## Client marks
 
@@ -53,6 +56,8 @@ A row that opens Details ends with a quiet › and the hidden words "Open detail
 The address keeps the project and the selected item (`sel=<kind>:<name>`, as in `#library?kind=skill&project=a&sel=skill%3Atidy`) on every page, so Back and a copied link return to them. Arriving with a selection (an Overview card or note, Back, Forward or a link), the Library opens that row's Details once, and the Gateway opens the selected server's Details once, in the Kitden gateway's own panel for a server it holds; a redraw does not open it again. A rail link opens its place fresh. An arrival never opens over a panel that is open, and a row or Details the person opens first wins.
 
 A Details footer button never grows past the panel: long words end in "…", and the whole label stays in its hover text. A Remove names every client it reaches: "Remove from Codex and Cursor…" for a skill in a folder both read, but not a client that keeps another copy of its own; a switch names only its own client. When one client has two Remove buttons for the same scope, each names its folder by the last two parts: "Remove from Codex and Cursor (.agents/skills)…".
+
+Details beside the page: on Gateway, Library and Changes, in a window 1024 px wide or more, Details is a 320 px column at the right with no scrim. The page makes room for it and stays usable. Escape closes it, and focus goes back to what opened it, also after the page was drawn again. In a narrower window, and on Overview, Details stays the drawer; a window that crosses 1024 px while Details is open switches between the two. A review opens in the same column. A Details card (`detailsCard` in `details.js`) draws, top to bottom: the kind and Close, the title with its id quiet under it, Facts (labels 86 px wide), one sentence, the actions stacked full width, and "Technical details" folded at the bottom.
 
 Details answers in the same order for every kind (`DETAILS_ORDER` in `details.js`).
 
@@ -137,7 +142,7 @@ Defined once in `style.css`; JavaScript reads `--spring` from there.
 | --- | --- | --- |
 | Press | 80 ms in to 0.98, 260 ms `--spring` out | Buttons, tabs, filters, rail links, switches, tiles |
 | `--t-fast` | 180 ms ease | Hover colour, word fades, focus |
-| `--t-panel` | 240 ms `--ease-drawer` | Drawer, scrim |
+| `--t-panel` | 240 ms `--ease-drawer` | Drawer, column beside the page, scrim |
 | Fold | 280 ms `--ease-out` | A `<details>` opening or closing |
 | Glide | 300 ms `--spring` | The mark sliding between choices |
 | Flight | 340 ms `--ease-drawer` | A shared tile between places |
@@ -181,7 +186,8 @@ All helpers live in `src/kitden/web/static/js/motion.js`.
 - One motion per change. A change that morphs cells does not also cross-fade the page.
 - A new control gets the press (`transform`), a hover colour and a visible focus ring; nothing else.
 - Lists stagger, single things do not. Total stagger under 500 ms.
-- A drawer has one motion: it slides in. Its blocks and diff lines are there at once.
+- A drawer has one motion: it slides in. Its blocks and diff lines are there at once. The column
+  beside the page slides in the same way, and the page takes its room at once.
 - Put the resting style in CSS and the animation in a class or keyframe, so a skipped animation
   still lands on the right look.
 - Never read the true state from `transitionend` or `animationend`; use a timer or the data.

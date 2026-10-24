@@ -3,7 +3,7 @@
 // review.js. The names other pages imported from here before the split still come from here.
 import { postJson } from "./api.js";
 import { openItem } from "./details.js";
-import { $, $$, button, el, reportError } from "./dom.js";
+import { $, $$, button, el, focusKey, reportError } from "./dom.js";
 import { onOpenItem } from "./library.js";
 import { finishTransition } from "./motion.js";
 import { checkStale } from "./review.js";
@@ -18,8 +18,19 @@ export { ADDS, addScope, afterParts, alignGroups, canShowReview, cancelTarget, c
 // behind it. `from` is the Details a review was opened from (details.js sets it): Cancel goes
 // back there. A closed panel forgets it.
 export const panelState = { current: null, from: null };
+// Beside the page: on these places, in a window this wide, Details are a 320 px column with no
+// scrim and no focus trap, and the page stays usable. Anywhere else they are the drawer.
+export const DOCK_MIN = 1024;
+export const DOCKS = ["gateway", "library", "changes"];
+export const docksAt = (view, width) => DOCKS.includes(view) && width >= DOCK_MIN;
+const isWide = () => matchMedia(`(min-width: ${DOCK_MIN}px)`).matches;
+// How the open panel sits: `docked` beside the page, else the drawer. `wantsDock` is what the opener
+// asked for, so a window that changes size while the panel is open can pick again.
+let docked = false;
+let wantsDock = false;
 let opener = null;
-let openerKey = null;
+// What finds the opener again after a redraw: its data-focus key, and its row's key.
+let openerKeys = [];
 // The project the panel's content was drawn in: its switches and reviews are for that project.
 let openedIn = null;
 
@@ -27,30 +38,67 @@ export function isPanelOpen() {
   return $("#drawer").classList.contains("open");
 }
 
-// New content for an open panel; focus stays inside it (the old buttons are gone).
+// New content for an open panel; focus stays inside it (the old buttons are gone). Beside the
+// page focus may be on the page, and a redraw does not take it from there.
 export function swapContent(content) {
   const drawer = $("#drawer");
+  const had = drawer.contains(document.activeElement);
   drawer.replaceChildren(...content);
-  if (isPanelOpen() && !drawer.contains(document.activeElement)) drawer.focus();
+  if (isPanelOpen() && (had || !docked) && !drawer.contains(document.activeElement)) drawer.focus();
+}
+
+// The panel as a column beside the page (`on`) or as the drawer over it. The column is a region:
+// the page stays usable, so it is not modal. The page makes room for it.
+function place(on) {
+  docked = on;
+  const drawer = $("#drawer");
+  drawer.classList.toggle("docked", on);
+  $(".shell").classList.toggle("docked", on);
+  if (on) {
+    drawer.setAttribute("role", "region");
+    drawer.removeAttribute("aria-modal");
+    drawer.removeAttribute("aria-labelledby");
+  } else {
+    drawer.setAttribute("role", "dialog");
+    drawer.setAttribute("aria-modal", "true");
+    drawer.setAttribute("aria-labelledby", "panel-title");
+  }
+}
+
+// What opened the panel, so closing it can give focus back. A redraw makes new nodes: the opener's
+// data-focus key, or its row's key, finds the new one. With no focus on the page (an arrival from
+// another place) it is the selected row.
+function rememberOpener() {
+  opener = document.activeElement === document.body ? null : document.activeElement;
+  const named = opener && opener.closest ? opener.closest("[data-focus], tr[data-key]") : null;
+  const row = (opener && opener.closest ? opener.closest("tr[data-key]") : null) || $('tr[aria-selected="true"]');
+  openerKeys = [named, row].filter(Boolean).map(focusKey);
 }
 
 // Put content in the panel and slide it in. Keyboard opens are instant. New content belongs to
 // the project picked now: Details drawn again after an Apply is for the project picked during it.
 // A panel the person opens wins over an arrival still waiting for its page (store.js).
-export function openPanel(content, { instant = false } = {}) {
+// `dock`: sit beside the page where the window is wide enough. An open panel keeps how it sits,
+// so a review opened from the column stays in the column.
+export function openPanel(content, { instant = false, dock = DOCKS.includes(state.view) } = {}) {
   arrival.pending = false;
   finishTransition();
   const drawer = $("#drawer");
   openedIn = state.project;
-  if (isPanelOpen()) { swapContent(content); return; }
+  if (isPanelOpen()) {
+    // Beside the page another row may be pressed: the way back is to that row, and focus moves in.
+    const active = document.activeElement;
+    const elsewhere = docked && active && active !== document.body && !drawer.contains(active);
+    if (elsewhere) rememberOpener();
+    swapContent(content);
+    if (elsewhere) drawer.focus();
+    return;
+  }
   drawer.replaceChildren(...content);
-  // Opened on arrival from another place, nothing on this page has focus: it goes back to the
-  // selected row.
-  opener = document.activeElement === document.body ? null : document.activeElement;
-  const row = opener && opener.closest ? opener.closest("tr[data-key]") : null;
-  const selected = $('tr[aria-selected="true"]');
-  openerKey = row ? row.dataset.key : selected ? selected.dataset.key : null;
-  for (const node of [drawer, $("#scrim")]) {
+  rememberOpener();
+  wantsDock = dock;
+  place(dock && isWide());
+  for (const node of docked ? [drawer] : [drawer, $("#scrim")]) {
     node.classList.toggle("instant", instant);
     node.classList.add("open");
   }
@@ -67,6 +115,9 @@ export function closePanel({ instant = false, keepSelection = false, focus = tru
     node.classList.toggle("instant", instant);
     node.classList.remove("open");
   }
+  // The page takes its room back at once; the column slides out as it was.
+  $(".shell").classList.remove("docked");
+  docked = false;
   if (!keepSelection) {
     setState({ selected: null });
     for (const row of $$('tr[aria-selected="true"]')) row.setAttribute("aria-selected", "false");
@@ -94,9 +145,12 @@ export function cancelPreview() {
 
 export function restoreFocus() {
   if (opener && opener.isConnected) { opener.focus(); return; }
-  const row = openerKey && $$("tr[data-key]").find((tr) => tr.dataset.key === openerKey);
-  if (row) row.focus();
-  else $("#main").focus();
+  const nodes = [...$$("[data-focus]"), ...$$("tr[data-key]")];
+  for (const key of openerKeys) {
+    const node = nodes.find((candidate) => focusKey(candidate) === key);
+    if (node) { node.focus(); return; }
+  }
+  $("#main").focus();
 }
 
 // A review has no close button up here: its footer holds the one Cancel.
@@ -185,8 +239,9 @@ export function toast(text, onUndo, { ok = false } = {}) {
 
 // Wiring ---------------------------------------------------------------------------------
 
+// The drawer keeps Tab inside it; the column beside the page does not.
 function trapFocus(event) {
-  if (event.key !== "Tab" || !isPanelOpen()) return;
+  if (event.key !== "Tab" || !isPanelOpen() || docked) return;
   const drawer = $("#drawer");
   // Only what is drawn: a closed Details hides everything but its summary. A toast shown while
   // the panel stays open (after a tool switch) is in the loop too, so its Undo can be reached.
@@ -215,6 +270,13 @@ export function initPanel() {
   drawer.setAttribute("role", "dialog");
   drawer.setAttribute("aria-modal", "true");
   drawer.setAttribute("aria-labelledby", "panel-title");
+  // A window that grows or shrinks while the panel is open switches the column and the drawer.
+  matchMedia(`(min-width: ${DOCK_MIN}px)`).addEventListener("change", (event) => {
+    if (!isPanelOpen()) return;
+    place(wantsDock && event.matches);
+    $("#scrim").classList.toggle("open", !docked);
+    if (!docked && !drawer.contains(document.activeElement)) drawer.focus();
+  });
   onOpenItem((row, tr, how) => openItem(row, { instant: how === "keyboard" }));
   // A refresh of the gateway's tool lists ended: an open tool list reads them again.
   document.addEventListener("kitden:tools", reloadTools);

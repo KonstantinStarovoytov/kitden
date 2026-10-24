@@ -38,6 +38,14 @@ def test_the_side_panel_is_four_modules():
     assert "function showReview" in script("review.js")
 
 
+def test_details_sit_beside_the_page_without_a_scrim():
+    shell = script("panel.js")
+    assert "export const DOCK_MIN = 1024;" in shell and 'removeAttribute("aria-modal")' in shell
+    details = script("details.js")
+    assert "export function factsBlock(" in details and "export function detailsCard(" in details
+    assert "#drawer.docked" in CSS and ".shell.docked" in CSS and ".facts" in CSS
+
+
 def test_rail_counts_only_attention_and_changes():
     assert 'id="nav-attention"' in INDEX and 'id="nav-changes"' in INDEX
     assert "nav-items" not in INDEX and "nav-around" not in INDEX

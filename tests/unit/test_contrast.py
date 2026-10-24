@@ -91,3 +91,24 @@ def test_diff_text_is_readable_on_its_tint_and_on_the_panel():
             assert contrast(theme[text], theme["--panel-raised"]) >= 4.5, (text, theme[text])
     for name in ("--diff-add", "--diff-del"):
         assert DARK_AUTO[name] == DARK_RULE[name]
+
+
+def test_text_on_the_dim_fill_is_readable_in_both_themes():
+    # Outside blocks and off tools sit on --dim; their words are --ink-2 and --ink-3.
+    for theme in (LIGHT, DARK, {**LIGHT, **DARK_AUTO}):
+        for ink in ("--ink-2", "--ink-3"):
+            assert contrast(theme[ink], theme["--dim"]) >= 4.5, ink
+
+
+def test_the_preview_tokens_are_the_frames_values():
+    assert (LIGHT["--preview-fill"], LIGHT["--preview-line"]) == ("#a4422612", "#a4422680")
+    assert (DARK["--preview-fill"], DARK["--preview-line"]) == ("#f09a7c10", "#f09a7c80")
+    for name in ("--dim", "--preview-fill", "--preview-line"):
+        assert DARK_AUTO[name] == DARK_RULE[name]
+
+
+def test_facts_text_is_readable_on_the_details_column_in_both_themes():
+    # A fact's label is --ink-3 and an accent value is --route, on the raised panel.
+    for theme in (LIGHT, DARK):
+        for ink in ("--ink-3", "--route"):
+            assert contrast(theme[ink], theme["--panel-raised"]) >= 4.5, ink
