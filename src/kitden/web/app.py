@@ -5,9 +5,11 @@ import contextlib
 import json
 import sys
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
@@ -59,6 +61,7 @@ from kitden.changes.actions import (
 )
 from kitden.changes.align import align_steps
 from kitden.changes.backup import ChangeStore
+from kitden.changes.batch import BATCH, Part, combine, part_of, requests_in
 from kitden.changes.client_cli import CommandRunner
 from kitden.changes.engine import (
     ChangeRefusedError,
@@ -105,7 +108,7 @@ from kitden.local_gateway.views import (
     tools_view,
 )
 from kitden.marketplace_link import LinkError, read_marketplace
-from kitden.model import Change, ChangeState, Gateway, GatewayAuth, GatewayEdit, ItemKind
+from kitden.model import Change, ChangeState, Gateway, GatewayAuth, GatewayEdit, ItemKind, Step
 from kitden.redact import masked_command, redact_text
 from kitden.views.after import after_words
 from kitden.views.catalog import catalog
@@ -196,6 +199,7 @@ def change_dict(change: Change) -> dict:
         "restart_needed": change.restart_needed,
         "shared_file_warning": change.shared_file_warning,
         "target": change.target,
+        "rows": change.rows,
         "steps": [
             {
                 "client": s.client,
@@ -229,6 +233,27 @@ STATUS = {
 
 def _error(text: str, status: int) -> JSONResponse:
     return JSONResponse({"detail": text}, status_code=status)
+
+
+@dataclass
+class Built:
+    """What one request's builder made: the steps, and what the review's words read besides."""
+
+    steps: list[Step]
+    items: list = field(default_factory=list)  # the definitions the change changes
+    left_out: list | None = None
+    copied: list | None = None
+    align: Any = None
+
+
+class _RowRefused(Exception):
+    """A tray request cannot join the change: the words, and the row they come from (None when
+    the engine refuses the whole change)."""
+
+    def __init__(self, reason: str, row: str | None) -> None:
+        super().__init__(reason)
+        self.reason = reason
+        self.row = row
 
 
 # What the first scan reads, step by step, so the page can say what it still waits for.
@@ -943,13 +968,10 @@ def create_app(
             raise ValueError("Unknown project.")
         return paths[str(wanted)]
 
-    async def preview(request: Request) -> JSONResponse:
-        if engine is None:
-            return _error("Changes are not available.", 404)
-        body = await _body(request)
-        action = body.get("action")
-        targets = body.get("targets") if isinstance(body.get("targets"), list) else []
-        params = body.get("params") if isinstance(body.get("params"), dict) else {}
+    async def _steps_for(action: str, targets: list, params: dict) -> Built:
+        """The steps one request makes, from that action's own builder. Raises ValueError with
+        the review's words when the builder refuses. Writes nothing."""
+        steps: list = []
         left_out = None
         copied = None  # the skill list's rows a skill copy takes, for the review's first line
         align = None  # Add missing: what each client lacks, for the review's checkboxes
@@ -959,234 +981,308 @@ def create_app(
         found = [_item(str(i)) for i in named if i]
         kept = next((i for i in found if i is not None and i.stale_at), None)
         if kept is not None:
-            return _error(kept_refusal(kept), 422)
-        try:
-            if action == GATEWAY_CONNECT:
-                gateway = next((g for g in _registered() if g.id == params.get("gateway")), None)
-                if gateway is None:
-                    return _error("Register the gateway first.", 422)
-                clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
-                steps = connect_steps(adapters, clients, gateway, str(params.get("name", "")))
-            elif action == PLUGIN_INSTALL:
-                offer = next(
-                    (
-                        o
-                        for o in catalog(state.inventory, adapters)
-                        if o["id"] == params.get("plugin")
-                    ),
-                    None,
-                )
-                if offer is None:
-                    return _error("This plugin is not in a marketplace on this computer.", 422)
-                clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
-                steps = install_steps(adapters, offer, clients, _project_param(params))
-            elif action == SKILL_INSTALL:
-                # A project's own skill ("project/<name>") is read from that project only.
-                wanted = str(params.get("skill", ""))
-                project = _project_param(params)
-                if wanted.startswith("project/") and project is None:
-                    return _error(ONLY_IN_PROJECT, 422)
-                listed = (
-                    project_skills(state.inventory, adapters, project)
-                    if wanted.startswith("project/")
-                    else skill_catalog(state.inventory, adapters)
-                )
-                skill = next((s for s in listed if s["id"] == wanted), None)
-                if skill is None:
-                    return _error("This skill is not on this computer.", 422)
-                clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
-                found = {c["id"] for c in state.data["clients"] if c["status"] == "found"}
-                steps = skill_steps(adapters, skill, clients, found, project)
-                copied = [skill]
-            elif action == PLUGIN_SKILLS:
-                if len(targets) != 1 or not isinstance(targets[0], dict):
-                    return _error("Choose one client.", 422)
-                client = str(targets[0].get("client"))
-                plugin_id = str(params.get("plugin"))
-                skills = skill_catalog(state.inventory, adapters)
-                if not any(s["plugin"] == plugin_id for s in skills):
-                    return _error("This plugin has no skills on this computer.", 422)
-                found = {c["id"] for c in state.data["clients"] if c["status"] == "found"}
-                steps = plugin_skill_steps(adapters, plugin_id, skills, client, found)
-                left_out = plugin_skills_left_out(plugin_id, skills, client)
-                copied = [s for s in skills if s["plugin"] == plugin_id]
-            elif action == MARKETPLACE_ADD:
-                if stand_ins:
-                    return _error(stand_ins.NOT_IN_DEMO, 422)
-                try:
-                    found = await asyncio.to_thread(read_marketplace, str(params.get("source", "")))
-                except LinkError as error:
-                    return _error(str(error), 422)
-                clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
-                steps = marketplace_steps(adapters, found, clients)
-            elif action == GATEWAY_SWITCH:
-                gateway = next((g for g in _registered() if g.id == params.get("gateway")), None)
-                if gateway is None:
-                    return _error("Register the gateway first.", 422)
-                mcp = [i for i in state.inventory.items if i.kind is ItemKind.MCP_SERVER]
-                steps = switch_steps(adapters, mcp, gateway, str(params.get("name", "")))
-            elif action == SETUP_SERVER:
+            raise ValueError(kept_refusal(kept))
+        if action == GATEWAY_CONNECT:
+            gateway = next((g for g in _registered() if g.id == params.get("gateway")), None)
+            if gateway is None:
+                raise ValueError("Register the gateway first.")
+            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+            steps = connect_steps(adapters, clients, gateway, str(params.get("name", "")))
+        elif action == PLUGIN_INSTALL:
+            offer = next(
+                (o for o in catalog(state.inventory, adapters) if o["id"] == params.get("plugin")),
+                None,
+            )
+            if offer is None:
+                raise ValueError("This plugin is not in a marketplace on this computer.")
+            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+            steps = install_steps(adapters, offer, clients, _project_param(params))
+        elif action == SKILL_INSTALL:
+            # A project's own skill ("project/<name>") is read from that project only.
+            wanted = str(params.get("skill", ""))
+            project = _project_param(params)
+            if wanted.startswith("project/") and project is None:
+                raise ValueError(ONLY_IN_PROJECT)
+            listed = (
+                project_skills(state.inventory, adapters, project)
+                if wanted.startswith("project/")
+                else skill_catalog(state.inventory, adapters)
+            )
+            skill = next((s for s in listed if s["id"] == wanted), None)
+            if skill is None:
+                raise ValueError("This skill is not on this computer.")
+            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+            found = {c["id"] for c in state.data["clients"] if c["status"] == "found"}
+            steps = skill_steps(adapters, skill, clients, found, project)
+            copied = [skill]
+        elif action == PLUGIN_SKILLS:
+            if len(targets) != 1 or not isinstance(targets[0], dict):
+                raise ValueError("Choose one client.")
+            client = str(targets[0].get("client"))
+            plugin_id = str(params.get("plugin"))
+            skills = skill_catalog(state.inventory, adapters)
+            if not any(s["plugin"] == plugin_id for s in skills):
+                raise ValueError("This plugin has no skills on this computer.")
+            found = {c["id"] for c in state.data["clients"] if c["status"] == "found"}
+            steps = plugin_skill_steps(adapters, plugin_id, skills, client, found)
+            left_out = plugin_skills_left_out(plugin_id, skills, client)
+            copied = [s for s in skills if s["plugin"] == plugin_id]
+        elif action == MARKETPLACE_ADD:
+            if stand_ins:
+                raise ValueError(stand_ins.NOT_IN_DEMO)
+            try:
+                found = await asyncio.to_thread(read_marketplace, str(params.get("source", "")))
+            except LinkError as error:
+                raise ValueError(str(error)) from None
+            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+            steps = marketplace_steps(adapters, found, clients)
+        elif action == GATEWAY_SWITCH:
+            gateway = next((g for g in _registered() if g.id == params.get("gateway")), None)
+            if gateway is None:
+                raise ValueError("Register the gateway first.")
+            mcp = [i for i in state.inventory.items if i.kind is ItemKind.MCP_SERVER]
+            steps = switch_steps(adapters, mcp, gateway, str(params.get("name", "")))
+        elif action == SETUP_SERVER:
+            command = (setup_command or installed_command)()
+            if command is None:
+                raise ValueError("Install the tool first: uv tool install <this folder>")
+            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+            provided = _states_in(state.inventory, "plugin")
+            if any(c in provided for c in clients):
+                raise ValueError("The kitden plugin already provides this server there.")
+            steps = setup_server_steps(adapters, clients, command)
+        elif action == SETUP_SERVER_UPDATE:
+            ids = [str(t.get("item")) for t in targets if isinstance(t, dict)]
+            items = [_item(i) for i in ids]
+            if not items or any(i is None or not is_old_entry(i) for i in items):
+                raise ValueError("Choose an old Kitden entry.")
+            added = _states_in(state.inventory, "added", "plugin")
+            command = None
+            if any(i.client not in added for i in items):
                 command = (setup_command or installed_command)()
                 if command is None:
-                    return _error("Install the tool first: uv tool install <this folder>", 422)
-                clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
-                provided = _states_in(state.inventory, "plugin")
-                if any(c in provided for c in clients):
-                    return _error("The kitden plugin already provides this server there.", 422)
-                steps = setup_server_steps(adapters, clients, command)
-            elif action == SETUP_SERVER_UPDATE:
-                ids = [str(t.get("item")) for t in targets if isinstance(t, dict)]
-                items = [_item(i) for i in ids]
-                if not items or any(i is None or not is_old_entry(i) for i in items):
-                    return _error("Choose an old Kitden entry.", 422)
-                added = _states_in(state.inventory, "added", "plugin")
-                command = None
-                if any(i.client not in added for i in items):
-                    command = (setup_command or installed_command)()
-                    if command is None:
-                        return _error("Install the tool first: uv tool install <this folder>", 422)
-                steps = update_steps(adapters, items, added, command)
-            elif action == SETUP_SERVER_ENABLE:
-                clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
-                entries = setup_server_state(state.inventory)
-                entry = next((e for e in entries if [e["client"]] == clients), None)
-                # Only the client's own entry, turned off: a plugin's is the plugin's switch.
-                if entry is None or entry["state"] != "added" or entry["enabled"] is not False:
-                    return _error("The kitden entry there is not turned off.", 422)
-                steps = enable_steps(adapters, clients[0])
-            elif action == GATEWAY_MOVE and params.get("gateway") == KITDEN_GATEWAY:
-                ids = [str(t.get("item")) for t in targets if isinstance(t, dict)]
-                items = [_item(i) for i in ids]
-                if not items or any(i is None for i in items):
-                    return _error("Choose a known server.", 422)
-                known = [p.path for p in state.inventory.projects]
-                added = _states_in(state.inventory, "added", "plugin")
-                command = (setup_command or installed_command)()
-                if command is None and {i.client for i in items} - added:
-                    return _error("Install the tool first: uv tool install <this folder>", 422)
-                # A Codex entry that keeps only some tools on: Kitden needs the whole list.
-                wanted = await asyncio.to_thread(tools_to_read, adapters, items, home, known)
-                for name, server in wanted.items():
-                    tools = await _read_tools(name, server)
-                    if tools is None:
-                        return _error(
-                            f"Kitden could not read the tools of {name}; it stays direct for now.",
-                            422,
-                        )
-                    save_tools(home, name, tools)
-                # It may ask a remote server whether it signs in, so not on the event loop.
-                steps = await asyncio.to_thread(
-                    local_move_steps,
-                    adapters,
-                    items,
-                    home,
-                    known,
-                    command,
-                    added_clients=added,
-                    sign_in=sign_in,
-                    keychain_run=keychain_run,
-                )
-            elif action == GATEWAY_RULE:
-                projects = {p["id"]: p["path"] for p in state.data["projects"]}
-                steps = rule_steps(home, params, projects)
-            elif action == GATEWAY_RULES:
-                projects = {p["id"]: p["path"] for p in state.data["projects"]}
-                steps = rules_steps(home, params, projects)
-            elif action == GATEWAY_STRICT:
-                steps = strict_steps(home, params, load_tools(home))
-            elif action == GATEWAY_REMOVE:
-                steps = remove_server_steps(home, str(params.get("server", "")))
-            elif action == GATEWAY_PUT_BACK:
-                clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
-                server = str(params.get("server", ""))
-                steps = put_back_steps(adapters, home, server, clients, keychain_run)
-            elif action == GATEWAY_KEYCHAIN:
-                steps = keychain_steps(home, str(params.get("server", "")))
-            elif action == MCP_ADD:
-                item = _item(str(params.get("item", "")))
-                if item is None:
-                    return _error("Choose a known server.", 422)
-                clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
-                steps = add_server_steps(adapters, item, clients)
-            elif action == PROJECT_ALIGN:
-                folder = _project_param(params)
-                if folder is None:
-                    return _error("Unknown project.", 422)
-                found = {c["id"] for c in state.data["clients"] if c["status"] == "found"}
-                wanted = params.get("chosen")
-                chosen = [str(k) for k in wanted] if isinstance(wanted, list) else None
-                steps, align = await asyncio.to_thread(
-                    align_steps, state.inventory, adapters, folder, found, chosen
-                )
-                if not steps:
-                    # Every add would make a duplicate, so none is chosen: the list only, with
-                    # no change to apply.
-                    listing = {"action": action, "steps": [], "after": [], "align": align}
-                    return JSONResponse(listing)
-                copied = skill_catalog(state.inventory, adapters)
-            elif action == GATEWAY_MOVE:
-                gateway = next((g for g in _registered() if g.id == params.get("gateway")), None)
-                if gateway is None:
-                    return _error("Register the gateway first.", 422)
-                ids = [str(t.get("item")) for t in targets if isinstance(t, dict)]
-                items = [_item(i) for i in ids]
-                if not items or any(i is None for i in items):
-                    return _error("Choose a known server.", 422)
-                steps = move_steps(adapters, items, gateway)
-            elif action == SKILL_REMOVE:
-                ids = [t.get("item") for t in targets if isinstance(t, dict)]
-                items = [_item(str(i)) for i in ids]
-                if len(items) != 1 or items[0] is None:
-                    return _error("Choose one known item.", 422)
-                readers = skill_readers(state.inventory, items[0])
-                keeps = skill_keepers(state.inventory, items[0], readers)
-                steps = skill_remove_steps(adapters, items[0], readers, keeps)
-            elif action in (REMOVE_DIRECT, PLUGIN_ENABLE, PLUGIN_DISABLE, PLUGIN_REMOVE):
-                ids = [t.get("item") for t in targets if isinstance(t, dict)]
-                items = [_item(str(i)) for i in ids]
-                # A direct entry may go from several clients at once; a plugin is one item.
-                one = len(items) == 1 or action == REMOVE_DIRECT
-                if not items or any(i is None for i in items) or not one:
-                    return _error("Choose one known item.", 422)
-                if action == REMOVE_DIRECT:
-                    steps = [s for item in items for s in remove_steps(adapters, item)]
-                elif action == PLUGIN_REMOVE:
-                    steps = remove_plugin_steps(adapters, items[0])
-                else:
-                    steps = plugin_steps(adapters, items[0], action == PLUGIN_ENABLE)
+                    raise ValueError("Install the tool first: uv tool install <this folder>")
+            steps = update_steps(adapters, items, added, command)
+        elif action == SETUP_SERVER_ENABLE:
+            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+            entries = setup_server_state(state.inventory)
+            entry = next((e for e in entries if [e["client"]] == clients), None)
+            # Only the client's own entry, turned off: a plugin's is the plugin's switch.
+            if entry is None or entry["state"] != "added" or entry["enabled"] is not False:
+                raise ValueError("The kitden entry there is not turned off.")
+            steps = enable_steps(adapters, clients[0])
+        elif action == GATEWAY_MOVE and params.get("gateway") == KITDEN_GATEWAY:
+            ids = [str(t.get("item")) for t in targets if isinstance(t, dict)]
+            items = [_item(i) for i in ids]
+            if not items or any(i is None for i in items):
+                raise ValueError("Choose a known server.")
+            known = [p.path for p in state.inventory.projects]
+            added = _states_in(state.inventory, "added", "plugin")
+            command = (setup_command or installed_command)()
+            if command is None and {i.client for i in items} - added:
+                raise ValueError("Install the tool first: uv tool install <this folder>")
+            # A Codex entry that keeps only some tools on: Kitden needs the whole list.
+            wanted = await asyncio.to_thread(tools_to_read, adapters, items, home, known)
+            for name, server in wanted.items():
+                tools = await _read_tools(name, server)
+                if tools is None:
+                    raise ValueError(
+                        f"Kitden could not read the tools of {name}; it stays direct for now."
+                    )
+                save_tools(home, name, tools)
+            # It may ask a remote server whether it signs in, so not on the event loop.
+            steps = await asyncio.to_thread(
+                local_move_steps,
+                adapters,
+                items,
+                home,
+                known,
+                command,
+                added_clients=added,
+                sign_in=sign_in,
+                keychain_run=keychain_run,
+            )
+        elif action == GATEWAY_RULE:
+            projects = {p["id"]: p["path"] for p in state.data["projects"]}
+            steps = rule_steps(home, params, projects)
+        elif action == GATEWAY_RULES:
+            projects = {p["id"]: p["path"] for p in state.data["projects"]}
+            steps = rules_steps(home, params, projects)
+        elif action == GATEWAY_STRICT:
+            steps = strict_steps(home, params, load_tools(home))
+        elif action == GATEWAY_REMOVE:
+            steps = remove_server_steps(home, str(params.get("server", "")))
+        elif action == GATEWAY_PUT_BACK:
+            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+            server = str(params.get("server", ""))
+            steps = put_back_steps(adapters, home, server, clients, keychain_run)
+        elif action == GATEWAY_KEYCHAIN:
+            steps = keychain_steps(home, str(params.get("server", "")))
+        elif action == MCP_ADD:
+            item = _item(str(params.get("item", "")))
+            if item is None:
+                raise ValueError("Choose a known server.")
+            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+            steps = add_server_steps(adapters, item, clients)
+        elif action == PROJECT_ALIGN:
+            folder = _project_param(params)
+            if folder is None:
+                raise ValueError("Unknown project.")
+            found = {c["id"] for c in state.data["clients"] if c["status"] == "found"}
+            wanted = params.get("chosen")
+            chosen = [str(k) for k in wanted] if isinstance(wanted, list) else None
+            steps, align = await asyncio.to_thread(
+                align_steps, state.inventory, adapters, folder, found, chosen
+            )
+            if not steps:
+                return Built(steps=[], align=align)
+            copied = skill_catalog(state.inventory, adapters)
+        elif action == GATEWAY_MOVE:
+            gateway = next((g for g in _registered() if g.id == params.get("gateway")), None)
+            if gateway is None:
+                raise ValueError("Register the gateway first.")
+            ids = [str(t.get("item")) for t in targets if isinstance(t, dict)]
+            items = [_item(i) for i in ids]
+            if not items or any(i is None for i in items):
+                raise ValueError("Choose a known server.")
+            steps = move_steps(adapters, items, gateway)
+        elif action == SKILL_REMOVE:
+            ids = [t.get("item") for t in targets if isinstance(t, dict)]
+            items = [_item(str(i)) for i in ids]
+            if len(items) != 1 or items[0] is None:
+                raise ValueError("Choose one known item.")
+            readers = skill_readers(state.inventory, items[0])
+            keeps = skill_keepers(state.inventory, items[0], readers)
+            steps = skill_remove_steps(adapters, items[0], readers, keeps)
+        elif action in (REMOVE_DIRECT, PLUGIN_ENABLE, PLUGIN_DISABLE, PLUGIN_REMOVE):
+            ids = [t.get("item") for t in targets if isinstance(t, dict)]
+            items = [_item(str(i)) for i in ids]
+            # A direct entry may go from several clients at once; a plugin is one item.
+            one = len(items) == 1 or action == REMOVE_DIRECT
+            if not items or any(i is None for i in items) or not one:
+                raise ValueError("Choose one known item.")
+            if action == REMOVE_DIRECT:
+                steps = [s for item in items for s in remove_steps(adapters, item)]
+            elif action == PLUGIN_REMOVE:
+                steps = remove_plugin_steps(adapters, items[0])
             else:
-                return _error("This action is not offered.", 422)
-            # No step into a file Kitden could not read, also for a place chosen after the add
-            # opened.
-            broken = {p.path for p in state.inventory.problems if p.path}
-            stuck = next((s.edit.path for s in steps if s.edit and s.edit.path in broken), None)
-            if stuck:
-                return _error(unread_refusal(str(action), stuck), 422)
-            change = await asyncio.to_thread(engine.preview, str(action), steps)
-        except ValueError as error:  # includes ChangeRefusedError
-            return _error(refusal_words(error), 422)
-        events.publish("change_state")
+                steps = plugin_steps(adapters, items[0], action == PLUGIN_ENABLE)
+        else:
+            raise ValueError("This action is not offered.")
+        # No step into a file Kitden could not read, also for a place chosen after the add opened.
+        broken = {p.path for p in state.inventory.problems if p.path}
+        stuck = next((s.edit.path for s in steps if s.edit and s.edit.path in broken), None)
+        if stuck:
+            raise ValueError(unread_refusal(str(action), stuck))
+        return Built(steps, items, left_out, copied, align)
+
+    def _picked(body: dict) -> str | None:
+        """The folder of the project picked at the top of the page, if any."""
+        paths = {p["id"]: p["path"] for p in state.data["projects"]}
+        return paths.get(str(body.get("picked") or ""))
+
+    def _review(change: Change, built: Built, picked: str | None) -> dict:
+        """The review's words for a previewed change: what each client shows after it and what
+        Undo cannot bring back. Also marks the clients a plugin step reaches and sets where the
+        steps go (`change.target`)."""
         # Only an added or removed plugin reaches Cursor through Claude Code.
         plugins = (PLUGIN_INSTALL, PLUGIN_REMOVE, PROJECT_ALIGN)
-        cursor = _found_cursor() if action in plugins else None
+        cursor = _found_cursor() if change.action in plugins else None
         imports = bool(cursor and cursor.imports_claude_plugins())
-        switched = items[0] if action in (PLUGIN_REMOVE, PLUGIN_ENABLE, PLUGIN_DISABLE) else None
+        switches = (PLUGIN_REMOVE, PLUGIN_ENABLE, PLUGIN_DISABLE)
+        switched = built.items[0] if change.action in switches else None
         mark_reach(change, state.inventory, switched, imports)
         after = after_words(
-            change, state.inventory, cursor_imports=imports, skills=copied, home=home
+            change, state.inventory, cursor_imports=imports, skills=built.copied, home=home
         )
         # The review's first sentence: where the steps go (also for the project picked at the
         # top, which may have its own definition of what changes), and what Undo cannot bring
         # back.
         known = [p.path for p in state.inventory.projects]
-        paths = {p["id"]: p["path"] for p in state.data["projects"]}
-        picked = paths.get(str(body.get("picked") or ""))
+        change.target = change_target(change, known, state.inventory, picked, built.items)
+        words = {"after": after, "undo_note": undo_note(change)}
+        if built.left_out is not None:
+            words["left_out"] = built.left_out
+        if built.align is not None:
+            words["align"] = built.align
+        return words
+
+    async def preview(request: Request) -> JSONResponse:
+        if engine is None:
+            return _error("Changes are not available.", 404)
+        body = await _body(request)
+        action = body.get("action")
+        targets = body.get("targets") if isinstance(body.get("targets"), list) else []
+        params = body.get("params") if isinstance(body.get("params"), dict) else {}
+        try:
+            built = await _steps_for(action, targets, params)
+            if action == PROJECT_ALIGN and not built.steps:
+                # Every add would make a duplicate, so none is chosen: the list only, with no
+                # change to apply.
+                listing = {"action": action, "steps": [], "after": [], "align": built.align}
+                return JSONResponse(listing)
+            change = await asyncio.to_thread(engine.preview, str(action), built.steps)
+        except ValueError as error:  # includes ChangeRefusedError
+            return _error(refusal_words(error), 422)
+        events.publish("change_state")
+        words = _review(change, built, _picked(body))
+        return JSONResponse({**change_dict(change), **words})
+
+    async def _batch(requests: list[dict]) -> tuple[Change, list[Built], list[list[int]]]:
+        """Build each request, join the steps in tray order and preview them as one change.
+        Raises _RowRefused with the words and the row they come from."""
+        assert engine is not None
+        built = []
+        for request in requests:
+            try:
+                made = await _steps_for(request["kind"], request["targets"], request["params"])
+            except ValueError as error:
+                raise _RowRefused(refusal_words(error), request["id"]) from None
+            if not made.steps:
+                raise _RowRefused("Nothing to change.", request["id"])
+            built.append(made)
+        parts = [Part(r["id"], r["title"], m.steps) for r, m in zip(requests, built, strict=True)]
+        steps, maps = combine(parts)
+        action = requests[0]["kind"] if len(requests) == 1 else BATCH
+        try:
+            change = await asyncio.to_thread(engine.preview, action, steps)
+        except ValueError as error:  # includes ChangeRefusedError
+            raise _RowRefused(refusal_words(error), None) from None
+        return change, built, maps
+
+    async def batch_preview(request: Request) -> JSONResponse:
+        """The preview tray as one change (changes/batch.py): each request's own builder, the
+        steps joined in tray order. Apply, Undo and Cancel are the change's own verbs. A
+        refusal names the row it comes from (`row`), or none when the engine refuses."""
+        if engine is None:
+            return _error("Changes are not available.", 404)
+        body = await _body(request)
+        try:
+            requests = requests_in(body)
+        except ValueError as error:
+            return _error(str(error), 422)
+        try:
+            change, built, maps = await _batch(requests)
+        except _RowRefused as refused:
+            return JSONResponse({"detail": refused.reason, "row": refused.row}, status_code=422)
+        picked = _picked(body)
+        rows, answers = [], []
+        for request, made, row_steps in zip(requests, built, maps, strict=True):
+            row = {k: request[k] for k in ("id", "kind", "title", "detail")}
+            row.update(project=None, steps=row_steps)
+            part = part_of(change, row)
+            words = _review(part, made, picked)
+            if part.target["scope"] == "project":
+                row["project"] = part.target["project"]
+            rows.append(row)
+            answers.append({**row, "target": part.target, **words})
+        change.rows = rows
+        known = [p.path for p in state.inventory.projects]
+        items = [i for made in built for i in made.items]
         change.target = change_target(change, known, state.inventory, picked, items)
-        answer = {**change_dict(change), "after": after, "undo_note": undo_note(change)}
-        if left_out is not None:
-            answer["left_out"] = left_out
-        if align is not None:
-            answer["align"] = align
+        events.publish("change_state")
+        notes = list(dict.fromkeys(a["undo_note"] for a in answers if a["undo_note"]))
+        answer = {**change_dict(change), "rows": answers, "undo_note": " ".join(notes) or None}
         return JSONResponse(answer)
 
     async def change_action(request: Request) -> JSONResponse:
@@ -1328,6 +1424,7 @@ def create_app(
             Route("/api/gateway/tools/refresh", gateway_tools_refresh, methods=["POST"]),
             Route("/api/changes", changes),
             Route("/api/changes/preview", preview, methods=["POST"]),
+            Route("/api/batch/preview", batch_preview, methods=["POST"]),
             Route("/api/changes/{change_id}", change_view),
             Route("/api/changes/{change_id}/{verb}", change_action, methods=["POST"]),
             Route("/api/commands", commands),

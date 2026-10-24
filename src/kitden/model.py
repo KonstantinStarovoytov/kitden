@@ -332,6 +332,10 @@ class Change:
     # Where the steps go (views/review.py change_target), set at preview: the review's title
     # and the Changes page say it. Kept in the record.
     target: dict | None = None
+    # The preview tray's rows when the change was made from them (changes/batch.py): each
+    # {id, kind, title, detail, project, steps}, `steps` being indices into `steps`. Kept in the
+    # record and the log.
+    rows: list[dict] | None = None
 
     def move_to(self, new: ChangeState) -> None:
         if new not in _TRANSITIONS.get(self.state, set()):

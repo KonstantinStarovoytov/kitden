@@ -357,6 +357,7 @@ def _record(change: Change) -> dict:
         "error": change.error,
         "holds_secret": change.holds_secret,
         "target": change.target,
+        "rows": change.rows,
         "steps": steps,
     }
 
@@ -413,6 +414,7 @@ def _from_record(record: dict) -> Change:
         error=record["error"],
         holds_secret=record.get("holds_secret", False),
         target=record.get("target"),
+        rows=record.get("rows"),
     )
 
 
@@ -1096,6 +1098,7 @@ class Engine:
                 "error": change.error,
                 "holds_secret": change.holds_secret,
                 "target": change.target,
+                "rows": change.rows,
                 "steps": [
                     {
                         "client": s.client,
