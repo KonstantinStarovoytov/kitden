@@ -5,7 +5,7 @@ from pathlib import Path
 from kitden.changes.actions import KITDEN_GATEWAY, set_up_differently
 from kitden.clients.base import REMOVE_DIRECT
 from kitden.clients.entries import IN_PROJECT_FILES
-from kitden.model import Gateway, Item, ItemKind, Scope
+from kitden.model import Enabled, Gateway, Item, ItemKind, Scope
 from kitden.views.effective import DESKTOP, effective_view
 from kitden.views.explain import summary_line
 from kitden.views.findings import bypass_kind
@@ -96,8 +96,10 @@ def gateway_view(
 
     Each outside row has the client columns that load it (the Desktop Code tab counts as
     Claude Code), whether one of its entries is the project's own and replaces an all-projects
-    one (`override`), and the first reason a move would refuse it (`stays`), or None. A move
-    takes the row's entries together, so two of them set up differently are such a reason."""
+    one (`override`), the first reason a move would refuse it (`stays`), or None, and whether
+    no entry of it is known to be on (`unknown`: a project's `.mcp.json` server Claude Code has
+    not approved yet). A move takes the row's entries together, so two of them set up
+    differently are a reason it refuses."""
     ids = ([KITDEN_GATEWAY] if kitden is not None else []) + [g.id for g in gateways]
     # Per gateway and client: the servers that load in this scope and go through that gateway.
     connections: dict[str, dict[str, list[str]]] = {g: {c: [] for c in COLUMNS} for g in ids}
@@ -129,11 +131,13 @@ def gateway_view(
                 "movable": movable[group],
                 "override": False,
                 "stays": None,
+                "unknown": True,
             },
         )
         if item.client not in row["clients"]:
             row["clients"].append(item.client)
         row["override"] = row["override"] or item.id in overrides
+        row["unknown"] = row["unknown"] and item.enabled is not Enabled.ON
         row["stays"] = row["stays"] or stays(item, group)
         if REMOVE_DIRECT in item.actions:
             row["items"].append(item.id)

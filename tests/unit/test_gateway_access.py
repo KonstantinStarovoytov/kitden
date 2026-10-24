@@ -115,6 +115,22 @@ def test_a_name_set_up_differently_in_one_group_stays_with_the_moves_own_words(t
     assert (refused.status_code, refused.json()["detail"]) == (422, row["stays"])
 
 
+def test_a_project_server_claude_code_has_not_approved_is_not_known(tmp_path):
+    with demo_page(tmp_path) as page:
+        # Atlas approves docs only: Claude Code still asks about notes.
+        mcp = page.home / "work/atlas/.mcp.json"
+        data = json.loads(mcp.read_text())
+        data["mcpServers"]["notes"] = {"command": "npx", "args": ["notes-mcp"]}
+        mcp.write_text(json.dumps(data))
+        page.post("/api/rescan", headers=POST)
+        projects = page.get("/api/projects").json()
+        atlas = next(p["id"] for p in projects if p["path"].endswith("/work/atlas"))
+        groups = page.get(f"/api/gateway-view?project={atlas}").json()["groups"]
+    notes = next(r for r in groups["local"] if r["name"] == "notes")
+    docs = next(r for r in groups["move"] if r["name"] == "docs")
+    assert (notes["unknown"], docs["unknown"]) == (True, False)
+
+
 def test_a_row_kept_from_the_last_good_read_stays(tmp_path):
     with demo_page(tmp_path) as page:
         (page.home / ".cursor/mcp.json").write_text("{ broken")

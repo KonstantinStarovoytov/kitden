@@ -26,6 +26,8 @@ const OUTSIDE_ICONS = { move: "remote", local: "local", plugin: "plugin" };
 const KINDS = [["remote", "Remote"], ["local", "Local"]];
 // A gateway's block, or on a first run the slot of the Kitden gateway.
 const GATEWAY_KINDS = ["gateway", "slot"];
+// What a client or an outside server says when Kitden does not know its state.
+const NOT_KNOWN = "Not known";
 // A tool's row says "Read" or "Write" only when the server says so; a guess from its name says
 // "May write".
 const HINT_TAGS = { reads: "Read", writes: "Write", "may write": "May write" };
@@ -165,7 +167,8 @@ function heldTag(server, on) {
 //   on (layoutTree shows them only for an open server);
 // - the servers outside every gateway, each joined to each client that has it by a direct line,
 //   with a grip where a move can take it, and in a project "This project" where the project's
-//   own definition replaces the shared one.
+//   own definition replaces the shared one. One that no client is known to load (`unknown`) is
+//   "unk", and its lines are dashed (`unk`): they show who has the entry, not that it is on.
 // On a first run (no client has the kitden entry, on or off, and the Kitden gateway holds nothing)
 // the clients say they are found, with their version (`clients`, /api/clients), the gateway is a
 // slot to set up, and nothing has a grip. `picked` is the picked project ("" for All projects).
@@ -189,7 +192,7 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
     const on = linked.includes(id);
     const found = (clients || []).find((c) => c.id === id && c.status === "found");
     // Without the setup read, a client is neither connected nor not.
-    let meta = known ? (on ? "Connected" : "Not connected") : "Not known";
+    let meta = known ? (on ? "Connected" : "Not connected") : NOT_KNOWN;
     // Found lights the dot; the state stays what the link shows: no gateway reached yet.
     let dot = null;
     if (first && found) [meta, dot] = [found.version ? `Found · ${found.version}` : "Found", "on"];
@@ -275,8 +278,10 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
     const tag = picked && row.override ? ORIGIN_WORDS.override : null;
     // A drop moves into the Kitden gateway only, so a grip needs it.
     const grip = targets.some((g) => g.kind === "kitden") && !first && !moving;
-    blocks.push({ id, column: "servers", parent: "group:outside", kind: "outside", name: row.name, meta, tag, state: "on", icon: OUTSIDE_ICONS[key], row, groupKey: key, columns, move, grip });
-    if (id !== moved) for (const client of columns) links.push({ from: `client:${client}`, to: id, kind: "direct" });
+    const state = row.unknown ? "unk" : "on";
+    blocks.push({ id, column: "servers", parent: "group:outside", kind: "outside", name: row.name, meta, tag, state, icon: OUTSIDE_ICONS[key], row, groupKey: key, columns, move, grip });
+    const line = row.unknown ? { kind: "direct", unk: true } : { kind: "direct" };
+    if (id !== moved) for (const client of columns) links.push({ from: `client:${client}`, to: id, ...line });
   }
   return { columns: GATEWAY_COLUMNS, blocks, links };
 }
@@ -330,7 +335,9 @@ export function listRows(model, open = new Set(), folded = new Set()) {
     }
   }
   const outside = model.blocks.find((b) => b.id === "group:outside");
-  if (outside) group(outside.id, outside.name, null, 0, children.get(outside.id) || [], (b) => row(b, outside.id, 1, { usedBy: b.columns, action: b.move ? "move" : "open" }));
+  // An outside server no client is known to load says so; the others are on.
+  const outsideRow = (b) => row(b, outside.id, 1, { usedBy: b.columns, action: b.move ? "move" : "open", meta: b.state === "unk" ? NOT_KNOWN : null });
+  if (outside) group(outside.id, outside.name, null, 0, children.get(outside.id) || [], outsideRow);
   return rows;
 }
 

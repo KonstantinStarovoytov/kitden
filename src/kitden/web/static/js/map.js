@@ -13,8 +13,9 @@
 //   holds. `grip`: it can be dragged. `action`: what pressing it does, in words ("Set up…").
 //   `stateInMeta`: its meta says its state already ("On in 2 projects"), so no state word is
 //   spoken. `dot`: a client's dot when it is not its state (a client found on a first run).
-// - links: [{ from, to, kind }], kind "on", "faint", "direct" or "preview". The link is the
-//   state: something on has a link, something off has none.
+// - links: [{ from, to, kind, unk }], kind "on", "faint", "direct" or "preview". The link is the
+//   state: something on has a link, something off has none. `unk`: Kitden does not know whether
+//   it is on, so the line is dashed; it only shows who has the entry.
 import { button, cutName, el, plural } from "./dom.js";
 
 export const GAP = 46; // between two columns
@@ -132,7 +133,7 @@ export function layoutTree(model, { open = new Set(), width = 0, narrow = isNarr
     const child = byId.get(link.to);
     const rail = narrow && child.parent === link.from && child.column !== byId.get(link.from).column;
     const d = rail ? railPath(from, to) : link.kind === "direct" ? elbow(from, to) : curve(from, to);
-    links.push({ from: link.from, to: link.to, kind: link.kind, d });
+    links.push({ from: link.from, to: link.to, kind: link.kind, d, ...(link.unk ? { unk: true } : {}) });
   }
   const blocks = [...placed.values()];
   const height = blocks.reduce((most, block) => Math.max(most, block.y + block.h), 0);
@@ -447,9 +448,10 @@ export function drawMap(box, model, layout, { onSelect, onOpen, onAdd, tile, sel
   for (const link of links) {
     const key = keyOf(link);
     const path = document.createElementNS(SVG, "path");
-    path.setAttribute("class", `link ${link.kind}${lit.has(key) ? " lit" : ""}`);
+    path.setAttribute("class", `link ${link.kind}${link.unk ? " unk" : ""}${lit.has(key) ? " lit" : ""}`);
     path.setAttribute("d", link.d);
-    if (fresh.has(key) && !reduced) {
+    // A dashed line shows at once: the draw itself is a dash.
+    if (fresh.has(key) && !reduced && !link.unk) {
       path.classList.add("draw");
       path.setAttribute("pathLength", "1");
     }

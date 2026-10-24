@@ -504,6 +504,8 @@ div.map .map-area { position: relative; }
 div.map .map-links { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
 div.map .link { fill: none; stroke: var(--wire-strong); stroke-width: 1.3; stroke-linecap: round; transition: stroke var(--t-fast) ease; }
 div.map .link.direct { stroke: var(--lamp-warn); stroke-width: 1.2; opacity: 0.55; }
+/* A client has the entry, but Kitden does not know that it loads it: the line does not say on. */
+div.map .link.direct.unk { stroke-dasharray: 3 3; }
 div.map .link.faint { opacity: 0.5; }
 div.map .link.lit { stroke: var(--route); stroke-width: 1.6; opacity: 1; }
 div.map .link.draw { stroke-dasharray: 1; animation: wire-draw 150ms var(--ease-out) both; }

@@ -344,6 +344,24 @@ test('a name set up differently in two clients of one group has no grip and no "
   assert.equal(listRows(tree).find((r) => r.id === 'outside:local:files').action, 'open');
 });
 
+test('an outside server Kitden does not know to be on has a dashed line and says "Not known"', () => {
+  // A project's .mcp.json server Claude Code has not approved yet: no entry of it is known on.
+  const notes = { name: 'notes', clients: ['claude_code'], columns: ['claude_code'], items: [], stays: "notes is in the project's own files; it stays there.", override: false, unknown: true };
+  const tree = gatewayTree({ ...MEDIUM_VIEW, groups: { ...MEDIUM_VIEW.groups, local: [notes] } }, OPTS);
+  const shown = block(tree, 'outside:local:notes');
+  assert.equal(shown.state, 'unk');
+  assert.equal(blockLabel(shown), 'notes, In Claude Code, Not known');
+  // The line still shows which client has the entry, dashed: it does not claim "on".
+  assert.deepEqual(tree.links.find((l) => l.to === 'outside:local:notes'), { from: 'client:claude_code', to: 'outside:local:notes', kind: 'direct', unk: true });
+  assert.equal(layoutTree(tree, { width: 1440 }).links.find((l) => l.to === 'outside:local:notes').unk, true);
+  assert.equal(listRows(tree).find((r) => r.id === 'outside:local:notes').meta, 'Not known');
+  // A server a client loads stays on, with a plain line.
+  assert.equal(blockLabel(block(tree, 'outside:move:github')), 'github, In Claude Code, On');
+  assert.equal(tree.links.find((l) => l.to === 'outside:move:github').unk, undefined);
+  assert.equal(layoutTree(tree, { width: 1440 }).links.find((l) => l.to === 'outside:move:github').unk, undefined);
+  assert.equal(listRows(tree).find((r) => r.id === 'outside:move:github').meta, null);
+});
+
 test('a Desktop Code tab entry draws its line from Claude Code', () => {
   const desk = { name: 'desk', clients: ['claude_desktop_code_tab'], columns: ['claude_code'], items: ['d'], stays: null, override: false };
   const tree = gatewayTree({ ...MEDIUM_VIEW, groups: { ...MEDIUM_VIEW.groups, move: [desk] } }, OPTS);

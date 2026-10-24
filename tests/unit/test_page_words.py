@@ -248,6 +248,10 @@ def test_the_map_says_the_link_is_the_state():
     assert "ResizeObserver" in script("gateway.js") and "unfoldDelays(" in script("map.js")
     direct = CSS.split(".link.direct")[1].split("}")[0]
     assert ".link.direct" in CSS and "var(--lamp-warn)" in direct
+    # A line to a server Kitden does not know to be on is dashed: it does not say "on".
+    assert "div.map .link.direct.unk { stroke-dasharray: 3 3; }" in CSS
+    assert '${link.unk ? " unk" : ""}' in script("map.js")
+    assert 'const NOT_KNOWN = "Not known";' in script("gateway.js")
     # A block says whether it is open by what is open, not by what shows yet.
     assert 'setAttribute("aria-expanded", String(open.has(' in script("map.js")
 
