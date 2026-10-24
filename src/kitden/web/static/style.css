@@ -525,6 +525,7 @@ div.map .block.gateway .block-text, div.map .block.slot .block-text { flex: none
 div.map .block.gateway .block-meta, div.map .block.slot .block-meta { justify-content: center; }
 div.map .block.slot { gap: 4px; border: 1px dashed var(--preview-line); background: var(--preview-fill); }
 div.map .block.slot .block-house { width: 20px; height: 20px; }
+div.map .block.slot .block-meta { color: var(--ink-2); }
 div.map .block.slot .block-words { white-space: normal; }
 div.map .block-action { flex: none; height: 24px; padding: 0 10px; border-radius: 6px; background: var(--action); color: var(--on-action); font-size: 12px; font-weight: 600; line-height: 24px; }
 div.map .block[aria-expanded="true"] { border-color: var(--route); }

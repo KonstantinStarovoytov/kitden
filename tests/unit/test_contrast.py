@@ -100,6 +100,29 @@ def test_text_on_the_dim_fill_is_readable_in_both_themes():
             assert contrast(theme[ink], theme["--dim"]) >= 4.5, ink
 
 
+def blend(fill: str, base: str) -> str:
+    """A see-through #rrggbbaa fill drawn over an opaque #rrggbb base, as #rrggbb."""
+    alpha = int(fill[7:9], 16) / 255
+    mix = (
+        int(fill[i : i + 2], 16) * alpha + int(base[i : i + 2], 16) * (1 - alpha) for i in (1, 3, 5)
+    )
+    return "#" + "".join(f"{round(c):02x}" for c in mix)
+
+
+def test_the_first_run_slot_is_readable_in_both_themes():
+    # "No gateway yet" sits on --preview-fill over the canvas. Its name is --ink and its sentence
+    # --ink-2: --ink-3 is only 4.48:1 there in the light theme.
+    assert "div.map .block.slot .block-meta { color: var(--ink-2); }" in CSS
+    assert (
+        round(contrast(LIGHT["--ink-3"], blend(LIGHT["--preview-fill"], LIGHT["--canvas"])), 2)
+        < 4.5
+    )
+    for theme in (LIGHT, DARK, {**LIGHT, **DARK_AUTO}):
+        fill = blend(theme["--preview-fill"], theme["--canvas"])
+        for ink in ("--ink", "--ink-2"):
+            assert contrast(theme[ink], fill) >= 4.5, (ink, fill)
+
+
 def test_the_preview_tokens_are_the_frames_values():
     assert (LIGHT["--preview-fill"], LIGHT["--preview-line"]) == ("#a4422612", "#a4422680")
     assert (DARK["--preview-fill"], DARK["--preview-line"]) == ("#f09a7c10", "#f09a7c80")

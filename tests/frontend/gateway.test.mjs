@@ -6,7 +6,7 @@ globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
 const { GATEWAY_COLUMNS, gatewayTree, heldServer, kitdenLinks, listAt, listRows, narrowFor, serverCount } = await import('../../src/kitden/web/static/js/gateway.js');
 const { offersSwitch } = await import('../../src/kitden/web/static/js/gateway-details.js');
-const { findIn, layoutTree } = await import('../../src/kitden/web/static/js/map.js');
+const { blockLabel, findIn, layoutTree } = await import('../../src/kitden/web/static/js/map.js');
 const { kitdenClients } = await import('../../src/kitden/web/static/js/parts.js');
 const { viewMode } = await import('../../src/kitden/web/static/js/store.js');
 
@@ -287,8 +287,11 @@ test('a first run shows the gateway as a slot to set up and no grips', () => {
   assert.ok(m.blocks.filter((b) => b.kind === 'outside').every((b) => !b.grip));
   assert.equal(m.blocks.find((b) => b.id === 'client:codex').meta, 'Found · 0.48');
   assert.equal(m.blocks.find((b) => b.id === 'client:cursor').meta, 'Found');
-  // Found is a good state: its dot is lit, though no client reaches a gateway yet.
-  assert.equal(m.blocks.find((b) => b.id === 'client:codex').state, 'on');
+  // Found lights the dot, but no client reaches a gateway yet: its state, and the word a screen
+  // reader hears, stay Off, as the map shows no link.
+  const codex = m.blocks.find((b) => b.id === 'client:codex');
+  assert.deepEqual([codex.dot, codex.state], ['on', 'off']);
+  assert.equal(blockLabel(codex), 'Codex, Found · 0.48, Off');
   // Direct lines are elbows on a first run too.
   assert.ok(m.links.filter((l) => l.to.startsWith('outside:')).every((l) => l.kind === 'direct'));
   // A client with the kitden entry is not a first run, nor is a setup Kitden could not read.
@@ -342,6 +345,12 @@ test('With All projects a server only some projects turn on says so', () => {
   const tree = gatewayTree(view, OPTS);
   assert.equal(block(tree, 'held:kitden:tracker').meta, 'On in 2 projects');
   assert.ok(!tree.links.some((l) => l.to === 'held:kitden:tracker'));
+  // Its words say where it is on; no On or Off word beside them.
+  assert.equal(blockLabel(block(tree, 'held:kitden:tracker')), 'tracker, On in 2 projects');
+  assert.equal(listRows(tree, new Set()).find((r) => r.id === 'held:kitden:tracker').said, null);
+  // A server with no such words still says its state.
+  assert.equal(blockLabel(block(tree, 'held:kitden:files')), 'files, 3 of 4 on, On');
+  assert.equal(listRows(tree, new Set()).find((r) => r.id === 'held:kitden:files').said, 'On');
   // In a project the server says how many of its tools are on there.
   assert.equal(block(gatewayTree(view, { ...OPTS, picked: 'atlas' }), 'held:kitden:tracker').meta, '0 of 3 on');
 });

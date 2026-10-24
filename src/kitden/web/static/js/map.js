@@ -11,6 +11,8 @@
 //   its children sit under it, in its column, and always show. Any other block shows its children
 //   only while it is open. `state`: "on", "off", "unk" or "preview". `count`: what a folded block
 //   holds. `grip`: it can be dragged. `action`: what pressing it does, in words ("Set up…").
+//   `stateInMeta`: its meta says its state already ("On in 2 projects"), so no state word is
+//   spoken. `dot`: a client's dot when it is not its state (a client found on a first run).
 // - links: [{ from, to, kind }], kind "on", "faint", "direct" or "preview". The link is the
 //   state: something on has a link, something off has none.
 import { button, cutName, el } from "./dom.js";
@@ -295,7 +297,7 @@ function blockParts(block, { tile, open }) {
   if (tag && !(counted && block.meta)) top.append(tag);
   if (block.meta) {
     const line = el("span", "block-meta");
-    if (block.kind === "client") line.append(quiet(el("span", `block-dot ${block.state}`)));
+    if (block.kind === "client") line.append(quiet(el("span", `block-dot ${block.dot || block.state}`)));
     line.append(tag && counted ? tag : el("span", "block-words", block.meta));
     text.append(line);
   }
@@ -305,8 +307,15 @@ function blockParts(block, { tile, open }) {
   return parts;
 }
 
-// One block: a button with its name cut short (the whole name in its hover text and label, with
-// its meta, tag, state and action). A group is a caption, or a button when it has Details. A
+// What a screen reader hears for a block: its whole name, meta, tag, the state word that matches
+// its link (none where the meta says it), and its action.
+export function blockLabel(block) {
+  const state = block.stateInMeta ? null : STATE_SAID[block.state];
+  return [block.name, block.meta, block.tag, state, block.action].filter(Boolean).join(", ");
+}
+
+// One block: a button with its name cut short (the whole name in its hover text and its label,
+// blockLabel). A group is a caption, or a button when it has Details. A
 // block that folds says whether it is open (`open`), also while its children are read. A press
 // opens or folds a block that folds (`onOpen`), then selects it (`onSelect`, which draws again).
 function blockNode(block, { selected, lit, found, folds, open, tile, onSelect, onOpen }) {
@@ -321,7 +330,7 @@ function blockNode(block, { selected, lit, found, folds, open, tile, onSelect, o
   node.dataset.focus = `block:${block.id}`;
   if (block.state) node.dataset.state = block.state;
   node.title = name;
-  node.setAttribute("aria-label", [name, block.meta, block.tag, STATE_SAID[block.state], block.action].filter(Boolean).join(", "));
+  node.setAttribute("aria-label", blockLabel(block));
   const folding = folds.has(block.id);
   if (block.kind === "group") node.textContent = name;
   else node.append(...blockParts(block, { tile, open: folding && open.has(block.id) }));

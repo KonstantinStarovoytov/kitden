@@ -170,9 +170,10 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
     const found = (clients || []).find((c) => c.id === id && c.status === "found");
     // Without the setup read, a client is neither connected nor not.
     let meta = known ? (on ? "Connected" : "Not connected") : "Not known";
-    let state = known ? (on ? "on" : "off") : "unk";
-    if (first && found) [meta, state] = [found.version ? `Found · ${found.version}` : "Found", "on"];
-    blocks.push({ id: `client:${id}`, column: "clients", kind: "client", name: CLIENT_NAMES[id], meta, state, client: id });
+    // Found lights the dot; the state stays what the link shows: no gateway reached yet.
+    let dot = null;
+    if (first && found) [meta, dot] = [found.version ? `Found · ${found.version}` : "Found", "on"];
+    blocks.push({ id: `client:${id}`, column: "clients", kind: "client", name: CLIENT_NAMES[id], meta, dot, state: known ? (on ? "on" : "off") : "unk", client: id });
   }
   // A gateway block joined to the clients it `reaches` (null when not read), then its servers in
   // their groups; `server(block, word)` adds what each server's block says. `unread` says why
@@ -210,6 +211,8 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
       block.onCount = list.length ? `${server.on_count} of ${list.length} on` : null;
       block.onIn = !picked && server.on_in ? `On in ${plural(server.on_in, "project", "projects")}` : null;
       block.meta = block.onIn || block.onCount || word;
+      // "On in 2 projects" says the state itself; a lone On or Off beside it would contradict it.
+      block.stateInMeta = Boolean(block.onIn);
       block.tag = heldTag(server, block.state === "on");
       block.count = server.tools;
       for (const tool of list) {
@@ -252,7 +255,8 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
 // its tools; then the group outside the gateway. A group or a gateway the person folded
 // (`folded`) shows no rows under it. Each row: { id, parent, depth, kind, name, usedBy (client
 // ids), tools ("3 of 4 on"), meta (quiet words after the name), action ("open" for ›, "move" for
-// "Move in…"), tag, scope (a tool's own rule), state, expanded (only on a row that folds), group }.
+// "Move in…"), tag, scope (a tool's own rule), state, said (the state word a screen reader hears
+// for a server or tool, none where its words say it), expanded (only on a row that folds), group }.
 export function listRows(model, open = new Set(), folded = new Set()) {
   const rows = [];
   const children = new Map();
@@ -263,7 +267,9 @@ export function listRows(model, open = new Set(), folded = new Set()) {
   }
   const reaches = (id) => model.links.filter((l) => l.to === id && l.from.startsWith("client:")).map((l) => l.from.slice("client:".length));
   const row = (block, parent, depth, fields = {}) => {
-    rows.push({ id: block.id, parent, depth, kind: block.kind, name: block.name, usedBy: [], tools: null, meta: null, action: "open", tag: block.tag || null, scope: null, state: block.state, group: false, ...fields });
+    const spoken = ["held", "tool"].includes(block.kind) && !block.stateInMeta;
+    const said = spoken ? (block.state === "on" ? STATE_WORDS.on : STATE_WORDS.off) : null;
+    rows.push({ id: block.id, parent, depth, kind: block.kind, name: block.name, usedBy: [], tools: null, meta: null, action: "open", tag: block.tag || null, scope: null, state: block.state, said, group: false, ...fields });
   };
   const group = (id, name, parent, depth, items, draw) => {
     const expanded = !folded.has(id);
@@ -557,7 +563,7 @@ function listRow(row, block, { current, selected, view, press }) {
   const words = el("span", row.group ? "words" : "words mono", row.name);
   words.title = row.name;
   name.append(words);
-  if (row.kind === "held" || row.kind === "tool") name.append(el("span", "sr-only", row.state === "on" ? STATE_WORDS.on : STATE_WORDS.off));
+  if (row.said) name.append(el("span", "sr-only", row.said));
   // A tool's tag says whether it reads or writes; an accent tag says a rule of this project.
   const accent = row.kind === "tool" ? row.scope : row.tag;
   if (accent) name.append(el("span", "tag", accent));

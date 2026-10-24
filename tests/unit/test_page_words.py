@@ -230,6 +230,7 @@ def test_the_map_says_the_link_is_the_state():
         '"Connected"',
         '"Not connected"',
         "Found · ${",
+        '"Found"',
         '"No gateway yet"',
         '"One place for servers, rules and logins."',
         '"Set up…"',
