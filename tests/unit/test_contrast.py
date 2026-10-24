@@ -56,6 +56,12 @@ def test_the_applied_label_is_drawn_at_full_strength_at_once():
     assert not re.search(r"\.done[^{]*\{[^}]*opacity: 0", later)
 
 
+def test_the_cell_tag_is_readable_on_its_fill_in_both_themes():
+    # "This project" and "Only this project" sit on the accent tint.
+    for theme in (LIGHT, DARK):
+        assert contrast(theme["--route"], theme["--route-soft"]) >= 4.5
+
+
 def test_system_dark_theme_has_the_same_success_tokens():
     for name in ("--success", "--on-success"):
         assert DARK_AUTO[name] == DARK_RULE[name]

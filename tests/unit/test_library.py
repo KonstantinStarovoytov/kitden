@@ -927,21 +927,24 @@ def test_project_items_stay_while_claude_json_is_broken(tmp_path):
         off = cell("website", kind, name, "claude_code", source)
         assert (off["state"], off["where"], off["stale_at"]) == (
             "off",
-            "project override",
+            "This project",
             "2026-10-22T14:02:00+00:00",
         ), name
     docs = cell("atlas", "mcp_server", "docs", "claude_code")
-    assert (docs["where"], docs["stale_at"]) == ("project override", "2026-10-22T14:02:00+00:00")
+    assert (docs["where"], docs["stale_at"]) == ("This project", "2026-10-22T14:02:00+00:00")
 
 
 def test_project_items_stay_while_codex_config_is_broken(tmp_path):
     # Codex reads a project's skills and AGENTS.md only for projects config.toml trusts.
     cell = _after_a_break(tmp_path, ".codex/config.toml")
     style = cell("atlas", "skill", "api-style", "codex")
-    assert (style["state"], style["where"]) == ("on", "this project")
+    assert (style["state"], style["where"]) == ("on", "Only this project")
     assert style["reason"].startswith("From the last good read at ")
     agents = cell("atlas", "instructions", "AGENTS.md", "codex")
-    assert (agents["where"], agents["stale_at"]) == ("this project", "2026-10-22T14:02:00+00:00")
+    assert (agents["where"], agents["stale_at"]) == (
+        "Only this project",
+        "2026-10-22T14:02:00+00:00",
+    )
 
 
 def _toolbox_cell(home: Path, project: Path) -> dict:
@@ -1112,7 +1115,7 @@ def test_a_project_only_skill_adds_into_the_project(tmp_path):
         True,
     )
     assert (add["project_place"], add["project_hint"]) == (False, None)
-    assert style["cells"]["codex"]["where"] == "this project"
+    assert style["cells"]["codex"]["where"] == "Only this project"
     assert (style["source"], style["offer"]) == ("atlas", None)
     everywhere = library(
         inventory, adapters, None, gateway_registered=False, kind="skill", show="all"

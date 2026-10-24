@@ -3,13 +3,13 @@
 Rows group items by kind and name. A plugin is one row per marketplace ("figma@a" and
 "figma@b" are two rows named "figma"); an instruction file per category (a command and an agent
 named "review" are two rows); other kinds group by name.
-Each cell says what that client does with the item in the chosen project: has it available,
+Each cell says what that client does with the item in the chosen project: has it on,
 has it but off, routes it through the gateway, or does not know (a client Kitden could not read
 says why). A client whose item has the name of another client's but another source needs review
 (match.py). A cell kept from the last good read says when it was read. In a project a cell also
-says where it applies, and every cell keeps how the client gets the item (its route) for the
-hover text. The Claude Desktop Code tab has no column of its own: its extra items show in the
-Claude Code column, with the route "from the Desktop app".
+carries a tag when the project's own settings decide it, and every cell keeps how the client
+gets the item (its route) for the hover text. The Claude Desktop Code tab has no column of its
+own: its extra items show in the Claude Code column, with the route "from the Desktop app".
 """
 
 from dataclasses import dataclass, field
@@ -40,7 +40,7 @@ class Cell:
     # "on", "off", "gw", "unk", "review" (same name, another source), "none" or "missing"
     # (client not installed)
     state: str
-    where: str | None = None  # in a project, ORIGIN_WORDS[origin]; with All projects, None
+    where: str | None = None  # in a project, ORIGIN_WORDS.get(origin); else None
     origin: str | None = None  # None (all projects), "project" or "override"
     route: str | None = None  # how the client gets it, from ROUTE_WORDS; None when plain
     reason: str | None = None  # why the state, when the page should say it (a client not read)
@@ -151,7 +151,7 @@ def _cell(
     stale = min((i.stale_at for i in items + deciding if i.stale_at), default=None)
     return Cell(
         state,
-        where=ORIGIN_WORDS[origin] if in_project else None,
+        where=ORIGIN_WORDS.get(origin) if in_project else None,
         origin=origin,
         route=_route(items[0], column),
         reason=STALE.format(_clock(stale)) if stale else None,
@@ -162,7 +162,7 @@ def _cell(
 
 
 def _review(row: Row, items: dict[str, Item], copies: Copies) -> None:
-    """Same name, another source: of two or more Available cells, those whose items share no
+    """Same name, another source: of two or more On cells, those whose items share no
     command, address, skill files or plugin with the most common ones need review. Only the
     state and the reason change."""
     if row.kind not in (ItemKind.MCP_SERVER, ItemKind.SKILL):

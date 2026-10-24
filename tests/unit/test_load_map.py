@@ -59,7 +59,7 @@ def test_rows_group_by_kind_and_name_with_one_plugin_row_per_marketplace(home):
 def test_cell_states_for_the_website_project(home):
     rows = load_map(build_inventory(home), str(home / "work/website"))
     cell = plugin_row(rows, "superpowers@claude-plugins-official").cells["claude_code"]
-    assert (cell.state, cell.where) == ("off", "project override")
+    assert (cell.state, cell.where) == ("off", "This project")
 
 
 def test_cursor_loading_a_plugin_twice_flags_both_rows_and_each_row_has_one_cell(home):
@@ -249,35 +249,36 @@ def test_a_name_without_a_marketplace_has_no_source(home):
     assert (skill.source, skill.lookup) == (None, "docker-expert")
 
 
-def test_a_project_item_says_this_project_and_a_project_win_says_project_override(home):
+def test_an_item_only_the_project_has_says_only_this_project_and_a_project_win_says_this_project(
+    home,
+):
     rows = load_map(build_inventory(home), str(home / "work/website"))
     docs = rows_by(rows, "mcp_server", "docs").cells["claude_code"]
-    assert (docs.where, docs.origin) == ("this project", "project")
+    assert (docs.where, docs.origin) == ("Only this project", "project")
     plugin = plugin_row(rows, "superpowers@claude-plugins-official").cells["claude_code"]
-    assert (plugin.state, plugin.where, plugin.origin) == ("off", "project override", "override")
+    assert (plugin.state, plugin.where, plugin.origin) == ("off", "This project", "override")
     github = rows_by(rows, "mcp_server", "github").cells["claude_code"]
-    assert (github.where, github.origin) == ("all projects", None)
+    assert (github.where, github.origin) == (None, None)
 
 
 def test_a_plugin_part_applies_where_its_plugin_does(home):
     rows = load_map(build_inventory(home), str(home / "work/website"))
     # The website turns superpowers off over the all-projects install; its skill follows it.
     skill = rows_by(rows, "skill", "brainstorming").cells["claude_code"]
-    assert (skill.state, skill.where, skill.origin) == ("off", "project override", "override")
+    assert (skill.state, skill.where, skill.origin) == ("off", "This project", "override")
     assert skill.route == "from a plugin"
     # claude-md-management is off for all projects, so its server is too.
     server = rows_by(rows, "mcp_server", "md-index").cells["claude_code"]
-    assert (server.state, server.where, server.origin) == ("off", "all projects", None)
+    assert (server.state, server.where, server.origin) == ("off", None, None)
 
 
-def test_every_item_cell_in_a_project_says_where_it_applies(home):
+def test_a_cell_in_a_project_carries_a_tag_or_nothing(home):
     rows = load_map(build_inventory(home), str(home / "work/website"))
     cells = [c for r in rows for c in r.cells.values() if c.items]
-    words = {"all projects", "this project", "project override"}
-    assert cells and {c.where for c in cells} <= words
+    assert {c.where for c in cells} == {None, "This project", "Only this project"}
 
 
-def test_all_projects_cells_carry_no_scope_word(home):
+def test_all_projects_cells_carry_no_tag(home):
     rows = load_map(build_inventory(home), None)
     assert all(c.origin is None and c.where is None for r in rows for c in r.cells.values())
 
@@ -295,19 +296,19 @@ def test_the_route_leaves_the_word_slot(home):
     assert rows_by(rows, "mcp_server", "md-index").cells["claude_code"].route == "from a plugin"
 
 
-def test_the_medium_sample_says_where_each_atlas_cell_applies(tmp_path):
+def test_a_cell_says_this_project_only_where_the_project_decides(tmp_path):
     home = build_demo_home(tmp_path, "medium")  # Part 1: atlas/.mcp.json overrides the user docs
     rows = load_map(build_inventory(home), str(home / "work/atlas"))
     docs = rows_by(rows, "mcp_server", "docs").cells
-    assert (docs["claude_code"].where, docs["claude_code"].origin) == (
-        "project override",
-        "override",
-    )
-    assert docs["codex"].where == "all projects"
-    assert rows_by(rows, "skill", "api-style").cells["codex"].where == "this project"
+    assert (docs["claude_code"].origin, docs["claude_code"].where) == ("override", "This project")
+    assert (docs["codex"].origin, docs["codex"].where) == (None, None)
+    shared = rows_by(rows, "mcp_server", "github").cells["claude_code"]
+    assert (shared.origin, shared.where) == (None, None)
+    only = rows_by(rows, "skill", "api-style").cells["codex"]
+    assert (only.origin, only.where) == ("project", "Only this project")
 
 
-def test_a_kept_cell_keeps_its_scope_word_and_route(home):
+def test_a_kept_cell_keeps_its_route(home):
     inventory = build_inventory(home)
     settings = str(home / ".claude/settings.json")
     inventory.items = [
@@ -319,7 +320,7 @@ def test_a_kept_cell_keeps_its_scope_word_and_route(home):
     cell = row.cells["cursor"]
     assert (cell.state, cell.where, cell.route) == (
         "on",
-        "all projects",
+        None,
         "through Claude Code's folder",
     )
     assert cell.stale_at == "2026-10-22T14:02:00+00:00"
@@ -366,12 +367,12 @@ def test_a_duplicate_in_one_client_is_not_review(home):
     assert "review" not in {c.state for c in row.cells.values()}
 
 
-def test_review_keeps_the_scope_word_and_route(tmp_path):
+def test_a_review_cell_that_follows_the_shared_setup_carries_no_tag(tmp_path):
     home = build_demo_home(tmp_path, "medium")  # Part 1: Claude Code's docs is an address
     rows = load_map(build_inventory(home), str(home / "work/atlas"))
     codex = rows_by(rows, "mcp_server", "docs").cells["codex"]
     assert (codex.state, codex.where, codex.reason) == (
         "review",
-        "all projects",
+        None,
         "Same name, another source.",
     )

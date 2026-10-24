@@ -24,10 +24,13 @@ export function targetWords(target, folder = folderName(target && target.project
 }
 // The twin of views/words.py STATE_WORDS.
 export const STATE_WORDS = {
-  on: "Available", off: "Off", over: "Overridden", unk: "Unknown", review: "Needs review", gw: "Via gateway",
+  on: "On", off: "Off", over: "Overridden", unk: "Unknown", review: "Needs review", gw: "Via gateway",
   missing: "Not installed", none: "—", via: "Via Claude Code", done: "Has its skills",
   unread: "Could not read",
 };
+// The twin of views/words.py ORIGIN_WORDS: the tag of a cell in a project view. "This project":
+// the project's own settings decide the cell. "Only this project": only that project has the item.
+export const ORIGIN_WORDS = { override: "This project", project: "Only this project" };
 // The twin of views/words.py ROUTE_WORDS: how a client gets an item, said in Details and hover
 // text. "{}" is the client whose folder it is.
 export const ROUTE_WORDS = {
@@ -194,7 +197,7 @@ export function socket({ state, where, word, label, stale = false }) {
   const dot = el("span", "dot");
   dot.setAttribute("aria-hidden", "true");
   node.append(dot, el("span", "word", word || STATE_WORDS[state] || state));
-  if (where) node.append(el("span", "where", where));
+  if (where) node.append(el("span", "tag", where));
   return node;
 }
 
@@ -214,12 +217,12 @@ export function morphSocket(node, next) {
     const newDot = fresh.querySelector(".dot");
     if (oldDot && newDot) newDot.replaceWith(oldDot);
     const parts = [...fresh.childNodes];
-    if (!still) parts.filter((p) => p.matches(".word, .where")).forEach((p) => p.classList.add("swap"));
+    if (!still) parts.filter((p) => p.matches(".word, .tag")).forEach((p) => p.classList.add("swap"));
     node.replaceChildren(...parts);
     if (!still) requestAnimationFrame(() => node.querySelectorAll(".swap").forEach((t) => t.classList.remove("swap")));
   };
   if (still) { swap(); return; }
-  node.querySelectorAll(".word, .where").forEach((t) => t.classList.add("swap"));
+  node.querySelectorAll(".word, .tag").forEach((t) => t.classList.add("swap"));
   setTimeout(swap, 160);
 }
 

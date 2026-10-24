@@ -64,7 +64,7 @@ def test_a_skill_goes_into_the_project_folder(client):
     rows = client.get(f"/api/library?kind=skill&project={pid(client, website)}").json()["rows"]
     tidy = next(r for r in rows if r["name"] == "tidy")
     cell = tidy["cells"]["claude_code"]
-    assert (cell["state"], cell["where"]) == ("on", "this project")
+    assert (cell["state"], cell["where"]) == ("on", "Only this project")
     everywhere = client.get("/api/library?kind=skill&show=all").json()["rows"]
     assert (
         next(r for r in everywhere if r["name"] == "tidy")["cells"]["claude_code"]["state"]

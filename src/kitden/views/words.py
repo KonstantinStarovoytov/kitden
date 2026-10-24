@@ -2,7 +2,7 @@
 
 # A cell's state, as the Library, Details and the After chips say it.
 STATE_WORDS: dict[str, str] = {
-    "on": "Available",
+    "on": "On",
     "off": "Off",
     "unk": "Unknown",
     "review": "Needs review",
@@ -51,12 +51,13 @@ AFTER_WORDS: dict[str, tuple[str, str]] = {
     "setup_server.update": ("on", "Updated"),
 }
 
-# Where a cell's items apply, said in a project view: a project item that wins over an
-# all-projects one is a "project override". With All projects picked a cell says none.
-ORIGIN_WORDS: dict[str | None, str] = {
-    None: "all projects",
-    "project": "this project",
-    "override": "project override",
+# The tag a cell carries in a project view: "This project" when the project's own settings
+# decide it (a project item that wins over a shared one), "Only this project" for an item only
+# that project has. A cell that follows the shared setup carries none, and so does every cell
+# with All projects picked. The twin of parts.js ORIGIN_WORDS.
+ORIGIN_WORDS: dict[str, str] = {
+    "override": "This project",
+    "project": "Only this project",
 }
 
 # Why a change to one client's definition reaches another client too: Details says it before

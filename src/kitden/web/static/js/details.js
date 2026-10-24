@@ -75,14 +75,14 @@ export function loadsLede(row, columns) {
   const names = (states) => columns
     .filter((c) => states.includes(row.cells[c.id] && row.cells[c.id].state))
     .map((c) => c.name);
-  const available = names(["on", "gw"]);
+  const on = names(["on", "gw"]);
   const review = names(["review"]);
   const unknown = names(["unk"]);
   const lines = [];
-  if (available.length) lines.push(`Available in ${joinWords(available)}.`);
+  if (on.length) lines.push(`On in ${joinWords(on)}.`);
   if (review.length) lines.push(`Needs review in ${joinWords(review)}: same name, another source.`);
   if (unknown.length) lines.push(`Unknown in ${joinWords(unknown)}.`);
-  return lines.join(" ") || "Not available here.";
+  return lines.join(" ") || "Not on here.";
 }
 
 // The title names the source too when two rows share the name ("superpowers · cursor-public").
@@ -615,14 +615,14 @@ function staleWords(at) {
   return `From the last good read at ${two(time.getHours())}:${two(time.getMinutes())}`;
 }
 
-// A definition's dot, badge and line of why. An instruction file says it is available, or
+// A definition's dot, badge and line of why. An instruction file says it is on, or
 // that it is in a project, never "Not loaded": its why says when it is read. A definition kept
 // from the last good read also says when (`stale`).
 export function layerState(def, said = new Set()) {
   let look = "off";
   let badge = "Not loaded";
   // The server's why is written for agents ("Loads. It overrides the user definition."). The
-  // badge says Available, and the Why lines say in page words which definition overrides or
+  // badge says On, and the Why lines say in page words which definition overrides or
   // merges with which; such a definition has no line of its own. Nor has one whose line the
   // Why says instead (`said`, from whyParts): turned off, or only in another project.
   const ruled = def.kind !== "instructions" && (def.loads || def.overridden || def.merged);

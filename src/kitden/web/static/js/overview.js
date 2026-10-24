@@ -176,7 +176,7 @@ function loadsLine(clientId, tile) {
     return line;
   }
   const counts = loadCounts(map.rows, clientId);
-  if (!counts.length) line.append(el("span", "muted", "Nothing available here."));
+  if (!counts.length) line.append(el("span", "muted", "Nothing on here."));
   for (const [kind, , words] of counts) {
     line.append(button(words, async () => {
       const choice = { kind, show: "mine", category: "", attention: false, q: "" };

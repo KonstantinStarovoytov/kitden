@@ -471,9 +471,9 @@ def _skill_cell(
 ) -> dict:
     """The scan's state when it has one; else how the skill list says the client gets it, or
     what the client can add. `no_place`: clients that cannot take a copy in the picked project,
-    with what to say instead. `where`: the scope word of an installed one, None with All
-    projects picked. A skill only the picked project has adds into that project, or says why
-    not."""
+    with what to say instead. `where`: the tag of an installed one: "Only this project" for a
+    project's own skill, else None. A skill only the picked project has adds into that project,
+    or says why not."""
     if _has(row, client):
         return _map_cell(row, client)
     word = skill["installed"].get(client)
@@ -556,9 +556,9 @@ def _skill_rows(
     out = []
     for skill in skills:
         # The skill list reads no project: its installed words come from user skills and from
-        # plugins of any scope. In a project an installed cell says all projects; a project
-        # row's says this project.
-        where = ORIGIN_WORDS["project" if skill["project"] else None] if in_project else None
+        # plugins of any scope. In a project an installed cell carries no tag; a project row's
+        # says "Only this project".
+        where = ORIGIN_WORDS["project"] if in_project and skill["project"] else None
         row = mapped.get(skill["name"])
         key = row.key if row and row.key not in used else _hash(ItemKind.SKILL, skill["id"])
         used.add(key)

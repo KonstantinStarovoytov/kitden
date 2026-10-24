@@ -205,7 +205,7 @@ def test_adding_to_claude_code_says_cursor_loads_it_too(cursor_client):
     assert change["after"][-1] == {
         "client": "cursor",
         "state": "on",
-        "word": "Available",
+        "word": "On",
         "note": "Cursor loads Claude Code's plugins, so it gets this one too.",
     }
     # The title names Cursor too, as Details' Affects does before the click.

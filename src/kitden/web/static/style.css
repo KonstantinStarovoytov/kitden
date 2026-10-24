@@ -235,8 +235,8 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .socket.stale .dot { border-style: dashed; }
 .s-none, .s-missing { color: var(--ink-4); }
 .socket .word { color: var(--ink-2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: opacity var(--t-fast) ease; }
-.socket .where { color: var(--ink-3); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: opacity var(--t-fast) ease; }
-.socket .where::before { content: "· "; }
+/* The tag of a cell in a project view ("This project", "Only this project"): the accent family. */
+.socket .tag { color: var(--route); background: var(--route-soft); font-size: 11px; line-height: 18px; padding: 0 6px; border-radius: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: opacity var(--t-fast) ease; }
 .socket .swap { opacity: 0; }
 .socket.pulse .dot { animation: ping 900ms var(--ease-out) 1; }
 @keyframes ping { 0% { box-shadow: 0 0 0 0 currentColor; } 100% { box-shadow: 0 0 0 7px transparent; } }

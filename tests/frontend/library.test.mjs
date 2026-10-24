@@ -86,15 +86,16 @@ test('a state cell says the state, and why when the server says', () => {
   const done = cellNode(row({ codex: cell({ state: 'done', word: 'Has its skills' }) }), 'codex');
   assert.equal(done.className, 'socket s-done');
   assert.equal(done.children[1].textContent, 'Has its skills');
-  const on = cellNode(row({ codex: cell({ state: 'on', where: 'project' }) }), 'codex');
-  assert.deepEqual(on.children.map((c) => c.textContent), ['', 'Available', 'project']);
+  const on = cellNode(row({ codex: cell({ state: 'on', where: 'Only this project' }) }), 'codex');
+  assert.deepEqual(on.children.map((c) => c.textContent), ['', 'On', 'Only this project']);
+  assert.equal(on.children[2].className, 'tag');
 });
 
 test("a cell's route is in its hover text, not beside the state", () => {
-  const node = cellNode(row({ cursor: cell({ state: 'on', where: 'all projects', route: "through Claude Code's folder" }) }), 'cursor');
-  assert.deepEqual(node.children.map((c) => c.textContent), ['', 'Available', 'all projects']);
-  assert.equal(node.title, "All projects. Through Claude Code's folder");
-  assert.equal(cellHint({ where: 'project override', route: "through Codex's folder", reason: 'Could not read Codex.' }), "Project override. Through Codex's folder. Could not read Codex.");
+  const node = cellNode(row({ cursor: cell({ state: 'on', route: "through Claude Code's folder" }) }), 'cursor');
+  assert.deepEqual(node.children.map((c) => c.textContent), ['', 'On']);
+  assert.equal(node.title, "Through Claude Code's folder");
+  assert.equal(cellHint({ where: 'This project', route: "through Codex's folder", reason: 'Could not read Codex.' }), "This project. Through Codex's folder. Could not read Codex.");
   assert.equal(cellHint({ route: 'from a plugin', reason: 'From the last good read at 14:02' }), 'From a plugin. From the last good read at 14:02');
   assert.equal(cellHint({ reason: 'Could not read Codex.' }), 'Could not read Codex.');
   assert.equal(cellHint({}), '');
@@ -102,8 +103,8 @@ test("a cell's route is in its hover text, not beside the state", () => {
 
 test('one word for a cell that has it, on every tab', () => {
   const word = (kind) => cellNode({ key: 'k', kind, name: 'x', cells: { codex: cell({ state: 'on' }) } }, 'codex').children[1].textContent;
-  assert.equal(word('instructions'), 'Available');
-  assert.equal(word('mcp_server'), 'Available');
+  assert.equal(word('instructions'), 'On');
+  assert.equal(word('mcp_server'), 'On');
 });
 
 test('a cell add asks for a review of that one client', () => {

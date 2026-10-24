@@ -49,12 +49,13 @@ and "Show" brings it back. Tabs split MCP servers, plugins, skills, hooks, marke
 instructions (CLAUDE.md, AGENTS.md, rules, commands and agents; Details shows the first lines,
 common secret shapes hidden). On plugins and skills, choose Installed, New (not on this computer
 yet) or All, and filter by category. Pick a project at the top to see what loads in that folder.
-All projects shows what every project shares. In a project, each cell that has the item also says
-where it applies: "all projects", "this project" or "project override". How a client gets it,
+All projects shows what every project shares. In a project, a cell carries "This project" when the
+project's own settings decide it, and "Only this project" for an item only that project has; the
+other cells follow what every project shares and carry nothing. How a client gets it,
 such as "through Claude Code's folder", is in the cell's hover text. The address keeps the
 project and the item you opened, so a link or Back returns to it.
 
-A cell says "Available" when the client has the item and "Off" when it has it turned off.
+A cell says "On" when the client has the item and "Off" when it has it turned off.
 "Unknown" means Kitden could not read it, so it may or may not be available; it never means
 missing. Either a file could not be read, or the client keeps the on/off state where Kitden
 cannot see it, such as your Claude account. "Needs review" means another client has an item with

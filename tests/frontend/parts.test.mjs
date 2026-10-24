@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 // parts.js needs only these from a browser to load. The stub element knows classes,
-// attributes, children and class selectors (".word, .where"); `media` is reduced motion.
+// attributes, children and class selectors (".word, .tag"); `media` is reduced motion.
 const media = { matches: false };
 globalThis.matchMedia = () => media;
 function element(tag) {
@@ -69,10 +69,10 @@ test('with reduced motion a changed socket shows its new word at once, never fad
   media.matches = true;
   try {
     const node = socket({ state: 'off' });
-    morphSocket(node, { state: 'on', where: 'global' });
+    morphSocket(node, { state: 'on', where: 'This project' });
     assert.equal(node.className, 'socket s-on');
-    assert.equal(node.querySelector('.word').textContent, 'Available');
-    assert.equal(node.querySelector('.where').textContent, 'global');
+    assert.equal(node.querySelector('.word').textContent, 'On');
+    assert.equal(node.querySelector('.tag').textContent, 'This project');
     assert.equal(node.querySelectorAll('.swap').length, 0);
   } finally {
     media.matches = false;

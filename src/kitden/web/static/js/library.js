@@ -162,7 +162,7 @@ export function cellNode(row, client) {
 }
 
 // A cell's hover text: where it applies (in full, where the cell may cut it), how the client
-// gets the item, then why: "Project override. Through Codex's folder. <reason>".
+// gets the item, then why: "This project. Through Codex's folder. <reason>".
 export function cellHint(cell) {
   return [cell.where, cell.route, cell.reason].filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(". ");

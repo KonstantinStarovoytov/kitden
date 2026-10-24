@@ -109,6 +109,23 @@ def test_one_phrase_says_cursor_loads_claude_codes_plugins():
     assert "Claude Code's plugins" not in Path(commands.__file__).read_text()
 
 
+def test_python_and_page_origin_words_agree():
+    from kitden.views.words import ORIGIN_WORDS
+
+    parts = script("parts.js")
+    assert ORIGIN_WORDS == {"override": "This project", "project": "Only this project"}
+    for origin, word in ORIGIN_WORDS.items():
+        assert f'{origin}: "{word}"' in parts, origin
+    assert "project override" not in parts + script("library.js") + panel()
+
+
+def test_a_cell_draws_its_tag_in_the_accent_family():
+    assert 'el("span", "tag", where)' in script("parts.js")
+    css = (STATIC / "style.css").read_text()
+    assert ".socket .tag { color: var(--route); background: var(--route-soft);" in css
+    assert ".socket .where" not in css
+
+
 def test_python_and_page_route_words_agree():
     parts = script("parts.js")
     for route, words in ROUTE_WORDS.items():
@@ -119,9 +136,9 @@ def test_after_words_come_from_the_one_table():
     from kitden.views import after
 
     assert not hasattr(after, "WORDS")
-    assert AFTER_WORDS["plugin.enable"] == ("on", "Available")
+    assert AFTER_WORDS["plugin.enable"] == ("on", "On")
     assert AFTER_WORDS["gateway.move"] == ("gw", STATE_WORDS["gw"])
-    assert after.CURSOR_IMPORT["word"] == "Available"
+    assert after.CURSOR_IMPORT["word"] == "On"
 
 
 def test_gateway_names_the_remove_action_and_draws_no_idle_wire():
@@ -457,7 +474,7 @@ def test_changes_and_the_library_say_saved_settings_and_scope():
     assert "global settings" not in changes
     assert '"everywhere"' not in changes
     assert "Tools · ${where || ALL_PROJECTS}" in panel()
-    assert '"Nothing available here."' in script("overview.js")
+    assert '"Nothing on here."' in script("overview.js")
     assert "Loads nothing" not in script("overview.js")
 
 

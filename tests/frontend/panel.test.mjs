@@ -447,18 +447,18 @@ test('Details with nothing to do say why first', () => {
   const remote = { cells: { codex: cell({ state: 'unk' }) } };
   assert.equal(whyNoAction(remote, [{ change_hint: null }, { change_hint: hint }]), hint);
   // Nothing known (an MCP server row from the scan has no reasons): no line.
-  assert.equal(whyNoAction({ cells: { codex: { state: 'on', where: 'all projects', items: [] } } }, []), '');
+  assert.equal(whyNoAction({ cells: { codex: { state: 'on', where: null, items: [] } } }, []), '');
 });
 
 test('the Details lede says where it loads, and where it may', () => {
   const columns = [{ id: 'claude_code', name: 'Claude Code' }, { id: 'codex', name: 'Codex' }, { id: 'cursor', name: 'Cursor' }];
   const lede = (states) => loadsLede({ cells: Object.fromEntries(Object.entries(states).map(([c, state]) => [c, cell({ state })])) }, columns);
-  assert.equal(lede({ claude_code: 'on', codex: 'gw', cursor: 'none' }), 'Available in Claude Code and Codex.');
+  assert.equal(lede({ claude_code: 'on', codex: 'gw', cursor: 'none' }), 'On in Claude Code and Codex.');
   // The page cannot tell whether it is on: it may load there.
   assert.equal(lede({ codex: 'unk' }), 'Unknown in Codex.');
-  assert.equal(lede({ claude_code: 'on', codex: 'unk' }), 'Available in Claude Code. Unknown in Codex.');
-  assert.equal(lede({ claude_code: 'off', cursor: 'via' }), 'Not available here.');
-  assert.equal(lede({ claude_code: 'on', codex: 'review' }), 'Available in Claude Code. Needs review in Codex: same name, another source.');
+  assert.equal(lede({ claude_code: 'on', codex: 'unk' }), 'On in Claude Code. Unknown in Codex.');
+  assert.equal(lede({ claude_code: 'off', cursor: 'via' }), 'Not on here.');
+  assert.equal(lede({ claude_code: 'on', codex: 'review' }), 'On in Claude Code. Needs review in Codex: same name, another source.');
 });
 
 test('Details names the scope with the same phrases as the cells', () => {
@@ -559,8 +559,8 @@ test('the align review groups what each client lacks and keeps the choice', () =
 test('an instruction file never says Loads', () => {
   const columns = [{ id: 'codex', name: 'Codex' }, { id: 'cursor', name: 'Cursor' }];
   const row = { kind: 'instructions', category: 'instructions', cells: { codex: { state: 'on' }, cursor: { state: 'on' } } };
-  assert.equal(loadsLede(row, columns), 'Available in Codex and Cursor.');
-  assert.equal(loadsLede({ ...row, cells: { codex: { state: 'on' }, cursor: { state: 'none' } } }, columns), 'Available in Codex.');
+  assert.equal(loadsLede(row, columns), 'On in Codex and Cursor.');
+  assert.equal(loadsLede({ ...row, cells: { codex: { state: 'on' }, cursor: { state: 'none' } } }, columns), 'On in Codex.');
   assert.equal(kindWord(row), 'Instruction file');
   assert.equal(kindWord({ kind: 'instructions', category: 'agent' }), 'Agent');
   assert.equal(kindWord({ kind: 'skill' }), 'Skill');
@@ -568,11 +568,11 @@ test('an instruction file never says Loads', () => {
 
 test('an instruction file layer never says Loads or Not loaded', () => {
   const def = { kind: 'instructions', enabled: 'on', why: 'Read when a session starts.' };
-  assert.equal(layerState({ ...def, loads: true }).badge, 'Available');
+  assert.equal(layerState({ ...def, loads: true }).badge, 'On');
   assert.equal(layerState({ ...def, loads: false, project: '/h/work/site' }).badge, 'In a project');
   assert.equal(layerState({ ...def, loads: false, project: null }).badge, '');
   assert.equal(layerState({ kind: 'skill', enabled: 'on', loads: false, why: 'x' }).badge, 'Not loaded');
-  // The badge says Available; the why never says Loads again under it, and the Why lines at
+  // The badge says On; the why never says Loads again under it, and the Why lines at
   // the top say which definition overrides which.
   const loaded = { kind: 'mcp_server', enabled: 'on', loads: true };
   assert.equal(layerState({ ...loaded, why: 'Loads.' }).why, '');

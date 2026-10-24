@@ -44,7 +44,9 @@ def test_readme_says_unknown_is_not_missing():
 
 def test_readme_says_what_a_project_view_adds():
     readme = " ".join((ROOT / "README.md").read_text().split())
-    assert '"all projects", "this project" or "project override"' in readme
+    assert '"This project" when the project\'s own settings decide it' in readme
+    assert '"Only this project"' in readme
+    assert 'A cell says "On" when the client has the item' in readme
     assert "is in the cell's hover text" in readme
     assert '"Needs review" means another client has an item with the same name' in readme
     assert "a skill only this project has adds into this project" in readme
