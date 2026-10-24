@@ -25,8 +25,14 @@ PANEL = ("panel.js", "details.js", "tools.js", "review.js")
 
 
 def panel() -> str:
-    """The side panel's modules as one text, so a pin does not depend on which file holds it."""
-    return "\n".join(script(name) for name in PANEL)
+    """The side panel's modules as one text, so a pin does not depend on which file holds it. The
+    review bar on a map shares its Apply, so it is read too."""
+    return "\n".join(script(name) for name in (*PANEL, "map-review.js"))
+
+
+def reviews() -> str:
+    """The change review and the review bar on a map as one text: one module until Part 4."""
+    return script("review.js") + "\n" + script("map-review.js")
 
 
 def gw() -> str:
@@ -567,6 +573,8 @@ def test_a_banner_retry_reads_everything_again():
         text = script(name)
         assert re.search(r"banner\([^;]*, retry\)", text), name
         assert "render(); })" not in text, name
+    # The drag left gateway.js; it holds no such retry either.
+    assert "render(); })" not in script("gateway-drag.js")
 
 
 def test_the_rail_time_follows_every_render_not_only_a_refresh():
@@ -990,7 +998,7 @@ def test_an_add_review_names_its_scope():
 
 
 def test_the_review_leads_with_the_outcome_and_keeps_undo_honest():
-    review = script("review.js")
+    review = reviews()
     assert "Other projects are unchanged." in review and "A backup is kept." in review
     # One words table: the page's sentence is the twin of views/words.py's.
     assert f'const UNCHANGED = "{UNCHANGED} ";' in review
@@ -1003,7 +1011,7 @@ def test_the_review_leads_with_the_outcome_and_keeps_undo_honest():
 
 
 def test_cancel_and_a_refused_preview_go_back_to_details():
-    review, shell, details = script("review.js"), script("panel.js"), script("details.js")
+    review, shell, details = reviews(), script("panel.js"), script("details.js")
     assert "cancelTarget(" in review and "backToDetails({ error: reason })" in review
     assert "panelState.from = null" in shell
     # Details, and the Gateway's cards of a held server and a tool, keep how to draw themselves
@@ -1023,7 +1031,7 @@ def test_cancel_and_a_refused_preview_go_back_to_details():
 def test_a_review_says_when_its_settings_changed():
     # After a rescan the page asks the server about the open review (review.test.mjs).
     assert '"kitden:rescanned"' in script("app.js") and '"kitden:rescanned"' in script("panel.js")
-    review = script("review.js")
+    review = reviews()
     assert "Settings changed since this preview." in review and '"Preview again"' in review
 
 
@@ -1129,7 +1137,7 @@ def test_tool_and_server_details_say_what_they_know():
     assert "`This project · ${folder}`" in script("parts.js")
     assert "`From ${origin_from}`" in script("parts.js")
     assert "`Turn it on in ${name}'s own MCP settings.`" in text
-    review, parts = script("review.js"), script("parts.js")
+    review, parts = reviews(), script("parts.js")
     assert "`Turn on the kitden entry in ${clients}`" in review
     assert '"setup_server.enable": "Turned on the kitden entry"' in parts
     assert '"setup_server.enable"' in parts.split("export const PLACE_IN_TITLE")[1].split("\n")[0]
@@ -1281,7 +1289,7 @@ def test_skill_and_plugin_details_fold_paths_commands_and_versions():
 
 
 def test_pages_import_the_side_panel_through_panel_js():
-    for name in ("gateway.js", "gateway-details.js", "offer.js"):
+    for name in ("gateway.js", "gateway-details.js", "gateway-drag.js", "offer.js"):
         assert 'from "./details.js"' not in script(name), name
     shell = script("panel.js")
     for word in ("contextLinks", "linksRow", "technical"):

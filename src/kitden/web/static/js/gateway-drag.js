@@ -1,9 +1,9 @@
 // Gateway: drag a server from outside the gateway onto the map to preview its move (4.6, S.8).
-import { moveBody } from "./details.js";
 import { el, reportError, withFocusKey } from "./dom.js";
 import { mapPreview, previewOnMap } from "./map-review.js";
 import { dropAt, groupBox } from "./map.js";
 import { animate, spring } from "./motion.js";
+import { moveBody } from "./panel.js";
 import { busy, current, render } from "./store.js";
 
 // How far a pointer moves on a block with a grip before the block follows it.

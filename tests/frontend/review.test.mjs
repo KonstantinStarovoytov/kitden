@@ -7,7 +7,7 @@ globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
 const { PLACE_IN_TITLE, changeWords, checkStale, review, reviewLede, staleCheckWanted, stoppedWords, targetWords } = await import('../../src/kitden/web/static/js/review.js');
 const { applyOnMap, barWords, cancelOnMap, leaveMap, mapPreview, outcomeLine, previewOnMap, writingLine } = await import('../../src/kitden/web/static/js/map-review.js');
-const { hideToast, isPanelOpen, openPanel, panelState } = await import('../../src/kitden/web/static/js/panel.js');
+const { closeForProject, hideToast, isPanelOpen, openPanel, panelState } = await import('../../src/kitden/web/static/js/panel.js');
 const { moveBody } = await import('../../src/kitden/web/static/js/details.js');
 const { busy, state } = await import('../../src/kitden/web/static/js/store.js');
 
@@ -407,6 +407,26 @@ function fakePage({ bar = false } = {}) {
   };
   return nodes;
 }
+
+test('another project picked drops a map preview that is only previewed (panel.js)', async () => {
+  fakePage();
+  const net = stubFetch((url) => (url === '/api/changes/preview' ? { json: { ...change, state: 'previewed' } } : { json: {} }));
+  try {
+    state.project = 'p1';
+    await previewOnMap(body, () => {});
+    assert.deepEqual([mapPreview.phase, mapPreview.project], ['ready', 'p1']);
+    // The same project keeps it.
+    closeForProject();
+    assert.equal(mapPreview.phase, 'ready');
+    // Another project: it goes, and the server forgets it.
+    state.project = 'p2';
+    closeForProject();
+    assert.deepEqual([mapPreview.phase, posts(net.asked)], ['idle', ['/api/changes/preview', '/api/changes/c1/cancel']]);
+  } finally {
+    net.done();
+    delete globalThis.document;
+  }
+});
 
 test('a drop while a review shows in Details ends that review first; one being written refuses it', async () => {
   fakePage();
