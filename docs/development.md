@@ -79,10 +79,10 @@ the `#gateway?view=map` link in one and read the marks.
 
 Measured 2026-10-24 (Apple M4 Max, macOS 26.6.2):
 
-- Browser pane of the Claude desktop app, probe sample, 5 loads of `#gateway?view=map`, on the
-  first build of the map (an early build, before its Details, find and drag): `kitden:map-draw`
-  median 1.1 ms; `kitden:gateway-drawn` median 52.4 ms, against 51.2 ms for the cards page
-  before the map.
+- Browser pane of the Claude desktop app at 1440×900, probe sample (20 servers), 5 loads of
+  `#gateway?view=map`, build c90b67f: `kitden:map-draw` 4.5, 2.8, 3.3, 2.8 and 3.1 ms (median
+  3.1 ms, limit 50 ms); `kitden:gateway-drawn` 64.0, 54.9, 64.3, 58.3 and 64.2 ms from the
+  start of the navigation (median 64.0 ms).
 - Node, `map.test.mjs`, on the code as it is today, 3 runs: layout median 0.03 to 0.04 ms for 20
   servers and 0.11 to 0.12 ms for the large sample.
 

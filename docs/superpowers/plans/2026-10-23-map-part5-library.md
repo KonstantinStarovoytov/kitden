@@ -119,7 +119,8 @@ Also pinned, from the master Review Focus: the large sample opens in List, its l
     `redrawPreview(redraw, { same, ended })`; `review.js` keeps `appliedToast`;
   - `gateway.js`: `gatewayTree(…, { preview: {name, kind} })`; `app.js`: `MAP_PAGES`, which gains
     `"library"`;
-  - `clients/entries.py`: `gateway_entry`, `reads_elsewhere`; `own_rules(settings, path)`.
+  - `clients/entries.py`: `gateway_entry`, `reads_elsewhere`; `local_gateway/views.py`:
+    `own_rules(settings, chain)`.
 - **Part 4's rulings this part builds on:**
   - Until this part groups them, a Library cell for an item only one project has carries the tag
     "Only this project". The group replaces it here (Task 3).
@@ -403,7 +404,8 @@ git commit -m "Plugins: read what an installed plugin holds" -m "Read again only
   rule.
 - Produces `library_rules(inventory) -> dict[str, int]`: a project path → how many plugin and skill
   rows have an `"off"` or `"override"` entry there. `/api/library` sends `own_rules`, and
-  `/api/projects` items add it to Part 4's `own_rules(settings, path)`.
+  `/api/projects` items add it to Part 4's `own_rules(settings, chain)`
+  (`local_gateway/views.py`).
 - Produces test helper `served(home)`: `create_app(demo_build(home), token="tok", port=47800,
   home=home, demo=True)` on a home the test changed first. `demo_page` uses it.
 - Builder calls:
