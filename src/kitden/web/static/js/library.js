@@ -3,7 +3,7 @@
 // dash that says why not. The server builds the rows and cells (views/library.py).
 import { getJson, query } from "./api.js";
 import { button, el, tabKeys } from "./dom.js";
-import { animate, entrance, glide, land, reducedMotion, rollTo, spring } from "./motion.js";
+import { CALM, animate, entrance, glide, land, reducedMotion, rollTo } from "./motion.js";
 import { marketplaceForm, projectNote, showOffer, showSkill } from "./offer.js";
 import { isPanelOpen, openInfo, projectLabel, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, lookFor, mark, morphSocket, opens, skeleton, socket, sourceLines, staleNote } from "./parts.js";
@@ -838,7 +838,7 @@ export function settleRows(before) {
   const byKey = new Map(rows.map(([tr]) => [tr.dataset.key, tr]));
   const { moved, entered } = rowMoves(before.tops, new Map(rows.map(([tr, top]) => [tr.dataset.key, top])));
   for (const [key, dy] of moved) {
-    animate(byKey.get(key), [{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: 260, easing: spring() });
+    animate(byKey.get(key), [{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: 260, easing: CALM });
   }
   entered.slice(0, RISE_ROWS).forEach((key, index) => {
     const frames = [{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }];

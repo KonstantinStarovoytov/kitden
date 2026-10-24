@@ -2,7 +2,7 @@
 import { el, reportError, withFocusKey } from "./dom.js";
 import { mapPreview, previewOnMap } from "./map-review.js";
 import { dropAt, groupBox } from "./map.js";
-import { animate, spring } from "./motion.js";
+import { CALM, animate } from "./motion.js";
 import { moveBody } from "./panel.js";
 import { busy, current, render } from "./store.js";
 
@@ -173,7 +173,7 @@ function goHome() {
 
 // A block glides from (dx, dy) off where it is shown; with reduced motion it is there at once.
 function glideFrom(node, dx, dy) {
-  if (dx || dy) animate(node, [{ translate: `${dx}px ${dy}px` }, { translate: "0 0" }], { duration: 260, easing: spring() });
+  if (dx || dy) animate(node, [{ translate: `${dx}px ${dy}px` }, { translate: "0 0" }], { duration: 260, easing: CALM });
 }
 
 // The pointer lets go at `point` (page coordinates), or Escape or a lost pointer (null). On the

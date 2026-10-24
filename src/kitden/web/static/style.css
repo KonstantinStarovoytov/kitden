@@ -369,15 +369,15 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .client-row.expandable:hover, .client-row[aria-expanded="true"] { background: var(--inset); }
 .client-row[aria-expanded="true"] .client-mark { transform: scale(1.06); }
 .client-row.expandable:focus-visible { outline-offset: -2px; }
-.client-row .client-mark { transition: transform 260ms var(--spring); }
+.client-row .client-mark { transition: transform 260ms var(--calm); }
 .client-row.expandable:hover .client-mark { transform: scale(1.06); }
 .client-row.expandable:active .client-mark { transform: scale(0.94); transition-duration: 80ms; }
-.chevron { width: 8px; height: 8px; border-right: 1.5px solid var(--ink-3); border-bottom: 1.5px solid var(--ink-3); transform: rotate(-45deg); justify-self: center; transition: transform 280ms var(--spring); grid-column: 4; }
+.chevron { width: 8px; height: 8px; border-right: 1.5px solid var(--ink-3); border-bottom: 1.5px solid var(--ink-3); transform: rotate(-45deg); justify-self: center; transition: transform 280ms var(--calm); grid-column: 4; }
 .client-row[aria-expanded="true"] .chevron { transform: rotate(45deg); }
 .client-more { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 280ms var(--ease-out); }
 .client-more > div { overflow: hidden; min-height: 0; }
 .client-more.open { grid-template-rows: 1fr; }
-.client-more .loads { display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 0 10px 30px; opacity: 0; transform: translateY(-4px); transition: opacity 200ms ease, transform 280ms var(--spring); }
+.client-more .loads { display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 0 10px 30px; opacity: 0; transform: translateY(-4px); transition: opacity 200ms ease, transform 280ms var(--calm); }
 .client-more.open .loads { opacity: 1; transform: none; transition-delay: 60ms; }
 .client-more .loads .muted { font-size: 12px; padding: 2px 8px; }
 .feed { list-style: none; margin: 0; padding: 0; }
@@ -544,7 +544,7 @@ div.map .link.faint { opacity: 0.5; }
 div.map .link.lit { stroke: var(--route); stroke-width: 1.6; opacity: 1; }
 div.map .link.draw { stroke-dasharray: 1; animation: wire-draw 150ms var(--ease-out) both; }
 div.map .appear { animation: block-in 60ms var(--ease-out) both; }
-div.map .block { position: absolute; display: flex; align-items: center; gap: 8px; margin: 0; padding: 0 10px; border: 1px solid var(--wire-strong); border-radius: 8px; background: var(--panel); color: var(--ink); text-align: left; cursor: pointer; transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease, transform 260ms var(--spring); }
+div.map .block { position: absolute; display: flex; align-items: center; gap: 8px; margin: 0; padding: 0 10px; border: 1px solid var(--wire-strong); border-radius: 8px; background: var(--panel); color: var(--ink); text-align: left; cursor: pointer; transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease, transform 260ms var(--calm); }
 div.map .block:hover { border-color: color-mix(in srgb, var(--ink-3) 60%, transparent); }
 div.map .block:active { transform: scale(0.98); transition-duration: var(--t-fast), var(--t-fast), 80ms; }
 div.map .block:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -705,7 +705,7 @@ details.file-change > summary, details.tech > summary { cursor: pointer; color: 
 .diff-count .plus { color: var(--diff-add); }
 .diff-count .minus { color: var(--diff-del); }
 .fold { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 280ms var(--ease-out); }
-.fold > .fold-in { overflow: hidden; min-height: 0; display: grid; gap: 10px; align-content: start; opacity: 0; transform: translateY(-4px); transition: opacity 200ms ease, transform 280ms var(--spring); }
+.fold > .fold-in { overflow: hidden; min-height: 0; display: grid; gap: 10px; align-content: start; opacity: 0; transform: translateY(-4px); transition: opacity 200ms ease, transform 280ms var(--calm); }
 .fold.open { grid-template-rows: 1fr; }
 .fold.open > .fold-in { opacity: 1; transform: none; transition-delay: 40ms; }
 details.file-change .fold-in, details.tech .fold-in, details.connect .fold-in { padding-top: 10px; }
@@ -730,7 +730,7 @@ pre.diff .del { color: var(--diff-del); background: color-mix(in srgb, var(--dan
 
 /* Toast with an undo countdown that pauses on hover */
 .toast { position: fixed; z-index: 30; left: 50%; bottom: 20px; transform: translate(-50%, 140%); visibility: hidden; background: var(--ink); color: var(--canvas); border-radius: 10px; padding: 8px 8px 8px 14px; display: flex; gap: 12px; align-items: center; overflow: hidden; max-width: calc(100vw - 32px); transition: transform var(--t-panel) var(--ease-out), visibility 0s linear var(--t-panel); }
-.toast.show { transform: translate(-50%, 0); visibility: visible; transition: transform 420ms var(--spring), visibility 0s; }
+.toast.show { transform: translate(-50%, 0); visibility: visible; transition: transform 420ms var(--calm), visibility 0s; }
 .toast .btn { background: transparent; color: var(--canvas); border-color: color-mix(in srgb, var(--canvas) 35%, transparent); }
 .toast .timer { position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: var(--route); transform-origin: left; }
 .toast.show .timer { animation: countdown 6s linear forwards; }

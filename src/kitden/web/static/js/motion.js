@@ -118,7 +118,7 @@ export function entrance(place, nodes) {
   });
 }
 
-// The spring from style.css, for animations started from here.
+// The spring from style.css, for small parts only (presses, knobs, ports, badges).
 const SPRING_FALLBACK = "cubic-bezier(.3,1.25,.5,1)";
 let springEasing = null;
 export function spring() {

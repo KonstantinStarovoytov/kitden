@@ -158,7 +158,7 @@ Defined once in `style.css`; JavaScript reads `--spring` from there.
 
 | Token | Value | Use |
 | --- | --- | --- |
-| Press | 80 ms in to 0.98, 260 ms `--spring` out | Buttons, tabs, filters, rail links, switches, tiles |
+| Press | 80 ms in to 0.98, 260 ms `--spring` out | Buttons, tabs, filters, rail links, switches |
 | `--t-fast` | 180 ms ease | Hover colour, word fades, focus |
 | `--t-panel` | 240 ms `--ease-drawer` | Drawer, column beside the page, scrim |
 | Fold | 280 ms `--ease-out` | A `<details>` opening or closing |
@@ -170,8 +170,8 @@ Defined once in `style.css`; JavaScript reads `--spring` from there.
 | Busy | spinner after 150 ms, in the button's own place | A button whose work takes a moment |
 | Scan line | shows after 400 ms, 1.6 s calm sweep | A rescan that takes a while |
 | Start line | shows after 1 s; fills from the left as each step of the first scan ends, then fills up and goes; a quiet note under its right end says "Reading Codex and Cursor…" or "Still checking …" | Starting Kitden |
-| `--calm` | `cubic-bezier(.2,.8,.2,1)` | The default curve for Web Animations |
-| `--spring` | `linear()` spring that overshoots about 3.4 %; falls back to `cubic-bezier(.3,1.25,.5,1)` | Presses, switch knobs, ports and badges |
+| `--calm` | `cubic-bezier(.2,.8,.2,1)` | The default curve for Web Animations, and for anything that moves a row, block, tile, panel, mark or dragged block |
+| `--spring` | `linear()` spring that overshoots about 3.4 %; falls back to `cubic-bezier(.3,1.25,.5,1)` | Small parts only: presses, switch knobs, ports, badges and tick draws |
 
 ### Patterns
 
@@ -183,7 +183,7 @@ All helpers live in `src/kitden/web/static/js/motion.js`.
 | Shared tile | `fly(node, name)` before `go()`, `land(twin, name)` while the new place draws | Overview count → Library column |
 | Sliding mark | `glide(box, active, key)` | Rail, Library tabs, the show choice |
 | Ready, then swap | `choose(params)` (library.js): read the rows first; over 300 ms the old list dims (`.table-scroll.waiting`), never a skeleton | Library tabs, Installed / New / All, category, Needs attention |
-| List settle | `snapshotRows()` before a redraw, `settleRows()` after: rows that stay slide from their old place (260 ms `--spring`), new rows rise 4 px (200 ms, 20 ms apart, first 12) | Library filters and search |
+| List settle | `snapshotRows()` before a redraw, `settleRows()` after: rows that stay slide from their old place (260 ms `--calm`), new rows rise 4 px (200 ms, 20 ms apart, first 12) | Library filters and search |
 | Tab slide | in `settleRows()`: another tab's list slides in 8 px from that tab's side (220 ms) | Library kind tabs |
 | Smooth `<details>` | `fold(details)` | File change in a review, gateway forms |
 | Rolling number | `rollTo(holder, value)` | Rail counts, Library tab counts |
@@ -200,7 +200,7 @@ All helpers live in `src/kitden/web/static/js/motion.js`.
 | Toast check | `toast(text, undo, { ok: true })` | Only for verified and undone |
 | Unfold | `drawMap` with `unfoldDelays` (map.js): the new links draw (150 ms), then the new blocks fade in 15 ms apart (60 ms each), with no extra wait after the sixth, all within 300 ms; reduced motion shows the end at once | A server opening on the Gateway map |
 | Link | `appeared` (map.js): a link draws once, when it appears; the page's first draw, a redraw and a new width show what is there at once, and nothing moves while idle | Gateway map |
-| Map preview | `previewOnMap` and `applyOnMap` (map-review.js): the preview block fades in and its link draws once when the preview opens. Only after `verified` does the preview go: the server's block turns solid in its group, its new link draws once, and the toast offers Undo. A dragged block follows the pointer at once and glides (260 ms `--spring`) onto the slot or back to its place; reduced motion moves nothing by itself | Gateway map |
+| Map preview | `previewOnMap` and `applyOnMap` (map-review.js): the preview block fades in and its link draws once when the preview opens. Only after `verified` does the preview go: the server's block turns solid in its group, its new link draws once, and the toast offers Undo. A dragged block follows the pointer at once and glides (260 ms `--calm`) onto the slot or back to its place; reduced motion moves nothing by itself | Gateway map |
 
 ### Conventions
 
