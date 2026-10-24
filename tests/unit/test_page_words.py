@@ -1377,7 +1377,10 @@ def test_search_on_a_map_page_finds_on_that_page():
     # The chip's words are shared by every map page, so they live in map.js.
     assert '"match", "matches"' in script("map.js") and '"No matches"' in script("map.js")
     assert '<span class="find-chip" id="find-chip" role="status"></span>' in INDEX
-    assert ".find-chip:empty" in CSS
+    # The empty chip stays in the page (a live region that is drawn announces its first words);
+    # it only gives back the gap before it.
+    empty = re.search(r"\.find-chip:empty \{([^}]*)\}", CSS)
+    assert empty and "margin-left: -8px;" in empty.group(1) and "display" not in empty.group(1)
     # Matches are lit; the other blocks dim to 35% and their links to 25%, in the map and the List.
     assert ".map.finding" in CSS
     assert re.search(r"div\.map\.finding \.block:not\(\.found\)[^{]*\{ opacity: 0\.35; \}", CSS)
@@ -1395,5 +1398,9 @@ def test_finding_keeps_the_place_and_the_details():
     assert 'if (event.key === "/" && !typing && !modal) {' in app
     # The Gateway only lights, dims and opens blocks for the view: it asks nothing of a client.
     text = script("gateway.js")
+    # A press on a block the search holds open changes nothing (map.js pressOpen), in the map and
+    # the List.
+    assert "onMap.open = pressOpen(model, onMap.open, onMap.found, id);" in text
+    assert "if (row.kept) return;" in text.split("function toggleRow(")[1].split("\n}\n")[0]
     find = text.split("export function findRows(")[1].split("\n}\n")[0]
     assert "postJson" not in find and "review(" not in find and "setState" not in find

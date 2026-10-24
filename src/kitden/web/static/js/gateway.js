@@ -2,7 +2,7 @@
 // row opens its Details beside the page (gateway-details.js).
 import { $, button, el, gridKey, joinWords, plural, reportError, withFocusKey } from "./dom.js";
 import { addForm, heldServer, liveHeld, movesTo, SETUP_NOTE, showClient, showGateway, showHeld, showOutside, showTool } from "./gateway-details.js";
-import { appeared, drawMap, findIn, isNarrow, layoutTree, litFrom, litPath, toggleOpen, wideWidth } from "./map.js";
+import { appeared, drawMap, findIn, isNarrow, keepOpen, layoutTree, litFrom, litPath, pressOpen, toggleOpen, wideWidth } from "./map.js";
 import { entrance, glide, reducedMotion } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, openInfo, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, folderName, gatewayName, kitdenClients, mark, opens, ORIGIN_WORDS, scopeBar, skeleton, STATE_WORDS, staleNote } from "./parts.js";
@@ -311,12 +311,14 @@ export function listRows(model, open = new Set(), folded = new Set()) {
 
 // The List's rows for a search (`found`, from findIn; null for none): a match's row is lit
 // (`found: true`), the servers above a match show their tools, and the groups and gateways above
-// one unfold. Only for this view: `open` and `folded` stay as the person left them.
+// one unfold. Those rows are `kept`: they stay open while the search runs, so a press on one does
+// nothing. Only for this view: `open` and `folded` stay as the person left them.
 export function findRows(model, found, open, folded) {
   if (!found) return listRows(model, open, folded);
-  const unfolded = new Set(folded);
-  for (const id of found.matches) for (const above of rowsAbove(model, id)) unfolded.delete(above);
-  return listRows(model, new Set([...open, ...found.open]), unfolded).map((row) => ({ ...row, found: found.matches.has(row.id) }));
+  const above = new Set(found.open);
+  for (const id of found.matches) for (const row of rowsAbove(model, id)) above.add(row);
+  const unfolded = new Set([...folded].filter((id) => !above.has(id)));
+  return listRows(model, new Set([...open, ...found.open]), unfolded).map((row) => ({ ...row, found: found.matches.has(row.id), kept: above.has(row.id) }));
 }
 
 // "N more" (`more:group:<id>`) and a group (`group:<id>`) open the List at that group.
@@ -398,7 +400,7 @@ function drawOnMap(box, model) {
   const chosen = model.blocks.find((b) => b.id === onMap.selected);
   const lit = !chosen ? new Set() : chosen.kind === "client" ? litFrom(model, chosen.id) : litPath(model, chosen.id);
   drawMap(box, model, layout, {
-    onOpen: (id) => { onMap.open = toggleOpen(model, onMap.open, id); },
+    onOpen: (id) => { onMap.open = pressOpen(model, onMap.open, onMap.found, id); },
     onSelect: (id) => pressBlock(model, id),
     tile,
     selected: chosen ? chosen.id : null,
@@ -436,18 +438,12 @@ function pressBlock(model, id) {
   else selectOnMap(block);
 }
 
-// What a search opened to show `block` stays open, so the selection is still on the map when the
-// search ends. With no search it changes nothing: what holds a shown block is open already.
-function keepOpen(block) {
-  const byId = new Map(onMap.model.blocks.map((b) => [b.id, b]));
-  const now = openNow();
-  for (let at = byId.get(block.parent); at; at = byId.get(at.parent)) if (now.has(at.id)) onMap.open.add(at.id);
-}
-
 // Select a block: the map lights it and is drawn again, then its Details open beside the page.
 // The List takes the Tab key on the same row.
 function selectOnMap(block) {
-  keepOpen(block);
+  // What a search opened to show it stays open, so the selection is still on the map when the
+  // search ends.
+  onMap.open = keepOpen(onMap.model, onMap.open, block);
   onMap.selected = block.id;
   onList.current = block.id;
   drawAgain();
@@ -644,6 +640,7 @@ function focusRow(grid, id) {
 
 // Fold or unfold a row: a server shows its tools; a group or a gateway hides its rows.
 function toggleRow(row) {
+  if (row.kept) return; // a search holds it open
   const set = row.kind === "held" ? onList.open : onList.folded;
   if (set.has(row.id)) set.delete(row.id);
   else set.add(row.id);

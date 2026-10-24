@@ -213,6 +213,26 @@ export function toggleOpen(model, open, id) {
   return next;
 }
 
+// What the person has open after a press on `id`. A block a search holds open (`found.open`) is
+// open for the view only: a press leaves what the person opened as it is.
+export function pressOpen(model, open, found, id) {
+  return found && found.open.has(id) ? open : toggleOpen(model, open, id);
+}
+
+// What the person has open after they select `block`, so it stays on the map when the search that
+// showed it ends. A block that shows already changes nothing. Otherwise the blocks above it open,
+// the outermost first, as presses would open them: one open block per column.
+export function keepOpen(model, open, block) {
+  const shown = (set) => layoutTree(model, { open: set, narrow: false }).blocks.some((at) => at.id === block.id);
+  if (shown(open)) return open;
+  const byId = new Map(model.blocks.map((b) => [b.id, b]));
+  const above = [];
+  for (let at = byId.get(block.parent); at && !above.includes(at.id); at = byId.get(at.parent)) above.unshift(at.id);
+  let next = open;
+  for (const id of above) if (!next.has(id)) next = toggleOpen(model, next, id);
+  return next;
+}
+
 // The blocks reached from `starts` along the links a path follows (backwards with `back`), and
 // those links as "from>to".
 function reached(links, starts, back = false) {

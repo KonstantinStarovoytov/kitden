@@ -179,9 +179,10 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .search { flex: 1; max-width: 420px; display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border-radius: 7px; background: var(--inset); border: 1px solid var(--wire-soft); color: var(--ink-3); }
 .search input { align-self: stretch; border: 0; background: transparent; outline: none; flex: 1; min-width: 0; color: var(--ink); }
 .search input::-webkit-search-cancel-button { display: none; }
-/* How many blocks a search finds on a map page; empty (hidden) for no search. */
+/* How many blocks a search finds on a map page. A live region, so it stays in the page when empty: it
+   only gives back the gap before it. */
 .find-chip { flex: none; color: var(--ink-2); font-size: 12px; white-space: nowrap; }
-.find-chip:empty { display: none; }
+.find-chip:empty { margin-left: -8px; }
 .where-box { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 4px 0 10px; border: 1px solid var(--wire); border-radius: 7px; background: var(--panel); max-width: 380px; }
 .where-pick { display: flex; min-width: 0; }
 .where { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: 300px; height: 24px; padding: 0 6px; border: 0; border-radius: 5px; background: transparent; color: var(--ink); cursor: pointer; }
@@ -453,9 +454,10 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .tg-row:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .tg-row.group { min-height: 30px; background: var(--inset); color: var(--ink-3); font-size: 12px; font-weight: 500; }
 .tg-row.group > [role="gridcell"] { grid-column: 1 / -1; }
-/* The same search in the List: a matching row is lit (its quiet words one step darker, for 4.5:1 on
-   the tint), the others dim to 35%. */
-.tg-row.found { background: var(--route-soft); color: var(--ink-2); }
+/* The same search in the List: a matching row is lit and the others dim to 35%. Words that are quiet
+   (--ink-3) go one step darker on the tint, for 4.5:1. */
+.tg-row.found { background: var(--route-soft); }
+.tg-row.group.found { color: var(--ink-2); }
 .tg-row.found .meta, .tg-row.found .tg-tools { color: var(--ink-2); }
 .treegrid.finding .tg-row:not(.found) { opacity: 0.35; }
 .tg-row > .tg-name { display: flex; align-items: center; gap: 6px; padding-left: calc(8px + var(--depth, 0) * 18px); }

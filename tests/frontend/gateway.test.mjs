@@ -6,7 +6,7 @@ globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
 const { GATEWAY_COLUMNS, findRows, gatewayTree, heldServer, kitdenLinks, listAt, listRows, narrowFor, serverCount } = await import('../../src/kitden/web/static/js/gateway.js');
 const { offersSwitch } = await import('../../src/kitden/web/static/js/gateway-details.js');
-const { blockLabel, findChip, findIn, layoutTree } = await import('../../src/kitden/web/static/js/map.js');
+const { blockLabel, findChip, findIn, keepOpen, layoutTree, pressOpen } = await import('../../src/kitden/web/static/js/map.js');
 const { kitdenClients } = await import('../../src/kitden/web/static/js/parts.js');
 const { viewMode } = await import('../../src/kitden/web/static/js/store.js');
 
@@ -422,9 +422,40 @@ test('the List lights a match and opens what holds it, without changing what the
   assert.ok(ids(rows).includes('held:kitden:files') && ids(rows).includes('tool:files/search_files'));
   assert.deepEqual(rows.filter((r) => r.found).map((r) => r.id), ['tool:files/search_files']);
   assert.deepEqual([[...open], [...folded].sort()], [[], ['gateway:kitden', 'group:clients']]);
+  // The rows that hold the match are kept open for the search: a press on one folds nothing.
+  assert.deepEqual(rows.filter((r) => r.kept).map((r) => r.id).sort(), ['gateway:kitden', 'group:kitden:local', 'held:kitden:files']);
   // A client is found too, and its folded group opens.
   const client = findRows(tree, findIn(tree, 'cursor'), open, folded);
   assert.deepEqual(client.filter((r) => r.found).map((r) => r.id), ['client:cursor']);
   // No search: the rows as they are, none lit.
   assert.deepEqual(findRows(tree, null, open, folded), listRows(tree, open, folded));
+});
+
+test('a press on a block the search holds open leaves what the person opened alone', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+  const mine = new Set(['held:kitden:files']);
+  const found = findIn(tree, 'export'); // opens the tracker server for the view
+  // The tracker is open only for the search: pressing it changes nothing, and files stays open.
+  assert.deepEqual([...pressOpen(tree, mine, found, 'held:kitden:tracker')], ['held:kitden:files']);
+  // Without a search, or on a block the search does not hold, a press opens it as always: one
+  // server per column, so files closes; and files, which the person opened, folds.
+  assert.deepEqual([...pressOpen(tree, mine, null, 'held:kitden:tracker')], ['held:kitden:tracker']);
+  assert.deepEqual([...pressOpen(tree, mine, found, 'held:kitden:files')], []);
+  assert.deepEqual([...mine], ['held:kitden:files']);
+});
+
+test('a tool the search showed stays on the map when the search ends', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+  const tool = block(tree, 'tool:tracker/export_report');
+  const mine = new Set(['held:kitden:files']);
+  const shown = (open) => layoutTree(tree, { open, narrow: false }).blocks.map((b) => b.id);
+  assert.ok(!shown(mine).includes(tool.id));
+  const kept = keepOpen(tree, mine, tool);
+  // Its server opens, and as always one server per column: files folds.
+  assert.ok(shown(kept).includes(tool.id));
+  assert.ok(kept.has('held:kitden:tracker') && !kept.has('held:kitden:files'));
+  // A block that shows already changes nothing, so the person's server stays open.
+  assert.equal(keepOpen(tree, mine, block(tree, 'tool:files/read_file')), mine);
+  assert.equal(keepOpen(tree, mine, block(tree, 'outside:move:docs')), mine);
+  assert.deepEqual([...mine], ['held:kitden:files']);
 });
