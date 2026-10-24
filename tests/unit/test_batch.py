@@ -233,3 +233,17 @@ def test_engine_check_keeps_no_change(tmp_path):
 def test_step_rows_names_the_first_row_of_a_shared_step():
     rows = [{"id": "a", "steps": [0, 1]}, {"id": "b", "steps": [0, 2]}]
     assert step_rows(rows) == {0: "a", 1: "a", 2: "b"}
+
+
+def test_removing_a_server_clashes_with_a_move_that_needs_it(tmp_path):
+    # A move into the gateway of a server it holds already writes no server step.
+    _hold(tmp_path, {"files": {"command": "npx"}})
+    remove = Part("a", "Remove files from the gateway", remove_server_steps(tmp_path, "files"))
+    cursor = _json_step(tmp_path / "mcp.json", ("mcpServers", "files"), ABSENT)
+    move = Part("b", "Move files into the gateway", [cursor], frozenset({"files"}))
+    assert clash([remove], move) == LEAVES.format(
+        other="Remove files from the gateway", server="files"
+    )
+    assert clash([move], remove) == REMOVES.format(
+        other="Move files into the gateway", server="files"
+    )

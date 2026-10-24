@@ -1236,6 +1236,13 @@ def create_app(
         words = _review(change, built, _picked(body))
         return JSONResponse({**change_dict(change), **words})
 
+    def _needs(request: dict, made: Built) -> frozenset[str]:
+        """The Kitden gateway servers a tray row needs held after Apply: the ones a move into
+        it takes in (one it holds already gets no server step of its own)."""
+        if request["kind"] != GATEWAY_MOVE or request["params"].get("gateway") != KITDEN_GATEWAY:
+            return frozenset()
+        return frozenset(item.name for item in made.items)
+
     async def _batch(
         requests: list[dict], keep: bool = True
     ) -> tuple[Change | None, list[Built], list[list[int]]]:
@@ -1252,7 +1259,10 @@ def create_app(
             if not made.steps:
                 raise _RowRefused("Nothing to change.", request["id"])
             built.append(made)
-        parts = [Part(r["id"], r["title"], m.steps) for r, m in zip(requests, built, strict=True)]
+        parts = [
+            Part(r["id"], r["title"], m.steps, _needs(r, m))
+            for r, m in zip(requests, built, strict=True)
+        ]
         clash = first_clash(parts)
         if clash is not None:
             raise _RowRefused(*clash)

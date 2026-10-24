@@ -32,6 +32,9 @@ class Part:
     id: str
     title: str
     steps: list[Step]
+    # Kitden gateway servers the row needs held, besides the ones its steps write: a move into
+    # the gateway of a server it holds already writes no server step.
+    needs: frozenset[str] = frozenset()
 
 
 def _text(value: object) -> bool:
@@ -125,6 +128,10 @@ def _between(old: Part, new: Part) -> str | None:
             return REMOVES.format(other=other, server=server)
         if (server := _removed(a)) and _server(b) == server:
             return LEAVES.format(other=other, server=server)
+    if leaving := sorted(new.needs & {_removed(a) for a in old.steps}):
+        return LEAVES.format(other=other, server=leaving[0])
+    if leaving := sorted(old.needs & {_removed(b) for b in new.steps}):
+        return REMOVES.format(other=other, server=leaving[0])
     for a, b in pairs:
         if a.edit is None or b.edit is None or _real(a.edit.path) != _real(b.edit.path):
             continue

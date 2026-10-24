@@ -354,3 +354,23 @@ def test_moves_in_a_batch_get_their_tools_read(tmp_path):
         while not {"n8n", "browser-tools"} <= set(json.loads(tools.read_text())):
             assert time.monotonic() < end, "the moved servers' tools were not read"
             time.sleep(0.05)
+
+
+def test_a_move_of_a_held_server_and_its_removal_are_refused(tmp_path):
+    with _page(tmp_path) as page:
+        # Cursor's files entry is now the one the gateway holds, so the move writes no server.
+        path = page.home / ".cursor/mcp.json"
+        data = json.loads(path.read_text())
+        data["mcpServers"]["files"]["env"] = {"FILES_TOKEN": "DEMO_SECRET_FILES"}
+        path.write_text(json.dumps(data, indent=2))
+        page.post("/api/rescan", headers=POST)
+        remove = {
+            "id": "a",
+            "kind": "gateway.remove",
+            "title": "Remove files from the gateway",
+            "params": {"server": "files"},
+        }
+        move = _move("b", _ids(page, "cursor")["files"])
+        leaves = LEAVES.format(other="Remove files from the gateway", server="files")
+        assert _check(page, remove, move) == {"ok": False, "reason": leaves, "row": "b"}
+        assert _preview(page, remove, move).status_code == 422
