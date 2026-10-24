@@ -370,6 +370,8 @@ function start() {
   $("#rescan").addEventListener("click", () => rescan().catch(reportError));
   initPanel();
 
+  // Markers measured before a font arrived sit on the old widths; a resize re-seats them.
+  document.fonts?.addEventListener("loadingdone", () => dispatchEvent(new Event("resize")));
   renderPlace();
   // Once per start: whether this is the demo. It answers before the first scan.
   getJson("/api/about")

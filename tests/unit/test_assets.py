@@ -15,6 +15,18 @@ def test_fonts_are_local_files():
     assert (STATIC / "fonts/OFL-JetBrainsMono.txt").is_file()
 
 
+def test_every_font_file_is_declared_and_cyrillic_letters_have_their_own():
+    # Folder names can be Cyrillic, so both fonts need the subset; a file nobody declares is waste.
+    urls = re.findall(r"@font-face\s*{[^}]*url\(\"?([^\")]+)", CSS)
+    files = {p.name for p in (STATIC / "fonts").glob("*.woff2")}
+    assert files == {u.rsplit("/", 1)[1] for u in urls}
+    for name in ("inter", "jetbrains-mono"):
+        file = f"{name}-cyrillic-wght-normal.woff2"
+        assert (STATIC / "fonts" / file).read_bytes()[:4] == b"wOF2"
+        face = re.search(rf"@font-face\s*{{[^}}]*{file}[^}}]*}}", CSS)
+        assert face and "unicode-range: U+0301,U+0400-045F" in face.group(0), file
+
+
 def test_nothing_loads_from_another_site():
     for path in [STATIC / "index.html", STATIC / "style.css", *STATIC.glob("js/*.js")]:
         assert not re.search(r"(src|href|url)\(?=?\"?https?://", path.read_text()), path.name

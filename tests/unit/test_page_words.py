@@ -134,6 +134,15 @@ def test_the_shell_draws_its_icons_and_the_hint_line_sets_its_words_at_once():
     assert "pointer-events: none" in rule(".hint-dock")
 
 
+def test_markers_re_seat_when_a_font_finishes_loading():
+    # Pills and the rail marker are measured in text; a late font changes the widths. motion.js
+    # puts every marker back on a resize, so a font that arrives sends one.
+    app = script("app.js")
+    resize = 'dispatchEvent(new Event("resize"))'
+    assert f'document.fonts?.addEventListener("loadingdone", () => {resize})' in app
+    assert 'addEventListener("resize"' in script("motion.js")
+
+
 def test_the_page_hint_line_has_its_own_class_and_the_tool_word_stays_in_its_row():
     # tools.js calls a tool's "Read" or "Write" word `hint`. A page-wide `.hint` rule once pulled
     # every such word out of its row, so the page's line is `.hint-line` and `.hint` stays free.
