@@ -18,6 +18,10 @@ export { ADDS, addScope, afterParts, alignGroups, canShowReview, cancelTarget, c
 // behind it. `from` is the Details a review was opened from (details.js sets it): Cancel goes
 // back there. A closed panel forgets it.
 export const panelState = { current: null, from: null };
+// What the panel shows now, as panelState.current was when it was drawn. A caller sets
+// panelState.current to its new content before it calls openPanel, so the review still showing is
+// kept here: other content must not replace it unseen.
+let showing = null;
 // Beside the page: on these places, in a window this wide, Details are a 320 px column with no
 // scrim and no focus trap, and the page stays usable. Anywhere else they are the drawer.
 export const DOCK_MIN = 1024;
@@ -45,6 +49,7 @@ export function swapContent(content) {
   const had = drawer.contains(document.activeElement);
   drawer.replaceChildren(...content);
   if (isPanelOpen() && (had || !docked) && !drawer.contains(document.activeElement)) drawer.focus();
+  showing = panelState.current;
 }
 
 // The panel as a column beside the page (`on`) or as the drawer over it. The column is a region:
@@ -80,20 +85,38 @@ function rememberOpener() {
 // A panel the person opens wins over an arrival still waiting for its page (store.js).
 // `dock`: sit beside the page where the window is wide enough. An open panel keeps how it sits,
 // so a review opened from the column stays in the column.
+// Beside the page a press elsewhere can reach here while a review shows. While its change is
+// written nothing replaces it: this returns false, panelState.current is the review again, and
+// the caller stops. A review that is only previewed is cancelled on the server first, as closing
+// it would. A review handing back after its change was verified (`handingBack`) is let go.
 export function openPanel(content, { instant = false, dock = DOCKS.includes(state.view) } = {}) {
   arrival.pending = false;
   finishTransition();
   const drawer = $("#drawer");
-  openedIn = state.project;
   if (isPanelOpen()) {
+    const review = showing && showing.type === "review" ? showing : null;
+    if (review && busy.change && !review.handingBack) {
+      panelState.current = review;
+      return false;
+    }
+    if (review) {
+      // A caller that has no state of its own leaves the review's as current: it is gone now.
+      const next = panelState.current === review ? null : panelState.current;
+      const previewed = review.change && review.change.state === "previewed";
+      cancelPreview(review);
+      if (!next) panelState.current = null;
+      if (previewed && !(next && next.type === "review")) panelState.from = null;
+    }
+    openedIn = state.project;
     // Beside the page another row may be pressed: the way back is to that row, and focus moves in.
     const active = document.activeElement;
     const elsewhere = docked && active && active !== document.body && !drawer.contains(active);
     if (elsewhere) rememberOpener();
     swapContent(content);
     if (elsewhere) drawer.focus();
-    return;
+    return true;
   }
+  openedIn = state.project;
   drawer.replaceChildren(...content);
   rememberOpener();
   wantsDock = dock;
@@ -102,7 +125,9 @@ export function openPanel(content, { instant = false, dock = DOCKS.includes(stat
     node.classList.toggle("instant", instant);
     node.classList.add("open");
   }
+  showing = panelState.current;
   drawer.focus();
+  return true;
 }
 
 // While a change is being applied the panel stays open: closing it could not stop the change.
@@ -111,6 +136,7 @@ export function closePanel({ instant = false, keepSelection = false, focus = tru
   cancelPreview();
   panelState.current = null;
   panelState.from = null;
+  showing = null;
   for (const node of [$("#drawer"), $("#scrim")]) {
     node.classList.toggle("instant", instant);
     node.classList.remove("open");
@@ -133,9 +159,9 @@ export function closeForProject() {
 }
 
 // A review left without Apply: the server forgets its preview. Sent once: the change is marked
-// cancelled, so a panel closed after Cancel does not send it again.
-export function cancelPreview() {
-  const current = panelState.current;
+// cancelled, so a panel closed after Cancel does not send it again. `current` is the review shown
+// now, or one that is being replaced.
+export function cancelPreview(current = panelState.current) {
   const change = current && current.type === "review" ? current.change : null;
   if (change && change.state === "previewed") {
     postJson(`/api/changes/${encodeURIComponent(change.id)}/cancel`).catch(() => {});
@@ -167,12 +193,13 @@ export function header(kicker, title, lede, closeLabel = "Close", mono = false) 
 }
 
 // A note in the panel, for example a server the gateway holds; `actions` go in its footer.
-// The title is a name in mono, unless `mono` is false (a sentence).
+// The title is a name in mono, unless `mono` is false (a sentence). False when openPanel kept a
+// review whose change is being written.
 export function openInfo(kicker, title, body, actions = [], { mono = true } = {}) {
   panelState.current = { type: "info" };
   const footer = el("footer");
   footer.append(...actions);
-  openPanel([header(kicker, title, null, "Close", mono), body, footer]);
+  return openPanel([header(kicker, title, null, "Close", mono), body, footer]);
 }
 
 // A change from the Changes page: the Changes page builds the body (steps with their files,

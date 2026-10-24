@@ -470,7 +470,7 @@ function showKitdenServer(server, next = {}) {
   body.append(stack, toolsSection(server.name, (again) => showKitdenServer(server, again), next));
   const links = kitdenLinks(current("gateway"), server.name);
   if (links.length) body.append(linksRow(links));
-  openInfo("MCP server", server.name, body, heldButtons(heldActions(server.name, foundClients(), server.plain_secrets)));
+  if (!openInfo("MCP server", server.name, body, heldButtons(heldActions(server.name, foundClients(), server.plain_secrets)))) return;
   // A review opened from here (Remove, Put back, the Keychain) comes back to this panel. When
   // the settings changed since its preview, it is drawn from the page's latest read of the
   // gateway (the rescan reads it again); a server gone from it closes the panel.

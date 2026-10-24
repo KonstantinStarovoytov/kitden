@@ -373,7 +373,10 @@ function showReview(change, previewBody, note, back = null, from = null) {
   apply.append(label);
   apply.addEventListener("click", () => applyChange(change, { apply, cancel, label, body }).catch(brokeAfterAnswer));
   footer.append(cancel, apply);
-  openPanel([header("Review change", words.title, reviewLede(change, state.project), null), body, footer]);
+  // A review whose change is being written stays: this preview is dropped at once.
+  if (!openPanel([header("Review change", words.title, reviewLede(change, state.project), null), body, footer])) {
+    cancelPreview({ type: "review", change });
+  }
 }
 
 // Something broke after the server answered (a render, the toast). The answer stands, so
@@ -557,6 +560,8 @@ async function showApplied(after, apply, label, previewBody, back) {
   label.textContent = "Applied";
   await reloadAll();
   if (back) {
+    // The change is done: this review lets its place go to the Details `back` draws again.
+    if (panelState.current) panelState.current.handingBack = true;
     render();
     await back({ verified: true });
   } else {

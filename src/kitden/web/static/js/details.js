@@ -40,7 +40,8 @@ export async function openItem(row, { instant = false, tools: toolsNext = {} } =
   panelState.current = { type: "item", row };
   const body = el("div", "body");
   body.append(el("div", "skeleton card"));
-  openPanel([itemHeader(row), body, el("footer")], { instant });
+  // A review whose change is being written stays; this press does nothing.
+  if (!openPanel([itemHeader(row), body, el("footer")], { instant })) return;
   // The marketplace's entry says what the item is; read beside the definitions. Without it the
   // rest still shows.
   const entry = row.offer ? getJson(`/api/offer${query({ kind: row.kind, id: row.offer })}`).catch(() => null) : null;

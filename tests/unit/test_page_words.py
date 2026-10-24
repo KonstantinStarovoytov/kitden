@@ -958,7 +958,7 @@ def test_cancel_and_a_refused_preview_go_back_to_details():
         assert key in panel() + script("offer.js"), key
     assert "`switch:${def.id}`" in details
     # The review is cancelled once: Cancel's own request, not again when the panel closes.
-    cancel = shell.split("export function cancelPreview()")[1].split("\n}\n")[0]
+    cancel = shell.split("export function cancelPreview(")[1].split("\n}\n")[0]
     assert 'change.state = "cancelled"' in cancel
 
 
