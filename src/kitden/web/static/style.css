@@ -444,31 +444,31 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 
 /* Map (map.js): HTML blocks over one SVG of links, each where the layout puts it. The link is the
    state; it draws once when it appears, and nothing moves while idle. */
-.map { position: relative; padding: 4px; margin: 12px 0; overflow-x: auto; }
-.map-head { position: relative; height: 28px; }
-.map-caption { position: absolute; top: 0; height: 24px; display: flex; align-items: center; justify-content: space-between; gap: 6px; color: var(--ink-3); font-size: 12px; font-weight: 500; }
-.map-area { position: relative; }
-.map-links { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
-.map .link { fill: none; stroke: var(--wire-strong); stroke-width: 1.3; stroke-linecap: round; transition: stroke var(--t-fast) ease; }
-.map .link.direct { stroke: var(--lamp-warn); stroke-width: 1.2; opacity: 0.55; }
-.map .link.faint { opacity: 0.5; }
-.map .link.lit { stroke: var(--route); stroke-width: 1.6; opacity: 1; }
-.map .link.draw { stroke-dasharray: 1; animation: wire-draw 150ms var(--ease-out) both; }
-.map .block { position: absolute; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-content: center; column-gap: 8px; margin: 0; padding: 0 10px; border: 1px solid var(--wire); border-radius: 8px; background: var(--panel); color: var(--ink); text-align: left; cursor: pointer; transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease, transform 260ms var(--spring); }
-.map .block:hover { border-color: var(--wire-strong); }
-.map .block:active { transform: scale(0.98); transition-duration: var(--t-fast), var(--t-fast), 80ms; }
-.map .block:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.map .block.tool { border-radius: 7px; }
-.map .block.gateway { background: var(--panel-raised); border-color: var(--route); }
-.map .block.lit { border-color: var(--route); }
-.map .block.selected { background: var(--route-soft); border-color: var(--route); }
-.map .block-name { grid-column: 1; font-family: var(--mono); font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.map .block-meta { grid-column: 1; color: var(--ink-3); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.map .block-count { grid-column: 2; grid-row: 1 / span 2; align-self: center; padding: 0 6px; border-radius: 9px; background: var(--wire-soft); color: var(--ink-3); font-size: 11px; line-height: 18px; }
-.map .caption { position: absolute; display: block; padding: 4px 0 0; border: 0; background: none; color: var(--ink-3); font-size: 11px; font-weight: 600; line-height: 18px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.map button.caption { cursor: pointer; }
-.map button.caption:hover { color: var(--ink); }
-.map button.caption:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+div.map { position: relative; padding: 4px; margin: 12px 0; overflow-x: auto; }
+div.map .map-head { position: relative; height: 28px; }
+div.map .map-caption { position: absolute; top: 0; height: 24px; display: flex; align-items: center; justify-content: space-between; gap: 6px; color: var(--ink-3); font-size: 12px; font-weight: 500; }
+div.map .map-area { position: relative; }
+div.map .map-links { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+div.map .link { fill: none; stroke: var(--wire-strong); stroke-width: 1.3; stroke-linecap: round; transition: stroke var(--t-fast) ease; }
+div.map .link.direct { stroke: var(--lamp-warn); stroke-width: 1.2; opacity: 0.55; }
+div.map .link.faint { opacity: 0.5; }
+div.map .link.lit { stroke: var(--route); stroke-width: 1.6; opacity: 1; }
+div.map .link.draw { stroke-dasharray: 1; animation: wire-draw 150ms var(--ease-out) both; }
+div.map .block { position: absolute; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-content: center; column-gap: 8px; margin: 0; padding: 0 10px; border: 1px solid var(--wire); border-radius: 8px; background: var(--panel); color: var(--ink); text-align: left; cursor: pointer; transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease, transform 260ms var(--spring); }
+div.map .block:hover { border-color: var(--wire-strong); }
+div.map .block:active { transform: scale(0.98); transition-duration: var(--t-fast), var(--t-fast), 80ms; }
+div.map .block:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+div.map .block.tool { border-radius: 7px; }
+div.map .block.gateway { background: var(--panel-raised); border-color: var(--route); }
+div.map .block.lit { border-color: var(--route); }
+div.map .block.selected { background: var(--route-soft); border-color: var(--route); }
+div.map .block-name { grid-column: 1; font-family: var(--mono); font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+div.map .block-meta { grid-column: 1; color: var(--ink-3); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+div.map .block-count { grid-column: 2; grid-row: 1 / span 2; align-self: center; padding: 0 6px; border-radius: 9px; background: var(--wire-soft); color: var(--ink-3); font-size: 11px; line-height: 18px; }
+div.map .caption { position: absolute; display: block; padding: 4px 0 0; border: 0; background: none; color: var(--ink-3); font-size: 11px; font-weight: 600; line-height: 18px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+div.map button.caption { cursor: pointer; }
+div.map button.caption:hover { color: var(--ink); }
+div.map button.caption:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* Side panel: details and review share one surface */
 .scrim { position: fixed; inset: 0; z-index: 20; background: rgba(10, 12, 16, 0.22); opacity: 0; pointer-events: none; transition: opacity var(--t-panel) ease; }

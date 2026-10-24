@@ -151,6 +151,15 @@ def test_gateway_wires_do_not_fake_traffic():
         assert "flow" not in script(name), name
 
 
+def test_the_map_rules_never_reach_the_library_table():
+    # The Library's table has the class "map" too, so every rule of the map names its box.
+    css = (STATIC / "style.css").read_text()
+    block = css.split("/* Map (map.js)")[1].split("\n\n")[0]
+    rules = [line for line in block.splitlines() if "{" in line]
+    assert rules and all(line.startswith("div.map") for line in rules)
+    assert not re.search(r"^\.map\s*\{", css, re.MULTILINE)
+
+
 def test_the_map_marks_when_it_is_drawn():
     assert '"kitden:map-drawn"' in script("map.js") and '"kitden:gateway-drawn"' in script(
         "gateway.js"
