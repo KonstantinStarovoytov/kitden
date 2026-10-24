@@ -5,7 +5,7 @@ import { loadLibraryFor, raceSlow, rowSel, rowTitle, shownRow } from "./library.
 import { fold } from "./motion.js";
 import { about, addButton, addOptions, addReach, mcpRows, whyNoAction } from "./offer.js";
 import { closePanel, header, isPanelOpen, openInfo, openPanel, panelState, swapContent } from "./panel.js";
-import { ALL_PROJECTS, callout, CLIENT_NAMES, CLIENT_ORDER, folderName, GATEWAY_NOTE, gatewayName, kitdenClients, mark, menuItems, optionAfter, ROUTE_WORDS, socket, STATE_WORDS, toolsNode } from "./parts.js";
+import { ALL_PROJECTS, callout, CLIENT_NAMES, CLIENT_ORDER, folderName, GATEWAY_NOTE, gatewayName, kitdenClients, mark, menuItems, optionAfter, optionParts, ROUTE_WORDS, socket, STATE_WORDS, toolsNode } from "./parts.js";
 import { review } from "./review.js";
 import { current as currentModel, currentError, data, goTo, libraryChoice, projectPath, state } from "./store.js";
 import { toolsSection } from "./tools.js";
@@ -410,9 +410,7 @@ export function projectChoice(projects, picked, onPick, opener = null) {
     const node = el("div", "where-option");
     node.id = `choice-option-${at}`;
     node.setAttribute("role", "option");
-    node.append(el("span", "where-label", item.name));
-    if (item.count) node.append(el("span", "where-count", item.count));
-    if (item.sub) node.append(el("span", "where-sub", item.sub));
+    node.append(...optionParts(item));
     node.addEventListener("click", () => onPick(item.id));
     return node;
   });

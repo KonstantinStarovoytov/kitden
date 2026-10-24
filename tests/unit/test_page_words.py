@@ -432,6 +432,12 @@ def test_the_project_button_is_drawn_in_one_place():
     assert '"folder"' not in drawn and '"chevron-down"' not in drawn
 
 
+def test_the_details_choice_has_the_menus_rows():
+    # The project choice in a Details column builds its rows with the menu's own parts.
+    assert "export function optionParts(" in script("parts.js")
+    assert "optionParts(" in script("details.js")
+
+
 def test_python_and_page_state_words_agree():
     parts = script("parts.js")
     for state, word in STATE_WORDS.items():

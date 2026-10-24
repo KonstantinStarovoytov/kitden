@@ -410,6 +410,18 @@ const press = (node, key) => {
 };
 const chosen = (box) => box.childNodes.filter((o) => o.attributes['aria-selected'] === 'true').map(textOf);
 
+test('a project choice row is a menu row: a folder icon, the name over its sub line, the count apart', () => {
+  const rows = [{ id: 'g', path: '/w/gone', own_rules: 2, exists: false }, CHOICE[1]];
+  const [missing, plain] = projectChoice(rows, 'g', () => {}).childNodes;
+  const parts = (row) => row.childNodes.map((c) => c.dataset.icon || c.className);
+  assert.deepEqual(parts(missing), ['folder', 'where-tx', 'where-count']);
+  assert.deepEqual(missing.childNodes[1].childNodes.map((c) => [c.className, c.textContent]), [['where-label', 'gone'], ['where-sub', 'Folder missing']]);
+  assert.equal(missing.childNodes[2].textContent, '2 own rules');
+  // No count and no sub line: the icon and the name only. The choice shows no check; it picks nothing yet.
+  assert.deepEqual(parts(plain), ['folder', 'where-tx']);
+  assert.deepEqual(plain.childNodes[1].childNodes.map((c) => c.className), ['where-label']);
+});
+
 test('the project choice starts on the picked project', () => {
   const picks = [];
   const box = projectChoice(CHOICE, 'm', (id) => picks.push(id));

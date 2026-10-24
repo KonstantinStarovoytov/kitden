@@ -59,6 +59,19 @@ export function optionAfter(key, at, count) {
   return null;
 }
 
+// The parts of one option row, in the project menu and in a Details choice: an icon (layers for
+// All projects, a folder for a project), the name over its sub line, the count, and a check when
+// `check` is set.
+export function optionParts(item, check = false) {
+  const text = el("span", "where-tx");
+  text.append(el("span", "where-label", item.name));
+  if (item.sub) text.append(el("span", "where-sub", item.sub));
+  const parts = [item.id ? icon("folder", 14) : icon("layers", 14), text];
+  if (item.count) parts.push(el("span", "where-count", item.count));
+  if (check) parts.push(icon("check", 14, "ic where-check"));
+  return parts;
+}
+
 // The picker's button: a folder icon, "Project", the picked project's name and a chevron. The page
 // draws it, switched off, before the project list is read; projectMenu draws it again after.
 export function projectButton(label) {
@@ -115,12 +128,7 @@ export function projectMenu(projects, picked, onPick, from = null) {
     node.id = `where-option-${at}`;
     node.setAttribute("role", "option");
     node.setAttribute("aria-selected", String(item.picked));
-    const text = el("span", "where-tx");
-    text.append(el("span", "where-label", item.name));
-    if (item.sub) text.append(el("span", "where-sub", item.sub));
-    node.append(item.id ? icon("folder", 14) : icon("layers", 14), text);
-    if (item.count) node.append(el("span", "where-count", item.count));
-    if (item.picked) node.append(icon("check", 14, "ic where-check"));
+    node.append(...optionParts(item, item.picked));
     node.addEventListener("click", () => pick(item));
     return node;
   };
