@@ -92,7 +92,7 @@
     --wire: #3b424d; --link: #59616f;
     --route: #f09a7c; --route-soft: #382a27;
     --success: #47c27a; --on-success: #0b1a12;
-    --lamp-on: #47c27a; --lamp-warn: #eac27c; --lamp-warn-soft: rgba(234, 194, 124, 0.12); --lamp-off: #6b7381;
+    --lamp-on: #47c27a; --lamp-warn: #eac27c; --lamp-warn-soft: rgba(234, 194, 124, 0.12); --lamp-off: #707886;
     --danger: #f07070; --focus: #f09a7c;
     --diff-add: #47c27a; --diff-del: #f07070;
     --dim: #1b1f26; --preview-fill: #f09a7c10; --preview-line: #f09a7c80;
@@ -107,7 +107,7 @@
   --wire: #3b424d; --link: #59616f;
   --route: #f09a7c; --route-soft: #382a27;
   --success: #47c27a; --on-success: #0b1a12;
-  --lamp-on: #47c27a; --lamp-warn: #eac27c; --lamp-warn-soft: rgba(234, 194, 124, 0.12); --lamp-off: #6b7381;
+  --lamp-on: #47c27a; --lamp-warn: #eac27c; --lamp-warn-soft: rgba(234, 194, 124, 0.12); --lamp-off: #707886;
   --danger: #f07070; --focus: #f09a7c;
   --diff-add: #47c27a; --diff-del: #f07070;
   --dim: #1b1f26; --preview-fill: #f09a7c10; --preview-line: #f09a7c80;

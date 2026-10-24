@@ -170,10 +170,11 @@ def test_text_tokens_are_readable_on_every_fill_in_both_themes():
 
 
 def test_the_edge_of_an_unticked_check_or_radio_keeps_3_to_1_in_both_themes():
-    # WCAG 1.4.11: the boundary of a control needs 3:1. --lamp-off draws it; --link is for map lines
-    # and is under 3:1 on the panel.
+    # WCAG 1.4.11: the boundary of a control needs 3:1. --lamp-off draws it on every fill a control
+    # can sit on (the drawer is --panel-raised); --link is for map lines and is under 3:1 on the
+    # panel.
     for theme in (LIGHT, DARK):
-        for fill in ("--panel", "--inset", "--dim", "--canvas"):
+        for fill in ("--panel", "--panel-raised", "--inset", "--dim", "--canvas", "--route-soft"):
             assert contrast(theme["--lamp-off"], theme[fill]) >= 3.0, (fill, theme["--lamp-off"])
     for selector in (".chk {", ".radio {"):
         assert "border: 1.5px solid var(--lamp-off);" in block(selector), selector
@@ -184,7 +185,8 @@ def test_mockup_tokens_are_there():
     assert DARK["--wire"] == "#3b424d" and LIGHT["--wire"] == "#e1e4e9"
     assert DARK["--link"] == "#59616f" and LIGHT["--link"] == "#c3c8d0"
     assert DARK["--lamp-warn"] == "#eac27c" and LIGHT["--lamp-warn"] == "#97590a"
-    assert DARK["--lamp-off"] == "#6b7381" and LIGHT["--lamp-off"] == "#80868f"
+    # The dark off lamp is a hair lighter than the mockup's #6b7381, so an empty box keeps 3:1.
+    assert DARK["--lamp-off"] == "#707886" and LIGHT["--lamp-off"] == "#80868f"
     assert DARK["--shadow"] == "0 18px 44px -14px rgb(0 0 0 / .7)"
     assert LIGHT["--shadow"] == "0 18px 44px -18px rgb(26 31 42 / .28)"
 
