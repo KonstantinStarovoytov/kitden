@@ -12,5 +12,8 @@ Each file comes from `https://cdn.jsdelivr.net/npm/<package>@5.2.5/files/<file>`
 The `unicode-range` values in `style.css` are from the same package's `wght.css`.
 Checked 2026-10-24.
 
-Both fonts use the SIL Open Font License 1.1. The licence text of each package is kept
-as `OFL-Inter.txt` and `OFL-JetBrainsMono.txt`.
+Both fonts use the SIL Open Font License 1.1. The licence texts come from the font projects,
+not from the packages (the packages carry a generic copy without the authors' names):
+
+- `OFL-Inter.txt`: https://raw.githubusercontent.com/rsms/inter/master/LICENSE.txt
+- `OFL-JetBrainsMono.txt`: https://raw.githubusercontent.com/JetBrains/JetBrainsMono/master/OFL.txt
