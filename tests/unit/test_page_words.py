@@ -336,7 +336,7 @@ def test_checks_and_radios_follow_the_mockup():
         "width: 16px",
         "height: 16px",
         "border-radius: 4px",
-        "border: 1.5px solid var(--link)",
+        "border: 1.5px solid var(--lamp-off)",
     ):
         assert part in chk, part
     tick = rule(".chk .ic")
@@ -350,11 +350,16 @@ def test_checks_and_radios_follow_the_mockup():
         "width: 14px",
         "height: 14px",
         "border-radius: 50%",
-        "border: 1.5px solid var(--link)",
+        "border: 1.5px solid var(--lamp-off)",
     ):
         assert part in radio, part
     picked = rule(".pick.on .radio")
     assert "background: var(--route)" in picked and "inset 0 0 0 3px var(--panel)" in picked
+    # The unticked edge is --lamp-off, which keeps 3:1 (test_contrast.py); --link is for map lines.
+    assert "--link" not in chk + radio
+    # The picker row's own box waits for the tool picker; only the ticked looks are here.
+    assert not re.search(r"^\.pick( |:)", CSS, re.MULTILINE)
+    assert "accent-color" not in CSS
     # A real checkbox keeps its input for the keys; only its box is drawn. Add missing uses it too.
     assert "checkBox(" in script("review.js") and 'type = "checkbox"' not in script("review.js")
 

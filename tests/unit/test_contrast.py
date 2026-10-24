@@ -169,6 +169,16 @@ def test_text_tokens_are_readable_on_every_fill_in_both_themes():
                 assert contrast(theme[t], theme[f]) >= 4.5, (t, f, theme[t], theme[f])
 
 
+def test_the_edge_of_an_unticked_check_or_radio_keeps_3_to_1_in_both_themes():
+    # WCAG 1.4.11: the boundary of a control needs 3:1. --lamp-off draws it; --link is for map lines
+    # and is under 3:1 on the panel.
+    for theme in (LIGHT, DARK):
+        for fill in ("--panel", "--inset", "--dim", "--canvas"):
+            assert contrast(theme["--lamp-off"], theme[fill]) >= 3.0, (fill, theme["--lamp-off"])
+    for selector in (".chk {", ".radio {"):
+        assert "border: 1.5px solid var(--lamp-off);" in block(selector), selector
+
+
 def test_mockup_tokens_are_there():
     assert DARK["--out"] == "#0d0f13" and LIGHT["--out"] == "#e4e7ec"
     assert DARK["--wire"] == "#3b424d" and LIGHT["--wire"] == "#e1e4e9"
