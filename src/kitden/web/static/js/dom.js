@@ -13,10 +13,13 @@ export function el(tag, className, text) {
   return node;
 }
 
-// A lucide icon as an SVG node. The markup comes only from the fixed ICONS table, never from
-// client text. An unknown name gives an empty icon; only the table's own names count.
+// A lucide icon as an SVG node. Its shapes are built from the fixed ICONS table with DOM calls,
+// never from markup or client text. An unknown name gives an empty icon; only the table's own
+// names count.
+const SVG_NS = "http://www.w3.org/2000/svg";
+
 export function icon(name, size = 16, className = "ic") {
-  const node = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  const node = document.createElementNS(SVG_NS, "svg");
   const attrs = {
     viewBox: "0 0 24 24",
     width: size,
@@ -31,7 +34,11 @@ export function icon(name, size = 16, className = "ic") {
   };
   for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
   node.dataset.icon = name;
-  node.innerHTML = Object.hasOwn(ICONS, name) ? ICONS[name] : "";
+  for (const [tag, shape] of Object.hasOwn(ICONS, name) ? ICONS[name] : []) {
+    const part = document.createElementNS(SVG_NS, tag);
+    for (const [key, value] of Object.entries(shape)) part.setAttribute(key, value);
+    node.append(part);
+  }
   return node;
 }
 

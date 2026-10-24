@@ -11,8 +11,6 @@ STATIC = Path(__file__).parents[2] / "src/kitden/web/static"
 SCRIPTS = sorted((STATIC / "js").glob("*.js"))
 INDEX = STATIC / "index.html"
 SVG_NS = "http://www.w3.org/2000/svg"
-# The one place that sets innerHTML: icon() in dom.js, from the fixed icon table only.
-ICON_LINE = 'node.innerHTML = Object.hasOwn(ICONS, name) ? ICONS[name] : "";'
 
 
 def test_no_html_injection_apis_in_scripts():
@@ -27,18 +25,7 @@ def test_no_html_injection_apis_in_scripts():
     ]
     for script in SCRIPTS:
         text = script.read_text()
-        if script.name == "dom.js":
-            assert text.count(ICON_LINE) == 1
-            text = text.replace(ICON_LINE, "")
         assert [b for b in banned if b in text] == [], script.name
-
-
-def test_icon_table_is_plain_shapes():
-    # The table is the only markup that becomes HTML, so it holds drawing tags and nothing else.
-    table = (STATIC / "js/icons.js").read_text()
-    tags = set(re.findall(r"<([a-z]+)", table))
-    assert tags <= {"path", "circle", "rect", "line", "polyline", "polygon", "ellipse"}
-    assert not re.search(r"\son[a-z]+=|href|javascript:", table)
 
 
 def test_index_has_no_inline_code_or_styles():
