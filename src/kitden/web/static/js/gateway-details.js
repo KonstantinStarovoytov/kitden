@@ -122,7 +122,8 @@ const held = new Map(); // gateway id -> { servers, error, at, loading }
 
 async function loadHeld(gateway) {
   const at = performance.now();
-  held.set(gateway.id, { loading: true, at });
+  // The last answer stays while it is read again, so the map's links do not go and draw again.
+  held.set(gateway.id, { ...held.get(gateway.id), loading: true, at });
   let answer;
   try {
     answer = await getJson(`/api/gateways/${encodeURIComponent(gateway.id)}/servers`);

@@ -5,11 +5,12 @@
 // - columns: [{ id, caption, add, w, h, narrowW, narrowH }]. Each column has its blocks' size,
 //   wide and narrow (the narrow size is the wide one unless set). `add` puts "+ Add" beside the
 //   caption.
-// - blocks: [{ id, column, parent, kind, name, meta, state, tag, count, grip, details }]. The
-//   children of a block are the blocks whose `parent` it is. A group block is a caption at the
-//   top of its stack (a button when it has `details`); its children sit under it, in its column,
-//   and always show. Any other block shows its children only while it is open. `state`: "on",
-//   "off", "unk" or "preview". `count`: what a folded block holds.
+// - blocks: [{ id, column, parent, kind, name, meta, state, tag, count, grip, action, details, h }].
+//   The children of a block are the blocks whose `parent` it is. A group block is a caption at
+//   the top of its stack (a button when it has `details`), `h` high when its words take two lines;
+//   its children sit under it, in its column, and always show. Any other block shows its children
+//   only while it is open. `state`: "on", "off", "unk" or "preview". `count`: what a folded block
+//   holds. `grip`: it can be dragged. `action`: what pressing it does, in words ("Set up…").
 // - links: [{ from, to, kind }], kind "on", "faint", "direct" or "preview". The link is the
 //   state: something on has a link, something off has none.
 import { button, cutName, el } from "./dom.js";
@@ -28,7 +29,7 @@ const LAST_STEP = 5; // no extra wait after the sixth child
 // The links a lit path follows.
 const PATH_KINDS = ["on", "direct", "faint"];
 // What a screen reader hears for a block's state; the map itself shows no state word.
-const STATE_SAID = { on: "On", off: "Off", unk: "Unknown", preview: "Preview" };
+const STATE_SAID = { on: "On", off: "Off", unk: "Not known", preview: "Preview" };
 const SVG = "http://www.w3.org/2000/svg";
 
 // Narrow: under 1024 px, or under 1280 px with Details open beside the page.
@@ -62,32 +63,38 @@ function shownChildren(block, children, open) {
   return [...children.slice(0, GROUP_MAX - 1), more];
 }
 
-// Where each shown block goes, for any tree model: `{ columns: [{id, x, w}], blocks: [{id, x, y,
-// w, h}], links: [{from, to, kind, d}], height }`. Columns sit at fixed x, one after the other;
-// a block takes its column's size. Wide, the children of an open block go to their own column,
-// beside it. Narrow, the narrow sizes apply and they unfold down inside it, on a rail. Only links
-// between shown blocks are drawn; `d` is an SVG path.
+// Where each shown block goes, for any tree model: `{ columns: [{id, x, w}], blocks: [{id, kind,
+// x, y, w, h}], links: [{from, to, kind, d}], height, narrow }`. Columns sit at fixed x, one after
+// the other; a block takes its column's size. Wide, the children of an open block go to their own
+// column, beside it, and every column keeps its place. Narrow, the narrow sizes apply and they
+// unfold down inside it, on a rail; a column with no block of its own (tools inside their server)
+// then takes no room. Only links between shown blocks are drawn; `d` is an SVG path.
 export function layoutTree(model, { open = new Set(), width = 0, narrow = isNarrow(width, false) } = {}) {
   const byId = new Map(model.blocks.map((block) => [block.id, block]));
   const children = childrenOf(model);
+  const own = new Set(model.blocks.filter((block) => !byId.has(block.parent)).map((block) => block.column));
   const sizes = new Map();
+  const columns = [];
   let x = 0;
-  const columns = model.columns.map((column) => {
+  for (const column of model.columns) {
     const w = narrow ? column.narrowW ?? column.w : column.w;
     const h = narrow ? column.narrowH ?? column.h : column.h;
     sizes.set(column.id, { x, w, h });
-    const at = { id: column.id, x, w };
+    if (narrow && !own.has(column.id)) continue;
+    columns.push({ id: column.id, x, w });
     x += w + (narrow ? NARROW_GAP : GAP);
-    return at;
-  });
+  }
 
   const placed = new Map(); // in reading order: column by column, top to bottom
   // A block at (left, y), `w` wide, then the children it shows under it: those of its own
   // column, and narrow every one, inside it beside the rail (never wider than its own column).
   // Returns the y under them.
   const stack = (block, left, w, y) => {
-    const h = block.kind === "group" ? GROUP_H : sizes.get(block.column).h;
-    placed.set(block.id, { id: block.id, x: left, y, w, h, ...(block.kind === "more" ? { kind: "more", name: block.name } : {}) });
+    const h = block.kind === "group" ? block.h || GROUP_H : sizes.get(block.column).h;
+    const at = { id: block.id, kind: block.kind, x: left, y, w, h };
+    if (block.kind === "more") at.name = block.name;
+    if (block.details) at.details = true;
+    placed.set(block.id, at);
     let below = y + h + ROW_GAP;
     for (const child of shownChildren(block, children.get(block.id) || [], open)) {
       if (child.column === block.column) below = stack(child, left, w, below);
@@ -122,7 +129,38 @@ export function layoutTree(model, { open = new Set(), width = 0, narrow = isNarr
   }
   const blocks = [...placed.values()];
   const height = blocks.reduce((most, block) => Math.max(most, block.y + block.h), 0);
-  return { columns, blocks, links, height };
+  return { columns, blocks, links, height, narrow };
+}
+
+// How wide the map is when it lays out wide: every column and the gaps between them.
+export function wideWidth(model) {
+  return model.columns.reduce((sum, column) => sum + column.w, 0) + GAP * (model.columns.length - 1);
+}
+
+// The blocks a person can press, in the order the map draws them, which is the reading order:
+// column by column, top to bottom (narrow, a block's children right after it). A group is a
+// caption, not a button, unless it has Details.
+export function blockOrder(layout) {
+  return layout.blocks.filter((block) => block.kind !== "group" || block.details).map((block) => block.id);
+}
+
+// What is new on the map since the last draw: the links ("from>to") and the blocks (ids) of
+// `layout` that `drawn` does not hold. `drawn` then holds just what shows now, so something that
+// goes and comes back is new again.
+export function appeared(layout, drawn) {
+  const now = [...layout.links.map((link) => `${link.from}>${link.to}`), ...layout.blocks.map((block) => block.id)];
+  const fresh = new Set(now.filter((key) => !drawn.has(key)));
+  drawn.clear();
+  for (const key of now) drawn.add(key);
+  return fresh;
+}
+
+// The blocks that fold: any that holds something, also before its children are read (a count,
+// even 0). Groups always show theirs. A block that folds says whether it is open.
+export function foldable(model) {
+  const parents = new Set(model.blocks.map((block) => block.parent).filter(Boolean));
+  const folds = (block) => block.kind !== "group" && (typeof block.count === "number" || parents.has(block.id));
+  return new Set(model.blocks.filter(folds).map((block) => block.id));
 }
 
 const middle = (block) => block.y + block.h / 2;
@@ -229,10 +267,49 @@ export function findIn(model, text) {
   return { matches, open };
 }
 
-// One block: a button with its name cut short (the whole name in its hover text and label), what
-// it says under the name, and the count of a folded block. A group is a caption, or a button
-// when it has Details.
-function blockNode(block, { selected, lit, found, opens, open, onSelect, onOpen }) {
+// A part a screen reader skips: the block's label says it already.
+function quiet(node) {
+  node.setAttribute("aria-hidden", "true");
+  return node;
+}
+
+// What a block shows, left to right: the grip of one that can be dragged, its tile (the page's
+// `tile(block)`), its name cut short with its meta line under it, the count of a folded block
+// and a slot's action. A client's meta starts with its dot. A tag takes the meta line's place
+// where a count pill takes the room, else it sits beside the name.
+function blockParts(block, { tile, open }) {
+  const parts = [];
+  if (block.grip) parts.push(quiet(el("span", "block-grip")));
+  const mark = tile ? tile(block) : null;
+  if (mark) {
+    const holder = quiet(el("span", "block-tile"));
+    holder.append(mark);
+    parts.push(holder);
+  }
+  const text = el("span", "block-text");
+  const top = el("span", "block-top");
+  top.append(el("span", "block-name", cutName(block.name)));
+  text.append(top);
+  const counted = typeof block.count === "number";
+  const tag = block.tag ? el("span", "block-tag", block.tag) : null;
+  if (tag && !(counted && block.meta)) top.append(tag);
+  if (block.meta) {
+    const line = el("span", "block-meta");
+    if (block.kind === "client") line.append(quiet(el("span", `block-dot ${block.state}`)));
+    line.append(tag && counted ? tag : el("span", "block-words", block.meta));
+    text.append(line);
+  }
+  parts.push(text);
+  if (counted && !open) parts.push(quiet(el("span", "block-count", block.count)));
+  if (block.action) parts.push(quiet(el("span", "block-action", block.action)));
+  return parts;
+}
+
+// One block: a button with its name cut short (the whole name in its hover text and label, with
+// its meta, tag, state and action). A group is a caption, or a button when it has Details. A
+// block that folds says whether it is open (`open`), also while its children are read. A press
+// opens or folds a block that folds (`onOpen`), then selects it (`onSelect`, which draws again).
+function blockNode(block, { selected, lit, found, folds, open, tile, onSelect, onOpen }) {
   const name = String(block.name || "");
   if (block.kind === "group" && !block.details) {
     const caption = el("div", "caption", name);
@@ -242,33 +319,34 @@ function blockNode(block, { selected, lit, found, opens, open, onSelect, onOpen 
   const node = el("button", block.kind === "group" ? "caption" : `block ${block.kind}`);
   node.type = "button";
   node.dataset.focus = `block:${block.id}`;
+  if (block.state) node.dataset.state = block.state;
   node.title = name;
-  node.setAttribute("aria-label", [name, block.meta, STATE_SAID[block.state]].filter(Boolean).join(", "));
+  node.setAttribute("aria-label", [name, block.meta, block.tag, STATE_SAID[block.state], block.action].filter(Boolean).join(", "));
+  const folding = folds.has(block.id);
   if (block.kind === "group") node.textContent = name;
-  else {
-    node.append(el("span", "block-name", cutName(name)));
-    if (block.meta) node.append(el("span", "block-meta", block.meta));
-    if (block.count) node.append(el("span", "block-count", block.count));
-  }
-  if (opens) node.setAttribute("aria-expanded", String(open));
+  else node.append(...blockParts(block, { tile, open: folding && open.has(block.id) }));
+  if (folding) node.setAttribute("aria-expanded", String(open.has(block.id)));
   if (block.id === selected) node.classList.add("selected");
   if (lit.has(block.id)) node.classList.add("lit");
   if (found && found.matches.has(block.id)) node.classList.add("found");
   node.addEventListener("click", () => {
+    if (folding && onOpen) onOpen(block.id);
     if (onSelect) onSelect(block.id);
-    if (opens && onOpen) onOpen(block.id);
   });
   return node;
 }
 
 // Draw `layout` (from layoutTree) of `model` in `box`: column captions, then one SVG of links
-// under the blocks, each placed where the layout says. The DOM order is the reading order:
-// column by column, top to bottom. A link draws once, when its key is not in `drawn` yet; `drawn`
-// then keeps it. A click calls `onSelect(id)`, and `onOpen(id)` too on a block that unfolds.
-export function drawMap(box, model, layout, { onSelect, onOpen, onAdd, selected = null, lit = new Set(), found = null, drawn = new Set(), reduced = false } = {}) {
+// under the blocks, each placed where the layout says. The DOM order is the reading order
+// (blockOrder). What `drawn` does not hold yet appeared since the last draw (`appeared`): a new
+// link draws once, then new blocks fade in after it (`unfoldDelays`); with `reduced` all of it
+// shows at once. Lit links are drawn last, over the others. A click calls `onOpen(id)` on a block
+// that folds, then `onSelect(id)`. `tile(block)` gives what a block shows before its name.
+export function drawMap(box, model, layout, { onSelect, onOpen, onAdd, tile, selected = null, lit = new Set(), found = null, open = new Set(), drawn = new Set(), reduced = false } = {}) {
   performance.mark("kitden:map-start");
   const byId = new Map(model.blocks.map((block) => [block.id, block]));
   const width = layout.columns.reduce((most, column) => Math.max(most, column.x + column.w), 0);
+  const fresh = appeared(layout, drawn);
   const parts = [];
 
   const heads = model.columns.filter((column) => column.caption || column.add);
@@ -276,7 +354,9 @@ export function drawMap(box, model, layout, { onSelect, onOpen, onAdd, selected 
     const head = el("div", "map-head");
     head.style.width = `${width}px`;
     for (const column of heads) {
+      // Narrow, a column with no room of its own has no caption either.
       const at = layout.columns.find((c) => c.id === column.id);
+      if (!at) continue;
       const cell = el("div", "map-caption");
       cell.style.left = `${at.x}px`;
       cell.style.width = `${at.w}px`;
@@ -300,34 +380,39 @@ export function drawMap(box, model, layout, { onSelect, onOpen, onAdd, selected 
   svg.setAttribute("width", String(width));
   svg.setAttribute("height", String(layout.height));
   svg.setAttribute("viewBox", `0 0 ${width} ${layout.height}`);
-  for (const link of layout.links) {
-    const key = `${link.from}>${link.to}`;
+  const keyOf = (link) => `${link.from}>${link.to}`;
+  const links = [...layout.links.filter((link) => !lit.has(keyOf(link))), ...layout.links.filter((link) => lit.has(keyOf(link)))];
+  for (const link of links) {
+    const key = keyOf(link);
     const path = document.createElementNS(SVG, "path");
     path.setAttribute("class", `link ${link.kind}${lit.has(key) ? " lit" : ""}`);
     path.setAttribute("d", link.d);
-    if (!drawn.has(key) && !reduced) {
+    if (fresh.has(key) && !reduced) {
       path.classList.add("draw");
       path.setAttribute("pathLength", "1");
     }
-    drawn.add(key);
     svg.append(path);
   }
   area.append(svg);
 
-  // A block unfolds when it holds something; it is open while a child of it is on the map.
-  const parents = new Set(model.blocks.map((block) => block.parent).filter(Boolean));
-  const opened = new Set(layout.blocks.map((at) => byId.get(at.id)?.parent).filter(Boolean));
+  const folds = foldable(model);
+  const delays = unfoldDelays(layout.blocks.filter((at) => fresh.has(at.id)).length, reduced);
+  let next = 0;
   for (const at of layout.blocks) {
     const block = byId.get(at.id) || at; // "N more" is the layout's own block
-    const opens = block.kind !== "group" && block.kind !== "more" && (block.count > 0 || parents.has(block.id));
-    const node = blockNode(block, { selected, lit, found, opens, open: opened.has(block.id), onSelect, onOpen });
+    const node = blockNode(block, { selected, lit, found, folds, open, tile, onSelect, onOpen });
     Object.assign(node.style, { left: `${at.x}px`, top: `${at.y}px`, width: `${at.w}px`, height: `${at.h}px` });
+    if (fresh.has(at.id) && !reduced) {
+      node.classList.add("appear");
+      node.style.animationDelay = `${delays[next++]}ms`;
+    }
     area.append(node);
   }
   parts.push(area);
 
   box.classList.add("map");
   box.classList.toggle("finding", Boolean(found));
+  box.classList.toggle("narrow", Boolean(layout.narrow));
   box.replaceChildren(...parts);
   performance.mark("kitden:map-drawn");
   performance.measure("kitden:map-draw", "kitden:map-start", "kitden:map-drawn");

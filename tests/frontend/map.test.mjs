@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js (for its columns) needs only this from a browser to load.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { GAP, layoutTree, toggleOpen, litPath, litFrom, findIn, isNarrow, unfoldDelays } = await import('../../src/kitden/web/static/js/map.js');
+const { GAP, NARROW_GAP, appeared, blockOrder, foldable, layoutTree, toggleOpen, litPath, litFrom, findIn, isNarrow, unfoldDelays } = await import('../../src/kitden/web/static/js/map.js');
 const { cutName } = await import('../../src/kitden/web/static/js/dom.js');
 const { GATEWAY_COLUMNS } = await import('../../src/kitden/web/static/js/gateway.js');
 
@@ -179,4 +179,59 @@ test('the layout of 20 servers and of the large sample stays under 16 ms', () =>
 test('a long name is cut and keeps its whole name in its label', () => {
   const name = 'a-very-long-server-name-from-the-large-sample-0001';
   assert.equal(cutName(name).length, 24); assert.ok(cutName(name).endsWith('…')); assert.equal(cutName('files'), 'files');
+});
+
+test('every block is a button in reading order', () => {
+  const m = model(3, 2, { open: 'github' });
+  const wide = layoutTree(m, { open: new Set(['held:kitden:github']), ...WIDE });
+  const order = blockOrder(wide);
+  // Groups are captions, not buttons.
+  assert.ok(!order.some((id) => id.startsWith('group:')));
+  assert.equal(order.length, wide.blocks.filter((b) => !b.id.startsWith('group:')).length);
+  assert.deepEqual(order.slice(0, 4), ['client:claude_code', 'client:codex', 'client:cursor', 'gateway:kitden']);
+  // Column by column, top to bottom.
+  const at = new Map(wide.blocks.map((b) => [b.id, b]));
+  for (let i = 1; i < order.length; i++) {
+    const [a, b] = [at.get(order[i - 1]), at.get(order[i])];
+    assert.ok(a.x < b.x || (a.x === b.x && a.y < b.y), `${order[i - 1]} before ${order[i]}`);
+  }
+  assert.equal(order[order.length - 1], 'tool:github/list_prs');
+  // Narrow, a server's tools come right after it.
+  const narrow = blockOrder(layoutTree(m, { open: new Set(['held:kitden:github']), width: 900, narrow: true }));
+  assert.deepEqual(narrow.slice(narrow.indexOf('held:kitden:github'), narrow.indexOf('held:kitden:github') + 3), ['held:kitden:github', 'tool:github/read_repo', 'tool:github/push_files']);
+});
+
+test('narrow: a column with no blocks of its own takes no width', () => {
+  const l = layoutTree(model(3, 2, { open: 'github' }), { open: new Set(['held:kitden:github']), width: 900, narrow: true });
+  assert.deepEqual(l.columns.map((c) => c.id), ['clients', 'gateway', 'servers']);
+  assert.equal(Math.max(...l.blocks.map((b) => b.x + b.w)), 140 + NARROW_GAP + 56 + NARROW_GAP + 220);
+  assert.equal(l.narrow, true);
+  // Wide, every column keeps its place, so nothing moves sideways when a server opens.
+  assert.deepEqual(layoutTree(model(3, 2), { open: new Set(), ...WIDE }).columns.map((c) => c.id), ['clients', 'gateway', 'servers', 'tools']);
+});
+
+test('a link that goes and comes back draws again; what the first draw shows does not', () => {
+  const m = model(3, 0, { open: 'github' });
+  const open = layoutTree(m, { open: new Set(['held:kitden:github']), ...WIDE });
+  const folded = layoutTree(m, { open: new Set(), ...WIDE });
+  const drawn = new Set();
+  // The page's first draw: all of it is drawn already.
+  appeared(open, drawn);
+  assert.equal(appeared(open, drawn).size, 0);
+  // A fold only forgets what went.
+  assert.equal(appeared(folded, drawn).size, 0);
+  assert.ok(!drawn.has('held:kitden:github>tool:github/read_repo') && !drawn.has('tool:github/read_repo'));
+  const again = appeared(open, drawn);
+  assert.ok(again.has('held:kitden:github>tool:github/read_repo') && again.has('tool:github/read_repo'));
+  assert.ok(!again.has('gateway:kitden>held:kitden:github') && !again.has('held:kitden:github'));
+});
+
+test('a block folds when it holds something, also before its tools are read', () => {
+  const m = model(3, 0);  // no tool blocks in the model yet
+  const folds = foldable(m);
+  assert.ok(folds.has('held:kitden:github') && folds.has('held:kitden:files'));
+  assert.ok(!folds.has('client:codex') && !folds.has('group:outside') && !folds.has('gateway:kitden'));
+  // A server with no tools still folds, so it can say it is open.
+  const empty = { ...m, blocks: m.blocks.map((b) => (b.id === 'held:kitden:files' ? { ...b, count: 0 } : b)) };
+  assert.ok(foldable(empty).has('held:kitden:files'));
 });

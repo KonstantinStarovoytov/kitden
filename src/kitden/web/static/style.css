@@ -480,11 +480,13 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .add-gateway h2 { margin: 0 0 4px; font-size: 13px; }
 .add-gateway .form { margin: 0; }
 
-/* A link on a map draws once, when it appears. */
+/* A link on a map draws once, when it appears; then the blocks that appeared fade in. */
 @keyframes wire-draw { from { stroke-dashoffset: 1; } }
+@keyframes block-in { from { opacity: 0; } }
 
 /* Map (map.js): HTML blocks over one SVG of links, each where the layout puts it. The link is the
-   state; it draws once when it appears, and nothing moves while idle. */
+   state; it draws once when it appears, and nothing moves while idle. A block's handle marks where
+   links meet it: the route color on an open server, amber where a direct line comes in. */
 div.map { position: relative; padding: 4px; margin: 12px 0; overflow-x: auto; }
 div.map .map-head { position: relative; height: 28px; }
 div.map .map-caption { position: absolute; top: 0; height: 24px; display: flex; align-items: center; justify-content: space-between; gap: 6px; color: var(--ink-3); font-size: 12px; font-weight: 500; }
@@ -495,18 +497,58 @@ div.map .link.direct { stroke: var(--lamp-warn); stroke-width: 1.2; opacity: 0.5
 div.map .link.faint { opacity: 0.5; }
 div.map .link.lit { stroke: var(--route); stroke-width: 1.6; opacity: 1; }
 div.map .link.draw { stroke-dasharray: 1; animation: wire-draw 150ms var(--ease-out) both; }
-div.map .block { position: absolute; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-content: center; column-gap: 8px; margin: 0; padding: 0 10px; border: 1px solid var(--wire); border-radius: 8px; background: var(--panel); color: var(--ink); text-align: left; cursor: pointer; transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease, transform 260ms var(--spring); }
-div.map .block:hover { border-color: var(--wire-strong); }
+div.map .appear { animation: block-in 60ms var(--ease-out) both; }
+div.map .block { position: absolute; display: flex; align-items: center; gap: 8px; margin: 0; padding: 0 10px; border: 1px solid var(--wire-strong); border-radius: 8px; background: var(--panel); color: var(--ink); text-align: left; cursor: pointer; transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease, transform 260ms var(--spring); }
+div.map .block:hover { border-color: color-mix(in srgb, var(--ink-3) 60%, transparent); }
 div.map .block:active { transform: scale(0.98); transition-duration: var(--t-fast), var(--t-fast), 80ms; }
 div.map .block:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-div.map .block.tool { border-radius: 7px; }
+div.map .block:has(> .block-count) { padding-right: 16px; }
+div.map .block-tile { flex: none; display: grid; place-items: center; }
+div.map .block-tile .client-mark, div.map .block-tile .mono-mark { --tile: 28px; border-radius: 7px; }
+div.map .block-tile .client-mark[data-icon="claude"] img { padding: 5px; }
+div.map .block-icon { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 7px; background: var(--inset); box-shadow: 0 0 0 1px var(--wire); color: var(--ink-2); }
+div.map .block-house { display: block; width: 26px; height: 26px; }
+div.map .block-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+div.map .block-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+div.map .block-name { min-width: 0; font-family: var(--mono); font-size: 12px; font-weight: 600; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+div.map .block-meta { display: flex; align-items: center; gap: 5px; min-width: 0; color: var(--ink-3); font-size: 11px; line-height: 15px; }
+div.map .block-words { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+div.map .block-tag { flex: none; color: var(--route); font-size: 11px; font-weight: 500; line-height: 15px; white-space: nowrap; }
+div.map .block-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--lamp-off); }
+div.map .block-dot.on { background: var(--lamp-on); }
+div.map .block-dot.unk { background: none; box-shadow: inset 0 0 0 1px var(--lamp-off); }
+div.map .block-count { position: absolute; top: calc(50% - 10px); right: -10px; min-width: 20px; height: 20px; padding: 0 5px; border: 1px solid var(--wire-strong); border-radius: 10px; background: var(--panel); color: var(--ink-2); font-size: 11px; line-height: 18px; text-align: center; }
+div.map .block.client .block-name, div.map .block.gateway .block-name, div.map .block.slot .block-name, div.map .block.more .block-name { font-family: var(--sans); }
+div.map .block.gateway, div.map .block.slot { flex-direction: column; justify-content: center; gap: 6px; padding: 8px; text-align: center; }
 div.map .block.gateway { background: var(--panel-raised); border-color: var(--route); }
+div.map .block.gateway .block-text, div.map .block.slot .block-text { flex: none; width: 100%; justify-items: center; }
+div.map .block.gateway .block-meta, div.map .block.slot .block-meta { justify-content: center; }
+div.map .block.slot { gap: 4px; border: 1px dashed var(--preview-line); background: var(--preview-fill); }
+div.map .block.slot .block-house { width: 20px; height: 20px; }
+div.map .block.slot .block-words { white-space: normal; }
+div.map .block-action { flex: none; height: 24px; padding: 0 10px; border-radius: 6px; background: var(--action); color: var(--on-action); font-size: 12px; font-weight: 600; line-height: 24px; }
+div.map .block[aria-expanded="true"] { border-color: var(--route); }
+div.map .block[aria-expanded="true"]::after { content: ""; position: absolute; top: calc(50% - 4px); right: -4px; width: 7px; height: 7px; border-radius: 50%; background: var(--route); box-shadow: 0 0 0 2px var(--canvas); }
+div.map .block.tool { gap: 10px; border-radius: 7px; }
+div.map .block.tool::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 2px; background: var(--route); }
+div.map .block.tool[data-state="off"] { background: var(--dim); }
+div.map .block.tool[data-state="off"]::before { background: none; box-shadow: inset 0 0 0 1.5px var(--lamp-off); }
+div.map .block.tool .block-top { justify-content: space-between; }
+div.map .block.outside { padding-left: 18px; background: var(--dim); }
+div.map .block.outside .block-icon { width: 16px; height: 16px; background: none; box-shadow: none; color: var(--ink-3); }
+div.map .block.outside::before { content: ""; position: absolute; top: calc(50% - 4px); left: -4px; width: 7px; height: 7px; border-radius: 50%; background: var(--lamp-warn); box-shadow: 0 0 0 2px var(--canvas); }
+div.map .block-grip { position: absolute; top: calc(50% - 6px); left: 7px; width: 6px; height: 12px; background: radial-gradient(circle, var(--lamp-off) 1px, transparent 1.4px) 0 0 / 3px 4px; }
+div.map .block.more { justify-content: center; border-style: dashed; background: transparent; color: var(--ink-2); }
+div.map .block.more .block-text { flex: none; }
 div.map .block.lit { border-color: var(--route); }
-div.map .block.selected { background: var(--route-soft); border-color: var(--route); }
-div.map .block-name { grid-column: 1; font-family: var(--mono); font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-div.map .block-meta { grid-column: 1; color: var(--ink-3); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-div.map .block-count { grid-column: 2; grid-row: 1 / span 2; align-self: center; padding: 0 6px; border-radius: 9px; background: var(--wire-soft); color: var(--ink-3); font-size: 11px; line-height: 18px; }
-div.map .caption { position: absolute; display: block; padding: 4px 0 0; border: 0; background: none; color: var(--ink-3); font-size: 11px; font-weight: 600; line-height: 18px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+div.map .block.selected, div.map .block.tool.selected[data-state] { background: var(--route-soft); border-color: var(--route); }
+div.map .block.selected .block-meta { color: var(--ink-2); }
+div.map .block.client { gap: 6px; padding: 0 8px; }
+div.map.narrow .block.client .block-tile .client-mark, div.map.narrow .block.client .block-tile .mono-mark { --tile: 24px; }
+div.map.narrow .block.gateway, div.map.narrow .block.slot { padding: 0; }
+div.map.narrow .block.gateway .block-text, div.map.narrow .block.slot .block-text, div.map.narrow .block-action { display: none; }
+div.map.narrow .block[aria-expanded="true"]::after { display: none; }
+div.map .caption { position: absolute; display: block; margin: 0; padding: 4px 0 0; border: 0; background: none; color: var(--ink-3); font-size: 11px; font-weight: 600; line-height: 16px; text-align: left; overflow: hidden; }
 div.map button.caption { cursor: pointer; }
 div.map button.caption:hover { color: var(--ink); }
 div.map button.caption:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

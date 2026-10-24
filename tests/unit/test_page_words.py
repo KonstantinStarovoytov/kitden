@@ -215,9 +215,33 @@ def test_the_map_words():
     # A group over six shows five and "N more"; the outside group says why it is apart.
     assert '"Outside the gateway · calls skip Kitden\'s rules"' in script("gateway.js")
     assert " more`" in script("map.js")
-    # The map shows no state word; a screen reader hears one.
-    states = 'STATE_SAID = { on: "On", off: "Off", unk: "Unknown", preview: "Preview" }'
+    # The map shows no state word; a screen reader hears one, the same as the words it shows.
+    states = 'STATE_SAID = { on: "On", off: "Off", unk: "Not known", preview: "Preview" }'
     assert states in script("map.js")
+
+
+def test_the_map_says_the_link_is_the_state():
+    text = gw() + script("map.js")
+    for words in (
+        '"Clients"',
+        '"Gateway"',
+        '"Servers"',
+        '"Tools"',
+        '"Connected"',
+        '"Not connected"',
+        "Found · ${",
+        '"No gateway yet"',
+        '"One place for servers, rules and logins."',
+        '"Set up…"',
+        "more`",
+        "In ${",
+    ):
+        assert words in text, words
+    assert "ResizeObserver" in script("gateway.js") and "unfoldDelays(" in script("map.js")
+    direct = CSS.split(".link.direct")[1].split("}")[0]
+    assert ".link.direct" in CSS and "var(--lamp-warn)" in direct
+    # A block says whether it is open by what is open, not by what shows yet.
+    assert 'setAttribute("aria-expanded", String(open.has(' in script("map.js")
 
 
 def test_plugin_switch_opens_a_review_and_does_not_flip_itself():

@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js needs only this from a browser to load; the tests call its pure parts.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { gatewayTree, heldServer, kitdenLinks, listRows, serverCount } = await import('../../src/kitden/web/static/js/gateway.js');
+const { GATEWAY_COLUMNS, gatewayTree, heldServer, kitdenLinks, listAt, listRows, narrowFor, serverCount } = await import('../../src/kitden/web/static/js/gateway.js');
 const { offersSwitch } = await import('../../src/kitden/web/static/js/gateway-details.js');
 const { findIn, layoutTree } = await import('../../src/kitden/web/static/js/map.js');
 const { kitdenClients } = await import('../../src/kitden/web/static/js/parts.js');
@@ -254,4 +254,129 @@ test("a held server's panel links to the Library only when a client loads it thr
   // No client reaches tracker here, so the Library has no row for it.
   assert.deepEqual(kitdenLinks(model, 'tracker'), []);
   assert.deepEqual(kitdenLinks(null, 'files'), []);
+});
+
+// A first run: every client found, none with a kitden entry, an empty Kitden gateway, and two
+// servers each client set up on its own.
+const FIRST_RUN_VIEW = {
+  gateways: [{ id: 'kitden', kind: 'kitden', name: 'Kitden gateway', where: 'On this Mac', movable: true, servers: [] }],
+  connections: { kitden: { claude_code: [], codex: [], cursor: [] } },
+  used: [],
+  groups: {
+    move: [{ name: 'github', clients: ['claude_code'], columns: ['claude_code'], items: ['g'], stays: null, override: false }],
+    local: [{ name: 'files', clients: ['codex'], columns: ['codex'], items: ['f'], stays: null, override: false }],
+    plugin: [],
+  },
+  own_rules: 0,
+};
+const NO_ENTRIES = ['claude_code', 'codex', 'cursor'].map((id) => entry(id, 'missing'));
+const FOUND = [
+  { id: 'claude_code', status: 'found', version: '2.1.4' },
+  { id: 'codex', status: 'found', version: '0.48' },
+  { id: 'cursor', status: 'found', version: null },
+];
+
+test('a first run shows the gateway as a slot to set up and no grips', () => {
+  const m = gatewayTree(FIRST_RUN_VIEW, { setup: NO_ENTRIES, clients: FOUND, open: new Set(), held: new Map() });
+  const slot = m.blocks.find((b) => b.column === 'gateway');
+  assert.deepEqual([slot.kind, slot.name], ['slot', 'No gateway yet']);
+  assert.deepEqual([slot.meta, slot.action], ['One place for servers, rules and logins.', 'Set up…']);
+  // One review sets up every client that has no kitden entry.
+  assert.deepEqual(slot.setup, { action: 'setup_server.register', targets: [{ client: 'claude_code' }, { client: 'codex' }, { client: 'cursor' }], params: {} });
+  assert.ok(!m.links.some((l) => l.to === slot.id));
+  assert.ok(m.blocks.filter((b) => b.kind === 'outside').every((b) => !b.grip));
+  assert.equal(m.blocks.find((b) => b.id === 'client:codex').meta, 'Found · 0.48');
+  assert.equal(m.blocks.find((b) => b.id === 'client:cursor').meta, 'Found');
+  // Found is a good state: its dot is lit, though no client reaches a gateway yet.
+  assert.equal(m.blocks.find((b) => b.id === 'client:codex').state, 'on');
+  // Direct lines are elbows on a first run too.
+  assert.ok(m.links.filter((l) => l.to.startsWith('outside:')).every((l) => l.kind === 'direct'));
+  // A client with the kitden entry is not a first run, nor is a setup Kitden could not read.
+  const linked = gatewayTree(FIRST_RUN_VIEW, { ...OPTS, setup: [entry('claude_code', 'added'), entry('codex', 'missing')], clients: FOUND });
+  assert.equal(linked.blocks.find((b) => b.column === 'gateway').kind, 'gateway');
+  assert.ok(linked.blocks.find((b) => b.id === 'outside:move:github').grip);
+  assert.equal(gatewayTree(FIRST_RUN_VIEW, { ...OPTS, setup: null, clients: FOUND }).blocks.find((b) => b.column === 'gateway').kind, 'gateway');
+  // The List keeps a row for it, with the same words.
+  const row = listRows(m, new Set()).find((r) => r.id === slot.id);
+  assert.deepEqual([row.depth, row.name, row.meta], [0, 'No gateway yet', 'One place for servers, rules and logins.']);
+});
+
+test('the map columns, and the Kitden gateway says its clients and servers', () => {
+  assert.deepEqual(GATEWAY_COLUMNS.map((c) => c.caption), ['Clients', 'Gateway', 'Servers', 'Tools']);
+  const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+  assert.equal(block(tree, 'gateway:kitden').meta, '2 clients · 2 servers');
+  // Not read: no count of clients it does not know.
+  assert.equal(block(gatewayTree(MEDIUM_VIEW, { ...OPTS, setup: null }), 'gateway:kitden').meta, '2 servers');
+});
+
+test('no grip where the row stays', () => {
+  const row = (name, fields = {}) => ({ name, clients: ['claude_code'], columns: ['claude_code'], items: [name], stays: null, override: false, ...fields });
+  const view = { ...MEDIUM_VIEW, groups: {
+    move: [
+      row('github'),
+      row('docs', { stays: "docs is in the project's own files; it stays there." }),
+      row('secret', { stays: 'secret uses ${API_KEY}; Kitden cannot move a value it does not know.' }),
+      row('kept', { stays: 'From the last good read at 14:02; Kitden can change it once it reads .claude.json again.' }),
+      row('empty', { items: [] }),
+    ],
+    local: [row('files', { clients: ['codex'], columns: ['codex'] })],
+    plugin: [row('linear', { stays: 'linear comes with a plugin; it stays with the plugin.' })],
+  } };
+  const tree = gatewayTree(view, OPTS);
+  assert.deepEqual(tree.blocks.filter((b) => b.kind === 'outside').map((b) => [b.name, Boolean(b.grip)]), [
+    ['github', true], ['docs', false], ['secret', false], ['kept', false], ['empty', false], ['files', true], ['linear', false]]);
+  // Without a gateway that takes it, nothing has a grip.
+  assert.ok(gatewayTree({ ...view, gateways: [] }, OPTS).blocks.every((b) => !b.grip));
+});
+
+test('a Desktop Code tab entry draws its line from Claude Code', () => {
+  const desk = { name: 'desk', clients: ['claude_desktop_code_tab'], columns: ['claude_code'], items: ['d'], stays: null, override: false };
+  const tree = gatewayTree({ ...MEDIUM_VIEW, groups: { ...MEDIUM_VIEW.groups, move: [desk] } }, OPTS);
+  assert.ok(keys(tree).includes('client:claude_code>outside:move:desk direct'));
+  assert.equal(block(tree, 'outside:move:desk').meta, 'In Claude Code');
+});
+
+test('With All projects a server only some projects turn on says so', () => {
+  const servers = [MEDIUM_VIEW.gateways[0].servers[0], { ...MEDIUM_VIEW.gateways[0].servers[1], on_in: 2 }];
+  const view = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers }] };
+  const tree = gatewayTree(view, OPTS);
+  assert.equal(block(tree, 'held:kitden:tracker').meta, 'On in 2 projects');
+  assert.ok(!tree.links.some((l) => l.to === 'held:kitden:tracker'));
+  // In a project the server says how many of its tools are on there.
+  assert.equal(block(gatewayTree(view, { ...OPTS, picked: 'atlas' }), 'held:kitden:tracker').meta, '0 of 3 on');
+});
+
+test('in atlas the docs block says This project', () => {
+  const docs = { ...MEDIUM_VIEW.groups.move[0], override: true };
+  const view = { ...MEDIUM_VIEW, groups: { ...MEDIUM_VIEW.groups, move: [docs, MEDIUM_VIEW.groups.move[1]] } };
+  const atlas = gatewayTree(view, { ...OPTS, picked: 'atlas' });
+  assert.equal(block(atlas, 'outside:move:docs').tag, 'This project');
+  assert.equal(block(atlas, 'outside:local:docs').tag, null);
+  // The List shows the tag too.
+  assert.equal(listRows(atlas, new Set()).find((r) => r.id === 'outside:move:docs').tag, 'This project');
+  // With All projects no block carries it.
+  assert.equal(block(gatewayTree(view, OPTS), 'outside:move:docs').tag, null);
+});
+
+test('N more and a group address open the List at that group', () => {
+  const rows = Array.from({ length: 8 }, (_, i) => ({ name: `direct-${i}`, clients: ['codex'], columns: ['codex'], items: ['x'], stays: null, override: false }));
+  const tree = gatewayTree({ ...MEDIUM_VIEW, groups: { move: rows, local: [], plugin: [] } }, OPTS);
+  const more = layoutTree(tree, { open: new Set(), narrow: false }).blocks.find((b) => b.kind === 'more');
+  assert.equal(more.id, 'more:group:outside');
+  assert.deepEqual(listAt(more.id), { mode: 'list', selected: { kind: 'group', name: 'outside' } });
+  assert.deepEqual(listAt('group:outside'), { mode: 'list', selected: { kind: 'group', name: 'outside' } });
+  assert.deepEqual(listAt('more:group:kitden:remote').selected, { kind: 'group', name: 'kitden:remote' });
+});
+
+test('the map goes narrow by the window rule, or where the wide map does not fit its box', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+  // 1440 px with Details beside the page leaves the map 840 px: the wide map fits.
+  assert.equal(narrowFor(tree, { window: 1440, box: 840, docked: true }), false);
+  assert.equal(narrowFor(tree, { window: 1100, box: 836, docked: false }), false);
+  assert.equal(narrowFor(tree, { window: 1100, box: 500, docked: true }), true);
+  assert.equal(narrowFor(tree, { window: 900, box: 868, docked: false }), true);
+  // 1366 px with Details: the window rule says wide, but 766 px is too small.
+  assert.equal(narrowFor(tree, { window: 1366, box: 766, docked: true }), true);
+  // Before the box is measured, the window rule alone.
+  assert.equal(narrowFor(tree, { window: 1440, box: null, docked: false }), false);
 });
