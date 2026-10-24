@@ -160,3 +160,59 @@ def test_the_find_chip_and_a_lit_list_row_are_readable_in_both_themes():
     for theme in (LIGHT, DARK):
         assert contrast(theme["--ink-2"], theme["--inset"]) >= 4.5
         assert contrast(theme["--ink-2"], theme["--route-soft"]) >= 4.5
+
+
+TEXT = ("--ink", "--ink-2", "--ink-3", "--ink-4", "--route")
+FILLS = ("--canvas", "--panel", "--panel-raised", "--inset", "--dim", "--route-soft")
+
+
+def test_text_tokens_are_readable_on_every_fill_in_both_themes():
+    # Quiet text (--ink-3, --ink-4) is never put on the accent tint: --ink-3 is 4.48:1 there in
+    # the light theme, so a lit row uses --ink-2 (test_the_find_chip_and_a_lit_list_row...).
+    for theme in (LIGHT, DARK):
+        for t in TEXT:
+            for f in FILLS:
+                if f == "--route-soft" and t in ("--ink-3", "--ink-4"):
+                    continue
+                assert contrast(theme[t], theme[f]) >= 4.5, (t, f, theme[t], theme[f])
+
+
+def test_mockup_tokens_are_there():
+    assert DARK["--out"] == "#0d0f13" and LIGHT["--out"] == "#e4e7ec"
+    assert DARK["--wire"] == "#3b424d" and LIGHT["--wire"] == "#e1e4e9"
+    assert DARK["--link"] == "#59616f" and LIGHT["--link"] == "#c3c8d0"
+    assert DARK["--lamp-warn"] == "#eac27c" and LIGHT["--lamp-warn"] == "#97590a"
+    assert DARK["--lamp-off"] == "#6b7381" and LIGHT["--lamp-off"] == "#80868f"
+    assert DARK["--shadow"] == "0 18px 44px -14px rgb(0 0 0 / .7)"
+    assert LIGHT["--shadow"] == "0 18px 44px -18px rgb(26 31 42 / .28)"
+
+
+def test_the_two_dark_blocks_are_the_same():
+    assert DARK_AUTO == DARK_RULE
+
+
+def test_wire_is_solid_and_its_soft_and_strong_follow_it():
+    # --wire, --link and --out are plain colors. The soft and strong lines are made from them in
+    # :root only, so both themes get the mix of their own --wire.
+    for theme in (LIGHT, DARK):
+        for name in ("--out", "--wire", "--link"):
+            assert re.fullmatch(r"#[0-9a-f]{6}", theme[name]), name
+    soft = "color-mix(in srgb, var(--wire) 60%, transparent)"
+    strong = "color-mix(in srgb, var(--ink) 18%, var(--wire))"
+    assert LIGHT["--wire-soft"] == soft and LIGHT["--wire-strong"] == strong
+    assert DARK["--wire-soft"] == soft and DARK["--wire-strong"] == strong
+
+
+def test_a_map_link_is_drawn_in_the_link_color():
+    assert "div.map .link { fill: none; stroke: var(--link);" in CSS
+    # No other stroke takes a line color: lines that frame things use --wire.
+    assert not re.search(r"stroke:\s*var\(--wire", CSS)
+
+
+def test_quiet_text_on_the_soft_line_fill_is_readable_in_both_themes():
+    # A quiet flag (.flag.info) and a winning layer's reason sit on --wire-soft, a 60% mix of the
+    # line over the panel or the drawer.
+    for theme in (LIGHT, DARK):
+        for base in ("--panel", "--panel-raised"):
+            fill = over(theme["--wire"], 0.6, theme[base])
+            assert contrast(theme["--ink-3"], fill) >= 4.5, (base, fill)

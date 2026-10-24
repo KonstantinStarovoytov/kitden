@@ -33,6 +33,7 @@
   --action: #b34b2d;
   --action-hover: #9f4025;
   --on-action: #ffffff;
+  --out: #e4e7ec;
   --canvas: #f5f6f8;
   --panel: #ffffff;
   --panel-raised: #ffffff;
@@ -40,10 +41,13 @@
   --ink: #161a21;
   --ink-2: #464d5b;
   --ink-3: #646b79;
-  --ink-4: #696f7b;
-  --wire: rgba(22, 30, 46, 0.10);
-  --wire-soft: rgba(22, 30, 46, 0.06);
-  --wire-strong: rgba(22, 30, 46, 0.18);
+  --ink-4: #676d79;
+  /* Lines are solid. --wire frames things; --link is the stroke of a map link. The soft and strong
+     lines come from --wire here only, so each theme gets its own. */
+  --wire: #e1e4e9;
+  --link: #c3c8d0;
+  --wire-soft: color-mix(in srgb, var(--wire) 60%, transparent);
+  --wire-strong: color-mix(in srgb, var(--ink) 18%, var(--wire));
   --route: #a44226;
   --route-soft: #f6e8e2;
   --lamp-on: #1c8a4c;
@@ -52,7 +56,7 @@
   --on-success: #ffffff;
   --lamp-warn: #97590a;
   --lamp-warn-soft: rgba(151, 89, 10, 0.10);
-  --lamp-off: #9aa1ad;
+  --lamp-off: #80868f;
   --danger: #c23b3b;
   /* Added and removed diff text: 4.5:1 or better on its tint and on the drawer (tests/unit/test_contrast.py). */
   --diff-add: #136a39;
@@ -63,6 +67,7 @@
   --dim: #eef0f3;
   --preview-fill: #a4422612;
   --preview-line: #a4422680;
+  --shadow: 0 18px 44px -18px rgb(26 31 42 / .28);
   --shadow-pop: 0 0 0 1px var(--wire), 0 8px 24px rgba(16, 24, 40, 0.10);
   --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
@@ -81,29 +86,31 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --canvas: #171a20; --panel: #20242c; --panel-raised: #282d36; --inset: #12151a;
+    --out: #0d0f13; --canvas: #171a20; --panel: #20242c; --panel-raised: #282d36; --inset: #12151a;
     --ink: #f2f3f5; --ink-2: #c1c6cf; --ink-3: #a5adba; --ink-4: #a5adba;
-    --wire: rgba(255, 255, 255, 0.08); --wire-soft: rgba(255, 255, 255, 0.05); --wire-strong: rgba(255, 255, 255, 0.16);
+    --wire: #3b424d; --link: #59616f;
     --route: #f09a7c; --route-soft: #382a27;
     --success: #47c27a; --on-success: #0b1a12;
-    --lamp-on: #47c27a; --lamp-warn: #e0a347; --lamp-warn-soft: rgba(224, 163, 71, 0.12); --lamp-off: #6b717d;
+    --lamp-on: #47c27a; --lamp-warn: #eac27c; --lamp-warn-soft: rgba(234, 194, 124, 0.12); --lamp-off: #6b7381;
     --danger: #f07070; --focus: #f09a7c;
     --diff-add: #47c27a; --diff-del: #f07070;
     --dim: #1b1f26; --preview-fill: #f09a7c10; --preview-line: #f09a7c80;
+    --shadow: 0 18px 44px -14px rgb(0 0 0 / .7);
     --shadow-pop: 0 0 0 1px var(--wire-strong), 0 12px 32px rgba(0, 0, 0, 0.45);
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --canvas: #171a20; --panel: #20242c; --panel-raised: #282d36; --inset: #12151a;
+  --out: #0d0f13; --canvas: #171a20; --panel: #20242c; --panel-raised: #282d36; --inset: #12151a;
   --ink: #f2f3f5; --ink-2: #c1c6cf; --ink-3: #a5adba; --ink-4: #a5adba;
-  --wire: rgba(255, 255, 255, 0.08); --wire-soft: rgba(255, 255, 255, 0.05); --wire-strong: rgba(255, 255, 255, 0.16);
+  --wire: #3b424d; --link: #59616f;
   --route: #f09a7c; --route-soft: #382a27;
   --success: #47c27a; --on-success: #0b1a12;
-  --lamp-on: #47c27a; --lamp-warn: #e0a347; --lamp-warn-soft: rgba(224, 163, 71, 0.12); --lamp-off: #6b717d;
+  --lamp-on: #47c27a; --lamp-warn: #eac27c; --lamp-warn-soft: rgba(234, 194, 124, 0.12); --lamp-off: #6b7381;
   --danger: #f07070; --focus: #f09a7c;
   --diff-add: #47c27a; --diff-del: #f07070;
   --dim: #1b1f26; --preview-fill: #f09a7c10; --preview-line: #f09a7c80;
+  --shadow: 0 18px 44px -14px rgb(0 0 0 / .7);
   --shadow-pop: 0 0 0 1px var(--wire-strong), 0 12px 32px rgba(0, 0, 0, 0.45);
 }
 
@@ -528,7 +535,7 @@ div.map .map-head { position: relative; height: 28px; }
 div.map .map-caption { position: absolute; top: 0; height: 24px; display: flex; align-items: center; justify-content: space-between; gap: 6px; color: var(--ink-3); font-size: 12px; font-weight: 500; }
 div.map .map-area { position: relative; }
 div.map .map-links { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
-div.map .link { fill: none; stroke: var(--wire-strong); stroke-width: 1.3; stroke-linecap: round; transition: stroke var(--t-fast) ease; }
+div.map .link { fill: none; stroke: var(--link); stroke-width: 1.3; stroke-linecap: round; transition: stroke var(--t-fast) ease; }
 div.map .link.direct { stroke: var(--lamp-warn); stroke-width: 1.2; opacity: 0.55; }
 /* A client has the entry, but Kitden does not know that it loads it: the line does not say on. */
 div.map .link.direct.unk { stroke-dasharray: 3 3; }
