@@ -18,3 +18,13 @@ def test_fonts_are_local_files():
 def test_nothing_loads_from_another_site():
     for path in [STATIC / "index.html", STATIC / "style.css", *STATIC.glob("js/*.js")]:
         assert not re.search(r"(src|href|url)\(?=?\"?https?://", path.read_text()), path.name
+
+
+def test_every_icon_name_used_is_in_the_module():
+    module = (STATIC / "js/icons.js").read_text()
+    used = set(
+        re.findall(
+            r"icon\(\"([a-z0-9-]+)\"", "".join(p.read_text() for p in STATIC.glob("js/*.js"))
+        )
+    )
+    assert used <= set(re.findall(r"^\s*\"([a-z0-9-]+)\":", module, re.M))

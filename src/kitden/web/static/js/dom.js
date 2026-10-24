@@ -1,6 +1,8 @@
 // DOM helpers. All text from client files is untrusted (FR-041): it only ever goes in through
 // textContent or attributes, never as HTML.
 
+import { ICONS } from "./icons.js";
+
 export const $ = (selector, root = document) => root.querySelector(selector);
 export const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
@@ -8,6 +10,28 @@ export function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
   if (text !== undefined && text !== null) node.textContent = String(text);
+  return node;
+}
+
+// A lucide icon as an SVG node. The markup comes only from the fixed ICONS table, never from
+// client text. An unknown name gives an empty icon; only the table's own names count.
+export function icon(name, size = 16, className = "ic") {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  const attrs = {
+    viewBox: "0 0 24 24",
+    width: size,
+    height: size,
+    fill: "none",
+    stroke: "currentColor",
+    "stroke-width": "1.75",
+    "stroke-linecap": "round",
+    "stroke-linejoin": "round",
+    "aria-hidden": "true",
+    class: className,
+  };
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+  node.dataset.icon = name;
+  node.innerHTML = Object.hasOwn(ICONS, name) ? ICONS[name] : "";
   return node;
 }
 
