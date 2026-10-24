@@ -80,7 +80,7 @@ from kitden.clients.base import (
 from kitden.command import installed_command
 from kitden.gateway_api import GatewayError, MetaMcpClient, ObotClient
 from kitden.gateways import add_gateway, data_dir, load_gateways
-from kitden.local_gateway.project import project_chain
+from kitden.local_gateway.project import project_chain, project_chains
 from kitden.local_gateway.settings import CLIENT as KITDEN
 from kitden.local_gateway.settings import (
     load_calls,
@@ -95,6 +95,7 @@ from kitden.local_gateway.views import (
     gateway_items,
     held_servers,
     load_proxy,
+    own_rules,
     refresh_tools,
     rule_of,
     rule_steps,
@@ -689,7 +690,16 @@ def create_app(
         return JSONResponse(found)
 
     async def projects(request: Request) -> JSONResponse:
-        return JSONResponse(state.data["projects"])
+        """The known projects, each with how many gateway rules of its own differ from the
+        shared setup, for the project menu."""
+        settings = load_settings(home) if home is not None else {}
+        chains = _chains()  # with no home, none: every count is 0
+        return JSONResponse(
+            [
+                {**p, "own_rules": own_rules(settings, chains.get(p["path"], []))}
+                for p in state.data["projects"]
+            ]
+        )
 
     async def problems(request: Request) -> JSONResponse:
         return JSONResponse(state.data["problems"])
@@ -738,6 +748,12 @@ def create_app(
         if path is None or home is None:
             return []
         return project_chain(path, home, [p.path for p in state.inventory.projects])
+
+    def _chains() -> dict[str, list[str]]:
+        """Each known project's `_chain`, found in one pass."""
+        if home is None:
+            return {}
+        return project_chains(home, [p.path for p in state.inventory.projects])
 
     def _read_model(make):
         async def endpoint(request: Request) -> JSONResponse:
@@ -801,14 +817,16 @@ def create_app(
         """The servers the Kitden gateway holds, and why its settings could not be read."""
         if home is None:
             return None, None
-        held = held_servers(load_settings(home), _chain(path), load_tools(home))
+        held = held_servers(load_settings(home), _chain(path), load_tools(home), _chains())
         problem = UNREADABLE if settings_unreadable(home) else None
         return held, problem
 
     def _gateway_view(request, project, path):
         held, problem = _kitden(path)
         view = gateway_view(state.inventory, _registered(), path, kitden=held, problem=problem)
-        return JSONResponse(view)
+        # The picked project's own rules, for the scope bar; 0 for all projects.
+        rules = own_rules(load_settings(home), _chain(path)) if home is not None else 0
+        return JSONResponse({**view, "own_rules": rules})
 
     async def gateway_tools(request: Request) -> JSONResponse:
         """A held server's tools with their states for the project, from the cache and rules."""

@@ -9,6 +9,7 @@ import re
 from collections.abc import Iterable
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 from kitden.changes.actions import GATEWAY_RULE, KITDEN_GATEWAY, secrets_out
 from kitden.clients.base import mcp_item
@@ -76,16 +77,57 @@ def gateway_items(inventory, settings: dict, home: Path) -> list[Item]:
 def _states(settings: dict, server: str, tool: str | None, chain: list[str]) -> dict:
     """A server's or a tool's state along the picked project's chain (the picked project
     first; empty for all projects); whether the picked project's own rule makes it differ from
-    what the project would get without that rule; and the folder name of the project it would
-    then follow (None: all projects)."""
+    what the project would get without that rule; the folder name of the project it would
+    then follow (None: all projects); and where the state comes from (`origin`): the picked
+    project, a parent project (`origin_from` names its folder), all projects, a new tool of a
+    strict server, or the default."""
     own = own_state(settings["rules"]["projects"].get(chain[0]), server, tool) if chain else None
     without = state_in(settings, chain[1:], server, tool)
     by = deciding_project(settings, chain[1:], server, tool)
+    if own is not None:
+        origin = "project"
+    elif by:
+        origin = "parent"
+    elif own_state(settings["rules"]["global"], server, tool) is not None:
+        origin = "global"
+    elif tool is not None and strict_mode(settings, server):
+        origin = "strict"
+    else:
+        origin = "default"
     return {
         "state": own or without,
         "differs": own is not None and own != without,
         "follows": Path(by).name if by else None,
+        "origin": origin,
+        "origin_from": Path(by).name if origin == "parent" else None,
     }
+
+
+def _effective(state: str, server_on: bool) -> dict:
+    """A tool's state with its server's switch: a tool of a server that is off is off."""
+    return {"effective": state} if server_on else {"effective": "off", "why": "server_off"}
+
+
+def _ruled(rules: Any, server: str) -> list[str | None]:
+    """What one scope of rules sets a state for: the server (None) and each of its tools."""
+    entry = rules.get(server) if isinstance(rules, dict) else None
+    tools = entry.get("tools") if isinstance(entry, dict) else None
+    names = [None, *(tools if isinstance(tools, dict) else {})]
+    return [name for name in names if own_state(rules, server, name) is not None]
+
+
+def own_rules(settings: dict, chain: list[str]) -> int:
+    """How many states the picked project (`chain[0]`) sets that differ from what it would
+    get without them: its server switches and tool states, over all held servers. 0 for all
+    projects."""
+    if not chain:
+        return 0
+    rules = settings["rules"]["projects"].get(chain[0])
+    return sum(
+        _states(settings, server, name, chain)["differs"]
+        for server in settings["servers"]
+        for name in _ruled(rules, server)
+    )
 
 
 def tool_count(tools: dict | None, server: str) -> int | None:
@@ -93,23 +135,59 @@ def tool_count(tools: dict | None, server: str) -> int | None:
     return len((tools or {}).get(server) or []) or None
 
 
-def held_servers(settings: dict, chain: list[str], tools: dict | None = None) -> list[dict]:
+def held_servers(
+    settings: dict,
+    chain: list[str],
+    tools: dict | None = None,
+    chains: dict[str, list[str]] | None = None,
+) -> list[dict]:
     """Every server in the Kitden gateway, for its card: name, local or remote, and its state
-    along the picked project's chain (empty: all projects), whether its entry still holds a
-    plain secret the Keychain could keep, and how many tools `tools` (the cache) knows for it.
-    Commands, addresses and env stay out."""
+    along the picked project's chain (empty: all projects) and where it comes from, whether
+    its entry still holds a plain secret the Keychain could keep, and how many tools `tools`
+    (the cache) knows for it. Commands, addresses and env stay out.
+
+    Also its known tools with their states (`tool_list`) and how many are on (`on_count`);
+    with all projects and the server off, how many known projects turn it on (`on_in`); and
+    how many known projects have rules of their own for it (`projects`). `chains` maps every
+    known project to its chain."""
+    rules = settings["rules"]["projects"]
+    known = chains or {}
     cards = []
     for name, server in sorted(settings["servers"].items(), key=lambda pair: pair[0].lower()):
         states = _states(settings, name, None, chain)
         held = isinstance(server, dict)
+        server_on = states["state"] == "on"
+        listed = []
+        for tool in (tools or {}).get(name) or []:
+            found = _states(settings, name, tool["name"], chain)
+            listed.append(
+                {
+                    "name": tool["name"],
+                    "title": tool.get("title"),
+                    "state": found["state"],
+                    **_effective(found["state"], server_on),
+                    "hint": tool_hint(tool)[0],
+                    "origin": found["origin"],
+                    "origin_from": found["origin_from"],
+                }
+            )
+        on_in = 0
+        if not chain and not server_on:
+            on_in = sum(state_in(settings, c, name, None) == "on" for c in known.values())
         cards.append(
             {
                 "name": name,
                 "kind": "remote" if held and "url" in server else "local",
                 "state": states["state"],
                 "differs": states["differs"],
+                "origin": states["origin"],
+                "origin_from": states["origin_from"],
                 "plain_secrets": held and bool(secrets_out(name, server)[1]),
                 "tools": tool_count(tools, name),
+                "tool_list": listed,
+                "on_count": sum(t["effective"] == "on" for t in listed),
+                "on_in": on_in,
+                "projects": sum(bool(_ruled(rules.get(p), name)) for p in known),
             }
         )
     return cards
@@ -176,28 +254,32 @@ def tools_view(
     settings: dict, tools: dict, server: str, chain: list[str], calls: dict | None = None
 ) -> dict:
     """A held server's state and its known tools, each with its state, along the picked
-    project's chain (empty: all projects). A tool is new when the server is strict and no rule
-    of the chain or for all projects has a state for it: it waits, off, until someone decides.
-    `calls` is what `load_calls` gives; each tool carries its count and last time, or None."""
+    project's chain (empty: all projects), and where each comes from. A tool's `state` is its
+    own rule's; `effective` also applies the server's switch, as in `held_servers`. A tool is
+    new when the server is strict and no rule of the chain or for all projects has a state for
+    it: it waits, off, until someone decides. `calls` is what `load_calls` gives; each tool
+    carries its count and last time, or None."""
     strict = strict_mode(settings, server)
     scopes = _scopes(settings, chain)
     counted = (calls or {}).get(server, {})
-    return {
-        "server": server,
-        **_states(settings, server, None, chain),
-        "strict": strict,
-        "tools": [
+    states = _states(settings, server, None, chain)
+    server_on = states["state"] == "on"
+    listed = []
+    for tool in tools.get(server, []):
+        found = _states(settings, server, tool["name"], chain)
+        listed.append(
             {
                 "name": tool["name"],
+                "title": tool.get("title"),
                 **dict(zip(("hint", "hint_from"), tool_hint(tool), strict=True)),
                 "description": tool.get("description") or "",
                 "calls": counted.get(tool["name"]),
                 "new": strict and all(own_state(r, server, tool["name"]) is None for r in scopes),
-                **_states(settings, server, tool["name"], chain),
+                **found,
+                **_effective(found["state"], server_on),
             }
-            for tool in tools.get(server, [])
-        ],
-    }
+        )
+    return {"server": server, **states, "strict": strict, "tools": listed}
 
 
 def rule_steps(home: Path, params: dict, projects: dict[str, str]) -> list[Step]:

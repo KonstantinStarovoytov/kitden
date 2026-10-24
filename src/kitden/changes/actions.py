@@ -24,10 +24,10 @@ from kitden.clients.base import (
     SKILL_REMOVE,
     ClientAdapter,
 )
+from kitden.clients.entries import IN_PROJECT_FILES, entry_refusal, gateway_entry
 from kitden.gateway_api import gateway_name
 from kitden.local_gateway.keychain import KeychainError, Runner, resolve_entry, run_security
 from kitden.local_gateway.settings import (
-    PLACEHOLDERS,
     START_TIME,
     load_settings,
     load_tools,
@@ -447,17 +447,6 @@ GATEWAY_KEYCHAIN = "gateway.keychain"  # a held server's plain secrets moved to 
 # Codex waits 10 s for a server to start and 60 s for a tool call (checked 2026-10-21). The
 # Kitden gateway may take up to 20 s to list a server and 300 s for one call.
 CODEX_TIMEOUTS = {"startup_timeout_sec": 30, "tool_timeout_sec": 300}
-# Keys whose values come from the shell or from another program (checked 2026-10-21): Cursor
-# `envFile`; Codex `env_vars`, `bearer_token_env_var`, `env_http_headers` and
-# `http_headers_helper`; Claude Code `headersHelper`.
-FROM_ELSEWHERE = (
-    "envFile",
-    "env_vars",
-    "bearer_token_env_var",
-    "env_http_headers",
-    "http_headers_helper",
-    "headersHelper",
-)
 SIGN_IN_SECONDS = 5
 MCP_VERSION = "2025-06-18"  # a protocol version every MCP server knows (checked 2026-10-21)
 
@@ -512,40 +501,6 @@ def needs_sign_in(url: str, headers: dict) -> bool:
         raise OSError("no answer") from None
 
 
-def _gateway_entry(entry: dict) -> dict:
-    """What the Kitden gateway runs: command, args and env, or url and headers. Keys only the
-    client reads (type, on/off, tool lists, timeouts) stay behind; local_move_steps adds a
-    Codex entry's own start time."""
-    server = {key: entry[key] for key in ("command", "args", "env", "url") if entry.get(key)}
-    headers = entry.get("headers") or entry.get("http_headers")
-    if headers:
-        server["headers"] = headers
-    return server
-
-
-def _strings(value: Any) -> list[str]:
-    if isinstance(value, str):
-        return [value]
-    if isinstance(value, dict):
-        return [s for k, v in value.items() for s in (*_strings(k), *_strings(v))]
-    if isinstance(value, list):
-        return [s for v in value for s in _strings(v)]
-    return []
-
-
-def _reads_elsewhere(entry: dict, server: dict) -> bool:
-    """A key or a `${...}` value that the client fills in from elsewhere. A project folder in
-    the arguments is fine: the gateway fills it in."""
-    if any(key in entry for key in FROM_ELSEWHERE):
-        return True
-    args = []
-    for arg in _strings(server.get("args")):
-        for placeholder in PLACEHOLDERS:
-            arg = arg.replace(placeholder, "")
-        args.append(arg)
-    return any("${" in s for s in _strings({**server, "args": args}))
-
-
 def _codex_layers(name: str, known_projects: list[str], user_file: str) -> bool:
     """A known project's `.codex/config.toml` has its own `[mcp_servers.<name>]` table, which
     changes Codex's user entry there."""
@@ -569,35 +524,20 @@ def _movable(
     reason, an entry that stays direct."""
     name = item.name
     if item.scope is Scope.PROJECT:
-        raise ValueError(f"{name} is in the project's own files; it stays there.")
+        raise ValueError(IN_PROJECT_FILES.format(name))
     if name == SETUP_NAME:
         raise ValueError("Kitden's own entry stays in each client.")
     remove = remove_steps(adapters, item)[0]
     assert remove.edit is not None
     if item.client == "codex" and _codex_layers(name, known_projects, remove.edit.path):
-        raise ValueError(f"{name} is in the project's own files; it stays there.")
+        raise ValueError(IN_PROJECT_FILES.format(name))
     entry = _raw_entry(remove)
     if entry is None:
         raise ValueError(f"{name} could not be read from its file.")
-    server = _gateway_entry(entry)
-    if _reads_elsewhere(entry, server):
-        raise ValueError(f"{name} reads values from your shell; it stays direct for now.")
-    if "cwd" in entry:
-        raise ValueError(f"{name} starts in its own folder; it stays direct for now.")
-    # The gateway speaks streamable HTTP; Claude Code also has `sse` and `ws` (checked
-    # 2026-10-21). Without a type, an address that ends in /sse is SSE, as Cursor reads it.
-    kind = entry.get("type")
-    by_address = kind is None and str(server.get("url", "")).rstrip("/").endswith("/sse")
-    if str(kind).lower() in ("sse", "ws") or by_address:
-        raise ValueError(
-            f"{name} uses a connection the Kitden gateway does not support yet; "
-            "it stays direct for now."
-        )
-    shapes = {"command": str, "args": list, "env": dict, "url": str, "headers": dict}
-    wrong = any(not isinstance(server.get(k, kind()), kind) for k, kind in shapes.items())
-    if wrong or not ("command" in server or "url" in server):
-        raise ValueError(f"{name} could not be read from its file.")
-    return remove, entry, server
+    refusal = entry_refusal(name, entry)
+    if refusal is not None:
+        raise ValueError(refusal)
+    return remove, entry, gateway_entry(entry)
 
 
 def _permission_rules(path: Path, kind: str = "deny") -> list[str]:

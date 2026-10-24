@@ -148,6 +148,7 @@ class Item:
     actions: tuple[str, ...] = ()
     change_hint: str | None = None  # where to change it when the tool cannot (FR-028)
     stale_at: str | None = None  # kept from the last good read (ISO time); not part of the id
+    stays_direct: str | None = None  # an MCP entry the Kitden gateway cannot run: why
 
     @property
     def id(self) -> str:

@@ -1,10 +1,12 @@
 """Gateway page model: connections and what goes around it (redesign plan, Task 3)."""
 
 import json
+from dataclasses import replace
 
 import pytest
 
 from kitden.model import Client, ClientStatus, Gateway, Item, ItemKind, Scope, Source, SourceKind
+from kitden.views.effective import DESKTOP
 from kitden.views.findings import mark_gateways
 from kitden.views.gateway_view import gateway_view
 from kitden.views.inventory import Inventory, build_inventory
@@ -44,28 +46,53 @@ def test_kitdens_own_server_is_not_listed(home):
     assert all(r["name"] != "kitden" for g in groups.values() for r in g)
 
 
-def test_a_server_in_two_clients_is_one_row_with_both_marks():
-    def direct(client):
-        source = Source(kind=SourceKind.FILE, path=f"/h/{client}.json", owner_client=client)
-        return Item(
-            client=client,
-            kind=ItemKind.MCP_SERVER,
-            name="github",
-            source=source,
-            scope=Scope.USER,
-            summary=(("url", "https://api.githubcopilot.com/mcp/"),),
-            actions=("mcp.remove_direct",),
-        )
+def direct(client):
+    source = Source(kind=SourceKind.FILE, path=f"/h/{client}.json", owner_client=client)
+    return Item(
+        client=client,
+        kind=ItemKind.MCP_SERVER,
+        name="github",
+        source=source,
+        scope=Scope.USER,
+        summary=(("url", "https://api.githubcopilot.com/mcp/"),),
+        actions=("mcp.remove_direct",),
+    )
 
-    clients = [
-        Client(id=c, display_name=c, status=ClientStatus.FOUND) for c in ("claude_code", "codex")
-    ]
-    inventory = Inventory(clients=clients, items=[direct("claude_code"), direct("codex")])
+
+def found(*clients):
+    return [Client(id=c, display_name=c, status=ClientStatus.FOUND) for c in clients]
+
+
+def test_a_server_in_two_clients_is_one_row_with_both_marks():
+    inventory = Inventory(
+        clients=found("claude_code", "codex"), items=[direct("claude_code"), direct("codex")]
+    )
     groups = gateway_view(inventory, [], None)["groups"]
     assert len(groups["move"]) == 1
     github = groups["move"][0]
     assert github["clients"] == ["claude_code", "codex"]
     assert len(github["items"]) == 2
+    assert (github["columns"], github["override"], github["stays"]) == (
+        ["claude_code", "codex"],
+        False,
+        None,
+    )
+
+
+def test_columns_follow_the_page_and_count_the_desktop_code_tab_as_claude_code():
+    inventory = Inventory(
+        clients=found("cursor", DESKTOP), items=[direct("cursor"), direct(DESKTOP)]
+    )
+    github = gateway_view(inventory, [], None)["groups"]["move"][0]
+    assert github["clients"] == ["cursor", DESKTOP]
+    assert github["columns"] == ["claude_code", "cursor"]
+
+
+def test_a_plugins_server_stays_with_the_plugin():
+    item = replace(direct("codex"), scope=Scope.PLUGIN)
+    inventory = Inventory(clients=found("codex"), items=[item])
+    row = gateway_view(inventory, [], None)["groups"]["plugin"][0]
+    assert row["stays"] == "github comes with a plugin; it stays with the plugin."
 
 
 def test_connections_list_gateway_entries_per_client(home):

@@ -2,7 +2,12 @@
 
 from pathlib import Path
 
-from kitden.local_gateway.project import main_checkout, project_chain, session_folder
+from kitden.local_gateway.project import (
+    main_checkout,
+    project_chain,
+    project_chains,
+    session_folder,
+)
 
 
 def project(tmp_path, name="app"):
@@ -219,3 +224,15 @@ def test_the_walk_up_never_goes_past_the_home_folder(tmp_path):
     chat = home / "Documents" / "chat"
     chat.mkdir(parents=True)
     assert find(tmp_path, [app], cwd=chat, home=home) == []
+
+
+def test_every_chain_at_once_is_each_projects_own_chain(tmp_path):
+    home = tmp_path / "home"
+    app = project(tmp_path)
+    wt = worktree(tmp_path, app)
+    known = [str(p) for p in (home, app, app / "web", wt, wt / "docs")]
+    for folder in known:
+        Path(folder).mkdir(parents=True, exist_ok=True)
+    chains = project_chains(home, known)
+    assert chains == {k: project_chain(k, home, known) for k in known}
+    assert chains[str(wt / "docs")] == [str(wt / "docs"), str(wt), str(app)]

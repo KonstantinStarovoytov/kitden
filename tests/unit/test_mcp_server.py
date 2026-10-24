@@ -134,6 +134,8 @@ async def test_list_projects(home):
     data = await call(server_for(home), "list_projects")
     paths = {p["path"] for p in data["projects"]}
     assert str(home / "work/website") in paths
+    # The page's count of each project's own rules is for the project menu only.
+    assert all("own_rules" not in p for p in data["projects"])
 
 
 async def test_no_secret_values_in_any_answer_and_no_file_changes(home):

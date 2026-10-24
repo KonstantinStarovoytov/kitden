@@ -167,8 +167,14 @@ def test_the_kitden_gateway_is_listed_and_local_servers_can_move(home):
                 "kind": "local",
                 "state": "on",
                 "differs": False,
+                "origin": "default",
+                "origin_from": None,
                 "plain_secrets": True,
                 "tools": None,
+                "tool_list": [],
+                "on_count": 0,
+                "on_in": 0,
+                "projects": 0,
             }
         ],
     }
@@ -201,22 +207,46 @@ def test_the_kitden_card_lists_every_held_server_with_its_state_in_the_project(h
     with page_for(home) as page:
         everywhere = page.get("/api/gateway-view").json()["gateways"][0]["servers"]
         there = page.get(f"/api/gateway-view?project={project_id(page, website)}").json()
+    listed = [
+        {
+            "name": name,
+            "title": None,
+            "state": "on",
+            "effective": "on",
+            "hint": "unknown",
+            "origin": "default",
+            "origin_from": None,
+        }
+        for name in ("search", "read")
+    ]
     assert everywhere == [
         {
             "name": "docs",
             "kind": "remote",
             "state": "on",
             "differs": False,
+            "origin": "default",
+            "origin_from": None,
             "plain_secrets": False,
             "tools": 2,
+            "tool_list": listed,
+            "on_count": 2,
+            "on_in": 0,
+            "projects": 0,
         },
         {
             "name": "files",
             "kind": "local",
             "state": "off",
             "differs": False,
+            "origin": "global",
+            "origin_from": None,
             "plain_secrets": True,
             "tools": None,
+            "tool_list": [],
+            "on_count": 0,
+            "on_in": 1,  # website turns it on
+            "projects": 1,
         },
     ]
     assert there["gateways"][0]["servers"][1] == {
@@ -224,8 +254,14 @@ def test_the_kitden_card_lists_every_held_server_with_its_state_in_the_project(h
         "kind": "local",
         "state": "on",
         "differs": True,
+        "origin": "project",
+        "origin_from": None,
         "plain_secrets": True,
         "tools": None,
+        "tool_list": [],
+        "on_count": 0,
+        "on_in": 0,
+        "projects": 1,
     }
     assert "SENTINEL_SECRET_FILES" not in json.dumps(there)
 
@@ -285,12 +321,16 @@ def test_tools_api_marks_project_differences(home):
         }
         assert everywhere["tools"][0] == {
             "name": "echo",
+            "title": None,
             "description": "The echo tool",
             "calls": None,
             "new": False,
             "state": "on",
             "differs": False,
             "follows": None,
+            "origin": "default",
+            "origin_from": None,
+            "effective": "on",
             "hint": "unknown",
             "hint_from": None,
         }

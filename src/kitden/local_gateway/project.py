@@ -89,16 +89,26 @@ def project_chain(folder: str | None, home: Path, known: list[str]) -> list[str]
     """
     if folder is None:
         return []
-    stops = (_real(home), Path("/"))
+    return _chain(_real(folder), (_real(home), Path("/")), {k: _real(k) for k in known})
+
+
+def project_chains(home: Path, known: list[str]) -> dict[str, list[str]]:
+    """Each known project's `project_chain`, reading each real path once: a page answer that
+    needs every chain then costs one read per project, not one per pair of projects."""
     real = {k: _real(k) for k in known}
+    stops = (_real(home), Path("/"))
+    return {k: _chain(real[k], stops, real) for k in known}
+
+
+def _chain(start: Path, stops: tuple[Path, ...], real: dict[str, Path]) -> list[str]:
+    """`project_chain` for the real folder `start`; `real` maps each known path to its real
+    path."""
 
     def holding(place: Path) -> list[str]:
-        found = [
-            k for k, r in real.items() if r == place or (r not in stops and r in place.parents)
-        ]
+        ups = set(place.parents)  # read once: each `in place.parents` makes every parent again
+        found = [k for k, r in real.items() if r == place or (r not in stops and r in ups)]
         return sorted(found, key=lambda k: len(real[k].parts), reverse=True)
 
-    start = _real(folder)
     chain = holding(start)
     main = _real(_worktree_main(start, stops))
     if main != start:
