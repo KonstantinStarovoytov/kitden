@@ -134,6 +134,17 @@ def test_the_shell_draws_its_icons_and_the_hint_line_sets_its_words_at_once():
     assert "pointer-events: none" in rule(".hint-dock")
 
 
+def test_the_page_hint_line_has_its_own_class_and_the_tool_word_stays_in_its_row():
+    # tools.js calls a tool's "Read" or "Write" word `hint`. A page-wide `.hint` rule once pulled
+    # every such word out of its row, so the page's line is `.hint-line` and `.hint` stays free.
+    assert 'class="hint-line" id="hint"' in INDEX
+    assert not re.search(r"^\.hint[ ,{]", CSS, re.MULTILINE)
+    assert "position: absolute" in rule(".hint-line")
+    assert "position" not in rule(".layer.tool .hint")
+    for selectors, body in re.findall(r"^([^{}\n]*\.hint)\s*\{([^}]*)\}", CSS, re.MULTILINE):
+        assert "position" not in body, selectors
+
+
 def test_the_shell_is_a_frame_on_the_out_colour():
     assert "background: var(--out)" in rule("body") and "padding" in rule("body")
     assert "env(safe-area-inset-left" in rule("body")
