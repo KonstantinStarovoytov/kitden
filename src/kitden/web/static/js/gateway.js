@@ -203,11 +203,13 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
   // their groups; `server(block, word)` adds what each server's block says. `unread` says why
   // Kitden does not know what it holds, so no count shows: a problem is not an empty gateway.
   // `adds` is a block for the end of one group (`adds.kind`), which opens that group if need be.
+  // A gateway block speaks no state word: its meta says its clients and servers, or what Kitden
+  // could not read, and then its state is not known.
   const addGateway = (gateway, reaches, servers, kindOf, server, unread = null, adds = null) => {
     const id = `gateway:${gateway.id}`;
     const n = plural(servers.length, "server", "servers");
     const counts = reaches ? `${plural(reaches.length, "client", "clients")} · ${n}` : n;
-    blocks.push({ id, column: "gateway", kind: "gateway", name: gatewayName(gateway), meta: unread === null ? counts : unread || null, state: "on", gateway, unread });
+    blocks.push({ id, column: "gateway", kind: "gateway", name: gatewayName(gateway), meta: unread === null ? counts : unread || null, state: unread ? "unk" : "on", stateInMeta: true, gateway, unread });
     for (const client of reaches || []) links.push({ from: `client:${client}`, to: id, kind: "on" });
     for (const [kind, word] of KINDS) {
       const mine = servers.filter((s) => kindOf(s) === kind);

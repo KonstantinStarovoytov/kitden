@@ -124,10 +124,11 @@ export function projectMenu(projects, picked, onPick) {
     list.replaceChildren(...shown.map(row));
     mark(find.value.trim() ? (shown.length > 1 ? 1 : -1) : shown.findIndex((item) => item.picked));
   }
+  // The menu shows first: a hidden list cannot scroll the picked project into view.
   function open() {
     find.value = "";
-    draw();
     menu.hidden = false;
+    draw();
     trigger.setAttribute("aria-expanded", "true");
     document.addEventListener("pointerdown", outside);
     find.focus();
@@ -554,9 +555,10 @@ export function rulesText({ server, tools, state }, where) {
   return { title: `Turn ${what}`, done: `Turned ${what}` };
 }
 
-// The strict switch in words: the review's title and the line after the change.
+// The strict switch in words: the review's title and the line after the change. It has no
+// project rule, so it says it is for all projects, also in a project view.
 export function strictText({ server, state }) {
-  return { title: `Turn strict mode ${state} for ${server}`, done: `Turned strict mode ${state} for ${server}` };
+  return { title: `Turn strict mode ${state} for ${server} in all projects`, done: `Turned strict mode ${state} for ${server} in all projects` };
 }
 
 // The clients a skill removal takes the skill from: those that read the folder and load no
@@ -602,7 +604,7 @@ export function changeTitle(entry) {
   // A tool rule names its tool, server, project and new state (the server adds them).
   if (entry.action === "gateway.rule" && entry.rule) return ruleText(entry.rule, entry.rule.project).done;
   // The strict switch: its first step is the server's mode; the others are its tools.
-  if (entry.action === "gateway.strict" && entry.steps.length) return `${ACTION_WORDS[entry.action]} ${entry.steps[0].name} · Kitden gateway`;
+  if (entry.action === "gateway.strict" && entry.steps.length) return `${ACTION_WORDS[entry.action]} ${entry.steps[0].name} in all projects · Kitden gateway`;
   // The batch switch: its steps are the tools it changed.
   if (entry.action === "gateway.rules") return `${ACTION_WORDS[entry.action]} ${entry.steps.map((s) => s.name).join(", ")} · Kitden gateway`;
   if (entry.action === "gateway.remove" && entry.steps.length) return `${ACTION_WORDS[entry.action]} ${entry.steps[0].name} from the Kitden gateway`;

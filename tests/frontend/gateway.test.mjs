@@ -365,6 +365,27 @@ test('an outside server Kitden does not know to be on has a dashed line and says
   assert.equal(listRows(tree).find((r) => r.id === 'outside:move:github').meta, null);
 });
 
+test('a gateway block speaks no state word, and one Kitden could not read is not known', () => {
+  // Its meta says its clients and servers: an "On" beside it would say more than Kitden knows.
+  const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+  assert.equal(blockLabel(block(tree, 'gateway:kitden')), 'Kitden gateway, 2 clients · 2 servers');
+  const none = ['claude_code', 'codex', 'cursor'].map((c) => entry(c, 'missing'));
+  assert.equal(blockLabel(block(gatewayTree(MEDIUM_VIEW, { ...OPTS, setup: none }), 'gateway:kitden')), 'Kitden gateway, 0 clients · 2 servers');
+  const broken = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers: [], problem: 'Kitden could not read the gateway settings.' }] };
+  const unread = block(gatewayTree(broken, OPTS), 'gateway:kitden');
+  assert.equal(unread.state, 'unk');
+  assert.equal(blockLabel(unread), 'Kitden gateway, Could not read its settings.');
+});
+
+test('find skips the group captions, so they are not counted as matches', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+  for (const words of ['Remote', 'local', 'Outside the gateway']) {
+    assert.deepEqual(findIn(tree, words), { matches: new Set(), open: new Set() }, words);
+    assert.equal(findChip(findIn(tree, words)), 'No matches', words);
+  }
+  assert.equal(findChip(findIn(tree, 'docs')), '2 matches');
+});
+
 test('a Desktop Code tab entry draws its line from Claude Code', () => {
   const desk = { name: 'desk', clients: ['claude_desktop_code_tab'], columns: ['claude_code'], items: ['d'], stays: null, override: false };
   const tree = gatewayTree({ ...MEDIUM_VIEW, groups: { ...MEDIUM_VIEW.groups, move: [desk] } }, OPTS);

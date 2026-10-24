@@ -1141,6 +1141,8 @@ def test_tool_and_server_details_say_what_they_know():
         assert words in text, words
     # The kitden entry back on: a review where the docs name the key, else where to do it.
     assert "`Turn it on in ${name}…`" in text
+    # Strict mode applies in every project: its review says so, also in a project view.
+    assert "`Turn strict mode ${state} for ${server} in all projects`" in script("parts.js")
     assert "`This project · ${folder}`" in script("parts.js")
     assert "`From ${origin_from}`" in script("parts.js")
     assert "`Turn it on in ${name}'s own MCP settings.`" in text

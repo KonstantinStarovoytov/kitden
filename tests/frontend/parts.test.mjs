@@ -237,10 +237,11 @@ test('the Clients card is drawn again when the versions step first shows open', 
   assert.equal(versionsOpened(null, null), false);
 });
 
-test('the strict switch names its server, in the review and in the log', () => {
-  assert.deepEqual(strictText({ server: 'github', state: 'on' }), { title: 'Turn strict mode on for github', done: 'Turned strict mode on for github' });
+test('the strict switch names its server and that it is for all projects, in the review and in the log', () => {
+  // Strict mode has no project rule: it applies in every project, also from a project view.
+  assert.deepEqual(strictText({ server: 'github', state: 'on' }), { title: 'Turn strict mode on for github in all projects', done: 'Turned strict mode on for github in all projects' });
   const steps = [{ client: 'kitden', name: 'github' }, { client: 'kitden', name: 'list_issues' }];
-  assert.equal(changeTitle({ action: 'gateway.strict', steps }), 'Changed strict mode for github · Kitden gateway');
+  assert.equal(changeTitle({ action: 'gateway.strict', steps }), 'Changed strict mode for github in all projects · Kitden gateway');
 });
 
 test('the Changes page names the tools a batch switch changed', () => {
@@ -456,6 +457,26 @@ test('the project menu is a button with the picked name, closed until it is pres
   assert.equal(m.find.attributes.placeholder, 'Find a project…');
   assert.equal(projectMenu(PROJECTS, '', () => {}).children[0].querySelector('.where-name').textContent, 'All projects');
   assert.equal(projectMenu([], 'gone', () => {}).children[0].querySelector('.where-name').textContent, 'No longer on the list');
+});
+
+test('the menu shows before it scrolls the picked project into view', () => {
+  // A hidden list has no layout, so a scroll before it shows does nothing.
+  const make = globalThis.document.createElement;
+  const hidden = [];
+  let menu = null;
+  globalThis.document.createElement = (tag) => {
+    const node = make(tag);
+    node.scrollIntoView = () => hidden.push(menu.hidden);
+    return node;
+  };
+  try {
+    const m = menuOn('m');
+    menu = m.menu;
+    m.open();
+  } finally {
+    globalThis.document.createElement = make;
+  }
+  assert.deepEqual(hidden, [false]);
 });
 
 test('the button keeps the picked name for a screen reader, which its label would hide', () => {

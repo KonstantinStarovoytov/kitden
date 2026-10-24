@@ -11,8 +11,9 @@
 //   its children sit under it, in its column, and always show. Any other block shows its children
 //   only while it is open. `state`: "on", "off", "unk" or "preview". `count`: what a folded block
 //   holds. `grip`: it can be dragged. `action`: what pressing it does, in words ("Set up…").
-//   `stateInMeta`: its meta says its state already ("On in 2 projects"), so no state word is
-//   spoken. `dot`: a client's dot when it is not its state (a client found on a first run).
+//   `stateInMeta`: no state word is spoken; its meta says the state already ("On in 2
+//   projects") or all there is to say (a gateway's clients and servers). `dot`: a client's dot
+//   when it is not its state (a client found on a first run).
 // - links: [{ from, to, kind, unk }], kind "on", "faint", "direct" or "preview". The link is the
 //   state: something on has a link, something off has none. `unk`: Kitden does not know whether
 //   it is on, so the line is dashed; it only shows who has the entry.
@@ -298,7 +299,8 @@ export function litPath(model, id) {
 }
 
 // The blocks whose name holds `text` (any case, trimmed), and every block above a match, so a
-// folded parent opens to show it. Empty text finds nothing.
+// folded parent opens to show it. A group's caption ("Remote") is not a thing to find, so it
+// is never a match. Empty text finds nothing.
 export function findIn(model, text) {
   const words = String(text || "").trim().toLowerCase();
   const matches = new Set();
@@ -306,7 +308,7 @@ export function findIn(model, text) {
   if (!words) return { matches, open };
   const byId = new Map(model.blocks.map((block) => [block.id, block]));
   for (const block of model.blocks) {
-    if (!String(block.name || "").toLowerCase().includes(words)) continue;
+    if (block.kind === "group" || !String(block.name || "").toLowerCase().includes(words)) continue;
     matches.add(block.id);
     for (let at = block.parent; at && byId.has(at) && !open.has(at); at = byId.get(at).parent) open.add(at);
   }
