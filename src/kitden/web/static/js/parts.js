@@ -11,7 +11,7 @@ export const GONE_PROJECT = "This project is no longer on the list.";
 export const folderName = (path) => (path ? path.split("/").filter(Boolean).pop() || path : "");
 
 // Actions whose title names its place already, or has none: no place words are added.
-export const PLACE_IN_TITLE = ["gateway.rule", "gateway.rules", "gateway.strict", "project.align", "setup_server.update", "gateway.remove", "gateway.keychain"];
+export const PLACE_IN_TITLE = ["gateway.rule", "gateway.rules", "gateway.strict", "project.align", "setup_server.update", "setup_server.enable", "gateway.remove", "gateway.keychain"];
 
 // Where a change's steps go (`target`, from the server), as a title ends: " in website",
 // " for all projects", " for all projects except website" (that project's own definition wins
@@ -199,6 +199,18 @@ export const STATE_WORDS = {
 // The twin of views/words.py ORIGIN_WORDS: the tag of a cell in a project view. "This project":
 // the project's own settings decide the cell. "Only this project": only that project has the item.
 export const ORIGIN_WORDS = { override: "This project", project: "Only this project" };
+// Where a Kitden gateway rule's state comes from, as a tool's or a server's Details says it:
+// the rule for all projects, the default, or a strict server's new tool that waits. A project's
+// own rule and a parent folder's name the folder (originText).
+export const TOOL_ORIGIN_WORDS = { global: ALL_PROJECTS, default: "On by default", strict: "New · waits" };
+
+// The "Comes from" words of a rule (`origin`, and `origin_from` for a parent folder). `folder` is
+// the picked project's folder name. Null for an origin Kitden does not name.
+export function originText({ origin, origin_from }, folder) {
+  if (origin === "project") return `This project · ${folder}`;
+  if (origin === "parent") return `From ${origin_from}`;
+  return TOOL_ORIGIN_WORDS[origin] || null;
+}
 // The twin of views/words.py ROUTE_WORDS: how a client gets an item, said in Details and hover
 // text. "{}" is the client whose folder it is.
 export const ROUTE_WORDS = {
@@ -511,6 +523,7 @@ const ACTION_WORDS = {
   "skill.remove": "Removed",
   "setup_server.register": "Added show my setup",
   "setup_server.update": "Updated show my setup to Kitden",
+  "setup_server.enable": "Turned on the kitden entry",
   "gateway.rule": "Changed the rule for",
   "gateway.strict": "Changed strict mode for",
   "gateway.rules": "Changed the rules for",
@@ -607,7 +620,7 @@ export function changeTitle(entry) {
   }
   // A plugin's skills can be many; the line counts them, the change lists them.
   if (entry.action === "plugin.skills") return `${verb} ${plural(names.length, "skill", "skills")}${place} · ${clients.join(", ")}`;
-  const whole = ["gateway.connect", "gateway.switch", "setup_server.register", "setup_server.update", "project.align"].includes(entry.action);
+  const whole = ["gateway.connect", "gateway.switch", "setup_server.register", "setup_server.update", "setup_server.enable", "project.align"].includes(entry.action);
   const what = whole ? "" : ` ${names.join(", ")}`;
   if (kitden) return `${verb}${what} into the Kitden gateway${place} · ${clients.join(", ")}`;
   return `${verb}${what}${place} · ${clients.join(", ")}`;

@@ -102,6 +102,16 @@ def test_readme_says_what_details_and_a_review_start_with():
     assert '"Preview again"' in page and "`One folder, read by ${joinWords(" in page
 
 
+def test_the_check_before_a_release_turns_strict_mode_on_in_the_servers_details():
+    development = " ".join((ROOT / "docs/development.md").read_text().split())
+    step = (
+        "5. Move the server in again. Turn strict mode on in the server's Details "
+        '("Turn strict mode on…") and turn one tool off.'
+    )
+    assert step in development
+    assert "Strict: only tools you turned on" not in development
+
+
 def test_the_check_before_a_release_has_the_changed_settings_step():
     development = " ".join((ROOT / "docs/development.md").read_text().split())
     assert "23. Open a review (Remove for a Claude Code plugin)" in development

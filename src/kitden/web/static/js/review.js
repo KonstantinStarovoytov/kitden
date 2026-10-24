@@ -19,6 +19,7 @@ const DONE_WORDS = {
   "skill.remove": "Removed",
   "gateway.connect": "Connected the gateway", "setup_server.register": "Added show my setup",
   "setup_server.update": "Updated show my setup to Kitden", "gateway.move": "Moved",
+  "setup_server.enable": "Turned on the kitden entry",
   "gateway.switch": "Switched the gateway", "plugin.install": "Added", "marketplace.add": "Added the marketplace",
   "skill.install": "Added", "plugin.skills": "Added",
   "gateway.remove": "Removed", "gateway.put_back": "Put", "mcp.add": "Added",
@@ -103,6 +104,7 @@ export function changeWords(change, previewBody) {
     "gateway.switch": `Use ${steps.length ? steps[steps.length - 1].name : "the new gateway"} in ${clients}`,
     "setup_server.register": `Add “show my setup” to ${clients}`,
     "setup_server.update": `Update “show my setup” to Kitden in ${clients}`,
+    "setup_server.enable": `Turn on the kitden entry in ${clients}`,
     "gateway.remove": `Remove ${server} from the Kitden gateway`,
     "gateway.put_back": `Put ${server} back in ${clients}`,
     "gateway.keychain": `Move the secrets of ${server} to the Keychain`,
@@ -120,8 +122,8 @@ export function changeWords(change, previewBody) {
     what = `${verb} ${joinWords([...new Set(steps.filter((s) => s.name.includes("@")).map((s) => s.name.split("@")[0]))])} to ${clients}`;
   } else if (["marketplace.add", "skill.install", "mcp.add"].includes(change.action)) {
     what = `${verb} ${short} to ${clients}`;
-  } else if (["gateway.connect", "gateway.switch", "setup_server.register", "setup_server.update"].includes(change.action)) {
-    what = `${verb} ${["setup_server.update", "gateway.switch"].includes(change.action) ? "in" : "to"} ${clients}`;
+  } else if (["gateway.connect", "gateway.switch", "setup_server.register", "setup_server.update", "setup_server.enable"].includes(change.action)) {
+    what = `${verb} ${["setup_server.update", "setup_server.enable", "gateway.switch"].includes(change.action) ? "in" : "to"} ${clients}`;
   } else if (change.action === "gateway.move") {
     what = `${verb} ${short} into ${kitden ? "the Kitden gateway" : "the gateway"}`;
   } else if (change.action === "gateway.remove") {

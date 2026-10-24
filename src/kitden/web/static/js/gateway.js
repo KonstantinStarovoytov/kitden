@@ -1,15 +1,16 @@
 // Gateway: the clients, the gateways and the MCP servers they reach, as a Map or a List. Each
 // row opens its Details beside the page (gateway-details.js).
 import { $, button, el, gridKey, joinWords, plural, reportError, withFocusKey } from "./dom.js";
-import { addForm, foundClients, liveHeld, movesTo, showClient, showGateway, showOutside } from "./gateway-details.js";
+import { addForm, heldServer, liveHeld, movesTo, showClient, showGateway, showHeld, showOutside, showTool } from "./gateway-details.js";
 import { drawMap, layoutTree, toggleOpen } from "./map.js";
 import { entrance, glide, reducedMotion } from "./motion.js";
-import { closePanel, contextLinks, heldActions, heldButtons, isPanelOpen, keepFrom, linksRow, moveInto, openInfo, toolsSection } from "./panel.js";
-import { banner, CLIENT_NAMES, flag, folderName, gatewayName, kitdenClients, mark, opens, ORIGIN_WORDS, scopeBar, skeleton, STATE_WORDS, staleNote, toolsNode } from "./parts.js";
+import { isPanelOpen, moveInto, openInfo } from "./panel.js";
+import { banner, CLIENT_NAMES, flag, folderName, gatewayName, kitdenClients, mark, opens, ORIGIN_WORDS, scopeBar, skeleton, STATE_WORDS, staleNote } from "./parts.js";
 import { current, currentError, data, go, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
 
-// Overview sets a client up with the same note.
-export { SETUP_NOTE } from "./gateway-details.js";
+// Overview sets a client up with the same note. A server the Kitden gateway holds, and its
+// links, are found where its Details are drawn.
+export { heldServer, kitdenLinks, SETUP_NOTE } from "./gateway-details.js";
 
 const WRITABLE = ["claude_code", "codex", "cursor"];
 const OUTSIDE = "Outside the gateway · calls skip Kitden's rules";
@@ -20,13 +21,6 @@ const KINDS = [["remote", "Remote"], ["local", "Local"]];
 // A tool's row says "Read" or "Write" only when the server says so; a guess from its name says
 // "May write".
 const HINT_TAGS = { reads: "Read", writes: "Write", "may write": "May write" };
-
-// A selected MCP server that the Kitden gateway holds, or null.
-export function heldServer(model, selected) {
-  if (!model || !selected || selected.kind !== "mcp_server") return null;
-  const kitden = model.gateways.find((g) => g.kind === "kitden");
-  return ((kitden && kitden.servers) || []).find((s) => s.name === selected.name) || null;
-}
 
 // What an arrival with a selection (Back, Forward or a link) opens, once: a server the Kitden
 // gateway holds (`held`, and `tool` for one of its tools), a server outside it by its name (its
@@ -449,12 +443,10 @@ function openRow(row, block) {
     setState({ selected: null });
     showGateway(block.gateway.id);
   } else if (row.kind === "held") {
-    if (block.gateway.kind === "kitden") showKitdenServer(block.server);
-    else showHeld(block.server, block.gateway);
-  } else if (row.kind === "tool") {
-    showKitdenServer(block.server, { focus: `tool:${block.name}` });
-    setState({ selected: { kind: "tool", name: `${block.server.name}/${block.name}` } });
-  } else if (row.kind === "outside") showOutside(block.groupKey, block.name).catch(reportError);
+    if (block.gateway.kind === "kitden") showHeld(block.server.name).catch(reportError);
+    else showRegistered(block.server, block.gateway);
+  } else if (row.kind === "tool") showTool(block.server.name, block.name).catch(reportError);
+  else if (row.kind === "outside") showOutside(block.groupKey, block.name).catch(reportError);
 }
 
 // The rows above `id` in the List, so an arrival can unfold them.
@@ -489,8 +481,10 @@ async function openArrival(view, model, mode) {
   if (found.held) {
     const name = found.held.name;
     if (listed) showRow(model, found.tool ? `tool:${name}/${found.tool}` : `held:kitden:${name}`);
-    showKitdenServer(found.held, found.tool ? { focus: `tool:${found.tool}` } : {});
-    if (found.tool) setState({ selected: { kind: "tool", name: `${name}/${found.tool}` } });
+    // A tool the server no longer lists opens its server.
+    const listsIt = found.tool && (found.held.tool_list || []).some((t) => t.name === found.tool);
+    if (listsIt) await showTool(name, found.tool);
+    else await showHeld(name);
   } else if (found.outside) {
     if (listed) showRow(model, `outside:${found.group}:${found.outside.name}`);
     await showOutside(found.group, found.outside.name);
@@ -500,7 +494,7 @@ async function openArrival(view, model, mode) {
 
 // Details of a server a registered gateway holds: what it is and where it is set. The address
 // stays behind Details, as on the other lists.
-function showHeld(server, gateway) {
+function showRegistered(server, gateway) {
   const body = el("div", "body");
   const row = el("div", "layer");
   const middle = el("div");
@@ -516,38 +510,3 @@ function showHeld(server, gateway) {
   openInfo("MCP server", server.name, body);
 }
 
-// The links in the Kitden gateway's own panel of a held server: the same server in the Library,
-// which has a row for it only while some client reaches it through the gateway here.
-export function kitdenLinks(model, name) {
-  const reached = model && Object.values(model.connections.kitden || {}).some((names) => names.includes(name));
-  return reached ? contextLinks({ kind: "mcp_server", name }, [], "gateway") : [];
-}
-
-// Details of a server in the Kitden gateway: what it is, its tools for the project picked at the
-// top, then a link to the same server in the Library. `next` goes to the tool list (see
-// toolsSection). The address keeps the server.
-function showKitdenServer(server, next = {}) {
-  setState({ selected: { kind: "mcp_server", name: server.name } });
-  const body = el("div", "body");
-  const row = el("div", "layer");
-  const middle = el("div");
-  middle.append(el("div", "name", `In the Kitden gateway · ${server.kind === "local" ? "Runs on this Mac" : "Remote"}`));
-  const count = toolsNode(server);
-  if (count) middle.append(count);
-  row.append(mark("kitden"), middle);
-  const stack = el("div", "stack");
-  stack.append(row);
-  body.append(stack, toolsSection(server.name, (again) => showKitdenServer(server, again), next));
-  const links = kitdenLinks(current("gateway"), server.name);
-  if (links.length) body.append(linksRow(links));
-  if (!openInfo("MCP server", server.name, body, heldButtons(heldActions(server.name, foundClients(), server.plain_secrets)))) return;
-  // A review opened from here (Remove, Put back, the Keychain) comes back to this panel. When
-  // the settings changed since its preview, it is drawn from the page's latest read of the
-  // gateway (the rescan reads it again); a server gone from it closes the panel.
-  const readAgain = () => {
-    const now = heldServer(current("gateway"), { kind: "mcp_server", name: server.name });
-    if (now) showKitdenServer(now);
-    else closePanel();
-  };
-  keepFrom(() => showKitdenServer(server), [body, $("#drawer footer")], readAgain);
-}

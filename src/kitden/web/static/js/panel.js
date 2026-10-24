@@ -10,8 +10,8 @@ import { checkStale } from "./review.js";
 import { arrival, busy, setState, state } from "./store.js";
 import { reloadTools } from "./tools.js";
 
-export { backToDetails, contextLinks, countedDefinition, detailsCard, footerActions, footerButtons, heldActions, heldButtons, keepFrom, kindWord, layerState, linksRow, loadsLede, moveFor, moveInto, moveTargets, offerLabel, openItem, plainSecrets, scopeWords, techRows, technical } from "./details.js";
-export { callsText, projectLabel, toolRows, toolsSection, writingToolsOn } from "./tools.js";
+export { backToDetails, contextLinks, countedDefinition, detailsCard, footerActions, footerButtons, heldActions, heldButtons, keepFrom, kindWord, layerState, linksRow, loadsLede, moveFor, moveInto, moveTargets, offerLabel, openItem, plainSecrets, projectChoice, scopeWords, techRows, technical } from "./details.js";
+export { callsText, projectLabel, refreshTools, toolRows, toolsSection, writingToolsOn } from "./tools.js";
 export { ADDS, addScope, afterParts, alignGroups, canShowReview, cancelTarget, changeOutcome, changeWords, chosenKeys, leftOutText, review, reviewLede, undoChange } from "./review.js";
 
 // What is open now (`current`): "item" or "review", and for a review the change and the request

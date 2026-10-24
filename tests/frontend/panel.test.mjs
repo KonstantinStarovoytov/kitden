@@ -208,6 +208,9 @@ test('an add names its scope in the title and, with All projects, in the lede', 
   assert.equal(addScope('project.align', '/w/site'), null);
   assert.equal(addScope('setup_server.update', ''), null);
   assert.equal(reviewLede({ action: 'setup_server.update' }, ''), 'Nothing is written until you press Apply. A backup is kept.');
+  // The kitden entry turned on again: its title names the client, with no place.
+  const enable = { action: 'setup_server.enable', steps: [{ client: 'codex', name: 'kitden' }], target: { scope: 'all' } };
+  assert.deepEqual(changeWords(enable), { title: 'Turn on the kitden entry in Codex', done: 'Turned on the kitden entry in Codex' });
 });
 
 test('an add into a known project on another disk names that project', () => {
@@ -501,8 +504,8 @@ test('the batch review counts the tools and names the project', () => {
 test('calls text says how many and when', () => {
   process.env.TZ = 'UTC'; // the times are shown in local time
   const now = new Date('2026-10-21T15:00:00Z');
-  assert.equal(callsText({ count: 12, last: '2026-10-21T14:02Z' }, now), 'Called 12 times, last today 14:02');
-  assert.equal(callsText({ count: 1, last: '2026-10-20T09:15Z' }, now), 'Called once, last 20 Oct 09:15');
+  assert.equal(callsText({ count: 12, last: '2026-10-21T14:02Z' }, now), '12 calls · last today 14:02');
+  assert.equal(callsText({ count: 1, last: '2026-10-20T09:15Z' }, now), '1 call · last 20 Oct 09:15');
   assert.equal(callsText(null, now), null);
 });
 

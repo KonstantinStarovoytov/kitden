@@ -132,12 +132,12 @@ the gateway's settings file, which keeps only a reference. The review says so, a
 item is already there and will be replaced. Undo removes only the items the move created. If a
 server is removed from the gateway, its secrets stay in your Keychain under `kitden`.
 
-For a server you do not trust with new tools, turn on "Strict: only tools you turned on". It
-applies to all projects: the server offers only the tools you turned on, and a tool it adds later
-waits as "New · off" until you decide. Each tool shows a quiet word, reads, writes or may write,
-from the server's own hint or a guess from the tool's name. "Turn off every writing tool…" turns
-them off in one review. Hovering a tool shows how often it was called and when last; only the
-count and the time are kept, never what was sent. The words are a guess, so check the list; for a
+For a server you do not trust with new tools, use "Turn strict mode on…" in its Details. It
+applies to all projects: the server offers only the tools that are on, and a tool it adds later
+waits as "New · waits" until you decide. Each tool says what it is reported to do, from the
+server's own hint or a guess from the tool's name. "Turn off every writing tool…" turns them off
+in one review. A tool's Details say how often it was called and when last ("12 calls · last today
+14:02"); only the count and the time are kept, never what was sent. The words are a guess, so check the list; for a
 real guarantee, give the server a token that can only read.
 
 A few servers stay direct for now, and the page says why:

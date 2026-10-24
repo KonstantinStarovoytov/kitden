@@ -49,6 +49,7 @@ AFTER_WORDS: dict[str, tuple[str, str]] = {
     "marketplace.add": ("on", "Added"),
     "setup_server.register": ("on", "Added"),
     "setup_server.update": ("on", "Updated"),
+    "setup_server.enable": ("on", STATE_WORDS["on"]),
 }
 
 # The tag a cell carries in a project view: "This project" when the project's own settings

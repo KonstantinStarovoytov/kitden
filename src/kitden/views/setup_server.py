@@ -10,10 +10,11 @@ provided by the kitden plugin (feature 003): the page shows it and never adds a 
 import json
 from pathlib import Path
 
-from kitden.clients.base import SETUP_NAME
-from kitden.model import Enabled, Item, ItemKind, Scope
+from kitden.clients.base import SETUP_NAME, ClientAdapter
+from kitden.model import Enabled, FileEdit, Item, ItemKind, Scope, Step
 
 CLIENTS = ("claude_code", "codex", "cursor")
+CLIENT_WORDS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
 OLD_NAME = "agentsetup"
 
 
@@ -50,6 +51,45 @@ def is_old_entry(item: Item) -> bool:
     except ValueError:
         return False
     return summary.get("command", "").endswith(f"/{OLD_NAME}") and args == ["mcp"]
+
+
+# The clients whose docs name the key that turns a user entry off, as Kitden reads it, and the
+# key. Checked 2026-10-24:
+# - Codex: `enabled = false` in the entry's `[mcp_servers.<name>]` table turns it off without
+#   removing it (learn.chatgpt.com/docs/extend/mcp, /docs/config-file/config-reference);
+#   codex.py reads it.
+# - Claude Code: the /mcp panel keeps its choice per project in `disabledMcpServers` of
+#   ~/.claude.json; the docs show no format to write by hand (code.claude.com/docs/en/mcp).
+# - Cursor: only a toggle in Customize; mcp.json has no such key (cursor.com/docs/context/mcp).
+ENABLE_KEYS = {"codex": "enabled"}
+
+
+def enable_steps(adapters: dict[str, ClientAdapter], client: str) -> list[Step]:
+    """Turn the client's `kitden` user entry back on, only where its docs name the key (see
+    ENABLE_KEYS). The caller checks that the entry is there and off. Every other client turns
+    it on in its own settings."""
+    adapter = adapters.get(client)
+    if client not in ENABLE_KEYS or adapter is None:
+        name = CLIENT_WORDS.get(client, client)
+        raise ValueError(f"Turn it on in {name}'s own MCP settings.")
+    # The step that would add the entry names its file and key; its command is not used.
+    place = adapter.setup_server_step("", [])
+    assert place.edit is not None
+    edit = FileEdit(
+        path=place.edit.path,
+        fmt=place.edit.fmt,
+        key=(*place.edit.key, ENABLE_KEYS[client]),
+        after=True,
+    )
+    return [
+        Step(
+            client=client,
+            scope=Scope.USER,
+            name=SETUP_NAME,
+            edit=edit,
+            restart_note=place.restart_note,
+        )
+    ]
 
 
 def kitden_on(entry: dict) -> bool:

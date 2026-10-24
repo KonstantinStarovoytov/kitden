@@ -196,15 +196,18 @@ def _strict_servers(change: Change) -> list[str]:
     ]
 
 
-def _strict_line(server: str, on: bool, known: bool) -> str:
-    """What strict mode on or off does to a server; `known`: Kitden knows its tools."""
+def _strict_line(server: str, on: bool, kept: list[str] | None) -> str:
+    """What strict mode on or off does to a server. `kept`: the known tools that stay on; None
+    when Kitden does not know its tools."""
     if not on:
         return f"Strict mode off for {server}: a tool without a rule is on."
-    if known:
-        what = "only tools you turned on are offered; a new tool waits until you turn it on"
+    guarantee = GUARANTEE.format(server=server)
+    if kept is None:
+        what = "its tools show as off until you turn them on."
     else:
-        what = "its tools show as off until you turn them on"
-    return f"Strict mode on for {server}: {what}. {GUARANTEE.format(server=server)}"
+        keeps = f" Keeps on: {', '.join(kept)}." if kept else ""
+        what = f"a new tool waits until you turn it on.{keeps}"
+    return f"Strict mode on for {server}: {what} {guarantee}"
 
 
 def _had_on(change: Change, name: str, project: str | None) -> set[str]:
@@ -308,7 +311,9 @@ def _kitden_move_words(change: Change, inventory, home: Path | None) -> list[dic
             words, off = _server_words(change, name, rules.get(name, {}))
         said += words
         if name in strict:  # a move carries strict mode only with the server's tools known
-            said.append(_strict_line(name, True, True))
+            ruled = rules.get(name, {})
+            on = [tool for (p, tool), (s, _) in ruled.items() if p is None and tool and s == "on"]
+            said.append(_strict_line(name, True, on))
         if not off:
             offered.append(name)
     out = []
@@ -416,7 +421,10 @@ def _kept_words(kept: dict, state: str, with_tools: bool) -> str:
 
 
 # The gateway reads the rules again on each call, but a client keeps the list it was offered.
-AT_ONCE = "A tool turned off is refused at once. The client shows the new list in a new session."
+AT_ONCE = (
+    "A tool turned off is refused at once; a call already running is not stopped. The client "
+    "shows the new list in a new session."
+)
 
 
 def _rule_words(change: Change, inventory, home: Path) -> list[dict]:
@@ -496,7 +504,13 @@ def _strict_words(change: Change, inventory, home: Path) -> list[dict]:
     edit = change.steps[0].edit
     assert edit is not None
     server, on = edit.key[2], edit.after == "strict"
-    line = _strict_line(server, on, server in load_tools(home))
+    known = load_tools(home).get(server)
+    # Strict on keeps every known tool on that is not off for all projects (`strict_steps`).
+    rules = load_settings(home)["rules"]["global"]
+    kept = None
+    if known is not None:
+        kept = [t["name"] for t in known if own_state(rules, server, t["name"]) != "off"]
+    line = _strict_line(server, on, kept)
     clients = [c for c in CLIENTS if c in _offering(inventory)]
     if not clients:
         return [{"note": f"{line} No client uses the Kitden gateway yet."}]

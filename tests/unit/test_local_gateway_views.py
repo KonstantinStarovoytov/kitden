@@ -39,7 +39,10 @@ from kitden.views.inventory import build_inventory
 from kitden.web.app import create_app
 from tests.conftest import make_home, write_cursor_fixture_state
 
-AT_ONCE = "A tool turned off is refused at once. The client shows the new list in a new session."
+AT_ONCE = (
+    "A tool turned off is refused at once; a call already running is not stopped. The client "
+    "shows the new list in a new session."
+)
 KITDEN = "/opt/kitden/bin/kitden"
 FILES = {"command": "npx", "args": ["files-mcp"], "env": {"FILES_TOKEN": "SENTINEL_SECRET_FILES"}}
 ORIGIN = "http://127.0.0.1:47800"
@@ -333,6 +336,7 @@ def test_tools_api_marks_project_differences(home):
             "effective": "on",
             "hint": "unknown",
             "hint_from": None,
+            "shared": "on",
         }
         assert rows(everywhere) == [
             ("echo", "on", False),
@@ -1068,6 +1072,25 @@ def test_rules_steps_check_what_the_switch_checks(home):
     ):
         with pytest.raises(ValueError, match=words):
             rules_steps(home, {**base, **change}, {})
+
+
+def test_tools_view_says_the_shared_state_beside_the_projects_one(home):
+    website = project(home, "website")
+    rules = {
+        "global": {"github": {"tools": {"create_issue": "off"}}},
+        "projects": {website: {"github": {"server": "off", "tools": {"create_issue": "on"}}}},
+    }
+    hold(home, {"github": echo()}, rules)
+    save_tools(home, "github", [tool("list_issues"), tool("create_issue")])
+    view = tools_view(load_settings(home), load_tools(home), "github", [website])
+    # The shared state is what all projects get: the state with no project picked.
+    assert (view["state"], view["shared"]) == ("off", "on")
+    assert [(t["name"], t["state"], t["shared"]) for t in view["tools"]] == [
+        ("list_issues", "on", "on"),
+        ("create_issue", "on", "off"),
+    ]
+    shared = tools_view(load_settings(home), load_tools(home), "github", [])
+    assert [t["shared"] for t in shared["tools"]] == [t["state"] for t in shared["tools"]]
 
 
 def test_tools_view_carries_the_calls(home):

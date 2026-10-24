@@ -1,14 +1,15 @@
-// Details on the Gateway page for a client, a gateway and a server outside the gateway: a card
-// builder each (a plain object that detailsCard draws, so a test reads it without a page), and a
-// show… that opens it beside the page. The forms to add a gateway and to connect clients live
-// here too, with what each registered gateway holds.
+// Details on the Gateway page for a client, a gateway, a server outside the gateway, a server in
+// the Kitden gateway and one of its tools: a card builder each (a plain object that detailsCard
+// draws, so a test reads it without a page), and a show… that opens it beside the page. The
+// forms to add a gateway and to connect clients live here too, with what each registered
+// gateway holds.
 import { getJson, postJson, query } from "./api.js";
-import { $, busyWhile, el, joinWords, plural, reportError } from "./dom.js";
+import { $, busyWhile, el, joinWords, plural, reportError, withFocusKey } from "./dom.js";
 import { fold } from "./motion.js";
 import { projectNote } from "./offer.js";
-import { closePanel, detailsCard, keepFrom, moveInto, moveTargets, offerLabel, openPanel, panelState, review, techRows, technical, toast } from "./panel.js";
-import { callout, CLIENT_NAMES, clientCheck, GATEWAY_NOTE, gatewayName, kindOf, kitdenClients, mark, STATE_WORDS, versionWords } from "./parts.js";
-import { arrival, current, data, freshness, reload, render, setState, state } from "./store.js";
+import { callsText, closePanel, contextLinks, detailsCard, heldActions, keepFrom, linksRow, moveInto, moveTargets, offerLabel, openPanel, panelState, projectChoice, refreshTools, review, techRows, technical, toast, writingToolsOn } from "./panel.js";
+import { callout, CLIENT_NAMES, clientCheck, folderName, GATEWAY_NOTE, gatewayName, kindOf, kitdenClients, mark, originText, STATE_WORDS, versionWords } from "./parts.js";
+import { arrival, current, data, freshness, projectPath, reload, render, setState, state } from "./store.js";
 
 const WRITABLE = ["claude_code", "codex", "cursor"];
 // The kitden entry is the same one that lets agents read this setup.
@@ -70,9 +71,14 @@ function entryWord(entry, known) {
   return entry.state === "old" ? "Old" : "Not set up";
 }
 
+// The clients whose own kitden entry Kitden turns on again, by the key their docs name: the twin
+// of views/setup_server.py ENABLE_KEYS (checked 2026-10-24). Others say where to do it.
+const TURNS_ON = ["codex"];
+
 // Details of a client: its version, its kitden entry and whether that entry reaches the gateway.
-// "Set up in <client>…" comes from kitdenClients, as on Overview; the client's app opens from
-// here when Kitden found its link scheme.
+// "Set up in <client>…" comes from kitdenClients, as on Overview, and "Turn it on in <client>…"
+// where its own entry is off and Kitden can write the switch; the client's app opens from here
+// when Kitden found its link scheme.
 export function clientCard(client, { setup, clients, progress = data.progress } = {}) {
   const name = CLIENT_NAMES[client];
   const found = (clients || []).find((c) => c.id === client);
@@ -85,12 +91,21 @@ export function clientCard(client, { setup, clients, progress = data.progress } 
     // Without the setup read, Kitden does not know whether it connects.
     { label: "Gateway", value: known ? (on ? "Connected" : "Not connected") : "Not known" },
   ];
+  // A plugin's entry that is off is the plugin's switch, not the entry's.
+  const turnsOn = off.includes(client) && entry.state === "added" && TURNS_ON.includes(client);
   let why = `${name} does not use the Kitden gateway yet.`;
   if (!known) why = "Kitden could not read which clients use it.";
   else if (on) why = `${name} reaches the Kitden gateway through its kitden entry.`;
-  else if (off.includes(client)) why = `${name} has the kitden entry turned off, so it does not reach the gateway.`;
+  else if (off.includes(client)) {
+    why = `${name} has the kitden entry turned off, so it does not reach the gateway.`;
+    if (!turnsOn) why = [why, `Turn it on in ${name}'s own MCP settings.`].join(" ");
+  }
   const actions = offers.filter((s) => s.client === client)
     .map((s) => ({ label: s.label, body: s.body, run: () => review(s.body, { note: SETUP_NOTE }), primary: true }));
+  if (turnsOn) {
+    const body = { action: "setup_server.enable", targets: [{ client }], params: {} };
+    actions.push({ label: `Turn it on in ${name}…`, body, run: () => review(body, { note: SETUP_NOTE }), primary: true });
+  }
   if (found && found.app_url) {
     const url = found.app_url;
     // The browser asks once before it opens the app.
@@ -291,6 +306,174 @@ export function outsideCard(row, group, definitions, { view, clients = foundClie
   };
 }
 
+// Servers in the Kitden gateway and their tools ----------------------------------------------
+
+// A selected MCP server that the Kitden gateway holds, or null.
+export function heldServer(model, selected) {
+  if (!model || !selected || selected.kind !== "mcp_server") return null;
+  const kitden = model.gateways.find((g) => g.kind === "kitden");
+  return ((kitden && kitden.servers) || []).find((s) => s.name === selected.name) || null;
+}
+
+// The links in the Details of a server in the Kitden gateway: the same server in the Library,
+// which has a row for it only while some client reaches it through the gateway here.
+export function kitdenLinks(model, name) {
+  const reached = model && Object.values(model.connections.kitden || {}).some((names) => names.includes(name));
+  return reached ? contextLinks({ kind: "mcp_server", name }, [], "gateway") : [];
+}
+
+// The owner's words for the switches of a tool and of a server, by the state they turn to.
+const FOR_ALL = { on: "Turn on for all projects…", off: "Turn off for all projects…" };
+const IN_ONE = { on: "Turn on in one project…", off: "Turn off in one project…" };
+const STRICT = { on: "Turn strict mode on…", off: "Turn strict mode off…" };
+const UNKNOWN_FOLDERS = "These switches also apply in folders Kitden does not know.";
+const STRICT_WAITS = "Strict: a new tool waits until you turn it on.";
+const other = (state) => (state === "on" ? "off" : "on");
+
+// A tool's or a server's state in the picked project ("" for All projects), from `effective`: a
+// tool of a server that is off is off, and says so. A rule of the picked project's own says so.
+export function toolState(rule, picked) {
+  const on = (rule.effective ?? rule.state) === "on";
+  if (rule.why === "server_off") return "Off · server off";
+  if (picked && rule.origin === "project") return on ? "On in this project" : "Off in this project";
+  return on ? STATE_WORDS.on : STATE_WORDS.off;
+}
+
+// What a tool says it does: the server's hint, or a guess from its name (`hintFrom`). The
+// Gateway's short tool list has only the hint, whose word says where it comes from.
+const HINT_FROM = { reads: "server", writes: "server", "may write": "name" };
+export function reported(hint, hintFrom = HINT_FROM[hint] || null) {
+  if (hintFrom === "server") return hint === "reads" ? "Read only" : "May write";
+  if (hintFrom === "name") return "Not reported · its name suggests it writes";
+  return "Not reported";
+}
+
+// Where a rule of the picked project applies, as a sentence ends.
+const placeWords = (picked, folder) => (picked ? `in ${folder}` : "in any project");
+
+// The clients that reach the Kitden gateway, as a fact; null when Kitden could not read them.
+const linkedFact = (linked) => (linked ? clientsFact(linked) : { label: "Clients", value: "Not known" });
+
+// Who can call through the gateway, as a sentence starts; or the sentence when nobody can.
+function nobody(linked) {
+  if (!linked) return "Kitden could not read which clients use it.";
+  return linked.length ? null : "No client uses the Kitden gateway yet.";
+}
+
+function ruleBody(server, tool, state, project) {
+  return { action: "gateway.rule", targets: [], params: { server, tool, state, project } };
+}
+
+// The state all projects get, when the server's answer did not come: a state no project decides
+// is the shared one.
+const sharedOf = (rule, detail) => detail.shared || (["project", "parent"].includes(rule.origin) ? null : rule.state);
+
+// Nodes under a card's actions, in one box when there are two.
+function under(...nodes) {
+  const shown = nodes.filter(Boolean);
+  if (shown.length < 2) return shown[0] || null;
+  const box = el("div");
+  box.append(...shown);
+  return box;
+}
+
+// Details of a tool in the Kitden gateway, for the picked project (`picked`, its folder name
+// `folder`): its server, its state and where it comes from, what the server says it does, the
+// clients that call it through the gateway, and its calls. `detail` is the tool's entry in the
+// /api/gateway/tools answer (shared state, the folder a project rule falls back to, calls,
+// description). Actions: back to the shared rule (or a parent folder's) for a rule of the
+// project's own; "for all projects" turns the shared state the other way; "in one project" turns
+// the state shown the other way, after the project choice in the column (`choosing`). With its
+// server off a tool rule would change nothing anyone can call: only a way to the server.
+export function toolCard(tool, server, { linked, picked = "", folder = "", detail = {}, projects = [], choosing = false } = {}) {
+  const name = tool.name;
+  const place = placeWords(picked, folder);
+  const on = (tool.effective ?? tool.state) === "on";
+  const own = Boolean(picked) && tool.origin === "project";
+  const calls = callsText(detail.calls);
+  const facts = [
+    { label: "Server", value: `${server.name} · ${server.kind === "remote" ? "Remote" : "Local"}` },
+    { label: "State", value: toolState(tool, picked) },
+    { label: "Comes from", value: originText(tool, folder) || "Not known", accent: tool.origin === "project" },
+    { label: "Reported", value: reported(tool.hint, detail.hint_from) },
+    linkedFact(linked),
+    ...(calls ? [{ label: "Calls", value: calls }] : []),
+  ];
+  // The name goes under a title the server gives; without one it is the title.
+  const card = { kind: "Tool", title: tool.title || name, id: tool.title ? name : null, facts };
+  if (detail.description) card.technical = technical([{ title: "Description", summary: detail.description }]);
+  if (tool.why === "server_off") {
+    const why = `${server.name} is off ${place}, so none of its tools can be called.`;
+    return { ...card, why, actions: [{ label: `Open ${server.name}`, run: () => showHeld(server.name) }] };
+  }
+  let why = nobody(linked);
+  if (!why) {
+    const who = joinWords(linked.map((c) => CLIENT_NAMES[c]));
+    why = on ? `${who} can call this tool through Kitden ${place}.` : `${who} can't call this tool through Kitden ${place}.`;
+    if (own) why += " Other projects follow the shared rule.";
+  }
+  const actions = [];
+  if (own) actions.push({ label: detail.follows ? `Use ${detail.follows}'s rule…` : "Use the shared rule…", body: ruleBody(server.name, name, null, picked) });
+  const shared = sharedOf(tool, detail);
+  if (shared) actions.push({ label: FOR_ALL[other(shared)], body: ruleBody(server.name, name, other(shared), null) });
+  const one = IN_ONE[on ? "off" : "on"];
+  actions.push({ label: one, run: () => drawTool(server.name, name, detail, { choosing: true }) });
+  actions[0].primary = true;
+  const pick = (id) => review(ruleBody(server.name, name, on ? "off" : "on", id));
+  const after = choosing ? projectChoice(projects, picked, pick, `action:${one}`) : null;
+  return { ...card, why, actions, after };
+}
+
+// Details of a server in the Kitden gateway, for the picked project: what it is, its state, how
+// many of its tools are on, the clients that reach it and the projects with rules of their own.
+// `detail` is the /api/gateway/tools answer (strict, the shared state, the folder a project rule
+// falls back to). Every server action is here: the shared rule back, on or off for all projects
+// or in one project (the project choice in the column, `choosing`), strict mode, every writing
+// tool off, Refresh tools, and under More Remove, Put back and the Keychain.
+export function heldCard(server, { linked, picked = "", folder = "", view = null, detail = {}, clients = foundClients(), projects = [], choosing = false } = {}) {
+  const name = server.name;
+  const place = placeWords(picked, folder);
+  const on = server.state === "on";
+  const list = server.tool_list || [];
+  // All projects: off for all of them, but on in some.
+  const onIn = !picked && !on && server.on_in > 0;
+  const facts = [
+    { label: "Kind", value: server.kind === "remote" ? "Remote" : "Local · runs on this Mac" },
+    { label: "State", value: onIn ? `On in ${plural(server.on_in, "project", "projects")}` : toolState(server, picked) },
+    { label: "Tools", value: list.length ? `${server.on_count} of ${list.length} on` : "Not known yet" },
+    linkedFact(linked),
+  ];
+  if (server.projects > 0) facts.push({ label: "Projects", value: `${plural(server.projects, "project has its", "projects have their")} own rules` });
+  let first = nobody(linked) || `${joinWords(linked.map((c) => CLIENT_NAMES[c]))} reach it through the Kitden gateway ${place}.`;
+  if (!on) first = `It is off ${place}, so no client can call its tools.`;
+  if (onIn) first = `${plural(server.on_in, "project turns", "projects turn")} it on; no client can call its tools anywhere else.`;
+  const why = [first, picked ? null : UNKNOWN_FOLDERS, detail.strict ? STRICT_WAITS : null].filter(Boolean).join(" ");
+  const actions = [];
+  if (picked && server.origin === "project") {
+    actions.push({ label: detail.follows ? `Use ${detail.follows}'s rule…` : "Use the shared rule…", body: ruleBody(name, null, null, picked) });
+  }
+  const shared = sharedOf(server, detail);
+  if (shared) actions.push({ label: FOR_ALL[other(shared)], body: ruleBody(name, null, other(shared), null) });
+  const one = IN_ONE[other(server.state)];
+  actions.push({ label: one, run: () => drawHeld(name, detail, { choosing: true }) });
+  // Strict mode is the server's own, for all projects; unknown without the server's answer.
+  if (typeof detail.strict === "boolean") {
+    const state = detail.strict ? "off" : "on";
+    actions.push({ label: STRICT[state], body: { action: "gateway.strict", targets: [], params: { server: name, state } } });
+  }
+  const writing = on ? writingToolsOn(list) : [];
+  if (writing.length) {
+    actions.push({ label: "Turn off every writing tool…", body: { action: "gateway.rules", targets: [], params: { server: name, tools: writing, state: "off", project: picked || null } } });
+  }
+  actions.push({ label: "Refresh tools", run: () => refreshHeld(name) });
+  actions[0].primary = true;
+  const pick = (id) => review(ruleBody(name, null, other(server.state), id));
+  const links = view ? kitdenLinks(view, name) : [];
+  const after = under(choosing ? projectChoice(projects, picked, pick, `action:${one}`) : null, links.length ? linksRow(links) : null);
+  const more = heldActions(name, clients, server.plain_secrets);
+  return { kind: "MCP server", title: name, id: "In the Kitden gateway", facts, why, actions, more, after };
+}
+
 // Showing a card -----------------------------------------------------------------------------
 
 // Open a card beside the page, its warning first. A review opened from it comes back to it:
@@ -352,6 +535,100 @@ export async function showOutside(group, name) {
 function drawOutside(row, group, definitions, shown) {
   const card = outsideCard(row, group, definitions, { view: current("gateway") });
   return openCard(card, shown, () => drawOutside(row, group, definitions, shown), () => showOutside(group, row.name));
+}
+
+// A server in the Kitden gateway, or one of its tools: its card is drawn from the page's latest
+// read of the Gateway and the server's rules for the picked project (/api/gateway/tools), read
+// first. The address keeps what is shown.
+let reads = 0;
+
+async function readRules(server) {
+  try {
+    return await getJson(`/api/gateway/tools${query({ server, project: state.project })}`);
+  } catch {
+    return null;
+  }
+}
+
+// Read the server's rules, then `draw(answer)` (null when the read failed), unless the person
+// pressed something else or picked another project meanwhile.
+async function readThen(server, draw) {
+  const asked = ++reads;
+  const { current: before } = panelState;
+  const project = state.project;
+  const answer = await readRules(server);
+  if (asked !== reads || panelState.current !== before || state.project !== project) return;
+  draw(answer);
+}
+
+// What every card of the Kitden gateway is drawn for: the clients it reaches (null when not
+// read), the picked project and its folder, and the projects a choice offers.
+function heldContext() {
+  const { linked, known } = kitdenClients(data.setupServer);
+  return { linked: known ? linked : null, picked: state.project, folder: folderName(projectPath()), projects: data.projects || [] };
+}
+
+// After a redraw with the project choice, focus goes into it, and a review picked from it comes
+// back to it, also when it was picked by keyboard.
+function focusChoice(choosing) {
+  const box = choosing ? $("#drawer .choice") : null;
+  if (!box) return;
+  if (panelState.from) panelState.from.focus = box.dataset.focus;
+  box.focus();
+}
+
+export async function showHeld(name) {
+  setState({ selected: { kind: "mcp_server", name } });
+  await readThen(name, (answer) => drawHeld(name, answer || {}, { warning: answer ? answer.problem : "Could not load the details." }));
+}
+
+// A server that is gone from the gateway since closes its Details.
+function drawHeld(name, detail, { choosing = false, warning = null } = {}) {
+  const view = current("gateway");
+  const server = heldServer(view, { kind: "mcp_server", name });
+  if (!server) {
+    closePanel();
+    return;
+  }
+  const card = { ...heldCard(server, { ...heldContext(), view, detail, choosing }), warning };
+  if (!openCard(card, { type: "held", name }, () => drawHeld(name, detail, { choosing }), () => showHeld(name))) return;
+  focusChoice(choosing);
+}
+
+export async function showTool(server, name) {
+  setState({ selected: { kind: "tool", name: `${server}/${name}` } });
+  await readThen(server, (answer) => {
+    const detail = answer ? (answer.tools || []).find((t) => t.name === name) || {} : {};
+    drawTool(server, name, detail, { warning: answer ? null : "Could not load the details." });
+  });
+}
+
+// A tool that is gone since (its server left the gateway, or no longer lists it) closes them.
+function drawTool(serverName, name, detail, { choosing = false, warning = null } = {}) {
+  const server = heldServer(current("gateway"), { kind: "mcp_server", name: serverName });
+  const tool = server && (server.tool_list || []).find((t) => t.name === name);
+  if (!tool) {
+    closePanel();
+    return;
+  }
+  const card = { ...toolCard(tool, server, { ...heldContext(), detail, choosing }), warning };
+  if (!openCard(card, { type: "tool", server: serverName, tool: name }, () => drawTool(serverName, name, detail, { choosing }), () => showTool(serverName, name))) return;
+  focusChoice(choosing);
+}
+
+// Refresh tools asks every held server for its tools; when it is done the page reads the
+// Gateway again, and these Details too while they are still shown. Focus stays on the button.
+async function refreshHeld(name) {
+  const error = await refreshTools();
+  await reload().catch(() => {});
+  render();
+  const shown = panelState.current;
+  if (!shown || shown.type !== "held" || shown.name !== name) return;
+  await readThen(name, (answer) => {
+    drawHeld(name, answer || {}, { warning: error || (answer ? answer.problem : "Could not load the details.") });
+    const again = withFocusKey($("#drawer"), "action:Refresh tools");
+    if (again && $("#drawer").contains(document.activeElement)) again.focus();
+  });
 }
 
 // Forms --------------------------------------------------------------------------------------

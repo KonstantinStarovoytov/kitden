@@ -9,7 +9,7 @@ import pytest
 from kitden.changes.actions import setup_server_steps
 from kitden.model import Client, ClientStatus, Enabled, Item, ItemKind, Scope, Source, SourceKind
 from kitden.views.inventory import Inventory, build_inventory, default_adapters
-from kitden.views.setup_server import is_own_entry, setup_server_state
+from kitden.views.setup_server import enable_steps, is_own_entry, setup_server_state
 from tests.conftest import make_home
 
 COMMAND = "/Users/me/.local/bin/kitden"
@@ -139,3 +139,64 @@ def test_an_old_entry_beside_the_plugin_server_keeps_the_plugin_state(tmp_path):
     state = _state(build_inventory(home), "claude_code")
     assert state["state"] == "plugin"
     assert state["item"] is not None and state["command_exists"] is True
+
+
+# Turning the kitden entry back on (spec Part 4, 4.4). Codex's docs name the key (checked
+# 2026-10-24): `enabled = false` in the entry's own table turns it off.
+KITDEN_OFF = (
+    '\n[mcp_servers.kitden]\ncommand = "/opt/kitden/bin/kitden"\nargs = ["mcp"]\nenabled = false\n'
+)
+
+
+def test_only_codex_has_a_step_that_turns_the_entry_on(tmp_path):
+    home = make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2", "cursor/3.21.16")
+    adapters = {a.id: a for a in default_adapters(home)}
+    [step] = enable_steps(adapters, "codex")
+    assert (step.client, step.name, step.edit.fmt) == ("codex", "kitden", "toml")
+    assert (step.edit.key, step.edit.after) == (("mcp_servers", "kitden", "enabled"), True)
+    assert step.edit.path == str(home / ".codex/config.toml") and step.restart_note
+    for client, name in (("claude_code", "Claude Code"), ("cursor", "Cursor")):
+        with pytest.raises(ValueError, match=f"Turn it on in {name}'s own MCP settings."):
+            enable_steps(adapters, client)
+
+
+def test_a_codex_kitden_entry_turned_off_can_be_turned_on_and_undone(tmp_path, monkeypatch):
+    from tests.unit.test_api_changes import POST, _app_client, _files, _home
+
+    home = _home(tmp_path, monkeypatch)
+    config = home / ".codex/config.toml"
+    config.write_text(config.read_text() + KITDEN_OFF)
+    original = _files(home)
+    with _app_client(home) as client:
+        client.get("/?token=tok")
+        entry = next(e for e in client.get("/api/setup-server").json() if e["client"] == "codex")
+        assert (entry["state"], entry["enabled"]) == ("added", False)
+        body = {"action": "setup_server.enable", "targets": [{"client": "codex"}], "params": {}}
+        change = client.post("/api/changes/preview", json=body, headers=POST).json()
+        assert _files(home) == original
+        assert "-enabled = false" in change["steps"][0]["diff"]
+        assert "+enabled = true" in change["steps"][0]["diff"]
+        assert change["after"] == [{"client": "codex", "state": "on", "word": "On"}]
+        applied = client.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
+        assert applied["state"] == "verified"
+        entry = next(e for e in client.get("/api/setup-server").json() if e["client"] == "codex")
+        assert entry["enabled"] is True
+        # Only the kitden entry's switch changed: the owner's comment and aseprite's stay.
+        on = KITDEN_OFF.replace("enabled = false", "enabled = true")
+        assert config.read_text() == original[".codex/config.toml"].decode().replace(KITDEN_OFF, on)
+        client.post(f"/api/changes/{change['id']}/undo", headers=POST)
+        assert _files(home) == original
+
+
+def test_turning_on_an_entry_that_is_not_off_is_refused(tmp_path, monkeypatch):
+    from tests.unit.test_api_changes import POST, _app_client, _files, _home
+
+    home = _home(tmp_path, monkeypatch)
+    original = _files(home)
+    with _app_client(home) as client:
+        client.get("/?token=tok")
+        for target in ({"client": "codex"}, {"client": "cursor"}):
+            body = {"action": "setup_server.enable", "targets": [target], "params": {}}
+            answer = client.post("/api/changes/preview", json=body, headers=POST)
+            assert answer.status_code == 422
+    assert _files(home) == original

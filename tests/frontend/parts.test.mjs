@@ -33,7 +33,7 @@ function element(tag) {
   return node;
 }
 globalThis.document = { createElement: element };
-const { backupNote, banner, changeTitle, clientCheck, demoTag, folderName, gatewayName, menuItems, morphSocket, opens, optionAfter, projectMenu, scopeBar, scopeText, socket, strictText } = await import('../../src/kitden/web/static/js/parts.js');
+const { backupNote, banner, changeTitle, clientCheck, demoTag, folderName, gatewayName, menuItems, morphSocket, opens, optionAfter, originText, projectMenu, scopeBar, scopeText, socket, strictText, TOOL_ORIGIN_WORDS } = await import('../../src/kitden/web/static/js/parts.js');
 
 test('a row that opens Details ends with a chevron for the eye and words for a screen reader', () => {
   const node = opens();
@@ -180,6 +180,18 @@ test('the Changes page names what moved into the Kitden gateway and which rule c
   assert.equal(rule({ state: null }), 'slow of echo in website: own setting removed');
   // An old record without the rule's parts names what it has.
   assert.equal(changeTitle({ action: 'gateway.rule', steps: slow }), 'Changed the rule for slow · Kitden gateway');
+  // The kitden entry turned on again names its client.
+  assert.equal(changeTitle({ action: 'setup_server.enable', steps: [{ client: 'codex', name: 'kitden' }] }), 'Turned on the kitden entry · Codex');
+});
+
+test('a rule says where its state comes from', () => {
+  assert.equal(originText({ origin: 'project' }, 'website'), 'This project · website');
+  assert.equal(originText({ origin: 'parent', origin_from: 'atlas' }, 'web'), 'From atlas');
+  assert.equal(originText({ origin: 'strict' }), 'New · waits');
+  assert.equal(originText({ origin: 'global' }), 'All projects');
+  assert.equal(originText({ origin: 'default' }), 'On by default');
+  assert.equal(originText({}), null);
+  assert.deepEqual(TOOL_ORIGIN_WORDS, { global: 'All projects', default: 'On by default', strict: 'New · waits' });
 });
 
 test('a gateway goes by its own name, its kind, or its address', () => {

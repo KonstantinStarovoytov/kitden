@@ -75,8 +75,8 @@ command line does not (checked 2026-10-21).
 2. Pick the test project at the top and turn one tool off for it.
 3. Start a new session in that folder. The tool is gone; the others are still there.
 4. Undo the switch and the move. Start a new session; the server is direct again with its tool.
-5. Move the server in again. Turn on "Strict: only tools you turned on" and turn one tool off. A
-   new session offers only the tools that are on.
+5. Move the server in again. Turn strict mode on in the server's Details ("Turn strict mode on…")
+   and turn one tool off. A new session offers only the tools that are on.
 6. In a session that is already open, call the tool you turned off. It is refused with "<name> is
    turned off in Kitden." Turn it on again; the call works in the same session.
 7. Undo the switches and the move; check the server is direct again.

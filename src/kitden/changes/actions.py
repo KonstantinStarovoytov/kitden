@@ -56,6 +56,8 @@ SKILL_INSTALL = "skill.install"
 PLUGIN_SKILLS = "plugin.skills"
 CLIENT_WORDS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
 SETUP_SERVER_UPDATE = "setup_server.update"
+# Turns a client's `kitden` entry back on, where its docs name the switch (views/setup_server.py).
+SETUP_SERVER_ENABLE = "setup_server.enable"
 NEEDS_COMMAND = "The setup server needs the absolute path of the kitden command"
 ENTRY_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
 

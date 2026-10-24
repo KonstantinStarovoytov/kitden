@@ -1,7 +1,7 @@
 // Tools of a server in the Kitden gateway: a switch each, for the project picked at the top.
 import { getJson, postJson, query } from "./api.js";
 import { switchNode } from "./details.js";
-import { button, el, withFocusKey } from "./dom.js";
+import { button, el, plural, withFocusKey } from "./dom.js";
 import { ALL_PROJECTS, callout, flag, folderName, skeleton } from "./parts.js";
 import { review } from "./review.js";
 import { data, state } from "./store.js";
@@ -32,8 +32,9 @@ export function toolRows(answer, where) {
   ];
 }
 
-// What the tool row says when hovered: how often the gateway forwarded a call and when last. The
-// file keeps UTC minutes; the time shown is the browser's.
+// How often the gateway forwarded a call to a tool and when last: "12 calls · last today 14:02",
+// as a tool's Details and the tool row's hover text say it. The file keeps UTC minutes; the time
+// shown is the browser's.
 export function callsText(calls, now = new Date()) {
   if (!calls || !calls.count) return null;
   const last = new Date(calls.last);
@@ -41,8 +42,7 @@ export function callsText(calls, now = new Date()) {
   const time = `${pad(last.getHours())}:${pad(last.getMinutes())}`;
   const today = last.toDateString() === now.toDateString();
   const day = today ? "today" : `${last.getDate()} ${last.toLocaleString("en-GB", { month: "short" })}`;
-  const times = calls.count === 1 ? "once" : `${calls.count} times`;
-  return `Called ${times}, last ${day} ${time}`;
+  return `${plural(calls.count, "call", "calls")} · last ${day} ${time}`;
 }
 
 // The tools the batch switch turns off: those that are on and write, or may write by their name.
@@ -61,7 +61,9 @@ export function reloadTools() {
 
 // Asks every held server for its tools again. The server says when it is done; without the
 // event stream, stop waiting after a minute. The list reads the answer when the event comes.
-async function refreshTools() {
+// Ends when the refresh does, with why it could not start (null when it ran), so a server's
+// Details on the Gateway can read its tools again.
+export async function refreshTools() {
   // True when the minute ran out: the list is read again here, since no event will do it.
   const ended = new Promise((resolve) => {
     document.addEventListener("kitden:tools", () => resolve(false), { once: true });
@@ -69,10 +71,12 @@ async function refreshTools() {
   });
   const result = await postJson("/api/gateway/tools/refresh");
   if (!result.ok) {
-    if (tools) tools.load({ error: (result.data && result.data.detail) || `Could not refresh the tools (${result.status}).` });
-    return;
+    const error = (result.data && result.data.detail) || `Could not refresh the tools (${result.status}).`;
+    if (tools) tools.load({ error });
+    return error;
   }
   if (await ended) reloadTools();
+  return null;
 }
 
 // A held server's tools, a switch each, for the project picked at the top. A switch opens the
@@ -102,11 +106,11 @@ export function toolsSection(server, again, next = {}) {
   const strictRow = (answer, flip) => {
     const row = el("div", "layer tool whole");
     const middle = el("div");
-    middle.append(el("div", "name", "Strict"), el("div", "why", "Only tools you turned on are offered; a new tool waits."));
+    middle.append(el("div", "name", "Strict"), el("div", "why", "Only tools that are on are offered; a new tool waits."));
     const back = ({ error = null, verified = false } = {}) => again({ focus: "strict", error, flip: verified ? "strict" : null });
     const params = { server, state: answer.strict ? "off" : "on" };
     const toggle = switchNode(Boolean(answer.strict), () => review({ action: "gateway.strict", targets: [], params }, { back }));
-    toggle.setAttribute("aria-label", "Strict: only tools you turned on");
+    toggle.setAttribute("aria-label", "Strict: only tools that are on");
     toggle.dataset.focus = "strict";
     if (flip === "strict") toggle.classList.add("flipped");
     if (state.project) {

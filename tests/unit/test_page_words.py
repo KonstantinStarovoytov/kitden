@@ -980,10 +980,12 @@ def test_cancel_and_a_refused_preview_go_back_to_details():
     review, shell, details = script("review.js"), script("panel.js"), script("details.js")
     assert "cancelTarget(" in review and "backToDetails({ error: reason })" in review
     assert "panelState.from = null" in shell
-    # Details, and the Kitden gateway's own panel of a held server, keep how to draw themselves
+    # Details, and the Gateway's cards of a held server and a tool, keep how to draw themselves
     # again (details.test.mjs tests keepFrom and backToDetails).
     assert "keepFrom(" in details
-    assert "keepFrom(() => showKitdenServer(server)" in script("gateway.js")
+    assert "keepFrom(draw, nodes, read)" in gw()
+    assert "() => drawHeld(name, detail, { choosing }), () => showHeld(name))" in gw()
+    assert "() => showTool(serverName, name))" in gw()
     for key in ("`offer:", '"move"', "`add:", '"add:form"', "`held:", '"more"', '"commands"'):
         assert key in panel() + script("offer.js"), key
     assert "`switch:${def.id}`" in details
@@ -1047,9 +1049,70 @@ def test_agents_lede_says_held_servers_add_their_tools():
     assert "Servers moved into the gateway add their tools, which do what those servers do." in text
 
 
+def test_tool_and_server_details_use_the_owner_words():
+    text = gw() + script("parts.js")
+    for words in (
+        '"Use the shared rule…"',
+        "'s rule…",
+        '"Turn on for all projects…"',
+        '"Turn off in one project…"',
+        '"On in this project"',
+        '"Off · server off"',
+        '"Read only"',
+        '"May write"',
+        '"Not reported"',
+        '"New · waits"',
+        '"On by default"',
+        "of ${",
+        " on`",
+    ):
+        assert words in text, words
+    assert "Allowed" not in text and "Blocked" not in text and "Sign in" not in text
+
+
+def test_tool_and_server_details_say_what_they_know():
+    text = gw()
+    for words in (
+        '"Off in this project"',
+        '"Not reported · its name suggests it writes"',
+        "can call this tool through Kitden ${place}.`",
+        "can't call this tool through Kitden ${place}.`",
+        "is off ${place}, so none of its tools can be called.`",
+        '" Other projects follow the shared rule."',
+        '"No client uses the Kitden gateway yet."',
+        "`Open ${server.name}`",
+        '"In the Kitden gateway"',
+        '"Local · runs on this Mac"',
+        '"Not known yet"',
+        "reach it through the Kitden gateway ${place}.`",
+        "`It is off ${place}, so no client can call its tools.`",
+        "no client can call its tools anywhere else.`",
+        '"These switches also apply in folders Kitden does not know."',
+        '"Strict: a new tool waits until you turn it on."',
+        '"Turn strict mode on…"',
+        '"Turn strict mode off…"',
+        '"Turn off every writing tool…"',
+        '"Refresh tools"',
+        '"in any project"',
+    ):
+        assert words in text, words
+    # The kitden entry back on: a review where the docs name the key, else where to do it.
+    assert "`Turn it on in ${name}…`" in text
+    assert "`This project · ${folder}`" in script("parts.js")
+    assert "`From ${origin_from}`" in script("parts.js")
+    assert "`Turn it on in ${name}'s own MCP settings.`" in text
+    review, parts = script("review.js"), script("parts.js")
+    assert "`Turn on the kitden entry in ${clients}`" in review
+    assert '"setup_server.enable": "Turned on the kitden entry"' in parts
+    assert '"setup_server.enable"' in parts.split("export const PLACE_IN_TITLE")[1].split("\n")[0]
+    # The calls fact, in the spec's words.
+    assert '`${plural(calls.count, "call", "calls")} · last ${day} ${time}`' in panel()
+
+
 def test_the_tool_list_has_a_strict_switch():
     code = panel()
-    assert "Strict: only tools you turned on" in code
+    assert "Strict: only tools that are on" in code
+    assert "Only tools that are on are offered; a new tool waits." in code
     assert "Set for all projects" in code
     assert 'action: "gateway.strict"' in code
 
@@ -1069,12 +1132,12 @@ def test_a_held_server_can_be_removed_or_put_back():
     code = panel()
     assert '"Remove from the Kitden gateway…"' in code
     assert "`Put back in ${CLIENT_NAMES[client]}…`" in code
-    assert "heldActions(" in script("gateway.js")
+    assert "heldActions(" in gw()
 
 
 def test_a_held_server_can_move_its_secrets_to_the_keychain():
     assert '"Move secrets to the Keychain…"' in panel()
-    assert "server.plain_secrets" in script("gateway.js")
+    assert "server.plain_secrets" in gw()
     assert 'plainSecrets(currentModel("gateway"), row.name)' in panel()
 
 
@@ -1158,8 +1221,8 @@ def test_details_say_what_the_lead_changes_and_link_to_the_other_pages():
     assert follow.index("closePanel(") < follow.index("goTo(")
     assert "raceSlow(loadLibraryFor(libraryChoice(" in follow
     assert "dataset.focus = `link:${link.view}`" in details
-    # The Gateway's own panel of a held server links back to the Library.
-    assert "contextLinks(" in script("gateway.js")
+    # The Details of a server in the Kitden gateway link back to the Library.
+    assert "contextLinks(" in gw()
 
 
 def test_the_page_and_the_server_say_why_an_add_reaches_cursor_alike():
@@ -1237,7 +1300,8 @@ def test_overview_notes_say_same_name_another_source():
 def test_the_gateway_opens_and_keeps_the_selected_server():
     text = gw()
     # Details of a server, in the gateway's own panel or outside it, puts it in the address.
-    assert 'setState({ selected: { kind: "mcp_server", name: server.name } })' in text
+    assert 'setState({ selected: { kind: "mcp_server", name } })' in text
+    assert 'setState({ selected: { kind: "tool", name: `${server}/${name}` } })' in text
     assert 'setState({ selected: { kind: "mcp_server", name: row.name } })' in text
     assert "takeArrival()" in text
 

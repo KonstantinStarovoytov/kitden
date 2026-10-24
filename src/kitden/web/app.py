@@ -34,6 +34,7 @@ from kitden.changes.actions import (
     PLUGIN_INSTALL,
     PLUGIN_SKILLS,
     PROJECT_ALIGN,
+    SETUP_SERVER_ENABLE,
     SETUP_SERVER_UPDATE,
     SKILL_INSTALL,
     add_server_steps,
@@ -125,7 +126,7 @@ from kitden.views.library import KINDS, SHOWS, library
 from kitden.views.load_map import load_map, map_dict
 from kitden.views.overview import overview
 from kitden.views.review import change_target, mark_reach, undo_note
-from kitden.views.setup_server import is_old_entry, setup_server_state
+from kitden.views.setup_server import enable_steps, is_old_entry, setup_server_state
 from kitden.views.skills import project_skills, skill_catalog, skill_keepers, skill_readers
 from kitden.views.words import CHANGE_UNREAD, KEPT_UNREAD, NO_ADD_UNREAD, ONLY_IN_PROJECT
 from kitden.watch import Watcher
@@ -1038,6 +1039,14 @@ def create_app(
                     if command is None:
                         return _error("Install the tool first: uv tool install <this folder>", 422)
                 steps = update_steps(adapters, items, added, command)
+            elif action == SETUP_SERVER_ENABLE:
+                clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+                entries = setup_server_state(state.inventory)
+                entry = next((e for e in entries if [e["client"]] == clients), None)
+                # Only the client's own entry, turned off: a plugin's is the plugin's switch.
+                if entry is None or entry["state"] != "added" or entry["enabled"] is not False:
+                    return _error("The kitden entry there is not turned off.", 422)
+                steps = enable_steps(adapters, clients[0])
             elif action == GATEWAY_MOVE and params.get("gateway") == KITDEN_GATEWAY:
                 ids = [str(t.get("item")) for t in targets if isinstance(t, dict)]
                 items = [_item(i) for i in ids]

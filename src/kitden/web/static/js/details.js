@@ -5,7 +5,7 @@ import { loadLibraryFor, raceSlow, rowSel, rowTitle, shownRow } from "./library.
 import { fold } from "./motion.js";
 import { about, addButton, addOptions, addReach, mcpRows, whyNoAction } from "./offer.js";
 import { closePanel, header, isPanelOpen, openInfo, openPanel, panelState, swapContent } from "./panel.js";
-import { ALL_PROJECTS, callout, CLIENT_NAMES, CLIENT_ORDER, folderName, GATEWAY_NOTE, gatewayName, kitdenClients, mark, ROUTE_WORDS, socket, STATE_WORDS, toolsNode } from "./parts.js";
+import { ALL_PROJECTS, callout, CLIENT_NAMES, CLIENT_ORDER, folderName, GATEWAY_NOTE, gatewayName, kitdenClients, mark, menuItems, optionAfter, ROUTE_WORDS, socket, STATE_WORDS, toolsNode } from "./parts.js";
 import { review } from "./review.js";
 import { current as currentModel, currentError, data, goTo, libraryChoice, projectPath, state } from "./store.js";
 import { toolsSection } from "./tools.js";
@@ -384,6 +384,64 @@ export function factsBlock(rows) {
     else detail.append(value);
     list.append(el("dt", null, label), detail);
   }
+  return list;
+}
+
+// The scope choice inside a Details column: one known project, never All projects, by folder name
+// with its own rules counted, as the project menu shows them. It starts on the picked project, or
+// the first. The list takes focus; Down, Up, Home and End move, Enter or a click picks
+// (`onPick(id)`), and Escape hides it and gives focus back to the action that opened it (its
+// data-focus key, `opener`).
+export function projectChoice(projects, picked, onPick, opener = null) {
+  const items = menuItems(projects, picked).filter((item) => item.id !== "");
+  const list = el("div", "where-list choice");
+  list.setAttribute("role", "listbox");
+  list.setAttribute("aria-label", "Projects");
+  list.tabIndex = 0;
+  list.dataset.focus = "choice";
+  const options = items.map((item, at) => {
+    const node = el("div", "where-option");
+    node.id = `choice-option-${at}`;
+    node.setAttribute("role", "option");
+    node.append(el("span", "where-label", item.name));
+    if (item.count) node.append(el("span", "where-count", item.count));
+    if (item.sub) node.append(el("span", "where-sub", item.sub));
+    node.addEventListener("click", () => onPick(item.id));
+    return node;
+  });
+  list.append(...options);
+  let active = Math.max(0, items.findIndex((item) => item.picked));
+  // The active option is the selected one: a choice here only opens its review.
+  const show = (at) => {
+    active = at;
+    options.forEach((node, i) => {
+      node.setAttribute("aria-selected", String(i === at));
+      node.classList.toggle("active", i === at);
+    });
+    if (!options[at]) return;
+    list.setAttribute("aria-activedescendant", options[at].id);
+    if (options[at].scrollIntoView) options[at].scrollIntoView({ block: "nearest" });
+  };
+  show(active);
+  list.addEventListener("keydown", (event) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.key === "Enter") {
+      event.preventDefault();
+      if (items[active]) onPick(items[active].id);
+    } else if (event.key === "Escape") {
+      // Only the choice closes: Escape does not reach the page's own handler for Details.
+      event.preventDefault();
+      event.stopPropagation();
+      list.hidden = true;
+      const back = opener ? withFocusKey(document, opener) : null;
+      if (back) back.focus();
+    } else {
+      const to = optionAfter(event.key, active, items.length);
+      if (to === null) return;
+      event.preventDefault();
+      show(to);
+    }
+  });
   return list;
 }
 

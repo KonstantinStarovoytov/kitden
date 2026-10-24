@@ -258,7 +258,8 @@ def tools_view(
     own rule's; `effective` also applies the server's switch, as in `held_servers`. A tool is
     new when the server is strict and no rule of the chain or for all projects has a state for
     it: it waits, off, until someone decides. `calls` is what `load_calls` gives; each tool
-    carries its count and last time, or None."""
+    carries its count and last time, or None. `shared` is the state all projects get, which
+    "for all projects" turns the other way."""
     strict = strict_mode(settings, server)
     scopes = _scopes(settings, chain)
     counted = (calls or {}).get(server, {})
@@ -277,9 +278,11 @@ def tools_view(
                 "new": strict and all(own_state(r, server, tool["name"]) is None for r in scopes),
                 **found,
                 **_effective(found["state"], server_on),
+                "shared": state_in(settings, [], server, tool["name"]),
             }
         )
-    return {"server": server, **states, "strict": strict, "tools": listed}
+    shared = state_in(settings, [], server, None)
+    return {"server": server, **states, "shared": shared, "strict": strict, "tools": listed}
 
 
 def rule_steps(home: Path, params: dict, projects: dict[str, str]) -> list[Step]:
