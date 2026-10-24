@@ -10,7 +10,7 @@ the code. Until then, this file describes the page as it is.
 
 ## Identity
 
-Kitden is a calm local home for a developer's coding tools. The mark is a soft asymmetric house with an off-center arched door. The wordmark is Kitden in the existing system sans, medium-bold, with slightly tight tracking.
+Kitden is a calm local home for a developer's coding tools. The mark is a soft asymmetric house with an off-center arched door. The wordmark is Kitden in Inter, medium-bold, with slightly tight tracking.
 
 Canonical asset: `src/kitden/web/static/brand/kitden.svg`. The sidebar and favicon reuse this file. It contains no third-party mark.
 
@@ -119,7 +119,7 @@ The Gateway page shows the clients, the Kitden gateway, any registered gateway (
 | Drag a server in | A block with a grip follows the pointer once it moves 4 px (a click without a move still selects it) and lifts with an accent edge. Once it leaves its own group, its amber line hides and the slot "Drop to add" opens at the end of its group of the Kitden gateway, Remote or Local (the group comes with it when the gateway has none yet); the slot lights while a drop would preview. A drop on its own group outside the gateway, from the caption to its last block, puts it back, so a click that wobbles or a drag let go at home asks for nothing; let go on the rest of the Servers column, the block waits on the slot (a spinner after a moment) while the same preview as "Move into the gateway…" is prepared, into the Kitden gateway and for that row's entries only. Then a preview block stands in the slot's place, "Preview", with the preview line on the preview fill and a quiet accent link from the gateway; the outside block goes back without its direct line, and the review bar opens. Escape, or a drop anywhere else, puts the block back. A drop always moves into the Kitden gateway; a registered gateway stays reachable through "Move into the gateway…". The keyboard path is "Move in…" in the List (and "Move into the gateway…" in Details); their review opens in Details. |
 | Move choice | "Move into the gateway…" asks only when there is a choice: "Move into the Kitden gateway…" first (primary), a registered gateway second (plain). With one choice the review opens at once. A local server can go only into the Kitden gateway. |
 
-Keep existing system fonts and motion, keyboard focus, and reduced-motion support. Search and project controls show a visible focus outline. Preserve explicit Apply, backup and Undo semantics. Brand color must not imply success or a safe action.
+Keep the existing motion, keyboard focus, and reduced-motion support. Text is Inter and code is JetBrains Mono, both shipped as local files in `static/fonts/`; the page loads nothing from another site. Search and project controls show a visible focus outline. Preserve explicit Apply, backup and Undo semantics. Brand color must not imply success or a safe action.
 
 ## Motion
 
