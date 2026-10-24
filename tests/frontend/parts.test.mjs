@@ -21,7 +21,10 @@ function element(tag) {
     append(...nodes) { for (const n of nodes) { n.parent = node; node.children.push(n); } },
     replaceChildren(...nodes) { node.children = []; node.append(...nodes); },
     replaceWith(other) { node.parent.children[node.parent.children.indexOf(node)] = other; other.parent = node.parent; },
-    matches: (selector) => selector.split(',').some((s) => node.classList.contains(s.trim().slice(1))),
+    matches: (selector) => selector.split(',').some((s) => {
+      const one = s.trim();
+      return one.startsWith('.') ? node.classList.contains(one.slice(1)) : node.tag === one;
+    }),
     querySelectorAll: (selector) => node.children.flatMap((c) => [...(c.matches(selector) ? [c] : []), ...c.querySelectorAll(selector)]),
     querySelector: (selector) => node.querySelectorAll(selector)[0] || null,
     setAttribute(name, value) { node.attributes[name] = value; },
@@ -32,7 +35,7 @@ function element(tag) {
   };
   return node;
 }
-globalThis.document = { createElement: element };
+globalThis.document = { createElement: element, createElementNS: (namespace, tag) => element(tag) };
 const { backupNote, banner, changeTitle, clientCheck, demoTag, folderName, gatewayName, menuItems, morphSocket, opens, optionAfter, originText, projectMenu, scopeBar, scopeText, socket, strictText, TOOL_ORIGIN_WORDS } = await import('../../src/kitden/web/static/js/parts.js');
 
 test('a row that opens Details ends with a chevron for the eye and words for a screen reader', () => {
@@ -399,11 +402,17 @@ test('the scope bar says what the page shows', () => {
   assert.equal(scopeText('', 4), 'Shared setup · project overrides stay separate');
   assert.equal(scopeText('', null), 'Shared setup · project overrides stay separate');
   const shared = scopeBar('', 0);
-  assert.equal(shared.textContent, 'Shared setup · project overrides stay separate');
+  assert.equal(shared.querySelector('span').textContent, 'Shared setup · project overrides stay separate');
   assert.equal(shared.classList.contains('project'), false);
   const project = scopeBar('api', 2);
-  assert.equal(project.textContent, 'Project api · 2 rules differ from the shared setup');
+  assert.equal(project.querySelector('span').textContent, 'Project api · 2 rules differ from the shared setup');
   assert.equal(project.classList.contains('project'), true);
+});
+
+test('the scope bar leads with the layers icon, or folder in a project', () => {
+  assert.equal(scopeBar(null).querySelector('svg').dataset.icon, 'layers');
+  assert.equal(scopeBar('website').querySelector('svg').dataset.icon, 'folder');
+  assert.equal(Number(scopeBar('website').querySelector('svg').attributes.width), 14);
 });
 
 test('arrows, Home and End move through the options and stop at the ends', () => {
@@ -454,6 +463,11 @@ test('the project menu is a button with the picked name, closed until it is pres
   assert.equal(m.trigger.attributes['aria-expanded'], 'false');
   assert.equal(m.trigger.querySelector('.where-name').textContent, 'mcp-gateway');
   assert.equal(m.menu.hidden, true);
+  // The button reads: folder icon, "Project", the name, chevron.
+  assert.deepEqual(m.trigger.querySelectorAll('svg').map((node) => node.dataset.icon), ['folder', 'chevron-down']);
+  assert.equal(m.trigger.querySelector('.where-word').textContent, 'Project');
+  assert.equal(Number(m.trigger.querySelector('svg').attributes.width), 14);
+  assert.equal(Number(m.trigger.querySelectorAll('svg')[1].attributes.width), 13);
   assert.equal(m.find.attributes.placeholder, 'Find a project…');
   assert.equal(projectMenu(PROJECTS, '', () => {}).children[0].querySelector('.where-name').textContent, 'All projects');
   assert.equal(projectMenu([], 'gone', () => {}).children[0].querySelector('.where-name').textContent, 'No longer on the list');

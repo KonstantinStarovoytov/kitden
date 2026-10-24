@@ -1,5 +1,5 @@
 // Small parts shared by every place: sockets, client marks, flags, loading and error states.
-import { $, button, el, joinWords, plural, shortPath } from "./dom.js";
+import { $, button, el, icon, joinWords, plural, shortPath } from "./dom.js";
 import { reducedMotion } from "./motion.js";
 
 // The shared baseline: the picker's first choice, and the scope of what is set for every project.
@@ -59,8 +59,8 @@ export function optionAfter(key, at, count) {
   return null;
 }
 
-// The project picker: a button with the picked project's name, and a menu under it with a find
-// box and the options. Focus stays in the find box; the arrows move the active option, which
+// The project picker: a button that reads folder icon, "Project", the picked project's name and a
+// chevron, and a menu under it with a find box and the options. Focus stays in the find box; the arrows move the active option, which
 // `aria-activedescendant` names. `onPick(id)` hears the choice ("" is All projects).
 export function projectMenu(projects, picked, onPick) {
   const root = el("div", "where-pick");
@@ -69,9 +69,7 @@ export function projectMenu(projects, picked, onPick) {
   trigger.type = "button";
   const name = el("span", "where-name", menuItems(projects, picked).find((item) => item.picked).name);
   name.id = "where-picked";
-  const caret = el("span", "where-caret", "▾");
-  caret.setAttribute("aria-hidden", "true");
-  trigger.append(name, caret);
+  trigger.append(icon("folder", 14), el("span", "where-word", "Project"), name, icon("chevron-down", 13, "ic where-caret"));
   // The label stays "Project"; the picked name is its description, so a screen reader hears both.
   for (const [key, value] of Object.entries({ "aria-label": "Project", "aria-haspopup": "listbox", "aria-expanded": "false", "aria-describedby": name.id })) {
     trigger.setAttribute(key, value);
@@ -190,8 +188,11 @@ export function scopeText(folder, count) {
   return `Project ${folder} · no rules of its own`;
 }
 
+// The icon says the scope too: layers for every project, a folder for one.
 export function scopeBar(folder, count) {
-  return el("p", folder ? "scope-bar project" : "scope-bar", scopeText(folder, count));
+  const bar = el("p", folder ? "scope-bar project" : "scope-bar");
+  bar.append(folder ? icon("folder", 14) : icon("layers", 14), el("span", null, scopeText(folder, count)));
+  return bar;
 }
 
 // The twin of views/words.py STATE_WORDS.

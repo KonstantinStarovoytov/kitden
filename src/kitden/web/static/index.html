@@ -12,28 +12,26 @@
   <a class="skip" href="#main">Skip to content</a>
   <div class="shell">
     <nav class="rail" aria-label="Main">
-      <div class="brand"><span class="brand-mark" aria-hidden="true"></span>Kitden</div>
+      <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span class="label">Kitden</span></div>
       <div class="nav">
-        <a href="#overview" data-view="overview">Overview <span class="count warn roll" id="nav-attention"></span></a>
-        <a href="#library" data-view="library">Library</a>
-        <a href="#gateway" data-view="gateway">Gateway</a>
-        <a href="#changes" data-view="changes">Changes <span class="count roll" id="nav-changes"></span></a>
+        <a href="#overview" data-view="overview"><span class="label">Overview</span><span class="count warn roll" id="nav-attention"></span></a>
+        <a href="#library" data-view="library"><span class="label">Library</span></a>
+        <a href="#gateway" data-view="gateway"><span class="label">Gateway</span></a>
+        <a href="#changes" data-view="changes"><span class="label">Changes</span><span class="count roll" id="nav-changes"></span></a>
       </div>
       <div class="rail-foot">
-        <span>Scanned <span id="scanned">…</span> · <button class="btn ghost small" type="button" id="rescan">Rescan</button></span>
+        <div class="scan-line"><span>Scanned <span id="scanned">…</span></span><button class="btn ghost small" type="button" id="rescan">Rescan</button></div>
         <a href="#agents" data-view="agents" class="muted">Let agents read this setup</a>
-        <button class="btn small" type="button" id="theme">Dark theme</button>
+        <button class="appearance" type="button" id="theme"><span class="label">Appearance</span></button>
       </div>
     </nav>
 
     <div class="content" id="content">
       <div class="topbar" id="topbar">
         <div class="where-box" id="where-box">
-          <span class="muted">Project:</span>
-          <button class="where" id="where" type="button" aria-label="Project" aria-haspopup="listbox" aria-expanded="false" disabled>…</button>
+          <button class="where" id="where" type="button" aria-label="Project" aria-haspopup="listbox" aria-expanded="false" disabled><span class="where-word">Project</span><span class="where-name">…</span></button>
         </div>
         <label class="search">
-          <span aria-hidden="true">⌕</span>
           <input id="q" type="search" placeholder="Search your setup and marketplaces…" aria-label="Search your setup and marketplaces" autocomplete="off" spellcheck="false">
           <span class="find-chip" id="find-chip" role="status"></span>
           <span class="kbd" aria-hidden="true">/</span>
@@ -41,6 +39,7 @@
         <span class="scan-status" id="scan-status" role="status"></span>
       </div>
       <main id="main" class="page" tabindex="-1"></main>
+      <div class="hint-dock"><p class="hint" id="hint" hidden></p></div>
     </div>
   </div>
 

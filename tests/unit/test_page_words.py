@@ -94,6 +94,96 @@ def test_rail_says_let_agents_read_this_setup():
     assert "Agents can ask" not in INDEX and "show my setup" not in INDEX
 
 
+def test_shell_words():
+    assert "Appearance" in INDEX and "Dark theme" not in INDEX
+    assert ">Project<" in INDEX or "Project</span>" in INDEX
+    assert "Let agents read this setup" in INDEX and "Rescan" in INDEX
+
+
+def rule(selector, css=None):
+    """The declarations of the rule that starts a line with `selector`."""
+    found = re.search(rf"^{re.escape(selector)} \{{([^}}]*)\}}", css or CSS, re.MULTILINE)
+    assert found, selector
+    return found.group(1)
+
+
+def test_the_theme_button_says_appearance_and_its_hover_names_the_other_theme():
+    app = script("app.js")
+    assert 'id="theme"' in INDEX and "Light theme" not in app and "Dark theme" not in app
+    assert "Switch to light theme" in app and "Switch to dark theme" in app
+    # The stored choice and the circle that spreads stay.
+    assert 'const THEME_KEY = "kitden-theme";' in app
+    assert "localStorage.setItem(THEME_KEY, next)" in app
+    assert 'transition(() => applyTheme(next), "theme-switch")' in app
+    # The button's words never change, so applyTheme must not rewrite its text (it holds the icon).
+    assert '$("#theme").textContent' not in app
+
+
+def test_the_shell_draws_its_icons_and_the_hint_line_sets_its_words_at_once():
+    app, parts = script("app.js"), script("parts.js")
+    for name in ("house", "library", "network", "history", "sun-moon", "search", "folder", "info"):
+        assert f'icon("{name}"' in app + parts, name
+    for name in ("chevron-down", "folder", "layers"):
+        assert f'icon("{name}"' in parts, name
+    assert 'id="hint"' in INDEX and "hidden" in INDEX.split('id="hint"')[1].split(">")[0]
+    hint = app.split("export function setHint")[1].split("\n}\n")[0]
+    assert "line.hidden = !text" in hint and 'icon("info", 13)' in hint
+    # A page starts without its predecessor's hint.
+    assert 'setHint("")' in app.split("function renderPlace")[1].split("\n}\n")[0]
+    assert "pointer-events: none" in rule(".hint-dock")
+
+
+def test_the_shell_is_a_frame_on_the_out_colour():
+    assert "background: var(--out)" in rule("body") and "padding" in rule("body")
+    assert "env(safe-area-inset-left" in rule("body")
+    frame = rule(".shell")
+    for part in (
+        "148px",
+        "1px solid var(--wire)",
+        "border-radius: 12px",
+        "overflow: hidden",
+        "var(--canvas)",
+    ):
+        assert part in frame, part
+    rail = rule(".rail")
+    for part in ("background: var(--panel)", "gap: 26px", "padding: 20px 12px 18px"):
+        assert part in rail, part
+    assert "font-size: 19px" in rule(".brand") and "width: 28px" in rule(".brand-mark")
+    link = rule(".nav a")
+    for part in ("height: 38px", "padding: 0 10px", "border-radius: 8px", "gap: 10px"):
+        assert part in link, part
+    mark = rule(".nav .ink")
+    assert (
+        "color-mix(in srgb, var(--route) 30%, transparent)" in mark
+        and "inset 2px 0 0 var(--brand)" in mark
+    )
+    assert "font-size: 11px" in rule(".rail-foot") and "font-size: 12px" in rule(".appearance")
+
+
+def test_the_top_bar_and_the_page_head_have_the_mockups_sizes():
+    bar = rule(".topbar")
+    for part in ("height: 66px", "background: var(--panel)", "gap: 18px", "padding: 0 18px 0 22px"):
+        assert part in bar, part
+    assert "box-shadow" not in rule(".search") and "border: 0" in rule(".search")
+    assert "font-size: 12px" in rule(".search input")
+    assert "padding: 26px 22px 64px" in rule(".page")
+    assert "font-size: 24px" in rule(".page h1") and "letter-spacing: -0.018em" in rule(".page h1")
+    assert "font-size: 12px" in rule(".lede") and "color: var(--ink-3)" in rule(".lede")
+    scope = rule(".scope-bar")
+    assert "font-size: 11px" in scope and "gap: 6px" in scope
+    # The List header sticks right under the top bar.
+    assert "top: 66px" in rule(".map th")
+
+
+def test_a_narrow_window_turns_the_rail_into_a_top_row_and_hides_the_labels():
+    narrow = CSS.split("@media (max-width: 900px) {")[1].split("\n}\n")[0]
+    assert "grid-template-rows: auto minmax(0, 1fr)" in narrow
+    assert re.search(r"\.rail \{[^}]*flex-direction: row", narrow)
+    # Hidden to the eye, still heard: the links keep their names.
+    assert re.search(r"\.rail \.label[^{]*\{[^}]*clip", narrow)
+    assert re.search(r"\.page \{[^}]*padding: 16px 16px 40px", narrow)
+
+
 def test_changes_say_why_a_change_stopped():
     text = script("changes.js")
     assert "Can't undo: the file changed after this" in text
@@ -449,7 +539,7 @@ def test_library_adds_plugins_and_marketplaces_in_one_review():
     assert '"plugin.install"' in offer and '"marketplace.add"' in offer
     # Adding a marketplace lives on the Marketplaces tab.
     assert '"Add a marketplace…"' in library and 'kind === "marketplace"' in library
-    assert '<a href="#library" data-view="library">Library</a>' in INDEX
+    assert '<a href="#library" data-view="library"><span class="label">Library</span></a>' in INDEX
     assert '["new", "New"]' in library and 'row.mine ? "Installed" : "New"' in library
 
 

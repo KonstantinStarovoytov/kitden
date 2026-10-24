@@ -1,6 +1,6 @@
 // Entry point: the shell (rail, top bar), routing, theme, rescan and live updates.
 import { getJson, postJson } from "./api.js";
-import { $, $$, busyWhile, el, focusKey, reportError } from "./dom.js";
+import { $, $$, busyWhile, el, focusKey, icon, reportError } from "./dom.js";
 import { glide, rollTo, transition } from "./motion.js";
 import { renderAgents } from "./agents.js";
 import { renderChanges } from "./changes.js";
@@ -48,6 +48,8 @@ function renderPlace() {
   // A redraw of the same place notes where its rows were, so they can move from there.
   const before = samePlace && place.snapshot ? place.snapshot() : null;
   main.replaceChildren();
+  // A page sets its own hint line while it draws; none inherits the last page's.
+  setHint("");
   let found = null;
   if (PROJECT_PLACES.includes(state.view) && projectGone()) main.append(el("h1", null, place.title), callout(GONE_PROJECT));
   else found = place.render(main);
@@ -102,8 +104,7 @@ function drawPicker() {
   if (box.dataset.projects === signature) return;
   box.dataset.projects = signature;
   const had = box.contains(document.activeElement);
-  // The "Project:" label stays; the button and its menu are drawn again.
-  box.replaceChildren(box.firstElementChild, projectMenu(projects, state.project, (id) => switchProject(id).catch(reportError)));
+  box.replaceChildren(projectMenu(projects, state.project, (id) => switchProject(id).catch(reportError)));
   if (had) $("#where").focus({ preventScroll: true });
 }
 
@@ -131,6 +132,28 @@ function refreshForProject() {
   });
 }
 
+// The line at the bottom of the page: an info icon and a few words. The words change at once;
+// empty words hide the line.
+export function setHint(text) {
+  const line = $("#hint");
+  line.replaceChildren();
+  line.hidden = !text;
+  if (text) line.append(icon("info", 13), el("span", null, text));
+}
+
+// The icons of the rail, the project button and the search box. The page holds only their words.
+function drawIcons() {
+  $('.nav [data-view="overview"]').prepend(icon("house"));
+  $('.nav [data-view="library"]').prepend(icon("library"));
+  $('.nav [data-view="gateway"]').prepend(icon("network"));
+  $('.nav [data-view="changes"]').prepend(icon("history"));
+  $("#theme").prepend(icon("sun-moon", 14));
+  $(".search").prepend(icon("search", 14));
+  // Until the project list is read, the button keeps these; projectMenu draws its own.
+  $("#where").prepend(icon("folder", 14));
+  $("#where").append(icon("chevron-down", 13, "ic where-caret"));
+}
+
 // Theme: follows the system until the switch is used; the new theme spreads in a circle.
 const THEME_KEY = "kitden-theme";
 const OLD_THEME_KEY = "agentsetup-theme"; // the working name; read once so the choice carries over
@@ -141,7 +164,8 @@ function currentTheme() {
 }
 function applyTheme(theme) {
   if (theme) document.documentElement.dataset.theme = theme;
-  $("#theme").textContent = currentTheme() === "dark" ? "Light theme" : "Dark theme";
+  // The button always says "Appearance"; its hover text names the theme a press gives.
+  $("#theme").title = currentTheme() === "dark" ? "Switch to light theme" : "Switch to dark theme";
 }
 function switchTheme(event) {
   const next = currentTheme() === "dark" ? "light" : "dark";
@@ -290,6 +314,7 @@ function fromAddress() {
 }
 
 function start() {
+  drawIcons();
   let saved = null;
   try { saved = localStorage.getItem(THEME_KEY) || localStorage.getItem(OLD_THEME_KEY); } catch { saved = null; }
   applyTheme(saved);

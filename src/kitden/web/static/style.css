@@ -119,15 +119,17 @@
 html, body { margin: 0; height: 100%; }
 [hidden] { display: none !important; }
 body {
-  background: var(--canvas); color: var(--ink);
+  background: var(--out); color: var(--ink);
   font: 13px/1.45 var(--sans);
   -webkit-font-smoothing: antialiased;
   font-variant-numeric: tabular-nums;
+  /* The gutter around the app frame (.shell). */
+  padding-block: 16px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
 button, input, select, textarea { font: inherit; color: inherit; }
 input[type="checkbox"], input[type="radio"] { accent-color: var(--action); }
 ::selection { background: var(--route-soft); color: var(--ink); }
-.search:focus-within, .where-box:has(.where:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.search:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
 .mono { font-family: var(--mono); font-size: 12px; }
@@ -135,35 +137,39 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--action); }
 .faint { color: var(--ink-4); }
 /* The chevron at the end of a row that opens Details. It only changes colour: no motion. */
 .opens { position: relative; flex: none; margin-left: auto; color: var(--ink-3); font-size: 16px; line-height: 1; }
+.ic { flex: none; display: inline-block; vertical-align: middle; }
 .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
 .skip { position: absolute; left: -999px; padding: 6px 10px; }
 .skip:focus { left: 12px; top: 12px; z-index: 50; background: var(--panel); }
 a { color: var(--route); }
 
-/* Shell */
-.shell { display: grid; grid-template-columns: 216px minmax(0, 1fr); height: 100vh; }
-.rail { border-right: 1px solid var(--wire); padding: 14px 10px; display: flex; flex-direction: column; gap: 2px; }
-.brand { display: flex; align-items: center; gap: 10px; padding: 8px 8px 22px; font-size: 20px; font-weight: 650; letter-spacing: -0.01em; }
-.brand-mark { width: 30px; height: 30px; flex: none; background: url("/static/brand/kitden.svg") center / contain no-repeat; }
-.nav { position: relative; }
-.nav a { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; height: 30px; padding: 0 8px; border-radius: 6px; color: var(--ink-2); text-decoration: none; transition: background-color var(--t-fast) ease, color var(--t-fast) ease, transform 260ms var(--spring); }
-.nav a:hover { background: var(--wire-soft); color: var(--ink); }
-.nav a:active { transform: scale(0.98); transition-duration: var(--t-fast), var(--t-fast), 80ms; }
+/* Shell: the app frame (rail and page) sits on the --out colour. */
+.shell { display: grid; grid-template-columns: 148px minmax(0, 1fr); height: 100%; border: 1px solid var(--wire); border-radius: 12px; overflow: hidden; background: var(--canvas); }
+.rail { background: var(--panel); border-right: 1px solid var(--wire); padding: 20px 12px 18px; display: flex; flex-direction: column; gap: 26px; min-height: 0; }
+.brand { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 9px; padding: 2px 6px; font-size: 19px; font-weight: 600; letter-spacing: -0.015em; }
+.brand-mark { width: 28px; height: 28px; flex: none; background: url("/static/brand/kitden.svg") center / contain no-repeat; }
+.nav { position: relative; display: flex; flex-direction: column; gap: 6px; }
+.nav a { position: relative; z-index: 1; display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 10px; border-radius: 8px; color: var(--ink-2); text-decoration: none; transition: color var(--t-fast) ease, transform 260ms var(--spring); }
+.nav a:hover { color: var(--ink); }
+.nav a:active { transform: scale(0.98); transition-duration: var(--t-fast), 80ms; }
 .nav a[aria-current="page"] { color: var(--route); font-weight: 600; }
-.nav a[aria-current="page"]:hover { background: transparent; }
 /* One mark slides between the choices of a group (rail, tabs, filters); the choice itself is instant. */
 .ink { position: absolute; left: 0; top: 0; z-index: 0; border-radius: 6px; background: var(--route-soft); pointer-events: none; opacity: 0; transition: opacity var(--t-fast) ease; }
-.nav .ink { box-shadow: inset 3px 0 var(--brand); }
+.nav .ink { border-radius: 8px; border: 1px solid color-mix(in srgb, var(--route) 30%, transparent); box-shadow: inset 2px 0 0 var(--brand); }
 .count { font-size: 11px; color: var(--ink-3); }
+.nav .count { margin-left: auto; }
 .count.warn { color: var(--lamp-warn); font-weight: 600; }
-.rail-foot { margin-top: auto; padding: 8px; display: grid; gap: 8px; color: var(--ink-3); font-size: 12px; }
-.rail-foot button { justify-self: start; }
-.rail-foot a { line-height: 24px; }
+.rail-foot { margin-top: auto; padding: 0 8px; display: flex; flex-direction: column; gap: 14px; color: var(--ink-3); font-size: 11px; }
+.rail-foot a { display: flex; align-items: center; min-height: 24px; }
+.scan-line { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.rail-foot .btn { height: 24px; padding: 0 6px; margin-left: -6px; font-size: inherit; }
+.appearance { align-self: flex-start; display: flex; align-items: center; gap: 8px; min-height: 24px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--ink-2); font-size: 12px; cursor: pointer; transition: color var(--t-fast) ease; }
+.appearance:hover { color: var(--ink); }
 .roll { display: inline-grid; overflow: hidden; height: 1.45em; vertical-align: bottom; }
 .roll > span { grid-area: 1 / 1; }
 
-.content { isolation: isolate; overflow: auto; position: relative; }
-.topbar { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--canvas) 88%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--wire-soft); display: flex; align-items: center; gap: 12px; padding: 10px 24px; }
+.content { isolation: isolate; overflow: auto; position: relative; display: flex; flex-direction: column; }
+.topbar { position: sticky; top: 0; z-index: 5; flex: none; height: 66px; background: var(--panel); border-bottom: 1px solid var(--wire); display: flex; align-items: center; gap: 18px; padding: 0 18px 0 22px; min-width: 0; }
 /* The scan line shows only when a scan takes a while: a quick scan (after each Apply) is over
    before the delay, so it never blinks. A slow, calm sweep while a long scan really runs. */
 .topbar::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: linear-gradient(90deg, transparent, var(--route), transparent); transform: translateX(-100%); opacity: 0; transition: opacity 200ms ease; }
@@ -172,15 +178,20 @@ a { color: var(--route); }
    right end says what is left. Shown only after a second (the page adds .progress then), so a
    quick start never blinks. The note hangs below the bar, so it moves nothing. */
 .topbar.progress::after { opacity: 1; transform: scaleX(var(--scan-done, 0)); transform-origin: left; background: var(--route); animation: none; transition: transform 400ms var(--ease-out), opacity 200ms ease; }
-.scan-status { position: absolute; top: calc(100% + 6px); right: 24px; max-width: calc(100% - 48px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 8px; border-radius: 6px; background: var(--canvas); color: var(--ink-3); font-size: 12px; opacity: 0; pointer-events: none; transition: opacity 200ms ease; }
+.scan-status { position: absolute; top: calc(100% + 6px); right: 18px; max-width: calc(100% - 40px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 8px; border-radius: 6px; background: var(--canvas); color: var(--ink-3); font-size: 12px; opacity: 0; pointer-events: none; transition: opacity 200ms ease; }
 .topbar.progress .scan-status { opacity: 1; }
 @keyframes sweep { to { transform: translateX(100%); } }
-.page { padding: 20px 24px 48px; max-width: 1180px; outline: none; transition: opacity var(--t-fast) ease; }
+.page { flex: 1 0 auto; padding: 26px 22px 64px; max-width: 1180px; outline: none; transition: opacity var(--t-fast) ease; }
 .page.pending { opacity: 0.5; pointer-events: none; }
 h1 { font-size: 18px; margin: 0; letter-spacing: -0.015em; font-weight: 600; text-wrap: balance; }
+.page h1 { font-size: 24px; letter-spacing: -0.018em; }
 h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
-.lede { color: var(--ink-2); margin: 4px 0 18px; max-width: 70ch; text-wrap: pretty; }
-.page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.lede { color: var(--ink-3); font-size: 12px; margin: 4px 0 18px; max-width: 70ch; text-wrap: pretty; }
+.page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+/* The hint line: 14 px above the bottom of what is seen. It takes no room and no clicks; the page's
+   bottom space keeps its end clear. */
+.hint-dock { position: sticky; bottom: 0; z-index: 2; flex: none; height: 0; margin: 0 22px; pointer-events: none; }
+.hint { position: absolute; left: 0; right: 0; bottom: 14px; margin: 0; display: flex; align-items: center; gap: 6px; color: var(--ink-3); font-size: 11px; }
 .lede.fresh { animation: rise 320ms var(--ease-out) both; }
 
 /* Controls */
@@ -210,25 +221,23 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .check path { stroke-dasharray: 20; stroke-dashoffset: 20; animation: draw 320ms var(--ease-out) forwards; }
 @keyframes draw { to { stroke-dashoffset: 0; } }
 .kbd { font-family: var(--mono); font-size: 11px; padding: 0 5px; border: 1px solid var(--wire); border-radius: 4px; color: var(--ink-3); }
-.search { flex: 1; max-width: 420px; display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border-radius: 7px; background: var(--inset); border: 1px solid var(--wire-soft); color: var(--ink-3); }
-.search input { align-self: stretch; border: 0; background: transparent; outline: none; flex: 1; min-width: 0; color: var(--ink); }
+.search { flex: 1; min-width: 80px; max-width: 420px; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0; border: 0; border-radius: 7px; color: var(--ink-3); }
+.search input { align-self: stretch; border: 0; background: transparent; outline: none; flex: 1; min-width: 0; font-size: 12px; color: var(--ink); }
+.search input::placeholder { color: var(--ink-3); }
 .search input::-webkit-search-cancel-button { display: none; }
 /* How many blocks a search finds on a map page. A live region, so it stays in the page when empty: it
    only gives back the gap before it. */
 .find-chip { flex: none; color: var(--ink-2); font-size: 12px; white-space: nowrap; }
 .find-chip:empty { margin-left: -8px; }
-.where-box { position: relative; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 4px 0 10px; border: 1px solid var(--wire); border-radius: 7px; background: var(--panel); max-width: 380px; }
+.where-box { position: relative; display: flex; align-items: center; min-width: 0; max-width: 380px; margin-left: -8px; }
 .where-pick { display: flex; min-width: 0; }
-.where { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: 300px; height: 24px; padding: 0 6px; border: 0; border-radius: 5px; background: transparent; color: var(--ink); cursor: pointer; }
+.where { display: flex; align-items: center; gap: 7px; min-width: 0; max-width: 300px; height: 32px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; color: var(--ink-3); font-size: 12px; white-space: nowrap; cursor: pointer; transition: background-color var(--t-fast) ease; }
+.where:hover:not(:disabled) { background: var(--dim); }
 .where:disabled { cursor: default; }
-.where:focus-visible { outline: none; }
-.where-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.where-caret { flex: none; color: var(--ink-3); font-size: 10px; }
-.where-box { transition: background-color var(--t-fast) ease, border-color var(--t-fast) ease; }
-.where-box:hover { border-color: var(--wire-strong); }
-/* A project is open: the picker wears the selection tint, so the scope is clear at a glance. */
-.where-box.project { background: var(--route-soft); border-color: color-mix(in srgb, var(--route) 40%, var(--wire)); }
-.where-box.project .where { color: var(--route); font-weight: 600; }
+.where-word { flex: none; }
+.where-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-weight: 600; }
+/* A project is open: its name takes the accent, so the scope is clear at a glance. */
+.where-box.project .where-name { color: var(--route); }
 /* The menu: a find box, then the options. Focus stays in the find box; the active option is tinted. */
 .where-menu { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; width: 300px; max-width: calc(100vw - 32px); padding: 6px; border-radius: 8px; background: var(--panel-raised); box-shadow: var(--shadow-pop); }
 .where-find { width: 100%; height: 28px; padding: 0 8px; border: 1px solid var(--wire); border-radius: 6px; background: var(--inset); color: var(--ink); }
@@ -240,8 +249,8 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .where-count { color: var(--ink-3); font-size: 12px; }
 .where-sub { grid-column: 1 / -1; color: var(--ink-3); font-size: 12px; }
 /* Under a page head: the shared setup, or a project and how much of it differs. */
-.scope-bar { margin: -10px 0 18px; color: var(--ink-3); font-size: 12px; }
-.scope-bar.project { width: fit-content; padding: 2px 10px; border-radius: 10px; color: var(--route); background: var(--route-soft); }
+.scope-bar { display: flex; align-items: center; gap: 6px; margin: -6px 0 18px; color: var(--ink-3); font-size: 11px; }
+.scope-bar.project { color: var(--route); }
 .seg { position: relative; display: inline-flex; padding: 2px; background: var(--inset); border-radius: 7px; border: 1px solid var(--wire-soft); }
 .seg button { position: relative; z-index: 1; height: 24px; padding: 0 10px; border: 0; background: transparent; border-radius: 5px; color: var(--ink-2); cursor: pointer; transition: color var(--t-fast) ease, transform 260ms var(--spring); }
 .seg button:hover { color: var(--ink); }
@@ -396,7 +405,7 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .tabs .count { margin-left: 4px; }
 .tabs .ink { top: auto; bottom: 0; height: 2px !important; border-radius: 0; background: var(--brand); box-shadow: none; }
 table.map { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--panel); border: 1px solid var(--wire); border-radius: 8px; table-layout: fixed; }
-.map th { text-align: left; font-weight: 500; color: var(--ink-3); font-size: 12px; padding: 0 12px; height: 34px; border-bottom: 1px solid var(--wire); background: var(--panel); position: sticky; top: 51px; z-index: 1; }
+.map th { text-align: left; font-weight: 500; color: var(--ink-3); font-size: 12px; padding: 0 12px; height: 34px; border-bottom: 1px solid var(--wire); background: var(--panel); position: sticky; top: 66px; z-index: 1; }
 .map th:first-child { border-top-left-radius: 8px; } .map th:last-child { border-top-right-radius: 8px; }
 .map th .client-mark, .map th .mono-mark { --tile: 20px; }
 .map th .client-mark[data-icon="claude"] img { padding: 3px; }
@@ -634,7 +643,8 @@ div.map .link.preview { stroke: var(--route); opacity: 0.6; }
 /* Side panel: details and review share one surface */
 .scrim { position: fixed; inset: 0; z-index: 20; background: rgba(10, 12, 16, 0.22); opacity: 0; pointer-events: none; transition: opacity var(--t-panel) ease; }
 .scrim.open { opacity: 1; pointer-events: auto; }
-.drawer { position: fixed; z-index: 21; top: 0; right: 0; bottom: 0; width: min(520px, 100vw); background: var(--panel-raised); box-shadow: var(--shadow-pop); transform: translateX(104%); visibility: hidden; transition: transform var(--t-panel) var(--ease-drawer), visibility 0s linear var(--t-panel); display: flex; flex-direction: column; overscroll-behavior: contain; outline: none; }
+/* The panel stays inside the frame's edge: 16 px from the window, like the gutter. */
+.drawer { position: fixed; z-index: 21; top: 16px; right: 16px; bottom: 16px; width: min(520px, calc(100vw - 32px)); border-radius: 12px; overflow: hidden; background: var(--panel-raised); box-shadow: var(--shadow-pop); transform: translateX(104%); visibility: hidden; transition: transform var(--t-panel) var(--ease-drawer), visibility 0s linear var(--t-panel); display: flex; flex-direction: column; overscroll-behavior: contain; outline: none; }
 .drawer.open { transform: none; visibility: visible; transition: transform var(--t-panel) var(--ease-drawer), visibility 0s; }
 .drawer.instant, .scrim.instant { transition: none; }
 .drawer header { padding: 16px 20px 12px; border-bottom: 1px solid var(--wire); display: grid; gap: 4px; }
@@ -649,7 +659,7 @@ div.map .link.preview { stroke: var(--route); opacity: 0.6; }
    column with no scrim. The page keeps room for it and stays usable. It slides in like the drawer,
    and the page takes its room at once. The toast moves left to stay clear of the column. */
 .shell.docked #content { padding-right: 336px; }
-#drawer.docked { width: 320px; box-shadow: none; border-left: 1px solid var(--wire); }
+#drawer.docked { width: 320px; box-shadow: none; border-left: 1px solid var(--wire); border-radius: 0 12px 12px 0; }
 .shell.docked ~ .toast { left: calc(50% - 168px); }
 /* A column stacks the footer's buttons, full width. A Details card does it in the drawer too. */
 #drawer.docked footer, .drawer footer.stack { flex-direction: column; align-items: stretch; flex-wrap: nowrap; }
@@ -775,20 +785,24 @@ html.place-change::view-transition-old(root), html.place-change::view-transition
 @media (max-width: 900px) {
   /* minmax(0, …): a wide table or a long project name scrolls inside, not the whole page. */
   .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
-  .rail { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--wire); }
-  .brand { padding: 0 8px 0 4px; }
-  .nav { display: flex; gap: 2px; overflow-x: auto; max-width: 100%; }
-  .nav a { gap: 6px; white-space: nowrap; }
-  .rail-foot { margin: 0; padding: 0 4px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; width: 100%; }
+  /* The rail is a row on top. The words of the links go (the icons stay); screen readers still hear them. */
+  .rail { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 8px 10px; border-right: 0; border-bottom: 1px solid var(--wire); }
+  .rail .label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+  .brand { padding: 0 4px; }
+  .nav { flex-direction: row; gap: 2px; }
+  .nav a { height: 32px; padding: 0 9px; white-space: nowrap; }
+  .rail-foot { margin: 0 0 0 auto; padding: 0; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+  .scan-line { flex-direction: row; align-items: center; gap: 6px; }
+  .rail-foot .btn { margin-left: 0; }
+  .appearance { min-width: 24px; justify-content: center; }
   .overview { grid-template-columns: 1fr; }
   .conn { grid-template-columns: 1fr; }
   /* Narrow: the time and the title on line one; the badge, the buttons and the chevron on line two. */
   .timeline .feed li { grid-template-columns: minmax(0, 1fr) auto 12px; }
   .timeline .feed li > span:nth-child(2) { grid-column: 2 / -1; }
-  .topbar { padding: 10px 16px; flex-wrap: wrap; gap: 8px; }
+  .topbar { height: auto; min-height: 66px; padding: 10px 16px; flex-wrap: wrap; gap: 8px; }
   .where-box, .search { flex: 1 1 100%; max-width: none; min-width: 0; }
-  .where-pick { flex: 1; }
-  .where { flex: 1; max-width: none; justify-content: space-between; }
+  .where { max-width: 100%; }
   .where-menu { right: 0; width: auto; }
   .page { padding: 16px 16px 40px; }
   .table-scroll { overflow-x: auto; }
