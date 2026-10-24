@@ -4,15 +4,22 @@ Two runs, each on its own copy of the large sample (`kitden.demo`) with fake `cl
 and `cursor` commands:
 - first usable: the time to the first answer of /api/overview while Codex's plugin list
   takes `--slow` seconds; the start line must then say it still checks "Codex plugins";
+  then the time /api/gateway-view takes to answer (no budget of its own);
 - complete: the time until every step of the first scan is done, with the list answering at once.
 The client versions are read once before each run, as on any start after the first.
 A third run times `kitden demo` on the medium sample: from building it to the first answer of
 /api/overview.
 
-Usage: uv run python scripts/measure-start.py [--slow 10]
+`--probe` measures nothing: it starts the demo page on the probe sample (the medium sample with
+direct servers added up to PROBE_SERVERS on the Gateway) and prints its link, so the map's
+performance marks can be read in a browser. Ctrl+C stops it.
+
+Usage: uv run python scripts/measure-start.py [--slow 10] [--probe]
 """
 
 import argparse
+import contextlib
+import json
 import os
 import secrets
 import socket
@@ -41,6 +48,10 @@ COMPLETE_BUDGET = 5.0  # seconds, with every answer at once
 DEMO_BUDGET = 2.0  # seconds, from building the medium sample to its first overview
 GIVE_UP_SECONDS = 60
 SLOW_STEP = "Codex plugins"
+# The map probe (Part 4.1): servers on the Gateway, held plus outside rows. The medium sample has
+# 2 held and 7 outside rows; build_probe adds the rest.
+PROBE_SERVERS = 20
+MEDIUM_ROWS = 9
 
 
 def build_sandbox(root: Path, slow: float) -> Path:
@@ -61,6 +72,25 @@ def build_sandbox(root: Path, slow: float) -> Path:
     return home
 
 
+def build_probe(root: Path) -> Path:
+    """The medium sample in root/home with direct servers `probe-01` … added, remote ones in
+    Claude Code and local ones in Codex, until the Gateway has PROBE_SERVERS servers."""
+    home = build_demo_home(root, "medium")
+    claude_file = home / ".claude.json"
+    claude = json.loads(claude_file.read_text())
+    codex = []
+    for n in range(1, PROBE_SERVERS - MEDIUM_ROWS + 1):
+        name = f"probe-{n:02d}"
+        if n % 2:
+            claude["mcpServers"][name] = {"type": "http", "url": f"https://example.test/{name}"}
+        else:
+            codex.append(f'\n[mcp_servers.{name}]\ncommand = "uvx"\nargs = ["{name}"]\n')
+    claude_file.write_text(json.dumps(claude, indent=2))
+    with (home / ".codex/config.toml").open("a") as config:
+        config.write("".join(codex))
+    return home
+
+
 def _free_port() -> int:
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
@@ -75,7 +105,8 @@ def still_checking(progress: dict) -> list[str]:
 
 
 def measure(home: Path, slow: float) -> dict:
-    """Start the page on `home`; return seconds to first usable and to complete data."""
+    """Start the page on `home`; return seconds to first usable and to complete data, and how
+    long /api/gateway-view then takes to answer."""
     os.environ.update(HOME=str(home), PATH=f"{home.parent / 'bin'}:/usr/bin:/bin")
     os.environ.pop("CODEX_HOME", None)
     version_cache.refresh_versions(home, version_cache.CLIENTS)  # the common start: known
@@ -104,6 +135,9 @@ def measure(home: Path, slow: float) -> dict:
             found["still_checking"] = still_checking(http.get("/api/progress").json())
             if slow > 0 and SLOW_STEP not in found["still_checking"]:
                 raise SystemExit(f"The start line does not say it still checks {SLOW_STEP}.")
+            asked = time.monotonic()
+            _poll(lambda: "gateways" in _json(http.get("/api/gateway-view")))
+            found["gateway_view"] = time.monotonic() - asked
             _poll(lambda: all(s["done"] for s in http.get("/api/progress").json()["steps"]))
             found["complete"] = time.monotonic() - started
     finally:
@@ -118,17 +152,7 @@ def measure_demo(root: Path) -> float:
     started = time.monotonic()
     home = build_demo_home(root, "medium")
     port, token = _free_port(), secrets.token_urlsafe(16)
-    app = create_app(
-        demo_build(home),
-        token=token,
-        port=port,
-        watch_folders=[home / name for name in WATCHED],
-        flat_folders=[home],
-        home=home,
-        first_scan_later=True,
-        quick_first=True,
-        demo=True,
-    )
+    app = _demo_app(home, port, token)
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
@@ -140,6 +164,39 @@ def measure_demo(root: Path) -> float:
     finally:
         server.should_exit = True
         thread.join(timeout=10)
+
+
+def _demo_app(home: Path, port: int, token: str):
+    """The page on a sample home, as `kitden demo` starts it."""
+    return create_app(
+        demo_build(home),
+        token=token,
+        port=port,
+        watch_folders=[home / name for name in WATCHED],
+        flat_folders=[home],
+        home=home,
+        first_scan_later=True,
+        quick_first=True,
+        demo=True,
+    )
+
+
+def run_probe() -> int:
+    """Start the demo page on the probe sample in a temporary folder, print its link and wait
+    for Ctrl+C; the folder is deleted then."""
+    with tempfile.TemporaryDirectory(prefix="kitden-probe-") as folder:
+        home = build_probe(Path(folder))
+        port, token = _free_port(), secrets.token_urlsafe(16)
+        page = f"http://127.0.0.1:{port}/?token={token}"
+        print(f"The probe sample is on the page: {page}", flush=True)
+        print(f"  today's Gateway: {page}#gateway", flush=True)
+        print(f"  the map:         {page}#gateway?view=map", flush=True)
+        print("Press Ctrl+C to stop.", flush=True)
+        app = _demo_app(home, port, token)
+        # uvicorn stops on Ctrl+C, then passes it on.
+        with contextlib.suppress(KeyboardInterrupt):
+            uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    return 0
 
 
 def _json(response: httpx.Response) -> dict:
@@ -162,7 +219,10 @@ def _poll(ready) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Measure how fast the page opens.")
     parser.add_argument("--slow", type=float, default=10)
+    parser.add_argument("--probe", action="store_true", help="run the page on the probe sample")
     args = parser.parse_args()
+    if args.probe:
+        return run_probe()
     real_home, real_path = os.environ.get("HOME"), os.environ.get("PATH")
     try:
         with tempfile.TemporaryDirectory(prefix="kitden-measure-") as folder:
@@ -176,6 +236,7 @@ def main() -> int:
     first, complete = slow_run["first_usable"], quick_run["complete"]
     print(f"first usable: {first:.1f} s (budget {FIRST_USABLE_BUDGET:g} s)")
     print(f"  the start line then said: Still checking {', '.join(slow_run['still_checking'])}")
+    print(f"  gateway view: {slow_run['gateway_view'] * 1000:.0f} ms")
     print(f"complete: {complete:.1f} s (budget {COMPLETE_BUDGET:g} s)")
     print(f"demo (medium): {demo:.1f} s (budget {DEMO_BUDGET:g} s)")
     missed = first > FIRST_USABLE_BUDGET or complete > COMPLETE_BUDGET or demo > DEMO_BUDGET

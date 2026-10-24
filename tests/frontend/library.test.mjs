@@ -158,7 +158,7 @@ test('the more line names what the choice hides', () => {
 });
 
 test('old map and discover addresses open the Library', () => {
-  const library = (fields) => ({ view: 'library', kind: 'mcp_server', show: 'mine', category: '', attention: false, project: '', q: '', selected: null, ...fields });
+  const library = (fields) => ({ view: 'library', kind: 'mcp_server', show: 'mine', category: '', attention: false, mode: '', project: '', q: '', selected: null, ...fields });
   assert.deepEqual(parseHash('#map'), library({}));
   // The Load map's "Needs attention" filter carries over.
   assert.deepEqual(parseHash('#map?kind=plugin&only=problems&project=p1&q=git'), library({ kind: 'plugin', attention: true, project: 'p1', q: 'git' }));
@@ -167,9 +167,9 @@ test('old map and discover addresses open the Library', () => {
   assert.deepEqual(parseHash('#discover?kind=skill&q=pdf'), library({ kind: 'skill', show: 'new', q: 'pdf' }));
   assert.deepEqual(parseHash('#discover?kind=hook'), library({ kind: 'plugin', show: 'new' }));
   // The Library's own address keeps every choice, and writes back the same.
-  const hash = '#library?kind=skill&show=all&category=Design&attention=1&project=p1&q=pdf';
+  const hash = '#library?kind=skill&show=all&category=Design&attention=1&view=list&project=p1&q=pdf';
   const parsed = parseHash(hash);
-  assert.deepEqual(parsed, library({ kind: 'skill', show: 'all', category: 'Design', attention: true, project: 'p1', q: 'pdf' }));
+  assert.deepEqual(parsed, library({ kind: 'skill', show: 'all', category: 'Design', attention: true, mode: 'list', project: 'p1', q: 'pdf' }));
   assert.equal(hashFor(parsed), hash);
   assert.equal(hashFor(library({})), '#library?kind=mcp_server');
   assert.equal(parseHash('#library?show=nope').show, 'mine');

@@ -1,6 +1,7 @@
 // Gateway: which clients reach it, and which servers are not connected to it.
-import { getJson, postJson } from "./api.js";
+import { getJson, postJson, query } from "./api.js";
 import { $, busyWhile, button, el, joinWords, plural, reportError, webLink } from "./dom.js";
+import { drawMap, layoutTree, toggleOpen } from "./map.js";
 import { entrance, fold, reducedMotion } from "./motion.js";
 import { closePanel, contextLinks, heldActions, heldButtons, isPanelOpen, keepFrom, linksRow, moveInto, moveTargets, openInfo, openItem, review, toast, toolsSection } from "./panel.js";
 import { banner, CLIENT_ICONS, CLIENT_NAMES, clientCheck, DARK_ICONS, flag, GATEWAY_NOTE, gatewayName, kindOf, kitdenClients, mark, skeleton, staleNote, toolsNode } from "./parts.js";
@@ -89,7 +90,99 @@ export function renderGateway(main) {
     return;
   }
   if (currentError("gateway")) main.append(staleNote(data.readAt.gateway));
+  if (state.mode === "map") gatewayMap(main, model);
+  else gatewayCards(main, model);
+  // A performance mark for the map probe (Part 4.1): the first time the page draws with data.
+  if (!performance.getEntriesByName("kitden:gateway-drawn").length) performance.mark("kitden:gateway-drawn");
+}
 
+// The Gateway's map columns: clients, the gateway, servers, tools, each with its blocks' size,
+// wide and narrow. Narrow, the gateway is a small tile and tools are rows inside their server.
+export const GATEWAY_COLUMNS = [
+  { id: "clients", w: 150, h: 54, narrowW: 132 },
+  { id: "gateway", w: 150, h: 124, narrowW: 56, narrowH: 56 },
+  { id: "servers", w: 170, h: 54, narrowW: 220 },
+  { id: "tools", w: 190, h: 34, narrowH: 30 },
+];
+const OUTSIDE = "Outside the gateway · calls skip Kitden's rules";
+
+// The Gateway as a tree for the map (map.js), from `view` (the /api/gateway-view answer): the
+// three clients, each joined to the Kitden gateway while its kitden entry is on; the gateway's
+// servers in Remote and Local groups, joined to it unless off; the servers outside it, each
+// joined to every client that has it by a direct line; and the tools of an open server, from
+// `tools` (a server's tools by name, as /api/gateway/tools answers), joined to it while on.
+export function gatewayTree(view, { setup, open = new Set(), tools = {} } = {}) {
+  const { linked } = kitdenClients(setup);
+  const blocks = [];
+  const links = [];
+  for (const id of WRITABLE) {
+    blocks.push({ id: `client:${id}`, column: "clients", kind: "client", name: CLIENT_NAMES[id], state: linked.includes(id) ? "on" : "off" });
+  }
+  const kitden = view.gateways.find((g) => g.kind === "kitden");
+  if (kitden) {
+    const gateway = `gateway:${kitden.id}`;
+    blocks.push({ id: gateway, column: "gateway", kind: "gateway", name: kitden.name, state: "on" });
+    for (const id of linked) links.push({ from: `client:${id}`, to: gateway, kind: "on" });
+    for (const [kind, word] of [["remote", "Remote"], ["local", "Local"]]) {
+      const servers = (kitden.servers || []).filter((s) => s.kind === kind);
+      if (!servers.length) continue;
+      const group = `group:${kitden.id}:${kind}`;
+      blocks.push({ id: group, column: "servers", kind: "group", name: word });
+      for (const server of servers) {
+        const id = `held:${kitden.id}:${server.name}`;
+        const on = server.state !== "off";
+        blocks.push({ id, column: "servers", parent: group, kind: "held", name: server.name, state: on ? "on" : "off", count: server.tools });
+        if (on) links.push({ from: gateway, to: id, kind: "on" });
+        if (!open.has(id)) continue;
+        for (const tool of tools[server.name] || []) {
+          // `effective` counts the server's switch too; without it, the tool's own state.
+          const toolOn = (tool.effective ?? tool.state) === "on";
+          const toolId = `tool:${server.name}/${tool.name}`;
+          blocks.push({ id: toolId, column: "tools", parent: id, kind: "tool", name: tool.name, state: toolOn ? "on" : "off" });
+          if (toolOn) links.push({ from: id, to: toolId, kind: "on" });
+        }
+      }
+    }
+  }
+  const rows = GROUPS.flatMap(([key]) => (view.groups[key] || []).map((row) => [key, row]));
+  if (rows.length) blocks.push({ id: "group:outside", column: "servers", kind: "group", name: OUTSIDE });
+  for (const [key, row] of rows) {
+    const id = `outside:${key}:${row.name}`;
+    blocks.push({ id, column: "servers", parent: "group:outside", kind: "outside", name: row.name, state: "on" });
+    for (const client of row.clients) if (WRITABLE.includes(client)) links.push({ from: `client:${client}`, to: id, kind: "direct" });
+  }
+  return { columns: GATEWAY_COLUMNS, blocks, links };
+}
+
+// The map at #gateway?view=map, the probe of Part 4.1: what is open, each open server's tools
+// for the picked project, and the links drawn already. A held server opens on a click, and its
+// tools are read each time it opens.
+const onMap = { project: null, open: new Set(), tools: {}, drawn: new Set() };
+
+function gatewayMap(main, view) {
+  if (onMap.project !== state.project) Object.assign(onMap, { project: state.project, open: new Set(), tools: {} });
+  const tree = gatewayTree(view, { setup: data.setupServer, open: onMap.open, tools: onMap.tools });
+  const layout = layoutTree(tree, { open: onMap.open, width: innerWidth });
+  const box = el("div");
+  main.append(box);
+  drawMap(box, tree, layout, { onOpen: (id) => openOnMap(tree, id).catch(reportError), drawn: onMap.drawn, reduced: reducedMotion.matches });
+}
+
+async function openOnMap(tree, id) {
+  const block = tree.blocks.find((b) => b.id === id);
+  if (!block || block.kind !== "held") return;
+  onMap.open = toggleOpen(tree, onMap.open, id);
+  render();
+  if (!onMap.open.has(id)) return;
+  const { project } = onMap;
+  const answer = await getJson(`/api/gateway/tools${query({ server: block.name, project })}`);
+  if (onMap.project !== project) return;
+  onMap.tools[block.name] = answer.tools;
+  if (state.view === "gateway" && state.mode === "map") render();
+}
+
+// Today's cards: the Kitden gateway, the registered ones, and the servers not in a gateway.
+function gatewayCards(main, model) {
   const blocks = [];
   // Only without any gateway, the Kitden one included (no home folder to change).
   if (!model.gateways.length) {

@@ -144,8 +144,26 @@ def test_gateway_says_its_lists_are_mcp_servers():
 def test_gateway_wires_do_not_fake_traffic():
     # A wire draws once when its connection appears; nothing loops, Kitden cannot see traffic.
     css = (STATIC / "style.css").read_text()
-    assert not any(".routes" in line and "infinite" in line for line in css.splitlines())
-    assert "flow" not in script("gateway.js")
+    assert not any(
+        ("map" in line or ".routes" in line) and "infinite" in line for line in css.splitlines()
+    )
+    for name in ("gateway.js", "map.js"):
+        assert "flow" not in script(name), name
+
+
+def test_the_map_marks_when_it_is_drawn():
+    assert '"kitden:map-drawn"' in script("map.js") and '"kitden:gateway-drawn"' in script(
+        "gateway.js"
+    )
+
+
+def test_the_map_words():
+    # A group over six shows five and "N more"; the outside group says why it is apart.
+    assert '"Outside the gateway · calls skip Kitden\'s rules"' in script("gateway.js")
+    assert " more`" in script("map.js")
+    # The map shows no state word; a screen reader hears one.
+    states = 'STATE_SAID = { on: "On", off: "Off", unk: "Unknown", preview: "Preview" }'
+    assert states in script("map.js")
 
 
 def test_plugin_switch_opens_a_review_and_does_not_flip_itself():
@@ -634,7 +652,7 @@ def test_while_a_change_is_written_the_review_says_so_and_offers_nothing_to_pres
 
 def test_library_replaces_load_map_and_discover():
     assert "Load map" not in INDEX and "Discover" not in INDEX
-    assert not (STATIC / "js" / "map.js").exists() and not (STATIC / "js" / "discover.js").exists()
+    assert not (STATIC / "js" / "discover.js").exists()
     text = script("library.js")
     assert 'el("h1", null, "Library")' in text
     assert "What each client loads, and what you can add to it. Based on saved settings." in text

@@ -1,5 +1,5 @@
 // Page state, data cache and navigation. The URL hash keeps the state, so links and Back work:
-// #library?kind=<kind>&show=<mine|new|all>&category=<name>&attention=1&project=<id>&q=<text>&sel=<kind>:<name>
+// #library?kind=<kind>&show=<mine|new|all>&category=<name>&attention=1&view=<map|list>&project=<id>&q=<text>&sel=<kind>:<name>
 import { getJson, query } from "./api.js";
 import { transition } from "./motion.js";
 
@@ -7,12 +7,27 @@ export const VIEWS = ["overview", "library", "gateway", "changes", "agents"];
 // Places the Library replaced, and the choice each one opens it on.
 export const OLD_VIEWS = { map: "mine", discover: "new" };
 const SHOWS = ["mine", "new", "all"];
-// The kinds of item the address can select: `sel=mcp_server:github`.
-export const SEL_KINDS = ["mcp_server", "plugin", "skill", "hook", "marketplace", "instructions"];
-// `selected` is the item picked on any page, { kind, name }, or null.
+// The places with a Map and a List. The address keeps the choice as `view=map|list`; the state
+// keeps it as `mode`, because `view` names the place.
+const MODE_PLACES = ["gateway", "library"];
+const MODES = ["map", "list"];
+// With no choice in the address, a page opens in List past this many blocks in its middle column.
+export const MAP_AT = 15;
+// The kinds of item the address can select: `sel=mcp_server:github`, `sel=tool:github/push_files`,
+// `sel=client:codex`, `sel=group:outside` (a map's group block, its id without `group:`).
+export const SEL_KINDS = ["mcp_server", "plugin", "skill", "hook", "marketplace", "instructions", "tool", "client", "group"];
+// `selected` is the item picked on any page, { kind, name }, or null. `mode`: "map", "list" or
+// "" (no choice).
 export const state = {
-  view: "overview", kind: "mcp_server", show: "mine", category: "", attention: false, project: "", q: "", selected: null,
+  view: "overview", kind: "mcp_server", show: "mine", category: "", attention: false, mode: "", project: "", q: "", selected: null,
 };
+
+// What a page shows: the choice in the address, else List past MAP_AT blocks, else Map.
+export function viewMode(s, count) {
+  if (s.mode) return s.mode;
+  return count > MAP_AT ? "list" : "map";
+}
+
 // A change is being applied or undone: live rescans wait so the result can morph in.
 export const busy = { change: false };
 let idleListener = () => {};
@@ -65,6 +80,14 @@ export function selFor(selected) {
   return selected ? `${selected.kind}:${selected.name}` : "";
 }
 
+// A selected tool's name, "github/push_files", as { server, tool }: split at the first "/", so a
+// tool name may hold "/" too. Null without both parts.
+export function toolSel(name) {
+  const text = String(name || "");
+  const at = text.indexOf("/");
+  return at > 0 && at < text.length - 1 ? { server: text.slice(0, at), tool: text.slice(at + 1) } : null;
+}
+
 export function sameSel(a, b) {
   return selFor(a) === selFor(b);
 }
@@ -78,12 +101,15 @@ export function parseHash(hash) {
   const show = params.get("show");
   let kind = params.get("kind") || "mcp_server";
   if (place === "discover") kind = kind === "skill" ? "skill" : "plugin";
+  const view = old ? "library" : VIEWS.includes(place) ? place : "overview";
+  const mode = params.get("view");
   return {
-    view: old ? "library" : VIEWS.includes(place) ? place : "overview",
+    view,
     kind,
     show: old || (SHOWS.includes(show) ? show : "mine"),
     category: params.get("category") || "",
     attention: params.get("attention") === "1" || (place === "map" && params.get("only") === "problems"),
+    mode: MODE_PLACES.includes(view) && MODES.includes(mode) ? mode : "",
     project: params.get("project") || "",
     q: params.get("q") || "",
     selected: parseSel(params.get("sel")),
@@ -94,7 +120,8 @@ export function hashFor(s) {
   const library = s.view === "library"
     ? { kind: s.kind, show: s.show === "mine" ? "" : s.show, category: s.category, attention: s.attention ? "1" : "" }
     : {};
-  return `#${s.view}${query({ ...library, project: s.project, q: s.q, sel: selFor(s.selected) })}`;
+  const mode = MODE_PLACES.includes(s.view) ? s.mode : "";
+  return `#${s.view}${query({ ...library, view: mode, project: s.project, q: s.q, sel: selFor(s.selected) })}`;
 }
 
 // A new place or project gets its own history entry, so Back returns to it; tabs, filters
@@ -135,18 +162,22 @@ export function libraryChoice(selected) {
   return { kind: selected.kind, show: "mine", category: "", attention: false, q: "" };
 }
 
-// Open a place with an item selected; the place opens its Details. The project stays.
-export function goTo(view, selected) {
+// Open a place with an item selected; the place opens its Details. The project stays; `mode`
+// picks Map or List there.
+export function goTo(view, selected, { mode } = {}) {
   arrival.pending = Boolean(selected);
-  place(view, { selected, ...(view === "library" && selected ? libraryChoice(selected) : {}) });
+  place(view, { selected, ...(view === "library" && selected ? libraryChoice(selected) : {}), ...(mode ? { mode } : {}) });
 }
 
-// Place changes cross-fade; filter changes are instant.
+// Place changes cross-fade; filter changes are instant. The Map or List choice belongs to its
+// place: another place starts without one, unless `params` brings one. A switch between Map and
+// List gets its own history entry, so Back switches back.
 function place(view, params) {
   const moving = view !== state.view;
   const newProject = params.project !== undefined && params.project !== state.project;
-  Object.assign(state, { view }, params);
-  writeHash(moving || newProject);
+  const newMode = params.mode !== undefined && params.mode !== state.mode;
+  Object.assign(state, { view }, moving ? { mode: "" } : {}, params);
+  writeHash(moving || newProject || newMode);
   show(moving);
 }
 
@@ -173,7 +204,7 @@ export function followHash(hash) {
   const old = Boolean(OLD_VIEWS[view]);
   if (!VIEWS.includes(view) && !old) return null;
   const next = parseHash(hash);
-  const same = ["view", "project", "kind", "show", "category", "attention", "q"].every((key) => next[key] === state[key])
+  const same = ["view", "project", "kind", "show", "category", "attention", "mode", "q"].every((key) => next[key] === state[key])
     && sameSel(next.selected, state.selected);
   const newProject = next.project !== state.project;
   if (!same) followAddress(next);
@@ -239,6 +270,15 @@ export async function loadMap() {
 export async function loadGateway() {
   const { project } = state;
   await guarded("gateway", `/api/gateway-view${query({ project })}`, (v) => { data.gateway = v; }, project);
+  markGatewayData();
+}
+
+// A performance mark for the map probe (Part 4.1): both reads the Gateway draws from have
+// answered, once per page load.
+function markGatewayData() {
+  if (data.gateway && data.setupServer && !performance.getEntriesByName("kitden:gateway-data").length) {
+    performance.mark("kitden:gateway-data");
+  }
 }
 
 export async function loadChanges() {
@@ -247,6 +287,7 @@ export async function loadChanges() {
 
 export async function loadSetupServer() {
   await guarded("setupServer", "/api/setup-server", (v) => { data.setupServer = v; });
+  markGatewayData();
 }
 
 // Everything the current place shows, after a scan or a change. Nothing is read for a project

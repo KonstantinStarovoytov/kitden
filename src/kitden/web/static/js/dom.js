@@ -105,6 +105,12 @@ export function shortPaths(text) {
   return String(text || "").replace(/\/Users\/[^/\s]+/g, "~");
 }
 
+// A name cut to `max` characters with "…"; the whole name goes in the hover text and the label.
+export function cutName(name, max = 24) {
+  const text = String(name || "");
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
 export function plural(count, one, many) {
   return `${count} ${count === 1 ? one : many}`;
 }

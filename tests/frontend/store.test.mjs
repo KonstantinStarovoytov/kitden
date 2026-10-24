@@ -18,7 +18,7 @@ function fetchAnswers(map) { answers = map; failing = null; }
 function fetchFails(url) { failing = url; }
 const ALL_OK = {};
 
-const { current, currentError, data, freshness, go, goTo, hashFor, loadMap, parseHash, parseSel, projectGone, reload, retry, selFor, setRenderer, state, takeArrival } = await import('../../src/kitden/web/static/js/store.js');
+const { current, currentError, data, followHash, freshness, go, goTo, hashFor, loadMap, MAP_AT, parseHash, parseSel, projectGone, reload, retry, selFor, setRenderer, state, takeArrival, toolSel, viewMode } = await import('../../src/kitden/web/static/js/store.js');
 
 beforeEach(() => { state.project = ''; });
 
@@ -130,4 +130,48 @@ test('a plain place change opens no selection', () => {
   go('library', { kind: 'mcp_server' });
   assert.equal(takeArrival(), null);
   assert.deepEqual(state.selected, { kind: 'skill', name: 'tidy' }); // it stays for the next page
+});
+
+test('the view choice stays in the address, and List opens first past 15 servers', () => {
+  assert.equal(parseHash('#gateway?view=list').mode, 'list');
+  assert.equal(parseHash('#gateway?view=nope').mode, '');
+  // Only the Gateway and the Library have a Map and a List.
+  assert.equal(parseHash('#overview?view=map').mode, '');
+  assert.equal(hashFor({ ...state, view: 'gateway', mode: 'map', project: '', q: '', selected: null }), '#gateway?view=map');
+  assert.equal(hashFor({ ...state, view: 'overview', mode: 'map', project: '', q: '', selected: null }), '#overview');
+  assert.equal(MAP_AT, 15);
+  assert.equal(viewMode({ mode: '' }, 15), 'map'); assert.equal(viewMode({ mode: '' }, 16), 'list'); assert.equal(viewMode({ mode: 'map' }, 157), 'map');
+  assert.deepEqual(toolSel('github/push/files'), { server: 'github', tool: 'push/files' });
+  assert.equal(toolSel('github'), null);
+  assert.deepEqual(parseSel('tool:github/push_files'), { kind: 'tool', name: 'github/push_files' });
+  assert.deepEqual(parseSel('group:outside'), { kind: 'group', name: 'outside' });
+  assert.deepEqual(parseSel('client:codex'), { kind: 'client', name: 'codex' });
+});
+
+test('Back switches Map and List, and a mode passed to go wins over the clear', () => {
+  followHash('#gateway?view=map');
+  assert.equal(state.mode, 'map');
+  assert.equal(followHash('#gateway?view=map').same, true);
+  // Only the view differs: Back is a change of state.
+  const back = followHash('#gateway?view=list');
+  assert.equal(back.same, false);
+  assert.equal(state.mode, 'list');
+  go('gateway', { q: 'docs' }); // the same place keeps it
+  assert.equal(state.mode, 'list');
+  // A switch adds a history entry, so Back has one to go back to; a search only replaces it.
+  const entries = [];
+  globalThis.history = { pushState: (_, __, hash) => entries.push(['push', hash]), replaceState: (_, __, hash) => entries.push(['replace', hash]) };
+  go('gateway', { mode: 'map' });
+  go('gateway', { q: 'files' });
+  delete globalThis.history;
+  assert.deepEqual(entries, [['push', '#gateway?view=map&q=docs'], ['replace', '#gateway?view=map&q=files']]);
+  go('overview');
+  assert.equal(state.mode, '');
+  go('gateway', { mode: 'list' });
+  assert.equal(state.mode, 'list');
+  goTo('library', { kind: 'skill', name: 'tidy' });
+  assert.equal(state.mode, '');
+  goTo('gateway', { kind: 'tool', name: 'files/read_file' }, { mode: 'map' });
+  assert.equal(state.mode, 'map');
+  assert.deepEqual(takeArrival(), { kind: 'tool', name: 'files/read_file' });
 });
