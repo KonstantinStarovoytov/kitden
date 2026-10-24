@@ -89,7 +89,8 @@ Sources: the ledgers of the earlier review follow-up, Parts 1–6 (F1 truth, F2 
 F3 management, F4 speed, F5 secrets, F6 instructions), checked against the code on 2026-10-22
 (`align-listing-fix`, one commit ahead of `main`), plus one item the coordinator added (47).
 Rows 48–79 come from the ledgers of the visual plan's Parts 1–3, checked against `main`
-(`d8c05cc`) on 2026-10-24. Lines in the raw list that are tool-call noise are left out.
+(`d8c05cc`) on 2026-10-24. Rows 80–87 come from the ledger of map Part 4 (2026-10-24); Task 9
+takes them in the same batch. Lines in the raw list that are tool-call noise are left out.
 
 "Map Part N" is Part N of `docs/superpowers/specs/2026-10-23-map-pages-design.md`, which replaced
 the old Parts 4–6.
@@ -233,6 +234,14 @@ the old Parts 4–6.
 | 77 | `details.js` size (about 830 lines in the ledger, 902 on `main`) (Part 3) | superseded by map Part 4 | Part 4 moves the Gateway cards into `gateway-details.js`. Task 9 splits `details.js` only if it is still over 900 lines after Part 6. |
 | 78 | `design.md` length: a read-through for repetition (Part 3) | fix here, Task 11 | One read, cut repeats; no pinned word changes. |
 | 79 | The frames' hint lines under the page body, and the scope bars of O1 (Overview) and C1 (Changes) (map Parts 4–6) | fix here, Task 9 | Parts 4–6 leave them out (Part 6 builds only the Instructions hint line). Words from the frames, for facts Kitden knows. |
+| 80 | The Kitden gateway card's Rules fact says "No project has its own rules" when the gateway settings could not be read: `/api/projects` sends 0 (map Part 4) | fix here, Task 9 | Say "Not known" when `gateway.problem` is set, as the scope bar does. |
+| 81 | A "Not known" outside server's Details still say "<client> calls it directly…" (map Part 4) | fix here, Task 9 | The sentence claims more than Kitden knows. |
+| 82 | `unknown` is per row: a name on in one client and not yet approved in another draws both amber lines solid (map Part 4) | fix here, Task 9 | Mark the line per client. |
+| 83 | A refused map preview shows the server's refusal words in the review bar; a few name a path (map Part 4) | fix here, Task 9 | A short sentence on the bar; the full words in Details. |
+| 84 | The Undo toast shows the engine's words, paths included (on `main` before Part 4) | fix here, Task 9 | Same rule as row 83. |
+| 85 | Two project folders with the same name look alike in the project menu, which shows no paths (map Part 4) | owner decision | Parent folder name on a clash, or the path under Technical details. |
+| 86 | Codex project layers are not in an outside row's `stays`: the grip shows, then the preview refuses (map Part 4 builder call) | fix here, Task 9 | Kitden knows it at scan time. |
+| 87 | Map Part 4 cleanups: the `ResizeObserver` also watches height; the amber direct line is 2.27:1 on the light canvas; `WRITABLE`, `SVG` and `CLIENT_WORDS` copies; two module objects named `onMap`; `Item.entry_key` should not take part in `==` | fix here, Task 9 | Small; one commit. |
 
 Spec items with no line above: safer `~/.claude.json` writes (Task 4), one start read (Task 8),
 the gateway card's set-up for every client (re-checked in Task 8 against map Part 4's client

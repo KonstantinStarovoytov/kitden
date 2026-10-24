@@ -98,6 +98,18 @@ here.
 Also pinned, from the master Review Focus: the large sample opens in List, its layout stays under
 16 ms, and long names are cut (Task 6).
 
+## Carried from Part 4 (2026-10-24)
+
+- `app.js` calls `leaveMap()` on every place that is not the Gateway, and `mapPreview` records no
+  page. Before the Library map uses `previewOnMap` (Task 9), give the preview its page, or the
+  Library will drop its own preview on each render.
+- With Details docked, the Library table clips words at 1024–1150 px. Task 4 replaces the table.
+- The Gateway's outside server Details have no finding callouts and no "Compare across clients".
+  The Library's MCP Details had both. Bring the callouts over before Task 4 takes MCP rows out of
+  the Library.
+- In the Gateway List, `gridKey` folds a group on Enter. The Library's marketplace captions open
+  Details on Enter (Task 6), so `gridKey` needs that case.
+
 ## Names this part shares with other parts
 
 - **Consumes from Part 4**, under the master names and Part 4's signatures:
