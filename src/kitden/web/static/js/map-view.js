@@ -296,9 +296,13 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
     pointer.onClick(item.link);
   }
 
+  // Enter or Space opens the link. Delete or Backspace removes it, once: a key held down or one
+  // with a modifier is not that.
   function keyOnHit(event, item) {
     const press = event.key === "Enter" || event.key === " ";
-    if (!press && event.key !== "Delete" && event.key !== "Backspace") return;
+    const plain = !event.repeat && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
+    const remove = plain && (event.key === "Delete" || event.key === "Backspace");
+    if (!press && !remove) return;
     event.preventDefault();
     if (press) pressLink(item);
     else pointer.onRemove(item.link);
@@ -315,7 +319,11 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
     if (item.d) hit.setAttribute("d", item.d);
     hit.addEventListener("pointerover", () => pointAt(item));
     hit.addEventListener("pointerout", unpointSoon);
-    hit.addEventListener("focus", () => pointAt(item));
+    // Only focus for a keyboard points at it: a mouse click focuses the hit too, and the panel gives
+    // that focus back when it closes, long after the pointer has gone.
+    hit.addEventListener("focus", () => {
+      if (hit.matches?.(":focus-visible") !== false) pointAt(item);
+    });
     hit.addEventListener("blur", unpointSoon);
     hit.addEventListener("click", () => pressLink(item));
     hit.addEventListener("keydown", (event) => keyOnHit(event, item));

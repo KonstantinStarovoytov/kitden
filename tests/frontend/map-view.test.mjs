@@ -443,3 +443,39 @@ test('a hit follows its link while blocks move, and goes with it', async () => {
   assert.equal(hitOf(v), undefined);
   assert.equal(xOf(v).hidden, true);
 });
+
+test('focus that is not for a keyboard does not give the link its hover look; a press still does', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  reduce(true);
+  const v = view({ links: LINKS });
+  await v.draw(TREE, lay(), {});
+  const [h, x, link] = [hitOf(v), xOf(v), v.node('c1>s1')];
+  // A mouse click focused it, the panel took the focus, and closing the panel gives it back.
+  h.matches = () => false;
+  h.focus();
+  assert.ok(!link.classList.contains('hov')); assert.equal(x.hidden, true);
+  // A press (the click itself) still points at it.
+  h.dispatch('click');
+  assert.ok(link.classList.contains('hov')); assert.equal(x.hidden, false);
+  h.dispatch('blur'); t.mock.timers.tick(240);
+  assert.ok(!link.classList.contains('hov')); assert.equal(x.hidden, true);
+  // Focus from the keyboard points at it.
+  h.matches = () => true;
+  h.focus();
+  assert.ok(link.classList.contains('hov')); assert.equal(x.hidden, false);
+});
+
+test('Delete with a modifier, or held down, removes nothing; a plain Delete removes once', async () => {
+  reduce(true); removed.length = 0;
+  const v = view({ links: LINKS });
+  await v.draw(TREE, lay(), {});
+  const h = hitOf(v);
+  for (const init of [{ ctrlKey: true }, { metaKey: true }, { altKey: true }, { shiftKey: true }, { repeat: true }]) {
+    const event = h.dispatch('keydown', { key: 'Delete', ...init });
+    assert.equal(event.defaultPrevented, false);
+  }
+  h.dispatch('keydown', { key: 'Backspace', metaKey: true });
+  assert.equal(removed.length, 0);
+  h.dispatch('keydown', { key: 'Delete' });
+  assert.equal(removed.length, 1);
+});

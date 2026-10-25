@@ -542,6 +542,12 @@ def test_a_link_says_what_its_x_does():
     assert "} to ${" in view and '"Connections"' in view and '"aria-keyshortcuts", "Delete"' in view
 
 
+def test_a_pointed_link_keeps_its_look_in_a_search():
+    rule = "div.map.finding .link.hov, div.map.finding .link.picked { stroke-opacity: 1; }"
+    assert rule in CSS
+    assert CSS.index("div.map.finding .link { stroke-opacity: 0.25; }") < CSS.index(rule)
+
+
 def test_the_gateway_rises_on_its_own_when_the_place_changes():
     assert "html.map-entrance::view-transition-new(page) { animation: none; }" in CSS
     assert '"map-entrance"' in script("store.js")
