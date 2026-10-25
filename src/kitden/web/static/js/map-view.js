@@ -65,12 +65,13 @@ function rollingWords(words, nums, slot) {
 }
 
 // What a block shows, left to right: the grip of one that can be dragged, its tile (the page's
-// `tile(block)`), a tool's mark, its name cut short with its meta line under it (its lamp first)
-// and a gateway's counts under that, which projects have a rule of their own for a tool, the count
-// of a block that folds (style.css hides it while it is open), a slot's action, its ports (the
-// right one of a block that folds shows only while it is open), and the × of a block in preview. A
-// tag takes the meta line's words where a count takes the room, else it sits beside the name. It
-// gives the parts, with the lamp and the numbers that move when they change.
+// `tile(block)`), a tool's mark, its name cut short with its meta line under it (its lamp first,
+// and after its words, in the accent, what waits in the tray: `wait`) and a gateway's counts under
+// that, which projects have a rule of their own for a tool, the count of a block that folds
+// (style.css hides it while it is open), a slot's action, its ports (the right one of a block that
+// folds shows only while it is open), and the × of a block in preview. A tag takes the meta line's
+// words where a count takes the room, else it sits beside the name. It gives the parts, with the
+// lamp and the numbers that move when they change.
 function blockParts(block, { tile }) {
   const parts = [];
   const nums = new Map();
@@ -105,7 +106,9 @@ function blockParts(block, { tile }) {
       lamp = quiet(el("span", lampClass("lamp", block.lamp)));
       line.append(lamp);
     }
-    line.append(tag && counted ? tag : rollingWords(block.meta, nums, "meta"));
+    const words = tag && counted ? tag : rollingWords(block.meta, nums, "meta");
+    if (block.wait) words.append(el("span", "block-wait", block.wait));
+    line.append(words);
     text.append(line);
   }
   parts.push(text);
@@ -139,7 +142,7 @@ function blockParts(block, { tile }) {
 // it changes. Opening a block draws none of them again: its count and right port follow its
 // aria-expanded in style.css, so they fade.
 function wordsKey(block) {
-  return JSON.stringify([block.kind, block.name, block.meta, block.tag, block.count, block.action, block.lamp, block.grip, block.icon, block.client, block.gateway && block.gateway.kind, block.stats, block.projects, block.ports, block.takeOut]);
+  return JSON.stringify([block.kind, block.name, block.meta, block.wait, block.tag, block.count, block.action, block.lamp, block.grip, block.icon, block.client, block.gateway && block.gateway.kind, block.stats, block.projects, block.ports, block.takeOut]);
 }
 
 // What a block's parts showed (`drawn`, as blockParts gave them, for `block`), for its next draw:

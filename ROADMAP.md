@@ -15,7 +15,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Gateway map:** blocks glide and unfold in place, links take the pointer (× to remove, by
   keyboard too), and a selected block dims everything off its path. Blocks look like the mockup:
   lamps, ports, the gateway's counts that roll, and on each tool how many projects have a rule of
-  their own for it.
+  their own for it. Changes in the tray show on the map: a connect draws a dashed link, a
+  disconnect or a removed entry makes its line leave, and a server moved out waits outside,
+  "Moves to" its client; a click on one takes it out.
 - **Details float beside the map:** on Gateway, Library and Changes, Details float over the right
   of the page as in the mockup; the page keeps its width and the map stays wide. Another block's
   Details swap in place through a quiet skeleton.

@@ -104,7 +104,8 @@ const batch = (id) => (sent) => ({
 const { renderGateway } = await import('../../src/kitden/web/static/js/gateway.js');
 const { dropBody } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { data, setRenderer, state } = await import('../../src/kitden/web/static/js/store.js');
-const { addToTray, cancelTray } = await import('../../src/kitden/web/static/js/tray.js');
+const { addToTray, cancelTray, keyFor, takeOut } = await import('../../src/kitden/web/static/js/tray.js');
+const { reducedMotion } = await import('../../src/kitden/web/static/js/motion.js');
 
 // The medium sample, cut short (gateway.test.mjs has it whole): files and tracker in the Kitden
 // gateway, github outside it.
@@ -186,4 +187,111 @@ test('on the List, or once the page shows another place, a tray change draws not
   assert.doesNotMatch(filesLink(box).className, /\bleaving\b/);
   assert.equal(renders, 0);
   await cancelTray();
+});
+
+// The path drawn for a link of `box`: the line its hit lies on.
+const linkLine = (box, key) => {
+  const hit = node(box, `link:${key}`);
+  return hit && walk(box).find((n) => n.tagName === 'path' && /\blink\b/.test(n.className) && n.getAttribute('d') === hit.getAttribute('d'));
+};
+const lastMotion = (n) => {
+  const { keyframes, options } = n.animations.at(-1);
+  return [keyframes, options.duration, options.easing];
+};
+const CONNECT_CURSOR = { action: 'setup_server.register', targets: [{ client: 'cursor' }], params: {} };
+const DISCONNECT_CODEX = { action: 'client.disconnect', targets: [{ client: 'codex' }], params: {} };
+const MOVE_FILES_OUT = { action: 'gateway.move_out', targets: [{ client: 'claude_code' }], params: { server: 'files' } };
+const CALM = 'cubic-bezier(.2,.8,.2,1)';
+
+function freshMap() {
+  state.mode = 'map';
+  main.replaceChildren();
+  renderGateway(main);
+  settle();
+  return map();
+}
+
+test('a connect link fades in and a disconnect link blends to leaving; taken out, both go back', async (t) => {
+  const box = freshMap();
+  t.after(() => cancelTray());
+  queue(PREVIEW, batch('c4'), batch('c5'), batch('c6'));
+  await addToTray(CONNECT_CURSOR);
+  const connect = linkLine(box, 'client:cursor>gateway:kitden');
+  assert.match(connect.className, /\bpreview\b/);
+  assert.deepEqual(lastMotion(connect), [[{ opacity: 0 }, { opacity: 1 }], 300, CALM]);
+  // Cursor's lamp is the dashed ring, and its words say the change waits.
+  const cursor = node(box, 'block:client:cursor');
+  assert.ok(walk(cursor).some((n) => n.className === 'lamp pv'));
+  assert.ok(walk(cursor).some((n) => n.className === 'block-wait' && n.textContent === ' · in preview'));
+  await addToTray(DISCONNECT_CODEX);
+  const codex = linkLine(box, 'client:codex>gateway:kitden');
+  assert.match(codex.className, /\bleaving\b/);
+  assert.deepEqual(lastMotion(codex), [[{ strokeDasharray: '8 0', strokeOpacity: '1' }, { strokeDasharray: '4 4', strokeOpacity: '0.4' }], 300, CALM]);
+  settle();
+  // Taken out: the connect link fades out, the other blends back to a solid link.
+  await takeOut(keyFor(CONNECT_CURSOR));
+  assert.deepEqual(lastMotion(connect), [[{ opacity: 1 }, { opacity: 0 }], 240, 'ease-out']);
+  assert.ok(!walk(node(box, 'block:client:cursor')).some((n) => n.className === 'block-wait'));
+  await cancelTray();
+  assert.doesNotMatch(codex.className, /\bleaving\b/);
+  assert.deepEqual(lastMotion(codex), [[{ strokeDasharray: '4 4', strokeOpacity: '0.4' }, { strokeDasharray: '8 0', strokeOpacity: '1' }], 300, CALM]);
+  settle();
+});
+
+test('under reduced motion a connect link shows at once', async () => {
+  const box = freshMap();
+  reducedMotion.matches = true;
+  try {
+    queue(PREVIEW, batch('c7'));
+    await addToTray(CONNECT_CURSOR);
+    const connect = linkLine(box, 'client:cursor>gateway:kitden');
+    assert.deepEqual([connect.animations.length, connect.style.opacity], [0, '']);
+    assert.ok(walk(node(box, 'block:client:cursor')).some((n) => n.className === 'lamp pv'));
+  } finally {
+    reducedMotion.matches = false;
+    await cancelTray();
+    settle();
+  }
+});
+
+test('a press on the move-out block takes its row out and gives focus back to the server', async () => {
+  const box = freshMap();
+  try {
+    queue(PREVIEW, batch('c8'));
+    await addToTray(MOVE_FILES_OUT);
+    settle();
+    assert.equal(node(box, 'block:held:kitden:files'), null);
+    const shown = node(box, 'block:preview-out:files');
+    assert.ok(shown && linkLine(box, 'client:claude_code>preview-out:files'));
+    shown.focus();
+    shown.listeners.click[0]();
+    await new Promise((resolve) => setImmediate(resolve));
+    settle();
+    assert.deepEqual([document.activeElement, node(box, 'block:preview-out:files')], [node(box, 'block:held:kitden:files'), null]);
+  } finally {
+    await cancelTray();
+    settle();
+  }
+});
+
+test('the List draws none of them', async (t) => {
+  t.after(() => cancelTray());
+  queue(PREVIEW, batch('c9'), batch('c10'), batch('c11'), batch('c12'));
+  await addToTray(CONNECT_CURSOR);
+  await addToTray(DISCONNECT_CODEX);
+  await addToTray(MOVE_FILES_OUT);
+  await addToTray({ action: 'mcp.remove_direct', targets: [{ item: 'g' }], params: {} });
+  state.mode = 'list';
+  main.replaceChildren();
+  renderGateway(main);
+  const list = main.children.find((n) => n.getAttribute('role') === 'treegrid');
+  const rows = walk(list).filter((n) => n.dataset.row);
+  const ids = rows.map((n) => n.dataset.row);
+  // files is still in the gateway and github outside it; no row is a preview.
+  assert.ok(ids.includes('held:kitden:files') && ids.includes('outside:move:github'));
+  assert.ok(!ids.some((id) => id.startsWith('preview')));
+  // Cursor's row says what is true now, and nothing leaves.
+  const cursor = rows.find((n) => n.dataset.row === 'client:cursor');
+  assert.deepEqual(walk(cursor).filter((n) => n.className === 'meta').map((n) => n.textContent), ['Not connected']);
+  assert.ok(!walk(list).some((n) => /\bleaving\b|block-wait/.test(n.className)));
 });

@@ -628,7 +628,7 @@ def test_the_map_words():
     assert '"Outside the gateway · calls skip Kitden\'s rules"' in script("gateway.js")
     assert " more`" in script("map.js")
     # The map shows no state word; a screen reader hears one, the same as the words it shows.
-    states = 'STATE_SAID = { on: "On", off: "Off", unk: "Not known", preview: "Preview" }'
+    states = 'STATE_SAID = { on: "On", off: "Off", unk: "Not known", preview: "In preview" }'
     assert states in script("map.js")
 
 
@@ -2133,6 +2133,27 @@ def test_the_map_previews_are_tray_rows():
     dock = script("dock.js")
     assert "A backup is kept." in dock and '"Nothing was changed"' in dock
     assert "Sign in after Apply" not in review + dock
+
+
+def test_the_map_previews_connect_disconnect_and_move_out():
+    # gateway-notes 4.1, 4.2, 4.4: a connect waits as a preview link and the client says so; a
+    # disconnect, a removed entry and a removal from the gateway leave; a move out waits outside.
+    text = gw()
+    for words in (
+        'wait: " · in preview"',
+        "meta: `Moves to ${CLIENT_NAMES[move.client]}`",
+        'kind: "direct", preview: true',
+    ):
+        assert words in text, words
+    assert 'block.leaving && "Leaving"' in script("map.js")
+    assert 'const LINK_FLAGS = ["unk", "leaving", "preview"];' in script("map.js")
+    # The waiting words are in the accent and wrap under the state words, beside the lamp.
+    assert "color: var(--route);" in rule("div.map .block-wait")
+    words = rule("div.map .block-words:has(> .block-wait), div.map .block.preview .block-words")
+    assert "white-space: normal" in words and "text-wrap: balance" in words
+    # Outside the gateway an icon has no tile, a move out's preview too.
+    assert "border: 0" in rule("div.map .block-icon.bare")
+    assert "div.map .block.outside .block-icon" not in CSS
 
 
 def test_the_map_preview_words_and_look():

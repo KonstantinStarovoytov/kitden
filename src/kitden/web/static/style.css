@@ -686,10 +686,10 @@ div.map .block.tool { gap: 9px; padding: 0 10px; }
 div.map .block.tool .block-name { font-weight: 400; }
 div.map .block-projects { flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: 4px; color: var(--ink-3); font-size: 10.5px; white-space: nowrap; }
 div.map .block-projects.own { color: var(--route); }
-/* Outside the gateway: on the dim fill, the grip where the gateway can take it, its icon with no tile,
-   a grey ring for its lamp and a grey port. */
+/* Outside the gateway: on the dim fill, the grip where the gateway can take it, its icon with no tile
+   (a move out's preview there too), a grey ring for its lamp and a grey port. */
 div.map .block.outside { background: var(--dim); }
-div.map .block.outside .block-icon { width: auto; height: auto; border: 0; background: none; }
+div.map .block-icon.bare { width: auto; height: auto; border: 0; background: none; }
 div.map .block-grip { flex: none; display: grid; margin-right: -4px; color: var(--lamp-off); }
 div.map .block.more { justify-content: center; border-style: dashed; background: transparent; color: var(--ink-2); }
 div.map .block.more .block-text { flex: none; }
@@ -707,6 +707,13 @@ div.map.narrow .block.client .block-tile .client-mark, div.map.narrow .block.cli
 /* A client's words get 2 px more room on its right, so "Not connected" fits beside its lamp. */
 div.map .block.client { padding-right: 10px; }
 div.map .block.client .lamp { --pop: 2.4; }
+/* While its connect waits in the tray, " · in preview" follows a client's words in the accent, on a
+   second line where they do not fit. A move out's "Moves to Claude Code" breaks before the client's
+   name the same way. The lamp stays beside the first line. */
+div.map .block-wait { color: var(--route); }
+div.map .block-words:has(> .block-wait), div.map .block.preview .block-words { white-space: normal; text-wrap: balance; }
+div.map .block-meta:has(.block-wait), div.map .block.preview .block-meta { align-items: flex-start; }
+div.map .block-meta:has(.block-wait) > .lamp, div.map .block.preview .block-meta > .lamp { margin-top: 4.5px; }
 div.map.narrow .block.client { gap: 6px; padding: 0 8px; }
 div.map.narrow .block.gateway, div.map.narrow .block.slot:not([data-state="preview"]) { padding: 0; }
 div.map.narrow .block.gateway .block-text, div.map.narrow .block.gateway .block-stats, div.map.narrow .block.slot:not([data-state="preview"]) .block-text, div.map.narrow .block-action { display: none; }

@@ -212,8 +212,11 @@ function heldTag(server, on) {
 // puts a preview block `preview:<name>` at the end of its group once its row has its part (the
 // slot "Drop to add" while it is asked), joined to the gateway by a preview link; the outside row
 // it moves hides its direct lines and its grip. A server taken out of the Kitden gateway, or a
-// tool turned off in the scope shown, has its link drawn leaving. Each block and link a row draws
-// names it (`row`, its key). While a server is dragged (`drop`, `{ name, kind }`, kind "remote"
+// tool turned off in the scope shown, has its link drawn leaving. A client the tray connects gets
+// a preview link to the Kitden gateway, one it disconnects has its link drawn leaving; a server
+// moved out of the gateway shows outside (outsideParts), and a client's own entry removed has its
+// line drawn leaving. Each block and link a row draws names it (`row`, its key); rows are drawn
+// once they have their part. While a server is dragged (`drop`, `{ name, kind }`, kind "remote"
 // or "local") the slot opens in that group too.
 export function gatewayTree(view, { setup, clients = [], held = new Map(), picked = "", rows = [], drop = null } = {}) {
   const { linked, off, known, setup: offers } = kitdenClients(setup);
@@ -223,20 +226,22 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
   const links = [];
   // What the moves put in the groups of the Kitden gateway, and the outside rows they take.
   const { adds, moved } = movesIn(view, kitden, rows, drop);
-  for (const id of WRITABLE) blocks.push(clientBlock(id, { setup, linked, known, first, clients }));
+  const waits = connectRows(rows, setup);
+  const out = movesOut(rows);
+  for (const id of WRITABLE) blocks.push(clientBlock(id, { setup, linked, known, first, clients, wait: waits.get(id) }));
   // A gateway block joined to the clients it `reaches` (null when not read), then its servers in
-  // their groups; `server(block, word)` adds what each server's block says. `unread` says why
-  // Kitden does not know what it holds, so no count shows: a problem is not an empty gateway.
-  // `ends` are blocks for the end of a group (each `{ kind, block }`), which open that group if
-  // need be.
+  // their groups, but those that show elsewhere (`away`, by name); it counts them all.
+  // `server(block, word)` adds what each server's block says. `unread` says why Kitden does not
+  // know what it holds, so no count shows: a problem is not an empty gateway. `ends` are blocks
+  // for the end of a group (each `{ kind, block }`), which open that group if need be.
   // A gateway block speaks no state word: it says where it runs and its clients and servers, or
   // what Kitden could not read, and then its state is not known.
-  const addGateway = (gateway, reaches, servers, kindOf, server, unread = null, ends = []) => {
+  const addGateway = (gateway, reaches, servers, kindOf, server, unread = null, ends = [], away = new Map()) => {
     const id = `gateway:${gateway.id}`;
     blocks.push({ id, column: "gateway", kind: "gateway", name: gatewayName(gateway), ...gatewayFace(gateway, reaches, servers, unread), state: unread ? "unk" : "on", stateInMeta: true, gateway, unread, ports: { left: true, right: true } });
     for (const client of reaches || []) links.push({ from: `client:${client}`, to: id, kind: "on" });
     for (const [kind, word, mark] of KINDS) {
-      const mine = servers.filter((s) => kindOf(s) === kind);
+      const mine = servers.filter((s) => kindOf(s) === kind && !away.has(s.name));
       const last = ends.filter((end) => end.kind === kind).map((end) => end.block);
       if (!mine.length && !last.length) continue;
       const group = `group:${gateway.id}:${kind}`;
@@ -268,9 +273,10 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
         tools.push(shown);
         if (shown.state === "on") links.push({ from: block.id, to: shown.id, kind: "on" });
       }
-    }, kitden.problem ? "Could not read its settings." : null, adds);
+    }, kitden.problem ? "Could not read its settings." : null, adds, out);
     leaveParts(blocks, links, kitden, rows, picked);
   }
+  if (kitden) connectParts(links, kitden, waits);
   for (const other of usedFirst(view, view.gateways.filter((g) => g.kind !== "kitden"))) {
     const per = view.connections[other.id] || {};
     const answer = held.get(other.id);
@@ -283,30 +289,120 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
     }, unread);
   }
   blocks.push(...tools);
-  const outside = OUTSIDE_GROUPS.flatMap((key) => (view.groups[key] || []).map((row) => [key, row]));
-  if (outside.length) blocks.push({ id: "group:outside", column: "servers", kind: "group", name: OUTSIDE_MAP, icon: "info", h: OUTSIDE_H, before: 21, rowGap: 6 });
-  for (const [key, row] of outside) {
-    const id = `outside:${key}:${row.name}`;
-    const columns = (row.columns || row.clients).filter((c) => WRITABLE.includes(c));
-    const meta = `In ${joinWords(columns.map((c) => CLIENT_NAMES[c]))}`;
-    const targets = movesTo(view, key, row);
-    const move = targets.length > 0;
-    const tag = picked && row.override ? ORIGIN_WORDS.override : null;
-    // A drop moves into the Kitden gateway only, so a grip needs it; a move already in the tray
-    // needs no second one.
-    const grip = targets.some((g) => g.kind === "kitden") && !first && !moved.has(id);
-    const state = row.unknown ? "unk" : "on";
-    blocks.push({ id, column: "servers", parent: "group:outside", kind: "outside", name: row.name, meta, tag, state, lamp: "out", h: OUTSIDE_BLOCK_H, icon: OUTSIDE_ICONS[key], ports: { left: "out" }, row, groupKey: key, columns, move, grip });
-    const line = row.unknown ? { kind: "direct", unk: true } : { kind: "direct" };
-    if (!moved.has(id)) for (const client of columns) links.push({ from: `client:${client}`, to: id, ...line });
+  const outside = outsideParts(view, kitden, { picked, first, moved, out, gone: directRemovals(rows) });
+  return { columns: GATEWAY_COLUMNS, blocks: [...blocks, ...outside.blocks], links: [...links, ...outside.links] };
+}
+
+// The servers outside every gateway, each joined to each client that has it by a direct line,
+// with a grip where a move can take it, and in a project "This project" where the project's own
+// definition replaces the shared one (`picked`). A row a move into the gateway takes (`moved`)
+// has no line and no grip. A client whose own entries of it all go in the tray (`gone`, by entry)
+// has its line drawn leaving, and the server, once every client loses it, looks leaving too and
+// has no grip. After the rows of its kind, a server whose move out of the Kitden gateway waits in
+// the tray (`out`) shows in preview, "Moves to <Client>", joined to that client by a preview line;
+// it is a block of its own, also where that server is outside the gateway already.
+function outsideParts(view, kitden, { picked, first, moved, out, gone }) {
+  const blocks = [];
+  const links = [];
+  for (const group of OUTSIDE_GROUPS) {
+    for (const row of view.groups[group] || []) {
+      const id = `outside:${group}:${row.name}`;
+      const columns = (row.columns || row.clients).filter((c) => WRITABLE.includes(c));
+      // The clients whose line leaves, each with the key of the row that takes its entries out.
+      const leaves = new Map(columns.map((c) => [c, goneWith(row, c, gone)]).filter(([, by]) => by));
+      const leaving = columns.length > 0 && leaves.size === columns.length;
+      const meta = `In ${joinWords(columns.map((c) => CLIENT_NAMES[c]))}`;
+      const targets = movesTo(view, group, row);
+      const tag = picked && row.override ? ORIGIN_WORDS.override : null;
+      // A drop moves into the Kitden gateway only, so a grip needs it; a move already in the tray
+      // needs no second one, and a server on its way out has none.
+      const grip = targets.some((g) => g.kind === "kitden") && !first && !moved.has(id) && !leaving;
+      const state = row.unknown ? "unk" : "on";
+      blocks.push({ id, column: "servers", parent: "group:outside", kind: "outside", name: row.name, meta, tag, state, lamp: "out", h: OUTSIDE_BLOCK_H, icon: OUTSIDE_ICONS[group], ports: { left: "out" }, row, groupKey: group, columns, move: targets.length > 0, grip, ...(leaving ? { leaving } : {}) });
+      const line = row.unknown ? { kind: "direct", unk: true } : { kind: "direct" };
+      if (moved.has(id)) continue;
+      for (const client of columns) links.push({ from: `client:${client}`, to: id, ...line, ...(leaves.has(client) ? { leaving: true, row: leaves.get(client) } : {}) });
+    }
+    for (const [name, move] of out) {
+      const server = ((kitden && kitden.servers) || []).find((s) => s.name === name);
+      if (!server || (server.kind === "local" ? "local" : "move") !== group) continue;
+      const id = `preview-out:${name}`;
+      blocks.push({ id, column: "servers", parent: "group:outside", kind: "preview", name, meta: `Moves to ${CLIENT_NAMES[move.client]}`, state: "preview", lamp: "preview", h: OUTSIDE_BLOCK_H, icon: OUTSIDE_ICONS[group], ports: { left: "out" }, takeOut: IN_PREVIEW, row: move.key, backTo: `held:${kitden.id}:${name}` });
+      links.push({ from: `client:${move.client}`, to: id, kind: "direct", preview: true, row: move.key });
+    }
   }
-  return { columns: GATEWAY_COLUMNS, blocks, links };
+  if (blocks.length) blocks.unshift({ id: "group:outside", column: "servers", kind: "group", name: OUTSIDE_MAP, icon: "info", h: OUTSIDE_H, before: 21, rowGap: 6 });
+  return { blocks, links };
+}
+
+// The key of the tray row that takes out every entry of its own that `client` has of an outside
+// `row` (`gone`, directRemovals), or null: a client with no entry of its own keeps its line.
+function goneWith(row, client, gone) {
+  const items = (row.client_items || {})[client] || [];
+  return items.length && items.every((item) => gone.has(item)) ? gone.get(items[0]) : null;
+}
+
+// The entries of clients that a removal in the tray takes out (mcp.remove_direct, once its row has
+// its part), each with its row's key.
+function directRemovals(rows) {
+  const gone = new Map();
+  for (const row of rows) {
+    if (!row.part || row.body.action !== "mcp.remove_direct") continue;
+    for (const target of row.body.targets || []) gone.set(target.item, row.key);
+  }
+  return gone;
+}
+
+// The servers of the Kitden gateway whose move out to one client waits in the tray, once its row
+// has its part: by name, that client and the row's key.
+function movesOut(rows) {
+  const out = new Map();
+  for (const row of rows) {
+    const { action, targets = [], params = {} } = row.body;
+    if (row.part && action === "gateway.move_out" && targets[0]) out.set(params.server, { client: targets[0].client, key: row.key });
+  }
+  return out;
+}
+
+// The changes that connect a client to the Kitden gateway: its kitden entry set up, or an old one
+// updated (Task 1).
+const CONNECTS = ["setup_server.register", "setup_server.update"];
+
+// The clients whose connection to the Kitden gateway waits in the tray, once its row has its part:
+// by client, the row's key and whether it connects the client (`connect`) or disconnects it. An
+// update names the client's old entry, which the setup read (`setup`) knows.
+function connectRows(rows, setup) {
+  const waits = new Map();
+  for (const row of rows) {
+    const { action, targets = [] } = row.body;
+    if (!row.part || (!CONNECTS.includes(action) && action !== "client.disconnect")) continue;
+    for (const target of targets) {
+      const client = target.client || ((setup || []).find((e) => e.item && e.item === target.item) || {}).client;
+      if (client) waits.set(client, { key: row.key, connect: action !== "client.disconnect" });
+    }
+  }
+  return waits;
+}
+
+// The links a connect or a disconnect in the tray draws (`waits`, connectRows): a client it
+// connects gets a preview link to the Kitden gateway, a client it disconnects has its link drawn
+// leaving.
+function connectParts(links, kitden, waits) {
+  const to = `gateway:${kitden.id}`;
+  for (const [client, { key, connect }] of waits) {
+    const from = `client:${client}`;
+    const link = links.find((l) => l.from === from && l.to === to);
+    if (connect && !link) links.push({ from, to, kind: "preview", row: key });
+    else if (!connect && link) Object.assign(link, { leaving: true, row: key });
+  }
 }
 
 // A client's block: Connected or Not connected, and on a first run that it is found, with its
 // version; the change that disconnects it (`disconnect`) where its link's × can (connectAction),
 // and whether a plugin gives it its kitden entry (`viaPlugin`), which Kitden cannot take out.
-function clientBlock(id, { setup, linked, known, first, clients }) {
+// While a change that connects it waits in the tray (`wait`, connectRows), its lamp is the dashed
+// ring and its meta says so (`wait`, in the accent).
+function clientBlock(id, { setup, linked, known, first, clients, wait = null }) {
   const on = linked.includes(id);
   const found = (clients || []).find((c) => c.id === id && c.status === "found");
   // Without the setup read, a client is neither connected nor not.
@@ -318,7 +414,8 @@ function clientBlock(id, { setup, linked, known, first, clients }) {
   const action = on ? connectAction(id, setup) : null;
   const disconnect = action && !action.connect ? action.body : null;
   const viaPlugin = on && (setup || []).some((e) => e.client === id && e.state === "plugin");
-  return { id: `client:${id}`, column: "clients", kind: "client", name: CLIENT_NAMES[id], meta, lamp, state: known ? (on ? "on" : "off") : "unk", client: id, ports: { right: true }, disconnect, viaPlugin };
+  const block = { id: `client:${id}`, column: "clients", kind: "client", name: CLIENT_NAMES[id], meta, lamp, state: known ? (on ? "on" : "off") : "unk", client: id, ports: { right: true }, disconnect, viaPlugin };
+  return wait && wait.connect ? { ...block, lamp: "preview", state: "preview", wait: " · in preview" } : block;
 }
 
 // The moves into the Kitden gateway the map shows: each one in the tray (`rows`), for the outside
@@ -341,9 +438,9 @@ function movesIn(view, kitden, rows, drop) {
     for (const group of ["move", "local"]) {
       for (const each of view.groups[group] || []) {
         if (!each.items.length || !each.items.every((item) => items.has(item))) continue;
-        const outside = `outside:${group}:${each.name}`;
+        const backTo = `outside:${group}:${each.name}`;
         const look = { icon: SERVER_ICONS[group === "local" ? "local" : "remote"], lamp: "preview", ports: { left: true }, takeOut: IN_PREVIEW };
-        add(group, each.name, row.part ? { id: `preview:${each.name}`, column: "servers", kind: "preview", name: each.name, meta: "Preview", stateInMeta: true, state: "preview", ...look, row: row.key, outside } : slot(each.name));
+        add(group, each.name, row.part ? { id: `preview:${each.name}`, column: "servers", kind: "preview", name: each.name, meta: "Preview", stateInMeta: true, state: "preview", ...look, row: row.key, backTo } : slot(each.name));
       }
     }
   }
@@ -748,16 +845,16 @@ function pickLink(key) {
 }
 
 // A row taken out on the map. A move's preview block and link go with it, so focus on either goes
-// to the server outside the gateway that it would have moved. Nothing happens while the tray's
-// change is written.
+// to the server the move would have taken (`backTo`): outside the gateway for a move in, in it for
+// a move out. Nothing happens while the tray's change is written.
 function takeOutHere(model, key) {
   if (writing()) return Promise.resolve();
   const box = onMap.view ? onMap.view.box : null;
-  const shown = model.blocks.find((b) => b.row === key && b.outside);
+  const shown = model.blocks.find((b) => b.row === key && b.backTo);
   const focus = box && shown ? document.activeElement?.dataset?.focus : null;
   const taken = takeOut(key);
   const lost = Boolean(focus) && (focus === `block:${shown.id}` || focus.endsWith(`>${shown.id}`));
-  if (lost) withFocusKey(box, `block:${shown.outside}`)?.focus({ preventScroll: true });
+  if (lost) withFocusKey(box, `block:${shown.backTo}`)?.focus({ preventScroll: true });
   return taken;
 }
 
@@ -1004,7 +1101,8 @@ function focusGateway({ fromDock }) {
 
 // What a block shows before its name: a client's tile, the Kitden house (it keeps its own color),
 // a registered gateway's mark, or the icon of what kind of server it is (15 px, on a tile of its
-// own except outside the gateway, style.css). The slot of a drag shows nothing.
+// own except outside the gateway, a move out's preview too: `.bare` in style.css). The slot of a
+// drag shows nothing.
 function tile(block) {
   if (block.kind === "client") return mark(block.client);
   if (GATEWAY_KINDS.includes(block.kind) && block.gateway) {
@@ -1015,7 +1113,7 @@ function tile(block) {
     return house;
   }
   if (!block.icon) return null;
-  const holder = el("span", "block-icon");
+  const holder = el("span", block.parent === "group:outside" ? "block-icon bare" : "block-icon");
   holder.append(icon(block.icon, 15));
   return holder;
 }

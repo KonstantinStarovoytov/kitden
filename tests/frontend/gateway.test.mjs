@@ -8,7 +8,7 @@ const { GATEWAY_COLUMNS, afterPress, besideBy, bringBeside, clickLink, contentWi
 const { dropBody, dropTarget, pressGrip, placeMoved } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
 const { offersSwitch, ruleBody } = await import('../../src/kitden/web/static/js/gateway-details.js');
-const { blockLabel, findChip, findIn, isNarrow, keepOpen, layoutTree, pressOpen, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
+const { blockLabel, findChip, findIn, isNarrow, keepOpen, layoutTree, linkClass, pressOpen, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
 const { kitdenClients } = await import('../../src/kitden/web/static/js/parts.js');
 const { data, state, viewMode } = await import('../../src/kitden/web/static/js/store.js');
 const { addToTray, applyTray, cancelTray, endApplied, keyFor, tray } = await import('../../src/kitden/web/static/js/tray.js');
@@ -927,6 +927,132 @@ test("the client link's × adds a disconnect row", async () => {
   const plugin = gatewayTree(MEDIUM_VIEW, { ...OPTS, setup: [...SETUP.slice(0, 2), entry('cursor', 'plugin')] });
   assert.equal(linkRemoval(plugin, linkOf(plugin, 'client:cursor>gateway:kitden'), ''), null);
   await freshTray();
+});
+
+const CONNECT_CURSOR = { action: 'setup_server.register', targets: [{ client: 'cursor' }], params: {} };
+const DISCONNECT_CODEX = { action: 'client.disconnect', targets: [{ client: 'codex' }], params: {} };
+const moveOut = (server, client) => ({ action: 'gateway.move_out', targets: [{ client }], params: { server } });
+const removeDirect = (...items) => ({ action: 'mcp.remove_direct', targets: items.map((item) => ({ item })), params: {} });
+const laidOut = (tree) => layoutTree(tree, { open: new Set(), narrow: false });
+
+test('a connect row draws a dashed link to the gateway', () => {
+  const row = trayRow(CONNECT_CURSOR);
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [row] });
+  const link = linkOf(tree, 'client:cursor>gateway:kitden');
+  assert.deepEqual([link.kind, link.row], ['preview', row.key]);
+  assert.equal(linkClass(laidOut(tree).links.find((l) => l.from === 'client:cursor')), 'link preview');
+  // The client's lamp is the dashed ring and its meta says the change waits; it is not connected
+  // yet, so the gateway still counts two clients.
+  const cursor = block(tree, 'client:cursor');
+  assert.deepEqual([cursor.meta, cursor.wait, cursor.lamp, cursor.state], ['Not connected', ' · in preview', 'preview', 'preview']);
+  assert.equal(blockLabel(cursor), 'Cursor, Not connected, In preview');
+  assert.deepEqual(block(tree, 'gateway:kitden').stats.map((s) => s.words), ['2 clients', '2 servers']);
+  // A press on the link takes the row out.
+  assert.equal(linkTip(tree, link, ''), 'Take it out of the preview');
+  // An old entry is updated: its row names the entry, and the map finds the client by it.
+  const setup = [...SETUP.slice(0, 2), entry('cursor', 'old', { item: 'cursor:kitden' })];
+  const update = trayRow({ action: 'setup_server.update', targets: [{ item: 'cursor:kitden' }], params: {} });
+  assert.equal(linkOf(gatewayTree(MEDIUM_VIEW, { ...OPTS, setup, rows: [update] }), 'client:cursor>gateway:kitden').kind, 'preview');
+  // A row still being asked draws nothing yet, and no row nothing at all.
+  for (const rows of [[trayRow(CONNECT_CURSOR, null)], []]) {
+    const plain = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows });
+    assert.equal(linkOf(plain, 'client:cursor>gateway:kitden'), undefined);
+    assert.deepEqual([block(plain, 'client:cursor').lamp, block(plain, 'client:cursor').wait], ['off', undefined]);
+  }
+});
+
+test('a disconnect row makes the client\'s link leave', () => {
+  const row = trayRow(DISCONNECT_CODEX);
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [row] });
+  const link = linkOf(tree, 'client:codex>gateway:kitden');
+  assert.deepEqual([link.kind, link.leaving, link.row], ['on', true, row.key]);
+  assert.equal(linkClass(laidOut(tree).links.find((l) => l.from === 'client:codex' && l.to === 'gateway:kitden')), 'link on leaving');
+  // Codex is connected until Apply: its block says so; the other clients keep their links.
+  const codex = block(tree, 'client:codex');
+  assert.deepEqual([codex.meta, codex.lamp, codex.wait], ['Connected', 'on', undefined]);
+  assert.equal(linkOf(tree, 'client:claude_code>gateway:kitden').leaving, undefined);
+  assert.equal(linkTip(tree, link, ''), 'Take it out of the preview');
+  assert.equal(linkOf(gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [trayRow(DISCONNECT_CODEX, null)] }), 'client:codex>gateway:kitden').leaving, undefined);
+});
+
+test('a move-out row shows the server outside, moving to its client', () => {
+  const row = trayRow(moveOut('files', 'claude_code'));
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [row] });
+  // files is not drawn in the gateway: nor its tools, its links, or its Local group; the gateway
+  // counts it until Apply.
+  assert.ok(!['held:kitden:files', 'group:kitden:local', 'tool:files/read_file'].some((id) => block(tree, id)));
+  assert.ok(!tree.links.some((l) => [l.from, l.to].includes('held:kitden:files')));
+  assert.deepEqual(block(tree, 'gateway:kitden').stats.map((s) => s.words), ['2 clients', '2 servers']);
+  // It shows outside, after the local rows (Cursor's own files stays apart), moving to Claude Code.
+  const shown = block(tree, 'preview-out:files');
+  assert.deepEqual([shown.kind, shown.parent, shown.name, shown.meta, shown.lamp, shown.state, shown.icon, shown.h], ['preview', 'group:outside', 'files', 'Moves to Claude Code', 'preview', 'preview', 'hard-drive', 50]);
+  assert.deepEqual([shown.takeOut, shown.row, shown.ports], ['In preview. Click to take it out.', row.key, { left: 'out' }]);
+  assert.equal(blockLabel(shown), 'files, Moves to Claude Code, In preview');
+  assert.deepEqual(tree.blocks.filter((b) => b.parent === 'group:outside').map((b) => b.id), ['outside:move:docs', 'outside:move:github', 'outside:local:docs', 'outside:local:files', 'preview-out:files']);
+  // A preview line joins it to Claude Code, at right angles; no line comes from the gateway.
+  const line = linkOf(tree, 'client:claude_code>preview-out:files');
+  assert.deepEqual([line.kind, line.preview, line.row], ['direct', true, row.key]);
+  assert.deepEqual(tree.links.filter((l) => l.to === 'preview-out:files').map((l) => l.from), ['client:claude_code']);
+  const drawn = laidOut(tree).links.find((l) => l.to === 'preview-out:files');
+  assert.deepEqual([drawn.shape, linkClass(drawn)], ['step', 'link direct preview']);
+  assert.equal(linkTip(tree, line, ''), 'Take it out of the preview');
+  // A remote server sits after the remote rows; with nothing outside, the group comes with it.
+  const tracker = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [trayRow(moveOut('tracker', 'codex'))] });
+  assert.deepEqual(tracker.blocks.filter((b) => b.parent === 'group:outside').map((b) => b.id).slice(1, 4), ['outside:move:github', 'preview-out:tracker', 'outside:local:docs']);
+  assert.deepEqual([block(tracker, 'preview-out:tracker').meta, block(tracker, 'preview-out:tracker').icon], ['Moves to Codex', 'globe']);
+  const bare = { ...MEDIUM_VIEW, groups: { move: [], local: [], plugin: [] } };
+  const alone = gatewayTree(bare, { ...OPTS, rows: [row] });
+  assert.deepEqual(alone.blocks.filter((b) => b.column === 'servers').map((b) => b.id).slice(-2), ['group:outside', 'preview-out:files']);
+  // A row still being asked changes nothing yet.
+  assert.ok(block(gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [trayRow(moveOut('files', 'claude_code'), null)] }), 'held:kitden:files'));
+});
+
+test('a press on the move-out block takes its row out', async () => {
+  await freshTray();
+  queue(PREVIEW, batch('c1'), batch('c2'), batch('c3'));
+  await addToTray(moveOut('files', 'claude_code'));
+  await addToTray(REMOVE_FILES, { icon: 'x' });
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: rowsOnMap(tray) });
+  pressBlock(tree, 'preview-out:files');
+  await flush();
+  assert.deepEqual([tray.rows.map((r) => r.key), tray.phase], [[keyFor(REMOVE_FILES)], 'ready']);
+  // A click on its line takes it out too: the last row out cancels the change.
+  await cancelTray();
+  queue(PREVIEW, batch('c4'));
+  await addToTray(moveOut('files', 'codex'));
+  const now = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: rowsOnMap(tray) });
+  assert.equal(block(now, 'preview-out:files').meta, 'Moves to Codex');
+  clickLink(now, linkOf(now, 'client:codex>preview-out:files'));
+  await flush();
+  assert.deepEqual([tray.rows, tray.phase], [[], 'idle']);
+  await freshTray();
+});
+
+test('a bypass removal makes its line leave, and its block when every client loses it', () => {
+  // docs in Claude Code: its only client's entry goes, so the block leaves too, with no grip.
+  const row = trayRow(removeDirect('a'));
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [row] });
+  const line = linkOf(tree, 'client:claude_code>outside:move:docs');
+  assert.deepEqual([line.kind, line.leaving, line.row], ['direct', true, row.key]);
+  assert.equal(linkClass(laidOut(tree).links.find((l) => l.to === 'outside:move:docs')), 'link direct leaving');
+  const docs = block(tree, 'outside:move:docs');
+  assert.deepEqual([docs.leaving, Boolean(docs.grip)], [true, false]);
+  assert.equal(blockLabel(docs), 'docs, In Claude Code, On, Leaving');
+  assert.equal(linkTip(tree, line, ''), 'Take it out of the preview');
+  // The other rows stay as they are.
+  assert.ok(!block(tree, 'outside:move:github').leaving && !linkOf(tree, 'client:claude_code>outside:move:github').leaving);
+  // A server two clients set up: one client's removal takes only its line; both take the block.
+  const both = { name: 'github', clients: ['claude_code', 'codex'], columns: ['claude_code', 'codex'], items: ['g', 'h'], client_items: { claude_code: ['g'], codex: ['h'] }, stays: null };
+  const view = { ...MEDIUM_VIEW, groups: { ...MEDIUM_VIEW.groups, move: [both] } };
+  const one = gatewayTree(view, { ...OPTS, rows: [trayRow(removeDirect('h'))] });
+  assert.deepEqual([linkOf(one, 'client:codex>outside:move:github').leaving, linkOf(one, 'client:claude_code>outside:move:github').leaving], [true, undefined]);
+  assert.equal(block(one, 'outside:move:github').leaving, undefined);
+  const all = gatewayTree(view, { ...OPTS, rows: [trayRow(removeDirect('g', 'h'))] });
+  assert.ok(block(all, 'outside:move:github').leaving && linkOf(all, 'client:claude_code>outside:move:github').leaving);
+  // A row still being asked changes nothing yet.
+  assert.equal(block(gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [trayRow(removeDirect('a'), null)] }), 'outside:move:docs').leaving, undefined);
+  // A server whose removal from the gateway waits says it leaves too.
+  assert.equal(blockLabel(block(gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [trayRow(REMOVE_FILES)] }), 'held:kitden:files')), 'files, 3 of 4 on, On, Leaving');
 });
 
 test('a drop adds a move to the tray', async (t) => {

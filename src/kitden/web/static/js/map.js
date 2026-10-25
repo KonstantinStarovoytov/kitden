@@ -8,7 +8,7 @@
 //   "+ Add" beside the caption. Wide only: `colGap` is the space before the column (GAP unless
 //   set), `top` the y of its first block (CAPTION_ROW) and `rowGap` the space between its blocks.
 // - blocks: [{ id, column, parent, kind, name, meta, state, tag, count, grip, action, details, h,
-//   icon, before, rowGap, lamp, stats, projects, ports, takeOut, leaving }]. The children of a
+//   icon, before, rowGap, lamp, wait, stats, projects, ports, takeOut, leaving }]. The children of a
 //   block are the blocks whose `parent` it is. A block with an `h` is that high, whatever its
 //   column says. A group block is a caption at the top of its stack (a button when it has
 //   `details`), CAPTION_H high unless `h` says otherwise; its words after a " · " are quiet; its
@@ -20,14 +20,16 @@
 //   ("Set up…"). `stateInMeta`: no state word is spoken; its meta says the state already ("On in
 //   2 projects") or all there is to say (a gateway's clients and servers). How it looks
 //   (map-view.js): `lamp` "on", "off", "preview" or "out" (works outside the gateway), at the start
-//   of its meta line, or as a tool's mark; `stats`, a gateway's counts, [{ icon, words }]; `projects`,
+//   of its meta line, or as a tool's mark; `wait`, words after the meta, in the accent, while a
+//   change for it waits in the tray; `stats`, a gateway's counts, [{ icon, words }]; `projects`,
 //   a tool's { words, said, own }; `ports`, { left, right }, each true or a look ("out"); `takeOut`, the
 //   words of a block in preview, which a press takes out (it shows an ×); `leaving`, a change in the
 //   tray takes it out.
-// - links: [{ from, to, kind, unk, leaving }], kind "on", "faint", "direct" or "preview". The link
-//   is the state: something on has a link, something off has none. `unk`: Kitden does not know
-//   whether it is on, so the line is dashed; it only shows who has the entry. `leaving`: a change
-//   in preview takes it out, so the line is dashed and quiet.
+// - links: [{ from, to, kind, unk, leaving, preview }], kind "on", "faint", "direct" or "preview".
+//   The link is the state: something on has a link, something off has none. `unk`: Kitden does not
+//   know whether it is on, so the line is dashed; it only shows who has the entry. `leaving`: a
+//   change in preview takes it out, so the line is dashed and quiet. `preview`: a change in preview
+//   adds this direct line, so it has a preview's dashes.
 import { plural } from "./dom.js";
 
 export const GAP = 46; // between two columns
@@ -54,7 +56,9 @@ const COORDS = { M: 2, H: 1, V: 1, C: 6, Q: 4 };
 // The links a lit path follows.
 const PATH_KINDS = ["on", "direct", "faint"];
 // What a screen reader hears for a block's state; the map itself shows no state word.
-const STATE_SAID = { on: "On", off: "Off", unk: "Not known", preview: "Preview" };
+const STATE_SAID = { on: "On", off: "Off", unk: "Not known", preview: "In preview" };
+// What a link's look carries over from the model to the layout.
+const LINK_FLAGS = ["unk", "leaving", "preview"];
 
 // Narrow: under 1024 px. Details float over the map (panel.js), so they never make it narrow.
 export function isNarrow(width) {
@@ -209,7 +213,7 @@ export function layoutTree(model, { open = new Set(), width = 0, narrow = isNarr
     if (!from || !to) continue;
     const child = byId.get(link.to);
     const rail = narrow && child.parent === link.from && child.column !== byId.get(link.from).column;
-    const drawn = { from: link.from, to: link.to, kind: link.kind, shape: rail ? "rail" : link.kind === "direct" ? "step" : "curve", ...(link.unk ? { unk: true } : {}), ...(link.leaving ? { leaving: true } : {}) };
+    const drawn = { from: link.from, to: link.to, kind: link.kind, shape: rail ? "rail" : link.kind === "direct" ? "step" : "curve", ...flagsOf(link) };
     if (link.kind === "direct") drawn.chan = narrow ? NARROW_CHANNEL : CHANNELS[places.indexOf(link.to) % CHANNELS.length];
     drawn.d = linkPath(drawn, from, to);
     links.push(drawn);
@@ -218,15 +222,18 @@ export function layoutTree(model, { open = new Set(), width = 0, narrow = isNarr
   return { columns, blocks, links, height, narrow };
 }
 
+// The flags of a link's look that it has (LINK_FLAGS), each true.
+const flagsOf = (link) => Object.fromEntries(LINK_FLAGS.filter((flag) => link[flag]).map((flag) => [flag, true]));
+
 // A link's key, "from>to": one per pair of blocks.
 export function linkKey(link) {
   return `${link.from}>${link.to}`;
 }
 
-// A link's look: its kind, dashed when Kitden does not know that it is on, and quiet while a change
-// in preview takes it out.
+// A link's look: its kind, dashed when Kitden does not know that it is on, quiet while a change in
+// preview takes it out, and a preview's dashes on a direct line a change in preview adds.
 export function linkClass(link) {
-  return `link ${link.kind}${link.unk ? " unk" : ""}${link.leaving ? " leaving" : ""}`;
+  return ["link", link.kind, ...LINK_FLAGS.filter((flag) => link[flag])].join(" ");
 }
 
 // Whether a link is drawn in dashes or dots: one that skips the gateway, a preview, one not known
@@ -489,9 +496,10 @@ export function findChip(found) {
 }
 
 // What a screen reader hears for a block: its whole name, meta, counts, tag, projects, the state
-// word that matches its link (none where the meta says it), and its action.
+// word that matches its link (none where the meta says it), "Leaving" while a change in the tray
+// takes it out, and its action.
 export function blockLabel(block) {
   const state = block.stateInMeta ? null : STATE_SAID[block.state];
   const stats = block.stats ? block.stats.map((stat) => stat.words).join(" · ") : null;
-  return [block.name, block.meta, stats, block.tag, block.projects && block.projects.said, state, block.action].filter(Boolean).join(", ");
+  return [block.name, block.meta, stats, block.tag, block.projects && block.projects.said, state, block.leaving && "Leaving", block.action].filter(Boolean).join(", ");
 }
