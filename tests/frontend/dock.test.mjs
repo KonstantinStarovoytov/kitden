@@ -10,11 +10,22 @@ const reduce = (flag) => { motionQuery.matches = flag; };
 // A small tree of stand-in nodes: enough of the DOM for the bar, the toast and the side panel.
 const textNode = (value) => ({ nodeType: 3, textContent: String(value), parent: null });
 // How tall the bar is: its text, and a row of the list on top of that.
-const rects = (node) => ({ width: 380, height: 60 + 50 * all(node).filter((n) => n.tag === 'li').length, bottom: 0 });
+// While a size animation runs, the browser reports its animated height, not the natural one.
+const running = (run) => !run.cancelled && Date.now() - run.startedAt < run.options.duration;
+const rects = (node) => {
+  const sizing = node.animations.findLast((run) => run.frames[0].height && running(run));
+  return { width: 380, height: sizing ? parseFloat(sizing.frames[0].height) : 60 + 50 * all(node).filter((n) => n.tag === 'li').length, bottom: 0 };
+};
 function fakeNode(tag) {
   const classes = new Set();
+  let disabled = false;
   const node = {
-    nodeType: 1, tag, parent: null, childNodes: [], attributes: {}, dataset: {}, listeners: {}, animations: [], style: { setProperty() {} },
+    nodeType: 1, tag, parent: null, childNodes: [], attributes: {}, dataset: {}, listeners: {}, animations: [],
+    style: { setProperty(name, value) { this[name] = String(value); }, removeProperty(name) { delete this[name]; } },
+    // A button that is turned off while it has focus loses it (the browser's focus fixup).
+    get disabled() { return disabled; },
+    set disabled(value) { disabled = Boolean(value); if (disabled && globalThis.document.activeElement === node) globalThis.document.activeElement = null; },
+    get offsetHeight() { return rects(node).height; },
     // A node points to its parent and children: a failed assertion prints only its name.
     [Symbol.for('nodejs.util.inspect.custom')]: () => `<${tag}>`,
     get className() { return [...classes].join(' '); },
@@ -40,8 +51,9 @@ function fakeNode(tag) {
     },
     append(...items) { node.childNodes.push(...node.adopt(items)); },
     prepend(...items) { node.childNodes.unshift(...node.adopt(items)); },
-    replaceChildren(...items) { for (const child of node.childNodes) child.parent = null; node.childNodes = []; node.childNodes = node.adopt(items); },
-    remove() { if (node.parent) node.parent.childNodes = node.parent.childNodes.filter((child) => child !== node); node.parent = null; },
+    // A node that leaves the page takes focus with it: the page is left with none.
+    replaceChildren(...items) { for (const child of node.childNodes) { leave(child); child.parent = null; } node.childNodes = []; node.childNodes = node.adopt(items); },
+    remove() { leave(node); if (node.parent) node.parent.childNodes = node.parent.childNodes.filter((child) => child !== node); node.parent = null; },
     replaceWith(other) {
       if (!node.parent) return;
       const at = node.parent.childNodes.indexOf(node);
@@ -57,7 +69,13 @@ function fakeNode(tag) {
     // A press: every listener runs; the promise is the first one's work.
     click() { const runs = (node.listeners.click || []).map((listener) => listener({ preventDefault() {} })); return Promise.all(runs); },
     focus() { globalThis.document.activeElement = node; },
-    animate(frames, options) { node.animations.push({ frames, options }); return { finished: Promise.resolve(), cancel() {} }; },
+    animate(frames, options) {
+      const run = { frames, options, startedAt: Date.now(), cancelled: false };
+      run.handle = { finished: Promise.resolve(), cancel() { run.cancelled = true; } };
+      node.animations.push(run);
+      return run.handle;
+    },
+    getAnimations: () => node.animations.filter(running).map((run) => run.handle),
     getBoundingClientRect: () => rects(node),
     querySelector: (selector) => (selector === ':scope > summary' ? node.children.find((child) => child.tag === 'summary') || null : null),
     querySelectorAll: (selector) => (selector === '[data-focus]' ? all(node).filter((child) => child !== node && child.dataset.focus) : []),
@@ -65,6 +83,7 @@ function fakeNode(tag) {
   return node;
 }
 const all = (node) => [node, ...node.children.flatMap(all)];
+const leave = (node) => { if (node.nodeType === 1 && node.contains(globalThis.document.activeElement)) globalThis.document.activeElement = null; };
 const named = (root, name) => all(root).filter((n) => n.classList.contains(name));
 const tagged = (root, tag) => all(root).filter((n) => n.tag === tag);
 const labelOf = (node) => node.attributes['aria-label'] || node.textContent;
@@ -72,7 +91,7 @@ const buttonsOf = (root) => tagged(root, 'button');
 const button = (root, label) => buttonsOf(root).find((node) => labelOf(node) === label || node.textContent === label);
 
 const pages = {};
-for (const id of ['#dock', '#drawer', '#scrim', '#toast', '#main', '.shell']) {
+for (const id of ['#dock', '#drawer', '#scrim', '#toast', '#main', '#content', '.shell']) {
   pages[id] = fakeNode('div');
   pages[id].root = true;
 }
@@ -107,7 +126,7 @@ const posted = () => calls.filter((call) => call.method === 'POST').map((call) =
 const dockPath = '../../src/kitden/web/static/js/dock.js';
 const { appliedToast, barWords, drawTray, initDock, outcomeLine, rowWords, writingLine } = await import(dockPath);
 const { changeWords } = await import('../../src/kitden/web/static/js/review.js');
-const { addToTray, cancelTray, endApplied, tray } = await import('../../src/kitden/web/static/js/tray.js');
+const { addToTray, cancelTray, endApplied, takeOut, tray, tryAgain } = await import('../../src/kitden/web/static/js/tray.js');
 const { busy, state } = await import('../../src/kitden/web/static/js/store.js');
 const { hideToast, isPanelOpen, panelState } = await import('../../src/kitden/web/static/js/panel.js');
 initDock();
@@ -164,6 +183,7 @@ async function fresh() {
   pages['#dock'].replaceChildren();
   pages['#drawer'].replaceChildren();
   pages['#drawer'].classList.remove('open');
+  pages['#content'].style.removeProperty('--dock-room');
   panelState.current = null;
   calls.length = 0;
   replies.clear();
@@ -339,7 +359,7 @@ test('drawTray draws one row with Show changes and Apply', async () => {
   assert.equal(apply.children[1].dataset.icon, 'arrow-right');
   assert.equal(apply.attributes['aria-disabled'], undefined);
   // Focus stays where it was.
-  assert.equal(globalThis.document.activeElement, null);
+  assert.ok(globalThis.document.activeElement === null, 'focus is not where it should be');
   // Cancel asks the server to forget the preview, and the bar goes.
   await acts.children[0].click();
   assert.equal(bar(), null);
@@ -474,7 +494,7 @@ test('with motion the bar, its size and its rows move as the mockup says', async
   assert.deepEqual(section.animations.map(({ frames, options }) => [frames, options.duration, options.delay, options.easing]), [[enter, 220, 0, CALM]]);
   // Two changes: the same bar is rebuilt and grows from its old size to its new one; both rows enter.
   await addToTray(add('neon'));
-  assert.equal(bar(), section);
+  assert.ok(bar() === section, 'the same bar');
   const [, grow, ...rest] = section.animations;
   assert.deepEqual([grow.frames, grow.options.duration, grow.options.easing], [[{ height: '60px', width: '380px' }, { height: '160px', width: '380px' }], 200, CALM]);
   assert.deepEqual(rest, []);
@@ -530,7 +550,7 @@ test('a failed Apply stays in the bar, shakes it and puts focus on Try again', a
   // The rows stay, each with a ×, and none is marked.
   assert.deepEqual(named(section, 'x').map((node) => node.disabled), [false, false]);
   assert.deepEqual(named(section, 'ts').map((node) => node.children.length), [0, 0]);
-  assert.equal(globalThis.document.activeElement, button(section, 'Try again'));
+  assert.ok(globalThis.document.activeElement === button(section, 'Try again'), 'focus is not where it should be');
   const shaking = section.animations.at(-1);
   assert.deepEqual(shaking.frames.map((frame) => frame.transform), ['translateX(0)', 'translateX(-7px)', 'translateX(6px)', 'translateX(-3px)', 'translateX(0)']);
   assert.equal(shaking.options.duration, 380);
@@ -552,7 +572,7 @@ test('an end that is not known leaves Open Changes and no Try again', async () =
   assert.equal(section.className, 'bar tray err');
   assert.deepEqual(section.children[0].children.map((node) => node.textContent).slice(0, 2), ['Could not confirm the result', 'Check Changes before trying again.']);
   assert.deepEqual(named(section, 'acts')[0].children.map((node) => node.textContent), ['Cancel', 'Open Changes']);
-  assert.equal(globalThis.document.activeElement, button(section, 'Open Changes'));
+  assert.ok(globalThis.document.activeElement === button(section, 'Open Changes'), 'focus is not where it should be');
   await button(section, 'Open Changes').click();
   assert.equal(state.view, 'changes');
 });
@@ -579,7 +599,7 @@ test('a refused add keeps the bar, shakes it and says why until the next add', a
   const section = bar();
   const before = section.animations.length;
   assert.equal(await addToTray(add('neon')), false);
-  assert.equal(bar(), section);
+  assert.ok(bar() === section, 'the same bar');
   assert.equal(section.className, 'bar tray');
   const line = section.children[0].children[1];
   assert.deepEqual([line.textContent, line.className], ['Choose a server in the Kitden gateway.', 'bad']);
@@ -639,4 +659,140 @@ test('a row review closes with the row: Cancel all leaves nothing to review', as
   await button(bar(), 'Cancel').click();
   assert.equal(isPanelOpen(), false);
   assert.equal(panelState.current, null);
+});
+
+test('a row taken out while its × has focus hands focus to Apply before its buttons are turned off', async () => {
+  for (const motion of [true, false]) {
+    await fresh();
+    queue(PREVIEW, previewed('c1'), previewed('c2'));
+    await addToTray(add('github'));
+    await addToTray(add('neon'));
+    reduce(!motion);
+    const cross = named(bar(), 'x')[0];
+    cross.focus();
+    queue(PREVIEW, previewed('c3'));
+    const out = cross.click();
+    // The press has turned the × off by now; focus is on Apply, not on nothing.
+    assert.equal(cross.disabled, true);
+    // With motion the list is still there (Apply all); without it the bar is one change already.
+    assert.ok(globalThis.document.activeElement === button(bar(), motion ? 'Apply all' : 'Apply'), `focus, motion ${motion}`);
+    await out;
+    await sleep(motion ? 220 : 0);
+    // The bar is one change now; its Apply has focus.
+    assert.ok(globalThis.document.activeElement === button(bar(), 'Apply'), `focus at the end, motion ${motion}`);
+  }
+});
+
+test('a bar that leaves with focus inside it hands focus to the page', async () => {
+  await fresh();
+  queue(PREVIEW, previewed('c1'), previewed('c1'), previewed('c1'));
+  await addToTray(add('github'));
+  button(bar(), 'Cancel').focus();
+  await button(bar(), 'Cancel').click();
+  assert.ok(globalThis.document.activeElement === pages['#main'], 'focus is not where it should be');
+  // Focus that was somewhere else stays there.
+  await addToTray(add('github'));
+  const elsewhere = fakeNode('a');
+  elsewhere.focus();
+  await button(bar(), 'Cancel').click();
+  assert.ok(globalThis.document.activeElement === elsewhere, 'focus is not where it should be');
+  // After a verified Apply the bar leaves too, with focus on its Apply.
+  await addToTray(add('github'));
+  queue('/api/changes/c1/apply', verified('c1'));
+  button(bar(), 'Apply').focus();
+  await button(bar(), 'Apply').click();
+  assert.equal(bar(), null);
+  assert.ok(globalThis.document.activeElement === pages['#main'], 'focus is not where it should be');
+  hideToast();
+});
+
+test('focus stays on the same button when the bar is built again', async () => {
+  await fresh();
+  queue(PREVIEW, previewed('c1'), previewed('c2'));
+  await addToTray(add('github'));
+  button(bar(), 'Cancel').focus();
+  await addToTray(add('neon'));
+  // One change became two: Cancel became Cancel all, and keeps focus.
+  assert.ok(globalThis.document.activeElement === button(bar(), 'Cancel all'), 'focus is not where it should be');
+  assert.equal(globalThis.document.activeElement.dataset.focus, 'tray:cancel');
+  // A list that could not be previewed again is not counted; asked again, it is, and the same row's ×
+  // keeps focus though the head is built again.
+  await cancelTray();
+  queue(PREVIEW, previewed('c3'), previewed('c4'), previewed('c5'), refusal('Apply the preview first.'), previewed('c6'));
+  for (const name of ['github', 'neon', 'slack']) await addToTray(add(name));
+  await takeOut(tray.rows[0].key);
+  assert.deepEqual([tray.phase, named(bar(), 'num').length, bar().attributes['aria-label']], ['failed', 0, 'Could not prepare the preview']);
+  const key = tray.rows[1].key;
+  const second = named(bar(), 'x')[1];
+  second.focus();
+  const asking = tryAgain();
+  assert.equal(named(bar(), 'num').length, 1);
+  assert.ok(globalThis.document.activeElement !== second, 'focus left the old ×');
+  assert.equal(globalThis.document.activeElement.dataset.focus, `tray:x:${key}`);
+  assert.equal(globalThis.document.activeElement.isConnected, true);
+  await asking;
+});
+
+test('the line follows the place without drawing the bar in again', async () => {
+  await fresh();
+  state.view = 'gateway';
+  queue(PREVIEW, previewed('c1'), previewed('c2'));
+  await addToTray(add('github'));
+  await addToTray(add('neon'));
+  reduce(false);
+  const section = bar();
+  const line = named(section, 'tray-head')[0].children[1];
+  assert.match(line.textContent, /Click one on the map to take it out\./);
+  const animations = all(section).map((node) => node.animations.length);
+  state.view = 'library';
+  drawTray(tray);
+  drawTray(tray); // safe to call twice
+  assert.ok(bar() === section, 'the same bar');
+  assert.equal(line.textContent, 'Nothing is written until you Apply.');
+  assert.deepEqual(all(section).map((node) => node.animations.length), animations);
+  state.view = 'gateway';
+  drawTray(tray);
+  assert.match(line.textContent, /Click one on the map/);
+});
+
+test('the page keeps room under the bar while the dock shows one', async () => {
+  await fresh();
+  const room = () => pages['#content'].style['--dock-room'];
+  queue(PREVIEW, previewed('c1'), previewed('c2'));
+  await addToTray(add('github'));
+  assert.equal(room(), '106px'); // the bar's 60 px and the dock's 46 px offset
+  await addToTray(add('neon'));
+  assert.equal(room(), '206px');
+  await button(bar(), 'Cancel all').click();
+  assert.equal(room(), undefined);
+  // With motion the room goes when the bar has gone.
+  queue(PREVIEW, previewed('c3'));
+  await addToTray(add('github'));
+  reduce(false);
+  await button(bar(), 'Cancel').click();
+  assert.equal(room(), '106px');
+  await sleep(200);
+  assert.equal(room(), undefined);
+  // A bar that grows with motion: the room is for its new height, not the animated one.
+  await fresh();
+  queue(PREVIEW, previewed('c4'), previewed('c5'));
+  reduce(false);
+  await addToTray(add('github'));
+  await addToTray(add('neon'));
+  assert.equal(room(), '206px');
+  // A third change joins while that size animation still runs: the room is for the new height.
+  queue(PREVIEW, previewed('c6'));
+  await addToTray(add('slack'));
+  assert.equal(room(), '256px');
+  await sleep(250);
+  assert.equal(room(), '256px');
+});
+
+test('a first refused add comes in with the entrance and does not shake', async () => {
+  await fresh();
+  reduce(false);
+  queue(PREVIEW, refusal('Nothing to change.'));
+  await addToTray(add('github'));
+  const section = bar();
+  assert.deepEqual(section.animations.map(({ frames }) => frames[0]), [{ opacity: 0, transform: 'translateY(18px) scale(.97)' }]);
 });

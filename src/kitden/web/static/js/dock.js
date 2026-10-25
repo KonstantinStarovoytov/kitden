@@ -88,6 +88,8 @@ export function appliedToast({ change, rows }) {
 // The bar on the page ---------------------------------------------------------------------------
 
 let host = null;
+// The page's scrolling area, where the room kept for the bar is set (makeRoom).
+let page = null;
 // The bar on the page now, and what it shows: { sig, kind, words, status, head, num, cancel, apply,
 // label, icon, iconKind, meter, ratio, changes, show, list, rows } (`rows`: key -> its parts).
 let bar = null;
@@ -97,6 +99,8 @@ let leaving = null;
 // The timer while rows slide out, and the size the bar had before they went.
 let sliding = null;
 let carried = null;
+// The bar's size animation, while it runs.
+let growing = null;
 // The refusal or failure the bar last answered with a shake, so each is answered once.
 let reacted = null;
 
@@ -126,8 +130,8 @@ function iconButton(name, label, className, key, run) {
 }
 
 // The kinds of bar: "one" change, "many" (a list), or a "refusal" that has no rows to show. The
-// head counts ("3 changes in preview") only while the list is not telling how it ended.
-const counting = (view) => view.kind === "many" && view.words.head === `${view.rows.length}${IN_PREVIEW}`;
+// head of a list counts ("3 changes in preview") except while it tells how an Apply or a preview ended.
+const counting = (view) => view.kind === "many" && view.t.phase !== "failed";
 // What the bar is built of; when it changes the bar is built again, else its parts are updated.
 const sigOf = (view) => [view.kind, counting(view), view.words.apply !== null, view.words.changes].join("|");
 
@@ -310,6 +314,7 @@ function enterBar(view) {
   host.append(bar);
   shown = build(view, null, view.rows.length);
   patch(view, { animate: false });
+  makeRoom();
   animateTo(bar, [{ opacity: 0, transform: "translateY(18px) scale(.97)" }, { opacity: 1, transform: "none" }], { dur: 220 });
   react(view, true);
 }
@@ -319,21 +324,36 @@ function enterBar(view) {
 function leaveBar() {
   if (!bar) return;
   const old = bar;
+  // Focus inside the bar goes to the page, so a keyboard user is never left on nothing.
+  if (old.contains(document.activeElement)) $("#main").focus({ preventScroll: true });
   bar = null;
   shown = null;
+  growing = null;
   reacted = null;
   animateTo(old, [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(10px)" }], { dur: 160, ease: "ease-in", fill: "forwards" });
   if (D(160) > 0) leaving = old;
   later(() => {
     old.remove();
     if (leaving === old) leaving = null;
+    makeRoom();
   }, D(160));
 }
 
-// Rows taken out slide off to the right, 180 ms; the bar is drawn again once they have gone.
+// The end of a long page must not sit under the bar: while the dock shows a bar, the page keeps
+// room at its bottom as high as the bar plus the dock's 46 px offset (style.css, `.page`).
+function makeRoom() {
+  if (!page) return;
+  if (bar) page.style.setProperty("--dock-room", `${bar.offsetHeight + 46}px`);
+  else page.style.removeProperty("--dock-room");
+}
+
+// Rows taken out slide off to the right, 180 ms; the bar is drawn again once they have gone. Focus
+// on one of them goes to Apply (or Cancel) first: a button that is turned off while it has focus
+// loses it at once.
 function slideOut(keys) {
-  for (const key of keys) {
-    const item = shown.rows.get(key);
+  const items = keys.map((key) => shown.rows.get(key));
+  if (items.some((item) => item.li.contains(document.activeElement))) (shown.apply || shown.cancel).focus({ preventScroll: true });
+  for (const item of items) {
     item.out.disabled = true;
     item.show.disabled = true;
     animateTo(item.li, [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateX(18px)" }], { dur: 180, ease: "ease-in", fill: "forwards" });
@@ -348,28 +368,33 @@ function slideOut(keys) {
   else finish();
 }
 
-// Take rows off the list. Focus that was on one of them goes to Apply (or Cancel), not to nowhere.
 function dropRows(keys) {
-  let lost = false;
   for (const key of keys) {
     const item = shown.rows.get(key);
     if (!item) continue;
-    if (item.li.contains(document.activeElement)) lost = true;
     item.li.remove();
     shown.rows.delete(key);
   }
-  if (lost) (shown.apply || shown.cancel).focus({ preventScroll: true });
 }
 
-// The bar grows or shrinks from its old size to its new one.
+// The bar grows or shrinks from the size it had (`before`, as it showed, maybe mid-animation) to
+// its new one, and the page's room follows its new size. A size animation still running is
+// cancelled first: while it runs the browser reports its height, not the bar's own.
 function resize(before) {
+  if (growing) growing.cancel();
+  growing = null;
   const now = bar.getBoundingClientRect();
+  makeRoom();
   if (Math.abs(before.height - now.height) < 1 && Math.abs(before.width - now.width) < 1) return;
+  const running = bar.getAnimations ? bar.getAnimations().length : 0;
   animateTo(bar, [{ height: `${before.height}px`, width: `${before.width}px` }, { height: `${now.height}px`, width: `${now.width}px` }], { dur: 200 });
+  if (bar.getAnimations && bar.getAnimations().length > running) growing = bar.getAnimations().at(-1);
 }
 
 // A refusal or a failure is answered once: the bar shakes, and after a failure focus goes to Try
-// again (or Open Changes when there is no Try again). A bar that has just come in does not shake.
+// again (or Open Changes when there is no Try again). A first refused add (no bar before) comes in
+// with the bar's entrance and does not shake: one motion per change. A refusal on a bar that is
+// already shown shakes it.
 function react(view, fresh) {
   const { t } = view;
   const end = t.refused || (t.phase === "failed" ? t.failure : null);
@@ -450,6 +475,9 @@ async function land() {
 
 export function initDock() {
   host = $("#dock");
+  page = $("#content");
   setTrayWords(rowWords);
   onTray(drawTray);
+  // A narrower window can wrap the bar's words, so its height changes.
+  if (typeof addEventListener === "function") addEventListener("resize", makeRoom);
 }

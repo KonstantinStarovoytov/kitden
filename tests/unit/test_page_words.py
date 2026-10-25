@@ -1922,3 +1922,8 @@ def test_the_tray_bar_sits_in_the_dock_and_says_its_words():
     assert '<div class="dock" id="dock"></div>' in INDEX
     assert ".dock {" in CSS and ".tray-list {" in CSS
     assert "initDock();" in script("app.js")
+    # The line says whether a click on the map takes a row out, so it follows the place; the page
+    # keeps room under the bar; the small buttons have the press.
+    assert "drawTray(tray);" in script("app.js")
+    assert "--dock-room" in script("dock.js") and "var(--dock-room, 0px)" in CSS
+    assert ".dock .ib:active, .dock .x:active:not(:disabled) {" in CSS

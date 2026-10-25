@@ -4,7 +4,7 @@ import { $, $$, busyWhile, el, focusKey, icon, reportError } from "./dom.js";
 import { glide, rollTo, transition } from "./motion.js";
 import { renderAgents } from "./agents.js";
 import { renderChanges } from "./changes.js";
-import { initDock } from "./dock.js";
+import { drawTray, initDock } from "./dock.js";
 import { renderGateway } from "./gateway.js";
 import { loadLibrary, loadLibraryFor, morphOnNextRender, raceSlow, renderLibrary, settleRows, showSources, snapshotRows } from "./library.js";
 import { leaveMap } from "./map-review.js";
@@ -16,6 +16,7 @@ import {
   arrival, busy, current, data, followHash, freshness, go, loadShared, OLD_VIEWS, onIdle, parseHash, projectGone, reload, setRenderer, setState, setSwitcher, state,
   switchProject,
 } from "./store.js";
+import { tray } from "./tray.js";
 
 const PLACES = {
   overview: { title: "Overview", render: renderOverview },
@@ -70,6 +71,8 @@ function renderPlace() {
   glide($(".nav"), $('.nav a[aria-current="page"]'), "nav");
   renderShell();
   drawChip(MAP_PAGES.includes(state.view) ? found : null);
+  // The tray's line depends on the place ("Click one on the map to take it out." only on the Gateway).
+  drawTray(tray);
 }
 
 // Rail counters and the Where list follow the data.

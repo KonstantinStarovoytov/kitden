@@ -197,7 +197,9 @@ a { color: var(--route); }
 .scan-status { position: absolute; top: calc(100% + 6px); right: 18px; max-width: calc(100% - 40px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 8px; border-radius: 6px; background: var(--canvas); color: var(--ink-3); font-size: 12px; opacity: 0; pointer-events: none; transition: opacity 200ms ease; }
 .topbar.progress .scan-status { opacity: 1; }
 @keyframes sweep { to { transform: translateX(100%); } }
-.page { flex: 1 0 auto; padding: 26px 22px 64px; max-width: 1180px; outline: none; transition: opacity var(--t-fast) ease; }
+/* The bottom keeps the end of the page clear of the hint line, and of the tray's bar while the dock
+   shows one (--dock-room, set by dock.js: the bar's height and the dock's 46 px offset). */
+.page { flex: 1 0 auto; padding: 26px 22px 64px; padding-bottom: max(64px, var(--dock-room, 0px)); max-width: 1180px; outline: none; transition: opacity var(--t-fast) ease; }
 .page.pending { opacity: 0.5; pointer-events: none; }
 .page[data-place="gateway"] { max-width: none; }
 h1 { font-size: 18px; margin: 0; letter-spacing: -0.015em; font-weight: 600; text-wrap: balance; }
@@ -744,8 +746,9 @@ div.map .block.preview .block-meta { color: var(--ink-2); }
 .dock .tt small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dock .ts { display: grid; place-items: center; width: 14px; color: var(--ink-3); }
 .dock .ts .ok { color: var(--success); }
-.dock .ib, .dock .x { display: grid; place-items: center; flex: none; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--ink-3); cursor: pointer; transition: background-color var(--t-fast) ease, color var(--t-fast) ease; }
+.dock .ib, .dock .x { display: grid; place-items: center; flex: none; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--ink-3); cursor: pointer; transition: background-color var(--t-fast) ease, color var(--t-fast) ease, transform 260ms var(--spring); }
 .dock .ib:hover, .dock .x:hover:not(:disabled) { background: var(--wire-soft); color: var(--ink); }
+.dock .ib:active, .dock .x:active:not(:disabled) { transform: scale(0.97); transition-duration: var(--t-fast), var(--t-fast), 80ms; }
 .dock .x:disabled { opacity: 0.35; pointer-events: none; }
 /* Apply: its meter is a 2 px white line along the bottom edge, filled from the left by script. */
 .dock .apply { overflow: hidden; }
@@ -930,7 +933,7 @@ html.map-entrance::view-transition-new(page) { animation: none; }
   .where-box, .search { flex: 1 1 100%; max-width: none; min-width: 0; }
   .where { max-width: 100%; }
   .where-menu { right: 0; width: auto; }
-  .page { padding: 16px 16px 40px; }
+  .page { padding: 16px 16px 40px; padding-bottom: max(40px, var(--dock-room, 0px)); }
   .table-scroll { overflow-x: auto; }
   table.map { min-width: 600px; }
   .map th { position: static; }
