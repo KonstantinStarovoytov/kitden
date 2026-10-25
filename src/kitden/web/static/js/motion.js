@@ -48,6 +48,13 @@ export function animateTo(node, keyframes, { dur = 300, delay = 0, ease = CALM, 
   }
 }
 
+// A bar that could not do what was asked shakes once: 7 px left, 6 right, 3 left, and back.
+// Nothing under reduced motion.
+export function shake(node) {
+  const at = (x) => ({ transform: `translateX(${x})` });
+  return animateTo(node, [at("0"), at("-7px"), at("6px"), at("-3px"), at("0")], { dur: 380, ease: "ease-out", fill: "none" });
+}
+
 // Blocks fade in and lift a little, one step after the other.
 export function rise(nodes, { delay = 0, step = 0, y = 6, dur = 260 } = {}) {
   nodes.forEach((node, index) => {

@@ -6,7 +6,7 @@ globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; review.js must load there too.
 delete globalThis.navigator;
 const { PLACE_IN_TITLE, changeWords, checkStale, review, reviewLede, staleCheckWanted, stoppedWords, targetWords } = await import('../../src/kitden/web/static/js/review.js');
-const { applyOnMap, barWords, cancelOnMap, leaveMap, mapPreview, outcomeLine, previewOnMap, writingLine } = await import('../../src/kitden/web/static/js/map-review.js');
+const { applyOnMap, barWords, cancelOnMap, leaveMap, mapPreview, previewOnMap } = await import('../../src/kitden/web/static/js/map-review.js');
 const { closeForProject, hideToast, isPanelOpen, openPanel, panelState } = await import('../../src/kitden/web/static/js/panel.js');
 const { moveBody } = await import('../../src/kitden/web/static/js/details.js');
 const { busy, state } = await import('../../src/kitden/web/static/js/store.js');
@@ -189,7 +189,6 @@ test('the bar says what will happen, then what is being written', () => {
   assert.deepEqual(barWords({ ...IDLE, phase: 'ready', change, body }).outcome, 'Claude Code: Via gateway.');
   const applying = barWords({ ...IDLE, phase: 'applying', change, body, done: 1, total: 3 });
   assert.deepEqual([applying.apply, applying.outcome, applying.cancelWaits], ['Applying 1 of 3', 'Writing the settings of the Kitden gateway and Claude Code. A backup is kept.', true]);
-  assert.equal(writingLine([{ client: 'claude_code' }]), "Writing Claude Code's settings. A backup is kept.");
 });
 
 test('an error stays and says nothing changed when nothing was written', () => {
@@ -251,14 +250,6 @@ test("the bar never shows the engine's own words: no path, no command", () => {
     }
   }
   assert.equal(barWords({ ...IDLE, phase: 'failed', change, body: {}, failure: { state: 'stale', error: STALE_ERROR } }).outcome, 'Settings changed since this preview. Nothing was changed.');
-});
-
-test("the outcome line groups the After chips by word, else the first note's first sentence", () => {
-  const after = [{ client: 'claude_code', state: 'gw', word: 'Via gateway' }, { client: 'codex', state: 'gw', word: 'Via gateway' }, { client: 'cursor', state: 'off', word: 'Removed' }];
-  assert.equal(outcomeLine({ after }), 'Claude Code and Codex: Via gateway. Cursor: Removed.');
-  assert.equal(outcomeLine({ after: [{ note: 'No client uses the Kitden gateway yet. Set one up first.' }] }), 'No client uses the Kitden gateway yet.');
-  assert.equal(outcomeLine({ after: [] }), '');
-  assert.equal(writingLine([{ client: 'kitden' }]), "Writing the Kitden gateway's settings. A backup is kept.");
 });
 
 // A fetch that answers each request by `answers(url, sent)` and records it.

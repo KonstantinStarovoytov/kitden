@@ -4,6 +4,7 @@ import { $, $$, busyWhile, el, focusKey, icon, reportError } from "./dom.js";
 import { glide, rollTo, transition } from "./motion.js";
 import { renderAgents } from "./agents.js";
 import { renderChanges } from "./changes.js";
+import { initDock } from "./dock.js";
 import { renderGateway } from "./gateway.js";
 import { loadLibrary, loadLibraryFor, morphOnNextRender, raceSlow, renderLibrary, settleRows, showSources, snapshotRows } from "./library.js";
 import { leaveMap } from "./map-review.js";
@@ -372,6 +373,7 @@ function start() {
   $("#theme").addEventListener("click", switchTheme);
   $("#rescan").addEventListener("click", () => rescan().catch(reportError));
   initPanel();
+  initDock();
 
   // Markers measured before a font arrived sit on the old widths; a resize re-seats them.
   document.fonts?.addEventListener("loadingdone", () => dispatchEvent(new Event("resize")));

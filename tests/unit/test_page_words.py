@@ -1844,11 +1844,12 @@ def test_the_map_review_bar_waits_for_verified():
     for words in (
         '"Show changes"',
         '"Try again"',
-        "A backup is kept.",
         "export function reviewBar(",
         "previewOnMap(",
     ):
         assert words in bar, words
+    # What is written is said in dock.js, which the tray's bar shares.
+    assert "A backup is kept." in script("dock.js") and 'from "./dock.js"' in bar
     # The bar says it with the one word of review.js (barWords).
     assert '"Nothing was changed."' in review and "`${refused} ${NOTHING}`" in bar
     assert '"Drop to add"' in gw() and "dropBody(" in gw() and "moveBody(" in script("details.js")
@@ -1857,10 +1858,12 @@ def test_the_map_review_bar_waits_for_verified():
 
 def test_the_map_review_bar_words_and_look():
     review, bar = script("review.js"), script("map-review.js")
-    # What is written, in the owner's words; the step count comes from the server.
-    assert "`Writing ${names[0]}'s settings. A backup is kept.`" in bar
-    assert "`Writing the settings of ${joinWords(names)}. A backup is kept.`" in bar
-    assert '"the Kitden gateway"' in bar and 'stepText("Applying", done, total)' in bar
+    # What is written, in the owner's words (dock.js, shared with the tray's bar); the step count
+    # comes from the server.
+    dock = script("dock.js")
+    assert "`Writing ${names[0]}'s settings. A backup is kept.`" in dock
+    assert "`Writing the settings of ${joinWords(names)}. A backup is kept.`" in dock
+    assert '"the Kitden gateway"' in dock and 'stepText("Applying", done, total)' in bar
     # A refusal says why and keeps only Cancel; the bar is a region with a status line.
     assert '"Could not prepare this change"' in bar
     assert 'setAttribute("role", "region")' in bar and 'setAttribute("role", "status")' in bar
@@ -1892,3 +1895,30 @@ def test_the_map_review_reads_no_gateway_module():
         assert f'from "./{name}"' not in bar, name
     assert 'from "./map-review.js"' not in script("review.js")
     assert "setMapReview(TURNS)" in bar and "export function setMapReview(" in script("review.js")
+
+
+def test_the_tray_bar_sits_in_the_dock_and_says_its_words():
+    dock = script("dock.js")
+    for words in (
+        "Applied ",
+        "Undo all",
+        "changes in preview",
+        "Nothing is written until you Apply.",
+        "Click one on the map to take it out.",
+        "Take it out of the preview",
+        "Show changes",
+        "Cancel all",
+        "Apply all",
+        "All applied",
+        "Could not prepare the preview",
+        "Not everything was put back",
+        "Kitden put the files back.",
+    ):
+        assert words in dock, words
+    # A row's review in Details has no Apply of its own; the person can take the row out there.
+    assert '"Take it out"' in script("review.js")
+    assert 'type: "row-review"' in script("review.js")
+    # The bar lives in the page's dock, at the bottom left of the content.
+    assert '<div class="dock" id="dock"></div>' in INDEX
+    assert ".dock {" in CSS and ".tray-list {" in CSS
+    assert "initDock();" in script("app.js")

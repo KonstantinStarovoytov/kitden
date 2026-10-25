@@ -8,7 +8,7 @@ import { cancelPreview, checkMark, closePanel, header, hideToast, isPanelOpen, o
 import { allPutBack, callout, checkBox, CLIENT_ORDER, diffCounts, kitdenMove, mark, movedNames, notesSection, PLACE_IN_TITLE, ruleText, rulesText, skillRemoval, socket, stepText, strictText, targetWords } from "./parts.js";
 import { busy, reload, render, setBusy, state } from "./store.js";
 import { projectLabel, tools } from "./tools.js";
-import { changeOutcome, LOST, readChange } from "./tray.js";
+import { changeOutcome, LOST, readChange, takeOut } from "./tray.js";
 
 // changeOutcome lives in tray.js; panel.js and the map's bar still import it from here.
 export { changeOutcome };
@@ -335,15 +335,15 @@ function diffLines(text) {
   return pre;
 }
 
-export function showReview(change, previewBody, note, back = null, from = null) {
-  panelState.current = { type: "review", change, previewBody, note, back, from };
-  const words = changeWords(change, previewBody);
+// What a review shows under its title: the note, the result, the file changes behind one summary
+// and what follows. `apply` is the review's own Apply button, which Add missing's checklist turns
+// off until a box is ticked; a row of the tray has none, and its choice is already made.
+function reviewBody(change, previewBody, note, apply) {
   const body = el("div", "body");
   if (note) body.append(callout(note));
   if (change.after && change.after.length) body.append(afterLine(change.after));
   if (change.shared_file_warning) body.append(callout("This edits a project file that is usually shared through git."));
-  const apply = el("button", "btn primary apply");
-  if (change.align) body.append(alignSection(change, previewBody, note, apply));
+  if (change.align && apply) body.append(alignSection(change, previewBody, note, apply));
   // The result comes first; the file change and the command wait behind one summary.
   const files = el("details", "file-change");
   const summary = el("summary", null, change.steps.length > 1 ? "Show file changes" : "Show file change");
@@ -371,6 +371,14 @@ export function showReview(change, previewBody, note, back = null, from = null) 
   if (leftOut) body.append(el("p", "muted", leftOut));
   const after = notesSection("After you apply", change.steps);
   if (after) body.append(after);
+  return body;
+}
+
+export function showReview(change, previewBody, note, back = null, from = null) {
+  panelState.current = { type: "review", change, previewBody, note, back, from };
+  const words = changeWords(change, previewBody);
+  const apply = el("button", "btn primary apply");
+  const body = reviewBody(change, previewBody, note, apply);
 
   const footer = el("footer");
   footer.append(el("span", "note", APPLY_KEY));
@@ -392,6 +400,25 @@ export function showReview(change, previewBody, note, back = null, from = null) 
   if (!openPanel([header("Review change", words.title, reviewLede(change, state.project), null), body, footer])) {
     cancelPreview({ type: "review", change });
   }
+}
+
+// "Show changes" on a row of the preview tray: that row's review in Details, as it was asked. It has
+// no Apply of its own (the bar's Apply writes the whole tray) and is not a review in `panelState`'s
+// sense, so closing it never cancels the tray's change. "Take it out" leaves the tray; Close leaves
+// everything as it is.
+export function showRowReview(row) {
+  panelState.current = { type: "row-review", row };
+  const words = changeWords(row.part, row.body);
+  const footer = el("footer");
+  footer.append(
+    button("Take it out", () => {
+      const taken = takeOut(row.key);
+      closePanel();
+      return taken;
+    }, "btn"),
+    button("Close", () => closePanel(), "btn"),
+  );
+  openPanel([header("Review change", words.title, reviewLede(row.part, row.picked), null), reviewBody(row.part, row.body, row.note, null), footer]);
 }
 
 // Something broke after the server answered (a render, the toast). The answer stands, so
@@ -584,7 +611,7 @@ export async function reloadAll() {
 
 // The page shows the effect where it happened: the Library morphs its cells, every other
 // place cross-fades to its new state.
-function showEffect() {
+export function showEffect() {
   if (state.view === "library") {
     morphOnNextRender();
     render();

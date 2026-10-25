@@ -106,7 +106,7 @@ test('the diff count skips the header lines', () => {
 });
 
 const motion = await import('../../src/kitden/web/static/js/motion.js');
-const { D, animateTo, rise, riseHead, rollTo, glide, CALM, OUT3, IN3, DRAW, RETRACT } = motion;
+const { D, animateTo, rise, riseHead, rollTo, glide, shake, CALM, OUT3, IN3, DRAW, RETRACT } = motion;
 
 test('the curves have the mockup values', () => {
   assert.equal(CALM, 'cubic-bezier(.2,.8,.2,1)');
@@ -301,6 +301,24 @@ test('rollTo drops the old value by time, and under reduced motion shows the new
   assert.equal(calm.old.animations.length, 0);
   await new Promise((resolve) => setTimeout(resolve, 10));
   assert.equal(calm.old.removed, true);
+});
+
+test('shake moves a bar 7 px left, 6 right, 3 left and back in 380 ms', async () => {
+  const node = fakeNode();
+  await shake(node);
+  assert.deepEqual(node.animations[0].keyframes.map((frame) => frame.transform), [
+    'translateX(0)', 'translateX(-7px)', 'translateX(6px)', 'translateX(-3px)', 'translateX(0)',
+  ]);
+  assert.equal(node.animations[0].options.duration, 380);
+  assert.equal(node.animations[0].options.easing, 'ease-out');
+});
+
+test('shake does nothing under reduced motion', async () => {
+  reduce(true);
+  const node = fakeNode();
+  await shake(node);
+  assert.equal(node.animations.length, 0);
+  await shake(null);
 });
 
 test('glide slides the mark with the calm curve, 300 ms by default and 280 ms when asked', () => {

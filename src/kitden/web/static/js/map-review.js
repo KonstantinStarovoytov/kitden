@@ -1,10 +1,10 @@
 // The review bar on a map: a preview started on a map shows, applies and ends there (S.8).
 import { postJson } from "./api.js";
-import { clientName } from "./details.js";
-import { $, el, joinWords, reportError, withFocusKey } from "./dom.js";
+import { outcomeLine, writingLine } from "./dock.js";
+import { $, el, reportError, withFocusKey } from "./dom.js";
 import { closePanel, isPanelOpen, panelState, toast } from "./panel.js";
 import { stepText } from "./parts.js";
-import { afterParts, appliedToast, canShowReview, changeOutcome, changeWords, NOTHING, nothingChanged, reloadAll, setMapReview, showReview, stoppedWords } from "./review.js";
+import { appliedToast, canShowReview, changeOutcome, changeWords, NOTHING, nothingChanged, reloadAll, setMapReview, showReview, stoppedWords } from "./review.js";
 import { busy, go, render, setBusy, state } from "./store.js";
 
 // A preview started on the map (a drag, later a marketplace result) shows there: a preview block
@@ -30,24 +30,6 @@ const REFUSED = "Could not prepare this change";
 // asks its first preview (setMapReview): its review in Details goes back with `mapBack`, a review
 // asked elsewhere makes room first, and its verified Apply there ends it.
 const TURNS = { back: mapBack, makeRoom, applied: () => Object.assign(mapPreview, IDLE) };
-
-// Every client the steps write, as the bar says it while Apply runs. Not the one being written:
-// the engine's count names no step, and it does not write them in the preview's order.
-export function writingLine(steps) {
-  const names = [...new Set(steps.map((s) => s.client))].map((c) => (c === "kitden" ? "the Kitden gateway" : clientName(c)));
-  if (names.length === 1) return `Writing ${names[0]}'s settings. A backup is kept.`;
-  return `Writing the settings of ${joinWords(names)}. A backup is kept.`;
-}
-
-// What the change will do, in one line: the After chips by word ("Claude Code and Codex: Via
-// gateway."), or with no chip the first sentence of the first note.
-export function outcomeLine(change) {
-  const { chips, notes } = afterParts(change.after || []);
-  if (!chips.length) return notes.length ? (notes[0].match(/^.*?[.!?](?=\s|$)/) || [notes[0]])[0] : "";
-  const byWord = new Map();
-  for (const chip of chips) byWord.set(chip.word, [...(byWord.get(chip.word) || []), clientName(chip.client)]);
-  return [...byWord].map(([word, names]) => `${joinWords(names)}: ${word}.`).join(" ");
-}
 
 // The bar's words for a preview (mapPreview's shape): the title with its scope, one outcome line
 // and what Apply says. While Apply runs it counts the steps and Cancel waits. An error makes the

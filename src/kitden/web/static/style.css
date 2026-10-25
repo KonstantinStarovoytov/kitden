@@ -207,7 +207,7 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 /* The hint line: 14 px above the bottom of what is seen. It takes no room and no clicks; the page's
    bottom space keeps its end clear. */
-.hint-dock { position: sticky; bottom: 0; z-index: 2; flex: none; height: 0; margin: 0 22px; pointer-events: none; }
+.hint-dock { position: sticky; bottom: 0; z-index: 4; flex: none; height: 0; margin: 0 22px; pointer-events: none; }
 .hint-line { position: absolute; left: 0; right: 0; bottom: 14px; margin: 0; display: flex; align-items: center; gap: 6px; color: var(--ink-3); font-size: 11px; }
 .lede.fresh { animation: rise 320ms var(--ease-out) both; }
 
@@ -720,6 +720,42 @@ div.map .block.preview .block-meta { color: var(--ink-2); }
 .review-bar .bar-actions { display: flex; gap: 6px; }
 .review-bar .btn[aria-disabled="true"] { cursor: progress; }
 .review-bar .btn:not(.primary)[aria-disabled="true"] { opacity: 0.5; }
+/* The preview tray's bar (docs/design.md, Preview tray). The dock sits at the bottom left of the page,
+   above the hint line, over the map; the band it sits in takes no clicks, the dock does. One change
+   is a row of words and buttons; two or more are a list. */
+.dock { position: absolute; left: 0; bottom: 46px; z-index: 1; max-width: 100%; pointer-events: auto; }
+.dock .bar { display: flex; align-items: center; gap: 14px; width: 380px; max-width: 100%; padding: 14px 14px 14px 16px; background: var(--panel); border: 1px solid var(--wire); border-radius: 10px; box-shadow: var(--shadow); }
+.dock .bar.err { border-color: var(--route); }
+.dock .bar.many { flex-direction: column; align-items: stretch; gap: 10px; }
+.dock .tx, .dock .tray-head { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.dock .tx { flex: 1; }
+.dock .bar b { font-size: 13px; font-weight: 600; }
+.dock .bar small { font-size: 11px; color: var(--ink-3); overflow-wrap: anywhere; }
+.dock .bar small.bad { color: var(--route); }
+.dock .tx .btn { align-self: flex-start; margin: 2px 0 -4px -9px; }
+.dock .num { font-variant-numeric: tabular-nums; }
+.dock .acts { display: flex; gap: 8px; }
+.dock .bar.many .acts { justify-content: flex-end; }
+.dock .tray-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 212px; overflow: auto; }
+.dock .tray-list li { display: flex; align-items: center; gap: 10px; padding: 7px 6px 7px 10px; border: 1px dashed var(--preview-line); background: var(--preview-fill); border-radius: 8px; }
+.dock .ti { display: grid; color: var(--route); }
+.dock .tt { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.dock .tt b { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dock .tt small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dock .ts { display: grid; place-items: center; width: 14px; color: var(--ink-3); }
+.dock .ts .ok { color: var(--success); }
+.dock .ib, .dock .x { display: grid; place-items: center; flex: none; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--ink-3); cursor: pointer; transition: background-color var(--t-fast) ease, color var(--t-fast) ease; }
+.dock .ib:hover, .dock .x:hover:not(:disabled) { background: var(--wire-soft); color: var(--ink); }
+.dock .x:disabled { opacity: 0.35; pointer-events: none; }
+/* Apply: its meter is a 2 px white line along the bottom edge, filled from the left by script. */
+.dock .apply { overflow: hidden; }
+.dock .apply .meter { left: 0; right: 0; bottom: 0; height: 2px; border-radius: 0; background: rgb(255 255 255 / 0.75); opacity: 1; transition: none; }
+.dock .btn[aria-disabled="true"] { cursor: progress; }
+.dock .btn[aria-disabled="true"]:active { transform: none; }
+/* Applied: green fill and label (the Applied button's own tokens), and a check that draws in. */
+.dock .btn.ok, .dock .btn.ok:hover { background: var(--success); border-color: var(--success); color: var(--on-success); }
+.dock .btn.ok .ic path { stroke-dasharray: 24; }
+.spin { animation: spin 800ms linear infinite; }
 /* A drag on the map: the pointer says it holds something, and no text is selected on the way. */
 .grabbing, .grabbing * { cursor: grabbing !important; user-select: none; }
 /* While a block is dragged no link takes the pointer. */

@@ -220,3 +220,18 @@ def test_quiet_text_on_the_soft_line_fill_is_readable_in_both_themes():
         for base in ("--panel", "--panel-raised"):
             fill = over(theme["--wire"], 0.6, theme[base])
             assert contrast(theme["--ink-3"], fill) >= 4.5, (base, fill)
+
+
+def test_the_tray_bar_is_readable_in_both_themes():
+    # A row sits on the preview fill over the panel: its icon is the accent, its line --ink-3 and
+    # its check the success green. A refusal in the bar's line sits on the panel itself.
+    for theme in (LIGHT, DARK, {**LIGHT, **DARK_AUTO}):
+        row = blend(theme["--preview-fill"], theme["--panel"])
+        for ink in ("--ink", "--ink-3", "--route", "--success"):
+            assert contrast(theme[ink], row) >= 4.5, (ink, row)
+        for ink in ("--ink-3", "--route"):
+            assert contrast(theme[ink], theme["--panel"]) >= 4.5, ink
+    assert ".dock .bar small.bad { color: var(--route); }" in CSS
+    # Applied is green with the label that was checked for it.
+    rule = block(".dock .btn.ok, .dock .btn.ok:hover {")
+    assert "background: var(--success);" in rule and "color: var(--on-success);" in rule
