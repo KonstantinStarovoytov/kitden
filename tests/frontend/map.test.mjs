@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js (for its columns) needs only this from a browser to load.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { CAPTION_H, GAP, NARROW_GAP, blockOrder, drawPlan, dropAt, findChip, groupBox, findIn, foldable, isNarrow, layoutTree, linkClass, linkKey, litFrom, litPath, toggleOpen, unfoldDelays } = await import('../../src/kitden/web/static/js/map.js');
+const { CAPTION_H, GAP, NARROW_GAP, blockOrder, drawPlan, dropAt, enterDelays, findChip, groupBox, findIn, foldable, isNarrow, layoutTree, linkClass, linkKey, litFrom, litPath, toggleOpen, unfoldDelays } = await import('../../src/kitden/web/static/js/map.js');
 const { cutName } = await import('../../src/kitden/web/static/js/dom.js');
 const { GATEWAY_COLUMNS } = await import('../../src/kitden/web/static/js/gateway.js');
 
@@ -175,6 +175,17 @@ test('unfold: links draw for 170 ms, then children start 15 ms apart with no cap
   const d = unfoldDelays(12);
   assert.equal(d[0], 170); assert.equal(d[1] - d[0], 15); assert.equal(d[11], 170 + 11 * 15);
   assert.ok(unfoldDelays(12, true).every((t) => t === 0));
+});
+
+test('entrance: blocks start 22 ms apart, and the whole wave ends within 440 ms; reduced motion starts all at once', () => {
+  const small = enterDelays(15);
+  assert.equal(small.length, 15); assert.equal(small[0], 0); assert.equal(small[1] - small[0], 22); assert.equal(small.at(-1), 308);
+  assert.equal(enterDelays(21).at(-1), 440);
+  const big = enterDelays(41);
+  assert.equal(big.length, 41); assert.equal(big[0], 0); assert.equal(big.at(-1), 440);
+  assert.ok(big.every((t, i) => i === 0 || t > big[i - 1]));
+  assert.deepEqual(enterDelays(0), []); assert.deepEqual(enterDelays(1), [0]);
+  assert.ok(enterDelays(41, true).every((t) => t === 0) && enterDelays(15, true).length === 15);
 });
 
 test('the layout of 20 servers and of the large sample stays under 16 ms', () => {

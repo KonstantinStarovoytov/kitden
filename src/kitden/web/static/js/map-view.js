@@ -3,7 +3,7 @@
 // frame clock, and every link is drawn again from its two blocks on each frame. The page gives the
 // hooks; the view knows nothing of servers, tools or clients.
 import { button, cutName, el } from "./dom.js";
-import { blockLabel, drawPlan, foldable, LINK_MS, linkClass, linkKey, linkPath, unfoldDelays } from "./map.js";
+import { blockLabel, drawPlan, enterDelays, foldable, LINK_MS, linkClass, linkKey, linkPath, unfoldDelays } from "./map.js";
 import { animateTo, CALM, D, IN3, OUT3 } from "./motion.js";
 
 const SVG = "http://www.w3.org/2000/svg";
@@ -14,7 +14,6 @@ const FOLD_SCALE = 0.3; // how small a folded child gets as it goes
 const FOLD_IN = 100; // a folded child goes this far left of its opener's right side
 const ROOM = 24; // under the lowest block
 const ENTER_RISE = 6; // an entering block starts this far below its place
-const ENTER_STEP = 22; // and the next one starts this much later, in layout order
 
 // A part a screen reader skips: the block's label says it already.
 function quiet(node) {
@@ -327,6 +326,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd } = {}) {
     folds = foldable(model);
     const unfold = new Map(plan.unfold.map((id, i) => [id, i]));
     const delays = unfoldDelays(plan.unfold.length);
+    const waves = enterDelays(layout.blocks.length); // when each block of an entrance starts
     const opened = new Set(); // new blocks of an unfold: their links draw in first
 
     for (const [at, place] of layout.blocks.entries()) {
@@ -345,9 +345,9 @@ export function mapView({ tile, onOpen, onSelect, onAdd } = {}) {
         stop(item);
         put(item, end);
       } else if (enters) {
-        // The entrance: it waits below its place, unseen, then rises, one step after the last.
+        // The entrance: it waits below its place, unseen, then rises in its turn.
         put(item, { ...end, y: end.y + ENTER_RISE, o: 0 });
-        go(item, end, { dur: D(MOVE_MS), ease: OUT3, start: start + D(ENTER_STEP * at) });
+        go(item, end, { dur: D(MOVE_MS), ease: OUT3, start: start + D(waves[at]) });
       } else if (fresh && unfold.has(place.id)) {
         // An unfold: it waits at its place while its links draw, then fades in.
         opened.add(place.id);

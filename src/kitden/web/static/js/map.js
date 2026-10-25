@@ -32,6 +32,8 @@ const RAIL = 16; // narrow: children sit this far inside their parent, beside it
 const TRUNK = 20; // a direct line runs down a trunk this far right of the block it leaves
 const CORNER = 6; // the round corners of a direct line and of a rail
 const CHILD_MS = 15; // between two children of an unfold
+const ENTER_STEP = 22; // between two blocks of the entrance
+const ENTER_WAVE = 440; // the entrance starts its last block by now, however many there are
 // The links a lit path follows.
 const PATH_KINDS = ["on", "direct", "faint"];
 // What a screen reader hears for a block's state; the map itself shows no state word.
@@ -46,6 +48,14 @@ export function isNarrow(width, detailsOpen) {
 // many there are. Reduced motion starts them all at once.
 export function unfoldDelays(count, reduced = false) {
   return Array.from({ length: count }, (_, i) => (reduced ? 0 : LINK_MS + i * CHILD_MS));
+}
+
+// When each block of the entrance starts to rise, in layout order: 22 ms apart while the whole
+// wave fits in 440 ms (up to 21 blocks), else spread evenly so the last one starts at 440 ms.
+// Reduced motion starts them all at once.
+export function enterDelays(count, reduced = false) {
+  const step = count > 1 ? Math.min(ENTER_STEP, ENTER_WAVE / (count - 1)) : 0;
+  return Array.from({ length: count }, (_, i) => (reduced ? 0 : i * step));
 }
 
 function childrenOf(model) {

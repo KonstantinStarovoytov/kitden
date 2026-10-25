@@ -185,7 +185,7 @@ All helpers live in `src/kitden/web/static/js/motion.js`.
 | Pattern | Helper | Where |
 | --- | --- | --- |
 | Place change | `transition(change, "place-change")`: only the page goes (120 ms) and the new one rises 6 px (260 ms); the rail and top bar stay still. The Gateway rises on its own (`transition(change, "map-entrance")`): the old page goes in 120 ms, then `riseHead` lifts the title, the lede at 120 ms and the scope line at 180 ms (each 6 px, 260 ms `--calm`), then the map or List | Rail links, Back; the Library's rows are read first (up to 300 ms) |
-| Map entrance | `draw(…, { motion: "enter" })` (map-view.js): each block and caption rises 6 px in 260 ms OUT3, 22 ms apart in layout order; a link shows as much as the fainter of its two blocks. On every visit, and when the List gives way to the Map. Reduced motion and a hidden page show the end at once | Gateway map |
+| Map entrance | `draw(…, { motion: "enter" })` (map-view.js): each block and caption rises 6 px in 260 ms OUT3, 22 ms apart in layout order, and past 21 blocks closer, so the last one starts at 440 ms (`enterDelays` in map.js); a link shows as much as the fainter of its two blocks. On every visit, and when the List gives way to the Map. Reduced motion and a hidden page show the end at once | Gateway map |
 | Shared tile | `fly(node, name)` before `go()`, `land(twin, name)` while the new place draws | Overview count → Library column |
 | Sliding mark | `glide(box, active, key, { duration })` (pills pass 280) | Rail, Library tabs, the show choice, Map / List |
 | Ready, then swap | `choose(params)` (library.js): read the rows first; over 300 ms the old list dims (`.table-scroll.waiting`), never a skeleton | Library tabs, Installed / New / All, category, Needs attention |

@@ -313,3 +313,15 @@ test('under reduced motion the entrance leaves every block and link visible at o
   await v.draw(TREE, lay(['s1']), { motion: 'enter' });
   for (const n of walk(v.area)) { assert.ok(!n.animations?.length); if (n.style) assert.equal(n.style.opacity ?? '', ''); }
 });
+
+test('a big entrance starts its last block at 440 ms, not 22 ms per block', async () => {
+  const blocks = Array.from({ length: 40 }, (_, i) => ({ id: `x${i}`, column: 'b', kind: 'held', name: `x${i}`, state: 'on', count: 0 }));
+  const big = { columns: TREE.columns, blocks, links: [] };
+  const layout = layoutTree(big, { open: new Set(), narrow: false });
+  const v = view();
+  v.draw(big, layout, { motion: 'enter' });
+  const last = v.node(layout.blocks.at(-1).id);
+  assert.ok(layout.blocks.length > 21);
+  tick(440); assert.equal(last.style.opacity, '0');
+  tick(260); assert.equal(last.style.opacity, '');
+});
