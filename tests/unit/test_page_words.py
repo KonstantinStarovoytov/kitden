@@ -1727,6 +1727,58 @@ def test_the_tool_panel_says_the_mockups_words():
         assert selector in CSS, selector
 
 
+def test_the_client_gateway_link_and_outside_panels_say_the_mockups_words():
+    # The client, gateway, connection and outside panels of the mockup (gateway-notes 3.5-3.8).
+    # What Kitden does not know stays out (D23, D24): no "Running", no "not tested", no sign-in,
+    # no Library counts, no drag that is not there yet, and no rules file of its own: a rule is
+    # written in the gateway's file.
+    text = gw()
+    for words in (
+        "· on this Mac`",
+        '"Connect to the gateway…"',
+        '"Disconnect from the gateway…"',
+        '"See what it loads in Library"',
+        '"Through Kitden"',
+        '"On its own"',
+        '"Nothing yet"',
+        '"Nothing"',
+        '" · change in preview"',
+        '" · in preview"',
+        '"Connect…"',
+        '"Disconnect…"',
+        "in the gateway · ${",
+        " through Kitden, so Kitden's rules apply to them.`",
+        " on its own and skip",
+        "gets Kitden from a plugin: turn the plugin off to disconnect it.`",
+        "`Kitden did not find ${",
+        'connection: "Connection"',
+        '"Route through the gateway"',
+        '"Held by the gateway"',
+        '"Tool on"',
+        '"Direct route"',
+        '"Written in"',
+        "'s settings`",
+        '"Kitden\'s gateway file"',
+        '"In place"',
+        '"This link is a change in preview. Nothing is written until you Apply."',
+        '"Take it out of the preview"',
+        "`Disconnect ${",
+        "· outside the gateway`",
+        '"Set up in"',
+        '"Direct, on its own"',
+        '"Kitden\'s rules"',
+        '"Don\'t reach it"',
+        " on ${own}, so Kitden can't turn its tools on or off.",
+        '"Move it into the gateway to manage them here."',
+        " it either way.`",
+    ):
+        assert words in text, words
+    for words in ("Kitden entry", "Running", "not tested", "Drag it onto", "Kitden's rules file"):
+        assert words not in text, words
+    for selector in (".chip-s", "header.has-tile", ".p-tile", ".client-rows", ".facts dd.quiet"):
+        assert selector in CSS, selector
+
+
 def test_connect_and_disconnect_say_kitden():
     # The `kitden` entry is how a client reaches Kitden: Gateway and Agents say it the same way.
     review, parts = script("review.js"), script("parts.js")
@@ -1995,7 +2047,6 @@ def test_the_gateway_says_what_it_could_not_read():
     for words in (
         '"Not known"',
         '"Could not read its settings."',
-        '"project has its", "projects have their"',
     ):
         assert words in text, words
     assert "projects have its" not in text
@@ -2048,7 +2099,8 @@ def test_the_map_previews_are_tray_rows():
     text = gw()
     for words in (
         'const TAKE_OUT = "Take it out of the preview";',
-        'addToTray(removal.body, { icon: "x" })',
+        "addToTray(removal.body, { icon: removalIcon(removal.body) })",
+        '(body.action === "client.disconnect" ? iconFor(body) : "x")',
         "addToTray(body)",
         "takeOut(",
         "onTray(trayChanged);",

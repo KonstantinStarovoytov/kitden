@@ -881,7 +881,27 @@ test('the × of a link in the tray takes it out, else adds it', async () => {
   assert.equal(await adding, false);
   assert.deepEqual(tray.rows, []);
   // A link the map does not act on does nothing.
-  assert.equal(removeLink(tree, linkOf(tree, 'client:codex>gateway:kitden'), ''), null);
+  assert.equal(removeLink(tree, linkOf(tree, 'client:codex>outside:local:docs'), ''), null);
+  await freshTray();
+});
+
+test("the client link's × adds a disconnect row", async () => {
+  await freshTray();
+  queue(PREVIEW, batch('c1'));
+  const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+  const link = linkOf(tree, 'client:codex>gateway:kitden');
+  const body = { action: 'client.disconnect', targets: [{ client: 'codex' }], params: {} };
+  assert.deepEqual(linkRemoval(tree, link, ''), { tip: 'Disconnect Codex', body });
+  assert.equal(linkTip(tree, link, ''), 'Disconnect Codex');
+  // The row has the plug, as the panel's Disconnect gives it.
+  await removeLink(tree, link, '');
+  assert.deepEqual(tray.rows.map((r) => [r.body, r.icon]), [[body, 'plug']]);
+  // A second × takes it out.
+  await removeLink(tree, link, '');
+  assert.deepEqual(tray.rows, []);
+  // A plugin gives Cursor its entry: Kitden cannot take it out, so its link has no ×.
+  const plugin = gatewayTree(MEDIUM_VIEW, { ...OPTS, setup: [...SETUP.slice(0, 2), entry('cursor', 'plugin')] });
+  assert.equal(linkRemoval(plugin, linkOf(plugin, 'client:cursor>gateway:kitden'), ''), null);
   await freshTray();
 });
 
@@ -1039,7 +1059,8 @@ test('a link the map can act on says what its × does', () => {
     { tip: 'Remove files from the gateway', body: { action: 'gateway.remove', targets: [], params: { server: 'files' } } });
   assert.deepEqual(linkRemoval(tree, link('held:kitden:files>tool:files/read_file'), 'website'),
     { tip: 'Turn off read_file', body: { action: 'gateway.rule', targets: [], params: { server: 'files', tool: 'read_file', state: 'off', project: 'website' } } });
-  assert.equal(linkRemoval(tree, link('client:codex>gateway:kitden'), ''), null);
+  assert.deepEqual(linkRemoval(tree, link('client:codex>gateway:kitden'), ''),
+    { tip: 'Disconnect Codex', body: { action: 'client.disconnect', targets: [{ client: 'codex' }], params: {} } });
   assert.equal(linkRemoval(tree, link('client:codex>outside:local:docs'), ''), null);
 });
 

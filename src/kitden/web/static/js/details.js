@@ -384,12 +384,13 @@ export function footerButtons({ lead, rest }, draw, commands = []) {
 }
 
 // Facts: a label and a value each, in two columns. A value is words or a node (client marks);
-// `accent` draws it in the accent color, for what applies in the picked project, and `warn` in
-// amber, for a tool that may write.
+// `accent` draws it in the accent color, for what applies in the picked project, `warn` in amber,
+// for a tool that may write or rules that do not reach a server, and `quiet` in the quiet color,
+// for nothing there.
 export function factsBlock(rows) {
   const list = el("dl", "facts");
-  for (const { label, value, accent = false, warn = false } of rows) {
-    const detail = el("dd", accent ? "accent" : warn ? "warn" : null);
+  for (const { label, value, accent = false, warn = false, quiet = false } of rows) {
+    const detail = el("dd", accent ? "accent" : warn ? "warn" : quiet ? "quiet" : null);
     if (typeof value === "string") detail.textContent = value;
     else detail.append(value);
     list.append(el("dt", null, label), detail);
@@ -398,8 +399,10 @@ export function factsBlock(rows) {
 }
 
 // One action of a card as a button: `run()` on press, else a preview button that adds `body`, with
-// its `note`, to the tray. The whole label stays in the hover text when the column cuts it.
-function cardButton({ label, run, body, note = null, primary = false }) {
+// its `note`, to the tray; or a control the card made itself (`node`). The whole label stays in the
+// hover text when the column cuts it.
+function cardButton({ label, run, body, note = null, primary = false, node: own = null }) {
+  if (own) return own;
   const look = primary ? "btn primary" : "btn";
   let node = null;
   if (run) {
@@ -414,22 +417,36 @@ function cardButton({ label, run, body, note = null, primary = false }) {
 }
 
 // A card as the nodes openPanel shows, in the order of every Details card: the kind and Close, the
-// title with the id quiet under it, the facts, a list (`list`, a node: a server's switches, a
-// tool's projects with rules of their own), one sentence, the actions stacked in the footer in
-// order (`more` waits behind one More button,
-// `after` is a quiet node under them), and the evidence folded last (`technical`, a node from
-// technical(rows)). At most one action is `primary`. Card builders return this plain object, so a
-// test reads its fields without a page.
-export function detailsCard({ kind, title, id = null, facts = [], why = null, list = null, actions = [], more = [], after = null, technical: evidence = null }) {
+// title with the id quiet under it (and `tile`, a node, beside both), the facts, a list (`list`, a
+// node: a server's switches, a tool's projects with rules of their own, a gateway's clients), one
+// sentence (words, or a node that changes), the actions stacked in the footer in order (`more`
+// waits behind one More button, `after` is a quiet node under them), and the evidence folded last
+// (`technical`, a node from technical(rows)). At most one action is `primary`. Card builders return
+// this plain object, so a test reads its fields without a page.
+export function detailsCard({ kind, title, id = null, tile = null, facts = [], why = null, list = null, actions = [], more = [], after = null, technical: evidence = null }) {
   const body = el("div", "body");
   if (facts.length) body.append(factsBlock(facts));
   if (list) body.append(list);
-  if (why) body.append(el("p", "why", why));
+  if (why) body.append(typeof why === "string" ? el("p", "why", why) : why);
   const footer = el("footer", "stack");
   footer.append(...actions.map(cardButton));
   if (more.length) footer.append(moreButton(more.map(cardButton)));
   if (after) footer.append(after);
-  return [header(kind, title, id), body, ...(footer.children.length ? [footer] : []), ...(evidence ? [evidence] : [])];
+  return [cardHead(kind, title, id, tile), body, ...(footer.children.length ? [footer] : []), ...(evidence ? [evidence] : [])];
+}
+
+// A card's head: the kind and Close over its title (words, or parts: a link's two ends and the
+// arrow between them) and its id; a tile (a client's, the house, a server's icon) sits beside the
+// title and the id, after them for a screen reader, which hears nothing of it.
+function cardHead(kind, title, id, tile) {
+  const head = header(kind, typeof title === "string" ? title : null, id);
+  if (typeof title !== "string") head.children[1].append(...title);
+  if (tile) {
+    head.classList.add("has-tile");
+    tile.setAttribute("aria-hidden", "true");
+    head.append(tile);
+  }
+  return head;
 }
 
 // The client whose folder or file this definition is read from, when it is another of the

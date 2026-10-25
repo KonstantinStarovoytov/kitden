@@ -36,7 +36,7 @@ globalThis.document = { createElement: fakeNode, createElementNS: (namespace, ta
 const asked = [];
 globalThis.fetch = async (url) => { asked.push(url); return { ok: true, status: 200, json: async () => ({}) }; };
 
-const { SETUP_NOTE, clientCard, gatewayCard, heldCard, outsideCard, reported, toolCard, toolState } = await import('../../src/kitden/web/static/js/gateway-details.js');
+const { SETUP_NOTE, clientCard, gatewayCard, heldCard, linkCard, outsideCard, reported, toolCard, toolState } = await import('../../src/kitden/web/static/js/gateway-details.js');
 const { detailsCard, moveBody, syncTray } = await import('../../src/kitden/web/static/js/details.js');
 const { review } = await import('../../src/kitden/web/static/js/review.js');
 const { data, state } = await import('../../src/kitden/web/static/js/store.js');
@@ -48,6 +48,13 @@ const { switchList, toolRows } = await import('../../src/kitden/web/static/js/to
 const textOf = (node) => (typeof node === 'string' ? node : node ? `${node.textContent}${node.childNodes.map(textOf).join('')}` : '');
 const facts = (card) => card.facts.map((f) => [f.label, typeof f.value === 'string' ? f.value : f.text]);
 const labels = (card) => card.actions.map((a) => a.label);
+const moreLabels = (card) => (card.more || []).map((a) => a.label);
+const mainOf = (card) => card.actions.map((a) => [a.label, Boolean(a.primary)]);
+// A press, and what it set off.
+const click = async (node) => {
+  for (const listener of node.listeners.click || []) listener({});
+  await new Promise((resolve) => setTimeout(resolve, 0));
+};
 
 const entry = (client, state, fields = {}) => ({ client, state, item: null, enabled: true, ...fields });
 const SETUP = [entry('claude_code', 'added'), entry('codex', 'added'), entry('cursor', 'missing')];
@@ -69,106 +76,188 @@ const def = (id, client, fields = {}) => ({
   affects: { clients: [client], scope: 'all', note: null }, source: `/Users/me/.${client}.json`, key: 'mcpServers', summary: null, ...fields,
 });
 const PROJECTS = [{ id: 'p1', path: '/w/atlas', own_rules: 1 }, { id: 'p2', path: '/w/web', own_rules: 0 }];
+// The Kitden gateway with what its servers say of their tools: files on (3 of its 4 tools on),
+// tracker off (none of its 2 on).
+const TOOLED = (name, on, all, state = 'on') => ({ name, kind: 'local', state, on_count: on, tool_list: Array.from({ length: all }, (_, at) => ({ name: `${name}_${at}` })) });
+const KITDEN_TOOLS = { ...KITDEN, servers: [TOOLED('files', 3, 4), TOOLED('tracker', 0, 2, 'off')] };
+const VIEW_TOOLS = { ...VIEW, gateways: [KITDEN_TOOLS] };
+const REGISTER = (client) => ({ action: 'setup_server.register', targets: [{ client }], params: {} });
+const DISCONNECT = (client) => ({ action: 'client.disconnect', targets: [{ client }], params: {} });
 
-test('an outside server offers move, adds and removes, and never reads the map', () => {
+test('the outside panel keeps every action, the rest under More', () => {
   asked.length = 0;
-  const card = outsideCard(GITHUB, 'move', [def('g', 'claude_code', { summary: 'https://api.github.example.test/mcp' })], { view: VIEW, clients: FOUND });
-  assert.deepEqual([card.kind, card.title], ['Server', 'github']);
-  assert.deepEqual(labels(card), ['Move into the gateway…', '+ Add to Codex…', '+ Add to Cursor…', 'Remove from Claude Code…']);
-  assert.deepEqual(card.actions.map((a) => Boolean(a.primary)), [true, false, false, false]);
+  const card = outsideCard(GITHUB, 'move', [def('g', 'claude_code', { summary: 'https://api.github.example.test/mcp' })], { view: VIEW, clients: FOUND, linked: ['claude_code', 'codex'] });
+  assert.deepEqual([card.kind, card.title, card.id], ['Server', 'github', 'Remote · outside the gateway']);
+  // Its icon on a tile, as on the map.
+  assert.equal(card.tile.childNodes[0].dataset.icon, 'globe');
+  assert.deepEqual(mainOf(card), [['Move into the gateway…', true]]);
+  assert.deepEqual(moreLabels(card), ['+ Add to Codex…', '+ Add to Cursor…', 'Remove from Claude Code…']);
   // One gateway can take it: the button is the move's own, so it can say "In preview".
   assert.deepEqual([card.actions[0].body, card.actions[0].run], [moveBody(KITDEN, ['g']), undefined]);
-  assert.deepEqual(card.actions[1].body, { action: 'mcp.add', targets: [{ client: 'codex' }], params: { item: 'g' } });
-  assert.deepEqual(card.actions[3].body, { action: 'mcp.remove_direct', targets: [{ item: 'g' }], params: {} });
-  assert.deepEqual(facts(card), [['In', 'Claude Code'], ['Kind', 'Remote'], ['Gateway', "Outside · calls skip Kitden's rules"]]);
-  assert.equal(card.why, "Claude Code calls it directly, so Kitden's tool rules do not reach it.");
+  assert.deepEqual(card.more[0].body, { action: 'mcp.add', targets: [{ client: 'codex' }], params: { item: 'g' } });
+  assert.deepEqual(card.more[2].body, { action: 'mcp.remove_direct', targets: [{ item: 'g' }], params: {} });
+  assert.deepEqual(facts(card), [['Set up in', 'Claude Code'], ['Route', 'Direct, on its own'], ["Kitden's rules", "Don't reach it"]]);
+  assert.equal(card.facts[2].warn, true);
+  // Claude Code uses the Kitden gateway: it keeps github either way.
+  assert.equal(card.why, "Claude Code calls github on its own, so Kitden can't turn its tools on or off. Move it into the gateway to manage them here. Claude Code keeps it either way.");
   // The address waits under Technical details.
   assert.ok(textOf(card.technical).includes('https://api.github.example.test/mcp'));
   assert.deepEqual(asked, []);
+  // Cursor does not use the gateway: a move would take files from it, so the panel does not say it keeps it.
+  const files = outsideCard(FILES, 'local', [def('c', 'cursor')], { view: VIEW, clients: FOUND, linked: ['claude_code', 'codex'] });
+  assert.equal(files.id, 'Local · outside the gateway');
+  assert.equal(files.why, "Cursor calls files on its own, so Kitden can't turn its tools on or off. Move it into the gateway to manage them here.");
+  // No gateway takes a remote one: its entry can go, under More with the rest.
+  const none = outsideCard(GITHUB, 'move', [def('g', 'claude_code')], { view: { ...VIEW, gateways: [] }, clients: FOUND, linked: [] });
+  assert.deepEqual([labels(none), moreLabels(none)], [[], ['Remove direct entry…', '+ Add to Codex…', '+ Add to Cursor…', 'Remove from Claude Code…']]);
+  assert.deepEqual(none.more[0].body, { action: 'mcp.remove_direct', targets: [{ item: 'g' }], params: {} });
+  assert.equal(none.why, "Claude Code calls github on its own, so Kitden can't turn its tools on or off.");
+  // Kitden does not know that a client loads it: the panel says only that it is set up there.
+  const unknown = outsideCard({ ...GITHUB, unknown: true }, 'move', [def('g', 'claude_code')], { view: VIEW, clients: FOUND, linked: ['claude_code'] });
+  assert.ok(unknown.why.startsWith("Claude Code has github set up on its own, so Kitden can't turn its tools on or off."), unknown.why);
 });
 
 test('a server in two groups adds and removes only its own entries; a gateway client gets no add', () => {
   const docs = outsideCard(DOCS, 'move', [def('a', 'claude_code'), def('b', 'codex')], { view: VIEW, clients: FOUND });
-  assert.deepEqual(labels(docs), ['Move into the gateway…', '+ Add to Cursor…', 'Remove from Claude Code…']);
-  assert.deepEqual(docs.actions[1].body.params, { item: 'a' });
+  assert.deepEqual([labels(docs), moreLabels(docs)], [['Move into the gateway…'], ['+ Add to Cursor…', 'Remove from Claude Code…']]);
+  assert.deepEqual(docs.more[0].body.params, { item: 'a' });
   // Claude Code and Codex get files through the Kitden gateway: nothing to add anywhere.
   const via = { via_gateway: 'kitden', actions: [], affects: null };
   const files = outsideCard(FILES, 'local', [def('c', 'cursor'), def('k1', 'claude_code', via), def('k2', 'codex', via)], { view: VIEW, clients: FOUND });
-  assert.deepEqual(labels(files), ['Move into the gateway…', 'Remove from Cursor…']);
-  assert.deepEqual(facts(files)[1], ['Kind', 'Local']);
+  assert.deepEqual([labels(files), moreLabels(files)], [['Move into the gateway…'], ['Remove from Cursor…']]);
+  assert.equal(files.id, 'Local · outside the gateway');
   // Two clients say "call"; a project's own entry is not a source for an add.
-  const two = outsideCard(row('n8n', 'codex', ['n1', 'n2'], { columns: ['claude_code', 'codex'] }), 'local', [def('n1', 'claude_code', { scope: 'project', project: '/w/atlas' }), def('n2', 'codex')], { view: VIEW, clients: FOUND });
-  assert.equal(two.why, "Claude Code and Codex call it directly, so Kitden's tool rules do not reach it.");
-  assert.deepEqual(two.actions[1].body.params, { item: 'n2' });
+  const two = outsideCard(row('n8n', 'codex', ['n1', 'n2'], { columns: ['claude_code', 'codex'] }), 'local', [def('n1', 'claude_code', { scope: 'project', project: '/w/atlas' }), def('n2', 'codex')], { view: VIEW, clients: FOUND, linked: ['claude_code', 'codex'] });
+  assert.deepEqual(facts(two)[0], ['Set up in', 'Claude Code and Codex']);
+  assert.equal(two.why, "Claude Code and Codex call n8n on their own, so Kitden can't turn its tools on or off. Move it into the gateway to manage them here. Claude Code and Codex keep it either way.");
+  assert.deepEqual(two.more[0].body.params, { item: 'n2' });
 });
 
-test('a server that stays says why instead of Move; without a gateway a remote one can lose its entry', () => {
+test('a server that stays says why instead of Move', () => {
   const stays = "docs is in the project's own files; it stays there.";
-  const kept = outsideCard({ ...DOCS, stays }, 'move', [def('a', 'claude_code')], { view: VIEW, clients: FOUND });
+  const kept = outsideCard({ ...DOCS, stays }, 'move', [def('a', 'claude_code')], { view: VIEW, clients: FOUND, linked: ['claude_code'] });
   assert.ok(!labels(kept).includes('Move into the gateway…'));
   assert.equal(textOf(kept.after), stays);
+  // It cannot move: the sentence does not ask for it.
+  assert.equal(kept.why, "Claude Code calls docs on its own, so Kitden can't turn its tools on or off.");
   const none = outsideCard(GITHUB, 'move', [def('g', 'claude_code')], { view: { ...VIEW, gateways: [] }, clients: FOUND });
-  assert.deepEqual(labels(none), ['Remove direct entry…', '+ Add to Codex…', '+ Add to Cursor…', 'Remove from Claude Code…']);
-  assert.deepEqual(none.actions[0].body, { action: 'mcp.remove_direct', targets: [{ item: 'g' }], params: {} });
   assert.equal(textOf(none.after), GATEWAY_NOTE);
   // A plugin's server stays with its plugin, and says so.
   const plugin = outsideCard(row('linear', 'claude_code', [], { stays: 'linear comes with a plugin; it stays with the plugin.' }), 'plugin', [def('l', 'claude_code', { actions: [] })], { view: VIEW, clients: FOUND });
-  assert.deepEqual([labels(plugin), facts(plugin)[1]], [[], ['Kind', 'From a plugin']]);
+  assert.deepEqual([labels(plugin), moreLabels(plugin), plugin.id], [[], [], 'From a plugin · outside the gateway']);
   assert.equal(textOf(plugin.after), 'linear comes with a plugin; it stays with the plugin.');
 });
 
-test('a client without the entry offers set up; one with it off says so', () => {
+test('a connected client offers Disconnect, a free one Connect', () => {
+  const codex = clientCard('codex', { setup: SETUP, clients: CLIENTS, view: VIEW });
+  assert.deepEqual([codex.kind, codex.title, codex.id], ['Client', 'Codex', 'Version 0.159.2 · on this Mac']);
+  assert.ok(codex.tile.childNodes[0].className.startsWith('client-mark'));
+  assert.deepEqual(mainOf(codex), [['Disconnect from the gateway…', false], ['See what it loads in Library', false]]);
+  assert.deepEqual(codex.actions[0].body, DISCONNECT('codex'));
+  assert.equal(typeof codex.actions[1].run, 'function');
+  // Its app opens from under More (D18).
+  assert.deepEqual(moreLabels(codex), ['Open ChatGPT']);
   const cursor = clientCard('cursor', { setup: SETUP, clients: CLIENTS, view: VIEW });
-  assert.deepEqual([cursor.kind, cursor.title], ['Client', 'Cursor']);
-  assert.deepEqual(facts(cursor), [['Version', '3.21.16'], ['Kitden entry', 'Not set up'], ['Gateway', 'Not connected']]);
-  assert.equal(cursor.why, 'Cursor does not use the Kitden gateway yet.');
-  assert.deepEqual(labels(cursor), ['Set up in Cursor…']);
-  assert.deepEqual([cursor.actions[0].primary, cursor.actions[0].body], [true, { action: 'setup_server.register', targets: [{ client: 'cursor' }], params: {} }]);
+  assert.deepEqual(mainOf(cursor), [['Connect to the gateway…', true], ['See what it loads in Library', false]]);
+  assert.deepEqual([cursor.actions[0].body, cursor.actions[0].note], [REGISTER('cursor'), SETUP_NOTE]);
+  assert.deepEqual(facts(cursor)[0], ['Gateway', 'Not connected']);
+  // An old entry connects by updating it.
+  const old = clientCard('codex', { setup: [entry('codex', 'old', { item: 'codex:agentsetup' })], clients: CLIENTS, view: VIEW });
+  assert.deepEqual(old.actions[0].body, { action: 'setup_server.update', targets: [{ item: 'codex:agentsetup' }], params: {} });
+  // A plugin gives Cursor its entry: Kitden cannot take it out, and says how.
+  const plugin = clientCard('cursor', { setup: [entry('cursor', 'plugin')], clients: CLIENTS, view: VIEW });
+  assert.deepEqual([labels(plugin), facts(plugin)[0]], [['See what it loads in Library'], ['Gateway', 'Connected']]);
+  assert.ok(plugin.why.endsWith('Cursor gets Kitden from a plugin: turn the plugin off to disconnect it.'), plugin.why);
+  // Not on this Mac: nothing to connect, and the panel says why.
+  const gone = clientCard('cursor', { setup: [entry('cursor', 'not_installed', { enabled: null })], clients: [{ id: 'cursor', status: 'not_found', version: null }], view: VIEW });
+  assert.deepEqual([gone.id, labels(gone)], ['Not installed', ['See what it loads in Library']]);
+  assert.ok(gone.why.startsWith('Kitden did not find Cursor on this Mac, so it cannot connect it.'), gone.why);
+  // Its own entry off: Claude Code and Cursor keep that switch in their own settings (docs checked
+  // 2026-10-24); Codex turns it on again in a review, under More.
   const off = clientCard('claude_code', { setup: [entry('claude_code', 'added', { enabled: false })], clients: CLIENTS, view: VIEW });
-  assert.deepEqual(facts(off).slice(1), [['Kitden entry', 'Off'], ['Gateway', 'Not connected']]);
-  // Claude Code and Cursor keep their switch for an entry in their own settings (docs checked
-  // 2026-10-24): the card says where to turn it on.
-  assert.equal(off.why, "Claude Code has the kitden entry turned off, so it does not reach the gateway. Turn it on in Claude Code's own MCP settings.");
-  assert.deepEqual(labels(off), []);
-  // Codex turns an entry off with `enabled = false`: Kitden turns it on again, in a review.
+  assert.deepEqual([facts(off)[0], labels(off), moreLabels(off)], [['Gateway', 'Not connected'], ['See what it loads in Library'], []]);
+  assert.ok(off.why.startsWith("Claude Code has the kitden entry turned off, so it does not reach the gateway. Turn it on in Claude Code's own MCP settings. "), off.why);
   const codexOff = clientCard('codex', { setup: [entry('codex', 'added', { enabled: false })], clients: CLIENTS, view: VIEW });
-  assert.equal(codexOff.why, 'Codex has the kitden entry turned off, so it does not reach the gateway.');
-  assert.deepEqual(labels(codexOff), ['Turn it on in Codex…', 'Open ChatGPT']);
-  assert.deepEqual([codexOff.actions[0].primary, codexOff.actions[0].body], [true, { action: 'setup_server.enable', targets: [{ client: 'codex' }], params: {} }]);
+  assert.ok(codexOff.why.startsWith('Codex has the kitden entry turned off, so it does not reach the gateway. docs is'), codexOff.why);
+  assert.deepEqual(moreLabels(codexOff), ['Turn it on in Codex…', 'Open ChatGPT']);
+  assert.deepEqual([codexOff.more[0].body, codexOff.more[0].note], [{ action: 'setup_server.enable', targets: [{ client: 'codex' }], params: {} }, SETUP_NOTE]);
   // A plugin's entry that is off is the plugin's switch: only the sentence.
   const pluginOff = clientCard('codex', { setup: [entry('codex', 'plugin', { enabled: false })], clients: CLIENTS, view: VIEW });
-  assert.deepEqual(labels(pluginOff), ['Open ChatGPT']);
-  assert.ok(pluginOff.why.endsWith("Turn it on in Codex's own MCP settings."));
-  // Connected, with its app's link scheme known: the app opens from here.
-  const codex = clientCard('codex', { setup: SETUP, clients: CLIENTS, view: VIEW });
-  assert.deepEqual(facts(codex).slice(1), [['Kitden entry', 'On'], ['Gateway', 'Connected']]);
-  assert.equal(codex.why, 'Codex reaches the Kitden gateway through its kitden entry.');
-  assert.deepEqual(labels(codex), ['Open ChatGPT']);
-  // An old entry is set up again, and a client Kitden did not find says so.
-  const old = clientCard('codex', { setup: [entry('codex', 'old', { item: 'codex:agentsetup' })], clients: [{ id: 'codex', status: 'not_found', version: null }], view: VIEW });
-  assert.deepEqual(facts(old), [['Version', 'Not installed'], ['Kitden entry', 'Old'], ['Gateway', 'Not connected']]);
-  assert.deepEqual(old.actions[0].body, { action: 'setup_server.update', targets: [{ item: 'codex:agentsetup' }], params: {} });
+  assert.deepEqual(moreLabels(pluginOff), ['Open ChatGPT']);
+  assert.ok(pluginOff.why.includes("Turn it on in Codex's own MCP settings."), pluginOff.why);
+  // Without the setup read, Kitden does not know whether it connects: no button claims either.
+  const unread = clientCard('codex', { setup: null, clients: CLIENTS, view: VIEW });
+  assert.deepEqual(facts(unread).slice(0, 2), [['Gateway', 'Not known'], ['Through Kitden', 'Not known']]);
+  assert.equal(unread.why, 'Kitden could not read which clients use it.');
+  assert.deepEqual(labels(unread), ['See what it loads in Library']);
 });
 
-test('the Kitden gateway moves every outside server that can go, in one review', () => {
-  const stays = "docs is in the project's own files; it stays there.";
-  const view = { ...VIEW, groups: { move: [{ ...DOCS, stays }, GITHUB], local: [DOCS_LOCAL, FILES], plugin: [row('linear', 'claude_code', [], { stays: 'with the plugin' })] } };
-  const card = gatewayCard(KITDEN, { view, setup: SETUP, projects: PROJECTS, clients: FOUND });
+test('the client panel says what goes through Kitden and what runs on its own', () => {
+  const claude = clientCard('claude_code', { setup: SETUP, clients: CLIENTS, view: VIEW_TOOLS });
+  // Only files is on: its 3 tools that are on; tracker is off.
+  assert.deepEqual(facts(claude), [['Gateway', 'Connected'], ['Through Kitden', '1 server · 3 tools on'], ['On its own', 'docs and github'], ['Projects', 'All projects']]);
+  // Each server it sets up on its own is a chip with its icon, as on the map.
+  const chips = claude.facts[2].value.children;
+  assert.deepEqual(chips.map((chip) => [chip.className, chip.childNodes[0].dataset.icon, textOf(chip)]), [['chip-s', 'globe', 'docs'], ['chip-s', 'globe', 'github']]);
+  assert.equal(claude.why, "Claude Code calls 1 server through Kitden, so Kitden's rules apply to them. docs and github are set up in Claude Code on its own and skip those rules.");
+  const cursor = clientCard('cursor', { setup: SETUP, clients: CLIENTS, view: VIEW_TOOLS, picked: 'p1', folder: 'atlas' });
+  assert.deepEqual(facts(cursor), [['Gateway', 'Not connected'], ['Through Kitden', 'Nothing yet'], ['On its own', 'files'], ['Projects', 'atlas']]);
+  assert.equal(cursor.facts[1].quiet, true);
+  assert.equal(cursor.why, "Cursor does not use the Kitden gateway yet. files is set up in Cursor on its own and skips Kitden's rules.");
+  // Nothing of its own: "Nothing"; tools Kitden does not know yet are not counted.
+  const codex = clientCard('codex', { setup: SETUP, clients: CLIENTS, view: { ...VIEW, groups: { move: [], local: [], plugin: [] } } });
+  assert.deepEqual(facts(codex).slice(1, 3), [['Through Kitden', '2 servers'], ['On its own', 'Nothing']]);
+  assert.equal(codex.why, "Codex calls 2 servers through Kitden, so Kitden's rules apply to them.");
+  // No server in the gateway is on: nothing goes through it.
+  const quiet = clientCard('codex', { setup: SETUP, clients: CLIENTS, view: { ...VIEW_TOOLS, gateways: [{ ...KITDEN_TOOLS, servers: [TOOLED('tracker', 0, 2, 'off')] }] } });
+  assert.deepEqual(facts(quiet)[1], ['Through Kitden', 'Nothing yet']);
+  assert.ok(quiet.why.startsWith('Codex uses the Kitden gateway, but no server in it is on by the shared rule.'), quiet.why);
+});
+
+test("the client panel's Gateway fact says when its change waits in preview", async () => {
+  const card = clientCard('codex', { setup: SETUP, clients: CLIENTS, view: VIEW });
+  await withTray(() => [card.facts[0].value], async ([gateway]) => {
+    assert.equal(textOf(gateway), 'Connected');
+    await review(DISCONNECT('codex'));
+    assert.equal(textOf(gateway), 'Connected · change in preview');
+  });
+});
+
+test('the gateway panel lists every client with its own button', async () => {
+  const card = gatewayCard(KITDEN_TOOLS, { view: VIEW_TOOLS, setup: SETUP, projects: PROJECTS, clients: FOUND });
   assert.deepEqual([card.kind, card.title, card.id], ['Gateway', 'Kitden gateway', 'On this Mac']);
-  assert.match(card.actions[0].label, /^Move all \d+…$/);
-  // docs is in two groups: it moves on its own, so neither of its rows is in "Move all".
-  assert.deepEqual(labels(card), ['Move all 2…', 'Add another gateway…']);
-  assert.deepEqual(card.actions[0].body, { action: 'gateway.move', targets: [{ item: 'g' }, { item: 'c' }], params: { gateway: 'kitden' } });
-  assert.equal(card.actions[0].primary, true);
-  assert.deepEqual(facts(card), [['Clients', '2 clients'], ['Servers', '2 servers'], ['Rules', '1 project has its own rules']]);
+  assert.equal(card.tile.childNodes[0].className, 'p-house');
+  assert.deepEqual(facts(card), [['Servers', '2 in the gateway · 4 outside'], ['Tools', '3 of 6 on']]);
+  const [head, list] = card.list.children;
+  assert.deepEqual([head.className, textOf(head)], ['sw-head', 'Clients']);
+  // Each row: the client's tile, its name, whether it is connected, and its own button.
+  const rowWords = () => list.children.map((r) => [r.children[1].children.map(textOf), textOf(r.children[2].childNodes[0])]);
+  assert.deepEqual(rowWords(), [[['Claude Code', 'Connected'], 'Disconnect…'], [['Codex', 'Connected'], 'Disconnect…'], [['Cursor', 'Not connected'], 'Connect…']]);
+  // The button names its client for a screen reader.
+  assert.equal(textOf(list.children[2].children[2]), 'Connect… Cursor');
+  // Move all and Add another gateway wait under More (D18).
+  assert.deepEqual([labels(card), moreLabels(card)], [[], ['Move all 2…', 'Add another gateway…']]);
+  assert.deepEqual(card.more[0].body, { action: 'gateway.move', targets: [{ item: 'g' }, { item: 'c' }], params: { gateway: 'kitden' } });
   assert.equal(card.why, 'The gateway controls only the servers in it. Direct entries and terminal tools are outside it.');
-  assert.equal(card.warning, null);
-  // Nothing left to move: only the add.
-  const done = gatewayCard({ ...KITDEN, servers: [] }, { view: { ...VIEW, groups: { move: [], local: [], plugin: [] } }, setup: SETUP, projects: [], clients: FOUND });
-  assert.deepEqual(labels(done), ['Add another gateway…']);
-  assert.deepEqual(facts(done).slice(1), [['Servers', 'Nothing yet. Move a server in from the outside group.'], ['Rules', 'No project has its own rules']]);
-  // "Add another gateway…" shows the form in the column.
-  assert.ok(gatewayCard(KITDEN, { view, setup: SETUP, projects: PROJECTS, clients: FOUND, adding: true }).after);
+  await withTray(() => [list], async ([rows], sent) => {
+    await click(rows.children[2].children[2]);
+    assert.deepEqual(tray.rows.map((r) => [r.body, r.note]), [[REGISTER('cursor'), SETUP_NOTE]]);
+    assert.deepEqual(rowWords()[2], [['Cursor', 'Not connected · in preview'], 'In preview']);
+    // A second press on it asks for nothing.
+    await click(rows.children[2].children[2]);
+    assert.equal(sent.filter((url) => url === '/api/batch/preview').length, 1);
+    await click(rows.children[0].children[2]);
+    assert.deepEqual(tray.rows.map((r) => r.body), [REGISTER('cursor'), DISCONNECT('claude_code')]);
+  });
+  // Tools Kitden does not know yet, and an empty gateway.
+  assert.deepEqual(facts(gatewayCard(KITDEN, { view: VIEW, setup: SETUP, projects: PROJECTS, clients: FOUND })).at(-1), ['Tools', 'Not known yet']);
+  const empty = gatewayCard({ ...KITDEN, servers: [] }, { view: { ...VIEW, groups: { move: [], local: [], plugin: [] } }, setup: SETUP, projects: [], clients: FOUND });
+  assert.deepEqual([facts(empty), moreLabels(empty)], [[['Servers', '0 in the gateway · 0 outside'], ['Tools', 'Nothing yet']], ['Add another gateway…']]);
+  // A client a plugin connects, or one not on this Mac, has no button.
+  const plugin = gatewayCard(KITDEN, { view: VIEW, setup: [entry('claude_code', 'plugin'), entry('codex', 'not_installed', { enabled: null }), entry('cursor', 'missing')], projects: PROJECTS, clients: FOUND });
+  assert.deepEqual(plugin.list.children[1].children.map((r) => r.children.length), [2, 2, 3]);
+  // "Add another gateway…" shows the form in the panel.
+  assert.ok(gatewayCard(KITDEN, { view: VIEW, setup: SETUP, projects: PROJECTS, clients: FOUND, adding: true }).after);
 });
 
 test("Move all leaves out a name set up differently in two clients, as the medium sample's docs", () => {
@@ -179,11 +268,15 @@ test("Move all leaves out a name set up differently in two clients, as the mediu
     plugin: [],
   } };
   const card = gatewayCard(KITDEN, { view, setup: SETUP, projects: PROJECTS, clients: FOUND });
-  assert.equal(card.actions[0].label, 'Move all 5…');
-  assert.deepEqual(card.actions[0].body.targets.map((t) => t.item), ['an', 'g', 'bt', 'c', 'n8']);
+  assert.equal(card.more[0].label, 'Move all 5…');
+  assert.deepEqual(card.more[0].body.targets.map((t) => t.item), ['an', 'g', 'bt', 'c', 'n8']);
   // Only the pair left: nothing to move all of.
   const pair = gatewayCard(KITDEN, { view: { ...VIEW, groups: { move: [DOCS], local: [DOCS_LOCAL], plugin: [] } }, setup: SETUP, projects: PROJECTS, clients: FOUND });
-  assert.deepEqual(labels(pair), ['Add another gateway…']);
+  assert.deepEqual(moreLabels(pair), ['Add another gateway…']);
+  // A stays reason keeps a row out too.
+  const stays = "docs is in the project's own files; it stays there.";
+  const kept = gatewayCard(KITDEN, { view: { ...VIEW, groups: { move: [{ ...GITHUB, stays }], local: [FILES], plugin: [] } }, setup: SETUP, projects: PROJECTS, clients: FOUND });
+  assert.equal(kept.more[0].label, 'Move all 1…');
 });
 
 test('Move all leaves out a name set up differently in two clients of one group', () => {
@@ -191,31 +284,19 @@ test('Move all leaves out a name set up differently in two clients of one group'
   const files = { ...row('files', 'codex', ['c', 'd']), clients: ['codex', 'cursor'], columns: ['codex', 'cursor'], stays };
   const view = { ...VIEW, groups: { move: [GITHUB], local: [files], plugin: [] } };
   const card = gatewayCard(KITDEN, { view, setup: SETUP, projects: PROJECTS, clients: FOUND });
-  assert.equal(card.actions[0].label, 'Move all 1…');
-  assert.deepEqual(card.actions[0].body.targets.map((t) => t.item), ['g']);
-});
-
-test('rules count projects in words, and an unread list is not known', () => {
-  const two = [...PROJECTS, { id: 'p3', path: '/w/site', own_rules: 3 }];
-  assert.deepEqual(facts(gatewayCard(KITDEN, { view: VIEW, setup: SETUP, projects: two, clients: FOUND })).at(-1), ['Rules', '2 projects have their own rules']);
-  assert.deepEqual(facts(gatewayCard(KITDEN, { view: VIEW, setup: SETUP, projects: null, clients: FOUND })).at(-1), ['Rules', 'Not known']);
-});
-
-test('a client Kitden could not read the setup for is not known, not not connected', () => {
-  const card = clientCard('codex', { setup: null, clients: CLIENTS, view: VIEW });
-  assert.deepEqual(facts(card).slice(1), [['Kitden entry', 'Not known'], ['Gateway', 'Not known']]);
-  assert.equal(card.why, 'Kitden could not read which clients use it.');
-  assert.deepEqual(labels(card), ['Open ChatGPT']);
+  assert.equal(card.more[0].label, 'Move all 1…');
+  assert.deepEqual(card.more[0].body.targets.map((t) => t.item), ['g']);
 });
 
 test('the Kitden gateway says what it could not read', () => {
   const problem = 'Could not read the Kitden gateway settings.';
   const broken = gatewayCard({ ...KITDEN, servers: [], problem }, { view: VIEW, setup: SETUP, projects: PROJECTS, clients: FOUND });
   assert.equal(broken.warning, problem);
-  assert.ok(!facts(broken).some(([label]) => label === 'Servers'));
+  assert.deepEqual(facts(broken), []);
   const unknown = gatewayCard(KITDEN, { view: VIEW, setup: null, projects: PROJECTS, clients: FOUND });
   assert.equal(unknown.warning, 'Kitden could not read which clients use it.');
-  assert.ok(!facts(unknown).some(([label]) => label === 'Clients'));
+  // Without the setup read, no row claims a client is connected or not.
+  assert.equal(unknown.list, null);
 });
 
 test('a registered gateway says what it holds and offers to take the clients over', () => {
@@ -272,11 +353,6 @@ const MEDIUM_RULES = {
 };
 const FILES_ROW = { name: 'files', kind: 'local', state: 'on' };
 const medium = (name, extra = {}) => toolCard({ name, title: null, state: 'on', effective: 'on', hint: 'writes', origin: 'default', origin_from: null }, FILES_ROW, { linked: LINKED, picked: '', folder: '', detail: { shared: 'on' }, rules: MEDIUM_RULES, projects: MEDIUM_PROJECTS, ...extra });
-// A press, and what it set off.
-const click = async (node) => {
-  for (const listener of node.listeners.click || []) listener({});
-  await new Promise((resolve) => setTimeout(resolve, 0));
-};
 
 test("the tool panel says Permission and Reported in the mockup's words", () => {
   // push_files is off for all projects; atlas turns it on, and atlas/web follows atlas.
@@ -633,7 +709,7 @@ test("a card's change waits in the tray with its note, and its button says In pr
     assert.deepEqual(tray.rows.map((r) => [r.body, r.note]), [[register, SETUP_NOTE]]);
     // Drawn again while it waits, the button says so and takes no press.
     const [, , again] = detailsCard(card);
-    assert.deepEqual([textOf(again.childNodes[0]), again.childNodes[0].attributes['aria-disabled'], again.childNodes[0].title], ['In preview', 'true', 'Set up in Cursor…']);
+    assert.deepEqual([textOf(again.childNodes[0]), again.childNodes[0].attributes['aria-disabled'], again.childNodes[0].title], ['In preview', 'true', 'Connect to the gateway…']);
     await press(again.childNodes[0]);
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.deepEqual(sent, ['/api/batch/preview']);
@@ -677,7 +753,7 @@ test("an outside server's Move says In preview while it waits; with two gateways
 // Showing a card in the panel ------------------------------------------------------------------
 
 const { showHeld, showOutside, showTool } = await import('../../src/kitden/web/static/js/gateway-details.js');
-const { closePanel, panelState } = await import('../../src/kitden/web/static/js/panel.js');
+const { closePanel, isPanelOpen, panelState } = await import('../../src/kitden/web/static/js/panel.js');
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const isSkeleton = (drawer) => drawer.children.some((node) => node.className.includes('sk-body'));
 
@@ -1113,4 +1189,75 @@ test('a tick names the projects whose chain reaches it, as the gateway decides',
     await click(control(drawer, 'tick:docs'));
     assert.deepEqual(lines(), ['web follows atlas and changes with it.', 'api follows site and changes with it.']);
   }, { rules, projects });
+});
+
+// Links on the map ------------------------------------------------------------------------------
+
+const { clickLink, gatewayTree, linkParts } = await import('../../src/kitden/web/static/js/gateway.js');
+// The Kitden gateway holding files, and a link of its map by its "from>to" key.
+const FILES_VIEW = { ...VIEW, gateways: [{ ...KITDEN, servers: [FILES_HELD] }] };
+const linkFor = (key, { picked = '', setup = SETUP } = {}) => linkParts(gatewayTree(FILES_VIEW, { setup, clients: CLIENTS, picked }), key, picked);
+const titleOf = (card) => card.title.map(textOf).join('');
+
+test('a link says what it joins, where it is written and what its button does', async () => {
+  // A client's link to the Kitden gateway: Disconnect.
+  const client = linkCard(linkFor('client:codex>gateway:kitden'), { linked: LINKED, view: FILES_VIEW });
+  assert.deepEqual([client.kind, titleOf(client), client.id], ['Connection', 'Codex → Kitden gateway', 'Route through the gateway']);
+  assert.deepEqual(facts(client), [['From', 'Codex'], ['To', 'Kitden gateway'], ['State', 'In place'], ['Written in', "Codex's settings"]]);
+  assert.equal(textOf(client.why), "Codex calls 1 server through Kitden, so Kitden's rules apply to them.");
+  assert.deepEqual(labels(client), ['Disconnect Codex…']);
+  // A tool's link, in a project: its rule is in the gateway's own file (gateway.json holds rules too).
+  const tool = linkCard(linkFor('held:kitden:files>tool:files/read_file', { picked: 'p1' }), { linked: LINKED, view: FILES_VIEW, picked: 'p1', folder: 'atlas' });
+  assert.deepEqual([titleOf(tool), tool.id, facts(tool).at(-1)], ['files → read_file', 'Tool on', ['Written in', "Kitden's gateway file"]]);
+  assert.equal(textOf(tool.why), 'read_file is on in atlas: Claude Code and Codex can call it through Kitden.');
+  assert.deepEqual(labels(tool), ['Turn off read_file…']);
+  // A server's link, while Kitden does not know who uses the gateway.
+  const held = linkCard(linkFor('gateway:kitden>held:kitden:files'), { linked: null, view: FILES_VIEW });
+  assert.equal(textOf(held.why), 'The gateway holds files and passes its tools that are on to the clients that use it.');
+  // A server a client sets up on its own: a direct route the map does not act on.
+  const direct = linkCard(linkFor('client:claude_code>outside:move:github'), { linked: LINKED, view: FILES_VIEW });
+  assert.deepEqual([direct.id, facts(direct).slice(2)], ['Direct route', [['State', 'In place'], ['Written in', "Claude Code's settings"]]]);
+  assert.equal(textOf(direct.why), "Claude Code calls github on its own. Kitden's rules don't reach it.");
+  assert.deepEqual(labels(direct), []);
+  // Its button adds the change, as the link's × does, and the panel says it waits; a second press
+  // takes it out.
+  await withTray(() => [client.facts[2].value, client.why, client.actions[0].node], async ([lamp, why, remove]) => {
+    await click(remove);
+    assert.deepEqual(tray.rows.map((r) => [r.body, r.icon]), [[DISCONNECT('codex'), 'plug']]);
+    assert.deepEqual([lamp, why, remove].map(textOf), ['In preview', 'This link is a change in preview. Nothing is written until you Apply.', 'Take it out of the preview']);
+    await click(remove);
+    assert.deepEqual(tray.rows, []);
+    assert.deepEqual([lamp, remove].map(textOf), ['In place', 'Disconnect Codex…']);
+  });
+});
+
+test('a click on a link opens the connection panel; a second click lets go', async () => {
+  const key = 'gateway:kitden>held:kitden:files';
+  let tree = null;
+  let link = null;
+  const open = () => {
+    tree = gatewayTree(data.gateway, { setup: data.setupServer, clients: data.clients });
+    link = tree.links.find((l) => `${l.from}>${l.to}` === key);
+    clickLink(tree, link);
+  };
+  await onFilesPanel(async (drawer) => {
+    assert.deepEqual(panelState.current, { type: 'link', key });
+    const [head, body, footer] = drawer.children;
+    assert.deepEqual([head.children[0].children[0].textContent, textOf(head.children[1]), textOf(head.children[2])], ['Connection', 'Kitden gateway → files', 'Held by the gateway']);
+    const [list, why] = body.children;
+    assert.deepEqual(list.children.map(textOf), ['From', 'Kitden gateway', 'To', 'files', 'State', 'In place', 'Written in', "Kitden's gateway file"]);
+    assert.equal(textOf(why), 'The gateway holds files and passes its tools that are on to 2 clients.');
+    assert.equal(textOf(footer.children[0]), 'Remove files from the gateway…');
+    // The button adds the removal; the panel says it waits, and takes it out again.
+    await click(footer.children[0]);
+    await wait(20);
+    assert.deepEqual(tray.rows.map((r) => [r.body, r.icon]), [[{ action: 'gateway.remove', targets: [], params: { server: 'files' } }, 'x']]);
+    assert.deepEqual([textOf(list.children[5]), textOf(footer.children[0])], ['In preview', 'Take it out of the preview']);
+    await click(footer.children[0]);
+    await wait(20);
+    assert.deepEqual(tray.rows, []);
+    // A second click on the same link lets go: the panel closes.
+    clickLink(tree, link);
+    assert.equal(isPanelOpen(), false);
+  }, { open });
 });

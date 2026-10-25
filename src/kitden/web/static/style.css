@@ -827,6 +827,8 @@ div.map .block.leaving:focus-visible { filter: none; }
 #drawer.floating.leaving { visibility: visible; pointer-events: none; }
 #drawer.floating > * { flex: none; }
 #drawer.floating header, #drawer.floating .body, #drawer.floating footer { padding: 0; border: 0; overflow: visible; }
+/* The quiet line under a floating panel's title sits right under it, as in the mockup. */
+#drawer.floating header > p { margin: 0; }
 #drawer.floating > details.tech { margin-top: auto; max-height: none; overflow: visible; padding: 10px 0 0; }
 /* The floating panel stacks the footer's buttons, full width. A Details card does it in the drawer too. */
 #drawer.floating footer, .drawer footer.stack { flex-direction: column; align-items: stretch; flex-wrap: nowrap; }
@@ -847,6 +849,34 @@ div.map .block.leaving:focus-visible { filter: none; }
 .facts dd.accent { color: var(--route); }
 .facts dd.warn { color: var(--lamp-warn); }
 .fact-mark { display: inline-flex; align-items: center; gap: 6px; }
+.facts dd.quiet { color: var(--ink-3); }
+/* In the floating panel the facts sit between two lines, as in the mockup: 11 px labels in a 94 px
+   column, 12 px values. */
+#drawer.floating .facts { grid-template-columns: 94px minmax(0, 1fr); gap: 11px 8px; padding: 12px 0; border-block: 1px solid var(--wire); font-size: 12px; }
+#drawer.floating .facts dt { font-size: 11px; }
+/* Words in the accent that show only while a change waits in the tray ("· change in preview"). */
+.fact-mark .accent, .client-rows small .accent { color: var(--route); }
+/* A panel's head with a tile beside its title and the quiet line under it (gateway-details.js
+   headTile): a client's 28 px tile, the Kitden house at 32 px, a registered gateway's mark, or a
+   server's icon on a 28 px tile. A link's title has a quiet arrow between its two ends. */
+.drawer header.has-tile { grid-template-columns: auto minmax(0, 1fr); column-gap: 12px; }
+.drawer header.has-tile > .top { grid-column: 1 / -1; }
+.drawer header.has-tile > .p-tile { grid-column: 1; grid-row: 2 / span 2; align-self: center; }
+.drawer header.has-tile > h1, .drawer header.has-tile > p { grid-column: 2; margin: 0; }
+.p-tile { display: grid; place-items: center; }
+.p-tile > .client-mark, .p-tile > .mono-mark { --tile: 28px; }
+.p-tile.p-icon { width: 28px; height: 28px; border: 1px solid var(--wire); border-radius: 6px; background: var(--inset); color: var(--ink-2); }
+.p-house { display: block; width: 32px; height: 32px; }
+.drawer header h1 .arrow { color: var(--ink-3); }
+/* The servers a client sets up on its own: small chips with their icon, edged in amber, as their
+   calls skip Kitden's rules. */
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip-s { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--lamp-warn) 45%, transparent); background: var(--dim); color: var(--ink-2); font-size: 11px; }
+.chip-s > .ic { flex: none; color: var(--ink-3); }
+/* The gateway panel's clients: a row each with a 20 px tile, the name over the lamp and its state,
+   and its own button. */
+.client-rows .client-mark, .client-rows .mono-mark { --tile: 20px; border-radius: 5px; }
+.client-rows .btn { flex: none; }
 .drawer .body > p.why { margin: 0; color: var(--ink-2); }
 .drawer > details.tech { flex: none; max-height: 50%; overflow: auto; padding: 8px 20px; border-top: 1px solid var(--wire); }
 .title-mono { font-family: var(--mono); font-size: 17px; font-weight: 600; letter-spacing: -0.01em; overflow-wrap: anywhere; }

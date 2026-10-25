@@ -1,7 +1,7 @@
 // Gateway: the clients, the gateways and the MCP servers they reach, as a Map or a List. Each
 // row opens its Details beside the page (gateway-details.js).
 import { $, button, el, gridKey, icon, joinWords, plural, reportError, withFocusKey } from "./dom.js";
-import { addForm, heldServer, liveHeld, movesTo, ruleBody, SETUP_NOTE, showClient, showGateway, showHeld, showOutside, showTool } from "./gateway-details.js";
+import { addForm, connectAction, heldServer, liveHeld, movesTo, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool, TAKE_OUT } from "./gateway-details.js";
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { findIn, foldable, isNarrow, keepOpen, layoutTree, linkKey, litFrom, litPath, pressOpen, toggleOpen, wideWidth } from "./map.js";
 import { mapView } from "./map-view.js";
@@ -24,12 +24,8 @@ const OUTSIDE_MAP = "Outside the gateway · drag one in";
 const OUTSIDE_H = 16;
 const OUTSIDE_BLOCK_H = 50;
 // The groups of servers outside the gateway in /api/gateway-view, in the order the page lists them.
+// A server's icon on the map is the one its panel shows (SERVER_ICONS, OUTSIDE_ICONS).
 const OUTSIDE_GROUPS = ["move", "local", "plugin"];
-// The icon of a server on the map, by what it is: one reached over the network, one that runs on
-// this Mac, one that comes with a plugin. Kitden knows no icon of a server's own.
-const SERVER_ICONS = { remote: "globe", local: "hard-drive", plugin: "package-open" };
-// ... and of a server outside the gateway, by its group.
-const OUTSIDE_ICONS = { move: SERVER_ICONS.remote, local: SERVER_ICONS.local, plugin: SERVER_ICONS.plugin };
 // What a block in preview says under the pointer: a press takes its row out of the tray (D12).
 const IN_PREVIEW = "In preview. Click to take it out.";
 // A gateway's own groups, each with the icon of its caption.
@@ -227,17 +223,7 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
   const links = [];
   // What the moves put in the groups of the Kitden gateway, and the outside rows they take.
   const { adds, moved } = movesIn(view, kitden, rows, drop);
-  for (const id of WRITABLE) {
-    const on = linked.includes(id);
-    const found = (clients || []).find((c) => c.id === id && c.status === "found");
-    // Without the setup read, a client is neither connected nor not.
-    let meta = known ? (on ? "Connected" : "Not connected") : NOT_KNOWN;
-    // Found lights the lamp; the state stays what the link shows: no gateway reached yet. A client
-    // whose state Kitden does not know has no lamp: a grey one would say off.
-    let lamp = known ? (on ? "on" : "off") : null;
-    if (first && found) [meta, lamp] = [found.version ? `Found · ${found.version}` : "Found", "on"];
-    blocks.push({ id: `client:${id}`, column: "clients", kind: "client", name: CLIENT_NAMES[id], meta, lamp, state: known ? (on ? "on" : "off") : "unk", client: id, ports: { right: true } });
-  }
+  for (const id of WRITABLE) blocks.push(clientBlock(id, { setup, linked, known, first, clients }));
   // A gateway block joined to the clients it `reaches` (null when not read), then its servers in
   // their groups; `server(block, word)` adds what each server's block says. `unread` says why
   // Kitden does not know what it holds, so no count shows: a problem is not an empty gateway.
@@ -315,6 +301,22 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
     if (!moved.has(id)) for (const client of columns) links.push({ from: `client:${client}`, to: id, ...line });
   }
   return { columns: GATEWAY_COLUMNS, blocks, links };
+}
+
+// A client's block: Connected or Not connected, and on a first run that it is found, with its
+// version; the change that disconnects it (`disconnect`) where its link's × can (connectAction).
+function clientBlock(id, { setup, linked, known, first, clients }) {
+  const on = linked.includes(id);
+  const found = (clients || []).find((c) => c.id === id && c.status === "found");
+  // Without the setup read, a client is neither connected nor not.
+  let meta = known ? (on ? "Connected" : "Not connected") : NOT_KNOWN;
+  // Found lights the lamp; the state stays what the link shows: no gateway reached yet. A client
+  // whose state Kitden does not know has no lamp: a grey one would say off.
+  let lamp = known ? (on ? "on" : "off") : null;
+  if (first && found) [meta, lamp] = [found.version ? `Found · ${found.version}` : "Found", "on"];
+  const action = on ? connectAction(id, setup) : null;
+  const disconnect = action && !action.connect ? action.body : null;
+  return { id: `client:${id}`, column: "clients", kind: "client", name: CLIENT_NAMES[id], meta, lamp, state: known ? (on ? "on" : "off") : "unk", client: id, ports: { right: true }, disconnect };
 }
 
 // The moves into the Kitden gateway the map shows: each one in the tray (`rows`), for the outside
@@ -638,13 +640,19 @@ function blocksById(model) {
 }
 
 // What the × of a link does, as `{ tip, body }` (`body` is the change to preview), or null where
-// the map does not act on the link: a server in the Kitden gateway comes out of it, and a tool of
+// the map does not act on the link: a client disconnects from the Kitden gateway (not one a
+// plugin connects: clientBlock), a server in the Kitden gateway comes out of it, and a tool of
 // such a server turns off, for the picked project (`picked`, "" for all).
 export function linkRemoval(model, link, picked) {
   const byId = blocksById(model);
   const from = byId.get(link.from);
   const to = byId.get(link.to);
-  if (!from || !to || !from.gateway || from.gateway.kind !== "kitden") return null;
+  if (!from || !to) return null;
+  if (from.kind === "client") {
+    const kitden = to.kind === "gateway" && to.gateway.kind === "kitden";
+    return kitden && from.disconnect ? { tip: `Disconnect ${from.name}`, body: from.disconnect } : null;
+  }
+  if (!from.gateway || from.gateway.kind !== "kitden") return null;
   if (from.kind === "gateway" && to.kind === "held") {
     return { tip: `Remove ${to.name} from the gateway`, body: { action: "gateway.remove", targets: [], params: { server: to.name } } };
   }
@@ -653,8 +661,6 @@ export function linkRemoval(model, link, picked) {
   }
   return null;
 }
-
-const TAKE_OUT = "Take it out of the preview";
 
 // The key of the tray row a link of the map draws (a preview link, or one leaving), else null.
 function rowOfLink(model, link) {
@@ -684,19 +690,42 @@ export function removeLink(model, link, picked) {
   const removal = linkRemoval(model, link, picked);
   if (!removal) return null;
   const key = keyFor(removal.body);
-  return inTray(key) ? takeOut(key) : addToTray(removal.body, { icon: "x" });
+  return inTray(key) ? takeOut(key) : addToTray(removal.body, { icon: removalIcon(removal.body) });
 }
 
-// A press on a link: one the tray draws is taken out of it (D12); any other is selected and opens
-// the Details of its far block, until a link has a panel of its own.
+// A press on a link: one the tray draws is taken out of it (D12); a second press on the link
+// picked lets go of it; any other is picked and opens its Connection panel.
 export function clickLink(model, link) {
   const key = rowOfLink(model, link);
   if (key) {
     takeOutHere(model, key).catch(reportError);
     return;
   }
-  const far = model.blocks.find((b) => b.id === link.to);
-  if (far) selectOnMap(far, linkKey(link));
+  if (onMap.selected === linkKey(link)) letGoOnMap();
+  else pickLink(linkKey(link));
+}
+
+// What a link's Connection panel is drawn from (gateway-details.js linkCard): its two blocks,
+// whether Kitden knows its client loads it, what its × does and the tray row it draws. Null when
+// the model has no link of that key.
+export function linkParts(model, key, picked) {
+  const link = model && model.links.find((l) => linkKey(l) === key);
+  if (!link) return null;
+  const byId = blocksById(model);
+  return { from: byId.get(link.from), to: byId.get(link.to), unk: Boolean(link.unk), removal: linkRemoval(model, link, picked), row: rowOfLink(model, link) };
+}
+
+// Pick a link: the map lights its two ends and keeps its ×, and its Connection panel opens beside
+// the page, drawn each time from the Gateway as the page has it then (after Apply all too). A link
+// does not go into the address: what it selected before leaves it.
+function pickLink(key) {
+  onMap.selected = key;
+  setState({ selected: null });
+  drawAgain();
+  showLink(key, () => {
+    const view = current("gateway");
+    return view ? linkParts(treeFor(view), key, state.project) : null;
+  });
 }
 
 // A row taken out on the map. A move's preview block and link go with it, so focus on either goes
@@ -883,13 +912,12 @@ export function pressBlock(model, id) {
 }
 
 // Select a block: the map lights it and is drawn again, then its Details open beside the page.
-// The List takes the Tab key on the same row. A press on a link selects it (`selected` is its key)
-// and opens the Details of its far block.
-function selectOnMap(block, selected = block.id) {
+// The List takes the Tab key on the same row.
+function selectOnMap(block) {
   // What a search opened to show it stays open, so the selection is still on the map when the
   // search ends.
   onMap.open = keepOpen(onMap.model, onMap.open, block);
-  onMap.selected = selected;
+  onMap.selected = block.id;
   onList.current = block.id;
   const lightLater = onMap.unfolds;
   onMap.unfolds = false;

@@ -26,6 +26,11 @@ What Kitden does today and what comes next. Ideas and bugs:
   list the projects with a rule of their own, with "Show" to open one. "Turn on|off in some
   projects…" ticks projects in a list (also for a whole server): each tick is its own row in the
   tray, and the map's tool names the projects that wait.
+- **Client, gateway, link and outside panels:** a client's Details on the Gateway say what it gets
+  through Kitden and what it sets up on its own, with "Connect to the gateway…" or "Disconnect
+  from the gateway…"; the gateway's Details list each client with its own button. A click on a
+  link opens its own panel, and a client's link × disconnects it. Every action stays, some under
+  More.
 - **Preview tray:** every change, from a switch in Details to a drag on the map, waits in one tray
   at the bottom left. Apply all writes them as one change, all or nothing, and Undo all takes them
   back. "Show changes" opens one row's full review.
