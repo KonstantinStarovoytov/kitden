@@ -467,6 +467,25 @@ test('a stale apply keeps the rows', async () => {
   assert.equal(asked('/api/changes/c2/cancel').length, 0); // the server ended it already
 });
 
+test('an add after a failed Apply: a new answer clears the failure, a refusal keeps it', async () => {
+  await fresh();
+  await twoRows();
+  const failure = { state: 'stale', error: 'Settings changed.' };
+  queue('/api/changes/c2/apply', { status: 409, json: { id: 'c2', ...failure } });
+  await applyTray();
+  assert.deepEqual([tray.phase, tray.failure], ['failed', failure]);
+  // Refused: the tray is as it was, failure and all, and says why.
+  queue(PREVIEW, refusal('Choose a known item.'));
+  assert.equal(await addToTray(add('slack')), false);
+  assert.deepEqual([tray.phase, tray.failure, tray.refused, tray.rows.length], ['failed', failure, { reason: 'Choose a known item.' }, 2]);
+  // Joined: a fresh preview of every row, ready to apply.
+  queue(PREVIEW, previewed('c4'));
+  assert.equal(await addToTray(add('slack')), true);
+  assert.deepEqual([tray.phase, tray.failure, tray.refused, tray.change.id], ['ready', null, null, 'c4']);
+  assert.deepEqual(tray.rows.map((row) => row.body.params.item), ['github', 'neon', 'slack']);
+  assert.equal(asked('/api/changes/c4/apply').length, 0);
+});
+
 test('an apply that did not run keeps its rows, and Try again drops the preview', async () => {
   await fresh();
   await twoRows();

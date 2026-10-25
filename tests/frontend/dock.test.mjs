@@ -68,7 +68,8 @@ function fakeNode(tag) {
     addEventListener(type, listener) { (node.listeners[type] ||= []).push(listener); },
     // A press: every listener runs; the promise is the first one's work.
     click() { const runs = (node.listeners.click || []).map((listener) => listener({ preventDefault() {} })); return Promise.all(runs); },
-    focus() { globalThis.document.activeElement = node; },
+    // How it was last given focus: `focusedWith.preventScroll` keeps the page where it is.
+    focus(options) { globalThis.document.activeElement = node; node.focusedWith = options; },
     animate(frames, options) {
       const run = { frames, options, startedAt: Date.now(), cancelled: false };
       run.handle = { finished: Promise.resolve(), cancel() { run.cancelled = true; } };
@@ -95,6 +96,12 @@ for (const id of ['#dock', '#drawer', '#scrim', '#said', '#main', '.shell']) {
   pages[id] = fakeNode('div');
   pages[id].root = true;
 }
+// What a screen reader hears: every text the page's quiet live region (#said) is given, in order.
+const saidLog = [];
+Object.defineProperty(pages['#said'], 'textContent', { get: () => saidLog.at(-1) ?? '', set: (value) => { saidLog.push(String(value)); } });
+const heard = () => saidLog.filter(Boolean);
+// The Gateway shows its map (not its List): the map's box is on the page.
+const showMap = (on) => { if (on) pages['#main .map'] = fakeNode('div'); else delete pages['#main .map']; };
 const listeners = new Map();
 // The page's root holds the room kept for the dock (--dock-room).
 const rootStyle = { setProperty(name, value) { this[name] = String(value); }, removeProperty(name) { delete this[name]; } };
@@ -128,9 +135,9 @@ const posted = () => calls.filter((call) => call.method === 'POST').map((call) =
 
 const dockPath = '../../src/kitden/web/static/js/dock.js';
 const { appliedToast, barWords, drawTray, initDock, outcomeLine, rowWords, writingLine } = await import(dockPath);
-const { changeWords } = await import('../../src/kitden/web/static/js/review.js');
+const { changeWords, undoChange } = await import('../../src/kitden/web/static/js/review.js');
 const { addToTray, cancelTray, endApplied, takeOut, tray, tryAgain } = await import('../../src/kitden/web/static/js/tray.js');
-const { busy, state } = await import('../../src/kitden/web/static/js/store.js');
+const { busy, render, setRenderer, state } = await import('../../src/kitden/web/static/js/store.js');
 const { closePanel, hideToast, isPanelOpen, keepFrom, openPanel, panelState, toast, toolsSection } = await import('../../src/kitden/web/static/js/panel.js');
 initDock();
 
@@ -193,8 +200,11 @@ async function fresh() {
   replies.clear();
   state.project = '';
   state.view = 'overview';
+  showMap(false);
   globalThis.document.activeElement = null;
   hideToast();
+  await settle();
+  saidLog.length = 0;
 }
 
 const row = (title, detail = '') => ({ title, detail, part: {} });
@@ -284,6 +294,17 @@ test("the bar never shows the engine's own words: no path, no command", () => {
       }
     }
   }
+});
+
+test('a reason that names a file shows only its name in the bar', () => {
+  const reason = '/Users/me/.cursor/mcp.json has a hard link; so has ~/.codex/config.toml.';
+  const shown = 'mcp.json has a hard link; so has config.toml.';
+  assert.equal(barWords(trayOf([row('a')], { refused: { reason } })).line, shown);
+  assert.equal(barWords(trayOf([], { phase: 'idle', refused: { reason } })).line, shown);
+  assert.equal(barWords(trayOf([row('a'), row('b')], { phase: 'failed', refused: { reason } })).line, shown);
+  // Words that only look like a path stay as they are.
+  const plain = 'Turn a tool on and/or off (read/write) in "/" here.';
+  assert.equal(barWords(trayOf([row('a')], { refused: { reason: plain } })).line, plain);
 });
 
 test('barWords shows a refusal with no rows', () => {
@@ -432,6 +453,7 @@ test('drawTray draws one row with Show changes and Apply', async () => {
 test('drawTray draws a list with a take-out button per row', async () => {
   await fresh();
   state.view = 'gateway';
+  showMap(true);
   queue(PREVIEW, previewed('c1'), previewed('c2'));
   await addToTray(add('github'));
   await addToTray(add('neon'));
@@ -724,6 +746,115 @@ test('a row review closes with the row: Cancel all leaves nothing to review', as
   assert.equal(panelState.current, null);
 });
 
+test("Take it out in a row's review waits while Apply runs", async () => {
+  await fresh();
+  queue(PREVIEW, previewed('c1'), previewed('c2'));
+  await addToTray(add('github'));
+  await addToTray(add('neon'));
+  await button(bar(), 'Show changes: Add github to Codex for all projects').click();
+  const out = button(pages['#drawer'], 'Take it out');
+  assert.equal(out.attributes['aria-disabled'], undefined);
+  const writing = slow();
+  queue('/api/changes/c2/apply', writing.reply);
+  const running = button(bar(), 'Apply all').click();
+  // As the bar's ×: a change being written cannot stop halfway. The press does nothing.
+  assert.equal(out.attributes['aria-disabled'], 'true');
+  await out.click();
+  await settle();
+  assert.equal(isPanelOpen(), true);
+  assert.equal(tray.rows.length, 2);
+  assert.equal(posted().filter((url) => url === PREVIEW).length, 2);
+  writing.release(verified('c2'));
+  await settle();
+  assert.equal(out.attributes['aria-disabled'], 'true', 'still off once applied');
+  await running;
+  // The row was applied: its review closed with it.
+  assert.equal(isPanelOpen(), false);
+  hideToast();
+});
+
+test("Take it out in a row's review hands focus to the bar's Apply, or to the page when the bar goes", async () => {
+  await fresh();
+  queue(PREVIEW, previewed('c1'), previewed('c2'), previewed('c3'));
+  await addToTray(add('github'));
+  await addToTray(add('neon'));
+  // Opened by a click that gives the button no focus (as in Safari): Details take it.
+  await button(bar(), 'Show changes: Add github to Codex for all projects').click();
+  assert.ok(pages['#drawer'].contains(globalThis.document.activeElement), 'focus is in Details');
+  await button(pages['#drawer'], 'Take it out').click();
+  await settle();
+  assert.equal(isPanelOpen(), false);
+  assert.ok(globalThis.document.activeElement === button(bar(), 'Apply'), 'focus is not on Apply');
+  // The last row: the bar goes, and focus goes to the page without scrolling it.
+  await button(bar(), 'Show changes').click();
+  pages['#main'].focusedWith = null;
+  await button(pages['#drawer'], 'Take it out').click();
+  await settle();
+  assert.equal(bar(), null);
+  assert.ok(globalThis.document.activeElement === pages['#main'], 'focus is not on the page');
+  assert.deepEqual(pages['#main'].focusedWith, { preventScroll: true });
+});
+
+test('a screen reader hears each change join and leave the tray', async () => {
+  await fresh();
+  queue(PREVIEW, previewed('c1'), previewed('c2'), previewed('c3'), previewed('c4'));
+  await addToTray(add('github'));
+  await settle();
+  assert.deepEqual(heard(), ['Add github to Codex for all projects: in the preview.']);
+  await addToTray(add('neon'));
+  await settle();
+  await addToTray(add('slack'));
+  await settle();
+  assert.deepEqual(heard().slice(1), [
+    'Add neon to Codex for all projects: in the preview. 2 changes in preview.',
+    'Add slack to Codex for all projects: in the preview. 3 changes in preview.',
+  ]);
+  // A row taken out is said at once, before the rest are previewed again; the new answer says nothing more.
+  await takeOut(tray.rows[0].key);
+  await settle();
+  assert.deepEqual(heard().slice(3), ['Add github to Codex for all projects: taken out of the preview.']);
+  // A refused add with the bar on the page: the bar's own line (a status) says why, once.
+  queue(PREVIEW, refusal('Choose a server in the Kitden gateway.'));
+  await addToTray(add('files'));
+  await settle();
+  assert.equal(heard().length, 4);
+  // Cancel all takes every row out.
+  await button(bar(), 'Cancel all').click();
+  await settle();
+  assert.deepEqual(heard().slice(4), ['2 changes taken out of the preview.']);
+  // A first add that is refused: the bar comes in with the reason, so it is said here, with no path.
+  queue(PREVIEW, refusal('/Users/me/.cursor/mcp.json has a hard link.'));
+  await addToTray(add('github'));
+  await settle();
+  assert.deepEqual(heard().slice(5), ['Could not prepare this change. mcp.json has a hard link.']);
+});
+
+test('the toast says an applied tray, and the rows leaving it say nothing more', async () => {
+  await fresh();
+  queue(PREVIEW, previewed('c1'), previewed('c2'));
+  await addToTray(add('github'));
+  await addToTray(add('neon'));
+  await settle();
+  saidLog.length = 0;
+  queue('/api/changes/c2/apply', verified('c2'));
+  await button(bar(), 'Apply all').click();
+  await settle();
+  assert.deepEqual(heard(), ['Applied 2 changes']);
+  hideToast();
+});
+
+test('a toast that shows while a change joins: the bar takes the dock and says the change', async () => {
+  await fresh();
+  queue(PREVIEW, previewed('c1'), previewed('c2'));
+  await addToTray(add('github'));
+  toast('Could not find this item in the Library.');
+  await settle();
+  saidLog.length = 0;
+  await addToTray(add('neon'));
+  await settle();
+  assert.deepEqual(heard(), ['Add neon to Codex for all projects: in the preview. 2 changes in preview.']);
+});
+
 test('a row taken out while its × has focus hands focus to Apply before its buttons are turned off', async () => {
   for (const motion of [true, false]) {
     await fresh();
@@ -799,6 +930,7 @@ test('focus stays on the same button when the bar is built again', async () => {
 test('the line follows the place without drawing the bar in again', async () => {
   await fresh();
   state.view = 'gateway';
+  showMap(true);
   queue(PREVIEW, previewed('c1'), previewed('c2'));
   await addToTray(add('github'));
   await addToTray(add('neon'));
@@ -807,15 +939,93 @@ test('the line follows the place without drawing the bar in again', async () => 
   const line = named(section, 'tray-head')[0].children[1];
   assert.match(line.textContent, /Click one on the map to take it out\./);
   const animations = all(section).map((node) => node.animations.length);
+  // The page draws the place again as app.js does (`place`): the bar on the page follows it.
   state.view = 'library';
-  drawTray(tray);
-  drawTray(tray); // safe to call twice
+  showMap(false);
+  drawTray(tray, { toastStays: true });
+  drawTray(tray, { toastStays: true }); // safe to call twice
   assert.ok(bar() === section, 'the same bar');
   assert.equal(line.textContent, 'Nothing is written until you Apply.');
   assert.deepEqual(all(section).map((node) => node.animations.length), animations);
   state.view = 'gateway';
-  drawTray(tray);
+  showMap(true);
+  drawTray(tray, { toastStays: true });
   assert.match(line.textContent, /Click one on the map/);
+});
+
+test('the line sends no one to the map while the Gateway shows its List', async () => {
+  await fresh();
+  state.view = 'gateway';
+  queue(PREVIEW, previewed('c1'), previewed('c2'));
+  await addToTray(add('github'));
+  await addToTray(add('neon'));
+  const line = named(bar(), 'tray-head')[0].children[1];
+  assert.equal(line.textContent, 'Nothing is written until you Apply.');
+  showMap(true);
+  drawTray(tray, { toastStays: true });
+  assert.equal(line.textContent, 'Nothing is written until you Apply. Click one on the map to take it out.');
+});
+
+test('a page redraw keeps a toast while rows wait; a tray change still replaces it', async () => {
+  await fresh();
+  queue(PREVIEW, previewed('c1'), previewed('c2'));
+  await addToTray(add('github'));
+  toast('Undone. The previous settings are back.', null, { ok: true });
+  const shown = toastNode();
+  // The page draws again (after an Undo, a search, a live refresh): the toast stays, and so does its room.
+  drawTray(tray, { toastStays: true });
+  drawTray(tray, { toastStays: true });
+  assert.ok(toastNode() === shown, 'the toast stays');
+  assert.equal(bar(), null);
+  assert.equal(room(), '86px');
+  // A change of the tray takes the dock: the bar replaces the toast at once, with both rows.
+  await addToTray(add('neon'));
+  assert.equal(shown.isConnected, false);
+  assert.ok(button(bar(), 'Apply all'), 'the bar has both rows');
+  // The bar still comes back when a toast leaves.
+  toast('Could not find this item in the Library.');
+  hideToast();
+  assert.ok(button(bar(), 'Apply all'), 'the bar is back');
+});
+
+test('an Undo while rows wait keeps its toast, and the tray asks at once whether its preview is stale', async () => {
+  await fresh();
+  // What app.js does on every redraw of the page.
+  setRenderer(() => drawTray(tray, { toastStays: true }));
+  try {
+    queue(PREVIEW, previewed('c1'));
+    await addToTray(add('github'));
+    queue('/api/changes/c0/undo', { status: 200, json: { id: 'c0', state: 'undone', steps: [] } });
+    queue('/api/changes/c1', { status: 200, json: { id: 'c1', state: 'previewed', stale: true } });
+    await quietly(() => undoChange({ id: 'c0' }));
+    // The page's cross-fade draws it again a frame after the toast came.
+    render();
+    assert.deepEqual(toastParts().map(([, text]) => text), ['', 'Undone. The previous settings are back.']);
+    assert.equal(tray.stale, true);
+    // Once the toast has gone the bar is back, and offers a fresh preview.
+    hideToast();
+    assert.ok(button(bar(), 'Preview again'), 'the bar offers Preview again');
+  } finally {
+    setRenderer(() => {});
+  }
+});
+
+test('an Undo whose Details cannot be read again still says how it went', async () => {
+  await fresh();
+  const body = fakeNode('div');
+  const footer = fakeNode('footer');
+  panelState.current = { type: 'item' };
+  openPanel([body, footer]);
+  keepFrom(() => {}, [body, footer], async () => { throw new Error('Could not read the item.'); });
+  queue('/api/changes/c0/undo', { status: 200, json: { id: 'c0', state: 'undone', steps: [] } });
+  try {
+    await quietly(() => undoChange({ id: 'c0' }));
+    assert.deepEqual(toastParts().map(([, text]) => text), ['', 'Undone. The previous settings are back.']);
+    assert.equal(busy.change, false);
+  } finally {
+    hideToast();
+    closePanel({ focus: false });
+  }
 });
 
 test('the page keeps room under the bar while the dock shows one', async () => {

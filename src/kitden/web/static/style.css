@@ -764,10 +764,11 @@ div.map .block.preview .block-meta { color: var(--ink-2); }
 .scrim.open { opacity: 1; pointer-events: auto; }
 /* The panel stays inside the frame's edge: 16 px from the window, like the gutter. */
 .drawer { position: fixed; z-index: 21; top: 16px; right: 16px; bottom: 16px; width: min(520px, calc(100vw - 32px)); border-radius: 12px; overflow: hidden; background: var(--panel-raised); box-shadow: var(--shadow-pop); transform: translateX(104%); visibility: hidden; transition: transform var(--t-panel) var(--ease-drawer), visibility 0s linear var(--t-panel); display: flex; flex-direction: column; overscroll-behavior: contain; outline: none; }
-/* The dock stands above the drawer, so while it shows a bar or a toast the modal drawer ends above it
-   (`--dock-room` on the root, set by toast.js) and its footer is never hidden. The column beside the
-   page needs no room: the dock is in the page. */
-.drawer:not(.docked) { bottom: max(16px, calc(var(--dock-room, 0px) + 8px)); }
+/* The dock stands above the drawer, so while it shows a bar or a toast the modal drawer ends 8 px above
+   it (`--dock-room` on the root, set by toast.js) and its footer is never hidden. The room is measured
+   from the frame's content, which ends 17 px above the window (the 16 px gutter and the frame's line),
+   hence + 25 px. The column beside the page needs no room: the dock is in the page. */
+.drawer:not(.docked) { bottom: max(16px, calc(var(--dock-room, 0px) + 25px)); }
 .drawer.open { transform: none; visibility: visible; transition: transform var(--t-panel) var(--ease-drawer), visibility 0s; }
 .drawer.instant, .scrim.instant { transition: none; }
 .drawer header { padding: 16px 20px 12px; border-bottom: 1px solid var(--wire); display: grid; gap: 4px; }

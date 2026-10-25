@@ -497,6 +497,24 @@ test('a switch in the tray shows the pending look and a press takes it out', asy
   }
 });
 
+test('a switch whose change waits in the tray says so in its name', async () => {
+  const page = trayPage();
+  const body = { action: 'plugin.disable', targets: [{ item: 'i3' }], params: {} };
+  try {
+    const toggle = switchNode(true, () => review(body), keyFor(body), 'Turn off in Codex…');
+    page.controls.push(toggle);
+    assert.equal(toggle.attributes['aria-label'], 'Turn off in Codex…');
+    // Its checked state stays the real one, so the name tells a screen reader the press was heard.
+    await toggle.click();
+    assert.equal(toggle.attributes['aria-label'], 'Turn off in Codex… (in preview)');
+    assert.equal(switchNode(true, () => review(body), keyFor(body), 'Turn off in Codex…').attributes['aria-label'], 'Turn off in Codex… (in preview)');
+    await toggle.click();
+    assert.equal(toggle.attributes['aria-label'], 'Turn off in Codex…');
+  } finally {
+    await leaveTrayPage(page);
+  }
+});
+
 test('a button in the tray says In preview', async () => {
   const page = trayPage();
   const body = { action: 'mcp.remove_direct', targets: [{ item: 'e1' }], params: {} };

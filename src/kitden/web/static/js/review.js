@@ -2,14 +2,14 @@
 // list before its row is added), what the page does after Apply all, and Undo.
 import { postJson } from "./api.js";
 import { backToDetails, clientName, KIND_WORDS } from "./details.js";
-import { $, $$, button, el, joinWords, plural, shortPath, shortPaths, withFocusKey } from "./dom.js";
+import { $, $$, button, el, joinWords, plural, reportError, shortPath, shortPaths, withFocusKey } from "./dom.js";
 import { loadLibrary, morphOnNextRender } from "./library.js";
 import { fold, transition } from "./motion.js";
 import { closePanel, drawQuietly, header, hideToast, isPanelOpen, openPanel, panelState, toast } from "./panel.js";
 import { allPutBack, callout, checkBox, CLIENT_ORDER, diffCounts, kitdenMove, mark, movedNames, notesSection, PLACE_IN_TITLE, ruleText, rulesText, skillRemoval, socket, strictText, targetWords } from "./parts.js";
 import { busy, reload, render, setBusy, state } from "./store.js";
 import { projectLabel, tools } from "./tools.js";
-import { addToTray, changeOutcome, takeOut, tray } from "./tray.js";
+import { addToTray, changeOutcome, checkTrayStale, onTray, takeOut, tray } from "./tray.js";
 
 // changeOutcome lives in tray.js; panel.js still exports it from here.
 export { changeOutcome };
@@ -401,16 +401,29 @@ export function showRowReview(row) {
   showReview(row.part, row.body, row.note, {
     current: { type: "row-review", row },
     picked: row.picked,
-    buttons: [
-      button("Take it out", () => {
-        const taken = takeOut(row.key);
-        closePanel();
-        return taken;
-      }, "btn"),
-      button("Close", () => closePanel(), "btn"),
-    ],
+    buttons: [takeOutButton(row), button("Close", () => closePanel(), "btn")],
     onChoose: row.part.align ? (keys) => chooseAgain(row, keys) : null,
   });
+}
+
+// "Take it out" of a row's review: the row leaves the tray, and the review closes with it (the dock
+// hands focus on to the bar). While the tray is written it is off and does nothing, as the bar's ×:
+// a change cannot stop halfway. It follows the tray while it is on the page.
+function takeOutButton(row) {
+  const writing = () => tray.phase === "applying" || tray.phase === "applied";
+  const node = button("Take it out", () => {
+    if (writing()) return null;
+    const taken = takeOut(row.key);
+    closePanel();
+    return taken;
+  }, "btn");
+  const follow = () => {
+    if (writing()) node.setAttribute("aria-disabled", "true");
+    else node.removeAttribute("aria-disabled");
+  };
+  follow();
+  const stop = onTray(() => (node.isConnected ? follow() : stop()));
+  return node;
 }
 
 // A changed tick in an Add missing row's review: the row is added again with the new choice (the
@@ -473,7 +486,9 @@ export async function detailsAgain(keys) {
 }
 
 // Undo, from the toast or the Changes page. Whatever the answer, the page reloads first: the
-// server may have put the files back even when its answer was lost.
+// server may have put the files back even when its answer was lost. Details that cannot be read
+// again never keep the toast from saying how it went. Then the tray asks whether its preview is
+// stale: the Undo may have changed its files.
 export async function undoChange(change) {
   if (busy.change) return;
   hideToast();
@@ -490,7 +505,11 @@ export async function undoChange(change) {
     } else {
       showEffect();
       // Other Details open now show the files as they are after the Undo too.
-      await detailsAgain([]);
+      try {
+        await detailsAgain([]);
+      } catch (error) {
+        reportError(error);
+      }
     }
     if (after && after.state === "undone") toast("Undone. The previous settings are back.", null, { ok: true });
     else if (after && after.state === "undo_blocked") toast("Undo stopped: " + (after.error ? shortPaths(after.error) : "the file changed after the change was applied."));
@@ -498,4 +517,5 @@ export async function undoChange(change) {
   } finally {
     setBusy(false);
   }
+  await checkTrayStale();
 }

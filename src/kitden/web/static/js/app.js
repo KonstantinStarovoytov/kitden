@@ -68,8 +68,9 @@ function renderPlace() {
   glide($(".nav"), $('.nav a[aria-current="page"]'), "nav");
   renderShell();
   drawChip(MAP_PAGES.includes(state.view) ? found : null);
-  // The tray's line depends on the place ("Click one on the map to take it out." only on the Gateway).
-  drawTray(tray);
+  // The tray's line depends on the place ("Click one on the map to take it out." only on the
+  // Gateway's map). A redraw of the page never takes the dock from a toast.
+  drawTray(tray, { toastStays: true });
 }
 
 // Rail counters and the Where list follow the data.

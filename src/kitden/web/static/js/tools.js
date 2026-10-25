@@ -111,8 +111,7 @@ export function toolsSection(server, again, next = {}) {
     const middle = el("div");
     middle.append(el("div", "name", "Strict"), el("div", "why", "Only tools that are on are offered; a new tool waits."));
     const body = { action: "gateway.strict", targets: [], params: { server, state: answer.strict ? "off" : "on" } };
-    const toggle = switchNode(Boolean(answer.strict), () => review(body, { back: backTo("strict") }), keyFor(body));
-    toggle.setAttribute("aria-label", "Strict: only tools that are on");
+    const toggle = switchNode(Boolean(answer.strict), () => review(body, { back: backTo("strict") }), keyFor(body), "Strict: only tools that are on");
     toggle.dataset.focus = "strict";
     if (flip === "strict") toggle.classList.add("flipped");
     if (state.project) {
@@ -165,8 +164,7 @@ export function toolsSection(server, again, next = {}) {
         line.append(flag({ text: `Differs from ${row.follows}`, level: "info" }), follow);
         middle.append(line);
       }
-      const toggle = switchNode(row.on, () => review(rule(row, row.on ? "off" : "on"), { back: backTo(row.key) }), keyFor(rule(row, null)));
-      toggle.setAttribute("aria-label", row.label);
+      const toggle = switchNode(row.on, () => review(rule(row, row.on ? "off" : "on"), { back: backTo(row.key) }), keyFor(rule(row, null)), row.label);
       toggle.dataset.focus = row.key;
       // Drawn in its new state after Apply all; the thumb slides there once (the resting style is the truth).
       if (flip === row.key) toggle.classList.add("flipped");

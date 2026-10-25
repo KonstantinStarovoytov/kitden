@@ -1912,12 +1912,33 @@ def test_the_tray_bar_sits_in_the_dock_and_says_its_words():
     assert '<div class="dock" id="dock"></div>' in INDEX
     assert ".dock {" in CSS and ".tray-list {" in CSS
     assert "initDock();" in script("app.js")
-    # The line says whether a click on the map takes a row out, so it follows the place; the page
-    # keeps room under the bar; the small buttons have the press.
-    assert "drawTray(tray);" in script("app.js")
+    # The line says whether a click on the map takes a row out, so it follows the place (a redraw
+    # of the page never takes the dock from a toast); the page keeps room under the bar; the small
+    # buttons have the press.
+    assert "drawTray(tray, { toastStays: true });" in script("app.js")
+    assert 'state.view === "gateway" && Boolean($("#main .map"))' in dock
     assert "--dock-room" in script("toast.js") and "makeRoom" in script("dock.js")
     assert "var(--dock-room, 0px)" in CSS
     assert ".dock .ib:active, .dock .x:active:not(:disabled) {" in CSS
+
+
+def test_a_screen_reader_hears_the_tray_change():
+    dock, toast = script("dock.js"), script("toast.js")
+    # Each change that joins or leaves the tray is said through the page's quiet live region, and
+    # why an add was refused when the bar comes in with it. The bar names a file, never its path.
+    assert "export function say(text) {" in toast
+    assert 'from "./toast.js"' in dock and "say(news)" in dock
+    for words in (
+        ": in the preview.",
+        " changes taken out of the preview.",
+        ": taken out of the preview.",
+    ):
+        assert words in dock, words
+    assert "export function baseNames(text) {" in dock
+    # A switch whose change waits says so in its name: its checked state stays the real one.
+    assert "(in preview)" in script("details.js")
+    # A row's review cannot take its row out while the tray is written.
+    assert 'node.setAttribute("aria-disabled", "true");' in script("review.js")
 
 
 def test_every_change_waits_in_the_tray():
@@ -1974,7 +1995,9 @@ def test_the_dock_stands_above_the_scrim_and_the_drawer_keeps_its_room():
     makeRoom = script("toast.js")
     assert "const root = document.documentElement;" in makeRoom
     assert 'root.style.setProperty("--dock-room"' in makeRoom
-    assert "var(--dock-room, 0px)" in rule(".drawer:not(.docked)")
+    # The room is measured from the frame's content, 17 px above the window's bottom (the 16 px
+    # gutter and the frame's 1 px line): + 25 px ends the drawer 8 px above the dock.
+    assert "calc(var(--dock-room, 0px) + 25px)" in rule(".drawer:not(.docked)")
     # The Tab loop of the modal drawer takes the dock's buttons, the bar's and the toast's.
     shell = script("panel.js")
     assert 'const dock = $("#dock");' in shell and '"button:not([disabled])", dock' in shell

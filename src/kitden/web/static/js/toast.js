@@ -37,10 +37,11 @@ export function makeRoom() {
 }
 
 // A screen reader may not announce a node that arrives with a role, so the toast has none and its
-// words go to a live region that is always on the page (index.html). The region is emptied first
-// and the words come in a later task, so the same words twice are a change again.
+// words go to a live region that is always on the page (index.html); the tray's news goes there too
+// (dock.js). The region is emptied first and the words come in a later task, so the same words twice
+// are a change again.
 let saying = null;
-function say(text) {
+export function say(text) {
   const live = $("#said");
   if (!live) return;
   clearTimeout(saying);

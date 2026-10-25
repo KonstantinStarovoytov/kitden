@@ -804,13 +804,15 @@ export function syncTray() {
 
 // A switch that shows a real state; it flips only when the change is written and checked, never
 // before. A press runs `press`, which adds its change to the tray. While that change waits there
-// (`key`, its row) the switch rests half-way, pending, and a press takes it out again. Without
-// `press` it only shows.
-export function switchNode(on, press, key = null) {
+// (`key`, its row) the switch rests half-way, pending, and a press takes it out again; its name
+// (`label`) then ends "(in preview)", since its checked state stays the real one. Without `press`
+// it only shows.
+export function switchNode(on, press, key = null, label = null) {
   const node = el("button", "switch");
   node.type = "button";
   node.setAttribute("role", "switch");
   node.setAttribute("aria-checked", String(on));
+  if (label) node.setAttribute("aria-label", label);
   node.append(el("span", "thumb"));
   if (!press) return node;
   const idle = on ? "On. Press to preview turning it off." : "Off. Press to preview turning it on.";
@@ -818,6 +820,7 @@ export function switchNode(on, press, key = null) {
   if (key) {
     followTray(node, key, (waiting) => {
       node.classList.toggle("pending", waiting);
+      if (label) node.setAttribute("aria-label", waiting ? `${label} (in preview)` : label);
       // A switch that is off here keeps the words that say why.
       if (!node.disabled) node.title = waiting ? "In preview. Press to take it out." : idle;
     });
@@ -870,15 +873,14 @@ export function previewButton(label, body, { note = null, look = "btn", back = n
 function pluginSwitch(def, action) {
   const on = action ? action === "plugin.disable" : def.enabled === "on";
   const body = { action, targets: [{ item: def.id }], params: {} };
-  const node = switchNode(on, action ? () => review(body) : null, action ? keyFor(body) : null);
+  const where = clientName(def.client);
+  const label = action ? `${on ? "Turn off" : "Turn on"} in ${where}…` : `${on ? "On" : "Off"} in ${where}; not changed from here`;
+  const node = switchNode(on, action ? () => review(body) : null, action ? keyFor(body) : null, label);
   node.dataset.focus = `switch:${def.id}`;
   if (!action) {
     node.disabled = true;
-    node.setAttribute("aria-label", `${on ? "On" : "Off"} in ${clientName(def.client)}; not changed from here`);
     node.title = def.change_hint || "Not changed from here.";
-    return node;
   }
-  node.setAttribute("aria-label", `${on ? "Turn off" : "Turn on"} in ${clientName(def.client)}…`);
   return node;
 }
 

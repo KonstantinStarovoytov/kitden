@@ -8,7 +8,7 @@ import { closePanel, isPanelOpen, panelState } from "./panel.js";
 import { stepText } from "./parts.js";
 import { afterParts, changeWords, detailsAgain, nothingChanged, reloadAll, showEffect, showRowReview, undoChange } from "./review.js";
 import { go, state } from "./store.js";
-import { hideToast, makeRoom, onToastGone, toast } from "./toast.js";
+import { hideToast, makeRoom, onToastGone, say, toast } from "./toast.js";
 import { applyTray, cancelTray, endApplied, onTray, setTrayWords, takeOut, tray, tryAgain } from "./tray.js";
 
 // Every client the steps write, as the bar says it while Apply runs. Not the one being written:
@@ -35,6 +35,13 @@ export function rowWords(part, body, note) {
   return { title: changeWords(part, body).title, detail: outcomeLine(part) || note || "" };
 }
 
+// A reason from the engine may name a file by its full path ("/Users/me/.cursor/mcp.json", or one
+// under "~/"). The bar and its spoken words name the file only ("mcp.json"); the full words stay on
+// Changes.
+export function baseNames(text) {
+  return String(text).replace(/(^|[\s"'(`])(~?\/[^\s"'`)]+)/g, (whole, lead, path) => lead + (path.split("/").filter(Boolean).at(-1) || path));
+}
+
 const STALE = "Settings changed since this preview.";
 const CHECK_CHANGES = "Check Changes before trying again.";
 const IN_PREVIEW = " changes in preview";
@@ -42,8 +49,8 @@ const IN_PREVIEW = " changes in preview";
 // How a tray that did not go through ends: the head and line, and what Apply's place holds.
 // "Nothing was changed" only when that is true (nothingChanged, review.js); the engine's own words
 // name paths and commands, so they stay behind Details and on Changes.
-function endWords({ failure, refused }) {
-  if (refused) return { head: "Could not prepare the preview", line: refused.reason, apply: "Try again", retry: true };
+function endWords({ failure, refused }, reason) {
+  if (refused) return { head: "Could not prepare the preview", line: reason, apply: "Try again", retry: true };
   const { state: ended = null, error = null } = failure || {};
   if (nothingChanged({ state: ended, error })) {
     return { head: "Nothing was changed", line: ended === "stale" ? STALE : "The change did not check out. Kitden put the files back.", apply: "Try again", retry: true };
@@ -58,7 +65,8 @@ function endWords({ failure, refused }) {
 export function barWords(t, { onMap = false } = {}) {
   const count = t.rows.length;
   const base = { applyWaits: false, retry: false, changes: false };
-  if (!count) return { head: "Could not prepare this change", line: t.refused ? t.refused.reason : "", cancel: "Close", apply: null, ...base };
+  const reason = t.refused ? baseNames(t.refused.reason) : "";
+  if (!count) return { head: "Could not prepare this change", line: reason, cancel: "Close", apply: null, ...base };
   const many = count > 1;
   const words = {
     head: many ? `${count}${IN_PREVIEW}` : t.rows[0].title,
@@ -71,9 +79,9 @@ export function barWords(t, { onMap = false } = {}) {
   else if (t.phase === "ready" && t.stale) Object.assign(words, { line: STALE, apply: "Preview again", retry: true });
   else if (t.phase === "applying") Object.assign(words, { line: writingLine(t.change.steps), apply: stepText("Applying", t.done, t.total), applyWaits: true });
   else if (t.phase === "applied") Object.assign(words, { apply: many ? "All applied" : "Applied", applyWaits: true });
-  else if (t.phase === "failed") Object.assign(words, endWords(t));
+  else if (t.phase === "failed") Object.assign(words, endWords(t, reason));
   // A refused add: the tray stands as it was, and the reason takes the line.
-  if (t.refused && t.phase !== "failed") words.line = t.refused.reason;
+  if (t.refused && t.phase !== "failed") words.line = reason;
   return words;
 }
 
@@ -404,19 +412,35 @@ function react(view, fresh) {
   reacted = end;
 }
 
-// A row's review in Details goes with its row.
+// A row's review in Details goes with its row. True when focus was in Details: it is handed on.
 function closeRowReview(t) {
   const open = panelState.current;
-  if (open && open.type === "row-review" && isPanelOpen() && !t.rows.some((row) => row.key === open.row.key)) closePanel();
+  if (!open || open.type !== "row-review" || !isPanelOpen() || t.rows.some((row) => row.key === open.row.key)) return false;
+  const inside = $("#drawer").contains(document.activeElement);
+  closePanel({ focus: false });
+  return inside;
 }
+
+// "Click one on the map to take it out." only while the Gateway shows its map, not its List.
+const onTheMap = () => state.view === "gateway" && Boolean($("#main .map"));
 
 // Draw the tray: the rows with words (one still being asked is not drawn), as one change, a list, or
 // only the reason a first add was refused. No rows and no refusal: no bar. Called after every change
-// of the tray, so it only updates what changed.
-export function drawTray(t = tray) {
+// of the tray, so it only updates what changed. `toastStays`: only a bar on the page is updated, and
+// a toast keeps the dock (the bar comes back, as it is then, when the toast has gone): for a redraw
+// of the page (app.js) and for a mark the tray gets by itself. A row's review that had focus closes
+// with its row; focus goes to Apply (or Cancel), or to the page when the bar goes, as when a row's
+// × had it.
+export function drawTray(t = tray, { toastStays = false } = {}) {
+  if (toastStays && !(bar && bar.isConnected)) return;
+  const handOn = closeRowReview(t);
+  drawBar(t);
+  if (handOn) ((shown && (shown.apply || shown.cancel)) || $("#main")).focus({ preventScroll: true });
+}
+
+function drawBar(t) {
   const rows = t.rows.filter((row) => row.part);
   const kind = rows.length > 1 ? "many" : rows.length ? "one" : t.refused ? "refusal" : null;
-  closeRowReview(t);
   if (!kind) {
     clearTimeout(sliding);
     sliding = null;
@@ -429,7 +453,7 @@ export function drawTray(t = tray) {
   // A toast took the dock's place while the tray still had rows: the bar is drawn again, and it
   // takes the place of the toast.
   if (bar && !bar.isConnected) forgetBar();
-  const view = { t, rows, kind, words: barWords({ ...t, rows }, { onMap: state.view === "gateway" }) };
+  const view = { t, rows, kind, words: barWords({ ...t, rows }, { onMap: onTheMap() }) };
   if (!bar) {
     enterBar(view);
     return;
@@ -477,10 +501,51 @@ async function land() {
   later(() => appliedToast(kept), D(kept.rows.length * 60));
 }
 
+// What a screen reader was last told of the tray: its rows with words (key -> title), its phase,
+// and the refusal.
+let told = { rows: new Map(), phase: "idle", refused: null };
+
+// How the tray changed, in words for a screen reader, or "": each row that joined ("…: in the
+// preview.", and the count from two on), the rows taken out, and why an add was refused when the
+// bar came in with the reason (`had`: a bar was on the page, and its line, a status, says it).
+// A tray that empties after Apply says nothing: the toast says it.
+function trayNews(t, had) {
+  const rows = t.rows.filter((row) => row.part);
+  const keys = new Set(t.rows.map((row) => row.key));
+  const gone = [...told.rows].filter(([key]) => !keys.has(key)).map(([, title]) => title);
+  const joined = t.phase === "ready" ? rows.filter((row) => !told.rows.has(row.key)) : [];
+  const news = [];
+  if (gone.length && told.phase !== "applied") news.push(gone.length > 1 ? `${gone.length} changes taken out of the preview.` : `${gone[0]}: taken out of the preview.`);
+  for (const row of joined) news.push(`${row.title}: in the preview.`);
+  if (joined.length && rows.length > 1) news.push(`${rows.length}${IN_PREVIEW}.`);
+  if (t.refused && t.refused !== told.refused && !had) {
+    news.push(`${t.phase === "failed" ? "Could not prepare the preview" : "Could not prepare this change"}. ${baseNames(t.refused.reason)}`);
+  }
+  told = { rows: new Map(rows.map((row) => [row.key, row.title])), phase: t.phase, refused: t.refused };
+  return news.join(" ");
+}
+
+// The rows and phase of the tray as last drawn. A change of either (an add, a take-out, Cancel or
+// Apply, and their answers) takes the dock from a toast; a mark the tray gets by itself (a stale
+// preview, a step's count) waits until the toast has gone.
+let drawn = "";
+
+// Every change of the tray: the bar is drawn, then a screen reader hears what changed, through the
+// page's quiet live region (toast.js). The bar comes first: one that takes the dock from a toast
+// empties the region.
+function trayChanged(t) {
+  const had = Boolean(bar && bar.isConnected);
+  const now = JSON.stringify([t.phase, t.rows.map((row) => row.key)]);
+  drawTray(t, { toastStays: now === drawn });
+  drawn = now;
+  const news = trayNews(t, had);
+  if (news) say(news);
+}
+
 export function initDock() {
   host = $("#dock");
   setTrayWords(rowWords);
-  onTray(drawTray);
+  onTray(trayChanged);
   // A toast that goes by itself leaves the dock empty: a tray that still has rows draws its bar.
   onToastGone(drawTray);
   // A narrower window can wrap the bar's words, so its height changes; makeRoom (toast.js) sizes
