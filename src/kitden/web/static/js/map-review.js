@@ -248,7 +248,7 @@ export async function applyOnMap(redraw) {
       // everything was put back.
       const check = !after || (after.state === "restored" && !nothingChanged(after));
       dropMapPreview();
-      toast(`${title} · ${outcome}`, check ? () => go("changes") : null, check ? { label: "Open Changes" } : {});
+      toast(`${title} · ${outcome}`, null, check ? { extra: { label: "Open Changes", run: () => go("changes") } } : {});
     }
     reloadAll().then(render).catch(() => {});
   } finally {

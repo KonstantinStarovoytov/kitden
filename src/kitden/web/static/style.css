@@ -235,7 +235,6 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .btn .meter { position: absolute; left: 6px; right: 6px; bottom: 3px; height: 2px; border-radius: 1px; background: currentColor; opacity: 0.55; transform: scaleX(0); transform-origin: left; transition: transform 240ms var(--ease-out); pointer-events: none; }
 /* Applied: green at once and at full strength, though the button is disabled. */
 .btn.primary.done, .btn.primary.done:hover, .btn.primary.done:disabled { background: var(--success); border-color: var(--success); color: var(--on-success); opacity: 1; transition: none; }
-.toast .check { flex: none; color: var(--lamp-on); }
 .spinner { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid currentColor; border-right-color: transparent; animation: spin 600ms linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .check path { stroke-dasharray: 20; stroke-dashoffset: 20; animation: draw 320ms var(--ease-out) forwards; }
@@ -758,6 +757,13 @@ div.map .block.preview .block-meta { color: var(--ink-2); }
 /* Applied: green fill and label (the Applied button's own tokens), and a check that draws in. */
 .dock .btn.ok, .dock .btn.ok:hover { background: var(--success); border-color: var(--success); color: var(--on-success); }
 .dock .btn.ok .ic path { stroke-dasharray: 24; }
+/* The toast takes the bar's place in the dock (docs/design.md, Toast). A long sentence wraps; the
+   buttons keep their size. The life is a 2 px green line along the bottom, run down by script. */
+.dock .toast { position: relative; overflow: hidden; display: flex; align-items: center; gap: 10px; max-width: 100%; padding: 9px 10px 9px 14px; background: var(--panel); border: 1px solid var(--wire); border-radius: 10px; box-shadow: var(--shadow); font-size: 12px; }
+.dock .toast .tk { display: grid; flex: none; color: var(--success); }
+.dock .toast > span:not(.tk) { min-width: 0; overflow-wrap: anywhere; }
+.dock .toast .btn { flex: none; }
+.dock .toast .life { position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: var(--success); opacity: 0.7; transform-origin: left; }
 .spin { animation: spin 800ms linear infinite; }
 /* A drag on the map: the pointer says it holds something, and no text is selected on the way. */
 .grabbing, .grabbing * { cursor: grabbing !important; user-select: none; }
@@ -783,10 +789,10 @@ div.map .block.preview .block-meta { color: var(--ink-2); }
 .drawer footer .note.side { margin-right: 0; margin-left: auto; text-align: right; }
 /* Details beside the page (Gateway, Library and Changes, from 1024 px): the same panel as a 320 px
    column with no scrim. The page keeps room for it and stays usable. It slides in like the drawer,
-   and the page takes its room at once. The toast moves left to stay clear of the column. */
+   and the page takes its room at once. The dock sits in the page, so the bar and the toast stay clear
+   of the column. */
 .shell.docked #content { padding-right: 336px; }
 #drawer.docked { width: 320px; box-shadow: none; border-left: 1px solid var(--wire); border-radius: 0 12px 12px 0; }
-.shell.docked ~ .toast { left: calc(50% - 168px); }
 /* A column stacks the footer's buttons, full width. A Details card does it in the drawer too. */
 #drawer.docked footer, .drawer footer.stack { flex-direction: column; align-items: stretch; flex-wrap: nowrap; }
 #drawer.docked footer .btn, .drawer footer.stack .btn { justify-content: center; }
@@ -863,15 +869,6 @@ pre.diff .del { color: var(--diff-del); background: color-mix(in srgb, var(--dan
 .commands { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .looks-for { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 4px; }
 .commands pre, pre.command { margin: 4px 0 0; padding: 8px 10px; background: var(--inset); border-radius: 6px; font: 12px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
-
-/* Toast with an undo countdown that pauses on hover */
-.toast { position: fixed; z-index: 30; left: 50%; bottom: 20px; transform: translate(-50%, 140%); visibility: hidden; background: var(--ink); color: var(--canvas); border-radius: 10px; padding: 8px 8px 8px 14px; display: flex; gap: 12px; align-items: center; overflow: hidden; max-width: calc(100vw - 32px); transition: transform var(--t-panel) var(--ease-out), visibility 0s linear var(--t-panel); }
-.toast.show { transform: translate(-50%, 0); visibility: visible; transition: transform 420ms var(--calm), visibility 0s; }
-.toast .btn { background: transparent; color: var(--canvas); border-color: color-mix(in srgb, var(--canvas) 35%, transparent); }
-.toast .timer { position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: var(--route); transform-origin: left; }
-.toast.show .timer { animation: countdown 6s linear forwards; }
-.toast:hover .timer, .toast:focus-within .timer { animation-play-state: paused; }
-@keyframes countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 
 .timeline .feed li { grid-template-columns: 120px minmax(0, 1fr) auto auto 12px; padding: 10px 12px; cursor: pointer; transition: background-color 120ms ease; }
 .timeline .feed li:hover { background: var(--inset); }

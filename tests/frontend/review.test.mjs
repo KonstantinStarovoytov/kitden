@@ -370,24 +370,27 @@ test('a review asked elsewhere first ends a preview on the map, and waits while 
   }
 });
 
-// Just enough of a page for the panel and the toast: the drawer, its scrim, the shell, the toast,
-// and the map's review bar when `bar` is on the page.
+// Just enough of a page for the panel and the toast: the drawer, its scrim, the shell, the dock the
+// toast stands in (and the page around it), and the map's review bar when `bar` is on the page.
 function fakePage({ bar = false } = {}) {
   const node = (tag = 'div') => {
     const classes = new Set();
     return {
-      tag, className: '', textContent: '', children: [], attributes: {}, dataset: {}, listeners: {},
+      tag, className: '', textContent: '', children: [], attributes: {}, dataset: {}, listeners: {}, offsetHeight: 40,
+      style: { setProperty() {}, removeProperty() {} },
       classList: { add: (n) => classes.add(n), remove: (n) => classes.delete(n), toggle: (n, on) => (on ? classes.add(n) : classes.delete(n)), contains: (n) => classes.has(n) },
+      get lastElementChild() { return this.children.at(-1) || null; },
       append(...nodes) { this.children.push(...nodes); },
       prepend(...nodes) { this.children.unshift(...nodes); },
       replaceChildren(...nodes) { this.children = nodes; },
+      remove() { for (const holder of Object.values(nodes)) if (holder) holder.children = holder.children.filter((child) => child !== this); },
       setAttribute(name, value) { this.attributes[name] = String(value); },
       removeAttribute(name) { delete this.attributes[name]; },
       addEventListener(type, listener) { this.listeners[type] = listener; },
       focus() {}, contains: () => false,
     };
   };
-  const nodes = { '#drawer': node(), '#scrim': node(), '#toast': node(), '#main': node(), '.shell': node(), '.review-bar': bar ? node() : null };
+  const nodes = { '#drawer': node(), '#scrim': node(), '#dock': node(), '#content': node(), '#said': node(), '#main': node(), '.shell': node(), '.review-bar': bar ? node() : null };
   globalThis.document = {
     activeElement: null,
     documentElement: { classList: { remove() {} } },
@@ -458,7 +461,7 @@ test('an Apply that ends while the bar is off the page says so in a toast with n
     if (url === '/api/changes/c1') return { status: 500, json: null };
     return { json: {} };
   });
-  const toast = () => nodes['#toast'].children.filter((c) => c.className !== 'timer').map((c) => [c.tag, c.textContent]);
+  const toast = () => nodes['#dock'].children[0].children.filter((c) => c.className !== 'life').map((c) => [c.tag, c.textContent]);
   const logged = console.error;
   console.error = () => {}; // the answer with no body is logged; here it is expected
   const title = 'Move github into the Kitden gateway for all projects';
@@ -485,7 +488,7 @@ test('an Apply that ends while the bar is off the page says so in a toast with n
     assert.ok(!posts(net.asked).some((u) => u.endsWith('/cancel')));
   } finally {
     console.error = logged;
-    hideToast();
+    hideToast({ now: true }); // no leaving motion left running after the page is gone
     net.done();
     delete globalThis.document;
   }

@@ -1,12 +1,14 @@
 // The preview tray's bar, in the dock at the bottom left of the page: one change, or a list of them,
-// with Cancel and Apply. tray.js holds the state and talks to the server; this module draws it.
+// with Cancel and Apply. tray.js holds the state and talks to the server; this module draws it. The
+// toast (toast.js) stands in the same dock: the bar and the toast take turns.
 import { clientName } from "./details.js";
 import { $, button, el, icon, joinWords, reportError, withFocusKey } from "./dom.js";
 import { animateTo, D, DRAW, rollTo, shake } from "./motion.js";
-import { closePanel, isPanelOpen, panelState, toast } from "./panel.js";
+import { closePanel, isPanelOpen, panelState } from "./panel.js";
 import { stepText } from "./parts.js";
 import { afterParts, changeWords, nothingChanged, reloadAll, showEffect, showRowReview, undoChange } from "./review.js";
 import { go, state } from "./store.js";
+import { hideToast, makeRoom, onToastGone, toast } from "./toast.js";
 import { applyTray, cancelTray, endApplied, onTray, setTrayWords, takeOut, tray, tryAgain } from "./tray.js";
 
 // Every client the steps write, as the bar says it while Apply runs. Not the one being written:
@@ -88,8 +90,6 @@ export function appliedToast({ change, rows }) {
 // The bar on the page ---------------------------------------------------------------------------
 
 let host = null;
-// The page's scrolling area, where the room kept for the bar is set (makeRoom).
-let page = null;
 // The bar on the page now, and what it shows: { sig, kind, words, status, head, num, cancel, apply,
 // label, icon, iconKind, meter, ratio, changes, show, list, rows } (`rows`: key -> its parts).
 let bar = null;
@@ -309,6 +309,7 @@ function rebuild(view) {
 function enterBar(view) {
   if (leaving) leaving.remove();
   leaving = null;
+  hideToast({ now: true });
   bar = el("section", "bar tray");
   bar.setAttribute("role", "region");
   host.append(bar);
@@ -319,6 +320,14 @@ function enterBar(view) {
   react(view, true);
 }
 
+// The page forgets the bar it drew: it left, or a toast took its place.
+function forgetBar() {
+  bar = null;
+  shown = null;
+  growing = null;
+  reacted = null;
+}
+
 // The last row out, Cancel all, or an Apply taken in: the bar goes down 10 px and fades; then it is
 // removed, by time and not by the animation's end.
 function leaveBar() {
@@ -326,10 +335,7 @@ function leaveBar() {
   const old = bar;
   // Focus inside the bar goes to the page, so a keyboard user is never left on nothing.
   if (old.contains(document.activeElement)) $("#main").focus({ preventScroll: true });
-  bar = null;
-  shown = null;
-  growing = null;
-  reacted = null;
+  forgetBar();
   animateTo(old, [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(10px)" }], { dur: 160, ease: "ease-in", fill: "forwards" });
   if (D(160) > 0) leaving = old;
   later(() => {
@@ -337,14 +343,6 @@ function leaveBar() {
     if (leaving === old) leaving = null;
     makeRoom();
   }, D(160));
-}
-
-// The end of a long page must not sit under the bar: while the dock shows a bar, the page keeps
-// room at its bottom as high as the bar plus the dock's 46 px offset (style.css, `.page`).
-function makeRoom() {
-  if (!page) return;
-  if (bar) page.style.setProperty("--dock-room", `${bar.offsetHeight + 46}px`);
-  else page.style.removeProperty("--dock-room");
 }
 
 // Rows taken out slide off to the right, 180 ms; the bar is drawn again once they have gone. Focus
@@ -427,6 +425,9 @@ export function drawTray(t = tray) {
   }
   // Rows are sliding out: the bar is drawn once they have gone.
   if (sliding) return;
+  // A toast took the dock's place while the tray still had rows: the bar is drawn again, and it
+  // takes the place of the toast.
+  if (bar && !bar.isConnected) forgetBar();
   const view = { t, rows, kind, words: barWords({ ...t, rows }, { onMap: state.view === "gateway" }) };
   if (!bar) {
     enterBar(view);
@@ -475,9 +476,10 @@ async function land() {
 
 export function initDock() {
   host = $("#dock");
-  page = $("#content");
   setTrayWords(rowWords);
   onTray(drawTray);
+  // A toast that goes by itself leaves the dock empty: a tray that still has rows draws its bar.
+  onToastGone(drawTray);
   // A narrower window can wrap the bar's words, so its height changes.
   if (typeof addEventListener === "function") addEventListener("resize", makeRoom);
 }

@@ -1876,7 +1876,7 @@ def test_the_map_review_bar_words_and_look():
     # The bar and its toast leave out the engine's words (paths, commands): they stay in Details.
     assert "{ detail: false }" in bar
     assert '"Not everything was put back. Check Changes before trying again."' in review
-    assert '{ label: "Open Changes" }' in bar and 'go("changes")' in bar
+    assert 'extra: { label: "Open Changes", run: () => go("changes") }' in bar
     # The preview block says it is a preview; it sits on the preview fill with the preview line.
     assert '"Preview"' in script("gateway.js")
     look = r"div\.map \.block\.preview \{[^}]*var\(--preview-line\)[^}]*var\(--preview-fill\)"
@@ -1925,5 +1925,29 @@ def test_the_tray_bar_sits_in_the_dock_and_says_its_words():
     # The line says whether a click on the map takes a row out, so it follows the place; the page
     # keeps room under the bar; the small buttons have the press.
     assert "drawTray(tray);" in script("app.js")
-    assert "--dock-room" in script("dock.js") and "var(--dock-room, 0px)" in CSS
+    assert "--dock-room" in script("toast.js") and "makeRoom" in script("dock.js")
+    assert "var(--dock-room, 0px)" in CSS
     assert ".dock .ib:active, .dock .x:active:not(:disabled) {" in CSS
+
+
+def test_the_toast_lives_in_the_dock_and_is_its_own_module():
+    toast = script("toast.js")
+    # The centred toast is gone from the shell and the style sheet.
+    assert 'id="toast"' not in INDEX
+    assert ".toast.show" not in CSS and "@keyframes countdown" not in CSS
+    assert "shell.docked ~ .toast" not in CSS and ".toast .check" not in CSS
+    # The dock holds it; a live region that is always there says its words to a screen reader.
+    assert 'id="said"' in INDEX and 'role="status"' in INDEX
+    assert ".dock .toast {" in CSS and ".dock .toast .life {" in CSS
+    assert 'setAttribute("role", "status")' in toast and '$("#said")' in toast
+    # Its life is 9 s, a linear line toward the left, and reduced motion does not shorten it.
+    assert "LIFE_MS = 9000" in toast and 'easing: "linear"' in toast
+    assert "D(LIFE_MS) || LIFE_MS" in toast
+    # It imports only dom.js and motion.js, so panel.js can hand it on without an import cycle.
+    assert sorted(re.findall(r'from "(\./[^"]+)"', toast)) == ["./dom.js", "./motion.js"]
+    shell = script("panel.js")
+    assert 'export { hideToast, toast } from "./toast.js";' in shell
+    assert "TOAST_MS" not in shell and "#toast" not in shell and '$("#dock .toast")' in shell
+    # Nothing reads the old element any more.
+    for name in sorted(path.name for path in (STATIC / "js").glob("*.js")):
+        assert '"#toast"' not in script(name), name

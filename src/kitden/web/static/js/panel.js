@@ -1,6 +1,6 @@
-// Side panel: the shell that opens, swaps and closes it, the toast with Undo, and the wiring.
-// Item details are in details.js, a held server's tools in tools.js and the change review in
-// review.js. The names other pages imported from here before the split still come from here.
+// Side panel: the shell that opens, swaps and closes it, and the wiring. Item details are in
+// details.js, a held server's tools in tools.js, the change review in review.js and the toast in
+// toast.js. The names other pages imported from here before the split still come from here.
 import { postJson } from "./api.js";
 import { openItem } from "./details.js";
 import { $, $$, button, el, focusKey, reportError } from "./dom.js";
@@ -14,6 +14,7 @@ import { reloadTools } from "./tools.js";
 export { backToDetails, contextLinks, countedDefinition, detailsCard, footerActions, footerButtons, heldActions, heldButtons, keepFrom, kindWord, layerState, linksRow, loadsLede, moveBody, moveFor, moveInto, moveTargets, offerLabel, openItem, plainSecrets, projectChoice, scopeWords, techRows, technical } from "./details.js";
 export { callsText, projectLabel, refreshTools, toolRows, toolsSection, writingToolsOn } from "./tools.js";
 export { ADDS, addScope, afterParts, alignGroups, canShowReview, cancelTarget, changeOutcome, changeWords, chosenKeys, leftOutText, review, reviewLede, undoChange } from "./review.js";
+export { hideToast, toast } from "./toast.js";
 
 // What is open now (`current`): "item" or "review", and for a review the change and the request
 // behind it. `from` is the Details a review was opened from (details.js sets it): Cancel goes
@@ -224,49 +225,6 @@ export function checkMark() {
   return svg;
 }
 
-// Toast ----------------------------------------------------------------------------------
-
-const TOAST_MS = 6000;
-let hideTimer = null;
-let remaining = TOAST_MS;
-let shownAt = 0;
-
-function scheduleHide(ms) {
-  clearTimeout(hideTimer);
-  remaining = ms;
-  shownAt = performance.now();
-  hideTimer = setTimeout(hideToast, ms);
-}
-
-function pauseHide() {
-  clearTimeout(hideTimer);
-  remaining = Math.max(800, remaining - (performance.now() - shownAt));
-}
-
-export function hideToast() {
-  clearTimeout(hideTimer);
-  $("#toast").classList.remove("show");
-}
-
-// A short note after a change, with Undo when it can be undone (or another action, `label`).
-// Hides after 6 s; the countdown pauses while the pointer or focus is on it.
-// A check mark only for a state the server verified (applied, undone); never for an error.
-export function toast(text, onUndo, { ok = false, label = "Undo" } = {}) {
-  const node = $("#toast");
-  node.classList.remove("show");
-  node.replaceChildren(el("span", null, text));
-  if (ok) node.prepend(checkMark());
-  if (onUndo) node.append(button(label, () => onUndo()));
-  node.append(el("span", "timer"));
-  void node.offsetWidth;
-  node.classList.add("show");
-  node.onmouseenter = pauseHide;
-  node.onmouseleave = () => scheduleHide(remaining);
-  node.onfocusin = pauseHide;
-  node.onfocusout = () => scheduleHide(remaining);
-  scheduleHide(TOAST_MS);
-}
-
 // Wiring ---------------------------------------------------------------------------------
 
 // The drawer keeps Tab inside it; the column beside the page does not.
@@ -275,10 +233,11 @@ function trapFocus(event) {
   const drawer = $("#drawer");
   // Only what is drawn: a closed Details hides everything but its summary. A toast shown while
   // the panel stays open (after a tool switch) is in the loop too, so its Undo can be reached.
-  const shown = $("#toast").classList.contains("show") ? $$("button", $("#toast")) : [];
+  const note = $("#dock .toast");
+  const shown = note ? $$("button", note) : [];
   const stops = [...$$("button:not([disabled]), a[href], select, input, textarea, summary, [tabindex]:not([tabindex='-1'])", drawer), ...shown]
     .filter((node) => node.getClientRects().length > 0);
-  const inside = drawer.contains(document.activeElement) || $("#toast").contains(document.activeElement);
+  const inside = drawer.contains(document.activeElement) || Boolean(note && note.contains(document.activeElement));
   if (!stops.length || !inside) {
     event.preventDefault();
     (stops[0] || drawer).focus();

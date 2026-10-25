@@ -617,7 +617,7 @@ function fakePanelPage() {
       replaceChildren() {}, focus() {}, contains: () => false,
     };
   };
-  const nodes = { '#drawer': node(), '#scrim': node(), '#toast': node(), '#main': node(), '.shell': node() };
+  const nodes = { '#drawer': node(), '#scrim': node(), '#main': node(), '.shell': node() };
   globalThis.document = {
     activeElement: null,
     documentElement: { classList: { remove() {} } },
@@ -965,6 +965,32 @@ test('Tab is not trapped in the column, and Escape closes it', () => {
     assert.equal(page.press('Tab').prevented, true); // the drawer keeps focus inside
     page.press('Escape');
     assert.equal(isPanelOpen(), false);
+  } finally {
+    leaveDockTest();
+  }
+});
+
+test('Tab in the drawer also reaches the toast in the dock', () => {
+  const page = keyboardPage();
+  const find = document.querySelector;
+  const stop = (name) => ({ name, getClientRects: () => [{}], focus() { document.activeElement = this; } });
+  const [first, undo] = [stop('first'), stop('undo')];
+  const toast = { querySelectorAll: () => [first, undo], contains: (node) => node === first || node === undo };
+  document.querySelector = (selector) => (selector === '#dock .toast' ? toast : find(selector));
+  try {
+    initPanel();
+    page.media.matches = false;
+    openPanel([]);
+    // On the toast's last button, Tab goes round to its first: the toast is in the loop.
+    undo.focus();
+    assert.equal(page.press('Tab').prevented, true);
+    assert.equal(document.activeElement, first);
+    assert.equal(page.press('Tab', { shiftKey: true }).prevented, true);
+    assert.equal(document.activeElement, undo);
+    // No toast, no stops: Tab goes to the drawer.
+    document.querySelector = find;
+    assert.equal(page.press('Tab').prevented, true);
+    page.press('Escape');
   } finally {
     leaveDockTest();
   }
@@ -1352,4 +1378,11 @@ test('a review whose preview arrives while another review is written is cancelle
   } finally {
     leaveReviewTest();
   }
+});
+
+test("panel.js re-exports the dock's toast", async () => {
+  const dock = await import('../../src/kitden/web/static/js/toast.js');
+  const panel = await import('../../src/kitden/web/static/js/panel.js');
+  assert.equal(panel.toast, dock.toast);
+  assert.equal(panel.hideToast, dock.hideToast);
 });

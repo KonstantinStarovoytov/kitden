@@ -91,7 +91,7 @@ const buttonsOf = (root) => tagged(root, 'button');
 const button = (root, label) => buttonsOf(root).find((node) => labelOf(node) === label || node.textContent === label);
 
 const pages = {};
-for (const id of ['#dock', '#drawer', '#scrim', '#toast', '#main', '#content', '.shell']) {
+for (const id of ['#dock', '#drawer', '#scrim', '#said', '#main', '#content', '.shell']) {
   pages[id] = fakeNode('div');
   pages[id].root = true;
 }
@@ -128,7 +128,7 @@ const { appliedToast, barWords, drawTray, initDock, outcomeLine, rowWords, writi
 const { changeWords } = await import('../../src/kitden/web/static/js/review.js');
 const { addToTray, cancelTray, endApplied, takeOut, tray, tryAgain } = await import('../../src/kitden/web/static/js/tray.js');
 const { busy, state } = await import('../../src/kitden/web/static/js/store.js');
-const { hideToast, isPanelOpen, panelState } = await import('../../src/kitden/web/static/js/panel.js');
+const { hideToast, isPanelOpen, panelState, toast } = await import('../../src/kitden/web/static/js/panel.js');
 initDock();
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -171,8 +171,9 @@ const refusal = (detail) => ({ status: 422, json: { detail, row: null } });
 const verified = (id) => ({ status: 200, json: { id, state: 'verified', steps: [] } });
 const stale = (id) => ({ status: 409, json: { id, state: 'stale', error: 'Settings changed.' } });
 
-const bar = () => pages['#dock'].children[0] || null;
-const toastParts = () => pages['#toast'].children.filter((child) => child.className !== 'timer').map((child) => [child.tag, child.textContent]);
+const bar = () => pages['#dock'].children.find((child) => child.classList.contains('bar')) || null;
+const toastNode = () => pages['#dock'].children.find((child) => child.classList.contains('toast')) || null;
+const toastParts = () => toastNode().children.filter((child) => child.className !== 'life').map((child) => [child.tag, child.textContent]);
 
 // An empty tray, a quiet server and no motion in every test; a test that looks at motion turns it on.
 async function fresh() {
@@ -315,7 +316,7 @@ test("appliedToast says one change's own words with Undo", async () => {
   appliedToast({ change: { id: 'c1' }, rows: [one] });
   try {
     assert.deepEqual(toastParts(), [
-      ['svg', ''], ['span', changeWords(remove, {}).done], ['button', 'Undo'],
+      ['span', ''], ['span', changeWords(remove, {}).done], ['button', 'Undo'],
     ]);
     assert.match(toastParts()[1][1], /^Turned off github in Claude Code/);
   } finally {
@@ -329,9 +330,9 @@ test('appliedToast says Applied 3 changes with Undo all, and Undo all undoes the
   queue('/api/changes/c9/undo', { status: 200, json: { id: 'c9', state: 'undone', steps: [] } });
   appliedToast({ change: { id: 'c9' }, rows });
   try {
-    assert.deepEqual(toastParts(), [['svg', ''], ['span', 'Applied 3 changes'], ['button', 'Undo all']]);
+    assert.deepEqual(toastParts(), [['span', ''], ['span', 'Applied 3 changes'], ['button', 'Undo all']]);
     await quietly(async () => {
-      button(pages['#toast'], 'Undo all').click();
+      button(toastNode(), 'Undo all').click();
       await sleep(20);
     });
     assert.deepEqual(posted().filter((url) => url.endsWith('/undo')), ['/api/changes/c9/undo']);
@@ -339,6 +340,44 @@ test('appliedToast says Applied 3 changes with Undo all, and Undo all undoes the
   } finally {
     hideToast();
   }
+});
+
+test('a tray change that draws a bar replaces a toast at once', async () => {
+  await fresh();
+  const room = () => pages['#content'].style['--dock-room'];
+  toast('Undone. The previous settings are back.', null, { ok: true });
+  const shown = toastNode();
+  assert.equal(room(), '106px'); // the toast's 60 px and the dock's 46 px offset
+  queue(PREVIEW, previewed('c1'));
+  await addToTray(add('github'));
+  assert.equal(shown.isConnected, false);
+  assert.deepEqual(pages['#dock'].children, [bar()]);
+  assert.equal(toastNode(), null);
+  assert.equal(room(), '106px');
+});
+
+test('a toast takes the bar\'s place while the tray keeps its rows, and the bar comes back after it', async () => {
+  await fresh();
+  queue(PREVIEW, previewed('c1'), previewed('c2'));
+  await addToTray(add('github'));
+  const first = bar();
+  toast('Could not find this item in the Library.');
+  assert.equal(first.isConnected, false);
+  assert.deepEqual(pages['#dock'].children, [toastNode()]);
+  assert.equal(tray.rows.length, 1);
+  // The toast has gone: the bar is drawn again from the tray, with its Apply.
+  hideToast();
+  assert.equal(toastNode(), null);
+  assert.ok(button(bar(), 'Apply'), 'the bar is back');
+  assert.equal(tray.rows.length, 1);
+  // A toast over the bar and then a tray change: the new bar replaces the toast, and has both rows.
+  toast('Could not find this item in the Library.');
+  await addToTray(add('neon'));
+  assert.equal(toastNode(), null);
+  assert.ok(button(bar(), 'Apply all'), 'the bar has both rows');
+  assert.equal(bar().classList.contains('many'), true);
+  hideToast();
+  assert.equal(bar().classList.contains('many'), true);
 });
 
 test('drawTray draws one row with Show changes and Apply', async () => {
