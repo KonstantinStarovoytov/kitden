@@ -43,7 +43,7 @@
 - A row asked with project A picked, then B picked and another row added: the first row still says A's place. Tests in Tasks 1 and 2.
 - A row taken out while Apply is pressed: Apply waits until the new preview answers, so the row is never written. Test in Task 2.
 - Apply all ends `stale`: "Nothing was changed", the rows stay, Try again asks a fresh preview and does not apply it. Tests in Tasks 2 and 3.
-- Escape, Close or other Details never take a row out of the tray. Test in Task 5.
+- Escape, Close or other Details never take a row out of the tray. Test in Task 6.
 
 ---
 
@@ -108,8 +108,8 @@
 
 **Files:**
 - Create: `src/kitden/web/static/js/dock.js`
-- Modify: `src/kitden/web/static/index.html` (`<div class="dock" id="dock"></div>` inside `.hint-dock`), `src/kitden/web/static/js/app.js` (call `initDock()` once at start), `src/kitden/web/static/js/motion.js` (`shake`), `src/kitden/web/static/style.css`, `docs/design.md`, `tests/unit/test_page_words.py`
-- Test: `tests/frontend/dock.test.mjs`, `tests/frontend/motion.test.mjs`
+- Modify: `src/kitden/web/static/index.html` (`<div class="dock" id="dock"></div>` inside `.hint-dock`), `src/kitden/web/static/js/app.js` (call `initDock()` once at start), `src/kitden/web/static/js/review.js` (export `showEffect`), `src/kitden/web/static/js/map-review.js` (imports `outcomeLine` and `writingLine` from dock.js until Task 5 deletes it), `src/kitden/web/static/js/motion.js` (`shake`), `src/kitden/web/static/style.css`, `docs/design.md`, `tests/unit/test_page_words.py`
+- Test: `tests/frontend/dock.test.mjs`, `tests/frontend/motion.test.mjs`, `tests/frontend/review.test.mjs` (its `outcomeLine` and `writingLine` tests move to dock.test.mjs)
 
 **Interfaces:**
 - Consumes: Task 2's `tray`, `onTray`, `setTrayWords`, `takeOut`, `cancelTray`, `applyTray`, `tryAgain`, `endApplied`; `changeWords`, `stoppedWords`, `reloadAll` (review.js); `stepText` (parts.js); `icon` (dom.js).
@@ -167,7 +167,33 @@
 - [ ] **Step 5: Run** all four checks — expected: PASS.
 - [ ] **Step 6: Commit** — `Tray: the toast lives in the dock`.
 
-### Task 5: Every change goes to the tray
+### Task 5: The Gateway map draws the tray
+
+**Files:**
+- Modify: `src/kitden/web/static/js/gateway.js` (`gatewayTree`, `LINK_HOOKS`, `pressBlock`, `redrawMove`), `gateway-drag.js` (a drop adds a row), `review.js` (remove `setMapReview`, `mapReview` and their uses in `review` and `showApplied`), `panel.js` and `app.js` (drop their map-review.js imports: `leaveMap`, `mapPreview`, `mapReviewLeft`), `docs/design.md`, `tests/unit/test_page_words.py`
+- Delete: `src/kitden/web/static/js/map-review.js`
+- Test: `tests/frontend/gateway.test.mjs`, `tests/frontend/review.test.mjs`
+
+**Interfaces:**
+- Consumes: `tray`, `onTray`, `addToTray`, `takeOut`, `inTray`, `keyFor` (Task 2).
+- Produces:
+  - `gatewayTree(view, { …, rows = [] })`: `rows` are the tray rows (`{ key, body }`). For each `gateway.move` into the Kitden gateway: a preview block `preview:<name>` in its group with a preview link, and its outside row hides its direct lines, as today's one `preview`. For each `gateway.remove`: the gateway → `held:kitden:<server>` link gets `leaving: true`. For each `gateway.rule` with `state: "off"` on a tool of a held server: that server → tool link gets `leaving: true`. The `preview` option goes.
+  - A press on a preview block, or a click on a preview or leaving link, takes its row out (D12). The × of a link whose row is in the tray takes it out; otherwise it adds `linkRemoval(...).body` with icon `"x"`. The map is drawn again on every tray change (`onTray`) while the Gateway shows.
+  - The drag (`gateway-drag.js`) adds the move with `addToTray(body)` in place of `previewOnMap`; the "Drop to add" slot shows until the row answers.
+- Carried from Phase 2 (master plan): `letGoOnMap` during Apply clears the selection while Details wait; after an applied removal, focus goes to the gateway block, not `#main`.
+- Until Task 6, Details still open their own review with its own Apply; only the map's previews (×, drag, preview block) go to the tray here.
+
+- [ ] **Step 1: Write the failing tests** in `tests/frontend/gateway.test.mjs`:
+  - `two moves in the tray show two preview blocks`; `a removal in the tray makes its link leave`; `a tool turned off in the tray makes its link leave`; `a press on a preview block takes its row out`; `a click on a leaving link takes its row out`; `the × of a link in the tray takes it out, else adds it`; `a drop adds a move to the tray`; `focus goes to the gateway after an applied removal`.
+  - Move any test of map-review.js that still matters to `tray.test.mjs` or `dock.test.mjs`; delete the rest with the module.
+- [ ] **Step 2: Run** `node --test tests/frontend/gateway.test.mjs` — expected: FAIL.
+- [ ] **Step 3: Implement**, then delete `map-review.js` and every import of it; update the page-word pins that read it (`panel()`, `reviews()` and the tests around line 1842 of `test_page_words.py` read dock.js in its place).
+- [ ] **Step 4: Update `docs/design.md`**: the "Review bar" paragraph becomes the tray on the map (rows draw preview blocks and leaving links; a press takes a row out); the "Map preview" motion row names the tray.
+- [ ] **Step 5: Check in a real browser** on the demo home (`docs/development.md`; stop only the server you started): add three rows (two link ×, a drag), take one out from the map, Apply all, then Undo all from the toast.
+- [ ] **Step 6: Run** all four checks — expected: PASS.
+- [ ] **Step 7: Commit** — `Tray: the Gateway map shows every row`.
+
+### Task 6: Every change goes to the tray
 
 **Files:**
 - Modify: `src/kitden/web/static/js/review.js` (`review`, `showReview`; remove `applyChange`, `showApplied`, `checkStale`, `setMapReview` and the one-preview turns), `panel.js` (closing Details never cancels a tray row; ⌘/Ctrl Enter presses the tray's Apply when it is ready), `details.js` and `tools.js` (switch pending looks), `app.js` (the stale check after a rescan asks `checkTrayStale`), `docs/design.md`, `tests/unit/test_page_words.py`
@@ -179,40 +205,19 @@
   - `review(body, { note = null, back = null } = {})`: `project.align` with no `chosen` asks `/api/changes/preview` and shows its chooser in Details as today, whose button says "Add to preview" and adds the row with `params.chosen`; every other body is `addToTray(body, { note })`. `back`, when given, is called with `{ queued: true }` after the add (and `{ error }` after a refusal), so a tool list draws its switch in the pending look.
   - `showRowReview(row)`: `showReview(row.part, row.body, row.note)` without Apply and without the "⌘ Enter to apply" note; its footer has "Take it out" (`takeOut(row.key)`, then Details close) and "Close". A project.align row shows its chooser; a changed tick adds the row again (same key, so it is replaced).
   - A switch whose key is in the tray shows its pending look (`.pending`) and a press takes the row out. `previewButton(label, body, { note, look })` in details.js: a Details button that adds `body`; while `keyFor(body)` is in the tray it says `"In preview"` and is disabled. details.js and gateway-details.js use it for every button that called `review(body)`.
-- Remove: `setMapReview`, `mapReview`, the review branch of `cancelPreview`, `applyChange`, `showApplied`, `lockReview`, `resetApply`, `APPLY_KEY`, `checkStale`, `staleCheckWanted`, and review.js's `appliedToast` (dock.js has its own, Task 3).
+- Remove: the review branch of `cancelPreview` (a row's review must never cancel the tray's change on the server), `applyChange`, `showApplied`, `lockReview`, `resetApply`, `APPLY_KEY`, `checkStale`, `staleCheckWanted`, and review.js's `appliedToast` (dock.js has its own, Task 3).
+- Carried from Phase 2 (master plan): a click on empty map or a second click clears only the map's selection while a row's review shows in Details.
 
 - [ ] **Step 1: Write the failing tests**
   - review.test.mjs: `review adds a row and opens nothing`; `Add missing opens its chooser and adds the row`; `a refused add calls back with the reason`; `showRowReview has no Apply and takes the row out`. Delete the tests of the removed functions (`applyChange` paths, map turns).
   - panel.test.mjs: `Escape and other Details keep every tray row` (open Details over a ready tray, close; `tray.rows.length` unchanged, no `/cancel` asked); `Ctrl Enter presses the tray's Apply when ready`.
   - details.test.mjs / gateway-details.test.mjs: `a switch in the tray shows the pending look and a press takes it out`; `a button in the tray says In preview`.
-  - test_page_words.py: `"Add to preview"`, `"In preview"`, `"Take it out"` pinned; `"⌘ Enter to apply"` gone; drop the pins of words that left with map-review.js only after Task 6 deletes it.
+  - test_page_words.py: `"Add to preview"`, `"In preview"`, `"Take it out"` pinned; `"⌘ Enter to apply"` gone.
+  - gateway.test.mjs: `a click on empty map keeps a row's review in Details`.
 - [ ] **Step 2: Run** the node tests and the page-word test — expected: FAIL.
 - [ ] **Step 3: Implement** the changes above. Every caller of `review()` keeps its call; only tools.js passes `back` and reads `{ queued }`.
 - [ ] **Step 4: Update `docs/design.md`**: Principle "one preview at a time" becomes the tray; the review in Details is "Show changes" of one row; switches' pending look.
-- [ ] **Step 5: Run** all four checks — expected: PASS.
-- [ ] **Step 6: Commit** — `Tray: every change waits in the tray`.
-
-### Task 6: The Gateway map draws the tray
-
-**Files:**
-- Modify: `src/kitden/web/static/js/gateway.js` (`gatewayTree`, `LINK_HOOKS`, `pressBlock`, `redrawMove`), `gateway-drag.js` (a drop adds a row), `docs/design.md`, `tests/unit/test_page_words.py`
-- Delete: `src/kitden/web/static/js/map-review.js`
-- Test: `tests/frontend/gateway.test.mjs`, `tests/frontend/review.test.mjs`
-
-**Interfaces:**
-- Consumes: `tray`, `onTray`, `addToTray`, `takeOut`, `inTray`, `keyFor` (Task 2).
-- Produces:
-  - `gatewayTree(view, { …, rows = [] })`: `rows` are the tray rows (`{ key, body }`). For each `gateway.move` into the Kitden gateway: a preview block `preview:<name>` in its group with a preview link, and its outside row hides its direct lines, as today's one `preview`. For each `gateway.remove`: the gateway → `held:kitden:<server>` link gets `leaving: true`. For each `gateway.rule` with `state: "off"` on a tool of a held server: that server → tool link gets `leaving: true`. The `preview` option goes.
-  - A press on a preview block, or a click on a preview or leaving link, takes its row out (D12). The × of a link whose row is in the tray takes it out; otherwise it adds `linkRemoval(...).body` with icon `"x"`. The map is drawn again on every tray change (`onTray`) while the Gateway shows.
-  - The drag (`gateway-drag.js`) adds the move with `addToTray(body)` in place of `previewOnMap`; the "Drop to add" slot shows until the row answers.
-- Carried from Phase 2 (master plan): a click on empty map or a second click clears only the map's selection while a row's review shows in Details; `letGoOnMap` during Apply clears the selection while Details wait; after an applied removal, focus goes to the gateway block, not `#main`.
-
-- [ ] **Step 1: Write the failing tests** in `tests/frontend/gateway.test.mjs`:
-  - `two moves in the tray show two preview blocks`; `a removal in the tray makes its link leave`; `a tool turned off in the tray makes its link leave`; `a press on a preview block takes its row out`; `a click on a leaving link takes its row out`; `the × of a link in the tray takes it out, else adds it`; `a drop adds a move to the tray`; `focus goes to the gateway after an applied removal`.
-  - Move any test of map-review.js that still matters to `tray.test.mjs` or `dock.test.mjs`; delete the rest with the module.
-- [ ] **Step 2: Run** `node --test tests/frontend/gateway.test.mjs` — expected: FAIL.
-- [ ] **Step 3: Implement**, then delete `map-review.js` and every import of it; update the page-word pins that read it (`panel()`, `reviews()` and the tests around line 1842 of `test_page_words.py` read dock.js in its place).
-- [ ] **Step 4: Update `docs/design.md`**: the "Review bar" paragraph becomes the tray on the map (rows draw preview blocks and leaving links; a press takes a row out); the "Map preview" motion row names the tray.
-- [ ] **Step 5: Check in a real browser** on the demo home (`docs/development.md`; stop only the server you started): add three rows (a link ×, a tool off, a drag), take one out from the map, Apply all, then Undo all from the toast. At 1440×900 in both themes, compare the bar and toast with the M4 frames in `design/kitden.pen` when the Pencil MCP can read them.
+- [ ] **Step 5: Check in a real browser** on the demo home (stop only the server you started): a Details switch, a Details button and an Overview card each add a row; Show changes opens and Take it out works; Escape keeps the rows; Apply all, then Undo all. At 1440×900 in both themes, compare the bar and toast with the M4 frames in `design/kitden.pen` when the Pencil MCP can read them.
 - [ ] **Step 6: Run** all four checks — expected: PASS.
-- [ ] **Step 7: Commit** — `Tray: the Gateway map shows every row`.
+- [ ] **Step 7: Commit** — `Tray: every change waits in the tray`.
+
