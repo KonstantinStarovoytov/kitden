@@ -140,6 +140,21 @@ test('D scales by ?slow= and ignores a value that is not a positive number', asy
   }
 });
 
+test('unscaled gives back the ms that D scales to a real time, so a delay is scaled once', async () => {
+  const slow = async (search) => {
+    globalThis.location = { search };
+    try { return await import(`../../src/kitden/web/static/js/motion.js?${search}`); }
+    finally { delete globalThis.location; }
+  };
+  const two = await slow('?slow=2');
+  assert.equal(two.unscaled(300), 150);
+  assert.equal(two.D(two.unscaled(300)), 300);
+  assert.equal((await slow('?slow=0.5')).unscaled(100), 200);
+  assert.equal(motion.unscaled(100), 100);
+  reduce(true);
+  assert.equal(motion.unscaled(100), 0);
+});
+
 test('animateTo resolves at once under reduced motion and never animates', async () => {
   reduce(true);
   let called = false;

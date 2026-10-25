@@ -25,6 +25,13 @@ export function D(ms) {
   return reducedMotion.matches ? 0 : ms * slow;
 }
 
+// A time that is already in real ms (a clock reading, scaled by D when it was made), as the ms to
+// give `animateTo` as a delay, which scales it once more. Zero under reduced motion.
+export function unscaled(ms) {
+  const one = D(1);
+  return one > 0 ? ms / one : 0;
+}
+
 // Animate a node and wait for the end. Under reduced motion it does nothing and is done at once.
 // It never throws or keeps a caller waiting: a cancelled animation ends quietly, any other
 // failure is reported and ends at once.

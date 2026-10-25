@@ -6,7 +6,7 @@
 // the hooks; the view knows nothing of servers, tools or clients.
 import { button, cutName, el, icon } from "./dom.js";
 import { blockLabel, drawPlan, enterDelays, foldable, LINK_MS, linkClass, linkDashed, linkKey, linkPath, midPoint, unfoldDelays } from "./map.js";
-import { animateTo, CALM, D, IN3, OUT3, RETRACT } from "./motion.js";
+import { animateTo, CALM, D, IN3, OUT3, RETRACT, unscaled } from "./motion.js";
 
 const SVG = "http://www.w3.org/2000/svg";
 const MOVE_MS = 260; // a block that moves, or a new one that fades in at its place
@@ -313,8 +313,9 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     }, D(ms));
   }
 
-  // The accent line over a lit link, made once for it. It follows the link, and fades in. One that is
-  // on its way out comes back whole at once.
+  // The accent line over a lit link, made once for it. It follows the link, and fades in (reduced
+  // motion and a hidden page just show it). One that is on its way out comes back whole at once.
+  // A link that is still drawing in (`free` is a real time) gets its line when it has drawn.
   function lay(item) {
     if (item.over) {
       if (!item.overOut) return;
@@ -327,7 +328,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     if (item.d) over.setAttribute("d", item.d);
     layer.append(over);
     item.over = over;
-    animateTo(over, [{ opacity: 0 }, { opacity: 1 }], { dur: OVER_IN_MS, delay: Math.max(0, item.free - performance.now()), ease: CALM });
+    if (canMove()) animateTo(over, [{ opacity: 0 }, { opacity: 1 }], { dur: OVER_IN_MS, delay: unscaled(Math.max(0, item.free - performance.now())), ease: CALM });
   }
 
   // It fades out, and is removed by time; reduced motion and a hidden page take it away at once.
@@ -739,7 +740,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
       else drawIn(key, DRAW_MS);
     }
     // A selected block lays an accent line over each lit link on its way, a bypass line excepted; a
-    // picked link has none. A link that is still drawing in gets its line when it has drawn.
+    // picked link has none.
     const lines = new Set(selecting && !picked ? layout.links.filter((link) => link.kind !== "direct" && shown.has(linkKey(link))).map(linkKey) : []);
     for (const key of lines) lay(links.get(key));
     for (const item of links.values()) if (item.over && !lines.has(item.key)) lift(item);

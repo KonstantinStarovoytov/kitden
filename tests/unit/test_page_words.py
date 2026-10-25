@@ -627,6 +627,18 @@ def test_a_selection_dims_what_is_off_its_path():
     )
     assert "stroke-opacity: 0.16" in rule("div.map.focus .link:not(.lit)")
     assert "stroke-width: 2.1" in rule("div.map .link-over")
+    # A block that is dragged, and a block with keyboard focus, keep their ring and look at full
+    # strength. Both repeat the dim rule's selector, or it would win.
+    for selector in (
+        "div.map.focus .block.dragging:not(.lit):not(.selected)",
+        "div.map.focus .block:focus-visible:not(.lit):not(.selected)",
+    ):
+        assert "filter: none" in rule(selector)
+        assert CSS.index(selector + " {") > CSS.index(
+            "div.map.focus .block:not(.lit):not(.selected) {"
+        )
+    # An overlay's wait is a real time, scaled back so that the animation scales it only once.
+    assert "delay: unscaled(" in script("map-view.js")
 
 
 def test_plugin_switch_opens_a_review_and_does_not_flip_itself():

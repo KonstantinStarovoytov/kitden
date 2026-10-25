@@ -480,9 +480,7 @@ function newMap() {
     tile,
     onOpen: openBlock,
     onSelect: (id) => pressBlock(onMap.model, id),
-    onEmpty: () => {
-      if (onMap.selected) letGoOnMap();
-    },
+    onEmpty: letGoIfSelected,
     onHover: (id) => view.glance(glanceFor(onMap.model, id)),
     links: LINK_HOOKS,
   });
@@ -493,7 +491,7 @@ function newMap() {
     if (!isPanelOpen()) setState({ selected: null });
     drawAgain();
   });
-  view.box.addEventListener("pointerdown", pressGrip);
+  view.box.addEventListener("pointerdown", (event) => pressGrip(event, letGoIfSelected));
   watchMap(view.box);
   return view;
 }
@@ -577,6 +575,11 @@ function letGoOnMap() {
   if (isPanelOpen()) closePanel({ focus: false });
   else setState({ selected: null });
   drawAgain();
+}
+
+// A click on empty map, or the start of a drag, lets go of what is selected.
+function letGoIfSelected() {
+  if (onMap.selected) letGoOnMap();
 }
 
 // A press on a block (a held server opened or folded first, by onOpen). "N more" opens the List

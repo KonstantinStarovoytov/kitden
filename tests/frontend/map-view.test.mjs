@@ -781,3 +781,12 @@ test('the overlay of a link that draws in as a block unfolds waits until the blo
   v.draw(TREE, lay(['s1']), { selected: 's1', lit: new Set(['c1', 's1', 't1', 'c1>s1', 's1>t1']) });
   assert.deepEqual(overs(v).map((o) => o.animations[0].options.delay), [0, 305]);
 });
+
+test('a hidden page shows an overlay at once, with no fade', async () => {
+  globalThis.document.hidden = true;
+  const v = view();
+  await v.draw(TREE, lay(), { selected: 's1', lit: LIT });
+  const [o] = overs(v);
+  assert.ok(o);
+  assert.equal(o.animations.length, 0);
+});

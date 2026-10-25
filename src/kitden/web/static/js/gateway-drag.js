@@ -73,8 +73,10 @@ export function dropBody(row, view) {
 // dotted line hides (so a click that wobbles moves nothing on the map). Let go on the Servers
 // column, away from its own group, it starts the same preview as "Move into the gateway…";
 // Escape, or a drop anywhere else, puts it back. Nothing is written before Apply. A click without
-// a move selects the block as before; a grip press while a change is written does nothing.
-export function pressGrip(event) {
+// a move selects the block as before; a grip press while a change is written does nothing. When
+// the block first follows the pointer, `onStart()` runs before the map holds it: the page lets go
+// of its selection there, so nothing it dims is left under the drag or its preview.
+export function pressGrip(event, onStart = () => {}) {
   if (event.button !== 0 || busy.change || onMap.drag) return;
   const node = event.target.closest("button.block");
   const block = node && onMap.model.blocks.find((b) => node.dataset.focus === `block:${b.id}`);
@@ -86,6 +88,7 @@ export function pressGrip(event) {
     const at = { x: e.clientX, y: e.clientY };
     if (!onMap.drag) {
       if (Math.hypot(at.x - from.x, at.y - from.y) < DRAG_START) return;
+      onStart();
       onMap.drag = { id: block.id, name: block.name, kind: block.groupKey === "local" ? "local" : "remote", row: block.row, grab, at, open: false };
       document.documentElement.classList.add("grabbing");
     }

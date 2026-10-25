@@ -672,9 +672,12 @@ div.map .block.more { justify-content: center; border-style: dashed; background:
 div.map .block.more .block-text { flex: none; }
 div.map .block.lit { border-color: var(--route); }
 /* A block off the lit path dims to 40% with less colour, over the 300 ms its filter transition
-   takes. Captions keep their look. A block that is dragged does not dim. */
+   takes. Captions keep their look. A block that is dragged does not dim, and a block with keyboard
+   focus does not, so its ring keeps 3:1 (WCAG 1.4.11). These two repeat the dim rule's selector so
+   that they win over it. */
 div.map.focus .block:not(.lit):not(.selected) { filter: opacity(0.4) saturate(0.6); }
 div.map.focus .block.dragging:not(.lit):not(.selected) { filter: none; }
+div.map.focus .block:focus-visible:not(.lit):not(.selected) { filter: none; }
 div.map .block.selected, div.map .block.tool.selected[data-state] { background: var(--route-soft); border-color: var(--route); }
 div.map .block.selected .block-meta { color: var(--ink-2); }
 div.map .block.client { gap: 6px; padding: 0 8px; }

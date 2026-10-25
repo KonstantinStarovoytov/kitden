@@ -5,7 +5,7 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
 const { GATEWAY_COLUMNS, afterPress, findRows, gatewayTree, glanceFor, heldServer, kitdenLinks, linkRemoval, listAt, listRows, litFor, mapMotion, narrowFor, serverCount } = await import('../../src/kitden/web/static/js/gateway.js');
-const { dropBody, dropTarget } = await import('../../src/kitden/web/static/js/gateway-drag.js');
+const { dropBody, dropTarget, pressGrip, placeMoved } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
 const { offersSwitch } = await import('../../src/kitden/web/static/js/gateway-details.js');
 const { blockLabel, findChip, findIn, keepOpen, layoutTree, pressOpen, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
@@ -656,4 +656,27 @@ test('a selected server or gateway also lights what it holds on; a tool lights o
   assert.ok(litFor(tree, 'gateway:kitden').has('gateway:kitden>held:kitden:files'));
   const tool = litFor(tree, 'tool:files/read_file');
   assert.ok(tool.has('held:kitden:files>tool:files/read_file') && !tool.has('tool:files/write_file'));
+});
+
+test('a drag lets go of the selection when the block first follows the pointer, before the map holds it', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const heard = {};
+  globalThis.document = { addEventListener: (type, fn) => { (heard[type] ||= []).push(fn); }, removeEventListener() {}, documentElement: { classList: { add() {}, remove() {} } } };
+  try {
+    const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+    const layout = layoutTree(tree, { open: new Set(), narrow: false });
+    const calls = [];
+    const node = { dataset: { focus: 'block:outside:move:github' }, getBoundingClientRect: () => ({ left: 0, top: 0 }) };
+    const view = { node: () => node, hold: () => calls.push('hold'), letGo() {}, box: { isConnected: true, classList: { toggle() {}, remove() {} } }, area: { getBoundingClientRect: () => ({ left: 0, top: 0 }) } };
+    placeMoved({ view, model: tree, layout, redraw() {} });
+    const home = layout.blocks.find((b) => b.id === 'outside:move:github');
+    const [x, y] = [home.x + 10, home.y + 10];
+    pressGrip({ button: 0, target: { closest: () => node }, clientX: x, clientY: y }, () => calls.push('letGo'));
+    heard.pointermove[0]({ clientX: x + 2, clientY: y });
+    assert.deepEqual(calls, [], 'a wobble under 4 px starts nothing');
+    heard.pointermove[0]({ clientX: x + 6, clientY: y });
+    heard.pointermove[0]({ clientX: x + 9, clientY: y });
+    assert.deepEqual(calls, ['letGo', 'hold', 'hold']);
+    heard.pointerup[0]({ type: 'pointerup', clientX: x + 9, clientY: y });
+  } finally { delete globalThis.document; }
 });
