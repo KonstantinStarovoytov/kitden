@@ -4,7 +4,7 @@ import { $, button, el, gridKey, joinWords, plural, reportError, withFocusKey } 
 import { addForm, heldServer, liveHeld, movesTo, ruleBody, SETUP_NOTE, showClient, showGateway, showHeld, showOutside, showTool } from "./gateway-details.js";
 import { endedMove, movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { leaveMap, mapReviewLeft, previewBar, redrawPreview, showMapReview } from "./map-review.js";
-import { findIn, isNarrow, keepOpen, layoutTree, linkKey, litFrom, litPath, pressOpen, toggleOpen, wideWidth } from "./map.js";
+import { findIn, foldable, isNarrow, keepOpen, layoutTree, linkKey, litFrom, litPath, pressOpen, toggleOpen, wideWidth } from "./map.js";
 import { mapView } from "./map-view.js";
 import { entrance, glide, rise, riseHead } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, openInfo, review } from "./panel.js";
@@ -391,6 +391,39 @@ const onMap = {
   shows: "",
 };
 
+// What a selection lights: a link's key lights its two ends and itself, a client what it reaches,
+// any other block every client's path to it and what it holds on (the gateway's servers, a server's
+// tools). Nothing selected, or a selection the model no longer has, lights nothing.
+export function litFor(model, selected) {
+  if (!selected) return new Set();
+  const link = model.links.find((l) => linkKey(l) === selected);
+  if (link) return new Set([link.from, link.to, selected]);
+  const block = model.blocks.find((b) => b.id === selected);
+  if (!block) return new Set();
+  if (block.kind === "client") return litFrom(model, block.id);
+  const lit = litPath(model, block.id);
+  for (const own of model.links.filter((l) => l.from === block.id && l.kind === "on")) {
+    lit.add(own.to);
+    lit.add(linkKey(own));
+  }
+  return lit;
+}
+
+// What pointing at a block lights while nothing is selected: a client's paths, or the lines from the
+// clients to a server outside the gateway. Any other block lights nothing (null).
+export function glanceFor(model, id) {
+  const block = model.blocks.find((b) => b.id === id);
+  if (!block) return null;
+  if (block.kind === "client") return litFrom(model, id);
+  return block.kind === "outside" ? litPath(model, id) : null;
+}
+
+// A press on the block that is selected lets go, unless the press itself opened it (a block that
+// folds is open now): then it is still the one selected.
+export function afterPress({ selected, id, opened }) {
+  return selected === id && !opened ? "letGo" : "select";
+}
+
 // Every render puts the same map back on the page, so its blocks keep their nodes and focus.
 function gatewayMap(main, model, found) {
   let fresh = false;
@@ -443,7 +476,16 @@ const LINK_HOOKS = {
 
 // A new map for this visit, with what its box listens to, once.
 function newMap() {
-  const view = mapView({ tile, onOpen: openBlock, onSelect: (id) => pressBlock(onMap.model, id), links: LINK_HOOKS });
+  const view = mapView({
+    tile,
+    onOpen: openBlock,
+    onSelect: (id) => pressBlock(onMap.model, id),
+    onEmpty: () => {
+      if (onMap.selected) letGoOnMap();
+    },
+    onHover: (id) => view.glance(glanceFor(onMap.model, id)),
+    links: LINK_HOOKS,
+  });
   // Escape clears the selection first; open Details then close too (panel.js).
   view.box.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || !onMap.selected) return;
@@ -513,11 +555,11 @@ function drawOnMap(model, { fresh = false, projectChanged = false } = {}) {
   onMap.narrow = narrow;
   const open = openNow();
   const layout = layoutTree(model, { open, narrow });
-  // A selected block lights every client's path to it; a selected client lights what it reaches.
-  const chosen = model.blocks.find((b) => b.id === onMap.selected);
-  const lit = !chosen ? new Set() : chosen.kind === "client" ? litFrom(model, chosen.id) : litPath(model, chosen.id);
+  // A selected block lights every client's path to it; a selected client lights what it reaches; a
+  // selected link its two ends. A selection the model no longer has is none.
+  const lit = litFor(model, onMap.selected);
   const motion = mapMotion({ fresh, projectChanged, narrowChanged: flipped });
-  onMap.view.draw(model, layout, { selected: chosen ? chosen.id : null, lit, found: onMap.found, open, motion });
+  onMap.view.draw(model, layout, { selected: lit.size ? onMap.selected : null, lit, found: onMap.found, open, motion });
   // A block a move took off its place stays where it is shown (gateway-drag.js).
   placeMoved({ view: onMap.view, model, layout, redraw: redrawMove });
 }
@@ -529,10 +571,19 @@ function drawAgain() {
   drawOnMap(model);
 }
 
+// Let go of the selection: the map shows none and Details close. Focus stays where it is.
+function letGoOnMap() {
+  onMap.selected = null;
+  if (isPanelOpen()) closePanel({ focus: false });
+  else setState({ selected: null });
+  drawAgain();
+}
+
 // A press on a block (a held server opened or folded first, by onOpen). "N more" opens the List
-// at its group, focused there, so Details close first. The first run's slot opens the review that
-// sets every client up; the slot of a drag does nothing. A preview opens its full review in
-// Details, as "Show changes" does. Any other block is selected.
+// at its group, focused there, so Details close first. A second press on the selected block lets
+// go. The first run's slot opens the review that sets every client up; the slot of a drag does
+// nothing. A preview opens its full review in Details, as "Show changes" does. Any other block is
+// selected.
 function pressBlock(model, id) {
   if (id.startsWith("more:")) {
     closePanel({ instant: true, focus: false });
@@ -542,6 +593,10 @@ function pressBlock(model, id) {
   }
   const block = model.blocks.find((b) => b.id === id);
   if (!block) return;
+  if (afterPress({ selected: onMap.selected, id, opened: foldable(model).has(id) && onMap.open.has(id) }) === "letGo") {
+    letGoOnMap();
+    return;
+  }
   if (block.kind === "slot" && block.setup) review(block.setup, { note: SETUP_NOTE }).catch(reportError);
   else if (block.kind === "preview") showMapReview(redrawMove);
   else if (block.kind !== "slot" || block.gateway) selectOnMap(block);

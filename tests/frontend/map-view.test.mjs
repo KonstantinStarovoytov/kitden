@@ -608,3 +608,176 @@ test('a link whose look changes without a new dash or opacity does not blend', a
   assert.ok(v.node('c1>s2').classList.contains('lit'));
   assert.equal(v.node('c1>s2').animations.length, 0);
 });
+
+const LIT = new Set(['c1', 's1', 'c1>s1']);
+const overs = (v) => walk(v.area).filter((n) => n.classList?.contains('link-over'));
+
+test('a selection dims what is off its path and lays an overlay on each lit link', async () => {
+  const v = view();
+  await v.draw(TREE, lay(), { motion: 'none' });
+  v.draw(TREE, lay(), { selected: 's1', lit: LIT });
+  assert.ok(v.box.classList.contains('focus'));
+  assert.ok(v.node('s1').classList.contains('selected') && v.node('c1').classList.contains('lit') && !v.node('s2').classList.contains('lit'));
+  assert.ok(v.node('c1>s1').classList.contains('lit'));
+  const [o] = overs(v); const a = o.animations[0];
+  assert.equal(overs(v).length, 1);
+  assert.deepEqual([a.keyframes, a.options.duration, a.options.easing], [[{ opacity: 0 }, { opacity: 1 }], 180, CALM]);
+});
+
+test('letting go fades the overlays out in 160 ms, then removes them', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const v = view();
+  await v.draw(TREE, lay(), { selected: 's1', lit: LIT, motion: 'none' });
+  const [o] = overs(v);
+  v.draw(TREE, lay(), {});
+  assert.ok(!v.box.classList.contains('focus'));
+  assert.deepEqual([o.animations.at(-1).keyframes, o.animations.at(-1).options.duration, o.animations.at(-1).options.easing], [[{ opacity: 1 }, { opacity: 0 }], 160, 'ease-in']);
+  t.mock.timers.tick(160); assert.equal(o.parentNode, null);
+});
+
+test('a selected link is picked, keeps its ×, and lays no overlay', async () => {
+  reduce(true);
+  const v = view({ links: LINKS });
+  await v.draw(TREE, lay(), { selected: 'c1>s1', lit: LIT });
+  assert.ok(v.node('c1>s1').classList.contains('picked'));
+  assert.equal(xOf(v).hidden, false);
+  assert.equal(overs(v).length, 0);
+});
+
+test('a glance lights a path with no overlay, only while nothing is selected', async () => {
+  reduce(true);
+  const v = view();
+  await v.draw(TREE, lay(), {});
+  v.glance(LIT); assert.ok(v.box.classList.contains('focus')); assert.equal(overs(v).length, 0);
+  v.glance(null); assert.ok(!v.box.classList.contains('focus'));
+  await v.draw(TREE, lay(), { selected: 's2', lit: new Set(['c1', 's2', 'c1>s2']) });
+  v.glance(LIT); assert.ok(v.node('s2').classList.contains('lit') && !v.node('s1').classList.contains('lit'));
+});
+
+test('a click on empty map lets go; a click on a block or a link does not', async () => {
+  reduce(true);
+  let empty = 0;
+  const v = view({ onEmpty: () => { empty += 1; }, links: LINKS });
+  await v.draw(TREE, lay(), {});
+  v.area.dispatch('click'); v.node('s1').dispatch('click'); hitOf(v).dispatch('click');
+  assert.equal(empty, 1);
+});
+
+test('a click whose target the press has drawn away was on a block, not on empty map', async () => {
+  reduce(true);
+  let empty = 0;
+  const v = view({ onEmpty: () => { empty += 1; }, onSelect: () => v.node('s1').replaceChildren() });
+  await v.draw(TREE, lay(), {});
+  v.node('s1').firstElementChild.dispatch('click');
+  assert.equal(empty, 0);
+});
+
+test('a press that began on a block or a link is no click on empty map, wherever it ended', async () => {
+  reduce(true);
+  let empty = 0;
+  const v = view({ onEmpty: () => { empty += 1; }, links: LINKS });
+  await v.draw(TREE, lay(), {});
+  v.node('s1').dispatch('pointerdown'); v.area.dispatch('click');
+  hitOf(v).dispatch('pointerdown'); v.area.dispatch('click');
+  assert.equal(empty, 0);
+  v.area.dispatch('pointerdown'); v.area.dispatch('click');
+  assert.equal(empty, 1);
+});
+
+test('the page hears which block the pointer is on, and null when it leaves the map', async () => {
+  reduce(true);
+  const heard = [];
+  const v = view({ onHover: (id) => heard.push(id) });
+  await v.draw(TREE, lay(), {});
+  v.node('s1').dispatch('pointerover'); v.node('s1').firstElementChild.dispatch('pointerover'); v.box.dispatch('pointerleave');
+  v.hold('s2', { x: 0, y: 0 }); v.node('s2').dispatch('pointerover');
+  assert.deepEqual(heard, ['s1', null]);
+});
+
+test('an overlay is made once per lit link, follows it, and sits over every link', async () => {
+  const v = view();
+  await v.draw(TREE, lay(), { motion: 'none' });
+  v.draw(TREE, lay(), { selected: 's1', lit: LIT });
+  const [o] = overs(v);
+  v.draw(TREE, lay(), { selected: 's1', lit: LIT });
+  assert.deepEqual(overs(v), [o]);
+  assert.equal(o.animations.length, 1);
+  assert.equal(o.getAttribute('d'), v.node('c1>s1').getAttribute('d'));
+  const svg = v.node('c1>s1').parentNode;
+  assert.ok(svg.children.indexOf(o.parentNode) > svg.children.indexOf(v.node('c1>s1')));
+  v.draw(TREE, lay(['s1']), { selected: 's1', lit: LIT });
+  tick(130); settle();
+  assert.equal(o.getAttribute('d'), v.node('c1>s1').getAttribute('d'));
+});
+
+test('a bypass line gets no overlay, and lit links go last, under the overlays', async () => {
+  reduce(true);
+  const m = { ...TREE, links: TREE.links.map((l) => (l.to === 's2' ? { ...l, kind: 'direct' } : l)) };
+  const v = view();
+  await v.draw(m, layoutTree(m, { open: new Set(['s1']), narrow: false }), { selected: 's1', lit: new Set(['c1', 's1', 's2', 'c1>s1', 'c1>s2']) });
+  assert.equal(overs(v).length, 1);
+  const svg = v.node('c1>s1').parentNode;
+  const last = svg.children.slice(-3);
+  assert.ok([v.node('c1>s1'), v.node('c1>s2'), overs(v)[0].parentNode].every((n, i) => last[i] === n));
+});
+
+test('under reduced motion an overlay shows and goes at once', async () => {
+  reduce(true);
+  const v = view();
+  await v.draw(TREE, lay(), { selected: 's1', lit: LIT });
+  const [o] = overs(v);
+  assert.equal(o.animations.length, 0);
+  await v.draw(TREE, lay(), {});
+  assert.equal(o.parentNode, null);
+});
+
+test('a path that is lit again during its overlay\'s exit shows whole at once', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const v = view();
+  await v.draw(TREE, lay(), { selected: 's1', lit: LIT, motion: 'none' });
+  const [o] = overs(v);
+  v.draw(TREE, lay(), {});
+  t.mock.timers.tick(100);
+  v.draw(TREE, lay(), { selected: 's1', lit: LIT });
+  assert.ok(o.animations.every((a) => a.cancelled || a === o.animations[0]));
+  t.mock.timers.tick(200);
+  assert.deepEqual(overs(v), [o]);
+});
+
+test('a selection ends a glance; so does the start of a drag', async () => {
+  reduce(true);
+  const v = view();
+  await v.draw(TREE, lay(), {});
+  v.glance(LIT);
+  await v.draw(TREE, lay(), { selected: 's2', lit: new Set(['c1', 's2', 'c1>s2']) });
+  await v.draw(TREE, lay(), {});
+  assert.ok(!v.box.classList.contains('focus'));
+  v.glance(LIT); assert.ok(v.node('s1').classList.contains('lit'));
+  await v.draw(TREE, lay(), {});
+  assert.ok(v.box.classList.contains('focus'), 'a draw with no selection keeps a glance');
+  v.hold('s2', { x: 0, y: 0 });
+  assert.ok(!v.box.classList.contains('focus') && !v.node('s1').classList.contains('lit'));
+});
+
+test('the × goes back to the picked link when the pointer leaves another link', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  reduce(true);
+  const v = view({ links: { ...LINKS, canHit: () => true } });
+  await v.draw(TREE, lay(), { selected: 'c1>s1', lit: LIT });
+  const [a, b] = walk(v.area).filter((n) => n.classList?.contains('hit'));
+  const x = xOf(v);
+  b.dispatch('pointerover');
+  assert.equal(x.getAttribute('aria-label'), 'Remove s2');
+  b.dispatch('pointerout'); t.mock.timers.tick(240);
+  assert.deepEqual([x.hidden, x.getAttribute('aria-label')], [false, 'Remove s1']);
+  assert.ok(a.parentNode && v.node('c1>s1').classList.contains('picked') && !v.node('c1>s2').classList.contains('hov'));
+  await v.draw(TREE, lay(), {});
+  assert.ok(x.hidden && !v.node('c1>s1').classList.contains('picked'));
+});
+
+test('the overlay of a link that draws in as a block unfolds waits until the block it leads to is in', async () => {
+  const v = view();
+  await v.draw(TREE, lay(), { motion: 'none' });
+  v.draw(TREE, lay(['s1']), { selected: 's1', lit: new Set(['c1', 's1', 't1', 'c1>s1', 's1>t1']) });
+  assert.deepEqual(overs(v).map((o) => o.animations[0].options.delay), [0, 305]);
+});

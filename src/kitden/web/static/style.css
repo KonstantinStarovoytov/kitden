@@ -621,6 +621,12 @@ div.map .link.lit { stroke: var(--route); stroke-width: 1.7; }
 div.map .link.hov, div.map .link.picked { stroke: var(--route); stroke-width: 2.4; stroke-opacity: 1; }
 div.map .link.direct.lit { stroke: var(--ink-3); stroke-opacity: 1; }
 div.map .link.direct.hov, div.map .link.direct.picked { stroke: var(--lamp-warn); }
+/* While a path is lit (a selection, or a glance at a client or an outside server) a link off it dims
+   to 16% and a block off it to 40% (at .block.lit). A pointed or picked link keeps full strength.
+   The accent line over each lit link of a selected block fades in and out in map-view.js. */
+div.map.focus .link:not(.lit) { stroke-opacity: 0.16; }
+div.map.focus .link.hov, div.map.focus .link.picked { stroke-opacity: 1; }
+div.map .link-over { fill: none; stroke: var(--route); stroke-width: 2.1; stroke-linecap: round; }
 div.map .block { display: flex; align-items: center; gap: 8px; margin: 0; padding: 0 10px; border: 1px solid var(--wire-strong); border-radius: 8px; background: var(--panel); color: var(--ink); text-align: left; cursor: pointer; transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease, filter 300ms ease, scale 260ms var(--spring); }
 div.map .block:hover { border-color: color-mix(in srgb, var(--ink-3) 60%, transparent); }
 div.map .block:active { scale: 0.98; transition-duration: var(--t-fast), var(--t-fast), 300ms, 80ms; }
@@ -665,6 +671,10 @@ div.map .block-grip { position: absolute; top: calc(50% - 6px); left: 7px; width
 div.map .block.more { justify-content: center; border-style: dashed; background: transparent; color: var(--ink-2); }
 div.map .block.more .block-text { flex: none; }
 div.map .block.lit { border-color: var(--route); }
+/* A block off the lit path dims to 40% with less colour, over the 300 ms its filter transition
+   takes. Captions keep their look. A block that is dragged does not dim. */
+div.map.focus .block:not(.lit):not(.selected) { filter: opacity(0.4) saturate(0.6); }
+div.map.focus .block.dragging:not(.lit):not(.selected) { filter: none; }
 div.map .block.selected, div.map .block.tool.selected[data-state] { background: var(--route-soft); border-color: var(--route); }
 div.map .block.selected .block-meta { color: var(--ink-2); }
 div.map .block.client { gap: 6px; padding: 0 8px; }

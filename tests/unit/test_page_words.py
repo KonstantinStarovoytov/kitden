@@ -621,6 +621,14 @@ def test_the_map_says_the_link_is_the_state():
     assert 'setAttribute("aria-expanded", String(open.has(' in script("map-view.js")
 
 
+def test_a_selection_dims_what_is_off_its_path():
+    assert "filter: opacity(0.4) saturate(0.6)" in rule(
+        "div.map.focus .block:not(.lit):not(.selected)"
+    )
+    assert "stroke-opacity: 0.16" in rule("div.map.focus .link:not(.lit)")
+    assert "stroke-width: 2.1" in rule("div.map .link-over")
+
+
 def test_plugin_switch_opens_a_review_and_does_not_flip_itself():
     text = panel()
     assert 'setAttribute("role", "switch")' in text

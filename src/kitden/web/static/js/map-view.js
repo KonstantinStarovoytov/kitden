@@ -1,8 +1,9 @@
 // The map on a page: HTML blocks over one SVG of links, where map.js lays them out. A view keeps
 // one node per block, column caption and link across draws. A block moves by `transform` on one
 // frame clock, and every link is drawn again from its two blocks on each frame. A link the page
-// acts on takes the pointer: a wide hit stroke, a hover look and a small × on its middle. The page
-// gives the hooks; the view knows nothing of servers, tools or clients.
+// acts on takes the pointer: a wide hit stroke, a hover look and a small × on its middle. A
+// selection dims what is off its path and lays an accent line over each lit link. The page gives
+// the hooks; the view knows nothing of servers, tools or clients.
 import { button, cutName, el, icon } from "./dom.js";
 import { blockLabel, drawPlan, enterDelays, foldable, LINK_MS, linkClass, linkDashed, linkKey, linkPath, midPoint, unfoldDelays } from "./map.js";
 import { animateTo, CALM, D, IN3, OUT3, RETRACT } from "./motion.js";
@@ -25,6 +26,8 @@ const FADE_IN_MS = 300; // a new dashed link fades in
 const FADE_OUT_MS = 240; // a dashed link that goes fades out
 const UNDRAW_MS = 380; // a solid link that goes draws back to its start
 const BLEND_MS = 300; // a link whose look changes blends from its old dashes to the new
+const OVER_IN_MS = 180; // the accent line over a lit link fades in
+const OVER_OUT_MS = 160; // ... and fades out
 const NO_LINKS = { canHit: () => false }; // a page that acts on no link
 
 // A part a screen reader skips: the block's label says it already.
@@ -117,7 +120,14 @@ function boxOf({ x, y, w, h, s }) {
 // `links` are the page's hooks for the links it acts on: `canHit(link)`, `tip(link)` (what its
 // × does, in words), `onClick(link)` and `onRemove(link)`. After the blocks the area holds the
 // hit of each such link (a button for a keyboard: Enter opens, Delete removes) and one ×.
-export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LINKS } = {}) {
+// A non-empty `lit` (the blocks and "from>to" links on the path of the selection) dims all else.
+// When `selected` is a block, each lit link that is not a bypass line gets an accent line, in 180 ms;
+// letting go takes it away in 160 ms. When `selected` is a link's key, that link is picked: it keeps
+// its × and gets no accent line. glance(lit | null) lights a path the same way with no accent line,
+// only while the last draw selected nothing. `onEmpty()` hears a click on the map that is on no
+// block, button or link; `onHover(id | null)` the block under the pointer when it changes (null:
+// the pointer left the map), never while a block is held.
+export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links: pointer = NO_LINKS } = {}) {
   const box = el("div", "map");
   const area = el("div", "map-area");
   const svg = document.createElementNS(SVG, "svg");
@@ -136,6 +146,9 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
   cross.setAttribute("tabindex", "-1");
   cross.hidden = true;
   cross.append(icon("x", 10));
+  // The accent lines over the lit links sit in one group after every link.
+  const layer = document.createElementNS(SVG, "g");
+  svg.append(layer);
   area.append(svg, hits, cross);
   box.append(area);
 
@@ -148,7 +161,12 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
   const links = new Map();
   let exits = 0; // the last exit turn given
   let pointed = null; // the key of the link with the hover look and the ×
+  let picked = null; // the key of the selected link: it keeps its × while none is pointed at
   let wait = 0; // the timer that ends it
+  let selecting = false; // the last draw selected something
+  let drawnLit = new Set(); // what the last draw lit
+  let glanced = null; // what a glance lights (while nothing is selected)
+  let hovered = null; // the block under the pointer, as the page was told
   const moving = new Set(); // the blocks with a move
   const waiting = []; // what waits for every motion to end
   let last = null; // the layout drawn last
@@ -182,9 +200,10 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
     fade(item.node, o);
   }
 
-  // A block's classes: its look from the last draw, and `.dragging` while it is held or glides back.
+  // A block's classes: its look from the last draw, `.lit` on the lit path, and `.dragging` while it
+  // is held or glides back.
   function paint(item) {
-    const look = item.held || item.back ? `${item.look} dragging` : item.look;
+    const look = [item.look, item.lit && "lit", (item.held || item.back) && "dragging"].filter(Boolean).join(" ");
     if (item.node.className !== look) item.node.className = look;
   }
 
@@ -193,6 +212,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
     const { node } = item;
     const name = String(block.name || "");
     const matched = Boolean(found && found.matches.has(place.id));
+    item.lit = lit.has(place.id);
     if (place.kind === "column") {
       item.look = "map-caption";
       const words = JSON.stringify([block.caption, Boolean(block.add)]);
@@ -216,7 +236,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
       const group = place.kind === "group";
       const folding = folds.has(place.id);
       const opened = folding && open.has(place.id);
-      item.look = [group ? "caption" : `block ${place.kind}`, place.id === selected && "selected", lit.has(place.id) && "lit", matched && "found"].filter(Boolean).join(" ");
+      item.look = [group ? "caption" : `block ${place.kind}`, place.id === selected && "selected", matched && "found"].filter(Boolean).join(" ");
       node.dataset.focus = `block:${place.id}`;
       if (block.state) node.dataset.state = block.state;
       else delete node.dataset.state;
@@ -267,6 +287,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
     item.exit = 0;
     item.path.remove();
     dropHit(item);
+    dropOver(item);
     links.delete(key);
   }
 
@@ -292,6 +313,65 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
     }, D(ms));
   }
 
+  // The accent line over a lit link, made once for it. It follows the link, and fades in. One that is
+  // on its way out comes back whole at once.
+  function lay(item) {
+    if (item.over) {
+      if (!item.overOut) return;
+      item.overOut = 0;
+      for (const run of item.over.getAnimations ? item.over.getAnimations() : []) run.cancel();
+      return;
+    }
+    const over = document.createElementNS(SVG, "path");
+    over.setAttribute("class", "link-over");
+    if (item.d) over.setAttribute("d", item.d);
+    layer.append(over);
+    item.over = over;
+    animateTo(over, [{ opacity: 0 }, { opacity: 1 }], { dur: OVER_IN_MS, delay: Math.max(0, item.free - performance.now()), ease: CALM });
+  }
+
+  // It fades out, and is removed by time; reduced motion and a hidden page take it away at once.
+  function lift(item) {
+    if (!item.over || item.overOut) return;
+    if (!canMove()) {
+      dropOver(item);
+      return;
+    }
+    const turn = ++exits;
+    item.overOut = turn;
+    animateTo(item.over, [{ opacity: 1 }, { opacity: 0 }], { dur: OVER_OUT_MS, ease: "ease-in", fill: "forwards" });
+    setTimeout(() => {
+      if (item.overOut === turn) dropOver(item);
+    }, D(OVER_OUT_MS));
+  }
+
+  function dropOver(item) {
+    if (!item.over) return;
+    item.over.remove();
+    item.over = null;
+    item.overOut = 0;
+  }
+
+  // A link's classes: its kind, whether it is on the lit path and whether it is the selected link.
+  function linkLook(link, lit) {
+    const key = linkKey(link);
+    return `${linkClass(link)}${lit.has(key) ? " lit" : ""}${key === picked ? " picked" : ""}`;
+  }
+
+  // Give a link its look. With `blend`, a link whose dashes or opacity change blends from the old to
+  // the new.
+  function setLook(item, look, blend) {
+    if (look === item.look) return;
+    const was = blend && item.look ? dashLook(item.path) : null;
+    item.path.setAttribute("class", look);
+    item.path.classList.toggle("hov", item.key === pointed);
+    if (was) {
+      const now = endLook(item.path);
+      if (now.strokeDasharray !== was.strokeDasharray || now.strokeOpacity !== was.strokeOpacity) animateTo(item.path, [was, now], { dur: BLEND_MS, ease: CALM });
+    }
+    item.look = look;
+  }
+
   // A link that comes back during its exit is shown whole again at once.
   function revive(item) {
     item.exit = 0;
@@ -314,13 +394,22 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
     return look;
   }
 
-  // The hover look and the × go at once.
+  // What the × says is for the link it sits on.
+  function aimCross(item) {
+    const tip = pointer.tip(item.link);
+    cross.title = tip;
+    cross.setAttribute("aria-label", tip);
+  }
+
+  // The hover look goes at once, and the × with it, unless a link is selected: then the × goes to it.
   function unpoint() {
     clearTimeout(wait);
     const item = pointed && links.get(pointed);
     if (item) item.path.classList.remove("hov");
     pointed = null;
-    cross.hidden = true;
+    const rest = picked && links.get(picked);
+    if (rest && rest.hit) aimCross(rest);
+    placeCross();
   }
 
   // ... or after the grace, which the clock of the motions does not scale, so a pointer that is
@@ -330,11 +419,14 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
     wait = setTimeout(unpoint, GRACE_MS);
   }
 
-  // The × on the middle of the link with the hover look. It follows the link; it moves to another
-  // link at once, and fades in only when it was hidden.
+  // The × on the middle of the link with the hover look, else of the selected link. It follows the
+  // link; it moves to another link at once, and fades in only when it was hidden.
   function placeCross() {
-    const item = pointed && links.get(pointed);
-    if (!item || !item.hit || !item.d) return;
+    const item = links.get(pointed || picked);
+    if (!item || !item.hit || !item.d) {
+      cross.hidden = true;
+      return;
+    }
     const mid = midPoint(item.d);
     cross.style.transform = `translate(${Math.round(mid.x - CROSS_R)}px, ${Math.round(mid.y - CROSS_R)}px)`;
     if (!cross.hidden) return;
@@ -347,9 +439,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
     if (pointed && pointed !== item.key) links.get(pointed)?.path.classList.remove("hov");
     pointed = item.key;
     item.path.classList.add("hov");
-    const tip = pointer.tip(item.link);
-    cross.title = tip;
-    cross.setAttribute("aria-label", tip);
+    aimCross(item);
     placeCross();
   }
 
@@ -431,10 +521,12 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
       if (d !== item.d) {
         item.path.setAttribute("d", d);
         if (item.hit) item.hit.setAttribute("d", d);
+        if (item.over) item.over.setAttribute("d", d);
         item.d = d;
       }
       const o = now < item.free ? 1 : Math.min(a.o, b.o);
       fade(item.path, o);
+      if (item.over) fade(item.over, o);
       // A link that fades away takes no pointer.
       if (!item.hit) continue;
       const display = o < HIT_MIN ? "none" : "";
@@ -525,6 +617,14 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
     const byId = new Map(model.blocks.map((block) => [block.id, block]));
     const columns = new Map(model.columns.map((column) => [column.id, column]));
     const start = performance.now();
+    // A selection that is a link's key picks that link; any other selection is a block. A selection,
+    // or a lit path, ends a glance.
+    picked = layout.links.some((link) => linkKey(link) === selected) ? selected : null;
+    selecting = selected !== null;
+    if (selecting || lit.size) glanced = null;
+    drawnLit = lit;
+    const shown = glanced || lit;
+    box.classList.toggle("focus", shown.size > 0);
     folds = foldable(model);
     const unfold = new Map(plan.unfold.map((id, i) => [id, i]));
     const delays = unfoldDelays(plan.unfold.length);
@@ -536,11 +636,11 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
       let item = blocks.get(place.id);
       const fresh = !item;
       if (fresh) {
-        item = { id: place.id, node: makeNode(place.id, isWords(place)), div: isWords(place), x: place.x, y: place.y, s: 1, o: 1, w: 0, h: 0, move: null, leaving: false, held: false, back: false, look: "", words: null };
+        item = { id: place.id, node: makeNode(place.id, isWords(place)), div: isWords(place), x: place.x, y: place.y, s: 1, o: 1, w: 0, h: 0, move: null, leaving: false, held: false, back: false, lit: false, look: "", words: null };
         blocks.set(place.id, item);
       } else if (item.div !== isWords(place)) swap(item, place);
       item.leaving = false;
-      fill(item, place, block, { selected, lit, found, open });
+      fill(item, place, block, { selected, lit: shown, found, open });
       const end = { x: place.x, y: place.y, s: 1, o: 1 };
       if (item.held) continue;
       if (!moves) {
@@ -584,24 +684,14 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
       let item = links.get(key);
       if (item && item.exit) revive(item);
       if (!item) {
-        item = { key, path: document.createElementNS(SVG, "path"), hit: null, link, d: "", look: "", free: 0, drawing: 0, exit: 0 };
-        svg.append(item.path);
+        item = { key, path: document.createElementNS(SVG, "path"), hit: null, over: null, link, d: "", look: "", free: 0, drawing: 0, exit: 0, overOut: 0 };
+        svg.insertBefore(item.path, layer);
         links.set(key, item);
         if (opened.has(link.to) && before.has(link.from)) drawsIn.push([key, start + D(delays[unfold.get(link.to)] + FADE_MS)]);
         else if (linksMove && before.has(link.from) && before.has(link.to)) arrives.push(key);
       }
       item.link = link;
-      const look = `${linkClass(link)}${lit.has(key) ? " lit" : ""}`;
-      if (look !== item.look) {
-        const was = linksMove && item.look ? dashLook(item.path) : null;
-        item.path.setAttribute("class", look);
-        item.path.classList.toggle("hov", key === pointed);
-        if (was) {
-          const now = endLook(item.path);
-          if (now.strokeDasharray !== was.strokeDasharray || now.strokeOpacity !== was.strokeOpacity) animateTo(item.path, [was, now], { dur: BLEND_MS, ease: CALM });
-        }
-      }
-      item.look = look;
+      setLook(item, linkLook(link, shown), linksMove);
       syncHit(item, names);
     }
     const shownLinks = new Set(layout.links.map(linkKey));
@@ -626,10 +716,13 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
       if (!hit.parentNode) hits.insertBefore(hit, next);
       next = hit;
     }
-    // Lit links are drawn last, over the others.
-    const litPaths = layout.links.filter((link) => lit.has(linkKey(link))).map((link) => links.get(linkKey(link)).path);
-    const paths = [...svg.children];
-    if (litPaths.some((path, i) => paths[paths.length - litPaths.length + i] !== path)) svg.append(...litPaths);
+    // Lit links are drawn last, over the others (the accent lines sit over them all).
+    const litPaths = layout.links.filter((link) => shown.has(linkKey(link))).map((link) => links.get(linkKey(link)).path);
+    const paths = [...svg.children].slice(0, -1);
+    if (litPaths.some((path, i) => paths[paths.length - litPaths.length + i] !== path)) for (const path of litPaths) svg.insertBefore(path, layer);
+    // The × stays on the picked link while the pointer is on none.
+    const rest = picked && !pointed && links.get(picked);
+    if (rest && rest.hit) aimCross(rest);
 
     order(layout);
     box.classList.toggle("narrow", Boolean(layout.narrow));
@@ -645,6 +738,11 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
       if (linkDashed(link)) animateTo(path, [{ opacity: 0 }, { opacity: 1 }], { dur: FADE_IN_MS, ease: CALM });
       else drawIn(key, DRAW_MS);
     }
+    // A selected block lays an accent line over each lit link on its way, a bypass line excepted; a
+    // picked link has none. A link that is still drawing in gets its line when it has drawn.
+    const lines = new Set(selecting && !picked ? layout.links.filter((link) => link.kind !== "direct" && shown.has(linkKey(link))).map(linkKey) : []);
+    for (const key of lines) lay(links.get(key));
+    for (const item of links.values()) if (item.over && !lines.has(item.key)) lift(item);
     fit(moves);
     const done = run(!moves);
     performance.mark("kitden:map-drawn");
@@ -657,6 +755,11 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
   function hold(id, { x, y }, { glide = false } = {}) {
     const item = blocks.get(id);
     if (!item || item.leaving) return Promise.resolve();
+    // A drag begins: a glance ends, and the page will hear of the next block the pointer is on.
+    if (!item.held) {
+      hovered = null;
+      if (glanced) glance(null);
+    }
     Object.assign(item, { held: true, back: false });
     paint(item);
     const to = { x, y, s: 1, o: 1 };
@@ -702,10 +805,57 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
     });
   }
 
+  // Light a path, or none (null), with no accent line: the box dims what is off it. It does nothing
+  // while something is selected.
+  function glance(set) {
+    if (selecting) return;
+    glanced = set && set.size ? set : null;
+    const shown = glanced || drawnLit;
+    box.classList.toggle("focus", shown.size > 0);
+    for (const item of blocks.values()) {
+      const on = shown.has(item.id);
+      if (item.lit === on) continue;
+      item.lit = on;
+      paint(item);
+    }
+    for (const item of links.values()) setLook(item, linkLook(item.link, shown), canMove());
+  }
+
+  // The block that holds `target`, by its focus key, or null.
+  function blockAt(target) {
+    for (let at = target; at && at !== box; at = at.parentNode) {
+      const focus = at.dataset && at.dataset.focus;
+      if (focus && focus.startsWith("block:")) return focus.slice("block:".length);
+    }
+    return null;
+  }
+
+  // The page hears the block under the pointer when it changes, but not while a block is held.
+  function hover(id) {
+    if (id === hovered || [...blocks.values()].some((item) => item.held)) return;
+    hovered = id;
+    if (onHover) onHover(id);
+  }
+
+  box.addEventListener("pointerover", (event) => hover(blockAt(event.target)));
+  box.addEventListener("pointerleave", () => hover(null));
+  // A click on the map that is on no block, button or link, where it began and where it ended: a
+  // press on a block that lets go elsewhere is no click on empty map. A target the draw of a press
+  // has taken out of the map (a block's words drawn again) was on that block.
+  const onSomething = (node) => !box.contains(node) || Boolean(node.closest("button") || node.closest(".hit"));
+  let pressedOn = null;
+  box.addEventListener("pointerdown", (event) => {
+    pressedOn = event.target;
+  });
+  box.addEventListener("click", (event) => {
+    const from = pressedOn || event.target;
+    pressedOn = null;
+    if (onEmpty && !onSomething(from) && !onSomething(event.target)) onEmpty();
+  });
   cross.addEventListener("pointerenter", () => clearTimeout(wait));
   cross.addEventListener("pointerleave", unpointSoon);
   cross.addEventListener("click", () => {
-    const item = pointed && links.get(pointed);
+    const item = links.get(pointed || picked);
     if (item) pointer.onRemove(item.link);
   });
 
@@ -713,5 +863,5 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
     return blocks.get(idOrKey)?.node || links.get(idOrKey)?.path || null;
   }
 
-  return { box, area, draw, hold, letGo, drawIn, node };
+  return { box, area, draw, glance, hold, letGo, drawIn, node };
 }

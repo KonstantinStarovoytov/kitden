@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js needs only this from a browser to load; the tests call its pure parts.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { GATEWAY_COLUMNS, findRows, gatewayTree, heldServer, kitdenLinks, linkRemoval, listAt, listRows, mapMotion, narrowFor, serverCount } = await import('../../src/kitden/web/static/js/gateway.js');
+const { GATEWAY_COLUMNS, afterPress, findRows, gatewayTree, glanceFor, heldServer, kitdenLinks, linkRemoval, listAt, listRows, litFor, mapMotion, narrowFor, serverCount } = await import('../../src/kitden/web/static/js/gateway.js');
 const { dropBody, dropTarget } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
 const { offersSwitch } = await import('../../src/kitden/web/static/js/gateway-details.js');
@@ -632,4 +632,28 @@ test('a link the map can act on says what its × does', () => {
     { tip: 'Turn off read_file', body: { action: 'gateway.rule', targets: [], params: { server: 'files', tool: 'read_file', state: 'off', project: 'website' } } });
   assert.equal(linkRemoval(tree, link('client:codex>gateway:kitden'), ''), null);
   assert.equal(linkRemoval(tree, link('client:codex>outside:local:docs'), ''), null);
+});
+
+test('a second press on the selected block lets go, unless the press opened it', () => {
+  assert.equal(afterPress({ selected: 'client:codex', id: 'client:codex', opened: false }), 'letGo');
+  assert.equal(afterPress({ selected: 'held:kitden:files', id: 'held:kitden:files', opened: true }), 'select');
+  assert.equal(afterPress({ selected: null, id: 'client:codex', opened: false }), 'select');
+});
+
+test('pointing at a client or a server outside the gateway previews its paths; a selected link lights its two ends', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+  assert.ok(glanceFor(tree, 'client:codex').has('client:codex>gateway:kitden'));
+  assert.deepEqual([...glanceFor(tree, 'outside:local:files')].sort(), ['client:cursor', 'client:cursor>outside:local:files', 'outside:local:files']);
+  assert.equal(glanceFor(tree, 'held:kitden:files'), null);
+  assert.deepEqual([...litFor(tree, 'gateway:kitden>held:kitden:files')].sort(), ['gateway:kitden', 'gateway:kitden>held:kitden:files', 'held:kitden:files']);
+  assert.equal(litFor(tree, null).size, 0);
+});
+
+test('a selected server or gateway also lights what it holds on; a tool lights only its way in', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+  const server = litFor(tree, 'held:kitden:files');
+  for (const id of ['client:codex', 'gateway:kitden', 'held:kitden:files', 'tool:files/read_file', 'held:kitden:files>tool:files/read_file']) assert.ok(server.has(id), id);
+  assert.ok(litFor(tree, 'gateway:kitden').has('gateway:kitden>held:kitden:files'));
+  const tool = litFor(tree, 'tool:files/read_file');
+  assert.ok(tool.has('held:kitden:files>tool:files/read_file') && !tool.has('tool:files/write_file'));
 });
