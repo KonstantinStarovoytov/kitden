@@ -441,6 +441,7 @@ function trayPage() {
       addEventListener(type, listener) { if (type === 'click') made.listeners.push(listener); },
       // A press, and what it set off.
       async click() { made.listeners.forEach((listener) => listener({})); await new Promise((resolve) => setTimeout(resolve, 0)); },
+      focus() { globalThis.document.activeElement = made; },
     };
     return made;
   };
@@ -448,6 +449,7 @@ function trayPage() {
   globalThis.document = { createElement: node, getElementById: () => null, querySelector: (selector) => (selector === '#drawer' ? drawer : null), querySelectorAll: () => [] };
   globalThis.fetch = async (url, options = {}) => {
     page.sent.push(url);
+    if (page.hold) await page.hold;
     if (url !== '/api/batch/preview') return Response.json({});
     const { requests } = JSON.parse(options.body);
     return Response.json({
@@ -516,6 +518,32 @@ test('a button in the tray says In preview', async () => {
     await takeOut(keyFor(body));
     assert.deepEqual([words(remove), remove.attributes['aria-disabled']], ['Remove from Codex…', undefined]);
   } finally {
+    await leaveTrayPage(page);
+  }
+});
+
+test('a preview button keeps focus while its add is asked', async () => {
+  const page = trayPage();
+  const body = { action: 'mcp.remove_direct', targets: [{ item: 'e2' }], params: {} };
+  let release;
+  page.hold = new Promise((resolve) => { release = resolve; });
+  try {
+    const remove = previewButton('Remove from Cursor…', body);
+    page.controls.push(remove);
+    remove.focus();
+    await remove.click();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    // Slow: the spinner shows, but the button is never :disabled, so focus stays on it.
+    assert.deepEqual([remove.disabled, remove.className, remove.attributes['aria-busy'], globalThis.document.activeElement === remove], [false, 'btn busy', 'true', true]);
+    // A second press while it is asked sends nothing more.
+    const asked = page.sent.length;
+    await remove.click();
+    assert.equal(page.sent.length, asked);
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual([remove.className, remove.attributes['aria-busy'], remove.attributes['aria-disabled'], globalThis.document.activeElement === remove], ['btn', undefined, 'true', true]);
+  } finally {
+    page.hold = null;
     await leaveTrayPage(page);
   }
 });

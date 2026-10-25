@@ -7,7 +7,7 @@ import { getJson, postJson, query } from "./api.js";
 import { $, busyWhile, el, joinWords, plural, reportError, withFocusKey } from "./dom.js";
 import { fold } from "./motion.js";
 import { projectNote } from "./offer.js";
-import { callsText, closePanel, contextLinks, detailsCard, heldActions, keepFrom, linksRow, moveInto, moveTargets, offerLabel, openPanel, panelState, projectChoice, refreshTools, review, techRows, technical, toast, writingToolsOn } from "./panel.js";
+import { callsText, closePanel, contextLinks, detailsCard, heldActions, keepFrom, linksRow, moveBody, moveInto, moveTargets, offerLabel, openPanel, panelState, projectChoice, refreshTools, review, techRows, technical, toast, writingToolsOn } from "./panel.js";
 import { callout, CLIENT_NAMES, clientCheck, folderName, GATEWAY_NOTE, gatewayName, kindOf, kitdenClients, mark, originText, STATE_WORDS, versionWords } from "./parts.js";
 import { arrival, current, data, freshness, projectPath, reload, render, setState, state } from "./store.js";
 
@@ -272,7 +272,9 @@ export function outsideCard(row, group, definitions, { view, clients = foundClie
   const targets = moveTargets(view, group);
   const actions = [];
   const moves = movesTo(view, group, row);
-  if (moves.length) actions.push({ label: "Move into the gateway…", run: () => moveInto(moves, row.items, row.name), primary: true });
+  // With one gateway the button is the move's own, so it says when the move waits in the tray.
+  if (moves.length === 1) actions.push({ label: "Move into the gateway…", body: moveBody(moves[0], row.items), primary: true });
+  else if (moves.length) actions.push({ label: "Move into the gateway…", run: () => moveInto(moves, row.items, row.name), primary: true });
   else if (group === "move" && row.items.length && !targets.length) {
     actions.push({ label: "Remove direct entry…", body: { action: "mcp.remove_direct", targets: row.items.map((item) => ({ item })), params: {} } });
   }

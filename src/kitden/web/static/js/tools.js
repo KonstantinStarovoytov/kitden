@@ -186,10 +186,11 @@ export function toolsSection(server, again, next = {}) {
       answer = null;
     }
     if (!section.isConnected) return;
-    // A redraw keeps keyboard focus on the same control.
+    // A redraw keeps keyboard focus on the same control. A control asked for that is gone (the
+    // writing tools button once they are off) gives way to Refresh tools.
     const kept = list.contains(document.activeElement) ? document.activeElement.dataset.focus : null;
     list.replaceChildren(...(answer ? draw(answer, options) : [callout("Could not load the tools.", "error")]));
-    const target = withFocusKey(section, options.focus || kept);
+    const target = withFocusKey(section, options.focus || kept) || (options.focus ? withFocusKey(section, "tools:refresh") : null);
     if (target) target.focus();
   };
   // `flipped`: the switch the last verified change flipped; an Undo puts focus back on it.

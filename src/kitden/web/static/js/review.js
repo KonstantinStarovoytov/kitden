@@ -2,10 +2,10 @@
 // list before its row is added), what the page does after Apply all, and Undo.
 import { postJson } from "./api.js";
 import { backToDetails, clientName, KIND_WORDS } from "./details.js";
-import { $$, button, el, joinWords, plural, shortPath, shortPaths, withFocusKey } from "./dom.js";
+import { $, $$, button, el, joinWords, plural, shortPath, shortPaths, withFocusKey } from "./dom.js";
 import { loadLibrary, morphOnNextRender } from "./library.js";
 import { fold, transition } from "./motion.js";
-import { closePanel, header, hideToast, isPanelOpen, openPanel, panelState, toast } from "./panel.js";
+import { closePanel, drawQuietly, header, hideToast, isPanelOpen, openPanel, panelState, toast } from "./panel.js";
 import { allPutBack, callout, checkBox, CLIENT_ORDER, diffCounts, kitdenMove, mark, movedNames, notesSection, PLACE_IN_TITLE, ruleText, rulesText, skillRemoval, socket, strictText, targetWords } from "./parts.js";
 import { busy, reload, render, setBusy, state } from "./store.js";
 import { projectLabel, tools } from "./tools.js";
@@ -243,10 +243,13 @@ export async function review(previewBody, { note = null, back = null } = {}) {
     await chooseMissing(previewBody, note);
     return;
   }
+  // A refusal of this add is a new `tray.refused`; an add that could not even be asked (a change
+  // is being written) leaves the one before as it was, and says nothing of it.
+  const before = tray.refused;
   const joined = await addToTray(previewBody, { note });
   if (!back) return;
   if (joined) await back({ queued: true });
-  else if (tray.refused) await back({ error: tray.refused.reason });
+  else if (tray.refused && tray.refused !== before) await back({ error: tray.refused.reason });
 }
 
 // Add missing's list: the server says what each client lacks and ticks what would not make a
@@ -383,7 +386,7 @@ function reviewBody(change, previewBody, note, onChoose) {
 // A change in Details as it was previewed, with no Apply of its own: the tray's bar writes every
 // change at once. `current` is what the panel shows (panelState), `picked` the project it was
 // asked in (for the lede), `buttons` the footer's, and `onChoose` takes Add missing's ticks.
-export function showReview(change, previewBody, note, { current, picked, buttons, onChoose = null }) {
+function showReview(change, previewBody, note, { current, picked, buttons, onChoose = null }) {
   panelState.current = current;
   const footer = el("footer");
   footer.append(...buttons);
@@ -444,21 +447,29 @@ export function showEffect() {
   }
 }
 
-// After Apply all, the Details open now are drawn again from what the files say. A tool list draws
-// itself again, focus on the control pressed last there; a switch among the applied rows (`keys`)
-// springs into its new state. Other Details read again. Anything else in the panel (a row's
-// review, Add missing's list) is left alone: a row's review closes with its row.
+// After Apply all or an Undo, the Details open now are drawn again from what the files say: a tool
+// list by its own redraw, other Details by reading again. Focus in the dock or on the page stays
+// there; focus in Details stays on its control, found again by its key (a control that is gone
+// gives way, as backToDetails and the tool list say). The switch pressed last springs into its new
+// state when its row is among the applied ones (`keys`). Anything else in the panel (a row's review,
+// Add missing's list) is left alone: a row's review closes with its row.
 export async function detailsAgain(keys) {
   const from = panelState.from;
   if (!isPanelOpen() || !from || !from.shown()) return;
-  if (tools && tools.section.isConnected) {
-    const pressed = withFocusKey(tools.section, from.focus);
-    const flip = pressed && keys.includes(pressed.dataset.tray) ? from.focus : null;
-    await tools.again({ focus: from.focus, flip });
-    return;
-  }
-  from.stale = true;
-  await backToDetails();
+  const active = document.activeElement;
+  const inside = $("#drawer").contains(active);
+  const held = inside && active.dataset ? active.dataset.focus || null : null;
+  await drawQuietly(async () => {
+    if (tools && tools.section.isConnected) {
+      const pressed = withFocusKey(tools.section, from.focus);
+      const flip = pressed && keys.includes(pressed.dataset.tray) ? from.focus : null;
+      await tools.again({ focus: inside ? held || from.focus : null, flip });
+      return;
+    }
+    if (held) from.focus = held;
+    from.stale = true;
+    await backToDetails({ refocus: inside });
+  });
 }
 
 // Undo, from the toast or the Changes page. Whatever the answer, the page reloads first: the
@@ -478,6 +489,8 @@ export async function undoChange(change) {
       await tools.again({ focus: tools.flipped, flip: undone ? tools.flipped : null });
     } else {
       showEffect();
+      // Other Details open now show the files as they are after the Undo too.
+      await detailsAgain([]);
     }
     if (after && after.state === "undone") toast("Undone. The previous settings are back.", null, { ok: true });
     else if (after && after.state === "undo_blocked") toast("Undo stopped: " + (after.error ? shortPaths(after.error) : "the file changed after the change was applied."));

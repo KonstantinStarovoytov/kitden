@@ -1357,7 +1357,7 @@ def test_a_tool_switch_flips_only_after_the_change_is_verified():
     code = panel()
     # Details are drawn again after Apply all, the switch in its new state; the thumb slides once.
     assert "await detailsAgain(tray.rows.map((row) => row.key));" in code
-    assert "await tools.again({ focus: from.focus, flip });" in code
+    assert "await tools.again({ focus: inside ? held || from.focus : null, flip });" in code
     assert 'toggle.classList.add("flipped")' in code
     assert ".switch.flipped .thumb" in CSS and "@keyframes thumb-on" in CSS
     # A refused change stays as a callout in Details, and focus goes back to the switch.

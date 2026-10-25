@@ -82,7 +82,7 @@ const posted = () => calls.filter((call) => call.method === 'POST').map((call) =
 const { PLACE_IN_TITLE, changeWords, review, reviewLede, showRowReview, targetWords } = await import('../../src/kitden/web/static/js/review.js');
 const { isPanelOpen, openPanel, panelState } = await import('../../src/kitden/web/static/js/panel.js');
 const { addToTray, cancelTray, tray } = await import('../../src/kitden/web/static/js/tray.js');
-const { state } = await import('../../src/kitden/web/static/js/store.js');
+const { busy, state } = await import('../../src/kitden/web/static/js/store.js');
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 const PREVIEW = '/api/batch/preview';
@@ -271,6 +271,31 @@ test('a refused add calls back with the reason', async () => {
   assert.equal(isPanelOpen(), false);
   assert.deepEqual(tray.refused, { reason: 'No.' });
   assert.equal(tray.rows.length, 1);
+  // An add that cannot even be asked (a change is being written) hands on no earlier reason.
+  const heardBefore = heard.length;
+  busy.change = true;
+  try {
+    assert.equal(await addToTray({ ...ADD, params: { item: 'sqlite' } }), false);
+    await review({ ...ADD, params: { item: 'sqlite' } }, { back });
+  } finally {
+    busy.change = false;
+  }
+  assert.equal(heard.length, heardBefore);
+});
+
+test('a list that answers after another project was picked opens nothing, and the server forgets it', async () => {
+  await fresh();
+  let answer;
+  queue(LIST, () => new Promise((resolve) => { answer = resolve; }));
+  state.project = 'p1';
+  const pending = review(ALIGN);
+  state.project = 'p2';
+  answer(listing(['neon']));
+  await pending;
+  await settle();
+  assert.equal(isPanelOpen(), false);
+  assert.deepEqual(posted().filter((url) => url.endsWith('/cancel')), ['/api/changes/a1/cancel']);
+  assert.equal(tray.rows.length, 0);
 });
 
 test('showRowReview has no Apply and takes the row out', async () => {

@@ -131,7 +131,7 @@ const { appliedToast, barWords, drawTray, initDock, outcomeLine, rowWords, writi
 const { changeWords } = await import('../../src/kitden/web/static/js/review.js');
 const { addToTray, cancelTray, endApplied, takeOut, tray, tryAgain } = await import('../../src/kitden/web/static/js/tray.js');
 const { busy, state } = await import('../../src/kitden/web/static/js/store.js');
-const { hideToast, isPanelOpen, panelState, toast } = await import('../../src/kitden/web/static/js/panel.js');
+const { closePanel, hideToast, isPanelOpen, keepFrom, openPanel, panelState, toast, toolsSection } = await import('../../src/kitden/web/static/js/panel.js');
 initDock();
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -857,4 +857,71 @@ test('a first refused add comes in with the entrance and does not shake', async 
   await addToTray(add('github'));
   const section = bar();
   assert.deepEqual(section.animations.map(({ frames }) => frames[0]), [{ opacity: 0, transform: 'translateY(18px) scale(.97)' }]);
+});
+
+// Details as a press drew them: a body with one control (`switch:i1`) and a footer. Reading them
+// again (after Apply all or an Undo) counts in `seen.reads` and draws new nodes.
+function openDetails(seen) {
+  const body = fakeNode('div');
+  const control = fakeNode('button');
+  control.dataset.focus = 'switch:i1';
+  body.append(control);
+  const footer = fakeNode('footer');
+  panelState.current = { type: 'item' };
+  openPanel([body, footer]);
+  keepFrom(() => openDetails(seen), [body, footer], async () => { seen.reads += 1; openDetails(seen); });
+  return control;
+}
+
+test('open Details are read again after Apply all and after Undo all, focus left where it is', async () => {
+  await fresh();
+  const seen = { reads: 0 };
+  openDetails(seen);
+  queue(PREVIEW, previewed('c1'));
+  await addToTray(add('github'));
+  // Apply all from the dock: Details show the new files, and focus is not pulled into them.
+  queue('/api/changes/c1/apply', verified('c1'));
+  const apply = button(bar(), 'Apply');
+  apply.focus();
+  await apply.click();
+  assert.deepEqual([seen.reads, isPanelOpen()], [1, true]);
+  assert.ok(!pages['#drawer'].contains(globalThis.document.activeElement), 'focus moved into Details');
+  // Undo from the toast: they are read again.
+  queue('/api/changes/c1/undo', { status: 200, json: { id: 'c1', state: 'undone', steps: [] } });
+  await quietly(async () => {
+    button(toastNode(), 'Undo').click();
+    await sleep(20);
+  });
+  assert.deepEqual([seen.reads, isPanelOpen()], [2, true]);
+  assert.ok(!pages['#drawer'].contains(globalThis.document.activeElement), 'focus moved into Details');
+  hideToast();
+  // Focus in Details (⌘ Enter from a switch) stays on that control, drawn anew.
+  queue(PREVIEW, previewed('c2'));
+  await addToTray(add('neon'));
+  queue('/api/changes/c2/apply', verified('c2'));
+  const before = all(pages['#drawer']).find((node) => node.dataset.focus === 'switch:i1');
+  before.focus();
+  await button(bar(), 'Apply').click();
+  assert.equal(seen.reads, 3);
+  const now = globalThis.document.activeElement;
+  assert.ok(now !== before && now.dataset.focus === 'switch:i1', 'focus did not stay on the switch');
+  hideToast();
+  closePanel({ focus: false });
+});
+
+test('a tool list drawn again gives focus to Refresh tools when the control asked for is gone', async () => {
+  await fresh();
+  // The writing tools are off now: "Turn off every writing tool…" is not drawn.
+  queue('/api/gateway/tools?server=files', { status: 200, json: { server: 'files', state: 'on', strict: false, tools: [{ name: 'read_file', state: 'on', hint: 'reads' }] } });
+  const section = toolsSection('files', () => {}, { focus: 'writing' });
+  pages['#drawer'].replaceChildren(section);
+  await settle();
+  assert.equal(globalThis.document.activeElement.dataset.focus, 'tools:refresh');
+  // A control that is there keeps it.
+  queue('/api/gateway/tools?server=files', { status: 200, json: { server: 'files', state: 'on', strict: false, tools: [{ name: 'read_file', state: 'on', hint: 'reads' }] } });
+  const again = toolsSection('files', () => {}, { focus: 'tool:read_file' });
+  pages['#drawer'].replaceChildren(again);
+  await settle();
+  assert.equal(globalThis.document.activeElement.dataset.focus, 'tool:read_file');
+  pages['#drawer'].replaceChildren();
 });

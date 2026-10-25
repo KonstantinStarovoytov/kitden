@@ -36,7 +36,7 @@ const asked = [];
 globalThis.fetch = async (url) => { asked.push(url); return { ok: true, status: 200, json: async () => ({}) }; };
 
 const { SETUP_NOTE, clientCard, gatewayCard, heldCard, outsideCard, reported, toolCard, toolState } = await import('../../src/kitden/web/static/js/gateway-details.js');
-const { detailsCard, projectChoice } = await import('../../src/kitden/web/static/js/details.js');
+const { detailsCard, moveBody, projectChoice } = await import('../../src/kitden/web/static/js/details.js');
 const { cancelTray, tray } = await import('../../src/kitden/web/static/js/tray.js');
 const { GATEWAY_NOTE } = await import('../../src/kitden/web/static/js/parts.js');
 
@@ -72,7 +72,8 @@ test('an outside server offers move, adds and removes, and never reads the map',
   assert.deepEqual([card.kind, card.title], ['MCP server', 'github']);
   assert.deepEqual(labels(card), ['Move into the gateway…', '+ Add to Codex…', '+ Add to Cursor…', 'Remove from Claude Code…']);
   assert.deepEqual(card.actions.map((a) => Boolean(a.primary)), [true, false, false, false]);
-  assert.equal(typeof card.actions[0].run, 'function');
+  // One gateway can take it: the button is the move's own, so it can say "In preview".
+  assert.deepEqual([card.actions[0].body, card.actions[0].run], [moveBody(KITDEN, ['g']), undefined]);
   assert.deepEqual(card.actions[1].body, { action: 'mcp.add', targets: [{ client: 'codex' }], params: { item: 'g' } });
   assert.deepEqual(card.actions[3].body, { action: 'mcp.remove_direct', targets: [{ item: 'g' }], params: {} });
   assert.deepEqual(facts(card), [['In', 'Claude Code'], ['Kind', 'Remote'], ['Gateway', "Outside · calls skip Kitden's rules"]]);
@@ -477,6 +478,37 @@ test("a card's change waits in the tray with its note, and its button says In pr
     await press(again.childNodes[0]);
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.deepEqual(sent, ['/api/batch/preview']);
+  } finally {
+    await cancelTray();
+    globalThis.fetch = before;
+  }
+});
+
+test("an outside server's Move says In preview while it waits; with two gateways it asks which", async () => {
+  const sent = [];
+  const before = globalThis.fetch;
+  globalThis.fetch = async (url, options = {}) => {
+    sent.push(url);
+    if (url !== '/api/batch/preview') return Response.json({});
+    const { requests } = JSON.parse(options.body);
+    return Response.json({
+      id: 'c1', action: 'batch', state: 'previewed', error: null, undo_note: null, steps: [{ client: 'kitden', name: 'github' }],
+      rows: requests.map((r, at) => ({ id: r.id, kind: r.kind, title: r.title, detail: '', project: null, steps: [at], after: [] })),
+    });
+  };
+  try {
+    const card = outsideCard(GITHUB, 'move', [def('g', 'claude_code')], { view: VIEW, clients: FOUND });
+    const press = (node) => Promise.all(node.listeners.click.map((listener) => listener({})));
+    const [, , footer] = detailsCard(card);
+    await press(footer.childNodes[0]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(tray.rows.map((r) => r.body), [moveBody(KITDEN, ['g'])]);
+    const [, , again] = detailsCard(card);
+    assert.deepEqual([textOf(again.childNodes[0]), again.childNodes[0].attributes['aria-disabled']], ['In preview', 'true']);
+    // Two gateways can take it: the button asks which first.
+    const obot = { id: 'gw-1', kind: 'obot', name: 'Obot', movable: true };
+    const two = outsideCard(GITHUB, 'move', [def('g', 'claude_code')], { view: { ...VIEW, gateways: [KITDEN, obot] }, clients: FOUND });
+    assert.deepEqual([typeof two.actions[0].run, two.actions[0].body], ['function', undefined]);
   } finally {
     await cancelTray();
     globalThis.fetch = before;

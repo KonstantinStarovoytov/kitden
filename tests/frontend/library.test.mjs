@@ -40,6 +40,7 @@ globalThis.fetch = (url) => new Promise((resolve) => {
 });
 const { addChoices, addName, hasAdds, scopeLine, cellHint, cellNode, emptyState, hiddenClients, hiddenLine, hideButton, loadLibrary, loadLibraryFor, metaText, moreLine, nameCell, noClients, noteFor, showSources, previewFor, setHidden, startAdd } = await import('../../src/kitden/web/static/js/library.js');
 const { data, freshness, hashFor, loadShared, parseHash, state } = await import('../../src/kitden/web/static/js/store.js');
+const { cancelTray, tray } = await import('../../src/kitden/web/static/js/tray.js');
 const later = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const cell = (fields) => ({ state: 'none', where: null, items: [], word: null, add: null, reason: null, ...fields });
@@ -497,7 +498,7 @@ test("a project's own skill adds into the project, with no choice", () => {
   state.project = '';
   data.projects = null;
 });
-test("a project's own skill adds its change at once, into the project", () => {
+test("a project's own skill adds its change at once, into the project", async () => {
   const asked = globalThis.fetch;
   const sent = [];
   globalThis.fetch = (url, options) => { sent.push([url, JSON.parse(options.body)]); return new Promise(() => {}); };
@@ -510,6 +511,9 @@ test("a project's own skill adds its change at once, into the project", () => {
       ['skill.install', [{ client: 'claude_code' }], { skill: 'project/api-style', project: 'p1' }, 'p1'],
     ]]]);
   } finally {
+    // The add is still asked (the stand-in never answers): the tray lets it go.
+    await cancelTray();
+    assert.equal(tray.rows.length, 0);
     globalThis.fetch = asked;
     state.project = '';
     data.projects = null;

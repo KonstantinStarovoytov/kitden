@@ -829,14 +829,34 @@ export function switchNode(on, press, key = null) {
 }
 
 // A Details button that adds `body` to the tray (review, with `note`, and `back` for a tool list).
-// While that change waits there it says "In preview" and takes no press; it keeps focus, so a
-// keyboard user stays where they were. The hover text keeps what it does.
+// While that change waits there it says "In preview" and takes no press. It never turns :disabled,
+// so it keeps focus and a keyboard user stays where they were: while its add is asked it shows
+// the busy spinner after a moment (aria-busy) and takes no second press. The hover text keeps
+// what it does.
 export function previewButton(label, body, { note = null, look = "btn", back = null } = {}) {
   const key = keyFor(body);
   const words = el("span", "cut", label);
-  const node = button(null, () => (inTray(key) ? null : review(body, { note, back })), look);
+  const node = el("button", look);
+  node.type = "button";
   node.title = label;
   node.append(words);
+  node.addEventListener("click", () => {
+    if (inTray(key) || node.dataset.working) return;
+    node.dataset.working = "1";
+    let shown = false;
+    const slow = setTimeout(() => {
+      shown = true;
+      node.classList.add("busy");
+      node.setAttribute("aria-busy", "true");
+    }, 150);
+    Promise.resolve(review(body, { note, back })).catch(reportError).finally(() => {
+      clearTimeout(slow);
+      delete node.dataset.working;
+      if (!shown) return;
+      node.classList.remove("busy");
+      node.removeAttribute("aria-busy");
+    });
+  });
   followTray(node, key, (waiting) => {
     words.textContent = waiting ? IN_PREVIEW : label;
     if (waiting) node.setAttribute("aria-disabled", "true");
@@ -996,10 +1016,11 @@ export function focusAfterBack(key, keys) {
 }
 
 // Back to the panel a press in it left (Details, or the Kitden gateway's own panel of a held
-// server): from Add missing's list, or drawn again after Apply all. Drawn again from what it read
-// then (no new read), or read again when `stale`. `error`: why the list was refused, first in
-// the body. Focus goes back to the control pressed, unless the panel closed while it read.
-export async function backToDetails({ error = null } = {}) {
+// server): from Add missing's list, or drawn again after Apply all or an Undo. Drawn again from
+// what it read then (no new read), or read again when `stale`. `error`: why the list was refused,
+// first in the body. Focus goes back to the control pressed, unless the panel closed while it read,
+// or `refocus` is false (focus was not in Details).
+export async function backToDetails({ error = null, refocus = true } = {}) {
   const from = panelState.from;
   if (!from) return;
   const { focus } = from;
@@ -1012,6 +1033,7 @@ export async function backToDetails({ error = null } = {}) {
   const drawer = $("#drawer");
   const body = $(".body", drawer);
   if (error && body) body.prepend(callout(error, "error"));
+  if (!refocus) return;
   const keys = $$("[data-focus]", drawer).map((node) => node.dataset.focus);
   (withFocusKey(drawer, focusAfterBack(focus, keys)) || drawer).focus();
 }

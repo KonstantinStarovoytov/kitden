@@ -185,12 +185,13 @@ export function addOptions(row, offer) {
   return options;
 }
 
-// A cell's add opens the same review as the cell's own button; "Add…" opens the form.
+// A cell's add does what the cell's own button does (its change goes to the tray, or it asks
+// where first); "Add…" opens the form.
 export function addButton(option, row, offer, look) {
   const node = option.form
     ? button(option.label, () => (row.kind === "skill" ? addSkillForm(offer) : addForm(offer, row)), look)
     : button(option.label, () => startAdd(option.add, option.client, row), look);
-  // Cancel in the review brings focus back here (details.js backToDetails).
+  // A redraw of these Details gives focus back here by this key (details.js backToDetails).
   node.dataset.focus = option.form ? "add:form" : `add:${option.client}`;
   return node;
 }

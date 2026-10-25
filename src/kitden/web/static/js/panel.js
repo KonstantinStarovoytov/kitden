@@ -1,8 +1,8 @@
 // Side panel: the shell that opens, swaps and closes it, and the wiring. Item details are in
 // details.js, a held server's tools in tools.js, the change review in review.js and the toast in
 // toast.js. The names other pages imported from here before the split still come from here.
-// Every change waits in the tray (tray.js): nothing in the panel writes, so closing it or drawing
-// something else in it never touches a change.
+// Every change waits in the tray (tray.js), so closing the panel or drawing something else in it
+// never touches a change. The one write the panel starts is Undo, in a change from the Changes page.
 import { openItem, syncTray } from "./details.js";
 import { $, $$, button, el, focusKey } from "./dom.js";
 import { onOpenItem } from "./library.js";
@@ -20,6 +20,9 @@ export { hideToast, toast } from "./toast.js";
 // Add missing's list ("align"), and so on. `from` is the Details drawn last (details.js keepFrom):
 // Add missing's Cancel goes back there, and Apply all draws it again. A closed panel forgets it.
 export const panelState = { current: null, from: null };
+// Details drawn again by the page itself, not by a press (after Apply all or an Undo): while
+// `quiet`, focus and the way back stay where the person has them, unless focus was in Details.
+let quiet = false;
 // Beside the page: on these places, in a window this wide, Details are a 320 px column with no
 // scrim and no focus trap, and the page stays usable. Anywhere else they are the drawer.
 export const DOCK_MIN = 1024;
@@ -46,7 +49,18 @@ export function swapContent(content) {
   const drawer = $("#drawer");
   const had = drawer.contains(document.activeElement);
   drawer.replaceChildren(...content);
-  if (isPanelOpen() && (had || !docked) && !drawer.contains(document.activeElement)) drawer.focus();
+  if (isPanelOpen() && (had || (!docked && !quiet)) && !drawer.contains(document.activeElement)) drawer.focus();
+}
+
+// Draw open Details again (`draw`, which may read first) without taking focus from the dock or the
+// page: only focus that was in Details stays in them.
+export async function drawQuietly(draw) {
+  quiet = true;
+  try {
+    await draw();
+  } finally {
+    quiet = false;
+  }
 }
 
 // The panel as a column beside the page (`on`) or as the drawer over it. The column is a region:
@@ -90,7 +104,7 @@ export function openPanel(content, { instant = false, dock = DOCKS.includes(stat
   if (isPanelOpen()) {
     // Beside the page another row may be pressed: the way back is to that row, and focus moves in.
     const active = document.activeElement;
-    const elsewhere = docked && active && active !== document.body && !drawer.contains(active);
+    const elsewhere = !quiet && docked && active && active !== document.body && !drawer.contains(active);
     if (elsewhere) rememberOpener();
     swapContent(content);
     if (elsewhere) drawer.focus();
