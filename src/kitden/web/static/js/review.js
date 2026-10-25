@@ -22,7 +22,7 @@ const DONE_WORDS = {
   "setup_server.enable": "Turned on the kitden entry",
   "gateway.switch": "Switched the gateway", "plugin.install": "Added", "marketplace.add": "Added the marketplace",
   "skill.install": "Added", "plugin.skills": "Added",
-  "gateway.remove": "Removed", "gateway.put_back": "Put", "mcp.add": "Added",
+  "gateway.remove": "Removed", "gateway.put_back": "Put", "gateway.move_out": "Moved", "mcp.add": "Added",
   "gateway.keychain": "Moved",
 };
 
@@ -30,8 +30,9 @@ const DONE_WORDS = {
 const REMOVES = ["mcp.remove_direct", "plugin.remove", "skill.remove"];
 // Actions that add an item: the review names where it goes before the click. A marketplace, a
 // gateway's entry and a server put back always go to all projects. app.py's ADD_ACTIONS has
-// three more: Add missing names its project in its title already, setup_server.update changes an
-// entry where it is, and setup_server.register says "to Kitden".
+// four more: Add missing names its project in its title already, setup_server.update changes an
+// entry where it is, setup_server.register says "to Kitden" and gateway.move_out names the
+// client it goes into.
 export const ADDS = ["mcp.add", "skill.install", "plugin.install", "plugin.skills", "marketplace.add", "gateway.connect", "gateway.put_back"];
 // Where the steps go, as the title ends (parts.js, so the Changes page says it too).
 export { PLACE_IN_TITLE, targetWords };
@@ -108,6 +109,7 @@ export function changeWords(change, previewBody) {
     "setup_server.enable": `Turn on the kitden entry in ${clients}`,
     "gateway.remove": `Remove ${server} from the Kitden gateway`,
     "gateway.put_back": `Put ${server} back in ${clients}`,
+    "gateway.move_out": `Move ${server} out of the gateway into ${clients}`,
     "gateway.keychain": `Move the secrets of ${server} to the Keychain`,
   }[change.action] || change.action;
   const verb = DONE_WORDS[change.action] || change.action;
@@ -135,6 +137,8 @@ export function changeWords(change, previewBody) {
     what = `${verb} ${server} from the Kitden gateway`;
   } else if (change.action === "gateway.put_back") {
     what = `${verb} ${server} back in ${clients}`;
+  } else if (change.action === "gateway.move_out") {
+    what = `${verb} ${server} into ${clients}`;
   } else if (change.action === "gateway.keychain") {
     what = `${verb} the secrets of ${server} to the Keychain`;
   } else if (change.action === "plugin.skills") {

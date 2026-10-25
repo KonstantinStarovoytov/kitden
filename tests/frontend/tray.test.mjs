@@ -131,6 +131,7 @@ test("iconFor picks the mockup's icon", () => {
   assert.equal(icon('gateway.rule', { server: 's', project: null }), 'toggle-right');
   for (const action of ['gateway.rules', 'gateway.strict', 'plugin.enable', 'plugin.disable', 'setup_server.enable']) assert.equal(icon(action), 'toggle-right', action);
   for (const action of ['gateway.move', 'gateway.put_back', 'gateway.keychain']) assert.equal(icon(action), 'arrow-right', action);
+  assert.equal(icon('gateway.move_out', { server: 'files' }), 'log-out');
   for (const action of ['gateway.connect', 'gateway.switch', 'setup_server.register', 'setup_server.update', 'client.disconnect']) assert.equal(icon(action), 'plug', action);
   for (const action of ['plugin.install', 'skill.install', 'mcp.add', 'marketplace.add', 'plugin.skills']) assert.equal(icon(action), 'plus', action);
   assert.equal(icon('something.else'), 'file-text');

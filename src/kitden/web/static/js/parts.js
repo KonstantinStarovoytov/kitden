@@ -11,7 +11,7 @@ export const GONE_PROJECT = "This project is no longer on the list.";
 export const folderName = (path) => (path ? path.split("/").filter(Boolean).pop() || path : "");
 
 // Actions whose title names its place already, or has none: no place words are added.
-export const PLACE_IN_TITLE = ["gateway.rule", "gateway.rules", "gateway.strict", "project.align", "setup_server.register", "setup_server.update", "setup_server.enable", "client.disconnect", "gateway.remove", "gateway.keychain"];
+export const PLACE_IN_TITLE = ["gateway.rule", "gateway.rules", "gateway.strict", "project.align", "setup_server.register", "setup_server.update", "setup_server.enable", "client.disconnect", "gateway.move_out", "gateway.remove", "gateway.keychain"];
 
 // Where a change's steps go (`target`, from the server), as a title ends: " in website",
 // " for all projects", " for all projects except website" (that project's own definition wins
@@ -607,6 +607,7 @@ const ACTION_WORDS = {
   "gateway.rules": "Changed the rules for",
   "gateway.remove": "Removed",
   "gateway.put_back": "Put back",
+  "gateway.move_out": "Moved out of the gateway",
   "mcp.add": "Added",
   "project.align": "Added missing items",
 };
@@ -674,6 +675,13 @@ export function backupNote(entry) {
   return entry.holds_secret ? "This change's backup or record holds a secret." : null;
 }
 
+// A server moved out of the gateway: the server, then the client that got its entry (the other
+// steps are the gateway's own settings).
+function moveOutTitle(entry) {
+  const into = entry.steps.filter((s) => s.client !== "kitden").map((s) => CLIENT_NAMES[s.client] || s.client);
+  return `${ACTION_WORDS[entry.action]} · ${entry.steps[0].name} · ${into.join(", ")}`;
+}
+
 export function changeTitle(entry) {
   // A tool rule names its tool, server, project and new state (the server adds them).
   if (entry.action === "gateway.rule" && entry.rule) return ruleText(entry.rule, entry.rule.project).done;
@@ -681,6 +689,7 @@ export function changeTitle(entry) {
   if (entry.action === "gateway.strict" && entry.steps.length) return `${ACTION_WORDS[entry.action]} ${entry.steps[0].name} in all projects · Kitden gateway`;
   // The batch switch: its steps are the tools it changed.
   if (entry.action === "gateway.rules") return `${ACTION_WORDS[entry.action]} ${entry.steps.map((s) => s.name).join(", ")} · Kitden gateway`;
+  if (entry.action === "gateway.move_out" && entry.steps.length) return moveOutTitle(entry);
   if (entry.action === "gateway.remove" && entry.steps.length) return `${ACTION_WORDS[entry.action]} ${entry.steps[0].name} from the Kitden gateway`;
   if (entry.action === "gateway.keychain" && entry.steps.length) return `Moved the secrets of ${entry.steps[0].name} to the Keychain`;
   const kitden = kitdenMove(entry);

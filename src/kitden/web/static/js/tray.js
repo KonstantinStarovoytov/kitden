@@ -109,6 +109,7 @@ export function iconFor(body) {
   const { action, params = {} } = body;
   if (params.project || action === "project.align") return "folder";
   if (REMOVES.includes(action)) return "x";
+  if (action === "gateway.move_out") return "log-out";
   if (SWITCHES.includes(action)) return "toggle-right";
   if (MOVES.includes(action)) return "arrow-right";
   if (PLUGS.includes(action)) return "plug";

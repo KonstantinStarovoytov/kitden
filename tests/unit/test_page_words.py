@@ -1592,6 +1592,24 @@ def test_connect_and_disconnect_say_kitden():
         assert old not in review and old not in parts, old
 
 
+def test_move_out_says_where_the_server_goes():
+    # A server leaves the Kitden gateway for one client's own file.
+    review, parts, tray = script("review.js"), script("parts.js"), script("tray.js")
+    for words in (
+        "`Move ${server} out of the gateway into ${clients}`",
+        "`${verb} ${server} into ${clients}`",
+        '"gateway.move_out": "Moved"',
+    ):
+        assert words in review, words
+    assert '"gateway.move_out": "Moved out of the gateway"' in parts
+    # Its title names its place, so it takes no scope words and is not one of the page's ADDS.
+    place = parts.split("export const PLACE_IN_TITLE")[1].split("\n")[0]
+    assert '"gateway.move_out"' in place
+    adds = review.split("export const ADDS = [")[1].split("]")[0]
+    assert "gateway.move_out" not in adds
+    assert '"gateway.move_out"' in tray and '"log-out"' in tray
+
+
 def test_the_tool_list_has_a_strict_switch():
     code = panel()
     assert "Strict: only tools that are on" in code

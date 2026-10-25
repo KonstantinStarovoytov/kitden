@@ -474,6 +474,7 @@ GATEWAY_STRICT = "gateway.strict"  # a held server's strict mode on or off: new 
 GATEWAY_RULES = "gateway.rules"  # several tools of one server on or off in one review
 GATEWAY_REMOVE = "gateway.remove"  # a held server and its rules leave the Kitden gateway
 GATEWAY_PUT_BACK = "gateway.put_back"  # a held server's entry written into a client
+GATEWAY_MOVE_OUT = "gateway.move_out"  # a held server put back in one client and removed
 GATEWAY_KEYCHAIN = "gateway.keychain"  # a held server's plain secrets moved to the Keychain
 # Codex waits 10 s for a server to start and 60 s for a tool call (checked 2026-10-21). The
 # Kitden gateway may take up to 20 s to list a server and 300 s for one call.

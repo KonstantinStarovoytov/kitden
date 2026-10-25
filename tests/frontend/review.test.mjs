@@ -184,6 +184,20 @@ test('connecting a client to Kitden and disconnecting it name their place and no
   assert.equal(reviewLede({ action: 'client.disconnect' }, ''), 'Nothing is written until you press Apply. A backup is kept.');
 });
 
+test('moving a server out of the gateway names the server and the client, and no scope', () => {
+  assert.ok(PLACE_IN_TITLE.includes('gateway.move_out'));
+  // The client's own step comes first; the gateway's settings steps are not a client.
+  const steps = [{ client: 'codex', name: 'files' }, { client: 'kitden', name: 'files' }, { client: 'kitden', name: 'files' }];
+  const out = { action: 'gateway.move_out', steps, target: target('all') };
+  const words = { title: 'Move files out of the gateway into Codex', done: 'Moved files into Codex' };
+  assert.deepEqual(changeWords(out, { params: { server: 'files' } }), words);
+  // The same without the preview's body, and without a target.
+  assert.deepEqual(changeWords({ ...out, target: undefined }), words);
+  // It writes a client's file, but its title says its place: no scope in the lede.
+  assert.equal(addScope('gateway.move_out', ''), null);
+  assert.equal(reviewLede({ action: 'gateway.move_out' }, ''), 'Nothing is written until you press Apply. A backup is kept.');
+});
+
 test('the scope words are the folder, all projects, or none', () => {
   assert.equal(targetWords(target('project', '/Users/me/work/website'), 'website'), ' in website');
   assert.equal(targetWords(target('all'), ''), ' for all projects');

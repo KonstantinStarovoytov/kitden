@@ -6,6 +6,7 @@ from pathlib import Path
 
 from kitden.changes.actions import (
     GATEWAY_KEYCHAIN,
+    GATEWAY_MOVE_OUT,
     GATEWAY_PUT_BACK,
     GATEWAY_REMOVE,
     GATEWAY_RULE,
@@ -529,10 +530,11 @@ def home_path(path: str, home: Path) -> str:
         return path
 
 
-def _gateway_remove_words(change: Change, inventory) -> list[dict]:
+def _gateway_remove_words(change: Change, inventory, into: str | None = None) -> list[dict]:
     """A server leaves the Kitden gateway: each client that offers the gateway's tools loses
     it. The note says whether a client still has its own entry for it, or still reaches it
-    through a registered gateway."""
+    through a registered gateway. `into` is the client that gets its own entry in the same
+    change: it keeps the server, so it is not listed as losing it."""
     server = change.steps[0].name
 
     def having(via) -> list[str]:
@@ -559,12 +561,13 @@ def _gateway_remove_words(change: Change, inventory) -> list[dict]:
         who = _join([CLIENT_WORDS[c] for c in other])
         reach = "reaches" if len(other) == 1 else "reach"
         lines.append(f"{who} still {reach} {server} through another gateway.")
-    first = " ".join(lines) or f"{server} is then in no client."
+    alone = f"Only {CLIENT_WORDS[into]} then loads {server}." if into else None
+    first = " ".join(lines) or alone or f"{server} is then in no client."
     entries = [s.edit.before for s in change.steps if s.edit and s.edit.key[0] == "servers"]
     held = entries[0] if entries else None
     if isinstance(held, dict) and references_in(held):
         first += " Its secrets stay in your Keychain under kitden."
-    clients = [c for c in CLIENTS if c in _offering(inventory)]
+    clients = [c for c in CLIENTS if c in _offering(inventory) and c != into]
     if not clients:
         return [{"note": f"{first} Undo brings it back."}]
     out = [{"client": c, "state": "off", "word": "Removed"} for c in clients]
@@ -588,9 +591,10 @@ def _keychain_words(change: Change) -> list[dict]:
     return [{"note": " ".join(lines)}]
 
 
-def _put_back_words(change: Change, inventory, home: Path) -> list[dict]:
+def _put_back_words(change: Change, inventory, home: Path, leaves: bool = False) -> list[dict]:
     """A held server written into clients: each loads it, and says when the entry holds a
-    secret, and when it then also gets the server through the Kitden gateway."""
+    secret, and when it then also gets the server through the Kitden gateway. `leaves` is true
+    when the server leaves the gateway in the same change, so no client gets it twice."""
     settings = load_settings(home)
     offering = _offering(inventory)
     out = []
@@ -601,7 +605,11 @@ def _put_back_words(change: Change, inventory, home: Path) -> list[dict]:
         notes = []
         if redact(edit.after)[1]:
             notes.append(f"This writes a secret into {home_path(edit.path, home)}.")
-        if step.client in offering and state_in(settings, [], step.name, None) == "on":
+        if (
+            step.client in offering
+            and not leaves
+            and state_in(settings, [], step.name, None) == "on"
+        ):
             notes.append(
                 f"{CLIENT_WORDS[step.client]} then loads {step.name} twice: directly and "
                 "through the Kitden gateway. Remove it from the gateway to keep one."
@@ -610,6 +618,17 @@ def _put_back_words(change: Change, inventory, home: Path) -> list[dict]:
             entry["note"] = " ".join(notes)
         out.append(entry)
     return out
+
+
+def _move_out_words(change: Change, inventory, home: Path) -> list[dict]:
+    """A server moves out of the gateway into one client: that client loads it from its own
+    file, as for a put back; every other client that used the gateway loses it."""
+    into = replace(change, steps=[s for s in change.steps if s.client != KITDEN])
+    gone = replace(change, steps=[s for s in change.steps if s.client == KITDEN])
+    return [
+        *_put_back_words(into, inventory, home, leaves=True),
+        *_gateway_remove_words(gone, inventory, into=into.steps[0].client),
+    ]
 
 
 def _second_secret(step, home: Path) -> str | None:
@@ -703,6 +722,8 @@ def after_words(
         return _keychain_words(change)
     if change.action == GATEWAY_PUT_BACK and home is not None:
         return _put_back_words(change, inventory, home)
+    if change.action == GATEWAY_MOVE_OUT and change.steps and home is not None:
+        return _move_out_words(change, inventory, home)
     if change.action == MCP_ADD and home is not None:
         return _add_server_words(change, home)
     if change.action == PROJECT_ALIGN:

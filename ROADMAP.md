@@ -54,6 +54,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Remove from the Kitden gateway:** a held server leaves with its switches; open sessions refuse
   its tools at once.
 - **Put back:** a held server's entry goes into a client again.
+- **Move a server out of the gateway:** its entry goes into one client and leaves the gateway, as
+  one change. A Keychain secret is written into that client's file as plain text; the review says
+  so. Undo brings both back.
 - **Disconnect a client from Kitden:** removes the client's `kitden` entry, so it no longer reaches
   the gateway. Undo puts it back. Adding that entry now reads "Connect … to Kitden".
 - **Add an MCP server to another client:** "+ Add" copies the entry; a `${VAR}` reference stays a

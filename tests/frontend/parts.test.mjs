@@ -231,6 +231,13 @@ test('the Changes page names a client connected to or disconnected from Kitden',
   for (const action of ['setup_server.register', 'client.disconnect']) assert.ok(PLACE_IN_TITLE.includes(action), action);
 });
 
+test('the Changes page names a server moved out of the gateway and the client it went to', () => {
+  const steps = [{ client: 'cursor', name: 'files' }, { client: 'kitden', name: 'files' }, { client: 'kitden', name: 'files' }];
+  assert.equal(changeTitle({ action: 'gateway.move_out', steps, target: { scope: 'all' } }), 'Moved out of the gateway · files · Cursor');
+  assert.equal(changeTitle({ action: 'gateway.move_out', steps }), 'Moved out of the gateway · files · Cursor');
+  assert.ok(PLACE_IN_TITLE.includes('gateway.move_out'));
+});
+
 test('a rule says where its state comes from', () => {
   assert.equal(originText({ origin: 'project' }, 'website'), 'This project · website');
   assert.equal(originText({ origin: 'parent', origin_from: 'atlas' }, 'web'), 'From atlas');

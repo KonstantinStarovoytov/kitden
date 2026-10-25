@@ -25,6 +25,7 @@ from kitden.changes.actions import (
     GATEWAY_CONNECT,
     GATEWAY_KEYCHAIN,
     GATEWAY_MOVE,
+    GATEWAY_MOVE_OUT,
     GATEWAY_PUT_BACK,
     GATEWAY_REMOVE,
     GATEWAY_RULE,
@@ -465,7 +466,7 @@ class State:
 
 # The actions that add something: a refusal into a file Kitden could not read says "add". The
 # page's ADDS (review.js) names their scope in the review; it leaves out PROJECT_ALIGN,
-# SETUP_SERVER and SETUP_SERVER_UPDATE, which say their place another way.
+# SETUP_SERVER, SETUP_SERVER_UPDATE and GATEWAY_MOVE_OUT, which say their place another way.
 ADD_ACTIONS = frozenset(
     {
         MCP_ADD,
@@ -478,6 +479,7 @@ ADD_ACTIONS = frozenset(
         SETUP_SERVER,
         SETUP_SERVER_UPDATE,
         GATEWAY_PUT_BACK,
+        GATEWAY_MOVE_OUT,
     }
 )
 
@@ -1129,6 +1131,16 @@ def create_app(
             clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
             server = str(params.get("server", ""))
             steps = put_back_steps(adapters, home, server, clients, keychain_run)
+        elif action == GATEWAY_MOVE_OUT:
+            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+            if len(clients) != 1:
+                raise ValueError("Pick one client to move it into.")
+            server = str(params.get("server", ""))
+            # The client's entry first: when its file is wrong, no other step is built.
+            steps = [
+                *put_back_steps(adapters, home, server, clients, keychain_run),
+                *remove_server_steps(home, server),
+            ]
         elif action == GATEWAY_KEYCHAIN:
             steps = keychain_steps(home, str(params.get("server", "")))
         elif action == MCP_ADD:
