@@ -9,6 +9,7 @@ import { ALL_PROJECTS, callout, CLIENT_NAMES, CLIENT_ORDER, folderName, GATEWAY_
 import { review } from "./review.js";
 import { current as currentModel, currentError, data, goTo, libraryChoice, projectPath, state } from "./store.js";
 import { toolsSection } from "./tools.js";
+import { inTray, keyFor, takeOut } from "./tray.js";
 
 export const KIND_WORDS = {
   mcp_server: "MCP server", plugin: "Plugin", skill: "Skill", hook: "Hook", marketplace: "Marketplace",
@@ -40,8 +41,7 @@ export async function openItem(row, { instant = false, tools: toolsNext = {} } =
   panelState.current = { type: "item", row };
   const body = el("div", "body");
   body.append(el("div", "skeleton card"));
-  // A review whose change is being written stays; this press does nothing.
-  if (!openPanel([itemHeader(row), body, el("footer")], { instant })) return;
+  openPanel([itemHeader(row), body, el("footer")], { instant });
   // The marketplace's entry says what the item is; read beside the definitions. Without it the
   // rest still shows.
   const entry = row.offer ? getJson(`/api/offer${query({ kind: row.kind, id: row.offer })}`).catch(() => null) : null;
@@ -163,23 +163,25 @@ export function moveBody(gateway, items) {
   return { action: "gateway.move", targets: items.map((item) => ({ item })), params: { gateway: gateway.id } };
 }
 
-// Move entries into a gateway. With one gateway that can take them the review opens at once;
-// with two the panel asks which, the Kitden gateway first. A move into the Kitden gateway may
-// ask the server for its tools first, so the button that started it stays busy until then.
+// Move entries into a gateway. With one gateway that can take them the move goes to the tray at
+// once; with two the panel asks which, the Kitden gateway first. A move into the Kitden gateway
+// may ask the server for its tools first, so the button that started it stays busy until then.
 export function moveInto(gateways, items, title) {
-  const preview = (gateway) => review(moveBody(gateway, items));
-  if (gateways.length === 1) return preview(gateways[0]);
+  if (gateways.length === 1) return review(moveBody(gateways[0], items));
   const body = el("div", "body");
   body.append(el("p", "muted", "More than one gateway can take it. The Kitden gateway runs on this Mac and turns tools on or off per project."));
   const into = (gateway) => (gateway.kind === "kitden" ? "the Kitden gateway" : gatewayName(gateway));
   // The primary button sits last, so the Kitden gateway is drawn last.
-  const choices = gateways.map((gateway, i) => button(`Move into ${into(gateway)}…`, () => preview(gateway), i === 0 ? "btn primary" : "btn"));
+  const choices = gateways.map((gateway, i) => previewButton(`Move into ${into(gateway)}…`, moveBody(gateway, items), { look: i === 0 ? "btn primary" : "btn" }));
   openInfo("Move into the gateway", title, body, choices.reverse());
   return null;
 }
 
+// With one gateway to go to, the button is the move's own, so it says when the move waits in the
+// tray; with two it asks which first.
 function moveButton({ items, gateways }, look, name) {
-  const node = button("Move into the gateway…", () => moveInto(gateways, items, name), look);
+  const label = "Move into the gateway…";
+  const node = gateways.length === 1 ? previewButton(label, moveBody(gateways[0], items), { look }) : button(label, () => moveInto(gateways, items, name), look);
   node.dataset.focus = "move";
   return node;
 }
@@ -205,10 +207,10 @@ export function plainSecrets(model, server) {
   return Boolean(kitden && (kitden.servers || []).some((s) => s.name === server && s.plain_secrets));
 }
 
-// heldActions as plain buttons, for both Details of a held server.
+// heldActions as preview buttons, for both Details of a held server.
 export function heldButtons(actions) {
   const draw = (a, look) => {
-    const node = button(a.label, () => review(a.body), look);
+    const node = previewButton(a.label, a.body, { look });
     node.dataset.focus = `held:${a.label}`;
     return [node];
   };
@@ -220,10 +222,12 @@ function writableClients() {
   return (data.clients || []).filter((c) => WRITABLE.includes(c.id) && c.status === "found").map((c) => c.id);
 }
 
-// The other actions wait behind one button, so the primary one stands alone.
+// The other actions wait behind one button, so the primary one stands alone. They show the tray as
+// it is when they come out: it may have changed while they waited.
 function moreButton(buttons) {
   const more = button("More", () => {
     more.replaceWith(...buttons);
+    buttons.forEach(showTrayLook);
     buttons[0].focus();
   }, "btn");
   more.dataset.focus = "more";
@@ -416,7 +420,7 @@ export function projectChoice(projects, picked, onPick, opener = null) {
   });
   list.append(...options);
   let active = Math.max(0, items.findIndex((item) => item.picked));
-  // The active option is the selected one: a choice here only opens its review.
+  // The active option is the selected one: a choice here only adds its change to the tray.
   const show = (at) => {
     active = at;
     options.forEach((node, i) => {
@@ -450,13 +454,19 @@ export function projectChoice(projects, picked, onPick, opener = null) {
   return list;
 }
 
-// One action of a card as a button: `run()` on press, else the review of `body`. The whole label
-// stays in the hover text when the column cuts it.
-function cardButton({ label, run, body, primary = false }) {
-  const node = button(null, () => (run ? run() : review(body)), primary ? "btn primary" : "btn");
+// One action of a card as a button: `run()` on press, else a preview button that adds `body`, with
+// its `note`, to the tray. The whole label stays in the hover text when the column cuts it.
+function cardButton({ label, run, body, note = null, primary = false }) {
+  const look = primary ? "btn primary" : "btn";
+  let node = null;
+  if (run) {
+    node = button(null, () => run(), look);
+    node.title = label;
+    node.append(el("span", "cut", label));
+  } else {
+    node = previewButton(label, body, { note, look });
+  }
   node.dataset.focus = `action:${label}`;
-  node.title = label;
-  node.append(el("span", "cut", label));
   return node;
 }
 
@@ -767,29 +777,70 @@ function layer(def, said) {
   return row;
 }
 
-// A switch that shows a real state. Pressing it runs `press`, which opens the review; it flips
-// only when the change is written and checked, never before. Without `press` it only shows.
-export function switchNode(on, press) {
+// The tray in Details --------------------------------------------------------------------------
+
+const IN_PREVIEW = "In preview";
+// How each control whose change can wait in the tray shows whether it does: `look(waiting)`.
+const trayLooks = new WeakMap();
+
+// `node` follows the tray: `data-tray` names its row, and `look(waiting)` draws it now and after
+// every change of the tray (syncTray).
+function followTray(node, key, look) {
+  node.dataset.tray = key;
+  trayLooks.set(node, look);
+  look(inTray(key));
+}
+
+function showTrayLook(node) {
+  const look = trayLooks.get(node);
+  if (look) look(inTray(node.dataset.tray));
+}
+
+// The tray changed (panel.js listens): every switch and button in Details shows whether its change
+// waits there. Only those controls change; nothing is drawn again.
+export function syncTray() {
+  for (const node of $$("[data-tray]", $("#drawer"))) showTrayLook(node);
+}
+
+// A switch that shows a real state; it flips only when the change is written and checked, never
+// before. A press runs `press`, which adds its change to the tray. While that change waits there
+// (`key`, its row) the switch rests half-way, pending, and a press takes it out again. Without
+// `press` it only shows.
+export function switchNode(on, press, key = null) {
   const node = el("button", "switch");
   node.type = "button";
   node.setAttribute("role", "switch");
   node.setAttribute("aria-checked", String(on));
   node.append(el("span", "thumb"));
   if (!press) return node;
-  node.title = on ? "On. Press to review turning it off." : "Off. Press to review turning it on.";
-  // While the preview is fetched the thumb rests half-way: pending, not flipped.
-  node.addEventListener("click", async () => {
-    if (node.classList.contains("pending")) return;
-    node.classList.add("pending");
-    node.setAttribute("aria-busy", "true");
-    try {
-      await press();
-    } catch (error) {
-      reportError(error);
-    } finally {
-      node.classList.remove("pending");
-      node.removeAttribute("aria-busy");
-    }
+  const idle = on ? "On. Press to preview turning it off." : "Off. Press to preview turning it on.";
+  node.title = idle;
+  if (key) {
+    followTray(node, key, (waiting) => {
+      node.classList.toggle("pending", waiting);
+      // A switch that is off here keeps the words that say why.
+      if (!node.disabled) node.title = waiting ? "In preview. Press to take it out." : idle;
+    });
+  }
+  node.addEventListener("click", () => {
+    Promise.resolve(key && inTray(key) ? takeOut(key) : press()).catch(reportError);
+  });
+  return node;
+}
+
+// A Details button that adds `body` to the tray (review, with `note`, and `back` for a tool list).
+// While that change waits there it says "In preview" and takes no press; it keeps focus, so a
+// keyboard user stays where they were. The hover text keeps what it does.
+export function previewButton(label, body, { note = null, look = "btn", back = null } = {}) {
+  const key = keyFor(body);
+  const words = el("span", "cut", label);
+  const node = button(null, () => (inTray(key) ? null : review(body, { note, back })), look);
+  node.title = label;
+  node.append(words);
+  followTray(node, key, (waiting) => {
+    words.textContent = waiting ? IN_PREVIEW : label;
+    if (waiting) node.setAttribute("aria-disabled", "true");
+    else node.removeAttribute("aria-disabled");
   });
   return node;
 }
@@ -798,7 +849,8 @@ export function switchNode(on, press) {
 // the switch is locked: it shows the state and says where to change it.
 function pluginSwitch(def, action) {
   const on = action ? action === "plugin.disable" : def.enabled === "on";
-  const node = switchNode(on, action ? () => review({ action, targets: [{ item: def.id }], params: {} }) : null);
+  const body = { action, targets: [{ item: def.id }], params: {} };
+  const node = switchNode(on, action ? () => review(body) : null, action ? keyFor(body) : null);
   node.dataset.focus = `switch:${def.id}`;
   if (!action) {
     node.disabled = true;
@@ -896,13 +948,10 @@ function showDetails(row, definitions, offer = null, toolsNext = {}, inherits = 
   const withCommands = definitions.filter((d) => d.kind === "plugin" || d.kind === "marketplace");
   const commands = withCommands.length ? [button("Commands…", () => showCommands(row, withCommands), "btn")] : [];
   for (const node of commands) node.dataset.focus = "commands";
+  // A narrow panel cuts the words with "…"; the whole label stays in the hover text.
   const buttonFor = ({ def, action }, look) => {
-    const label = offerLabel({ def, action }, offers);
-    const node = button(null, () => review({ action, targets: [{ item: def.id }], params: {} }), look);
+    const node = previewButton(offerLabel({ def, action }, offers), { action, targets: [{ item: def.id }], params: {} }, { look });
     node.dataset.focus = `offer:${def.id}:${action}`;
-    // A narrow panel cuts the words with "…"; the whole label stays in the hover text.
-    node.title = label;
-    node.append(el("span", "cut", label));
     return node;
   };
   // A plain action names what else it changes; the primary one stands alone.
@@ -915,8 +964,7 @@ function showDetails(row, definitions, offer = null, toolsNext = {}, inherits = 
   const footer = el("footer");
   const held = definitions.some((d) => d.via_gateway === "kitden") ? heldButtons(heldActions(row.name, writableClients(), plainSecrets(currentModel("gateway"), row.name))) : [];
   footer.append(...held, ...footerButtons(actions, draw, commands));
-  // A review opened from here comes back to this Details, drawn from what it read, or read
-  // again when the settings changed since the review's preview.
+  // A press here comes back to this Details, drawn from what it read, or read again after Apply.
   keepFrom(() => {
     panelState.current = { type: "item", row, definitions, offer, inherits };
     showDetails(row, definitions, offer, {}, inherits);
@@ -924,12 +972,12 @@ function showDetails(row, definitions, offer = null, toolsNext = {}, inherits = 
   swapContent([itemHeader(row), body, footer]);
 }
 
-// What a review opened from this panel comes back to (backToDetails): `draw()` draws the panel
-// again from what it read, `read()` reads it again (review.js checkStale sets `stale` when the
-// settings changed since the preview), and `focus` is the control pressed last, by its focus
-// key, heard by one capture click listener on each of `nodes` (the body and the footer).
+// What a press in this panel comes back to (backToDetails): `draw()` draws the panel again from
+// what it read, `read()` reads it again (when `stale`: after Apply all, review.js detailsAgain),
+// `focus` is the control pressed last, by its focus key, heard by one capture click listener on
+// each of `nodes` (the body and the footer), and `shown()` says whether the panel still shows them.
 export function keepFrom(draw, nodes, read = draw) {
-  const from = { draw, read, focus: null };
+  const from = { draw, read, focus: null, shown: () => nodes.some((node) => node && node.isConnected) };
   panelState.from = from;
   const remember = (event) => {
     const node = event.target && event.target.closest ? event.target.closest("[data-focus]") : null;
@@ -947,9 +995,9 @@ export function focusAfterBack(key, keys) {
   return keys.includes("more") ? "more" : null;
 }
 
-// Back from a review to the panel it was opened from (Details, or the Kitden gateway's own panel
-// of a held server), drawn again from what it read then (no new read), or read again when the
-// settings changed since the review's preview. `error`: why the preview was refused, first in
+// Back to the panel a press in it left (Details, or the Kitden gateway's own panel of a held
+// server): from Add missing's list, or drawn again after Apply all. Drawn again from what it read
+// then (no new read), or read again when `stale`. `error`: why the list was refused, first in
 // the body. Focus goes back to the control pressed, unless the panel closed while it read.
 export async function backToDetails({ error = null } = {}) {
   const from = panelState.from;

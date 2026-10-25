@@ -130,8 +130,8 @@ def test_the_check_before_a_release_turns_strict_mode_on_in_the_servers_details(
 
 def test_the_check_before_a_release_has_the_changed_settings_step():
     development = " ".join((ROOT / "docs/development.md").read_text().split())
-    assert "23. Open a review (Remove for a Claude Code plugin)" in development
-    assert 'The review says "Settings changed since this preview." and offers "Preview again"' in (
+    assert "23. Add a Remove for a Claude Code plugin to the preview" in development
+    assert 'The bar says "Settings changed since this preview." and offers "Preview again"' in (
         development
     )
     assert "Not run yet for step 23:" in development

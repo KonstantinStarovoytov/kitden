@@ -1,10 +1,11 @@
 // Tools of a server in the Kitden gateway: a switch each, for the project picked at the top.
 import { getJson, postJson, query } from "./api.js";
-import { switchNode } from "./details.js";
+import { previewButton, switchNode } from "./details.js";
 import { button, el, plural, withFocusKey } from "./dom.js";
 import { ALL_PROJECTS, callout, flag, folderName, skeleton } from "./parts.js";
 import { review } from "./review.js";
 import { data, state } from "./store.js";
+import { keyFor } from "./tray.js";
 
 // The project's folder name, as the picker at the top shows it.
 export function projectLabel(id) {
@@ -79,10 +80,11 @@ export async function refreshTools() {
   return null;
 }
 
-// A held server's tools, a switch each, for the project picked at the top. A switch opens the
-// review; when the change is verified, `again(next)` draws this Details again with the switch
-// flipped. `next` says which control gets focus (`focus`), why a review stopped (`error`) and
-// which switch has just flipped (`flip`). An error stays as a callout until the next action.
+// A held server's tools, a switch each, for the project picked at the top. A switch adds its change
+// to the tray and rests pending there; after Apply all, `again(next)` draws this Details again
+// with the switch in its new state. `next` says which control gets focus (`focus`), why a change
+// was refused (`error`) and which switch has just flipped (`flip`). An error stays as a callout
+// until the next action.
 export function toolsSection(server, again, next = {}) {
   const section = el("section", "tools");
   const where = state.project ? projectLabel(state.project) : null;
@@ -96,20 +98,20 @@ export function toolsSection(server, again, next = {}) {
   if (!state.project) section.append(el("p", "muted", "These switches also apply in folders Kitden does not know."));
   section.append(list);
 
-  const change = (row, value, pressed) => {
-    const back = ({ error = null, verified = false } = {}) => again({ focus: verified ? row.key : pressed, error, flip: verified ? row.key : null });
-    const params = { server, tool: row.tool, state: value, project: state.project || null };
-    return review({ action: "gateway.rule", targets: [], params }, { back });
-  };
+  // After a press its change waits in the tray (`queued`), and the control's look follows the tray
+  // by itself (details.js syncTray). A refusal draws this Details again with the reason above the
+  // list, focus on the control pressed.
+  const backTo = (pressed) => ({ queued = false, error = null } = {}) => (queued || !section.isConnected ? null : again({ focus: pressed, error }));
+  // A tool's rule (`value` null follows the project around it, or all projects); one key for every value.
+  const rule = (row, value) => ({ action: "gateway.rule", targets: [], params: { server, tool: row.tool, state: value, project: state.project || null } });
 
   // Strict mode is set for all projects: with a project picked the switch only shows it.
   const strictRow = (answer, flip) => {
     const row = el("div", "layer tool whole");
     const middle = el("div");
     middle.append(el("div", "name", "Strict"), el("div", "why", "Only tools that are on are offered; a new tool waits."));
-    const back = ({ error = null, verified = false } = {}) => again({ focus: "strict", error, flip: verified ? "strict" : null });
-    const params = { server, state: answer.strict ? "off" : "on" };
-    const toggle = switchNode(Boolean(answer.strict), () => review({ action: "gateway.strict", targets: [], params }, { back }));
+    const body = { action: "gateway.strict", targets: [], params: { server, state: answer.strict ? "off" : "on" } };
+    const toggle = switchNode(Boolean(answer.strict), () => review(body, { back: backTo("strict") }), keyFor(body));
     toggle.setAttribute("aria-label", "Strict: only tools that are on");
     toggle.dataset.focus = "strict";
     if (flip === "strict") toggle.classList.add("flipped");
@@ -131,10 +133,8 @@ export function toolsSection(server, again, next = {}) {
     nodes.push(strictRow(answer, flip));
     const writing = writingToolsOn(answer.tools);
     if (writing.length) {
-      // Verified, the button is gone (no writing tool is on), so focus goes to Refresh tools.
-      const back = ({ error = null, verified = false } = {}) => again({ focus: verified ? "tools:refresh" : "writing", error });
-      const params = { server, tools: writing, state: "off", project: state.project || null };
-      const all = button("Turn off every writing tool…", () => review({ action: "gateway.rules", targets: [], params }, { back }), "btn small");
+      const body = { action: "gateway.rules", targets: [], params: { server, tools: writing, state: "off", project: state.project || null } };
+      const all = previewButton("Turn off every writing tool…", body, { look: "btn small", back: backTo("writing") });
       all.dataset.focus = "writing";
       const line = el("div");
       line.append(all);
@@ -160,15 +160,15 @@ export function toolsSection(server, again, next = {}) {
       }
       if (row.differs) {
         const line = el("div", "differs");
-        const follow = button(`Use ${row.follows}`, () => change(row, null, `follow:${row.key}`), "btn small");
+        const follow = previewButton(`Use ${row.follows}`, rule(row, null), { look: "btn small", back: backTo(`follow:${row.key}`) });
         follow.dataset.focus = `follow:${row.key}`;
         line.append(flag({ text: `Differs from ${row.follows}`, level: "info" }), follow);
         middle.append(line);
       }
-      const toggle = switchNode(row.on, () => change(row, row.on ? "off" : "on", row.key));
+      const toggle = switchNode(row.on, () => review(rule(row, row.on ? "off" : "on"), { back: backTo(row.key) }), keyFor(rule(row, null)));
       toggle.setAttribute("aria-label", row.label);
       toggle.dataset.focus = row.key;
-      // Drawn in its new state; the thumb slides there once (the resting style is the truth).
+      // Drawn in its new state after Apply all; the thumb slides there once (the resting style is the truth).
       if (flip === row.key) toggle.classList.add("flipped");
       node.append(middle, toggle);
       stack.append(node);

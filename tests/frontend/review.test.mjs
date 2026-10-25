@@ -1,12 +1,141 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-// review.js needs only this from a browser to load; the tests call its pure parts.
-globalThis.matchMedia = () => ({ matches: false });
+// review.js draws in a side panel and talks to the tray: a small stand-in page holds what it draws.
+// Any media query is a narrow window with reduced motion, so nothing waits for an animation.
+globalThis.matchMedia = () => ({ matches: true, addEventListener() {} });
 // Node before 21 has no navigator; review.js must load there too.
 delete globalThis.navigator;
-const { PLACE_IN_TITLE, changeWords, checkStale, reviewLede, staleCheckWanted, stoppedWords, targetWords } = await import('../../src/kitden/web/static/js/review.js');
-const { panelState } = await import('../../src/kitden/web/static/js/panel.js');
+
+// A stand-in node: its children, classes, attributes and listeners; a press runs its listeners.
+function fakeNode(tag) {
+  const classes = new Set();
+  const node = {
+    nodeType: 1, tag, parent: null, childNodes: [], attributes: {}, dataset: {}, listeners: {}, style: { setProperty() {} }, disabled: false,
+    [Symbol.for('nodejs.util.inspect.custom')]: () => `<${tag}>`,
+    get className() { return [...classes].join(' '); },
+    set className(value) { classes.clear(); String(value).split(/\s+/).filter(Boolean).forEach((name) => classes.add(name)); },
+    classList: {
+      add: (...names) => names.forEach((name) => classes.add(name)),
+      remove: (...names) => names.forEach((name) => classes.delete(name)),
+      toggle: (name, on = !classes.has(name)) => { if (on) classes.add(name); else classes.delete(name); return on; },
+      contains: (name) => classes.has(name),
+    },
+    get textContent() { return node.childNodes.map((child) => (typeof child === 'string' ? child : child.textContent)).join(''); },
+    set textContent(value) { node.childNodes = String(value) === '' ? [] : [String(value)]; },
+    get children() { return node.childNodes.filter((child) => typeof child !== 'string'); },
+    get isConnected() { let up = node; while (up.parent) up = up.parent; return up.root === true; },
+    append(...items) { for (const child of items) { if (typeof child !== 'string') child.parent = node; node.childNodes.push(child); } },
+    prepend(...items) { for (const child of items) { if (typeof child !== 'string') child.parent = node; } node.childNodes.unshift(...items); },
+    replaceChildren(...items) { node.childNodes = []; node.append(...items); },
+    replaceWith(...items) { const up = node.parent; if (!up) return; const at = up.childNodes.indexOf(node); for (const child of items) child.parent = up; up.childNodes.splice(at, 1, ...items); },
+    contains(other) { return other === node || node.children.some((child) => child.contains(other)); },
+    setAttribute(name, value) { node.attributes[name] = String(value); },
+    getAttribute: (name) => (name in node.attributes ? node.attributes[name] : null),
+    removeAttribute(name) { delete node.attributes[name]; },
+    addEventListener(type, listener) { (node.listeners[type] ||= []).push(listener); },
+    // A press: every listener runs; the promise is their work.
+    click() { return Promise.all((node.listeners.click || []).map((listener) => listener({ preventDefault() {} }))); },
+    focus() { globalThis.document.activeElement = node; },
+    querySelector: (selector) => {
+      if (selector === ':scope > summary') return node.children.find((child) => child.tag === 'summary') || null;
+      return selector.startsWith('.') ? all(node).find((child) => child !== node && child.classList.contains(selector.slice(1))) || null : null;
+    },
+    querySelectorAll: () => [],
+  };
+  return node;
+}
+const all = (node) => [node, ...node.children.flatMap(all)];
+const tagged = (root, tag) => all(root).filter((n) => n.tag === tag);
+const button = (root, label) => tagged(root, 'button').find((node) => node.textContent === label);
+
+const pages = {};
+for (const id of ['#dock', '#drawer', '#scrim', '#main', '.shell']) {
+  pages[id] = fakeNode('div');
+  pages[id].root = true;
+}
+globalThis.document = {
+  activeElement: null,
+  documentElement: { classList: { add() {}, remove() {} }, style: { setProperty() {}, removeProperty() {} } },
+  createElement: fakeNode,
+  createElementNS: (namespace, tag) => fakeNode(tag),
+  querySelector: (selector) => pages[selector] ?? null,
+  querySelectorAll: () => [],
+  addEventListener() {},
+  removeEventListener() {},
+};
+
+// A stand-in server: each address answers from its own queue (a reply, or a function of the
+// request body that gives one); an address with nothing queued answers 200 with an empty body.
+const calls = [];
+const replies = new Map();
+globalThis.fetch = (url, init = {}) => {
+  calls.push({ url, method: init.method || 'GET', body: init.body ? JSON.parse(init.body) : null });
+  const waiting = replies.get(url) || [];
+  const next = waiting.length ? waiting.shift() : { status: 200, json: {} };
+  const reply = typeof next === 'function' ? next(calls.at(-1).body) : next;
+  return Promise.resolve(reply).then((made) => ({ ok: made.status < 400, status: made.status, json: async () => made.json }));
+};
+const queue = (url, ...items) => replies.set(url, [...(replies.get(url) || []), ...items]);
+const posted = () => calls.filter((call) => call.method === 'POST').map((call) => call.url);
+
+const { PLACE_IN_TITLE, changeWords, review, reviewLede, showRowReview, targetWords } = await import('../../src/kitden/web/static/js/review.js');
+const { isPanelOpen, openPanel, panelState } = await import('../../src/kitden/web/static/js/panel.js');
+const { addToTray, cancelTray, tray } = await import('../../src/kitden/web/static/js/tray.js');
+const { state } = await import('../../src/kitden/web/static/js/store.js');
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+const PREVIEW = '/api/batch/preview';
+const LIST = '/api/changes/preview';
+
+// Add missing in project p1: two servers Claude Code has and Codex lacks, `chosen` ticked.
+const ALIGN = { action: 'project.align', targets: [], params: { project: 'p1', chosen: null } };
+const candidate = (key, chosen) => ({ key, name: key, kind: 'mcp_server', from: 'claude_code', to: 'codex', place: 'all', note: null, chosen: chosen.includes(key) });
+const alignOf = (chosen) => ({ candidates: [candidate('github', chosen), candidate('neon', chosen)], not_same: [], left_out: [] });
+const stepsOf = (chosen) => chosen.map((name) => ({ client: 'codex', name, path: '/Users/me/.codex/config.toml', diff: '+x' }));
+// The list as /api/changes/preview gives it: with nothing ticked there is no change yet, so no id.
+const listing = (chosen) => ({
+  status: 200,
+  json: { ...(chosen.length ? { id: `a${chosen.length}`, state: 'previewed' } : {}), action: 'project.align', steps: stepsOf(chosen), after: [], target: null, align: alignOf(chosen) },
+});
+// The server's answer to a batch: one step per request, each row naming its step; an Add missing
+// row also carries its list.
+const SCOPE = { scope: 'all', project: null, others_unchanged: false };
+const previewed = (id) => (sent) => ({
+  status: 200,
+  json: {
+    id, action: 'batch', state: 'previewed', error: null, target: SCOPE, undo_note: null,
+    steps: sent.requests.map((request) => ({ client: 'codex', name: request.params.item || 'missing', path: '/Users/me/.codex/config.toml', diff: '+x' })),
+    rows: sent.requests.map((request, index) => ({
+      id: request.id, kind: request.kind, title: request.title, detail: request.detail, project: null, steps: [index], target: SCOPE, after: [], undo_note: null,
+      ...(request.kind === 'project.align' ? { align: alignOf(request.params.chosen) } : {}),
+    })),
+  },
+});
+const refusal = (detail) => ({ status: 422, json: { detail, row: null } });
+const ADD = { action: 'mcp.add', targets: [{ client: 'codex' }], params: { item: 'github' } };
+
+// A changed tick: the box of `key` in Details is set, and its listeners run.
+async function tick(key, checked) {
+  const box = tagged(pages['#drawer'], 'input').find((node) => node.dataset.key === key);
+  box.checked = checked;
+  await Promise.all(box.listeners.change.map((listener) => listener({})));
+  await settle();
+}
+
+// An empty tray, a closed panel and a quiet server in every test.
+async function fresh() {
+  await cancelTray();
+  await settle();
+  pages['#drawer'].replaceChildren();
+  pages['#drawer'].classList.remove('open');
+  panelState.current = null;
+  panelState.from = null;
+  calls.length = 0;
+  replies.clear();
+  state.project = '';
+  globalThis.document.activeElement = null;
+}
 
 const target = (scope, project = null, others = false) => ({ scope, project, others_unchanged: others });
 const remove = { action: 'mcp.remove_direct', steps: [{ client: 'codex', name: 'neon' }] };
@@ -69,122 +198,123 @@ test('the lede promises only the Undo it can keep', () => {
   assert.equal(reviewLede({ ...remove, target: target('project', '/a/web', false) }, 'p1'), 'Nothing is written until you press Apply. A backup is kept.');
 });
 
-test('only an open, previewed review is checked, never while a change is written', () => {
-  const review = { type: 'review', change: { id: 'c1', state: 'previewed' } };
-  assert.equal(staleCheckWanted(review, { change: false }), true);
-  assert.equal(staleCheckWanted(review, { change: true }), false);
-  assert.equal(staleCheckWanted({ type: 'review', change: { id: 'c1', state: 'verified' } }, { change: false }), false);
-  assert.equal(staleCheckWanted({ type: 'review', change: { state: 'previewed' } }, { change: false }), false); // Add missing with nothing chosen
-  assert.equal(staleCheckWanted({ type: 'item' }, { change: false }), false);
-  assert.equal(staleCheckWanted(null, { change: false }), false);
+test('review adds a row and opens nothing', async () => {
+  await fresh();
+  // Details are open: the press adds its row and they stay as they are.
+  panelState.current = { type: 'item', row: {} };
+  const details = fakeNode('div');
+  openPanel([details]);
+  const shown = panelState.current;
+  queue(PREVIEW, previewed('c1'));
+  await review(ADD, { note: 'Adds for all projects.' });
+  assert.deepEqual(posted(), [PREVIEW]); // never a review of its own
+  assert.deepEqual(calls[0].body.requests.map((r) => [r.kind, r.targets, r.params]), [['mcp.add', [{ client: 'codex' }], { item: 'github' }]]);
+  assert.deepEqual(tray.rows.map((r) => [r.body, r.note]), [[ADD, 'Adds for all projects.']]);
+  assert.equal(panelState.current, shown);
+  assert.deepEqual(pages['#drawer'].children, [details]);
+  // Closed, nothing opens either.
+  pages['#drawer'].classList.remove('open');
+  queue(PREVIEW, previewed('c2'));
+  await review({ ...ADD, params: { item: 'neon' } });
+  assert.equal(isPanelOpen(), false);
+  assert.equal(tray.rows.length, 2);
 });
 
-// A review drawn in a stub page: its body and its Apply button. `drawn` is what the page shows
-// (a replaced Apply is gone from it); `asked` lists each request; `answers(url, options)` answers.
-function stubPage(answers) {
-  const drawn = {};
-  const node = (tag) => ({
-    tag, className: '', textContent: '', children: [], attributes: {}, dataset: {}, listeners: {},
-    append(...nodes) { this.children.push(...nodes); },
-    prepend(...nodes) { this.children.unshift(...nodes); },
-    setAttribute(name, value) { this.attributes[name] = value; },
-    addEventListener(type, listener) { this.listeners[type] = listener; },
-    replaceWith(other) {
-      this.replacedBy = other;
-      for (const key of Object.keys(drawn)) if (drawn[key] === this) drawn[key] = null;
-    },
-    focus() { globalThis.document.activeElement = this; },
-  });
-  const apply = node('button');
-  const body = node('div');
-  Object.assign(drawn, { '#drawer .apply': apply, '#drawer .body': body });
-  globalThis.document = { createElement: node, querySelector: (selector) => drawn[selector] || null, activeElement: apply };
-  const asked = [];
-  const realFetch = globalThis.fetch;
-  globalThis.fetch = async (url, options = {}) => {
-    asked.push({ url, method: options.method || 'GET', body: options.body });
-    const { status = 200, json } = await answers(url, options);
-    return { ok: status < 400, status, json: async () => json };
-  };
-  const done = () => {
-    panelState.current = null;
-    delete globalThis.document;
-    globalThis.fetch = realFetch;
-  };
-  return { node, apply, body, drawn, asked, done };
-}
-
-const previewed = (fields = {}) => ({ type: 'review', change: { id: 'c1', state: 'previewed' }, previewBody: { action: 'mcp.remove_direct', targets: [{ item: 'i1' }], params: {} }, note: null, back: null, ...fields });
-
-test('settings changed since the preview: the callout comes first and Apply gives way to Preview again', async () => {
-  let stale = false;
-  let meanwhile = () => {};
-  const page = stubPage(() => { meanwhile(); return { json: { id: 'c1', state: 'previewed', stale } }; });
-  const { node, apply, body, drawn, asked } = page;
-  try {
-    const from = { draw: () => {} };
-    const review = previewed({ from });
-    // Not changed: nothing moves.
-    panelState.current = review;
-    await checkStale();
-    assert.deepEqual([asked.map((a) => a.url), body.children.length, apply.replacedBy, from.stale], [['/api/changes/c1'], 0, undefined, undefined]);
-    // Changed: the warning first, read out at once; focus follows from Apply to Preview again.
-    stale = true;
-    await checkStale();
-    const [warning] = body.children;
-    assert.equal(warning.attributes.role, 'alert');
-    assert.equal(warning.children[1].textContent, 'Settings changed since this preview.');
-    assert.equal(apply.replacedBy.textContent, 'Preview again');
-    assert.equal(apply.replacedBy.className, 'btn primary');
-    assert.equal(globalThis.document.activeElement, apply.replacedBy);
-    // The Details it came from is out of date too: Cancel, also after Preview again, reads it again.
-    assert.equal(from.stale, true);
-    // A later rescan: Apply has given way already, so the server is not asked again.
-    await checkStale();
-    assert.equal(asked.length, 2);
-    // Another review opened while the server answered: the old answer changes nothing.
-    const later = node('button');
-    drawn['#drawer .apply'] = later;
-    body.children = [];
-    meanwhile = () => { panelState.current = { ...review }; };
-    await checkStale();
-    assert.deepEqual([body.children.length, later.replacedBy], [0, undefined]);
-  } finally {
-    page.done();
-  }
+test('Add missing opens its chooser and adds the row', async () => {
+  await fresh();
+  queue(LIST, listing([]));
+  await review(ALIGN, { note: 'For this project.' });
+  // The list shows in Details, with no Apply of its own; nothing is in the tray yet.
+  const drawer = pages['#drawer'];
+  assert.equal(isPanelOpen(), true);
+  assert.equal(panelState.current.type, 'align');
+  assert.equal(all(drawer).some((node) => node.classList.contains('apply')), false);
+  assert.equal(/Enter to apply/.test(drawer.textContent), false);
+  assert.match(drawer.textContent, /For this project\./);
+  assert.equal(tray.rows.length, 0);
+  // Nothing ticked: "Add to preview" waits for a box.
+  assert.match(drawer.textContent, /Choose at least one item\./);
+  assert.equal(button(drawer, 'Add to preview').disabled, true);
+  assert.deepEqual(tagged(drawer, 'footer')[0].children.map((node) => node.textContent), ['Cancel', 'Add to preview']);
+  // A tick asks for the list again with that choice; the server forgets the list's own preview at
+  // once, since only the tray is ever applied.
+  queue(LIST, listing(['neon']));
+  await tick('neon', true);
+  assert.deepEqual(calls.filter((call) => call.url === LIST).map((call) => call.body.params.chosen), [null, ['neon']]);
+  assert.deepEqual(posted().filter((url) => url.endsWith('/cancel')), ['/api/changes/a1/cancel']);
+  const add = button(pages['#drawer'], 'Add to preview');
+  assert.equal(add.disabled, false);
+  // "Add to preview" closes the list and adds the row with the ticks.
+  queue(PREVIEW, previewed('c1'));
+  await add.click();
+  await settle();
+  assert.equal(isPanelOpen(), false);
+  assert.deepEqual(tray.rows.map((r) => [r.key, r.body.params.chosen, r.note]), [['align:p1', ['neon'], 'For this project.']]);
+  assert.equal(posted().filter((url) => url === LIST).length, 2);
 });
 
-test('Preview again drops this preview once and asks for the same change again', async () => {
-  const page = stubPage((url) => {
-    if (url === '/api/changes/c1') return { json: { id: 'c1', state: 'previewed', stale: true } };
-    if (url === '/api/changes/c1/cancel') return { json: { id: 'c1', state: 'cancelled' } };
-    return { status: 422, json: { detail: 'Refused.' } }; // the new preview: a refusal goes back
-  });
-  try {
-    let backed;
-    const back = new Promise((resolve) => { backed = resolve; });
-    const review = previewed({ note: 'For all projects.', back: (answer) => backed(answer) });
-    panelState.current = review;
-    await checkStale();
-    page.apply.replacedBy.listeners.click({});
-    assert.deepEqual(await back, { error: 'Refused.' });
-    const posts = page.asked.filter((a) => a.method === 'POST');
-    assert.deepEqual(posts.map((a) => a.url), ['/api/changes/c1/cancel', '/api/changes/preview']);
-    assert.deepEqual(JSON.parse(posts[1].body), { ...review.previewBody, picked: null });
-    assert.equal(review.change.state, 'cancelled');
-  } finally {
-    page.done();
-  }
+test('a refused add calls back with the reason', async () => {
+  await fresh();
+  const heard = [];
+  const back = async (answer) => { heard.push(answer); };
+  queue(PREVIEW, refusal('Choose a known item.'));
+  await review(ADD, { back });
+  assert.deepEqual(heard, [{ error: 'Choose a known item.' }]);
+  assert.equal(tray.rows.length, 0);
+  // Joined: the way back hears that it waits in the tray.
+  queue(PREVIEW, previewed('c1'));
+  await review(ADD, { back });
+  assert.deepEqual(heard.at(-1), { queued: true });
+  // With no way back a refusal opens nothing: the tray's bar says why.
+  queue(PREVIEW, refusal('No.'));
+  await review({ ...ADD, params: { item: 'neon' } });
+  assert.equal(isPanelOpen(), false);
+  assert.deepEqual(tray.refused, { reason: 'No.' });
+  assert.equal(tray.rows.length, 1);
 });
 
-// What the engine says when a change stops: paths, commands and Keychain names.
-const BACK_ERROR = '`claude mcp add` failed in /Users/me/.claude.json. The original settings were restored.';
-const LOST_ERROR = '`claude mcp add` failed. github/TOKEN in your Keychain keeps the new value.';
+test('showRowReview has no Apply and takes the row out', async () => {
+  await fresh();
+  queue(PREVIEW, previewed('c1'));
+  await addToTray(ADD, { note: 'Adds for all projects.' });
+  showRowReview(tray.rows[0]);
+  const drawer = pages['#drawer'];
+  assert.equal(panelState.current.type, 'row-review');
+  assert.equal(all(drawer).some((node) => node.classList.contains('apply')), false);
+  assert.equal(/Enter to apply/.test(drawer.textContent), false);
+  assert.match(drawer.textContent, /Adds for all projects\./);
+  assert.deepEqual(tagged(drawer, 'footer')[0].children.map((node) => node.textContent), ['Take it out', 'Close']);
+  await button(drawer, 'Take it out').click();
+  await settle();
+  assert.equal(isPanelOpen(), false);
+  assert.equal(tray.rows.length, 0);
+});
 
-test('a change that did not check out says nothing changed only when the engine put everything back', () => {
-  // Everything was put back: "Nothing was changed.", after the engine's own words, paths shortened.
-  assert.equal(stoppedWords({ state: 'restored', error: BACK_ERROR }, null), 'The change did not check out. (`claude mcp add` failed in ~/.claude.json. The original settings were restored.) Nothing was changed.');
-  // Something could not be put back: Details names what, and never claims nothing changed.
-  assert.equal(stoppedWords({ state: 'restored', error: LOST_ERROR }, null), 'The change did not check out. (`claude mcp add` failed. github/TOKEN in your Keychain keeps the new value.)');
-  assert.equal(stoppedWords(null, null), 'Could not confirm the result. Check Changes before trying again.');
+test("an Add missing row's review shows its ticks, and a changed tick adds the row again", async () => {
+  await fresh();
+  queue(PREVIEW, previewed('c1'));
+  await addToTray({ ...ALIGN, params: { project: 'p1', chosen: ['neon'] } });
+  showRowReview(tray.rows[0]);
+  const boxes = () => tagged(pages['#drawer'], 'input').map((node) => [node.dataset.key, node.checked]);
+  assert.deepEqual(boxes(), [['github', false], ['neon', true]]);
+  // The same key: the new row takes the old one's place, and the review shows it.
+  queue(PREVIEW, previewed('c2'));
+  await tick('github', true);
+  assert.deepEqual(tray.rows.map((r) => [r.key, r.body.params.chosen]), [['align:p1', ['github', 'neon']]]);
+  assert.equal(panelState.current.row, tray.rows[0]);
+  assert.deepEqual(boxes(), [['github', true], ['neon', true]]);
+  // A refused choice leaves the row as it was, and the review shows it so.
+  queue(PREVIEW, refusal('No.'));
+  await tick('neon', false);
+  assert.deepEqual(tray.rows.map((r) => r.body.params.chosen), [['github', 'neon']]);
+  assert.deepEqual(boxes(), [['github', true], ['neon', true]]);
+  // No tick at all: nothing to add, the row stays, and the review says to choose one.
+  queue(PREVIEW, previewed('c3'));
+  await tick('github', false);
+  assert.deepEqual(tray.rows.map((r) => r.body.params.chosen), [['neon']]);
+  const asked = calls.length;
+  await tick('neon', false);
+  assert.equal(calls.length, asked);
+  assert.match(pages['#drawer'].textContent, /Choose at least one item\./);
+  assert.equal(tray.rows.length, 1);
 });

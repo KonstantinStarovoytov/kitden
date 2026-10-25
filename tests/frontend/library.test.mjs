@@ -497,7 +497,7 @@ test("a project's own skill adds into the project, with no choice", () => {
   state.project = '';
   data.projects = null;
 });
-test("a project's own skill opens its review at once, into the project", () => {
+test("a project's own skill adds its change at once, into the project", () => {
   const asked = globalThis.fetch;
   const sent = [];
   globalThis.fetch = (url, options) => { sent.push([url, JSON.parse(options.body)]); return new Promise(() => {}); };
@@ -506,9 +506,9 @@ test("a project's own skill opens its review at once, into the project", () => {
     data.projects = [{ id: 'p1', path: '/w/atlas' }];
     const own = add({ action: 'skill.install', skill: 'project/api-style', project_only: true });
     assert.equal(startAdd(own, 'claude_code', { kind: 'skill', name: 'api-style' }) instanceof Promise, true);
-    assert.deepEqual(sent, [['/api/changes/preview', {
-      action: 'skill.install', targets: [{ client: 'claude_code' }], params: { skill: 'project/api-style', project: 'p1' }, picked: 'p1',
-    }]]);
+    assert.deepEqual(sent.map(([url, body]) => [url, body.requests.map((r) => [r.kind, r.targets, r.params, r.picked])]), [['/api/batch/preview', [
+      ['skill.install', [{ client: 'claude_code' }], { skill: 'project/api-style', project: 'p1' }, 'p1'],
+    ]]]);
   } finally {
     globalThis.fetch = asked;
     state.project = '';

@@ -21,7 +21,9 @@ function fakeNode(tag) {
     append(...nodes) { node.childNodes.push(...nodes); },
     prepend(...nodes) { node.childNodes.unshift(...nodes); },
     replaceChildren(...nodes) { node.childNodes = [...nodes]; },
+    get children() { return node.childNodes.filter((child) => typeof child === 'object'); },
     setAttribute(name, value) { node.attributes[name] = String(value); },
+    getAttribute: (name) => (name in node.attributes ? node.attributes[name] : null),
     removeAttribute(name) { delete node.attributes[name]; },
     addEventListener(type, listener) { (node.listeners[type] ||= []).push(listener); },
     querySelector: (selector) => (selector === ':scope > summary' ? node.childNodes.find((child) => child.tag === 'summary') || null : null),
@@ -33,8 +35,9 @@ globalThis.document = { createElement: fakeNode, createElementNS: (namespace, ta
 const asked = [];
 globalThis.fetch = async (url) => { asked.push(url); return { ok: true, status: 200, json: async () => ({}) }; };
 
-const { clientCard, gatewayCard, heldCard, outsideCard, reported, toolCard, toolState } = await import('../../src/kitden/web/static/js/gateway-details.js');
-const { projectChoice } = await import('../../src/kitden/web/static/js/details.js');
+const { SETUP_NOTE, clientCard, gatewayCard, heldCard, outsideCard, reported, toolCard, toolState } = await import('../../src/kitden/web/static/js/gateway-details.js');
+const { detailsCard, projectChoice } = await import('../../src/kitden/web/static/js/details.js');
+const { cancelTray, tray } = await import('../../src/kitden/web/static/js/tray.js');
 const { GATEWAY_NOTE } = await import('../../src/kitden/web/static/js/parts.js');
 
 // The words of a node: its own text, then its children's.
@@ -445,4 +448,37 @@ test('the project choice starts on the picked project', () => {
   // A picked project the choice does not offer is not added to it: it starts on the first.
   const offered = projectChoice(CHOICE.filter((p) => p.id !== 'm'), 'm', () => {});
   assert.deepEqual([offered.childNodes.map(textOf), chosen(offered)], [['atlas1 own rule', 'web'], ['atlas1 own rule']]);
+});
+
+test("a card's change waits in the tray with its note, and its button says In preview", async () => {
+  const sent = [];
+  const before = globalThis.fetch;
+  globalThis.fetch = async (url, options = {}) => {
+    sent.push(url);
+    if (url !== '/api/batch/preview') return Response.json({});
+    const { requests } = JSON.parse(options.body);
+    return Response.json({
+      id: 'c1', action: 'batch', state: 'previewed', error: null, undo_note: null, steps: [{ client: 'cursor', name: 'kitden' }],
+      rows: requests.map((r, at) => ({ id: r.id, kind: r.kind, title: r.title, detail: '', project: null, steps: [at], after: [] })),
+    });
+  };
+  try {
+    const card = clientCard('cursor', { setup: SETUP, clients: CLIENTS, view: VIEW });
+    const register = { action: 'setup_server.register', targets: [{ client: 'cursor' }], params: {} };
+    assert.deepEqual([card.actions[0].body, card.actions[0].note], [register, SETUP_NOTE]);
+    const press = (node) => Promise.all(node.listeners.click.map((listener) => listener({})));
+    const [, , footer] = detailsCard(card);
+    await press(footer.childNodes[0]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(tray.rows.map((r) => [r.body, r.note]), [[register, SETUP_NOTE]]);
+    // Drawn again while it waits, the button says so and takes no press.
+    const [, , again] = detailsCard(card);
+    assert.deepEqual([textOf(again.childNodes[0]), again.childNodes[0].attributes['aria-disabled'], again.childNodes[0].title], ['In preview', 'true', 'Set up in Cursor…']);
+    await press(again.childNodes[0]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(sent, ['/api/batch/preview']);
+  } finally {
+    await cancelTray();
+    globalThis.fetch = before;
+  }
 });

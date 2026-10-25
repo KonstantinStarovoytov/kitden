@@ -155,14 +155,14 @@ project, with a server that has a token:
 Not run yet for steps 17 to 22: Part 5 was built and tested with a fake `security` only, and
 step 22 with a fake `claude`.
 
-Before a release that touches Details or reviews, also check this once by hand, on the same test
-project, with a Claude Code plugin that is on:
+Before a release that touches Details or the preview tray, also check this once by hand, on the
+same test project, with a Claude Code plugin that is on:
 
-23. Open a review (Remove for a Claude Code plugin) and do not press Apply. Then turn that plugin
-    off in Claude Code itself. The page rescans on its own; press Rescan if it does not. The
-    review says "Settings changed since this preview." and offers "Preview again"; Apply is gone.
-    Press "Preview again": a new review opens for the plugin as it is now. Press Cancel there:
-    Details comes back and shows the plugin off.
+23. Add a Remove for a Claude Code plugin to the preview and do not press Apply. Then turn that
+    plugin off in Claude Code itself. The page rescans on its own; press Rescan if it does not.
+    The bar says "Settings changed since this preview." and offers "Preview again" in Apply's
+    place. Press "Preview again": the bar shows a fresh preview of the plugin as it is now. Press
+    Cancel: the tray is empty and nothing was written.
 
 Not run yet for step 23: Part 3 of visual management was tested with sandbox files only.
 

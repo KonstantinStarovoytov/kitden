@@ -6,9 +6,10 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; details.js must load there too.
 delete globalThis.navigator;
-const { DETAILS_ORDER, affectsFor, affectsText, backToDetails, contextLinks, detailsOrder, fileScopeWords, focusAfterBack, footerActions, keepFrom, layerState, offerLabel, originWords, scopeWords, techRows, whyLines, whyParts } = await import('../../src/kitden/web/static/js/details.js');
+const { DETAILS_ORDER, affectsFor, affectsText, backToDetails, contextLinks, detailsOrder, fileScopeWords, focusAfterBack, footerActions, keepFrom, layerState, offerLabel, originWords, previewButton, scopeWords, switchNode, syncTray, techRows, whyLines, whyParts } = await import('../../src/kitden/web/static/js/details.js');
 const { addReach } = await import('../../src/kitden/web/static/js/offer.js');
-const { cancelTarget } = await import('../../src/kitden/web/static/js/review.js');
+const { review } = await import('../../src/kitden/web/static/js/review.js');
+const { cancelTray, keyFor, onTray, takeOut, tray } = await import('../../src/kitden/web/static/js/tray.js');
 const { panelState } = await import('../../src/kitden/web/static/js/panel.js');
 
 const def = (fields) => ({ kind: 'skill', scope: 'user', project: null, enabled: 'on', owner_client: fields.client, loads: true, overridden: false, merged: false, ...fields });
@@ -327,12 +328,6 @@ test('a server the Kitden gateway holds leads with Manage tools; Move waits unde
   assert.equal(affectsText(affectsFor(manage, { definitions, project: site }), site), 'Its tool switches change Claude Code and Codex. In this project.');
 });
 
-test('Cancel goes back to where the review came from', () => {
-  assert.equal(cancelTarget({ back: () => {}, from: { row: {} } }), 'back'); // a tool switch's own way back
-  assert.equal(cancelTarget({ back: null, from: { row: {} } }), 'details');
-  assert.equal(cancelTarget({ back: null, from: null }), 'close');
-});
-
 test('focus comes back to the pressed control, or to More when it was under More', () => {
   assert.equal(focusAfterBack('offer:d1:skill.remove', ['offer:d1:skill.remove', 'more']), 'offer:d1:skill.remove');
   assert.equal(focusAfterBack('offer:d2:plugin.disable', ['more', 'move']), 'more');
@@ -424,5 +419,103 @@ test('back from a review whose settings changed, Details reads them again', asyn
   } finally {
     panelState.from = null;
     delete globalThis.document;
+  }
+});
+
+// A page whose Details hold `controls`, and a stand-in server for the tray: a batch preview answers
+// with one row per request. `sent` keeps every request's address.
+function trayPage() {
+  const page = { controls: [], sent: [] };
+  const node = (tag) => {
+    const classes = new Set();
+    const made = {
+      tag, textContent: '', childNodes: [], attributes: {}, dataset: {}, listeners: [], title: '', disabled: false,
+      get className() { return [...classes].join(' '); },
+      set className(value) { classes.clear(); String(value).split(/\s+/).filter(Boolean).forEach((name) => classes.add(name)); },
+      classList: { add: (name) => classes.add(name), remove: (name) => classes.delete(name), toggle: (name, on) => (on ? classes.add(name) : classes.delete(name)), contains: (name) => classes.has(name) },
+      get firstElementChild() { return made.childNodes[0] || null; },
+      append(...nodes) { made.childNodes.push(...nodes); },
+      setAttribute(name, value) { made.attributes[name] = String(value); },
+      getAttribute: (name) => (name in made.attributes ? made.attributes[name] : null),
+      removeAttribute(name) { delete made.attributes[name]; },
+      addEventListener(type, listener) { if (type === 'click') made.listeners.push(listener); },
+      // A press, and what it set off.
+      async click() { made.listeners.forEach((listener) => listener({})); await new Promise((resolve) => setTimeout(resolve, 0)); },
+    };
+    return made;
+  };
+  const drawer = { querySelectorAll: (selector) => (selector === '[data-tray]' ? page.controls.filter((c) => c.dataset.tray) : []) };
+  globalThis.document = { createElement: node, getElementById: () => null, querySelector: (selector) => (selector === '#drawer' ? drawer : null), querySelectorAll: () => [] };
+  globalThis.fetch = async (url, options = {}) => {
+    page.sent.push(url);
+    if (url !== '/api/batch/preview') return Response.json({});
+    const { requests } = JSON.parse(options.body);
+    return Response.json({
+      id: `c${page.sent.length}`, action: 'batch', state: 'previewed', error: null, undo_note: null,
+      steps: requests.map(() => ({ client: 'codex', name: 'x' })),
+      rows: requests.map((r, at) => ({ id: r.id, kind: r.kind, title: r.title, detail: '', project: null, steps: [at], after: [] })),
+    });
+  };
+  // What initPanel does: the looks follow every change of the tray.
+  page.stop = onTray(syncTray);
+  return page;
+}
+
+async function leaveTrayPage(page) {
+  await cancelTray();
+  page.stop();
+  delete globalThis.document;
+  delete globalThis.fetch;
+}
+
+test('a switch in the tray shows the pending look and a press takes it out', async () => {
+  const page = trayPage();
+  const body = { action: 'plugin.disable', targets: [{ item: 'i1' }], params: {} };
+  try {
+    const toggle = switchNode(true, () => review(body), keyFor(body));
+    page.controls.push(toggle);
+    assert.deepEqual([toggle.className, toggle.attributes['aria-checked'], toggle.title], ['switch', 'true', 'On. Press to preview turning it off.']);
+    // A press adds the change: the switch rests half-way, its real state unchanged until Apply.
+    await toggle.click();
+    assert.deepEqual(tray.rows.map((r) => r.key), ['switch:i1']);
+    assert.deepEqual([toggle.className, toggle.attributes['aria-checked'], toggle.title], ['switch pending', 'true', 'In preview. Press to take it out.']);
+    // Drawn again while its change waits, it starts pending.
+    assert.equal(switchNode(true, () => review(body), keyFor(body)).className, 'switch pending');
+    // A second press takes the change out: the switch is as it was, and the server forgets it.
+    await toggle.click();
+    assert.deepEqual([tray.rows.length, toggle.className, toggle.title], [0, 'switch', 'On. Press to preview turning it off.']);
+    assert.ok(page.sent.includes('/api/changes/c1/cancel'));
+    // Taken out anywhere else (the bar's ×, Cancel), the switch comes back too.
+    await toggle.click();
+    assert.equal(toggle.className, 'switch pending');
+    await takeOut(keyFor(body));
+    assert.equal(toggle.className, 'switch');
+  } finally {
+    await leaveTrayPage(page);
+  }
+});
+
+test('a button in the tray says In preview', async () => {
+  const page = trayPage();
+  const body = { action: 'mcp.remove_direct', targets: [{ item: 'e1' }], params: {} };
+  const words = (node) => node.childNodes.map((child) => child.textContent).join('');
+  try {
+    const remove = previewButton('Remove from Codex…', body, { note: 'Codex only.', look: 'btn primary' });
+    page.controls.push(remove);
+    assert.deepEqual([words(remove), remove.title, remove.className, remove.attributes['aria-disabled']], ['Remove from Codex…', 'Remove from Codex…', 'btn primary', undefined]);
+    await remove.click();
+    assert.deepEqual(tray.rows.map((r) => [r.key, r.note]), [[keyFor(body), 'Codex only.']]);
+    // While its change waits it says so and takes no press; the hover text still says what it does.
+    assert.deepEqual([words(remove), remove.title, remove.attributes['aria-disabled']], ['In preview', 'Remove from Codex…', 'true']);
+    const asked = page.sent.length;
+    await remove.click();
+    assert.equal(page.sent.length, asked);
+    // Drawn again while it waits, it says so at once.
+    assert.equal(words(previewButton('Remove from Codex…', body)), 'In preview');
+    // Out of the tray, the button is back.
+    await takeOut(keyFor(body));
+    assert.deepEqual([words(remove), remove.attributes['aria-disabled']], ['Remove from Codex…', undefined]);
+  } finally {
+    await leaveTrayPage(page);
   }
 });

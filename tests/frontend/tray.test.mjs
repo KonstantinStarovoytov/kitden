@@ -185,6 +185,26 @@ test('an add with the same key replaces the row and puts it last', async () => {
   assert.deepEqual(tray.rows.map((row) => [row.title, row.detail]), [['Add neon', ''], ['Add github', 'new']]);
 });
 
+test('a row added again keeps its words and its project until its answer', async () => {
+  await fresh();
+  queue(PREVIEW, previewed('c1'));
+  state.project = 'p1';
+  await addToTray(add('github'), { note: 'old' });
+  const [old] = tray.rows;
+  state.project = 'p2';
+  const late = slowPreview('c2');
+  queue(PREVIEW, late.reply);
+  const adding = addToTray(add('github'), { note: 'new', picked: old.picked });
+  // While it is asked the bar still has the row's words and its part to draw.
+  assert.equal(tray.phase, 'asking');
+  assert.deepEqual(tray.rows.map((row) => [row.title, row.part, row.note, row.picked]), [[old.title, old.part, 'new', 'p1']]);
+  assert.deepEqual(asked(PREVIEW)[1].body.requests.map((r) => [r.title, r.picked]), [[old.title, 'p1']]);
+  late.release();
+  assert.equal(await adding, true);
+  assert.deepEqual(tray.rows.map((row) => [row.detail, row.picked]), [['new', 'p1']]);
+  state.project = '';
+});
+
 test('a refused add that would replace a row puts the old row back', async () => {
   await fresh();
   queue(PREVIEW, previewed('c1'), previewed('c2'), refusal('No.'));

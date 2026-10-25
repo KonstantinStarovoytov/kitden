@@ -102,7 +102,7 @@ export function addChoices(add, folder) {
 }
 
 // An add: in a project, one that can go into the project asks where first; a project's own
-// skill goes into the project with no choice; any other opens the review at once.
+// skill goes into the project with no choice; any other goes to the tray at once.
 export function startAdd(add, client, row) {
   if (add.project_only) {
     return review(previewFor(add, client, "project"), { note: noteFor(add, state.project, "project") });

@@ -206,15 +206,18 @@ function empty() {
   notify();
 }
 
-// Add a change to the tray (a row with the same key is replaced and goes last). True when it
-// joined: false when the server refused it (`tray.refused` says why, and the tray is as it
-// was), or when it cannot join now: a change is being written, or has just been applied.
-export async function addToTray(body, { key = keyFor(body), note = null, icon = iconFor(body) } = {}) {
+// Add a change to the tray (a row with the same key is replaced and goes last; until its answer it
+// keeps the old row's words, so the bar does not go and come back). True when it joined: false
+// when the server refused it (`tray.refused` says why, and the tray is as it was), or when it
+// cannot join now: a change is being written, or has just been applied. `picked` is the project
+// it is asked in: the one picked now, or the old row's when a row's own review asks again.
+export async function addToTray(body, { key = keyFor(body), note = null, icon = iconFor(body), picked = state.project || null } = {}) {
   if (tray.phase === "applying" || tray.phase === "applied" || busy.change) return false;
   const before = tray.rows;
   const was = tray.phase;
-  const row = { id: `r${++rowCount}`, key, body, note, icon, picked: state.project || null, title: "", detail: "", project: null, part: null, status: "" };
-  tray.rows = [...before.filter((old) => old.key !== key), row];
+  const old = before.find((row) => row.key === key) || { title: "", detail: "", project: null, part: null };
+  const row = { id: `r${++rowCount}`, key, body, note, icon, picked, title: old.title, detail: old.detail, project: old.project, part: old.part, status: "" };
+  tray.rows = [...before.filter((other) => other.key !== key), row];
   const answer = await ask();
   if (answer.dropped) return tray.rows.includes(row);
   if (answer.change) {

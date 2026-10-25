@@ -221,7 +221,6 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .btn:hover:not(:disabled) { border-color: color-mix(in srgb, var(--route) 40%, var(--wire)); }
 .btn:active:not(:disabled) { transform: scale(0.97); transition-duration: var(--t-fast), var(--t-fast), var(--t-fast), 80ms, var(--t-fast); }
 .btn:disabled { cursor: not-allowed; opacity: 0.5; }
-.btn.primary.apply:disabled { opacity: 1; cursor: progress; }
 .btn.primary { background: var(--action); border-color: var(--action); color: var(--on-action); font-weight: 600; }
 .btn.primary:hover:not(:disabled) { background: var(--action-hover); border-color: var(--action-hover); }
 .btn.ghost { border-color: transparent; background: transparent; color: var(--ink-2); }
@@ -236,12 +235,8 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .btn.primary.busy::after { border-color: var(--on-action); border-right-color: transparent; }
 /* Apply's step meter: a thin line along the bottom edge, filled to the share of steps done. */
 .btn .meter { position: absolute; left: 6px; right: 6px; bottom: 3px; height: 2px; border-radius: 1px; background: currentColor; opacity: 0.55; transform: scaleX(0); transform-origin: left; transition: transform 240ms var(--ease-out); pointer-events: none; }
-/* Applied: green at once and at full strength, though the button is disabled. */
-.btn.primary.done, .btn.primary.done:hover, .btn.primary.done:disabled { background: var(--success); border-color: var(--success); color: var(--on-success); opacity: 1; transition: none; }
 .spinner { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid currentColor; border-right-color: transparent; animation: spin 600ms linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.check path { stroke-dasharray: 20; stroke-dashoffset: 20; animation: draw 320ms var(--ease-out) forwards; }
-@keyframes draw { to { stroke-dashoffset: 0; } }
 .kbd { font-family: var(--mono); font-size: 11px; padding: 0 5px; border: 1px solid var(--wire); border-radius: 4px; color: var(--ink-3); }
 .search { flex: 1; min-width: 80px; max-width: 420px; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0; border: 0; border-radius: 7px; color: var(--ink-3); }
 .search input { align-self: stretch; border: 0; background: transparent; outline: none; flex: 1; min-width: 0; font-size: 12px; color: var(--ink); }
@@ -352,7 +347,7 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .badge { font-size: 11px; padding: 0 6px; line-height: 18px; border-radius: 4px; border: 1px solid var(--wire); color: var(--ink-2); white-space: nowrap; }
 .badge.win { border-color: var(--ink-3); color: var(--ink); font-weight: 500; }
 .badge.warn { border-color: var(--lamp-warn); color: var(--lamp-warn); }
-/* The switch shows the real state; pressing it opens the review. The button is 24 px high to press.
+/* The switch shows the real state; pressing it adds its change to the tray. The button is 24 px high to press.
    Its track (34 x 20) is drawn by ::before between two clear 2 px bands, and the knob (14 px) sits
    2 px inside the track's line. Off the knob is grey, on it is white on the accent. */
 .switch { position: relative; flex: none; align-self: center; width: 34px; height: 24px; padding: 0; border: 0; border-radius: 12px; background: none; cursor: pointer; }
@@ -362,8 +357,8 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .switch[aria-checked="true"]::before { background: var(--route); border-color: var(--route); }
 .switch[aria-checked="true"] .thumb { transform: translateX(14px); background: #fff; }
 .switch:disabled { cursor: not-allowed; opacity: 0.55; }
-/* Waiting for the preview: a dashed track on the accent tint, the knob half-way, neither on nor off. */
-.switch.pending { cursor: progress; }
+/* Its change waits in the tray: a dashed track on the accent tint, the knob half-way, neither on nor
+   off. A press takes it out again. */
 .switch.pending::before, .switch[aria-checked="true"].pending::before { border-style: dashed; border-color: var(--route); background: var(--route-soft); }
 .switch.pending .thumb, .switch[aria-checked="true"].pending .thumb { transform: translateX(7px); background: var(--route); }
 /* A tool switch after a verified change: drawn in its new state, the knob moves there once. */
@@ -781,6 +776,11 @@ div.map .block.preview .block-meta { color: var(--ink-2); }
 .drawer footer { padding: 12px 20px; border-top: 1px solid var(--wire); display: flex; gap: 8px; justify-content: flex-end; align-items: center; flex-wrap: wrap; }
 .drawer footer .btn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .drawer footer .btn > .cut { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* A Details button whose change waits in the tray says "In preview" and takes no press. It keeps
+   focus, so it is aria-disabled, not :disabled, and is drawn as a button that is off. */
+.drawer .btn[aria-disabled="true"], .drawer .btn[aria-disabled="true"]:hover { cursor: default; opacity: 0.5; border-color: var(--wire); }
+.drawer .btn.primary[aria-disabled="true"], .drawer .btn.primary[aria-disabled="true"]:hover { background: var(--action); border-color: var(--action); }
+.drawer .btn[aria-disabled="true"]:active { transform: none; }
 .drawer footer .note { margin-right: auto; color: var(--ink-3); font-size: 12px; }
 .drawer footer .note.side { margin-right: 0; margin-left: auto; text-align: right; }
 /* Details beside the page (Gateway, Library and Changes, from 1024 px): the same panel as a 320 px

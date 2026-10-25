@@ -15,7 +15,7 @@ import {
   arrival, busy, current, data, followHash, freshness, go, loadShared, OLD_VIEWS, onIdle, parseHash, projectGone, reload, setRenderer, setState, setSwitcher, state,
   switchProject,
 } from "./store.js";
-import { tray } from "./tray.js";
+import { checkTrayStale, tray } from "./tray.js";
 
 const PLACES = {
   overview: { title: "Overview", render: renderOverview },
@@ -287,7 +287,7 @@ function listen() {
   });
   // While the first scan's line runs, it already says that a scan runs: no sweep on top.
   events.addEventListener("rescan_started", () => { if (!scanning) $("#topbar").classList.add("scanning"); });
-  // How many steps of a running change are done; the review's Apply button counts them.
+  // How many steps of a running change are done; the tray's Apply counts them.
   events.addEventListener("change_progress", (event) => {
     let detail = null;
     try { detail = JSON.parse(event.data); } catch { return; }
@@ -299,11 +299,11 @@ function listen() {
   // The clients' versions were read in the background, also after a failure: the Clients card
   // reads them again.
   events.addEventListener("versions", () => document.dispatchEvent(new CustomEvent("kitden:versions")));
-  // An open review asks whether its files changed (review.js checkStale), also while someone
-  // types: only the page's redraw waits.
+  // The tray asks whether its files changed since the preview (checkTrayStale), also while
+  // someone types: only the page's redraw waits.
   events.addEventListener("rescan_finished", () => {
     $("#topbar").classList.remove("scanning");
-    document.dispatchEvent(new CustomEvent("kitden:rescanned"));
+    checkTrayStale().catch(reportError);
     liveRefresh();
   });
   onIdle(() => setTimeout(catchUp, 800));

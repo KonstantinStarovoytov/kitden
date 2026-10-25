@@ -1,28 +1,25 @@
 // Side panel: the shell that opens, swaps and closes it, and the wiring. Item details are in
 // details.js, a held server's tools in tools.js, the change review in review.js and the toast in
 // toast.js. The names other pages imported from here before the split still come from here.
-import { postJson } from "./api.js";
-import { openItem } from "./details.js";
-import { $, $$, button, el, focusKey, reportError } from "./dom.js";
+// Every change waits in the tray (tray.js): nothing in the panel writes, so closing it or drawing
+// something else in it never touches a change.
+import { openItem, syncTray } from "./details.js";
+import { $, $$, button, el, focusKey } from "./dom.js";
 import { onOpenItem } from "./library.js";
 import { finishTransition } from "./motion.js";
-import { checkStale } from "./review.js";
-import { arrival, busy, setState, state } from "./store.js";
+import { arrival, setState, state } from "./store.js";
 import { reloadTools } from "./tools.js";
+import { onTray, tray } from "./tray.js";
 
 export { backToDetails, contextLinks, countedDefinition, detailsCard, footerActions, footerButtons, heldActions, heldButtons, keepFrom, kindWord, layerState, linksRow, loadsLede, moveBody, moveFor, moveInto, moveTargets, offerLabel, openItem, plainSecrets, projectChoice, scopeWords, techRows, technical } from "./details.js";
 export { callsText, projectLabel, refreshTools, toolRows, toolsSection, writingToolsOn } from "./tools.js";
-export { ADDS, addScope, afterParts, alignGroups, canShowReview, cancelTarget, changeOutcome, changeWords, chosenKeys, leftOutText, review, reviewLede, undoChange } from "./review.js";
+export { ADDS, addScope, afterParts, alignGroups, canShowReview, changeOutcome, changeWords, chosenKeys, leftOutText, review, reviewLede, undoChange } from "./review.js";
 export { hideToast, toast } from "./toast.js";
 
-// What is open now (`current`): "item" or "review", and for a review the change and the request
-// behind it. `from` is the Details a review was opened from (details.js sets it): Cancel goes
-// back there. A closed panel forgets it.
+// What is open now (`current`): Details ("item", or a Gateway card), a row's review ("row-review"),
+// Add missing's list ("align"), and so on. `from` is the Details drawn last (details.js keepFrom):
+// Add missing's Cancel goes back there, and Apply all draws it again. A closed panel forgets it.
 export const panelState = { current: null, from: null };
-// What the panel shows now, as panelState.current was when it was drawn. A caller sets
-// panelState.current to its new content before it calls openPanel, so the review still showing is
-// kept here: other content must not replace it unseen.
-let showing = null;
 // Beside the page: on these places, in a window this wide, Details are a 320 px column with no
 // scrim and no focus trap, and the page stays usable. Anywhere else they are the drawer.
 export const DOCK_MIN = 1024;
@@ -50,7 +47,6 @@ export function swapContent(content) {
   const had = drawer.contains(document.activeElement);
   drawer.replaceChildren(...content);
   if (isPanelOpen() && (had || !docked) && !drawer.contains(document.activeElement)) drawer.focus();
-  showing = panelState.current;
 }
 
 // The panel as a column beside the page (`on`) or as the drawer over it. The column is a region:
@@ -86,38 +82,20 @@ function rememberOpener() {
 // A panel the person opens wins over an arrival still waiting for its page (store.js).
 // `dock`: sit beside the page where the window is wide enough. An open panel keeps how it sits,
 // so a review opened from the column stays in the column.
-// Beside the page a press elsewhere can reach here while a review shows. While its change is
-// written nothing replaces it: this returns false, panelState.current is the review again, and
-// the caller stops. A review that is only previewed is cancelled on the server first, as closing
-// it would. A review handing back after its change was verified (`handingBack`) is let go.
 export function openPanel(content, { instant = false, dock = DOCKS.includes(state.view) } = {}) {
   arrival.pending = false;
   finishTransition();
   const drawer = $("#drawer");
+  openedIn = state.project;
   if (isPanelOpen()) {
-    const review = showing && showing.type === "review" ? showing : null;
-    if (review && busy.change && !review.handingBack) {
-      panelState.current = review;
-      return false;
-    }
-    if (review) {
-      // A caller that has no state of its own leaves the review's as current: it is gone now.
-      const next = panelState.current === review ? null : panelState.current;
-      const previewed = review.change && review.change.state === "previewed";
-      cancelPreview(review);
-      if (!next) panelState.current = null;
-      if (previewed && !(next && next.type === "review")) panelState.from = null;
-    }
-    openedIn = state.project;
     // Beside the page another row may be pressed: the way back is to that row, and focus moves in.
     const active = document.activeElement;
     const elsewhere = docked && active && active !== document.body && !drawer.contains(active);
     if (elsewhere) rememberOpener();
     swapContent(content);
     if (elsewhere) drawer.focus();
-    return true;
+    return;
   }
-  openedIn = state.project;
   drawer.replaceChildren(...content);
   rememberOpener();
   wantsDock = dock;
@@ -126,18 +104,14 @@ export function openPanel(content, { instant = false, dock = DOCKS.includes(stat
     node.classList.toggle("instant", instant);
     node.classList.add("open");
   }
-  showing = panelState.current;
   drawer.focus();
-  return true;
 }
 
-// While a change is being applied the panel stays open: closing it could not stop the change.
-export function closePanel({ instant = false, keepSelection = false, focus = true, force = false } = {}) {
-  if (!isPanelOpen() || (busy.change && !force)) return;
-  cancelPreview();
+// The tray keeps its rows: they wait for the bar's Apply or Cancel, whatever the panel shows.
+export function closePanel({ instant = false, keepSelection = false, focus = true } = {}) {
+  if (!isPanelOpen()) return;
   panelState.current = null;
   panelState.from = null;
-  showing = null;
   for (const node of [$("#drawer"), $("#scrim")]) {
     node.classList.toggle("instant", instant);
     node.classList.remove("open");
@@ -152,23 +126,11 @@ export function closePanel({ instant = false, keepSelection = false, focus = tru
   if (focus) restoreFocus();
 }
 
-// Another project picked (at the top, or by Back or an edited address) closes the panel, and an
-// open review is cancelled as Cancel does: a switch in it never acts on a project it does not name.
-// The tray keeps its rows: each keeps the project it was asked in. The selection is the caller's:
-// the picker clears it, an address brings its own.
+// Another project picked (at the top, or by Back or an edited address) closes the panel: a switch
+// in it never acts on a project it does not name. The tray keeps its rows: each keeps the project
+// it was asked in. The selection is the caller's: the picker clears it, an address brings its own.
 export function closeForProject() {
   if (isPanelOpen() && openedIn !== state.project) closePanel({ focus: false, keepSelection: true });
-}
-
-// A review left without Apply: the server forgets its preview. Sent once: the change is marked
-// cancelled, so a panel closed after Cancel does not send it again. `current` is the review shown
-// now, or one that is being replaced.
-export function cancelPreview(current = panelState.current) {
-  const change = current && current.type === "review" ? current.change : null;
-  if (change && change.state === "previewed") {
-    postJson(`/api/changes/${encodeURIComponent(change.id)}/cancel`).catch(() => {});
-    change.state = "cancelled";
-  }
 }
 
 export function restoreFocus() {
@@ -195,13 +157,12 @@ export function header(kicker, title, lede, closeLabel = "Close", mono = false) 
 }
 
 // A note in the panel, for example a server the gateway holds; `actions` go in its footer.
-// The title is a name in mono, unless `mono` is false (a sentence). False when openPanel kept a
-// review whose change is being written.
+// The title is a name in mono, unless `mono` is false (a sentence).
 export function openInfo(kicker, title, body, actions = [], { mono = true } = {}) {
   panelState.current = { type: "info" };
   const footer = el("footer");
   footer.append(...actions);
-  return openPanel([header(kicker, title, null, "Close", mono), body, footer]);
+  openPanel([header(kicker, title, null, "Close", mono), body, footer]);
 }
 
 // A change from the Changes page: the Changes page builds the body (steps with their files,
@@ -211,16 +172,6 @@ export function openChange(title, body, onUndo) {
   const footer = el("footer");
   if (onUndo) footer.append(button("Undo", onUndo, "btn primary"));
   openPanel([header("Change", title, null), body, footer]);
-}
-
-export function checkMark() {
-  const ns = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(ns, "svg");
-  for (const [key, value] of Object.entries({ viewBox: "0 0 14 14", width: "12", height: "12", class: "check", "aria-hidden": "true" })) svg.setAttribute(key, value);
-  const path = document.createElementNS(ns, "path");
-  for (const [key, value] of Object.entries({ d: "M2.5 7.5 L5.8 10.5 L11.5 3.5", fill: "none", stroke: "currentColor", "stroke-width": "1.8", "stroke-linecap": "round", "stroke-linejoin": "round" })) path.setAttribute(key, value);
-  svg.append(path);
-  return svg;
 }
 
 // Wiring ---------------------------------------------------------------------------------
@@ -269,19 +220,29 @@ export function initPanel() {
   onOpenItem((row, tr, how) => openItem(row, { instant: how === "keyboard" }));
   // A refresh of the gateway's tool lists ended: an open tool list reads them again.
   document.addEventListener("kitden:tools", reloadTools);
-  // A rescan ended: an open review checks that its files did not change since the preview.
-  document.addEventListener("kitden:rescanned", () => checkStale().catch(reportError));
-  $("#scrim").addEventListener("click", () => { if (!busy.change) closePanel(); });
+  // The tray changed: switches and buttons in Details show whether their change waits there.
+  onTray(syncTray);
+  $("#scrim").addEventListener("click", () => closePanel());
   document.addEventListener("keydown", trapFocus);
   document.addEventListener("keydown", (event) => {
-    if (!isPanelOpen()) return;
-    // Keyboard closes are instant: an action done many times a day must not wait.
-    if (event.key === "Escape" && !busy.change) {
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+      pressApply(event);
+    } else if (event.key === "Escape" && isPanelOpen()) {
+      // Keyboard closes are instant: an action done many times a day must not wait.
       event.preventDefault();
       closePanel({ instant: true });
-    } else if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && panelState.current && panelState.current.type === "review") {
-      const apply = $("#drawer .apply");
-      if (apply && !apply.disabled) { event.preventDefault(); apply.click(); }
     }
   });
+}
+
+// ⌘ or Ctrl Enter in Details or in the dock presses the tray's Apply, once its preview is ready:
+// the same as a press on the button (Preview again, when the files changed since).
+function pressApply(event) {
+  const active = document.activeElement;
+  const dock = $("#dock");
+  const inside = (isPanelOpen() && $("#drawer").contains(active)) || Boolean(dock && dock.contains(active));
+  const apply = $("#dock .apply");
+  if (tray.phase !== "ready" || !inside || !apply) return;
+  event.preventDefault();
+  apply.click();
 }

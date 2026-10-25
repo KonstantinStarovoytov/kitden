@@ -44,16 +44,17 @@ def test_success_and_action_labels_are_readable_in_both_themes():
         assert contrast(theme["--on-action"], theme["--action"]) >= 4.5
 
 
-def test_the_applied_label_is_drawn_at_full_strength_at_once():
-    # A disabled button is drawn at 0.5 opacity, which would take the label below 4.5:1, and
-    # a fill that fades passes through colors the label was not checked on.
+def test_the_applied_label_is_drawn_at_full_strength():
+    # A disabled button is drawn at 0.5 opacity, which would take the label below 4.5:1. The tray's
+    # Apply waits with aria-disabled, which the dock draws no fainter, and Applied is green with its
+    # own label color (it turns green in 180 ms, docs/design.md Tray Apply).
     assert ".btn:disabled { cursor: not-allowed; opacity: 0.5; }" in CSS
-    rule = block(".btn.primary.done, .btn.primary.done:hover, .btn.primary.done:disabled {")
+    rule = block(".dock .btn.ok, .dock .btn.ok:hover {")
     assert "background: var(--success);" in rule and "color: var(--on-success);" in rule
-    assert "opacity: 1;" in rule and "transition: none;" in rule
-    # No later rule draws the done button fainter.
+    # No later rule draws the Applied button fainter, and the dock's waiting Apply is never dimmed.
     later = CSS[CSS.index(rule) :]
-    assert not re.search(r"\.done[^{]*\{[^}]*opacity: 0", later)
+    assert not re.search(r"\.ok[^{]*\{[^}]*opacity: 0", later)
+    assert not re.search(r'\.dock \.btn\[aria-disabled="true"\][^{]*\{[^}]*opacity', CSS)
 
 
 def test_the_cell_tag_is_readable_on_its_fill_in_both_themes():

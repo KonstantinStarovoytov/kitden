@@ -81,28 +81,20 @@ test('a checkbox keeps its real input and draws the mockup box with a check in i
   assert.equal(box.children[0].attributes['aria-hidden'], 'true');
 });
 
-test('switch looks: off, on and pending', async () => {
+test('switch looks: off and on, and a press runs its change', () => {
   assert.equal(switchNode(false).getAttribute('aria-checked'), 'false');
   assert.equal(switchNode(true).getAttribute('aria-checked'), 'true');
   assert.equal(switchNode(true).getAttribute('role'), 'switch');
   // The knob is the .thumb; the track and the looks are drawn by CSS from the state.
   assert.equal(switchNode(true).children[0].className, 'thumb');
-  // Pressed: pending and busy while the preview is fetched, and still not flipped.
-  let finish;
+  // A press runs `press`, which adds the change to the tray; the pending look follows the tray
+  // (details.test.mjs), and the switch is not flipped.
   let presses = 0;
-  const node = switchNode(false, () => { presses += 1; return new Promise((done) => { finish = done; }); });
-  assert.equal(node.classList.contains('pending'), false);
-  node.listeners.click();
-  assert.ok(node.classList.contains('pending'));
-  assert.equal(node.getAttribute('aria-busy'), 'true');
-  assert.equal(node.getAttribute('aria-checked'), 'false');
-  // A second press while it waits does nothing.
+  const node = switchNode(false, () => { presses += 1; });
+  assert.equal(node.title, 'Off. Press to preview turning it on.');
   node.listeners.click();
   assert.equal(presses, 1);
-  finish();
-  await new Promise((done) => setTimeout(done, 0));
   assert.equal(node.classList.contains('pending'), false);
-  assert.equal(node.hasAttribute('aria-busy'), false);
   assert.equal(node.getAttribute('aria-checked'), 'false');
 });
 

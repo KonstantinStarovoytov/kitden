@@ -6,7 +6,7 @@ import { $, button, el, icon, joinWords, reportError, withFocusKey } from "./dom
 import { animateTo, D, DRAW, rollTo, shake } from "./motion.js";
 import { closePanel, isPanelOpen, panelState } from "./panel.js";
 import { stepText } from "./parts.js";
-import { afterParts, changeWords, nothingChanged, reloadAll, showEffect, showRowReview, undoChange } from "./review.js";
+import { afterParts, changeWords, detailsAgain, nothingChanged, reloadAll, showEffect, showRowReview, undoChange } from "./review.js";
 import { go, state } from "./store.js";
 import { hideToast, makeRoom, onToastGone, toast } from "./toast.js";
 import { applyTray, cancelTray, endApplied, onTray, setTrayWords, takeOut, tray, tryAgain } from "./tray.js";
@@ -40,8 +40,8 @@ const CHECK_CHANGES = "Check Changes before trying again.";
 const IN_PREVIEW = " changes in preview";
 
 // How a tray that did not go through ends: the head and line, and what Apply's place holds.
-// "Nothing was changed" only when that is true (nothingChanged, as in the review in Details); the
-// engine's own words name paths and commands, so they stay behind Details and on Changes.
+// "Nothing was changed" only when that is true (nothingChanged, review.js); the engine's own words
+// name paths and commands, so they stay behind Details and on Changes.
 function endWords({ failure, refused }) {
   if (refused) return { head: "Could not prepare the preview", line: refused.reason, apply: "Try again", retry: true };
   const { state: ended = null, error = null } = failure || {};
@@ -461,12 +461,14 @@ async function onApply() {
 }
 
 // Apply is verified: the Applied look rests 200 ms, the page reads everything again and shows the
-// effect, the tray empties (the bar leaves), and the toast takes its place after 60 ms a change.
+// effect, open Details are drawn again with it, the tray empties (the bar leaves, and a row's
+// review with it), and the toast takes its place after 60 ms a change.
 async function land() {
   await wait(D(200));
   try {
     await reloadAll();
     showEffect();
+    await detailsAgain(tray.rows.map((row) => row.key));
   } catch (error) {
     reportError(error);
   }

@@ -225,11 +225,9 @@ def test_buttons_have_the_mockups_look():
     small = rule(".btn.small")
     for part in ("padding: 4px 9px", "font-size: 11px", "min-height: 24px"):
         assert part in small, part
-    # A ghost button keeps no line on hover; Applied is green all round.
+    # A ghost button keeps no line on hover; the tray's Applied is green all round.
     assert "border-color: transparent" in rule(".btn.ghost:hover:not(:disabled)")
-    assert "border-color: var(--success)" in rule(
-        ".btn.primary.done, .btn.primary.done:hover, .btn.primary.done:disabled"
-    )
+    assert "border-color: var(--success)" in rule(".dock .btn.ok, .dock .btn.ok:hover")
 
 
 def test_the_pill_is_the_mockups_segmented_control_and_glides_in_280_ms():
@@ -670,7 +668,7 @@ def test_a_press_scales_a_block_about_its_own_middle():
     assert "scale: 0.98" in rule("div.map .block:active")
 
 
-def test_plugin_switch_opens_a_review_and_does_not_flip_itself():
+def test_plugin_switch_adds_its_change_and_does_not_flip_itself():
     text = panel()
     assert 'setAttribute("role", "switch")' in text
     assert text.count('"aria-checked"') == 1
@@ -688,11 +686,12 @@ def test_details_offer_remove_for_plugins_and_skills():
 CSS = (STATIC / "style.css").read_text()
 
 
-def test_controls_press_and_the_switch_waits_for_the_preview():
+def test_controls_press_and_the_switch_waits_in_the_tray():
     assert ".switch.pending" in CSS
     assert ".seg button:active" in CSS and ".tabs button:active" in CSS
+    # The pending look follows the tray: on while the switch's change waits there.
     text = panel()
-    assert 'classList.add("pending")' in text and 'setAttribute("aria-busy", "true")' in text
+    assert 'node.classList.toggle("pending", waiting);' in text and "onTray(syncTray);" in text
 
 
 def test_client_tile_flies_to_its_library_column():
@@ -714,8 +713,12 @@ def test_review_counts_the_diff_and_folds_the_file_change():
 
 def test_apply_turns_green_only_after_verified_and_only_ok_toasts_get_a_check():
     text = panel()
-    assert text.index('after.state !== "verified"') < text.index('apply.classList.add("done")')
-    assert text.count("{ ok: true }") == 2
+    # The tray is "applied" only when the server says verified; only then is its Apply green.
+    applied = 'Object.assign(tray, { change: after, phase: "applied" });'
+    assert text.index('if (after && after.state === "verified") {') < text.index(applied)
+    assert 'apply.classList.toggle("ok", applied);' in text
+    assert "{ ok: true, label: many" in text
+    assert 'toast("Undone. The previous settings are back.", null, { ok: true })' in text
     assert "Undone. The previous settings are back." in text
     assert 'toast("Undo stopped' in text  # a stopped undo gets no check
 
@@ -1115,19 +1118,17 @@ def test_apply_waits_for_work_not_for_a_timer():
 
 
 def test_apply_sets_its_label_at_once_and_a_failure_focuses_the_button():
-    # The review in Details and the tray's Apply; the tray's bar in the dock rests on purpose
-    # (dock.js).
+    # The tray's Apply: tray.js waits for work, never a timer; its bar in the dock rests on purpose
+    # (dock.js). Details have no Apply of their own.
     code = "\n".join(script(name) for name in (*PANEL, "tray.js"))
-    flow = code.split("function brokeAfterAnswer")[1].split("function showEffect")[0]
-    # No timer in the Apply flow, so a late label cannot land on a button already reset.
-    assert "setTimeout" not in flow and "const wait" not in code
-    assert 'label.textContent = "Applying…"' in flow
-    assert "next.focus()" in flow
+    assert "setTimeout" not in script("tray.js") and "const wait" not in code
+    dock = script("dock.js")
+    assert 'apply: stepText("Applying", t.done, t.total)' in dock
+    # A failure moves focus to the button that comes next, and a refusal clears at the next action.
+    assert "(shown.apply || shown.changes || shown.cancel).focus(" in dock
     assert ".label.swap" not in CSS
-    # An error from the last try goes when Apply is pressed again, so it never sits next to Applied.
-    apply = flow.split("async function applyChange")[1]
-    clear = 'for (const old of body.querySelectorAll(".callout.error")) old.remove();'
-    assert apply.index(clear) < apply.index('changeOutcome(change.id, "apply")')
+    started = 'Object.assign(tray, { phase: "applying", refused: null, failure: null'
+    assert started in script("tray.js")
 
 
 def test_every_view_reads_project_data_through_current():
@@ -1149,28 +1150,23 @@ def test_buttons_show_progress_and_the_scan_line_no_longer_blinks():
     # A change with several steps counts them in the Apply button, from the server's events.
     assert '"change_progress"' in script("app.js") and '"kitden:progress"' in script("app.js")
     code = panel()
-    assert 'stepText("Applying", done, total)' in code and '"kitden:progress"' in code
+    assert 'stepText("Applying", t.done, t.total)' in code and '"kitden:progress"' in code
     assert ".btn .meter" in css
     # The scan line shows only when a scan takes a while, so quick scans never blink.
     assert ".topbar.scanning::after { opacity: 1; transition-delay: 400ms;" in css
 
 
-def test_while_a_change_is_written_the_review_says_so_and_offers_nothing_to_press():
-    code = panel()
-    lock = code.split("function lockReview(")[1].split("\n}\n")[0]
-    # Cancel and the close button go away while the change is written, and come back after.
-    assert "cancel.hidden = locked" in lock and "close.hidden = locked" in lock
-    # The note under the buttons says what is happening instead of the Apply shortcut.
-    assert "WRITING" in lock and "APPLY_KEY" in lock
-    writing = (
-        "Writing the change. It can't stop halfway: if a step fails, Kitden puts everything back."
-    )
-    assert writing in code
+def test_while_a_change_is_written_the_tray_offers_nothing_to_stop_it():
+    dock = script("dock.js")
+    # Cancel and every × are off while the change is written: it cannot stop halfway.
+    assert 'shown.cancel.disabled = t.phase === "applying" || t.phase === "applied";' in dock
+    assert "item.out.disabled = working;" in dock
+    # The line says what is written, and Apply takes no press until it ends.
+    assert "line: writingLine(t.change.steps)" in dock and "applyWaits: true" in dock
     css = (STATIC / "style.css").read_text()
     # A button that is off never lights up on hover and says so with the pointer.
     assert ".btn:hover:not(:disabled)" in css
     assert ".btn:disabled { cursor: not-allowed; opacity: 0.5; }" in css
-    assert ".btn.primary.apply:disabled { opacity: 1; cursor: progress; }" in css
 
 
 # Library: one page in place of Load map and Discover ---------------------------------------
@@ -1224,8 +1220,8 @@ def test_a_cell_add_reviews_one_client_and_the_review_shows_its_note():
     code = panel()
     assert "export async function review(previewBody, { note = null, back = null } = {})" in code
     assert "if (note) body.append(callout(note));" in code
-    # Preview again keeps the note, and the Details a tool switch came from.
-    assert "review(previewBody, { note, back })" in code
+    # The row keeps the note, and its review shows it.
+    assert "addToTray(previewBody, { note })" in code
     # Details of a row with a repeated name name its source.
     assert "rowTitle(row)" in code
 
@@ -1359,12 +1355,13 @@ def test_a_held_server_lists_its_tools_with_a_switch_each():
 
 def test_a_tool_switch_flips_only_after_the_change_is_verified():
     code = panel()
-    # Details comes back after Apply with the switch drawn in its new state; the thumb slides once.
-    assert "await back({ verified: true })" in code
+    # Details are drawn again after Apply all, the switch in its new state; the thumb slides once.
+    assert "await detailsAgain(tray.rows.map((row) => row.key));" in code
+    assert "await tools.again({ focus: from.focus, flip });" in code
     assert 'toggle.classList.add("flipped")' in code
     assert ".switch.flipped .thumb" in CSS and "@keyframes thumb-on" in CSS
-    # A refused preview stays as a callout in Details, and focus goes back to the switch.
-    assert "await back({ error: reason })" in code
+    # A refused change stays as a callout in Details, and focus goes back to the switch.
+    assert "await back({ error: tray.refused.reason });" in code
     assert 'callout(error, "error")' in code
 
 
@@ -1417,9 +1414,10 @@ def test_a_projects_own_skill_adds_into_the_project():
 
 def test_an_add_review_names_its_scope():
     code = panel()
-    # With All projects picked the lede says it; in a project the note callout says it.
+    # With All projects picked the lede says it; in a project the note callout says it. A row's
+    # review says it for the project the row was asked in.
     assert '"Adds for all projects. "' in code
-    assert "reviewLede(change, state.project)" in code
+    assert "reviewLede(change, picked)" in code and "picked: row.picked," in code
     assert '" for all projects"' in code
 
 
@@ -1429,16 +1427,17 @@ def test_the_review_leads_with_the_outcome_and_keeps_undo_honest():
     # One words table: the page's sentence is the twin of views/words.py's.
     assert f'const UNCHANGED = "{UNCHANGED} ";' in review
     assert "so you can undo" not in panel()
-    # The applied change keeps the target, so the toast says the same place as the title.
-    assert "after.target = change.target" in review
+    # The toast after Apply says the row's own words, the same place as its title.
+    assert "changeWords(rows[0].part, rows[0].body).done" in review
     # The Undo limit comes from the server (views/words.py REMOVE_NOTE), said once.
     assert "saved options" not in panel()
     assert "change.undo_note" in review
 
 
-def test_cancel_and_a_refused_preview_go_back_to_details():
+def test_add_missing_and_a_refused_list_go_back_to_details():
     review, shell, details = reviews(), script("panel.js"), script("details.js")
-    assert "cancelTarget(" in review and "backToDetails({ error: reason })" in review
+    assert "from && panelState.from === from ? backToDetails() : closePanel()" in review
+    assert "backToDetails({ error: reason })" in review
     assert "panelState.from = null" in shell
     # Details, and the Gateway's cards of a held server and a tool, keep how to draw themselves
     # again (details.test.mjs tests keepFrom and backToDetails).
@@ -1449,14 +1448,13 @@ def test_cancel_and_a_refused_preview_go_back_to_details():
     for key in ("`offer:", '"move"', "`add:", '"add:form"', "`held:", '"more"', '"commands"'):
         assert key in panel() + script("offer.js"), key
     assert "`switch:${def.id}`" in details
-    # The review is cancelled once: Cancel's own request, not again when the panel closes.
-    cancel = shell.split("export function cancelPreview(")[1].split("\n}\n")[0]
-    assert 'change.state = "cancelled"' in cancel
+    # Add missing's own list is never applied, so the server forgets it at once.
+    assert "if (id) postJson(`/api/changes/${encodeURIComponent(id)}/cancel`)" in review
 
 
-def test_a_review_says_when_its_settings_changed():
-    # After a rescan the page asks the server about the open review (review.test.mjs).
-    assert '"kitden:rescanned"' in script("app.js") and '"kitden:rescanned"' in script("panel.js")
+def test_the_tray_says_when_its_settings_changed():
+    # After a rescan the tray asks the server about its preview (tray.test.mjs).
+    assert "checkTrayStale().catch(reportError);" in script("app.js")
     review = reviews()
     assert "Settings changed since this preview." in review and '"Preview again"' in review
 
@@ -1621,7 +1619,7 @@ def test_a_project_can_be_aligned_in_one_review():
 def test_a_failed_change_does_not_claim_a_restore_on_the_page():
     # The engine's error says "The original settings were restored." only when it is true.
     assert "were put back" not in panel()
-    assert '"The change did not check out."' in panel()
+    assert "The change did not check out. Kitden put the files back." in panel()
     assert "Failed, put back" not in script("changes.js")
 
 
@@ -1920,6 +1918,26 @@ def test_the_tray_bar_sits_in_the_dock_and_says_its_words():
     assert "--dock-room" in script("toast.js") and "makeRoom" in script("dock.js")
     assert "var(--dock-room, 0px)" in CSS
     assert ".dock .ib:active, .dock .x:active:not(:disabled) {" in CSS
+
+
+def test_every_change_waits_in_the_tray():
+    review, details, shell = script("review.js"), script("details.js"), script("panel.js")
+    # Add missing's chooser adds its row with the ticks; a row's review can take it out again.
+    assert '"Add to preview"' in review and '"Take it out"' in review
+    # A Details button whose change waits in the tray says so and takes no press.
+    assert 'const IN_PREVIEW = "In preview";' in details
+    assert "export function previewButton(label, body," in details
+    # Details have no Apply of their own: the tray's bar writes everything, and the key presses it.
+    for name in PANEL:
+        assert "Enter to apply" not in script(name), name
+    gone = ("function applyChange", "function showApplied", "function checkStale", "APPLY_KEY")
+    for name in gone:
+        assert name not in review, name
+    assert '$("#dock .apply")' in shell and 'tray.phase !== "ready"' in shell
+    # Closing Details never cancels a change on the server: the tray holds every preview.
+    assert "/cancel" not in shell
+    # After a rescan the tray asks whether its preview is stale.
+    assert "checkTrayStale()" in script("app.js")
 
 
 def test_the_toast_lives_in_the_dock_and_is_its_own_module():

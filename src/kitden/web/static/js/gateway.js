@@ -6,7 +6,7 @@ import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { findIn, foldable, isNarrow, keepOpen, layoutTree, linkKey, litFrom, litPath, pressOpen, toggleOpen, wideWidth } from "./map.js";
 import { mapView } from "./map-view.js";
 import { afterOldPage, entrance, glide, rise, riseHead } from "./motion.js";
-import { closePanel, isPanelOpen, moveInto, openInfo, review } from "./panel.js";
+import { closePanel, isPanelOpen, moveInto, openInfo, panelState, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, folderName, gatewayName, kitdenClients, mark, opens, ORIGIN_WORDS, scopeBar, skeleton, STATE_WORDS, staleNote } from "./parts.js";
 import { arrival, current, currentError, data, go, goTo, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
 import { addToTray, inTray, keyFor, onTray, takeOut, tray } from "./tray.js";
@@ -721,10 +721,17 @@ function drawAgain(options) {
   return drawOnMap(model, options);
 }
 
-// Let go of the selection: the map shows none and Details close. Focus stays where it is.
+// Letting go of the selection closes the Details it opened, unless they show a row's review
+// (`current`, panelState's): that review belongs to the tray, not to the selection.
+export function letGoCloses(current) {
+  return !(current && current.type === "row-review");
+}
+
+// Let go of the selection: the map shows none and Details close (letGoCloses). Focus stays where
+// it is.
 function letGoOnMap() {
   onMap.selected = null;
-  if (isPanelOpen()) closePanel({ focus: false });
+  if (isPanelOpen() && letGoCloses(panelState.current)) closePanel({ focus: false });
   else setState({ selected: null });
   drawAgain();
 }
@@ -736,7 +743,7 @@ function letGoIfSelected() {
 
 // A press on a block (a held server opened or folded first, by onOpen). "N more" opens the List
 // at its group, focused there, so Details close first. A second press on the selected block lets
-// go. The first run's slot opens the review that sets every client up; the slot of a drag does
+// go. The first run's slot adds the change that sets every client up; the slot of a drag does
 // nothing. A preview block takes its row out of the tray (D12). Any other block is selected.
 export function pressBlock(model, id) {
   if (id.startsWith("more:")) {

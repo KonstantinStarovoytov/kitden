@@ -101,10 +101,10 @@ export function clientCard(client, { setup, clients, progress = data.progress } 
     if (!turnsOn) why = [why, `Turn it on in ${name}'s own MCP settings.`].join(" ");
   }
   const actions = offers.filter((s) => s.client === client)
-    .map((s) => ({ label: s.label, body: s.body, run: () => review(s.body, { note: SETUP_NOTE }), primary: true }));
+    .map((s) => ({ label: s.label, body: s.body, note: SETUP_NOTE, primary: true }));
   if (turnsOn) {
     const body = { action: "setup_server.enable", targets: [{ client }], params: {} };
-    actions.push({ label: `Turn it on in ${name}…`, body, run: () => review(body, { note: SETUP_NOTE }), primary: true });
+    actions.push({ label: `Turn it on in ${name}…`, body, note: SETUP_NOTE, primary: true });
   }
   if (found && found.app_url) {
     const url = found.app_url;
@@ -280,8 +280,8 @@ export function outsideCard(row, group, definitions, { view, clients = foundClie
   if (source && !definitions.some((d) => d.via_gateway)) {
     for (const client of WRITABLE.filter((c) => clients.includes(c) && !definitions.some((d) => d.client === c))) {
       const body = { action: "mcp.add", targets: [{ client }], params: { item: source.id } };
-      // In a project an add still goes to the client's settings for all projects; the review says so.
-      actions.push({ label: `+ Add to ${CLIENT_NAMES[client]}…`, body, run: () => review(body, { note: projectNote(state.project) }) });
+      // In a project an add still goes to the client's settings for all projects; its note says so.
+      actions.push({ label: `+ Add to ${CLIENT_NAMES[client]}…`, body, note: projectNote(state.project) });
     }
   }
   const offers = own.filter((d) => d.actions.includes("mcp.remove_direct")).map((def) => ({ def, action: "mcp.remove_direct" }));
@@ -508,16 +508,14 @@ export function heldCard(server, { linked, picked = "", folder = "", view = null
 
 // Showing a card -----------------------------------------------------------------------------
 
-// Open a card beside the page, its warning first. A review opened from it comes back to it:
-// `draw` draws it again from what it read, `read` reads first (the settings changed since the
-// preview). False when a review being written kept its place.
+// Open a card beside the page, its warning first. A press in it comes back to it: `draw` draws it
+// again from what it read, `read` reads first (after Apply all).
 function openCard(card, shown, draw, read = draw) {
   panelState.current = shown;
   const nodes = detailsCard(card);
   if (card.warning) nodes[1].prepend(callout(card.warning));
-  if (!openPanel(nodes)) return false;
+  openPanel(nodes);
   keepFrom(draw, nodes, read);
-  return true;
 }
 
 export function showClient(id) {
@@ -534,7 +532,7 @@ export function showGateway(id, { adding = false } = {}) {
     return;
   }
   const card = gatewayCard(gateway, { view, setup: data.setupServer, projects: data.projects, held: held.get(id), adding });
-  if (!openCard(card, { type: "gateway", gateway: id }, () => showGateway(id))) return;
+  openCard(card, { type: "gateway", gateway: id }, () => showGateway(id));
   if (adding) {
     const first = $("#drawer .add-gateway input");
     if (first) first.focus();
@@ -552,7 +550,7 @@ export async function showOutside(group, name) {
   }
   setState({ selected: { kind: "mcp_server", name: row.name } });
   const shown = { type: "outside", group, name };
-  if (!drawOutside(row, group, [], shown)) return;
+  drawOutside(row, group, [], shown);
   let answer;
   try {
     answer = await getJson(`/api/explain${query({ name: row.name, kind: "mcp_server", project: state.project })}`);
@@ -566,7 +564,7 @@ export async function showOutside(group, name) {
 
 function drawOutside(row, group, definitions, shown) {
   const card = outsideCard(row, group, definitions, { view: current("gateway") });
-  return openCard(card, shown, () => drawOutside(row, group, definitions, shown), () => showOutside(group, row.name));
+  openCard(card, shown, () => drawOutside(row, group, definitions, shown), () => showOutside(group, row.name));
 }
 
 // A server in the Kitden gateway, or one of its tools: its card is drawn from the page's latest
@@ -623,7 +621,7 @@ function drawHeld(name, detail, { choosing = false, warning = null } = {}) {
     return;
   }
   const card = { ...heldCard(server, { ...heldContext(), view, detail, choosing }), warning };
-  if (!openCard(card, { type: "held", name }, () => drawHeld(name, detail, { choosing }), () => showHeld(name))) return;
+  openCard(card, { type: "held", name }, () => drawHeld(name, detail, { choosing }), () => showHeld(name));
   focusChoice(choosing);
 }
 
@@ -643,7 +641,7 @@ function drawTool(serverName, name, rules, { choosing = false, warning = null } 
   }
   const detail = (rules.tools || []).find((t) => t.name === name) || {};
   const card = { ...toolCard(tool, server, { ...heldContext(), detail, rules, choosing }), warning };
-  if (!openCard(card, { type: "tool", server: serverName, tool: name }, () => drawTool(serverName, name, rules, { choosing }), () => showTool(serverName, name))) return;
+  openCard(card, { type: "tool", server: serverName, tool: name }, () => drawTool(serverName, name, rules, { choosing }), () => showTool(serverName, name));
   focusChoice(choosing);
 }
 

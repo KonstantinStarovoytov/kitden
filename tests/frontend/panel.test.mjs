@@ -5,10 +5,11 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; panel.js must load there too.
 delete globalThis.navigator;
-const { DOCK_MIN, addScope, afterParts, alignGroups, canShowReview, cancelPreview, closeForProject, closePanel, countedDefinition, changeOutcome, chosenKeys, callsText, changeWords, docksAt, footerActions, heldActions, initPanel, isPanelOpen, offerLabel, openItem, layerState, leftOutText, kindWord, loadsLede, moveFor, moveTargets, openPanel, panelState, plainSecrets, projectLabel, review, reviewLede, scopeWords, swapContent, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
+const { DOCK_MIN, addScope, afterParts, alignGroups, canShowReview, closeForProject, closePanel, countedDefinition, changeOutcome, chosenKeys, callsText, changeWords, docksAt, footerActions, heldActions, initPanel, isPanelOpen, offerLabel, openItem, layerState, leftOutText, kindWord, loadsLede, moveFor, moveTargets, openPanel, panelState, plainSecrets, projectLabel, review, reviewLede, scopeWords, swapContent, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
 const { detailsCard, factsBlock } = await import('../../src/kitden/web/static/js/details.js');
 const { addOptions, whyNoAction } = await import('../../src/kitden/web/static/js/offer.js');
-const { busy, data, state } = await import('../../src/kitden/web/static/js/store.js');
+const { data, state } = await import('../../src/kitden/web/static/js/store.js');
+const { addToTray, cancelTray, tray } = await import('../../src/kitden/web/static/js/tray.js');
 
 const github = { kind: 'mcp_server', name: 'github' };
 const direct = { name: 'github', items: ['entry-1', 'entry-2'] };
@@ -614,7 +615,7 @@ function fakePanelPage() {
       attributes,
       setAttribute: (name, value) => { attributes[name] = String(value); },
       removeAttribute: (name) => { delete attributes[name]; },
-      replaceChildren() {}, focus() {}, contains: () => false,
+      replaceChildren() {}, focus() {}, contains: () => false, querySelectorAll: () => [],
     };
   };
   const nodes = { '#drawer': node(), '#scrim': node(), '#main': node(), '.shell': node() };
@@ -623,6 +624,22 @@ function fakePanelPage() {
     documentElement: { classList: { remove() {} } },
     querySelector: (selector) => nodes[selector] ?? null,
     querySelectorAll: () => [],
+  };
+}
+
+// A stand-in server for the tray: every request is kept as { url, body }; a batch preview answers
+// with one step and one row per request.
+function trayServer(sent) {
+  return async (url, options = {}) => {
+    const body = options.body ? JSON.parse(options.body) : null;
+    sent.push({ url, body });
+    if (url !== '/api/batch/preview') return Response.json({});
+    const { requests } = body;
+    return Response.json({
+      id: `c${sent.length}`, action: 'batch', state: 'previewed', error: null, undo_note: null,
+      steps: requests.map(() => ({ client: 'codex', name: 'x' })),
+      rows: requests.map((r, at) => ({ id: r.id, kind: r.kind, title: r.title, detail: '', project: null, steps: [at], after: [] })),
+    });
   };
 }
 
@@ -688,115 +705,20 @@ test('Details opened on arrival gives focus back to the selected row, not to the
   }
 });
 
-test('Details drawn again after an Apply belongs to the project picked during it', () => {
-  fakePanelPage();
-  try {
-    state.project = 'atlas';
-    openPanel([]);
-    busy.change = true; // the change is being written: the panel stays
-    state.project = 'web';
-    closeForProject();
-    assert.equal(isPanelOpen(), true);
-    openPanel([]); // verified: Details is drawn again, for web
-    busy.change = false;
-    state.project = 'atlas'; // Back
-    closeForProject();
-    assert.equal(isPanelOpen(), false);
-  } finally {
-    busy.change = false;
-    state.project = '';
-    delete globalThis.document;
-  }
-});
 
-test('a review that answers after the project changed is dropped', async () => {
-  fakePanelPage();
-  const posted = [];
-  let answer;
-  globalThis.fetch = (url) => {
-    posted.push(url);
-    if (url.endsWith('/preview')) return new Promise((resolve) => { answer = resolve; });
-    return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
-  };
-  try {
-    state.project = 'atlas';
-    const pending = review({ action: 'mcp.add', targets: [{ client: 'codex' }], params: {} });
-    state.project = 'web';
-    answer({ ok: true, status: 200, json: async () => ({ id: 'c1', action: 'mcp.add', steps: [{ client: 'codex', name: 'github' }], after: [] }) });
-    await pending;
-    assert.equal(isPanelOpen(), false);
-    assert.deepEqual(posted.filter((url) => url.includes('/cancel')), ['/api/changes/c1/cancel']);
-  } finally {
-    state.project = '';
-    delete globalThis.document;
-    delete globalThis.fetch;
-  }
-});
-
-test('a refused review that answers after the project changed goes nowhere', async () => {
-  fakePanelPage();
-  const posted = [];
-  let answer;
-  let backs = 0;
-  globalThis.fetch = (url) => {
-    posted.push(url);
-    return new Promise((resolve) => { answer = resolve; });
-  };
-  try {
-    state.project = 'atlas';
-    const pending = review({ action: 'gateway.rule', targets: [], params: {} }, { back: async () => { backs += 1; } });
-    state.project = '';
-    answer({ ok: false, status: 422, json: async () => ({ detail: 'No.' }) });
-    await pending;
-    assert.equal(isPanelOpen(), false);
-    assert.equal(backs, 0);
-    assert.deepEqual(posted, ['/api/changes/preview']);
-  } finally {
-    state.project = '';
-    delete globalThis.document;
-    delete globalThis.fetch;
-  }
-});
-
-test('Cancel sends one cancel for the review, and a closed panel forgets the Details it came from', async () => {
-  fakePanelPage();
-  const posted = [];
-  globalThis.fetch = (url) => {
-    posted.push(url);
-    return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
-  };
-  try {
-    openPanel([]);
-    panelState.current = { type: 'review', change: { id: 'c1', state: 'previewed' } };
-    panelState.from = { row: {}, definitions: [], offer: null, inherits: {}, focus: 'move' };
-    cancelPreview(); // Cancel's own
-    closePanel({ focus: false }); // closing cancels an open review too: not twice
-    await Promise.resolve();
-    assert.deepEqual(posted, ['/api/changes/c1/cancel']);
-    assert.equal(panelState.from, null);
-  } finally {
-    panelState.current = null;
-    panelState.from = null;
-    delete globalThis.document;
-    delete globalThis.fetch;
-  }
-});
-
-test('the preview names the project picked at the top, so the server can tell what it overrides', async () => {
-  let sent = null;
-  globalThis.fetch = (url, options) => {
-    sent = JSON.parse(options.body);
-    return Promise.resolve({ ok: false, status: 422, json: async () => ({ detail: 'No.' }) });
-  };
+test('a change names the project picked at the top, so the server can tell what it overrides', async () => {
+  const sent = [];
+  globalThis.fetch = trayServer(sent);
   try {
     state.project = 'p1';
     await review({ action: 'plugin.disable', targets: [{ item: 'i1' }], params: {} }, { back: async () => {} });
-    assert.deepEqual(sent, { action: 'plugin.disable', targets: [{ item: 'i1' }], params: {}, picked: 'p1' });
     state.project = '';
-    await review({ action: 'plugin.disable', targets: [{ item: 'i1' }], params: {} }, { back: async () => {} });
-    assert.equal(sent.picked, null);
+    await review({ action: 'plugin.disable', targets: [{ item: 'i2' }], params: {} }, { back: async () => {} });
+    const asked = sent.filter((call) => call.url === '/api/batch/preview').map((call) => call.body.requests.map((r) => [r.targets[0].item, r.picked]));
+    assert.deepEqual(asked, [[['i1', 'p1']], [['i1', 'p1'], ['i2', null]]]);
   } finally {
     state.project = '';
+    await cancelTray();
     delete globalThis.fetch;
   }
 });
@@ -813,7 +735,7 @@ function element(tag) {
   return node;
 }
 
-test('a refusal goes back only to the Details the review was asked from', async () => {
+test("a refusal of Add missing's list goes back only to the Details it was asked from", async () => {
   fakePanelPage();
   document.createElement = element;
   let answer;
@@ -821,7 +743,7 @@ test('a refusal goes back only to the Details the review was asked from', async 
   const drawn = [];
   try {
     panelState.from = { draw: () => drawn.push('asked from'), focus: null };
-    const pending = review({ action: 'mcp.remove_direct', targets: [], params: {} });
+    const pending = review({ action: 'project.align', targets: [], params: { project: 'p1', chosen: null } });
     // The person opened another item's Details while the preview was prepared.
     panelState.from = { draw: () => drawn.push('another'), focus: null };
     answer({ ok: false, status: 422, json: async () => ({ detail: 'No.' }) });
@@ -1014,6 +936,81 @@ test('Tab in the drawer also reaches what the dock shows, the bar or a toast, in
   }
 });
 
+test('Escape and other Details keep every tray row', async () => {
+  const page = keyboardPage();
+  const sent = [];
+  globalThis.fetch = trayServer(sent);
+  try {
+    initPanel();
+    await addToTray({ action: 'mcp.add', targets: [{ client: 'codex' }], params: { item: 'github' } });
+    await addToTray({ action: 'mcp.add', targets: [{ client: 'codex' }], params: { item: 'neon' } });
+    assert.deepEqual([tray.rows.length, tray.phase], [2, 'ready']);
+    // A row's review, other Details over it, then Escape.
+    panelState.current = { type: 'row-review', row: tray.rows[0] };
+    openPanel(['row review']);
+    panelState.current = { type: 'item', row: {} };
+    openPanel(['other details']);
+    page.press('Escape');
+    assert.equal(isPanelOpen(), false);
+    // A row's review closed by its own Close.
+    panelState.current = { type: 'row-review', row: tray.rows[1] };
+    openPanel(['row review']);
+    closePanel({ focus: false });
+    assert.deepEqual([tray.rows.length, tray.phase], [2, 'ready']);
+    assert.deepEqual(sent.filter((call) => call.url.endsWith('/cancel')).map((call) => call.url), ['/api/changes/c1/cancel']); // only the first preview, replaced by the second
+  } finally {
+    await cancelTray();
+    panelState.current = null;
+    delete globalThis.fetch;
+    leaveDockTest();
+  }
+});
+
+test("Ctrl Enter presses the tray's Apply when ready", async () => {
+  const page = keyboardPage();
+  const sent = [];
+  globalThis.fetch = trayServer(sent);
+  let pressed = 0;
+  const apply = { click: () => { pressed += 1; } };
+  const [inDock, inDrawer, onPage] = [{ name: 'dock' }, { name: 'drawer' }, { name: 'page' }];
+  const dock = { contains: (node) => node === inDock };
+  const drawer = document.querySelector('#drawer');
+  drawer.contains = (node) => node === inDrawer;
+  const find = document.querySelector;
+  document.querySelector = (selector) => ({ '#dock': dock, '#dock .apply': apply })[selector] ?? find(selector);
+  const ctrl = (extra = { ctrlKey: true }) => page.press('Enter', extra).prevented;
+  try {
+    initPanel();
+    // Nothing in the tray: nothing to press.
+    document.activeElement = inDock;
+    assert.deepEqual([ctrl(), pressed], [false, 0]);
+    await addToTray({ action: 'mcp.add', targets: [{ client: 'codex' }], params: { item: 'github' } });
+    assert.equal(tray.phase, 'ready');
+    // From the dock, and from Details with ⌘ (on a Mac).
+    assert.deepEqual([ctrl(), pressed], [true, 1]);
+    openPanel([]);
+    document.activeElement = inDrawer;
+    assert.deepEqual([ctrl({ metaKey: true }), pressed], [true, 2]);
+    // Focus on the page, or Enter alone: nothing.
+    document.activeElement = onPage;
+    assert.deepEqual([ctrl(), pressed], [false, 2]);
+    document.activeElement = inDrawer;
+    assert.deepEqual([ctrl({}), pressed], [false, 2]);
+    // While a preview is on its way Apply waits, and so does the key.
+    tray.phase = 'asking';
+    assert.deepEqual([ctrl(), pressed], [false, 2]);
+    tray.phase = 'ready';
+    // Closed Details: focus in the drawer does not count.
+    closePanel({ focus: false });
+    document.activeElement = inDrawer;
+    assert.deepEqual([ctrl(), pressed], [false, 2]);
+  } finally {
+    await cancelTray();
+    delete globalThis.fetch;
+    leaveDockTest();
+  }
+});
+
 test('a window that grows or shrinks while Details are open switches the column and the drawer', () => {
   const page = keyboardPage();
   const drawer = document.querySelector('#drawer');
@@ -1112,6 +1109,7 @@ function domNode(tag) {
     append(...nodes) { for (const child of nodes) { child.parent = node; node.children.push(child); } },
     prepend(...nodes) { for (const child of nodes) child.parent = node; node.children.unshift(...nodes); },
     setAttribute(name, value) { node.attributes[name] = value; },
+    removeAttribute(name) { delete node.attributes[name]; },
     addEventListener(type, fn) { node[`on${type}`] = fn; },
     replaceWith(...nodes) {
       const at = node.parent.children.indexOf(node);
@@ -1211,7 +1209,7 @@ test('More shows the other actions where it stood, before the quiet node', () =>
   }
 });
 
-test('an action runs its own code, else it asks for the review of its change', async () => {
+test('an action runs its own code, else it adds its change to the tray', async () => {
   fakePanelPage();
   document.createElement = domNode;
   const calls = [];
@@ -1227,174 +1225,15 @@ test('an action runs its own code, else it asks for the review of its change', a
     assert.deepEqual(calls, ['run']);
     footer.children[1].onclick({});
     await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.deepEqual(calls[1], ['POST', '/api/changes/preview', JSON.stringify({ ...body, picked: null })]);
+    assert.equal(calls[1][1], '/api/batch/preview');
+    assert.deepEqual(JSON.parse(calls[1][2]).requests.map((r) => [r.kind, r.targets, r.params, r.picked]), [[body.action, body.targets, body.params, null]]);
     // Each action is found again by its words after the card is drawn again.
     assert.deepEqual(footer.children.map((node) => node.dataset.focus), ['action:Own', 'action:Remove…']);
   } finally {
+    await cancelTray();
     panelState.current = null;
     delete globalThis.document;
     delete globalThis.fetch;
-  }
-});
-
-// A review that stays, or goes, when a press elsewhere opens other Details beside the page -----
-
-// The panel shows a review. `content` keeps what the drawer was last given; `asked` each request.
-function pageWithReview(change, fields = {}) {
-  fakePanelPage();
-  const drawer = document.querySelector('#drawer');
-  const shown = { content: null, asked: [] };
-  drawer.replaceChildren = (...nodes) => { shown.content = nodes; };
-  globalThis.fetch = async (url, options = {}) => {
-    shown.asked.push(`${options.method || 'GET'} ${url}`);
-    return Response.json({});
-  };
-  state.view = 'library';
-  windowIs(true);
-  shown.review = { type: 'review', change, ...fields };
-  panelState.current = shown.review;
-  openPanel(['the review']);
-  return shown;
-}
-
-function leaveReviewTest() {
-  busy.change = false;
-  panelState.current = null;
-  panelState.from = null;
-  delete globalThis.fetch;
-  leaveDockTest();
-}
-
-test('while a review is written, a press that would open other Details does nothing', () => {
-  const shown = pageWithReview({ id: 'c1', state: 'previewed' });
-  try {
-    busy.change = true;
-    panelState.current = { type: 'item', row: {} }; // openItem sets its own state before openPanel
-    assert.equal(openPanel(['other details']), false);
-    assert.equal(panelState.current, shown.review); // the review that is still showing
-    assert.deepEqual(shown.content, ['the review']);
-    // The change is being written: nothing is sent to cancel it.
-    assert.deepEqual(shown.asked, []);
-    assert.equal(shown.review.change.state, 'previewed');
-    // An opener with no state of its own (the Add form) is kept out too.
-    assert.equal(openPanel(['add form']), false);
-    assert.deepEqual(shown.content, ['the review']);
-    // Once the change is verified, a review that hands back to its Details lets go.
-    shown.review.change = { id: 'c1', state: 'verified' };
-    shown.review.handingBack = true;
-    panelState.current = { type: 'item', row: {} };
-    assert.equal(openPanel(['details again']), true);
-    assert.deepEqual(shown.content, ['details again']);
-    assert.deepEqual(shown.asked, []);
-  } finally {
-    leaveReviewTest();
-  }
-});
-
-test('Details pressed while a review is written read nothing, and the review stays', async () => {
-  const shown = pageWithReview({ id: 'c1', state: 'previewed' });
-  document.createElement = domNode;
-  try {
-    busy.change = true;
-    await openItem({ kind: 'mcp_server', name: 'github', key: 'k1', cells: {}, flags: [] });
-    assert.equal(panelState.current, shown.review);
-    assert.deepEqual(shown.content, ['the review']);
-    assert.deepEqual(shown.asked, []); // no read of the item, no cancel
-    // The same press with nothing being written opens the Details.
-    busy.change = false;
-    openItem({ kind: 'mcp_server', name: 'github', key: 'k1', cells: {}, flags: [] }).catch(() => {});
-    assert.equal(panelState.current.type, 'item');
-    assert.notDeepEqual(shown.content, ['the review']);
-  } finally {
-    leaveReviewTest();
-  }
-});
-
-test('a review that is only previewed is cancelled on the server when other Details replace it', () => {
-  const from = { draw() {} };
-  const shown = pageWithReview({ id: 'c1', state: 'previewed' }, { from });
-  try {
-    panelState.from = from;
-    panelState.current = { type: 'item', row: {} };
-    assert.equal(openPanel(['other details']), true);
-    assert.deepEqual(shown.asked, ['POST /api/changes/c1/cancel']);
-    assert.equal(shown.review.change.state, 'cancelled');
-    assert.equal(panelState.from, null); // the Details it came from is not a way back now
-    assert.equal(panelState.current.type, 'item');
-    assert.deepEqual(shown.content, ['other details']);
-  } finally {
-    leaveReviewTest();
-  }
-});
-
-test('a press that has no state of its own clears the review it replaces', () => {
-  const shown = pageWithReview({ id: 'c1', state: 'previewed' });
-  try {
-    openPanel(['add form']); // the Add form leaves panelState.current as it was
-    assert.deepEqual(shown.asked, ['POST /api/changes/c1/cancel']);
-    assert.equal(panelState.current, null);
-  } finally {
-    leaveReviewTest();
-  }
-});
-
-test('a review replaced on purpose keeps its way back, and a cancelled one sends nothing', () => {
-  const from = { draw() {} };
-  const shown = pageWithReview({ id: 'c1', state: 'cancelled' }, { from });
-  try {
-    // Cancel went back to Details: the review was cancelled already.
-    panelState.from = from;
-    panelState.current = { type: 'item', row: {} };
-    openPanel(['details']);
-    assert.deepEqual(shown.asked, []);
-    assert.equal(panelState.from, from);
-    // A new preview over a previewed one (Preview again, an Add pressed on the page): the old
-    // one is cancelled, and the way back stays for the new review.
-    closePanel({ focus: false });
-    const old = { type: 'review', change: { id: 'c2', state: 'previewed' } };
-    panelState.current = old;
-    openPanel(['review two']);
-    panelState.from = from;
-    panelState.current = { type: 'review', change: { id: 'c3', state: 'previewed' } };
-    openPanel(['review three']);
-    assert.deepEqual(shown.asked, ['POST /api/changes/c2/cancel']);
-    assert.equal(panelState.from, from);
-  } finally {
-    leaveReviewTest();
-  }
-});
-
-// An element that takes whatever a review draws on it.
-function looseNode(tag) {
-  const node = {
-    tag, className: '', textContent: '', children: [], childNodes: [], attributes: {}, dataset: {}, style: {},
-    classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
-    append(...nodes) { node.children.push(...nodes); },
-    prepend(...nodes) { node.children.unshift(...nodes); },
-    setAttribute(name, value) { node.attributes[name] = value; },
-    addEventListener() {},
-    querySelector: () => ({ addEventListener() {} }),
-  };
-  return node;
-}
-
-test('a review whose preview arrives while another review is written is cancelled at once', async () => {
-  const shown = pageWithReview({ id: 'c1', state: 'previewed' });
-  document.createElement = looseNode;
-  document.createElementNS = looseNode;
-  const recorded = globalThis.fetch;
-  globalThis.fetch = async (url, options = {}) => {
-    if (url === '/api/changes/preview') return Response.json({ id: 'c2', state: 'previewed', action: 'mcp.remove_direct', steps: [] });
-    return recorded(url, options);
-  };
-  try {
-    busy.change = true;
-    await review({ action: 'mcp.remove_direct', targets: [{ item: 'i1' }], params: {} });
-    assert.deepEqual(shown.content, ['the review']);
-    assert.equal(panelState.current, shown.review);
-    assert.deepEqual(shown.asked, ['POST /api/changes/c2/cancel']);
-  } finally {
-    leaveReviewTest();
   }
 });
 

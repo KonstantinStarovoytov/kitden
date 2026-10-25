@@ -1,22 +1,18 @@
-// Change review: the preview, Apply and its motion, and Undo.
+// Change review: a change in Details as it was previewed (a row of the tray, or Add missing's
+// list before its row is added), what the page does after Apply all, and Undo.
 import { postJson } from "./api.js";
 import { backToDetails, clientName, KIND_WORDS } from "./details.js";
-import { $, $$, button, el, joinWords, plural, reportError, shortPath, shortPaths } from "./dom.js";
+import { $$, button, el, joinWords, plural, shortPath, shortPaths, withFocusKey } from "./dom.js";
 import { loadLibrary, morphOnNextRender } from "./library.js";
 import { fold, transition } from "./motion.js";
-import { cancelPreview, checkMark, closePanel, header, hideToast, isPanelOpen, openPanel, panelState, restoreFocus, toast } from "./panel.js";
-import { allPutBack, callout, checkBox, CLIENT_ORDER, diffCounts, kitdenMove, mark, movedNames, notesSection, PLACE_IN_TITLE, ruleText, rulesText, skillRemoval, socket, stepText, strictText, targetWords } from "./parts.js";
+import { closePanel, header, hideToast, isPanelOpen, openPanel, panelState, toast } from "./panel.js";
+import { allPutBack, callout, checkBox, CLIENT_ORDER, diffCounts, kitdenMove, mark, movedNames, notesSection, PLACE_IN_TITLE, ruleText, rulesText, skillRemoval, socket, strictText, targetWords } from "./parts.js";
 import { busy, reload, render, setBusy, state } from "./store.js";
 import { projectLabel, tools } from "./tools.js";
-import { changeOutcome, LOST, readChange, takeOut } from "./tray.js";
+import { addToTray, changeOutcome, takeOut, tray } from "./tray.js";
 
 // changeOutcome lives in tray.js; panel.js still exports it from here.
 export { changeOutcome };
-
-// Node before 21 (the tests) has no navigator.
-const APPLY_KEY = typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "⌘ Enter to apply" : "Ctrl Enter to apply";
-// While a change is written nothing in the review can stop it; the note says what happens.
-const WRITING = "Writing the change. It can't stop halfway: if a step fails, Kitden puts everything back.";
 
 const DONE_WORDS = {
   "plugin.disable": "Turned off", "plugin.enable": "Turned on", "mcp.remove_direct": "Removed", "plugin.remove": "Removed",
@@ -180,11 +176,16 @@ export function chosenKeys(align, key, checked) {
   return align.candidates.filter((c) => (c.key === key ? checked : c.chosen)).map((c) => c.key);
 }
 
-// The Add missing checklist. A change cancels this preview and asks for a new one with the new
-// choice; with nothing chosen there is nothing to preview, so Apply waits for a box.
-function alignSection(change, previewBody, note, apply) {
+// The Add missing checklist, ticked as the change says. A changed tick calls `onChoose(keys)` with
+// the keys ticked now, in candidate order; with none it says to choose one. The change itself is
+// left as it is: the caller asks for the new one.
+function alignSection(change, onChoose) {
   const section = el("section", "align");
-  for (const group of alignGroups(change.align)) {
+  const align = { ...change.align, candidates: change.align.candidates.map((c) => ({ ...c })) };
+  const none = () => {
+    if (!section.querySelector(".none")) section.append(el("p", "note none", "Choose at least one item."));
+  };
+  for (const group of alignGroups(align)) {
     const set = el("fieldset", "checks list");
     set.append(el("legend", null, `Add to ${group.name}`));
     for (const item of group.items) {
@@ -193,16 +194,10 @@ function alignSection(change, previewBody, note, apply) {
       box.checked = item.chosen;
       box.dataset.key = item.key;
       box.addEventListener("change", async () => {
-        const chosen = chosenKeys(change.align, item.key, box.checked);
-        cancelPreview();
-        apply.disabled = true;
-        change.align.candidates = change.align.candidates.map((c) => ({ ...c, chosen: chosen.includes(c.key) }));
-        change.state = "cancelled";
-        if (!chosen.length) {
-          if (!section.querySelector(".none")) section.append(el("p", "note none", "Choose at least one item."));
-          return;
-        }
-        await review({ ...previewBody, params: { ...previewBody.params, chosen } }, { note });
+        const chosen = chosenKeys(align, item.key, box.checked);
+        for (const c of align.candidates) c.chosen = chosen.includes(c.key);
+        if (!chosen.length) none();
+        await onChoose(chosen);
         const again = $$("#drawer input[type=checkbox]").find((b) => b.dataset.key === item.key);
         if (again) again.focus();
       });
@@ -212,18 +207,15 @@ function alignSection(change, previewBody, note, apply) {
     }
     section.append(set);
   }
-  // Every add would make a duplicate, so none starts checked: Apply waits for a box.
-  if (!change.align.candidates.some((c) => c.chosen)) {
-    apply.disabled = true;
-    section.append(el("p", "note none", "Choose at least one item."));
-  }
-  const notSame = change.align.not_same || [];
+  // Every add would make a duplicate, so none starts ticked.
+  if (!align.candidates.some((c) => c.chosen)) none();
+  const notSame = align.not_same || [];
   if (notSame.length) {
     const list = el("ul", "checklist");
     for (const n of notSame) list.append(el("li", null, `${n.name} · ${KIND_WORDS[n.kind]} · ${n.clients.map(clientName).join(", ")}`));
     section.append(el("h2", null, "Not the same; not touched"), list);
   }
-  const leftOut = leftOutText(change.align.left_out);
+  const leftOut = leftOutText(align.left_out);
   if (leftOut) section.append(el("p", "muted", leftOut));
   return section;
 }
@@ -234,36 +226,42 @@ export function leftOutText(leftOut) {
   return `Left out: ${leftOut.map((s) => `${s.name} (${s.why})`).join(", ")}.`;
 }
 
-// Ask the server for a preview and show it. Used by the Library, Gateway and Agents places.
-// `note` shows as a callout above the result, for example that an add is for every project.
-// `back({ error, verified })` returns to the Details the review came from (a tool switch):
-// after Cancel, after Apply is verified, or with the reason the preview was refused.
 // A preview answer the review can show: a change, or an Add missing list with nothing chosen
-// (no change yet, so no id; Apply waits for a box).
+// (no change yet, so no id; "Add to preview" waits for a box).
 export function canShowReview(result) {
   const data = result && result.ok ? result.data : null;
   return Boolean(data && (data.id || (data.align && Array.isArray(data.steps))));
 }
 
+// Every change waits in the tray: a press adds its row there and opens nothing (the tray's bar says
+// why when the server refuses it). Add missing is the one change asked with nothing chosen yet, so
+// its list opens in Details first. `note` goes with the row, shown above its review. `back`, from a
+// tool list, hears how the add went: `{ queued: true }`, or `{ error }` with the reason.
 export async function review(previewBody, { note = null, back = null } = {}) {
-  const asked = state.project;
-  // The Details this review is asked from, if any: Cancel and a refusal go back only there.
-  const from = panelState.from;
-  // The project picked at the top: the server says when its own definition wins there.
-  const result = await postJson("/api/changes/preview", { ...previewBody, picked: asked || null });
-  // Another project was picked while it was prepared: it opens nothing, and the server forgets it.
-  if (state.project !== asked) {
-    const id = result && result.data && result.data.id;
-    if (id) postJson(`/api/changes/${encodeURIComponent(id)}/cancel`).catch(() => {});
+  const params = previewBody.params || {};
+  if (previewBody.action === "project.align" && !params.chosen) {
+    await chooseMissing(previewBody, note);
     return;
   }
+  const joined = await addToTray(previewBody, { note });
+  if (!back) return;
+  if (joined) await back({ queued: true });
+  else if (tray.refused) await back({ error: tray.refused.reason });
+}
+
+// Add missing's list: the server says what each client lacks and ticks what would not make a
+// duplicate. The preview behind it is never applied (the tray is), so the server forgets it at once.
+// The list shows in Details; a refusal goes back to the Details it was asked from, if still there.
+async function chooseMissing(previewBody, note) {
+  const asked = state.project;
+  const from = panelState.from;
+  const result = await postJson("/api/changes/preview", { ...previewBody, picked: asked || null });
+  const id = result && result.data && result.data.id;
+  if (id) postJson(`/api/changes/${encodeURIComponent(id)}/cancel`).catch(() => {});
+  // Another project was picked while it was prepared: it opens nothing.
+  if (state.project !== asked) return;
   if (!canShowReview(result)) {
     const reason = (result.data && result.data.detail) || `Could not prepare this change (${result.status}).`;
-    if (back) {
-      await back({ error: reason });
-      return;
-    }
-    // From Details, the reason shows there, as for a tool switch.
     if (from && panelState.from === from) {
       backToDetails({ error: reason });
       return;
@@ -276,14 +274,33 @@ export async function review(previewBody, { note = null, back = null } = {}) {
     openPanel([header("Review change", "Could not prepare this change", null, null), body, footer]);
     return;
   }
-  showReview(result.data, previewBody, note, back, from);
+  showChooser(result.data, previewBody, note, from);
 }
 
-// Where Cancel goes: "back" (a tool switch's own way back), "details" (the Details the review
-// was opened from) or "close".
-export function cancelTarget({ back, from }) {
-  if (back) return "back";
-  return from ? "details" : "close";
+// The list in Details: the review of what is ticked now, the ticks, Cancel and "Add to preview".
+// A changed tick asks for the list again with that choice. "Add to preview" adds the row with the
+// ticks; it and Cancel go back to the Details the list was opened from, else the panel closes.
+function showChooser(change, previewBody, note, from) {
+  const leave = () => (from && panelState.from === from ? backToDetails() : closePanel());
+  let chosen = change.align.candidates.filter((c) => c.chosen).map((c) => c.key);
+  const add = button("Add to preview", () => {
+    const body = { ...previewBody, params: { ...previewBody.params, chosen } };
+    leave();
+    return addToTray(body, { note });
+  }, "btn primary");
+  add.disabled = !chosen.length;
+  const onChoose = (keys) => {
+    chosen = keys;
+    add.disabled = true;
+    if (keys.length) return chooseMissing({ ...previewBody, params: { ...previewBody.params, chosen: keys } }, note);
+    return null;
+  };
+  showReview(change, previewBody, note, {
+    current: { type: "align", change, previewBody, note },
+    picked: state.project,
+    buttons: [button("Cancel", leave, "btn"), add],
+    onChoose,
+  });
 }
 
 // The after line's client chips, and its notes, each once. An entry may have only a note (a
@@ -325,15 +342,14 @@ function diffLines(text) {
   return pre;
 }
 
-// What a review shows under its title: the note, the result, the file changes behind one summary
-// and what follows. `apply` is the review's own Apply button, which Add missing's checklist turns
-// off until a box is ticked; a row of the tray has none, and its choice is already made.
-function reviewBody(change, previewBody, note, apply) {
+// What a review shows under its title: the note, the result, Add missing's ticks (with
+// `onChoose`), the file changes behind one summary and what follows.
+function reviewBody(change, previewBody, note, onChoose) {
   const body = el("div", "body");
   if (note) body.append(callout(note));
   if (change.after && change.after.length) body.append(afterLine(change.after));
   if (change.shared_file_warning) body.append(callout("This edits a project file that is usually shared through git."));
-  if (change.align && apply) body.append(alignSection(change, previewBody, note, apply));
+  if (change.align && onChoose) body.append(alignSection(change, onChoose));
   // The result comes first; the file change and the command wait behind one summary.
   const files = el("details", "file-change");
   const summary = el("summary", null, change.steps.length > 1 ? "Show file changes" : "Show file change");
@@ -364,231 +380,52 @@ function reviewBody(change, previewBody, note, apply) {
   return body;
 }
 
-export function showReview(change, previewBody, note, back = null, from = null) {
-  panelState.current = { type: "review", change, previewBody, note, back, from };
+// A change in Details as it was previewed, with no Apply of its own: the tray's bar writes every
+// change at once. `current` is what the panel shows (panelState), `picked` the project it was
+// asked in (for the lede), `buttons` the footer's, and `onChoose` takes Add missing's ticks.
+export function showReview(change, previewBody, note, { current, picked, buttons, onChoose = null }) {
+  panelState.current = current;
+  const footer = el("footer");
+  footer.append(...buttons);
   const words = changeWords(change, previewBody);
-  const apply = el("button", "btn primary apply");
-  const body = reviewBody(change, previewBody, note, apply);
-
-  const footer = el("footer");
-  footer.append(el("span", "note", APPLY_KEY));
-  // Cancel goes back to where the review came from: a tool switch's Details, the Details it was
-  // opened from, or nowhere (the panel closes).
-  const cancel = button("Cancel", () => {
-    cancelPreview();
-    const to = cancelTarget({ back, from: from && panelState.from === from ? from : null });
-    if (to === "back") return back();
-    if (to === "details") return backToDetails();
-    return closePanel();
-  }, "btn");
-  apply.type = "button";
-  const label = el("span", "label", "Apply");
-  apply.append(label);
-  apply.addEventListener("click", () => applyChange(change, { apply, cancel, label, body }).catch(brokeAfterAnswer));
-  footer.append(cancel, apply);
-  // A review whose change is being written stays: this preview is dropped at once.
-  if (!openPanel([header("Review change", words.title, reviewLede(change, state.project), null), body, footer])) {
-    cancelPreview({ type: "review", change });
-  }
+  openPanel([header("Review change", words.title, reviewLede(change, picked), null), reviewBody(change, previewBody, note, onChoose), footer]);
 }
 
-// "Show changes" on a row of the preview tray: that row's review in Details, as it was asked. It has
-// no Apply of its own (the bar's Apply writes the whole tray) and is not a review in `panelState`'s
-// sense, so closing it never cancels the tray's change. "Take it out" leaves the tray; Close leaves
-// everything as it is.
+// "Show changes" on a row of the tray: that row's review, as it was asked. Closing it asks the
+// server nothing; "Take it out" leaves the tray, Close leaves everything as it is. An Add missing
+// row shows its ticks: a changed one adds the row again with the new choice.
 export function showRowReview(row) {
-  panelState.current = { type: "row-review", row };
-  const words = changeWords(row.part, row.body);
-  const footer = el("footer");
-  footer.append(
-    button("Take it out", () => {
-      const taken = takeOut(row.key);
-      closePanel();
-      return taken;
-    }, "btn"),
-    button("Close", () => closePanel(), "btn"),
-  );
-  openPanel([header("Review change", words.title, reviewLede(row.part, row.picked), null), reviewBody(row.part, row.body, row.note, null), footer]);
+  showReview(row.part, row.body, row.note, {
+    current: { type: "row-review", row },
+    picked: row.picked,
+    buttons: [
+      button("Take it out", () => {
+        const taken = takeOut(row.key);
+        closePanel();
+        return taken;
+      }, "btn"),
+      button("Close", () => closePanel(), "btn"),
+    ],
+    onChoose: row.part.align ? (keys) => chooseAgain(row, keys) : null,
+  });
 }
 
-// Something broke after the server answered (a render, the toast). The answer stands, so
-// the page says nothing new about the change; it only frees itself and logs the error.
-function brokeAfterAnswer(error) {
-  setBusy(false);
-  reportError(error);
+// A changed tick in an Add missing row's review: the row is added again with the new choice (the
+// same key, so it takes the old row's place), and the review shows the row the tray has now, the
+// new one, or the old one when the server refused the choice (the bar says why). With nothing
+// ticked there is nothing to add: the row stays as it is.
+async function chooseAgain(row, keys) {
+  if (!keys.length) return;
+  await addToTray({ ...row.body, params: { ...row.body.params, chosen: keys } }, { note: row.note, icon: row.icon, picked: row.picked });
+  const now = tray.rows.find((r) => r.key === row.key && r.part);
+  const open = panelState.current;
+  if (now && open && open.type === "row-review" && open.row.key === row.key && isPanelOpen()) showRowReview(now);
 }
-
-// While a change is written, Cancel and the close button are gone (nothing could stop it)
-// and the note under the buttons says what is happening; they come back if it stops.
-function lockReview(locked, apply, cancel) {
-  apply.disabled = locked;
-  cancel.disabled = locked;
-  for (const box of $$("#drawer .align input")) box.disabled = locked;
-  cancel.hidden = locked;
-  const close = $("#drawer header .top button");
-  if (close) {
-    close.disabled = locked;
-    close.hidden = locked;
-  }
-  const note = $("#drawer footer .note");
-  if (note) note.textContent = locked ? WRITING : APPLY_KEY;
-}
-
-function resetApply(apply, cancel, label) {
-  for (const extra of apply.querySelectorAll(".spinner, .check")) extra.remove();
-  apply.classList.remove("done");
-  label.textContent = "Apply";
-  lockReview(false, apply, cancel);
-}
-
-const STOPPED = {
-  stale: "Settings changed since this preview.",
-  restored: "The change did not check out.",
-};
-export const NOTHING = "Nothing was changed.";
-const NOT_ALL_BACK = "Not everything was put back. Check Changes before trying again.";
 
 // The engine put back everything a change that did not check out wrote: its words then end "The
 // original settings were restored.".
 export function nothingChanged(after) {
   return after.state === "stale" || (after.state === "restored" && allPutBack(after.error));
-}
-
-// How an Apply that was not verified ended, in a review and on the map's bar: why it stopped, then
-// "Nothing was changed." only when that is true: nothing was written (stale), or the engine put
-// every file back. In Details (`detail`) the engine's own words come between, paths shortened.
-// Without them (the map's bar and toast: paths and commands stay behind Details), a change the
-// engine could not wholly put back says so and points to Changes. With no change read back
-// (`after` null): in Details the server's words (`failure`), else that the result is not known.
-export function stoppedWords(after, failure, { detail = true } = {}) {
-  if (!after) return (detail && failure) || LOST;
-  const reason = STOPPED[after.state] || `The change stopped: ${after.state}.`;
-  const words = detail && after.error ? ` (${shortPaths(after.error)})` : "";
-  if (nothingChanged(after)) return `${reason}${words} ${NOTHING}`;
-  if (!detail && after.state === "restored") return `${reason} ${NOT_ALL_BACK}`;
-  return `${reason}${words}`;
-}
-
-// Apply → Applying… (spinner) → Applied (the check draws); then the panel leaves and the
-// page shows the effect where it happened. Each step waits for work, never for a timer.
-async function applyChange(change, { apply, cancel, label, body }) {
-  if (busy.change) return;
-  const previewBody = panelState.current && panelState.current.previewBody;
-  const note = panelState.current && panelState.current.note;
-  const back = panelState.current && panelState.current.back;
-  setBusy(true);
-  lockReview(true, apply, cancel);
-  label.textContent = "Applying…";
-  apply.prepend(el("span", "spinner"));
-  // A change with several steps counts them as the server finishes each one, and a thin bar
-  // along the button's bottom edge fills to match. Both show only what the server reported.
-  const meter = el("span", "meter");
-  meter.setAttribute("aria-hidden", "true");
-  apply.append(meter);
-  const onProgress = (event) => {
-    const { id, done, total } = event.detail || {};
-    if (id !== change.id || !(total > 1)) return;
-    label.textContent = stepText("Applying", done, total);
-    meter.style.transform = `scaleX(${done / total})`;
-  };
-  document.addEventListener("kitden:progress", onProgress);
-  // The last try's error stays until now, the next action.
-  for (const old of body.querySelectorAll(".callout.error")) old.remove();
-  let outcome;
-  try {
-    outcome = await changeOutcome(change.id, "apply");
-  } finally {
-    document.removeEventListener("kitden:progress", onProgress);
-    meter.remove();
-  }
-  const { after, failure } = outcome;
-  if (after && change.align) after.align = change.align;
-  // The toast says the same place as the title.
-  if (after) after.target = change.target;
-  if (after && panelState.current) panelState.current.change = after;
-
-  if (!after || after.state !== "verified") {
-    setBusy(false);
-    resetApply(apply, cancel, label);
-    body.prepend(callout(stoppedWords(after, failure), "error"));
-    // Focus goes to the button in Apply's place; the callout says what went wrong.
-    let next = apply;
-    if (after && after.state !== "previewed") {
-      next = button("Preview again", () => review(previewBody, { note, back }), "btn primary");
-      apply.replaceWith(next);
-    }
-    next.focus();
-    reload().then(render).catch(() => {});
-    return;
-  }
-  await showApplied(after, apply, label, previewBody, back);
-}
-
-// After a rescan, an open review asks whether its files changed since the preview. Only a
-// previewed change with an id (Add missing with nothing chosen has none), and never while a
-// change is written: that rescan is the change's own.
-export function staleCheckWanted(current, busy) {
-  const change = current && current.type === "review" ? current.change : null;
-  return Boolean(change && change.id && change.state === "previewed" && !busy.change);
-}
-
-const STALE_NOTE = "Settings changed since this preview.";
-
-// The server compares the files with the preview's own hashes. When they changed and the same
-// review is still open, the warning comes first and stays until the next action, and Apply
-// gives way to "Preview again", which drops this preview and asks for a new one. Focus moves
-// only when it was on Apply. The Details the review came from is out of date too: Cancel, also
-// after "Preview again", reads it again (details.js backToDetails).
-export async function checkStale() {
-  const current = panelState.current;
-  // Apply gave way to "Preview again" already: nothing to ask.
-  if (!staleCheckWanted(current, busy) || !$("#drawer .apply")) return;
-  const read = await readChange(current.change.id);
-  if (!read || !read.stale || panelState.current !== current || !staleCheckWanted(current, busy)) return;
-  const apply = $("#drawer .apply");
-  const body = $("#drawer .body");
-  if (!apply || !body) return;
-  const warning = callout(STALE_NOTE);
-  warning.setAttribute("role", "alert");
-  body.prepend(warning);
-  const { previewBody, note, back } = current;
-  const again = button("Preview again", () => {
-    cancelPreview();
-    return review(previewBody, { note, back });
-  }, "btn primary");
-  const focused = document.activeElement === apply;
-  apply.replaceWith(again);
-  if (focused) again.focus();
-  if (current.from) current.from.stale = true;
-}
-
-// The server said `verified`: the button turns green while the page reloads, then the panel
-// leaves at once and the toast offers Undo. From a tool switch, its Details comes back instead,
-// with the switch flipped, and the page behind shows the new state.
-async function showApplied(after, apply, label, previewBody, back) {
-  for (const spin of apply.querySelectorAll(".spinner")) spin.remove();
-  apply.prepend(checkMark());
-  apply.classList.add("done");
-  label.textContent = "Applied";
-  await reloadAll();
-  if (back) {
-    // The change is done: this review lets its place go to the Details `back` draws again.
-    if (panelState.current) panelState.current.handingBack = true;
-    render();
-    await back({ verified: true });
-  } else {
-    panelState.current = null;
-    closePanel({ keepSelection: true, focus: false, force: true });
-    showEffect();
-    restoreFocus();
-  }
-  setBusy(false);
-  appliedToast(after, previewBody);
-}
-
-// The toast after a verified change, the same for every review: what was done, and Undo.
-export function appliedToast(after, previewBody) {
-  toast(changeWords(after, previewBody).done, () => undoChange(after), { ok: true });
 }
 
 // Everything the page shows, the Library's rows too, read again after a change.
@@ -605,6 +442,23 @@ export function showEffect() {
   } else {
     transition(render);
   }
+}
+
+// After Apply all, the Details open now are drawn again from what the files say. A tool list draws
+// itself again, focus on the control pressed last there; a switch among the applied rows (`keys`)
+// springs into its new state. Other Details read again. Anything else in the panel (a row's
+// review, Add missing's list) is left alone: a row's review closes with its row.
+export async function detailsAgain(keys) {
+  const from = panelState.from;
+  if (!isPanelOpen() || !from || !from.shown()) return;
+  if (tools && tools.section.isConnected) {
+    const pressed = withFocusKey(tools.section, from.focus);
+    const flip = pressed && keys.includes(pressed.dataset.tray) ? from.focus : null;
+    await tools.again({ focus: from.focus, flip });
+    return;
+  }
+  from.stale = true;
+  await backToDetails();
 }
 
 // Undo, from the toast or the Changes page. Whatever the answer, the page reloads first: the

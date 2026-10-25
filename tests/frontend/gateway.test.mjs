@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js needs only this from a browser to load; the tests call its pure parts.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { GATEWAY_COLUMNS, afterPress, clickLink, contentWidth, findRows, gatewayTree, glanceFor, heldServer, kitdenLinks, linkRemoval, linkTip, listAt, listRows, litFor, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, serverCount, stillSelected } = await import('../../src/kitden/web/static/js/gateway.js');
+const { GATEWAY_COLUMNS, afterPress, clickLink, contentWidth, findRows, gatewayTree, glanceFor, heldServer, kitdenLinks, letGoCloses, linkRemoval, linkTip, listAt, listRows, litFor, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, serverCount, stillSelected } = await import('../../src/kitden/web/static/js/gateway.js');
 const { dropBody, dropTarget, pressGrip, placeMoved } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
 const { offersSwitch, ruleBody } = await import('../../src/kitden/web/static/js/gateway-details.js');
@@ -1042,6 +1042,15 @@ test('a second press on the selected block lets go, unless the press opened it',
   assert.equal(afterPress({ selected: 'client:codex', id: 'client:codex', opened: false }), 'letGo');
   assert.equal(afterPress({ selected: 'held:kitden:files', id: 'held:kitden:files', opened: true }), 'select');
   assert.equal(afterPress({ selected: null, id: 'client:codex', opened: false }), 'select');
+});
+
+test("a click on empty map keeps a row's review in Details", () => {
+  // Letting go of the selection (a click on empty map, a second press) closes the Details it
+  // opened; a row's review belongs to the tray, so only the map's selection goes.
+  assert.equal(letGoCloses({ type: 'row-review', row: {} }), false);
+  assert.equal(letGoCloses({ type: 'held', name: 'files' }), true);
+  assert.equal(letGoCloses({ type: 'item', row: {} }), true);
+  assert.equal(letGoCloses(null), true);
 });
 
 test('the path of a press that opened a server lights when its tools are in, if that is still the selection', () => {

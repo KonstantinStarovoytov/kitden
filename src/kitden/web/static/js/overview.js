@@ -333,7 +333,7 @@ function gatewayCard(gateway) {
   if (!gateway) card.append(el("p", "muted", "Manage MCP tools in one place and connect it to every client."));
   if (words.action === "Set up") card.append(button(words.action, () => go("gateway")));
   else if (words.action) {
-    // The same review the Gateway page opens for this client.
+    // The same change the Gateway page's card adds for this client.
     const entry = kitdenClients(data.setupServer).setup.find((s) => s.client === gateway.lacking[0]);
     card.append(button(words.action, () => (entry ? review(entry.body, { note: SETUP_NOTE }) : go("gateway"))));
   }
