@@ -155,6 +155,11 @@ The mockup breaks several written rules. Each line gives the rule, what the mock
 - `undoChange`'s tool-list branch moves focus to `tools.flipped` whatever had focus.
 - `quiet` stays set across `detailsAgain`'s awaited re-read (a docked-column press in that window skips `rememberOpener`), and a re-read can draw old Details over a row opened during the await.
 - A row's review keeps the row it was opened with: a row added again under the same key shows its old part until the review is opened again.
+- With the dock empty the modal drawer's bottom is 25 px from the window, not 16 px (`style.css` ~771: `max(16px, var(--dock-room, 0px) + 25px)`); a default of `-9px` fixes it, or Task 4.3's floating panel replaces the rule.
+- `#said` sits outside the `aria-modal` drawer, so the tray's spoken words may go unheard while the modal drawer is open (Task 4.3's floating panel may drop `aria-modal`).
+- `baseNames` (dock.js) leaves part of a path that holds a space and drops the slash of a "/command"; the tool list's refusal callout (review.js ~252) still shows the full words.
+- A refused add on a tray whose Apply failed shows "Could not prepare the preview" and loses the "Nothing was changed" line.
+- A toast that comes during a row's 180 ms slide-out is replaced by the bar (`slideOut` draws in full); `takeOutButton` keeps its `onTray` listener until the next tray change after its review closes.
 
 **Carried from Phase 1:**
 - `gateway.js` has its own local `icon()` and `ICONS` (~line 543). Remove them before importing `icon` from `dom.js`, or the module fails to parse.
