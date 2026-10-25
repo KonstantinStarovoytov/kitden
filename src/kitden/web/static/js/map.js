@@ -8,11 +8,12 @@
 //   "+ Add" beside the caption. Wide only: `colGap` is the space before the column (GAP unless
 //   set), `top` the y of its first block (CAPTION_ROW) and `rowGap` the space between its blocks.
 // - blocks: [{ id, column, parent, kind, name, meta, state, tag, count, grip, action, details, h,
-//   icon, before, rowGap, lamp, wait, stats, projects, ports, takeOut, leaving }]. The children of a
-//   block are the blocks whose `parent` it is. A block with an `h` is that high, whatever its
-//   column says. A group block is a caption at the top of its stack (a button when it has
-//   `details`), CAPTION_H high unless `h` says otherwise; its words after a " · " are quiet; its
-//   children sit under it, in its column, and always show. Wide, a group
+//   icon, before, rowGap, lamp, wait, stats, projects, ports, takeOut, leaving, pageName }]. The
+//   children of a block are the blocks whose `parent` it is. A block with an `h` is that high,
+//   whatever its column says. A group block is a caption at the top of its stack (a button when it
+//   has `details`), CAPTION_H high unless `h` says otherwise; its words after a " · " are quiet;
+//   `pageName`, its words while it pages (layoutTree); its children sit under it, in its column,
+//   and always show. Wide, a group
 //   sits `before` more space under the block above it, its children are CAPTION_GAP under it and
 //   `rowGap` apart; `icon` (a lucide name) is drawn before its words. Any other block shows its
 //   children only while it is open. `state`: "on", "off", "unk" or "preview". `count`: what a
@@ -122,15 +123,15 @@ function shownChildren(block, children, open, pages) {
 }
 
 // What the layout says of a block beyond its place: the words of "N more"; a group that pages,
-// the page it shows and its caption with which ones ("Remote · 6–10 of 12"); a block on a page,
-// the group it turns with.
+// the page it shows and its caption with which ones ("Remote · 6–10 of 12", from its `pageName`
+// when it has one); a block on a page, the group it turns with.
 function pageParts(block, children, pages) {
   if (block.kind === "more") return { name: block.name };
   const parts = block.turns ? { turns: block.turns } : {};
   const paged = paging(block, children, pages);
   if (!paged) return parts;
   const { rest, page } = paged;
-  return { ...parts, page, name: `${block.name} · ${page * PAGE + 1}–${Math.min(rest.length, (page + 1) * PAGE)} of ${rest.length}` };
+  return { ...parts, page, name: `${block.pageName || block.name} · ${page * PAGE + 1}–${Math.min(rest.length, (page + 1) * PAGE)} of ${rest.length}` };
 }
 
 // The pages after a press on "N more" (`more:<group id>`): its group shows its next five, and its
@@ -140,6 +141,15 @@ export function turnPage(model, pages, id) {
   const paged = group && paging(group, childrenOf(model).get(group.id) || [], pages);
   if (!paged) return pages;
   return new Map(pages).set(group.id, (paged.page + 1) % paged.count);
+}
+
+// The pages of the groups that page now: a group that stopped paging (or went) forgets its page, so
+// it starts on its first page when it pages again. `pages` itself when every group still pages.
+export function pagesNow(model, pages) {
+  const byId = new Map(model.blocks.map((block) => [block.id, block]));
+  const children = childrenOf(model);
+  const kept = [...pages].filter(([id]) => byId.has(id) && paging(byId.get(id), children.get(id) || []));
+  return kept.length === pages.size ? pages : new Map(kept);
 }
 
 // The pages that show `ids` (a search's matches, a selection): a group that pages turns to the page

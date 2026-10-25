@@ -424,7 +424,8 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
       else node.removeAttribute("aria-expanded");
     }
     paint(item);
-    if (item.w !== place.w) node.style.width = `${place.w}px`;
+    // A group's caption in words is as wide as its words, up to what style.css lets it have.
+    if (item.w !== place.w && !(item.div && place.kind === "group")) node.style.width = `${place.w}px`;
     if (item.h !== place.h) node.style.height = `${place.h}px`;
     Object.assign(item, { w: place.w, h: place.h, home: { x: place.x, y: place.y }, growsFrom: block.growsFrom || null });
   }

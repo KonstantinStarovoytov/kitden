@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js (for its columns) needs only this from a browser to load.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { CAPTION_H, GAP, NARROW_GAP, blockOrder, drawPlan, enterDelays, findChip, findIn, foldable, isNarrow, layoutTree, linkClass, linkDashed, linkKey, linkPath, litFrom, litPath, midPoint, toggleOpen, turnPage, unfoldDelays, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
+const { CAPTION_H, GAP, NARROW_GAP, blockOrder, drawPlan, enterDelays, findChip, findIn, foldable, isNarrow, layoutTree, linkClass, linkDashed, linkKey, linkPath, litFrom, litPath, midPoint, pagesNow, toggleOpen, turnPage, unfoldDelays, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
 const { cutName } = await import('../../src/kitden/web/static/js/dom.js');
 const { GATEWAY_COLUMNS } = await import('../../src/kitden/web/static/js/gateway.js');
 
@@ -266,6 +266,17 @@ test('a preview is never behind the page', () => {
   // It counts in no page.
   assert.equal(groupWords(onPage(m, 0)), 'Outside the gateway · 1–5 of 12');
   assert.equal(moreWords(onPage(m, 0)), '7 more');
+});
+
+test('a group that stops paging forgets its page, so it starts on its first page again', () => {
+  const pages = new Map([['group:outside', 2], ['group:kitden:remote', 1]]);
+  // Remote holds no more than six: its page goes; the Outside group keeps its own.
+  const kept = pagesNow(model(0, 12), pages);
+  assert.deepEqual([...kept], [['group:outside', 2]]);
+  assert.equal(pagesNow(model(0, 12), kept), kept);
+  // Down to six, then up to twelve again: the first page.
+  const grown = layoutTree(model(0, 12), { open: new Set(), pages: pagesNow(model(0, 6), kept), ...WIDE });
+  assert.deepEqual(outsideShown(grown), ['docs', 'analytics', 'n8n', 'direct-3', 'direct-4']);
 });
 
 test('selecting a tool lights the path from every client that reaches it', () => {

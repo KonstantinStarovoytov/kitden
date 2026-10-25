@@ -3,7 +3,7 @@
 import { $, button, el, gridKey, icon, joinWords, plural, reportError, withFocusKey } from "./dom.js";
 import { addForm, connectAction, connectBody, heldServer, liveHeld, movesTo, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool, TAKE_OUT } from "./gateway-details.js";
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
-import { findIn, foldable, isNarrow, keepOpen, layoutTree, linkKey, litFrom, litPath, pagesWith, pressOpen, toggleOpen, turnPage, wideWidth } from "./map.js";
+import { findIn, foldable, isNarrow, keepOpen, layoutTree, linkKey, litFrom, litPath, pagesNow, pagesWith, pressOpen, toggleOpen, turnPage, wideWidth } from "./map.js";
 import { mapView } from "./map-view.js";
 import { afterOldPage, D, entrance, glide, rise, riseHead } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, openInfo, panelState, projectLabel, review } from "./panel.js";
@@ -19,6 +19,8 @@ const WRITABLE = ["claude_code", "codex", "cursor"];
 // The group of servers outside the gateway: the List's words, and the map's, which asks for a drag.
 const OUTSIDE = "Outside the gateway · calls skip Kitden's rules";
 const OUTSIDE_MAP = "Outside the gateway · drag one in";
+// ... and while the group pages, before which ones show ("Outside the gateway · 6–10 of 12").
+const OUTSIDE_PAGED = "Outside the gateway";
 // On the map these words take one line, wider than their column, and an outside server's block is
 // 50 high.
 const OUTSIDE_H = 16;
@@ -347,7 +349,7 @@ function outsideParts(view, kitden, { picked, first, moved, out, gone }) {
       links.push({ from: `gateway:${kitden.id}`, to: id, kind: "on", leaving: true, row: move.key });
     }
   }
-  if (blocks.length) blocks.unshift({ id: "group:outside", column: "servers", kind: "group", name: OUTSIDE_MAP, icon: "info", h: OUTSIDE_H, before: 21, rowGap: 6 });
+  if (blocks.length) blocks.unshift({ id: "group:outside", column: "servers", kind: "group", name: OUTSIDE_MAP, pageName: OUTSIDE_PAGED, icon: "info", h: OUTSIDE_H, before: 21, rowGap: 6 });
   return { blocks, links };
 }
 
@@ -689,10 +691,12 @@ function keepBeside() {
 
 // The map: the blocks open and the one selected, its view (map-view.js, one per visit) and the
 // tree it shows, what the search found, and the box's width as last measured. Kept across redraws
-// of one project. `pages`: the page each group that pages shows (map.js), kept across projects too.
+// of one project. `pages`: the page each group that pages shows (map.js), kept across projects too;
+// `searched`, the search text whose matches brought their pages; `back`, the block a row taken out
+// gives back, whose page the next draw brings.
 const onMap = {
   project: null, open: new Set(), selected: null, view: null, model: null, found: null, width: null, narrow: false, watch: null,
-  unfolds: false, pages: new Map(),
+  unfolds: false, pages: new Map(), searched: "", back: null,
 };
 
 // What a selection lights: a link's key lights its two ends and itself, a client what it reaches,
@@ -753,15 +757,19 @@ function gatewayMap(main, model, found) {
   // it to narrow in the middle of its entrance.
   if (fresh) onMap.width = contentWidth(onMap.view.box) ?? onMap.width;
   Object.assign(onMap, { model, found });
-  bringPages(model, found, { fresh });
+  bringPages(model, { fresh });
   drawOnMap(model, { fresh, projectChanged });
 }
 
-// A search's matches bring the page that holds them, and it stays after the search; a new map (a
-// visit, or the List before) brings the page of what is selected.
-function bringPages(model, found, { fresh = false } = {}) {
-  const ids = [...(found ? found.matches : []), ...(fresh && onMap.selected ? [onMap.selected] : [])];
-  if (ids.length) onMap.pages = pagesWith(model, onMap.pages, ids);
+// The pages a draw shows, before it: those of groups that still page, then the page of a block a
+// row taken out gives back, of a search's matches when its text is new (or the map is: so a turn
+// during a search stays, and the page stays after it), and on a new map (a visit, or the List
+// before) of what is selected.
+function bringPages(model, { fresh = false } = {}) {
+  const text = state.q.trim();
+  const ids = [onMap.back, ...(onMap.found && (fresh || text !== onMap.searched) ? onMap.found.matches : []), fresh && onMap.selected].filter(Boolean);
+  Object.assign(onMap, { searched: text, back: null });
+  onMap.pages = pagesWith(model, pagesNow(model, onMap.pages), ids);
 }
 
 // The blocks of a model by id. Every link asks, so it is built once for a model.
@@ -885,7 +893,10 @@ function takeOutHere(model, key) {
   const box = onMap.view ? onMap.view.box : null;
   const shown = model.blocks.find((b) => b.row === key && b.backTo);
   const focus = box && shown ? document.activeElement?.dataset?.focus : null;
+  // The server comes back on its page: the draw the take-out starts brings it.
+  onMap.back = shown ? shown.backTo : null;
   const taken = takeOut(key);
+  onMap.back = null;
   const lost = Boolean(focus) && (focus === `block:${shown.id}` || focus.endsWith(`>${shown.id}`));
   if (lost) withFocusKey(box, `block:${shown.backTo}`)?.focus({ preventScroll: true });
   return taken;
@@ -1134,7 +1145,7 @@ function drawRows() {
   if (!view || !onMap.view || !onMap.view.box.isConnected) return Promise.resolve();
   const model = treeFor(view);
   Object.assign(onMap, { model, found: state.q.trim() ? findIn(model, state.q) : null });
-  bringPages(model, onMap.found);
+  bringPages(model);
   return drawOnMap(model);
 }
 

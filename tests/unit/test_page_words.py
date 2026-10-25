@@ -635,7 +635,12 @@ def test_the_map_words():
     assert '"Outside the gateway · calls skip Kitden\'s rules"' in script("gateway.js")
     assert " more`" in script("map.js")
     assert 'FIRST_PAGE = "Show the first 5"' in script("map.js")
-    assert "`${block.name} · ${page * PAGE + 1}–${" in script("map.js")
+    assert "`${block.pageName || block.name} · ${page * PAGE + 1}–${" in script("map.js")
+    # While the Outside group pages its caption drops "drag one in" for the range, and a caption
+    # never runs into the next column: what does not fit ends in "…".
+    assert 'const OUTSIDE_PAGED = "Outside the gateway";' in script("gateway.js")
+    assert "max-width: 236px;" in rule("div.map div.caption")
+    assert "text-overflow: ellipsis;" in rule("div.map .caption .quiet")
     # The map shows no state word; a screen reader hears one, the same as the words it shows.
     states = 'STATE_SAID = { on: "On", off: "Off", unk: "Not known", preview: "In preview" }'
     assert states in script("map.js")

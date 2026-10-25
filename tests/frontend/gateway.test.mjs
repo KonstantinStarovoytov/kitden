@@ -583,6 +583,16 @@ test('a search match turns its group to the page that holds it; a match on the p
   assert.equal(pagesWith(tree, pages, ['client:codex>outside:move:direct-1']), pages);
 });
 
+test('while the Outside group pages, its caption names the page in place of "drag one in"', () => {
+  const caption = (tree, pages = new Map()) => layoutTree(tree, { open: new Set(), pages, narrow: false }).blocks.find((b) => b.id === 'group:outside');
+  assert.equal(caption(twelve()).name, 'Outside the gateway · 1–5 of 12');
+  assert.equal(caption(twelve(), new Map([['group:outside', 1]])).name, 'Outside the gateway · 6–10 of 12');
+  // A group that does not page keeps its words, which ask for a drag.
+  const few = gatewayTree(MEDIUM_VIEW, OPTS);
+  assert.equal(caption(few).name, undefined);
+  assert.equal(block(few, 'group:outside').name, 'Outside the gateway · drag one in');
+});
+
 test('a selection or an arrival on another page brings its page', () => {
   const tree = twelve();
   const target = block(tree, 'outside:move:direct-7');

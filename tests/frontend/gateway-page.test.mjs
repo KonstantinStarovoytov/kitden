@@ -366,4 +366,90 @@ test('an arrival on another page brings its page and selects its server', async 
   settle();
   assert.deepEqual(outsideShown(box), ['direct-5', 'direct-6', 'direct-7', 'direct-8', 'direct-9']);
   assert.match(node(box, 'block:outside:move:direct-7').className, /\bselected\b/);
+  // Let go, and back to the first page, for the next tests.
+  node(box, 'block:outside:move:direct-7').listeners.click[0]();
+  node(box, 'block:more:group:outside').listeners.click[0]();
+  node(box, 'block:more:group:outside').listeners.click[0]();
+  settle();
+  assert.deepEqual(outsideShown(box), ['direct-0', 'direct-1', 'direct-2', 'direct-3', 'direct-4']);
+});
+
+// Fix round 1: a row taken out gives its server back on its page; a turn during a search stays.
+const press = (box, key) => node(box, key).listeners.click[0]();
+const heldShown = (box) => walk(box).filter((n) => n.dataset.focus?.startsWith('block:held:kitden:')).map((n) => n.dataset.focus.split(':').at(-1));
+const done = () => new Promise((resolve) => setImmediate(resolve));
+
+test('a move in taken out brings its server back on its page in the Outside list, with focus', async (t) => {
+  const box = await onTwelve(t);
+  t.after(() => cancelTray());
+  // On the last page, direct-11 moves into the gateway.
+  press(box, 'block:more:group:outside');
+  press(box, 'block:more:group:outside');
+  settle();
+  assert.deepEqual(outsideShown(box), ['direct-10', 'direct-11']);
+  queue(PREVIEW, batch('p1'));
+  await addToTray(dropBody(TWELVE.groups.move[11], TWELVE));
+  settle();
+  assert.deepEqual(outsideShown(box), ['direct-10']);
+  // Back on the first page, a press on its preview block takes it out.
+  press(box, 'block:more:group:outside');
+  settle();
+  const preview = node(box, 'block:preview:direct-11');
+  preview.focus();
+  preview.listeners.click[0]();
+  await done();
+  settle();
+  assert.deepEqual(outsideShown(box), ['direct-10', 'direct-11']);
+  assert.equal(document.activeElement, node(box, 'block:outside:move:direct-11'));
+  press(box, 'block:more:group:outside');
+  settle();
+});
+
+test('a move out taken out brings its server back on its page in the gateway, with focus', async (t) => {
+  const local = Array.from({ length: 8 }, (_, i) => ({ ...VIEW.gateways[0].servers[0], name: `l${i}`, tool_list: [tool(`t${i}`, 'on')] }));
+  const view = { ...VIEW, gateways: [{ ...VIEW.gateways[0], servers: local }], connections: { kitden: { claude_code: [], codex: [], cursor: [] } } };
+  data.gateway = view;
+  t.after(() => { data.gateway = VIEW; return cancelTray(); });
+  const box = freshMap();
+  assert.deepEqual(heldShown(box), ['l0', 'l1', 'l2', 'l3', 'l4']);
+  // l7, on the second page, moves out while the first page shows.
+  queue(PREVIEW, batch('p2'));
+  await addToTray({ action: 'gateway.move_out', targets: [{ client: 'claude_code' }], params: { server: 'l7' } });
+  settle();
+  const preview = node(box, 'block:preview-out:l7');
+  preview.focus();
+  preview.listeners.click[0]();
+  await done();
+  settle();
+  assert.deepEqual(heldShown(box), ['l5', 'l6', 'l7']);
+  assert.equal(document.activeElement, node(box, 'block:held:kitden:l7'));
+  press(box, 'block:more:group:kitden:local');
+  settle();
+});
+
+test('a turn during a search stays when the tray draws the map again', async (t) => {
+  const box = await onTwelve(t);
+  t.after(() => cancelTray());
+  state.q = 'direct-11';
+  renderGateway(main, { again: true });
+  settle();
+  assert.deepEqual(outsideShown(box), ['direct-10', 'direct-11']);
+  // The person turns to the first page; the search is still on.
+  press(box, 'block:more:group:outside');
+  settle();
+  queue(PREVIEW, batch('p3'));
+  await addToTray(REMOVE_FILES);
+  renderGateway(main, { again: true });
+  settle();
+  assert.deepEqual(outsideShown(box), ['direct-0', 'direct-1', 'direct-2', 'direct-3', 'direct-4']);
+  // New search words bring their page again.
+  state.q = 'direct-7';
+  renderGateway(main, { again: true });
+  settle();
+  assert.ok(outsideShown(box).includes('direct-7'));
+  state.q = '';
+  renderGateway(main, { again: true });
+  press(box, 'block:more:group:outside');
+  press(box, 'block:more:group:outside');
+  settle();
 });
