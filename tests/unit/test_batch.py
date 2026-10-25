@@ -61,6 +61,7 @@ def test_requests_in_reads_each_change():
             "detail": "",
             "targets": [],
             "params": {"server": "s"},
+            "picked": None,
         },
         {
             "id": "b",
@@ -69,8 +70,21 @@ def test_requests_in_reads_each_change():
             "detail": "Only y.",
             "targets": [],
             "params": {},
+            "picked": None,
         },
     ]
+
+
+def test_requests_in_keeps_each_picked():
+    one = {"kind": "gateway.rule", "title": "Turn off x"}
+    body = {
+        "requests": [
+            {**one, "id": "a", "picked": "p1"},
+            {**one, "id": "b"},
+            {**one, "id": "c", "picked": 7},
+        ]
+    }
+    assert [r["picked"] for r in requests_in(body)] == ["p1", None, None]
 
 
 def test_requests_in_refuses_a_missing_title_or_a_repeated_id():

@@ -13,6 +13,7 @@ from kitden.demo import DemoRunner, build_demo_home, demo_build
 from kitden.gateways import data_dir
 from kitden.local_gateway.settings import SETTINGS_FILE, TOOLS_FILE
 from kitden.web.app import create_app
+from tests.unit.test_api_changes import _app_client, _home
 
 ORIGIN = "http://127.0.0.1:47800"
 POST = {"Origin": ORIGIN, "X-Tool-Request": "1"}
@@ -374,3 +375,37 @@ def test_a_move_of_a_held_server_and_its_removal_are_refused(tmp_path):
         leaves = LEAVES.format(other="Remove files from the gateway", server="files")
         assert _check(page, remove, move) == {"ok": False, "reason": leaves, "row": "b"}
         assert _preview(page, remove, move).status_code == 422
+
+
+def test_each_row_keeps_the_project_it_was_asked_in(tmp_path, monkeypatch):
+    home = _home(tmp_path, monkeypatch)
+    # website gets its own github in Claude Code, which wins there over the user one.
+    config = home / ".claude.json"
+    data = json.loads(config.read_text())
+    data["projects"][str(home / "work/website")]["mcpServers"]["github"] = {"command": "gh-mcp"}
+    config.write_text(json.dumps(data))
+    with _app_client(home) as page:
+        page.get("/?token=tok")
+        website = next(
+            p for p in page.get("/api/projects").json() if p["path"].endswith("/work/website")
+        )
+        users = {
+            (client, i["name"]): i["id"]
+            for client in ("claude_code", "codex")
+            for i in page.get(f"/api/items?client={client}&kind=mcp_server").json()
+            if i["scope"] == "user"
+        }
+        # `a` was asked in website; `b` has no project, and the body has none either.
+        a = {**_remove("a", users["claude_code", "github"]), "picked": website["id"]}
+        b = _remove("b", users["codex", "neon"])
+        answer = _preview(page, a, b)
+        assert answer.status_code == 200, answer.text
+        change = answer.json()
+        rows = change["rows"]
+        assert rows[0]["target"] == {
+            "scope": "others",
+            "project": website["path"],
+            "others_unchanged": False,
+        }
+        assert rows[1]["target"]["scope"] == "all"
+        assert _apply(page, change["id"], "cancel").status_code == 200

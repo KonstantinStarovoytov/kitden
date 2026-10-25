@@ -42,7 +42,8 @@ def _text(value: object) -> bool:
 
 
 def requests_in(body: dict) -> list[dict]:
-    """The tray's requests from a page body: each {id, kind, title, detail, targets, params}."""
+    """The tray's requests from a page body: each {id, kind, title, detail, targets, params,
+    picked}. `picked` is the project the row was asked in, or None."""
     raw = body.get("requests")
     if not isinstance(raw, list) or not raw:
         raise ValueError(NEEDS)
@@ -53,6 +54,7 @@ def requests_in(body: dict) -> list[dict]:
         if not all(_text(request.get(k)) for k in ("id", "kind", "title")):
             raise ValueError(NEEDS)
         detail, targets, params = (request.get(k) for k in ("detail", "targets", "params"))
+        picked = request.get("picked")
         requests.append(
             {
                 "id": request["id"],
@@ -61,6 +63,7 @@ def requests_in(body: dict) -> list[dict]:
                 "detail": detail if isinstance(detail, str) else "",
                 "targets": targets if isinstance(targets, list) else [],
                 "params": params if isinstance(params, dict) else {},
+                "picked": picked if _text(picked) else None,
             }
         )
     if len({r["id"] for r in requests}) != len(requests):

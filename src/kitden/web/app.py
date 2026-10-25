@@ -1315,7 +1315,8 @@ def create_app(
             row = {k: request[k] for k in ("id", "kind", "title", "detail")}
             row.update(project=None, steps=row_steps)
             part = part_of(change, row)
-            words = _review(part, made, picked)
+            # A row keeps the project it was asked in; the body's is for rows with none.
+            words = _review(part, made, _picked(request) if request["picked"] else picked)
             if part.target["scope"] == "project":
                 row["project"] = part.target["project"]
             rows.append(row)
