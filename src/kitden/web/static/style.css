@@ -815,12 +815,15 @@ details.connect .fold > .fold-in { display: block; }
 @keyframes fade-out { to { opacity: 0; } }
 html.theme-switch::view-transition-old(root), html.theme-switch::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
 /* A place change: only the page changes. The rail and the top bar stay still; the old page goes
-   in 120 ms and the new one rises 6 px in 260 ms. */
-html.place-change #main { view-transition-name: page; }
-html.place-change::view-transition-old(root), html.place-change::view-transition-new(root) { animation: none; }
+   in 120 ms and the new one rises 6 px in 260 ms. The Gateway rises on its own (its head, then
+   its map or List), so there the new page shows at once. */
+html.place-change #main, html.map-entrance #main { view-transition-name: page; }
+html.place-change::view-transition-old(root), html.place-change::view-transition-new(root),
+html.map-entrance::view-transition-old(root), html.map-entrance::view-transition-new(root) { animation: none; }
 ::view-transition-group(page) { animation: none; }
 ::view-transition-old(page) { animation: 120ms ease both fade-out; }
 ::view-transition-new(page) { animation: 260ms var(--ease-out) both page-in; }
+html.map-entrance::view-transition-new(page) { animation: none; }
 @keyframes page-in { from { opacity: 0; transform: translateY(6px); } }
 /* A tab or filter whose rows are slow to come: the old list dims while it waits. */
 .table-scroll.waiting { opacity: 0.5; pointer-events: none; }

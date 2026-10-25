@@ -145,8 +145,10 @@ function writeHash(addEntry = false) {
   } catch { /* not a normal page */ }
 }
 
+// A place change keeps the rail and the top bar still. The Gateway rises on its own (head, then its
+// map or List), so its change only fades the old page out (style.css).
 function show(moving) {
-  if (moving) transition(() => { renderPlace(); document.getElementById("content").scrollTop = 0; }, "place-change");
+  if (moving) transition(() => { renderPlace(); document.getElementById("content").scrollTop = 0; }, state.view === "gateway" ? "map-entrance" : "place-change");
   else renderPlace();
 }
 

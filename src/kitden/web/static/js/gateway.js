@@ -6,7 +6,7 @@ import { endedMove, movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { leaveMap, mapReviewLeft, previewBar, redrawPreview, showMapReview } from "./map-review.js";
 import { findIn, isNarrow, keepOpen, layoutTree, litFrom, litPath, pressOpen, toggleOpen, wideWidth } from "./map.js";
 import { mapView } from "./map-view.js";
-import { entrance, glide } from "./motion.js";
+import { entrance, glide, rise, riseHead } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, openInfo, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, folderName, gatewayName, kitdenClients, mark, opens, ORIGIN_WORDS, scopeBar, skeleton, STATE_WORDS, staleNote } from "./parts.js";
 import { arrival, current, currentError, data, go, goTo, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
@@ -69,20 +69,25 @@ export function serverCount(view) {
 
 // Draws the page. It returns what the top search found on it (map.js findIn), or null with no
 // search or no page to search: app.js shows the chip. The map keeps its blocks while the page
-// draws `again`; a new visit, or the List, starts a new one.
+// draws `again`; a new visit, or the List, starts a new one. A new visit also lifts the head
+// (title, lede, scope line), and then the map or List.
 export function renderGateway(main, { again = false } = {}) {
   if (!again) onMap.view = null;
   const head = el("div", "page-head");
   head.append(el("h1", null, "Gateway"));
-  main.append(head, el("p", "lede", "Connect your agents. Shape what they can use."));
+  const lede = el("p", "lede", "Connect your agents. Shape what they can use.");
+  main.append(head, lede);
   const view = current("gateway");
   if (!view) {
+    if (!again) riseHead(head, lede, null);
     if (currentError("gateway")) main.append(banner("the gateway", retry));
     else main.append(skeleton("card", 2));
     return;
   }
   // Under the head: what the page shows, the shared setup or a project's rules that differ from it.
-  main.append(scopeBar(folderName(projectPath()), view.own_rules));
+  const scope = scopeBar(folderName(projectPath()), view.own_rules);
+  main.append(scope);
+  if (!again) riseHead(head, lede, scope);
   if (currentError("gateway")) main.append(staleNote(data.readAt.gateway));
   // Only without any gateway, the Kitden one included (no home folder to change).
   if (!view.gateways.length) {
@@ -101,7 +106,7 @@ export function renderGateway(main, { again = false } = {}) {
   if (mode === "map") gatewayMap(main, model, found);
   else {
     onMap.view = null;
-    gatewayList(main, view, model, found);
+    gatewayList(main, view, model, found, { enter: !again });
   }
   glide(seg, seg.querySelector('[aria-pressed="true"]'), "gateway-view", { duration: 280 });
   // A performance mark for the map probe (Part 4.1): the first time the page draws with data.
@@ -386,9 +391,10 @@ const onMap = {
 // Every render puts the same map back on the page, so its blocks keep their nodes and focus.
 function gatewayMap(main, model, found) {
   let fresh = false;
+  let projectChanged = false;
   if (onMap.project !== state.project) {
     Object.assign(onMap, { project: state.project, open: new Set(), selected: null });
-    fresh = true;
+    projectChanged = true;
   }
   if (!onMap.view) {
     onMap.view = newMap();
@@ -396,7 +402,7 @@ function gatewayMap(main, model, found) {
   }
   main.append(onMap.view.box);
   Object.assign(onMap, { model, found, shows: JSON.stringify(movingOn()) });
-  drawOnMap(model, { fresh });
+  drawOnMap(model, { fresh, projectChanged });
   const bar = previewBar(redrawMove);
   if (bar) main.append(bar);
 }
@@ -459,9 +465,15 @@ function openNow() {
   return onMap.found ? new Set([...onMap.open, ...onMap.found.open]) : onMap.open;
 }
 
-// Draw the map as it is now. What changed moves; a new map, another project or a new width shows
-// at once.
-function drawOnMap(model, { fresh = false } = {}) {
+// How a draw of the map shows: a new map enters (each block rises into its place), another
+// project or a new width shows at once, and anything else moves what changed.
+export function mapMotion({ fresh, projectChanged, narrowChanged }) {
+  if (fresh) return "enter";
+  return projectChanged || narrowChanged ? "none" : "move";
+}
+
+// Draw the map as it is now, as `mapMotion` says.
+function drawOnMap(model, { fresh = false, projectChanged = false } = {}) {
   const narrow = narrowNow(model);
   const flipped = narrow !== onMap.narrow;
   onMap.narrow = narrow;
@@ -470,7 +482,7 @@ function drawOnMap(model, { fresh = false } = {}) {
   // A selected block lights every client's path to it; a selected client lights what it reaches.
   const chosen = model.blocks.find((b) => b.id === onMap.selected);
   const lit = !chosen ? new Set() : chosen.kind === "client" ? litFrom(model, chosen.id) : litPath(model, chosen.id);
-  const motion = fresh || flipped ? "none" : "move";
+  const motion = mapMotion({ fresh, projectChanged, narrowChanged: flipped });
   onMap.view.draw(model, layout, { selected: chosen ? chosen.id : null, lit, found: onMap.found, open, motion });
   // A block a move took off its place stays where it is shown (gateway-drag.js).
   placeMoved({ view: onMap.view, model, layout, redraw: redrawMove });
@@ -582,7 +594,7 @@ function tile(block) {
 // person folded, and the row that takes the Tab key, kept across redraws of one project.
 const onList = { project: null, open: new Set(), folded: new Set(), current: null };
 
-function gatewayList(main, view, model, found) {
+function gatewayList(main, view, model, found, { enter = false } = {}) {
   if (onList.project !== state.project) Object.assign(onList, { project: state.project, open: new Set(), current: null });
   const rows = findRows(model, found, onList.open, onList.folded);
   const byId = new Map(model.blocks.map((block) => [block.id, block]));
@@ -615,7 +627,7 @@ function gatewayList(main, view, model, found) {
     else focusRow(grid, row.id);
   });
   main.append(grid);
-  entrance("gateway", [grid]);
+  if (enter) rise([grid]);
 }
 
 // The row of what the address selects: a server (the row that takes the Tab key when both of a

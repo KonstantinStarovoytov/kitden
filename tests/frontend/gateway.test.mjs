@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js needs only this from a browser to load; the tests call its pure parts.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { GATEWAY_COLUMNS, findRows, gatewayTree, heldServer, kitdenLinks, listAt, listRows, narrowFor, serverCount } = await import('../../src/kitden/web/static/js/gateway.js');
+const { GATEWAY_COLUMNS, findRows, gatewayTree, heldServer, kitdenLinks, listAt, listRows, mapMotion, narrowFor, serverCount } = await import('../../src/kitden/web/static/js/gateway.js');
 const { dropBody, dropTarget } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
 const { offersSwitch } = await import('../../src/kitden/web/static/js/gateway-details.js');
@@ -596,4 +596,11 @@ test('a grip shows only where the Kitden gateway can take the server', () => {
   const tree = gatewayTree({ ...MEDIUM_VIEW, gateways: [obot], connections: {}, used: [] }, OPTS);
   assert.ok(tree.blocks.filter((b) => b.kind === 'outside').every((b) => !b.grip));
   assert.ok(block(gatewayTree(MEDIUM_VIEW, OPTS), 'outside:move:github').grip);
+});
+
+test('the map enters when it is new, jumps for a new project or width, and moves otherwise', () => {
+  assert.equal(mapMotion({ fresh: true, projectChanged: true, narrowChanged: true }), 'enter');
+  assert.equal(mapMotion({ fresh: false, projectChanged: true, narrowChanged: false }), 'none');
+  assert.equal(mapMotion({ fresh: false, projectChanged: false, narrowChanged: true }), 'none');
+  assert.equal(mapMotion({ fresh: false, projectChanged: false, narrowChanged: false }), 'move');
 });

@@ -106,7 +106,7 @@ test('the diff count skips the header lines', () => {
 });
 
 const motion = await import('../../src/kitden/web/static/js/motion.js');
-const { D, animateTo, rise, rollTo, glide, CALM, OUT3, IN3, DRAW, RETRACT } = motion;
+const { D, animateTo, rise, riseHead, rollTo, glide, CALM, OUT3, IN3, DRAW, RETRACT } = motion;
 
 test('the curves have the mockup values', () => {
   assert.equal(CALM, 'cubic-bezier(.2,.8,.2,1)');
@@ -208,6 +208,15 @@ test('rise fades and lifts each node, one step after the other', () => {
   rise([a], { y: 12, dur: 100 });
   assert.equal(a.animations[1].keyframes[0].transform, 'translateY(12px)');
   assert.equal(a.animations[1].options.duration, 100);
+});
+
+test('riseHead lifts the title at once, the lede after 120 ms and the scope line after 180 ms', () => {
+  const [t, l, s] = [fakeNode(), fakeNode(), fakeNode()];
+  riseHead(t, l, s);
+  assert.deepEqual([t, l, s].map((n) => n.animations[0].options.delay), [0, 120, 180]);
+  assert.ok([t, l, s].every((n) => n.animations[0].options.duration === 260 && n.animations[0].options.easing === CALM));
+  assert.deepEqual(t.animations[0].keyframes, [{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }]);
+  riseHead(t, l, null);  // no scope line: nothing breaks
 });
 
 function holderWith(text) {

@@ -536,6 +536,12 @@ def test_gateway_wires_do_not_fake_traffic():
         assert "flow" not in script(name), name
 
 
+def test_the_gateway_rises_on_its_own_when_the_place_changes():
+    assert "html.map-entrance::view-transition-new(page) { animation: none; }" in CSS
+    assert '"map-entrance"' in script("store.js")
+    assert "riseHead(" in script("gateway.js")
+
+
 def test_the_map_rules_never_reach_the_library_table():
     # The Library's table has the class "map" too, so every rule of the map names its box.
     css = (STATIC / "style.css").read_text()
@@ -1225,8 +1231,8 @@ def test_tabs_and_filters_read_first_then_the_list_settles():
     assert "snapshot: snapshotRows, settle: settleRows" in app
     assert "const before = samePlace && place.snapshot ? place.snapshot() : null;" in app
     # A place change: only the page moves, and the Library's rows are read first.
-    assert '}, "place-change");' in store
-    assert "html.place-change #main { view-transition-name: page; }" in css
+    assert 'state.view === "gateway" ? "map-entrance" : "place-change");' in store
+    assert "html.place-change #main, html.map-entrance #main { view-transition-name: page; }" in css
     assert "::view-transition-new(page) { animation: 260ms var(--ease-out) both page-in; }" in css
     assert 'if (view === "library" && state.view !== "library") await raceSlow(' in app
 

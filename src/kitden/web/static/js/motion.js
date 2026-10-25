@@ -48,6 +48,15 @@ export function rise(nodes, { delay = 0, step = 0, y = 6, dur = 260 } = {}) {
   });
 }
 
+// The page head rises as a place opens: the title at once, the lede after 120 ms and the scope
+// line after 180 ms. Any of them may be null.
+const HEAD_DELAYS = [0, 120, 180];
+export function riseHead(title, lede, scope) {
+  [title, lede, scope].forEach((node, index) => {
+    if (node) rise([node], { delay: HEAD_DELAYS[index] });
+  });
+}
+
 export function animate(node, keyframes, options) {
   if (reducedMotion.matches || !node || !node.animate) return null;
   return node.animate(keyframes, { easing: EASE_OUT, ...options });

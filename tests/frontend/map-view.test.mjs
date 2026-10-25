@@ -288,3 +288,28 @@ test('a press opens a block that folds, then selects it; any other block is only
   v.node('c1').dispatch('click');
   assert.deepEqual(heard, ['open s1', 'select s1', 'select c1']);
 });
+
+test('the entrance: each block rises 6 px in 260 ms OUT3, 22 ms apart in layout order', async () => {
+  const v = view(); const layout = lay();
+  v.draw(TREE, layout, { motion: 'enter' });
+  const ids = layout.blocks.map((b) => b.id); const last = v.node(ids.at(-1)); const end = 22 * (ids.length - 1);
+  assert.equal(pos(v.node(ids[0])).y, place(layout, ids[0]).y + 6); assert.equal(v.node(ids[0]).style.opacity, '0');
+  tick(end); assert.equal(last.style.opacity, '0');
+  tick(130); assert.ok(near(pos(last).y, place(layout, ids.at(-1)).y + 6 * 0.125));
+  tick(130); assert.equal(pos(last).y, place(layout, ids.at(-1)).y); assert.equal(last.style.opacity, '');
+});
+
+test('in the entrance a link shows only as much as the fainter of its two blocks', async () => {
+  const v = view(); const layout = lay();
+  v.draw(TREE, layout, { motion: 'enter' });
+  const later = layout.blocks.findIndex((b) => b.id === 's2');
+  tick(22 * later + 130);
+  assert.equal(v.node('c1>s2').style.opacity, v.node('s2').style.opacity);
+});
+
+test('under reduced motion the entrance leaves every block and link visible at once', async () => {
+  reduce(true);
+  const v = view();
+  await v.draw(TREE, lay(['s1']), { motion: 'enter' });
+  for (const n of walk(v.area)) { assert.ok(!n.animations?.length); if (n.style) assert.equal(n.style.opacity ?? '', ''); }
+});

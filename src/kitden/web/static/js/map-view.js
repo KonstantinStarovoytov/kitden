@@ -13,6 +13,8 @@ const FADE_MS = 120; // a child of an unfold fades in after its link has drawn
 const FOLD_SCALE = 0.3; // how small a folded child gets as it goes
 const FOLD_IN = 100; // a folded child goes this far left of its opener's right side
 const ROOM = 24; // under the lowest block
+const ENTER_RISE = 6; // an entering block starts this far below its place
+const ENTER_STEP = 22; // and the next one starts this much later, in layout order
 
 // A part a screen reader skips: the block's label says it already.
 function quiet(node) {
@@ -74,8 +76,9 @@ function boxOf({ x, y, w, h, s }) {
 // One map. `view.box` (div.map) goes where the page wants it and keeps every node when it is taken
 // out and put back; `view.area` holds the links' SVG, then the blocks in reading order.
 // - draw(model, layout, { selected, lit, found, open, motion }): show `layout` (map.js layoutTree)
-//   of `model`. `motion` "move" moves what changed; "none" (and the first draw, reduced motion or
-//   a hidden page) shows the end at once. It resolves when every motion ends.
+//   of `model`. `motion` "move" moves what changed; "enter" lets every block rise into its place;
+//   "none" (and the first draw of a "move", reduced motion or a hidden page) shows the end at
+//   once. It resolves when every motion ends.
 // - hold(id, point, { glide }): the block shows at that map point until letGo; letGo(id): it
 //   glides back to its place.
 // - drawIn(key, ms): a link grows from its start. node(idOrKey): a block's node or a link's path.
@@ -313,7 +316,8 @@ export function mapView({ tile, onOpen, onSelect, onAdd } = {}) {
 
   function draw(model, layout, { selected = null, lit = new Set(), found = null, open = new Set(), motion = "move" } = {}) {
     performance.mark("kitden:map-start");
-    const moves = motion === "move" && last !== null && canMove();
+    const enters = motion === "enter" && canMove();
+    const moves = enters || (motion === "move" && last !== null && canMove());
     const plan = drawPlan(last, layout);
     const before = new Map((last ? last.blocks : []).map((at) => [at.id, at]));
     const after = new Map(layout.blocks.map((at) => [at.id, at]));
@@ -325,7 +329,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd } = {}) {
     const delays = unfoldDelays(plan.unfold.length);
     const opened = new Set(); // new blocks of an unfold: their links draw in first
 
-    for (const place of layout.blocks) {
+    for (const [at, place] of layout.blocks.entries()) {
       const block = place.kind === "column" ? columns.get(place.column) : byId.get(place.id) || place;
       let item = blocks.get(place.id);
       const fresh = !item;
@@ -340,6 +344,10 @@ export function mapView({ tile, onOpen, onSelect, onAdd } = {}) {
       if (!moves) {
         stop(item);
         put(item, end);
+      } else if (enters) {
+        // The entrance: it waits below its place, unseen, then rises, one step after the last.
+        put(item, { ...end, y: end.y + ENTER_RISE, o: 0 });
+        go(item, end, { dur: D(MOVE_MS), ease: OUT3, start: start + D(ENTER_STEP * at) });
       } else if (fresh && unfold.has(place.id)) {
         // An unfold: it waits at its place while its links draw, then fades in.
         opened.add(place.id);
