@@ -2194,9 +2194,38 @@ def test_the_map_preview_words_and_look():
     assert re.search(look, CSS)
     # The map's own review bar went with map-review.js.
     assert ".review-bar" not in CSS
-    # A drag starts after 4 px; the keyboard path stays "Move in…".
-    assert "const DRAG_START = 4;" in script("gateway-drag.js")
+    # A drag starts after 5 px; the keyboard path stays "Move in…".
+    assert "const DRAG_START = 5;" in script("gateway-drag.js")
     assert '"Move in…"' in script("gateway.js")
+
+
+def test_a_drag_keeps_its_press_lights_its_target_and_has_a_tip():
+    # gateway-notes 6.0 and 1.9: the dragged block keeps the .98 press while the pointer is down; a
+    # drop target takes the accent edge, the selection fill and 1.05 on the spring; the tip is an
+    # 11 px pill on the panel fill with a line edge and the shadow, in the accent when a drop works.
+    assert "scale: 0.98" in rule("div.map .block.dragging.pressed")
+    target = rule("div.map .block.drop")
+    for words in ("border-color: var(--route)", "background: var(--route-soft)", "scale: 1.05"):
+        assert words in target, words
+    assert "scale 260ms var(--spring)" in rule("div.map .block")
+    tip = rule("div.map .dragtip")
+    for words in (
+        "font-size: 11px",
+        "background: var(--panel)",
+        "border: 1px solid var(--wire)",
+        "box-shadow: var(--shadow)",
+        "pointer-events: none",
+        "color: var(--ink-3)",
+    ):
+        assert words in tip, words
+    on = rule("div.map .dragtip.on")
+    accent = ("background: var(--route-soft)", "border-color: var(--route)", "color: var(--route)")
+    for words in accent:
+        assert words in on, words
+    # The drag holds the pointer on its block and is one engine for every drag.
+    drag = script("gateway-drag.js")
+    assert "setPointerCapture(" in drag and "export function startDrag(event, block, kind" in drag
+    assert "div.map.dropping" not in CSS
 
 
 def test_the_tray_bar_sits_in_the_dock_and_says_its_words():

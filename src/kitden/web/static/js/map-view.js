@@ -10,6 +10,8 @@ import { afterOldPage, animateTo, CALM, D, IN3, OUT3, RETRACT, rollTo, unscaled 
 
 const SVG = "http://www.w3.org/2000/svg";
 const MOVE_MS = 260; // a block that moves, or a new one that fades in at its place
+const HOME_MS = 220; // a dragged block that glides home
+const TIP_AT = { x: 6, y: -28 }; // the drag tip, from the held block's top left
 const GO_MS = 180; // a block that goes, or folds back into the block that showed it
 const FADE_MS = 120; // a child of an unfold fades in after its link has drawn
 const FOLD_SCALE = 0.3; // how small a folded child gets as it goes
@@ -236,9 +238,16 @@ function boxOf({ x, y, w, h, s }) {
 //   "none" (and the first draw of a "move", reduced motion or a hidden page) shows the end at
 //   once. It resolves when the motions of the blocks end; the motions of the links are not
 //   waited for.
-// - hold(id, point, { glide }): the block shows at that map point until letGo; letGo(id): it
-//   glides back to its place.
+// - hold(id, point, { glide, ms, pressed }): the block shows at that map point until homeIn, at
+//   once or gliding there in `ms` (OUT3); `pressed` keeps the press scale on it (style.css).
+//   homeIn(id, ms): it glides back to its place, 220 ms OUT3.
+// - lightTarget(id) / unlightTarget(): one block at a time takes the drop look (`.drop`).
+// - tip(text, { on }) / untip(): the drag tip (`.dragtip`), 6 px right of and 28 px over the held
+//   block's top left, plain or `on` (a drop there would work).
 // - drawIn(key, ms): a link grows from its start. node(idOrKey): a block's node or a link's path.
+// A new block that takes the place of one that goes (its `from`, that block's id) starts where that
+// one shows, whole, and glides to its place (260 ms OUT3); the one that goes leaves at once, its
+// links fade out (240 ms ease-out), and its focus goes to the new block.
 // A link between two blocks that stay moves on its own: a new solid one draws in (260 ms), a new
 // dashed one fades in (300 ms); a dashed one that goes fades out (240 ms), a solid one draws back to
 // its start (380 ms); one that changes look (dashed or solid) blends (300 ms). One to or from a block
@@ -305,6 +314,8 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
   let size = { w: 0, h: 0 }; // the last layout's size
   let shown = null; // the size the area has now
   let queued = false; // a frame is asked for
+  let target = null; // the block with the drop look
+  let tipNode = null; // the drag tip, while a drag shows one
 
   const canMove = () => D(MOVE_MS) > 0 && !document.hidden;
 
@@ -335,10 +346,11 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
   }
 
   // A block's classes: its look from the last draw, `.lit` on the lit path, `.dragging` while it is
-  // held or glides back, and `.leaving` while it leaves the map, except a child of a fold, which
-  // only shrinks back into its opener. A block that leaves is no Tab stop while it goes.
+  // held or glides back, `.pressed` while the pointer that holds it is down, `.drop` while it is the
+  // drop target, and `.leaving` while it leaves the map, except a child of a fold, which only
+  // shrinks back into its opener. A block that leaves is no Tab stop while it goes.
   function paint(item) {
-    const classes = [...item.look.split(" "), item.lit && "lit", (item.held || item.back) && "dragging", item.leaving && !item.folds && "leaving"];
+    const classes = [...item.look.split(" "), item.lit && "lit", (item.held || item.back) && "dragging", item.pressed && "pressed", item.id === target && "drop", item.leaving && !item.folds && "leaving"];
     const look = [...new Set(classes.filter(Boolean))].join(" ");
     if (item.node.className !== look) item.node.className = look;
     if (item.leaving) item.node.setAttribute("tabindex", "-1");
@@ -681,6 +693,28 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     for (const [key, link] of links) if (link.link.from === item.id || link.link.to === item.id) unlink(key);
   }
 
+  // A block whose place a new block takes leaves at once. Its links fade out where they are (240 ms
+  // ease-out, with `fades`) and are removed by time; they are no links of the map any more.
+  function handOver(item, fades) {
+    if (blocks.get(item.id) !== item) return;
+    stop(item);
+    blocks.delete(item.id);
+    item.node.remove();
+    for (const [key, link] of links) {
+      if (link.link.from !== item.id && link.link.to !== item.id) continue;
+      if (!fades) {
+        unlink(key);
+        continue;
+      }
+      const { path } = link;
+      dropHit(link);
+      dropOver(link);
+      links.delete(key);
+      animateTo(path, [{ opacity: Number(path.style.opacity || 1) }, { opacity: 0 }], { dur: FADE_OUT_MS, ease: "ease-out", fill: "forwards" });
+      setTimeout(() => path.remove(), D(FADE_OUT_MS));
+    }
+  }
+
   // Every link drawn again from its two blocks as they show now. Its opacity is the lower of
   // theirs, except while it draws in. The × follows its link.
   function paintLinks(now) {
@@ -705,6 +739,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
       if (display && pointed === item.key) unpoint();
     }
     placeCross();
+    placeTip();
   }
 
   // The area takes the last layout's size; while blocks move, the larger of that and its own.
@@ -815,11 +850,13 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     const delays = unfoldDelays(plan.unfold.length);
     const waves = enterDelays(layout.blocks.length); // when each block of an entrance starts
     const opened = new Set(); // new blocks of an unfold: their links draw in first
+    const handed = new Map(); // a block that goes -> the new block that takes its place
 
     for (const [i, place] of layout.blocks.entries()) {
       const block = place.kind === "column" ? columns.get(place.column) : byId.get(place.id) || place;
       let item = blocks.get(place.id);
       const fresh = !item;
+      const was = fresh && block.from && !after.has(block.from) ? blocks.get(block.from) : null;
       if (fresh) {
         item = { id: place.id, node: makeNode(place.id, isWords(place)), div: isWords(place), x: place.x, y: place.y, s: 1, o: 1, w: 0, h: 0, move: null, leaving: false, held: false, back: false, lit: false, look: "", words: null };
         blocks.set(place.id, item);
@@ -840,6 +877,10 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
         // The entrance: it waits below its place, unseen, then rises in its turn.
         put(item, { ...end, y: end.y + ENTER_RISE, o: 0 });
         go(item, end, { dur: D(MOVE_MS), ease: OUT3, start: start + D(waves[i] + afterOldPage()) });
+      } else if (was) {
+        // It takes the place of a block that goes: from where that one shows, to its own.
+        put(item, { x: was.x, y: was.y, s: 1, o: 1 });
+        go(item, end, { dur: D(MOVE_MS), ease: OUT3, start });
       } else if (fresh && unfold.has(place.id)) {
         // An unfold: it waits at its place while its links draw, then fades in.
         opened.add(place.id);
@@ -849,11 +890,18 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
         if (fresh) put(item, { ...end, o: 0 });
         go(item, end, { dur: D(MOVE_MS), ease: OUT3, start });
       }
+      if (was) handed.set(was.id, item);
     }
 
+    let focusTo = null; // the new block that takes the focus of the one it replaces
     for (const id of plan.leave) {
       const item = blocks.get(id);
       if (!item) continue;
+      if (handed.has(id)) {
+        if (item.node.contains(document.activeElement)) focusTo = handed.get(id);
+        handOver(item, linksMove);
+        continue;
+      }
       Object.assign(item, { leaving: true, folds: plan.fold.includes(id), held: false, back: false });
       paint(item);
       if (!moves) {
@@ -910,6 +958,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     if (aimed && aimed.hit) aimCross(aimed);
 
     order(layout);
+    if (focusTo) focusTo.node.focus({ preventScroll: true });
     box.classList.toggle("narrow", Boolean(layout.narrow));
     box.classList.toggle("finding", Boolean(found));
     size = { w: layout.columns.reduce((most, column) => Math.max(most, column.x + column.w), 0), h: layout.height + ROOM };
@@ -936,9 +985,9 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     return done;
   }
 
-  // Show a block at (x, y) of the map, at once or gliding there, until letGo: draws leave it
-  // there, and its links follow it.
-  function hold(id, { x, y }, { glide = false } = {}) {
+  // Show a block at (x, y) of the map, at once or gliding there in `ms`, until homeIn: draws leave
+  // it there, and its links follow it. A block held while the pointer is down keeps its press.
+  function hold(id, { x, y }, { glide = false, ms = MOVE_MS, pressed = false } = {}) {
     const item = blocks.get(id);
     if (!item || item.leaving) return Promise.resolve();
     // A drag begins: a glance ends, and the page will hear of the next block the pointer is on.
@@ -946,10 +995,10 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
       hovered = null;
       if (glanced) glance(null);
     }
-    Object.assign(item, { held: true, back: false });
+    Object.assign(item, { held: true, back: false, pressed });
     paint(item);
     const to = { x, y, s: 1, o: 1 };
-    if (glide && canMove()) go(item, to, { dur: D(MOVE_MS), ease: OUT3, start: performance.now() });
+    if (glide && canMove()) go(item, to, { dur: D(ms), ease: OUT3, start: performance.now() });
     else {
       stop(item);
       put(item, to);
@@ -957,15 +1006,51 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     return run(!canMove());
   }
 
-  // A held block glides from where it is to its place, and loses `.dragging` when it lands.
-  function letGo(id) {
+  // A held block glides from where it is to its place in `ms`, and loses `.dragging` when it lands.
+  function homeIn(id, ms = HOME_MS) {
     const item = blocks.get(id);
     if (!item || item.leaving) return Promise.resolve();
-    item.held = false;
-    go(item, { ...item.home, s: 1, o: 1 }, { dur: D(MOVE_MS), ease: OUT3, start: performance.now() });
+    Object.assign(item, { held: false, pressed: false });
+    go(item, { ...item.home, s: 1, o: 1 }, { dur: D(ms), ease: OUT3, start: performance.now() });
     item.back = Boolean(item.move);
     paint(item);
     return run(!canMove());
+  }
+
+  // The drop look on one block (null: none). Its edge and fill change in 180 ms and it grows to
+  // 1.05 on the spring in 260 ms (style.css).
+  function lightTarget(id) {
+    const was = blocks.get(target);
+    target = id;
+    if (was) paint(was);
+    const item = blocks.get(id);
+    if (item) paint(item);
+  }
+
+  function unlightTarget() {
+    lightTarget(null);
+  }
+
+  // The tip of a drag: what a drop there does, in the accent when it would work (`on`). Its words
+  // change at once; it follows the held block.
+  function tip(text, { on = false } = {}) {
+    if (!tipNode) {
+      tipNode = quiet(el("div", "dragtip"));
+      area.append(tipNode);
+    }
+    tipNode.textContent = text;
+    tipNode.className = on ? "dragtip on" : "dragtip";
+    placeTip();
+  }
+
+  function untip() {
+    if (tipNode) tipNode.remove();
+    tipNode = null;
+  }
+
+  function placeTip() {
+    const held = tipNode && [...blocks.values()].find((item) => item.held);
+    if (held) tipNode.style.transform = `translate(${held.x + TIP_AT.x}px, ${held.y + TIP_AT.y}px)`;
   }
 
   // A link grows from its start. It shows whole while it draws; its own dashes come back when it
@@ -1050,5 +1135,5 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     return blocks.get(idOrKey)?.node || links.get(idOrKey)?.path || null;
   }
 
-  return { box, area, draw, glance, hold, letGo, drawIn, node };
+  return { box, area, draw, glance, hold, homeIn, lightTarget, unlightTarget, tip, untip, drawIn, node };
 }

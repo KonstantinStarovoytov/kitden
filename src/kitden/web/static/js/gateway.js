@@ -209,9 +209,11 @@ function heldTag(server, on) {
 // the clients say they are found, with their version (`clients`, /api/clients), the gateway is a
 // slot to set up, and nothing has a grip. `picked` is the picked project ("" for All projects).
 // `rows` are the tray's rows (tray.js, as rowsOnMap gives them). A move into the Kitden gateway
-// puts a preview block `preview:<name>` at the end of its group once its row has its part (the
-// slot "Drop to add" while it is asked), joined to the gateway by a preview link; the outside row
-// it moves hides its direct lines and its grip. A server taken out of the Kitden gateway, or a
+// puts a preview block `preview:<name>` at the end of its group once its row has its part, joined
+// to the gateway by a preview link and to its clients by their dotted lines: the server is drawn
+// once, there, and the Outside list closes up (Task 4.7). While its row is asked the slot "Drop to
+// add" shows there instead and the outside block stays, with no grip. A server taken out of the
+// Kitden gateway, or a
 // tool turned off in the scope shown, has its link drawn leaving. A client the tray connects gets
 // a preview link to the Kitden gateway, one it disconnects has its link drawn leaving; a server
 // moved out of the gateway shows outside (outsideParts), and a client's own entry removed has its
@@ -299,8 +301,10 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
 
 // The servers outside every gateway, each joined to each client that has it by a direct line,
 // with a grip where a move can take it, and in a project "This project" where the project's own
-// definition replaces the shared one (`picked`). A row a move into the gateway takes (`moved`)
-// has no line and no grip. A client whose own entries of it all go in the tray (`gone`, by entry)
+// definition replaces the shared one (`picked`). A row a move into the gateway takes (`moved`) is
+// not drawn here once its preview is: its lines run to the preview block instead; while the move is
+// asked it stays, with no grip. Taken out, it comes back from where its preview was (`from`). A
+// client whose own entries of it all go in the tray (`gone`, by entry)
 // has its line drawn leaving, and the server, once every client loses it, looks leaving too and
 // has no grip. After the rows of its kind, a server whose move out of the Kitden gateway waits in
 // the tray (`out`) shows in preview, "Moves to <Client>", joined to that client by a preview line;
@@ -313,6 +317,12 @@ function outsideParts(view, kitden, { picked, first, moved, out, gone }) {
     for (const row of view.groups[group] || []) {
       const id = `outside:${group}:${row.name}`;
       const columns = (row.columns || row.clients).filter((c) => WRITABLE.includes(c));
+      const line = row.unknown ? { kind: "direct", unk: true } : { kind: "direct" };
+      const preview = moved.get(id);
+      if (preview) {
+        for (const client of columns) links.push({ from: `client:${client}`, to: preview.id, ...line, row: preview.row });
+        continue;
+      }
       // The clients whose line leaves, each with the key of the row that takes its entries out.
       const leaves = new Map(columns.map((c) => [c, goneWith(row, c, gone)]).filter(([, by]) => by));
       const leaving = columns.length > 0 && leaves.size === columns.length;
@@ -323,9 +333,7 @@ function outsideParts(view, kitden, { picked, first, moved, out, gone }) {
       // needs no second one, and a server on its way out has none.
       const grip = targets.some((g) => g.kind === "kitden") && !first && !moved.has(id) && !leaving;
       const state = row.unknown ? "unk" : "on";
-      blocks.push({ id, column: "servers", parent: "group:outside", kind: "outside", name: row.name, meta, tag, state, lamp: "out", h: OUTSIDE_BLOCK_H, icon: OUTSIDE_ICONS[group], ports: { left: "out" }, row, groupKey: group, columns, move: targets.length > 0, grip, ...(leaving ? { leaving } : {}) });
-      const line = row.unknown ? { kind: "direct", unk: true } : { kind: "direct" };
-      if (moved.has(id)) continue;
+      blocks.push({ id, column: "servers", parent: "group:outside", kind: "outside", name: row.name, meta, tag, state, lamp: "out", h: OUTSIDE_BLOCK_H, icon: OUTSIDE_ICONS[group], ports: { left: "out" }, row, groupKey: group, columns, move: targets.length > 0, grip, from: `preview:${row.name}`, ...(leaving ? { leaving } : {}) });
       for (const client of columns) links.push({ from: `client:${client}`, to: id, ...line, ...(leaves.has(client) ? { leaving: true, row: leaves.get(client) } : {}) });
     }
     for (const [name, move] of out) {
@@ -429,16 +437,21 @@ function clientBlock(id, { setup, linked, known, first, clients, wait = null }) 
 
 // The moves into the Kitden gateway the map shows: each one in the tray (`rows`), for the outside
 // rows whose entries it takes, then a drag (`drop`). Each puts a block at the end of its group of
-// the gateway (`adds`, each `{ kind, block }`): the preview block once its row has its part, else
-// the slot. `moved` holds the ids of the outside rows they take.
+// the gateway (`adds`, each `{ kind, block }`): the preview block once its row has its part, which
+// takes the outside block's place (`from`), else the slot. `moved` maps the ids of the outside rows
+// the moves in the tray take to their preview block, or null while it is the slot.
 function movesIn(view, kitden, rows, drop) {
   const adds = [];
-  const moved = new Set();
+  const moved = new Map();
   const slot = (name) => ({ id: `slot:${name}`, column: "servers", kind: "slot", name: "Drop to add", stateInMeta: true, state: "preview" });
-  // The outside row `name` of `group` ("move" or "local") goes in as `block`.
-  const add = (group, name, block) => {
-    moved.add(`outside:${group}:${name}`);
+  // `block` goes at the end of `group` ("move" or "local"); a move in the tray takes the outside
+  // row `name` of that group, while a drag keeps its block as it is.
+  const put = (group, block) => {
     if (!adds.some((other) => other.block.id === block.id)) adds.push({ kind: group === "local" ? "local" : "remote", block });
+  };
+  const add = (group, name, block) => {
+    moved.set(`outside:${group}:${name}`, block.kind === "preview" ? block : null);
+    put(group, block);
   };
   for (const row of rows) {
     const { action, targets = [], params = {} } = row.body;
@@ -449,11 +462,11 @@ function movesIn(view, kitden, rows, drop) {
         if (!each.items.length || !each.items.every((item) => items.has(item))) continue;
         const backTo = `outside:${group}:${each.name}`;
         const look = { icon: SERVER_ICONS[group === "local" ? "local" : "remote"], lamp: "preview", ports: { left: true }, takeOut: IN_PREVIEW };
-        add(group, each.name, row.part ? { id: `preview:${each.name}`, column: "servers", kind: "preview", name: each.name, meta: "Preview", stateInMeta: true, state: "preview", ...look, row: row.key, backTo } : slot(each.name));
+        add(group, each.name, row.part ? { id: `preview:${each.name}`, column: "servers", kind: "preview", name: each.name, meta: "Preview", stateInMeta: true, state: "preview", ...look, row: row.key, backTo, from: backTo } : slot(each.name));
       }
     }
   }
-  if (drop) add(drop.kind === "local" ? "local" : "move", drop.name, slot(drop.name));
+  if (drop) put(drop.kind === "local" ? "local" : "move", slot(drop.name));
   return { adds, moved };
 }
 
@@ -981,8 +994,9 @@ function drawOnMap(model, { fresh = false, projectChanged = false, lightLater = 
   const { view, selected } = onMap;
   const later = lightsLater({ unfolds: lightLater, lit });
   const drawn = view.draw(model, layout, { selected: lit.size ? selected : null, lit: later ? new Set() : lit, found: onMap.found, open, motion });
-  // A block a move took off its place stays where it is shown (gateway-drag.js).
-  placeMoved({ view, model, layout });
+  // A block a move took off its place stays where it is shown (gateway-drag.js); a drag draws the
+  // map again in place as its slot opens or closes.
+  placeMoved({ view, model, layout, redraw: drawRows });
   if (later) drawn.then(() => stillSelected({ view, selected }, onMap) && drawAgain());
   return drawn;
 }

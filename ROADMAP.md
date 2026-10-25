@@ -17,7 +17,9 @@ What Kitden does today and what comes next. Ideas and bugs:
   lamps, ports, the gateway's counts that roll, and on each tool how many projects have a rule of
   their own for it. Changes in the tray show on the map: a connect draws a dashed link, a
   disconnect or a removed entry makes its line leave, and a server moved out waits outside,
-  "Moves to" its client; a click on one takes it out.
+  "Moves to" its client; a click on one takes it out. Drag a server from outside onto the gateway:
+  the gateway lights and a slot opens; while the move waits the server shows only in the gateway,
+  and taking it out glides it back.
 - **Details float beside the map:** on Gateway, Library and Changes, Details float over the right
   of the page as in the mockup; the page keeps its width and the map stays wide. Another block's
   Details swap in place through a quiet skeleton.

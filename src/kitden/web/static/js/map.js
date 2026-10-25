@@ -323,24 +323,6 @@ export function drawPlan(before, after) {
   return plan;
 }
 
-// The column under a point of the layout (x and y from its top left): the id of the column whose
-// box, the whole height of the map, holds it; null between columns or outside the map.
-export function dropAt(layout, x, y) {
-  if (y < 0 || y > layout.height) return null;
-  const column = layout.columns.find((c) => x >= c.x && x <= c.x + c.w);
-  return column ? column.id : null;
-}
-
-// The box a group of `model` takes in `layout`: from its caption to its last block shown ("N more"
-// too), as wide as its column; null when the group is not drawn.
-export function groupBox(model, layout, id) {
-  const caption = layout.blocks.find((b) => b.id === id);
-  if (!caption) return null;
-  const inside = new Set([...model.blocks.filter((b) => b.parent === id).map((b) => b.id), `more:${id}`]);
-  const bottom = layout.blocks.filter((b) => inside.has(b.id)).reduce((most, b) => Math.max(most, b.y + b.h), caption.y + caption.h);
-  return { x: caption.x, y: caption.y, w: caption.w, h: bottom - caption.y };
-}
-
 // How wide the map is when it lays out wide: every column and the gaps between them.
 export function wideWidth(model) {
   return model.columns.reduce((sum, column, i) => sum + column.w + (i ? column.colGap ?? GAP : 0), 0);

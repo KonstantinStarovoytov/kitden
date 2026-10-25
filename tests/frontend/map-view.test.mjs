@@ -262,7 +262,7 @@ test("a group's caption draws its icon before its words, 13 px; a caption with n
   assert.equal(v.node('g1').children[0].dataset.icon, 'info');
 });
 
-test('a held block stays where it is put across draws, and glides home when let go', async () => {
+test('a held block stays where it is put across draws, and glides home in 220 ms OUT3', async () => {
   const v = view();
   await v.draw(TREE, lay([], true), { motion: 'none' });
   v.hold('s2', { x: 500, y: 300 });
@@ -270,7 +270,10 @@ test('a held block stays where it is put across draws, and glides home when let 
   assert.ok(v.node('s2').classList.contains('dragging'));
   v.draw(TREE, lay(['s1'], true), {}); settle();
   assert.deepEqual(pos(v.node('s2')), { x: 500, y: 300, s: 1 });
-  v.letGo('s2'); tick(260);
+  const home = place(lay(['s1'], true), 's2').y;
+  v.homeIn('s2'); tick(110);
+  assert.ok(near(pos(v.node('s2')).y, 300 + (home - 300) * 0.875));
+  tick(110);
   assert.equal(pos(v.node('s2')).y, place(lay(['s1'], true), 's2').y);
   assert.ok(!v.node('s2').classList.contains('dragging'));
 });
@@ -281,7 +284,7 @@ test('a block that glides home when a draw shows the end at once keeps no .dragg
     const v = view();
     await v.draw(TREE, lay([], true), { motion: 'none' });
     v.hold('s2', { x: 500, y: 300 });
-    v.letGo('s2'); tick(100);
+    v.homeIn('s2'); tick(100);
     assert.ok(v.node('s2').classList.contains('dragging'), 'it still glides');
     const layout = lay(['s1'], true);
     if (how === 'hidden') document.hidden = true;
@@ -302,12 +305,109 @@ test('a block held with a glide arrives held; letting go of a block the map does
   tick(130); assert.ok(near(pos(v.node('s2')).x, from.x + (500 - from.x) * 0.875));
   tick(130); assert.deepEqual(pos(v.node('s2')), { x: 500, y: 300, s: 1 });
   assert.ok(v.node('s2').classList.contains('dragging'), 'held until let go');
-  await v.letGo('nope');
+  await v.homeIn('nope');
   assert.equal(v.node('nope'), null);
   assert.ok(v.node('s2').classList.contains('dragging'));
-  v.letGo('s2'); settle();
+  v.homeIn('s2'); settle();
   assert.ok(!v.node('s2').classList.contains('dragging'));
   assert.equal(v.node('s2').style.opacity, '');
+});
+
+test('the dragged block keeps its press scale while the pointer is down', async () => {
+  const v = view();
+  await v.draw(TREE, lay(), { motion: 'none' });
+  v.hold('s2', { x: 500, y: 300 }, { pressed: true });
+  assert.ok(v.node('s2').classList.contains('pressed') && v.node('s2').classList.contains('dragging'));
+  // A draw while it is held keeps it.
+  await v.draw(TREE, lay(), {});
+  assert.ok(v.node('s2').classList.contains('pressed'));
+  // Let go, it flies on with no press: onto a slot, or home.
+  v.hold('s2', { x: 400, y: 300 }, { glide: true, ms: 200 });
+  assert.ok(!v.node('s2').classList.contains('pressed') && v.node('s2').classList.contains('dragging'));
+  v.hold('s2', { x: 500, y: 300 }, { pressed: true });
+  v.homeIn('s2', 220);
+  assert.ok(!v.node('s2').classList.contains('pressed'));
+});
+
+test('a drop flies onto its spot in 200 ms OUT3', async () => {
+  const v = view();
+  await v.draw(TREE, lay(), { motion: 'none' });
+  v.hold('s2', { x: 500, y: 300 }, { pressed: true });
+  v.hold('s2', { x: 400, y: 200 }, { glide: true, ms: 200 });
+  tick(100); assert.ok(near(pos(v.node('s2')).x, 500 - 100 * 0.875));
+  tick(100); assert.deepEqual(pos(v.node('s2')), { x: 400, y: 200, s: 1 });
+});
+
+test('under reduced motion the drop and the way home land at once', async () => {
+  reduce(true);
+  const v = view();
+  await v.draw(TREE, lay(), {});
+  v.hold('s2', { x: 500, y: 300 }, { pressed: true });
+  v.hold('s2', { x: 400, y: 200 }, { glide: true, ms: 200 });
+  assert.deepEqual([pos(v.node('s2')), frames.length], [{ x: 400, y: 200, s: 1 }, 0]);
+  v.homeIn('s2', 220);
+  const home = place(lay(), 's2');
+  assert.deepEqual([pos(v.node('s2')), frames.length], [{ x: home.x, y: home.y, s: 1 }, 0]);
+  assert.ok(!v.node('s2').classList.contains('dragging'));
+});
+
+test('a drop target lights with .drop, one at a time, and lets go', async () => {
+  const v = view();
+  await v.draw(TREE, lay(), { motion: 'none' });
+  v.lightTarget('s1');
+  assert.ok(v.node('s1').classList.contains('drop'));
+  // A draw keeps it lit.
+  await v.draw(TREE, lay(), {});
+  assert.ok(v.node('s1').classList.contains('drop'));
+  v.lightTarget('c1');
+  assert.ok(!v.node('s1').classList.contains('drop') && v.node('c1').classList.contains('drop'));
+  v.unlightTarget();
+  assert.ok(!v.node('c1').classList.contains('drop'));
+});
+
+test('the drag tip sits 6 px right of and 28 px over the held block, plain or on', async () => {
+  const v = view();
+  await v.draw(TREE, lay(), { motion: 'none' });
+  v.hold('s2', { x: 500, y: 300 }, { pressed: true });
+  v.tip('Drop on a client');
+  const tip = v.area.children.find((n) => n.classList.contains('dragtip'));
+  assert.deepEqual([tip.textContent, tip.className, tip.getAttribute('aria-hidden')], ['Drop on a client', 'dragtip', 'true']);
+  assert.equal(tip.style.transform, 'translate(506px, 272px)');
+  // It follows the block, and turns on where a drop would work.
+  v.hold('s2', { x: 520, y: 310 }, { pressed: true });
+  v.tip('Move into Codex', { on: true });
+  assert.deepEqual([tip.textContent, tip.className, tip.style.transform], ['Move into Codex', 'dragtip on', 'translate(526px, 282px)']);
+  assert.equal(v.area.children.filter((n) => n.classList.contains('dragtip')).length, 1);
+  v.untip();
+  assert.ok(!v.area.children.some((n) => n.classList.contains('dragtip')));
+});
+
+test('a block that takes the place of one that goes starts where that one shows and glides to its place', async () => {
+  const v = view();
+  const tree = { ...TREE, blocks: TREE.blocks.filter((b) => b.id !== 's2'), links: TREE.links.filter((l) => l.to !== 's2') };
+  const withS2 = layoutTree(TREE, { open: new Set(), narrow: false });
+  await v.draw(TREE, withS2, { motion: 'none' });
+  // s2 is held somewhere and has focus; it turns into p2, which belongs at the bottom of column b.
+  v.hold('s2', { x: 500, y: 300 });
+  const old = v.node('s2');
+  old.focus();
+  const turned = { ...tree, blocks: [...tree.blocks, { id: 'p2', column: 'b', kind: 'preview', name: 'files', state: 'preview', from: 's2' }], links: [...tree.links, { from: 'c1', to: 'p2', kind: 'direct' }] };
+  const layout = layoutTree(turned, { open: new Set(), narrow: false });
+  v.draw(turned, layout, {});
+  // The old block is gone at once, the new one is where it was, whole, and has its focus.
+  assert.equal(v.node('s2'), null);
+  assert.equal(old.parentNode, null);
+  assert.deepEqual([pos(v.node('p2')), v.node('p2').style.opacity], [{ x: 500, y: 300, s: 1 }, '']);
+  assert.equal(document.activeElement, v.node('p2'));
+  const end = place(layout, 'p2');
+  tick(130); assert.ok(near(pos(v.node('p2')).x, 500 + (end.x - 500) * 0.875));
+  tick(130); assert.deepEqual(pos(v.node('p2')), { x: end.x, y: end.y, s: 1 });
+  // Back the other way under reduced motion: at its place at once.
+  reduce(true);
+  const back = { ...TREE, blocks: TREE.blocks.map((b) => (b.id === 's2' ? { ...b, from: 'p2' } : b)) };
+  v.draw(back, withS2, {});
+  assert.equal(v.node('p2'), null);
+  assert.deepEqual([pos(v.node('s2')), frames.length], [{ x: place(withS2, 's2').x, y: place(withS2, 's2').y, s: 1 }, 0]);
 });
 
 // Review Focus

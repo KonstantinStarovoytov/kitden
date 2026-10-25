@@ -5,13 +5,13 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
 const { GATEWAY_COLUMNS, afterPress, besideBy, bringBeside, clickLink, contentWidth, findRows, gatewayTree, glanceFor, heldServer, kitdenLinks, letGoCloses, linkRemoval, linkTip, listAt, listRows, litFor, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, serverCount, stillSelected, takesPointer } = await import('../../src/kitden/web/static/js/gateway.js');
-const { dropBody, dropTarget, pressGrip, placeMoved } = await import('../../src/kitden/web/static/js/gateway-drag.js');
+const { dropBody, movingOn, pressGrip, placeMoved } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
 const { offersSwitch, ruleBody } = await import('../../src/kitden/web/static/js/gateway-details.js');
 const { blockLabel, findChip, findIn, isNarrow, keepOpen, layoutTree, linkClass, pressOpen, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
 const { kitdenClients } = await import('../../src/kitden/web/static/js/parts.js');
 const { data, state, viewMode } = await import('../../src/kitden/web/static/js/store.js');
-const { addToTray, applyTray, cancelTray, endApplied, keyFor, tray } = await import('../../src/kitden/web/static/js/tray.js');
+const { addToTray, applyTray, cancelTray, endApplied, keyFor, takeOut, tray } = await import('../../src/kitden/web/static/js/tray.js');
 
 // A stand-in server for the tray: each address answers from its own queue (a reply, or a function
 // of the request body that gives one); an address with nothing queued answers 200 with no body.
@@ -675,14 +675,15 @@ test('two moves in the tray show two preview blocks', () => {
   assert.ok(!keys(tree).includes('client:claude_code>outside:move:github direct'));
   assert.ok(!keys(tree).includes('client:codex>outside:local:docs direct'));
   assert.ok(keys(tree).includes('client:claude_code>outside:move:docs direct'));
-  // A server whose move is in the tray has no grip; every other one keeps its own.
+  // A server whose move is in the tray is drawn only in the gateway; every other one keeps its grip.
   assert.deepEqual(tree.blocks.filter((b) => b.kind === 'outside').map((b) => [b.id, Boolean(b.grip)]), [
-    ['outside:move:docs', true], ['outside:move:github', false], ['outside:local:docs', false], ['outside:local:files', true]]);
-  // A move still being asked shows the slot "Drop to add" in its place.
+    ['outside:move:docs', true], ['outside:local:files', true]]);
+  // A move still being asked shows the slot "Drop to add" in its place; its server waits there
+  // with its line and no grip.
   const asked = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [moveRow(GITHUB, null), moveRow(LOCAL_DOCS)] });
   assert.deepEqual([block(asked, 'slot:github').name, block(asked, 'slot:github').parent], ['Drop to add', 'group:kitden:remote']);
   assert.ok(!block(asked, 'preview:github') && block(asked, 'preview:docs'));
-  assert.ok(!keys(asked).includes('client:claude_code>outside:move:github direct'));
+  assert.ok(keys(asked).includes('client:claude_code>outside:move:github direct') && !block(asked, 'outside:move:github').grip);
 });
 
 test('the List shows no block of the tray and counts none', () => {
@@ -692,7 +693,10 @@ test('the List shows no block of the tray and counts none', () => {
     const rows = listRows(gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [moveRow(GITHUB, part)] }), new Set());
     assert.ok(!rows.some((r) => /^(preview|slot):/.test(r.id)), JSON.stringify(part));
     assert.equal(rows.find((r) => r.id === 'gateway:kitden').meta, '2 servers');
-    assert.deepEqual(rows.map((r) => r.id), plain.map((r) => r.id));
+    // A map with a move answered draws its server only as the preview (the List itself is drawn
+    // from no rows of the tray, so it keeps the server's row).
+    const moved = part ? ['outside:move:github'] : [];
+    assert.deepEqual(rows.map((r) => r.id), plain.map((r) => r.id).filter((id) => !moved.includes(id)));
   }
   // A drag's slot is no row either; a group that would hold only a preview has no row.
   const onlyLocal = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers: [MEDIUM_VIEW.gateways[0].servers[0]] }] };
@@ -747,7 +751,7 @@ test('a move left with no answer, and nothing asked, draws nothing and its block
   await freshTray();
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const heard = {};
-  globalThis.document = { addEventListener: (type, fn) => { (heard[type] ||= []).push(fn); }, removeEventListener() {}, documentElement: { classList: { add() {}, remove() {} } }, createElement: (tag) => ({ tag }) };
+  globalThis.document = { addEventListener: (type, fn) => { (heard[type] ||= []).push(fn); }, removeEventListener() {}, documentElement: { classList: { add() {}, remove() {} } }, querySelector: () => null, createElement: (tag) => ({ tag }) };
   Object.assign(data, { gateway: MEDIUM_VIEW });
   data.scope.gateway = '';
   try {
@@ -755,7 +759,7 @@ test('a move left with no answer, and nothing asked, draws nothing and its block
     const layout = layoutTree(tree, { open: new Set(), narrow: false });
     const held = [];
     const node = { dataset: { focus: 'block:outside:move:github' }, getBoundingClientRect: () => ({ left: 0, top: 0 }), querySelector: () => null, querySelectorAll: () => [], setAttribute() {}, removeAttribute() {}, append() {} };
-    const view = { node: () => node, hold: (id, at, how) => held.push([id, at, how]), letGo: (id) => held.push(['letGo', id]), box: { isConnected: true, classList: { toggle() {}, remove() {} } }, area: { getBoundingClientRect: () => ({ left: 0, top: 0 }) } };
+    const view = { node: () => node, hold: (id, at, how) => held.push([id, at, how]), homeIn: (id, ms) => held.push(['homeIn', id, ms]), lightTarget() {}, unlightTarget() {}, glance() {}, tip() {}, untip() {}, box: { isConnected: true, classList: { toggle() {}, remove() {} } }, area: { getBoundingClientRect: () => ({ left: 0, top: 0 }) } };
     placeMoved({ view, model: tree, layout });
     // The drop is asked; a second add drops that ask, and both it and the ask for the rest are
     // refused. The move stays in the tray with no part, and nothing is asked any more.
@@ -764,6 +768,8 @@ test('a move left with no answer, and nothing asked, draws nothing and its block
     queue(PREVIEW, { status: 422, json: { detail: 'No.' } }, { status: 422, json: { detail: 'Still no.' } });
     const home = layout.blocks.find((b) => b.id === 'outside:move:github');
     const files = layout.blocks.find((b) => b.id === 'held:kitden:files');
+    // The block is where the layout puts it: the press is 10 px into it.
+    node.getBoundingClientRect = () => ({ left: home.x, top: home.y });
     pressGrip({ button: 0, target: { closest: () => node }, clientX: home.x + 10, clientY: home.y + 10 });
     heard.pointermove[0]({ clientX: home.x + 16, clientY: home.y + 10 });
     heard.pointermove[0]({ clientX: files.x + 10, clientY: files.y + 10 });
@@ -779,7 +785,7 @@ test('a move left with no answer, and nothing asked, draws nothing and its block
     // The block the drop parked on the slot goes home.
     held.length = 0;
     placeMoved({ view, model: now, layout: layoutTree(now, { open: new Set(), narrow: false }) });
-    assert.deepEqual(held, [['letGo', 'outside:move:github']]);
+    assert.deepEqual(held, [['homeIn', 'outside:move:github', 220]]);
   } finally {
     delete globalThis.document;
     Object.assign(data, { gateway: null });
@@ -1086,7 +1092,7 @@ test('a drop adds a move to the tray', async (t) => {
   await freshTray();
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const heard = {};
-  globalThis.document = { addEventListener: (type, fn) => { (heard[type] ||= []).push(fn); }, removeEventListener() {}, documentElement: { classList: { add() {}, remove() {} } }, createElement: (tag) => ({ tag }) };
+  globalThis.document = { addEventListener: (type, fn) => { (heard[type] ||= []).push(fn); }, removeEventListener() {}, documentElement: { classList: { add() {}, remove() {} } }, querySelector: () => null, createElement: (tag) => ({ tag }) };
   Object.assign(data, { gateway: MEDIUM_VIEW });
   data.scope.gateway = '';
   try {
@@ -1094,10 +1100,12 @@ test('a drop adds a move to the tray', async (t) => {
     const layout = layoutTree(tree, { open: new Set(), narrow: false });
     const held = [];
     const node = { dataset: { focus: 'block:outside:move:github' }, getBoundingClientRect: () => ({ left: 0, top: 0 }), querySelector: () => null, querySelectorAll: () => [], setAttribute() {}, removeAttribute() {}, append() {} };
-    const view = { node: () => node, hold: (id, at, how) => held.push([id, at, how]), letGo: (id) => held.push(['letGo', id]), box: { isConnected: true, classList: { toggle() {}, remove() {} } }, area: { getBoundingClientRect: () => ({ left: 0, top: 0 }) } };
+    const view = { node: () => node, hold: (id, at, how) => held.push([id, at, how]), homeIn: (id, ms) => held.push(['homeIn', id, ms]), lightTarget() {}, unlightTarget() {}, glance() {}, tip() {}, untip() {}, box: { isConnected: true, classList: { toggle() {}, remove() {} } }, area: { getBoundingClientRect: () => ({ left: 0, top: 0 }) } };
     placeMoved({ view, model: tree, layout });
     const home = layout.blocks.find((b) => b.id === 'outside:move:github');
     const files = layout.blocks.find((b) => b.id === 'held:kitden:files');
+    // The block is where the layout puts it: the press is 10 px into it.
+    node.getBoundingClientRect = () => ({ left: home.x, top: home.y });
     let answer;
     queue(PREVIEW, (sent) => new Promise((resolve) => { answer = () => resolve(batch('c1')(sent)); }));
     pressGrip({ button: 0, target: { closest: () => node }, clientX: home.x + 10, clientY: home.y + 10 });
@@ -1113,15 +1121,16 @@ test('a drop adds a move to the tray', async (t) => {
     const slot = askedLayout.blocks.find((b) => b.id === 'slot:github');
     held.length = 0;
     placeMoved({ view, model: asked, layout: askedLayout });
-    assert.deepEqual(held, [['outside:move:github', { x: slot.x, y: slot.y }, { glide: true }]]);
-    // Its answer puts the preview block in the slot's place, and the block goes home.
+    assert.deepEqual(held, [['outside:move:github', { x: slot.x, y: slot.y }, { glide: true, ms: 200 }]]);
+    // Its answer puts the preview block in the slot's place, where the block turns into it: it is
+    // not sent home.
     answer();
     await flush();
     const answered = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: rowsOnMap(tray) });
-    assert.ok(block(answered, 'preview:github') && !block(answered, 'slot:github'));
+    assert.ok(block(answered, 'preview:github') && !block(answered, 'slot:github') && !block(answered, 'outside:move:github'));
     held.length = 0;
     placeMoved({ view, model: answered, layout: layoutTree(answered, { open: new Set(), narrow: false }) });
-    assert.deepEqual(held, [['letGo', 'outside:move:github']]);
+    assert.deepEqual(held, []);
   } finally {
     delete globalThis.document;
     Object.assign(data, { gateway: null });
@@ -1176,43 +1185,238 @@ test('focus goes to the gateway after an applied removal', async () => {
   }
 });
 
-test('a drag opens the slot "Drop to add" in its group, and its line hides', () => {
+test('a drag opens the slot "Drop to add" in its group, and its line follows it', () => {
   const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, drop: { name: 'github', kind: 'remote' } });
   const slot = tree.blocks.find((b) => b.kind === 'slot');
   assert.deepEqual([slot.name, slot.parent, slot.state, slot.column], ['Drop to add', 'group:kitden:remote', 'preview', 'servers']);
   assert.ok(keys(tree).includes(`gateway:kitden>${slot.id} preview`));
-  assert.ok(!keys(tree).includes('client:claude_code>outside:move:github direct'));
+  assert.ok(keys(tree).includes('client:claude_code>outside:move:github direct'));
   assert.ok(!tree.blocks.some((b) => b.kind === 'preview'));
   // The gateway is still a gateway block: the slot is not a first run.
   assert.equal(block(tree, 'gateway:kitden').kind, 'gateway');
 });
 
-test('a drop on its own group puts the block back; only the rest of Servers previews', () => {
-  const at = (l, id) => l.blocks.find((b) => b.id === id);
-  // Before the block leaves its group no slot opens, so a click that wobbles 4 px lands on its own
-  // group: it goes back and asks for nothing.
-  const still = gatewayTree(MEDIUM_VIEW, OPTS);
-  const before = layoutTree(still, { open: new Set(), narrow: false });
-  const home = at(before, 'outside:move:github');
-  assert.equal(dropTarget(still, before, home.x + 12, home.y + 14), null);
-  // Out of it, the slot opens and the group moves down; on the slot, or on a server in the
-  // gateway, a drop previews.
-  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, drop: { name: 'github', kind: 'remote' } });
-  const layout = layoutTree(tree, { open: new Set(), narrow: false });
-  const slot = at(layout, 'slot:github');
-  assert.equal(dropTarget(tree, layout, slot.x + 10, slot.y + 10), 'servers');
-  const files = at(layout, 'held:kitden:files');
-  assert.equal(dropTarget(tree, layout, files.x + 10, files.y + 10), 'servers');
-  // On the outside group as it is shown now, from its caption to its last block: back.
-  const caption = at(layout, 'group:outside');
-  const now = at(layout, 'outside:move:github');
-  const last = layout.blocks.filter((b) => b.id.startsWith('outside:')).at(-1);
-  for (const [x, y] of [[caption.x + 5, caption.y + 2], [now.x + 10, now.y + 10], [last.x + 10, last.y + last.h - 1]]) {
-    assert.equal(dropTarget(tree, layout, x, y), null);
+// A drag on the map with stand-ins (Task 4.7): the document hears the pointer, the floating Details
+// and the dock are where `covers` says (window rects by selector), and the view records what the
+// drag asks of it. Each redraw draws the tree again with the tray and the drag, as gateway.js does.
+// The map's area is at the window's top left, so a map point is a window point.
+function dragMap({ covers = {}, id = 'outside:move:github', view: shown = MEDIUM_VIEW } = {}) {
+  const heard = {};
+  const asked = [];
+  const captured = [];
+  globalThis.document = {
+    addEventListener: (type, fn) => { (heard[type] ||= []).push(fn); },
+    removeEventListener: (type, fn) => { heard[type] = (heard[type] || []).filter((f) => f !== fn); },
+    documentElement: { classList: { add() {}, remove() {} } },
+    querySelector: (selector) => (covers[selector] ? { getBoundingClientRect: () => covers[selector] } : null),
+    createElement: (tag) => ({ tag }),
+  };
+  const node = { dataset: { focus: `block:${id}` }, getBoundingClientRect: () => ({ left: 0, top: 0 }), setPointerCapture: (pointer) => captured.push(pointer), querySelector: () => null, querySelectorAll: () => [], setAttribute() {}, removeAttribute() {}, append() {} };
+  const view = {
+    node: () => node,
+    hold: (at, point, how = {}) => asked.push(['hold', at, point, how]),
+    homeIn: (at, ms) => asked.push(['homeIn', at, ms]),
+    lightTarget: (at) => asked.push(['light', at]),
+    unlightTarget: () => asked.push(['unlight']),
+    glance: (set) => asked.push(['glance', set ? [...set] : null]),
+    tip() {},
+    untip() {},
+    box: { isConnected: true, classList: { toggle() {}, remove() {} } },
+    area: { getBoundingClientRect: () => ({ left: 0, top: 0 }) },
+  };
+  const map = { asked, captured, heard, view, tree: null, layout: null };
+  const redraw = () => {
+    map.tree = gatewayTree(shown, { ...OPTS, rows: rowsOnMap(tray), ...movingOn() });
+    map.layout = layoutTree(map.tree, { open: new Set(), narrow: false });
+    placeMoved({ view, model: map.tree, layout: map.layout, redraw });
+  };
+  redraw();
+  const at = (which) => map.layout.blocks.find((b) => b.id === which);
+  const home = at(id);
+  node.getBoundingClientRect = () => ({ left: home.x, top: home.y, width: home.w, height: home.h });
+  Object.assign(map, {
+    at,
+    home,
+    // A press 10 px into the block, and the moves and the let go of that pointer.
+    press: (onStart) => pressGrip({ button: 0, pointerId: 7, target: { closest: () => node }, clientX: home.x + 10, clientY: home.y + 10 }, onStart),
+    move: (x, y) => { for (const fn of heard.pointermove || []) fn({ clientX: x, clientY: y }); },
+    up: (x, y) => { for (const fn of heard.pointerup || []) fn({ type: 'pointerup', clientX: x, clientY: y }); },
+    // Where the pointer puts the block's top left on a block of the map: its centre is that block's.
+    onto: (which) => [at(which).x + 10, at(which).y + 10],
+  });
+  return map;
+}
+
+test('a drag starts after 5 px and swallows its click', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  try {
+    const map = dragMap();
+    const [x, y] = [map.home.x + 10, map.home.y + 10];
+    const started = [];
+    map.press(() => started.push('start'));
+    // The block takes the pointer at the press.
+    assert.deepEqual(map.captured, [7]);
+    map.move(x + 3, y + 4 - 0.01);
+    assert.deepEqual([started, map.asked], [[], []], 'under 5 px nothing starts');
+    map.move(x + 3, y + 4);
+    assert.deepEqual(started, ['start']);
+    assert.deepEqual(map.asked[0], ['hold', 'outside:move:github', { x: map.home.x + 3, y: map.home.y + 4 }, { pressed: true }]);
+    map.up(x + 3, y + 4);
+    // The click that ends it selects nothing.
+    const click = { prevented: false, stopped: false, preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; } };
+    for (const fn of map.heard.click) fn(click);
+    assert.deepEqual([click.prevented, click.stopped], [true, true]);
+    // A press that moves under 5 px is a click: it is not swallowed.
+    map.heard.click = [];
+    map.press();
+    map.move(x + 2, y + 2);
+    map.up(x + 2, y + 2);
+    assert.deepEqual(map.heard.click, []);
+    assert.equal(tray.rows.length, 0);
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    await freshTray();
   }
-  // Off the Servers column: back.
-  assert.equal(dropTarget(tree, layout, 5, slot.y + 10), null);
-  assert.equal(dropTarget(tree, layout, at(layout, 'gateway:kitden').x + 5, slot.y + 10), null);
+});
+
+// Review Focus
+test('a drop over Details, over the dock, on nothing or home leaves the tray as it was and glides home in 220', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  try {
+    const probe = dragMap();
+    // The tracker's spot in the gateway: a drop there, with nothing over it, would move github in.
+    const [x, y] = probe.onto('held:kitden:tracker');
+    const over = { left: x - 50, top: y - 50, right: x + 50, bottom: y + 50, width: 100, height: 100 };
+    const cases = [
+      ['over Details', { '#drawer.open': over }, [x, y]],
+      ['over the dock', { '#dock': over }, [x, y]],
+      ['on nothing', {}, [1200, 10]],
+      ['home', {}, [probe.home.x + 10, probe.home.y + 10]],
+    ];
+    for (const [name, covers, [dropX, dropY]] of cases) {
+      const map = dragMap({ covers });
+      map.press();
+      map.move(map.home.x + 16, map.home.y + 10);
+      map.move(dropX, dropY);
+      map.up(dropX, dropY);
+      await flush();
+      assert.deepEqual([tray.rows, posted()], [[], []], name);
+      assert.deepEqual(map.asked.at(-1), ['homeIn', 'outside:move:github', 220], name);
+      // Over Details or the dock the gateway never lights and no slot opens.
+      assert.ok(!map.asked.some(([what]) => what === 'light'), name);
+      assert.deepEqual(movingOn(), {}, name);
+    }
+    // Escape does the same, before Details or the map hear it.
+    const map = dragMap();
+    map.press();
+    map.move(x, y);
+    const escape = { key: 'Escape', preventDefault() {}, stopImmediatePropagation() { this.stopped = true; } };
+    for (const fn of map.heard.keydown) fn(escape);
+    assert.ok(escape.stopped);
+    assert.deepEqual([tray.rows.length, map.asked.at(-1)], [0, ['homeIn', 'outside:move:github', 220]]);
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    await freshTray();
+  }
+});
+
+test("the gateway lights and the slot opens over the block's own group", async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  try {
+    const map = dragMap();
+    map.press();
+    map.move(map.home.x + 16, map.home.y + 10);
+    // It lights the block, the gateway and its dotted line, as a glance does.
+    assert.deepEqual(map.asked.find(([what]) => what === 'glance'), ['glance', ['outside:move:github', 'gateway:kitden', 'client:claude_code>outside:move:github']]);
+    assert.deepEqual(movingOn(), {}, 'no slot while the block is in its own group');
+    // Its centre over the gateway's groups, in the Local group's place too: the slot opens in its
+    // own group, Remote, and the gateway lights.
+    map.move(...map.onto('held:kitden:files'));
+    assert.deepEqual(movingOn(), { drop: { name: 'github', kind: 'remote' } });
+    assert.equal(block(map.tree, 'slot:github').parent, 'group:kitden:remote');
+    assert.deepEqual(map.asked.filter(([what]) => what === 'light'), [['light', 'gateway:kitden']]);
+    // Its dotted line follows it.
+    assert.ok(keys(map.tree).includes('client:claude_code>outside:move:github direct'));
+    // Back over its own group: the slot closes and the gateway lets go.
+    map.move(map.home.x + 10, map.home.y + 10);
+    assert.deepEqual([movingOn(), map.asked.at(-2)], [{}, ['unlight']]);
+    map.up(map.home.x + 10, map.home.y + 10);
+    // A local server opens its slot in Local.
+    const local = dragMap({ id: 'outside:local:docs' });
+    local.press();
+    local.move(local.home.x + 16, local.home.y + 10);
+    local.move(...local.onto('held:kitden:tracker'));
+    assert.deepEqual(movingOn(), { drop: { name: 'docs', kind: 'local' } });
+    assert.equal(block(local.tree, 'slot:docs').parent, 'group:kitden:local');
+    local.up(local.home.x + 10, local.home.y + 10);
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    await freshTray();
+  }
+});
+
+test('a moving server is drawn once, in the gateway, and the Outside list closes up', () => {
+  const plain = layoutTree(gatewayTree(MEDIUM_VIEW, OPTS), { open: new Set(), narrow: false });
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [moveRow(GITHUB)] });
+  const moved = layoutTree(tree, { open: new Set(), narrow: false });
+  // One github in the Servers column: the preview block in Remote.
+  assert.deepEqual(tree.blocks.filter((b) => b.name === 'github').map((b) => b.id), ['preview:github']);
+  assert.equal(block(tree, 'preview:github').from, 'outside:move:github');
+  // The Outside list closes up: each server under it takes the place of the one above.
+  const outside = (layout) => {
+    const caption = layout.blocks.find((b) => b.id === 'group:outside');
+    return layout.blocks.filter((b) => b.kind === 'outside').map((b) => [b.id, b.y - caption.y]);
+  };
+  assert.deepEqual(outside(moved).map(([, y]) => y), outside(plain).map(([, y]) => y).slice(0, 3));
+  assert.deepEqual(outside(moved).map(([id]) => id), ['outside:move:docs', 'outside:local:docs', 'outside:local:files']);
+  // While its row is still asked the block waits on the slot, so it is still the outside block.
+  const asked = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [moveRow(GITHUB, null)] });
+  assert.ok(block(asked, 'outside:move:github') && block(asked, 'slot:github') && !block(asked, 'preview:github'));
+  // Taken out, it comes back from where its preview was.
+  assert.equal(block(gatewayTree(MEDIUM_VIEW, OPTS), 'outside:move:github').from, 'preview:github');
+});
+
+// Review Focus
+test('a server behind N more moves up into the freed place and back after a take-out', async () => {
+  await freshTray();
+  const many = Array.from({ length: 8 }, (_, i) => ({ name: `s${i + 1}`, clients: ['codex'], columns: ['codex'], items: [`i${i + 1}`], client_items: { codex: [`i${i + 1}`] }, stays: null }));
+  const view = { ...MEDIUM_VIEW, groups: { move: many, local: [], plugin: [] } };
+  const shown = () => {
+    const tree = gatewayTree(view, { ...OPTS, rows: rowsOnMap(tray) });
+    const layout = layoutTree(tree, { open: new Set(), narrow: false });
+    return layout.blocks.filter((b) => b.id.startsWith('outside:') || b.id.startsWith('more:')).map((b) => (b.kind === 'more' ? b.name : b.id.split(':').at(-1)));
+  };
+  assert.deepEqual(shown(), ['s1', 's2', 's3', 's4', 's5', '3 more']);
+  queue(PREVIEW, batch('c1'));
+  await addToTray(dropBody(many[1], view));
+  // s6 moves up into the place s2 left.
+  assert.deepEqual(shown(), ['s1', 's3', 's4', 's5', 's6', '2 more']);
+  await takeOut(tray.rows[0].key);
+  await flush();
+  assert.deepEqual(shown(), ['s1', 's2', 's3', 's4', 's5', '3 more']);
+  await freshTray();
+});
+
+test("its client's dotted line runs to the preview block", () => {
+  const rows = [moveRow(GITHUB), moveRow(LOCAL_DOCS)];
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows });
+  assert.ok(keys(tree).includes('client:claude_code>preview:github direct'));
+  assert.ok(keys(tree).includes('client:codex>preview:docs direct'));
+  // It is the row's: a press on it, or its ×, takes the move out.
+  assert.equal(linkOf(tree, 'client:claude_code>preview:github').row, rows[0].key);
+  assert.equal(linkTip(tree, linkOf(tree, 'client:claude_code>preview:github'), ''), 'Take it out of the preview');
+  // It is drawn at right angles, as a dotted line from a client is.
+  const layout = layoutTree(tree, { open: new Set(), narrow: false });
+  assert.equal(layout.links.find((l) => l.from === 'client:claude_code' && l.to === 'preview:github').shape, 'step');
 });
 
 test('a grip shows only where the Kitden gateway can take the server', () => {
@@ -1326,19 +1530,19 @@ test('a selected server or gateway also lights what it holds on; a tool lights o
 test('a drag lets go of the selection when the block first follows the pointer, before the map holds it', (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const heard = {};
-  globalThis.document = { addEventListener: (type, fn) => { (heard[type] ||= []).push(fn); }, removeEventListener() {}, documentElement: { classList: { add() {}, remove() {} } } };
+  globalThis.document = { addEventListener: (type, fn) => { (heard[type] ||= []).push(fn); }, removeEventListener() {}, documentElement: { classList: { add() {}, remove() {} } }, querySelector: () => null };
   try {
     const tree = gatewayTree(MEDIUM_VIEW, OPTS);
     const layout = layoutTree(tree, { open: new Set(), narrow: false });
     const calls = [];
-    const node = { dataset: { focus: 'block:outside:move:github' }, getBoundingClientRect: () => ({ left: 0, top: 0 }) };
-    const view = { node: () => node, hold: () => calls.push('hold'), letGo() {}, box: { isConnected: true, classList: { toggle() {}, remove() {} } }, area: { getBoundingClientRect: () => ({ left: 0, top: 0 }) } };
+    const node = { dataset: { focus: 'block:outside:move:github' }, getBoundingClientRect: () => ({ left: 0, top: 0 }), removeAttribute() {}, querySelectorAll: () => [] };
+    const view = { node: () => node, hold: () => calls.push('hold'), homeIn() {}, lightTarget() {}, unlightTarget() {}, glance() {}, tip() {}, untip() {}, box: { isConnected: true, classList: { toggle() {}, remove() {} } }, area: { getBoundingClientRect: () => ({ left: 0, top: 0 }) } };
     placeMoved({ view, model: tree, layout, redraw() {} });
     const home = layout.blocks.find((b) => b.id === 'outside:move:github');
     const [x, y] = [home.x + 10, home.y + 10];
     pressGrip({ button: 0, target: { closest: () => node }, clientX: x, clientY: y }, () => calls.push('letGo'));
-    heard.pointermove[0]({ clientX: x + 2, clientY: y });
-    assert.deepEqual(calls, [], 'a wobble under 4 px starts nothing');
+    heard.pointermove[0]({ clientX: x + 4, clientY: y });
+    assert.deepEqual(calls, [], 'a wobble under 5 px starts nothing');
     heard.pointermove[0]({ clientX: x + 6, clientY: y });
     heard.pointermove[0]({ clientX: x + 9, clientY: y });
     assert.deepEqual(calls, ['letGo', 'hold', 'hold']);
@@ -1349,7 +1553,7 @@ test('a drag lets go of the selection when the block first follows the pointer, 
 test('a drag keeps the pointer inside the block when the layout changes its size under the drag', (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const heard = {};
-  globalThis.document = { addEventListener: (type, fn) => { (heard[type] ||= []).push(fn); }, removeEventListener() {}, documentElement: { classList: { add() {}, remove() {} } } };
+  globalThis.document = { addEventListener: (type, fn) => { (heard[type] ||= []).push(fn); }, removeEventListener() {}, documentElement: { classList: { add() {}, remove() {} } }, querySelector: () => null };
   try {
     const tree = gatewayTree(MEDIUM_VIEW, OPTS);
     const narrow = layoutTree(tree, { open: new Set(), narrow: true });
@@ -1359,7 +1563,7 @@ test('a drag keeps the pointer inside the block when the layout changes its size
     assert.ok(was.w > now.w, 'the narrow block is wider than the wide one');
     const held = [];
     const node = { dataset: { focus: `block:${id}` }, getBoundingClientRect: () => ({ left: was.x, top: was.y, width: was.w, height: was.h }), removeAttribute() {}, querySelectorAll: () => [] };
-    const view = { node: () => node, hold: (_, at) => held.push(at), letGo() {}, box: { isConnected: true, classList: { toggle() {}, remove() {} } }, area: { getBoundingClientRect: () => ({ left: 0, top: 0 }) } };
+    const view = { node: () => node, hold: (_, at) => held.push(at), homeIn() {}, lightTarget() {}, unlightTarget() {}, glance() {}, tip() {}, untip() {}, box: { isConnected: true, classList: { toggle() {}, remove() {} } }, area: { getBoundingClientRect: () => ({ left: 0, top: 0 }) } };
     placeMoved({ view, model: tree, layout: narrow, redraw() {} });
     // A press near the right edge of the wide narrow block, then a move that starts the drag.
     const [x, y] = [was.x + was.w - 15, was.y + 10];
