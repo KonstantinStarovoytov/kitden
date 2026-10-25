@@ -410,6 +410,88 @@ test('a block that takes the place of one that goes starts where that one shows 
   assert.deepEqual([pos(v.node('s2')), frames.length], [{ x: place(withS2, 's2').x, y: place(withS2, 's2').y, s: 1 }, 0]);
 });
 
+// TREE with a slot `g1` that grows out of the client c1, in column b after s1.
+const withSlot = () => ({ ...TREE, blocks: [...TREE.blocks.slice(0, 2), { id: 'g1', column: 'b', kind: 'slot', name: 'Drop to add', state: 'preview', growsFrom: 'c1' }, ...TREE.blocks.slice(2)] });
+
+test('a block that grows out of another starts small on its right side and grows in 220 ms OUT3; the rest glide 220 too', async () => {
+  const v = view();
+  const plain = layoutTree(TREE, { open: new Set(), narrow: false });
+  await v.draw(TREE, plain, { motion: 'none' });
+  const grown = layoutTree(withSlot(), { open: new Set(), narrow: false });
+  v.draw(withSlot(), grown, {});
+  const c1 = place(plain, 'c1');
+  const g1 = place(grown, 'g1');
+  const from = { x: c1.x + c1.w - g1.w / 2, y: c1.y + c1.h / 2 - g1.h / 2 };
+  assert.deepEqual([pos(v.node('g1')), v.node('g1').style.opacity], [{ ...from, s: 0.4 }, '0']);
+  const [s2From, s2To] = [place(plain, 's2').y, place(grown, 's2').y];
+  tick(110);
+  assert.ok(near(pos(v.node('g1')).y, from.y + (g1.y - from.y) * 0.875));
+  assert.ok(near(pos(v.node('s2')).y, s2From + (s2To - s2From) * 0.875), 'the block below makes room in the same time');
+  tick(110);
+  assert.deepEqual([pos(v.node('g1')), v.node('g1').style.opacity, pos(v.node('s2')).y], [{ x: g1.x, y: g1.y, s: 1 }, '', s2To]);
+});
+
+test('a block that grew out of another shrinks back into it in 180 ms IN3, then goes', async () => {
+  const v = view();
+  const grown = layoutTree(withSlot(), { open: new Set(), narrow: false });
+  await v.draw(withSlot(), grown, { motion: 'none' });
+  const node = v.node('g1');
+  const plain = layoutTree(TREE, { open: new Set(), narrow: false });
+  v.draw(TREE, plain, {});
+  const c1 = place(plain, 'c1');
+  const g1 = place(grown, 'g1');
+  tick(90);
+  assert.ok(near(pos(node).s, 1 - 0.6 * 0.125));
+  assert.equal(node.style.opacity, '0.875');
+  // The block below moves up in 220, as the slot goes.
+  const [s2From, s2To] = [place(grown, 's2').y, place(plain, 's2').y];
+  assert.ok(near(pos(v.node('s2')).y, s2From + (s2To - s2From) * (1 - (1 - 90 / 220) ** 3)));
+  tick(90);
+  assert.equal(v.node('g1'), null);
+  assert.deepEqual([pos(node).x, pos(node).y], [c1.x + c1.w - g1.w / 2, c1.y + c1.h / 2 - g1.h / 2]);
+});
+
+test('under reduced motion a block grows and shrinks back at once', async () => {
+  reduce(true);
+  const v = view();
+  await v.draw(TREE, lay(), {});
+  const grown = layoutTree(withSlot(), { open: new Set(), narrow: false });
+  v.draw(withSlot(), grown, {});
+  assert.deepEqual([pos(v.node('g1')), v.node('g1').style.opacity, frames.length], [{ x: place(grown, 'g1').x, y: place(grown, 'g1').y, s: 1 }, '', 0]);
+  v.draw(TREE, lay(), {});
+  assert.deepEqual([v.node('g1'), frames.length], [null, 0]);
+});
+
+test('a block dropped onto another hides that one at once, until it goes home', async () => {
+  const v = view();
+  const grown = layoutTree(withSlot(), { open: new Set(), narrow: false });
+  await v.draw(withSlot(), grown, { motion: 'none' });
+  const g1 = place(grown, 'g1');
+  v.hold('s2', { x: 500, y: 300 }, { pressed: true });
+  v.hold('s2', { x: g1.x, y: g1.y }, { glide: true, ms: 200, onto: 'g1' });
+  assert.ok(v.node('g1').classList.contains('covered'));
+  // A draw keeps it hidden, also once the block has landed.
+  v.draw(withSlot(), grown, {}); settle();
+  assert.ok(v.node('g1').classList.contains('covered'));
+  v.homeIn('s2');
+  assert.ok(!v.node('g1').classList.contains('covered'));
+});
+
+test('the drag tip can go by the pointer: 12 px right of it and 30 px over it', async () => {
+  const v = view();
+  await v.draw(TREE, lay(), { motion: 'none' });
+  v.tip('Drop on the gateway', { at: { x: 100, y: 200 } });
+  const tip = v.area.children.find((n) => n.classList.contains('dragtip'));
+  assert.equal(tip.style.transform, 'translate(112px, 170px)');
+  v.tip('Connect Cursor', { on: true, at: { x: 140, y: 210 } });
+  assert.deepEqual([tip.className, tip.style.transform], ['dragtip on', 'translate(152px, 180px)']);
+  // Without a pointer it goes by the held block again.
+  v.hold('s2', { x: 500, y: 300 }, { pressed: true });
+  v.tip('Drop on a client');
+  assert.equal(tip.style.transform, 'translate(506px, 272px)');
+  v.untip();
+});
+
 // Review Focus
 test('a draw during a move ends at the newer layout, one node per id', async () => {
   const v = view();

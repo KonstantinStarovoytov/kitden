@@ -4,8 +4,14 @@ import { test } from 'node:test';
 // gateway.js needs only this from a browser to load; the tests call its pure parts.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
+// The window a drag listens to for a blur.
+const windowHeard = {};
+globalThis.window = {
+  addEventListener: (type, fn) => { (windowHeard[type] ||= []).push(fn); },
+  removeEventListener: (type, fn) => { windowHeard[type] = (windowHeard[type] || []).filter((f) => f !== fn); },
+};
 const { GATEWAY_COLUMNS, afterPress, besideBy, bringBeside, clickLink, contentWidth, findRows, gatewayTree, glanceFor, heldServer, kitdenLinks, letGoCloses, linkRemoval, linkTip, listAt, listRows, litFor, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, serverCount, stillSelected, takesPointer } = await import('../../src/kitden/web/static/js/gateway.js');
-const { dropBody, movingOn, pressGrip, placeMoved } = await import('../../src/kitden/web/static/js/gateway-drag.js');
+const { DRAGS, dropBody, movingOn, pointOf, pressGrip, placeMoved, startDrag } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
 const { offersSwitch, ruleBody } = await import('../../src/kitden/web/static/js/gateway-details.js');
 const { blockLabel, findChip, findIn, isNarrow, keepOpen, layoutTree, linkClass, pressOpen, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
@@ -1121,7 +1127,8 @@ test('a drop adds a move to the tray', async (t) => {
     const slot = askedLayout.blocks.find((b) => b.id === 'slot:github');
     held.length = 0;
     placeMoved({ view, model: asked, layout: askedLayout });
-    assert.deepEqual(held, [['outside:move:github', { x: slot.x, y: slot.y }, { glide: true, ms: 200 }]]);
+    // The slot hides at once under it.
+    assert.deepEqual(held, [['outside:move:github', { x: slot.x, y: slot.y }, { glide: true, ms: 200, onto: 'slot:github' }]]);
     // Its answer puts the preview block in the slot's place, where the block turns into it: it is
     // not sent home.
     answer();
@@ -1219,12 +1226,14 @@ function dragMap({ covers = {}, id = 'outside:move:github', view: shown = MEDIUM
     lightTarget: (at) => asked.push(['light', at]),
     unlightTarget: () => asked.push(['unlight']),
     glance: (set) => asked.push(['glance', set ? [...set] : null]),
-    tip() {},
+    tip: (text, how = {}) => asked.push(['tip', text, how]),
     untip() {},
     box: { isConnected: true, classList: { toggle() {}, remove() {} } },
     area: { getBoundingClientRect: () => ({ left: 0, top: 0 }) },
   };
-  const map = { asked, captured, heard, view, tree: null, layout: null };
+  const grabbing = new Set();
+  globalThis.document.documentElement.classList = { add: (name) => grabbing.add(name), remove: (name) => grabbing.delete(name) };
+  const map = { asked, captured, heard, view, grabbing, node, tree: null, layout: null };
   const redraw = () => {
     map.tree = gatewayTree(shown, { ...OPTS, rows: rowsOnMap(tray), ...movingOn() });
     map.layout = layoutTree(map.tree, { open: new Set(), narrow: false });
@@ -1324,6 +1333,95 @@ test('a drop over Details, over the dock, on nothing or home leaves the tray as 
     Object.assign(data, { gateway: null });
     await freshTray();
   }
+});
+
+test('Escape, then release, selects nothing', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  try {
+    const map = dragMap();
+    map.press();
+    map.move(...map.onto('held:kitden:tracker'));
+    const escape = { key: 'Escape', preventDefault() {}, stopImmediatePropagation() {} };
+    for (const fn of map.heard.keydown) fn(escape);
+    assert.deepEqual([tray.rows.length, map.asked.at(-1)], [0, ['homeIn', 'outside:move:github', 220]]);
+    // The button is let go later: the click of that release, which the captured block hears, is
+    // swallowed then.
+    t.mock.timers.tick(10);
+    for (const fn of [...(map.heard.pointerup || [])]) fn({ type: 'pointerup', clientX: 0, clientY: 0 });
+    const click = { prevented: false, preventDefault() { this.prevented = true; }, stopPropagation() {} };
+    for (const fn of map.heard.click || []) fn(click);
+    assert.ok(click.prevented, 'the click after Escape selects nothing');
+    assert.equal(tray.rows.length, 0);
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    await freshTray();
+  }
+});
+
+test('a blur of the window ends a drag: nothing stays held and the tray is as it was', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  try {
+    const map = dragMap();
+    map.press();
+    map.move(...map.onto('held:kitden:tracker'));
+    assert.ok(map.grabbing.has('grabbing') && map.asked.some(([what]) => what === 'light'));
+    for (const fn of [...(windowHeard.blur || [])]) fn({ type: 'blur' });
+    assert.equal(map.grabbing.size, 0);
+    assert.ok(map.asked.some(([what]) => what === 'unlight'));
+    assert.deepEqual(map.asked.at(-1), ['homeIn', 'outside:move:github', 220]);
+    assert.deepEqual([movingOn(), tray.rows.length, windowHeard.blur.length], [{}, 0, 0]);
+    // The pointer that moves on moves nothing.
+    const before = map.asked.length;
+    map.move(...map.onto('held:kitden:files'));
+    assert.equal(map.asked.length, before);
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    await freshTray();
+  }
+});
+
+test('a still drag leaves its block where it is; its tip can go by the pointer', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  const seen = [];
+  const map = dragMap({ id: 'client:cursor' });
+  DRAGS.still = {
+    still: true,
+    begin: () => seen.push('begin'),
+    over: (drag) => map.view.tip('Drop on the gateway', { at: pointOf(drag) }),
+    drop: (drag, at) => { seen.push(['drop', at]); return false; },
+  };
+  try {
+    const client = block(map.tree, 'client:cursor');
+    startDrag({ button: 0, pointerId: 7, target: { closest: () => map.node }, clientX: map.home.x + 10, clientY: map.home.y + 10 }, client, 'still');
+    map.move(map.home.x + 40, map.home.y + 10);
+    // No hold: the block stays. The tip goes by the pointer, a map point.
+    const pointer = { x: map.home.x + 40, y: map.home.y + 10 };
+    assert.ok(!map.asked.some(([what]) => what === 'hold'));
+    assert.deepEqual(map.asked.find(([what]) => what === 'tip'), ['tip', 'Drop on the gateway', { at: pointer }]);
+    map.up(pointer.x, pointer.y);
+    // The drop hears a map point; nothing went off its place, so nothing goes home.
+    assert.deepEqual(seen, ['begin', ['drop', pointer]]);
+    assert.ok(!map.asked.some(([what]) => what === 'homeIn'));
+  } finally {
+    delete DRAGS.still;
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    await freshTray();
+  }
+});
+
+test('the slot grows out of the Kitden gateway', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, drop: { name: 'github', kind: 'remote' } });
+  assert.equal(block(tree, 'slot:github').growsFrom, 'gateway:kitden');
+  assert.equal(block(gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [moveRow(GITHUB, null)] }), 'slot:github').growsFrom, 'gateway:kitden');
 });
 
 test("the gateway lights and the slot opens over the block's own group", async (t) => {

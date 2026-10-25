@@ -2226,6 +2226,8 @@ def test_a_drag_keeps_its_press_lights_its_target_and_has_a_tip():
     drag = script("gateway-drag.js")
     assert "setPointerCapture(" in drag and "export function startDrag(event, block, kind" in drag
     assert "div.map.dropping" not in CSS
+    # The slot a dropped block flies onto hides at once; looks never set a block's opacity.
+    assert "visibility: hidden" in rule("div.map .block.covered")
 
 
 def test_the_tray_bar_sits_in_the_dock_and_says_its_words():

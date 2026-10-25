@@ -443,7 +443,8 @@ function clientBlock(id, { setup, linked, known, first, clients, wait = null }) 
 function movesIn(view, kitden, rows, drop) {
   const adds = [];
   const moved = new Map();
-  const slot = (name) => ({ id: `slot:${name}`, column: "servers", kind: "slot", name: "Drop to add", stateInMeta: true, state: "preview" });
+  // The slot grows out of the gateway and shrinks back into it (map-view.js `growsFrom`).
+  const slot = (name) => ({ id: `slot:${name}`, column: "servers", kind: "slot", name: "Drop to add", stateInMeta: true, state: "preview", growsFrom: `gateway:${kitden.id}` });
   // `block` goes at the end of `group` ("move" or "local"); a move in the tray takes the outside
   // row `name` of that group, while a drag keeps its block as it is.
   const put = (group, block) => {

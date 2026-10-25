@@ -745,12 +745,14 @@ div.map.finding .link.hov, div.map.finding .link.picked { stroke-opacity: 1; }
    follows the pointer or waits on the slot, and keeps the .98 press while the pointer is down (it
    springs back when the pointer lets go, by the block's own transitions). The drop target takes the
    accent edge and the selection fill and grows to 1.05 on the spring (the block's own transitions).
-   The tip says what a drop does: plain, or in the accent where a drop works. A preview is drawn with
+   The tip says what a drop does: plain, or in the accent where a drop works. A slot a dropped block
+   flies onto hides at once (`.covered`). A preview is drawn with
    the preview line on the preview fill, joined to the gateway by a quiet accent link. */
 div.map .block:has(> .block-grip) { cursor: grab; touch-action: none; }
 div.map .block.dragging { z-index: 3; border-color: var(--route); background: var(--panel-raised); box-shadow: var(--shadow-pop); }
 div.map .block.dragging.pressed { scale: 0.98; }
 div.map .block.drop { border-color: var(--route); background: var(--route-soft); scale: 1.05; }
+div.map .block.covered { visibility: hidden; }
 div.map .dragtip { position: absolute; left: 0; top: 0; z-index: 7; padding: 3px 9px; border: 1px solid var(--wire); border-radius: 10px; background: var(--panel); color: var(--ink-3); font-size: 11px; white-space: nowrap; pointer-events: none; box-shadow: var(--shadow); }
 div.map .dragtip.on { background: var(--route-soft); border-color: var(--route); color: var(--route); }
 /* In preview: the dashed preview line on the preview fill and accent words; under the pointer or

@@ -63,10 +63,13 @@ export function inZone(layout, centre, line) {
   return centre.x > column.x - ZONE.left && centre.x < column.x + column.w + ZONE.right && centre.y < line - ZONE.above;
 }
 
-// The drags, by kind. Each says what it does as the drag starts (`begin`), as the pointer moves
-// (`over`) and on a let go at a map point (`drop`, true when it took the drop; a point over Details
-// or the dock is none). The engine holds the block with the pointer.
-const DRAGS = {
+// The drags, by kind. Each says what it does as the drag starts (`begin(drag)`), as the pointer
+// moves (`over(drag)`; `drag.at` is the pointer in the page) and on a let go (`drop(drag, at)`, true
+// when it took the drop; `at` is a map point, null for Escape, a lost pointer, a blur of the window
+// or a point over Details or the dock). The engine holds the block with the pointer, unless the
+// kind is `still` (the block stays where it is, as a client's wire does). A kind's tip goes by the
+// block (`view.tip(text)`) or by the pointer (`view.tip(text, { at: pointOf(drag) })`).
+export const DRAGS = {
   in: { begin: beginIn, over: overIn, drop: dropIn },
 };
 
@@ -111,7 +114,7 @@ export function startDrag(event, block, kind, onStart = () => {}) {
       document.documentElement.classList.add("grabbing");
     }
     onMap.drag.at = at;
-    follow();
+    if (!hooks.still) follow();
     if (starts) hooks.begin(onMap.drag);
     hooks.over(onMap.drag);
   };
@@ -120,6 +123,7 @@ export function startDrag(event, block, kind, onStart = () => {}) {
     document.removeEventListener("pointerup", done);
     document.removeEventListener("pointercancel", done);
     document.removeEventListener("keydown", escape, true);
+    window.removeEventListener("blur", lost);
   };
   // A let go where the last move was not lands where it is.
   const done = (e) => {
@@ -129,27 +133,41 @@ export function startDrag(event, block, kind, onStart = () => {}) {
     if (up) move(e);
     letGo(hooks, up ? { x: e.clientX, y: e.clientY } : null);
   };
-  // Escape puts the block back before Details or the map hear it.
+  // Escape puts the block back before Details or the map hear it. The pointer is still down: the
+  // click of its release, which the captured block would hear, selects nothing either.
   const escape = (e) => {
     if (e.key !== "Escape" || !onMap.drag) return;
     e.preventDefault();
     e.stopImmediatePropagation();
     done(null);
+    document.addEventListener("pointerup", swallowClick, { capture: true, once: true });
   };
+  // A window that loses focus (another app, a dialog) ends the drag: nothing stays held.
+  const lost = () => done(null);
   document.addEventListener("pointermove", move);
   document.addEventListener("pointerup", done);
   document.addEventListener("pointercancel", done);
   document.addEventListener("keydown", escape, true);
+  window.addEventListener("blur", lost);
 }
 
-// The map's block area, and a point of the page (`at`) in the area's own terms: null over the
-// floating Details or the dock, where nothing lands.
+// The map's block area, and a point of the page (`at`) in the area's own terms (`pointOf` for a
+// drag's pointer): null over the floating Details or the dock, where nothing lands.
 const mapArea = () => (onMap.view && onMap.view.box.isConnected ? onMap.view.area : null);
-function mapPoint(at) {
+// The pointer of a drag in the map, also over Details or the dock (for its tip).
+export function pointOf(drag) {
+  return areaPoint(drag.at);
+}
+
+function areaPoint(at) {
   const area = mapArea();
-  if (!area || !at || covered(at)) return null;
+  if (!area || !at) return null;
   const origin = area.getBoundingClientRect();
   return { x: at.x - origin.left, y: at.y - origin.top };
+}
+
+function mapPoint(at) {
+  return at && !covered(at) ? areaPoint(at) : null;
 }
 
 function covered(at) {
@@ -215,8 +233,8 @@ function overIn(drag) {
 
 // A drop while the slot is open adds the same move as "Move into the gateway…" to the tray, and the
 // block flies onto the slot (200 ms OUT3) and waits there while the move is asked.
-function dropIn(drag, point) {
-  if (!drag.open || !point) return false;
+function dropIn(drag, at) {
+  if (!drag.open || !at) return false;
   const body = dropBody(drag.block.row, current("gateway"));
   if (!body) return false;
   onMap.moving = { id: drag.id, name: drag.name, key: keyFor(body) };
@@ -229,15 +247,15 @@ function dropIn(drag, point) {
   return false;
 }
 
-// While its move is asked, the block waits on the slot (it flies there from where it was let go),
-// and after a moment a spinner says the server is asked. The page draws again meanwhile, so the
+// While its move is asked, the block waits on the slot (it flies there from where it was let go,
+// and the slot hides at once under it), and after a moment a spinner says the server is asked. The page draws again meanwhile, so the
 // spinner is added once.
 function park() {
   const { moving, layout, view } = onMap;
   const node = view.node(moving.id);
   const slot = layout.blocks.find((b) => b.id === `slot:${moving.name}`);
   if (!node || !slot) return;
-  view.hold(moving.id, { x: slot.x, y: slot.y }, { glide: true, ms: DROP_MS });
+  view.hold(moving.id, { x: slot.x, y: slot.y }, { glide: true, ms: DROP_MS, onto: slot.id });
   onMap.home = moving.id;
   if (node.querySelector(".spinner")) return;
   node.setAttribute("aria-busy", "true");
@@ -256,7 +274,7 @@ function goHome() {
   view.homeIn(home, HOME_MS);
 }
 
-// The pointer lets go at `point` (page coordinates), or Escape or a lost pointer (null). The tip, the
+// The pointer lets go at `point` (page coordinates), or Escape, a lost pointer or a blur (null). The tip, the
 // target's light and the glance go; the drag takes the drop, or the block glides home. A slot that
 // was open closes as the map draws again.
 function letGo(hooks, point) {
@@ -268,8 +286,7 @@ function letGo(hooks, point) {
   view.untip();
   view.unlightTarget();
   view.glance(null);
-  const at = point && mapPoint(point) ? point : null;
-  if (hooks.drop(drag, at)) return;
+  if (hooks.drop(drag, point && mapPoint(point))) return;
   if (drag.open) onMap.redraw();
   if (onMap.home) goHome();
 }
