@@ -25,7 +25,9 @@ What Kitden does today and what comes next. Ideas and bugs:
   and snaps to the gateway, which lights; a client a plugin connects says why it cannot. A group
   of more than six shows five at a time: "N more" turns to the next five in place. Map | List
   swaps with a short fade, the List has the mockup's columns and rows, and a search dims what does
-  not match with a soft blur.
+  not match with a soft blur. Picking another project changes the map in place: counts roll,
+  tools that turn on or off draw or take back their links, open servers stay open, the tray's rows
+  keep their looks, and an open tool or server panel steps to the new project.
 - **Details float beside the map:** on Gateway, Library and Changes, Details float over the right
   of the page as in the mockup; the page keeps its width and the map stays wide. Another block's
   Details swap in place through a quiet skeleton.
@@ -33,7 +35,7 @@ What Kitden does today and what comes next. Ideas and bugs:
   Whole server switch, as in the mockup. "Move out of the gateway…" picks the client that keeps
   the server; its other actions wait under More.
 - **Tool panel and several projects:** a tool's Details on the Gateway say its permission and
-  list the projects with a rule of their own, with "Show" to open one. "Turn on|off in some
+  list the projects with a rule of their own, with "Show" to switch to one in place. "Turn on|off in some
   projects…" ticks projects in a list (also for a whole server): each tick is its own row in the
   tray, and the map's tool names the projects that wait.
 - **Client, gateway, link and outside panels:** a client's Details on the Gateway say what it gets

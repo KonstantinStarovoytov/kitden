@@ -1882,9 +1882,10 @@ test('a grip shows only where the Kitden gateway can take the server', () => {
   assert.ok(block(gatewayTree(MEDIUM_VIEW, OPTS), 'outside:move:github').grip);
 });
 
-test('the map enters when it is new, jumps for a new project or width, and moves otherwise', () => {
+test('the map enters when it is new, changes in place for a new project, jumps for a new width, and moves otherwise', () => {
   assert.equal(mapMotion({ fresh: true, projectChanged: true, narrowChanged: true }), 'enter');
-  assert.equal(mapMotion({ fresh: false, projectChanged: true, narrowChanged: false }), 'none');
+  assert.equal(mapMotion({ fresh: false, projectChanged: true, narrowChanged: false }), 'project');
+  assert.equal(mapMotion({ fresh: false, projectChanged: true, narrowChanged: true }), 'none');
   assert.equal(mapMotion({ fresh: false, projectChanged: false, narrowChanged: true }), 'none');
   assert.equal(mapMotion({ fresh: false, projectChanged: false, narrowChanged: false }), 'move');
   // The view switch brings the map in as one piece, so its blocks do not rise one by one too.

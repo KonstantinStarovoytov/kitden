@@ -104,7 +104,7 @@ const batch = (id) => (sent) => ({
 const { drawChip, renderGateway } = await import('../../src/kitden/web/static/js/gateway.js');
 const { dropBody } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { arrival, data, setRenderer, state } = await import('../../src/kitden/web/static/js/store.js');
-const { addToTray, cancelTray, keyFor, takeOut } = await import('../../src/kitden/web/static/js/tray.js');
+const { addToTray, cancelTray, keyFor, takeOut, tray } = await import('../../src/kitden/web/static/js/tray.js');
 const { reducedMotion } = await import('../../src/kitden/web/static/js/motion.js');
 
 // The medium sample, cut short (gateway.test.mjs has it whole): files and tracker in the Kitden
@@ -622,4 +622,163 @@ test('the chip counts again after a tray redraw', async (t) => {
   main.replaceChildren();
   drawChip(renderGateway(main));
   assert.equal(chip.textContent, '');
+});
+
+// A project switch in place (gateway-notes 7.4): the map stays and changes what the project
+// changes. atlas turns read_file off with a rule of its own; web follows the shared rule.
+const { ruleBody } = await import('../../src/kitden/web/static/js/gateway-details.js');
+const { closePanel, isPanelOpen, panelState } = await import('../../src/kitden/web/static/js/panel.js');
+const { RETRACT } = await import('../../src/kitden/web/static/js/motion.js');
+const [FILES, TRACKER] = VIEW.gateways[0].servers;
+const ATLAS = { ...VIEW, own_rules: 1, gateways: [{ ...VIEW.gateways[0], servers: [{ ...FILES, on_count: 0, tool_list: [{ ...tool('read_file', 'off'), origin: 'project' }] }, TRACKER] }] };
+const PROJECTS = [{ id: 'atlas', path: '/h/work/atlas', own_rules: 1, exists: true }, { id: 'web', path: '/h/work/web', own_rules: 0, exists: true }];
+const TOOL_LINK = 'held:kitden:files>tool:files/read_file';
+const scopeLine = () => main.children.find((n) => /\bscope-bar\b/.test(n.className));
+const partOf = (box, key, look) => walk(node(box, key)).find((n) => n.className.split(' ')[0] === look);
+
+// The page picks a project as app.js does on the Gateway: it reads the project, then draws again
+// in place.
+function pickProject(id, view = VIEW) {
+  state.project = id;
+  data.gateway = view;
+  data.scope.gateway = id;
+  main.replaceChildren();
+  renderGateway(main, { again: true });
+}
+
+// A map with the files server open (and selected, its Details open), every read noted in `asked`.
+async function filesOpen(t) {
+  const asked = [];
+  const fetchWas = globalThis.fetch;
+  globalThis.fetch = (url, init) => { asked.push(url); return fetchWas(url, init); };
+  data.projects = PROJECTS;
+  t.after(async () => {
+    globalThis.fetch = fetchWas;
+    pickProject('', VIEW);
+    closePanel({ instant: true, focus: false });
+    await done();
+    settle();
+    // Fold files again for the next test.
+    if (node(map(), 'block:tool:files/read_file')) press(map(), 'block:held:kitden:files');
+    settle();
+    Object.assign(data, { projects: null });
+    Object.assign(state, { selected: null });
+    reducedMotion.matches = false;
+    await cancelTray();
+  });
+  const box = freshMap();
+  press(box, 'block:held:kitden:files');
+  await done();
+  settle();
+  assert.ok(node(box, 'block:tool:files/read_file'));
+  return { box, asked };
+}
+
+test('a project switch keeps the map and its open servers', async (t) => {
+  const { box, asked } = await filesOpen(t);
+  assert.equal(isPanelOpen(), true);
+  renders = 0;
+  pickProject('atlas', ATLAS);
+  settle();
+  // The same map: the server is still open and selected, nothing rose into its place again.
+  assert.equal(map(), box);
+  assert.ok(node(box, 'block:tool:files/read_file'));
+  assert.match(node(box, 'block:held:kitden:files').className, /\bselected\b/);
+  assert.equal(renders, 0);
+  // The scope line swaps its words and rises 4 px in 320 ms.
+  assert.match(scopeLine().className, /\bproject\b/);
+  assert.equal(scopeLine().children.at(-1).textContent, 'Project atlas · 1 rule differs from the shared setup');
+  assert.deepEqual(lastMotion(scopeLine()), [[{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], 320, CALM]);
+  // Its Details stay open and follow the project: the server's rules are read for atlas.
+  await done();
+  assert.equal(isPanelOpen(), true);
+  assert.deepEqual(panelState.current, { type: 'held', name: 'files' });
+  assert.ok(asked.includes('/api/gateway/tools?server=files&project=atlas'), asked.join(' '));
+  // A draw for the same project again (the tray, a rescan): the scope line stays still.
+  main.replaceChildren();
+  renderGateway(main, { again: true });
+  assert.equal(scopeLine().animations.length, 0);
+});
+
+test('counts roll and flipped links draw or undraw', async (t) => {
+  const { box } = await filesOpen(t);
+  const line = linkLine(box, TOOL_LINK);
+  pickProject('atlas', ATLAS);
+  // "1 of 1 on" rolls to "0 of 1 on", and the server's lamp pops as it turns off.
+  const holder = walk(node(box, 'block:held:kitden:files')).find((n) => n.className === 'num roll');
+  assert.deepEqual(holder.children.map((n) => n.textContent), ['1', '0']);
+  assert.deepEqual([holder.children[1].animations[0].options.duration, holder.children[1].animations[0].options.delay], [200, 140]);
+  const pops = (n) => n.animations.filter((a) => /^scale\(/.test(a.keyframes[0].transform || '')).map((a) => [a.options.duration, a.options.easing]);
+  assert.deepEqual(pops(partOf(box, 'block:held:kitden:files', 'lamp')), [[200, CALM]]);
+  // The tool's mark pops, its tag pops in, and its link draws back (380 ms).
+  assert.deepEqual(pops(partOf(box, 'block:tool:files/read_file', 'mark')), [[200, CALM]]);
+  const tag = partOf(box, 'block:tool:files/read_file', 'block-projects');
+  assert.deepEqual(lastMotion(tag), [[{ opacity: 0, transform: 'scale(0.7)' }, { opacity: 1, transform: 'none' }], 200, CALM]);
+  assert.deepEqual(lastMotion(line), [[{ strokeDashoffset: 0 }, { strokeDashoffset: 1 }], 380, RETRACT]);
+  settle();
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  // Back to All projects: the link draws in (240 ms) and the mark pops again.
+  pickProject('', VIEW);
+  assert.deepEqual(lastMotion(linkLine(box, TOOL_LINK)), [[{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], 240, CALM]);
+  assert.deepEqual(pops(partOf(box, 'block:tool:files/read_file', 'mark')), [[200, CALM]]);
+  settle();
+});
+
+// Review Focus
+test('rows waiting in the tray keep their looks after a switch', async (t) => {
+  const { box } = await filesOpen(t);
+  queue(PREVIEW, batch('pj1'));
+  await addToTray(ruleBody('files', 'read_file', 'off', 'atlas'));
+  settle();
+  const looks = () => [partOf(box, 'block:tool:files/read_file', 'mark').className, walk(node(box, 'block:tool:files/read_file')).find((n) => /block-projects/.test(n.className))?.children.at(-1).textContent];
+  assert.deepEqual(looks(), ['mark on', 'atlas']);
+  // In atlas the rule is this project's: its mark is the dashed ring until Apply.
+  pickProject('atlas', ATLAS);
+  settle();
+  assert.equal(looks()[0], 'mark pv');
+  // In web the tool names atlas again, and the tray still holds the row.
+  pickProject('web', VIEW);
+  settle();
+  assert.deepEqual(looks(), ['mark on', 'atlas']);
+  assert.equal(tray.rows.length, 1);
+});
+
+test('under reduced motion the project switch lands at once', async (t) => {
+  const { box } = await filesOpen(t);
+  const line = linkLine(box, TOOL_LINK);
+  reducedMotion.matches = true;
+  pickProject('atlas', ATLAS);
+  assert.equal(scopeLine().animations.length, 0);
+  const tool = node(box, 'block:tool:files/read_file');
+  assert.ok(walk(tool).every((n) => n.animations.length === 0));
+  assert.equal(partOf(box, 'block:tool:files/read_file', 'mark').className, 'mark');
+  assert.equal(line.parentNode, null);
+  assert.equal(linkLine(box, TOOL_LINK), null);
+});
+
+test('a project switch keeps each page, and a search brings its matches there', async (t) => {
+  const box = await onTwelve(t);
+  t.after(() => pickProject('', VIEW));
+  state.q = 'direct-11';
+  renderGateway(main, { again: true });
+  settle();
+  // The person turns to the first page while the search is on; another project brings its match.
+  press(box, 'block:more:group:outside');
+  settle();
+  assert.deepEqual(outsideShown(box), ['direct-0', 'direct-1', 'direct-2', 'direct-3', 'direct-4']);
+  pickProject('atlas', TWELVE);
+  settle();
+  assert.deepEqual(outsideShown(box), ['direct-10', 'direct-11']);
+  // With no search, a switch keeps the page shown.
+  state.q = '';
+  press(box, 'block:more:group:outside');
+  press(box, 'block:more:group:outside');
+  settle();
+  assert.deepEqual(outsideShown(box), ['direct-5', 'direct-6', 'direct-7', 'direct-8', 'direct-9']);
+  pickProject('', TWELVE);
+  settle();
+  assert.deepEqual(outsideShown(box), ['direct-5', 'direct-6', 'direct-7', 'direct-8', 'direct-9']);
+  press(box, 'block:more:group:outside');
+  press(box, 'block:more:group:outside');
+  settle();
 });

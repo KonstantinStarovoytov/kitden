@@ -697,8 +697,14 @@ test('picking another project closes the panel, so a switch never acts on a proj
     openPanel([]); // opened again, it belongs to the project now picked
     closeForProject();
     assert.equal(isPanelOpen(), true);
+    // On the Gateway the project changes in place: Details stay, and the page has them follow.
+    state.view = 'gateway';
+    state.project = 'atlas';
+    closeForProject();
+    assert.equal(isPanelOpen(), true);
   } finally {
     state.project = '';
+    state.view = 'overview';
     delete globalThis.document;
   }
 });

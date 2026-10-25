@@ -881,35 +881,47 @@ async function onFilesPanel(run, { rules = FILES_TOOLS, refuse = null, open = ()
 // The open panel's control with this focus key.
 const control = (drawer, key) => drawer.querySelectorAll('[data-focus]').find((node) => node.dataset.focus === key);
 
-test('Show opens the same tool in that project, focus inside; a tool gone there leaves focus on the project button', async () => {
+test('the tool panel steps forward to the new project and Show switches in place', async () => {
   const { closeForProject } = await import('../../src/kitden/web/static/js/panel.js');
   const { setSwitcher } = await import('../../src/kitden/web/static/js/store.js');
-  // As app.js does: another project closes Details, then the page reads it (`there`).
+  const { followProject } = await import('../../src/kitden/web/static/js/gateway-details.js');
+  // As app.js and gateway.js do on the Gateway: Details stay, the page reads the project (`there`)
+  // and draws it again in place, and then Details follow it.
   let there = null;
   setSwitcher(async () => {
     closeForProject();
     if (there) data.gateway = there;
     data.scope.gateway = state.project;
+    followProject();
   });
   const open = () => showTool('files', 'write_file');
   try {
-    await onFilesPanel(async (drawer) => {
-      const show = control(drawer, 'show:atlas');
-      await click(show);
+    await onFilesPanel(async (drawer, sent) => {
+      const moved = [];
+      for (const node of drawer.children) node.animate = (keyframes, options) => { moved.push([keyframes.at(-1), options.duration, options.easing]); return { finished: Promise.resolve() }; };
+      const shown = drawer.children[0];
+      sent.length = 0;
+      await click(control(drawer, 'show:atlas'));
       await wait(400);
+      // The panel never closed: its parts went out 18 px left in 130 ms (a step forward), and the
+      // same tool came in, read for atlas, with no skeleton. Focus stays inside it.
       assert.equal(state.project, 'atlas');
       assert.equal(isPanelOpen(), true);
+      assert.deepEqual(moved[0], [{ opacity: 0, transform: 'translateX(-18px)' }, 130, 'ease-in']);
+      assert.ok(sent.includes('/api/gateway/tools?server=files&project=atlas'), sent.join(' '));
+      assert.equal(isSkeleton(drawer), false);
+      assert.notEqual(drawer.children[0], shown);
       assert.deepEqual(panelState.current, { type: 'tool', server: 'files', tool: 'write_file' });
+      assert.deepEqual(state.selected, { kind: 'tool', name: 'files/write_file' });
       assert.equal(globalThis.document.activeElement, drawer);
     }, { open, projects: MEDIUM_PROJECTS });
     state.project = '';
-    // In atlas the files server no longer lists write_file: the panel closes, focus on the project button.
+    // In atlas the files server no longer lists write_file: its panel closes.
     there = { ...VIEW, gateways: [{ ...KITDEN, servers: [{ ...FILES_HELD, tool_list: FILES_HELD.tool_list.filter((t) => t.name !== 'write_file') }] }] };
     await onFilesPanel(async (drawer) => {
       await click(control(drawer, 'show:atlas'));
       await wait(400);
       assert.equal(isPanelOpen(), false);
-      assert.equal(globalThis.document.activeElement, globalThis.document.querySelector('#where'));
     }, { open, projects: MEDIUM_PROJECTS });
   } finally {
     state.project = '';

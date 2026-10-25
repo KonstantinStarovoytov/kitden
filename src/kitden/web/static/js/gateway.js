@@ -1,7 +1,7 @@
 // Gateway: the clients, the gateways and the MCP servers they reach, as a Map or a List. Each
 // row opens its Details beside the page (gateway-details.js).
 import { $, button, el, gridKey, icon, joinWords, plural, reportError, withFocusKey } from "./dom.js";
-import { addForm, connectAction, connectBody, heldServer, liveHeld, movesTo, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool, TAKE_OUT } from "./gateway-details.js";
+import { addForm, connectAction, connectBody, followProject, heldServer, liveHeld, movesTo, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool, TAKE_OUT } from "./gateway-details.js";
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { findChip, findIn, foldable, isNarrow, keepOpen, layoutTree, linkKey, litFrom, litPath, pagesNow, pagesWith, pressOpen, toggleOpen, turnPage, wideWidth } from "./map.js";
 import { mapView } from "./map-view.js";
@@ -100,6 +100,7 @@ export function renderGateway(main, { again = false } = {}) {
   const scope = scopeBar(folderName(projectPath()), view.own_rules);
   main.append(scope);
   if (!again) riseHead(head, lede, scope);
+  switchInPlace(again, scope);
   if (currentError("gateway")) main.append(staleNote(data.readAt.gateway));
   // Only without any gateway, the Kitden one included (no home folder to change).
   if (!view.gateways.length) {
@@ -124,6 +125,19 @@ export function renderGateway(main, { again = false } = {}) {
   if (!performance.getEntriesByName("kitden:gateway-drawn").length) performance.mark("kitden:gateway-drawn");
   openArrival(view, model, mode).catch(reportError);
   return found;
+}
+
+// The project the page was drawn for last. A draw for another one on the same visit is a project
+// switch in place (gateway-notes 7.4): the scope line rises with its new words (4 px, 320 ms CALM)
+// and Details follow the project (gateway-details.js followProject), unless an address brings a
+// selection of its own. The map and the List change in place as they draw.
+let drawnFor = null;
+function switchInPlace(again, scope) {
+  const switched = again && drawnFor !== null && drawnFor !== state.project;
+  drawnFor = state.project;
+  if (!switched) return;
+  rise([scope], { y: 4, dur: 320 });
+  if (!arrival.pending) followProject().catch(reportError);
 }
 
 // The Gateway as one tree, as the page shows it now: what Kitden read and the picked project, and
@@ -723,8 +737,8 @@ function keepBeside() {
 }
 
 // The map: the blocks open and the one selected, its view (map-view.js, one per visit) and the
-// tree it shows, what the search found, and the box's width as last measured. Kept across redraws
-// of one project. `pages`: the page each group that pages shows (map.js), kept across projects too;
+// tree it shows, what the search found, and the box's width as last measured. Kept across redraws,
+// and across projects. `pages`: the page each group that pages shows (map.js);
 // `searched`, the search text whose matches brought their pages; `back`, the block a row taken out
 // gives back, whose page the next draw brings.
 const onMap = {
@@ -777,8 +791,9 @@ export function contentWidth(box) {
 function gatewayMap(main, model, found, { switched = false } = {}) {
   let fresh = false;
   let projectChanged = false;
+  // Another project changes the map in place: what is open, selected or paged stays.
   if (onMap.project !== state.project) {
-    Object.assign(onMap, { project: state.project, open: new Set(), selected: null });
+    onMap.project = state.project;
     projectChanged = true;
   }
   if (!onMap.view) {
@@ -790,17 +805,17 @@ function gatewayMap(main, model, found, { switched = false } = {}) {
   // it to narrow in the middle of its entrance.
   if (fresh) onMap.width = contentWidth(onMap.view.box) ?? onMap.width;
   Object.assign(onMap, { model, found });
-  bringPages(model, { fresh });
+  bringPages(model, { fresh, projectChanged });
   drawOnMap(model, { fresh, projectChanged, switched });
 }
 
 // The pages a draw shows, before it: those of groups that still page, then the page of a block a
-// row taken out gives back, of a search's matches when its text is new (or the map is: so a turn
-// during a search stays, and the page stays after it), and on a new map (a visit, or the List
-// before) of what is selected.
-function bringPages(model, { fresh = false } = {}) {
+// row taken out gives back, of a search's matches when its text is new (or the map or the project
+// is: so a turn during a search stays, and the page stays after it), and on a new map (a visit, or
+// the List before) of what is selected.
+function bringPages(model, { fresh = false, projectChanged = false } = {}) {
   const text = state.q.trim();
-  const ids = [onMap.back, ...(onMap.found && (fresh || text !== onMap.searched) ? onMap.found.matches : []), fresh && onMap.selected].filter(Boolean);
+  const ids = [onMap.back, ...(onMap.found && (fresh || projectChanged || text !== onMap.searched) ? onMap.found.matches : []), fresh && onMap.selected].filter(Boolean);
   Object.assign(onMap, { searched: text, back: null });
   onMap.pages = pagesWith(model, pagesNow(model, onMap.pages), ids);
 }
@@ -1015,11 +1030,13 @@ function openNow() {
 }
 
 // How a draw of the map shows: a new map enters (each block rises into its place), except one the
-// view switch brings, which comes in as one piece (renderGateway); another project or a new width
-// shows at once, and anything else moves what changed.
+// view switch brings, which comes in as one piece (renderGateway); a new width shows at once;
+// another project changes the map in place (map-view.js "project"), and anything else moves what
+// changed.
 export function mapMotion({ fresh, projectChanged, narrowChanged, switched = false }) {
   if (fresh) return switched ? "none" : "enter";
-  return projectChanged || narrowChanged ? "none" : "move";
+  if (narrowChanged) return "none";
+  return projectChanged ? "project" : "move";
 }
 
 // A press that opened a block (`unfolds`) draws its selection first and lights its path when the

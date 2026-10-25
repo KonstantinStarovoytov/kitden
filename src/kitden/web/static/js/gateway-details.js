@@ -8,7 +8,7 @@ import { $, busyWhile, button, el, icon, joinWords, plural, reportError, withFoc
 import { loadLibraryFor, raceSlow } from "./library.js";
 import { animateTo, fold } from "./motion.js";
 import { projectNote } from "./offer.js";
-import { callsText, closePanel, contextLinks, detailsCard, followTray, heldActions, isPanelOpen, keepFrom, linksRow, loadPanel, moveBody, moveInto, moveTargets, NO_TOOLS, offerLabel, offNote, openPanel, panelState, previewButton, refreshTools, review, stepTo, swapContent, switchList, techRows, technical, toast, toolRows, toolsHead, writingToolsOn } from "./panel.js";
+import { callsText, closePanel, contextLinks, detailsCard, drawQuietly, followTray, heldActions, isPanelOpen, keepFrom, linksRow, loadPanel, moveBody, moveInto, moveTargets, NO_TOOLS, offerLabel, offNote, openPanel, panelState, previewButton, refreshTools, review, stepTo, swapContent, switchList, techRows, technical, toast, toolRows, toolsHead, writingToolsOn } from "./panel.js";
 import { ALL_PROJECTS, callout, CLIENT_NAMES, clientCheck, FIND_PROJECT, folderName, GATEWAY_NOTE, gatewayName, kindOf, kitdenClients, mark, menuItems, originText, STATE_WORDS, versionsOpen } from "./parts.js";
 import { arrival, current, data, freshness, go, libraryChoice, projectPath, reload, render, setState, state, switchProject } from "./store.js";
 import { addToTray, iconFor, inTray, keyFor, takeOut, tray } from "./tray.js";
@@ -768,8 +768,9 @@ function toolActions(server, tool, { picked, folder, detail, shared, some }) {
 
 // Under All projects, the known projects with a rule of their own for the tool (`own` in the
 // server's answer, as the map counts them), each with that rule and "Show", which picks the
-// project as the menu at the top does and opens the tool there (showIn). Null without one, or
-// without the answer.
+// project as the menu at the top does: the Gateway changes in place and this panel steps forward to
+// the tool there (followProject). The press hands its button no wait, so focus stays inside the
+// panel. Null without one, or without the answer.
 function ownRules(server, name, known) {
   const own = (known || []).filter((p) => (p.entry.own || []).includes(name));
   if (!own.length) return null;
@@ -777,7 +778,7 @@ function ownRules(server, name, known) {
   section.append(el("h2", "sw-head", "Projects with a rule of their own"));
   for (const p of own) {
     const on = ruleIn(name)(p.entry) === "on";
-    const show = button("Show", () => showIn(p.id, server, name).catch(reportError), "btn small");
+    const show = button("Show", () => { switchProject(p.id).catch(reportError); }, "btn small");
     show.setAttribute("aria-label", `Show ${p.name}`);
     show.dataset.focus = `show:${p.id}`;
     const row = el("div", "own-row");
@@ -785,15 +786,6 @@ function ownRules(server, name, known) {
     section.append(row);
   }
   return section;
-}
-
-// Picking another project closes Details; open the same tool's panel there again, focus inside
-// it. A tool that is gone there leaves focus on the project button. (Phase 4B switches in place.)
-async function showIn(project, server, name) {
-  await switchProject(project);
-  await showTool(server, name);
-  const where = $("#where");
-  if (!isPanelOpen() && where) where.focus();
 }
 
 // Details of a server in the Kitden gateway, for the picked project, as the mockup's server panel
@@ -1348,9 +1340,10 @@ function heldContext() {
 // What a server in the Kitden gateway shows as, and the kind its skeleton names.
 const heldShown = (name) => ({ shown: { type: "held", name }, kind: KIND.server });
 
-export async function showHeld(name) {
+// `step` ("fwd"): it slides in as the next step in the panel, and focus stays where it is.
+export async function showHeld(name, { step = null } = {}) {
   setState({ selected: { kind: "mcp_server", name } });
-  await readThen(name, (answer) => drawHeld(name, answer || {}, { warning: answer ? answer.problem : "Could not load the details." }), heldShown(name));
+  await readThen(name, (answer) => drawHeld(name, answer || {}, { warning: answer ? answer.problem : "Could not load the details.", step, focus: [] }), heldShown(name));
 }
 
 // A server that is gone from the gateway since closes its Details. Back from a step it slides in
@@ -1367,9 +1360,25 @@ function drawHeld(name, detail, { warning = null, step = null, focus = [`action:
   if (step) shown.then(() => focusAfterStep(...focus));
 }
 
-export async function showTool(server, name) {
+export async function showTool(server, name, { step = null } = {}) {
   setState({ selected: { kind: "tool", name: `${server}/${name}` } });
-  await readThen(server, (answer) => drawTool(server, name, answer || {}, { warning: answer ? null : "Could not load the details." }), { shown: { type: "tool", server, tool: name }, kind: KIND.tool });
+  await readThen(server, (answer) => drawTool(server, name, answer || {}, { warning: answer ? null : "Could not load the details.", step }), { shown: { type: "tool", server, tool: name }, kind: KIND.tool });
+}
+
+// A project switch on the Gateway changes the page in place (gateway.js), and Details follow: a
+// tool's or a server's step forward to the new project (130 + 220), read for it first; a client's,
+// a gateway's, an outside server's or a link's are drawn again at once for it, so no button in
+// them acts on the old project. A step inside a panel (the project picker, a move out) and a row's
+// review stay as they are. A panel still loading for the old project closes.
+const REDRAWN = ["client", "gateway", "outside", "link"];
+export function followProject() {
+  const shown = panelState.current;
+  if (!isPanelOpen() || !shown) return Promise.resolve();
+  if (shown.type === "tool") return showTool(shown.server, shown.tool, { step: "fwd" });
+  if (shown.type === "held") return showHeld(shown.name, { step: "fwd" });
+  if (shown.type === "loading") closePanel({ focus: false });
+  else if (REDRAWN.includes(shown.type) && panelState.from) return drawQuietly(panelState.from.read);
+  return Promise.resolve();
 }
 
 // `rules` is the server's /api/gateway/tools answer. A tool that is gone since (its server left

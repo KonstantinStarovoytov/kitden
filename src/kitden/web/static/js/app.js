@@ -123,7 +123,9 @@ async function refresh({ fade = false } = {}) {
 }
 
 // Another project is picked (store.js switchProject): Details close, the old page waits faded
-// until the new project is read, and the Library's cells turn into their new states.
+// until the new project is read and cross-fades, and the Library's cells turn into their new
+// states. The Gateway changes in place instead (gateway.js): it neither fades nor cross-fades, and
+// its Details stay.
 function refreshForProject() {
   closeForProject();
   drawPicker();
@@ -132,7 +134,7 @@ function refreshForProject() {
   const main = $("#main");
   main.classList.add("pending");
   main.setAttribute("aria-busy", "true");
-  return refresh({ fade: state.view !== "library" }).catch(reportError).finally(() => {
+  return refresh({ fade: !["library", "gateway"].includes(state.view) }).catch(reportError).finally(() => {
     main.classList.remove("pending");
     main.removeAttribute("aria-busy");
   });

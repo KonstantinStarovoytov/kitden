@@ -30,11 +30,13 @@ const LAMP_MS = 400; // a lamp fades to its new colour
 const POP_MS = 200; // ... and pops when it turns on or off
 const POP = 2.2; // from this many times its size, unless style.css says otherwise (--pop)
 const TAG_POP_MS = 180; // a tool's tag of projects whose rules wait in the tray pops in
+const SWITCH_POP_MS = 200; // ... and every tool's tag, as another project shows
 const CROSS_MS = 120; // the × fades in
 const CROSS_R = 8; // half the × (16 px): it sits with its middle on the link's
 const GRACE_MS = 240; // the × stays this long after the pointer leaves, so the pointer can reach it
 const HIT_MIN = 0.5; // a link fainter than this takes no pointer
 const DRAW_MS = 260; // a new solid link draws in
+const SWITCH_DRAW_MS = 240; // ... or in 240 ms as another project shows (a tool it turns on)
 const FADE_IN_MS = 300; // a new dashed link fades in
 const FADE_OUT_MS = 240; // a dashed link that goes fades out
 const UNDRAW_MS = 380; // a solid link that goes draws back to its start
@@ -55,6 +57,7 @@ function quiet(node) {
 const LAMP_LOOKS = { on: "on", off: "", preview: "pv", out: "out" };
 const lampClass = (base, lamp) => [base, LAMP_LOOKS[lamp]].filter(Boolean).join(" ");
 const SOLID = ["on", "off"];
+const MOVES = ["move", "project"]; // the draws that move what changed
 
 // Words whose first number rolls when it changes ("3 of 4 on", "2 clients"): the number in a holder
 // of its own (kept in `nums` by its `slot`), then the rest. Other words are plain.
@@ -199,6 +202,12 @@ function liven(drawn, block, was) {
   }
 }
 
+// As another project shows, a tool's tag of projects pops in, from opacity 0 and .7 of its size in
+// 200 ms CALM, whether its words changed or not (gateway-notes 7.4).
+function popTag(item) {
+  if (item.tag) animateTo(item.tag, [{ opacity: 0, transform: "scale(0.7)" }, { opacity: 1, transform: "none" }], { dur: SWITCH_POP_MS, ease: CALM });
+}
+
 // A group's caption: its words, with its icon (a lucide name, if it has one) before them. Words
 // after a " · " are quiet ("Outside the gateway · drag one in").
 function captionWords(node, name, mark) {
@@ -237,7 +246,9 @@ function boxOf({ x, y, w, h, s }) {
 // out and put back; `view.area` holds the links' SVG, the blocks in reading order, then the hits of
 // the links and the ×.
 // - draw(model, layout, { selected, lit, found, open, motion }): show `layout` (map.js layoutTree)
-//   of `model`. `motion` "move" moves what changed; "enter" lets every block rise into its place;
+//   of `model`. `motion` "move" moves what changed; "project" does too, for another project: a
+//   tool's link it turns on draws in over 240 ms and every tool's tag pops; "enter" lets every
+//   block rise into its place;
 //   "none" (and the first draw of a "move", reduced motion or a hidden page) shows the end at
 //   once. It resolves when the motions of the blocks end; the motions of the links are not
 //   waited for.
@@ -373,7 +384,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
 
   // A block's node as this draw shows it: its look, words, size and what a screen reader hears. The
   // layout's words win (a group that pages names which ones show).
-  function fill(item, place, source, { selected, lit, found, open }) {
+  function fill(item, place, source, { selected, lit, found, open, motion }) {
     const block = place.name !== undefined && source !== place ? { ...source, name: place.name } : source;
     const { node } = item;
     const name = String(block.name || "");
@@ -417,8 +428,10 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
           node.replaceChildren(...drawn.parts);
           if (canMove()) liven(drawn, block, item.shown);
           item.shown = shownOf(drawn, block, item.shown);
+          item.tag = drawn.projects;
         }
       }
+      if (motion === "project" && canMove()) popTag(item);
       // A block that folds says whether it is open by what is open, not by what shows yet.
       if (folding) node.setAttribute("aria-expanded", String(open.has(place.id)));
       else node.removeAttribute("aria-expanded");
@@ -892,7 +905,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
   function draw(model, layout, { selected = null, lit = new Set(), found = null, open = new Set(), motion = "move" } = {}) {
     performance.mark("kitden:map-start");
     const enters = motion === "enter" && canMove();
-    const moves = enters || (motion === "move" && last !== null && canMove());
+    const moves = enters || (MOVES.includes(motion) && last !== null && canMove());
     const linksMove = moves && !enters; // links come, go and change look on their own
     const plan = drawPlan(last, layout);
     const before = new Map((last ? last.blocks : []).map((at) => [at.id, at]));
@@ -924,7 +937,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
         blocks.set(place.id, item);
       } else if (item.div !== isWords(place)) swap(item, place);
       item.leaving = false;
-      fill(item, place, block, { selected, lit: shown, found, open });
+      fill(item, place, block, { selected, lit: shown, found, open, motion });
       const end = { x: place.x, y: place.y, s: 1, o: 1 };
       if (item.held) continue;
       if (!moves) {
@@ -1019,7 +1032,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     for (const key of arrives) {
       const { path, link } = links.get(key);
       if (linkDashed(link)) animateTo(path, [{ opacity: 0 }, { opacity: 1 }], { dur: FADE_IN_MS, ease: CALM });
-      else drawIn(key, DRAW_MS);
+      else drawIn(key, motion === "project" ? SWITCH_DRAW_MS : DRAW_MS);
     }
     // A selected block lays an accent line over each lit link on its way, except a bypass line and
     // a link a change in preview adds or takes out (it keeps its dashes). A picked link has none.
