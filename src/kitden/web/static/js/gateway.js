@@ -229,14 +229,15 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
   const waits = connectRows(rows, setup);
   const out = movesOut(rows);
   for (const id of WRITABLE) blocks.push(clientBlock(id, { setup, linked, known, first, clients, wait: waits.get(id) }));
-  // A gateway block joined to the clients it `reaches` (null when not read), then its servers in
-  // their groups, but those that show elsewhere (`away`, by name); it counts them all.
+  // A gateway block joined to the clients it `reaches` (null when not read), then its `servers` in
+  // their groups (`kindOf` says which), but those that show elsewhere (`away`, by name); it counts
+  // them all.
   // `server(block, word)` adds what each server's block says. `unread` says why Kitden does not
   // know what it holds, so no count shows: a problem is not an empty gateway. `ends` are blocks
   // for the end of a group (each `{ kind, block }`), which open that group if need be.
   // A gateway block speaks no state word: it says where it runs and its clients and servers, or
   // what Kitden could not read, and then its state is not known.
-  const addGateway = (gateway, reaches, servers, kindOf, server, unread = null, ends = [], away = new Map()) => {
+  const addGateway = (gateway, { reaches, servers, kindOf, server, unread = null, ends = [], away = new Map() }) => {
     const id = `gateway:${gateway.id}`;
     blocks.push({ id, column: "gateway", kind: "gateway", name: gatewayName(gateway), ...gatewayFace(gateway, reaches, servers, unread), state: unread ? "unk" : "on", stateInMeta: true, gateway, unread, ports: { left: true, right: true } });
     for (const client of reaches || []) links.push({ from: `client:${client}`, to: id, kind: "on" });
@@ -266,14 +267,16 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
     blocks.push({ id: `gateway:${kitden.id}`, column: "gateway", kind: "slot", name: "No gateway yet", meta: "One place for servers, rules and logins.", gateway: kitden, unread: null, ...action });
   } else if (kitden) {
     const waiting = waitingTools(rows, picked);
-    addGateway(kitden, known ? linked : null, kitden.servers || [], (s) => s.kind, (block, word) => {
+    const server = (block, word) => {
       kitdenServer(block, word, picked);
       for (const tool of block.server.tool_list || []) {
         const shown = toolBlock(block, tool, picked, waiting);
         tools.push(shown);
         if (shown.state === "on") links.push({ from: block.id, to: shown.id, kind: "on" });
       }
-    }, kitden.problem ? "Could not read its settings." : null, adds, out);
+    };
+    const unread = kitden.problem ? "Could not read its settings." : null;
+    addGateway(kitden, { reaches: known ? linked : null, servers: kitden.servers || [], kindOf: (s) => s.kind, server, unread, ends: adds, away: out });
     leaveParts(blocks, links, kitden, rows, picked);
   }
   if (kitden) connectParts(links, kitden, waits);
@@ -284,9 +287,10 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
     const kindOf = (s) => (heldKind(s) === "Hosted" ? "local" : "remote");
     // Not read yet, or not readable from here: no count, and a failed read says so.
     const unread = answer && answer.servers ? null : (answer && answer.error) || "";
-    addGateway(other, WRITABLE.filter((c) => (per[c] || []).length), (answer && answer.servers) || [], kindOf, (block) => {
+    const server = (block) => {
       block.meta = heldKind(block.server);
-    }, unread);
+    };
+    addGateway(other, { reaches: WRITABLE.filter((c) => (per[c] || []).length), servers: (answer && answer.servers) || [], kindOf, server, unread });
   }
   blocks.push(...tools);
   const outside = outsideParts(view, kitden, { picked, first, moved, out, gone: directRemovals(rows) });
@@ -300,7 +304,8 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
 // has its line drawn leaving, and the server, once every client loses it, looks leaving too and
 // has no grip. After the rows of its kind, a server whose move out of the Kitden gateway waits in
 // the tray (`out`) shows in preview, "Moves to <Client>", joined to that client by a preview line;
-// it is a block of its own, also where that server is outside the gateway already.
+// it is a block of its own, also where that server is outside the gateway already. Its link from
+// the Kitden gateway is drawn leaving.
 function outsideParts(view, kitden, { picked, first, moved, out, gone }) {
   const blocks = [];
   const links = [];
@@ -329,6 +334,7 @@ function outsideParts(view, kitden, { picked, first, moved, out, gone }) {
       const id = `preview-out:${name}`;
       blocks.push({ id, column: "servers", parent: "group:outside", kind: "preview", name, meta: `Moves to ${CLIENT_NAMES[move.client]}`, state: "preview", lamp: "preview", h: OUTSIDE_BLOCK_H, icon: OUTSIDE_ICONS[group], ports: { left: "out" }, takeOut: IN_PREVIEW, row: move.key, backTo: `held:${kitden.id}:${name}` });
       links.push({ from: `client:${move.client}`, to: id, kind: "direct", preview: true, row: move.key });
+      links.push({ from: `gateway:${kitden.id}`, to: id, kind: "on", leaving: true, row: move.key });
     }
   }
   if (blocks.length) blocks.unshift({ id: "group:outside", column: "servers", kind: "group", name: OUTSIDE_MAP, icon: "info", h: OUTSIDE_H, before: 21, rowGap: 6 });
@@ -364,9 +370,9 @@ function movesOut(rows) {
   return out;
 }
 
-// The changes that connect a client to the Kitden gateway: its kitden entry set up, or an old one
-// updated (Task 1).
-const CONNECTS = ["setup_server.register", "setup_server.update"];
+// The changes that connect a client to the Kitden gateway: its kitden entry set up, an old one
+// updated (Task 1), or one that is off turned on.
+const CONNECTS = ["setup_server.register", "setup_server.update", "setup_server.enable"];
 
 // The clients whose connection to the Kitden gateway waits in the tray, once its row has its part:
 // by client, the row's key and whether it connects the client (`connect`) or disconnects it. An
@@ -415,7 +421,8 @@ function clientBlock(id, { setup, linked, known, first, clients, wait = null }) 
   const disconnect = action && !action.connect ? action.body : null;
   const viaPlugin = on && (setup || []).some((e) => e.client === id && e.state === "plugin");
   const block = { id: `client:${id}`, column: "clients", kind: "client", name: CLIENT_NAMES[id], meta, lamp, state: known ? (on ? "on" : "off") : "unk", client: id, ports: { right: true }, disconnect, viaPlugin };
-  return wait && wait.connect ? { ...block, lamp: "preview", state: "preview", wait: " · in preview" } : block;
+  // The dot stays with the words before it (a no-break space), so a wrap never starts a line with it.
+  return wait && wait.connect ? { ...block, lamp: "preview", state: "preview", wait: "\u00a0· in preview" } : block;
 }
 
 // The moves into the Kitden gateway the map shows: each one in the tray (`rows`), for the outside

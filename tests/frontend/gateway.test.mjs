@@ -944,7 +944,8 @@ test('a connect row draws a dashed link to the gateway', () => {
   // The client's lamp is the dashed ring and its meta says the change waits; it is not connected
   // yet, so the gateway still counts two clients.
   const cursor = block(tree, 'client:cursor');
-  assert.deepEqual([cursor.meta, cursor.wait, cursor.lamp, cursor.state], ['Not connected', ' · in preview', 'preview', 'preview']);
+  // A no-break space keeps the dot with "Not connected" when the words wrap.
+  assert.deepEqual([cursor.meta, cursor.wait, cursor.lamp, cursor.state], ['Not connected', '\u00a0· in preview', 'preview', 'preview']);
   assert.equal(blockLabel(cursor), 'Cursor, Not connected, In preview');
   assert.deepEqual(block(tree, 'gateway:kitden').stats.map((s) => s.words), ['2 clients', '2 servers']);
   // A press on the link takes the row out.
@@ -953,6 +954,11 @@ test('a connect row draws a dashed link to the gateway', () => {
   const setup = [...SETUP.slice(0, 2), entry('cursor', 'old', { item: 'cursor:kitden' })];
   const update = trayRow({ action: 'setup_server.update', targets: [{ item: 'cursor:kitden' }], params: {} });
   assert.equal(linkOf(gatewayTree(MEDIUM_VIEW, { ...OPTS, setup, rows: [update] }), 'client:cursor>gateway:kitden').kind, 'preview');
+  // An entry that is off, turned on again ("Turn it on in Codex…"), connects the client too.
+  const off = [entry('claude_code', 'added'), entry('codex', 'added', { enabled: false }), entry('cursor', 'missing')];
+  const enable = trayRow({ action: 'setup_server.enable', targets: [{ client: 'codex' }], params: {} });
+  const turnedOn = gatewayTree(MEDIUM_VIEW, { ...OPTS, setup: off, rows: [enable] });
+  assert.deepEqual([linkOf(turnedOn, 'client:codex>gateway:kitden').kind, block(turnedOn, 'client:codex').lamp], ['preview', 'preview']);
   // A row still being asked draws nothing yet, and no row nothing at all.
   for (const rows of [[trayRow(CONNECT_CURSOR, null)], []]) {
     const plain = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows });
@@ -989,13 +995,16 @@ test('a move-out row shows the server outside, moving to its client', () => {
   assert.deepEqual([shown.takeOut, shown.row, shown.ports], ['In preview. Click to take it out.', row.key, { left: 'out' }]);
   assert.equal(blockLabel(shown), 'files, Moves to Claude Code, In preview');
   assert.deepEqual(tree.blocks.filter((b) => b.parent === 'group:outside').map((b) => b.id), ['outside:move:docs', 'outside:move:github', 'outside:local:docs', 'outside:local:files', 'preview-out:files']);
-  // A preview line joins it to Claude Code, at right angles; no line comes from the gateway.
+  // A preview line joins it to Claude Code, at right angles, and its link from the gateway leaves.
   const line = linkOf(tree, 'client:claude_code>preview-out:files');
   assert.deepEqual([line.kind, line.preview, line.row], ['direct', true, row.key]);
-  assert.deepEqual(tree.links.filter((l) => l.to === 'preview-out:files').map((l) => l.from), ['client:claude_code']);
-  const drawn = laidOut(tree).links.find((l) => l.to === 'preview-out:files');
-  assert.deepEqual([drawn.shape, linkClass(drawn)], ['step', 'link direct preview']);
+  const away = linkOf(tree, 'gateway:kitden>preview-out:files');
+  assert.deepEqual([away.kind, away.leaving, away.row], ['on', true, row.key]);
+  assert.deepEqual(tree.links.filter((l) => l.to === 'preview-out:files').map((l) => l.from), ['client:claude_code', 'gateway:kitden']);
+  const drawn = laidOut(tree).links.filter((l) => l.to === 'preview-out:files');
+  assert.deepEqual(drawn.map((l) => [l.shape, linkClass(l)]), [['step', 'link direct preview'], ['curve', 'link on leaving']]);
   assert.equal(linkTip(tree, line, ''), 'Take it out of the preview');
+  assert.equal(linkTip(tree, away, ''), 'Take it out of the preview');
   // A remote server sits after the remote rows; with nothing outside, the group comes with it.
   const tracker = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [trayRow(moveOut('tracker', 'codex'))] });
   assert.deepEqual(tracker.blocks.filter((b) => b.parent === 'group:outside').map((b) => b.id).slice(1, 4), ['outside:move:github', 'preview-out:tracker', 'outside:local:docs']);
@@ -1023,6 +1032,13 @@ test('a press on the move-out block takes its row out', async () => {
   const now = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: rowsOnMap(tray) });
   assert.equal(block(now, 'preview-out:files').meta, 'Moves to Codex');
   clickLink(now, linkOf(now, 'client:codex>preview-out:files'));
+  await flush();
+  assert.deepEqual([tray.rows, tray.phase], [[], 'idle']);
+  // And a click on its leaving link from the gateway.
+  queue(PREVIEW, batch('c5'));
+  await addToTray(moveOut('files', 'codex'));
+  const again = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: rowsOnMap(tray) });
+  clickLink(again, linkOf(again, 'gateway:kitden>preview-out:files'));
   await flush();
   assert.deepEqual([tray.rows, tray.phase], [[], 'idle']);
   await freshTray();

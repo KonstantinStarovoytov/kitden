@@ -636,6 +636,11 @@ div.map .link.lit { stroke: var(--route); stroke-width: 1.7; }
 div.map .link.hov, div.map .link.picked { stroke: var(--route); stroke-width: 2.4; stroke-opacity: 1; }
 div.map .link.direct.lit { stroke: var(--ink-3); stroke-opacity: 1; }
 div.map .link.direct.hov, div.map .link.direct.picked { stroke: var(--lamp-warn); }
+/* A link a change in the tray adds or takes out keeps its look on the lit path; a bypass line a
+   move out adds is accent, not amber, under the pointer. */
+div.map .link.leaving.lit:not(.hov):not(.picked) { stroke: var(--ink-3); stroke-opacity: 0.4; }
+div.map .link.direct.preview.lit:not(.hov):not(.picked) { stroke: var(--route); stroke-opacity: 0.65; }
+div.map .link.direct.preview.hov, div.map .link.direct.preview.picked { stroke: var(--route); }
 /* While a path is lit (a selection, or a glance at a client or an outside server) a link off it dims
    to 16% and a block off it to 40% (at .block.lit). A pointed or picked link keeps full strength.
    The accent line over each lit link of a selected block fades in and out in map-view.js. */
@@ -707,14 +712,16 @@ div.map.narrow .block.client .block-tile .client-mark, div.map.narrow .block.cli
 /* A client's words get 2 px more room on its right, so "Not connected" fits beside its lamp. */
 div.map .block.client { padding-right: 10px; }
 div.map .block.client .lamp { --pop: 2.4; }
-/* While its connect waits in the tray, " · in preview" follows a client's words in the accent, on a
-   second line where they do not fit. A move out's "Moves to Claude Code" breaks before the client's
-   name the same way. The lamp stays beside the first line. */
+div.map.narrow .block.client { gap: 6px; padding: 0 8px; }
+/* While its connect waits in the tray, " · in preview" follows a client's words in the accent: "Not
+   connected ·" on the first line (the client takes the room on its right for it), "in preview" on
+   the second. A move out's "Moves to Claude Code" breaks before the client's name the same way. The
+   lamp stays beside the first line. */
+div.map .block.client:has(.block-wait) { padding-right: 2px; }
 div.map .block-wait { color: var(--route); }
 div.map .block-words:has(> .block-wait), div.map .block.preview .block-words { white-space: normal; text-wrap: balance; }
 div.map .block-meta:has(.block-wait), div.map .block.preview .block-meta { align-items: flex-start; }
 div.map .block-meta:has(.block-wait) > .lamp, div.map .block.preview .block-meta > .lamp { margin-top: 4.5px; }
-div.map.narrow .block.client { gap: 6px; padding: 0 8px; }
 div.map.narrow .block.gateway, div.map.narrow .block.slot:not([data-state="preview"]) { padding: 0; }
 div.map.narrow .block.gateway .block-text, div.map.narrow .block.gateway .block-stats, div.map.narrow .block.slot:not([data-state="preview"]) .block-text, div.map.narrow .block-action { display: none; }
 div.map.narrow .block[aria-expanded] > .port.r { display: none; }

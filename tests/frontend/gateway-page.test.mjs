@@ -222,7 +222,7 @@ test('a connect link fades in and a disconnect link blends to leaving; taken out
   // Cursor's lamp is the dashed ring, and its words say the change waits.
   const cursor = node(box, 'block:client:cursor');
   assert.ok(walk(cursor).some((n) => n.className === 'lamp pv'));
-  assert.ok(walk(cursor).some((n) => n.className === 'block-wait' && n.textContent === ' · in preview'));
+  assert.ok(walk(cursor).some((n) => n.className === 'block-wait' && n.textContent === '\u00a0· in preview'));
   await addToTray(DISCONNECT_CODEX);
   const codex = linkLine(box, 'client:codex>gateway:kitden');
   assert.match(codex.className, /\bleaving\b/);
@@ -263,6 +263,7 @@ test('a press on the move-out block takes its row out and gives focus back to th
     assert.equal(node(box, 'block:held:kitden:files'), null);
     const shown = node(box, 'block:preview-out:files');
     assert.ok(shown && linkLine(box, 'client:claude_code>preview-out:files'));
+  assert.match(linkLine(box, 'gateway:kitden>preview-out:files').className, /\bleaving\b/);
     shown.focus();
     shown.listeners.click[0]();
     await new Promise((resolve) => setImmediate(resolve));

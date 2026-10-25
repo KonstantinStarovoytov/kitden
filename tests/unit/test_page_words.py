@@ -2140,7 +2140,7 @@ def test_the_map_previews_connect_disconnect_and_move_out():
     # disconnect, a removed entry and a removal from the gateway leave; a move out waits outside.
     text = gw()
     for words in (
-        'wait: " · in preview"',
+        'wait: "\\u00a0· in preview"',
         "meta: `Moves to ${CLIENT_NAMES[move.client]}`",
         'kind: "direct", preview: true',
     ):
@@ -2151,6 +2151,15 @@ def test_the_map_previews_connect_disconnect_and_move_out():
     assert "color: var(--route);" in rule("div.map .block-wait")
     words = rule("div.map .block-words:has(> .block-wait), div.map .block.preview .block-words")
     assert "white-space: normal" in words and "text-wrap: balance" in words
+    assert "padding-right: 2px" in rule("div.map .block.client:has(.block-wait)")
+    # A preview or leaving line keeps its look when lit; a move out's line is accent when pointed.
+    left = rule("div.map .link.leaving.lit:not(.hov):not(.picked)")
+    assert "stroke: var(--ink-3)" in left and "stroke-opacity: 0.4" in left
+    added = rule("div.map .link.direct.preview.lit:not(.hov):not(.picked)")
+    assert "stroke: var(--route)" in added and "stroke-opacity: 0.65" in added
+    pointed = rule("div.map .link.direct.preview.hov, div.map .link.direct.preview.picked")
+    assert "stroke: var(--route)" in pointed
+    assert CSS.index("div.map .link.direct.preview.hov") > CSS.index("div.map .link.direct.hov")
     # Outside the gateway an icon has no tile, a move out's preview too.
     assert "border: 0" in rule("div.map .block-icon.bare")
     assert "div.map .block.outside .block-icon" not in CSS
