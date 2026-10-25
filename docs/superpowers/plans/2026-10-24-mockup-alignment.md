@@ -110,14 +110,16 @@ The mockup breaks several written rules. Each line gives the rule, what the mock
 
 **Files:** `static/js/map.js` (core), `static/js/gateway.js` and `library.js` callers, `tests/frontend/map.test.mjs`. **Mockup:** `MapView` (`place`, `move`, `link`, `draw`, `unlink`, `dash`, `undraw`, `drawIn`, `focus`, `unfocus`, `showX`, `hoverLink`); motion-spec M1–M3.
 
-- [ ] **Task 2.1 Blocks that stay.** Replace the full rebuild (`map.js:410-485`, `replaceChildren`) with keyed blocks moved by `transform`; `relayout()` tweens moved blocks 260 OUT3; new blocks enter, leaving blocks leave 180 IN3. Test: drawing twice keeps the same DOM nodes for unchanged ids.
-- [ ] **Task 2.2 Entrance.** Each block and caption rises 6 px, 260 OUT3, 22 ms apart in layout order; a link's opacity follows the lower of its two blocks; title, lede and scope rise 260, 120 and 180 ms after. Test: under reduced motion every block ends at opacity 1.
-- [ ] **Task 2.3 Layout numbers.** Clients and gateway start at y 124; pitch 70/72; server 170×60, tool 200×34, outside block with grip; captions with icons; "Tools" caption only while a server is open. Keep "N more" and the narrow layout.
-- [ ] **Task 2.4 Links take the pointer.** Each removable link gets a 14 px invisible hit stroke (off below .5 opacity); hover = accent 2.4 px (bypass: amber); the 16 px × sits at half the path's length, appears 120 CALM, 240 ms grace, jumps with no motion. Remove `pointer-events:none` and `aria-hidden` from the link layer (`map.js:442-444`) and give each hit path a label for keyboard and screen readers. Test: `midPoint(path)` and the grace timer.
-- [ ] **Task 2.5 Link motion.** Draw-in from start port (CALM, 240–280 by kind); preview link = accent dashes 4/4 at .65; leaving = muted dashes at .4; blend between them 300 CALM ("8 0" for solid); on Apply a dashed link fades 240 ease-out and is removed; undraw 380 RETRACT. Bypass shape: right angles, channels 16/24/+8, corner radius 8 (`map.js:203-210`).
-- [ ] **Task 2.6 Focus and select.** One active element; a second click or a click on empty map lets go; off-path blocks `opacity .4 saturate(.6)` and links `.16`, 300 ease; path overlay 2.1 px accent fades in 180 CALM; hover preview on clients and outside servers while nothing is selected.
+- [x] **Task 2.1 Blocks that stay.** Replace the full rebuild (`map.js:410-485`, `replaceChildren`) with keyed blocks moved by `transform`; `relayout()` tweens moved blocks 260 OUT3; new blocks enter, leaving blocks leave 180 IN3. Test: drawing twice keeps the same DOM nodes for unchanged ids.
+- [x] **Task 2.2 Entrance.** Each block and caption rises 6 px, 260 OUT3, 22 ms apart in layout order; a link's opacity follows the lower of its two blocks; title, lede and scope rise 260, 120 and 180 ms after. Test: under reduced motion every block ends at opacity 1.
+- [x] **Task 2.3 Layout numbers.** Clients and gateway start at y 124; pitch 70/72; server 170×60, tool 200×34, outside block with grip; captions with icons; "Tools" caption only while a server is open. Keep "N more" and the narrow layout.
+- [x] **Task 2.4 Links take the pointer.** Each removable link gets a 14 px invisible hit stroke (off below .5 opacity); hover = accent 2.4 px (bypass: amber); the 16 px × sits at half the path's length, appears 120 CALM, 240 ms grace, jumps with no motion. Remove `pointer-events:none` and `aria-hidden` from the link layer (`map.js:442-444`) and give each hit path a label for keyboard and screen readers. Test: `midPoint(path)` and the grace timer.
+- [x] **Task 2.5 Link motion.** Draw-in from start port (CALM, 240–280 by kind); preview link = accent dashes 4/4 at .65; leaving = muted dashes at .4; blend between them 300 CALM ("8 0" for solid); on Apply a dashed link fades 240 ease-out and is removed; undraw 380 RETRACT. Bypass shape: right angles, channels 16/24/+8, corner radius 8 (`map.js:203-210`).
+- [x] **Task 2.6 Focus and select.** One active element; a second click or a click on empty map lets go; off-path blocks `opacity .4 saturate(.6)` and links `.16`, 300 ease; path overlay 2.1 px accent fades in 180 CALM; hover preview on clients and outside servers while nothing is selected.
 
 ## Phase 3: Preview tray (backend + page)
+
+**Carried from Phase 2:** an empty-map click or a second click lets go with `closePanel`, which also cancels a review Details hold (the move's "Show changes", a × review); with the tray, clear only the map's selection while a review shows. `letGoOnMap` during a write clears the selection while Details wait. Undo draws a link back in 260 ms where the mockup says 480 (the engine cannot tell the cause; the tray can pass it). The review floats over the lowest blocks at a 900 px window. After an applied removal, focus falls to `#main`.
 
 **Files:** new `src/kitden/changes/batch.py`, `src/kitden/web/app.py` (route), `src/kitden/changes/engine.py` (progress per row), new `static/js/tray.js`, `static/js/panel.js` (toast), `static/js/map-review.js` (replaced by the tray), tests `tests/unit/test_batch.py`, `tests/frontend/tray.test.mjs`. **Mockup:** `tray`, `dock`; motion-spec M4. **Decisions:** D10, D11, D12, D20.
 
@@ -129,6 +131,14 @@ The mockup breaks several written rules. Each line gives the rule, what the mock
 - [ ] **Task 3.6 Wire every action to the tray.** Details buttons, switches, ×, drags and cards add tray rows instead of opening a review. A click on a preview block or link takes its row out (D12). Remove the one-preview rule (`review.js:234-253`, `map-review.js:24`).
 
 ## Phase 4: Gateway page
+
+**Carried from Phase 2:**
+- `blockParts` in map-view.js still checks kind `"client"`; the block looks replace it.
+- Leaving block nodes stay focusable for their 180 ms fade; give `.leaving` nodes `tabindex="-1"`.
+- Link Tab order follows the model (a server's tool links before its gateway link), and hits never re-sort; sort them by reading order.
+- A hovered, lit bypass link in a search stays at 0.25 once bypass links take the pointer; add a hover rule.
+- 4.8: the skeleton, the error banner and the "No gateway yet" card show without a rise; Map → List has no rise; the head snaps when data arrives within ~440 ms of a cold visit; the "First visit" row in design.md.
+- 4.7: a dragged block keeps the 0.98 press scale while the pointer is down.
 
 **Carried from Phase 1:**
 - `gateway.js` has its own local `icon()` and `ICONS` (~line 543). Remove them before importing `icon` from `dom.js`, or the module fails to parse.
@@ -159,6 +169,8 @@ The mockup breaks several written rules. Each line gives the rule, what the mock
 
 ## Phase 6: Library
 
+**Carried from Phase 2:** `map-view.js` reads `afterOldPage()` from motion.js to delay its entrance after a place change; give `draw` an `enterDelay` option when the Library reuses `mapView`.
+
 Reuses Part 5 backend Tasks 1, 2, 7 (local settings, plugin parts, `skill.rule`) and Part 6 Tasks 1–3 (imports). **Files:** `static/js/library.js`, `details.js` (move to `detailsCard`), `style.css`, `app.js:35` (`MAP_PAGES` adds `library`). **Mockup:** `Library` (`plugin`, `pluginPanel`, `wirePlugin`, `add`, `pickClient`, `dropWhy`, `dragStart`, `select`, `skill`, `file`, `imp`, `removeFrom`); motion-spec M7.
 
 - [ ] **Task 6.1 Two tabs and the map.** "Plugins and skills" | "Instructions" pill; Map | List; lede "Follow the source. Connect only what you need." + scope bar. Map: Clients → source captions → plugin cards (180×60) and slim skill rows → Inside column. A plugin nobody has shows only in the add panel (spec call #3 stays unless the owner says otherwise).
@@ -176,6 +188,8 @@ Reuses Part 6 backend Task 5 (cards with `icon`, `name`, `clients`). **Files:** 
 - [ ] **Task 7.2 Changes.** Today / Yesterday groups with a rail and a dot per row; row = time, title, client tiles, lamp + word, Undo; undone row gets the strike line and muted title; first row selected with its panel open; Details card (Project, State, Backup, Takes effect, client tiles, history arrows, Technical details); "See it on the map"; Undo toast "Undid “…”. The backup is back in place." with "Redo…" as a fresh preview (D21).
 
 ## Phase 8: Check and finish
+
+**Carried from Phase 2:** Safari's `:focus-visible` on SVG link paths; the Gateway view transition in both themes; the 39-server long-task check with a selection and a glance; a timer backstop so a draw lands even if frames stall while the page is visible.
 
 **Carried from Phase 1:** `docs/images/how-it-works-dark.svg:47` still uses the old amber #E0A347. The active-option ring in the project menu also shows on the picked row when the menu opens by mouse; the mockup has no ring (owner to judge).
 
