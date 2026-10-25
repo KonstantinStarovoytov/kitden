@@ -217,11 +217,11 @@ function barShown() {
 
 // Apply in the bar: the button counts the steps as the server reports them, the bar says what is
 // written, and Cancel waits. Only `verified` ends it: the page reads everything again, the preview
-// goes (its block turns solid and its new link draws once) and the toast offers Undo. Any other
-// end stays in the bar with "Try again", focus on it, and the page reads again behind it. With the
-// bar no longer on the page (the person went to the List or another place meanwhile), a toast
-// with no check says the same words, with a way to Changes when the result is not known or not
-// everything was put back, and the preview goes.
+// goes (its block and link fade out, the server's fade in where it belongs) and the toast offers
+// Undo. Any other end stays in the bar with "Try again", focus on it, and the page reads again
+// behind it. With the bar no longer on the page (the person went to the List or another place
+// meanwhile), a toast with no check says the same words, with a way to Changes when the result is
+// not known or not everything was put back, and the preview goes.
 export async function applyOnMap(redraw) {
   if (mapPreview.phase !== "ready" || busy.change) return;
   redrawMap = redraw;

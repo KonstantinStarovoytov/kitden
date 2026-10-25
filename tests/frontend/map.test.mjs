@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js (for its columns) needs only this from a browser to load.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { CAPTION_H, GAP, NARROW_GAP, blockOrder, drawPlan, dropAt, enterDelays, findChip, groupBox, findIn, foldable, isNarrow, layoutTree, linkClass, linkKey, litFrom, litPath, midPoint, toggleOpen, unfoldDelays, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
+const { CAPTION_H, GAP, NARROW_GAP, blockOrder, drawPlan, dropAt, enterDelays, findChip, groupBox, findIn, foldable, isNarrow, layoutTree, linkClass, linkDashed, linkKey, linkPath, litFrom, litPath, midPoint, toggleOpen, unfoldDelays, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
 const { cutName } = await import('../../src/kitden/web/static/js/dom.js');
 const { GATEWAY_COLUMNS } = await import('../../src/kitden/web/static/js/gateway.js');
 
@@ -158,11 +158,32 @@ test('the link is the state: an off tool has no link', () => {
   assert.ok(l.links.some((link) => key(link) === 'held:kitden:github>tool:github/read_repo'));
 });
 
-test('a direct line is an elbow with round corners on a trunk at x 170', () => {
-  const l = layoutTree(model(0, 2), { open: new Set(), ...WIDE });
-  const line = l.links.find((link) => key(link) === 'client:claude_code>outside:move:docs');
-  assert.equal(line.kind, 'direct');
-  assert.match(line.d, /^M 150 \d+ H 164 Q 170 \d+ 170 \d+ V \d+ Q 170 \d+ 176 \d+ H 396$/);
+test('a link that skips the gateway turns at right angles on its own channel, 16, 24 or 32 px out, with corners of 8', () => {
+  const l = layoutTree(model(0, 4), { open: new Set(), ...WIDE });
+  const lines = l.blocks.filter((b) => b.kind === 'outside').map((b) => l.links.find((k) => k.to === b.id));
+  assert.deepEqual(lines.map((k) => k.chan), [16, 24, 32, 16]);
+  assert.match(lines[0].d, /^M 150 (\d+) H 158 Q 166 \1 166 \d+ V \d+ Q 166 (\d+) 174 \2 H 396$/);
+  const narrow = layoutTree(model(0, 2), { open: new Set(), width: 900, narrow: true });
+  assert.ok(narrow.links.filter((k) => k.kind === 'direct').every((k) => k.chan === 14));
+});
+
+test('a skip link level with its block is one straight line, and a leaving link keeps its flag in the layout', () => {
+  assert.equal(linkPath({ shape: 'step', chan: 24 }, { x: 0, y: 10, w: 150, h: 54 }, { x: 396, y: 20, w: 170, h: 34 }), 'M 150 37 H 396');
+  assert.equal(linkPath({ shape: 'step', chan: 16 }, { x: 0, y: 0, w: 150, h: 20 }, { x: 396, y: 6, w: 170, h: 20 }), 'M 150 10 H 163 Q 166 10 166 13 V 13 Q 166 16 169 16 H 396');
+  const m = model(3, 0);
+  const marked = { ...m, links: m.links.map((k) => (k.to === 'held:kitden:github' ? { ...k, leaving: true } : k)) };
+  const links = layoutTree(marked, { open: new Set(), ...WIDE }).links;
+  assert.deepEqual(links.filter((k) => k.leaving).map((k) => k.to), ['held:kitden:github']);
+});
+
+test('a curve keeps its handles level, half the gap long and at least 18 px', () => {
+  assert.equal(linkPath({ shape: 'curve' }, { x: 0, y: 0, w: 150, h: 54 }, { x: 196, y: 0, w: 150, h: 124 }), 'M 150 27 C 173 27, 173 62, 196 62');
+  assert.equal(linkPath({ shape: 'curve' }, { x: 0, y: 0, w: 100, h: 20 }, { x: 110, y: 40, w: 10, h: 20 }), 'M 100 10 C 118 10, 92 50, 110 50');
+});
+
+test('a link is dashed when it skips the gateway, is a preview, is leaving or is not known', () => {
+  assert.deepEqual([{ kind: 'direct' }, { kind: 'preview' }, { kind: 'on', leaving: true }, { kind: 'on', unk: true }, { kind: 'on' }, { kind: 'faint' }].map(linkDashed), [true, true, true, true, false, false]);
+  assert.equal(linkClass({ from: 'a', to: 'b', kind: 'on', leaving: true }), 'link on leaving');
 });
 
 test('one block per column is open', () => {

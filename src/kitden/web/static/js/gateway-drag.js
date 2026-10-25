@@ -70,7 +70,7 @@ export function dropBody(row, view) {
 
 // A pointer goes down on a block with a grip. Once it moves 4 px the block follows it; once it
 // leaves its own group, the slot "Drop to add" opens in its group of the Kitden gateway and its
-// amber line hides (so a click that wobbles moves nothing on the map). Let go on the Servers
+// dotted line hides (so a click that wobbles moves nothing on the map). Let go on the Servers
 // column, away from its own group, it starts the same preview as "Move into the gateway…";
 // Escape, or a drop anywhere else, puts it back. Nothing is written before Apply. A click without
 // a move selects the block as before; a grip press while a change is written does nothing.

@@ -106,12 +106,12 @@ service. Connect your clients, see what a gateway holds, and move servers into i
 or all at once. Switch every client to another Obot or MetaMCP gateway in one review.
 
 A server a client sets up on its own sits under "Outside the gateway · calls skip Kitden's
-rules", joined to its client by a faint amber line. Amber here marks a call that skips the
-rules, not a fault. Drag one onto the servers ("Drop to add" shows where it lands) and the Move
-preview appears on the map, with a bar to Apply, Cancel or "Show changes", which opens the full
-review in Details. Without a mouse, use "Move in…" in the List. Nothing changes until Apply, and
-a call already running is not stopped. A gateway controls only the servers in it; direct entries
-and terminal tools stay outside it.
+rules", joined to its client by a grey dotted line that turns amber under the pointer. Amber
+here marks a call that skips the rules, not a fault. Drag one onto the servers ("Drop to add"
+shows where it lands) and the Move preview appears on the map, with a bar to Apply, Cancel or
+"Show changes", which opens the full review in Details. Without a mouse, use "Move in…" in the
+List. Nothing changes until Apply, and a call already running is not stopped. A gateway controls
+only the servers in it; direct entries and terminal tools stay outside it.
 
 <p align="center">
   <picture>

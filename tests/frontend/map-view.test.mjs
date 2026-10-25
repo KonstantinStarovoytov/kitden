@@ -78,12 +78,20 @@ function element(tagName) {
       return event;
     },
     animate(keyframes, options) {
-      node.animations.push({ keyframes, options });
-      return { finished: Promise.resolve(), cancel() {} };
+      const animation = { keyframes, options, cancelled: false, finished: Promise.resolve(), cancel() { animation.cancelled = true; } };
+      node.animations.push(animation);
+      return animation;
     },
+    getAnimations: () => node.animations.filter((a) => !a.cancelled),
   };
   return node;
 }
+// The dash look of a link, read from its class: leaving and preview are dashed, the rest solid.
+globalThis.getComputedStyle = (node) => {
+  if (node.classList.contains('leaving')) return { strokeDasharray: '4 4', strokeOpacity: '0.4' };
+  if (node.classList.contains('preview')) return { strokeDasharray: '4 4', strokeOpacity: '0.65' };
+  return { strokeDasharray: 'none', strokeOpacity: '1' };
+};
 globalThis.document = { hidden: false, activeElement: null, createElement: (tag) => element(tag.toUpperCase()), createElementNS: (namespace, tag) => element(tag) };
 
 beforeEach(() => {
@@ -95,7 +103,7 @@ beforeEach(() => {
 });
 
 const { blockOrder, layoutTree, linkKey, linkPath, midPoint } = await import('../../src/kitden/web/static/js/map.js');
-const { CALM } = await import('../../src/kitden/web/static/js/motion.js');
+const { CALM, RETRACT } = await import('../../src/kitden/web/static/js/motion.js');
 const { mapView } = await import('../../src/kitden/web/static/js/map-view.js');
 
 const TREE = {
@@ -478,4 +486,107 @@ test('Delete with a modifier, or held down, removes nothing; a plain Delete remo
   assert.equal(removed.length, 0);
   h.dispatch('keydown', { key: 'Delete' });
   assert.equal(removed.length, 1);
+});
+
+const NO_LINK = { ...TREE, links: TREE.links.filter((l) => l.to !== 's2') };
+const withLink = (fields) => ({ ...TREE, links: TREE.links.map((l) => (l.to === 's2' ? { ...l, ...fields } : l)) });
+const drawn = (m) => layoutTree(m, { open: new Set(), narrow: false });
+
+test('a new link between two blocks that stay draws from its start in 260 ms', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const v = view();
+  await v.draw(NO_LINK, drawn(NO_LINK), { motion: 'none' });
+  v.draw(TREE, drawn(TREE), {});
+  const link = v.node('c1>s2'); const a = link.animations[0];
+  assert.equal(link.getAttribute('pathLength'), '1');
+  assert.deepEqual([a.keyframes, a.options.duration, a.options.easing], [[{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], 260, CALM]);
+  t.mock.timers.tick(260); assert.equal(link.getAttribute('pathLength'), null); assert.equal(link.style.strokeDasharray, '');
+});
+
+test('a new preview link fades in over 300 ms', async () => {
+  const v = view();
+  await v.draw(NO_LINK, drawn(NO_LINK), { motion: 'none' });
+  const m = withLink({ kind: 'preview' }); v.draw(m, drawn(m), {});
+  const a = v.node('c1>s2').animations[0];
+  assert.deepEqual([a.keyframes, a.options.duration, a.options.easing], [[{ opacity: 0 }, { opacity: 1 }], 300, CALM]);
+});
+
+test('a dashed link that goes fades out in 240 ms; a solid one draws back to its start in 380 ms', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  for (const [kind, keyframes, ms, ease] of [['preview', [{ opacity: 1 }, { opacity: 0 }], 240, 'ease-out'], ['on', [{ strokeDashoffset: 0 }, { strokeDashoffset: 1 }], 380, RETRACT]]) {
+    const v = view(); const m = withLink({ kind });
+    await v.draw(m, drawn(m), { motion: 'none' });
+    const link = v.node('c1>s2');
+    v.draw(NO_LINK, drawn(NO_LINK), {});
+    const a = link.animations.at(-1);
+    assert.deepEqual([a.keyframes, a.options.duration, a.options.easing, a.options.fill], [keyframes, ms, ease, 'forwards']);
+    t.mock.timers.tick(ms); assert.equal(link.parentNode, null);
+  }
+});
+
+test('a link that turns dashed blends in 300 ms, a solid line counting as "8 0"', async () => {
+  const v = view();
+  await v.draw(TREE, drawn(TREE), { motion: 'none' });
+  const m = withLink({ leaving: true }); v.draw(m, drawn(m), {});
+  const link = v.node('c1>s2'); const a = link.animations.at(-1);
+  assert.ok(link.classList.contains('leaving'));
+  assert.deepEqual(a.keyframes, [{ strokeDasharray: '8 0', strokeOpacity: '1' }, { strokeDasharray: '4 4', strokeOpacity: '0.4' }]);
+  assert.deepEqual([a.options.duration, a.options.easing], [300, CALM]);
+});
+
+test('under reduced motion links come and go at once', async () => {
+  reduce(true);
+  const v = view();
+  await v.draw(NO_LINK, drawn(NO_LINK), {});
+  await v.draw(TREE, drawn(TREE), {});
+  const link = v.node('c1>s2');
+  assert.equal(link.animations.length, 0);
+  await v.draw(NO_LINK, drawn(NO_LINK), {});
+  assert.equal(link.parentNode, null);
+});
+
+// More cases.
+test('a link that goes and comes back during its exit is shown again at once', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  for (const kind of ['preview', 'on']) {
+    const v = view(); const m = withLink({ kind });
+    await v.draw(m, drawn(m), { motion: 'none' });
+    const link = v.node('c1>s2');
+    v.draw(NO_LINK, drawn(NO_LINK), {});
+    t.mock.timers.tick(100);
+    v.draw(m, drawn(m), {});
+    assert.equal(v.node('c1>s2'), link);
+    assert.equal(link.getAnimations().length, 0);  // the exit is cancelled and no new motion runs
+    assert.deepEqual([link.getAttribute('pathLength'), link.style.strokeDasharray, link.style.opacity], [null, '', '']);
+    t.mock.timers.tick(1000);  // the old timer removes nothing
+    assert.equal(v.node('c1>s2'), link); assert.ok(link.parentNode);
+  }
+});
+
+test('a link that goes takes no pointer and its hit is gone at once; the link stays until it has gone', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const v = view({ links: { ...LINKS, canHit: (l) => l.to === 's2' } });
+  await v.draw(TREE, drawn(TREE), { motion: 'none' });
+  assert.ok(hitOf(v));
+  v.draw(NO_LINK, drawn(NO_LINK), {});
+  assert.equal(hitOf(v), undefined);
+  assert.ok(v.node('c1>s2'));
+  t.mock.timers.tick(380); assert.equal(v.node('c1>s2'), null);
+});
+
+test('a link whose block goes with it keeps fading with the block; no exit of its own runs', async () => {
+  const v = view();
+  await v.draw(TREE, drawn(TREE), { motion: 'none' });
+  const link = v.node('c1>s2');
+  v.draw(without('s2'), drawn(without('s2')), {});
+  assert.equal(link.animations.length, 0);
+  tick(180); assert.equal(link.parentNode, null);
+});
+
+test('a link whose look changes without a new dash or opacity does not blend', async () => {
+  const v = view();
+  await v.draw(TREE, drawn(TREE), { motion: 'none' });
+  v.draw(TREE, drawn(TREE), { lit: new Set(['c1>s2']) });
+  assert.ok(v.node('c1>s2').classList.contains('lit'));
+  assert.equal(v.node('c1>s2').animations.length, 0);
 });

@@ -19,9 +19,10 @@
 //   ("Set up…"). `stateInMeta`: no state word is spoken; its meta says the state already ("On in
 //   2 projects") or all there is to say (a gateway's clients and servers). `dot`: a client's dot
 //   when it is not its state (a client found on a first run).
-// - links: [{ from, to, kind, unk }], kind "on", "faint", "direct" or "preview". The link is the
-//   state: something on has a link, something off has none. `unk`: Kitden does not know whether
-//   it is on, so the line is dashed; it only shows who has the entry.
+// - links: [{ from, to, kind, unk, leaving }], kind "on", "faint", "direct" or "preview". The link
+//   is the state: something on has a link, something off has none. `unk`: Kitden does not know
+//   whether it is on, so the line is dashed; it only shows who has the entry. `leaving`: a change
+//   in preview takes it out, so the line is dashed and quiet.
 import { plural } from "./dom.js";
 
 export const GAP = 46; // between two columns
@@ -32,10 +33,13 @@ export const CAPTION_H = 18; // a column's caption, at the top of its column; a 
 export const CAPTION_ROW = 24; // the blocks of a column start under its caption
 export const CAPTION_GAP = 5; // between a group's caption and its first block
 export const LINK_MS = 170; // an unfold draws its links first, then its children fade in
+export const CHANNELS = [16, 24, 32]; // wide: how far right of its client a direct line turns
+export const NARROW_CHANNEL = 14; // narrow: the same, in the smaller gap between columns
 const ROW_GAP = 8; // between two blocks of a column
 const RAIL = 16; // narrow: children sit this far inside their parent, beside its rail
-const TRUNK = 20; // a direct line runs down a trunk this far right of the block it leaves
-const CORNER = 6; // the round corners of a direct line and of a rail
+const CORNER = 6; // the round corners of a rail
+const BEND = 8; // the round corners of a direct line
+const MIN_HANDLE = 18; // a curve leaves and enters level for at least this far
 const CHILD_MS = 15; // between two children of an unfold
 const ENTER_STEP = 22; // between two blocks of the entrance
 const ENTER_WAVE = 440; // the entrance starts its last block by now, however many there are
@@ -101,7 +105,10 @@ function shownChildren(block, children, open) {
 // block of its own (tools inside their server) then takes no room. A block that shows because a
 // block of another column is open (wide) or on that block's rail (narrow) names it as its
 // `opener`, and so does the caption of a column whose blocks all do. Only links between shown
-// blocks are drawn: `shape` is "rail", "step" (a direct line) or "curve", and `d` its SVG path.
+// blocks are drawn: `shape` is "rail", "step" (a direct line) or "curve", and `d` its SVG path. A
+// direct line carries the `chan` it turns on, how far right of its client: wide, one of CHANNELS by
+// the place of its block among those with a direct line, so the lines to blocks one after the other
+// run side by side; narrow, NARROW_CHANNEL.
 export function layoutTree(model, { open = new Set(), width = 0, narrow = isNarrow(width, false) } = {}) {
   const byId = new Map(model.blocks.map((block) => [block.id, block]));
   const children = childrenOf(model);
@@ -186,6 +193,9 @@ export function layoutTree(model, { open = new Set(), width = 0, narrow = isNarr
     blocks.splice(first, 0, caption);
   }
 
+  // The place of each block with a direct line, in layout order, picks its channel.
+  const lined = new Set(model.links.filter((link) => link.kind === "direct").map((link) => link.to));
+  const places = blocks.map((at) => at.id).filter((id) => lined.has(id));
   const links = [];
   for (const link of model.links) {
     const from = placed.get(link.from);
@@ -193,7 +203,8 @@ export function layoutTree(model, { open = new Set(), width = 0, narrow = isNarr
     if (!from || !to) continue;
     const child = byId.get(link.to);
     const rail = narrow && child.parent === link.from && child.column !== byId.get(link.from).column;
-    const at = { from: link.from, to: link.to, kind: link.kind, shape: rail ? "rail" : link.kind === "direct" ? "step" : "curve", ...(link.unk ? { unk: true } : {}) };
+    const at = { from: link.from, to: link.to, kind: link.kind, shape: rail ? "rail" : link.kind === "direct" ? "step" : "curve", ...(link.unk ? { unk: true } : {}), ...(link.leaving ? { leaving: true } : {}) };
+    if (link.kind === "direct") at.chan = narrow ? NARROW_CHANNEL : CHANNELS[places.indexOf(link.to) % CHANNELS.length];
     at.d = linkPath(at, from, to);
     links.push(at);
   }
@@ -206,15 +217,22 @@ export function linkKey(link) {
   return `${link.from}>${link.to}`;
 }
 
-// A link's look: its kind, and dashed when Kitden does not know that it is on.
+// A link's look: its kind, dashed when Kitden does not know that it is on, and quiet while a change
+// in preview takes it out.
 export function linkClass(link) {
-  return `link ${link.kind}${link.unk ? " unk" : ""}`;
+  return `link ${link.kind}${link.unk ? " unk" : ""}${link.leaving ? " leaving" : ""}`;
+}
+
+// Whether a link is drawn in dashes or dots: one that skips the gateway, a preview, one not known
+// to be on and one that is leaving. A dashed link fades in and out; a solid one draws and undraws.
+export function linkDashed(link) {
+  return link.kind === "direct" || link.kind === "preview" || Boolean(link.unk) || Boolean(link.leaving);
 }
 
 // A link's SVG path between the boxes of its two blocks ({ x, y, w, h }) by its shape.
 export function linkPath(link, from, to) {
   if (link.shape === "rail") return railPath(from, to);
-  return link.shape === "step" ? elbow(from, to) : curve(from, to);
+  return link.shape === "step" ? elbow(from, to, link.chan) : curve(from, to);
 }
 
 // The point at t (0 to 1) of the curve through `points` (de Casteljau).
@@ -332,21 +350,23 @@ export function foldable(model) {
 
 const middle = (block) => block.y + block.h / 2;
 
-// A cubic from the right side of `a` to the left side of `b`.
+// A cubic from the right side of `a` to the left side of `b`, level at both ends: its handles are
+// half the gap long, and never under MIN_HANDLE.
 function curve(a, b) {
   const [x1, y1, x2, y2] = [a.x + a.w, middle(a), b.x, middle(b)];
-  const half = (x1 + x2) / 2;
-  return `M ${x1} ${y1} C ${half} ${y1}, ${half} ${y2}, ${x2} ${y2}`;
+  const handle = Math.max(MIN_HANDLE, Math.abs(x2 - x1) / 2);
+  return `M ${x1} ${y1} C ${x1 + handle} ${y1}, ${x2 - handle} ${y2}, ${x2} ${y2}`;
 }
 
-// An orthogonal elbow with round corners: out of `a`, down (or up) its trunk, and into `b`.
-function elbow(a, b) {
+// Right angles with round corners: out of `a`, right to its channel, down (or up) and into `b`.
+// Level with `b` it is one straight line.
+function elbow(a, b, chan = CHANNELS[0]) {
   const [x1, y1, x2, y2] = [a.x + a.w, middle(a), b.x, middle(b)];
-  const trunk = x1 + TRUNK;
-  const r = Math.min(CORNER, Math.abs(y2 - y1) / 2);
-  if (!r) return `M ${x1} ${y1} H ${x2}`;
+  const turn = x1 + chan;
+  if (Math.abs(y2 - y1) < 1) return `M ${x1} ${y1} H ${x2}`;
+  const r = Math.min(BEND, Math.abs(y2 - y1) / 2);
   const s = Math.sign(y2 - y1);
-  return `M ${x1} ${y1} H ${trunk - r} Q ${trunk} ${y1} ${trunk} ${y1 + s * r} V ${y2 - s * r} Q ${trunk} ${y2} ${trunk + r} ${y2} H ${x2}`;
+  return `M ${x1} ${y1} H ${turn - r} Q ${turn} ${y1} ${turn} ${y1 + s * r} V ${y2 - s * r} Q ${turn} ${y2} ${turn + r} ${y2} H ${x2}`;
 }
 
 // Narrow: down the rail at the parent's left side, then into the child.

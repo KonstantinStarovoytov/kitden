@@ -4,8 +4,8 @@
 // acts on takes the pointer: a wide hit stroke, a hover look and a small × on its middle. The page
 // gives the hooks; the view knows nothing of servers, tools or clients.
 import { button, cutName, el, icon } from "./dom.js";
-import { blockLabel, drawPlan, enterDelays, foldable, LINK_MS, linkClass, linkKey, linkPath, midPoint, unfoldDelays } from "./map.js";
-import { animateTo, CALM, D, IN3, OUT3 } from "./motion.js";
+import { blockLabel, drawPlan, enterDelays, foldable, LINK_MS, linkClass, linkDashed, linkKey, linkPath, midPoint, unfoldDelays } from "./map.js";
+import { animateTo, CALM, D, IN3, OUT3, RETRACT } from "./motion.js";
 
 const SVG = "http://www.w3.org/2000/svg";
 const MOVE_MS = 260; // a block that moves, or a new one that fades in at its place
@@ -20,6 +20,11 @@ const CROSS_MS = 120; // the × fades in
 const CROSS_R = 8; // half the × (16 px): it sits with its middle on the link's
 const GRACE_MS = 240; // the × stays this long after the pointer leaves, so the pointer can reach it
 const HIT_MIN = 0.5; // a link fainter than this takes no pointer
+const DRAW_MS = 260; // a new solid link draws in
+const FADE_IN_MS = 300; // a new dashed link fades in
+const FADE_OUT_MS = 240; // a dashed link that goes fades out
+const UNDRAW_MS = 380; // a solid link that goes draws back to its start
+const BLEND_MS = 300; // a link whose look changes blends from its old dashes to the new
 const NO_LINKS = { canHit: () => false }; // a page that acts on no link
 
 // A part a screen reader skips: the block's label says it already.
@@ -74,6 +79,13 @@ function captionWords(node, name, mark) {
 // A column's caption and a group's caption without Details are words; any other block is a button.
 const isWords = (place) => place.kind === "column" || (place.kind === "group" && !place.details);
 
+// A link's dashes and opacity as they show now. A solid line counts as dashes "8 0", so the gaps
+// open out of it when it turns dashed.
+function dashLook(path) {
+  const { strokeDasharray, strokeOpacity } = getComputedStyle(path);
+  return { strokeDasharray: strokeDasharray === "none" ? "8 0" : strokeDasharray, strokeOpacity };
+}
+
 // Opacity 1 leaves no inline opacity.
 function fade(node, o) {
   const value = o >= 1 ? "" : String(Math.max(0, o));
@@ -95,6 +107,10 @@ function boxOf({ x, y, w, h, s }) {
 // - hold(id, point, { glide }): the block shows at that map point until letGo; letGo(id): it
 //   glides back to its place.
 // - drawIn(key, ms): a link grows from its start. node(idOrKey): a block's node or a link's path.
+// A link between two blocks that stay moves on its own: a new solid one draws in (260 ms), a new
+// dashed one fades in (300 ms); a dashed one that goes fades out (240 ms), a solid one draws back to
+// its start (380 ms); one that changes look (dashed or solid) blends (300 ms). One to or from a block
+// that comes or goes shows as much as the fainter block. Reduced motion and a hidden page land at once.
 // A press on a block opens or folds it when it folds (`onOpen(id)`), then selects it
 // (`onSelect(id)`); "+ Add" beside a column's caption calls `onAdd(column)`. `tile(block)` gives
 // what a block shows before its name.
@@ -128,7 +144,9 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
   const blocks = new Map();
   // Each link: its key, its path, the hit that takes the pointer for it (if the page acts on it),
   // the layout's link, the path drawn, and until when it shows whole while it draws in (`free`).
+  // `exit` is the turn of the exit it runs (0: none), `drawing` the turn of its draw-in.
   const links = new Map();
+  let exits = 0; // the last exit turn given
   let pointed = null; // the key of the link with the hover look and the ×
   let wait = 0; // the timer that ends it
   const moving = new Set(); // the blocks with a move
@@ -246,9 +264,41 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
 
   function unlink(key) {
     const item = links.get(key);
+    item.exit = 0;
     item.path.remove();
     dropHit(item);
     links.delete(key);
+  }
+
+  // A link between two blocks that stay goes: a dashed one fades out, a solid one draws back to its
+  // start, and it is removed by time. It takes no pointer meanwhile.
+  function retire(key) {
+    const item = links.get(key);
+    const { path } = item;
+    const turn = ++exits;
+    item.exit = turn;
+    item.drawing++;
+    dropHit(item);
+    const faint = linkDashed(item.link);
+    const ms = faint ? FADE_OUT_MS : UNDRAW_MS;
+    if (faint) animateTo(path, [{ opacity: Number(path.style.opacity || 1) }, { opacity: 0 }], { dur: ms, ease: "ease-out", fill: "forwards" });
+    else {
+      path.setAttribute("pathLength", "1");
+      path.style.strokeDasharray = "1";
+      animateTo(path, [{ strokeDashoffset: 0 }, { strokeDashoffset: 1 }], { dur: ms, ease: RETRACT, fill: "forwards" });
+    }
+    setTimeout(() => {
+      if (item.exit === turn) unlink(key);
+    }, D(ms));
+  }
+
+  // A link that comes back during its exit is shown whole again at once.
+  function revive(item) {
+    item.exit = 0;
+    item.drawing++;
+    for (const run of item.path.getAnimations ? item.path.getAnimations() : []) run.cancel();
+    item.path.removeAttribute("pathLength");
+    item.path.style.strokeDasharray = "";
   }
 
   // The hover look and the × go at once.
@@ -455,6 +505,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
     performance.mark("kitden:map-start");
     const enters = motion === "enter" && canMove();
     const moves = enters || (motion === "move" && last !== null && canMove());
+    const linksMove = moves && !enters; // links come, go and change look on their own
     const plan = drawPlan(last, layout);
     const before = new Map((last ? last.blocks : []).map((at) => [at.id, at]));
     const after = new Map(layout.blocks.map((at) => [at.id, at]));
@@ -513,21 +564,29 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
     }
 
     const drawsIn = [];
+    const arrives = [];
     const names = new Map(model.blocks.map((block) => [block.id, String(block.name || "")]));
     for (const link of layout.links) {
       const key = linkKey(link);
       let item = links.get(key);
+      if (item && item.exit) revive(item);
       if (!item) {
-        item = { key, path: document.createElementNS(SVG, "path"), hit: null, link, d: "", look: "", free: 0, drawing: 0 };
+        item = { key, path: document.createElementNS(SVG, "path"), hit: null, link, d: "", look: "", free: 0, drawing: 0, exit: 0 };
         svg.append(item.path);
         links.set(key, item);
         if (opened.has(link.to) && before.has(link.from)) drawsIn.push([key, start + D(delays[unfold.get(link.to)] + FADE_MS)]);
+        else if (linksMove && before.has(link.from) && before.has(link.to)) arrives.push(key);
       }
       item.link = link;
       const look = `${linkClass(link)}${lit.has(key) ? " lit" : ""}`;
       if (look !== item.look) {
+        const was = linksMove && item.look ? dashLook(item.path) : null;
         item.path.setAttribute("class", look);
         item.path.classList.toggle("hov", key === pointed);
+        if (was) {
+          const now = dashLook(item.path);
+          if (now.strokeDasharray !== was.strokeDasharray || now.strokeOpacity !== was.strokeOpacity) animateTo(item.path, [was, now], { dur: BLEND_MS, ease: CALM });
+        }
       }
       item.look = look;
       syncHit(item, names);
@@ -537,8 +596,14 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
       if (shownLinks.has(key)) continue;
       // A link to a block that goes stays while it goes, and fades with it.
       const goes = [item.link.from, item.link.to].some((id) => blocks.get(id)?.leaving && blocks.get(id).move);
-      if (goes) item.free = 0;
-      else unlink(key);
+      if (goes) {
+        item.free = 0;
+        continue;
+      }
+      // Between two blocks that stay it goes on its own, by time; else at once.
+      const stay = [item.link.from, item.link.to].every((id) => blocks.has(id) && !blocks.get(id).leaving);
+      if (!linksMove || !stay) unlink(key);
+      else if (!item.exit) retire(key);
     }
     // The hits keep the order of the links, so Tab does.
     let next = null;
@@ -561,6 +626,11 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
     for (const [key, until] of drawsIn) {
       drawIn(key, LINK_MS);
       links.get(key).free = until;
+    }
+    for (const key of arrives) {
+      const { path, link } = links.get(key);
+      if (linkDashed(link)) animateTo(path, [{ opacity: 0 }, { opacity: 1 }], { dur: FADE_IN_MS, ease: CALM });
+      else drawIn(key, DRAW_MS);
     }
     fit(moves);
     const done = run(!moves);
@@ -598,7 +668,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
 
   // A link grows from its start. It shows whole while it draws; its own dashes come back when it
   // ends, by time.
-  function drawIn(key, ms = 260) {
+  function drawIn(key, ms = DRAW_MS) {
     const item = links.get(key);
     const dur = D(ms);
     if (!item || !dur || document.hidden) return Promise.resolve();

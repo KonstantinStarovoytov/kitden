@@ -602,8 +602,14 @@ def test_the_map_says_the_link_is_the_state():
     ):
         assert words in text, words
     assert "ResizeObserver" in script("gateway.js") and "unfoldDelays(" in script("map.js")
-    direct = CSS.split(".link.direct")[1].split("}")[0]
-    assert ".link.direct" in CSS and "var(--lamp-warn)" in direct
+    # A line that skips the gateway is grey dots, amber under the pointer.
+    direct = rule("div.map .link.direct")
+    assert "var(--lamp-off)" in direct and "stroke-dasharray: 1.5 4" in direct
+    assert "stroke-opacity: 0.8" in direct
+    assert "var(--lamp-warn)" in rule("div.map .link.direct.hov, div.map .link.direct.picked")
+    preview = rule("div.map .link.preview")
+    assert "stroke-dasharray: 4 4" in preview and "stroke-opacity: 0.65" in preview
+    assert "stroke-opacity: 0.4" in rule("div.map .link.leaving")
     # A line to a server Kitden does not know to be on is dashed: it does not say "on".
     assert "div.map .link.direct.unk { stroke-dasharray: 3 3; }" in CSS
     assert 'const NOT_KNOWN = "Not known";' in script("gateway.js")

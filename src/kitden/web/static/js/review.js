@@ -585,7 +585,7 @@ export async function checkStale() {
 // The server said `verified`: the button turns green while the page reloads, then the panel
 // leaves at once and the toast offers Undo. From a tool switch, its Details comes back instead,
 // with the switch flipped, and the page behind shows the new state. A preview from the map ends
-// before the page is drawn, so the map shows the block solid and its new link draws once.
+// before the page is drawn, so the map shows the server's block and link where they belong.
 async function showApplied(after, apply, label, previewBody, back) {
   for (const spin of apply.querySelectorAll(".spinner")) spin.remove();
   apply.prepend(checkMark());
