@@ -122,6 +122,23 @@ test('keyFor names a switch by what it switches', () => {
   assert.notEqual(keyFor(first), keyFor({ ...first, params: { item: 'y', scope: 'user' } }));
 });
 
+test('a server moves out to one client: another pick replaces its row', async () => {
+  const out = (client, server = 'files') => ({ action: 'gateway.move_out', targets: [{ client }], params: { server } });
+  assert.equal(keyFor(out('codex')), 'moveout:files');
+  assert.equal(keyFor(out('cursor')), keyFor(out('codex')));
+  assert.notEqual(keyFor(out('codex', 'tracker')), keyFor(out('codex')));
+  await fresh();
+  queue(PREVIEW, previewed('c1'), previewed('c2'));
+  try {
+    await addToTray(out('codex'));
+    await addToTray(out('cursor'));
+    // Two moves of one server into two clients never wait in one tray: the second replaces the first.
+    assert.deepEqual(tray.rows.map((row) => [row.key, row.body.targets[0].client]), [['moveout:files', 'cursor']]);
+  } finally {
+    await cancelTray();
+  }
+});
+
 test("iconFor picks the mockup's icon", () => {
   const icon = (action, params = {}) => iconFor({ action, targets: [], params });
   assert.equal(icon('gateway.remove'), 'x');

@@ -471,14 +471,16 @@ function cardButton({ label, run, body, note = null, primary = false }) {
 }
 
 // A card as the nodes openPanel shows, in the order of every Details card: the kind and Close, the
-// title with the id quiet under it, the facts, one sentence, the actions stacked in the footer in
-// order (`more` waits behind one More button, `after` is a quiet node under them), and the
-// evidence folded last (`technical`, a node from technical(rows)). At most one action is
-// `primary`. Card builders return this plain object, so a test reads its fields without a page.
-export function detailsCard({ kind, title, id = null, facts = [], why = null, actions = [], more = [], after = null, technical: evidence = null }) {
+// title with the id quiet under it, the facts, one sentence, a list (`list`, a node: a server's
+// switches), the actions stacked in the footer in order (`more` waits behind one More button,
+// `after` is a quiet node under them), and the evidence folded last (`technical`, a node from
+// technical(rows)). At most one action is `primary`. Card builders return this plain object, so a
+// test reads its fields without a page.
+export function detailsCard({ kind, title, id = null, facts = [], why = null, list = null, actions = [], more = [], after = null, technical: evidence = null }) {
   const body = el("div", "body");
   if (facts.length) body.append(factsBlock(facts));
   if (why) body.append(el("p", "why", why));
+  if (list) body.append(list);
   const footer = el("footer", "stack");
   footer.append(...actions.map(cardButton));
   if (more.length) footer.append(moreButton(more.map(cardButton)));
@@ -785,7 +787,7 @@ const trayLooks = new WeakMap();
 
 // `node` follows the tray: `data-tray` names its row, and `look(waiting)` draws it now and after
 // every change of the tray (syncTray).
-function followTray(node, key, look) {
+export function followTray(node, key, look) {
   node.dataset.tray = key;
   trayLooks.set(node, look);
   look(inTray(key));

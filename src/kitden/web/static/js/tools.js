@@ -1,7 +1,7 @@
 // Tools of a server in the Kitden gateway: a switch each, for the project picked at the top.
 import { getJson, postJson, query } from "./api.js";
 import { previewButton, switchNode } from "./details.js";
-import { button, el, plural, withFocusKey } from "./dom.js";
+import { button, el, icon, plural, withFocusKey } from "./dom.js";
 import { ALL_PROJECTS, callout, flag, folderName, skeleton } from "./parts.js";
 import { review } from "./review.js";
 import { data, state } from "./store.js";
@@ -13,24 +13,98 @@ export function projectLabel(id) {
   return found ? folderName(found.path) : id;
 }
 
-// The rows of a held server's Details, for the project picked at the top (`where`, its folder
-// name) or for all projects (null): the whole server first, then each tool it lists. A row
-// that differs names what it follows without its own setting: the project around it, or all
-// projects. A tool's hint says whether it reads or writes, from the server or by its name.
+// What a tool says it does, as its row says it: from the server's hint, or "may write" by its
+// name; nothing when neither says.
+const DOES = { reads: "Reads only", writes: "May write", "may write": "May write" };
+// The whole server's quiet line: how many of its tools are on where the list is for.
+const wholeWords = (on, all) => (on ? `${on} of ${all} tools on` : "Every tool is off");
+
+// The rows of a held server's switches, for the project picked at the top (`where`, its folder
+// name) or for all projects (null): the whole server first ("3 of 4 tools on"), then each tool it
+// lists ("Read file · Reads only"). A row that differs names what it follows without its own
+// setting: the project around it, or all projects. A tool's hint says whether it reads or writes,
+// from the server or by its name.
 export function toolRows(answer, where) {
   const place = where || "all projects";
-  const row = (key, tool, name, description, entry) => {
+  const tools = answer.tools || [];
+  const row = (key, tool, name, sub, entry) => {
     const on = entry.state !== "off";
     const what = tool === null ? answer.server : `${tool} of ${answer.server}`;
     const follows = entry.follows || "all projects";
     const hint = tool === null ? null : entry.hint || null;
     const hintFrom = tool === null ? null : entry.hint_from || null;
-    return { key, tool, name, description, on, hint, hintFrom, calls: tool === null ? null : callsText(entry.calls), flag: entry.new ? "New" : null, differs: Boolean(entry.differs), follows, label: `Turn ${on ? "off" : "on"} ${what} in ${place}…` };
+    return { key, tool, name, sub, description: entry.description || null, on, hint, hintFrom, calls: tool === null ? null : callsText(entry.calls), flag: entry.new ? "New" : null, differs: Boolean(entry.differs), follows, label: `Turn ${on ? "off" : "on"} ${what} in ${place}…` };
   };
+  const on = tools.filter((t) => (t.effective ?? t.state) === "on").length;
   return [
-    row("server", null, "Whole server", `Turns every tool of ${answer.server} on or off.`, answer),
-    ...answer.tools.map((t) => row(`tool:${t.name}`, t.name, t.name, t.description, t)),
+    row("server", null, "Whole server", tools.length ? wholeWords(on, tools.length) : null, answer),
+    ...tools.map((t) => row(`tool:${t.name}`, t.name, t.name, [t.title, DOES[t.hint]].filter(Boolean).join(" · ") || null, t)),
   ];
+}
+
+// The head over a server's switches: "Tools · All projects" or "Tools · atlas".
+export const toolsHead = (where) => `Tools · ${where || ALL_PROJECTS}`;
+export const NO_TOOLS = "Kitden does not know its tools yet. Refresh tools asks the server.";
+
+// Over the switches of a server that is off: its tools keep their own switches, but none is
+// offered. Null while it is on.
+export function offNote(answer, where) {
+  if (answer.state !== "off") return null;
+  return el("p", "muted", `${answer.server} is off in ${where || "all projects"}, so none of its tools are offered there.`);
+}
+
+// A server's switches as the mockup lists them (`rows` from toolRows): the whole server first,
+// then each tool. A press adds the row's rule for `project` (null: all projects) to the tray, and
+// a second press on a pending switch takes it out (switchNode). `back(key)` is the Library's way
+// back to its Details after a refusal; `flip` names the switch that has just flipped.
+export function switchList(rows, { server, project, back = () => null, flip = null }) {
+  const list = el("div", "sw-list");
+  for (const row of rows) {
+    const rule = (value) => ({ action: "gateway.rule", targets: [], params: { server, tool: row.tool, state: value, project } });
+    list.append(switchRow(row, rule, back, flip));
+  }
+  return list;
+}
+
+// One row: the name (a tool's in mono, with its "New" flag), its quiet line, its description in two
+// lines at most (so it reads without a pointer; the whole of it in hover text), and under a project
+// with its own rule "Differs from all projects · Use all projects"; then its switch. Its calls
+// wait in hover text.
+function switchRow(row, rule, back, flip) {
+  const node = el("div", row.tool === null ? "sw-row whole" : "sw-row");
+  const text = el("div", "sw-tx");
+  const name = el("span", "sw-name");
+  name.append(el(row.tool === null ? "b" : "code", null, row.name));
+  if (row.flag) name.append(flag({ text: row.flag, level: "info" }));
+  text.append(name);
+  if (row.calls) text.title = row.calls;
+  if (row.sub) {
+    const sub = el("small", null, row.sub);
+    if (row.hintFrom) sub.title = HINT_FROM[row.hintFrom];
+    text.append(sub);
+  }
+  if (row.description) {
+    const about = el("small", "about", row.description);
+    about.title = row.description;
+    text.append(about);
+  }
+  if (row.differs) text.append(differsLine(row, rule(null), back));
+  const toggle = switchNode(row.on, () => review(rule(row.on ? "off" : "on"), { back: back(row.key) }), keyFor(rule(null)), row.label);
+  toggle.dataset.focus = row.key;
+  // Drawn in its new state after Apply all; the thumb slides there once (the resting style is the truth).
+  if (flip === row.key) toggle.classList.add("flipped");
+  node.append(text, toggle);
+  return node;
+}
+
+// A rule of the picked project's own, and the way back to what it follows. The link adds the
+// same row as the switch, so both show it waits.
+function differsLine(row, body, back) {
+  const line = el("small", "differs");
+  const use = previewButton(`Use ${row.follows}`, body, { look: "lnk", back: back(`follow:${row.key}`) });
+  use.dataset.focus = `follow:${row.key}`;
+  line.append(icon("folder", 11), `Differs from ${row.follows} · `, use);
+  return line;
 }
 
 // How often the gateway forwarded a call to a tool and when last: "12 calls · last today 14:02",
@@ -91,7 +165,7 @@ export function toolsSection(server, again, next = {}) {
   const head = el("div", "tools-head");
   const refresh = button("Refresh tools", () => refreshTools(), "btn small ghost");
   refresh.dataset.focus = "tools:refresh";
-  head.append(el("h2", null, `Tools · ${where || ALL_PROJECTS}`), refresh);
+  head.append(el("h2", "sw-head", toolsHead(where)), refresh);
   const list = el("div", "tool-list");
   list.append(skeleton("line", 3));
   section.append(head);
@@ -102,14 +176,12 @@ export function toolsSection(server, again, next = {}) {
   // by itself (details.js syncTray). A refusal draws this Details again with the reason above the
   // list, focus on the control pressed.
   const backTo = (pressed) => ({ queued = false, error = null } = {}) => (queued || !section.isConnected ? null : again({ focus: pressed, error }));
-  // A tool's rule (`value` null follows the project around it, or all projects); one key for every value.
-  const rule = (row, value) => ({ action: "gateway.rule", targets: [], params: { server, tool: row.tool, state: value, project: state.project || null } });
 
   // Strict mode is set for all projects: with a project picked the switch only shows it.
   const strictRow = (answer, flip) => {
-    const row = el("div", "layer tool whole");
-    const middle = el("div");
-    middle.append(el("div", "name", "Strict"), el("div", "why", "Only tools that are on are offered; a new tool waits."));
+    const row = el("div", "sw-row whole");
+    const text = el("div", "sw-tx");
+    text.append(el("b", null, "Strict"), el("small", null, "Only tools that are on are offered; a new tool waits."));
     const body = { action: "gateway.strict", targets: [], params: { server, state: answer.strict ? "off" : "on" } };
     const toggle = switchNode(Boolean(answer.strict), () => review(body, { back: backTo("strict") }), keyFor(body), "Strict: only tools that are on");
     toggle.dataset.focus = "strict";
@@ -118,17 +190,18 @@ export function toolsSection(server, again, next = {}) {
       toggle.disabled = true;
       toggle.title = "Set for all projects";
     }
-    row.append(middle, toggle);
-    const stack = el("div", "stack");
-    stack.append(row);
-    return stack;
+    row.append(text, toggle);
+    const box = el("div", "sw-list");
+    box.append(row);
+    return box;
   };
 
   const draw = (answer, { error = null, flip = null }) => {
     const nodes = [];
     if (error) nodes.push(callout(error, "error"));
     if (answer.problem) nodes.push(callout(answer.problem));
-    if (answer.state === "off") nodes.push(el("p", "muted", `${server} is off in ${where || "all projects"}, so none of its tools are offered there.`));
+    const off = offNote(answer, where);
+    if (off) nodes.push(off);
     nodes.push(strictRow(answer, flip));
     const writing = writingToolsOn(answer.tools);
     if (writing.length) {
@@ -139,40 +212,8 @@ export function toolsSection(server, again, next = {}) {
       line.append(all);
       nodes.push(line);
     }
-    const stack = el("div", "stack");
-    for (const row of toolRows(answer, where)) {
-      const node = el("div", row.tool === null ? "layer tool whole" : "layer tool");
-      if (row.calls) node.title = row.calls;
-      const middle = el("div");
-      const title = el("div", row.tool === null ? "name" : "name mono", row.name);
-      if (row.hintFrom) {
-        const hint = el("span", "muted hint", row.hint);
-        hint.title = HINT_FROM[row.hintFrom];
-        title.append(" ", hint);
-      }
-      if (row.flag) title.append(" ", flag({ text: row.flag, level: "info" }));
-      middle.append(title);
-      if (row.description) {
-        const about = el("div", "why", row.description);
-        about.title = row.description;
-        middle.append(about);
-      }
-      if (row.differs) {
-        const line = el("div", "differs");
-        const follow = previewButton(`Use ${row.follows}`, rule(row, null), { look: "btn small", back: backTo(`follow:${row.key}`) });
-        follow.dataset.focus = `follow:${row.key}`;
-        line.append(flag({ text: `Differs from ${row.follows}`, level: "info" }), follow);
-        middle.append(line);
-      }
-      const toggle = switchNode(row.on, () => review(rule(row, row.on ? "off" : "on"), { back: backTo(row.key) }), keyFor(rule(row, null)), row.label);
-      toggle.dataset.focus = row.key;
-      // Drawn in its new state after Apply all; the thumb slides there once (the resting style is the truth).
-      if (flip === row.key) toggle.classList.add("flipped");
-      node.append(middle, toggle);
-      stack.append(node);
-    }
-    nodes.push(stack);
-    if (!answer.tools.length) nodes.push(el("p", "muted", "Kitden does not know its tools yet. Refresh tools asks the server."));
+    nodes.push(switchList(toolRows(answer, where), { server, project: state.project || null, back: backTo, flip }));
+    if (!answer.tools.length) nodes.push(el("p", "muted", NO_TOOLS));
     return nodes;
   };
 

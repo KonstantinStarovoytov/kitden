@@ -88,12 +88,14 @@ function sorted(value) {
 }
 
 // What a change is about: a second press of the same switch or rule is the same row. A
-// switch is named by what it switches, so on and off share a key.
+// switch is named by what it switches, so on and off share a key. A server moves out of the
+// gateway to one client: a pick of another client replaces the row.
 export function keyFor(body) {
   const { action, targets = [], params = {} } = body;
   if (action === "plugin.enable" || action === "plugin.disable") return `switch:${(targets[0] || {}).item}`;
   if (action === "gateway.rule") return `rule:${params.server}/${params.tool}@${params.project || ""}`;
   if (action === "gateway.strict") return `strict:${params.server}`;
+  if (action === "gateway.move_out") return `moveout:${params.server}`;
   if (action === "project.align") return `align:${params.project}`;
   return JSON.stringify(sorted({ action, targets, params }));
 }

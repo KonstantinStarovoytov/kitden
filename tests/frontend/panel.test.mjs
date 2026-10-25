@@ -247,6 +247,8 @@ test('a held server lists the whole server first, then each tool, for the projec
     ['tool:slow', 'slow', false, true, 'all projects'],
   ]);
   assert.equal(rows[0].name, 'Whole server');
+  // The quiet lines: how many tools are on; a tool that says nothing of itself has none.
+  assert.deepEqual(rows.map((r) => r.sub), ['1 of 2 tools on', null, null]);
   assert.equal(rows[1].label, 'Turn off echo of echo in website…');
   assert.equal(rows[2].label, 'Turn on slow of echo in website…');
   assert.equal(rows[0].label, 'Turn off echo in website…');

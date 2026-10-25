@@ -36,9 +36,10 @@ const asked = [];
 globalThis.fetch = async (url) => { asked.push(url); return { ok: true, status: 200, json: async () => ({}) }; };
 
 const { SETUP_NOTE, clientCard, gatewayCard, heldCard, outsideCard, reported, toolCard, toolState } = await import('../../src/kitden/web/static/js/gateway-details.js');
-const { detailsCard, moveBody, projectChoice } = await import('../../src/kitden/web/static/js/details.js');
-const { cancelTray, tray } = await import('../../src/kitden/web/static/js/tray.js');
+const { detailsCard, moveBody, projectChoice, syncTray } = await import('../../src/kitden/web/static/js/details.js');
+const { cancelTray, onTray, tray } = await import('../../src/kitden/web/static/js/tray.js');
 const { GATEWAY_NOTE } = await import('../../src/kitden/web/static/js/parts.js');
+const { switchList, toolRows } = await import('../../src/kitden/web/static/js/tools.js');
 
 // The words of a node: its own text, then its children's.
 const textOf = (node) => (typeof node === 'string' ? node : node ? `${node.textContent}${node.childNodes.map(textOf).join('')}` : '');
@@ -69,7 +70,7 @@ const PROJECTS = [{ id: 'p1', path: '/w/atlas', own_rules: 1 }, { id: 'p2', path
 test('an outside server offers move, adds and removes, and never reads the map', () => {
   asked.length = 0;
   const card = outsideCard(GITHUB, 'move', [def('g', 'claude_code', { summary: 'https://api.github.example.test/mcp' })], { view: VIEW, clients: FOUND });
-  assert.deepEqual([card.kind, card.title], ['MCP server', 'github']);
+  assert.deepEqual([card.kind, card.title], ['Server', 'github']);
   assert.deepEqual(labels(card), ['Move into the gateway…', '+ Add to Codex…', '+ Add to Cursor…', 'Remove from Claude Code…']);
   assert.deepEqual(card.actions.map((a) => Boolean(a.primary)), [true, false, false, false]);
   // One gateway can take it: the button is the move's own, so it can say "In preview".
@@ -366,44 +367,176 @@ const FILES_HELD = {
   on_count: 3, on_in: 0, projects: 2,
 };
 
-test('a held server holds every server action', () => {
-  const card = heldCard(FILES_HELD, { linked: LINKED, picked: '', folder: '', view: VIEW, clients: FOUND, detail: { strict: false, ...MEDIUM_RULES }, projects: MEDIUM_PROJECTS });
-  assert.deepEqual([card.kind, card.title, card.id], ['MCP server', 'files', 'In the Kitden gateway']);
-  assert.deepEqual(facts(card), [['Kind', 'Local · runs on this Mac'], ['State', 'On'], ['Tools', '3 of 4 on'], ['Clients', '2 clients'], ['Projects', '2 projects have their own rules']]);
-  assert.equal(card.why, 'Claude Code and Codex reach it through the Kitden gateway by the shared rule. These switches also apply in folders Kitden does not know.');
-  assert.deepEqual(labels(card), ['Turn off for all projects…', 'Turn off in one project…', 'Turn strict mode on…', 'Turn off every writing tool…', 'Refresh tools']);
-  assert.deepEqual(card.actions.map((a) => Boolean(a.primary)), [true, false, false, false, false]);
-  assert.deepEqual(card.actions[0].body, { action: 'gateway.rule', targets: [], params: { server: 'files', tool: null, state: 'off', project: null } });
-  assert.deepEqual(card.actions[2].body, { action: 'gateway.strict', targets: [], params: { server: 'files', state: 'on' } });
-  assert.deepEqual(card.actions[3].body, { action: 'gateway.rules', targets: [], params: { server: 'files', tools: ['write_file'], state: 'off', project: null } });
-  assert.deepEqual(card.more.map((a) => a.label), ['Remove from the Kitden gateway…', 'Put back in Claude Code…', 'Put back in Codex…', 'Put back in Cursor…', 'Move secrets to the Keychain…']);
-  assert.deepEqual(card.more[0].body, { action: 'gateway.remove', targets: [], params: { server: 'files' } });
+// The server's /api/gateway/tools answer for files with All projects picked: read_file has a
+// title and reads, write_file writes, delete_file may write by its name, search_files says nothing.
+const answerTool = (name, fields = {}) => ({ name, title: null, hint: 'unknown', hint_from: null, description: '', calls: null, new: false, state: 'on', effective: 'on', differs: false, follows: null, origin: 'default', origin_from: null, ...fields });
+const FILES_TOOLS = {
+  server: 'files', state: 'on', differs: false, follows: null, origin: 'default', origin_from: null, shared: 'on', strict: false, problem: null,
+  projects: MEDIUM_RULES.projects,
+  tools: [
+    answerTool('read_file', { title: 'Read file', hint: 'reads', hint_from: 'server', description: 'Reads one file.' }),
+    answerTool('write_file', { hint: 'writes', hint_from: 'server' }),
+    answerTool('delete_file', { hint: 'may write', hint_from: 'name', state: 'off', effective: 'off', origin: 'global' }),
+    answerTool('search_files'),
+  ],
+};
+const held = (server, extra = {}) => heldCard(server, { linked: LINKED, picked: '', folder: '', view: VIEW, clients: FOUND, detail: FILES_TOOLS, projects: MEDIUM_PROJECTS, ...extra });
+// A card's tool list: its head, any quiet line, and each row as [look, name, its lines…, switch on].
+const listOf = (card) => card.list.children.find((node) => node.className === 'sw-list');
+const listRows = (card) => listOf(card).children.map((row) => [row.className, ...row.children[0].children.map(textOf), row.children[1].attributes['aria-checked']]);
+const listLines = (card) => card.list.children.filter((node) => node.className !== 'sw-list').map(textOf);
+
+// A press, and what it set off.
+const click = async (node) => {
+  for (const listener of node.listeners.click || []) listener({});
+  await new Promise((resolve) => setTimeout(resolve, 0));
+};
+// A stand-in server for the tray (a batch preview answers one row per request; `sent` keeps every
+// address), and the controls under `nodes()` following the tray, as initPanel makes them.
+async function withTray(nodes, run) {
+  const saved = { document: globalThis.document, fetch: globalThis.fetch };
+  const sent = [];
+  const all = (node) => (node && typeof node === 'object' ? [node, ...node.childNodes.flatMap(all)] : []);
+  const drawer = { querySelectorAll: (selector) => (selector === '[data-tray]' ? nodes().flatMap(all).filter((node) => node.dataset && node.dataset.tray) : []) };
+  globalThis.document = { ...saved.document, querySelector: (selector) => (selector === '#drawer' ? drawer : null) };
+  globalThis.fetch = async (url, options = {}) => {
+    sent.push(url);
+    if (url !== '/api/batch/preview') return Response.json({});
+    const { requests } = JSON.parse(options.body);
+    return Response.json({
+      id: `c${sent.length}`, action: 'batch', state: 'previewed', error: null, undo_note: null, steps: requests.map(() => ({ client: 'kitden', name: 'files' })),
+      rows: requests.map((r, at) => ({ id: r.id, kind: r.kind, title: r.title, detail: '', project: null, steps: [at], after: [] })),
+    });
+  };
+  const stop = onTray(syncTray);
+  try {
+    await run(nodes(), sent);
+  } finally {
+    await cancelTray();
+    stop();
+    Object.assign(globalThis, saved);
+  }
+}
+
+test('the server panel lists its tools with a switch each and a Whole server row', () => {
+  const card = held(FILES_HELD);
+  assert.deepEqual([card.kind, card.title, card.id], ['Server', 'files', 'Local · in the Kitden gateway']);
+  assert.equal(held({ ...FILES_HELD, kind: 'remote' }).id, 'Remote · in the Kitden gateway');
+  assert.deepEqual(facts(card), [['Tools', '3 of 4 on'], ['Comes from', 'All projects'], ['Clients', '2 clients']]);
+  assert.equal(card.why, undefined);
+  assert.deepEqual(listLines(card), ['Tools · All projects']);
+  assert.deepEqual(listRows(card), [
+    ['sw-row whole', 'Whole server', '3 of 4 tools on', 'true'],
+    ['sw-row', 'read_file', 'Read file · Reads only', 'true'],
+    ['sw-row', 'write_file', 'May write', 'true'],
+    ['sw-row', 'delete_file', 'May write', 'false'],
+    // The server says nothing of what search_files does: no word.
+    ['sw-row', 'search_files', 'true'],
+  ]);
+  // The tool's name is mono, where its word comes from waits in hover text, and its description
+  // waits in its own panel.
+  const read = listOf(card).children[1].children[0];
+  assert.deepEqual([read.children[0].children[0].tag, read.children[1].title, read.children.length], ['code', 'from the server', 2]);
+  // Each switch adds the rule for all projects; the list sits in the body, under the facts.
+  const [, body] = detailsCard(card);
+  assert.deepEqual(body.children.map((node) => node.className), ['facts', 'tools']);
+  // A server that is off: every tool is off, and the list says why the tools still show a state.
+  const allOff = { ...FILES_TOOLS, state: 'off', tools: FILES_TOOLS.tools.map((t) => ({ ...t, effective: 'off', why: 'server_off' })) };
+  const off = held({ ...FILES_HELD, state: 'off', on_count: 0 }, { detail: allOff });
+  assert.deepEqual(facts(off)[0], ['Tools', '0 of 4 on']);
+  assert.deepEqual(listRows(off)[0], ['sw-row whole', 'Whole server', 'Every tool is off', 'false']);
+  assert.deepEqual(listLines(off), ['Tools · All projects', 'files is off in all projects, so none of its tools are offered there.']);
+  // Before Kitden knows its tools: the facts say so and the list asks for a refresh.
+  const unknown = held({ ...FILES_HELD, tool_list: [], on_count: 0, tools: null }, { detail: { ...FILES_TOOLS, tools: [] } });
+  assert.deepEqual(facts(unknown)[0], ['Tools', 'Not known yet']);
+  assert.deepEqual(listRows(unknown), [['sw-row whole', 'Whole server', 'true']]);
+  assert.deepEqual(listLines(unknown).at(-1), 'Kitden does not know its tools yet. Refresh tools asks the server.');
+  // Without the server's answer there is no list to draw; the card says it could not load.
+  assert.equal(held(FILES_HELD, { detail: {} }).list, null);
+  // The Library lists the same rows, and keeps a tool's description, in two lines at most.
+  const library = switchList(toolRows(FILES_TOOLS, null), { server: 'files', project: null });
+  assert.deepEqual(library.children[1].children[0].children.map(textOf), ['read_file', 'Read file · Reads only', 'Reads one file.']);
+});
+
+test('a tool with its own rule in this project offers Use all projects', async () => {
+  // In atlas: files has a rule of its own, write_file is off there; in web it follows atlas.
+  const atlas = {
+    ...FILES_TOOLS, differs: true, origin: 'project',
+    tools: FILES_TOOLS.tools.map((t) => (t.name === 'write_file' ? { ...t, state: 'off', effective: 'off', differs: true, origin: 'project' } : t)),
+  };
+  const card = held({ ...FILES_HELD, origin: 'project', on_count: 2 }, { picked: 'atlas', folder: 'atlas', detail: atlas });
+  assert.deepEqual(facts(card)[1], ['Comes from', 'This project · atlas']);
+  assert.equal(card.facts[1].accent, true);
+  assert.deepEqual(listLines(card), ['Tools · atlas']);
+  // Only the tool's row says it differs; the server's own rule goes back under More.
+  assert.deepEqual(listRows(card).slice(0, 3), [
+    ['sw-row whole', 'Whole server', '2 of 4 tools on', 'true'],
+    ['sw-row', 'read_file', 'Read file · Reads only', 'true'],
+    ['sw-row', 'write_file', 'May write', 'Differs from all projects · Use all projects', 'false'],
+  ]);
+  assert.equal(card.more[0].label, 'Use the shared rule…');
+  const web = held({ ...FILES_HELD, on_count: 2 }, { picked: 'web', folder: 'web', detail: { ...atlas, differs: false, origin: 'parent', tools: atlas.tools.map((t) => (t.differs ? { ...t, follows: 'atlas' } : t)) } });
+  assert.equal(listRows(web)[2][3], 'Differs from atlas · Use atlas');
+  // A press on it adds the rule back to all projects for this project, and the switch rests pending.
+  await withTray(() => [card.list], async () => {
+    const row = listOf(card).children[2];
+    const use = row.children[0].children[2].children.at(-1);
+    await click(use);
+    assert.deepEqual(tray.rows.map((r) => r.body), [{ action: 'gateway.rule', targets: [], params: { server: 'files', tool: 'write_file', state: null, project: 'atlas' } }]);
+    assert.deepEqual([textOf(use), use.attributes['aria-disabled'], row.children[1].className], ['In preview', 'true', 'switch pending']);
+  });
+});
+
+test('a tool switch pressed twice leaves the tray as it was', async () => {
+  const card = held(FILES_HELD);
+  await withTray(() => [card.list], async (nodes, sent) => {
+    const toggle = listOf(card).children[2].children[1];
+    assert.deepEqual([toggle.className, toggle.attributes['aria-label']], ['switch', 'Turn off write_file of files in all projects…']);
+    await click(toggle);
+    assert.deepEqual(tray.rows.map((r) => [r.key, r.body.params.state]), [['rule:files/write_file@', 'off']]);
+    assert.deepEqual([toggle.className, toggle.attributes['aria-checked'], toggle.attributes['aria-label']], ['switch pending', 'true', 'Turn off write_file of files in all projects… (in preview)']);
+    // The second press takes its row out: the tray is empty, the server forgets the preview, and
+    // the switch is back as it was.
+    await click(toggle);
+    assert.deepEqual(tray.rows, []);
+    assert.ok(sent.some((url) => url.endsWith('/cancel')), sent.join(' '));
+    assert.deepEqual([toggle.className, toggle.attributes['aria-checked'], toggle.attributes['aria-label']], ['switch', 'true', 'Turn off write_file of files in all projects…']);
+    // The Whole server switch is the server's rule for all projects.
+    await click(listOf(card).children[0].children[1]);
+    assert.deepEqual(tray.rows.map((r) => r.body), [{ action: 'gateway.rule', targets: [], params: { server: 'files', tool: null, state: 'off', project: null } }]);
+  });
+});
+
+test("every action of today's server panel is still there, under More", () => {
+  const card = held(FILES_HELD, { detail: { ...FILES_TOOLS, ...MEDIUM_RULES } });
+  // The panel's own button steps to the client choice; nothing else stands beside it.
+  assert.deepEqual(card.actions.map((a) => [a.label, typeof a.run, Boolean(a.primary)]), [['Move out of the gateway…', 'function', false]]);
+  assert.deepEqual(card.more.map((a) => a.label), [
+    'Turn off in one project…', 'Turn strict mode on…', 'Turn off every writing tool…', 'Refresh tools',
+    'Remove from the Kitden gateway…', 'Put back in Claude Code…', 'Put back in Codex…', 'Put back in Cursor…', 'Move secrets to the Keychain…',
+  ]);
+  const body = (label) => card.more.find((a) => a.label === label).body;
+  assert.deepEqual(body('Turn strict mode on…'), { action: 'gateway.strict', targets: [], params: { server: 'files', state: 'on' } });
+  assert.deepEqual(body('Turn off every writing tool…'), { action: 'gateway.rules', targets: [], params: { server: 'files', tools: ['write_file'], state: 'off', project: null } });
+  assert.deepEqual(body('Remove from the Kitden gateway…'), { action: 'gateway.remove', targets: [], params: { server: 'files' } });
+  assert.deepEqual(body('Put back in Codex…'), { action: 'gateway.put_back', targets: [{ client: 'codex' }], params: { server: 'files' } });
+  assert.deepEqual(body('Move secrets to the Keychain…'), { action: 'gateway.keychain', targets: [], params: { server: 'files' } });
   // Claude Code and Codex reach files through the Kitden gateway: the Library has its row.
   assert.ok(textOf(card.after).includes('Compare across clients'));
   // Every project has the server on: "in one project" offers each of them.
-  const choosing = heldCard(FILES_HELD, { linked: LINKED, picked: '', folder: '', view: null, clients: FOUND, detail: { strict: false, ...MEDIUM_RULES }, projects: MEDIUM_PROJECTS, choosing: true });
+  const choosing = held(FILES_HELD, { view: null, detail: { ...FILES_TOOLS, ...MEDIUM_RULES }, choosing: true });
   assert.equal(choosing.after.childNodes.length, MEDIUM_PROJECTS.length);
-});
-
-test("a held server off in a project offers its parent's rule and says strict mode", () => {
+  // In a project with a rule of its own: its parent's rule back, and the rule for all projects.
   const off = { ...FILES_HELD, state: 'off', origin: 'project', on_count: 0, projects: 1 };
   const rules = rulesFor({ a: 'on', m: 'on', w: 'on' }, { server: { w: 'off' } });
-  const card = heldCard(off, { linked: LINKED, picked: 'w', folder: 'web', view: VIEW, clients: FOUND, detail: { strict: true, follows: 'atlas', ...rules }, projects: CHOICE });
-  assert.deepEqual(facts(card).slice(1, 3), [['State', 'Off in this project'], ['Tools', '0 of 4 on']]);
-  assert.deepEqual(facts(card).at(-1), ['Projects', '1 project has its own rules']);
-  assert.equal(card.why, 'It is off in web, so no client can call its tools. Strict: a new tool waits until you turn it on.');
+  const web = held(off, { picked: 'w', folder: 'web', detail: { ...FILES_TOOLS, state: 'off', strict: true, follows: 'atlas', ...rules }, projects: CHOICE });
   // While it is off no writing tool can be called: nothing to turn off.
-  assert.deepEqual(labels(card), ["Use atlas's rule…", 'Turn off for all projects…', 'Turn on in one project…', 'Turn strict mode off…', 'Refresh tools']);
-  assert.deepEqual(card.actions[0].body, { action: 'gateway.rule', targets: [], params: { server: 'files', tool: null, state: null, project: 'w' } });
-  // With All projects, a server off by the shared rule but on in some says how many.
-  const some = rulesFor({ a: 'on', m: 'on', w: 'on' }, { shared: 'off', server: { a: 'on', m: 'off', w: 'on' } });
-  const shared = heldCard({ ...FILES_HELD, state: 'off', origin: 'global', on_in: 2, tool_list: [], tools: null }, { linked: LINKED, picked: '', folder: '', view: VIEW, clients: FOUND, detail: { strict: false, ...some }, projects: CHOICE });
-  assert.deepEqual(facts(shared).slice(1, 3), [['State', 'On in 2 projects'], ['Tools', 'Not known yet']]);
-  assert.equal(shared.why, 'It is off by the shared rule, so no client can call its tools. 2 projects decide otherwise. These switches also apply in folders Kitden does not know.');
-  assert.deepEqual(labels(shared).slice(0, 2), ['Turn on for all projects…', 'Turn on in one project…']);
-  // Without each project's rules there is no choice to offer.
-  const unread = heldCard(FILES_HELD, { linked: LINKED, picked: '', folder: '', view: VIEW, clients: FOUND, detail: {}, projects: CHOICE });
-  assert.ok(!labels(unread).includes('Turn off in one project…'));
+  assert.deepEqual(web.more.slice(0, 5).map((a) => a.label), ["Use atlas's rule…", 'Turn off for all projects…', 'Turn on in one project…', 'Turn strict mode off…', 'Refresh tools']);
+  assert.deepEqual(web.more[0].body, { action: 'gateway.rule', targets: [], params: { server: 'files', tool: null, state: null, project: 'w' } });
+  assert.deepEqual(web.more[1].body, { action: 'gateway.rule', targets: [], params: { server: 'files', tool: null, state: 'off', project: null } });
+  // No client Kitden can write: no move out; without each project's rules, no choice.
+  const alone = held(FILES_HELD, { clients: [], detail: { ...FILES_TOOLS, projects: undefined } });
+  assert.deepEqual([alone.actions, alone.more.map((a) => a.label).includes('Turn off in one project…')], [[], false]);
 });
 
 // The column's choice offers projects by folder name, never All projects.
@@ -537,7 +670,7 @@ async function onGatewayPage(reply, run) {
   const querySelector = (selector) => (selector === '#drawer .body' ? page['#drawer'].children.find((node) => node.className.split(' ').includes('body')) : page[selector] ?? null);
   globalThis.document = { ...saved.document, activeElement: null, body: {}, documentElement: { classList: { remove() {} } }, querySelector, querySelectorAll: () => [], addEventListener() {} };
   globalThis.matchMedia = (query) => ({ matches: query.includes('min-width'), addEventListener() {} });
-  globalThis.fetch = async (url) => reply(url);
+  globalThis.fetch = async (url, options) => reply(url, options);
   Object.assign(data, { gateway: VIEW, setupServer: SETUP, clients: CLIENTS, projects: [] });
   data.scope.gateway = state.project;
   state.view = 'gateway';
@@ -570,7 +703,7 @@ test('a held server opens on its skeleton and fills in; drawn again it shows no 
     // The panel opens at once on the skeleton of its kind, while the rules are read.
     const first = showHeld('files');
     assert.equal(isSkeleton(drawer), true);
-    assert.equal(drawer.children[0].children[0].children[0].textContent, 'MCP server');
+    assert.equal(drawer.children[0].children[0].children[0].textContent, 'Server');
     await first;
     // The read is in, but the skeleton stays its 160 ms; then the card replaces it.
     assert.equal(isSkeleton(drawer), true);
@@ -587,5 +720,68 @@ test('a held server opens on its skeleton and fills in; drawn again it shows no 
     assert.equal(isSkeleton(drawer), false);
     assert.notEqual(drawer.children[0], shown);
     assert.equal(drawer.children[0].children[1].textContent, 'files');
+  });
+});
+
+test('Move out steps to a client choice and a pick adds one move-out row', async () => {
+  // The server's rules, then a batch preview with one row per request.
+  const reply = (url, options = {}) => {
+    if (url === '/api/batch/preview') {
+      const { requests } = JSON.parse(options.body);
+      return Response.json({
+        id: 'c1', action: 'batch', state: 'previewed', error: null, undo_note: null, steps: [{ client: 'codex', name: 'files' }],
+        rows: requests.map((r, at) => ({ id: r.id, kind: r.kind, title: r.title, detail: '', project: null, steps: [at], after: [] })),
+      });
+    }
+    return Response.json(url.startsWith('/api/gateway/tools') ? FILES_TOOLS : {});
+  };
+  const view = { ...VIEW, gateways: [{ ...KITDEN, servers: [FILES_HELD] }] };
+  await onGatewayPage(reply, async (drawer) => {
+    data.gateway = view;
+    data.scope.gateway = state.project;
+    const all = (node) => (node && typeof node === 'object' ? [node, ...node.childNodes.flatMap(all)] : []);
+    drawer.querySelectorAll = (selector) => (selector === '[data-tray]' ? all(drawer).filter((node) => node.dataset && node.dataset.tray) : []);
+    const stop = onTray(syncTray);
+    try {
+      await showHeld('files');
+      await wait(400);
+      const move = all(drawer).find((node) => node.dataset.focus === 'action:Move out of the gateway…');
+      await click(move);
+      await wait(50);
+      // The next step in the panel: Back, where it came from, Close, and the question.
+      const [head, body, foot] = drawer.children;
+      const [top, title] = head.children;
+      assert.deepEqual(top.children.map((node) => node.attributes['aria-label'] || textOf(node)), ['Back', 'Server · files', 'Close']);
+      assert.equal(textOf(title), 'Move files out of the gateway');
+      const [say, picks] = body.children;
+      assert.equal(textOf(say), 'Pick the client that keeps it.');
+      // One row each: the client's tile, its name over whether it uses the gateway, and the radio.
+      assert.deepEqual(picks.children.map((node) => node.children.map((part) => part.className.split(' ')[0])), Array(3).fill(['client-mark', 'pk-tx', 'radio']));
+      assert.deepEqual(picks.children.map((node) => textOf(node.children[1])), ['Claude CodeUses the gateway now', 'CodexUses the gateway now', 'CursorNot connected to the gateway']);
+      assert.equal(picks.children[2].attributes['aria-label'], 'Cursor, Not connected to the gateway');
+      assert.equal(textOf(foot), "The other clients lose files's tools.");
+      assert.deepEqual(panelState.current, { type: 'moveout', name: 'files' });
+      // A pick adds the move at once; its row marks it picked.
+      const [, codex, cursor] = picks.children;
+      await click(codex);
+      const out = (client) => ({ action: 'gateway.move_out', targets: [{ client }], params: { server: 'files' } });
+      assert.deepEqual(tray.rows.map((r) => r.body), [out('codex')]);
+      assert.deepEqual(picks.children.map((node) => node.attributes['aria-pressed']), ['false', 'true', 'false']);
+      // Another pick replaces it: one server moves out to one client.
+      await click(cursor);
+      assert.deepEqual(tray.rows.map((r) => r.body), [out('cursor')]);
+      assert.deepEqual(picks.children.map((node) => node.className), ['pick', 'pick', 'pick on']);
+      // A second press on the picked client takes its row out.
+      await click(cursor);
+      assert.deepEqual(tray.rows, []);
+      // Back steps to the server's panel.
+      await click(top.children[0]);
+      await wait(50);
+      assert.equal(textOf(drawer.children[0].children[1]), 'files');
+      assert.deepEqual(panelState.current, { type: 'held', name: 'files' });
+    } finally {
+      stop();
+      await cancelTray();
+    }
   });
 });

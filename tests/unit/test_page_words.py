@@ -167,7 +167,7 @@ def test_the_page_hint_line_has_its_own_class_and_the_tool_word_stays_in_its_row
     assert 'class="hint-line" id="hint"' in INDEX
     assert not re.search(r"^\.hint[ ,{]", CSS, re.MULTILINE)
     assert "position: absolute" in rule(".hint-line")
-    assert "position" not in rule(".layer.tool .hint")
+    assert "position" not in rule(".sw-tx small")
     for selectors, body in re.findall(r"^([^{}\n]*\.hint)\s*\{([^}]*)\}", CSS, re.MULTILINE):
         assert "position" not in body, selectors
 
@@ -396,8 +396,11 @@ def test_checks_and_radios_follow_the_mockup():
     assert "background: var(--route)" in picked and "inset 0 0 0 3px var(--panel)" in picked
     # The unticked edge is --lamp-off, which keeps 3:1 (test_contrast.py); --link is for map lines.
     assert "--link" not in chk + radio
-    # The picker row's own box waits for the tool picker; only the ticked looks are here.
-    assert not re.search(r"^\.pick( |:)", CSS, re.MULTILINE)
+    # A picker row (the move-out step's clients) is framed, and takes the accent once picked.
+    row = rule(".pick")
+    assert "padding: 9px 10px" in row and "border-radius: 8px" in row
+    picked_row = rule(".pick.on")
+    assert "background: var(--route-soft)" in picked_row and "var(--route)" in picked_row
     assert "accent-color" not in CSS
     # A real checkbox keeps its input for the keys; only its box is drawn. Add missing uses it too.
     assert "checkBox(" in script("review.js") and 'type = "checkbox"' not in script("review.js")
@@ -1419,7 +1422,7 @@ def test_a_held_server_lists_its_tools_with_a_switch_each():
     code = panel()
     for words in (
         '"Whole server"',
-        "`Differs from ${row.follows}`",
+        "`Differs from ${row.follows} · `",
         "`Use ${row.follows}`",
         '"Refresh tools"',
         "ALL_PROJECTS",
@@ -1453,7 +1456,7 @@ def test_tool_list_reads_again_and_keeps_focus_after_a_refresh_or_an_undo():
     # drawer keeps its old content, so "connected" alone would reopen it.
     assert "if (isPanelOpen() && tools && tools.section.isConnected) {" in code
     # A tool's description wraps to two lines, so it can be read without a pointer.
-    rule = CSS.split(".layer.tool .why {")[1].split("}")[0]
+    rule = CSS.split(".sw-tx small.about {")[1].split("}")[0]
     assert "-webkit-line-clamp: 2" in rule and "nowrap" not in rule
 
 
@@ -1521,7 +1524,7 @@ def test_add_missing_and_a_refused_list_go_back_to_details():
     # again (details.test.mjs tests keepFrom and backToDetails).
     assert "keepFrom(" in details
     assert "keepFrom(draw, nodes, read)" in gw()
-    assert "() => drawHeld(name, detail, { choosing }), () => showHeld(name))" in gw()
+    assert "() => drawHeld(name, detail, { choosing }), () => showHeld(name), step)" in gw()
     assert "() => showTool(serverName, name))" in gw()
     for key in ("`offer:", '"move"', "`add:", '"add:form"', "`held:", '"more"', '"commands"'):
         assert key in panel() + script("offer.js"), key
@@ -1619,15 +1622,9 @@ def test_tool_and_server_details_say_what_they_know():
         "is off ${place}, so none of its tools can be called.${others}`",
         '"No client uses the Kitden gateway yet."',
         "`Open ${server.name}`",
-        '"In the Kitden gateway"',
-        '"Local · runs on this Mac"',
         '"Not known yet"',
-        "reach it through the Kitden gateway ${place}.${others}`",
-        "`It is off ${place}, so no client can call its tools.${others}`",
         '"by the shared rule"',
         '` ${plural(k, "project decides", "projects decide")} otherwise.`',
-        '"These switches also apply in folders Kitden does not know."',
-        '"Strict: a new tool waits until you turn it on."',
         '"Turn strict mode on…"',
         '"Turn strict mode off…"',
         '"Turn off every writing tool…"',
@@ -1647,6 +1644,37 @@ def test_tool_and_server_details_say_what_they_know():
     assert '"setup_server.enable"' in parts.split("export const PLACE_IN_TITLE")[1].split("\n")[0]
     # The calls fact, in the spec's words.
     assert '`${plural(calls.count, "call", "calls")} · last ${day} ${time}`' in panel()
+
+
+def test_the_server_panel_says_the_mockups_words():
+    # The server panel of the mockup (gateway-notes 3.3, 4.2): a list of switches, Move out, and
+    # every other action under More (D18). No sign-in words (D23).
+    text, tools = gw(), script("tools.js")
+    for words in (
+        'server: "Server"',
+        "· in the Kitden gateway`",
+        '"Move out of the gateway…"',
+        "`Server · ${name}`",
+        "`Move ${name} out of the gateway`",
+        '"Pick the client that keeps it."',
+        '"Uses the gateway now"',
+        '"Not connected to the gateway"',
+        "`The other clients lose ${name}'s tools.`",
+    ):
+        assert words in text, words
+    for words in (
+        "`${on} of ${all} tools on`",
+        '"Every tool is off"',
+        'reads: "Reads only"',
+        'writes: "May write"',
+        "`Differs from ${row.follows} · `",
+        "`Use ${row.follows}`",
+        "Tools · ${where || ALL_PROJECTS}",
+    ):
+        assert words in tools, words
+    assert "Sign in" not in text and "Signed in" not in text
+    # A server moves out to one client: a second pick replaces the first row.
+    assert "`moveout:${params.server}`" in script("tray.js")
 
 
 def test_connect_and_disconnect_say_kitden():

@@ -19,6 +19,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Details float beside the map:** on Gateway, Library and Changes, Details float over the right
   of the page as in the mockup; the page keeps its width and the map stays wide. Another block's
   Details swap in place through a quiet skeleton.
+- **Server panel:** a server's Details on the Gateway list its tools with a switch each and a
+  Whole server switch, as in the mockup. "Move out of the gateway…" picks the client that keeps
+  the server; its other actions wait under More.
 - **Preview tray:** every change, from a switch in Details to a drag on the map, waits in one tray
   at the bottom left. Apply all writes them as one change, all or nothing, and Undo all takes them
   back. "Show changes" opens one row's full review.
