@@ -16,6 +16,7 @@ const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/d
 const { offersSwitch, ruleBody } = await import('../../src/kitden/web/static/js/gateway-details.js');
 const { blockLabel, findChip, findIn, isNarrow, keepOpen, layoutTree, linkClass, pressOpen, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
 const { kitdenClients } = await import('../../src/kitden/web/static/js/parts.js');
+const { CALM } = await import('../../src/kitden/web/static/js/motion.js');
 const { data, state, viewMode } = await import('../../src/kitden/web/static/js/store.js');
 const { addToTray, applyTray, cancelTray, endApplied, keyFor, takeOut, tray } = await import('../../src/kitden/web/static/js/tray.js');
 
@@ -1207,7 +1208,7 @@ test('a drag opens the slot "Drop to add" in its group, and its line follows it'
 // and the dock are where `covers` says (window rects by selector), and the view records what the
 // drag asks of it. Each redraw draws the tree again with the tray and the drag, as gateway.js does.
 // The map's area is at the window's top left, so a map point is a window point.
-function dragMap({ covers = {}, id = 'outside:move:github', view: shown = MEDIUM_VIEW } = {}) {
+function dragMap({ covers = {}, id = 'outside:move:github', view: shown = MEDIUM_VIEW, opts = OPTS } = {}) {
   const heard = {};
   const asked = [];
   const captured = [];
@@ -1227,9 +1228,9 @@ function dragMap({ covers = {}, id = 'outside:move:github', view: shown = MEDIUM
     unlightTarget: () => asked.push(['unlight']),
     glance: (set) => asked.push(['glance', set ? [...set] : null]),
     tip: (text, how = {}) => asked.push(['tip', text, how]),
-    untip() {},
-    wire: (from, to) => asked.push(['wire', from, to]),
-    unwire: () => asked.push(['unwire']),
+    untip: () => asked.push(['untip']),
+    wire: (from, to, how) => asked.push(['wire', from, to, ...(how ? [how] : [])]),
+    unwire: (how) => asked.push(['unwire', ...(how ? [how] : [])]),
     box: { isConnected: true, classList: { toggle() {}, remove() {} } },
     area: { getBoundingClientRect: () => ({ left: 0, top: 0 }) },
   };
@@ -1237,7 +1238,7 @@ function dragMap({ covers = {}, id = 'outside:move:github', view: shown = MEDIUM
   globalThis.document.documentElement.classList = { add: (name) => grabbing.add(name), remove: (name) => grabbing.delete(name) };
   const map = { asked, captured, heard, view, grabbing, node, tree: null, layout: null };
   const redraw = () => {
-    map.tree = gatewayTree(shown, { ...OPTS, rows: rowsOnMap(tray), ...movingOn() });
+    map.tree = gatewayTree(shown, { ...opts, rows: rowsOnMap(tray), ...movingOn() });
     map.layout = layoutTree(map.tree, { open: new Set(), narrow: false });
     placeMoved({ view, model: map.tree, layout: map.layout, redraw });
   };
@@ -1666,6 +1667,172 @@ test('a client that has the name refuses before the drop, with the reason, and s
     // Cursor is not on this Mac.
     const away = CLIENTS.map((c) => (c.id === 'cursor' ? { ...c, status: 'missing' } : c));
     await refused('held:kitden:tracker', away, 'Cursor is not on this Mac.');
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null, clients: null });
+    await freshTray();
+  }
+});
+
+// A free client's wire to the gateway (Task 4.7, gateway-notes 6.3).
+const wires = (map) => map.asked.filter(([what]) => what === 'wire');
+const unwires = (map) => map.asked.filter(([what]) => what === 'unwire');
+
+test('a free client draws a wire to the pointer and the gateway lights under it', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW, clients: CLIENTS });
+  try {
+    const map = dragMap({ id: 'client:cursor' });
+    // Cursor can be connected and nothing waits: it can be dragged (the grab cursor).
+    assert.deepEqual([block(map.tree, 'client:cursor').connect, block(map.tree, 'client:cursor').drags], [CONNECT_CURSOR, true]);
+    // An entry that is off, which Kitden can turn on, connects by turning it on.
+    const off = gatewayTree(MEDIUM_VIEW, { ...OPTS, setup: [entry('claude_code', 'added'), entry('codex', 'added', { enabled: false }), entry('cursor', 'missing')] });
+    assert.deepEqual(block(off, 'client:codex').connect, { action: 'setup_server.enable', targets: [{ client: 'codex' }], params: {} });
+    map.press();
+    assert.deepEqual(map.captured, [7]);
+    const [x, y] = [map.home.x + 40, map.home.y + 10];
+    map.move(x, y);
+    // The block stays where it is; Cursor and the gateway light, with no links.
+    assert.ok(!map.asked.some(([what]) => what === 'hold'));
+    assert.deepEqual(map.asked.find(([what]) => what === 'glance'), ['glance', ['client:cursor', 'gateway:kitden']]);
+    // A plain wire from its right port to the pointer; the tip asks for the gateway, by the pointer.
+    assert.deepEqual(wires(map).at(-1), ['wire', 'client:cursor', { x, y }, { plain: true }]);
+    assert.deepEqual(tips(map).at(-1), ['tip', 'Drop on the gateway', { on: false, at: { x, y } }]);
+    // The pointer in the gateway's box, widened 24 px each side and 16 up and down: the gateway
+    // lights, the wire ends on its left port, and the tip says what a drop does.
+    const gw = map.at('gateway:kitden');
+    map.move(gw.x - 23, gw.y - 15);
+    assert.deepEqual(map.asked.filter(([what]) => what === 'light'), [['light', 'gateway:kitden']]);
+    assert.deepEqual(wires(map).at(-1), ['wire', 'client:cursor', 'gateway:kitden', { plain: true }]);
+    assert.deepEqual(tips(map).at(-1), ['tip', 'Connect Cursor', { on: true, at: { x: gw.x - 23, y: gw.y - 15 } }]);
+    map.move(gw.x + gw.w + 23, gw.y + gw.h + 15);
+    assert.equal(map.asked.filter(([what]) => what === 'light').length, 1);
+    // Off it the light goes and the wire runs to the pointer again.
+    map.asked.length = 0;
+    map.move(gw.x + gw.w + 25, gw.y + 10);
+    const pointer = { x: gw.x + gw.w + 25, y: gw.y + 10 };
+    assert.deepEqual(map.asked, [['unlight'], ['wire', 'client:cursor', pointer, { plain: true }], ['tip', 'Drop on the gateway', { on: false, at: pointer }]]);
+    map.up(pointer.x, pointer.y);
+    // Over Details the gateway never lights.
+    const covered = dragMap({ id: 'client:cursor', covers: { '#drawer.open': { left: gw.x - 30, top: gw.y - 30, right: gw.x + gw.w + 30, bottom: gw.y + gw.h + 30, width: 1, height: 1 } } });
+    covered.press();
+    covered.move(covered.home.x + 40, covered.home.y + 10);
+    covered.move(gw.x + 20, gw.y + 20);
+    assert.ok(!covered.asked.some(([what]) => what === 'light'));
+    assert.deepEqual(wires(covered).at(-1), ['wire', 'client:cursor', { x: gw.x + 20, y: gw.y + 20 }, { plain: true }]);
+    covered.up(gw.x + 20, gw.y + 20);
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null, clients: null });
+    await freshTray();
+  }
+});
+
+test('a drop on the gateway adds one connect row', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW, clients: CLIENTS });
+  try {
+    const map = dragMap({ id: 'client:cursor' });
+    queue(PREVIEW, batch('c1'));
+    const gw = map.at('gateway:kitden');
+    map.press();
+    map.move(map.home.x + 40, map.home.y + 10);
+    map.move(gw.x + 20, gw.y + 20);
+    map.up(gw.x + 20, gw.y + 20);
+    // The wire goes at once; the row is the client's Connect, the same as in its Details.
+    assert.deepEqual(unwires(map), [['unwire', { ms: 0 }]]);
+    assert.deepEqual(tray.rows.map((r) => [r.key, r.body]), [[keyFor(CONNECT_CURSOR), CONNECT_CURSOR]]);
+    assert.ok(!map.asked.some(([what]) => what === 'hold' || what === 'homeIn'));
+    // While it is asked a press starts nothing.
+    map.captured.length = 0;
+    map.press();
+    assert.deepEqual(map.captured, []);
+    await flush();
+    map.redraw();
+    // Its answer draws the preview link to the gateway and " · in preview"; Cursor no longer drags.
+    assert.ok(keys(map.tree).includes('client:cursor>gateway:kitden preview'));
+    const cursor = block(map.tree, 'client:cursor');
+    assert.deepEqual([cursor.wait, cursor.connect, cursor.drags], [' · in preview', null, false]);
+    map.press();
+    assert.deepEqual([map.captured, tray.rows.length, posted()], [[], 1, [PREVIEW]]);
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null, clients: null });
+    await freshTray();
+  }
+});
+
+test('a miss leaves the tray as it was and the wire fades', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW, clients: CLIENTS });
+  try {
+    const probe = dragMap({ id: 'client:cursor' });
+    const gw = probe.at('gateway:kitden');
+    const over = { left: gw.x, top: gw.y, right: gw.x + gw.w, bottom: gw.y + gw.h, width: gw.w, height: gw.h };
+    const cases = [
+      ['on nothing', {}, [1200, 10]],
+      ['home', {}, [probe.home.x + 10, probe.home.y + 10]],
+      ['over Details', { '#drawer.open': over }, [gw.x + 20, gw.y + 20]],
+      ['over the dock', { '#dock': over }, [gw.x + 20, gw.y + 20]],
+    ];
+    for (const [name, covers, [dropX, dropY]] of cases) {
+      const map = dragMap({ id: 'client:cursor', covers });
+      map.press();
+      map.move(map.home.x + 40, map.home.y + 10);
+      map.move(dropX, dropY);
+      map.up(dropX, dropY);
+      await flush();
+      assert.deepEqual([tray.rows, posted()], [[], []], name);
+      // The wire fades out in 180 ms CALM; the block never moved, so nothing goes home.
+      assert.deepEqual(unwires(map), [['unwire', { ms: 180, ease: CALM }]], name);
+      assert.ok(!map.asked.some(([what]) => what === 'hold' || what === 'homeIn'), name);
+      assert.equal(map.asked.at(-1)[0], 'unwire', name);
+    }
+    // Escape does the same.
+    const map = dragMap({ id: 'client:cursor' });
+    map.press();
+    map.move(gw.x + 20, gw.y + 20);
+    for (const fn of map.heard.keydown) fn({ key: 'Escape', preventDefault() {}, stopImmediatePropagation() {} });
+    assert.deepEqual([tray.rows.length, unwires(map)], [0, [['unwire', { ms: 180, ease: CALM }]]]);
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null, clients: null });
+    await freshTray();
+  }
+});
+
+test('a connected client cannot be dragged', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW, clients: CLIENTS });
+  try {
+    const map = dragMap({ id: 'client:codex' });
+    assert.deepEqual([block(map.tree, 'client:codex').connect, block(map.tree, 'client:codex').drags], [null, false]);
+    map.press();
+    map.move(map.home.x + 40, map.home.y + 10);
+    map.up(map.home.x + 40, map.home.y + 10);
+    assert.deepEqual([map.captured, map.asked], [[], []]);
+    // One whose kitden entry comes from a plugin (on or off) says why on press, in the tip's plain
+    // look by the pointer, until the pointer lets go. Nothing lights and no wire shows.
+    for (const fields of [{}, { enabled: false }]) {
+      const setup = [entry('claude_code', 'added'), entry('codex', 'plugin', fields), entry('cursor', 'missing')];
+      const plugin = dragMap({ id: 'client:codex', opts: { ...OPTS, setup } });
+      const { x, y } = plugin.home;
+      plugin.press();
+      assert.deepEqual([plugin.captured, plugin.asked], [[], [['tip', 'Codex gets Kitden from a plugin.', { at: { x: x + 10, y: y + 10 } }]]]);
+      plugin.move(x + 40, y + 10);
+      assert.deepEqual(plugin.asked.at(-1), ['tip', 'Codex gets Kitden from a plugin.', { at: { x: x + 40, y: y + 10 } }]);
+      plugin.up(x + 40, y + 10);
+      assert.deepEqual(plugin.asked.at(-1), ['untip']);
+      assert.ok(!plugin.asked.some(([what]) => ['light', 'wire', 'hold', 'glance'].includes(what)));
+      // The pointer that moves on shows nothing.
+      plugin.move(x + 60, y + 10);
+      assert.deepEqual(plugin.asked.at(-1), ['untip']);
+      assert.deepEqual([tray.rows, posted()], [[], []]);
+    }
   } finally {
     delete globalThis.document;
     Object.assign(data, { gateway: null, clients: null });

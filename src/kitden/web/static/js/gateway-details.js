@@ -119,6 +119,17 @@ export function connectAction(client, setup) {
   return offer ? { connect: true, update: offer.body.action === "setup_server.update", body: offer.body } : null;
 }
 
+// What connects a client that is not connected, for a drag onto the gateway: its Connect
+// (connectAction), or the switch of its own entry where that is off and Kitden can write it. Null
+// where Kitden can do neither.
+export function connectBody(client, setup) {
+  const action = connectAction(client, setup);
+  if (action) return action.connect ? action.body : null;
+  const entry = (setup || []).find((e) => e.client === client);
+  const turnsOn = entry && entry.state === "added" && entry.enabled === false && TURNS_ON.includes(client);
+  return turnsOn ? { action: "setup_server.enable", targets: [{ client }], params: {} } : null;
+}
+
 // Why a client has no Connect or Disconnect, in a few words for a gateway row: a plugin gives its
 // entry, its own entry is off, or Kitden did not find it here (or could not read its settings, by
 // the scan's `found`). Null where it has a button, or Kitden cannot say.

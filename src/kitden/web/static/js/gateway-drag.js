@@ -1,10 +1,11 @@
 // Gateway: the drags of the map (4.7, gateway-notes 6). One engine (`startDrag`) runs each of
-// them; a drop only adds a row to the tray. Today: a server from outside the gateway into it, and a
-// server in the Kitden gateway onto a client.
+// them; a drop only adds a row to the tray. Today: a server from outside the gateway into it, a
+// server in the Kitden gateway onto a client, and a wire from a client that is not connected onto
+// the gateway.
 import { el, reportError } from "./dom.js";
 import { foundClients } from "./gateway-details.js";
 import { linkKey } from "./map.js";
-import { shake } from "./motion.js";
+import { CALM, shake } from "./motion.js";
 import { moveBody } from "./panel.js";
 import { CLIENT_NAMES } from "./parts.js";
 import { busy, current, data } from "./store.js";
@@ -25,6 +26,12 @@ const COVERS = ["#drawer.open", "#dock"];
 // client takes it: the pointer in the client's box, widened 24 px left, 40 right, 16 up and down.
 const ON_CLIENT = "Drop on a client";
 const NEAR_CLIENT = { left: 24, right: 40, up: 16, down: 16 };
+// A client's wire: what its tip says until it is over the gateway, where the gateway takes it (the
+// pointer in the gateway's box, widened 24 px each side and 16 up and down), and how a wire that
+// misses fades.
+const ON_GATEWAY = "Drop on the gateway";
+const NEAR_GATEWAY = { side: 24, up: 16, down: 16 };
+const MISS = { ms: 180, ease: CALM };
 
 // The map as gateway.js drew it last, as it gives it (placeMoved): its view (map-view.js), the tree,
 // the layout and how to draw the map again in place (`redraw`). A drag on the map (`drag`), the
@@ -81,13 +88,15 @@ export function inZone(layout, centre, line) {
 export const DRAGS = {
   in: { begin: beginIn, over: overIn, drop: dropIn },
   out: { begin: beginOut, over: overOut, drop: dropOut },
+  client: { still: true, begin: beginClient, over: overClient, drop: dropClient },
 };
 
 // A pointer goes down on the map. A server outside the gateway with a grip starts a drag into it,
-// and a server in the Kitden gateway (the whole block: it has no grip) a drag onto a client. A
-// press while a change is written, while another server's dropped move is asked, or on anything
-// else, does nothing here. `onStart()` runs when the drag starts, before the map holds the block:
-// the page lets go of its selection there.
+// a server in the Kitden gateway (the whole block: it has no grip) a drag onto a client, and a
+// client that can be connected (`drags`), whose connect is not in the tray, a wire to the gateway;
+// a client a plugin connects says why it cannot. A press while a change is written, while another
+// server's dropped move is asked, or on anything else, does nothing here. `onStart()` runs when
+// the drag starts, before the map holds the block: the page lets go of its selection there.
 export function pressGrip(event, onStart = () => {}) {
   if (event.button !== 0 || busy.change || onMap.drag || !onMap.model) return;
   const node = event.target.closest("button.block");
@@ -95,6 +104,31 @@ export function pressGrip(event, onStart = () => {}) {
   if (!block || (onMap.moving && onMap.moving.id !== block.id)) return;
   if (block.grip) startDrag(event, block, "in", onStart);
   else if (leavesGateway(block)) startDrag(event, block, "out", onStart);
+  else if (block.drags && kitdenGateway() && !inTray(keyFor(block.connect))) startDrag(event, block, "client", onStart);
+  else if (block.kind === "client" && block.viaPlugin) sayWhy(event, block);
+}
+
+// The Kitden gateway's block on the map, or null (none, or a first run's slot).
+const kitdenGateway = () => onMap.model.blocks.find((b) => b.kind === "gateway" && b.gateway.kind === "kitden") || null;
+
+// A client a plugin connects cannot be dragged: a press shows why in the tip's plain look, by the
+// pointer, until the pointer lets go.
+function sayWhy(event, block) {
+  const { view } = onMap;
+  const words = `${CLIENT_NAMES[block.client]} gets Kitden from a plugin.`;
+  const show = (e) => view.tip(words, { at: areaPoint({ x: e.clientX, y: e.clientY }) });
+  const done = () => {
+    document.removeEventListener("pointermove", show);
+    document.removeEventListener("pointerup", done);
+    document.removeEventListener("pointercancel", done);
+    window.removeEventListener("blur", done);
+    view.untip();
+  };
+  show(event);
+  document.addEventListener("pointermove", show);
+  document.addEventListener("pointerup", done);
+  document.addEventListener("pointercancel", done);
+  window.addEventListener("blur", done);
 }
 
 // A server the Kitden gateway holds can move out to a client, unless a change takes it out.
@@ -383,6 +417,47 @@ function dropOut(drag, at) {
   }
   onMap.moving = null;
   return false;
+}
+
+// A client that is not connected: it stays where it is; it and the gateway light, as a glance does
+// (no links), and a plain wire runs from its right port to the pointer.
+function beginClient(drag) {
+  drag.gateway = kitdenGateway().id;
+  drag.on = false;
+  onMap.view.glance(new Set([drag.id, drag.gateway]));
+}
+
+// The pointer near the gateway (NEAR_GATEWAY), and not over Details or the dock: the gateway
+// lights, the wire ends on its left port and the tip says a drop connects the client. Elsewhere the
+// wire ends at the pointer and the tip asks for the gateway. The tip goes by the pointer.
+function overClient(drag) {
+  const { view, layout } = onMap;
+  const pointer = pointOf(drag);
+  const place = layout.blocks.find((b) => b.id === drag.gateway);
+  const near = (at) => at.x > place.x - NEAR_GATEWAY.side && at.x < place.x + place.w + NEAR_GATEWAY.side && at.y > place.y - NEAR_GATEWAY.up && at.y < place.y + place.h + NEAR_GATEWAY.down;
+  const on = Boolean(pointer && place && !covered(drag.at) && near(pointer));
+  if (on !== drag.on) {
+    drag.on = on;
+    if (on) view.lightTarget(drag.gateway);
+    else view.unlightTarget();
+  }
+  if (!pointer) return;
+  view.wire(drag.id, on ? drag.gateway : pointer, { plain: true });
+  view.tip(on ? `Connect ${CLIENT_NAMES[drag.block.client]}` : ON_GATEWAY, { on, at: pointer });
+}
+
+// A drop on the gateway takes the wire away at once and adds the client's connect to the tray (the
+// map then draws its preview link); a miss fades the wire (180 ms CALM) and leaves the tray as it
+// was.
+function dropClient(drag, at) {
+  const { view } = onMap;
+  if (!at || !drag.on) {
+    view.unwire(MISS);
+    return false;
+  }
+  view.unwire({ ms: 0 });
+  addToTray(drag.block.connect).catch(reportError);
+  return true;
 }
 
 // The pointer lets go at `point` (page coordinates), or Escape, a lost pointer or a blur (null). The tip, the

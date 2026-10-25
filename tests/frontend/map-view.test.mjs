@@ -512,6 +512,52 @@ test("a drag's wire runs from a client's right port to the held block's left por
   assert.deepEqual([again.parentNode, again.animations], [null, []]);
 });
 
+// A client's wire (gateway-notes 6.3): to the pointer, plain, and snapped onto a block.
+test("a client's wire runs to the pointer, snaps to a block's left port, and a miss fades it in 180 CALM", async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const v = view();
+  const layout = lay();
+  await v.draw(TREE, layout, { motion: 'none' });
+  const svg = v.area.children.find((n) => n.className === 'map-links');
+  const wires = () => svg.children.filter((n) => n.className === 'link preview wire');
+  const c1 = place(layout, 'c1');
+  const s2 = place(layout, 's2');
+  // From its right port to the pointer, level at both ends, with handles of at least 18 px.
+  v.wire('c1', { x: 300, y: 40 }, { plain: true });
+  const wire = wires()[0];
+  const [x0, y0] = [c1.x + c1.w, c1.y + c1.h / 2];
+  const k = Math.max(18, (300 - x0) / 2);
+  assert.equal(wire.getAttribute('d'), `M ${x0} ${y0} C ${x0 + k} ${y0}, ${300 - k} 40, 300 40`);
+  // It follows the pointer and stays one wire; over a block it ends on that block's left port.
+  v.wire('c1', { x: x0 + 10, y: y0 }, { plain: true });
+  assert.equal(wire.getAttribute('d'), `M ${x0} ${y0} C ${x0 + 18} ${y0}, ${x0 + 10 - 18} ${y0}, ${x0 + 10} ${y0}`);
+  v.wire('c1', 's2', { plain: true });
+  assert.deepEqual([wires(), wire.getAttribute('d')], [[wire], linkPath({}, c1, s2)]);
+  // A miss fades it out in 180 ms CALM, then it goes.
+  v.unwire({ ms: 180, ease: CALM });
+  const fade = wire.animations.at(-1);
+  assert.deepEqual([fade.keyframes, fade.options.duration, fade.options.easing], [[{ opacity: 1 }, { opacity: 0 }], 180, CALM]);
+  t.mock.timers.tick(180);
+  assert.equal(wire.parentNode, null);
+  // A drop takes it away at once.
+  v.wire('c1', { x: 300, y: 40 }, { plain: true });
+  const dropped = wires()[0];
+  v.unwire({ ms: 0 });
+  assert.deepEqual([dropped.parentNode, dropped.animations], [null, []]);
+});
+
+test('under reduced motion the wire appears and goes at once', async () => {
+  reduce(true);
+  const v = view();
+  await v.draw(TREE, lay(), { motion: 'none' });
+  const svg = v.area.children.find((n) => n.className === 'map-links');
+  v.wire('c1', { x: 300, y: 40 }, { plain: true });
+  const wire = svg.children.find((n) => n.className === 'link preview wire');
+  assert.deepEqual([wire.parentNode, wire.animations], [svg, []]);
+  v.unwire({ ms: 180, ease: CALM });
+  assert.deepEqual([wire.parentNode, wire.animations], [null, []]);
+});
+
 test('the drag tip can go by the pointer: 12 px right of it and 30 px over it', async () => {
   const v = view();
   await v.draw(TREE, lay(), { motion: 'none' });

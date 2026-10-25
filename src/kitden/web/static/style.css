@@ -646,6 +646,8 @@ div.map .link.direct.preview.hov, div.map .link.direct.preview.picked { stroke: 
    The accent line over each lit link of a selected block fades in and out in map-view.js. */
 div.map.focus .link:not(.lit) { stroke-opacity: 0.16; }
 div.map.focus .link.hov, div.map.focus .link.picked { stroke-opacity: 1; }
+/* A client's wire to the gateway keeps its .65 while the drag lights the client and the gateway. */
+div.map.focus .link.wire { stroke-opacity: 0.65; }
 div.map .link-over { fill: none; stroke: var(--route); stroke-width: 2.1; stroke-linecap: round; }
 div.map .block { display: flex; align-items: center; gap: 10px; margin: 0; padding: 0 12px; border: 1px solid var(--wire); border-radius: 8px; background: var(--panel); color: var(--ink); text-align: left; cursor: pointer; user-select: none; -webkit-user-select: none; transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease, box-shadow 300ms ease, filter 300ms ease, scale 260ms var(--spring); }
 div.map .block:hover { border-color: color-mix(in srgb, var(--route) 38%, var(--wire)); }
@@ -741,14 +743,15 @@ div.map.finding .link { stroke-opacity: 0.25; }
 div.map.finding .link.direct.lit { stroke-opacity: 0.25; }
 div.map.finding .link.leaving.lit:not(.hov):not(.picked), div.map.finding .link.direct.preview.lit:not(.hov):not(.picked) { stroke-opacity: 0.25; }
 div.map.finding .link.hov, div.map.finding .link.picked { stroke-opacity: 1; }
-/* A drag on the map (4.7, gateway-notes 6): a block with a grip can be dragged; it lifts while it
+/* A drag on the map (4.7, gateway-notes 6): a block with a grip, or a client that can be connected
+   (`.drags`), can be dragged; a block that moves lifts while it
    follows the pointer or waits on the slot, and keeps the .98 press while the pointer is down (it
    springs back when the pointer lets go, by the block's own transitions). The drop target takes the
    accent edge and the selection fill and grows to 1.05 on the spring (the block's own transitions).
    The tip says what a drop does: plain, or in the accent where a drop works. A slot a dropped block
    flies onto hides at once (`.covered`). A preview is drawn with
    the preview line on the preview fill, joined to the gateway by a quiet accent link. */
-div.map .block:has(> .block-grip) { cursor: grab; touch-action: none; }
+div.map .block:has(> .block-grip), div.map .block.drags { cursor: grab; touch-action: none; }
 div.map .block.dragging { z-index: 3; border-color: var(--route); background: var(--panel-raised); box-shadow: var(--shadow-pop); }
 div.map .block.dragging.pressed { scale: 0.98; }
 div.map .block.drop { border-color: var(--route); background: var(--route-soft); scale: 1.05; }

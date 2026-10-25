@@ -249,6 +249,8 @@ function boxOf({ x, y, w, h, s }) {
 // - tip(text, { on, at }): the drag tip (`.dragtip`), 6 px right of and 28 px over the held
 //   block's top left, or 12 px right of and 30 px over `at` (the pointer, a map point); plain or
 //   `on` (a drop there would work). untip() takes it away.
+// - wire(from, to, { plain }): a drag's wire from a block to a block or to the pointer;
+//   unwire({ ms, ease }) fades it out.
 // - drawIn(key, ms): a link grows from its start. node(idOrKey): a block's node or a link's path.
 // A new block that takes the place of one that goes (its `from`, that block's id) starts where that
 // one shows, whole, and glides to its place (260 ms OUT3); the one that goes leaves at once, its
@@ -398,7 +400,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
       const group = place.kind === "group";
       const folding = folds.has(place.id);
       // A block whose removal waits in the tray looks leaving too, and stays a Tab stop.
-      item.look = [group ? "caption" : `block ${place.kind}`, block.leaving && "leaving", place.id === selected && "selected", matched && "found"].filter(Boolean).join(" ");
+      item.look = [group ? "caption" : `block ${place.kind}`, block.leaving && "leaving", block.drags && "drags", place.id === selected && "selected", matched && "found"].filter(Boolean).join(" ");
       node.dataset.focus = `block:${place.id}`;
       if (block.state) node.dataset.state = block.state;
       else delete node.dataset.state;
@@ -1119,35 +1121,39 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     if (from) tipNode.style.transform = `translate(${from.x + by.x}px, ${from.y + by.y}px)`;
   }
 
-  // The wire of a drag, from the right port of `from` to the left port of `to`, in the accent
-  // dashes of a preview, lit. It shows at once and follows the two blocks; it is no link of the map.
-  function wire(from, to) {
-    if (wired && wired.from === from && wired.to === to) return;
-    unwire();
-    const path = document.createElementNS(SVG, "path");
-    path.setAttribute("class", "link preview lit");
-    svg.insertBefore(path, layer);
-    wired = { from, to, path };
+  // The wire of a drag, from the right port of `from` to the left port of `to` (a block's id), or
+  // to `to` itself (a map point: the pointer), which it reaches level. It is in the accent dashes of
+  // a preview, lit, or `plain` (1.2 px, and never dimmed). It shows at once and follows its ends; a
+  // new end for the same wire moves it. It is no link of the map.
+  function wire(from, to, { plain = false } = {}) {
+    if (!wired || wired.from !== from || wired.plain !== plain) {
+      unwire();
+      const path = document.createElementNS(SVG, "path");
+      path.setAttribute("class", plain ? "link preview wire" : "link preview lit");
+      svg.insertBefore(path, layer);
+      wired = { from, plain, path };
+    }
+    wired.to = to;
     placeWire();
   }
 
-  // The wire fades out (240 ms ease-out) and is removed by time; reduced motion and a hidden page
-  // take it away at once.
-  function unwire() {
+  // The wire fades out (240 ms ease-out, or `ms` and `ease`) and is removed by time; no `ms`,
+  // reduced motion and a hidden page take it away at once.
+  function unwire({ ms = FADE_OUT_MS, ease = "ease-out" } = {}) {
     if (!wired) return;
     const { path } = wired;
     wired = null;
-    if (!canMove()) {
+    if (!ms || !canMove()) {
       path.remove();
       return;
     }
-    animateTo(path, [{ opacity: 1 }, { opacity: 0 }], { dur: FADE_OUT_MS, ease: "ease-out", fill: "forwards" });
-    setTimeout(() => path.remove(), D(FADE_OUT_MS));
+    animateTo(path, [{ opacity: 1 }, { opacity: 0 }], { dur: ms, ease, fill: "forwards" });
+    setTimeout(() => path.remove(), D(ms));
   }
 
   function placeWire() {
     const a = wired && blocks.get(wired.from);
-    const b = wired && blocks.get(wired.to);
+    const b = wired && (typeof wired.to === "string" ? blocks.get(wired.to) : { ...wired.to, w: 0, h: 0, s: 1 });
     if (a && b) wired.path.setAttribute("d", linkPath({}, boxOf(a), boxOf(b)));
   }
 

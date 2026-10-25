@@ -2245,6 +2245,20 @@ def test_a_server_drags_onto_a_client():
     assert "const NEAR_CLIENT = { left: 24, right: 40, up: 16, down: 16 };" in drag
 
 
+def test_a_client_drags_onto_the_gateway():
+    # gateway-notes 6.3: the tip asks for the gateway, then says a drop connects the client; a
+    # client a plugin connects says why it cannot be dragged.
+    drag = script("gateway-drag.js")
+    for words in (
+        'const ON_GATEWAY = "Drop on the gateway";',
+        "`Connect ${CLIENT_NAMES[drag.block.client]}`",
+        "`${CLIENT_NAMES[block.client]} gets Kitden from a plugin.`",
+    ):
+        assert words in drag, words
+    # The gateway's box is widened 24 px each side and 16 up and down.
+    assert "const NEAR_GATEWAY = { side: 24, up: 16, down: 16 };" in drag
+
+
 def test_the_tray_bar_sits_in_the_dock_and_says_its_words():
     dock = script("dock.js")
     for words in (

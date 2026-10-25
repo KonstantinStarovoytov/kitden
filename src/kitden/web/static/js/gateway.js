@@ -1,7 +1,7 @@
 // Gateway: the clients, the gateways and the MCP servers they reach, as a Map or a List. Each
 // row opens its Details beside the page (gateway-details.js).
 import { $, button, el, gridKey, icon, joinWords, plural, reportError, withFocusKey } from "./dom.js";
-import { addForm, connectAction, heldServer, liveHeld, movesTo, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool, TAKE_OUT } from "./gateway-details.js";
+import { addForm, connectAction, connectBody, heldServer, liveHeld, movesTo, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool, TAKE_OUT } from "./gateway-details.js";
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { findIn, foldable, isNarrow, keepOpen, layoutTree, linkKey, litFrom, litPath, pressOpen, toggleOpen, wideWidth } from "./map.js";
 import { mapView } from "./map-view.js";
@@ -416,9 +416,11 @@ function connectParts(links, kitden, waits) {
 // A client's block: Connected or Not connected, and on a first run that it is found, with its
 // version; the change that disconnects it (`disconnect`) where its link's × can (connectAction),
 // and whether a plugin gives it its kitden entry (`viaPlugin`), which Kitden cannot take out.
-// While a change that connects it waits in the tray (`wait`, connectRows), its lamp is the dashed
-// ring and its meta says so (`wait`, in the accent). Its meta says its state, so a screen reader
-// hears no state word after it; on a first run, "Found" does not, and Off is heard.
+// One that is not connected, past a first run, has the change that connects it (`connect`,
+// connectBody) and can be dragged onto the gateway (`drags`). While a change that connects it waits
+// in the tray (`wait`, connectRows), its lamp is the dashed ring and its meta says so (`wait`, in
+// the accent), and it does not drag. Its meta says its state, so a screen reader hears no state
+// word after it; on a first run, "Found" does not, and Off is heard.
 function clientBlock(id, { setup, linked, known, first, clients, wait = null }) {
   const on = linked.includes(id);
   const found = (clients || []).find((c) => c.id === id && c.status === "found");
@@ -431,10 +433,11 @@ function clientBlock(id, { setup, linked, known, first, clients, wait = null }) 
   if (firstFound) [meta, lamp] = [found.version ? `Found · ${found.version}` : "Found", "on"];
   const action = on ? connectAction(id, setup) : null;
   const disconnect = action && !action.connect ? action.body : null;
-  const viaPlugin = on && (setup || []).some((e) => e.client === id && e.state === "plugin");
-  const block = { id: `client:${id}`, column: "clients", kind: "client", name: CLIENT_NAMES[id], meta, lamp, state: known ? (on ? "on" : "off") : "unk", stateInMeta: !firstFound, client: id, ports: { right: true }, disconnect, viaPlugin };
+  const viaPlugin = (setup || []).some((e) => e.client === id && e.state === "plugin");
+  const connect = !on && !first ? connectBody(id, setup) : null;
+  const block = { id: `client:${id}`, column: "clients", kind: "client", name: CLIENT_NAMES[id], meta, lamp, state: known ? (on ? "on" : "off") : "unk", stateInMeta: !firstFound, client: id, ports: { right: true }, disconnect, viaPlugin, connect, drags: Boolean(connect) };
   // The dot stays with the words before it (a no-break space), so a wrap never starts a line with it.
-  return wait && wait.connect ? { ...block, lamp: "preview", state: "preview", wait: "\u00a0· in preview" } : block;
+  return wait && wait.connect ? { ...block, lamp: "preview", state: "preview", wait: "\u00a0· in preview", connect: null, drags: false } : block;
 }
 
 // The moves into the Kitden gateway the map shows: each one in the tray (`rows`), for the outside
