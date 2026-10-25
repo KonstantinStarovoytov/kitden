@@ -26,12 +26,17 @@ export function D(ms) {
 }
 
 // Animate a node and wait for the end. Under reduced motion it does nothing and is done at once.
+// It never throws or keeps a caller waiting: a cancelled animation ends quietly, any other
+// failure is reported and ends at once.
 export function animateTo(node, keyframes, { dur = 300, delay = 0, ease = CALM, fill = "backwards" } = {}) {
   const duration = D(dur);
   if (!node || !node.animate || !duration) return Promise.resolve();
   try {
-    return node.animate(keyframes, { duration, delay: D(delay), easing: ease, fill }).finished.catch(() => {});
-  } catch {
+    return node.animate(keyframes, { duration, delay: D(delay), easing: ease, fill }).finished.catch((error) => {
+      if (!error || error.name !== "AbortError") console.error(error);
+    });
+  } catch (error) {
+    console.error(error);
     return Promise.resolve();
   }
 }

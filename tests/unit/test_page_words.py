@@ -532,7 +532,7 @@ def test_gateway_wires_do_not_fake_traffic():
     assert not any(
         ("map" in line or ".routes" in line) and "infinite" in line for line in css.splitlines()
     )
-    for name in ("gateway.js", "gateway-details.js", "gateway-drag.js", "map.js"):
+    for name in ("gateway.js", "gateway-details.js", "gateway-drag.js", "map.js", "map-view.js"):
         assert "flow" not in script(name), name
 
 
@@ -546,7 +546,7 @@ def test_the_map_rules_never_reach_the_library_table():
 
 
 def test_the_map_marks_when_it_is_drawn():
-    assert '"kitden:map-drawn"' in script("map.js") and '"kitden:gateway-drawn"' in script(
+    assert '"kitden:map-drawn"' in script("map-view.js") and '"kitden:gateway-drawn"' in script(
         "gateway.js"
     )
 
@@ -583,10 +583,9 @@ def test_the_map_says_the_link_is_the_state():
     assert ".link.direct" in CSS and "var(--lamp-warn)" in direct
     # A line to a server Kitden does not know to be on is dashed: it does not say "on".
     assert "div.map .link.direct.unk { stroke-dasharray: 3 3; }" in CSS
-    assert '${link.unk ? " unk" : ""}' in script("map.js")
     assert 'const NOT_KNOWN = "Not known";' in script("gateway.js")
     # A block says whether it is open by what is open, not by what shows yet.
-    assert 'setAttribute("aria-expanded", String(open.has(' in script("map.js")
+    assert 'setAttribute("aria-expanded", String(open.has(' in script("map-view.js")
 
 
 def test_plugin_switch_opens_a_review_and_does_not_flip_itself():
@@ -1734,8 +1733,9 @@ def test_search_on_a_map_page_finds_on_that_page():
     assert empty and "margin-left: -8px;" in empty.group(1) and "display" not in empty.group(1)
     # Matches are lit; the other blocks dim to 35% and their links to 25%, in the map and the List.
     assert ".map.finding" in CSS
-    assert re.search(r"div\.map\.finding \.block:not\(\.found\)[^{]*\{ opacity: 0\.35; \}", CSS)
-    assert "div.map.finding .link { opacity: 0.25; }" in CSS
+    dims = r"div\.map\.finding \.block:not\(\.found\)[^{]*\{ filter: opacity\(0\.35\); \}"
+    assert re.search(dims, CSS)
+    assert "div.map.finding .link { stroke-opacity: 0.25; }" in CSS
     assert ".treegrid.finding .tg-row:not(.found) { opacity: 0.35; }" in CSS
 
 

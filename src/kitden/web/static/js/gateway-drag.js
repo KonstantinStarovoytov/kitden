@@ -1,19 +1,18 @@
 // Gateway: drag a server from outside the gateway onto the map to preview its move (4.6, S.8).
-import { el, reportError, withFocusKey } from "./dom.js";
+import { el, reportError } from "./dom.js";
 import { mapPreview, previewOnMap } from "./map-review.js";
 import { dropAt, groupBox } from "./map.js";
-import { CALM, animate } from "./motion.js";
 import { moveBody } from "./panel.js";
 import { busy, current, render } from "./store.js";
 
 // How far a pointer moves on a block with a grip before the block follows it.
 const DRAG_START = 4;
 
-// The map as gateway.js drew it last, as it gives it (placeMoved): its box, the tree and the
-// layout, and how the page draws again for the move's preview. A move started on the map: the
-// block being dragged (`drag`), the server whose preview it started (`moving`, { id, name, kind }),
-// and where its block was last shown off its place (`home`).
-const onMap = { box: null, model: null, layout: null, redraw: () => {}, drag: null, moving: null, home: null };
+// The map as gateway.js drew it last, as it gives it (placeMoved): its view (map-view.js), the tree
+// and the layout, and how the page draws again for the move's preview. A move started on the map:
+// the block being dragged (`drag`), the server whose preview it started (`moving`, { id, name,
+// kind }), and the block the map holds off its place (`home`, its id).
+const onMap = { view: null, model: null, layout: null, redraw: () => {}, drag: null, moving: null, home: null };
 
 // What a move started on the map shows (gatewayTree's `drop` or `preview`): the slot once the
 // dragged block left its own group, and while its preview is prepared; the preview block while
@@ -37,11 +36,11 @@ export function endedMove() {
   return ended;
 }
 
-// gateway.js drew the map in `box`, from `model` laid out as `layout`; `redraw` draws the page again
-// for the move's preview. A block off its place stays where it is shown: with the pointer, or on
-// the slot while its preview is prepared. Back on its place, it glides there from where it was.
-export function placeMoved({ box, model, layout, redraw }) {
-  Object.assign(onMap, { box, model, layout, redraw });
+// gateway.js drew the map in `view`, from `model` laid out as `layout`; `redraw` draws the page
+// again for the move's preview. A block off its place stays where the map holds it: with the
+// pointer, or on the slot while its preview is prepared. Let go, it glides back to its place.
+export function placeMoved({ view, model, layout, redraw }) {
+  Object.assign(onMap, { view, model, layout, redraw });
   if (onMap.drag) follow();
   else if (mapPreview.phase === "loading" && onMap.moving) park();
   else if (onMap.home) goHome();
@@ -122,9 +121,8 @@ export function pressGrip(event) {
   document.addEventListener("keydown", escape, true);
 }
 
-// The map's block area, a block in it, and a point of the page (`at`) in the area's own terms.
-const mapArea = () => (onMap.box && onMap.box.isConnected ? onMap.box.querySelector(".map-area") : null);
-const blockIn = (area, id) => (area ? withFocusKey(area, `block:${id}`) : null);
+// The map's block area, and a point of the page (`at`) in the area's own terms.
+const mapArea = () => (onMap.view && onMap.view.box.isConnected ? onMap.view.area : null);
 function mapPoint(at) {
   const area = mapArea();
   if (!area || !at) return null;
@@ -132,48 +130,41 @@ function mapPoint(at) {
   return { x: at.x - origin.left, y: at.y - origin.top };
 }
 
-// A block lifted off its place, shown at (x, y) of the map area; `home` remembers where.
-function lift(node, id, x, y) {
-  node.classList.add("dragging");
-  node.style.transform = `translate(${x - parseFloat(node.style.left)}px, ${y - parseFloat(node.style.top)}px)`;
-  onMap.home = { id, x, y };
-}
-
 // The dragged block where the pointer holds it; the slot lights while a drop there would preview.
 function follow() {
-  const { drag } = onMap;
-  const node = blockIn(mapArea(), drag.id);
+  const { drag, view } = onMap;
   const point = mapPoint(drag.at);
-  if (!node || !point) return;
-  lift(node, drag.id, point.x - drag.grab.x, point.y - drag.grab.y);
-  onMap.box.classList.toggle("dropping", dropTarget(onMap.model, onMap.layout, point.x, point.y) === "servers");
+  if (!point || !view.node(drag.id)) return;
+  view.hold(drag.id, { x: point.x - drag.grab.x, y: point.y - drag.grab.y });
+  onMap.home = drag.id;
+  view.box.classList.toggle("dropping", dropTarget(onMap.model, onMap.layout, point.x, point.y) === "servers");
 }
 
 // While its preview is prepared, the block waits on the slot (it glides there from where it was
-// let go), and after a moment a spinner says the server is asked.
+// let go), and after a moment a spinner says the server is asked. The page draws again meanwhile,
+// so the spinner is added once.
 function park() {
-  const { moving, layout } = onMap;
-  const node = blockIn(mapArea(), moving.id);
+  const { moving, layout, view } = onMap;
+  const node = view.node(moving.id);
   const slot = layout.blocks.find((b) => b.id === `slot:${moving.name}`);
   if (!node || !slot) return;
-  const from = onMap.home && onMap.home.id === moving.id ? onMap.home : null;
-  lift(node, moving.id, slot.x, slot.y);
+  view.hold(moving.id, { x: slot.x, y: slot.y }, { glide: true });
+  onMap.home = moving.id;
+  if (node.querySelector(".spinner")) return;
   node.setAttribute("aria-busy", "true");
   node.append(el("span", "spinner late"));
-  if (from) glideFrom(node, from.x - slot.x, from.y - slot.y);
 }
 
-// Back on its place, the block glides there from where it was last shown.
+// Back to its place: the map lets go of the block, and it glides there from where it was.
 function goHome() {
-  const home = onMap.home;
+  const { view, home } = onMap;
   onMap.home = null;
-  const node = blockIn(mapArea(), home.id);
-  if (node) glideFrom(node, home.x - parseFloat(node.style.left), home.y - parseFloat(node.style.top));
-}
-
-// A block glides from (dx, dy) off where it is shown; with reduced motion it is there at once.
-function glideFrom(node, dx, dy) {
-  if (dx || dy) animate(node, [{ translate: `${dx}px ${dy}px` }, { translate: "0 0" }], { duration: 260, easing: CALM });
+  const node = view.node(home);
+  if (node) {
+    node.removeAttribute("aria-busy");
+    for (const spinner of node.querySelectorAll(".spinner")) spinner.remove();
+  }
+  view.letGo(home);
 }
 
 // The pointer lets go at `point` (page coordinates), or Escape or a lost pointer (null). On the
@@ -183,7 +174,7 @@ function letGo(point) {
   const drag = onMap.drag;
   onMap.drag = null;
   document.documentElement.classList.remove("grabbing");
-  if (onMap.box) onMap.box.classList.remove("dropping");
+  if (onMap.view) onMap.view.box.classList.remove("dropping");
   swallowClick();
   const at = mapPoint(point);
   const target = at ? dropTarget(onMap.model, onMap.layout, at.x, at.y) : null;

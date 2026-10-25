@@ -166,8 +166,20 @@ test('animateTo starts a calm 300 ms animation by default and resolves when it e
 });
 
 test('animateTo resolves when the animation is cancelled', async () => {
-  const node = { animate: () => ({ finished: Promise.reject(new Error('cancelled')) }) };
-  await animateTo(node, [{ opacity: 0 }, { opacity: 1 }]);
+  const logged = []; const error = console.error; console.error = (e) => logged.push(e);
+  try {
+    const node = { animate: () => ({ finished: Promise.reject(Object.assign(new Error('cancelled'), { name: 'AbortError' })) }) };
+    await animateTo(node, [{ opacity: 0 }, { opacity: 1 }]);
+    assert.equal(logged.length, 0);
+  } finally { console.error = error; }
+});
+
+test('animateTo reports a throwing animate() and still resolves', async () => {
+  const logged = []; const error = console.error; console.error = (e) => logged.push(e);
+  try {
+    await animateTo({ animate() { throw new TypeError('bad keyframes'); } }, [{ opacity: 0 }, { opacity: 1 }]);
+    assert.equal(logged.length, 1); assert.equal(logged[0].name, 'TypeError');
+  } finally { console.error = error; }
 });
 
 test('rise leaves every node visible', () => {

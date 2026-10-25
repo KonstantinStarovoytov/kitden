@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js (for its columns) needs only this from a browser to load.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { GAP, NARROW_GAP, appeared, blockOrder, dropAt, findChip, groupBox, findIn, foldable, isNarrow, layoutTree, litFrom, litPath, toggleOpen, unfoldDelays } = await import('../../src/kitden/web/static/js/map.js');
+const { CAPTION_H, GAP, NARROW_GAP, blockOrder, drawPlan, dropAt, findChip, groupBox, findIn, foldable, isNarrow, layoutTree, linkClass, linkKey, litFrom, litPath, toggleOpen, unfoldDelays } = await import('../../src/kitden/web/static/js/map.js');
 const { cutName } = await import('../../src/kitden/web/static/js/dom.js');
 const { GATEWAY_COLUMNS } = await import('../../src/kitden/web/static/js/gateway.js');
 
@@ -171,9 +171,9 @@ test('narrow: tools unfold down inside the server; the gateway is a small tile',
   assert.ok(linear.y > l.blocks.find((b) => b.id === 'tool:github/list_prs').y);
 });
 
-test('unfold: links first, children 15 ms apart, nothing past 300 ms; reduced motion shows the end at once', () => {
+test('unfold: links draw for 170 ms, then children start 15 ms apart with no cap; reduced motion starts all at once', () => {
   const d = unfoldDelays(12);
-  assert.equal(d[1] - d[0], 15); assert.equal(d[11], d[5]); assert.ok(d.every((t) => t + 60 <= 300));
+  assert.equal(d[0], 170); assert.equal(d[1] - d[0], 15); assert.equal(d[11], 170 + 11 * 15);
   assert.ok(unfoldDelays(12, true).every((t) => t === 0));
 });
 
@@ -193,9 +193,9 @@ test('every block is a button in reading order', () => {
   const m = model(3, 2, { open: 'github' });
   const wide = layoutTree(m, { open: new Set(['held:kitden:github']), ...WIDE });
   const order = blockOrder(wide);
-  // Groups are captions, not buttons.
-  assert.ok(!order.some((id) => id.startsWith('group:')));
-  assert.equal(order.length, wide.blocks.filter((b) => !b.id.startsWith('group:')).length);
+  // Groups and column captions are captions, not buttons.
+  assert.ok(!order.some((id) => id.startsWith('group:') || id.startsWith('column:')));
+  assert.equal(order.length, wide.blocks.filter((b) => !b.id.startsWith('group:') && !b.id.startsWith('column:')).length);
   assert.deepEqual(order.slice(0, 4), ['client:claude_code', 'client:codex', 'client:cursor', 'gateway:kitden']);
   // Column by column, top to bottom.
   const at = new Map(wide.blocks.map((b) => [b.id, b]));
@@ -218,20 +218,34 @@ test('narrow: a column with no blocks of its own takes no width', () => {
   assert.deepEqual(layoutTree(model(3, 2), { open: new Set(), ...WIDE }).columns.map((c) => c.id), ['clients', 'gateway', 'servers', 'tools']);
 });
 
-test('a link that goes and comes back draws again; what the first draw shows does not', () => {
+test('column captions are blocks at the top of their column; Tools only while a server is open', () => {
+  const l = layoutTree(model(3, 0), { open: new Set(), ...WIDE });
+  const caps = l.blocks.filter((b) => b.kind === 'column');
+  assert.deepEqual(caps.map((b) => b.id), ['column:clients', 'column:gateway', 'column:servers']);
+  assert.ok(caps.every((b) => b.y === 0 && b.h === CAPTION_H));
+  const open = layoutTree(model(3, 0, { open: 'github' }), { open: new Set(['held:kitden:github']), ...WIDE });
+  assert.equal(open.blocks.find((b) => b.id === 'column:tools').opener, 'held:kitden:github');
+  assert.equal(open.blocks.find((b) => b.id === 'tool:github/read_repo').opener, 'held:kitden:github');
+  assert.equal(open.links.find((k) => k.kind === 'on').shape, 'curve');
+});
+
+test('the draw plan says what enters, stays and leaves, and what an unfold or a fold moves', () => {
   const m = model(3, 0, { open: 'github' });
-  const open = layoutTree(m, { open: new Set(['held:kitden:github']), ...WIDE });
-  const folded = layoutTree(m, { open: new Set(), ...WIDE });
-  const drawn = new Set();
-  // The page's first draw: all of it is drawn already.
-  appeared(open, drawn);
-  assert.equal(appeared(open, drawn).size, 0);
-  // A fold only forgets what went.
-  assert.equal(appeared(folded, drawn).size, 0);
-  assert.ok(!drawn.has('held:kitden:github>tool:github/read_repo') && !drawn.has('tool:github/read_repo'));
-  const again = appeared(open, drawn);
-  assert.ok(again.has('held:kitden:github>tool:github/read_repo') && again.has('tool:github/read_repo'));
-  assert.ok(!again.has('gateway:kitden>held:kitden:github') && !again.has('held:kitden:github'));
+  const [closed, open] = [new Set(), new Set(['held:kitden:github'])].map((o) => layoutTree(m, { open: o, ...WIDE }));
+  const tools = ['column:tools', 'tool:github/read_repo', 'tool:github/push_files', 'tool:github/create_issue', 'tool:github/list_prs'];
+  const p = drawPlan(closed, open);
+  assert.deepEqual(p.enter, tools); assert.deepEqual(p.unfold, tools); assert.deepEqual(p.leave, []);
+  assert.ok(p.stay.includes('held:kitden:github'));
+  assert.equal(p.linksIn.length, 3);  // push_files is off: no link
+  assert.deepEqual(drawPlan(open, closed).fold, tools);
+  assert.deepEqual(drawPlan(null, closed).enter, closed.blocks.map((b) => b.id));
+  assert.deepEqual(drawPlan(null, closed).unfold, []);
+});
+
+test('an unknown direct link is dashed by its class', () => {
+  assert.equal(linkClass({ from: 'a', to: 'b', kind: 'direct', unk: true }), 'link direct unk');
+  assert.equal(linkClass({ from: 'a', to: 'b', kind: 'on' }), 'link on');
+  assert.equal(linkKey({ from: 'a', to: 'b' }), 'a>b');
 });
 
 test('a block folds when it holds something, also before its tools are read', () => {

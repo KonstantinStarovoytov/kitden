@@ -1,5 +1,6 @@
-// The map core every map page shares: a pure layout of a tree of blocks, what a selection lights,
-// what a search finds, and one renderer of HTML blocks over one SVG of links.
+// The map core every map page shares: a pure layout of a tree of blocks, the links' paths, what
+// changes between two layouts, what a selection lights and what a search finds. It touches no
+// page: map-view.js draws it.
 //
 // The tree model:
 // - columns: [{ id, caption, add, w, h, narrowW, narrowH }]. Each column has its blocks' size,
@@ -17,35 +18,34 @@
 // - links: [{ from, to, kind, unk }], kind "on", "faint", "direct" or "preview". The link is the
 //   state: something on has a link, something off has none. `unk`: Kitden does not know whether
 //   it is on, so the line is dashed; it only shows who has the entry.
-import { button, cutName, el, plural } from "./dom.js";
+import { plural } from "./dom.js";
 
 export const GAP = 46; // between two columns
 export const NARROW_GAP = 28; // between two columns in a narrow window
 export const GROUP_H = 22; // a group caption's height
 export const GROUP_MAX = 6; // a group with more children shows five and "N more"
-export const LINK_MS = 150; // an unfold draws its links first, then its children fade in
+export const CAPTION_H = 18; // a column's caption, at the top of its column
+export const CAPTION_ROW = 24; // the blocks of a column start under its caption
+export const LINK_MS = 170; // an unfold draws its links first, then its children fade in
 const ROW_GAP = 8; // between two blocks of a column
 const RAIL = 16; // narrow: children sit this far inside their parent, beside its rail
 const TRUNK = 20; // a direct line runs down a trunk this far right of the block it leaves
 const CORNER = 6; // the round corners of a direct line and of a rail
 const CHILD_MS = 15; // between two children of an unfold
-const LAST_STEP = 5; // no extra wait after the sixth child
 // The links a lit path follows.
 const PATH_KINDS = ["on", "direct", "faint"];
 // What a screen reader hears for a block's state; the map itself shows no state word.
 const STATE_SAID = { on: "On", off: "Off", unk: "Not known", preview: "Preview" };
-const SVG = "http://www.w3.org/2000/svg";
 
 // Narrow: under 1024 px, or under 1280 px with Details open beside the page.
 export function isNarrow(width, detailsOpen) {
   return width < 1024 || (Boolean(detailsOpen) && width < 1280);
 }
 
-// When each child of an unfold starts to fade in (it takes 60 ms): after the links, 15 ms apart,
-// with no extra wait after the sixth, so the whole unfold ends within 300 ms. Reduced motion
-// shows the end at once.
+// When each child of an unfold starts to fade in: after its links have drawn, 15 ms apart, however
+// many there are. Reduced motion starts them all at once.
 export function unfoldDelays(count, reduced = false) {
-  return Array.from({ length: count }, (_, i) => (reduced ? 0 : LINK_MS + Math.min(i, LAST_STEP) * CHILD_MS));
+  return Array.from({ length: count }, (_, i) => (reduced ? 0 : LINK_MS + i * CHILD_MS));
 }
 
 function childrenOf(model) {
@@ -73,11 +73,15 @@ function shownChildren(block, children, open) {
 }
 
 // Where each shown block goes, for any tree model: `{ columns: [{id, x, w}], blocks: [{id, kind,
-// x, y, w, h}], links: [{from, to, kind, d}], height, narrow }`. Columns sit at fixed x, one after
-// the other; a block takes its column's size. Wide, the children of an open block go to their own
-// column, beside it, and every column keeps its place. Narrow, the narrow sizes apply and they
-// unfold down inside it, on a rail; a column with no block of its own (tools inside their server)
-// then takes no room. Only links between shown blocks are drawn; `d` is an SVG path.
+// x, y, w, h, opener}], links: [{from, to, kind, shape, d}], height, narrow }`. Columns sit at fixed
+// x, one after the other; a block takes its column's size. A column that shows a block has its
+// caption at its top, a block `column:<id>` of kind "column", and its blocks start under it. Wide,
+// the children of an open block go to their own column, beside it, and every column keeps its
+// place. Narrow, the narrow sizes apply and they unfold down inside it, on a rail; a column with no
+// block of its own (tools inside their server) then takes no room. A block that shows because a
+// block of another column is open (wide) or on that block's rail (narrow) names it as its
+// `opener`, and so does the caption of a column whose blocks all do. Only links between shown
+// blocks are drawn: `shape` is "rail", "step" (a direct line) or "curve", and `d` its SVG path.
 export function layoutTree(model, { open = new Set(), width = 0, narrow = isNarrow(width, false) } = {}) {
   const byId = new Map(model.blocks.map((block) => [block.id, block]));
   const children = childrenOf(model);
@@ -94,26 +98,30 @@ export function layoutTree(model, { open = new Set(), width = 0, narrow = isNarr
     x += w + (narrow ? NARROW_GAP : GAP);
   }
 
-  const placed = new Map(); // in reading order: column by column, top to bottom
+  const placed = new Map();
+  const blocks = []; // in reading order: column by column, top to bottom
   // A block at (left, y), `w` wide, then the children it shows under it: those of its own
   // column, and narrow every one, inside it beside the rail (never wider than its own column).
-  // Returns the y under them.
-  const stack = (block, left, w, y) => {
+  // `opener` is the block whose opening shows it. Returns the y under them.
+  const stack = (block, left, w, y, opener) => {
     const h = block.kind === "group" ? block.h || GROUP_H : sizes.get(block.column).h;
     const at = { id: block.id, kind: block.kind, x: left, y, w, h };
+    if (opener) at.opener = opener;
     if (block.kind === "more") at.name = block.name;
     if (block.details) at.details = true;
     placed.set(block.id, at);
+    blocks.push(at);
     let below = y + h + ROW_GAP;
     for (const child of shownChildren(block, children.get(block.id) || [], open)) {
-      if (child.column === block.column) below = stack(child, left, w, below);
-      else if (narrow) below = stack(child, left + RAIL, Math.min(w - RAIL, sizes.get(child.column).w), below);
+      if (child.column === block.column) below = stack(child, left, w, below, opener);
+      else if (narrow) below = stack(child, left + RAIL, Math.min(w - RAIL, sizes.get(child.column).w), below, block.id);
     }
     return below;
   };
   for (const column of model.columns) {
     const { x: left, w } = sizes.get(column.id);
-    let y = 0;
+    const first = blocks.length;
+    let y = CAPTION_ROW;
     for (const block of model.blocks) {
       if (block.column !== column.id) continue;
       const parent = byId.get(block.parent);
@@ -122,8 +130,13 @@ export function layoutTree(model, { open = new Set(), width = 0, narrow = isNarr
         if (narrow || parent.column === column.id || !open.has(parent.id) || !placed.has(parent.id)) continue;
         y = Math.max(y, placed.get(parent.id).y);
       }
-      y = stack(block, left, w, y);
+      y = stack(block, left, w, y, parent ? parent.id : null);
     }
+    if (!column.caption || blocks.length === first) continue;
+    const caption = { id: `column:${column.id}`, kind: "column", column: column.id, x: left, y: 0, w, h: CAPTION_H };
+    const mine = blocks.slice(first);
+    if (mine.every((at) => at.opener)) caption.opener = mine[0].opener;
+    blocks.splice(first, 0, caption);
   }
 
   const links = [];
@@ -133,12 +146,55 @@ export function layoutTree(model, { open = new Set(), width = 0, narrow = isNarr
     if (!from || !to) continue;
     const child = byId.get(link.to);
     const rail = narrow && child.parent === link.from && child.column !== byId.get(link.from).column;
-    const d = rail ? railPath(from, to) : link.kind === "direct" ? elbow(from, to) : curve(from, to);
-    links.push({ from: link.from, to: link.to, kind: link.kind, d, ...(link.unk ? { unk: true } : {}) });
+    const at = { from: link.from, to: link.to, kind: link.kind, shape: rail ? "rail" : link.kind === "direct" ? "step" : "curve", ...(link.unk ? { unk: true } : {}) };
+    at.d = linkPath(at, from, to);
+    links.push(at);
   }
-  const blocks = [...placed.values()];
   const height = blocks.reduce((most, block) => Math.max(most, block.y + block.h), 0);
   return { columns, blocks, links, height, narrow };
+}
+
+// A link's key, "from>to": one per pair of blocks.
+export function linkKey(link) {
+  return `${link.from}>${link.to}`;
+}
+
+// A link's look: its kind, and dashed when Kitden does not know that it is on.
+export function linkClass(link) {
+  return `link ${link.kind}${link.unk ? " unk" : ""}`;
+}
+
+// A link's SVG path between the boxes of its two blocks ({ x, y, w, h }) by its shape.
+export function linkPath(link, from, to) {
+  if (link.shape === "rail") return railPath(from, to);
+  return link.shape === "step" ? elbow(from, to) : curve(from, to);
+}
+
+// What changes from the layout `before` (null: nothing drawn yet) to `after`: the block ids that
+// enter, stay and leave, and the link keys likewise, in layout order (what leaves in the order of
+// `before`). A block enters as an unfold when its opener showed before, and leaves as a fold when
+// its opener still shows after.
+export function drawPlan(before, after) {
+  const was = new Map((before ? before.blocks : []).map((at) => [at.id, at]));
+  const now = new Map(after.blocks.map((at) => [at.id, at]));
+  const plan = { enter: [], stay: [], leave: [], unfold: [], fold: [], linksIn: [], linksStay: [], linksOut: [] };
+  for (const at of after.blocks) {
+    if (was.has(at.id)) plan.stay.push(at.id);
+    else {
+      plan.enter.push(at.id);
+      if (at.opener && was.has(at.opener)) plan.unfold.push(at.id);
+    }
+  }
+  for (const at of was.values()) {
+    if (now.has(at.id)) continue;
+    plan.leave.push(at.id);
+    if (at.opener && now.has(at.opener)) plan.fold.push(at.id);
+  }
+  const drawn = new Set((before ? before.links : []).map(linkKey));
+  const shown = new Set(after.links.map(linkKey));
+  for (const key of shown) plan[drawn.has(key) ? "linksStay" : "linksIn"].push(key);
+  for (const key of drawn) if (!shown.has(key)) plan.linksOut.push(key);
+  return plan;
 }
 
 // The column under a point of the layout (x and y from its top left): the id of the column whose
@@ -166,20 +222,9 @@ export function wideWidth(model) {
 
 // The blocks a person can press, in the order the map draws them, which is the reading order:
 // column by column, top to bottom (narrow, a block's children right after it). A group is a
-// caption, not a button, unless it has Details.
+// caption, not a button, unless it has Details; a column's caption never is.
 export function blockOrder(layout) {
-  return layout.blocks.filter((block) => block.kind !== "group" || block.details).map((block) => block.id);
-}
-
-// What is new on the map since the last draw: the links ("from>to") and the blocks (ids) of
-// `layout` that `drawn` does not hold. `drawn` then holds just what shows now, so something that
-// goes and comes back is new again.
-export function appeared(layout, drawn) {
-  const now = [...layout.links.map((link) => `${link.from}>${link.to}`), ...layout.blocks.map((block) => block.id)];
-  const fresh = new Set(now.filter((key) => !drawn.has(key)));
-  drawn.clear();
-  for (const key of now) drawn.add(key);
-  return fresh;
+  return layout.blocks.filter((block) => block.kind !== "column" && (block.kind !== "group" || block.details)).map((block) => block.id);
 }
 
 // The blocks that fold: any that holds something, also before its children are read (a count,
@@ -322,164 +367,9 @@ export function findChip(found) {
   return found.matches.size ? plural(found.matches.size, "match", "matches") : "No matches";
 }
 
-// A part a screen reader skips: the block's label says it already.
-function quiet(node) {
-  node.setAttribute("aria-hidden", "true");
-  return node;
-}
-
-// What a block shows, left to right: the grip of one that can be dragged, its tile (the page's
-// `tile(block)`), its name cut short with its meta line under it, the count of a folded block
-// and a slot's action. A client's meta starts with its dot. A tag takes the meta line's place
-// where a count pill takes the room, else it sits beside the name.
-function blockParts(block, { tile, open }) {
-  const parts = [];
-  if (block.grip) parts.push(quiet(el("span", "block-grip")));
-  const mark = tile ? tile(block) : null;
-  if (mark) {
-    const holder = quiet(el("span", "block-tile"));
-    holder.append(mark);
-    parts.push(holder);
-  }
-  const text = el("span", "block-text");
-  const top = el("span", "block-top");
-  top.append(el("span", "block-name", cutName(block.name)));
-  text.append(top);
-  const counted = typeof block.count === "number";
-  const tag = block.tag ? el("span", "block-tag", block.tag) : null;
-  if (tag && !(counted && block.meta)) top.append(tag);
-  if (block.meta) {
-    const line = el("span", "block-meta");
-    if (block.kind === "client") line.append(quiet(el("span", `block-dot ${block.dot || block.state}`)));
-    line.append(tag && counted ? tag : el("span", "block-words", block.meta));
-    text.append(line);
-  }
-  parts.push(text);
-  if (counted && !open) parts.push(quiet(el("span", "block-count", block.count)));
-  if (block.action) parts.push(quiet(el("span", "block-action", block.action)));
-  return parts;
-}
-
 // What a screen reader hears for a block: its whole name, meta, tag, the state word that matches
 // its link (none where the meta says it), and its action.
 export function blockLabel(block) {
   const state = block.stateInMeta ? null : STATE_SAID[block.state];
   return [block.name, block.meta, block.tag, state, block.action].filter(Boolean).join(", ");
-}
-
-// One block: a button with its name cut short (the whole name in its hover text and its label,
-// blockLabel). A group is a caption, or a button when it has Details. A
-// block that folds says whether it is open (`open`), also while its children are read. A press
-// opens or folds a block that folds (`onOpen`), then selects it (`onSelect`, which draws again).
-function blockNode(block, { selected, lit, found, folds, open, tile, onSelect, onOpen }) {
-  const name = String(block.name || "");
-  const matched = Boolean(found && found.matches.has(block.id));
-  if (block.kind === "group" && !block.details) {
-    const caption = el("div", matched ? "caption found" : "caption", name);
-    caption.title = name;
-    return caption;
-  }
-  const node = el("button", block.kind === "group" ? "caption" : `block ${block.kind}`);
-  node.type = "button";
-  node.dataset.focus = `block:${block.id}`;
-  if (block.state) node.dataset.state = block.state;
-  node.title = name;
-  node.setAttribute("aria-label", blockLabel(block));
-  const folding = folds.has(block.id);
-  if (block.kind === "group") node.textContent = name;
-  else node.append(...blockParts(block, { tile, open: folding && open.has(block.id) }));
-  if (folding) node.setAttribute("aria-expanded", String(open.has(block.id)));
-  if (block.id === selected) node.classList.add("selected");
-  if (lit.has(block.id)) node.classList.add("lit");
-  if (matched) node.classList.add("found");
-  node.addEventListener("click", () => {
-    if (folding && onOpen) onOpen(block.id);
-    if (onSelect) onSelect(block.id);
-  });
-  return node;
-}
-
-// Draw `layout` (from layoutTree) of `model` in `box`: column captions, then one SVG of links
-// under the blocks, each placed where the layout says. The DOM order is the reading order
-// (blockOrder). What `drawn` does not hold yet appeared since the last draw (`appeared`): a new
-// link draws once, then new blocks fade in after it (`unfoldDelays`); with `reduced` all of it
-// shows at once. Lit links are drawn last, over the others. A click calls `onOpen(id)` on a block
-// that folds, then `onSelect(id)`. `tile(block)` gives what a block shows before its name. `found`
-// (from findIn, null for no search) lights its matches and dims the rest (`.finding`); the page
-// adds `found.open` to `open` itself.
-export function drawMap(box, model, layout, { onSelect, onOpen, onAdd, tile, selected = null, lit = new Set(), found = null, open = new Set(), drawn = new Set(), reduced = false } = {}) {
-  performance.mark("kitden:map-start");
-  const byId = new Map(model.blocks.map((block) => [block.id, block]));
-  const width = layout.columns.reduce((most, column) => Math.max(most, column.x + column.w), 0);
-  const fresh = appeared(layout, drawn);
-  const parts = [];
-
-  const heads = model.columns.filter((column) => column.caption || column.add);
-  if (heads.length) {
-    const head = el("div", "map-head");
-    head.style.width = `${width}px`;
-    for (const column of heads) {
-      // Narrow, a column with no room of its own has no caption either.
-      const at = layout.columns.find((c) => c.id === column.id);
-      if (!at) continue;
-      const cell = el("div", "map-caption");
-      cell.style.left = `${at.x}px`;
-      cell.style.width = `${at.w}px`;
-      if (column.caption) cell.append(el("span", null, column.caption));
-      if (column.add) {
-        const add = button("+ Add", () => onAdd && onAdd(column.id), "btn small ghost");
-        add.dataset.focus = `add:${column.id}`;
-        cell.append(add);
-      }
-      head.append(cell);
-    }
-    parts.push(head);
-  }
-
-  const area = el("div", "map-area");
-  area.style.width = `${width}px`;
-  area.style.height = `${layout.height}px`;
-  const svg = document.createElementNS(SVG, "svg");
-  svg.setAttribute("class", "map-links");
-  svg.setAttribute("aria-hidden", "true");
-  svg.setAttribute("width", String(width));
-  svg.setAttribute("height", String(layout.height));
-  svg.setAttribute("viewBox", `0 0 ${width} ${layout.height}`);
-  const keyOf = (link) => `${link.from}>${link.to}`;
-  const links = [...layout.links.filter((link) => !lit.has(keyOf(link))), ...layout.links.filter((link) => lit.has(keyOf(link)))];
-  for (const link of links) {
-    const key = keyOf(link);
-    const path = document.createElementNS(SVG, "path");
-    path.setAttribute("class", `link ${link.kind}${link.unk ? " unk" : ""}${lit.has(key) ? " lit" : ""}`);
-    path.setAttribute("d", link.d);
-    // A dashed line shows at once: the draw itself is a dash.
-    if (fresh.has(key) && !reduced && !link.unk) {
-      path.classList.add("draw");
-      path.setAttribute("pathLength", "1");
-    }
-    svg.append(path);
-  }
-  area.append(svg);
-
-  const folds = foldable(model);
-  const delays = unfoldDelays(layout.blocks.filter((at) => fresh.has(at.id)).length, reduced);
-  let next = 0;
-  for (const at of layout.blocks) {
-    const block = byId.get(at.id) || at; // "N more" is the layout's own block
-    const node = blockNode(block, { selected, lit, found, folds, open, tile, onSelect, onOpen });
-    Object.assign(node.style, { left: `${at.x}px`, top: `${at.y}px`, width: `${at.w}px`, height: `${at.h}px` });
-    if (fresh.has(at.id) && !reduced) {
-      node.classList.add("appear");
-      node.style.animationDelay = `${delays[next++]}ms`;
-    }
-    area.append(node);
-  }
-  parts.push(area);
-
-  box.classList.add("map");
-  box.classList.toggle("finding", Boolean(found));
-  box.classList.toggle("narrow", Boolean(layout.narrow));
-  box.replaceChildren(...parts);
-  performance.mark("kitden:map-drawn");
-  performance.measure("kitden:map-draw", "kitden:map-start", "kitden:map-drawn");
 }

@@ -588,29 +588,24 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .add-gateway h2 { margin: 0 0 4px; font-size: 13px; }
 .add-gateway .form { margin: 0; }
 
-/* A link on a map draws once, when it appears; then the blocks that appeared fade in. */
-@keyframes wire-draw { from { stroke-dashoffset: 1; } }
-@keyframes block-in { from { opacity: 0; } }
-
-/* Map (map.js): HTML blocks over one SVG of links, each where the layout puts it. The link is the
+/* Map (map.js): HTML blocks over one SVG of links, each where the layout puts it (map-view.js
+   moves them by transform and owns their opacity; a look here never sets either). The link is the
    state; it draws once when it appears, and nothing moves while idle. A block's handle marks where
    links meet it: the route color on an open server, amber where a direct line comes in. */
 div.map { position: relative; padding: 4px; margin: 12px 0; overflow-x: auto; }
-div.map .map-head { position: relative; height: 28px; }
-div.map .map-caption { position: absolute; top: 0; height: 24px; display: flex; align-items: center; justify-content: space-between; gap: 6px; color: var(--ink-3); font-size: 12px; font-weight: 500; }
+div.map .block, div.map .caption, div.map .map-caption { position: absolute; left: 0; top: 0; z-index: 1; transform-origin: center; will-change: transform; }
+div.map .map-caption { display: flex; align-items: center; justify-content: space-between; gap: 6px; color: var(--ink-3); font-size: 12px; font-weight: 500; }
 div.map .map-area { position: relative; }
-div.map .map-links { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; }
+div.map .map-links { position: absolute; inset: 0; z-index: 0; overflow: visible; pointer-events: none; }
 div.map .link { fill: none; stroke: var(--link); stroke-width: 1.3; stroke-linecap: round; transition: stroke var(--t-fast) ease; }
-div.map .link.direct { stroke: var(--lamp-warn); stroke-width: 1.2; opacity: 0.55; }
+div.map .link.direct { stroke: var(--lamp-warn); stroke-width: 1.2; stroke-opacity: 0.55; }
 /* A client has the entry, but Kitden does not know that it loads it: the line does not say on. */
 div.map .link.direct.unk { stroke-dasharray: 3 3; }
-div.map .link.faint { opacity: 0.5; }
-div.map .link.lit { stroke: var(--route); stroke-width: 1.6; opacity: 1; }
-div.map .link.draw { stroke-dasharray: 1; animation: wire-draw 150ms var(--ease-out) both; }
-div.map .appear { animation: block-in 60ms var(--ease-out) both; }
-div.map .block { position: absolute; display: flex; align-items: center; gap: 8px; margin: 0; padding: 0 10px; border: 1px solid var(--wire-strong); border-radius: 8px; background: var(--panel); color: var(--ink); text-align: left; cursor: pointer; transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease, transform 260ms var(--spring); }
+div.map .link.faint { stroke-opacity: 0.5; }
+div.map .link.lit { stroke: var(--route); stroke-width: 1.6; stroke-opacity: 1; }
+div.map .block { display: flex; align-items: center; gap: 8px; margin: 0; padding: 0 10px; border: 1px solid var(--wire-strong); border-radius: 8px; background: var(--panel); color: var(--ink); text-align: left; cursor: pointer; transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease, filter 300ms ease, scale 260ms var(--spring); }
 div.map .block:hover { border-color: color-mix(in srgb, var(--ink-3) 60%, transparent); }
-div.map .block:active { transform: scale(0.98); transition-duration: var(--t-fast), var(--t-fast), 80ms; }
+div.map .block:active { scale: 0.98; transition-duration: var(--t-fast), var(--t-fast), 300ms, 80ms; }
 div.map .block:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 div.map .block:has(> .block-count) { padding-right: 16px; }
 div.map .block-tile { flex: none; display: grid; place-items: center; }
@@ -659,25 +654,25 @@ div.map.narrow .block.client .block-tile .client-mark, div.map.narrow .block.cli
 div.map.narrow .block.gateway, div.map.narrow .block.slot:not([data-state="preview"]) { padding: 0; }
 div.map.narrow .block.gateway .block-text, div.map.narrow .block.slot:not([data-state="preview"]) .block-text, div.map.narrow .block-action { display: none; }
 div.map.narrow .block[aria-expanded="true"]::after { display: none; }
-div.map .caption { position: absolute; display: block; margin: 0; padding: 4px 0 0; border: 0; background: none; color: var(--ink-3); font-size: 11px; font-weight: 600; line-height: 16px; text-align: left; overflow: hidden; }
+div.map .caption { display: block; margin: 0; padding: 4px 0 0; border: 0; background: none; color: var(--ink-3); font-size: 11px; font-weight: 600; line-height: 16px; text-align: left; overflow: hidden; }
 div.map button.caption { cursor: pointer; }
 div.map button.caption:hover { color: var(--ink); }
 div.map button.caption:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 /* A search on the map (S.6): a match is lit, every other block dims to 35% and the links to 25%. */
 div.map .block.found { border-color: var(--route); box-shadow: 0 0 0 3px var(--route-soft); }
 div.map .caption.found { color: var(--ink); }
-div.map.finding .block:not(.found), div.map.finding .caption:not(.found) { opacity: 0.35; }
-div.map.finding .link { opacity: 0.25; }
+div.map.finding .block:not(.found), div.map.finding .caption:not(.found) { filter: opacity(0.35); }
+div.map.finding .link { stroke-opacity: 0.25; }
 /* A move on the map (S.8, 4.6): a block with a grip can be dragged; it lifts while it follows the
    pointer or waits on the slot, which lights while the pointer is over Servers. A preview is drawn
    with the preview line on the preview fill, joined to the gateway by a quiet accent link. */
 div.map .block:has(> .block-grip) { cursor: grab; touch-action: none; }
-div.map .block.dragging { z-index: 2; border-color: var(--route); background: var(--panel-raised); box-shadow: var(--shadow-pop); transition: none; }
+div.map .block.dragging { z-index: 3; border-color: var(--route); background: var(--panel-raised); box-shadow: var(--shadow-pop); transition: none; }
 div.map .block.outside.dragging::before { display: none; }
 div.map.dropping .block.slot[data-state="preview"] { border-style: solid; border-color: var(--route); }
 div.map .block.preview { border: 1px solid var(--preview-line); background: var(--preview-fill); }
 div.map .block.preview .block-meta { color: var(--ink-2); }
-div.map .link.preview { stroke: var(--route); opacity: 0.6; }
+div.map .link.preview { stroke: var(--route); stroke-opacity: 0.6; }
 
 /* The review bar of a preview on the map (S.8): what it will do, Cancel, Apply and "Show changes".
    It sits under the map at the left and stays in sight while the page scrolls. While Apply runs,

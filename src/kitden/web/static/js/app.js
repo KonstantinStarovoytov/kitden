@@ -51,8 +51,9 @@ function renderPlace() {
   // A page sets its own hint line while it draws; none inherits the last page's.
   setHint("");
   let found = null;
+  // `again`: the same place draws again, so a page may keep what it drew (the Gateway's map).
   if (PROJECT_PLACES.includes(state.view) && projectGone()) main.append(el("h1", null, place.title), callout(GONE_PROJECT));
-  else found = place.render(main);
+  else found = place.render(main, { again: samePlace });
   if (place.settle) place.settle(before);
   if (key) {
     const same = $$(FOCUSABLE, main).find((node) => focusKey(node) === key);

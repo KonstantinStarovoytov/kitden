@@ -152,9 +152,9 @@ has verified it. Calm beats bouncy: a tool that edits files must feel steady.
    the button that failed. No success animation can follow an error.
 5. **Interruptible.** Every animation can be cut short; the true state is always the resting
    style, never something an animation must finish to reach.
-6. **Transform and opacity.** Only these animate, with four small exceptions (the client
+6. **Transform and opacity.** Only these animate, with five small exceptions (the client
    counts row, a folded `<details>`, the sliding mark, a check or a map link drawing its
-   stroke), all on small elements.
+   stroke, a map link redrawn as its blocks move), all on small elements.
 
 ### Tokens
 
@@ -204,9 +204,8 @@ All helpers live in `src/kitden/web/static/js/motion.js`.
 | Step count | `change_progress` events → "Applying 2 of 5" + `.btn .meter` | Apply of a change with several steps, from the server's own count |
 | Applied | `.btn.primary.done` (green at once, full strength) + drawn check | Review footer, after `verified` |
 | Toast check | `toast(text, undo, { ok: true })` | Only for verified and undone |
-| Unfold | `drawMap` with `unfoldDelays` (map.js): the new links draw (150 ms), then the new blocks fade in 15 ms apart (60 ms each), with no extra wait after the sixth, all within 300 ms; reduced motion shows the end at once | A server opening on the Gateway map |
-| Link | `appeared` (map.js): a link draws once, when it appears; the page's first draw, a redraw and a new width show what is there at once, and nothing moves while idle | Gateway map |
-| Map preview | `previewOnMap` and `applyOnMap` (map-review.js): the preview block fades in and its link draws once when the preview opens. Only after `verified` does the preview go: the server's block turns solid in its group, its new link draws once, and the toast offers Undo. A dragged block follows the pointer at once and glides (260 ms `--calm`) onto the slot or back to its place; reduced motion moves nothing by itself | Gateway map |
+| Map draw | `mapView().draw` (map-view.js): nodes stay; a block that moves glides 260 ms OUT3, a new one fades in at its place in 260 ms, one that goes fades out in 180 ms IN3; an opened block's links draw in 170 ms, then its children fade in 120 ms, 15 ms apart; a folded block's children shrink back to its right side in 180 ms; links follow their blocks every frame; a new project or width shows the map at once; reduced motion and a hidden page land at once | Gateway map |
+| Map preview | `previewOnMap` and `applyOnMap` (map-review.js): the preview block fades in and its link draws once when the preview opens. Only after `verified` does the preview go: the server's block turns solid in its group, its new link draws once, and the toast offers Undo. The map holds a dragged block (`hold` in map-view.js): it follows the pointer at once and glides onto the slot (260 ms OUT3); let go (`letGo`), it glides home in 260 ms OUT3; reduced motion moves nothing by itself | Gateway map |
 
 ### Conventions
 

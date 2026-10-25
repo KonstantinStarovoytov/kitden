@@ -4,8 +4,9 @@ import { $, button, el, gridKey, joinWords, plural, reportError, withFocusKey } 
 import { addForm, heldServer, liveHeld, movesTo, SETUP_NOTE, showClient, showGateway, showHeld, showOutside, showTool } from "./gateway-details.js";
 import { endedMove, movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { leaveMap, mapReviewLeft, previewBar, redrawPreview, showMapReview } from "./map-review.js";
-import { appeared, drawMap, findIn, isNarrow, keepOpen, layoutTree, litFrom, litPath, pressOpen, toggleOpen, wideWidth } from "./map.js";
-import { entrance, glide, reducedMotion } from "./motion.js";
+import { findIn, isNarrow, keepOpen, layoutTree, litFrom, litPath, pressOpen, toggleOpen, wideWidth } from "./map.js";
+import { mapView } from "./map-view.js";
+import { entrance, glide } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, openInfo, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, folderName, gatewayName, kitdenClients, mark, opens, ORIGIN_WORDS, scopeBar, skeleton, STATE_WORDS, staleNote } from "./parts.js";
 import { arrival, current, currentError, data, go, goTo, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
@@ -67,8 +68,10 @@ export function serverCount(view) {
 }
 
 // Draws the page. It returns what the top search found on it (map.js findIn), or null with no
-// search or no page to search: app.js shows the chip.
-export function renderGateway(main) {
+// search or no page to search: app.js shows the chip. The map keeps its blocks while the page
+// draws `again`; a new visit, or the List, starts a new one.
+export function renderGateway(main, { again = false } = {}) {
+  if (!again) onMap.view = null;
   const head = el("div", "page-head");
   head.append(el("h1", null, "Gateway"));
   main.append(head, el("p", "lede", "Connect your agents. Shape what they can use."));
@@ -96,7 +99,10 @@ export function renderGateway(main) {
   // It changes nothing in a client and moves no Details.
   const found = state.q.trim() ? findIn(model, state.q) : null;
   if (mode === "map") gatewayMap(main, model, found);
-  else gatewayList(main, view, model, found);
+  else {
+    onMap.view = null;
+    gatewayList(main, view, model, found);
+  }
   glide(seg, seg.querySelector('[aria-pressed="true"]'), "gateway-view", { duration: 280 });
   // A performance mark for the map probe (Part 4.1): the first time the page draws with data.
   if (!performance.getEntriesByName("kitden:gateway-drawn").length) performance.mark("kitden:gateway-drawn");
@@ -368,35 +374,56 @@ export function narrowFor(model, { window: width, box = null, docked = false }) 
   return isNarrow(width, docked) || (box !== null && box < wideWidth(model));
 }
 
-// The map: the blocks open and the one selected, what is drawn already, its box and the tree it
-// shows, what the search found, and the box's width as last measured. Kept across redraws of one
-// project. What the map showed of a move started on it (`shows`; the move is gateway-drag.js's).
+// The map: the blocks open and the one selected, its view (map-view.js, one per visit) and the
+// tree it shows, what the search found, and the box's width as last measured. Kept across redraws
+// of one project. What the map showed of a move started on it (`shows`; the move is
+// gateway-drag.js's).
 const onMap = {
-  project: null, open: new Set(), selected: null, drawn: new Set(), seeded: false, box: null, model: null, found: null, width: null, narrow: false, watch: null,
+  project: null, open: new Set(), selected: null, view: null, model: null, found: null, width: null, narrow: false, watch: null,
   shows: "",
 };
 
+// Every render puts the same map back on the page, so its blocks keep their nodes and focus.
 function gatewayMap(main, model, found) {
-  if (onMap.project !== state.project) Object.assign(onMap, { project: state.project, open: new Set(), selected: null, seeded: false });
-  const box = el("div");
-  main.append(box);
-  Object.assign(onMap, { box, model, found, shows: JSON.stringify(movingOn()) });
+  let fresh = false;
+  if (onMap.project !== state.project) {
+    Object.assign(onMap, { project: state.project, open: new Set(), selected: null });
+    fresh = true;
+  }
+  if (!onMap.view) {
+    onMap.view = newMap();
+    fresh = true;
+  }
+  main.append(onMap.view.box);
+  Object.assign(onMap, { model, found, shows: JSON.stringify(movingOn()) });
+  drawOnMap(model, { fresh });
+  const bar = previewBar(redrawMove);
+  if (bar) main.append(bar);
+}
+
+// A new map for this visit, with what its box listens to, once.
+function newMap() {
+  const view = mapView({ tile, onOpen: openBlock, onSelect: (id) => pressBlock(onMap.model, id) });
   // Escape clears the selection first; open Details then close too (panel.js).
-  box.addEventListener("keydown", (event) => {
+  view.box.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || !onMap.selected) return;
     onMap.selected = null;
     if (!isPanelOpen()) setState({ selected: null });
     drawAgain();
   });
-  box.addEventListener("pointerdown", pressGrip);
-  watchMap(box);
-  drawOnMap(box, model);
-  const bar = previewBar(redrawMove);
-  if (bar) main.append(bar);
+  view.box.addEventListener("pointerdown", pressGrip);
+  watchMap(view.box);
+  return view;
+}
+
+// A press on a block that folds opens or folds it, before it is selected.
+function openBlock(id) {
+  const { model } = onMap;
+  onMap.open = pressOpen(model, onMap.open, onMap.found, id);
 }
 
 // A new width of the box (the window, or Details beside the page) may change the layout: it is
-// drawn again, and links shown already do not draw again. Details closing (Escape, Close or
+// drawn again, at once in its new shape. Details closing (Escape, Close or
 // another place) clears what the map lights; the panel's class says when it closes. A preview
 // shown in Details ends on the map when its review leaves there without Apply.
 function watchMap(box) {
@@ -432,42 +459,28 @@ function openNow() {
   return onMap.found ? new Set([...onMap.open, ...onMap.found.open]) : onMap.open;
 }
 
-// Draw the map in its box as it is now. On the page's first draw (and a project's), every link and
-// block counts as drawn already, so all of it shows at once; later only what appears draws.
-function drawOnMap(box, model) {
-  onMap.narrow = narrowNow(model);
+// Draw the map as it is now. What changed moves; a new map, another project or a new width shows
+// at once.
+function drawOnMap(model, { fresh = false } = {}) {
+  const narrow = narrowNow(model);
+  const flipped = narrow !== onMap.narrow;
+  onMap.narrow = narrow;
   const open = openNow();
-  const layout = layoutTree(model, { open, narrow: onMap.narrow });
-  if (!onMap.seeded) {
-    appeared(layout, onMap.drawn);
-    onMap.seeded = true;
-  }
+  const layout = layoutTree(model, { open, narrow });
   // A selected block lights every client's path to it; a selected client lights what it reaches.
   const chosen = model.blocks.find((b) => b.id === onMap.selected);
   const lit = !chosen ? new Set() : chosen.kind === "client" ? litFrom(model, chosen.id) : litPath(model, chosen.id);
-  drawMap(box, model, layout, {
-    onOpen: (id) => { onMap.open = pressOpen(model, onMap.open, onMap.found, id); },
-    onSelect: (id) => pressBlock(model, id),
-    tile,
-    selected: chosen ? chosen.id : null,
-    lit,
-    found: onMap.found,
-    open,
-    drawn: onMap.drawn,
-    reduced: reducedMotion.matches,
-  });
+  const motion = fresh || flipped ? "none" : "move";
+  onMap.view.draw(model, layout, { selected: chosen ? chosen.id : null, lit, found: onMap.found, open, motion });
   // A block a move took off its place stays where it is shown (gateway-drag.js).
-  placeMoved({ box, model, layout, redraw: redrawMove });
+  placeMoved({ view: onMap.view, model, layout, redraw: redrawMove });
 }
 
-// Draw the map again in place; focus stays on the block that had it.
+// Draw the map again in place; its blocks keep their nodes, so focus stays where it is.
 function drawAgain() {
-  const { box, model } = onMap;
-  if (!box || !box.isConnected) return;
-  const had = box.contains(document.activeElement) ? document.activeElement.dataset.focus : null;
-  drawOnMap(box, model);
-  const again = had ? withFocusKey(box, had) : null;
-  if (again) again.focus({ preventScroll: true });
+  const { view, model } = onMap;
+  if (!view || !view.box.isConnected) return;
+  drawOnMap(model);
 }
 
 // A press on a block (a held server opened or folded first, by onOpen). "N more" opens the List
