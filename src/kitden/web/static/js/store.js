@@ -204,16 +204,18 @@ export function setState(params) {
 
 // Back, Forward or an edited address: take the state from the address without a new entry. Its
 // selection opens as an arrival does.
-export function followAddress(next) {
+export function followAddress(next, { draw = true } = {}) {
   const moving = next.view !== state.view;
   Object.assign(state, next);
   arrival.pending = Boolean(next.selected);
-  show(moving);
+  if (draw) show(moving);
 }
 
 // The same from the address itself. Null for one that is not a page (like the skip link's
-// #main); else whether it is the state shown already and whether the project changed. An old
-// #map or #discover address opens the Library and the address says so.
+// #main); else whether it is the state shown already, whether the project changed, and whether
+// that is a project switch in place: on the Gateway, staying there, the page is drawn once the
+// project is read (app.js refreshForProject), not before. An old #map or #discover address opens
+// the Library and the address says so.
 export function followHash(hash) {
   const view = String(hash || "").replace(/^#/, "").split("?")[0];
   const old = Boolean(OLD_VIEWS[view]);
@@ -222,9 +224,10 @@ export function followHash(hash) {
   const same = ["view", "project", "kind", "show", "category", "attention", "mode", "q"].every((key) => next[key] === state[key])
     && sameSel(next.selected, state.selected);
   const newProject = next.project !== state.project;
-  if (!same) followAddress(next);
+  const inPlace = !same && newProject && next.view === "gateway" && state.view === "gateway";
+  if (!same) followAddress(next, { draw: !inPlace });
   if (old) setState({});
-  return { same, newProject };
+  return { same, newProject, inPlace };
 }
 
 export function projectPath() {

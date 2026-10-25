@@ -7,7 +7,7 @@ import { openItem, syncTray } from "./details.js";
 import { $, $$, button, el, focusKey } from "./dom.js";
 import { onOpenItem } from "./library.js";
 import { animateTo, D, finishTransition, rise } from "./motion.js";
-import { arrival, setState, state } from "./store.js";
+import { arrival, projectGone, setState, state } from "./store.js";
 import { reloadTools } from "./tools.js";
 import { onTray, tray } from "./tray.js";
 
@@ -63,10 +63,12 @@ export function swapContent(content) {
   put(content);
 }
 
+// New content belongs to the project picked now (a step to another project too).
 function put(content) {
   const drawer = $("#drawer");
   const had = drawer.contains(document.activeElement);
   drawn += 1;
+  openedIn = state.project;
   drawer.replaceChildren(...content);
   if (isPanelOpen() && (had || (!floating && !quiet)) && !drawer.contains(document.activeElement)) drawer.focus();
 }
@@ -327,8 +329,33 @@ export function closePanel({ instant = false, keepSelection = false, focus = tru
 // panel stays, and the page has it follow the project (gateway-details.js followProject). The tray
 // keeps its rows: each keeps the project it was asked in. The selection is the caller's: the
 // picker clears it, an address brings its own.
+// A project that is gone closes it on the Gateway too: the page then only says so.
 export function closeForProject() {
-  if (isPanelOpen() && openedIn !== state.project && state.view !== "gateway") closePanel({ focus: false, keepSelection: true });
+  const inPlace = state.view === "gateway" && !projectGone();
+  if (isPanelOpen() && openedIn !== state.project && !inPlace) closePanel({ focus: false, keepSelection: true });
+}
+
+// While the page reads another project and Details follow it (`work`, a promise), the panel takes
+// no press, key or Tab (inert, and `.pending`: the progress cursor), so nothing in it acts on the
+// project it was drawn for. Holds may overlap; focus that was inside comes back when the last ends.
+let holds = 0;
+let heldFocus = false;
+export async function holdPanel(work) {
+  const drawer = $("#drawer");
+  if (!holds++) {
+    heldFocus = drawer.contains(document.activeElement);
+    drawer.inert = true;
+    drawer.classList.add("pending");
+  }
+  try {
+    return await work;
+  } finally {
+    if (!--holds) {
+      drawer.classList.remove("pending");
+      if (!drawer.classList.contains("leaving")) drawer.inert = false;
+      if (heldFocus && isPanelOpen() && !drawer.contains(document.activeElement)) drawer.focus();
+    }
+  }
 }
 
 export function restoreFocus() {

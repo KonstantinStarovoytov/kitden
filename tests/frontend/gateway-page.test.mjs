@@ -782,3 +782,37 @@ test('a project switch keeps each page, and a search brings its matches there', 
   press(box, 'block:more:group:outside');
   settle();
 });
+
+// Fix round 1: "Show" in a tool's panel goes the picker's way (switchProject), and the page draws
+// the project in place as app.js does; the panel takes no press until it has stepped.
+test('Show switches in place through the page, and the panel waits for its step', async (t) => {
+  const { setSwitcher } = await import('../../src/kitden/web/static/js/store.js');
+  const { closeForProject } = await import('../../src/kitden/web/static/js/panel.js');
+  const rules = { server: 'files', state: 'on', shared: 'on', strict: false, problem: null, tools: [{ name: 'read_file', state: 'on', effective: 'on', hint: 'reads', origin: 'default' }],
+    projects: [{ id: 'atlas', server: 'on', tools: { read_file: 'off' }, own: ['read_file'], up: [] }] };
+  const { box, asked } = await filesOpen(t);
+  const fetchWas = globalThis.fetch;
+  globalThis.fetch = (url, init) => (url.startsWith('/api/gateway/tools') ? (asked.push(url), Promise.resolve({ ok: true, status: 200, json: async () => rules })) : fetchWas(url, init));
+  setSwitcher(async () => {
+    closeForProject();
+    pickProject(state.project, state.project === 'atlas' ? ATLAS : VIEW);
+  });
+  t.after(() => { globalThis.fetch = fetchWas; setSwitcher(async () => {}); });
+  press(box, 'block:tool:files/read_file');
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  const drawer = pages['#drawer'];
+  const show = walk(drawer).find((n) => n.dataset.focus === 'show:atlas');
+  assert.ok(show, 'Show for atlas');
+  asked.length = 0;
+  show.listeners.click[0]({});
+  await Promise.resolve();
+  // The page has drawn atlas in place; the panel holds still while its step reads.
+  assert.equal(state.project, 'atlas');
+  assert.equal(drawer.inert, true);
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  assert.equal(drawer.inert, false);
+  assert.equal(isPanelOpen(), true);
+  assert.deepEqual(panelState.current, { type: 'tool', server: 'files', tool: 'read_file' });
+  assert.ok(asked.includes('/api/gateway/tools?server=files&project=atlas'), asked.join(' '));
+  assert.equal(map(), box);
+});

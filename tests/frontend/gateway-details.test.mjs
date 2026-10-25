@@ -930,6 +930,66 @@ test('the tool panel steps forward to the new project and Show switches in place
 });
 const MOVE = 'action:Move out of the gateway…';
 
+// Fix round 1: after a switch in place, Back from a step reads its panel again for the new
+// project, and a client's panel keeps its place in the address.
+test('Back from a step after a project switch reads the panel again for that project', async () => {
+  const back = (drawer) => click(drawer.children[0].children[0].children[0]);
+  const reads = (sent) => sent.filter((url) => url.startsWith('/api/gateway/tools'));
+  const pick = (id) => {
+    state.project = id;
+    data.scope.gateway = id;
+  };
+  try {
+    // A server's move-out step: Back in the same project draws from what was read, with no read.
+    await onFilesPanel(async (drawer, sent) => {
+      await click(control(drawer, MOVE));
+      await wait(50);
+      sent.length = 0;
+      await back(drawer);
+      await wait(50);
+      assert.deepEqual(reads(sent), []);
+      await click(control(drawer, MOVE));
+      await wait(50);
+      pick('atlas');
+      await back(drawer);
+      await wait(400);
+      assert.deepEqual(reads(sent), ['/api/gateway/tools?server=files&project=atlas']);
+      assert.equal(textOf(drawer.children[0].children[1]), 'files');
+    }, { projects: MEDIUM_PROJECTS });
+    pick('');
+    // A tool's "in some projects" step: the same.
+    await onFilesPanel(async (drawer, sent) => {
+      await click(control(drawer, 'action:Turn off in some projects…'));
+      await wait(50);
+      assert.equal(textOf(drawer.children[0].children[1]), 'Turn off write_file in the projects you pick');
+      sent.length = 0;
+      pick('atlas');
+      await back(drawer);
+      await wait(400);
+      assert.deepEqual(reads(sent), ['/api/gateway/tools?server=files&project=atlas']);
+      assert.equal(textOf(drawer.children[0].children[1]), 'write_file');
+    }, { open: () => showTool('files', 'write_file'), projects: MEDIUM_PROJECTS });
+  } finally {
+    pick('');
+  }
+});
+
+test('after a project switch a client panel keeps its place in the address', async () => {
+  const { followProject, showClient } = await import('../../src/kitden/web/static/js/gateway-details.js');
+  await onGatewayPage(() => Response.json({}), async () => {
+    showClient('codex');
+    await wait(400);
+    // switchProject lets go of the selection; the panel that stays takes it back.
+    Object.assign(state, { selected: null, project: 'atlas' });
+    data.scope.gateway = 'atlas';
+    await followProject();
+    assert.equal(isPanelOpen(), true);
+    assert.deepEqual(state.selected, { kind: 'client', name: 'codex' });
+  });
+  state.project = '';
+});
+
+
 test('Move out steps to a client choice and a pick adds one move-out row', async () => {
   await onFilesPanel(async (drawer) => {
     await click(control(drawer, MOVE));

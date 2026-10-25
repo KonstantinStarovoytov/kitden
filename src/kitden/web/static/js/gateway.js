@@ -129,15 +129,15 @@ export function renderGateway(main, { again = false } = {}) {
 
 // The project the page was drawn for last. A draw for another one on the same visit is a project
 // switch in place (gateway-notes 7.4): the scope line rises with its new words (4 px, 320 ms CALM)
-// and Details follow the project (gateway-details.js followProject), unless an address brings a
-// selection of its own. The map and the List change in place as they draw.
+// and open Details follow the project (gateway-details.js followProject; an address's selection
+// never opens over them). The map and the List change in place as they draw.
 let drawnFor = null;
 function switchInPlace(again, scope) {
   const switched = again && drawnFor !== null && drawnFor !== state.project;
   drawnFor = state.project;
   if (!switched) return;
   rise([scope], { y: 4, dur: 320 });
-  if (!arrival.pending) followProject().catch(reportError);
+  followProject().catch(reportError);
 }
 
 // The Gateway as one tree, as the page shows it now: what Kitden read and the picked project, and

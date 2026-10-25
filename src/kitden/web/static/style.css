@@ -204,8 +204,10 @@ a { color: var(--route); }
    tray's bar or a toast (--dock-room, set on the root by toast.js: its height and the dock's 46 px). */
 .page { flex: 1 0 auto; padding: 26px 22px 64px; padding-bottom: max(64px, var(--dock-room, 0px)); max-width: 1180px; outline: none; transition: opacity var(--t-fast) ease; }
 .page.pending { opacity: 0.5; pointer-events: none; }
-/* The Gateway changes in place as another project is read (gateway.js): it does not fade. */
+/* The Gateway changes in place as another project is read (gateway.js): it does not fade, and the
+   progress cursor says why a press waits. Details take no press meanwhile (panel.js holdPanel). */
 .page.pending[data-place="gateway"] { opacity: 1; }
+.content:has(> .page.pending[data-place="gateway"]), .drawer.pending, .drawer.pending * { cursor: progress; }
 .page[data-place="gateway"] { max-width: none; }
 /* While Details float, a list or a table keeps room on its right for them (--float-room, panel.js),
    so no control sits under the panel. The Gateway map keeps its width: a block under the panel

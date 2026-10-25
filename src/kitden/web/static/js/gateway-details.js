@@ -8,7 +8,7 @@ import { $, busyWhile, button, el, icon, joinWords, plural, reportError, withFoc
 import { loadLibraryFor, raceSlow } from "./library.js";
 import { animateTo, fold } from "./motion.js";
 import { projectNote } from "./offer.js";
-import { callsText, closePanel, contextLinks, detailsCard, drawQuietly, followTray, heldActions, isPanelOpen, keepFrom, linksRow, loadPanel, moveBody, moveInto, moveTargets, NO_TOOLS, offerLabel, offNote, openPanel, panelState, previewButton, refreshTools, review, stepTo, swapContent, switchList, techRows, technical, toast, toolRows, toolsHead, writingToolsOn } from "./panel.js";
+import { callsText, closePanel, contextLinks, detailsCard, drawQuietly, followTray, heldActions, holdPanel, isPanelOpen, keepFrom, linksRow, loadPanel, moveBody, moveInto, moveTargets, NO_TOOLS, offerLabel, offNote, openPanel, panelState, previewButton, refreshTools, review, stepTo, swapContent, switchList, techRows, technical, toast, toolRows, toolsHead, writingToolsOn } from "./panel.js";
 import { ALL_PROJECTS, callout, CLIENT_NAMES, clientCheck, FIND_PROJECT, folderName, GATEWAY_NOTE, gatewayName, kindOf, kitdenClients, mark, menuItems, originText, STATE_WORDS, versionsOpen } from "./parts.js";
 import { arrival, current, data, freshness, go, libraryChoice, projectPath, reload, render, setState, state, switchProject } from "./store.js";
 import { addToTray, iconFor, inTray, keyFor, takeOut, tray } from "./tray.js";
@@ -1009,6 +1009,14 @@ function stepFoot(words) {
   return foot;
 }
 
+// Back from a step to its panel: drawn from the rules read for it (`draw`), or read again
+// (`read`) when another project is picked since (a project switch in place), so it never shows
+// one project's rules under another's name.
+function backTo(draw, read) {
+  const readIn = state.project;
+  return () => (state.project === readIn ? draw() : read());
+}
+
 // After a step, focus that was in the panel goes to the first control named in `keys` that is there.
 function focusAfterStep(...keys) {
   const drawer = $("#drawer");
@@ -1025,7 +1033,7 @@ function focusAfterStep(...keys) {
 function moveOutStep(name, detail, warning, dir = "fwd") {
   panelState.current = { type: "moveout", name };
   const { linked } = heldContext();
-  const back = () => drawHeld(name, detail, { step: "back", warning });
+  const back = backTo(() => drawHeld(name, detail, { step: "back", warning }), () => showHeld(name, { step: "back", focus: [`action:${MOVE_OUT}`] }));
   const nodes = moveOutNodes(name, foundClients(), linked, back);
   keepFrom(() => moveOutStep(name, detail, warning, null), nodes, () => showHeld(name));
   if (!dir) return swapContent(nodes);
@@ -1097,7 +1105,7 @@ function projectsStep(step, dir = "fwd") {
   const { server, tool } = step;
   panelState.current = { type: "projects", server, tool };
   const again = { warning: step.warning, step: "back", focus: [`action:${IN_SOME[step.target]}`, "more"] };
-  const back = () => (tool ? drawTool(server, tool, step.rules, again) : drawHeld(server, step.rules, again));
+  const back = backTo(() => (tool ? drawTool(server, tool, step.rules, again) : drawHeld(server, step.rules, again)), () => (tool ? showTool(server, tool, again) : showHeld(server, again)));
   const nodes = projectsNodes(step, heldContext().projects, back);
   keepFrom(() => projectsStep(step, null), nodes, () => (tool ? showTool(server, tool) : showHeld(server)));
   if (!dir) return swapContent(nodes);
@@ -1327,7 +1335,7 @@ async function readThen(server, draw, { shown, kind }) {
   const project = state.project;
   const answer = await readRules(server);
   if (asked !== reads || panelState.current !== before || state.project !== project) return;
-  draw(answer);
+  await draw(answer);
 }
 
 // What every card of the Kitden gateway is drawn for: the clients it reaches (null when not
@@ -1340,10 +1348,11 @@ function heldContext() {
 // What a server in the Kitden gateway shows as, and the kind its skeleton names.
 const heldShown = (name) => ({ shown: { type: "held", name }, kind: KIND.server });
 
-// `step` ("fwd"): it slides in as the next step in the panel, and focus stays where it is.
-export async function showHeld(name, { step = null } = {}) {
+// `step` ("fwd" or "back"): it slides in as a step in the panel, focus on the first control of
+// `focus` there (none: it stays where it is).
+export async function showHeld(name, { step = null, focus = [] } = {}) {
   setState({ selected: { kind: "mcp_server", name } });
-  await readThen(name, (answer) => drawHeld(name, answer || {}, { warning: answer ? answer.problem : "Could not load the details.", step, focus: [] }), heldShown(name));
+  await readThen(name, (answer) => drawHeld(name, answer || {}, { warning: answer ? answer.problem : "Could not load the details.", step, focus }), heldShown(name));
 }
 
 // A server that is gone from the gateway since closes its Details. Back from a step it slides in
@@ -1357,25 +1366,28 @@ function drawHeld(name, detail, { warning = null, step = null, focus = [`action:
   }
   const card = heldCard(server, { ...heldContext(), view, detail, warning });
   const shown = openCard(card, { type: "held", name }, () => drawHeld(name, detail, { warning }), () => showHeld(name), step);
-  if (step) shown.then(() => focusAfterStep(...focus));
+  if (step) return shown.then(() => focusAfterStep(...focus));
 }
 
-export async function showTool(server, name, { step = null } = {}) {
+export async function showTool(server, name, { step = null, focus = [] } = {}) {
   setState({ selected: { kind: "tool", name: `${server}/${name}` } });
-  await readThen(server, (answer) => drawTool(server, name, answer || {}, { warning: answer ? null : "Could not load the details.", step }), { shown: { type: "tool", server, tool: name }, kind: KIND.tool });
+  await readThen(server, (answer) => drawTool(server, name, answer || {}, { warning: answer ? null : "Could not load the details.", step, focus }), { shown: { type: "tool", server, tool: name }, kind: KIND.tool });
 }
 
 // A project switch on the Gateway changes the page in place (gateway.js), and Details follow: a
 // tool's or a server's step forward to the new project (130 + 220), read for it first; a client's,
 // a gateway's, an outside server's or a link's are drawn again at once for it, so no button in
-// them acts on the old project. A step inside a panel (the project picker, a move out) and a row's
-// review stay as they are. A panel still loading for the old project closes.
+// them acts on the old project; a client's keeps its place in the address. A step inside a panel
+// (the project picker, a move out) and a row's review stay as they are: Back from a step reads
+// again (backTo). A panel still loading for the old project closes. The panel takes no press
+// until a step has landed (holdPanel).
 const REDRAWN = ["client", "gateway", "outside", "link"];
 export function followProject() {
   const shown = panelState.current;
   if (!isPanelOpen() || !shown) return Promise.resolve();
-  if (shown.type === "tool") return showTool(shown.server, shown.tool, { step: "fwd" });
-  if (shown.type === "held") return showHeld(shown.name, { step: "fwd" });
+  if (shown.type === "tool") return holdPanel(showTool(shown.server, shown.tool, { step: "fwd" }));
+  if (shown.type === "held") return holdPanel(showHeld(shown.name, { step: "fwd" }));
+  if (shown.type === "client") setState({ selected: { kind: "client", name: shown.client } });
   if (shown.type === "loading") closePanel({ focus: false });
   else if (REDRAWN.includes(shown.type) && panelState.from) return drawQuietly(panelState.from.read);
   return Promise.resolve();
@@ -1394,7 +1406,7 @@ function drawTool(serverName, name, rules, { warning = null, step = null, focus 
   const detail = (rules.tools || []).find((t) => t.name === name) || {};
   const card = toolCard(tool, server, { ...heldContext(), detail, rules, warning });
   const shown = openCard(card, { type: "tool", server: serverName, tool: name }, () => drawTool(serverName, name, rules, { warning }), () => showTool(serverName, name), step);
-  if (step) shown.then(() => focusAfterStep(...focus));
+  if (step) return shown.then(() => focusAfterStep(...focus));
 }
 
 // Refresh tools asks every held server for its tools; when it is done the page reads the

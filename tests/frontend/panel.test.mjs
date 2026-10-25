@@ -5,7 +5,7 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; panel.js must load there too.
 delete globalThis.navigator;
-const { FLOAT_MIN, addScope, afterParts, alignGroups, canShowReview, closeForProject, closePanel, countedDefinition, changeOutcome, chosenKeys, callsText, changeWords, floatRoom, floatTop, floatsAt, footerActions, heldActions, initPanel, isPanelOpen, loadPanel, offerLabel, openItem, layerState, leftOutText, kindWord, loadsLede, moveFor, moveTargets, openPanel, panelState, plainSecrets, projectLabel, review, reviewLede, scopeWords, stepTo, swapContent, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
+const { FLOAT_MIN, addScope, afterParts, alignGroups, canShowReview, closeForProject, closePanel, holdPanel, countedDefinition, changeOutcome, chosenKeys, callsText, changeWords, floatRoom, floatTop, floatsAt, footerActions, heldActions, initPanel, isPanelOpen, loadPanel, offerLabel, openItem, layerState, leftOutText, kindWord, loadsLede, moveFor, moveTargets, openPanel, panelState, plainSecrets, projectLabel, review, reviewLede, scopeWords, stepTo, swapContent, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
 const { CALM, reducedMotion } = await import('../../src/kitden/web/static/js/motion.js');
 const { readFileSync } = await import('node:fs');
 const { detailsCard, factsBlock } = await import('../../src/kitden/web/static/js/details.js');
@@ -705,6 +705,51 @@ test('picking another project closes the panel, so a switch never acts on a proj
   } finally {
     state.project = '';
     state.view = 'overview';
+    delete globalThis.document;
+  }
+});
+
+test('on the Gateway a project that is gone closes the panel all the same', () => {
+  fakePanelPage();
+  try {
+    state.view = 'gateway';
+    data.projects = [{ id: 'atlas', path: '/h/atlas', own_rules: 0, exists: true }];
+    state.project = 'atlas';
+    openPanel([]);
+    state.project = 'gone';
+    closeForProject();
+    assert.equal(isPanelOpen(), false);
+  } finally {
+    Object.assign(state, { project: '', view: 'overview' });
+    data.projects = null;
+    delete globalThis.document;
+  }
+});
+
+test('while another project is read the panel takes no press, and focus inside comes back', async () => {
+  const { drawer } = fakePanelPage();
+  try {
+    openPanel([]);
+    globalThis.document.activeElement = drawer;
+    let inside = true;
+    drawer.contains = (node) => inside && node === drawer;
+    drawer.focus = () => { globalThis.document.activeElement = drawer; inside = true; };
+    let readDone;
+    let stepDone;
+    const read = holdPanel(new Promise((resolve) => { readDone = resolve; }));
+    assert.deepEqual([drawer.inert, drawer.classList.contains('pending')], [true, true]);
+    // The browser drops focus from an inert panel; a step that follows holds it too.
+    inside = false;
+    globalThis.document.activeElement = null;
+    const step = holdPanel(new Promise((resolve) => { stepDone = resolve; }));
+    readDone();
+    await read;
+    assert.equal(drawer.inert, true);
+    stepDone();
+    await step;
+    assert.deepEqual([drawer.inert, drawer.classList.contains('pending'), globalThis.document.activeElement], [false, false, drawer]);
+  } finally {
+    closePanel({ instant: true, focus: false });
     delete globalThis.document;
   }
 });

@@ -8,7 +8,7 @@ import { drawTray, initDock } from "./dock.js";
 import { drawChip, renderGateway } from "./gateway.js";
 import { loadLibrary, loadLibraryFor, morphOnNextRender, raceSlow, renderLibrary, settleRows, showSources, snapshotRows } from "./library.js";
 import { renderOverview } from "./overview.js";
-import { closeForProject, closePanel, initPanel, isPanelOpen } from "./panel.js";
+import { closeForProject, closePanel, holdPanel, initPanel, isPanelOpen } from "./panel.js";
 import { callout, demoTag, GONE_PROJECT, latestChanges, projectButton, projectMenu, scanLine, setHint, versionsOpened } from "./parts.js";
 import {
   arrival, busy, current, data, followHash, freshness, go, loadShared, OLD_VIEWS, onIdle, parseHash, projectGone, reload, setRenderer, setState, setSwitcher, state,
@@ -122,10 +122,10 @@ async function refresh({ fade = false } = {}) {
   else renderPlace();
 }
 
-// Another project is picked (store.js switchProject): Details close, the old page waits faded
-// until the new project is read and cross-fades, and the Library's cells turn into their new
-// states. The Gateway changes in place instead (gateway.js): it neither fades nor cross-fades, and
-// its Details stay.
+// Another project is picked (store.js switchProject, or an address on the Gateway): Details close,
+// the old page waits faded until the new project is read and cross-fades, and the Library's cells
+// turn into their new states. The Gateway changes in place instead (gateway.js): it neither fades
+// nor cross-fades, and its Details stay, taking no press until the read ends (holdPanel).
 function refreshForProject() {
   closeForProject();
   drawPicker();
@@ -134,7 +134,8 @@ function refreshForProject() {
   const main = $("#main");
   main.classList.add("pending");
   main.setAttribute("aria-busy", "true");
-  return refresh({ fade: !["library", "gateway"].includes(state.view) }).catch(reportError).finally(() => {
+  const read = refresh({ fade: !["library", "gateway"].includes(state.view) });
+  return (state.view === "gateway" ? holdPanel(read) : read).catch(reportError).finally(() => {
     main.classList.remove("pending");
     main.removeAttribute("aria-busy");
   });
@@ -305,10 +306,15 @@ function listen() {
 }
 
 // Back, Forward or an edited address (store.js followHash). Unknown places (like the skip link's
-// #main) are ignored; another project closes the panel and is read.
+// #main) are ignored; another project closes the panel and is read. On the Gateway another
+// project changes the page in place, as the picker does.
 function fromAddress() {
   const change = followHash(location.hash);
   if (!change) return;
+  if (change.inPlace) {
+    refreshForProject();
+    return;
+  }
   closeForProject();
   if (!change.same && change.newProject) refresh().catch(reportError);
 }

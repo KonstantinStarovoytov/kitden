@@ -148,6 +148,27 @@ test('the view choice stays in the address, and List opens first past 15 servers
   assert.deepEqual(parseSel('client:codex'), { kind: 'client', name: 'codex' });
 });
 
+test('Back to another project on the Gateway waits for the read: the page draws then, in place', () => {
+  const drawn = [];
+  setRenderer(() => drawn.push(`${state.view} ${state.project}`));
+  try {
+    go('gateway');
+    drawn.length = 0;
+    // Another project on the Gateway: nothing is drawn before app.js has read it.
+    const back = followHash('#gateway?project=a&sel=client%3Acodex');
+    assert.deepEqual([back.same, back.newProject, back.inPlace], [false, true, true]);
+    assert.deepEqual([state.project, drawn], ['a', []]);
+    assert.deepEqual(state.selected, { kind: 'client', name: 'codex' });
+    // Another place with another project draws at once, as before.
+    const away = followHash('#overview?project=b');
+    assert.deepEqual([away.newProject, away.inPlace], [true, false]);
+    assert.deepEqual(drawn, ['overview b']);
+  } finally {
+    setRenderer(() => {});
+    go('overview', { project: '', selected: null });
+  }
+});
+
 test('Back switches Map and List, and a mode passed to go wins over the clear', () => {
   followHash('#gateway?view=map');
   assert.equal(state.mode, 'map');
