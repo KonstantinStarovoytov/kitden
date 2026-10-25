@@ -268,7 +268,7 @@ const MEDIUM_PROJECTS = [
 const MEDIUM_RULES = {
   shared: 'on',
   projects: [['atlas', 'off', 'on', ['write_file']], ['web', 'off', 'off', ['search_files']], ['old', 'on', 'on', []], ['sand', 'on', 'on', []], ['site', 'on', 'on', []]]
-    .map(([id, write, search, own]) => ({ id, server: 'on', tools: { write_file: write, search_files: search }, own })),
+    .map(([id, write, search, own]) => ({ id, server: 'on', tools: { write_file: write, search_files: search }, own, up: id === 'web' ? ['atlas'] : [] })),
 };
 const FILES_ROW = { name: 'files', kind: 'local', state: 'on' };
 const medium = (name, extra = {}) => toolCard({ name, title: null, state: 'on', effective: 'on', hint: 'writes', origin: 'default', origin_from: null }, FILES_ROW, { linked: LINKED, picked: '', folder: '', detail: { shared: 'on' }, rules: MEDIUM_RULES, projects: MEDIUM_PROJECTS, ...extra });
@@ -1084,4 +1084,33 @@ test('back from the tool step keeps the warning the panel had', async () => {
     assert.equal(textOf(drawer.children[0].children[1]), 'write_file');
     assert.equal(says(), true);
   }, { open: () => showTool('files', 'write_file'), projects: MEDIUM_PROJECTS });
+});
+
+test('a tick names the projects whose chain reaches it, as the gateway decides', async () => {
+  // The gateway's chains (`up`, nearest first): web and docs sit in atlas, notes too but with a
+  // server rule of its own, api in site. The home folder claims no folder under it.
+  const at = (id, path, up = [], own = false) => ({ project: { id, path, own_rules: own ? 1 : 0, exists: true }, entry: { id, server: 'on', tools: {}, own: [], own_server: own, up } });
+  const list = [
+    at('home', '/Users/amanda'), at('atlas', '/Users/amanda/work/atlas'), at('web', '/Users/amanda/work/atlas/web', ['atlas']),
+    at('docs', '/Users/amanda/work/atlas/docs', ['atlas']), at('notes', '/Users/amanda/work/atlas/notes', ['atlas'], true),
+    at('site', '/Users/amanda/work/site'), at('api', '/Users/amanda/work/site/api', ['site']),
+  ];
+  const rules = { ...FILES_TOOLS, projects: list.map((p) => p.entry) };
+  const projects = list.map((p) => p.project);
+  await onFilesPanel(async (drawer) => {
+    await held(FILES_HELD, { detail: rules, projects }).more.find((a) => a.label === 'Turn off in some projects…').run();
+    await wait(50);
+    const follows = drawer.children[1].children[1];
+    const lines = () => (follows.hidden ? [] : follows.children.map(textOf));
+    // The home folder: nobody follows it.
+    await click(control(drawer, 'tick:home'));
+    assert.deepEqual(lines(), []);
+    // atlas: web and docs follow it; notes has its own rule.
+    await click(control(drawer, 'tick:atlas'));
+    assert.deepEqual(lines(), ['docs, web follow atlas and change with it.']);
+    // Each ticked parent names its own; a ticked child no longer follows.
+    await click(control(drawer, 'tick:site'));
+    await click(control(drawer, 'tick:docs'));
+    assert.deepEqual(lines(), ['web follows atlas and changes with it.', 'api follows site and changes with it.']);
+  }, { rules, projects });
 });

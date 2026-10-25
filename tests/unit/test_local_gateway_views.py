@@ -18,6 +18,7 @@ from kitden import mcp_server
 from kitden.changes.json_splice import ABSENT
 from kitden.gateways import data_dir
 from kitden.local_gateway import proxy
+from kitden.local_gateway.project import project_chains
 from kitden.local_gateway.settings import (
     SETTINGS_FILE,
     allowed_tools,
@@ -38,6 +39,7 @@ from kitden.views.gateway_view import gateway_view
 from kitden.views.inventory import build_inventory
 from kitden.web.app import create_app
 from tests.conftest import make_home, write_cursor_fixture_state
+from tests.unit.test_local_gateway_project import worktree
 
 AT_ONCE = (
     "A tool turned off is refused at once; a call already running is not stopped. The client "
@@ -293,7 +295,7 @@ def test_held_tools_count_the_projects_with_their_own_rule():
         "rules": {
             "global": {"files": {"tools": {"read_file": "off"}}},
             "projects": {
-                "/w/a": {"files": {"tools": {"read_file": "on"}}},
+                "/w/a": {"files": {"server": "off", "tools": {"read_file": "on"}}},
                 "/w/b": {"files": {"tools": {"read_file": "off"}}},
                 "/w/c": {"files": {"server": "on"}},
                 "/w/gone": {"files": {"tools": {"read_file": "on", "write_file": "on"}}},
@@ -317,7 +319,7 @@ def test_tools_view_names_the_tools_each_project_has_its_own_rule_for():
         "rules": {
             "global": {"files": {"tools": {"read_file": "off"}}},
             "projects": {
-                "/w/a": {"files": {"tools": {"read_file": "on"}}},
+                "/w/a": {"files": {"server": "off", "tools": {"read_file": "on"}}},
                 "/w/b": {"files": {"tools": {"read_file": "off"}}},
                 "/w/c": {"files": {"server": "on"}},
             },
@@ -339,8 +341,31 @@ def test_tools_view_names_the_tools_each_project_has_its_own_rule_for():
         "c": ("off", []),
         "none": ("off", []),
     }
-    # And whether it has a rule of its own for the whole server (the step names who follows it).
-    assert [p["id"] for p in view["projects"] if p["own_server"]] == ["c"]
+    # And whether it has a rule of its own for the whole server (the step names who follows it):
+    # web only follows atlas's.
+    assert [p["id"] for p in view["projects"] if p["own_server"]] == ["a", "c"]
+
+
+def test_tools_view_says_which_known_projects_each_one_follows(tmp_path):
+    # The step names the projects that change with a ticked one from the gateway's own chains
+    # (project_chain), nearest first: a folder inside a project and a worktree of it follow it; the
+    # home folder and `/` match only themselves and claim nothing.
+    home = tmp_path / "home"
+    atlas = home / "work" / "atlas"
+    web = atlas / "web"
+    web.mkdir(parents=True)
+    feature = worktree(tmp_path, atlas)
+    ids = {str(home): "home", "/": "root", str(atlas): "atlas", str(web): "web", str(feature): "wt"}
+    chains = {ids[k]: chain for k, chain in project_chains(home, list(ids)).items()}
+    settings = {"servers": {"files": {"command": "files"}}, "rules": {"global": {}, "projects": {}}}
+    view = tools_view(settings, {"files": []}, "files", [], chains=chains)
+    assert {p["id"]: p["up"] for p in view["projects"]} == {
+        "home": [],
+        "root": [],
+        "atlas": [],
+        "web": ["atlas"],
+        "wt": ["atlas"],
+    }
 
 
 def test_an_empty_tool_list_shows_no_count():

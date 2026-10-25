@@ -277,7 +277,9 @@ def tools_view(
     `projects` then says the server's and each tool's state in every one of them, as the gateway
     decides it there (the rule state, without the server's switch on its tools), so "in some
     projects" offers only projects it would change, which tools have a rule of the project's own
-    there (`own`, as `own_in` counts them) and whether the server has one (`own_server`)."""
+    there (`own`, as `own_in` counts them), whether the server has one (`own_server`), and the
+    known projects further along its chain, nearest first (`up`): the ones it follows where it
+    has no rule of its own."""
     strict = strict_mode(settings, server)
     scopes = _scopes(settings, chain)
     counted = (calls or {}).get(server, {})
@@ -301,6 +303,8 @@ def tools_view(
         )
     shared = state_in(settings, [], server, None)
     rules = settings["rules"]["projects"]
+    # A known project by its folder, the first of its own chain.
+    ids = {each[0]: project for project, each in (chains or {}).items() if each}
     projects = [
         {
             "id": project,
@@ -313,6 +317,7 @@ def tools_view(
                 if each and own_state(rules.get(each[0]), server, t["name"]) is not None
             ],
             "own_server": bool(each) and own_state(rules.get(each[0]), server, None) is not None,
+            "up": [ids[k] for k in each[1:] if k in ids],
         }
         for project, each in (chains or {}).items()
     ]

@@ -388,13 +388,11 @@ const ruleIn = (name) => (p) => p.tools && p.tools[name];
 const callableIn = (name) => (p) => (p.server === "off" ? "off" : ruleIn(name)(p));
 
 // The known projects (`projects`, as the menu lists them, by folder name) that the server's answer
-// (`rules`) has a state for, each with its folder (`path`) and its entry (`entry`); null without
-// the answer.
+// (`rules`) has a state for, each with its entry (`entry`); null without the answer.
 function knownIn(rules, projects) {
   if (!Array.isArray(rules.projects)) return null;
   const entries = new Map(rules.projects.map((p) => [p.id, p]));
-  const paths = new Map(projects.map((p) => [p.id, p.path]));
-  return menuItems(projects.filter((p) => entries.has(p.id)), "").filter((item) => item.id).map((item) => ({ ...item, path: paths.get(item.id), entry: entries.get(item.id) }));
+  return menuItems(projects.filter((p) => entries.has(p.id)), "").filter((item) => item.id).map((item) => ({ ...item, entry: entries.get(item.id) }));
 }
 
 // The clients that reach the Kitden gateway, as a fact; null when Kitden could not read them.
@@ -761,13 +759,19 @@ function projectsNodes({ server, tool, title, target, shared, rules }, projects,
   return [stepHead(crumb, `Turn ${target} ${title} in the projects you pick`, back), body, done, foot];
 }
 
-// The known projects inside a ticked project `p` (`rows`, by folder) that follow its rule, so they
-// change with it: no rule of their own (`ownOf`), not ticked themselves (`ticks`), and none between
-// them that decides. One sentence, or null when none does.
+// The known projects that follow the rule of a ticked project `p`, so they change with it: as the
+// gateway decides, `p` is further along their chain (`up` in the server's answer, nearest first; the
+// home folder and `/` claim nobody), they have no rule of their own (`ownOf`) and are not ticked
+// (`ticks`), and no project between them decides. One sentence, or null when none does.
 function followLine(p, rows, ownOf, ticks) {
-  const inside = (q, r) => Boolean(q.path && r.path) && q.path.startsWith(`${r.path}/`);
-  const decides = (q) => ownOf(q) || ticks.includes(q);
-  const names = rows.filter((q) => inside(q, p) && !decides(q) && !rows.some((m) => decides(m) && inside(m, p) && inside(q, m))).map((q) => q.name);
+  const byId = new Map(rows.map((q) => [q.id, q]));
+  const decides = (q) => !q || ownOf(q) || ticks.includes(q);
+  const follows = (q) => {
+    const up = q.entry.up || [];
+    const at = up.indexOf(p.id);
+    return at >= 0 && !decides(q) && !up.slice(0, at).some((id) => decides(byId.get(id)));
+  };
+  const names = rows.filter(follows).map((q) => q.name);
   if (!names.length) return null;
   return el("p", null, names.length === 1 ? `${names[0]} follows ${p.name} and changes with it.` : `${names.join(", ")} follow ${p.name} and change with it.`);
 }
