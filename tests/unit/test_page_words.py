@@ -549,6 +549,22 @@ def test_a_pointed_link_keeps_its_look_in_a_search():
     assert CSS.index("div.map.finding .link { stroke-opacity: 0.25; }") < CSS.index(rule)
 
 
+def test_a_dragged_block_takes_the_pointer_off_every_link():
+    # While a block is dragged no link takes the pointer, or the × would show under the block.
+    assert "pointer-events: none" in rule(".grabbing .map-hits .hit")
+
+
+def test_a_new_map_reads_its_width_before_its_first_draw():
+    # Else the observer's first report flips it to narrow with no motion in its entrance.
+    gateway = script("gateway.js")
+    body = gateway.split("function gatewayMap(")[1].split("\n}\n")[0]
+    assert (
+        body.index("main.append(onMap.view.box)")
+        < body.index("contentWidth(")
+        < body.index("drawOnMap(")
+    )
+
+
 def test_the_gateway_rises_on_its_own_when_the_place_changes():
     assert "html.map-entrance::view-transition-new(page) { animation: none; }" in CSS
     assert '"map-entrance"' in script("store.js")

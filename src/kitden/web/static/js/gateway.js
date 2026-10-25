@@ -424,6 +424,14 @@ export function afterPress({ selected, id, opened }) {
   return selected === id && !opened ? "letGo" : "select";
 }
 
+// The width of a box's content, as its ResizeObserver reports it first; null while the box is off
+// the page or not laid out.
+export function contentWidth(box) {
+  if (!box.isConnected || !box.clientWidth) return null;
+  const style = getComputedStyle(box);
+  return box.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+}
+
 // Every render puts the same map back on the page, so its blocks keep their nodes and focus.
 function gatewayMap(main, model, found) {
   let fresh = false;
@@ -437,18 +445,29 @@ function gatewayMap(main, model, found) {
     fresh = true;
   }
   main.append(onMap.view.box);
+  // A new map knows its width before its first draw, so the observer's first report does not flip
+  // it to narrow in the middle of its entrance.
+  if (fresh) onMap.width = contentWidth(onMap.view.box) ?? onMap.width;
   Object.assign(onMap, { model, found, shows: JSON.stringify(movingOn()) });
   drawOnMap(model, { fresh, projectChanged });
   const bar = previewBar(redrawMove);
   if (bar) main.append(bar);
 }
 
+// The blocks of a model by id. Every link asks, so it is built once for a model.
+const indexes = new WeakMap();
+function blocksById(model) {
+  if (!indexes.has(model)) indexes.set(model, new Map(model.blocks.map((b) => [b.id, b])));
+  return indexes.get(model);
+}
+
 // What the × of a link does, as `{ tip, body }` (`body` is the change to preview), or null where
 // the map does not act on the link: a server in the Kitden gateway comes out of it, and a tool of
 // such a server turns off, for the picked project (`picked`, "" for all).
 export function linkRemoval(model, link, picked) {
-  const from = model.blocks.find((b) => b.id === link.from);
-  const to = model.blocks.find((b) => b.id === link.to);
+  const byId = blocksById(model);
+  const from = byId.get(link.from);
+  const to = byId.get(link.to);
   if (!from || !to || !from.gateway || from.gateway.kind !== "kitden") return null;
   if (from.kind === "gateway" && to.kind === "held") {
     return { tip: `Remove ${to.name} from the gateway`, body: { action: "gateway.remove", targets: [], params: { server: to.name } } };

@@ -225,6 +225,27 @@ test("a block's words are drawn again only when they change", async () => {
   assert.notEqual(v.node('s1').firstElementChild, words);
 });
 
+test("a block's tile is drawn again when its icon, client or gateway kind changes", async () => {
+  reduce(true);
+  const mark = (b) => { const n = document.createElement('i'); n.dataset.look = [b.icon, b.client, b.gateway && b.gateway.kind].join('/'); return n; };
+  const v = view({ tile: mark });
+  const as = (fields) => ({ ...TREE, blocks: TREE.blocks.map((b) => (b.id === 's1' || b.id === 'c1' ? { ...b, ...fields[b.id] } : b)) });
+  const tileOf = (id) => v.node(id).children[0].children[0];
+  const show = (m) => v.draw(m, layoutTree(m, { open: new Set(), narrow: false }), {});
+  await show(as({ s1: { icon: 'remote', gateway: { kind: 'kitden' } }, c1: { client: 'codex' } }));
+  assert.deepEqual([tileOf('s1').dataset.look, tileOf('c1').dataset.look], ['remote//kitden', '/codex/']);
+  await show(as({ s1: { icon: 'local', gateway: { kind: 'kitden' } }, c1: { client: 'codex' } }));
+  assert.equal(tileOf('s1').dataset.look, 'local//kitden');
+  await show(as({ s1: { icon: 'local', gateway: { kind: 'metamcp' } }, c1: { client: 'codex' } }));
+  assert.equal(tileOf('s1').dataset.look, 'local//metamcp');
+  await show(as({ s1: { icon: 'local', gateway: { kind: 'metamcp' } }, c1: { client: 'cursor' } }));
+  assert.equal(tileOf('c1').dataset.look, '/cursor/');
+  // Nothing changed: the tile stays.
+  const kept = tileOf('s1');
+  await show(as({ s1: { icon: 'local', gateway: { kind: 'metamcp' } }, c1: { client: 'cursor' } }));
+  assert.equal(tileOf('s1'), kept);
+});
+
 test("a group's caption draws its icon before its words, 13 px; a caption with no icon is words only", async () => {
   reduce(true);
   const groups = { columns: TREE.columns, blocks: [{ id: 'g1', column: 'b', kind: 'group', name: 'Remote', icon: 'cloud' }, { id: 'g2', column: 'b', kind: 'group', name: 'Local' }], links: [] };
@@ -543,6 +564,99 @@ test('Delete with a modifier, or held down, removes nothing; a plain Delete remo
   assert.equal(removed.length, 1);
 });
 
+test('the link with keyboard focus keeps its look when the pointer passes over another link', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  reduce(true);
+  const v = view({ links: { ...LINKS, canHit: () => true } });
+  await v.draw(TREE, lay(), {});
+  const [a, b] = walk(v.area).filter((n) => n.classList?.contains('hit'));
+  const [one, two, x] = [v.node('c1>s1'), v.node('c1>s2'), xOf(v)];
+  a.matches = () => true;
+  a.focus();
+  b.dispatch('pointerover'); b.dispatch('pointerout'); t.mock.timers.tick(240);
+  // Its hover look is its only focus mark: it comes back, with the × on it.
+  assert.deepEqual([one.classList.contains('hov'), two.classList.contains('hov')], [true, false]);
+  assert.deepEqual([x.hidden, x.getAttribute('aria-label')], [false, 'Remove s1']);
+  // Focus that is no keyboard focus (a mouse click) has no look to come back.
+  a.matches = () => false;
+  b.dispatch('pointerover'); b.dispatch('pointerout'); t.mock.timers.tick(240);
+  assert.deepEqual([one.classList.contains('hov'), x.hidden], [false, true]);
+});
+
+test('a link that goes while it has keyboard focus does not come back as the focus look', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const v = view({ links: { ...LINKS, canHit: (l) => l.to === 's2' } });
+  await v.draw(TREE, drawn(TREE), { motion: 'none' });
+  const h = hitOf(v);
+  h.matches = () => true;
+  h.focus();
+  assert.ok(v.node('c1>s2').classList.contains('hov'));
+  v.draw(NO_LINK, drawn(NO_LINK), {});
+  assert.equal(xOf(v).hidden, true);
+  assert.ok(!v.node('c1>s2').classList.contains('hov'));
+  t.mock.timers.tick(500);
+  assert.equal(xOf(v).hidden, true);
+});
+
+test('a link that fades away under the pointer takes its look and × and does not take them back', async () => {
+  const v = view({ links: { ...LINKS, canHit: (l) => l.to === 's2' } });
+  await v.draw(TREE, lay(), { motion: 'none' });
+  const h = hitOf(v);
+  h.matches = () => true;
+  h.focus();
+  v.draw(without('s2'), layoutTree(without('s2'), { open: new Set(), narrow: false }), {});
+  tick(90); tick(60);
+  assert.equal(h.style.display, 'none');
+  assert.equal(xOf(v).hidden, true);
+  assert.ok(!v.node('c1>s2').classList.contains('hov'));
+});
+
+test('the look of a pointed link survives its look being written again', async () => {
+  reduce(true);
+  const v = view({ links: LINKS });
+  await v.draw(TREE, lay(), {});
+  hitOf(v).dispatch('pointerover');
+  await v.draw(TREE, lay(), { selected: 's1', lit: LIT });
+  const link = v.node('c1>s1');
+  assert.ok(link.classList.contains('lit') && link.classList.contains('hov'));
+  await v.draw(TREE, lay(), {});
+  assert.ok(!link.classList.contains('lit') && link.classList.contains('hov'));
+});
+
+test('Enter or Space held down opens a link once; the key does not scroll the page', async () => {
+  reduce(true); clicked.length = 0;
+  const v = view({ links: LINKS });
+  await v.draw(TREE, lay(), {});
+  const h = hitOf(v);
+  h.dispatch('keydown', { key: 'Enter' });
+  assert.equal(clicked.length, 1);
+  for (const key of ['Enter', ' ']) {
+    const event = h.dispatch('keydown', { key, repeat: true });
+    assert.equal(event.defaultPrevented, true, key);
+  }
+  assert.equal(clicked.length, 1);
+  h.dispatch('keydown', { key: ' ' });
+  assert.equal(clicked.length, 2);
+});
+
+test('the group of hits is hidden from a screen reader while it holds no hit', async () => {
+  reduce(true);
+  const v = view({ links: LINKS });
+  const hidden = () => v.area.children.find((n) => n.getAttribute('aria-label') === 'Connections').getAttribute('aria-hidden');
+  await v.draw(TREE, lay(), {});
+  assert.equal(hidden(), null);
+  const bare = { ...TREE, blocks: TREE.blocks.filter((b) => b.id !== 's1' && b.id !== 't1' && b.id !== 't2'), links: TREE.links.filter((l) => l.to === 's2') };
+  await v.draw(bare, layoutTree(bare, { open: new Set(), narrow: false }), {});
+  assert.equal(hitOf(v), undefined);
+  assert.equal(hidden(), 'true');
+  await v.draw(TREE, lay(), {});
+  assert.equal(hidden(), null);
+  // A page that acts on no link never shows the group.
+  const none = view();
+  await none.draw(TREE, lay(), {});
+  assert.equal(none.area.children.find((n) => n.getAttribute('aria-label') === 'Connections').getAttribute('aria-hidden'), 'true');
+});
+
 const NO_LINK = { ...TREE, links: TREE.links.filter((l) => l.to !== 's2') };
 const withLink = (fields) => ({ ...TREE, links: TREE.links.map((l) => (l.to === 's2' ? { ...l, ...fields } : l)) });
 const drawn = (m) => layoutTree(m, { open: new Set(), narrow: false });
@@ -656,12 +770,89 @@ test('the blend ends at the look the class gives, though a browser still reads t
   } finally { globalThis.getComputedStyle = real; }
 });
 
+test('the copy that gives the end look is taken away even when the read fails', async () => {
+  const real = globalThis.getComputedStyle;
+  globalThis.getComputedStyle = (node) => {
+    if (node.style.transition === 'none') throw new Error('no style');
+    return real(node);
+  };
+  try {
+    const v = view();
+    await v.draw(TREE, drawn(TREE), { motion: 'none' });
+    const svg = v.node('c1>s2').parentNode; const count = svg.children.length;
+    const m = withLink({ leaving: true });
+    assert.throws(() => v.draw(m, drawn(m), {}), /no style/);
+    assert.equal(svg.children.length, count);
+  } finally { globalThis.getComputedStyle = real; }
+});
+
+test('a pointed link that goes takes its hover look and its × with it', async () => {
+  const v = view({ links: { ...LINKS, canHit: (l) => l.to === 's2' } });
+  await v.draw(TREE, drawn(TREE), { motion: 'none' });
+  const link = v.node('c1>s2');
+  hitOf(v).dispatch('pointerover');
+  assert.ok(link.classList.contains('hov')); assert.equal(xOf(v).hidden, false);
+  v.draw(NO_LINK, drawn(NO_LINK), {});
+  assert.equal(xOf(v).hidden, true);
+  assert.ok(!link.classList.contains('hov'));
+  assert.equal(hitOf(v), undefined);
+});
+
 test('a link whose look changes without a new dash or opacity does not blend', async () => {
   const v = view();
   await v.draw(TREE, drawn(TREE), { motion: 'none' });
   v.draw(TREE, drawn(TREE), { lit: new Set(['c1>s2']) });
   assert.ok(v.node('c1>s2').classList.contains('lit'));
   assert.equal(v.node('c1>s2').animations.length, 0);
+});
+
+// A browser reads a link's dashes as they are now (an inline `stroke-dasharray` first) and dims a link
+// that is off the path of a map with `.focus`.
+async function inBrowser(run) {
+  const real = globalThis.getComputedStyle;
+  globalThis.getComputedStyle = (node) => {
+    const base = real(node);
+    let dim = false;
+    for (let at = node.parentNode; at; at = at.parentNode) if (at.classList?.contains('focus')) dim = true;
+    return { strokeDasharray: node.style.strokeDasharray || base.strokeDasharray, strokeOpacity: dim && !node.classList.contains('lit') ? '0.16' : base.strokeOpacity };
+  };
+  try { await run(); } finally { globalThis.getComputedStyle = real; }
+}
+
+test('a link that draws in does not blend when its look changes meanwhile', async () => {
+  await inBrowser(async () => {
+    const v = view();
+    await v.draw(NO_LINK, drawn(NO_LINK), { motion: 'none' });
+    v.draw(TREE, drawn(TREE), {});
+    const link = v.node('c1>s2');
+    assert.equal(link.style.strokeDasharray, '1');
+    const m = withLink({ leaving: true }); v.draw(m, drawn(m), {});
+    assert.ok(link.classList.contains('leaving'));
+    assert.deepEqual(link.animations.map((a) => a.keyframes), [[{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }]]);
+  });
+});
+
+test('a glance does not blend a link that draws back to its start', async () => {
+  await inBrowser(async () => {
+    const v = view();
+    await v.draw(TREE, drawn(TREE), { motion: 'none' });
+    const link = v.node('c1>s2');
+    v.draw(NO_LINK, drawn(NO_LINK), {});
+    const runs = link.animations.length;
+    assert.equal(runs, 1);
+    v.glance(new Set(['c1>s2']));
+    assert.equal(link.animations.length, runs);
+    assert.ok(!link.classList.contains('lit'), 'a link on its way out is left as it is');
+  });
+});
+
+test('a link whose look changes when it is at rest still blends in a browser', async () => {
+  await inBrowser(async () => {
+    const v = view();
+    await v.draw(TREE, drawn(TREE), { motion: 'none' });
+    const m = withLink({ leaving: true }); v.draw(m, drawn(m), {});
+    assert.equal(v.node('c1>s2').animations.length, 1);
+  });
 });
 
 const LIT = new Set(['c1', 's1', 'c1>s1']);

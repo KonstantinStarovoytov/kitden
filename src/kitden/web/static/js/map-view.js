@@ -68,9 +68,10 @@ function blockParts(block, { tile, open }) {
   return parts;
 }
 
-// Everything a block's words depend on, as one key: they are drawn again only when it changes.
+// Everything a block's parts depend on (its tile too), as one key: they are drawn again only when
+// it changes.
 function wordsKey(block, open) {
-  return JSON.stringify([block.kind, block.name, block.meta, block.tag, block.count, open, block.action, block.state, block.dot, block.grip]);
+  return JSON.stringify([block.kind, block.name, block.meta, block.tag, block.count, open, block.action, block.state, block.dot, block.grip, block.icon, block.client, block.gateway && block.gateway.kind]);
 }
 
 // A group's caption: its words, with its icon (a lucide name, if it has one) before them.
@@ -139,6 +140,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
   hits.setAttribute("class", "map-hits");
   hits.setAttribute("role", "group");
   hits.setAttribute("aria-label", "Connections");
+  hits.setAttribute("aria-hidden", "true");
   hits.setAttribute("width", "100%");
   hits.setAttribute("height", "100%");
   const cross = el("button", "link-x");
@@ -363,10 +365,11 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
   }
 
   // Give a link its look. With `blend`, a link whose dashes or opacity change blends from the old to
-  // the new.
+  // the new, unless it draws in or draws back right now: its dashes are the draw's then.
   function setLook(item, look, blend) {
     if (look === item.look) return;
-    const was = blend && item.look ? dashLook(item.path) : null;
+    const draws = item.exit || item.path.style.strokeDasharray;
+    const was = blend && item.look && !draws ? dashLook(item.path) : null;
     item.path.setAttribute("class", look);
     item.path.classList.toggle("hov", item.key === pointed);
     if (was) {
@@ -393,9 +396,11 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     copy.setAttribute("class", path.getAttribute("class"));
     copy.style.transition = "none";
     svg.append(copy);
-    const look = dashLook(copy);
-    copy.remove();
-    return look;
+    try {
+      return dashLook(copy);
+    } finally {
+      copy.remove();
+    }
   }
 
   // What the × says is for the link it sits on.
@@ -406,11 +411,17 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
   }
 
   // The hover look goes at once, and the × with it, unless a link is selected: then the × goes to it.
+  // A link with keyboard focus has no other mark of it, so the look goes back to it.
   function unpoint() {
     clearTimeout(wait);
     const item = pointed && links.get(pointed);
     if (item) item.path.classList.remove("hov");
     pointed = null;
+    const focused = [...links.values()].find((at) => at.hit && at.hit === document.activeElement && at.hit.style.display !== "none");
+    if (focused && keyboardFocus(focused.hit)) {
+      pointAt(focused);
+      return;
+    }
     const rest = picked && links.get(picked);
     if (rest && rest.hit) aimCross(rest);
     placeCross();
@@ -438,6 +449,9 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     animateTo(cross, [{ opacity: 0 }, { opacity: 1 }], { dur: CROSS_MS, ease: CALM });
   }
 
+  // Focus from a keyboard, not from a click (a mouse click focuses the hit too).
+  const keyboardFocus = (hit) => hit.matches?.(":focus-visible") !== false;
+
   function pointAt(item) {
     clearTimeout(wait);
     if (pointed && pointed !== item.key) links.get(pointed)?.path.classList.remove("hov");
@@ -453,16 +467,16 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     pointer.onClick(item.link);
   }
 
-  // Enter or Space opens the link. Delete or Backspace removes it, once: a key held down or one
-  // with a modifier is not that.
+  // Enter or Space opens the link, once: a key held down only keeps the page from scrolling.
+  // Delete or Backspace removes it, once: a key held down or one with a modifier is not that.
   function keyOnHit(event, item) {
     const press = event.key === "Enter" || event.key === " ";
     const plain = !event.repeat && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
     const remove = plain && (event.key === "Delete" || event.key === "Backspace");
     if (!press && !remove) return;
     event.preventDefault();
-    if (press) pressLink(item);
-    else pointer.onRemove(item.link);
+    if (press && !event.repeat) pressLink(item);
+    else if (remove) pointer.onRemove(item.link);
   }
 
   // A link's hit: a wide stroke over it, and a button for a keyboard.
@@ -479,7 +493,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     // Only focus for a keyboard points at it: a mouse click focuses the hit too, and the panel gives
     // that focus back when it closes, long after the pointer has gone.
     hit.addEventListener("focus", () => {
-      if (hit.matches?.(":focus-visible") !== false) pointAt(item);
+      if (keyboardFocus(hit)) pointAt(item);
     });
     hit.addEventListener("blur", unpointSoon);
     hit.addEventListener("click", () => pressLink(item));
@@ -489,9 +503,17 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
 
   function dropHit(item) {
     if (!item.hit) return;
-    if (pointed === item.key) unpoint();
-    item.hit.remove();
+    const { hit } = item;
     item.hit = null;
+    if (pointed === item.key) unpoint();
+    hit.remove();
+    showHits();
+  }
+
+  // The group of hits is there for a screen reader only while it holds a hit.
+  function showHits() {
+    if (hits.children.length) hits.removeAttribute("aria-hidden");
+    else hits.setAttribute("aria-hidden", "true");
   }
 
   // A link has a hit while the page acts on it, named for a screen reader by its two blocks.
@@ -725,6 +747,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
       if (!hit.parentNode) hits.insertBefore(hit, next);
       next = hit;
     }
+    showHits();
     // Lit links are drawn last, over the others (the accent lines sit over them all).
     const litPaths = layout.links.filter((link) => shown.has(linkKey(link))).map((link) => links.get(linkKey(link)).path);
     const paths = [...svg.children].slice(0, -1);
@@ -827,7 +850,8 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
       item.lit = on;
       paint(item);
     }
-    for (const item of links.values()) setLook(item, linkLook(item.link, shown), canMove());
+    // A link on its way out is left as it is.
+    for (const item of links.values()) if (!item.exit) setLook(item, linkLook(item.link, shown), canMove());
   }
 
   // The block that holds `target`, by its focus key, or null.

@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js needs only this from a browser to load; the tests call its pure parts.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { GATEWAY_COLUMNS, afterPress, findRows, gatewayTree, glanceFor, heldServer, kitdenLinks, linkRemoval, listAt, listRows, litFor, mapMotion, narrowFor, serverCount } = await import('../../src/kitden/web/static/js/gateway.js');
+const { GATEWAY_COLUMNS, afterPress, contentWidth, findRows, gatewayTree, glanceFor, heldServer, kitdenLinks, linkRemoval, listAt, listRows, litFor, mapMotion, narrowFor, serverCount } = await import('../../src/kitden/web/static/js/gateway.js');
 const { dropBody, dropTarget, pressGrip, placeMoved } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
 const { offersSwitch } = await import('../../src/kitden/web/static/js/gateway-details.js');
@@ -632,6 +632,40 @@ test('a link the map can act on says what its × does', () => {
     { tip: 'Turn off read_file', body: { action: 'gateway.rule', targets: [], params: { server: 'files', tool: 'read_file', state: 'off', project: 'website' } } });
   assert.equal(linkRemoval(tree, link('client:codex>gateway:kitden'), ''), null);
   assert.equal(linkRemoval(tree, link('client:codex>outside:local:docs'), ''), null);
+});
+
+test('a link of a registered gateway gives no ×', () => {
+  const meta = { id: 'gw-2', kind: 'metamcp', url: 'http://127.0.0.1:12008/metamcp/local/mcp', movable: true, managed: true };
+  const view = { ...MEDIUM_VIEW, gateways: [...MEDIUM_VIEW.gateways, meta], used: ['gw-2', 'kitden'],
+    connections: { ...MEDIUM_VIEW.connections, 'gw-2': { claude_code: [], codex: ['x'], cursor: [] } } };
+  const tree = gatewayTree(view, { ...OPTS, held: new Map([['gw-2', { servers: [{ name: 'x', type: 'STREAMABLE_HTTP', url: 'http://h/x' }] }]]) });
+  const link = (key) => tree.links.find((l) => `${l.from}>${l.to}` === key);
+  assert.ok(link('gateway:gw-2>held:gw-2:x') && link('client:codex>gateway:gw-2'));
+  assert.equal(linkRemoval(tree, link('gateway:gw-2>held:gw-2:x'), ''), null);
+  assert.equal(linkRemoval(tree, link('client:codex>gateway:gw-2'), ''), null);
+  // The Kitden gateway's link in the same tree still has one.
+  assert.ok(linkRemoval(tree, link('gateway:kitden>held:kitden:files'), ''));
+});
+
+test('a link is answered from the tree it is asked of, not from an older one', () => {
+  const first = gatewayTree(MEDIUM_VIEW, OPTS);
+  const link = first.links.find((l) => `${l.from}>${l.to}` === 'gateway:kitden>held:kitden:files');
+  assert.equal(linkRemoval(first, link, '').tip, 'Remove files from the gateway');
+  assert.equal(linkRemoval(first, link, '').tip, 'Remove files from the gateway');
+  // The same ids in another tree, where the server is no longer the gateway's (a registered one).
+  const other = { ...first, blocks: first.blocks.map((b) => (b.id === 'gateway:kitden' ? { ...b, gateway: { id: 'gw-9', kind: 'metamcp' } } : b)) };
+  assert.equal(linkRemoval(other, link, ''), null);
+});
+
+test('the width of the map box is read as its content, so the first report of the observer changes nothing', () => {
+  const box = { isConnected: true, clientWidth: 900 };
+  globalThis.getComputedStyle = () => ({ paddingLeft: '6px', paddingRight: '6px' });
+  try {
+    assert.equal(contentWidth(box), 888);
+    // A box that is off the page, or not laid out, has no width yet.
+    assert.equal(contentWidth({ ...box, isConnected: false }), null);
+    assert.equal(contentWidth({ ...box, clientWidth: 0 }), null);
+  } finally { delete globalThis.getComputedStyle; }
 });
 
 test('a second press on the selected block lets go, unless the press opened it', () => {
