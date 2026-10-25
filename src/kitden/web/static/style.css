@@ -369,16 +369,15 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 
 /* One lamp language. A lamp (beside a word) and a mark (beside a tool) are 6 px: grey is off, green
    works, amber needs you, a dashed ring is only a preview, a grey ring works outside the gateway.
-   --lamp-off is a fill and a line, never a text color. A lamp that turns on or off fades to its new
-   color and pops from --pop times its size: 2.2, a tool's mark 1.9 (a client's lamp on the map 2.4). */
+   --lamp-off is a fill and a line, never a text color. On the Gateway map a lamp that turns on or off
+   fades to its new color and pops from --pop times its size (map-view.js): 2.2, a tool's mark 1.9, a
+   client's lamp 2.4. */
 .lamp, .mark { --pop: 2.2; display: inline-block; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--lamp-off); transition: background-color 400ms ease; }
 .mark { --pop: 1.9; }
 .lamp.on, .mark.on { background: var(--lamp-on); }
 .lamp.warn, .mark.warn { background: var(--lamp-warn); }
 .lamp.pv, .mark.pv { background: transparent; border: 1.5px dashed var(--route); }
 .lamp.out, .mark.out { background: transparent; border: 1.5px solid var(--lamp-off); }
-.lamp.pop, .mark.pop { animation: lamp-pop 200ms var(--calm); }
-@keyframes lamp-pop { from { transform: scale(var(--pop)); } }
 /* A port: the ring where a link meets a block, on its left or right edge. A grey one (a server outside
    the gateway) never turns accent. */
 .port { position: absolute; top: 50%; width: 9px; height: 9px; margin-top: -4.5px; border-radius: 50%; border: 1.5px solid var(--link); background: var(--canvas); transition: border-color 200ms ease, opacity 200ms ease, scale 300ms var(--spring); }
@@ -731,6 +730,7 @@ div.map .block-x { position: absolute; top: -8px; right: -8px; z-index: 2; displ
 div.map .block:hover > .block-x, div.map .block:focus-visible > .block-x { opacity: 1; scale: 1; }
 /* Leaving: a change in the tray takes it out, or it fades off the map. */
 div.map .block.leaving { filter: opacity(0.45); border-style: dashed; }
+div.map .block.leaving:focus-visible { filter: none; }
 
 /* The preview tray's bar (docs/design.md, Preview tray). The dock sits at the bottom left of the page,
    above the hint line, over the map; the band it sits in takes no clicks, the dock does. One change

@@ -110,9 +110,10 @@ function blockParts(block, { tile }) {
   parts.push(text);
   if (block.stats) {
     const stats = el("span", "block-stats");
-    block.stats.forEach((stat, i) => {
+    // Each count is known by its icon, so one that comes or goes before it rolls nothing.
+    block.stats.forEach((stat) => {
       const one = el("span", "block-stat");
-      one.append(icon(stat.icon, STAT_ICON), rollingWords(stat.words, nums, `stat:${i}`));
+      one.append(icon(stat.icon, STAT_ICON), rollingWords(stat.words, nums, `stat:${stat.icon}`));
       stats.append(one);
     });
     parts.push(stats);
@@ -319,10 +320,10 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
   }
 
   // A block's classes: its look from the last draw, `.lit` on the lit path, `.dragging` while it is
-  // held or glides back, and `.leaving` while it leaves the map. A block that leaves is no Tab stop
-  // while it fades.
+  // held or glides back, and `.leaving` while it leaves the map, except a child of a fold, which
+  // only shrinks back into its opener. A block that leaves is no Tab stop while it goes.
   function paint(item) {
-    const classes = [...item.look.split(" "), item.lit && "lit", (item.held || item.back) && "dragging", item.leaving && "leaving"];
+    const classes = [...item.look.split(" "), item.lit && "lit", (item.held || item.back) && "dragging", item.leaving && !item.folds && "leaving"];
     const look = [...new Set(classes.filter(Boolean))].join(" ");
     if (item.node.className !== look) item.node.className = look;
     if (item.leaving) item.node.setAttribute("tabindex", "-1");
@@ -817,7 +818,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     for (const id of plan.leave) {
       const item = blocks.get(id);
       if (!item) continue;
-      Object.assign(item, { leaving: true, held: false, back: false });
+      Object.assign(item, { leaving: true, folds: plan.fold.includes(id), held: false, back: false });
       paint(item);
       if (!moves) {
         drop(item);

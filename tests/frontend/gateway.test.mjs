@@ -226,7 +226,7 @@ test('tags say where a rule comes from', () => {
   ];
   const view = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers }] };
   const tree = gatewayTree(view, { ...OPTS, picked: 'atlas' });
-  assert.deepEqual(block(tree, 'tool:files/write_file').projects, { words: 'This project', own: true });
+  assert.deepEqual(block(tree, 'tool:files/write_file').projects, { words: 'This project', said: 'own rule in this project', own: true });
   assert.equal(block(tree, 'held:kitden:files').tag, 'Only this project');
   assert.equal(block(tree, 'held:kitden:tracker').tag, 'This project');
   assert.equal(block(gatewayTree(MEDIUM_VIEW, OPTS), 'held:kitden:files').tag, null);
@@ -1158,7 +1158,8 @@ test('a server block carries its lamp and on count', () => {
   assert.deepEqual([block(other, 'held:kitden:n8n').lamp, block(other, 'held:kitden:n8n').ports], ['on', { left: true, right: false }]);
   // A client: its lamp is on while it is connected, and its port is on its right.
   assert.deepEqual(['claude_code', 'cursor'].map((id) => [block(tree, `client:${id}`).lamp, block(tree, `client:${id}`).ports]), [['on', { right: true }], ['off', { right: true }]]);
-  assert.equal(block(gatewayTree(MEDIUM_VIEW, { ...OPTS, setup: null }), 'client:codex').lamp, 'off');
+  // Without the setup read a client says "Not known" with no lamp: a grey one would say off.
+  assert.deepEqual(['meta', 'lamp'].map((k) => block(gatewayTree(MEDIUM_VIEW, { ...OPTS, setup: null }), 'client:codex')[k]), ['Not known', null]);
   // A server whose removal waits in the tray looks leaving until Apply.
   const removing = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [trayRow(REMOVE_FILES)] });
   assert.deepEqual([block(removing, 'held:kitden:files').leaving, block(removing, 'held:kitden:tracker').leaving], [true, undefined]);
@@ -1198,14 +1199,17 @@ test('a tool says how many projects have their own rule, also under All projects
   const view = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers: [{ ...files, tool_list }] }] };
   const all = gatewayTree(view, OPTS);
   const shown = (tree, name) => block(tree, `tool:files/${name}`);
-  assert.deepEqual(['read_file', 'write_file', 'delete_file'].map((name) => shown(all, name).projects), [{ words: '2 projects', own: false }, { words: '1 project', own: false }, null]);
+  assert.deepEqual(['read_file', 'write_file', 'delete_file'].map((name) => shown(all, name).projects), [
+    { words: '2 projects', said: 'own rule in 2 projects', own: false }, { words: '1 project', said: 'own rule in 1 project', own: false }, null]);
   // A round mark: on or off; a left port where its link comes in.
   assert.deepEqual([shown(all, 'read_file').lamp, shown(all, 'delete_file').lamp, shown(all, 'read_file').ports], ['on', 'off', { left: true }]);
-  assert.equal(blockLabel(shown(all, 'read_file')), 'read_file, 2 projects, On');
+  // A screen reader hears what the folder tag means.
+  assert.equal(blockLabel(shown(all, 'read_file')), 'read_file, own rule in 2 projects, On');
   // In a project, "This project" in the accent when that project has a rule of its own.
   const own = { ...view, gateways: [{ ...view.gateways[0], servers: [{ ...files, tool_list: [tool('read_file', 'off', 'reads', { origin: 'project', own_in: 2 }), tool('write_file', 'on', 'writes', { own_in: 1 })] }] }] };
   const atlas = gatewayTree(own, { ...OPTS, picked: 'atlas' });
-  assert.deepEqual([shown(atlas, 'read_file').projects, shown(atlas, 'write_file').projects], [{ words: 'This project', own: true }, null]);
+  assert.deepEqual([shown(atlas, 'read_file').projects, shown(atlas, 'write_file').projects], [{ words: 'This project', said: 'own rule in this project', own: true }, null]);
+  assert.equal(blockLabel(shown(atlas, 'read_file')), 'read_file, own rule in this project, Off');
   // While a rule for it in the scope shown waits in the tray, its mark is a dashed ring.
   const off = (project) => trayRow(ruleBody('files', 'read_file', 'off', project));
   assert.equal(shown(gatewayTree(view, { ...OPTS, rows: [off(null)] }), 'read_file').lamp, 'preview');

@@ -293,9 +293,9 @@ def test_lamps_marks_and_ports_follow_one_lamp_language():
     assert "background: transparent" in outside and "1.5px solid var(--lamp-off)" in outside
     # A lamp that turns on or off pops, on the calm curve: from 2.2 times its size, a client's from
     # 2.4 and a tool's mark from 1.9.
-    pop = rule(".lamp.pop, .mark.pop")
-    assert "200ms var(--calm)" in pop and "lamp-pop" in pop
-    assert "@keyframes lamp-pop { from { transform: scale(var(--pop)); } }" in CSS
+    # The map pops them with Web Animations (map-view.js), reading --pop: no CSS animation.
+    assert "lamp-pop" not in CSS and ".lamp.pop" not in CSS
+    assert 'getPropertyValue?.("--pop")' in script("map-view.js")
     assert "--pop: 2.2" in lamp and "--pop: 1.9" in rule(".mark")
     assert "--pop: 2.4" in rule("div.map .block.client .lamp")
     port = rule(".port")
@@ -613,6 +613,8 @@ def test_the_map_blocks_look_like_the_mockup():
     text = gw()
     assert '"Outside the gateway · drag one in"' in text
     assert '"In preview. Click to take it out."' in text
+    # A screen reader hears what a tool's folder tag means.
+    assert '"own rule in this project"' in text and "`own rule in ${" in text
     # The Kitden gateway says where it runs, in the words of the gateway view.
     assert '"where": "On this Mac"' in (STATIC.parents[1] / "views/gateway_view.py").read_text()
     assert "gateway.where" in script("gateway.js")
@@ -653,6 +655,11 @@ def test_the_map_blocks_look_like_the_mockup():
     )
     # Leaving: dimmed and dashed; a block that leaves the map is no Tab stop while it fades.
     assert "filter: opacity(0.45); border-style: dashed;" in rule("div.map .block.leaving")
+    # A leaving block that still takes focus keeps its ring at full strength (3:1).
+    assert "filter: none;" in rule("div.map .block.leaving:focus-visible")
+    assert CSS.index("div.map .block.leaving:focus-visible {") > CSS.index(
+        "div.map .block.leaving {"
+    )
     assert 'setAttribute("tabindex", "-1")' in script("map-view.js")
     # The gateway: 150 x 124, its stats 11 px with icons, its numbers roll.
     assert "rollTo(" in script("map-view.js")

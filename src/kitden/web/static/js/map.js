@@ -21,7 +21,7 @@
 //   2 projects") or all there is to say (a gateway's clients and servers). How it looks
 //   (map-view.js): `lamp` "on", "off", "preview" or "out" (works outside the gateway), at the start
 //   of its meta line, or as a tool's mark; `stats`, a gateway's counts, [{ icon, words }]; `projects`,
-//   a tool's { words, own }; `ports`, { left, right }, each true or a look ("out"); `takeOut`, the
+//   a tool's { words, said, own }; `ports`, { left, right }, each true or a look ("out"); `takeOut`, the
 //   words of a block in preview, which a press takes out (it shows an ×); `leaving`, a change in the
 //   tray takes it out.
 // - links: [{ from, to, kind, unk, leaving }], kind "on", "faint", "direct" or "preview". The link
@@ -493,5 +493,5 @@ export function findChip(found) {
 export function blockLabel(block) {
   const state = block.stateInMeta ? null : STATE_SAID[block.state];
   const stats = block.stats ? block.stats.map((stat) => stat.words).join(" · ") : null;
-  return [block.name, block.meta, stats, block.tag, block.projects && block.projects.words, state, block.action].filter(Boolean).join(", ");
+  return [block.name, block.meta, stats, block.tag, block.projects && block.projects.said, state, block.action].filter(Boolean).join(", ");
 }

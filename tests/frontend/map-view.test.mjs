@@ -1109,8 +1109,8 @@ const LOOKS = {
     { id: 'c1', column: 'a', kind: 'client', name: 'Codex', meta: 'Connected', lamp: 'on', state: 'on', ports: { right: true } },
     { id: 's1', column: 'b', kind: 'held', name: 'github', meta: '1 of 2 on', lamp: 'on', state: 'on', count: 2, ports: { left: true, right: true } },
     { id: 'o1', column: 'b', kind: 'outside', name: 'docs', meta: 'In Codex', lamp: 'out', state: 'on', ports: { left: 'out' } },
-    { id: 't1', column: 'c', parent: 's1', kind: 'tool', name: 'read', lamp: 'on', state: 'on', projects: { words: '2 projects', own: false }, ports: { left: true } },
-    { id: 't2', column: 'c', parent: 's1', kind: 'tool', name: 'push', lamp: 'off', state: 'off', projects: { words: 'This project', own: true }, ports: { left: true } },
+    { id: 't1', column: 'c', parent: 's1', kind: 'tool', name: 'read', lamp: 'on', state: 'on', projects: { words: '2 projects', said: 'own rule in 2 projects', own: false }, ports: { left: true } },
+    { id: 't2', column: 'c', parent: 's1', kind: 'tool', name: 'push', lamp: 'off', state: 'off', projects: { words: 'This project', said: 'own rule in this project', own: true }, ports: { left: true } },
   ],
   links: [{ from: 'c1', to: 's1', kind: 'on' }, { from: 's1', to: 't1', kind: 'on' }],
 };
@@ -1180,6 +1180,17 @@ test('a leaving block is dimmed, dashed and out of the Tab order', async () => {
   assert.deepEqual([node.classList.contains('leaving'), node.getAttribute('tabindex')], [true, null]);
 });
 
+test('the tools of a server that folds shrink back with no leaving look, and no Tab stop', async () => {
+  const v = view();
+  await v.draw(TREE, lay(['s1']), { motion: 'none' });
+  const t1 = v.node('t1');
+  v.draw(TREE, lay(), {});
+  tick(90);
+  assert.deepEqual([t1.classList.contains('leaving'), t1.getAttribute('tabindex')], [false, '-1']);
+  settle();
+  assert.equal(v.node('t1'), null);
+});
+
 test("the gateway's numbers roll when they change", async () => {
   const gate = (clients, servers, on) => ({ columns: TREE.columns, links: [], blocks: [
     { id: 'g1', column: 'a', kind: 'gateway', name: 'Kitden gateway', meta: 'On this Mac', lamp: 'on', stats: [{ icon: 'monitor', words: clients }, { icon: 'server', words: servers }] },
@@ -1208,6 +1219,19 @@ test("the gateway's numbers roll when they change", async () => {
   reduce(true);
   await show(gate('1 client', '1 server', '2 of 4 on'));
   assert.deepEqual(shown(), [['1'], ['1'], ['2']]);
+});
+
+test('a count rolls only from its own old value, when another count comes or goes before it', async () => {
+  const gate = (stats) => ({ columns: TREE.columns, links: [], blocks: [{ id: 'g1', column: 'a', kind: 'gateway', name: 'Kitden gateway', meta: 'On this Mac', lamp: 'on', stats }] });
+  const servers = { icon: 'server', words: '2 servers' };
+  const v = view();
+  const show = (m, motion) => v.draw(m, layoutTree(m, { open: new Set(), narrow: false }), { motion });
+  // The setup is read later: the clients' count comes before the servers' one.
+  await show(gate([servers]), 'none');
+  await show(gate([{ icon: 'monitor', words: '3 clients' }, servers]));
+  const nums = parts(v.node('g1'), 'num');
+  assert.deepEqual(nums.map((n) => n.children.map((c) => c.textContent)), [['3'], ['2']]);
+  assert.ok(nums.every((n) => n.children.every((c) => !c.animations.length)));
 });
 
 test('a lamp fades to its new colour, and pops when it turns on or off', async () => {

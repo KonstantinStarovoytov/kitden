@@ -232,8 +232,9 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
     const found = (clients || []).find((c) => c.id === id && c.status === "found");
     // Without the setup read, a client is neither connected nor not.
     let meta = known ? (on ? "Connected" : "Not connected") : NOT_KNOWN;
-    // Found lights the lamp; the state stays what the link shows: no gateway reached yet.
-    let lamp = on ? "on" : "off";
+    // Found lights the lamp; the state stays what the link shows: no gateway reached yet. A client
+    // whose state Kitden does not know has no lamp: a grey one would say off.
+    let lamp = known ? (on ? "on" : "off") : null;
     if (first && found) [meta, lamp] = [found.version ? `Found · ${found.version}` : "Found", "on"];
     blocks.push({ id: `client:${id}`, column: "clients", kind: "client", name: CLIENT_NAMES[id], meta, lamp, state: known ? (on ? "on" : "off") : "unk", client: id, ports: { right: true } });
   }
@@ -407,17 +408,23 @@ function kitdenServer(block, word, picked) {
 
 // "This project" for a tool whose rule is the picked project's own.
 const ownTag = (tool) => (tool.origin === "project" ? ORIGIN_WORDS.override : null);
+// What a screen reader hears for a tool's projects: what the folder tag means.
+const OWN_HERE = "own rule in this project";
 
 // A tool of a server in the Kitden gateway (`held`, its block): on or off (`effective` counts the
 // server's switch too: a tool of a server that is off is off), its mark (a dashed ring while a rule
 // for it in the scope shown waits in the tray, `waiting`), and which projects have a rule of their
-// own for it: with All projects how many (`own_in`), in a project "This project" when it is one.
+// own for it: with All projects how many (`own_in`), in a project "This project" when it is one;
+// `said` is what a screen reader hears for it.
 function toolBlock(held, tool, picked, waiting) {
   const server = held.server;
   const on = (tool.effective ?? tool.state) === "on";
   const own = picked ? ownTag(tool) : null;
-  let projects = own ? { words: own, own: true } : null;
-  if (!picked && tool.own_in) projects = { words: plural(tool.own_in, "project", "projects"), own: false };
+  let projects = own ? { words: own, said: OWN_HERE, own: true } : null;
+  if (!picked && tool.own_in) {
+    const words = plural(tool.own_in, "project", "projects");
+    projects = { words, said: `own rule in ${words}`, own: false };
+  }
   const lamp = waiting.has(`${server.name}/${tool.name}`) ? "preview" : on ? "on" : "off";
   return { id: `tool:${server.name}/${tool.name}`, column: "tools", parent: held.id, kind: "tool", name: tool.name, state: on ? "on" : "off", lamp, projects, ports: { left: true }, tool, server };
 }
