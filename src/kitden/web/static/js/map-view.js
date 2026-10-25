@@ -6,7 +6,7 @@
 // the hooks; the view knows nothing of servers, tools or clients.
 import { button, cutName, el, icon } from "./dom.js";
 import { blockLabel, drawPlan, enterDelays, foldable, LINK_MS, linkClass, linkDashed, linkKey, linkPath, midPoint, unfoldDelays } from "./map.js";
-import { animateTo, CALM, D, IN3, OUT3, RETRACT, unscaled } from "./motion.js";
+import { afterOldPage, animateTo, CALM, D, IN3, OUT3, RETRACT, unscaled } from "./motion.js";
 
 const SVG = "http://www.w3.org/2000/svg";
 const MOVE_MS = 260; // a block that moves, or a new one that fades in at its place
@@ -193,10 +193,13 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     return node;
   }
 
-  // A block at (x, y), scaled by s from its centre, at opacity o.
+  // A block at (x, y), scaled by s from its centre, at opacity o. The place is the `translate`
+  // property and only the scale is `transform`: a press scales the block with the CSS `scale`
+  // property, which turns about the block's own middle only when the place is not in `transform`.
   function put(item, { x, y, s, o }) {
     Object.assign(item, { x, y, s, o });
-    item.node.style.transform = `translate(${x}px, ${y}px) scale(${s})`;
+    item.node.style.translate = `${x}px ${y}px`;
+    item.node.style.transform = s === 1 ? "" : `scale(${s})`;
     fade(item.node, o);
   }
 
@@ -650,7 +653,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
       } else if (enters) {
         // The entrance: it waits below its place, unseen, then rises in its turn.
         put(item, { ...end, y: end.y + ENTER_RISE, o: 0 });
-        go(item, end, { dur: D(MOVE_MS), ease: OUT3, start: start + D(waves[at]) });
+        go(item, end, { dur: D(MOVE_MS), ease: OUT3, start: start + D(waves[at] + afterOldPage()) });
       } else if (fresh && unfold.has(place.id)) {
         // An unfold: it waits at its place while its links draw, then fades in.
         opened.add(place.id);

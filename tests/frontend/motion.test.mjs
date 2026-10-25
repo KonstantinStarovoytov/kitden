@@ -234,6 +234,15 @@ test('riseHead lifts the title at once, the lede after 120 ms and the scope line
   riseHead(t, l, null);  // no scope line: nothing breaks
 });
 
+test('a Gateway place change by view transition lets the old page leave first: the head starts 120 ms later', () => {
+  const lift = (name) => { const [t, l, s] = [fakeNode(), fakeNode(), fakeNode()]; transition(() => riseHead(t, l, s), name); finishTransition(); return [t, l, s].map((n) => n.animations[0].options.delay); };
+  assert.deepEqual(lift('map-entrance'), [120, 240, 300]);
+  assert.deepEqual(lift('place-change'), [0, 120, 180]);
+  const [t, l, s] = [fakeNode(), fakeNode(), fakeNode()];
+  riseHead(t, l, s);  // no place change: no wait
+  assert.deepEqual([t, l, s].map((n) => n.animations[0].options.delay), [0, 120, 180]);
+});
+
 function holderWith(text) {
   const old = fakeNode();
   old.textContent = text;

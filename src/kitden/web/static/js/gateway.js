@@ -6,7 +6,7 @@ import { endedMove, movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { leaveMap, mapReviewLeft, previewBar, redrawPreview, showMapReview } from "./map-review.js";
 import { findIn, foldable, isNarrow, keepOpen, layoutTree, linkKey, litFrom, litPath, pressOpen, toggleOpen, wideWidth } from "./map.js";
 import { mapView } from "./map-view.js";
-import { entrance, glide, rise, riseHead } from "./motion.js";
+import { afterOldPage, entrance, glide, rise, riseHead } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, openInfo, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, folderName, gatewayName, kitdenClients, mark, opens, ORIGIN_WORDS, scopeBar, skeleton, STATE_WORDS, staleNote } from "./parts.js";
 import { arrival, current, currentError, data, go, goTo, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
@@ -388,7 +388,7 @@ export function narrowFor(model, { window: width, box = null, docked = false }) 
 // gateway-drag.js's).
 const onMap = {
   project: null, open: new Set(), selected: null, view: null, model: null, found: null, width: null, narrow: false, watch: null,
-  shows: "",
+  shows: "", unfolds: false,
 };
 
 // What a selection lights: a link's key lights its two ends and itself, a client what it reaches,
@@ -496,10 +496,12 @@ function newMap() {
   return view;
 }
 
-// A press on a block that folds opens or folds it, before it is selected.
+// A press on a block that folds opens or folds it, before it is selected. `unfolds` says that the
+// press opened it: what it holds comes in before the path of the selection lights.
 function openBlock(id) {
   const { model } = onMap;
   onMap.open = pressOpen(model, onMap.open, onMap.found, id);
+  onMap.unfolds = onMap.open.has(id);
 }
 
 // A new width of the box (the window, or Details beside the page) may change the layout: it is
@@ -546,8 +548,10 @@ export function mapMotion({ fresh, projectChanged, narrowChanged }) {
   return projectChanged || narrowChanged ? "none" : "move";
 }
 
-// Draw the map as it is now, as `mapMotion` says.
-function drawOnMap(model, { fresh = false, projectChanged = false } = {}) {
+// Draw the map as it is now, as `mapMotion` says. With `lightLater` the selection shows, but its
+// path lights (the dims and the accent lines) when every motion of this draw has ended: a server's
+// tools come in first. The promise ends with the last motion.
+function drawOnMap(model, { fresh = false, projectChanged = false, lightLater = false } = {}) {
   const narrow = narrowNow(model);
   const flipped = narrow !== onMap.narrow;
   onMap.narrow = narrow;
@@ -557,16 +561,19 @@ function drawOnMap(model, { fresh = false, projectChanged = false } = {}) {
   // selected link its two ends. A selection the model no longer has is none.
   const lit = litFor(model, onMap.selected);
   const motion = mapMotion({ fresh, projectChanged, narrowChanged: flipped });
-  onMap.view.draw(model, layout, { selected: lit.size ? onMap.selected : null, lit, found: onMap.found, open, motion });
+  const { view, selected } = onMap;
+  const drawn = view.draw(model, layout, { selected: lit.size ? selected : null, lit: lightLater ? new Set() : lit, found: onMap.found, open, motion });
   // A block a move took off its place stays where it is shown (gateway-drag.js).
-  placeMoved({ view: onMap.view, model, layout, redraw: redrawMove });
+  placeMoved({ view, model, layout, redraw: redrawMove });
+  if (lightLater && lit.size) drawn.then(() => onMap.view === view && onMap.selected === selected && drawAgain());
+  return drawn;
 }
 
 // Draw the map again in place; its blocks keep their nodes, so focus stays where it is.
-function drawAgain() {
+function drawAgain(options) {
   const { view, model } = onMap;
-  if (!view || !view.box.isConnected) return;
-  drawOnMap(model);
+  if (!view || !view.box.isConnected) return Promise.resolve();
+  return drawOnMap(model, options);
 }
 
 // Let go of the selection: the map shows none and Details close. Focus stays where it is.
@@ -614,7 +621,9 @@ function selectOnMap(block, selected = block.id) {
   onMap.open = keepOpen(onMap.model, onMap.open, block);
   onMap.selected = selected;
   onList.current = block.id;
-  drawAgain();
+  const lightLater = onMap.unfolds;
+  onMap.unfolds = false;
+  drawAgain({ lightLater });
   openDetails(block);
 }
 
@@ -720,7 +729,7 @@ function gatewayList(main, view, model, found, { enter = false } = {}) {
     else focusRow(grid, row.id);
   });
   main.append(grid);
-  if (enter) rise([grid]);
+  if (enter) rise([grid], { delay: afterOldPage() });
 }
 
 // The row of what the address selects: a server (the row that takes the Tab key when both of a

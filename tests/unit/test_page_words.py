@@ -641,6 +641,16 @@ def test_a_selection_dims_what_is_off_its_path():
     assert "delay: unscaled(" in script("map-view.js")
 
 
+def test_a_press_scales_a_block_about_its_own_middle():
+    # The `scale` of a press turns about the block's middle only when the block's place is the
+    # `translate` property: a place in `transform` is pulled 2 % toward the corner of the map.
+    assert "scale: 0.98" in rule("div.map .block:active")
+    view = script("map-view.js")
+    assert "style.translate = `${x}px ${y}px`" in view
+    assert 'style.transform = s === 1 ? "" : `scale(${s})`' in view
+    assert "translate(" not in view.split("function put(")[1].split("fade(item.node, o)")[0]
+
+
 def test_plugin_switch_opens_a_review_and_does_not_flip_itself():
     text = panel()
     assert 'setAttribute("role", "switch")' in text

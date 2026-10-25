@@ -84,12 +84,16 @@ export function pressGrip(event, onStart = () => {}) {
   const from = { x: event.clientX, y: event.clientY };
   const box = node.getBoundingClientRect();
   const grab = { x: from.x - box.left, y: from.y - box.top };
+  // Where on the block the press is, as a share of its size: a layout that gives the block another
+  // size under the drag (the map turns wide when Details close) keeps the pointer on it.
+  const place = onMap.layout && onMap.layout.blocks.find((b) => b.id === block.id);
+  const share = place && place.w && place.h ? { x: grab.x / place.w, y: grab.y / place.h } : null;
   const move = (e) => {
     const at = { x: e.clientX, y: e.clientY };
     if (!onMap.drag) {
       if (Math.hypot(at.x - from.x, at.y - from.y) < DRAG_START) return;
       onStart();
-      onMap.drag = { id: block.id, name: block.name, kind: block.groupKey === "local" ? "local" : "remote", row: block.row, grab, at, open: false };
+      onMap.drag = { id: block.id, name: block.name, kind: block.groupKey === "local" ? "local" : "remote", row: block.row, grab, share, at, open: false };
       document.documentElement.classList.add("grabbing");
     }
     onMap.drag.at = at;
@@ -133,12 +137,20 @@ function mapPoint(at) {
   return { x: at.x - origin.left, y: at.y - origin.top };
 }
 
+// Where the pointer holds the dragged block, from its top left: the spot of the press, in the size
+// the layout gives the block now.
+function grabOf(drag) {
+  const place = drag.share && onMap.layout.blocks.find((b) => b.id === drag.id);
+  return place ? { x: drag.share.x * place.w, y: drag.share.y * place.h } : drag.grab;
+}
+
 // The dragged block where the pointer holds it; the slot lights while a drop there would preview.
 function follow() {
   const { drag, view } = onMap;
   const point = mapPoint(drag.at);
   if (!point || !view.node(drag.id)) return;
-  view.hold(drag.id, { x: point.x - drag.grab.x, y: point.y - drag.grab.y });
+  const grab = grabOf(drag);
+  view.hold(drag.id, { x: point.x - grab.x, y: point.y - grab.y });
   onMap.home = drag.id;
   view.box.classList.toggle("dropping", dropTarget(onMap.model, onMap.layout, point.x, point.y) === "servers");
 }

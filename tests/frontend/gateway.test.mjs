@@ -680,3 +680,31 @@ test('a drag lets go of the selection when the block first follows the pointer, 
     heard.pointerup[0]({ type: 'pointerup', clientX: x + 9, clientY: y });
   } finally { delete globalThis.document; }
 });
+
+test('a drag keeps the pointer inside the block when the layout changes its size under the drag', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const heard = {};
+  globalThis.document = { addEventListener: (type, fn) => { (heard[type] ||= []).push(fn); }, removeEventListener() {}, documentElement: { classList: { add() {}, remove() {} } } };
+  try {
+    const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+    const narrow = layoutTree(tree, { open: new Set(), narrow: true });
+    const wide = layoutTree(tree, { open: new Set(), narrow: false });
+    const id = 'outside:move:github';
+    const [was, now] = [narrow, wide].map((layout) => layout.blocks.find((b) => b.id === id));
+    assert.ok(was.w > now.w, 'the narrow block is wider than the wide one');
+    const held = [];
+    const node = { dataset: { focus: `block:${id}` }, getBoundingClientRect: () => ({ left: was.x, top: was.y, width: was.w, height: was.h }), removeAttribute() {}, querySelectorAll: () => [] };
+    const view = { node: () => node, hold: (_, at) => held.push(at), letGo() {}, box: { isConnected: true, classList: { toggle() {}, remove() {} } }, area: { getBoundingClientRect: () => ({ left: 0, top: 0 }) } };
+    placeMoved({ view, model: tree, layout: narrow, redraw() {} });
+    // A press near the right edge of the wide narrow block, then a move that starts the drag.
+    const [x, y] = [was.x + was.w - 15, was.y + 10];
+    pressGrip({ button: 0, target: { closest: () => node }, clientX: x, clientY: y });
+    heard.pointermove[0]({ clientX: x + 6, clientY: y });
+    // The layout turns wide (Details let go, the window is wide enough): the block is narrower now.
+    placeMoved({ view, model: tree, layout: wide, redraw() {} });
+    const at = held.at(-1);
+    assert.ok(x + 6 >= at.x && x + 6 <= at.x + now.w, `the pointer is inside the block (${x + 6} in ${at.x}..${at.x + now.w})`);
+    assert.ok(x + 6 > at.x + now.w - 40, 'and it stays near the same edge of the block');
+    heard.pointerup[0]({ type: 'pointerup', clientX: x + 6, clientY: y });
+  } finally { delete globalThis.document; }
+});

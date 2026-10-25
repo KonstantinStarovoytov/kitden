@@ -56,11 +56,12 @@ export function rise(nodes, { delay = 0, step = 0, y = 6, dur = 260 } = {}) {
 }
 
 // The page head rises as a place opens: the title at once, the lede after 120 ms and the scope
-// line after 180 ms. Any of them may be null.
+// line after 180 ms. Any of them may be null. While the Gateway comes by a view transition they
+// wait for the old page to leave (afterOldPage).
 const HEAD_DELAYS = [0, 120, 180];
 export function riseHead(title, lede, scope) {
   [title, lede, scope].forEach((node, index) => {
-    if (node) rise([node], { delay: HEAD_DELAYS[index] });
+    if (node) rise([node], { delay: HEAD_DELAYS[index] + afterOldPage() });
   });
 }
 
@@ -71,6 +72,14 @@ export function animate(node, keyframes, options) {
 
 let activeTransition = null;
 let activeClass = null;
+let changeClass = null; // the class of the place change whose change is running now
+
+// How long the new Gateway waits for the old page to leave (120 ms, style.css), while it comes by a
+// view transition: its head and map start then, as in the mockup, and do not show through the
+// fading page. Zero anywhere else, and under reduced motion (no transition runs).
+export function afterOldPage() {
+  return changeClass === "map-entrance" ? 120 : 0;
+}
 
 // Snapshots sit above all normal stacking contexts; drop them before opening a drawer.
 export function finishTransition() {
@@ -93,7 +102,8 @@ export function transition(change, extraClass) {
   let landed = null;
   const t = document.startViewTransition(() => {
     inChange = true;
-    try { change(); } finally { inChange = false; }
+    changeClass = extraClass || null;
+    try { change(); } finally { inChange = false; changeClass = null; }
     flying = null;
     landed = landing;
     landing = null;

@@ -103,7 +103,7 @@ beforeEach(() => {
 });
 
 const { blockOrder, layoutTree, linkKey, linkPath, midPoint } = await import('../../src/kitden/web/static/js/map.js');
-const { CALM, RETRACT } = await import('../../src/kitden/web/static/js/motion.js');
+const { CALM, RETRACT, finishTransition, transition } = await import('../../src/kitden/web/static/js/motion.js');
 const { mapView } = await import('../../src/kitden/web/static/js/map-view.js');
 
 const TREE = {
@@ -119,7 +119,8 @@ const TREE = {
 };
 const lay = (open = [], narrow = false) => layoutTree(TREE, { open: new Set(open), narrow });
 const view = (hooks = {}) => mapView({ tile: () => null, onOpen() {}, onSelect() {}, ...hooks });
-const pos = (n) => { const m = n.style.transform.match(/translate\(([-\d.]+)px, ([-\d.]+)px\) scale\(([-\d.]+)\)/); return { x: +m[1], y: +m[2], s: +m[3] }; };
+// Where a block shows: its place is the `translate` property, its scale the `transform`.
+const pos = (n) => { const [x, y] = n.style.translate.split(' ').map(parseFloat); const m = n.style.transform.match(/^scale\(([-\d.]+)\)$/); return { x, y, s: m ? +m[1] : 1 }; };
 const place = (layout, id) => layout.blocks.find((b) => b.id === id);
 const without = (id) => ({ ...TREE, blocks: TREE.blocks.filter((b) => b.id !== id), links: TREE.links.filter((l) => l.to !== id) });
 
@@ -134,12 +135,15 @@ test('drawing twice keeps the same node for every block and link that stays', as
   assert.ok(s1.classList.contains('selected'));
 });
 
-test('a block sits where the layout says, by transform only', async () => {
+test('a block sits where the layout says, by the translate property; the transform is only its scale', async () => {
   reduce(true);
   const v = view(); const layout = lay();
   await v.draw(TREE, layout, {});
   const at = place(layout, 's2');
-  assert.equal(v.node('s2').style.transform, `translate(${at.x}px, ${at.y}px) scale(1)`);
+  // A press scales the block with the CSS `scale` property. That property turns about the box's own
+  // middle only when the place is not in `transform`: it would pull the place 2 % toward the corner.
+  assert.equal(v.node('s2').style.translate, `${at.x}px ${at.y}px`);
+  assert.equal(v.node('s2').style.transform, '');
   assert.equal(v.node('s2').style.left, undefined);
 });
 
@@ -321,6 +325,22 @@ test('the entrance: each block rises 6 px in 260 ms OUT3, 22 ms apart in layout 
   tick(end); assert.equal(last.style.opacity, '0');
   tick(130); assert.ok(near(pos(last).y, place(layout, ids.at(-1)).y + 6 * 0.125));
   tick(130); assert.equal(pos(last).y, place(layout, ids.at(-1)).y); assert.equal(last.style.opacity, '');
+});
+
+test('an entrance that comes with a Gateway place change starts after the old page has left, 120 ms later', async () => {
+  globalThis.document.documentElement = { classList: { add() {}, remove() {} } };
+  globalThis.document.startViewTransition = (change) => { change(); return { ready: Promise.resolve(), finished: new Promise(() => {}), skipTransition() {} }; };
+  try {
+    const v = view(); const layout = lay();
+    transition(() => { v.draw(TREE, layout, { motion: 'enter' }); }, 'map-entrance');
+    const first = v.node(layout.blocks[0].id); const at = layout.blocks[0].y;
+    tick(110); assert.equal(pos(first).y, at + 6); assert.equal(first.style.opacity, '0');
+    tick(140); assert.ok(near(pos(first).y, at + 6 * 0.125));  // 130 ms into its rise, which starts at 120
+  } finally {
+    finishTransition();
+    delete globalThis.document.documentElement;
+    delete globalThis.document.startViewTransition;
+  }
 });
 
 test('in the entrance a link shows only as much as the fainter of its two blocks', async () => {
@@ -622,6 +642,19 @@ test('a selection dims what is off its path and lays an overlay on each lit link
   const [o] = overs(v); const a = o.animations[0];
   assert.equal(overs(v).length, 1);
   assert.deepEqual([a.keyframes, a.options.duration, a.options.easing], [[{ opacity: 0 }, { opacity: 1 }], 180, CALM]);
+});
+
+test('a selected block with nothing lit dims nothing and lays no line; a later draw lights its path', async () => {
+  // The page draws a press that opens a server this way, and lights the path when its tools are in.
+  const v = view();
+  await v.draw(TREE, lay(), { motion: 'none' });
+  v.draw(TREE, lay(), { selected: 's1', lit: new Set() });
+  assert.ok(v.node('s1').classList.contains('selected'));
+  assert.ok(!v.box.classList.contains('focus') && !v.node('s2').classList.contains('lit'));
+  assert.equal(overs(v).length, 0);
+  v.draw(TREE, lay(), { selected: 's1', lit: LIT });
+  assert.ok(v.box.classList.contains('focus') && v.node('s1').classList.contains('selected'));
+  assert.equal(overs(v).length, 1);
 });
 
 test('letting go fades the overlays out in 160 ms, then removes them', async (t) => {

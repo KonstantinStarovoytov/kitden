@@ -590,12 +590,13 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .add-gateway .form { margin: 0; }
 
 /* Map (map.js): HTML blocks over one SVG of links, each where the layout puts it (map-view.js
-   moves them by transform and owns their opacity; a look here never sets either). The link is the
-   state: one that comes draws in or fades in, one that goes undraws or fades out, one that changes
-   look blends (map-view.js), and nothing moves while idle. A block's handle marks where links meet
-   it: the route color on an open server, amber where a direct line comes in. */
+   moves them by `translate` and `transform` and owns their opacity; a look here never sets any of
+   them, and a press scales a block with the `scale` property). The link is the state: one that
+   comes draws in or fades in, one that goes undraws or fades out, one that changes look blends
+   (map-view.js), and nothing moves while idle. A block's handle marks where links meet it: the
+   route color on an open server, amber where a direct line comes in. */
 div.map { position: relative; margin: 22px 0 12px -6px; padding: 6px 6px 10px; overflow-x: auto; overflow-y: hidden; }
-div.map .block, div.map .caption, div.map .map-caption { position: absolute; left: 0; top: 0; z-index: 1; transform-origin: center; will-change: transform; }
+div.map .block, div.map .caption, div.map .map-caption { position: absolute; left: 0; top: 0; z-index: 1; transform-origin: center; will-change: translate, transform; }
 div.map .map-caption { display: flex; align-items: center; gap: 6px; color: var(--ink-3); font-size: 11px; white-space: nowrap; }
 div.map .map-area { position: relative; }
 div.map .map-links { position: absolute; inset: 0; z-index: 0; overflow: visible; pointer-events: none; }
