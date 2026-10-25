@@ -121,6 +121,8 @@ The mockup breaks several written rules. Each line gives the rule, what the mock
 
 **Carried from Phase 2:** an empty-map click or a second click lets go with `closePanel`, which also cancels a review Details hold (the move's "Show changes", a × review); with the tray, clear only the map's selection while a review shows. `letGoOnMap` during a write clears the selection while Details wait. Undo draws a link back in 260 ms where the mockup says 480 (the engine cannot tell the cause; the tray can pass it). The review floats over the lowest blocks at a 900 px window. After an applied removal, focus falls to `#main`.
 
+**Phase plans:** backend `2026-10-24-align-phase3-tray-backend.md` (Tasks 3.1–3.3, built on its own branch), page `2026-10-25-align-phase3-tray-page.md` (Tasks 3.4–3.6).
+
 **Files:** new `src/kitden/changes/batch.py`, `src/kitden/web/app.py` (route), `src/kitden/changes/engine.py` (progress per row), new `static/js/tray.js`, `static/js/panel.js` (toast), `static/js/map-review.js` (replaced by the tray), tests `tests/unit/test_batch.py`, `tests/frontend/tray.test.mjs`. **Mockup:** `tray`, `dock`; motion-spec M4. **Decisions:** D10, D11, D12, D20.
 
 - [ ] **Task 3.1 One change from many requests.** `POST /api/batch/preview` takes `{"requests": [ {id, kind, …} ]}` and returns one previewed change with `rows: [{id, title, detail, project, steps: [int]}]`. It uses each request's existing step builder and the engine's own merge. Tests: two requests on the same Cursor `mcp.json` apply without going stale; a failing last step puts every file back.
