@@ -180,6 +180,9 @@ The mockup breaks several written rules. Each line gives the rule, what the mock
 - A bypass line emptied by two rows takes out only one key.
 - The whole-server step ("in some projects…" for a server) leaves no mark on the map.
 - "Show" under "Projects with a rule of their own" closes Details and opens the tool again in that project; it should switch in place.
+- A first-run "Found" client with a Connect row is heard "in preview" twice (the state word and the wait words).
+- The gateway's Details card still counts a server that is moving out ("2 in the gateway"), while its block says "1 server".
+- A review from the gateway panel's Disconnect row says the disconnect note twice (the row's note and the client's line).
 
 **Files:** `static/js/gateway.js`, `gateway-details.js`, `gateway-drag.js`, `style.css`; backend `src/kitden/changes/actions.py`, `local_gateway/views.py`, client adapters. **Mockup:** `Gateway` (`spec`, `layout`, `toggle`, `select*`, `*Panel`, `wire*Panel`, `linkRemove`, `linkClick`, `linkPanel`, `dragStart`, `wireStart`, `connect`, `setConn`, `project`, `listHTML`, `filter`); motion-spec M2, M3, M5, M6. **Frames:** M1·1–M4·4 in `design/kitden.pen`.
 
