@@ -562,7 +562,8 @@ def test_gateway_wires_do_not_fake_traffic():
 def test_a_link_says_what_its_x_does():
     assert "} from the gateway`" in gw() and "`Turn off ${" in gw()
     view = script("map-view.js")
-    assert "} to ${" in view and '"Connections"' in view and '"aria-keyshortcuts", "Delete"' in view
+    assert "} to ${" in view and '"Connections"' in view
+    assert '"aria-keyshortcuts": tip ? "Delete" : null' in view
 
 
 def test_a_pointed_link_keeps_its_look_in_a_search():
@@ -1771,9 +1772,26 @@ def test_the_client_gateway_link_and_outside_panels_say_the_mockups_words():
         " on ${own}, so Kitden can't turn its tools on or off.",
         '"Move it into the gateway to manage them here."',
         " it either way.`",
+        '"Update the Kitden entry…"',
+        '"Update…"',
+        '"from a plugin"',
+        '"not on this Mac"',
+        '"its entry is off"',
+        '"settings not readable"',
+        "`Remove ${to.name} from ${from.name}`",
+        '"Version not known · on this Mac"',
     ):
         assert words in text, words
-    for words in ("Kitden entry", "Running", "not tested", "Drag it onto", "Kitden's rules file"):
+    review, parts = script("review.js"), script("parts.js")
+    assert '"setup_server.update": `Update Kitden in ${clients}`' in review
+    done = '"setup_server.update": "Updated Kitden"'
+    assert done in review and done in parts
+    assert "show my setup” to Kitden" not in review
+    assert "Updated show my setup" not in review + parts
+    # A link with no removal still takes the pointer, with no × and no Delete.
+    view = script("map-view.js")
+    assert '"aria-keyshortcuts": tip ? "Delete" : null' in view
+    for words in ('"Kitden entry"', "Running", "not tested", "Drag it onto", "Kitden's rules file"):
         assert words not in text, words
     for selector in (".chip-s", "header.has-tile", ".p-tile", ".client-rows", ".facts dd.quiet"):
         assert selector in CSS, selector

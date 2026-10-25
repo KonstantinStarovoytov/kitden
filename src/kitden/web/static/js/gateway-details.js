@@ -9,7 +9,7 @@ import { loadLibraryFor, raceSlow } from "./library.js";
 import { animateTo, fold } from "./motion.js";
 import { projectNote } from "./offer.js";
 import { callsText, closePanel, contextLinks, detailsCard, followTray, heldActions, keepFrom, linksRow, loadPanel, moveBody, moveInto, moveTargets, NO_TOOLS, offerLabel, offNote, openPanel, panelState, previewButton, refreshTools, review, stepTo, swapContent, switchList, techRows, technical, toast, toolRows, toolsHead, writingToolsOn } from "./panel.js";
-import { ALL_PROJECTS, callout, CLIENT_NAMES, clientCheck, FIND_PROJECT, folderName, GATEWAY_NOTE, gatewayName, kindOf, kitdenClients, mark, menuItems, originText, STATE_WORDS, versionWords } from "./parts.js";
+import { ALL_PROJECTS, callout, CLIENT_NAMES, clientCheck, FIND_PROJECT, folderName, GATEWAY_NOTE, gatewayName, kindOf, kitdenClients, mark, menuItems, originText, STATE_WORDS, versionsOpen } from "./parts.js";
 import { arrival, current, data, freshness, go, libraryChoice, projectPath, reload, render, setState, state, switchProject } from "./store.js";
 import { addToTray, iconFor, inTray, keyFor, takeOut, tray } from "./tray.js";
 
@@ -104,17 +104,31 @@ function waitWords(key, words) {
 }
 
 // What connects a client to the Kitden gateway, or takes it off again, by its kitden entry (its row
-// in the setup): `{ connect, body }`, Connect being the entry's set up and Disconnect its removal
-// (Task 1). Null where Kitden cannot do either: the setup was not read, a plugin gives the entry,
-// the client is not on this Mac, or its own entry is turned off.
+// in the setup): `{ connect, update, body }`, Connect being the entry's set up (`update` for an old
+// entry, which it replaces) and Disconnect its removal (Task 1). Null where Kitden cannot do
+// either: the setup was not read, a plugin gives the entry, the client is not on this Mac, or its
+// own entry is turned off.
 export function connectAction(client, setup) {
   const entry = (setup || []).find((e) => e.client === client);
   if (entry && entry.state === "added" && entry.enabled !== false) {
-    return { connect: false, body: { action: "client.disconnect", targets: [{ client }], params: {} } };
+    return { connect: false, update: false, body: { action: "client.disconnect", targets: [{ client }], params: {} } };
   }
   const offer = kitdenClients(setup).setup.find((s) => s.client === client);
-  return offer ? { connect: true, body: offer.body } : null;
+  return offer ? { connect: true, update: offer.body.action === "setup_server.update", body: offer.body } : null;
 }
+
+// Why a client has no Connect or Disconnect, in a few words for a gateway row: a plugin gives its
+// entry, its own entry is off, or Kitden did not find it here (or could not read its settings, by
+// the scan's `found`). Null where it has a button, or Kitden cannot say.
+function noButtonWords(entry, found) {
+  if (!entry) return null;
+  if (entry.state === "not_installed") return found && found.status === "unreadable" ? "settings not readable" : "not on this Mac";
+  if (entry.enabled === false) return "its entry is off";
+  return entry.state === "plugin" ? "from a plugin" : null;
+}
+
+// Whether Kitden knows the tools of every server in `servers`.
+const toolsKnown = (servers) => servers.every((s) => (s.tool_list || []).length);
 
 // What reaches a client through the Kitden gateway (`view`, the picked project's or all
 // projects'): its servers that are on, and their tools that are on (null while Kitden does not
@@ -123,18 +137,18 @@ function throughKitden(view) {
   const kitden = view && view.gateways.find((g) => g.kind === "kitden");
   if (!kitden || kitden.problem) return null;
   const on = (kitden.servers || []).filter((s) => s.state === "on");
-  const known = on.every((s) => (s.tool_list || []).length);
-  return { servers: on.length, tools: known ? on.reduce((n, s) => n + (s.on_count || 0), 0) : null };
+  return { servers: on.length, tools: toolsKnown(on) ? on.reduce((n, s) => n + (s.on_count || 0), 0) : null };
 }
 
 // Clients ------------------------------------------------------------------------------------
 
-// Under a client's name: its version on this Mac, or why there is none.
+// Under a client's name: its version on this Mac, or why there is none: still read in the
+// background, or not known.
 function clientWhere(found, progress) {
   if (!found || found.status === "not_found") return STATE_WORDS.missing;
   if (found.status === "unreadable") return STATE_WORDS.unread;
-  const version = found.version ? `Version ${found.version}` : versionWords(null, progress, true).replace(/^v/, "V");
-  return `${version} · on this Mac`;
+  if (found.version) return `Version ${found.version} · on this Mac`;
+  return versionsOpen(progress) ? "Checking the version… · on this Mac" : "Version not known · on this Mac";
 }
 
 // The clients whose own kitden entry Kitden turns on again, by the key their docs name: the twin
@@ -204,6 +218,7 @@ function clientSay(name, { known, on, entry, found, turnsOn, through, place, own
     const unread = found && found.status === "unreadable";
     said.say = unread ? `Kitden could not read ${name}'s settings, so it cannot connect it.` : `Kitden did not find ${name} on this Mac, so it cannot connect it.`;
   } else if (on) said = throughSay(name, through, place);
+  else if (entry && entry.state === "old") said.say = `${name} has an old Kitden entry, so it does not use the gateway yet.`;
   else if (entry && entry.enabled === false) {
     said.say = `${name} has the kitden entry turned off, so it does not reach the gateway.`;
     if (!turnsOn) said.say = [said.say, `Turn it on in ${name}'s own MCP settings.`].join(" ");
@@ -252,7 +267,7 @@ export function clientCard(client, { setup, clients, progress = data.progress, v
   const turnsOn = off.includes(client) && entry.state === "added" && TURNS_ON.includes(client);
   const why = clientSay(name, { known, on, entry, found, turnsOn, through, place: placeWords(picked, folder), own });
   const actions = [];
-  if (action && action.connect) actions.push({ label: "Connect to the gateway…", body: action.body, note: SETUP_NOTE, primary: true });
+  if (action && action.connect) actions.push({ label: action.update ? "Update the Kitden entry…" : "Connect to the gateway…", body: action.body, note: SETUP_NOTE, primary: true });
   else if (action) actions.push({ label: "Disconnect from the gateway…", body: action.body });
   actions.push({ label: "See what it loads in Library", run: seeInLibrary });
   const more = [];
@@ -316,21 +331,23 @@ function waitingClients(model, found) {
 // "3 of 6 on"; "Not known yet" while Kitden does not know the tools of one of them.
 function toolsWords(servers) {
   if (!servers.length) return "Nothing yet";
-  if (!servers.every((s) => (s.tool_list || []).length)) return "Not known yet";
+  if (!toolsKnown(servers)) return "Not known yet";
   const on = servers.reduce((n, s) => n + (s.on_count || 0), 0);
   return `${on} of ${servers.reduce((n, s) => n + s.tool_list.length, 0)} on`;
 }
 
 // The gateway panel's clients (gateway-notes 3.6): a row each with its tile, its name over its lamp
 // and whether it is connected (" · in preview" in the accent while its change waits in the tray),
-// and its own "Connect…" or "Disconnect…" where Kitden can do it (connectAction).
-function clientRows(setup) {
+// and its own "Connect…", "Update…" or "Disconnect…" where Kitden can do it (connectAction), else
+// why not (noButtonWords; `clientList`, the scan's clients).
+function clientRows(setup, clientList) {
   const { linked } = kitdenClients(setup);
   const list = el("div", "sw-list client-rows");
   for (const client of WRITABLE) {
     const on = linked.includes(client);
     const action = connectAction(client, setup);
-    const said = el("span", null, on ? "Connected" : "Not connected");
+    const why = action ? null : noButtonWords((setup || []).find((e) => e.client === client), (clientList || []).find((c) => c.id === client));
+    const said = el("span", null, [on ? "Connected" : "Not connected", why].filter(Boolean).join(" · "));
     const state = el("small");
     state.append(lamp(on ? "on" : "off"), said);
     const words = el("div", "sw-tx");
@@ -348,14 +365,20 @@ function clientRows(setup) {
   return section;
 }
 
-// A client row's button: it adds the client's Connect or Disconnect to the tray and says "In
-// preview" while it waits there. A screen reader hears the client's name after its words, and the
-// hover text says the whole change.
-function rowButton(client, { connect, body }) {
+// A client row's button: it adds the client's Connect (Update, for an old entry) or Disconnect to
+// the tray and says "In preview" while it waits there. A screen reader hears the client's name
+// after its words, and the hover text says the whole change.
+const ROW_WORDS = {
+  connect: ["Connect…", (name) => `Connect ${name} to the gateway…`],
+  update: ["Update…", (name) => `Update ${name}'s Kitden entry…`],
+  disconnect: ["Disconnect…", (name) => `Disconnect ${name} from the gateway…`],
+};
+function rowButton(client, { connect, update, body }) {
   const name = CLIENT_NAMES[client];
-  const node = previewButton(connect ? "Connect…" : "Disconnect…", body, { note: connect ? SETUP_NOTE : null, look: "btn small" });
+  const [label, hover] = ROW_WORDS[update ? "update" : connect ? "connect" : "disconnect"];
+  const node = previewButton(label, body, { note: connect ? SETUP_NOTE : null, look: "btn small" });
   node.append(el("span", "sr-only", ` ${name}`));
-  node.title = connect ? `Connect ${name} to the gateway…` : `Disconnect ${name} from the gateway…`;
+  node.title = hover(name);
   node.dataset.focus = `conn:${client}`;
   return node;
 }
@@ -365,7 +388,7 @@ function rowButton(client, { connect, body }) {
 // its own Connect or Disconnect (not without the setup read: the warning says so); the sentence of
 // what it controls. Under More (D18): "Move all N…", every outside server a move can take, in one
 // review, and "Add another gateway…", which shows the form in the panel (`adding`).
-function kitdenCard(gateway, { view, setup, adding }) {
+function kitdenCard(gateway, { view, setup, clientList, adding }) {
   const { known } = kitdenClients(setup);
   const servers = gateway.servers || [];
   const outside = Object.values(view.groups).flat();
@@ -392,7 +415,7 @@ function kitdenCard(gateway, { view, setup, adding }) {
     after.append(el("h2", null, "Add another gateway"), addForm());
   }
   const why = "The gateway controls only the servers in it. Direct entries and terminal tools are outside it.";
-  return { kind: KIND.gateway, title: gateway.name, id: gateway.where, tile: houseTile(), facts, list: known ? clientRows(setup) : null, why, actions: [], more, after, warning };
+  return { kind: KIND.gateway, title: gateway.name, id: gateway.where, tile: houseTile(), facts, list: known ? clientRows(setup, clientList) : null, why, actions: [], more, after, warning };
 }
 
 // What a registered gateway holds, as its Servers fact.
@@ -447,9 +470,10 @@ function registeredCard(gateway, { view, held: entry, clients }) {
   return { kind: KIND.gateway, title: name, id: null, tile: headTile(mark("gateway")), facts, why: heldWhy(gateway, entry), actions, after, technical: technical(rows) };
 }
 
-// Details of a gateway: the Kitden one, or a registered one.
-export function gatewayCard(gateway, { view, setup, held: entry = null, clients = foundClients(), adding = false } = {}) {
-  if (gateway.kind === "kitden") return kitdenCard(gateway, { view, setup, adding });
+// Details of a gateway: the Kitden one, or a registered one. `clients` are the found clients Kitden
+// writes; `clientList` the scan's clients, each with its status.
+export function gatewayCard(gateway, { view, setup, held: entry = null, clients = foundClients(), clientList = data.clients, adding = false } = {}) {
+  if (gateway.kind === "kitden") return kitdenCard(gateway, { view, setup, clientList, adding });
   return registeredCard(gateway, { view, held: entry, clients });
 }
 
@@ -864,7 +888,11 @@ function heldSay(name, linked) {
 // registered gateway's links say where its tools are set.
 function linkSay(kind, from, to, { linked, view, picked, folder, unk }) {
   const place = placeWords(picked, folder);
-  if (kind === "client") return to.gateway.kind === "kitden" ? throughSay(from.name, throughKitden(view), place).say : `Tools and access are set in ${to.name} itself.`;
+  if (kind === "client" && to.gateway.kind !== "kitden") return `Tools and access are set in ${to.name} itself.`;
+  if (kind === "client") {
+    const plugin = from.viaPlugin ? ` ${from.name} gets Kitden from a plugin: turn the plugin off to disconnect it.` : "";
+    return `${throughSay(from.name, throughKitden(view), place).say}${plugin}`;
+  }
   if (kind === "held") return from.gateway.kind === "kitden" ? heldSay(to.name, linked) : `Tools and access are set in ${from.name} itself.`;
   if (kind === "tool") {
     const none = nobody(linked);

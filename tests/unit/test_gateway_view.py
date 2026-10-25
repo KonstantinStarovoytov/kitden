@@ -88,6 +88,22 @@ def test_columns_follow_the_page_and_count_the_desktop_code_tab_as_claude_code()
     assert github["columns"] == ["claude_code", "cursor"]
 
 
+def test_each_column_names_the_entries_its_line_takes_out():
+    # A bypass line's × removes that client's own entries; the Desktop Code tab's count as Claude
+    # Code's, as its line does. An entry that cannot be removed is in none.
+    stuck = replace(direct("codex"), actions=())
+    inventory = Inventory(
+        clients=found("claude_code", "cursor", "codex", DESKTOP),
+        items=[direct("claude_code"), direct("cursor"), direct(DESKTOP), stuck],
+    )
+    github = gateway_view(inventory, [], None)["groups"]["move"][0]
+    ids = {i.client: i.id for i in inventory.items}
+    assert github["client_items"] == {
+        "claude_code": [ids["claude_code"], ids[DESKTOP]],
+        "cursor": [ids["cursor"]],
+    }
+
+
 def test_a_plugins_server_stays_with_the_plugin():
     item = replace(direct("codex"), scope=Scope.PLUGIN)
     inventory = Inventory(clients=found("codex"), items=[item])

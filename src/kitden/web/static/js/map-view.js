@@ -244,8 +244,9 @@ function boxOf({ x, y, w, h, s }) {
 // (`onSelect(id)`); "+ Add" beside a column's caption calls `onAdd(column)`. `tile(block)` gives
 // what a block shows before its name.
 // `links` are the page's hooks for the links it acts on: `canHit(link)`, `tip(link)` (what its
-// × does, in words), `onClick(link)` and `onRemove(link)`. After the blocks the area holds the
-// hit of each such link (a button for a keyboard: Enter opens, Delete removes) and one ×.
+// × does, in words; "" for a link with no removal, which gets no × and no Delete), `onClick(link)`
+// and `onRemove(link)`. After the blocks the area holds the hit of each such link (a button for a
+// keyboard: Enter opens, Delete removes) and one ×.
 // A non-empty `lit` (the blocks and "from>to" links on the path of the selection) dims all else.
 // When `selected` is a block, each lit link that is not a bypass line gets an accent line, in 180 ms;
 // letting go takes it away in 160 ms. When `selected` is a link's key, that link is picked: it keeps
@@ -568,11 +569,12 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     wait = setTimeout(unpoint, GRACE_MS);
   }
 
-  // The × on the middle of the link with the hover look, else of the selected link. It follows the
-  // link; it moves to another link at once, and fades in only when it was hidden.
+  // The × on the middle of the link with the hover look, else of the selected link, when that link
+  // has a removal. It follows the link; it moves to another link at once, and fades in only when it
+  // was hidden.
   function placeCross() {
     const item = links.get(pointed || picked);
-    if (!item || !item.hit || !item.d) {
+    if (!item || !item.hit || !item.d || !pointer.tip(item.link)) {
       cross.hidden = true;
       return;
     }
@@ -610,7 +612,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     if (!press && !remove) return;
     event.preventDefault();
     if (press && !event.repeat) pressLink(item);
-    else if (remove) pointer.onRemove(item.link);
+    else if (remove && pointer.tip(item.link)) pointer.onRemove(item.link);
   }
 
   // A link's hit: a wide stroke over it, and a button for a keyboard.
@@ -619,7 +621,6 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     hit.setAttribute("class", "hit");
     hit.setAttribute("tabindex", "0");
     hit.setAttribute("role", "button");
-    hit.setAttribute("aria-keyshortcuts", "Delete");
     hit.dataset.focus = `link:${item.key}`; // a redraw of the page gives focus back to it
     if (item.d) hit.setAttribute("d", item.d);
     hit.addEventListener("pointerover", () => pointAt(item));
@@ -650,15 +651,20 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     else hits.setAttribute("aria-hidden", "true");
   }
 
-  // A link has a hit while the page acts on it, named for a screen reader by its two blocks.
+  // A link has a hit while the page acts on it, named for a screen reader by its two blocks; its
+  // removal, when it has one, is its description and Delete its key.
   function syncHit(item, names) {
     if (!pointer.canHit(item.link)) {
       dropHit(item);
       return;
     }
     if (!item.hit) item.hit = makeHit(item);
-    const said = { "aria-label": `${names.get(item.link.from)} to ${names.get(item.link.to)}`, "aria-description": pointer.tip(item.link) };
-    for (const [name, value] of Object.entries(said)) if (item.hit.getAttribute(name) !== value) item.hit.setAttribute(name, value);
+    const tip = pointer.tip(item.link);
+    const said = { "aria-label": `${names.get(item.link.from)} to ${names.get(item.link.to)}`, "aria-description": tip || null, "aria-keyshortcuts": tip ? "Delete" : null };
+    for (const [name, value] of Object.entries(said)) {
+      if (value === null) item.hit.removeAttribute(name);
+      else if (item.hit.getAttribute(name) !== value) item.hit.setAttribute(name, value);
+    }
   }
 
   // A block that went: its node and its links leave the page.

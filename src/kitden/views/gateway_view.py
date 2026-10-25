@@ -95,11 +95,12 @@ def gateway_view(
     and local servers can move too. `problem` says why its settings could not be read.
 
     Each outside row has the client columns that load it (the Desktop Code tab counts as
-    Claude Code), whether one of its entries is the project's own and replaces an all-projects
-    one (`override`), the first reason a move would refuse it (`stays`), or None, and whether
-    no entry of it is known to be on (`unknown`: a project's `.mcp.json` server Claude Code has
-    not approved yet). A move takes the row's entries together, so two of them set up
-    differently are a reason it refuses."""
+    Claude Code) and, per column, the entries a remove can take (`client_items`, for the map's
+    line from that client), whether one of its entries is the project's own and replaces an
+    all-projects one (`override`), the first reason a move would refuse it (`stays`), or None,
+    and whether no entry of it is known to be on (`unknown`: a project's `.mcp.json` server
+    Claude Code has not approved yet). A move takes the row's entries together, so two of them
+    set up differently are a reason it refuses."""
     ids = ([KITDEN_GATEWAY] if kitden is not None else []) + [g.id for g in gateways]
     # Per gateway and client: the servers that load in this scope and go through that gateway.
     connections: dict[str, dict[str, list[str]]] = {g: {c: [] for c in COLUMNS} for g in ids}
@@ -128,6 +129,7 @@ def gateway_view(
                 "summary": summary_line(item),
                 "clients": [],
                 "items": [],
+                "client_items": {},
                 "movable": movable[group],
                 "override": False,
                 "stays": None,
@@ -141,6 +143,8 @@ def gateway_view(
         row["stays"] = row["stays"] or stays(item, group)
         if REMOVE_DIRECT in item.actions:
             row["items"].append(item.id)
+            column = "claude_code" if item.client == DESKTOP else item.client
+            row["client_items"].setdefault(column, []).append(item.id)
             first = firsts.setdefault((group, item.name), item)
             if item.entry_key != first.entry_key:
                 why = set_up_differently(item.name, first.client, item.client)

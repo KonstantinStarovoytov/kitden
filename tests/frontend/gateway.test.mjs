@@ -113,12 +113,12 @@ const MEDIUM_VIEW = {
   used: ['kitden'],
   groups: {
     move: [
-      { name: 'docs', clients: ['claude_code'], columns: ['claude_code'], items: ['a'], stays: null },
-      { name: 'github', clients: ['claude_code'], columns: ['claude_code'], items: ['g'], stays: null },
+      { name: 'docs', clients: ['claude_code'], columns: ['claude_code'], items: ['a'], client_items: { claude_code: ['a'] }, stays: null },
+      { name: 'github', clients: ['claude_code'], columns: ['claude_code'], items: ['g'], client_items: { claude_code: ['g'] }, stays: null },
     ],
     local: [
-      { name: 'docs', clients: ['codex'], columns: ['codex'], items: ['b'], stays: null },
-      { name: 'files', clients: ['cursor'], columns: ['cursor'], items: ['c'], stays: null },
+      { name: 'docs', clients: ['codex'], columns: ['codex'], items: ['b'], client_items: { codex: ['b'] }, stays: null },
+      { name: 'files', clients: ['cursor'], columns: ['cursor'], items: ['c'], client_items: { cursor: ['c'] }, stays: null },
     ],
     plugin: [],
   },
@@ -881,7 +881,25 @@ test('the × of a link in the tray takes it out, else adds it', async () => {
   assert.equal(await adding, false);
   assert.deepEqual(tray.rows, []);
   // A link the map does not act on does nothing.
-  assert.equal(removeLink(tree, linkOf(tree, 'client:codex>outside:local:docs'), ''), null);
+  const registered = { ...MEDIUM_VIEW, gateways: [...MEDIUM_VIEW.gateways, { id: 'gw-2', kind: 'metamcp', url: 'http://h/mcp', movable: true, managed: true }], connections: { ...MEDIUM_VIEW.connections, 'gw-2': { claude_code: [], codex: ['x'], cursor: [] } } };
+  const other = gatewayTree(registered, OPTS);
+  assert.equal(removeLink(other, linkOf(other, 'client:codex>gateway:gw-2'), ''), null);
+  await freshTray();
+});
+
+test("a bypass link's × removes that client's own entry", async () => {
+  await freshTray();
+  queue(PREVIEW, batch('c1'));
+  const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+  const link = linkOf(tree, 'client:codex>outside:local:docs');
+  const body = { action: 'mcp.remove_direct', targets: [{ item: 'b' }], params: {} };
+  assert.deepEqual(linkRemoval(tree, link, ''), { tip: 'Remove docs from Codex', body });
+  await removeLink(tree, link, '');
+  assert.deepEqual(tray.rows.map((r) => [r.body, r.icon]), [[body, 'x']]);
+  // A server a plugin brings has no entry of the client's own to remove.
+  const plugin = { ...MEDIUM_VIEW, groups: { ...MEDIUM_VIEW.groups, plugin: [{ name: 'linear', clients: ['codex'], columns: ['codex'], items: [], client_items: {}, stays: 'with the plugin' }] } };
+  const withPlugin = gatewayTree(plugin, OPTS);
+  assert.equal(linkRemoval(withPlugin, linkOf(withPlugin, 'client:codex>outside:plugin:linear'), ''), null);
   await freshTray();
 });
 
@@ -1061,7 +1079,7 @@ test('a link the map can act on says what its × does', () => {
     { tip: 'Turn off read_file', body: { action: 'gateway.rule', targets: [], params: { server: 'files', tool: 'read_file', state: 'off', project: 'website' } } });
   assert.deepEqual(linkRemoval(tree, link('client:codex>gateway:kitden'), ''),
     { tip: 'Disconnect Codex', body: { action: 'client.disconnect', targets: [{ client: 'codex' }], params: {} } });
-  assert.equal(linkRemoval(tree, link('client:codex>outside:local:docs'), ''), null);
+  assert.equal(linkRemoval(tree, link('client:codex>outside:local:docs'), '').tip, 'Remove docs from Codex');
 });
 
 test('a link of a registered gateway gives no ×', () => {

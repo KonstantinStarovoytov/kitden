@@ -304,7 +304,8 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
 }
 
 // A client's block: Connected or Not connected, and on a first run that it is found, with its
-// version; the change that disconnects it (`disconnect`) where its link's × can (connectAction).
+// version; the change that disconnects it (`disconnect`) where its link's × can (connectAction),
+// and whether a plugin gives it its kitden entry (`viaPlugin`), which Kitden cannot take out.
 function clientBlock(id, { setup, linked, known, first, clients }) {
   const on = linked.includes(id);
   const found = (clients || []).find((c) => c.id === id && c.status === "found");
@@ -316,7 +317,8 @@ function clientBlock(id, { setup, linked, known, first, clients }) {
   if (first && found) [meta, lamp] = [found.version ? `Found · ${found.version}` : "Found", "on"];
   const action = on ? connectAction(id, setup) : null;
   const disconnect = action && !action.connect ? action.body : null;
-  return { id: `client:${id}`, column: "clients", kind: "client", name: CLIENT_NAMES[id], meta, lamp, state: known ? (on ? "on" : "off") : "unk", client: id, ports: { right: true }, disconnect };
+  const viaPlugin = on && (setup || []).some((e) => e.client === id && e.state === "plugin");
+  return { id: `client:${id}`, column: "clients", kind: "client", name: CLIENT_NAMES[id], meta, lamp, state: known ? (on ? "on" : "off") : "unk", client: id, ports: { right: true }, disconnect, viaPlugin };
 }
 
 // The moves into the Kitden gateway the map shows: each one in the tray (`rows`), for the outside
@@ -641,13 +643,20 @@ function blocksById(model) {
 
 // What the × of a link does, as `{ tip, body }` (`body` is the change to preview), or null where
 // the map does not act on the link: a client disconnects from the Kitden gateway (not one a
-// plugin connects: clientBlock), a server in the Kitden gateway comes out of it, and a tool of
-// such a server turns off, for the picked project (`picked`, "" for all).
+// plugin connects: clientBlock), a client's own entries of a server it sets up on its own go (the
+// row's `client_items` for that client: none for a plugin's server), a server in the Kitden
+// gateway comes out of it, and a tool of such a server turns off, for the picked project
+// (`picked`, "" for all). A registered gateway's links have none.
 export function linkRemoval(model, link, picked) {
   const byId = blocksById(model);
   const from = byId.get(link.from);
   const to = byId.get(link.to);
   if (!from || !to) return null;
+  if (from.kind === "client" && to.kind === "outside") {
+    const items = (to.row.client_items || {})[from.client] || [];
+    const body = { action: "mcp.remove_direct", targets: items.map((item) => ({ item })), params: {} };
+    return items.length ? { tip: `Remove ${to.name} from ${from.name}`, body } : null;
+  }
   if (from.kind === "client") {
     const kitden = to.kind === "gateway" && to.gateway.kind === "kitden";
     return kitden && from.disconnect ? { tip: `Disconnect ${from.name}`, body: from.disconnect } : null;
@@ -693,16 +702,18 @@ export function removeLink(model, link, picked) {
   return inTray(key) ? takeOut(key) : addToTray(removal.body, { icon: removalIcon(removal.body) });
 }
 
-// A press on a link: one the tray draws is taken out of it (D12); a second press on the link
-// picked lets go of it; any other is picked and opens its Connection panel.
+// A press on a link: a second press on the link picked, while its panel is open, lets go of it,
+// also when its change waits in the tray; one the tray draws is taken out of it (D12); any other
+// is picked and opens its Connection panel.
 export function clickLink(model, link) {
-  const key = rowOfLink(model, link);
-  if (key) {
-    takeOutHere(model, key).catch(reportError);
+  const key = linkKey(link);
+  if (onMap.selected === key && isPanelOpen()) {
+    letGoOnMap();
     return;
   }
-  if (onMap.selected === linkKey(link)) letGoOnMap();
-  else pickLink(linkKey(link));
+  const row = rowOfLink(model, link);
+  if (row) takeOutHere(model, row).catch(reportError);
+  else pickLink(key);
 }
 
 // What a link's Connection panel is drawn from (gateway-details.js linkCard): its two blocks,
@@ -742,10 +753,11 @@ function takeOutHere(model, key) {
   return taken;
 }
 
-// The hooks of the links the map acts on (the model is the one drawn last): a link has a hit while
-// its × does something.
+// The hooks of the links of the map (the model is the one drawn last): every link has a hit, so a
+// click opens its panel, except while the tray's change is written; it has a × while that does
+// something (linkTip).
 const LINK_HOOKS = {
-  canHit: (link) => Boolean(linkTip(onMap.model, link, state.project)),
+  canHit: () => !writing(),
   tip: (link) => linkTip(onMap.model, link, state.project),
   onClick: (link) => clickLink(onMap.model, link),
   onRemove: (link) => {

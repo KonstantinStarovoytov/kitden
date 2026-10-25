@@ -65,7 +65,7 @@ const CLIENTS = [
 ];
 const FOUND = ['claude_code', 'codex', 'cursor'];
 const KITDEN = { id: 'kitden', kind: 'kitden', name: 'Kitden gateway', where: 'On this Mac', movable: true, servers: [{ name: 'files', kind: 'local', state: 'on' }, { name: 'tracker', kind: 'remote', state: 'on' }] };
-const row = (name, client, items, fields = {}) => ({ name, clients: [client], columns: [client], items, stays: null, ...fields });
+const row = (name, client, items, fields = {}) => ({ name, clients: [client], columns: [client], items, client_items: { [client]: items }, stays: null, ...fields });
 const GITHUB = row('github', 'claude_code', ['g']);
 const DOCS = row('docs', 'claude_code', ['a']);
 const DOCS_LOCAL = row('docs', 'codex', ['b']);
@@ -163,7 +163,14 @@ test('a connected client offers Disconnect, a free one Connect', () => {
   assert.deepEqual(facts(cursor)[0], ['Gateway', 'Not connected']);
   // An old entry connects by updating it.
   const old = clientCard('codex', { setup: [entry('codex', 'old', { item: 'codex:agentsetup' })], clients: CLIENTS, view: VIEW });
+  assert.deepEqual([old.actions[0].label, old.actions[0].primary], ['Update the Kitden entry…', true]);
   assert.deepEqual(old.actions[0].body, { action: 'setup_server.update', targets: [{ item: 'codex:agentsetup' }], params: {} });
+  assert.ok(old.why.startsWith('Codex has an old Kitden entry, so it does not use the gateway yet.'), old.why);
+  // A found client whose version is not read says so in its own words.
+  const quiet = clientCard('cursor', { setup: SETUP, clients: [{ id: 'cursor', status: 'found', version: null }], progress: null, view: VIEW });
+  assert.equal(quiet.id, 'Version not known · on this Mac');
+  const reading = clientCard('cursor', { setup: SETUP, clients: [{ id: 'cursor', status: 'found', version: null }], progress: { steps: [{ name: 'client versions', done: false }] }, view: VIEW });
+  assert.equal(reading.id, 'Checking the version… · on this Mac');
   // A plugin gives Cursor its entry: Kitden cannot take it out, and says how.
   const plugin = clientCard('cursor', { setup: [entry('cursor', 'plugin')], clients: CLIENTS, view: VIEW });
   assert.deepEqual([labels(plugin), facts(plugin)[0]], [['See what it loads in Library'], ['Gateway', 'Connected']]);
@@ -256,6 +263,13 @@ test('the gateway panel lists every client with its own button', async () => {
   // A client a plugin connects, or one not on this Mac, has no button.
   const plugin = gatewayCard(KITDEN, { view: VIEW, setup: [entry('claude_code', 'plugin'), entry('codex', 'not_installed', { enabled: null }), entry('cursor', 'missing')], projects: PROJECTS, clients: FOUND });
   assert.deepEqual(plugin.list.children[1].children.map((r) => r.children.length), [2, 2, 3]);
+  // A row with no button says why in its small line.
+  const smallOf = (card) => card.list.children[1].children.map((r) => textOf(r.children[1].children[1]));
+  assert.deepEqual(smallOf(plugin), ['Connected · from a plugin', 'Not connected · not on this Mac', 'Not connected']);
+  const off = gatewayCard(KITDEN, { view: VIEW, setup: [entry('claude_code', 'added', { enabled: false }), entry('codex', 'not_installed', { enabled: null }), entry('cursor', 'old', { item: 'cursor:agentsetup' })], clients: FOUND, clientList: [{ id: 'codex', status: 'unreadable' }] });
+  assert.deepEqual(smallOf(off), ['Not connected · its entry is off', 'Not connected · settings not readable', 'Not connected']);
+  // An old entry is updated, not connected.
+  assert.equal(textOf(off.list.children[1].children[2].children[2].childNodes[0]), 'Update…');
   // "Add another gateway…" shows the form in the panel.
   assert.ok(gatewayCard(KITDEN, { view: VIEW, setup: SETUP, projects: PROJECTS, clients: FOUND, adding: true }).after);
 });
@@ -1193,7 +1207,8 @@ test('a tick names the projects whose chain reaches it, as the gateway decides',
 
 // Links on the map ------------------------------------------------------------------------------
 
-const { clickLink, gatewayTree, linkParts } = await import('../../src/kitden/web/static/js/gateway.js');
+const { clickLink, gatewayTree, linkParts, rowsOnMap } = await import('../../src/kitden/web/static/js/gateway.js');
+const { keyFor } = await import('../../src/kitden/web/static/js/tray.js');
 // The Kitden gateway holding files, and a link of its map by its "from>to" key.
 const FILES_VIEW = { ...VIEW, gateways: [{ ...KITDEN, servers: [FILES_HELD] }] };
 const linkFor = (key, { picked = '', setup = SETUP } = {}) => linkParts(gatewayTree(FILES_VIEW, { setup, clients: CLIENTS, picked }), key, picked);
@@ -1214,11 +1229,11 @@ test('a link says what it joins, where it is written and what its button does', 
   // A server's link, while Kitden does not know who uses the gateway.
   const held = linkCard(linkFor('gateway:kitden>held:kitden:files'), { linked: null, view: FILES_VIEW });
   assert.equal(textOf(held.why), 'The gateway holds files and passes its tools that are on to the clients that use it.');
-  // A server a client sets up on its own: a direct route the map does not act on.
+  // A server a client sets up on its own: a direct route, which can lose that client's entry.
   const direct = linkCard(linkFor('client:claude_code>outside:move:github'), { linked: LINKED, view: FILES_VIEW });
   assert.deepEqual([direct.id, facts(direct).slice(2)], ['Direct route', [['State', 'In place'], ['Written in', "Claude Code's settings"]]]);
   assert.equal(textOf(direct.why), "Claude Code calls github on its own. Kitden's rules don't reach it.");
-  assert.deepEqual(labels(direct), []);
+  assert.deepEqual(labels(direct), ['Remove github from Claude Code…']);
   // Its button adds the change, as the link's × does, and the panel says it waits; a second press
   // takes it out.
   await withTray(() => [client.facts[2].value, client.why, client.actions[0].node], async ([lamp, why, remove]) => {
@@ -1229,6 +1244,62 @@ test('a link says what it joins, where it is written and what its button does', 
     assert.deepEqual(tray.rows, []);
     assert.deepEqual([lamp, remove].map(textOf), ['In place', 'Disconnect Codex…']);
   });
+});
+
+test('a bypass, a registered and a plugin client link open their panel; only the bypass has a remove', () => {
+  // A server Claude Code sets up on its own: its × removes Claude Code's own entry.
+  const direct = linkFor('client:claude_code>outside:move:github');
+  assert.deepEqual(direct.removal, { tip: 'Remove github from Claude Code', body: { action: 'mcp.remove_direct', targets: [{ item: 'g' }], params: {} } });
+  assert.deepEqual(labels(linkCard(direct, { linked: LINKED, view: FILES_VIEW })), ['Remove github from Claude Code…']);
+  // A registered gateway's links: where its tools are set, and no button.
+  const meta = { id: 'gw-2', kind: 'metamcp', url: 'http://127.0.0.1:12008/metamcp/local/mcp', movable: true, managed: true };
+  const view = { ...FILES_VIEW, gateways: [...FILES_VIEW.gateways, meta], used: ['gw-2', 'kitden'], connections: { ...VIEW.connections, 'gw-2': { claude_code: [], codex: ['x'], cursor: [] } } };
+  const tree = gatewayTree(view, { setup: SETUP, clients: CLIENTS, held: new Map([['gw-2', { servers: [{ name: 'x', type: 'STREAMABLE_HTTP' }] }]]) });
+  const route = linkCard(linkParts(tree, 'client:codex>gateway:gw-2', ''), { linked: LINKED, view });
+  assert.deepEqual([titleOf(route), route.id, labels(route), facts(route).at(-1)], ['Codex → MetaMCP', 'Route through the gateway', [], ['Written in', "Codex's settings"]]);
+  assert.equal(textOf(route.why), 'Tools and access are set in MetaMCP itself.');
+  const held = linkCard(linkParts(tree, 'gateway:gw-2>held:gw-2:x', ''), { linked: LINKED, view });
+  assert.deepEqual([held.id, labels(held), facts(held).map(([label]) => label)], ['Held by the gateway', [], ['From', 'To', 'State']]);
+  // A plugin gives Cursor its entry: no Disconnect, and the panel says why.
+  const plugin = linkCard(linkFor('client:cursor>gateway:kitden', { setup: [...SETUP.slice(0, 2), entry('cursor', 'plugin')] }), { linked: ['claude_code', 'codex', 'cursor'], view: FILES_VIEW });
+  assert.deepEqual(labels(plugin), []);
+  assert.ok(textOf(plugin.why).endsWith('Cursor gets Kitden from a plugin: turn the plugin off to disconnect it.'), textOf(plugin.why));
+});
+
+test('a second click on a picked link whose change waits lets go and keeps the change', async () => {
+  const key = 'gateway:kitden>held:kitden:files';
+  const REMOVE = { action: 'gateway.remove', targets: [], params: { server: 'files' } };
+  const treeNow = () => gatewayTree(data.gateway, { setup: data.setupServer, clients: data.clients, rows: rowsOnMap(tray) });
+  const linkIn = (tree, at) => tree.links.find((l) => `${l.from}>${l.to}` === at);
+  const open = () => clickLink(treeNow(), linkIn(treeNow(), key));
+  await onFilesPanel(async (drawer) => {
+    await click(drawer.children[2].children[0]);
+    await wait(20);
+    // The row has its part: the map draws the link leaving, with its row.
+    const drawn = treeNow();
+    assert.equal(linkIn(drawn, key).row, keyFor(REMOVE));
+    clickLink(drawn, linkIn(drawn, key));
+    await wait(20);
+    assert.equal(isPanelOpen(), false);
+    assert.deepEqual(tray.rows.map((r) => r.body), [REMOVE]);
+    // Not picked any more: a click on the leaving link takes its row out (D12).
+    clickLink(drawn, linkIn(drawn, key));
+    await wait(20);
+    assert.deepEqual(tray.rows, []);
+    // Escape closes the panel as panel.js does; a click then picks the link again.
+    open();
+    await wait(400);
+    assert.equal(isPanelOpen(), true);
+    closePanel({ instant: true });
+    open();
+    await wait(400);
+    assert.deepEqual([isPanelOpen(), panelState.current], [true, { type: 'link', key }]);
+    // A bypass link opens its own panel too.
+    const bypass = 'client:claude_code>outside:move:github';
+    clickLink(treeNow(), linkIn(treeNow(), bypass));
+    await wait(400);
+    assert.deepEqual([textOf(drawer.children[0].children[1]), textOf(drawer.children[2].children[0])], ['Claude Code → github', 'Remove github from Claude Code…']);
+  }, { open });
 });
 
 test('a click on a link opens the connection panel; a second click lets go', async () => {

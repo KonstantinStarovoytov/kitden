@@ -328,7 +328,7 @@ export function lookFor(clients) {
 // A client's version, or what is known of it: while the versions are still read in the
 // background, a found client says "Checking the version…", never a false "version unknown".
 // A client that is not installed keeps its own word.
-function versionsOpen(progress) {
+export function versionsOpen(progress) {
   const step = ((progress && progress.steps) || []).find((s) => s.name === "client versions");
   return Boolean(step && !step.done);
 }
@@ -600,7 +600,7 @@ const ACTION_WORDS = {
   "skill.remove": "Removed",
   "setup_server.register": "Connected to Kitden",
   "client.disconnect": "Disconnected from Kitden",
-  "setup_server.update": "Updated show my setup to Kitden",
+  "setup_server.update": "Updated Kitden",
   "setup_server.enable": "Turned on the kitden entry",
   "gateway.rule": "Changed the rule for",
   "gateway.strict": "Changed strict mode for",

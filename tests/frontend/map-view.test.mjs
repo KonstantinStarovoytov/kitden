@@ -519,6 +519,22 @@ test('Enter on a link is its click, Delete and the × are its removal', async ()
   h.focus(); assert.ok(v.node('c1>s1').classList.contains('hov'));
 });
 
+test('a link the page opens but cannot remove takes the pointer with no × and no Delete', async () => {
+  reduce(true); clicked.length = 0; removed.length = 0;
+  const v = view({ links: { ...LINKS, canHit: () => true, tip: (l) => (l.to === 's1' ? 'Remove s1' : '') } });
+  await v.draw(TREE, lay(), {});
+  const [a, b] = walk(v.area).filter((n) => n.classList?.contains('hit'));
+  assert.deepEqual([b.getAttribute('aria-label'), b.getAttribute('aria-description'), b.getAttribute('aria-keyshortcuts')], ['Codex to files', null, null]);
+  assert.equal(a.getAttribute('aria-keyshortcuts'), 'Delete');
+  b.dispatch('pointerover');
+  assert.ok(v.node('c1>s2').classList.contains('hov'));
+  assert.equal(xOf(v).hidden, true);
+  b.dispatch('keydown', { key: 'Delete' }); b.dispatch('keydown', { key: 'Enter' });
+  assert.deepEqual([clicked.length, removed.length], [1, 0]);
+  a.dispatch('pointerover');
+  assert.equal(xOf(v).hidden, false);
+});
+
 test('a link fainter than half takes no pointer', async () => {
   const v = view({ links: { ...LINKS, canHit: (l) => l.to === 's2' } });
   await v.draw(TREE, lay(), { motion: 'none' });

@@ -159,7 +159,7 @@ test('a title that names its place, or has none, gets no scope words', () => {
     assert.ok(PLACE_IN_TITLE.includes(action), action);
   }
   const update = { action: 'setup_server.update', steps: [{ client: 'claude_code', name: 'kitden' }], target: target('all') };
-  assert.equal(changeWords(update).title, 'Update “show my setup” to Kitden in Claude Code');
+  assert.deepEqual([changeWords(update).title, changeWords(update).done], ['Update Kitden in Claude Code', 'Updated Kitden in Claude Code']);
   const keychain = { action: 'gateway.keychain', steps: [{ client: 'kitden', name: 'files' }], target: target('all') };
   assert.equal(changeWords(keychain, { params: { server: 'files' } }).title, 'Move the secrets of files to the Keychain');
   const gone = { action: 'gateway.remove', steps: [{ client: 'kitden', name: 'files' }], target: target('mixed') };
