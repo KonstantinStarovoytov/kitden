@@ -519,26 +519,34 @@ export function besideBy(right, left) {
 }
 
 const floatingNow = () => isPanelOpen() && $("#drawer").classList.contains("floating");
+const scrolls = () => (D(1) ? "smooth" : "instant");
 
-// While Details float over part of the map, the map takes room at its right (`.beside`,
-// style.css) so it can scroll sideways to show what they cover, and the selected block they cover
-// scrolls left into view beside them. When they close the map scrolls home, and gives the room
-// back once it is there (newMap).
+// A block or link of the map (`node`) that floating Details cover scrolls left into view beside
+// them; the map takes room at its right for that (`.beside`, style.css). For the selected one, and
+// for one that takes keyboard focus (newMap).
+export function bringBeside(box, node) {
+  if (!node || !floatingNow()) return;
+  const by = besideBy(node.getBoundingClientRect().right, $("#drawer").offsetLeft);
+  if (!by) return;
+  box.classList.add("beside");
+  box.scrollBy({ left: by, behavior: scrolls() });
+}
+
+// While Details float over part of the map, the map keeps that room so it can scroll sideways to
+// what they cover, and the selected block or link comes beside them. When they close the map
+// scrolls home, and gives the room back once it is there (newMap).
 function keepBeside() {
   const box = onMap.view && onMap.view.box;
   if (!box || !box.isConnected) return;
-  const behavior = D(1) ? "smooth" : "instant";
   if (!floatingNow()) {
-    if (box.scrollLeft) box.scrollTo({ left: 0, behavior });
+    if (box.scrollLeft) box.scrollTo({ left: 0, behavior: scrolls() });
     else box.classList.remove("beside");
     return;
   }
-  const left = $("#drawer").offsetLeft;
   const area = $(".map-area", box);
-  if (area && besideBy(area.getBoundingClientRect().right + box.scrollLeft, left)) box.classList.add("beside");
-  const node = withFocusKey(box, `block:${onList.current}`);
-  const by = node ? besideBy(node.getBoundingClientRect().right, left) : 0;
-  if (by) box.scrollBy({ left: by, behavior });
+  if (area && besideBy(area.getBoundingClientRect().right + box.scrollLeft, $("#drawer").offsetLeft)) box.classList.add("beside");
+  const { selected } = onMap;
+  bringBeside(box, withFocusKey(box, `block:${selected}`) || withFocusKey(box, `link:${selected}`));
 }
 
 // The map: the blocks open and the one selected, its view (map-view.js, one per visit) and the
@@ -726,6 +734,8 @@ function newMap() {
   view.box.addEventListener("scroll", () => {
     if (!view.box.scrollLeft && !floatingNow()) view.box.classList.remove("beside");
   }, { passive: true });
+  // Keyboard focus never sits under floating Details (WCAG 2.4.11).
+  view.box.addEventListener("focusin", (event) => bringBeside(view.box, event.target.closest("[data-focus]")));
   watchMap(view.box);
   return view;
 }

@@ -46,8 +46,10 @@ let loading = null;
 // out while other content came, or another step, does not come in.
 let drawn = 0;
 let stepping = 0;
-// The timer that stops showing the floating panel once it has gone out (floatOut).
+// The timer that stops showing the floating panel once it has gone out (floatOut), and the frame
+// that places it again while the page scrolls (placeSoon).
 let leaving = null;
+let placing = 0;
 
 export function isPanelOpen() {
   return $("#drawer").classList.contains("open");
@@ -86,11 +88,12 @@ function place(on) {
   floating = on;
   const drawer = $("#drawer");
   drawer.classList.toggle("floating", on);
+  if (!on) $("#main").classList.remove("floats");
   if (on) {
     drawer.setAttribute("role", "complementary");
     drawer.removeAttribute("aria-modal");
     drawer.removeAttribute("aria-labelledby");
-    placeTop();
+    placeFloat();
   } else {
     drawer.setAttribute("role", "dialog");
     drawer.setAttribute("aria-modal", "true");
@@ -103,20 +106,37 @@ function place(on) {
 const HEAD = "h1, .page-head, .lede, .scope-bar, .tabs";
 const UNDER_BAR = 22;
 
-// The floating panel's top in the window: level with the stage's top (`stage`), and at least 22 px
-// under the top bar's bottom (`bar`) once the page has scrolled the stage up.
+// The floating panel's top in the window: level with the stage's top (`stage`), so it follows the
+// stage while the page scrolls, and it stops 22 px under the top bar's bottom (`bar`).
 export function floatTop(stage, bar) {
   return Math.round(Math.max(stage, bar + UNDER_BAR));
 }
 
-// Read again when the panel floats and when the page scrolls or the window changes, so the panel
-// stays in view and never covers the page's head.
-function placeTop() {
+// The page's right padding while Details float: a list or a table ends 16 px before the panel's
+// left edge (`left`), counted from the page's right edge (`right`); never less than its own 22 px.
+export function floatRoom(right, left) {
+  return Math.max(22, Math.round(right - left + 16));
+}
+
+// Where the floating panel sits: the room a list or a table keeps on its right (`--float-room` and
+// `.floats` on the page, style.css; the Gateway map keeps its width), then its top (floatTop), read
+// with that room in place. Read when the panel floats, then at most once a frame while the page
+// scrolls or the window changes (placeSoon).
+function placeFloat() {
+  placing = 0;
   if (!floating) return;
+  const drawer = $("#drawer");
+  const main = $("#main");
+  main.style.setProperty("--float-room", `${floatRoom(main.getBoundingClientRect().right, drawer.offsetLeft)}px`);
+  main.classList.add("floats");
   const bar = $("#topbar").getBoundingClientRect().bottom;
-  const stage = [...$("#main").children].find((node) => !node.matches(HEAD));
+  const stage = [...main.children].find((node) => !node.matches(HEAD));
   const top = stage ? stage.getBoundingClientRect().top : bar;
-  $("#drawer").style.setProperty("--float-top", `${floatTop(top, bar)}px`);
+  drawer.style.setProperty("--float-top", `${floatTop(top, bar)}px`);
+}
+
+function placeSoon() {
+  if (floating && !placing) placing = requestAnimationFrame(placeFloat);
 }
 
 // The floating panel comes in from 28 px to the right, a little smaller, in 240 ms; a keyboard
@@ -125,22 +145,30 @@ function floatIn(drawer, instant) {
   if (!instant) animateTo(drawer, [{ opacity: 0, transform: "translateX(28px) scale(.98)" }, { opacity: 1, transform: "none" }], { dur: 240 });
 }
 
-// It goes 22 px to the right in 180 ms ease-in. `.leaving` keeps it seen until then, and is taken
-// off by time, not by the animation's end.
-function floatOut(drawer) {
-  const dur = D(180);
-  if (!dur) return;
+// It goes 22 px to the right in 180 ms ease-in. `.leaving` keeps it seen until then, taking no
+// press and no Tab (inert), and is taken off by time, not by the animation's end. With no motion
+// (a keyboard close, reduced motion) it is gone at once.
+function floatOut(drawer, instant) {
+  const dur = instant ? 0 : D(180);
+  if (!dur) {
+    drawer.classList.remove("floating");
+    return;
+  }
   drawer.classList.add("leaving");
+  drawer.inert = true;
   animateTo(drawer, [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateX(22px)" }], { dur: 180, ease: "ease-in", fill: "forwards" });
   leaving = setTimeout(() => settleLeaving(drawer), dur);
 }
 
-// The floating panel has gone out, or opens again while it goes: it lets go of its last motion.
+// The floating panel has gone out, or opens again while it goes: it lets go of its last motion and
+// stops floating, with no transition, so the next drawer slides in as a drawer.
 function settleLeaving(drawer) {
   if (!leaving) return;
   clearTimeout(leaving);
   leaving = null;
-  drawer.classList.remove("leaving");
+  drawer.inert = false;
+  drawer.classList.add("instant");
+  drawer.classList.remove("leaving", "floating");
   for (const motion of drawer.getAnimations()) motion.cancel();
 }
 
@@ -215,12 +243,13 @@ function bars(className, widths) {
 // Details that load: the skeleton of `kind` shows at once (the panel opens, or keeps its place and
 // shows it), and the content openPanel brings next takes its place no sooner than 160 ms after it.
 // Meanwhile `panelState.current` is the mark this returns, so a read that ends after the panel
-// closed, or after something else opened, draws nothing. Under reduced motion no skeleton shows:
-// the panel keeps what it shows until the content comes.
+// closed, or after something else opened, draws nothing. Only the floating panel loads this way:
+// under reduced motion, and in the drawer (one motion, its blocks there at once), no skeleton
+// shows and the panel keeps what it shows until the content comes.
 export function loadPanel(kind) {
   stopLoading();
   const mark = { type: "loading", kind };
-  if (D(160)) {
+  if (D(160) && floatsNow()) {
     openPanel(skeleton(kind));
     loading = { since: performance.now(), content: null, timer: null };
   }
@@ -241,8 +270,11 @@ function land() {
   const { content } = loading;
   loading = null;
   put(content);
-  rise([...$("#drawer").children], { step: 20 });
+  if (floating) rise([...$("#drawer").children], { step: 20 });
 }
+
+// Whether a panel opened now floats: the open one as it sits, else by the place and the window.
+const floatsNow = () => (isPanelOpen() ? floating : FLOATS.includes(state.view) && isWide());
 
 function stopLoading() {
   if (loading) clearTimeout(loading.timer);
@@ -251,18 +283,20 @@ function stopLoading() {
 
 // The next step inside one panel (a choice, then what it asks): the parts shown go out together,
 // 18 px to the left in 130 ms ease-in, then the new ones come in from 22 px to the right in 220 ms.
-// "back" is the mirror. Done once the new content is in; a step, other content or a close that
-// comes meanwhile wins.
+// "back" is the mirror. In the drawer the new parts are there at once. Done once the new content
+// is in; a step, other content or a close that comes meanwhile wins.
 export async function stepTo(content, dir = "fwd") {
   const drawer = $("#drawer");
   const sign = dir === "back" ? -1 : 1;
   const step = ++stepping;
   const at = drawn;
+  const moves = floating;
   stopLoading();
   const out = [{ opacity: 1, transform: "none" }, { opacity: 0, transform: `translateX(${-18 * sign}px)` }];
-  await Promise.all([...drawer.children].map((node) => animateTo(node, out, { dur: 130, ease: "ease-in", fill: "forwards" })));
+  if (moves) await Promise.all([...drawer.children].map((node) => animateTo(node, out, { dur: 130, ease: "ease-in", fill: "forwards" })));
   if (step !== stepping || at !== drawn || !isPanelOpen()) return;
   put(content);
+  if (!moves) return;
   for (const node of drawer.children) animateTo(node, [{ opacity: 0, transform: `translateX(${22 * sign}px)` }, { opacity: 1, transform: "none" }], { dur: 220 });
 }
 
@@ -277,9 +311,10 @@ export function closePanel({ instant = false, keepSelection = false, focus = tru
     node.classList.toggle("instant", instant);
     node.classList.remove("open");
   }
-  // The floating panel goes as it was; the page never moved for it.
-  if (floating && !instant) floatOut(drawer);
+  // The floating panel goes as it was; a list takes its room back at once.
+  if (floating) floatOut(drawer, instant);
   floating = false;
+  $("#main").classList.remove("floats");
   if (!keepSelection) {
     setState({ selected: null });
     for (const row of $$('tr[aria-selected="true"], [role="row"][aria-selected="true"]')) row.setAttribute("aria-selected", "false");
@@ -379,9 +414,9 @@ export function initPanel() {
     $("#scrim").classList.toggle("open", !floating);
     if (!floating && !drawer.contains(document.activeElement)) drawer.focus();
   });
-  // The floating panel keeps its place in the window while the page scrolls or the window changes.
-  $("#content").addEventListener("scroll", placeTop, { passive: true });
-  addEventListener("resize", placeTop);
+  // The floating panel follows the page's stage as it scrolls, and the window as it changes.
+  $("#content").addEventListener("scroll", placeSoon, { passive: true });
+  addEventListener("resize", placeSoon);
   onOpenItem((row, tr, how) => openItem(row, { instant: how === "keyboard" }));
   // A refresh of the gateway's tool lists ended: an open tool list reads them again.
   document.addEventListener("kitden:tools", reloadTools);

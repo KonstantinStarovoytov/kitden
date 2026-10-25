@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js needs only this from a browser to load; the tests call its pure parts.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { GATEWAY_COLUMNS, afterPress, besideBy, clickLink, contentWidth, findRows, gatewayTree, glanceFor, heldServer, kitdenLinks, letGoCloses, linkRemoval, linkTip, listAt, listRows, litFor, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, serverCount, stillSelected } = await import('../../src/kitden/web/static/js/gateway.js');
+const { GATEWAY_COLUMNS, afterPress, besideBy, bringBeside, clickLink, contentWidth, findRows, gatewayTree, glanceFor, heldServer, kitdenLinks, letGoCloses, linkRemoval, linkTip, listAt, listRows, litFor, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, serverCount, stillSelected } = await import('../../src/kitden/web/static/js/gateway.js');
 const { dropBody, dropTarget, pressGrip, placeMoved } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
 const { offersSwitch, ruleBody } = await import('../../src/kitden/web/static/js/gateway-details.js');
@@ -520,6 +520,31 @@ test('opening Details no longer makes the map narrow', () => {
   // A selected block the floating Details cover scrolls left until it ends 16 px before them.
   assert.equal(besideBy(1023, 1081), 0);
   assert.equal(besideBy(1023, 921), 118);
+});
+
+test('a map block under floating Details, selected or focused, scrolls beside them', () => {
+  // Details float from 741 px (a 1100 px window); the map takes room and scrolls by what they cover.
+  const drawer = { offsetLeft: 741, classList: { contains: (name) => ['open', 'floating'].includes(name) } };
+  globalThis.document = { querySelector: (selector) => (selector === '#drawer' ? drawer : null) };
+  const scrolled = [];
+  const looks = new Set();
+  const box = { classList: { add: (name) => looks.add(name) }, scrollBy: (options) => scrolled.push(options) };
+  const endsAt = (right) => ({ getBoundingClientRect: () => ({ right }) });
+  try {
+    bringBeside(box, endsAt(1023));
+    assert.deepEqual(scrolled, [{ left: 298, behavior: 'smooth' }]);
+    assert.equal(looks.has('beside'), true);
+    // Clear of them, or nothing to show: nothing moves.
+    bringBeside(box, endsAt(700));
+    bringBeside(box, null);
+    assert.equal(scrolled.length, 1);
+    // The drawer under 1024 px covers the page on purpose: nothing moves.
+    drawer.classList.contains = (name) => name === 'open';
+    bringBeside(box, endsAt(1023));
+    assert.equal(scrolled.length, 1);
+  } finally {
+    delete globalThis.document;
+  }
 });
 
 test('find lights both docs and opens what hides them', () => {

@@ -205,6 +205,10 @@ a { color: var(--route); }
 .page { flex: 1 0 auto; padding: 26px 22px 64px; padding-bottom: max(64px, var(--dock-room, 0px)); max-width: 1180px; outline: none; transition: opacity var(--t-fast) ease; }
 .page.pending { opacity: 0.5; pointer-events: none; }
 .page[data-place="gateway"] { max-width: none; }
+/* While Details float, a list or a table keeps room on its right for them (--float-room, panel.js),
+   so no control sits under the panel. The Gateway map keeps its width: a block under the panel
+   scrolls beside it (gateway.js). */
+#main.floats:not(:has(> div.map)) { padding-right: var(--float-room); }
 h1 { font-size: 18px; margin: 0; letter-spacing: -0.015em; font-weight: 600; text-wrap: balance; }
 .page h1 { font-size: 24px; letter-spacing: -0.018em; }
 h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
@@ -814,12 +818,13 @@ div.map .block.leaving:focus-visible { filter: none; }
 /* Details beside the page (Gateway, Library and Changes, from 1024 px) float over the right of the
    content, as in the mockup: 22 px from its right and 46 px above its bottom, level with the dock's
    bar (the frame's content ends 17 px inside the window: the 16 px gutter and its line), from the
-   top of what the page shows under its head (--float-top, panel.js). No scrim: the page keeps its
-   width and stays usable, and the dock stays above. panel.js moves it in and out; `.leaving` keeps
-   it seen while it goes. Its parts stack 16 px apart and the whole panel scrolls; Technical details
-   sit at its foot. */
+   top of what the page shows under its head (--float-top, panel.js): its top follows that while the
+   page scrolls and stops 22 px under the top bar. No scrim: the page stays usable, and the dock
+   stays above. panel.js moves it in and out; `.leaving` keeps it seen while it goes, taking no
+   press. Its parts stack 16 px apart and the whole panel scrolls; Technical details sit at its
+   foot. */
 #drawer.floating { top: var(--float-top, 120px); right: 39px; bottom: 63px; width: 320px; padding: 18px; gap: 16px; overflow: auto; border: 1px solid var(--wire); border-radius: 10px; background: var(--panel); box-shadow: var(--shadow); transform: none; transition: none; }
-#drawer.floating.leaving { visibility: visible; }
+#drawer.floating.leaving { visibility: visible; pointer-events: none; }
 #drawer.floating > * { flex: none; }
 #drawer.floating header, #drawer.floating .body, #drawer.floating footer { padding: 0; border: 0; overflow: visible; }
 #drawer.floating > details.tech { margin-top: auto; max-height: none; overflow: visible; padding: 10px 0 0; }

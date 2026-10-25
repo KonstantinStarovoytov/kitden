@@ -5,7 +5,7 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; panel.js must load there too.
 delete globalThis.navigator;
-const { FLOAT_MIN, addScope, afterParts, alignGroups, canShowReview, closeForProject, closePanel, countedDefinition, changeOutcome, chosenKeys, callsText, changeWords, floatTop, floatsAt, footerActions, heldActions, initPanel, isPanelOpen, loadPanel, offerLabel, openItem, layerState, leftOutText, kindWord, loadsLede, moveFor, moveTargets, openPanel, panelState, plainSecrets, projectLabel, review, reviewLede, scopeWords, stepTo, swapContent, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
+const { FLOAT_MIN, addScope, afterParts, alignGroups, canShowReview, closeForProject, closePanel, countedDefinition, changeOutcome, chosenKeys, callsText, changeWords, floatRoom, floatTop, floatsAt, footerActions, heldActions, initPanel, isPanelOpen, loadPanel, offerLabel, openItem, layerState, leftOutText, kindWord, loadsLede, moveFor, moveTargets, openPanel, panelState, plainSecrets, projectLabel, review, reviewLede, scopeWords, stepTo, swapContent, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
 const { CALM, reducedMotion } = await import('../../src/kitden/web/static/js/motion.js');
 const { readFileSync } = await import('node:fs');
 const { detailsCard, factsBlock } = await import('../../src/kitden/web/static/js/details.js');
@@ -634,17 +634,24 @@ function fakeNode(tag = 'div', rect = { top: 0, bottom: 0 }) {
   return node;
 }
 
+// The frames asked for (requestAnimationFrame), run by `nextFrame()`.
+const frames = [];
+const nextFrame = () => { for (const fn of frames.splice(0)) fn(); };
+
 function fakePanelPage({ stage = 215 } = {}) {
   motions.length = 0;
+  frames.length = 0;
   globalThis.addEventListener = () => {}; // the window's resize
-  const main = fakeNode('main');
+  globalThis.requestAnimationFrame = (fn) => frames.push(fn);
+  // The page ends at 1345 px (1180 px wide from the rail); the panel floats from 1081 px.
+  const main = fakeNode('main', { top: 83, bottom: 900, right: 1345 });
   const lede = fakeNode('p', { top: 148, bottom: 165 });
   lede.className = 'lede';
   const map = fakeNode('div', { top: stage, bottom: stage + 600 });
   map.className = 'map';
   main.children = [fakeNode('h1', { top: 109, bottom: 144 }), lede, map];
   const nodes = {
-    '#drawer': fakeNode('aside'), '#scrim': fakeNode(), '#main': main, '.shell': fakeNode(),
+    '#drawer': Object.assign(fakeNode('aside'), { offsetLeft: 1081 }), '#scrim': fakeNode(), '#main': main, '.shell': fakeNode(),
     '#topbar': fakeNode('div', { top: 17, bottom: 83 }), '#content': fakeNode(),
   };
   globalThis.document = {
@@ -829,39 +836,39 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const motionsOf = (...nodes) => motions.filter((m) => nodes.includes(m.node)).map((m) => [m.keyframes, m.options.duration, m.options.delay, m.options.easing]);
 const parts = (count) => Array.from({ length: count }, () => fakeNode('section'));
 
-test('wide, Details float and the page keeps its width', () => {
+test('wide, Details float: the map keeps its width, a list keeps room for them', () => {
   const page = fakePanelPage();
   const { drawer, scrim } = page;
   const shell = page['.shell'];
+  const main = page['#main'];
   try {
     state.view = 'gateway';
     windowIs(true);
-    initPanel();
     openPanel([]);
     assert.equal(drawer.classList.contains('floating'), true);
     assert.equal(scrim.classList.contains('open'), false);
     // A region beside the map, not a dialog: the page stays usable.
     assert.equal(drawer.attributes.role, 'complementary');
     assert.equal(drawer.attributes['aria-modal'], undefined);
-    // Nothing makes room for it: the page keeps its width.
+    // The frame keeps its width. The page knows the panel floats: a list or a table keeps room on
+    // its right up to 16 px before the panel (style.css leaves the map as it is).
     assert.equal(shell.className, '');
+    assert.equal(main.classList.contains('floats'), true);
+    assert.equal(main.style['--float-room'], '280px');
+    assert.equal(floatRoom(1345, 1081), 280);
+    assert.equal(floatRoom(1083, 741), 358);
+    assert.equal(floatRoom(1000, 1081), 22);
     // Its top is level with the map under the page head.
     assert.equal(drawer.style['--float-top'], '215px');
     // It comes in from 28 px to the right, a little smaller, in 240 ms.
     assert.deepEqual(motionsOf(drawer), [[[{ opacity: 0, transform: 'translateX(28px) scale(.98)' }, { opacity: 1, transform: 'none' }], 240, 0, CALM]]);
-    // The page scrolls the map up: the panel stays in view, under the top bar.
-    page.map.rect = { top: -185, bottom: 415 };
-    page['#content'].listeners.scroll();
-    assert.equal(drawer.style['--float-top'], '105px');
-    assert.equal(floatTop(215, 83), 215);
-    assert.equal(floatTop(-185, 83), 105);
-    // It goes 22 px to the right in 180 ms ease-in, seen until then; the page never moved.
+    // It goes 22 px to the right in 180 ms ease-in, seen until then; a list takes its room back.
     motions.length = 0;
     closePanel({ focus: false });
     assert.equal(isPanelOpen(), false);
     assert.equal(drawer.classList.contains('leaving'), true);
     assert.deepEqual(motionsOf(drawer), [[[{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateX(22px)' }], 180, 0, 'ease-in']]);
-    assert.equal(shell.className, '');
+    assert.equal(main.classList.contains('floats'), false);
     // Overview keeps the drawer in a wide window; a caller can ask to float.
     state.view = 'overview';
     openPanel([]);
@@ -873,6 +880,75 @@ test('wide, Details float and the page keeps its width', () => {
   } finally {
     leaveFloatTest();
   }
+});
+
+test('the floating panel follows the stage as the page scrolls, read once a frame, and stops 22 px under the top bar', () => {
+  const page = fakePanelPage();
+  const { drawer } = page;
+  try {
+    state.view = 'gateway';
+    windowIs(true);
+    initPanel();
+    openPanel([]);
+    assert.equal(drawer.style['--float-top'], '215px');
+    // The page scrolls 100 px: the panel's top follows the map, once for the frame.
+    page.map.rect = { top: 115, bottom: 715 };
+    page['#content'].listeners.scroll();
+    page['#content'].listeners.scroll();
+    assert.equal(drawer.style['--float-top'], '215px');
+    assert.equal(frames.length, 1);
+    nextFrame();
+    assert.equal(drawer.style['--float-top'], '115px');
+    // Further up it stops 22 px under the top bar.
+    page.map.rect = { top: -185, bottom: 415 };
+    page['#content'].listeners.scroll();
+    nextFrame();
+    assert.equal(drawer.style['--float-top'], '105px');
+    assert.equal(floatTop(215, 83), 215);
+    assert.equal(floatTop(-185, 83), 105);
+    // Closed, a scroll asks for no frame.
+    closePanel({ focus: false, instant: true });
+    page['#content'].listeners.scroll();
+    assert.equal(frames.length, 0);
+  } finally {
+    leaveFloatTest();
+  }
+});
+
+test('the floating panel stops floating once it has gone, and takes no press or Tab while it goes', async () => {
+  const { drawer, scrim } = fakePanelPage();
+  try {
+    state.view = 'gateway';
+    windowIs(true);
+    // A keyboard close: gone at once.
+    openPanel([]);
+    closePanel({ focus: false, instant: true });
+    assert.equal(drawer.classList.contains('floating'), false);
+    // A close by Close: it floats out for 180 ms, inert, then stops floating with no transition.
+    openPanel([]);
+    closePanel({ focus: false });
+    assert.deepEqual([drawer.classList.contains('floating'), drawer.classList.contains('leaving'), drawer.inert], [true, true, true]);
+    await wait(400);
+    assert.deepEqual([drawer.classList.contains('floating'), drawer.classList.contains('leaving'), drawer.inert], [false, false, false]);
+    assert.equal(drawer.classList.contains('instant'), true);
+    // So the next drawer, in a narrow window, slides in as a drawer.
+    windowIs(false);
+    openPanel([]);
+    assert.deepEqual([drawer.classList.contains('floating'), drawer.classList.contains('instant'), scrim.classList.contains('open')], [false, false, true]);
+    closePanel({ focus: false, instant: true });
+    // Opened again while it goes, it floats at once and lets go of the leaving.
+    windowIs(true);
+    openPanel([]);
+    closePanel({ focus: false });
+    openPanel([]);
+    assert.deepEqual([drawer.classList.contains('floating'), drawer.classList.contains('leaving'), drawer.inert], [true, false, false]);
+    closePanel({ focus: false, instant: true });
+  } finally {
+    leaveFloatTest();
+  }
+  // While it goes it takes no press.
+  const css = readFileSync(new URL('../../src/kitden/web/static/style.css', import.meta.url), 'utf8');
+  assert.match(css, /^#drawer\.floating\.leaving \{ visibility: visible; pointer-events: none; \}/m);
 });
 
 test('under 1024 px Details are the modal drawer, with the dock above it', () => {
@@ -890,6 +966,19 @@ test('under 1024 px Details are the modal drawer, with the dock above it', () =>
     assert.equal(drawer.style['--float-top'], undefined);
     closePanel({ focus: false });
     assert.equal(drawer.classList.contains('leaving'), false);
+    // One motion: no skeleton, and a step lands at once.
+    loadPanel('Tool');
+    assert.equal(isPanelOpen(), false);
+    const content = parts(2);
+    openPanel(content);
+    assert.deepEqual(drawer.children, content);
+    loadPanel('Client');
+    assert.deepEqual(drawer.children, content);
+    const next = parts(1);
+    stepTo(next);
+    assert.deepEqual(drawer.children, next);
+    assert.deepEqual(motions, []);
+    closePanel({ focus: false, instant: true });
   } finally {
     leaveFloatTest();
   }
@@ -919,24 +1008,25 @@ test('a panel shows its skeleton, then its content rises', async () => {
     assert.deepEqual(head.children[0].children.map((node) => node.textContent), ['Tool', 'Close']);
     assert.equal(head.children[1].attributes['aria-hidden'], 'true');
     assert.equal(body.children.length, 3);
-    // The content waits until the skeleton has shown 160 ms, then each part rises 20 ms apart.
+    // The content waits until the skeleton has shown 160 ms (well past it here), then each part
+    // rises 20 ms apart.
     const content = parts(3);
     openPanel(content);
     assert.notDeepEqual(drawer.children, content);
-    await wait(200);
+    await wait(400);
     assert.deepEqual(drawer.children, content);
     const rise = [{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }];
     assert.deepEqual(motionsOf(...content), [[rise, 260, 0, CALM], [rise, 260, 20, CALM], [rise, 260, 40, CALM]]);
     // A read that took longer than that lands at once.
     loadPanel('MCP server');
-    await wait(200);
+    await wait(400);
     const later = parts(1);
     openPanel(later);
     assert.deepEqual(drawer.children, later);
     // Closed while it loads, it stays closed.
     loadPanel('Client');
     closePanel({ focus: false, instant: true });
-    await wait(200);
+    await wait(400);
     assert.equal(isPanelOpen(), false);
     assert.notDeepEqual(drawer.children, later);
   } finally {
@@ -962,7 +1052,7 @@ test("another block's Details swap in place", async () => {
     openPanel(parts(1));
     const second = parts(2);
     openPanel(second);
-    await wait(200);
+    await wait(400);
     assert.deepEqual(drawer.children, second);
     assert.equal(isPanelOpen(), true);
     closePanel({ focus: false, instant: true });

@@ -14,8 +14,11 @@ import { arrival, current, data, freshness, projectPath, reload, render, setStat
 const WRITABLE = ["claude_code", "codex", "cursor"];
 // The kitden entry is the same one that lets agents read this setup.
 export const SETUP_NOTE = "The kitden entry shows your setup to agents and offers the tools in the Kitden gateway.";
+// The kind word each card shows at its top, and its skeleton too while it loads: one source, so a
+// card never comes after a skeleton of another kind.
+const KIND = { client: "Client", gateway: "Gateway", server: "MCP server", tool: "Tool" };
 // What a server outside the gateway is, by the Gateway's group for it.
-const GROUP_KINDS = { move: "Remote", local: "Local", plugin: "From a plugin" };
+const GROUP_KINDS ={ move: "Remote", local: "Local", plugin: "From a plugin" };
 // Each client opens its own Mac app through the link scheme the app registers: Claude, Cursor,
 // and ChatGPT for Codex. The server reads the scheme from the installed app's Info.plist at scan
 // time (`app_url`); without the app there is nothing to open.
@@ -111,7 +114,7 @@ export function clientCard(client, { setup, clients, progress = data.progress } 
     // The browser asks once before it opens the app.
     actions.push({ label: `Open ${CLIENT_APPS[client]}`, run: () => { window.location.href = url; } });
   }
-  return { kind: "Client", title: name, id: null, facts, why, actions };
+  return { kind: KIND.client, title: name, id: null, facts, why, actions };
 }
 
 // Gateways -----------------------------------------------------------------------------------
@@ -163,7 +166,7 @@ function waitingClients(model, found) {
 
 // The Kitden gateway: its clients, servers and the projects with rules of their own. "Move all N…"
 // takes every outside server a move can take into it, in one review; "Add another gateway…" shows
-// the form in the column (`adding`).
+// the form in the panel (`adding`).
 function kitdenCard(gateway, { view, setup, projects, adding }) {
   const { linked, known } = kitdenClients(setup);
   const servers = gateway.servers || [];
@@ -196,7 +199,7 @@ function kitdenCard(gateway, { view, setup, projects, adding }) {
     after.append(el("h2", null, "Add another gateway"), addForm());
   }
   const why = "The gateway controls only the servers in it. Direct entries and terminal tools are outside it.";
-  return { kind: "Gateway", title: gateway.name, id: gateway.where, facts, why, actions, after, warning };
+  return { kind: KIND.gateway, title: gateway.name, id: gateway.where, facts, why, actions, after, warning };
 }
 
 // What a registered gateway holds, as its Servers fact.
@@ -248,7 +251,7 @@ function registeredCard(gateway, { view, held: entry, clients }) {
     after = fold(box);
   }
   const rows = [{ title: "MCP address", summary: gateway.url }, ...(gateway.ui_url ? [{ title: "Interface link", summary: gateway.ui_url }] : [])];
-  return { kind: "Gateway", title: name, id: null, facts, why: heldWhy(gateway, entry), actions, after, technical: technical(rows) };
+  return { kind: KIND.gateway, title: name, id: null, facts, why: heldWhy(gateway, entry), actions, after, technical: technical(rows) };
 }
 
 // Details of a gateway: the Kitden one, or a registered one.
@@ -294,7 +297,7 @@ export function outsideCard(row, group, definitions, { view, clients = foundClie
   const verb = columns.length > 1 ? "call" : "calls";
   const evidence = techRows(own.length ? own : definitions.filter((d) => !d.via_gateway && columns.includes(d.client)));
   return {
-    kind: "MCP server",
+    kind: KIND.server,
     title: row.name,
     id: null,
     facts: [
@@ -407,7 +410,7 @@ function under(...nodes) {
 // the tool's entry in it (shared state, the folder a project rule falls back to, calls,
 // description). Actions: back to the shared rule (or a parent folder's) for a rule of the
 // project's own; "for all projects" turns the shared state the other way; "in one project" turns
-// the state shown the other way, after the project choice in the column (`choosing`), which
+// the state shown the other way, after the project choice in the panel (`choosing`), which
 // offers only the projects it would change. With its server off a tool rule would change nothing
 // anyone can call: only a way to the server.
 export function toolCard(tool, server, { linked, picked = "", folder = "", detail = {}, rules = {}, projects = [], choosing = false } = {}) {
@@ -426,7 +429,7 @@ export function toolCard(tool, server, { linked, picked = "", folder = "", detai
     ...(calls ? [{ label: "Calls", value: calls }] : []),
   ];
   // The name goes under a title the server gives; without one it is the title.
-  const card = { kind: "Tool", title: tool.title || name, id: tool.title ? name : null, facts };
+  const card = { kind: KIND.tool, title: tool.title || name, id: tool.title ? name : null, facts };
   if (detail.description) card.technical = technical([{ title: "Description", summary: detail.description }]);
   if (tool.why === "server_off") {
     const others = othersText(picked, rules.projects, rules.shared, (p) => p.server);
@@ -457,7 +460,7 @@ export function toolCard(tool, server, { linked, picked = "", folder = "", detai
 // many of its tools are on, the clients that reach it and the projects with rules of their own.
 // `detail` is the /api/gateway/tools answer (strict, the shared state, the folder a project rule
 // falls back to, the state in each known project). Every server action is here: the shared rule
-// back, on or off for all projects or in one project (the project choice in the column,
+// back, on or off for all projects or in one project (the project choice in the panel,
 // `choosing`, with only the projects it would change), strict mode, every writing tool off,
 // Refresh tools, and under More Remove, Put back and the Keychain.
 export function heldCard(server, { linked, picked = "", folder = "", view = null, detail = {}, clients = foundClients(), projects = [], choosing = false } = {}) {
@@ -505,7 +508,7 @@ export function heldCard(server, { linked, picked = "", folder = "", view = null
   const choice = choosing && choices.length ? projectChoice(choices, picked, pick, `action:${one}`) : null;
   const after = under(choice, links.length ? linksRow(links) : null);
   const more = heldActions(name, clients, server.plain_secrets);
-  return { kind: "MCP server", title: name, id: "In the Kitden gateway", facts, why, actions, more, after };
+  return { kind: KIND.server, title: name, id: "In the Kitden gateway", facts, why, actions, more, after };
 }
 
 // Showing a card -----------------------------------------------------------------------------
@@ -568,15 +571,16 @@ export async function showOutside(group, name) {
   try {
     answer = await getJson(`/api/explain${query({ name: row.name, kind: "mcp_server", project: state.project })}`);
   } catch {
-    if (panelState.current === shown) $("#drawer .body").prepend(callout("Could not load the details.", "error"));
+    // Drawn again with the warning: the card may still wait behind its skeleton.
+    if (panelState.current === shown) drawOutside(row, group, [], shown, "Could not load the details.");
     return;
   }
   // The person may have opened something else meanwhile.
   if (panelState.current === shown) drawOutside(row, group, answer.definitions || [], shown);
 }
 
-function drawOutside(row, group, definitions, shown) {
-  const card = outsideCard(row, group, definitions, { view: current("gateway") });
+function drawOutside(row, group, definitions, shown, warning = null) {
+  const card = { ...outsideCard(row, group, definitions, { view: current("gateway") }), warning };
   openCard(card, shown, () => drawOutside(row, group, definitions, shown), () => showOutside(group, row.name));
 }
 
@@ -623,7 +627,7 @@ function focusChoice(choosing) {
 }
 
 // What a server in the Kitden gateway shows as, and the kind its skeleton names.
-const heldShown = (name) => ({ shown: { type: "held", name }, kind: "MCP server" });
+const heldShown = (name) => ({ shown: { type: "held", name }, kind: KIND.server });
 
 export async function showHeld(name) {
   setState({ selected: { kind: "mcp_server", name } });
@@ -645,7 +649,7 @@ function drawHeld(name, detail, { choosing = false, warning = null } = {}) {
 
 export async function showTool(server, name) {
   setState({ selected: { kind: "tool", name: `${server}/${name}` } });
-  await readThen(server, (answer) => drawTool(server, name, answer || {}, { warning: answer ? null : "Could not load the details." }), { shown: { type: "tool", server, tool: name }, kind: "Tool" });
+  await readThen(server, (answer) => drawTool(server, name, answer || {}, { warning: answer ? null : "Could not load the details." }), { shown: { type: "tool", server, tool: name }, kind: KIND.tool });
 }
 
 // `rules` is the server's /api/gateway/tools answer. A tool that is gone since (its server left

@@ -514,3 +514,78 @@ test("an outside server's Move says In preview while it waits; with two gateways
     globalThis.fetch = before;
   }
 });
+
+// Showing a card in the panel ------------------------------------------------------------------
+
+const { showHeld, showOutside } = await import('../../src/kitden/web/static/js/gateway-details.js');
+const { closePanel, panelState } = await import('../../src/kitden/web/static/js/panel.js');
+const { data, state } = await import('../../src/kitden/web/static/js/store.js');
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const isSkeleton = (drawer) => drawer.children.some((node) => node.className.includes('sk-body'));
+
+// The Gateway in a wide window, so Details float: `reply(url)` answers each read. `run(drawer)`
+// gets the panel; the page is put back after it.
+async function onGatewayPage(reply, run) {
+  const saved = { document: globalThis.document, fetch: globalThis.fetch, matchMedia: globalThis.matchMedia };
+  const page = {};
+  for (const id of ['#drawer', '#scrim', '#main', '#topbar', '#content', '.shell', '#dock']) {
+    page[id] = Object.assign(fakeNode('div'), {
+      offsetLeft: 1081, focus() {}, contains: () => false, getAnimations: () => [], getBoundingClientRect: () => ({ top: 0, bottom: 83, right: 1345 }),
+    });
+  }
+  // `#drawer .body` is the body the drawer shows now, skeleton or card.
+  const querySelector = (selector) => (selector === '#drawer .body' ? page['#drawer'].children.find((node) => node.className.split(' ').includes('body')) : page[selector] ?? null);
+  globalThis.document = { ...saved.document, activeElement: null, body: {}, documentElement: { classList: { remove() {} } }, querySelector, querySelectorAll: () => [], addEventListener() {} };
+  globalThis.matchMedia = (query) => ({ matches: query.includes('min-width'), addEventListener() {} });
+  globalThis.fetch = async (url) => reply(url);
+  Object.assign(data, { gateway: VIEW, setupServer: SETUP, clients: CLIENTS, projects: [] });
+  data.scope.gateway = state.project;
+  state.view = 'gateway';
+  try {
+    await run(page['#drawer']);
+  } finally {
+    closePanel({ instant: true, focus: false });
+    Object.assign(data, { gateway: null, setupServer: null, clients: null, projects: null });
+    Object.assign(globalThis, saved);
+    state.view = 'overview';
+  }
+}
+
+test("an outside server's read that fails at once still says it could not load the details", async () => {
+  const failed = (url) => (url.startsWith('/api/explain') ? { ok: false, status: 500, json: async () => ({}) } : { ok: true, status: 200, json: async () => ({}) });
+  await onGatewayPage(failed, async (drawer) => {
+    // The read fails while the card still waits behind its skeleton (160 ms).
+    await showOutside('move', 'github');
+    assert.equal(isSkeleton(drawer), true);
+    await wait(400);
+    const [head, body] = drawer.children;
+    assert.equal(head.children[1].textContent, 'github');
+    assert.ok(textOf(body).includes('Could not load the details.'), textOf(body));
+  });
+});
+
+test('a held server opens on its skeleton and fills in; drawn again it shows no skeleton', async () => {
+  const ok = () => ({ ok: true, status: 200, json: async () => ({ tools: [], projects: [] }) });
+  await onGatewayPage(ok, async (drawer) => {
+    // The panel opens at once on the skeleton of its kind, while the rules are read.
+    const first = showHeld('files');
+    assert.equal(isSkeleton(drawer), true);
+    assert.equal(drawer.children[0].children[0].children[0].textContent, 'MCP server');
+    await first;
+    // The read is in, but the skeleton stays its 160 ms; then the card replaces it.
+    assert.equal(isSkeleton(drawer), true);
+    await wait(400);
+    assert.equal(isSkeleton(drawer), false);
+    assert.equal(drawer.children[0].children[1].textContent, 'files');
+    assert.deepEqual(panelState.current, { type: 'held', name: 'files' });
+    // The same card drawn again (after Apply all, Refresh tools): no skeleton, the new card as
+    // soon as its read is in.
+    const shown = drawer.children[0];
+    const again = showHeld('files');
+    assert.equal(isSkeleton(drawer), false);
+    await again;
+    assert.equal(isSkeleton(drawer), false);
+    assert.notEqual(drawer.children[0], shown);
+    assert.equal(drawer.children[0].children[1].textContent, 'files');
+  });
+});

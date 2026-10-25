@@ -68,6 +68,12 @@ def test_details_float_beside_the_page_without_a_scrim():
         assert part in floating, part
     assert "padding: 18px;" in floating and "gap: 16px;" in floating
     assert "animation" not in rule(".sk")
+    # A list or a table keeps room on its right for the panel; the map keeps its width, and a block
+    # under the panel scrolls beside it when it is selected or takes keyboard focus (WCAG 2.4.11).
+    assert "padding-right: var(--float-room);" in rule("#main.floats:not(:has(> div.map))")
+    assert 'view.box.addEventListener("focusin"' in gw() and "const { selected } = onMap;" in gw()
+    # The panel follows the page's scroll at most once a frame.
+    assert "requestAnimationFrame(placeFloat)" in shell
 
 
 def test_rail_counts_only_attention_and_changes():
