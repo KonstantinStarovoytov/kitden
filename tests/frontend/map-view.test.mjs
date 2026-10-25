@@ -1234,6 +1234,31 @@ test('a count rolls only from its own old value, when another count comes or goe
   assert.ok(nums.every((n) => n.children.every((c) => !c.animations.length)));
 });
 
+test("a tool's pending tag pops in when it comes or grows, not when it shrinks or goes", async () => {
+  const as = (projects) => ({ ...LOOKS, blocks: LOOKS.blocks.map((b) => (b.id === 't1' ? { ...b, projects } : b)) });
+  const usual = { words: '2 projects', said: 'own rule in 2 projects', own: false };
+  const pending = (words, n) => ({ words, said: `in preview for ${words}`, own: true, pending: n });
+  const v = view();
+  const tag = () => part(v.node('t1'), 'block-projects');
+  const pops = () => tag().animations.map((a) => [a.keyframes, a.options.duration, a.options.easing]);
+  const pop = [[{ opacity: 0, transform: 'scale(0.7)' }, { opacity: 1, transform: 'none' }], 180, CALM];
+  const open = { open: new Set(['s1']) };
+  await v.draw(as(usual), looks(['s1']), { ...open, motion: 'none' });
+  assert.deepEqual([tag().className, pops()], ['block-projects', []]);
+  await v.draw(as(pending('atlas', 1)), looks(['s1']), open);
+  assert.deepEqual([tag().className, pops()], ['block-projects own pend', [pop]]);
+  await v.draw(as(pending('2 projects', 2)), looks(['s1']), open);
+  assert.deepEqual(pops(), [pop]);
+  await v.draw(as(pending('atlas', 1)), looks(['s1']), open);
+  assert.deepEqual(pops(), []);
+  await v.draw(as(usual), looks(['s1']), open);
+  assert.deepEqual([tag().className, pops()], ['block-projects', []]);
+  // Under reduced motion it shows at once.
+  reduce(true);
+  await v.draw(as(pending('atlas', 1)), looks(['s1']), open);
+  assert.deepEqual([tag().className, pops()], ['block-projects own pend', []]);
+});
+
 test('a lamp fades to its new colour, and pops when it turns on or off', async () => {
   const as = (lamp) => ({ ...TREE, blocks: TREE.blocks.map((b) => (b.id === 's2' ? { ...b, meta: 'Local', lamp } : b)) });
   const v = view();

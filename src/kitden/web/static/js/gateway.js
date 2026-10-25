@@ -6,7 +6,7 @@ import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { findIn, foldable, isNarrow, keepOpen, layoutTree, linkKey, litFrom, litPath, pressOpen, toggleOpen, wideWidth } from "./map.js";
 import { mapView } from "./map-view.js";
 import { afterOldPage, D, entrance, glide, rise, riseHead } from "./motion.js";
-import { closePanel, isPanelOpen, moveInto, openInfo, panelState, review } from "./panel.js";
+import { closePanel, isPanelOpen, moveInto, openInfo, panelState, projectLabel, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, folderName, gatewayName, kitdenClients, mark, opens, ORIGIN_WORDS, scopeBar, skeleton, STATE_WORDS, staleNote } from "./parts.js";
 import { arrival, current, currentError, data, go, goTo, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
 import { addToTray, inTray, keyFor, onTray, takeOut, tray } from "./tray.js";
@@ -365,15 +365,20 @@ function leaveParts(blocks, links, kitden, rows, picked) {
   }
 }
 
-// The tools whose rule for the scope shown (`picked`, "" for all projects) waits in the tray, once
-// its row has its part, as "server/tool": their mark is a dashed ring until Apply.
+// The tools whose rule waits in the tray, once its row has its part, by "server/tool": for the
+// scope shown (`picked`, "" for all projects) their mark is a dashed ring until Apply (`ring`);
+// for other projects the tool names them (`others`, the project ids).
 function waitingTools(rows, picked) {
-  const waiting = new Set();
+  const ring = new Set();
+  const others = new Map();
   for (const row of rows) {
     const { action, params = {} } = row.body;
-    if (row.part && action === "gateway.rule" && params.tool && (params.project || "") === (picked || "")) waiting.add(`${params.server}/${params.tool}`);
+    if (!row.part || action !== "gateway.rule" || !params.tool) continue;
+    const key = `${params.server}/${params.tool}`;
+    if ((params.project || "") === (picked || "")) ring.add(key);
+    else if (params.project) others.set(key, [...(others.get(key) || []), params.project]);
   }
-  return waiting;
+  return { ring, others };
 }
 
 // What a gateway's block says under its name: the Kitden gateway's lamp and where it runs, then
@@ -413,11 +418,13 @@ const OWN_HERE = "own rule in this project";
 
 // A tool of a server in the Kitden gateway (`held`, its block): on or off (`effective` counts the
 // server's switch too: a tool of a server that is off is off), its mark (a dashed ring while a rule
-// for it in the scope shown waits in the tray, `waiting`), and which projects have a rule of their
-// own for it: with All projects how many (`own_in`), in a project "This project" when it is one;
-// `said` is what a screen reader hears for it.
+// for it in the scope shown waits in the tray, `waiting.ring`), and which projects have a rule of
+// their own for it: with All projects how many (`own_in`), in a project "This project" when it is
+// one; while rules for other projects wait (`waiting.others`), that project's name or how many, in
+// the accent (`pending`, their count). `said` is what a screen reader hears for it.
 function toolBlock(held, tool, picked, waiting) {
   const server = held.server;
+  const key = `${server.name}/${tool.name}`;
   const on = (tool.effective ?? tool.state) === "on";
   const own = picked ? ownTag(tool) : null;
   let projects = own ? { words: own, said: OWN_HERE, own: true } : null;
@@ -425,7 +432,12 @@ function toolBlock(held, tool, picked, waiting) {
     const words = plural(tool.own_in, "project", "projects");
     projects = { words, said: `own rule in ${words}`, own: false };
   }
-  const lamp = waiting.has(`${server.name}/${tool.name}`) ? "preview" : on ? "on" : "off";
+  const pending = waiting.others.get(key);
+  if (pending) {
+    const words = pending.length === 1 ? projectLabel(pending[0]) : plural(pending.length, "project", "projects");
+    projects = { words, said: `in preview for ${words}`, own: true, pending: pending.length };
+  }
+  const lamp = waiting.ring.has(key) ? "preview" : on ? "on" : "off";
   return { id: `tool:${server.name}/${tool.name}`, column: "tools", parent: held.id, kind: "tool", name: tool.name, state: on ? "on" : "off", lamp, projects, ports: { left: true }, tool, server };
 }
 

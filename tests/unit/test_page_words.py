@@ -474,10 +474,10 @@ def test_the_project_button_is_drawn_in_one_place():
     assert '"folder"' not in drawn and '"chevron-down"' not in drawn
 
 
-def test_the_details_choice_has_the_menus_rows():
-    # The project choice in a Details column builds its rows with the menu's own parts.
-    assert "export function optionParts(" in script("parts.js")
-    assert "optionParts(" in script("details.js")
+def test_the_projects_step_has_the_menus_rows():
+    # The "in some projects" step names, counts and orders projects as the project menu does.
+    assert "export function menuItems(" in script("parts.js")
+    assert "menuItems(" in gw()
 
 
 def test_python_and_page_state_words_agree():
@@ -1524,9 +1524,9 @@ def test_add_missing_and_a_refused_list_go_back_to_details():
     # again (details.test.mjs tests keepFrom and backToDetails).
     assert "keepFrom(" in details
     assert "keepFrom(draw, nodes, read)" in gw()
-    redraw = "() => drawHeld(name, detail, { choosing, warning }), () => showHeld(name), step)"
+    redraw = "() => drawHeld(name, detail, { warning }), () => showHeld(name), step)"
     assert redraw in gw()
-    assert "() => showTool(serverName, name))" in gw()
+    assert "() => showTool(serverName, name), step)" in gw()
     for key in ("`offer:", '"move"', "`add:", '"add:form"', "`held:", '"more"', '"commands"'):
         assert key in panel() + script("offer.js"), key
     assert "`switch:${def.id}`" in details
@@ -1595,10 +1595,10 @@ def test_tool_and_server_details_use_the_owner_words():
         '"Use the shared rule…"',
         "'s rule…",
         '"Turn on for all projects…"',
-        '"Turn off in one project…"',
+        '"Turn off in some projects…"',
         '"On in this project"',
         '"Off · server off"',
-        '"Read only"',
+        '"Reads only"',
         '"May write"',
         '"Not reported"',
         '"New · waits"',
@@ -1608,9 +1608,9 @@ def test_tool_and_server_details_use_the_owner_words():
     ):
         assert words in text, words
     assert "Allowed" not in text and "Blocked" not in text and "Sign in" not in text
-    # With All projects a card says what the shared rule does, never "in any project":
-    # a project's own rule may decide otherwise.
-    assert "in any project" not in gw() and "Other projects follow" not in gw()
+    # With All projects a card says "in any project" only with every known project that decides
+    # otherwise after it ("Except atlas, where it is on."); never "Other projects follow".
+    assert "Other projects follow" not in gw() and '"Read only"' not in gw()
 
 
 def test_tool_and_server_details_say_what_they_know():
@@ -1618,8 +1618,7 @@ def test_tool_and_server_details_say_what_they_know():
     for words in (
         '"Off in this project"',
         '"Not reported · its name suggests it writes"',
-        "can call this tool through Kitden ${place}.`",
-        "can't call this tool through Kitden ${place}.`",
+        "call this tool through Kitden by the shared rule.`",
         "is off ${place}, so none of its tools can be called.${others}`",
         '"No client uses the Kitden gateway yet."',
         "`Open ${server.name}`",
@@ -1679,6 +1678,49 @@ def test_the_server_panel_says_the_mockups_words():
     assert 'off in ${where || "all projects"}' not in tools
     # A server moves out to one client: a second pick replaces the first row.
     assert "`moveout:${params.server}`" in script("tray.js")
+
+
+def test_the_tool_panel_says_the_mockups_words():
+    # The tool panel and its "in some projects" step (gateway-notes 3.4 and 5), with the real
+    # clients' names. Each ticked project is its own row in the tray (D13).
+    text = gw()
+    for words in (
+        'label: "Permission"',
+        '"On in this project"',
+        "· from ${",
+        '"all projects"',
+        '"Projects with a rule of their own"',
+        '"Show"',
+        "`Show ${",
+        "call this tool through Kitden, in every project.`",
+        "call this tool through Kitden, in any project.`",
+        " Except ${",
+        ", where it is ${",
+        " follows the shared rule: ",
+        "'s rule: ",
+        "call this tool in ${folder}.`",
+        "Every other project has it on",
+        "Every other project still has it off",
+        '"Turn on in some projects…"',
+        '"Turn off in some projects…"',
+        " in the projects you pick`",
+        "`Every other project keeps the shared rule: ${",
+        "FIND_PROJECT",
+        '"No project matches."',
+        '"Tick projects. Each one waits in preview until Apply."',
+        " in preview. Apply them from the tray.`",
+        '"Done"',
+        "`already ${",
+        " now`",
+        "`Tool · ${",
+    ):
+        assert words in text, words
+    # The project choice of one project is gone from the Gateway: the step ticks several.
+    assert "projectChoice" not in text and "projectChoice" not in script("details.js")
+    # While a project's rows wait, the map's tool block names the project, or how many.
+    assert "`in preview for ${" in script("gateway.js")
+    for selector in (".pick.multi", ".own-row", ".facts dd.warn", ".find-project"):
+        assert selector in CSS, selector
 
 
 def test_connect_and_disconnect_say_kitden():

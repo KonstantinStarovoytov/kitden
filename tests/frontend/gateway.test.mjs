@@ -1256,6 +1256,30 @@ test('a tool says how many projects have their own rule, also under All projects
   assert.equal(shown(gatewayTree(view, { ...OPTS, rows: [trayRow(ruleBody('files', 'read_file', 'off', null), null)] }), 'read_file').lamp, 'on');
 });
 
+test('the tool block shows the pending project while its rows wait', () => {
+  const files = MEDIUM_VIEW.gateways[0].servers[0];
+  const view = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers: [{ ...files, tool_list: [tool('read_file', 'on', 'reads', { own_in: 2 }), tool('write_file', 'on', 'writes')] }] }] };
+  const shown = (options) => gatewayTree(view, { ...OPTS, ...options }).blocks.find((b) => b.id === 'tool:files/read_file');
+  const off = (project, part = {}) => trayRow(ruleBody('files', 'read_file', 'off', project), part);
+  const saved = data.projects;
+  data.projects = [{ id: 'a', path: '/w/atlas' }, { id: 's', path: '/w/website' }];
+  try {
+    // One project's row waits: the tool names that project in the accent; its mark stays.
+    const one = shown({ rows: [off('a')] });
+    assert.deepEqual([one.projects, one.lamp], [{ words: 'atlas', said: 'in preview for atlas', own: true, pending: 1 }, 'on']);
+    assert.equal(blockLabel(one), 'read_file, in preview for atlas, On');
+    // Two: how many.
+    assert.deepEqual(shown({ rows: [off('a'), off('s')] }).projects, { words: '2 projects', said: 'in preview for 2 projects', own: true, pending: 2 });
+    // A row with no answer yet, a rule for all projects, or another tool's row: the usual tag.
+    assert.deepEqual(shown({ rows: [off('a', null), off(null), trayRow(ruleBody('files', 'write_file', 'off', 'a'))] }).projects, { words: '2 projects', said: 'own rule in 2 projects', own: false });
+    // In atlas its own row is a ring on the mark, as before; website's row is the pending tag.
+    const atlas = shown({ picked: 'a', rows: [off('a'), off('s')] });
+    assert.deepEqual([atlas.lamp, atlas.projects.words], ['preview', 'website']);
+  } finally {
+    data.projects = saved;
+  }
+});
+
 test('an outside block has a grey-ring lamp and a grip only where the gateway can take it', () => {
   const plugin = { name: 'linear', clients: ['claude_code'], columns: ['claude_code'], items: [], stays: 'linear comes with a plugin; it stays with the plugin.' };
   const tree = gatewayTree({ ...MEDIUM_VIEW, groups: { ...MEDIUM_VIEW.groups, plugin: [plugin] } }, OPTS);

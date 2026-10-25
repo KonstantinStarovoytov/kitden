@@ -845,6 +845,8 @@ div.map .block.leaving:focus-visible { filter: none; }
 .facts dt { color: var(--ink-3); }
 .facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .facts dd.accent { color: var(--route); }
+.facts dd.warn { color: var(--lamp-warn); }
+.fact-mark { display: inline-flex; align-items: center; gap: 6px; }
 .drawer .body > p.why { margin: 0; color: var(--ink-2); }
 .drawer > details.tech { flex: none; max-height: 50%; overflow: auto; padding: 8px 20px; border-top: 1px solid var(--wire); }
 .title-mono { font-family: var(--mono); font-size: 17px; font-weight: 600; letter-spacing: -0.01em; overflow-wrap: anywhere; }
@@ -900,6 +902,21 @@ h2.sw-head { margin: 0; font-size: 11px; font-weight: 600; color: var(--ink-2); 
 .pk-tx { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .pk-tx b { font-size: 12px; font-weight: 600; }
 .pk-tx small { font-size: 11px; color: var(--ink-3); }
+/* The "in some projects" step: a row per project with its folder and a check; a project that has
+   the state already cannot be ticked. Find narrows the rows. */
+.pick.multi > .ic { flex: none; color: var(--ink-3); }
+.pick:disabled { opacity: 0.45; cursor: default; }
+.pick:disabled:hover { border-color: var(--wire); }
+.find-project { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--wire); border-radius: 7px; background: var(--inset); color: var(--ink-3); }
+.find-project:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
+.find-project input { flex: 1; min-width: 0; padding: 0; border: 0; background: transparent; outline: none; color: var(--ink); font: inherit; font-size: 12px; }
+.find-project input::placeholder { color: var(--ink-3); }
+/* A tool's projects with a rule of their own: a folder, the name, On in the accent or Off, Show. */
+.own-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.own-row > .ic { flex: none; color: var(--ink-3); }
+.own-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.own-state { color: var(--ink-3); }
+.own-state.on { color: var(--route); }
 .drawer > .step-foot { display: flex; align-items: center; gap: 6px; margin: 0; padding: 12px 20px; border-top: 1px solid var(--wire); color: var(--ink-3); font-size: 12px; }
 #drawer.floating > .step-foot { margin-top: auto; padding: 10px 0 0; }
 .drawer .who h2 { margin: 0; }

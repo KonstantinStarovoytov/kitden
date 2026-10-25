@@ -11,7 +11,7 @@ import { arrival, setState, state } from "./store.js";
 import { reloadTools } from "./tools.js";
 import { onTray, tray } from "./tray.js";
 
-export { backToDetails, contextLinks, countedDefinition, detailsCard, followTray, footerActions, footerButtons, heldActions, heldButtons, keepFrom, kindWord, layerState, linksRow, loadsLede, moveBody, moveFor, moveInto, moveTargets, offerLabel, openItem, plainSecrets, projectChoice, scopeWords, techRows, technical } from "./details.js";
+export { backToDetails, contextLinks, countedDefinition, detailsCard, followTray, footerActions, footerButtons, heldActions, heldButtons, keepFrom, kindWord, layerState, linksRow, loadsLede, moveBody, moveFor, moveInto, moveTargets, offerLabel, openItem, plainSecrets, scopeWords, techRows, technical } from "./details.js";
 export { callsText, NO_TOOLS, offNote, projectLabel, refreshTools, switchList, toolRows, toolsHead, toolsSection, writingToolsOn } from "./tools.js";
 export { ADDS, addScope, afterParts, alignGroups, canShowReview, changeOutcome, changeWords, chosenKeys, leftOutText, review, reviewLede, undoChange } from "./review.js";
 export { hideToast, toast } from "./toast.js";

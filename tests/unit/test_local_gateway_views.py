@@ -308,6 +308,39 @@ def test_held_tools_count_the_projects_with_their_own_rule():
     assert held_servers(settings, [], tools)[0]["tool_list"][0]["own_in"] == 0
 
 
+def test_tools_view_names_the_tools_each_project_has_its_own_rule_for():
+    # The tool panel lists the projects with a rule of their own for a tool, as the map counts
+    # them (own_in): a folder that only follows its parent's rule, or a rule for the whole
+    # server, is not one. The page knows each project by its id; the rules by its folder.
+    settings = {
+        "servers": {"files": {"command": "files"}},
+        "rules": {
+            "global": {"files": {"tools": {"read_file": "off"}}},
+            "projects": {
+                "/w/a": {"files": {"tools": {"read_file": "on"}}},
+                "/w/b": {"files": {"tools": {"read_file": "off"}}},
+                "/w/c": {"files": {"server": "on"}},
+            },
+        },
+    }
+    chains = {
+        "a": ["/w/a"],
+        "web": ["/w/a/web", "/w/a"],
+        "b": ["/w/b"],
+        "c": ["/w/c"],
+        "none": [],
+    }
+    tools = {"files": [tool("read_file"), tool("write_file")]}
+    view = tools_view(settings, tools, "files", [], chains=chains)
+    assert {p["id"]: (p["tools"]["read_file"], p["own"]) for p in view["projects"]} == {
+        "a": ("on", ["read_file"]),
+        "web": ("on", []),
+        "b": ("off", ["read_file"]),
+        "c": ("off", []),
+        "none": ("off", []),
+    }
+
+
 def test_an_empty_tool_list_shows_no_count():
     assert held_servers(SETTINGS, [], {"github": []})[0]["tools"] is None
 

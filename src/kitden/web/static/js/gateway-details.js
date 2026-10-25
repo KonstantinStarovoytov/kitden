@@ -5,11 +5,11 @@
 // gateway holds.
 import { getJson, postJson, query } from "./api.js";
 import { $, busyWhile, button, el, icon, joinWords, plural, reportError, withFocusKey } from "./dom.js";
-import { fold } from "./motion.js";
+import { animateTo, fold } from "./motion.js";
 import { projectNote } from "./offer.js";
-import { callsText, closePanel, contextLinks, detailsCard, followTray, heldActions, keepFrom, linksRow, loadPanel, moveBody, moveInto, moveTargets, NO_TOOLS, offerLabel, offNote, openPanel, panelState, projectChoice, refreshTools, review, stepTo, swapContent, switchList, techRows, technical, toast, toolRows, toolsHead, writingToolsOn } from "./panel.js";
-import { ALL_PROJECTS, callout, CLIENT_NAMES, clientCheck, folderName, GATEWAY_NOTE, gatewayName, kindOf, kitdenClients, mark, originText, STATE_WORDS, versionWords } from "./parts.js";
-import { arrival, current, data, freshness, projectPath, reload, render, setState, state } from "./store.js";
+import { callsText, closePanel, contextLinks, detailsCard, followTray, heldActions, keepFrom, linksRow, loadPanel, moveBody, moveInto, moveTargets, NO_TOOLS, offerLabel, offNote, openPanel, panelState, refreshTools, review, stepTo, swapContent, switchList, techRows, technical, toast, toolRows, toolsHead, writingToolsOn } from "./panel.js";
+import { ALL_PROJECTS, callout, CLIENT_NAMES, clientCheck, FIND_PROJECT, folderName, GATEWAY_NOTE, gatewayName, kindOf, kitdenClients, mark, menuItems, originText, STATE_WORDS, versionWords } from "./parts.js";
+import { arrival, current, data, freshness, projectPath, reload, render, setState, state, switchProject } from "./store.js";
 import { keyFor, takeOut, tray } from "./tray.js";
 
 const WRITABLE = ["claude_code", "codex", "cursor"];
@@ -331,25 +331,32 @@ export function kitdenLinks(model, name) {
 
 // The owner's words for the switches of a tool and of a server, by the state they turn to.
 const FOR_ALL = { on: "Turn on for all projects…", off: "Turn off for all projects…" };
-const IN_ONE = { on: "Turn on in one project…", off: "Turn off in one project…" };
+const IN_SOME = { on: "Turn on in some projects…", off: "Turn off in some projects…" };
 const STRICT = { on: "Turn strict mode on…", off: "Turn strict mode off…" };
 const MOVE_OUT = "Move out of the gateway…";
 const other = (state) => (state === "on" ? "off" : "on");
+// An action that steps to the next part of the panel (`open`). Its button is not handed the step
+// to wait for: one that waits over 150 ms turns busy and disabled (busyWhile), and focus on it
+// would fall to the page.
+const stepAction = (label, open) => ({ label, run: () => { open(); } });
 
 // A tool's or a server's state in the picked project ("" for All projects), from `effective`: a
-// tool of a server that is off is off, and says so. A rule of the picked project's own says so.
+// tool of a server that is off is off, and says so. With All projects "On" or "Off"; in a project
+// a rule of its own says so, else where the state comes from: all projects, or a parent folder.
 export function toolState(rule, picked) {
   const on = (rule.effective ?? rule.state) === "on";
   if (rule.why === "server_off") return "Off · server off";
-  if (picked && rule.origin === "project") return on ? "On in this project" : "Off in this project";
-  return on ? STATE_WORDS.on : STATE_WORDS.off;
+  if (!picked) return on ? STATE_WORDS.on : STATE_WORDS.off;
+  if (rule.origin === "project") return on ? "On in this project" : "Off in this project";
+  const from = rule.origin === "parent" ? rule.origin_from : "all projects";
+  return `${on ? STATE_WORDS.on : STATE_WORDS.off} · from ${from}`;
 }
 
 // What a tool says it does: the server's hint, or a guess from its name (`hintFrom`). The
 // Gateway's short tool list has only the hint, whose word says where it comes from.
 const HINT_FROM = { reads: "server", writes: "server", "may write": "name" };
 export function reported(hint, hintFrom = HINT_FROM[hint] || null) {
-  if (hintFrom === "server") return hint === "reads" ? "Read only" : "May write";
+  if (hintFrom === "server") return hint === "reads" ? "Reads only" : "May write";
   if (hintFrom === "name") return "Not reported · its name suggests it writes";
   return "Not reported";
 }
@@ -375,6 +382,19 @@ function changedIn(projects, projectRules, target, stateIn) {
   return projects.filter((p) => differ.has(p.id));
 }
 
+// A tool's rule in one project of the server's answer, as the gateway decides it there; and
+// whether it can be called there, which it cannot while that project has the server off.
+const ruleIn = (name) => (p) => p.tools && p.tools[name];
+const callableIn = (name) => (p) => (p.server === "off" ? "off" : ruleIn(name)(p));
+
+// The known projects (`projects`, as the menu lists them, by folder name) that the server's answer
+// (`rules`) has a state for, each with its entry (`entry`); null without the answer.
+function knownIn(rules, projects) {
+  if (!Array.isArray(rules.projects)) return null;
+  const entries = new Map(rules.projects.map((p) => [p.id, p]));
+  return menuItems(projects.filter((p) => entries.has(p.id)), "").filter((item) => item.id).map((item) => ({ ...item, entry: entries.get(item.id) }));
+}
+
 // The clients that reach the Kitden gateway, as a fact; null when Kitden could not read them.
 const linkedFact = (linked) => (linked ? clientsFact(linked) : { label: "Clients", value: "Not known" });
 
@@ -394,66 +414,123 @@ export function ruleBody(server, tool, state, project) {
 // is the shared one.
 const sharedOf = (rule, detail) => detail.shared || (["project", "parent"].includes(rule.origin) ? null : rule.state);
 
-// Nodes under a card's actions, in one box when there are two.
-function under(...nodes) {
-  const shown = nodes.filter(Boolean);
-  if (shown.length < 2) return shown[0] || null;
-  const box = el("div");
-  box.append(...shown);
-  return box;
+// The Permission fact: the tool's mark, green while it is on, then its words.
+function permissionFact(tool, picked) {
+  const text = toolState(tool, picked);
+  const mark = el("span", (tool.effective ?? tool.state) === "on" ? "mark on" : "mark");
+  mark.setAttribute("aria-hidden", "true");
+  const value = el("span", "fact-mark");
+  value.append(mark, el("span", null, text));
+  return { label: "Permission", value, text };
 }
 
-// Details of a tool in the Kitden gateway, for the picked project (`picked`, its folder name
-// `folder`): its server, its state and where it comes from, what the server says it does, the
-// clients that call it through the gateway, and its calls. `rules` is the /api/gateway/tools
-// answer for its server (the shared state, and the state in each known project) and `detail`
-// the tool's entry in it (shared state, the folder a project rule falls back to, calls,
-// description). Actions: back to the shared rule (or a parent folder's) for a rule of the
-// project's own; "for all projects" turns the shared state the other way; "in one project" turns
-// the state shown the other way, after the project choice in the panel (`choosing`), which
-// offers only the projects it would change. With its server off a tool rule would change nothing
-// anyone can call: only a way to the server.
-export function toolCard(tool, server, { linked, picked = "", folder = "", detail = {}, rules = {}, projects = [], choosing = false } = {}) {
+// The Reported fact: what the tool says it does; "May write" in amber.
+function reportedFact(hint, hintFrom) {
+  const value = reported(hint, hintFrom);
+  return { label: "Reported", value, warn: value === "May write" };
+}
+
+// Details of a tool in the Kitden gateway, as the mockup's tool panel (gateway-notes 3.4), for the
+// picked project (`picked`, its folder name `folder`): its server, its permission and where it
+// comes from, what the server says it does, the clients that call it through the gateway, and its
+// calls; with All projects the projects with a rule of their own for it; a sentence (toolSay) and
+// its actions (toolActions). `rules` is the /api/gateway/tools answer for its server (the shared
+// state, and the state and own rules in each known project) and `detail` the tool's entry in it
+// (shared state, the folder a project rule falls back to, calls, description). "In some
+// projects…" steps to the projects it would change (projectsStep), keeping `warning`. With its
+// server off a tool rule would change nothing anyone can call: only a way to the server.
+export function toolCard(tool, server, { linked, picked = "", folder = "", detail = {}, rules = {}, projects = [], warning = null } = {}) {
   const name = tool.name;
-  const place = placeWords(picked, folder);
   const on = (tool.effective ?? tool.state) === "on";
-  const own = Boolean(picked) && tool.origin === "project";
-  const inProject = (p) => p.tools && p.tools[name];
   const calls = callsText(detail.calls);
   const facts = [
     { label: "Server", value: `${server.name} · ${server.kind === "remote" ? "Remote" : "Local"}` },
-    { label: "State", value: toolState(tool, picked) },
+    permissionFact(tool, picked),
     { label: "Comes from", value: originText(tool, folder) || "Not known", accent: tool.origin === "project" },
-    { label: "Reported", value: reported(tool.hint, detail.hint_from) },
+    reportedFact(tool.hint, detail.hint_from),
     linkedFact(linked),
     ...(calls ? [{ label: "Calls", value: calls }] : []),
   ];
   // The name goes under a title the server gives; without one it is the title.
-  const card = { kind: KIND.tool, title: tool.title || name, id: tool.title ? name : null, facts };
+  const title = tool.title || name;
+  const card = { kind: KIND.tool, title, id: tool.title ? name : null, facts, warning };
   if (detail.description) card.technical = technical([{ title: "Description", summary: detail.description }]);
   if (tool.why === "server_off") {
+    const place = placeWords(picked, folder);
     const others = othersText(picked, rules.projects, rules.shared, (p) => p.server);
     const why = `${server.name} is off ${place}, so none of its tools can be called.${others}`;
     return { ...card, why, actions: [{ label: `Open ${server.name}`, run: () => showHeld(server.name) }] };
   }
   const shared = sharedOf(tool, detail);
-  let why = nobody(linked);
-  if (!why) {
-    const who = joinWords(linked.map((c) => CLIENT_NAMES[c]));
-    why = on ? `${who} can call this tool through Kitden ${place}.` : `${who} can't call this tool through Kitden ${place}.`;
-    why += othersText(picked, rules.projects, shared, inProject);
+  const target = other(shared || (on ? "on" : "off"));
+  const step = { server: server.name, tool: name, title, target, shared, rules, warning };
+  const some = changedIn(projects, rules.projects, target, ruleIn(name)).length ? stepAction(IN_SOME[target], () => projectsStep(step)) : null;
+  const known = knownIn(rules, projects);
+  const others = known && known.map((p) => ({ id: p.id, name: p.name, state: callableIn(name)(p.entry) })).filter((p) => p.state);
+  const who = linked && linked.length ? joinWords(linked.map((c) => CLIENT_NAMES[c])) : null;
+  const why = toolSay({ who, none: nobody(linked), on, picked, folder, tool, shared, others });
+  return { ...card, why, list: picked ? null : ownRules(name, known), ...toolActions(server.name, tool, { picked, folder, detail, shared, some }) };
+}
+
+// "atlas, where it is on; web, where it is off": each project and its state.
+const whereItIs = (list) => list.map((p) => `${p.name}, where it is ${p.state}`).join("; ");
+
+// What the tool panel says. With All projects: whether the clients that reach the gateway (`who`)
+// can call it in every project, then each known project that decides otherwise (`others`, null
+// when Kitden did not read them: then only what the shared rule does). In a project with a rule of
+// its own: whether they can call it there, then what every other project has. In a project
+// without one: what it follows, which names no client. `none` says why nobody can call it.
+function toolSay({ who, none, on, picked, folder, tool, shared, others }) {
+  const state = on ? "on" : "off";
+  if (picked && tool.origin === "parent") return `${folder} follows ${tool.origin_from}'s rule: ${state}.`;
+  if (picked && tool.origin !== "project") return `${folder} follows the shared rule: ${state}.`;
+  if (none) return none;
+  if (!picked) {
+    if (!others) return `${who} ${on ? "can" : "can't"} call this tool through Kitden by the shared rule.`;
+    const all = on ? `${who} can call this tool through Kitden, in every project.` : `${who} can't call this tool through Kitden, in any project.`;
+    const differ = others.filter((p) => p.state !== state);
+    return differ.length ? `${all} Except ${whereItIs(differ)}.` : all;
   }
-  const actions = [];
-  if (own) actions.push({ label: detail.follows ? `Use ${detail.follows}'s rule…` : "Use the shared rule…", body: ruleBody(server.name, name, null, picked) });
-  if (shared) actions.push({ label: FOR_ALL[other(shared)], body: ruleBody(server.name, name, other(shared), null) });
-  const target = on ? "off" : "on";
-  const choices = changedIn(projects, rules.projects, target, inProject);
-  const one = IN_ONE[target];
-  if (choices.length) actions.push({ label: one, run: () => drawTool(server.name, name, rules, { choosing: true }) });
-  if (actions.length) actions[0].primary = true;
-  const pick = (id) => review(ruleBody(server.name, name, target, id));
-  const after = choosing && choices.length ? projectChoice(choices, picked, pick, `action:${one}`) : null;
-  return { ...card, why, actions, after };
+  const here = `${who} ${on ? "can" : "can't"} call this tool in ${folder}.`;
+  if (!others || !shared) return here;
+  const differ = others.filter((p) => p.id !== picked && p.state !== shared);
+  const every = shared === "on" ? "Every other project has it on" : "Every other project still has it off";
+  return `${here} ${every}${differ.length ? `, except ${whereItIs(differ)}` : ""}.`;
+}
+
+// The tool panel's actions. With All projects: the rule for all projects the other way (primary
+// while the tool is off) and "in some projects…" (`some`). In a project without a rule of its own:
+// the other way there (primary) and for all projects; with one: back to the rule it follows
+// (primary) and for all projects. In a project "in some projects…" waits under More (D18).
+function toolActions(server, tool, { picked, folder, detail, shared, some }) {
+  const on = (tool.effective ?? tool.state) === "on";
+  const all = shared ? { label: FOR_ALL[other(shared)], body: ruleBody(server, tool.name, other(shared), null) } : null;
+  if (!picked) return { actions: [...(all ? [{ ...all, primary: !on }] : []), ...(some ? [some] : [])], more: [] };
+  const flip = on ? "off" : "on";
+  const here = tool.origin === "project"
+    ? { label: detail.follows ? `Use ${detail.follows}'s rule…` : "Use the shared rule…", body: ruleBody(server, tool.name, null, picked) }
+    : { label: `Turn ${flip} in ${folder}…`, body: ruleBody(server, tool.name, flip, picked) };
+  return { actions: [{ ...here, primary: true }, ...(all ? [all] : [])], more: some ? [some] : [] };
+}
+
+// Under All projects, the known projects with a rule of their own for the tool (`own` in the
+// server's answer, as the map counts them), each with that rule and "Show", which picks the
+// project as the menu at the top does. Null without one, or without the answer.
+function ownRules(name, known) {
+  const own = (known || []).filter((p) => (p.entry.own || []).includes(name));
+  if (!own.length) return null;
+  const section = el("section", "own-rules");
+  section.append(el("h2", "sw-head", "Projects with a rule of their own"));
+  for (const p of own) {
+    const on = ruleIn(name)(p.entry) === "on";
+    const show = button("Show", () => switchProject(p.id), "btn small");
+    show.setAttribute("aria-label", `Show ${p.name}`);
+    show.dataset.focus = `show:${p.id}`;
+    const row = el("div", "own-row");
+    row.append(icon("folder", 13), el("span", "own-name", p.name), el("span", on ? "own-state on" : "own-state", on ? "On" : "Off"), show);
+    section.append(row);
+  }
+  return section;
 }
 
 // Details of a server in the Kitden gateway, for the picked project, as the mockup's server panel
@@ -462,9 +539,9 @@ export function toolCard(tool, server, { linked, picked = "", folder = "", detai
 // /api/gateway/tools answer (the tools, strict, the shared state, the folder a project rule falls
 // back to, the state in each known project). "Move out of the gateway…" steps to the client choice
 // (moveOutStep); every other server action waits under More (heldMore, then Remove, Put back and
-// the Keychain), and the project choice (`choosing`) and the Library link under them. `warning`
-// (the read failed, or the server's problem) shows first, also back from the move-out step.
-export function heldCard(server, { linked, picked = "", folder = "", view = null, detail = {}, clients = foundClients(), projects = [], choosing = false, warning = null } = {}) {
+// the Keychain), and the Library link under them. `warning` (the read failed, or the server's
+// problem) shows first, also back from a step.
+export function heldCard(server, { linked, picked = "", folder = "", view = null, detail = {}, clients = foundClients(), projects = [], warning = null } = {}) {
   const name = server.name;
   const list = server.tool_list || [];
   const facts = [
@@ -472,25 +549,23 @@ export function heldCard(server, { linked, picked = "", folder = "", view = null
     { label: "Comes from", value: (server.origin !== "default" && originText(server, folder)) || ALL_PROJECTS, accent: server.origin === "project" },
     linkedFact(linked),
   ];
-  const target = other(server.state);
-  const choices = changedIn(projects, detail.projects, target, (p) => p.server);
-  const actions = clients.length ? [{ label: MOVE_OUT, run: () => moveOutStep(name, detail, warning) }] : [];
-  const more = [...heldMore(server, picked, detail, choices), ...heldActions(name, clients, server.plain_secrets)];
-  const pick = (id) => review(ruleBody(name, null, target, id));
+  const shared = sharedOf(server, detail);
+  const target = other(shared || server.state);
+  const step = { server: name, tool: null, title: name, target, shared, rules: detail, warning };
+  const some = changedIn(projects, detail.projects, target, (p) => p.server).length ? stepAction(IN_SOME[target], () => projectsStep(step)) : null;
+  const actions = clients.length ? [stepAction(MOVE_OUT, () => moveOutStep(name, detail, warning))] : [];
+  const more = [...heldMore(server, picked, detail, some), ...heldActions(name, clients, server.plain_secrets)];
   const links = view ? kitdenLinks(view, name) : [];
-  // The action that shows the choice waits under More: Escape gives focus back to More.
-  const choice = choosing && choices.length ? projectChoice(choices, picked, pick, "more") : null;
-  const after = under(choice, links.length ? linksRow(links) : null);
   const id = `${server.kind === "remote" ? "Remote" : "Local"} · in the Kitden gateway`;
-  return { kind: KIND.server, title: name, id, facts, list: heldList(name, detail, picked, folder), actions, more, after, warning };
+  return { kind: KIND.server, title: name, id, facts, list: heldList(name, detail, picked, folder), actions, more, after: links.length ? linksRow(links) : null, warning };
 }
 
 // A held server's actions the mockup has no place for, under More (D18): back to the rule it
 // follows, for a rule of the picked project's own; the rule for all projects, from a project (the
 // Whole server switch is that project's) or when there is no Whole server switch (the server's
-// answer did not come); in one project (the project choice, with only the projects it would
-// change); strict mode, every writing tool off, and Refresh tools.
-function heldMore(server, picked, detail, choices) {
+// answer did not come); in some projects (`some`, with only the projects it would change); strict
+// mode, every writing tool off, and Refresh tools.
+function heldMore(server, picked, detail, some) {
   const name = server.name;
   const more = [];
   if (picked && server.origin === "project") {
@@ -498,7 +573,7 @@ function heldMore(server, picked, detail, choices) {
   }
   const shared = sharedOf(server, detail);
   if ((picked || !Array.isArray(detail.tools)) && shared) more.push({ label: FOR_ALL[other(shared)], body: ruleBody(name, null, other(shared), null) });
-  if (choices.length) more.push({ label: IN_ONE[other(server.state)], run: () => drawHeld(name, detail, { choosing: true }) });
+  if (some) more.push(some);
   // Strict mode is the server's own, for all projects; unknown without the server's answer.
   if (typeof detail.strict === "boolean") {
     const state = detail.strict ? "off" : "on";
@@ -529,6 +604,37 @@ function heldList(name, detail, picked, folder) {
   return section;
 }
 
+// Steps in the panel -----------------------------------------------------------------------------
+
+// A step's head: Back, where it came from (`crumb`) and Close, over its title.
+function stepHead(crumb, title, back) {
+  const head = el("header");
+  const top = el("div", "top");
+  const backButton = button(null, back, "btn ghost small step-back");
+  backButton.setAttribute("aria-label", "Back");
+  backButton.append(icon("arrow-left", 14));
+  top.append(backButton, el("span", "crumb", crumb), button("Close", () => closePanel(), "btn ghost small"));
+  const heading = el("h1", null, title);
+  heading.id = "panel-title";
+  head.append(top, heading);
+  return head;
+}
+
+// A step's quiet note at its foot, after an info icon; `words` can change.
+function stepFoot(words) {
+  const foot = el("p", "step-foot");
+  foot.append(icon("info", 13), words);
+  return foot;
+}
+
+// After a step, focus that was in the panel goes to the first control named in `keys` that is there.
+function focusAfterStep(...keys) {
+  const drawer = $("#drawer");
+  if (!drawer.contains(document.activeElement)) return;
+  const node = keys.map((key) => withFocusKey(drawer, key)).find(Boolean);
+  if (node) node.focus();
+}
+
 // Move a server out of the gateway (gateway-notes 4.2), the next step in its panel: one row per
 // client Kitden can write, saying whether it uses the gateway now. A press adds the move into that
 // client to the tray at once (one row per server: another press replaces it); a press on the
@@ -547,24 +653,13 @@ function moveOutStep(name, detail, warning, dir = "fwd") {
 // The step's parts: Back, where it came from and Close; the question; a row per client; and what
 // the other clients lose.
 function moveOutNodes(name, clients, linked, back) {
-  const head = el("header");
-  const top = el("div", "top");
-  const backButton = button(null, back, "btn ghost small step-back");
-  backButton.setAttribute("aria-label", "Back");
-  backButton.append(icon("arrow-left", 14));
-  top.append(backButton, el("span", "crumb", `Server · ${name}`), button("Close", () => closePanel(), "btn ghost small"));
-  const title = el("h1", null, `Move ${name} out of the gateway`);
-  title.id = "panel-title";
-  head.append(top, title);
   const picks = el("div", "picks");
   picks.setAttribute("role", "group");
   picks.setAttribute("aria-label", "Client that keeps it");
   picks.append(...clients.map((client) => clientPick(name, client, linked)));
   const body = el("div", "body");
   body.append(el("p", "why", "Pick the client that keeps it."), picks);
-  const foot = el("p", "step-foot");
-  foot.append(icon("info", 13), `The other clients lose ${name}'s tools.`);
-  return [head, body, foot];
+  return [stepHead(`Server · ${name}`, `Move ${name} out of the gateway`, back), body, stepFoot(`The other clients lose ${name}'s tools.`)];
 }
 
 // The client a server moves out to while its row waits in the tray, or null.
@@ -588,14 +683,7 @@ function clientPick(name, client, linked) {
   node.setAttribute("aria-label", [CLIENT_NAMES[client], uses].filter(Boolean).join(", "));
   node.append(mark(client), words, el("span", "radio"));
   const picked = () => movingTo(name) === client;
-  // One press at a time, as a preview button: a second one while the first is asked does nothing.
-  node.addEventListener("click", () => {
-    if (node.dataset.working) return;
-    node.dataset.working = "1";
-    Promise.resolve(picked() ? takeOut(keyFor(body)) : review(body)).catch(reportError).finally(() => {
-      delete node.dataset.working;
-    });
-  });
+  pressOnce(node, () => (picked() ? takeOut(keyFor(body)) : review(body)));
   followTray(node, keyFor(body), () => {
     node.classList.toggle("on", picked());
     node.setAttribute("aria-pressed", String(picked()));
@@ -603,12 +691,125 @@ function clientPick(name, client, linked) {
   return node;
 }
 
-// After a step, focus that was in the panel goes to the control named `key`, if it is there.
-function focusAfterStep(key) {
-  const drawer = $("#drawer");
-  if (!drawer.contains(document.activeElement)) return;
-  const node = withFocusKey(drawer, key);
-  if (node) node.focus();
+// A pick row's press, one at a time as a preview button's: a second one while the first is asked
+// does nothing, and so does a press on a row that is off.
+function pressOnce(node, press) {
+  node.addEventListener("click", () => {
+    if (node.disabled || node.dataset.working) return;
+    node.dataset.working = "1";
+    Promise.resolve(press()).catch(reportError).finally(() => {
+      delete node.dataset.working;
+    });
+  });
+}
+
+// Turn a tool, or a whole server (`tool` null), on or off (`target`) in the projects picked
+// (gateway-notes 5), the next step in its panel: one checkbox row per known project, by folder
+// name, saying what it has now; a project that has `target` already cannot be ticked. A tick adds
+// that project's rule to the tray at once (one row per project, D13), an untick takes exactly that
+// row out. Find narrows the rows as you type. Back and Done step back to the panel (with its
+// `warning`), focus on "in some projects…" or the More it waits under; focus comes to Find. Drawn
+// again (`dir` null) in place.
+function projectsStep(step, dir = "fwd") {
+  const { server, tool } = step;
+  panelState.current = { type: "projects", server, tool };
+  const again = { warning: step.warning, step: "back", focus: [`action:${IN_SOME[step.target]}`, "more"] };
+  const back = () => (tool ? drawTool(server, tool, step.rules, again) : drawHeld(server, step.rules, again));
+  const nodes = projectsNodes(step, heldContext().projects, back);
+  keepFrom(() => projectsStep(step, null), nodes, () => (tool ? showTool(server, tool) : showHeld(server)));
+  if (!dir) return swapContent(nodes);
+  return stepTo(nodes, dir).then(() => focusAfterStep("find"));
+}
+
+// The step's parts: Back, where it came from and Close; the question; what every other project
+// keeps; Find, a row per project and the words when none matches; Done; and how many wait.
+function projectsNodes({ server, tool, title, target, shared, rules }, projects, back) {
+  const stateIn = tool ? ruleIn(tool) : (p) => p.server;
+  const rows = (knownIn(rules, projects) || []).map((p) => ({ ...p, now: stateIn(p.entry) })).filter((p) => p.now);
+  const words = el("span");
+  const bodies = rows.map((p) => ruleBody(server, tool, target, p.id));
+  const count = () => {
+    const n = bodies.filter((body) => ticked(body)).length;
+    words.textContent = n ? `${plural(n, "project", "projects")} in preview. Apply them from the tray.` : "Tick projects. Each one waits in preview until Apply.";
+  };
+  const picks = el("div", "picks");
+  picks.setAttribute("role", "group");
+  picks.setAttribute("aria-label", "Projects");
+  picks.append(...rows.map((p, at) => projectPick(p, bodies[at], count)));
+  const none = el("p", "muted", "No project matches.");
+  none.hidden = true;
+  const body = el("div", "body");
+  if (shared) body.append(el("p", "why", `Every other project keeps the shared rule: ${shared}.`));
+  body.append(findField(picks, none), picks, none);
+  const done = el("footer", "stack");
+  done.append(button("Done", back, "btn"));
+  const crumb = tool ? `Tool · ${title}` : `Server · ${server}`;
+  const foot = stepFoot(words);
+  foot.setAttribute("aria-live", "polite");
+  count();
+  return [stepHead(crumb, `Turn ${target} ${title} in the projects you pick`, back), body, done, foot];
+}
+
+// Whether the rule `body` waits in the tray as it is: a row for that project with another state
+// (a "Use the shared rule…") is not this tick.
+function ticked(body) {
+  const row = tray.rows.find((r) => r.key === keyFor(body));
+  return Boolean(row) && row.body.params.state === body.params.state;
+}
+
+// One project to tick: its folder, its name over what it has now ("1 own rule · on now",
+// "already off"), and a check that fills, popping in, while its rule waits in the tray. A press
+// adds the rule, or takes it out again. `changed()` counts the ticks again.
+function projectPick(p, body, changed) {
+  const target = body.params.state;
+  const node = el("button", "pick multi");
+  node.type = "button";
+  node.setAttribute("role", "checkbox");
+  node.dataset.focus = `tick:${p.id}`;
+  node.dataset.name = p.name;
+  node.disabled = p.now === target;
+  const sub = [p.sub, p.count, node.disabled ? `already ${target}` : `${p.now} now`].filter(Boolean).join(" · ");
+  const words = el("span", "pk-tx");
+  words.append(el("b", null, p.name), el("small", null, sub));
+  node.setAttribute("aria-label", `${p.name}, ${sub}`);
+  const box = el("span", "chk");
+  box.append(icon("check", 12));
+  node.append(icon("folder", 14), words, box);
+  pressOnce(node, () => (ticked(body) ? takeOut(keyFor(body)) : review(body)));
+  let was = null;
+  followTray(node, keyFor(body), () => {
+    const on = ticked(body);
+    node.classList.toggle("on", on);
+    node.setAttribute("aria-checked", String(on));
+    if (on && was === false) animateTo(box, [{ transform: "scale(0.6)" }, { transform: "none" }], { dur: 160 });
+    was = on;
+    changed();
+  });
+  return node;
+}
+
+// Find narrows the rows by folder name as you type (Enter does nothing); when none is left it
+// says so (`none`).
+function findField(picks, none) {
+  const field = el("label", "find-project");
+  const input = el("input");
+  input.type = "text";
+  input.autocomplete = "off";
+  input.spellcheck = false;
+  input.setAttribute("placeholder", FIND_PROJECT);
+  input.setAttribute("aria-label", FIND_PROJECT);
+  input.dataset.focus = "find";
+  input.addEventListener("input", () => {
+    const text = input.value.trim().toLowerCase();
+    let shown = 0;
+    for (const row of picks.children) {
+      row.hidden = !row.dataset.name.toLowerCase().includes(text);
+      if (!row.hidden) shown += 1;
+    }
+    none.hidden = shown > 0;
+  });
+  field.append(icon("search", 14), input);
+  return field;
 }
 
 // Showing a card -----------------------------------------------------------------------------
@@ -711,19 +912,10 @@ async function readThen(server, draw, { shown, kind }) {
 }
 
 // What every card of the Kitden gateway is drawn for: the clients it reaches (null when not
-// read), the picked project and its folder, and the projects a choice offers.
+// read), the picked project and its folder, and the projects a step offers.
 function heldContext() {
   const { linked, known } = kitdenClients(data.setupServer);
   return { linked: known ? linked : null, picked: state.project, folder: folderName(projectPath()), projects: data.projects || [] };
-}
-
-// After a redraw with the project choice, focus goes into it, and a review picked from it comes
-// back to it, also when it was picked by keyboard.
-function focusChoice(choosing) {
-  const box = choosing ? $("#drawer .choice") : null;
-  if (!box) return;
-  if (panelState.from) panelState.from.focus = box.dataset.focus;
-  box.focus();
 }
 
 // What a server in the Kitden gateway shows as, and the kind its skeleton names.
@@ -734,19 +926,18 @@ export async function showHeld(name) {
   await readThen(name, (answer) => drawHeld(name, answer || {}, { warning: answer ? answer.problem : "Could not load the details." }), heldShown(name));
 }
 
-// A server that is gone from the gateway since closes its Details. Back from the move-out step it
-// slides in (`step`), focus on its Move out.
-function drawHeld(name, detail, { choosing = false, warning = null, step = null } = {}) {
+// A server that is gone from the gateway since closes its Details. Back from a step it slides in
+// (`step`), focus on the first control of `focus` there (Move out, or More).
+function drawHeld(name, detail, { warning = null, step = null, focus = [`action:${MOVE_OUT}`] } = {}) {
   const view = current("gateway");
   const server = heldServer(view, { kind: "mcp_server", name });
   if (!server) {
     closePanel();
     return;
   }
-  const card = heldCard(server, { ...heldContext(), view, detail, choosing, warning });
-  const shown = openCard(card, { type: "held", name }, () => drawHeld(name, detail, { choosing, warning }), () => showHeld(name), step);
-  focusChoice(choosing);
-  if (step) shown.then(() => focusAfterStep(`action:${MOVE_OUT}`));
+  const card = heldCard(server, { ...heldContext(), view, detail, warning });
+  const shown = openCard(card, { type: "held", name }, () => drawHeld(name, detail, { warning }), () => showHeld(name), step);
+  if (step) shown.then(() => focusAfterStep(...focus));
 }
 
 export async function showTool(server, name) {
@@ -755,8 +946,9 @@ export async function showTool(server, name) {
 }
 
 // `rules` is the server's /api/gateway/tools answer. A tool that is gone since (its server left
-// the gateway, or no longer lists it) closes its Details.
-function drawTool(serverName, name, rules, { choosing = false, warning = null } = {}) {
+// the gateway, or no longer lists it) closes its Details. Back from a step it slides in (`step`),
+// focus on the first control of `focus` there.
+function drawTool(serverName, name, rules, { warning = null, step = null, focus = [] } = {}) {
   const server = heldServer(current("gateway"), { kind: "mcp_server", name: serverName });
   const tool = server && (server.tool_list || []).find((t) => t.name === name);
   if (!tool) {
@@ -764,9 +956,9 @@ function drawTool(serverName, name, rules, { choosing = false, warning = null } 
     return;
   }
   const detail = (rules.tools || []).find((t) => t.name === name) || {};
-  const card = { ...toolCard(tool, server, { ...heldContext(), detail, rules, choosing }), warning };
-  openCard(card, { type: "tool", server: serverName, tool: name }, () => drawTool(serverName, name, rules, { choosing }), () => showTool(serverName, name));
-  focusChoice(choosing);
+  const card = toolCard(tool, server, { ...heldContext(), detail, rules, warning });
+  const shown = openCard(card, { type: "tool", server: serverName, tool: name }, () => drawTool(serverName, name, rules, { warning }), () => showTool(serverName, name), step);
+  if (step) shown.then(() => focusAfterStep(...focus));
 }
 
 // Refresh tools asks every held server for its tools; when it is done the page reads the

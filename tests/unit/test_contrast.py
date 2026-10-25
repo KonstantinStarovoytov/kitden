@@ -158,6 +158,14 @@ def test_facts_text_is_readable_in_details_in_both_themes():
                 assert contrast(theme[ink], theme[fill]) >= 4.5, (ink, fill)
 
 
+def test_a_fact_in_amber_is_readable_in_details_in_both_themes():
+    # A tool that may write says so in amber (--lamp-warn), on both panels.
+    assert ".facts dd.warn { color: var(--lamp-warn); }" in CSS
+    for theme in (LIGHT, DARK):
+        for fill in ("--panel-raised", "--panel"):
+            assert contrast(theme["--lamp-warn"], theme[fill]) >= 4.5, fill
+
+
 def test_the_find_chip_and_a_lit_list_row_are_readable_in_both_themes():
     # The chip sits on the search box (--inset); a lit List row's quiet words sit on the accent
     # tint and are --ink-2 there.

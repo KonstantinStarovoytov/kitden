@@ -5,7 +5,7 @@ import { loadLibraryFor, raceSlow, rowSel, rowTitle, shownRow } from "./library.
 import { fold } from "./motion.js";
 import { about, addButton, addOptions, addReach, mcpRows, whyNoAction } from "./offer.js";
 import { closePanel, header, isPanelOpen, openInfo, openPanel, panelState, swapContent } from "./panel.js";
-import { ALL_PROJECTS, callout, CLIENT_NAMES, CLIENT_ORDER, folderName, GATEWAY_NOTE, gatewayName, kitdenClients, mark, menuItems, optionAfter, optionParts, ROUTE_WORDS, socket, STATE_WORDS, toolsNode } from "./parts.js";
+import { ALL_PROJECTS, callout, CLIENT_NAMES, CLIENT_ORDER, folderName, GATEWAY_NOTE, gatewayName, kitdenClients, mark, ROUTE_WORDS, socket, STATE_WORDS, toolsNode } from "./parts.js";
 import { review } from "./review.js";
 import { current as currentModel, currentError, data, goTo, libraryChoice, projectPath, state } from "./store.js";
 import { toolsSection } from "./tools.js";
@@ -384,73 +384,16 @@ export function footerButtons({ lead, rest }, draw, commands = []) {
 }
 
 // Facts: a label and a value each, in two columns. A value is words or a node (client marks);
-// `accent` draws it in the accent color, for what applies in the picked project.
+// `accent` draws it in the accent color, for what applies in the picked project, and `warn` in
+// amber, for a tool that may write.
 export function factsBlock(rows) {
   const list = el("dl", "facts");
-  for (const { label, value, accent = false } of rows) {
-    const detail = el("dd", accent ? "accent" : null);
+  for (const { label, value, accent = false, warn = false } of rows) {
+    const detail = el("dd", accent ? "accent" : warn ? "warn" : null);
     if (typeof value === "string") detail.textContent = value;
     else detail.append(value);
     list.append(el("dt", null, label), detail);
   }
-  return list;
-}
-
-// The scope choice inside a Details column: one known project, never All projects, by folder name
-// with its own rules counted, as the project menu shows them. It starts on the picked project, or
-// the first. The list takes focus; Down, Up, Home and End move, Enter or a click picks
-// (`onPick(id)`), and Escape hides it and gives focus back to the action that opened it (its
-// data-focus key, `opener`).
-export function projectChoice(projects, picked, onPick, opener = null) {
-  // A picked project the choice does not offer stays out of it.
-  const start = projects.some((p) => p.id === picked) ? picked : "";
-  const items = menuItems(projects, start).filter((item) => item.id !== "");
-  const list = el("div", "where-list choice");
-  list.setAttribute("role", "listbox");
-  list.setAttribute("aria-label", "Projects");
-  list.tabIndex = 0;
-  list.dataset.focus = "choice";
-  const options = items.map((item, at) => {
-    const node = el("div", "where-option");
-    node.id = `choice-option-${at}`;
-    node.setAttribute("role", "option");
-    node.append(...optionParts(item));
-    node.addEventListener("click", () => onPick(item.id));
-    return node;
-  });
-  list.append(...options);
-  let active = Math.max(0, items.findIndex((item) => item.picked));
-  // The active option is the selected one: a choice here only adds its change to the tray.
-  const show = (at) => {
-    active = at;
-    options.forEach((node, i) => {
-      node.setAttribute("aria-selected", String(i === at));
-      node.classList.toggle("active", i === at);
-    });
-    if (!options[at]) return;
-    list.setAttribute("aria-activedescendant", options[at].id);
-    if (options[at].scrollIntoView) options[at].scrollIntoView({ block: "nearest" });
-  };
-  show(active);
-  list.addEventListener("keydown", (event) => {
-    if (event.altKey || event.ctrlKey || event.metaKey) return;
-    if (event.key === "Enter") {
-      event.preventDefault();
-      if (items[active]) onPick(items[active].id);
-    } else if (event.key === "Escape") {
-      // Only the choice closes: Escape does not reach the page's own handler for Details.
-      event.preventDefault();
-      event.stopPropagation();
-      list.hidden = true;
-      const back = opener ? withFocusKey(document, opener) : null;
-      if (back) back.focus();
-    } else {
-      const to = optionAfter(event.key, active, items.length);
-      if (to === null) return;
-      event.preventDefault();
-      show(to);
-    }
-  });
   return list;
 }
 
@@ -471,16 +414,17 @@ function cardButton({ label, run, body, note = null, primary = false }) {
 }
 
 // A card as the nodes openPanel shows, in the order of every Details card: the kind and Close, the
-// title with the id quiet under it, the facts, one sentence, a list (`list`, a node: a server's
-// switches), the actions stacked in the footer in order (`more` waits behind one More button,
+// title with the id quiet under it, the facts, a list (`list`, a node: a server's switches, a
+// tool's projects with rules of their own), one sentence, the actions stacked in the footer in
+// order (`more` waits behind one More button,
 // `after` is a quiet node under them), and the evidence folded last (`technical`, a node from
 // technical(rows)). At most one action is `primary`. Card builders return this plain object, so a
 // test reads its fields without a page.
 export function detailsCard({ kind, title, id = null, facts = [], why = null, list = null, actions = [], more = [], after = null, technical: evidence = null }) {
   const body = el("div", "body");
   if (facts.length) body.append(factsBlock(facts));
-  if (why) body.append(el("p", "why", why));
   if (list) body.append(list);
+  if (why) body.append(el("p", "why", why));
   const footer = el("footer", "stack");
   footer.append(...actions.map(cardButton));
   if (more.length) footer.append(moreButton(more.map(cardButton)));

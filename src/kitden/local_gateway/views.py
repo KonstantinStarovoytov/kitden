@@ -275,8 +275,9 @@ def tools_view(
     carries its count and last time, or None. `shared` is the state all projects get, which
     "for all projects" turns the other way. `chains` maps each known project's id to its chain;
     `projects` then says the server's and each tool's state in every one of them, as the gateway
-    decides it there (the rule state, without the server's switch on its tools), so "in one
-    project" offers only projects it would change."""
+    decides it there (the rule state, without the server's switch on its tools), so "in some
+    projects" offers only projects it would change, and which tools have a rule of the project's
+    own there (`own`, as `own_in` counts them)."""
     strict = strict_mode(settings, server)
     scopes = _scopes(settings, chain)
     counted = (calls or {}).get(server, {})
@@ -299,11 +300,18 @@ def tools_view(
             }
         )
     shared = state_in(settings, [], server, None)
+    rules = settings["rules"]["projects"]
     projects = [
         {
             "id": project,
             "server": state_in(settings, each, server, None),
             "tools": {t["name"]: state_in(settings, each, server, t["name"]) for t in listed},
+            # The project's own rules are kept by its folder, the first of its chain.
+            "own": [
+                t["name"]
+                for t in listed
+                if each and own_state(rules.get(each[0]), server, t["name"]) is not None
+            ],
         }
         for project, each in (chains or {}).items()
     ]

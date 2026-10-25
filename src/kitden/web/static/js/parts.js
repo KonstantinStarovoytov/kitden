@@ -24,7 +24,7 @@ export function targetWords(target, folder = folderName(target && target.project
 }
 // The project menu ---------------------------------------------------------------------------
 
-const FIND_PROJECT = "Find a project…";
+export const FIND_PROJECT = "Find a project…";
 
 // The menu's rows: "All projects" first and always there, then each project by its folder name
 // (no path), narrowed by `text`. `count`: "3 own rules" when the project has rules of its own.
@@ -59,7 +59,7 @@ export function optionAfter(key, at, count) {
   return null;
 }
 
-// The parts of one option row, in the project menu and in a Details choice: an icon (layers for
+// The parts of one option row in the project menu: an icon (layers for
 // All projects, a folder for a project), the name over its sub line, the count, and a check when
 // `check` is set.
 export function optionParts(item, check = false) {
