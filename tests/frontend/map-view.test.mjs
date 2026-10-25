@@ -583,6 +583,24 @@ test('a link whose block goes with it keeps fading with the block; no exit of it
   tick(180); assert.equal(link.parentNode, null);
 });
 
+test('the blend ends at the look the class gives, though a browser still reads the old opacity on the link itself', async () => {
+  const real = globalThis.getComputedStyle; const reads = [];
+  // A browser: while a node's transitions are on, its transition has just started and it reads the old look.
+  globalThis.getComputedStyle = (node) => { reads.push([node, node.style.transition]); return node.style.transition === 'none' ? real(node) : { strokeDasharray: 'none', strokeOpacity: '1' }; };
+  try {
+    const v = view();
+    await v.draw(TREE, drawn(TREE), { motion: 'none' });
+    const link = v.node('c1>s2'); const svg = link.parentNode; const count = svg.children.length;
+    const m = withLink({ leaving: true }); v.draw(m, drawn(m), {});
+    assert.deepEqual(link.animations.at(-1).keyframes, [{ strokeDasharray: '8 0', strokeOpacity: '1' }, { strokeDasharray: '4 4', strokeOpacity: '0.4' }]);
+    // The end look is read with transitions off, never on the link itself, which keeps its own.
+    const off = reads.filter(([, transition]) => transition === 'none');
+    assert.ok(off.length > 0 && off.every(([node]) => node !== link));
+    assert.ok(!link.style.transition);
+    assert.equal(svg.children.length, count);
+  } finally { globalThis.getComputedStyle = real; }
+});
+
 test('a link whose look changes without a new dash or opacity does not blend', async () => {
   const v = view();
   await v.draw(TREE, drawn(TREE), { motion: 'none' });

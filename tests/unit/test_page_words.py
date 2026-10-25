@@ -527,7 +527,8 @@ def test_gateway_says_its_lists_are_mcp_servers():
 
 
 def test_gateway_wires_do_not_fake_traffic():
-    # A wire draws once when its connection appears; nothing loops, Kitden cannot see traffic.
+    # A link moves only when it comes, goes or changes look; nothing loops, as Kitden cannot
+    # see traffic.
     css = (STATIC / "style.css").read_text()
     assert not any(
         ("map" in line or ".routes" in line) and "infinite" in line for line in css.splitlines()
@@ -610,6 +611,9 @@ def test_the_map_says_the_link_is_the_state():
     preview = rule("div.map .link.preview")
     assert "stroke-dasharray: 4 4" in preview and "stroke-opacity: 0.65" in preview
     assert "stroke-opacity: 0.4" in rule("div.map .link.leaving")
+    # A search dims every link, a lit bypass line too (it is lit at full strength otherwise).
+    assert "stroke-opacity: 0.25" in rule("div.map.finding .link")
+    assert "stroke-opacity: 0.25" in rule("div.map.finding .link.direct.lit")
     # A line to a server Kitden does not know to be on is dashed: it does not say "on".
     assert "div.map .link.direct.unk { stroke-dasharray: 3 3; }" in CSS
     assert 'const NOT_KNOWN = "Not known";' in script("gateway.js")

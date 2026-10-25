@@ -301,6 +301,19 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
     item.path.style.strokeDasharray = "";
   }
 
+  // The look a link has once its transitions end. Read on a copy of it with transitions off: read on
+  // the link itself, `stroke-opacity` is still the old one, as its transition has just started, and
+  // switching its own transitions off would make its colour snap.
+  function endLook(path) {
+    const copy = document.createElementNS(SVG, "path");
+    copy.setAttribute("class", path.getAttribute("class"));
+    copy.style.transition = "none";
+    svg.append(copy);
+    const look = dashLook(copy);
+    copy.remove();
+    return look;
+  }
+
   // The hover look and the × go at once.
   function unpoint() {
     clearTimeout(wait);
@@ -584,7 +597,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LIN
         item.path.setAttribute("class", look);
         item.path.classList.toggle("hov", key === pointed);
         if (was) {
-          const now = dashLook(item.path);
+          const now = endLook(item.path);
           if (now.strokeDasharray !== was.strokeDasharray || now.strokeOpacity !== was.strokeOpacity) animateTo(item.path, [was, now], { dur: BLEND_MS, ease: CALM });
         }
       }
