@@ -109,5 +109,8 @@ The parts, in order:
 ## Later
 
 - Skills per project: turn skills on or off for one project, as tools are today.
-- A living map: clients → config files → servers, plugins, skills → gateways.
+- A living map with connected comparison and access views. See the
+  [visual management UX concept](docs/research/visual-management-ux-concept-2026-10-22.md)
+  and the [final design](docs/research/visual-redesign-final-2026-10-23.md) in
+  `design/kitden.pen`; prototype and test it before implementation.
 - A shared setup for a small team.
