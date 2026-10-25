@@ -231,16 +231,18 @@ export function checkMark() {
 function trapFocus(event) {
   if (event.key !== "Tab" || !isPanelOpen() || docked) return;
   const drawer = $("#drawer");
-  // Only what is drawn: a closed Details hides everything but its summary. A toast shown while
-  // the panel stays open (after a tool switch) is in the loop too, so its Undo can be reached.
-  const note = $("#dock .toast");
-  const shown = note ? $$("button", note) : [];
-  const stops = [...$$("button:not([disabled]), a[href], select, input, textarea, summary, [tabindex]:not([tabindex='-1'])", drawer), ...shown]
-    .filter((node) => node.getClientRects().length > 0);
-  const inside = drawer.contains(document.activeElement) || Boolean(note && note.contains(document.activeElement));
+  // Only what is drawn: a closed Details hides everything but its summary. The dock stands above
+  // the scrim and the drawer, so what it shows (the tray's bar, or a toast after a tool switch) is
+  // in the loop too, and its Apply or Undo can be reached. The page has the dock before the
+  // drawer, so the loop does too: Tab leaves the drawer's last button for the dock's first.
+  const dock = $("#dock");
+  const visible = (node) => node.getClientRects().length > 0;
+  const own = $$("button:not([disabled]), a[href], select, input, textarea, summary, [tabindex]:not([tabindex='-1'])", drawer).filter(visible);
+  const stops = [...(dock ? $$("button:not([disabled])", dock).filter(visible) : []), ...own];
+  const inside = drawer.contains(document.activeElement) || Boolean(dock && dock.contains(document.activeElement));
   if (!stops.length || !inside) {
     event.preventDefault();
-    (stops[0] || drawer).focus();
+    (own[0] || stops[0] || drawer).focus();
     return;
   }
   const first = stops[0];

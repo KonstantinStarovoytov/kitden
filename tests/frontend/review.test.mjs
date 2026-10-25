@@ -390,10 +390,10 @@ function fakePage({ bar = false } = {}) {
       focus() {}, contains: () => false,
     };
   };
-  const nodes = { '#drawer': node(), '#scrim': node(), '#dock': node(), '#content': node(), '#said': node(), '#main': node(), '.shell': node(), '.review-bar': bar ? node() : null };
+  const nodes = { '#drawer': node(), '#scrim': node(), '#dock': node(), '#said': node(), '#main': node(), '.shell': node(), '.review-bar': bar ? node() : null };
   globalThis.document = {
     activeElement: null,
-    documentElement: { classList: { remove() {} } },
+    documentElement: { classList: { remove() {} }, style: { setProperty() {}, removeProperty() {} } },
     createElement: node,
     querySelector: (selector) => nodes[selector] ?? null,
     querySelectorAll: () => [],

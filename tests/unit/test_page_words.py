@@ -1936,10 +1936,11 @@ def test_the_toast_lives_in_the_dock_and_is_its_own_module():
     assert 'id="toast"' not in INDEX
     assert ".toast.show" not in CSS and "@keyframes countdown" not in CSS
     assert "shell.docked ~ .toast" not in CSS and ".toast .check" not in CSS
-    # The dock holds it; a live region that is always there says its words to a screen reader.
-    assert 'id="said"' in INDEX and 'role="status"' in INDEX
+    # The dock holds it. A live region that is always on the page says its words; the toast is not
+    # a second one, so a screen reader does not say it twice.
+    assert '<div class="sr-only" id="said" role="status" aria-live="polite"></div>' in INDEX
     assert ".dock .toast {" in CSS and ".dock .toast .life {" in CSS
-    assert 'setAttribute("role", "status")' in toast and '$("#said")' in toast
+    assert '$("#said")' in toast and 'setAttribute("role"' not in toast
     # Its life is 9 s, a linear line toward the left, and reduced motion does not shorten it.
     assert "LIFE_MS = 9000" in toast and 'easing: "linear"' in toast
     assert "D(LIFE_MS) || LIFE_MS" in toast
@@ -1947,7 +1948,23 @@ def test_the_toast_lives_in_the_dock_and_is_its_own_module():
     assert sorted(re.findall(r'from "(\./[^"]+)"', toast)) == ["./dom.js", "./motion.js"]
     shell = script("panel.js")
     assert 'export { hideToast, toast } from "./toast.js";' in shell
-    assert "TOAST_MS" not in shell and "#toast" not in shell and '$("#dock .toast")' in shell
+    assert "TOAST_MS" not in shell and "#toast" not in shell
     # Nothing reads the old element any more.
     for name in sorted(path.name for path in (STATIC / "js").glob("*.js")):
         assert '"#toast"' not in script(name), name
+
+
+def test_the_dock_stands_above_the_scrim_and_the_drawer_keeps_its_room():
+    # The page frame keeps no stacking context of its own: the dock (the bar and the toast) is
+    # above the scrim (20) and the Details drawer (21), so Apply and Undo can always be pressed.
+    assert "isolation" not in rule(".content")
+    assert "z-index: 22" in rule(".hint-dock")
+    assert "z-index: 20" in rule(".scrim") and "z-index: 21" in rule(".drawer")
+    # The room kept under the dock is on the page root, so the page and the modal drawer read it.
+    makeRoom = script("toast.js")
+    assert "const root = document.documentElement;" in makeRoom
+    assert 'root.style.setProperty("--dock-room"' in makeRoom
+    assert "var(--dock-room, 0px)" in rule(".drawer:not(.docked)")
+    # The Tab loop of the modal drawer takes the dock's buttons, the bar's and the toast's.
+    shell = script("panel.js")
+    assert 'const dock = $("#dock");' in shell and '"button:not([disabled])", dock' in shell

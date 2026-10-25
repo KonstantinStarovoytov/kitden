@@ -63,12 +63,18 @@ const all = (node) => [node, ...node.children.flatMap(all)];
 const fire = (node, type) => (node.listeners[type] || []).forEach((listener) => listener({}));
 
 const pages = {};
-for (const id of ['#dock', '#content', '#main', '#said']) {
+for (const id of ['#dock', '#main']) {
   pages[id] = fakeNode('div');
   pages[id].root = true;
 }
+// The live region keeps what was set and when, so a test can tell a change from a repeat.
+const saidLog = [];
+pages['#said'] = Object.assign(fakeNode('div'), { root: true });
+Object.defineProperty(pages['#said'], 'textContent', { get: () => saidLog.at(-1) ?? '', set: (value) => { saidLog.push(String(value)); } });
+const rootStyle = { setProperty(name, value) { this[name] = String(value); }, removeProperty(name) { delete this[name]; } };
 globalThis.document = {
   activeElement: null,
+  documentElement: { style: rootStyle },
   createElement: fakeNode,
   createElementNS: (namespace, tag) => fakeNode(tag),
   getElementById: () => null,
@@ -81,7 +87,7 @@ const dock = pages['#dock'];
 const toastNode = () => dock.children.find((node) => node.classList.contains('toast')) || null;
 const shape = (node) => node.children.map((child) => `${child.tag}${child.className ? `.${child.className}` : ''}`);
 const buttonOf = (label) => all(toastNode()).find((node) => node.tag === 'button' && node.textContent === label);
-const room = () => pages['#content'].style['--dock-room'];
+const room = () => rootStyle['--dock-room'];
 const quietly = (fn) => {
   const log = console.error;
   console.error = () => {};
@@ -95,8 +101,8 @@ function fresh() {
   hideToast({ now: true });
   onToastGone(null);
   dock.replaceChildren();
-  pages['#content'].style.removeProperty('--dock-room');
-  pages['#said'].textContent = '';
+  rootStyle.removeProperty('--dock-room');
+  saidLog.length = 0;
   globalThis.document.activeElement = null;
 }
 
@@ -110,7 +116,8 @@ test('the toast replaces the bar and offers Undo', () => {
   assert.deepEqual(dock.children, [toastNode()]);
   assert.equal(bar.isConnected, false);
   const node = toastNode();
-  assert.deepEqual([node.className, node.attributes.role], ['toast', 'status']);
+  // The page's live region speaks it; the toast is not a second one.
+  assert.deepEqual([node.className, node.attributes.role], ['toast', undefined]);
   assert.deepEqual(shape(node), ['span.tk', 'span', 'button.btn small', 'i.life']);
   const [tick, words, undo] = node.children;
   assert.equal(tick.children[0].dataset.icon, 'circle-check');
@@ -254,21 +261,43 @@ test('an action that fails is reported, and the toast has gone', async () => {
   assert.equal(toastNode(), null);
 });
 
-test('a new toast replaces the old one at once, and a screen reader hears each', () => {
+test('a new toast replaces the old one at once, and a screen reader hears each', (t) => {
   fresh();
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
   toast('Applied', () => {}, { ok: true });
   const first = toastNode();
+  t.mock.timers.tick(1);
   assert.equal(pages['#said'].textContent, 'Applied');
   const undo = buttonOf('Undo');
   undo.focus();
   toast('Undone. The previous settings are back.', null, { ok: true });
   assert.equal(first.isConnected, false);
   assert.deepEqual(dock.children, [toastNode()]);
+  t.mock.timers.tick(1);
   assert.equal(pages['#said'].textContent, 'Undone. The previous settings are back.');
   // Focus that was in the old one goes to the page, not nowhere.
   assert.equal(globalThis.document.activeElement, pages['#main']);
   hideToast();
-  assert.equal(pages['#said'].textContent, '', 'the next toast with the same words is a change again');
+  assert.equal(pages['#said'].textContent, '');
+});
+
+test('the same words twice are a change again: the region is emptied, and the words come in a later task', (t) => {
+  fresh();
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  toast('Undone. The previous settings are back.', null, { ok: true });
+  t.mock.timers.tick(1);
+  toast('Undone. The previous settings are back.', null, { ok: true });
+  // Still the same task: the region is empty, so the words that come next are a change.
+  assert.equal(pages['#said'].textContent, '');
+  t.mock.timers.tick(1);
+  assert.equal(pages['#said'].textContent, 'Undone. The previous settings are back.');
+  assert.deepEqual(saidLog, ['Undone. The previous settings are back.', '', 'Undone. The previous settings are back.']);
+  // A toast that has gone before its words came never says them.
+  hideToast();
+  toast('Applied', () => {}, { ok: true });
+  hideToast();
+  t.mock.timers.tick(5);
+  assert.equal(pages['#said'].textContent, '');
 });
 
 test('the page keeps room under the toast and gives it back when the dock is empty', (t) => {

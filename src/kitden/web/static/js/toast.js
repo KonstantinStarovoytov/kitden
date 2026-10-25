@@ -25,22 +25,27 @@ export function onToastGone(fn) {
 
 const later = (fn, ms) => (ms > 0 ? setTimeout(fn, ms) : fn());
 
-// The end of a long page must not sit under what the dock shows: while the dock shows a bar or a
-// toast, the page keeps room at its bottom as high as that plus the dock's 46 px offset
-// (style.css, `.page`). An empty dock takes the room back.
+// Keeps room for whatever the dock shows, a bar (dock.js) or a toast: as high as it is plus the dock's
+// 46 px offset. The room is `--dock-room` on the page root, so the page's bottom padding and the
+// modal Details drawer's bottom both read it (style.css): nothing under the dock is hidden by it.
+// An empty dock gives the room back.
 export function makeRoom() {
-  const page = $("#content");
+  const root = document.documentElement;
   const node = $("#dock").lastElementChild;
-  if (node) page.style.setProperty("--dock-room", `${node.offsetHeight + 46}px`);
-  else page.style.removeProperty("--dock-room");
+  if (node) root.style.setProperty("--dock-room", `${node.offsetHeight + 46}px`);
+  else root.style.removeProperty("--dock-room");
 }
 
-// A screen reader may not announce a node that arrives with role="status", so its words also go to
-// a live region that is always on the page (index.html). It is emptied when the toast goes, so the
-// same words next time are a change again.
+// A screen reader may not announce a node that arrives with a role, so the toast has none and its
+// words go to a live region that is always on the page (index.html). The region is emptied first
+// and the words come in a later task, so the same words twice are a change again.
+let saying = null;
 function say(text) {
   const live = $("#said");
-  if (live) live.textContent = text;
+  if (!live) return;
+  clearTimeout(saying);
+  if (live.textContent) live.textContent = "";
+  if (text) saying = setTimeout(() => { live.textContent = text; }, 0);
 }
 
 // The toast leaves: it fades and goes down 10 px (160 ms ease-in), and is removed by time, not by
@@ -133,7 +138,6 @@ export function toast(text, onUndo, { ok = false, label = "Undo", extra = null }
   hideToast({ now: true });
   const host = $("#dock");
   const node = el("div", "toast");
-  node.setAttribute("role", "status");
   if (ok) {
     const tick = el("span", "tk");
     tick.append(icon("circle-check", 16));

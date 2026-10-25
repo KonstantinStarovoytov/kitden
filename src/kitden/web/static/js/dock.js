@@ -315,6 +315,7 @@ function enterBar(view) {
   host.append(bar);
   shown = build(view, null, view.rows.length);
   patch(view, { animate: false });
+  // The page's room sizes itself to whatever the dock shows, the bar or a toast (makeRoom, toast.js).
   makeRoom();
   animateTo(bar, [{ opacity: 0, transform: "translateY(18px) scale(.97)" }, { opacity: 1, transform: "none" }], { dur: 220 });
   react(view, true);
@@ -480,6 +481,7 @@ export function initDock() {
   onTray(drawTray);
   // A toast that goes by itself leaves the dock empty: a tray that still has rows draws its bar.
   onToastGone(drawTray);
-  // A narrower window can wrap the bar's words, so its height changes.
+  // A narrower window can wrap the bar's words, so its height changes; makeRoom (toast.js) sizes
+  // the page's room for whatever the dock shows.
   if (typeof addEventListener === "function") addEventListener("resize", makeRoom);
 }

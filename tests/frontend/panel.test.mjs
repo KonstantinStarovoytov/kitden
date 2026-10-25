@@ -970,26 +970,44 @@ test('Tab is not trapped in the column, and Escape closes it', () => {
   }
 });
 
-test('Tab in the drawer also reaches the toast in the dock', () => {
+test('Tab in the drawer also reaches what the dock shows, the bar or a toast, in the page\'s order', () => {
   const page = keyboardPage();
   const find = document.querySelector;
   const stop = (name) => ({ name, getClientRects: () => [{}], focus() { document.activeElement = this; } });
-  const [first, undo] = [stop('first'), stop('undo')];
-  const toast = { querySelectorAll: () => [first, undo], contains: (node) => node === first || node === undo };
-  document.querySelector = (selector) => (selector === '#dock .toast' ? toast : find(selector));
+  const [near, dockLast, own, ownLast] = [stop('dock first'), stop('dock last'), stop('drawer first'), stop('drawer last')];
+  const asked = [];
+  const dock = {
+    querySelectorAll: (selector) => { asked.push(selector); return [near, dockLast]; },
+    contains: (node) => node === near || node === dockLast,
+  };
+  const drawer = document.querySelector('#drawer');
+  drawer.querySelectorAll = () => [own, ownLast];
+  drawer.contains = (node) => node === own || node === ownLast;
+  document.querySelector = (selector) => (selector === '#dock' ? dock : find(selector));
   try {
     initPanel();
     page.media.matches = false;
     openPanel([]);
-    // On the toast's last button, Tab goes round to its first: the toast is in the loop.
-    undo.focus();
+    // The dock comes before the drawer on the page, so the loop does: from the drawer's last
+    // button Tab goes to the dock's first, and Shift+Tab from there comes back.
+    ownLast.focus();
     assert.equal(page.press('Tab').prevented, true);
-    assert.equal(document.activeElement, first);
+    assert.equal(document.activeElement, near);
     assert.equal(page.press('Tab', { shiftKey: true }).prevented, true);
-    assert.equal(document.activeElement, undo);
-    // No toast, no stops: Tab goes to the drawer.
-    document.querySelector = find;
+    assert.equal(document.activeElement, ownLast);
+    // In the middle the browser's own order does the work; a turned-off button is not asked for.
+    dockLast.focus();
+    assert.equal(page.press('Tab').prevented, false);
+    assert.ok(asked.every((selector) => selector === 'button:not([disabled])'), asked.join());
+    // Focus outside starts at the drawer's own first button.
+    document.activeElement = null;
     assert.equal(page.press('Tab').prevented, true);
+    assert.equal(document.activeElement, own);
+    // An empty dock adds no stops: the drawer's last goes round to its first.
+    dock.querySelectorAll = () => [];
+    ownLast.focus();
+    assert.equal(page.press('Tab').prevented, true);
+    assert.equal(document.activeElement, own);
     page.press('Escape');
   } finally {
     leaveDockTest();

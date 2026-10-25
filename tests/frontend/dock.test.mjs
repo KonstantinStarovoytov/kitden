@@ -9,12 +9,12 @@ const reduce = (flag) => { motionQuery.matches = flag; };
 
 // A small tree of stand-in nodes: enough of the DOM for the bar, the toast and the side panel.
 const textNode = (value) => ({ nodeType: 3, textContent: String(value), parent: null });
-// How tall the bar is: its text, and a row of the list on top of that.
+// How tall the bar is: its text, and a row of the list on top of that. A toast is shorter than a bar.
 // While a size animation runs, the browser reports its animated height, not the natural one.
 const running = (run) => !run.cancelled && Date.now() - run.startedAt < run.options.duration;
 const rects = (node) => {
   const sizing = node.animations.findLast((run) => run.frames[0].height && running(run));
-  return { width: 380, height: sizing ? parseFloat(sizing.frames[0].height) : 60 + 50 * all(node).filter((n) => n.tag === 'li').length, bottom: 0 };
+  return { width: 380, height: sizing ? parseFloat(sizing.frames[0].height) : node.classList.contains('toast') ? 40 : 60 + 50 * all(node).filter((n) => n.tag === 'li').length, bottom: 0 };
 };
 function fakeNode(tag) {
   const classes = new Set();
@@ -91,15 +91,18 @@ const buttonsOf = (root) => tagged(root, 'button');
 const button = (root, label) => buttonsOf(root).find((node) => labelOf(node) === label || node.textContent === label);
 
 const pages = {};
-for (const id of ['#dock', '#drawer', '#scrim', '#said', '#main', '#content', '.shell']) {
+for (const id of ['#dock', '#drawer', '#scrim', '#said', '#main', '.shell']) {
   pages[id] = fakeNode('div');
   pages[id].root = true;
 }
 const listeners = new Map();
+// The page's root holds the room kept for the dock (--dock-room).
+const rootStyle = { setProperty(name, value) { this[name] = String(value); }, removeProperty(name) { delete this[name]; } };
+const room = () => rootStyle['--dock-room'];
 globalThis.document = {
   activeElement: null,
   hidden: false,
-  documentElement: { classList: { add() {}, remove() {} } },
+  documentElement: { classList: { add() {}, remove() {} }, style: rootStyle },
   createElement: fakeNode,
   createElementNS: (namespace, tag) => fakeNode(tag),
   getElementById: (id) => (id === 'content' ? { scrollTop: 0 } : null),
@@ -184,7 +187,7 @@ async function fresh() {
   pages['#dock'].replaceChildren();
   pages['#drawer'].replaceChildren();
   pages['#drawer'].classList.remove('open');
-  pages['#content'].style.removeProperty('--dock-room');
+  rootStyle.removeProperty('--dock-room');
   panelState.current = null;
   calls.length = 0;
   replies.clear();
@@ -344,10 +347,9 @@ test('appliedToast says Applied 3 changes with Undo all, and Undo all undoes the
 
 test('a tray change that draws a bar replaces a toast at once', async () => {
   await fresh();
-  const room = () => pages['#content'].style['--dock-room'];
   toast('Undone. The previous settings are back.', null, { ok: true });
   const shown = toastNode();
-  assert.equal(room(), '106px'); // the toast's 60 px and the dock's 46 px offset
+  assert.equal(room(), '86px'); // the toast's 40 px and the dock's 46 px offset
   queue(PREVIEW, previewed('c1'));
   await addToTray(add('github'));
   assert.equal(shown.isConnected, false);
@@ -361,15 +363,18 @@ test('a toast takes the bar\'s place while the tray keeps its rows, and the bar 
   queue(PREVIEW, previewed('c1'), previewed('c2'));
   await addToTray(add('github'));
   const first = bar();
+  assert.equal(room(), '106px');
   toast('Could not find this item in the Library.');
   assert.equal(first.isConnected, false);
   assert.deepEqual(pages['#dock'].children, [toastNode()]);
   assert.equal(tray.rows.length, 1);
+  assert.equal(room(), '86px', 'the room follows the toast');
   // The toast has gone: the bar is drawn again from the tray, with its Apply.
   hideToast();
   assert.equal(toastNode(), null);
   assert.ok(button(bar(), 'Apply'), 'the bar is back');
   assert.equal(tray.rows.length, 1);
+  assert.equal(room(), '106px', 'the room follows the bar');
   // A toast over the bar and then a tray change: the new bar replaces the toast, and has both rows.
   toast('Could not find this item in the Library.');
   await addToTray(add('neon'));
@@ -796,7 +801,6 @@ test('the line follows the place without drawing the bar in again', async () => 
 
 test('the page keeps room under the bar while the dock shows one', async () => {
   await fresh();
-  const room = () => pages['#content'].style['--dock-room'];
   queue(PREVIEW, previewed('c1'), previewed('c2'));
   await addToTray(add('github'));
   assert.equal(room(), '106px'); // the bar's 60 px and the dock's 46 px offset
