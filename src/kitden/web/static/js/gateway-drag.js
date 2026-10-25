@@ -22,8 +22,9 @@ export function movingOn() {
   return drag && drag.open ? { drop: { name: drag.name, kind: drag.kind } } : {};
 }
 
-// The row of a dropped move is still being asked: in the tray, without its part yet.
-const asked = (key) => tray.rows.some((row) => row.key === key && !row.part);
+// The row of a dropped move is still being asked: in the tray without its part yet, while the tray
+// asks. After a refused preview it may have no part while nothing is asked.
+const asked = (key) => tray.phase === "asking" && tray.rows.some((row) => row.key === key && !row.part);
 
 // gateway.js drew the map in `view`, from `model` laid out as `layout`. A block off its place stays
 // where the map holds it: with the pointer, or on the slot while its move is asked. Once its row

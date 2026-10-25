@@ -1103,8 +1103,10 @@ def test_client_checkboxes_come_from_one_named_part():
 
 
 def test_apply_waits_for_work_not_for_a_timer():
-    # The review in Details; the tray's bar in the dock rests and shakes on purpose (dock.js).
-    code, css = "\n".join(script(name) for name in PANEL), (STATIC / "style.css").read_text()
+    # The review in Details and the tray's Apply; the tray's bar in the dock rests and shakes on
+    # purpose (dock.js).
+    code = "\n".join(script(name) for name in (*PANEL, "tray.js"))
+    css = (STATIC / "style.css").read_text()
     assert "520 - (performance.now()" not in code and "wait(450)" not in code
     assert "shake(" not in code
     assert ".drawer.open .body > *:nth-child(2)" not in css and "line-in" not in css
@@ -1113,8 +1115,9 @@ def test_apply_waits_for_work_not_for_a_timer():
 
 
 def test_apply_sets_its_label_at_once_and_a_failure_focuses_the_button():
-    # The review in Details; the tray's bar in the dock rests on purpose (dock.js).
-    code = "\n".join(script(name) for name in PANEL)
+    # The review in Details and the tray's Apply; the tray's bar in the dock rests on purpose
+    # (dock.js).
+    code = "\n".join(script(name) for name in (*PANEL, "tray.js"))
     flow = code.split("function brokeAfterAnswer")[1].split("function showEffect")[0]
     # No timer in the Apply flow, so a late label cannot land on a button already reset.
     assert "setTimeout" not in flow and "const wait" not in code

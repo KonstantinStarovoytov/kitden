@@ -646,6 +646,22 @@ test('two moves in the tray show two preview blocks', () => {
   assert.ok(!keys(asked).includes('client:claude_code>outside:move:github direct'));
 });
 
+test('the List shows no block of the tray and counts none', () => {
+  const plain = listRows(gatewayTree(MEDIUM_VIEW, OPTS), new Set());
+  // A move that has answered (a preview block) and one still being asked (the slot).
+  for (const part of [{}, null]) {
+    const rows = listRows(gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [moveRow(GITHUB, part)] }), new Set());
+    assert.ok(!rows.some((r) => /^(preview|slot):/.test(r.id)), JSON.stringify(part));
+    assert.equal(rows.find((r) => r.id === 'gateway:kitden').meta, '2 servers');
+    assert.deepEqual(rows.map((r) => r.id), plain.map((r) => r.id));
+  }
+  // A drag's slot is no row either; a group that would hold only a preview has no row.
+  const onlyLocal = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers: [MEDIUM_VIEW.gateways[0].servers[0]] }] };
+  const rows = listRows(gatewayTree(onlyLocal, { ...OPTS, rows: [moveRow(GITHUB)], drop: { name: 'docs', kind: 'local' } }), new Set());
+  assert.ok(!rows.some((r) => r.id === 'group:kitden:remote' || /^(preview|slot):/.test(r.id)));
+  assert.equal(rows.find((r) => r.id === 'gateway:kitden').meta, '1 server');
+});
+
 test('a removal in the tray makes its link leave', () => {
   const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [trayRow(REMOVE_FILES)] });
   const link = linkOf(tree, 'gateway:kitden>held:kitden:files');
@@ -679,9 +695,90 @@ test('a tool turned off in the tray makes its link leave', () => {
 
 test('the map draws no rows once the change is applied', () => {
   const rows = [moveRow(GITHUB)];
-  assert.equal(rowsOnMap({ phase: 'ready', rows }), rows);
-  assert.equal(rowsOnMap({ phase: 'applying', rows }), rows);
+  assert.deepEqual(rowsOnMap({ phase: 'ready', rows }), rows);
+  assert.deepEqual(rowsOnMap({ phase: 'applying', rows }), rows);
   assert.deepEqual(rowsOnMap({ phase: 'applied', rows }), []);
+  // A row with no part yet is drawn only while the tray asks for it.
+  const asked = [moveRow(GITHUB, null), moveRow(LOCAL_DOCS)];
+  assert.deepEqual(rowsOnMap({ phase: 'asking', rows: asked }), asked);
+  assert.deepEqual(rowsOnMap({ phase: 'failed', rows: asked }), [asked[1]]);
+});
+
+test('a move left with no answer, and nothing asked, draws nothing and its block goes home', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const heard = {};
+  globalThis.document = { addEventListener: (type, fn) => { (heard[type] ||= []).push(fn); }, removeEventListener() {}, documentElement: { classList: { add() {}, remove() {} } }, createElement: (tag) => ({ tag }) };
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  data.scope.gateway = '';
+  try {
+    const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+    const layout = layoutTree(tree, { open: new Set(), narrow: false });
+    const held = [];
+    const node = { dataset: { focus: 'block:outside:move:github' }, getBoundingClientRect: () => ({ left: 0, top: 0 }), querySelector: () => null, querySelectorAll: () => [], setAttribute() {}, removeAttribute() {}, append() {} };
+    const view = { node: () => node, hold: (id, at, how) => held.push([id, at, how]), letGo: (id) => held.push(['letGo', id]), box: { isConnected: true, classList: { toggle() {}, remove() {} } }, area: { getBoundingClientRect: () => ({ left: 0, top: 0 }) } };
+    placeMoved({ view, model: tree, layout });
+    // The drop is asked; a second add drops that ask, and both it and the ask for the rest are
+    // refused. The move stays in the tray with no part, and nothing is asked any more.
+    let late;
+    queue(PREVIEW, (sent) => new Promise((resolve) => { late = () => resolve(batch('c1')(sent)); }));
+    queue(PREVIEW, { status: 422, json: { detail: 'No.' } }, { status: 422, json: { detail: 'Still no.' } });
+    const home = layout.blocks.find((b) => b.id === 'outside:move:github');
+    const files = layout.blocks.find((b) => b.id === 'held:kitden:files');
+    pressGrip({ button: 0, target: { closest: () => node }, clientX: home.x + 10, clientY: home.y + 10 });
+    heard.pointermove[0]({ clientX: home.x + 16, clientY: home.y + 10 });
+    heard.pointermove[0]({ clientX: files.x + 10, clientY: files.y + 10 });
+    heard.pointerup[0]({ type: 'pointerup', clientX: files.x + 10, clientY: files.y + 10 });
+    assert.equal(await addToTray(REMOVE_FILES), false);
+    late();
+    await flush();
+    assert.deepEqual([tray.phase, tray.rows.map((r) => [r.body.action, r.part])], ['failed', [['gateway.move', null]]]);
+    // No slot and no preview: github is back outside with its line and its grip.
+    const now = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: rowsOnMap(tray) });
+    assert.ok(!block(now, 'slot:github') && !block(now, 'preview:github'));
+    assert.ok(keys(now).includes('client:claude_code>outside:move:github direct') && block(now, 'outside:move:github').grip);
+    // The block the drop parked on the slot goes home.
+    held.length = 0;
+    placeMoved({ view, model: now, layout: layoutTree(now, { open: new Set(), narrow: false }) });
+    assert.deepEqual(held, [['letGo', 'outside:move:github']]);
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    await freshTray();
+  }
+});
+
+test('while the tray is written a link offers no × and a press takes nothing out', async () => {
+  await freshTray();
+  queue(PREVIEW, batch('c1'), batch('c2'));
+  await addToTray(dropBody(GITHUB, MEDIUM_VIEW));
+  await addToTray(REMOVE_FILES, { icon: 'x' });
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: rowsOnMap(tray) });
+  const links = ['gateway:kitden>held:kitden:files', 'gateway:kitden>preview:github', 'held:kitden:files>tool:files/read_file'];
+  let verify;
+  queue('/api/changes/c2/apply', () => new Promise((resolve) => { verify = () => resolve({ status: 200, json: { id: 'c2', state: 'verified', steps: [] } }); }));
+  globalThis.document = { activeElement: null, body: {}, querySelector: () => ({ querySelectorAll: () => [] }), addEventListener() {}, removeEventListener() {} };
+  try {
+    const applying = applyTray();
+    assert.equal(tray.phase, 'applying');
+    // No link has a × (a hit takes the pointer only while there is a tip), and nothing leaves.
+    assert.deepEqual(links.map((key) => linkTip(tree, linkOf(tree, key), '')), ['', '', '']);
+    pressBlock(tree, 'preview:github');
+    clickLink(tree, linkOf(tree, 'gateway:kitden>held:kitden:files'));
+    await removeLink(tree, linkOf(tree, 'gateway:kitden>held:kitden:files'), '');
+    await flush();
+    assert.deepEqual([tray.phase, tray.rows.length], ['applying', 2]);
+    verify();
+    await applying;
+    assert.equal(linkTip(tree, linkOf(tree, links[0]), ''), '');
+    // Once it has landed, the links offer their × again.
+    endApplied();
+    const now = gatewayTree(MEDIUM_VIEW, OPTS);
+    assert.equal(linkTip(now, linkOf(now, links[0]), ''), 'Remove files from the gateway');
+  } finally {
+    await freshTray();
+    delete globalThis.document;
+  }
 });
 
 test('a press on a preview block takes its row out', async () => {
@@ -771,9 +868,9 @@ test('a drop adds a move to the tray', async (t) => {
     heard.pointermove[0]({ clientX: home.x + 16, clientY: home.y + 10 });
     heard.pointermove[0]({ clientX: files.x + 10, clientY: files.y + 10 });
     heard.pointerup[0]({ type: 'pointerup', clientX: files.x + 10, clientY: files.y + 10 });
-    // The same move as "Move into the gateway…", in the tray at once.
+    // The same move as "Move into the gateway…", in the tray at once, with the move's arrow.
     const body = dropBody(GITHUB, MEDIUM_VIEW);
-    assert.deepEqual(tray.rows.map((r) => [r.key, r.body, r.part]), [[keyFor(body), body, null]]);
+    assert.deepEqual(tray.rows.map((r) => [r.key, r.body, r.part, r.icon]), [[keyFor(body), body, null, 'arrow-right']]);
     // Until it answers the slot shows, and the block waits on it.
     const asked = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: rowsOnMap(tray) });
     const askedLayout = layoutTree(asked, { open: new Set(), narrow: false });

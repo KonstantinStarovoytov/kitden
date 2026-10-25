@@ -28,6 +28,8 @@ const OUTSIDE_ICONS = { move: "remote", local: "local", plugin: "plugin" };
 const KINDS = [["remote", "Remote", "cloud"], ["local", "Local", "hard-drive"]];
 // A gateway's block, or on a first run the slot of the Kitden gateway.
 const GATEWAY_KINDS = ["gateway", "slot"];
+// What the tray puts in a gateway's group on the map: the List shows none of it.
+const ON_MAP_ONLY = ["preview", "slot"];
 // What a client or an outside server says when Kitden does not know its state.
 const NOT_KNOWN = "Not known";
 // A tool's row says "Read" or "Write" only when the server says so; a guess from its name says
@@ -98,7 +100,7 @@ export function renderGateway(main, { again = false } = {}) {
   const mode = viewMode(state, serverCount(view));
   const seg = modeSwitch(mode);
   head.append(seg);
-  const model = treeFor(view);
+  const model = treeFor(view, mode);
   // The search finds here: matches light up, the rest dims, and what hides a match opens (S.6).
   // It changes nothing in a client and moves no Details.
   const found = state.q.trim() ? findIn(model, state.q) : null;
@@ -114,16 +116,20 @@ export function renderGateway(main, { again = false } = {}) {
   return found;
 }
 
-// The Gateway as one tree, as the page shows it now: what Kitden read, the picked project, the
-// tray's rows and a drag.
-function treeFor(view) {
-  return gatewayTree(view, { setup: data.setupServer, clients: data.clients, held: liveHeld(view), picked: state.project, rows: rowsOnMap(tray), ...movingOn() });
+// The Gateway as one tree, as the page shows it now: what Kitden read and the picked project, and
+// on the map (`mode`) the tray's rows and a drag. The List shows what is set up, so its search
+// finds only that.
+function treeFor(view, mode = "map") {
+  const onMapOnly = mode === "map" ? { rows: rowsOnMap(tray), ...movingOn() } : {};
+  return gatewayTree(view, { setup: data.setupServer, clients: data.clients, held: liveHeld(view), picked: state.project, ...onMapOnly });
 }
 
 // The tray rows the map draws: none once their change is applied, as the page then reads the result
-// and shows the servers as they are.
+// and shows the servers as they are. A row with no part yet is drawn only while it is asked: after
+// a refused preview it has none, and nothing is asked for it.
 export function rowsOnMap(t) {
-  return t.phase === "applied" ? [] : t.rows;
+  if (t.phase === "applied") return [];
+  return t.phase === "asking" ? t.rows : t.rows.filter((row) => row.part);
 }
 
 function noGateway() {
@@ -362,15 +368,17 @@ function leaveLinks(links, kitden, rows, picked) {
 // The List's rows, in order, from the tree: a "Clients" group of client rows; each gateway's own
 // row, then its Remote and Local group rows with its servers and, under an open server (`open`),
 // its tools; then the group outside the gateway. A group or a gateway the person folded
-// (`folded`) shows no rows under it. Each row: { id, parent, depth, kind, name, usedBy (client
-// ids), tools ("3 of 4 on"), meta (quiet words after the name), action ("open" for ›, "move" for
-// "Move in…"), tag, scope (a tool's own rule), state, said (the state word a screen reader hears
-// for a server or tool, none where its words say it), expanded (only on a row that folds), group }.
+// (`folded`) shows no rows under it. What the tray draws on the map (a preview block, the slot of
+// a move) is no row of the List, and a group that holds only that has no row either. Each row:
+// { id, parent, depth, kind, name, usedBy (client ids), tools ("3 of 4 on"), meta (quiet words
+// after the name), action ("open" for ›, "move" for "Move in…"), tag, scope (a tool's own rule),
+// state, said (the state word a screen reader hears for a server or tool, none where its words say
+// it), expanded (only on a row that folds), group }.
 export function listRows(model, open = new Set(), folded = new Set()) {
   const rows = [];
   const children = new Map();
   for (const block of model.blocks) {
-    if (!block.parent) continue;
+    if (!block.parent || ON_MAP_ONLY.includes(block.kind)) continue;
     if (!children.has(block.parent)) children.set(block.parent, []);
     children.get(block.parent).push(block);
   }
@@ -386,8 +394,9 @@ export function listRows(model, open = new Set(), folded = new Set()) {
     if (expanded) items.forEach(draw);
   };
   group("group:clients", "Clients", null, 0, model.blocks.filter((b) => b.kind === "client"), (b) => row(b, "group:clients", 1, { meta: b.meta }));
-  for (const gateway of model.blocks.filter((b) => GATEWAY_KINDS.includes(b.kind))) {
-    const groups = model.blocks.filter((b) => b.kind === "group" && b.under === gateway.id);
+  // The blocks of the Gateway column; the slot of a move sits in a group, so it is not one.
+  for (const gateway of model.blocks.filter((b) => GATEWAY_KINDS.includes(b.kind) && b.column === "gateway")) {
+    const groups = model.blocks.filter((b) => b.kind === "group" && b.under === gateway.id && children.has(b.id));
     const linked = reaches(gateway.id);
     const count = groups.reduce((n, g) => n + (children.get(g.id) || []).length, 0);
     const expanded = groups.length ? !folded.has(gateway.id) : undefined;
@@ -539,9 +548,15 @@ function rowOfLink(model, link) {
   return (shown && shown.row) || null;
 }
 
+// The tray's change is being written or has just been: as in the bar, nothing can be added to it
+// or taken out of it now.
+const writing = () => tray.phase === "applying" || tray.phase === "applied";
+
 // What the × of a link does, in words: a link the tray draws is taken out of it, and the map acts
-// on the others as linkRemoval says. "" where it does not act on the link.
+// on the others as linkRemoval says. "" where it does not act on the link, and while the tray's
+// change is written: the link then has no ×.
 export function linkTip(model, link, picked) {
+  if (writing()) return "";
   if (rowOfLink(model, link)) return TAKE_OUT;
   return linkRemoval(model, link, picked)?.tip ?? "";
 }
@@ -571,8 +586,10 @@ export function clickLink(model, link) {
 }
 
 // A row taken out on the map. A move's preview block and link go with it, so focus on either goes
-// to the server outside the gateway that it would have moved.
+// to the server outside the gateway that it would have moved. Nothing happens while the tray's
+// change is written.
 function takeOutHere(model, key) {
+  if (writing()) return Promise.resolve();
   const box = onMap.view ? onMap.view.box : null;
   const shown = model.blocks.find((b) => b.row === key && b.outside);
   const focus = box && shown ? document.activeElement?.dataset?.focus : null;
