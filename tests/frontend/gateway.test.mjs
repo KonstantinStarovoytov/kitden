@@ -270,6 +270,11 @@ test("under an open server, its tools: a mark, the name, and Read, Write or May 
     ['read_file', 'on', 'Read', 3], ['write_file', 'on', 'Write', 3], ['delete_file', 'off', 'May write', 3], ['search_files', 'on', null, 3]]);
 });
 
+test('every group row of the List has the icon of its caption on the map', () => {
+  const rows = listRows(gatewayTree(MEDIUM_VIEW, OPTS), new Set());
+  assert.deepEqual(rows.filter((r) => r.group).map((r) => [r.name, r.icon]), [['Clients', 'monitor'], ['Remote', 'cloud'], ['Local', 'hard-drive'], ["Outside the gateway · calls skip Kitden's rules", 'info']]);
+});
+
 test('a folded group hides its rows', () => {
   const rows = listRows(gatewayTree(MEDIUM_VIEW, OPTS), new Set(), new Set(['group:outside', 'gateway:kitden']));
   assert.equal(rows.find((r) => r.id === 'group:outside').expanded, false);
@@ -1882,6 +1887,8 @@ test('the map enters when it is new, jumps for a new project or width, and moves
   assert.equal(mapMotion({ fresh: false, projectChanged: true, narrowChanged: false }), 'none');
   assert.equal(mapMotion({ fresh: false, projectChanged: false, narrowChanged: true }), 'none');
   assert.equal(mapMotion({ fresh: false, projectChanged: false, narrowChanged: false }), 'move');
+  // The view switch brings the map in as one piece, so its blocks do not rise one by one too.
+  assert.equal(mapMotion({ fresh: true, projectChanged: false, narrowChanged: false, switched: true }), 'none');
 });
 
 test('a link the map can act on says what its × does', () => {

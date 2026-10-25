@@ -69,7 +69,7 @@ function element(tagName) {
   return node;
 }
 const pages = {};
-for (const id of ['#main', '#drawer', '#scrim', '.shell', '#dock']) {
+for (const id of ['#main', '#drawer', '#scrim', '.shell', '#dock', '#find-chip']) {
   pages[id] = element('DIV');
   pages[id].root = true;
 }
@@ -101,7 +101,7 @@ const batch = (id) => (sent) => ({
   },
 });
 
-const { renderGateway } = await import('../../src/kitden/web/static/js/gateway.js');
+const { drawChip, renderGateway } = await import('../../src/kitden/web/static/js/gateway.js');
 const { dropBody } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { arrival, data, setRenderer, state } = await import('../../src/kitden/web/static/js/store.js');
 const { addToTray, cancelTray, keyFor, takeOut } = await import('../../src/kitden/web/static/js/tray.js');
@@ -452,4 +452,174 @@ test('a turn during a search stays when the tray draws the map again', async (t)
   press(box, 'block:more:group:outside');
   press(box, 'block:more:group:outside');
   settle();
+});
+
+// Map <-> List (gateway-notes 7.1): the view that shows leaves (120 ease-in, up 4 px), the page
+// then draws the other, which comes in (260 CALM, up from 6 px). The selection lets go.
+const listBox = () => main.children.find((n) => n.getAttribute('role') === 'treegrid') || null;
+const tick = () => new Promise((resolve) => setImmediate(resolve));
+const OUT = [[{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-4px)' }], 120, 'ease-in'];
+const IN = [[{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }], 260, CALM];
+
+// The page draws its next view the way store.js would after `go`: the test's renderer only counts.
+function redraw() {
+  main.replaceChildren();
+  renderGateway(main, { again: true });
+}
+
+test('Map to List and back move out and in', async () => {
+  const box = freshMap();
+  renders = 0;
+  // A server is selected: the switch lets go of it.
+  press(box, 'block:outside:move:github');
+  settle();
+  assert.match(node(box, 'block:outside:move:github').className, /\bselected\b/);
+  // The old view's motion ends only when the test says: the page keeps the map until then.
+  let leave;
+  const real = box.animate;
+  box.animate = (keyframes, options) => {
+    const animation = real(keyframes, options);
+    animation.finished = new Promise((resolve) => { leave = resolve; });
+    return animation;
+  };
+  node(main, 'view:list').listeners.click[0]();
+  await tick();
+  assert.deepEqual(lastMotion(box), OUT);
+  assert.equal(box.animations.at(-1).options.fill, 'forwards');
+  assert.deepEqual([state.mode, renders], ['map', 0]);
+  // The pill moves at once.
+  assert.deepEqual([node(main, 'view:list').getAttribute('aria-pressed'), node(main, 'view:map').getAttribute('aria-pressed')], ['true', 'false']);
+  leave();
+  await tick();
+  assert.deepEqual([state.mode, renders], ['list', 1]);
+  redraw();
+  const list = listBox();
+  assert.deepEqual(lastMotion(list), IN);
+  assert.equal(state.selected, null);
+  // Back to the map: the List leaves, the map comes in as one piece.
+  node(main, 'view:map').listeners.click[0]();
+  await tick();
+  assert.deepEqual(lastMotion(list), OUT);
+  assert.deepEqual([state.mode, renders], ['map', 2]);
+  redraw();
+  const again = map();
+  assert.deepEqual(lastMotion(again), IN);
+  // Its blocks do not rise one by one on top of that, and none is selected.
+  assert.equal(node(again, 'block:client:codex').animations.length, 0);
+  assert.ok(!walk(again).some((n) => /\bselected\b/.test(n.className)));
+  settle();
+});
+
+test('a second press on the pill while a view leaves does nothing', async () => {
+  const box = freshMap();
+  renders = 0;
+  let leave;
+  const real = box.animate;
+  box.animate = (keyframes, options) => {
+    const animation = real(keyframes, options);
+    animation.finished = new Promise((resolve) => { leave = resolve; });
+    return animation;
+  };
+  node(main, 'view:list').listeners.click[0]();
+  await tick();
+  node(main, 'view:list').listeners.click[0]();
+  await tick();
+  assert.equal(box.animations.filter((a) => a.options.duration === 120).length, 1);
+  leave();
+  await tick();
+  assert.equal(renders, 1);
+  redraw();
+  settle();
+  state.mode = 'map';
+});
+
+test('under reduced motion the switch lands at once', async () => {
+  const box = freshMap();
+  renders = 0;
+  reducedMotion.matches = true;
+  try {
+    node(main, 'view:list').listeners.click[0]();
+    await tick();
+    assert.deepEqual([box.animations.length, state.mode, renders], [0, 'list', 1]);
+    redraw();
+    assert.equal(listBox().animations.length, 0);
+    assert.equal(listBox().style.opacity, undefined);
+  } finally {
+    reducedMotion.matches = false;
+    state.mode = 'map';
+  }
+});
+
+// The List (gateway-notes 7.2): a header with "Name", "Used by" and "Tools"; group rows with their
+// icons; server rows with the clients that use them and "n of m on"; tool rows with a mark, the
+// name and a quiet Read or Write; outside rows with their client and "Move in…". The words of the
+// List are the mockup's, without sign-in words and tool counts of servers outside the gateway.
+test("the List shows the mockup's columns and rows", () => {
+  state.mode = 'list';
+  main.replaceChildren();
+  renderGateway(main);
+  const list = listBox();
+  const header = walk(list).filter((n) => n.getAttribute('role') === 'columnheader');
+  assert.deepEqual(header.map((n) => n.textContent), ['Name', 'Used by', 'Tools', '']);
+  assert.equal(header[3].children[0].textContent, 'Action');
+  assert.equal(header[3].children[0].className, 'sr-only');
+  const row = (id) => walk(list).find((n) => n.dataset.row === id);
+  const cells = (id) => row(id).children.filter((n) => n.getAttribute('role') === 'gridcell');
+  // Group rows have an icon.
+  const iconOf = (id) => walk(row(id)).find((n) => n.dataset.icon)?.dataset.icon;
+  assert.deepEqual(['group:kitden:remote', 'group:kitden:local', 'group:outside'].map(iconOf), ['cloud', 'hard-drive', 'info']);
+  assert.equal(cells('group:outside')[0].children.at(-1).textContent, "Outside the gateway · calls skip Kitden's rules");
+  // A server: the clients that use it as tiles, and how many of its tools are on.
+  const files = cells('held:kitden:files');
+  assert.equal(files[2].textContent, '1 of 1 on');
+  assert.equal(walk(files[1]).filter((n) => /mark/.test(n.className)).length, 2);
+  // An outside server: its client's tile, no count of tools, and "Move in…".
+  const github = cells('outside:move:github');
+  assert.equal(walk(github[1]).filter((n) => /mark/.test(n.className)).length, 1);
+  assert.equal(github[2].textContent, '');
+  assert.deepEqual(walk(github[3]).filter((n) => n.tagName === 'BUTTON').map((n) => n.textContent), ['Move in…']);
+  // The words of the sign-in and of tool counts outside the gateway stay out of the List.
+  const words = walk(list).map((n) => n.textContent).join(' ');
+  assert.doesNotMatch(words, /Sign in|Signed in|Running|not tested|\d+ tools/);
+});
+
+test('an open server shows its tools with a mark, the name and a quiet Read or Write', () => {
+  state.mode = 'list';
+  main.replaceChildren();
+  renderGateway(main);
+  const open = walk(listBox()).find((n) => n.dataset.row === 'held:kitden:files');
+  open.listeners.click[0]({ target: { closest: (selector) => (selector === '.caret' ? {} : null) } });
+  main.replaceChildren();
+  renderGateway(main);
+  const tool = walk(listBox()).find((n) => n.dataset.row === 'tool:files/read_file');
+  const name = tool.children[0];
+  assert.ok(walk(name).some((n) => /\btg-dot\b/.test(n.className)));
+  const quiet = walk(name).find((n) => n.className === 'hint');
+  assert.equal(quiet.textContent, 'Read');
+  assert.ok(!walk(name).some((n) => /\bflag\b/.test(n.className)));
+  open.listeners.click[0]({ target: { closest: (selector) => (selector === '.caret' ? {} : null) } });
+  state.mode = 'map';
+});
+
+test('the chip counts again after a tray redraw', async (t) => {
+  t.after(() => {
+    state.q = '';
+    return cancelTray();
+  });
+  state.q = 'files';
+  main.replaceChildren();
+  drawChip(renderGateway(main));
+  settle();
+  const chip = pages['#find-chip'];
+  assert.equal(chip.textContent, '1 match');
+  // Something else wrote the chip, or it went stale: the redraw in place says the count again.
+  chip.textContent = '';
+  queue(PREVIEW, batch('chip1'));
+  await addToTray(REMOVE_FILES);
+  assert.equal(chip.textContent, '1 match');
+  // With no search it says nothing.
+  state.q = '';
+  main.replaceChildren();
+  drawChip(renderGateway(main));
+  assert.equal(chip.textContent, '');
 });

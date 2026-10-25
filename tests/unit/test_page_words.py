@@ -578,7 +578,32 @@ def test_the_follows_live_region_stays_in_the_page():
 def test_a_pointed_link_keeps_its_look_in_a_search():
     rule = "div.map.finding .link.hov, div.map.finding .link.picked { stroke-opacity: 1; }"
     assert rule in CSS
-    assert CSS.index("div.map.finding .link { stroke-opacity: 0.25; }") < CSS.index(rule)
+    assert CSS.index("div.map.finding .link { stroke-opacity: 0.2; }") < CSS.index(rule)
+
+
+def test_a_hovered_bypass_link_in_a_search_shows_at_full():
+    # A lit bypass line dims with the others, but only while it is not pointed at or picked: its
+    # rule is more specific than the one that gives a pointed link full strength.
+    lit = rule("div.map.finding .link.direct.lit:not(.hov):not(.picked)")
+    assert "stroke-opacity: 0.2" in lit
+    assert "div.map.finding .link.direct.lit {" not in CSS
+
+
+def test_a_focused_block_keeps_its_ring_in_a_search():
+    # The dim of a search does not touch a block with keyboard focus, so its ring keeps 3:1. The
+    # rule is after the dim and more specific.
+    keep = "div.map.finding .block:not(.found):focus-visible { filter: none; }"
+    assert keep in CSS
+    assert CSS.index("div.map.finding .block:not(.found) {") < CSS.index(keep)
+
+
+def test_a_search_dims_blurs_and_desaturates_what_does_not_match():
+    # gateway-notes 7.3: 30 %, half the colour and a 1.2 px blur, over the block's 300 ms filter
+    # transition. A caption is no thing to find and is never dimmed. Every link goes to 20 %.
+    dims = "div.map.finding .block:not(.found) { filter: opacity(0.3) saturate(0.5) blur(1.2px); }"
+    assert dims in CSS
+    assert "filter 300ms ease" in rule("div.map .block")
+    assert "div.map.finding .caption" not in CSS.replace("div.map.finding .caption.found", "")
 
 
 def test_a_dragged_block_takes_the_pointer_off_every_link():
@@ -732,14 +757,14 @@ def test_the_map_says_the_link_is_the_state():
     assert "stroke-dasharray: 4 4" in preview and "stroke-opacity: 0.65" in preview
     assert "stroke-opacity: 0.4" in rule("div.map .link.leaving")
     # A search dims every link, a lit bypass line too (it is lit at full strength otherwise).
-    assert "stroke-opacity: 0.25" in rule("div.map.finding .link")
-    assert "stroke-opacity: 0.25" in rule("div.map.finding .link.direct.lit")
+    assert "stroke-opacity: 0.2" in rule("div.map.finding .link")
+    assert "stroke-opacity: 0.2" in rule("div.map.finding .link.direct.lit:not(.hov):not(.picked)")
     # Lit preview and leaving lines dim in a search too; a pointed or picked one stays full.
     lit = (
         "div.map.finding .link.leaving.lit:not(.hov):not(.picked), "
         "div.map.finding .link.direct.preview.lit:not(.hov):not(.picked)"
     )
-    assert "stroke-opacity: 0.25" in rule(lit)
+    assert "stroke-opacity: 0.2" in rule(lit)
     # A line to a server Kitden does not know to be on is dashed: it does not say "on".
     assert "div.map .link.direct.unk { stroke-dasharray: 3 3; }" in CSS
     assert 'const NOT_KNOWN = "Not known";' in script("gateway.js")
@@ -2105,11 +2130,12 @@ def test_search_on_a_map_page_finds_on_that_page():
     # it only gives back the gap before it.
     empty = re.search(r"\.find-chip:empty \{([^}]*)\}", CSS)
     assert empty and "margin-left: -8px;" in empty.group(1) and "display" not in empty.group(1)
-    # Matches are lit; the other blocks dim to 35% and their links to 25%, in the map and the List.
+    # Matches are lit; on the map the other blocks dim to 30% with less colour and a blur, their
+    # links to 20%; in the List the other rows dim to 35%.
     assert ".map.finding" in CSS
-    dims = r"div\.map\.finding \.block:not\(\.found\)[^{]*\{ filter: opacity\(0\.35\); \}"
-    assert re.search(dims, CSS)
-    assert "div.map.finding .link { stroke-opacity: 0.25; }" in CSS
+    dims = r"div\.map\.finding \.block:not\(\.found\)[^{]*\{ filter: opacity\(0\.3\) "
+    assert re.search(dims + r"saturate\(0\.5\) blur\(1\.2px\); \}", CSS)
+    assert "div.map.finding .link { stroke-opacity: 0.2; }" in CSS
     assert ".treegrid.finding .tg-row:not(.found) { opacity: 0.35; }" in CSS
 
 
@@ -2389,3 +2415,26 @@ def test_the_map_views_draw_puts_its_hits_in_order_with_a_helper():
     view = script("map-view.js")
     assert "  function orderHits(layout) {" in view
     assert "    orderHits(layout);\n" in view
+
+
+def test_the_list_has_the_mockups_columns_and_quiet_read_and_write_words():
+    # gateway-notes 7.2: Name, Used by, Tools and a last column with no title (a screen reader
+    # hears "Action"); a tool's Read or Write is quiet text, not a flag.
+    text = gw()
+    assert 'for (const name of ["Name", "Used by", "Tools", ""])' in text
+    assert 'el("span", "sr-only", "Action")' in text
+    assert 'el("span", "hint", row.tag)' in text and "flag(" not in text
+    assert "--tg-cols: minmax(0, 1fr) 130px 150px 100px; max-width: 912px;" in CSS
+    for words in ("Sign in", "Signed in", "Running"):
+        assert words not in text, words
+
+
+def test_the_view_switch_goes_out_in_120_and_comes_in_in_260():
+    # gateway-notes 7.1: the view that shows goes up 4 px and out (120 ease-in), the page draws
+    # the other, which comes in from 6 px below (rise: 260 CALM). The selection lets go.
+    text = gw()
+    assert 'animateTo(old, keyframes, { dur: 120, ease: "ease-in", fill: "forwards" })' in text
+    assert '{ opacity: 0, transform: "translateY(-4px)" }' in text
+    assert "if (switched) rise([" in text
+    switch = text.split("function switchView(")[1].split("\n}\n")[0]
+    assert "letGoIfSelected();" in switch and "!D(1)" in switch

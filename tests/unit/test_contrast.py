@@ -256,3 +256,12 @@ def test_the_tray_bar_is_readable_in_both_themes():
     # Applied is green with the label that was checked for it.
     rule = block(".dock .btn.ok, .dock .btn.ok:hover {")
     assert "background: var(--success);" in rule and "color: var(--on-success);" in rule
+
+
+def test_a_tools_read_or_write_word_is_readable_on_a_lit_or_selected_row():
+    # It is quiet (--ink-3) on the row, one step darker on the accent tint.
+    quiet = '.tg-row.found .hint, .tg-row[aria-selected="true"] .hint'
+    assert f"{quiet} {{ color: var(--ink-2); }}" in CSS
+    for theme in (LIGHT, DARK):
+        assert contrast(theme["--ink-3"], theme["--panel"]) >= 4.5
+        assert contrast(theme["--ink-2"], theme["--route-soft"]) >= 4.5

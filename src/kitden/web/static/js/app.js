@@ -5,9 +5,8 @@ import { glide, rollTo, transition } from "./motion.js";
 import { renderAgents } from "./agents.js";
 import { renderChanges } from "./changes.js";
 import { drawTray, initDock } from "./dock.js";
-import { renderGateway } from "./gateway.js";
+import { drawChip, renderGateway } from "./gateway.js";
 import { loadLibrary, loadLibraryFor, morphOnNextRender, raceSlow, renderLibrary, settleRows, showSources, snapshotRows } from "./library.js";
-import { findChip } from "./map.js";
 import { renderOverview } from "./overview.js";
 import { closeForProject, closePanel, initPanel, isPanelOpen } from "./panel.js";
 import { callout, demoTag, GONE_PROJECT, latestChanges, projectButton, projectMenu, scanLine, setHint, versionsOpened } from "./parts.js";
@@ -87,14 +86,6 @@ function renderShell() {
 
   drawPicker();
   if ($("#q") !== document.activeElement) $("#q").value = state.q;
-}
-
-// The chip in the search box says how many blocks the search found on a map page (`found`, else
-// null). It is a live region: its words are set only when they change, so a redraw is quiet.
-function drawChip(found) {
-  const chip = $("#find-chip");
-  const words = findChip(found) || "";
-  if (chip.textContent !== words) chip.textContent = words;
 }
 
 // The project picker (parts.js projectMenu), drawn again when the list, a count or the pick

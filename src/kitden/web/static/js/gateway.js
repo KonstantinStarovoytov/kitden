@@ -3,11 +3,11 @@
 import { $, button, el, gridKey, icon, joinWords, plural, reportError, withFocusKey } from "./dom.js";
 import { addForm, connectAction, connectBody, heldServer, liveHeld, movesTo, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool, TAKE_OUT } from "./gateway-details.js";
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
-import { findIn, foldable, isNarrow, keepOpen, layoutTree, linkKey, litFrom, litPath, pagesNow, pagesWith, pressOpen, toggleOpen, turnPage, wideWidth } from "./map.js";
+import { findChip, findIn, foldable, isNarrow, keepOpen, layoutTree, linkKey, litFrom, litPath, pagesNow, pagesWith, pressOpen, toggleOpen, turnPage, wideWidth } from "./map.js";
 import { mapView } from "./map-view.js";
-import { afterOldPage, D, entrance, glide, rise, riseHead } from "./motion.js";
+import { afterOldPage, animateTo, D, entrance, glide, rise, riseHead } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, openInfo, panelState, projectLabel, review } from "./panel.js";
-import { banner, CLIENT_NAMES, flag, folderName, gatewayName, kitdenClients, mark, opens, ORIGIN_WORDS, scopeBar, skeleton, STATE_WORDS, staleNote } from "./parts.js";
+import { banner, CLIENT_NAMES, folderName, gatewayName, kitdenClients, mark, opens, ORIGIN_WORDS, scopeBar, skeleton, STATE_WORDS, staleNote } from "./parts.js";
 import { arrival, current, currentError, data, go, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
 import { addToTray, inTray, keyFor, onTray, takeOut, tray } from "./tray.js";
 
@@ -81,6 +81,9 @@ export function serverCount(view) {
 // draws `again`; a new visit, or the List, starts a new one. A new visit also lifts the head
 // (title, lede, scope line), and then the map or List.
 export function renderGateway(main, { again = false } = {}) {
+  // A draw the view switch asked for: the view it draws comes in as one piece (below).
+  const switched = onSwitch.drawing;
+  onSwitch.drawing = false;
   if (!again) onMap.view = null;
   const head = el("div", "page-head");
   head.append(el("h1", null, "Gateway"));
@@ -110,12 +113,13 @@ export function renderGateway(main, { again = false } = {}) {
   // The search finds here: matches light up, the rest dims, and what hides a match opens (S.6).
   // It changes nothing in a client and moves no Details.
   const found = state.q.trim() ? findIn(model, state.q) : null;
-  if (mode === "map") gatewayMap(main, model, found);
+  if (mode === "map") gatewayMap(main, model, found, { switched });
   else {
     onMap.view = null;
     gatewayList(main, view, model, found, { enter: !again });
   }
-  glide(seg, seg.querySelector('[aria-pressed="true"]'), "gateway-view", { duration: 280 });
+  if (switched) rise([mode === "map" ? onMap.view.box : onList.box], { delay: afterOldPage() });
+  glidePill(seg, seg.querySelector('[aria-pressed="true"]'));
   // A performance mark for the map probe (Part 4.1): the first time the page draws with data.
   if (!performance.getEntriesByName("kitden:gateway-drawn").length) performance.mark("kitden:gateway-drawn");
   openArrival(view, model, mode).catch(reportError);
@@ -153,12 +157,41 @@ function modeSwitch(mode) {
   seg.setAttribute("role", "group");
   seg.setAttribute("aria-label", "Show as");
   for (const [id, label] of [["map", "Map"], ["list", "List"]]) {
-    const choice = button(label, () => go("gateway", { mode: id }), "");
+    const choice = button(label, () => switchView(id, mode, seg, choice), "");
     choice.setAttribute("aria-pressed", String(mode === id));
     choice.dataset.focus = `view:${id}`;
     seg.append(choice);
   }
   return seg;
+}
+
+// The mark behind Map | List glides to a choice in 280 ms.
+const glidePill = (seg, choice) => glide(seg, choice, "gateway-view", { duration: 280 });
+
+// The view switch (gateway-notes 7.1). `leaving`: the view that shows is on its way out. `drawing`:
+// the next draw comes from the switch, so its view comes in as one piece.
+const onSwitch = { leaving: false, drawing: false };
+// The pill moves and the selection lets go; the view that shows goes up 4 px and out (120 ease-in);
+// then the page draws the other (renderGateway), which comes in from 6 px below (260 CALM). Under
+// reduced motion all of it lands at once. A second press while a view leaves does nothing.
+function switchView(id, mode, seg, choice) {
+  if (id === mode || onSwitch.leaving) return;
+  for (const other of seg.children) if (other.dataset.focus) other.setAttribute("aria-pressed", String(other === choice));
+  glidePill(seg, choice);
+  letGoIfSelected();
+  const old = mode === "map" ? onMap.view && onMap.view.box : onList.box;
+  const land = () => {
+    onSwitch.leaving = false;
+    onSwitch.drawing = true;
+    go("gateway", { mode: id });
+  };
+  if (!old || !D(1)) {
+    land();
+    return;
+  }
+  onSwitch.leaving = true;
+  const keyframes = [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-4px)" }];
+  animateTo(old, keyframes, { dur: 120, ease: "ease-in", fill: "forwards" }).then(land);
 }
 
 // The Gateway's map columns: clients, the gateway, servers, tools, each with its blocks' size,
@@ -582,7 +615,7 @@ function toolBlock(held, tool, picked, waiting) {
 // { id, parent, depth, kind, name, usedBy (client ids), tools ("3 of 4 on"), meta (quiet words
 // after the name), action ("open" for ›, "move" for "Move in…"), tag, scope (a tool's own rule),
 // state, said (the state word a screen reader hears for a server or tool, none where its words say
-// it), expanded (only on a row that folds), group }.
+// it), expanded (only on a row that folds), group, icon (a group's) }.
 export function listRows(model, open = new Set(), folded = new Set()) {
   const rows = [];
   const children = new Map();
@@ -597,12 +630,12 @@ export function listRows(model, open = new Set(), folded = new Set()) {
     const said = spoken ? (block.state === "on" ? STATE_WORDS.on : STATE_WORDS.off) : null;
     rows.push({ id: block.id, parent, depth, kind: block.kind, name: block.name, usedBy: [], tools: null, meta: null, action: "open", tag: block.tag || null, scope: null, state: block.state, said, group: false, ...fields });
   };
-  const group = (id, name, parent, depth, items, draw) => {
+  const group = (id, name, parent, depth, items, draw, icon) => {
     const expanded = !folded.has(id);
-    rows.push({ id, parent, depth, kind: "group", name, usedBy: [], tools: null, meta: null, action: null, tag: null, scope: null, group: true, expanded });
+    rows.push({ id, parent, depth, kind: "group", name, usedBy: [], tools: null, meta: null, action: null, tag: null, scope: null, group: true, expanded, icon });
     if (expanded) items.forEach(draw);
   };
-  group("group:clients", "Clients", null, 0, model.blocks.filter((b) => b.kind === "client"), (b) => row(b, "group:clients", 1, { meta: b.meta }));
+  group("group:clients", "Clients", null, 0, model.blocks.filter((b) => b.kind === "client"), (b) => row(b, "group:clients", 1, { meta: b.meta }), "monitor");
   // The blocks of the Gateway column; the slot of a move sits in a group, so it is not one.
   for (const gateway of model.blocks.filter((b) => GATEWAY_KINDS.includes(b.kind) && b.column === "gateway")) {
     const groups = model.blocks.filter((b) => b.kind === "group" && b.under === gateway.id && children.has(b.id));
@@ -622,13 +655,13 @@ export function listRows(model, open = new Set(), folded = new Set()) {
         const own = server.gateway.kind === "kitden";
         row(server, g.id, 2, { usedBy: server.state === "on" ? linked : [], tools: own ? server.onCount : null, meta: own ? server.onIn : server.meta, expanded: opened });
         if (opened) for (const t of tools) row(t, server.id, 3, { tag: HINT_TAGS[t.tool.hint] || null, scope: ownTag(t.tool) });
-      });
+      }, g.icon);
     }
   }
   const outside = model.blocks.find((b) => b.id === "group:outside");
   // An outside server no client is known to load says so; the others are on.
   const outsideRow = (b) => row(b, outside.id, 1, { usedBy: b.columns, action: b.move ? "move" : "open", meta: b.state === "unk" ? NOT_KNOWN : null });
-  if (outside) group(outside.id, OUTSIDE, null, 0, children.get(outside.id) || [], outsideRow);
+  if (outside) group(outside.id, OUTSIDE, null, 0, children.get(outside.id) || [], outsideRow, outside.icon);
   return rows;
 }
 
@@ -741,7 +774,7 @@ export function contentWidth(box) {
 }
 
 // Every render puts the same map back on the page, so its blocks keep their nodes and focus.
-function gatewayMap(main, model, found) {
+function gatewayMap(main, model, found, { switched = false } = {}) {
   let fresh = false;
   let projectChanged = false;
   if (onMap.project !== state.project) {
@@ -758,7 +791,7 @@ function gatewayMap(main, model, found) {
   if (fresh) onMap.width = contentWidth(onMap.view.box) ?? onMap.width;
   Object.assign(onMap, { model, found });
   bringPages(model, { fresh });
-  drawOnMap(model, { fresh, projectChanged });
+  drawOnMap(model, { fresh, projectChanged, switched });
 }
 
 // The pages a draw shows, before it: those of groups that still page, then the page of a block a
@@ -981,10 +1014,11 @@ function openNow() {
   return onMap.found ? new Set([...onMap.open, ...onMap.found.open]) : onMap.open;
 }
 
-// How a draw of the map shows: a new map enters (each block rises into its place), another
-// project or a new width shows at once, and anything else moves what changed.
-export function mapMotion({ fresh, projectChanged, narrowChanged }) {
-  if (fresh) return "enter";
+// How a draw of the map shows: a new map enters (each block rises into its place), except one the
+// view switch brings, which comes in as one piece (renderGateway); another project or a new width
+// shows at once, and anything else moves what changed.
+export function mapMotion({ fresh, projectChanged, narrowChanged, switched = false }) {
+  if (fresh) return switched ? "none" : "enter";
   return projectChanged || narrowChanged ? "none" : "move";
 }
 
@@ -1003,7 +1037,7 @@ export function stillSelected(drawn, now) {
 // Draw the map as it is now, as `mapMotion` says. With `lightLater` (a press that opened a block)
 // the selection shows, but its path lights (the dims and the accent lines) when every motion of
 // this draw has ended: a server's tools come in first. The promise ends with the last motion.
-function drawOnMap(model, { fresh = false, projectChanged = false, lightLater = false } = {}) {
+function drawOnMap(model, { fresh = false, projectChanged = false, lightLater = false, switched = false } = {}) {
   const narrow = narrowNow(model);
   const flipped = narrow !== onMap.narrow;
   onMap.narrow = narrow;
@@ -1012,7 +1046,7 @@ function drawOnMap(model, { fresh = false, projectChanged = false, lightLater = 
   // A selected block lights every client's path to it; a selected client lights what it reaches; a
   // selected link its two ends. A selection the model no longer has is none.
   const lit = litFor(model, onMap.selected);
-  const motion = mapMotion({ fresh, projectChanged, narrowChanged: flipped });
+  const motion = mapMotion({ fresh, projectChanged, narrowChanged: flipped, switched });
   const { view, selected } = onMap;
   const later = lightsLater({ unfolds: lightLater, lit });
   const drawn = view.draw(model, layout, { selected: lit.size ? selected : null, lit: later ? new Set() : lit, found: onMap.found, open, motion });
@@ -1145,8 +1179,18 @@ function drawRows() {
   if (!view || !onMap.view || !onMap.view.box.isConnected) return Promise.resolve();
   const model = treeFor(view);
   Object.assign(onMap, { model, found: state.q.trim() ? findIn(model, state.q) : null });
+  drawChip(onMap.found);
   bringPages(model);
   return drawOnMap(model);
+}
+
+// The chip in the search box says how many blocks the search found on a map page (`found`, else
+// null). It is a live region: its words are set only when they change, so a redraw is quiet. The
+// page draws it with each draw of the place, and the map when it draws its rows again in place.
+export function drawChip(found) {
+  const chip = $("#find-chip");
+  const words = findChip(found) || "";
+  if (chip.textContent !== words) chip.textContent = words;
 }
 
 // After an applied change, focus on nothing or on the page itself (a block or link that went) goes
@@ -1180,7 +1224,7 @@ function tile(block) {
 
 // The List, a tree grid: the servers that show their tools (`open`), the groups and gateways the
 // person folded, and the row that takes the Tab key, kept across redraws of one project.
-const onList = { project: null, open: new Set(), folded: new Set(), current: null };
+const onList = { project: null, open: new Set(), folded: new Set(), current: null, box: null };
 
 function gatewayList(main, view, model, found, { enter = false } = {}) {
   if (onList.project !== state.project) Object.assign(onList, { project: state.project, open: new Set(), current: null });
@@ -1193,9 +1237,11 @@ function gatewayList(main, view, model, found, { enter = false } = {}) {
   grid.setAttribute("aria-label", "Clients, gateways and MCP servers");
   const head = el("div", "tg-head");
   head.setAttribute("role", "row");
-  for (const name of ["Name", "Used by", "Tools", "Action"]) {
+  // The last column has no title on the page; a screen reader hears "Action".
+  for (const name of ["Name", "Used by", "Tools", ""]) {
     const cell = el("div", null, name);
     cell.setAttribute("role", "columnheader");
+    if (!name) cell.append(el("span", "sr-only", "Action"));
     head.append(cell);
   }
   grid.append(head);
@@ -1215,6 +1261,7 @@ function gatewayList(main, view, model, found, { enter = false } = {}) {
     else focusRow(grid, row.id);
   });
   main.append(grid);
+  onList.box = grid;
   if (enter) rise([grid], { delay: afterOldPage() });
 }
 
@@ -1258,6 +1305,7 @@ function listRow(row, block, { current, selected, view, press }) {
   const caret = el("span", row.expanded === undefined ? "caret none" : "caret", "▸");
   caret.setAttribute("aria-hidden", "true");
   name.append(caret);
+  if (row.icon) name.append(icon(row.icon, 13));
   if (row.kind === "client") name.append(mark(block.client));
   else if (GATEWAY_KINDS.includes(row.kind)) name.append(mark(block.gateway.kind === "kitden" ? "kitden" : "gateway"));
   else if (row.kind === "held" || row.kind === "tool") {
@@ -1272,7 +1320,7 @@ function listRow(row, block, { current, selected, view, press }) {
   // A tool's tag says whether it reads or writes; an accent tag says a rule of this project.
   const accent = row.kind === "tool" ? row.scope : row.tag;
   if (accent) name.append(el("span", "tag", accent));
-  if (row.kind === "tool" && row.tag) name.append(flag({ text: row.tag, level: "info" }));
+  if (row.kind === "tool" && row.tag) name.append(el("span", "hint", row.tag));
   if (row.meta) name.append(el("span", "meta", row.meta));
   if (row.group) {
     name.setAttribute("aria-colspan", "4");

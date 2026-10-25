@@ -545,19 +545,23 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 
 /* Gateway List (gateway.js): a tree grid of groups and rows, one row in the Tab order. The arrows
    move, Right unfolds and Left folds, Enter opens Details. Columns: Name, Used by (client tiles),
-   Tools, and › or "Move in…". */
-.treegrid { --tg-cols: minmax(0, 1fr) 76px 96px 92px; margin: 0 0 12px; background: var(--panel); border: 1px solid var(--wire); border-radius: 8px; }
+   Tools, and › or "Move in…", at the mockup's sizes (gateway-notes 7.2): 912 wide, columns 130, 150
+   and 100, a 30 px header and group row, a 40 px row and a 34 px tool row. */
+.treegrid { --tg-cols: minmax(0, 1fr) 130px 150px 100px; max-width: 912px; margin: 0 0 12px; background: var(--panel); border: 1px solid var(--wire); border-radius: 8px; }
 .tg-head, .tg-row { display: grid; grid-template-columns: var(--tg-cols); align-items: center; }
-.tg-head { height: 34px; border-bottom: 1px solid var(--wire); color: var(--ink-3); font-size: 12px; font-weight: 500; }
+.tg-head { height: 30px; border-bottom: 1px solid var(--wire); color: var(--ink-3); font-size: 11px; font-weight: 500; }
 .tg-head > *, .tg-row > [role="gridcell"] { min-width: 0; padding: 0 12px; }
-.tg-row { min-height: 34px; border-top: 1px solid var(--wire-soft); cursor: pointer; transition: background-color 120ms ease; }
+.tg-row { min-height: 40px; border-top: 1px solid var(--wire-soft); cursor: pointer; transition: background-color 120ms ease; }
 .tg-head + .tg-row { border-top: 0; }
 .tg-row:last-child { border-radius: 0 0 8px 8px; }
 .tg-row:hover { background: var(--inset); }
 .tg-row:active { background: var(--wire-soft); transition-duration: 60ms; }
 .tg-row[aria-selected="true"] { background: var(--route-soft); }
 .tg-row:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-.tg-row.group { min-height: 30px; background: var(--inset); color: var(--ink-3); font-size: 12px; font-weight: 500; }
+.tg-row.tool { min-height: 34px; }
+.tg-row.group { min-height: 30px; background: var(--inset); color: var(--ink-2); font-size: 11px; font-weight: 600; }
+.tg-row.group .tg-name { gap: 7px; }
+.tg-row.group .ic { flex: none; width: 13px; height: 13px; }
 .tg-row.group > [role="gridcell"] { grid-column: 1 / -1; }
 /* The same search in the List: a matching row is lit and the others dim to 35%. Words that are quiet
    (--ink-3) go one step darker on the tint, for 4.5:1. */
@@ -571,6 +575,10 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .tg-row[aria-expanded="true"] .caret { transform: rotate(90deg); }
 .tg-name .words { min-width: 3ch; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tg-name .words.mono { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--ink); }
+.tg-row.tool .words.mono { font-weight: 400; }
+/* A tool's "Read" or "Write": quiet words after the name. */
+.tg-name .hint { flex: none; color: var(--ink-3); font-size: 12px; font-weight: 400; }
+.tg-row.found .hint, .tg-row[aria-selected="true"] .hint { color: var(--ink-2); }
 .tg-name .meta { min-width: 0; color: var(--ink-3); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tg-name .tag { flex: none; color: var(--route); background: var(--route-soft); font-size: 11px; line-height: 18px; padding: 0 6px; border-radius: 10px; white-space: nowrap; }
 .tg-row .client-mark, .tg-row .mono-mark { --tile: 18px; border-radius: 5px; }
@@ -585,7 +593,7 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 /* A narrow window keeps the name, the tools and the action; the tiles go. */
 @media (max-width: 640px) {
   .treegrid { --tg-cols: minmax(0, 1fr) 0 84px 84px; }
-  .tg-used { visibility: hidden; }
+  .tg-used, .tg-head > :nth-child(2) { visibility: hidden; }
 }
 .fact-tiles { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; }
 .fact-tiles .client-mark, .fact-tiles .mono-mark { --tile: 18px; border-radius: 5px; }
@@ -738,13 +746,17 @@ div.map .caption svg[data-icon="info"] { color: var(--lamp-warn); }
 div.map button.caption { cursor: pointer; }
 div.map button.caption:hover { color: var(--ink); }
 div.map button.caption:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-/* A search on the map (S.6): a match is lit, every other block dims to 35% and the links to 25%. */
+/* A search on the map (gateway-notes 7.3): a match is lit, every other block dims to 30% with half
+   its colour and a 1.2 px blur (the block's 300 ms filter transition), and every link goes to 20%.
+   A caption stays. A block with keyboard focus is not dimmed, so its ring keeps 3:1 (the rule
+   repeats the dim's selector to win over it). A pointed or picked link keeps full strength. */
 div.map .block.found { border-color: var(--route); box-shadow: 0 0 0 3px var(--route-soft); }
 div.map .caption.found { color: var(--ink); }
-div.map.finding .block:not(.found), div.map.finding .caption:not(.found) { filter: opacity(0.35); }
-div.map.finding .link { stroke-opacity: 0.25; }
-div.map.finding .link.direct.lit { stroke-opacity: 0.25; }
-div.map.finding .link.leaving.lit:not(.hov):not(.picked), div.map.finding .link.direct.preview.lit:not(.hov):not(.picked) { stroke-opacity: 0.25; }
+div.map.finding .block:not(.found) { filter: opacity(0.3) saturate(0.5) blur(1.2px); }
+div.map.finding .block:not(.found):focus-visible { filter: none; }
+div.map.finding .link { stroke-opacity: 0.2; }
+div.map.finding .link.direct.lit:not(.hov):not(.picked) { stroke-opacity: 0.2; }
+div.map.finding .link.leaving.lit:not(.hov):not(.picked), div.map.finding .link.direct.preview.lit:not(.hov):not(.picked) { stroke-opacity: 0.2; }
 div.map.finding .link.hov, div.map.finding .link.picked { stroke-opacity: 1; }
 /* A drag on the map (4.7, gateway-notes 6): a block with a grip, or a client that can be connected
    (`.drags`), can be dragged; a block that moves lifts while it

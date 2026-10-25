@@ -23,7 +23,9 @@ What Kitden does today and what comes next. Ideas and bugs:
   the client lights and a wire follows the server, or the tip says why that client cannot take it.
   Drag a client that is not connected onto the gateway to connect it: a wire runs to the pointer
   and snaps to the gateway, which lights; a client a plugin connects says why it cannot. A group
-  of more than six shows five at a time: "N more" turns to the next five in place.
+  of more than six shows five at a time: "N more" turns to the next five in place. Map | List
+  swaps with a short fade, the List has the mockup's columns and rows, and a search dims what does
+  not match with a soft blur.
 - **Details float beside the map:** on Gateway, Library and Changes, Details float over the right
   of the page as in the mockup; the page keeps its width and the map stays wide. Another block's
   Details swap in place through a quiet skeleton.
