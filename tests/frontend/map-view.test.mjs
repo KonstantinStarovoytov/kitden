@@ -1099,3 +1099,147 @@ test('a hidden page shows an overlay at once, with no fade', async () => {
   assert.ok(o);
   assert.equal(o.animations.length, 0);
 });
+
+// The parts of a block, by class.
+const parts = (node, name) => walk(node).filter((n) => n.classList?.contains(name));
+const part = (node, name) => parts(node, name)[0];
+const LOOKS = {
+  columns: TREE.columns,
+  blocks: [
+    { id: 'c1', column: 'a', kind: 'client', name: 'Codex', meta: 'Connected', lamp: 'on', state: 'on', ports: { right: true } },
+    { id: 's1', column: 'b', kind: 'held', name: 'github', meta: '1 of 2 on', lamp: 'on', state: 'on', count: 2, ports: { left: true, right: true } },
+    { id: 'o1', column: 'b', kind: 'outside', name: 'docs', meta: 'In Codex', lamp: 'out', state: 'on', ports: { left: 'out' } },
+    { id: 't1', column: 'c', parent: 's1', kind: 'tool', name: 'read', lamp: 'on', state: 'on', projects: { words: '2 projects', own: false }, ports: { left: true } },
+    { id: 't2', column: 'c', parent: 's1', kind: 'tool', name: 'push', lamp: 'off', state: 'off', projects: { words: 'This project', own: true }, ports: { left: true } },
+  ],
+  links: [{ from: 'c1', to: 's1', kind: 'on' }, { from: 's1', to: 't1', kind: 'on' }],
+};
+const looks = (open = []) => layoutTree(LOOKS, { open: new Set(open), narrow: false });
+
+test("a block draws its ports, and a server's right port shows only while open", async () => {
+  reduce(true);
+  const v = view();
+  await v.draw(LOOKS, looks(), {});
+  const ports = (id) => parts(v.node(id), 'port').map((n) => [n.className, n.getAttribute('aria-hidden')]);
+  assert.deepEqual([ports('c1'), ports('s1'), ports('o1')], [[['port r', 'true']], [['port l', 'true'], ['port r', 'true']], [['port l out', 'true']]]);
+  // Opening the server draws none of its parts again: its right port and its count only change
+  // their look by its aria-expanded (style.css), so they can fade.
+  const [right, count] = [parts(v.node('s1'), 'port')[1], part(v.node('s1'), 'block-count')];
+  assert.deepEqual([v.node('s1').getAttribute('aria-expanded'), count.textContent], ['false', '2']);
+  await v.draw(LOOKS, looks(['s1']), { open: new Set(['s1']) });
+  assert.equal(v.node('s1').getAttribute('aria-expanded'), 'true');
+  assert.deepEqual([parts(v.node('s1'), 'port')[1], part(v.node('s1'), 'block-count')], [right, count]);
+  // A tool: its round mark, its name, which projects have a rule of their own (a folder, in the
+  // accent for this project), and its port on the left. It has no meta line.
+  const tool = (id) => v.node(id).children.map((n) => n.className);
+  assert.deepEqual(tool('t1'), ['mark on', 'block-text', 'block-projects', 'port l']);
+  assert.deepEqual(tool('t2'), ['mark', 'block-text', 'block-projects own', 'port l']);
+  const tag = part(v.node('t1'), 'block-projects');
+  assert.deepEqual([tag.children[0].dataset.icon, tag.children[0].getAttribute('width'), tag.children[1].textContent], ['folder', '11', '2 projects']);
+  // Any other block has its lamp at the start of its meta line.
+  assert.deepEqual(['c1', 's1', 'o1'].map((id) => part(v.node(id), 'block-meta').children[0].className), ['lamp on', 'lamp on', 'lamp out']);
+});
+
+test('a preview block has its × badge and its take-out title', async () => {
+  reduce(true);
+  const words = 'In preview. Click to take it out.';
+  const model = { columns: TREE.columns, links: [], blocks: [
+    { id: 'p1', column: 'b', kind: 'preview', name: 'github', meta: 'Preview', lamp: 'preview', state: 'preview', takeOut: words, ports: { left: true } },
+    { id: 's2', column: 'b', kind: 'held', name: 'files', meta: '0 of 1 on', lamp: 'off', state: 'on' },
+  ] };
+  const v = view();
+  await v.draw(model, layoutTree(model, { open: new Set(), narrow: false }), {});
+  const node = v.node('p1');
+  assert.equal(node.title, words);
+  const cross = part(node, 'block-x');
+  assert.equal(cross.getAttribute('aria-hidden'), 'true');
+  assert.deepEqual([cross.children[0].dataset.icon, cross.children[0].getAttribute('width')], ['x', '11']);
+  assert.equal(part(node, 'lamp').className, 'lamp pv');
+  // Any other block has no × and its own name as its title.
+  assert.equal(part(v.node('s2'), 'block-x'), undefined);
+  assert.equal(v.node('s2').title, 'files');
+});
+
+test('a leaving block is dimmed, dashed and out of the Tab order', async () => {
+  const v = view();
+  await v.draw(TREE, lay(), { motion: 'none' });
+  const node = v.node('s2');
+  v.draw(without('s2'), layoutTree(without('s2'), { open: new Set(), narrow: false }), {});
+  // While it fades out it has the leaving look (style.css) and no Tab stop.
+  tick(90);
+  assert.ok(node.classList.contains('leaving'));
+  assert.equal(node.getAttribute('tabindex'), '-1');
+  // Drawn again before it has gone, it is a block like any other.
+  v.draw(TREE, lay(), {}); settle();
+  assert.equal(v.node('s2'), node);
+  assert.deepEqual([node.classList.contains('leaving'), node.getAttribute('tabindex')], [false, null]);
+  // A block whose removal waits in the tray has the same look, and stays a Tab stop: a press still
+  // opens its Details.
+  const removing = { ...TREE, blocks: TREE.blocks.map((b) => (b.id === 's2' ? { ...b, leaving: true } : b)) };
+  v.draw(removing, lay(), {}); settle();
+  assert.deepEqual([node.classList.contains('leaving'), node.getAttribute('tabindex')], [true, null]);
+});
+
+test("the gateway's numbers roll when they change", async () => {
+  const gate = (clients, servers, on) => ({ columns: TREE.columns, links: [], blocks: [
+    { id: 'g1', column: 'a', kind: 'gateway', name: 'Kitden gateway', meta: 'On this Mac', lamp: 'on', stats: [{ icon: 'monitor', words: clients }, { icon: 'server', words: servers }] },
+    { id: 's1', column: 'b', kind: 'held', name: 'github', meta: on, lamp: 'on', state: 'on' },
+  ] });
+  const v = view();
+  const show = (m, motion) => v.draw(m, layoutTree(m, { open: new Set(), narrow: false }), { motion });
+  const nums = () => [...parts(v.node('g1'), 'num'), ...parts(v.node('s1'), 'num')];
+  const shown = () => nums().map((n) => n.children.map((c) => c.textContent));
+  // The first draw shows the numbers as they are; the words after each number stay as they are.
+  await show(gate('2 clients', '3 servers', '1 of 4 on'), 'none');
+  assert.deepEqual(shown(), [['2'], ['3'], ['1']]);
+  assert.ok(nums().every((n) => n.children.every((c) => !c.animations.length)));
+  const stats = parts(v.node('g1'), 'block-stat').map((s) => [s.children[0].dataset.icon, s.children[0].getAttribute('width'), s.children[1].children[1].textContent]);
+  assert.deepEqual(stats, [['monitor', '12', ' clients'], ['server', '12', ' servers']]);
+  // A number that changed rolls from the old one: a bigger one goes up, a smaller one down. One
+  // that did not change stays.
+  await show(gate('3 clients', '3 servers', '0 of 4 on'));
+  assert.deepEqual(shown(), [['2', '3'], ['3'], ['1', '0']]);
+  const [old, next] = nums()[0].children;
+  assert.deepEqual([old.animations[0].keyframes[1], old.animations[0].options.duration], [{ transform: 'translateY(-70%)', opacity: 0 }, 140]);
+  assert.deepEqual([next.animations[0].options.duration, next.animations[0].options.delay], [200, 140]);
+  assert.deepEqual(nums()[2].children[0].animations[0].keyframes[1], { transform: 'translateY(70%)', opacity: 0 });
+  assert.ok(!nums()[1].children[0].animations.length);
+  // Under reduced motion each is set at once.
+  reduce(true);
+  await show(gate('1 client', '1 server', '2 of 4 on'));
+  assert.deepEqual(shown(), [['1'], ['1'], ['2']]);
+});
+
+test('a lamp fades to its new colour, and pops when it turns on or off', async () => {
+  const as = (lamp) => ({ ...TREE, blocks: TREE.blocks.map((b) => (b.id === 's2' ? { ...b, meta: 'Local', lamp } : b)) });
+  const v = view();
+  const lampOf = () => part(v.node('s2'), 'lamp');
+  // Its colours as style.css gives them, read from its look; a client's lamp pops from 2.4.
+  const COLOURS = { 'lamp on': 'green', lamp: 'grey', 'lamp pv': 'clear' };
+  const style = globalThis.getComputedStyle;
+  globalThis.getComputedStyle = (node) => (node.classList.contains('lamp') ? { backgroundColor: COLOURS[node.className], getPropertyValue: (name) => (name === '--pop' ? ' 2.4' : '') } : style(node));
+  const moves = () => lampOf().animations.map((a) => [a.keyframes, a.options.duration, a.options.easing]);
+  const fade = (from, to) => [[{ backgroundColor: from }, { backgroundColor: to }], 400, 'ease'];
+  const pop = [[{ transform: 'scale(2.4)' }, { transform: 'none' }], 200, CALM];
+  try {
+    await v.draw(as('on'), lay(), { motion: 'none' });
+    assert.deepEqual([lampOf().className, moves()], ['lamp on', []]);
+    await v.draw(as('off'), lay(), {});
+    assert.deepEqual([lampOf().className, moves()], ['lamp', [fade('green', 'grey'), pop]]);
+    // A preview ring does not pop; nor does going back to the state it had before its preview (a
+    // row taken out). Turning the other way after a preview does.
+    await v.draw(as('preview'), lay(), {});
+    assert.deepEqual([lampOf().className, moves()], ['lamp pv', [fade('grey', 'clear')]]);
+    await v.draw(as('off'), lay(), {});
+    assert.deepEqual(moves(), [fade('clear', 'grey')]);
+    await v.draw(as('preview'), lay(), {});
+    await v.draw(as('on'), lay(), {});
+    assert.deepEqual([lampOf().className, moves()], ['lamp on', [fade('clear', 'green'), pop]]);
+    // Under reduced motion it changes at once.
+    reduce(true);
+    await v.draw(as('off'), lay(), {});
+    assert.deepEqual([lampOf().className, moves()], ['lamp', []]);
+  } finally {
+    globalThis.getComputedStyle = style;
+  }
+});

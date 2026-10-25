@@ -6,7 +6,7 @@
 // lit link. The page gives the hooks; the view knows nothing of servers, tools or clients.
 import { button, cutName, el, icon } from "./dom.js";
 import { blockLabel, drawPlan, enterDelays, foldable, LINK_MS, linkClass, linkDashed, linkKey, linkPath, midPoint, unfoldDelays } from "./map.js";
-import { afterOldPage, animateTo, CALM, D, IN3, OUT3, RETRACT, unscaled } from "./motion.js";
+import { afterOldPage, animateTo, CALM, D, IN3, OUT3, RETRACT, rollTo, unscaled } from "./motion.js";
 
 const SVG = "http://www.w3.org/2000/svg";
 const MOVE_MS = 260; // a block that moves, or a new one that fades in at its place
@@ -17,6 +17,13 @@ const FOLD_IN = 100; // a folded child goes this far left of its opener's right 
 const ROOM = 24; // under the lowest block
 const ENTER_RISE = 6; // an entering block starts this far below its place
 const CAPTION_ICON = 13; // a group caption's icon
+const GRIP_ICON = 13; // the grip of a block that can be dragged
+const STAT_ICON = 12; // the icon of a gateway's count
+const PROJECTS_ICON = 11; // the folder before a tool's projects
+const TAKE_OUT_ICON = 11; // the × of a block in preview
+const LAMP_MS = 400; // a lamp fades to its new colour
+const POP_MS = 200; // ... and pops when it turns on or off
+const POP = 2.2; // from this many times its size, unless style.css says otherwise (--pop)
 const CROSS_MS = 120; // the × fades in
 const CROSS_R = 8; // half the × (16 px): it sits with its middle on the link's
 const GRACE_MS = 240; // the × stays this long after the pointer leaves, so the pointer can reach it
@@ -36,18 +43,53 @@ function quiet(node) {
   return node;
 }
 
+// A lamp's look by the block's `lamp` (style.css): grey is off, green on, a dashed accent ring in
+// preview, a grey ring works outside the gateway. It pops when it turns on or off, not when it goes
+// into a preview or comes back from one.
+const LAMP_LOOKS = { on: "on", off: "", preview: "pv", out: "out" };
+const lampClass = (base, lamp) => [base, LAMP_LOOKS[lamp]].filter(Boolean).join(" ");
+const SOLID = ["on", "off"];
+
+// Words whose first number rolls when it changes ("3 of 4 on", "2 clients"): the number in a holder
+// of its own (kept in `nums` by its `slot`), then the rest. Other words are plain.
+function rollingWords(words, nums, slot) {
+  const found = /^(\d+)(.*)$/.exec(words);
+  if (!found) return el("span", "block-words", words);
+  const node = el("span", "block-words");
+  const holder = el("span", "num roll");
+  holder.append(el("span", null, found[1]));
+  node.append(holder, el("span", null, found[2]));
+  nums.set(slot, { holder, value: found[1] });
+  return node;
+}
+
 // What a block shows, left to right: the grip of one that can be dragged, its tile (the page's
-// `tile(block)`), its name cut short with its meta line under it, the count of a folded block
-// and a slot's action. A client's meta starts with its dot. A tag takes the meta line's place
-// where a count pill takes the room, else it sits beside the name.
-function blockParts(block, { tile, open }) {
+// `tile(block)`), a tool's mark, its name cut short with its meta line under it (its lamp first)
+// and a gateway's counts under that, which projects have a rule of their own for a tool, the count
+// of a block that folds (style.css hides it while it is open), a slot's action, its ports (the
+// right one of a block that folds shows only while it is open), and the × of a block in preview. A
+// tag takes the meta line's words where a count takes the room, else it sits beside the name. It
+// gives the parts, with the lamp and the numbers that move when they change.
+function blockParts(block, { tile }) {
   const parts = [];
-  if (block.grip) parts.push(quiet(el("span", "block-grip")));
+  const nums = new Map();
+  let lamp = null;
+  const withIcon = (className, name, size) => {
+    const node = el("span", className);
+    node.append(icon(name, size));
+    return node;
+  };
+  if (block.grip) parts.push(quiet(withIcon("block-grip", "grip-vertical", GRIP_ICON)));
   const mark = tile ? tile(block) : null;
   if (mark) {
     const holder = quiet(el("span", "block-tile"));
     holder.append(mark);
     parts.push(holder);
+  }
+  // A lamp starts the meta line; a block with none (a tool) has it as a mark before its name.
+  if (block.lamp && !block.meta) {
+    lamp = quiet(el("span", lampClass("mark", block.lamp)));
+    parts.push(lamp);
   }
   const text = el("span", "block-text");
   const top = el("span", "block-top");
@@ -58,26 +100,96 @@ function blockParts(block, { tile, open }) {
   if (tag && !(counted && block.meta)) top.append(tag);
   if (block.meta) {
     const line = el("span", "block-meta");
-    if (block.kind === "client") line.append(quiet(el("span", `block-dot ${block.dot || block.state}`)));
-    line.append(tag && counted ? tag : el("span", "block-words", block.meta));
+    if (block.lamp) {
+      lamp = quiet(el("span", lampClass("lamp", block.lamp)));
+      line.append(lamp);
+    }
+    line.append(tag && counted ? tag : rollingWords(block.meta, nums, "meta"));
     text.append(line);
   }
   parts.push(text);
-  if (counted && !open) parts.push(quiet(el("span", "block-count", block.count)));
+  if (block.stats) {
+    const stats = el("span", "block-stats");
+    block.stats.forEach((stat, i) => {
+      const one = el("span", "block-stat");
+      one.append(icon(stat.icon, STAT_ICON), rollingWords(stat.words, nums, `stat:${i}`));
+      stats.append(one);
+    });
+    parts.push(stats);
+  }
+  if (block.projects) {
+    const projects = withIcon(block.projects.own ? "block-projects own" : "block-projects", "folder", PROJECTS_ICON);
+    projects.append(el("span", null, block.projects.words));
+    parts.push(projects);
+  }
+  if (counted) parts.push(quiet(el("span", "block-count", block.count)));
   if (block.action) parts.push(quiet(el("span", "block-action", block.action)));
-  return parts;
+  for (const side of ["left", "right"]) {
+    const look = block.ports && block.ports[side];
+    if (look) parts.push(quiet(el("span", [`port ${side[0]}`, look !== true && look].filter(Boolean).join(" "))));
+  }
+  if (block.takeOut) parts.push(quiet(withIcon("block-x", "x", TAKE_OUT_ICON)));
+  return { parts, lamp, nums };
 }
 
 // Everything a block's parts depend on (its tile too), as one key: they are drawn again only when
-// it changes.
-function wordsKey(block, open) {
-  return JSON.stringify([block.kind, block.name, block.meta, block.tag, block.count, open, block.action, block.state, block.dot, block.grip, block.icon, block.client, block.gateway && block.gateway.kind]);
+// it changes. Opening a block draws none of them again: its count and right port follow its
+// aria-expanded in style.css, so they fade.
+function wordsKey(block) {
+  return JSON.stringify([block.kind, block.name, block.meta, block.tag, block.count, block.action, block.lamp, block.grip, block.icon, block.client, block.gateway && block.gateway.kind, block.stats, block.projects, block.ports, block.takeOut]);
 }
 
-// A group's caption: its words, with its icon (a lucide name, if it has one) before them.
+// What a block's parts showed (`drawn`, as blockParts gave them, for `block`), for its next draw:
+// its lamp, the last on or off it showed (`was` keeps it through a preview) and its numbers.
+function shownOf(drawn, block, was) {
+  const solid = SOLID.includes(block.lamp) ? block.lamp : (was && was.solid) || null;
+  return { lamp: block.lamp || null, solid, nums: new Map([...drawn.nums].map(([slot, num]) => [slot, num.value])) };
+}
+
+// Parts drawn again (`drawn`, for `block`) move what changed since the last draw (`was`; none on a
+// block's first): a lamp fades from its old colour to the new one in 400 ms ease and pops, from
+// --pop times its size in 200 ms CALM, when it turns on or off; a number rolls from its old value
+// (rollTo). Web Animations, not CSS: a redraw of the page takes the map off the page and puts it
+// back, which would cut a transition short and start a CSS animation again. The page calls it only
+// while motion runs: reduced motion and a hidden page show the end at once.
+function liven(drawn, block, was) {
+  if (!was) return;
+  const { lamp } = drawn;
+  if (lamp && was.lamp && was.lamp !== block.lamp) {
+    // Both colours are read with its CSS transition off, which would give the old one for both.
+    const base = lamp.classList.contains("mark") ? "mark" : "lamp";
+    lamp.style.transition = "none";
+    lamp.className = lampClass(base, was.lamp);
+    const from = getComputedStyle(lamp).backgroundColor;
+    lamp.className = lampClass(base, block.lamp);
+    const now = getComputedStyle(lamp);
+    const to = now.backgroundColor;
+    lamp.style.transition = "";
+    animateTo(lamp, [{ backgroundColor: from }, { backgroundColor: to }], { dur: LAMP_MS, ease: "ease" });
+    if (SOLID.includes(block.lamp) && was.solid && was.solid !== block.lamp) {
+      const scale = Number(now.getPropertyValue?.("--pop")) || POP;
+      animateTo(lamp, [{ transform: `scale(${scale})` }, { transform: "none" }], { dur: POP_MS, ease: CALM });
+    }
+  }
+  for (const [slot, { holder, value }] of drawn.nums) {
+    const old = was.nums.get(slot);
+    if (old === undefined || old === value) continue;
+    holder.replaceChildren(el("span", null, old));
+    rollTo(holder, value);
+  }
+}
+
+// A group's caption: its words, with its icon (a lucide name, if it has one) before them. Words
+// after a " · " are quiet ("Outside the gateway · drag one in").
 function captionWords(node, name, mark) {
-  if (!mark) node.textContent = name;
-  else node.replaceChildren(icon(mark, CAPTION_ICON), el("span", null, name));
+  const [lead, ...more] = name.split(" · ");
+  if (!mark && !more.length) {
+    node.textContent = name;
+    return;
+  }
+  const words = [el("span", null, lead)];
+  if (more.length) words.push(el("span", "quiet", ` · ${more.join(" · ")}`));
+  node.replaceChildren(...(mark ? [icon(mark, CAPTION_ICON)] : []), ...words);
 }
 
 // A column's caption and a group's caption without Details are words; any other block is a button.
@@ -206,11 +318,15 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     fade(item.node, o);
   }
 
-  // A block's classes: its look from the last draw, `.lit` on the lit path, and `.dragging` while it
-  // is held or glides back.
+  // A block's classes: its look from the last draw, `.lit` on the lit path, `.dragging` while it is
+  // held or glides back, and `.leaving` while it leaves the map. A block that leaves is no Tab stop
+  // while it fades.
   function paint(item) {
-    const look = [item.look, item.lit && "lit", (item.held || item.back) && "dragging"].filter(Boolean).join(" ");
+    const classes = [...item.look.split(" "), item.lit && "lit", (item.held || item.back) && "dragging", item.leaving && "leaving"];
+    const look = [...new Set(classes.filter(Boolean))].join(" ");
     if (item.node.className !== look) item.node.className = look;
+    if (item.leaving) item.node.setAttribute("tabindex", "-1");
+    else if (item.node.getAttribute("tabindex") !== null) item.node.removeAttribute("tabindex");
   }
 
   // A block's node as this draw shows it: its look, words, size and what a screen reader hears.
@@ -241,18 +357,23 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     } else {
       const group = place.kind === "group";
       const folding = folds.has(place.id);
-      const opened = folding && open.has(place.id);
-      item.look = [group ? "caption" : `block ${place.kind}`, place.id === selected && "selected", matched && "found"].filter(Boolean).join(" ");
+      // A block whose removal waits in the tray looks leaving too, and stays a Tab stop.
+      item.look = [group ? "caption" : `block ${place.kind}`, block.leaving && "leaving", place.id === selected && "selected", matched && "found"].filter(Boolean).join(" ");
       node.dataset.focus = `block:${place.id}`;
       if (block.state) node.dataset.state = block.state;
       else delete node.dataset.state;
-      node.title = name;
+      node.title = block.takeOut || name;
       node.setAttribute("aria-label", blockLabel(block));
-      const words = group ? JSON.stringify([name, block.icon]) : wordsKey(block, opened);
+      const words = group ? JSON.stringify([name, block.icon]) : wordsKey(block);
       if (words !== item.words) {
         item.words = words;
         if (group) captionWords(node, name, block.icon);
-        else node.replaceChildren(...blockParts(block, { tile, open: opened }));
+        else {
+          const drawn = blockParts(block, { tile });
+          node.replaceChildren(...drawn.parts);
+          if (canMove()) liven(drawn, block, item.shown);
+          item.shown = shownOf(drawn, block, item.shown);
+        }
       }
       // A block that folds says whether it is open by what is open, not by what shows yet.
       if (folding) node.setAttribute("aria-expanded", String(open.has(place.id)));

@@ -146,10 +146,11 @@ def held_servers(
     its entry still holds a plain secret the Keychain could keep, and how many tools `tools`
     (the cache) knows for it. Commands, addresses and env stay out.
 
-    Also its known tools with their states (`tool_list`) and how many are on (`on_count`);
-    with all projects and the server off, how many known projects turn it on (`on_in`); with a
-    picked project, how many other known projects have it on (`on_elsewhere`, a folder under it
-    by its rule too); and how many known projects have rules of their own for it (`projects`).
+    Also its known tools with their states (`tool_list`, each with how many known projects
+    have a rule of their own for it, `own_in`) and how many are on (`on_count`); with all
+    projects and the server off, how many known projects turn it on (`on_in`); with a picked
+    project, how many other known projects have it on (`on_elsewhere`, a folder under it by its
+    rule too); and how many known projects have rules of their own for it (`projects`).
     `chains` maps every known project to its chain."""
     rules = settings["rules"]["projects"]
     known = chains or {}
@@ -170,6 +171,9 @@ def held_servers(
                     "hint": tool_hint(tool)[0],
                     "origin": found["origin"],
                     "origin_from": found["origin_from"],
+                    "own_in": sum(
+                        own_state(rules.get(p), name, tool["name"]) is not None for p in known
+                    ),
                 }
             )
         on_in = on_elsewhere = 0

@@ -338,8 +338,9 @@ test('glide slides the mark with the calm curve, 300 ms by default and 280 ms wh
   assert.equal(ink.style.transform, 'translate(150px, 0px)');
 });
 
-// The spring overshoots a little: only presses, the chevron, switch knobs, ports and the tick of a
-// check may use it. Rows, blocks that move, tiles, panels, marks and the dragged block move with CALM.
+// The spring overshoots a little: only presses, the chevron, switch knobs, ports, a server's count
+// badge, the × of a block in preview and the tick of a check may use it. Rows, blocks that move,
+// tiles, panels, marks and the dragged block move with CALM.
 test('only presses and small parts use the spring in CSS', () => {
   const file = new URL('../../src/kitden/web/static/style.css', import.meta.url);
   const css = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
@@ -347,6 +348,6 @@ test('only presses and small parts use the spring in CSS', () => {
     .filter(([, , body]) => body.includes('var(--spring)'))
     .map(([, selector]) => selector.trim().replace(/\s+/g, ' '));
   assert.deepEqual(users.sort(), [
-    '.btn', '.chevron', '.chk .ic', '.dock .ib, .dock .x', '.nav a', '.port', '.seg button', '.switch .thumb', '.switch.flipped .thumb', '.tabs button', 'div.map .block',
+    '.btn', '.chevron', '.chk .ic', '.dock .ib, .dock .x', '.nav a', '.port', '.seg button', '.switch .thumb', '.switch.flipped .thumb', '.tabs button', 'div.map .block', 'div.map .block-count', 'div.map .block-x',
   ]);
 });

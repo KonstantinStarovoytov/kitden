@@ -220,6 +220,7 @@ def test_the_kitden_card_lists_every_held_server_with_its_state_in_the_project(h
             "hint": "unknown",
             "origin": "default",
             "origin_from": None,
+            "own_in": 0,
         }
         for name in ("search", "read")
     ]
@@ -282,6 +283,29 @@ SETTINGS = {
 def test_held_rows_count_known_tools():
     rows = held_servers(SETTINGS, [], {"github": [tool("a"), tool("b")]})
     assert {r["name"]: r["tools"] for r in rows} == {"github": 2, "notion": None}
+
+
+def test_held_tools_count_the_projects_with_their_own_rule():
+    # The map tags a tool with how many known projects have a rule of their own for it. A rule
+    # for the whole server, or in a folder Kitden does not know, is not one.
+    settings = {
+        "servers": {"files": {"command": "files"}},
+        "rules": {
+            "global": {"files": {"tools": {"read_file": "off"}}},
+            "projects": {
+                "/w/a": {"files": {"tools": {"read_file": "on"}}},
+                "/w/b": {"files": {"tools": {"read_file": "off"}}},
+                "/w/c": {"files": {"server": "on"}},
+                "/w/gone": {"files": {"tools": {"read_file": "on", "write_file": "on"}}},
+            },
+        },
+    }
+    chains = {path: [path] for path in ("/w/a", "/w/b", "/w/c")}
+    tools = {"files": [tool("read_file"), tool("write_file")]}
+    for chain in ([], ["/w/a"]):
+        listed = held_servers(settings, chain, tools, chains)[0]["tool_list"]
+        assert {t["name"]: t["own_in"] for t in listed} == {"read_file": 2, "write_file": 0}
+    assert held_servers(settings, [], tools)[0]["tool_list"][0]["own_in"] == 0
 
 
 def test_an_empty_tool_list_shows_no_count():

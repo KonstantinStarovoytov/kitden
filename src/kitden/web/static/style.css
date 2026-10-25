@@ -369,18 +369,22 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 
 /* One lamp language. A lamp (beside a word) and a mark (beside a tool) are 6 px: grey is off, green
    works, amber needs you, a dashed ring is only a preview, a grey ring works outside the gateway.
-   --lamp-off is a fill and a line, never a text color. A lamp that just turned on pops from 2.2 times. */
-.lamp, .mark { display: inline-block; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--lamp-off); transition: background-color 400ms ease; }
+   --lamp-off is a fill and a line, never a text color. A lamp that turns on or off fades to its new
+   color and pops from --pop times its size: 2.2, a tool's mark 1.9 (a client's lamp on the map 2.4). */
+.lamp, .mark { --pop: 2.2; display: inline-block; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--lamp-off); transition: background-color 400ms ease; }
+.mark { --pop: 1.9; }
 .lamp.on, .mark.on { background: var(--lamp-on); }
 .lamp.warn, .mark.warn { background: var(--lamp-warn); }
 .lamp.pv, .mark.pv { background: transparent; border: 1.5px dashed var(--route); }
 .lamp.out, .mark.out { background: transparent; border: 1.5px solid var(--lamp-off); }
 .lamp.pop, .mark.pop { animation: lamp-pop 200ms var(--calm); }
-@keyframes lamp-pop { from { transform: scale(2.2); } }
-/* A port: the ring where a link meets a block, on its left or right edge. */
+@keyframes lamp-pop { from { transform: scale(var(--pop)); } }
+/* A port: the ring where a link meets a block, on its left or right edge. A grey one (a server outside
+   the gateway) never turns accent. */
 .port { position: absolute; top: 50%; width: 9px; height: 9px; margin-top: -4.5px; border-radius: 50%; border: 1.5px solid var(--link); background: var(--canvas); transition: border-color 200ms ease, opacity 200ms ease, scale 300ms var(--spring); }
 .port.l { left: -5px; }
 .port.r { right: -5px; }
+.port.out { border-color: var(--lamp-off); }
 
 /* Checks and radios. An unticked edge is --lamp-off, which keeps 3:1 (--link does not). A check's
    real input stays in the page (for keys and screen readers) and the box follows it. A radio, and a
@@ -592,8 +596,9 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
    moves them by `translate` and `transform` and owns their opacity; a look here never sets any of
    them, and a press scales a block with the `scale` property). The link is the state: one that
    comes draws in or fades in, one that goes undraws or fades out, one that changes look blends
-   (map-view.js), and nothing moves while idle. A block's handle marks where links meet it: the
-   route color on an open server, amber where a direct line comes in. */
+   (map-view.js), and nothing moves while idle. A block's ports mark where links meet it: accent on
+   an open server and on the lit path, grey where a direct line comes in. The blocks follow
+   docs/mockup/gateway-notes.md 1. */
 div.map { position: relative; margin: 22px 0 12px -6px; padding: 6px 6px 10px; overflow-x: auto; overflow-y: hidden; }
 div.map .block, div.map .caption, div.map .map-caption { position: absolute; left: 0; top: 0; z-index: 1; transform-origin: center; will-change: translate, transform; }
 div.map .map-caption { display: flex; align-items: center; gap: 6px; color: var(--ink-3); font-size: 11px; white-space: nowrap; }
@@ -627,29 +632,36 @@ div.map .link.direct.hov, div.map .link.direct.picked { stroke: var(--lamp-warn)
 div.map.focus .link:not(.lit) { stroke-opacity: 0.16; }
 div.map.focus .link.hov, div.map.focus .link.picked { stroke-opacity: 1; }
 div.map .link-over { fill: none; stroke: var(--route); stroke-width: 2.1; stroke-linecap: round; }
-div.map .block { display: flex; align-items: center; gap: 8px; margin: 0; padding: 0 10px; border: 1px solid var(--wire-strong); border-radius: 8px; background: var(--panel); color: var(--ink); text-align: left; cursor: pointer; transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease, filter 300ms ease, scale 260ms var(--spring); }
-div.map .block:hover { border-color: color-mix(in srgb, var(--ink-3) 60%, transparent); }
-div.map .block:active { scale: 0.98; transition-duration: var(--t-fast), var(--t-fast), 300ms, 80ms; }
+div.map .block { display: flex; align-items: center; gap: 10px; margin: 0; padding: 0 12px; border: 1px solid var(--wire); border-radius: 8px; background: var(--panel); color: var(--ink); text-align: left; cursor: pointer; user-select: none; -webkit-user-select: none; transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease, box-shadow 300ms ease, filter 300ms ease, scale 260ms var(--spring); }
+div.map .block:hover { border-color: color-mix(in srgb, var(--route) 38%, var(--wire)); }
+div.map .block:active { scale: 0.98; transition-duration: var(--t-fast), var(--t-fast), 300ms, 300ms, 80ms; }
 div.map .block:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 div.map .block:has(> .block-count) { padding-right: 16px; }
 div.map .block-tile { flex: none; display: grid; place-items: center; }
-div.map .block-tile .client-mark, div.map .block-tile .mono-mark { --tile: 28px; border-radius: 7px; }
-div.map .block-tile .client-mark[data-icon="claude"] img { padding: 5px; }
-div.map .block-icon { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 7px; background: var(--inset); box-shadow: 0 0 0 1px var(--wire); color: var(--ink-2); }
+div.map .block-tile .client-mark, div.map .block-tile .mono-mark { --tile: 28px; border-radius: 6px; }
+div.map .block-tile .client-mark[data-icon="claude"] img { padding: 4px; }
+div.map .block-icon { width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid var(--wire); border-radius: 6px; background: var(--inset); color: var(--ink-2); }
 div.map .block-house { display: block; width: 26px; height: 26px; }
 div.map .block-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
 div.map .block-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
-div.map .block-name { min-width: 0; font-family: var(--mono); font-size: 12px; font-weight: 600; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+div.map .block-name { min-width: 0; font-size: 12px; font-weight: 600; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 div.map .block-meta { display: flex; align-items: center; gap: 5px; min-width: 0; color: var(--ink-3); font-size: 11px; line-height: 15px; }
 div.map .block-words { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+div.map .block .num { font-variant-numeric: tabular-nums; }
 div.map .block-tag { flex: none; color: var(--route); font-size: 11px; font-weight: 500; line-height: 15px; white-space: nowrap; }
-div.map .block-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--lamp-off); }
-div.map .block-dot.on { background: var(--lamp-on); }
-div.map .block-dot.unk { background: none; box-shadow: inset 0 0 0 1px var(--lamp-off); }
-div.map .block-count { position: absolute; top: calc(50% - 10px); right: -10px; min-width: 20px; height: 20px; padding: 0 5px; border: 1px solid var(--wire-strong); border-radius: 10px; background: var(--panel); color: var(--ink-2); font-size: 11px; line-height: 18px; text-align: center; }
-div.map .block.client .block-name, div.map .block.gateway .block-name, div.map .block.slot .block-name, div.map .block.more .block-name { font-family: var(--sans); }
+/* A server's tool count: a 20 px round badge on its right edge, which hides while it is open. */
+div.map .block-count { position: absolute; top: calc(50% - 10px); right: -10px; min-width: 20px; height: 20px; padding: 0 3px; border: 1px solid var(--wire); border-radius: 10px; background: var(--panel-raised); color: var(--ink-2); font-size: 10px; line-height: 18px; text-align: center; transition: opacity 200ms ease, scale 300ms var(--spring); }
+div.map .block[aria-expanded="true"] > .block-count { opacity: 0; scale: 0.3; }
+/* The right port of a block that folds shows only while it is open; a port on the lit path, or of
+   the selected or open block, is accent. */
+div.map .block[aria-expanded="false"] > .port.r { opacity: 0; scale: 0.4; }
+div.map .block[aria-expanded="true"] > .port, div.map .block.lit > .port:not(.out), div.map .block.selected > .port:not(.out) { border-color: var(--route); }
 div.map .block.gateway, div.map .block.slot { flex-direction: column; justify-content: center; gap: 6px; padding: 8px; text-align: center; }
-div.map .block.gateway { background: var(--panel-raised); border-color: var(--route); }
+div.map .block.gateway { gap: 1px; padding: 10px; background: var(--panel-raised); border-color: var(--route); }
+div.map .block.gateway .block-tile { margin-bottom: 4px; }
+div.map .block.gateway .block-name { font-size: 13px; }
+div.map .block-stats { display: flex; justify-content: center; gap: 10px; margin-top: 7px; color: var(--ink-2); font-size: 11px; line-height: 15px; }
+div.map .block-stat { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 div.map .block.gateway .block-text, div.map .block.slot .block-text { flex: none; width: 100%; justify-items: center; }
 div.map .block.gateway .block-meta, div.map .block.slot .block-meta { justify-content: center; }
 div.map .block.slot { gap: 4px; border: 1px dashed var(--preview-line); background: var(--preview-fill); }
@@ -658,16 +670,17 @@ div.map .block.slot .block-meta { color: var(--ink-2); }
 div.map .block.slot .block-words { white-space: normal; }
 div.map .block-action { flex: none; height: 24px; padding: 0 10px; border-radius: 6px; background: var(--action); color: var(--on-action); font-size: 12px; font-weight: 600; line-height: 24px; }
 div.map .block[aria-expanded="true"] { border-color: var(--route); }
-div.map .block[aria-expanded="true"]::after { content: ""; position: absolute; top: calc(50% - 4px); right: -4px; width: 7px; height: 7px; border-radius: 50%; background: var(--route); box-shadow: 0 0 0 2px var(--canvas); }
-div.map .block.tool { gap: 10px; border-radius: 7px; }
-div.map .block.tool::before { content: ""; flex: none; width: 8px; height: 8px; border-radius: 2px; background: var(--route); }
-div.map .block.tool[data-state="off"] { background: var(--dim); }
-div.map .block.tool[data-state="off"]::before { background: none; box-shadow: inset 0 0 0 1.5px var(--lamp-off); }
-div.map .block.tool .block-top { justify-content: space-between; }
-div.map .block.outside { padding-left: 18px; background: var(--dim); }
-div.map .block.outside .block-icon { width: 16px; height: 16px; background: none; box-shadow: none; color: var(--ink-3); }
-div.map .block.outside::before { content: ""; position: absolute; top: calc(50% - 4px); left: -4px; width: 7px; height: 7px; border-radius: 50%; background: var(--lamp-warn); box-shadow: 0 0 0 2px var(--canvas); }
-div.map .block-grip { position: absolute; top: calc(50% - 6px); left: 7px; width: 6px; height: 12px; background: radial-gradient(circle, var(--lamp-off) 1px, transparent 1.4px) 0 0 / 3px 4px; }
+/* A tool: its round mark, its name in regular weight, and at its right which projects have a rule
+   of their own for it (a folder; in the accent for this project). */
+div.map .block.tool { gap: 9px; padding: 0 10px; }
+div.map .block.tool .block-name { font-weight: 400; }
+div.map .block-projects { flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: 4px; color: var(--ink-3); font-size: 10.5px; white-space: nowrap; }
+div.map .block-projects.own { color: var(--route); }
+/* Outside the gateway: on the dim fill, the grip where the gateway can take it, its icon with no tile,
+   a grey ring for its lamp and a grey port. */
+div.map .block.outside { background: var(--dim); }
+div.map .block.outside .block-icon { width: auto; height: auto; border: 0; background: none; }
+div.map .block-grip { flex: none; display: grid; margin-right: -4px; color: var(--lamp-off); }
 div.map .block.more { justify-content: center; border-style: dashed; background: transparent; color: var(--ink-2); }
 div.map .block.more .block-text { flex: none; }
 div.map .block.lit { border-color: var(--route); }
@@ -680,12 +693,17 @@ div.map.focus .block.dragging:not(.lit):not(.selected) { filter: none; }
 div.map.focus .block:focus-visible:not(.lit):not(.selected) { filter: none; }
 div.map .block.selected, div.map .block.tool.selected[data-state] { background: var(--route-soft); border-color: var(--route); }
 div.map .block.selected .block-meta { color: var(--ink-2); }
-div.map .block.client { gap: 6px; padding: 0 8px; }
 div.map.narrow .block.client .block-tile .client-mark, div.map.narrow .block.client .block-tile .mono-mark { --tile: 24px; }
+/* A client's words get 2 px more room on its right, so "Not connected" fits beside its lamp. */
+div.map .block.client { padding-right: 10px; }
+div.map .block.client .lamp { --pop: 2.4; }
+div.map.narrow .block.client { gap: 6px; padding: 0 8px; }
 div.map.narrow .block.gateway, div.map.narrow .block.slot:not([data-state="preview"]) { padding: 0; }
-div.map.narrow .block.gateway .block-text, div.map.narrow .block.slot:not([data-state="preview"]) .block-text, div.map.narrow .block-action { display: none; }
-div.map.narrow .block[aria-expanded="true"]::after { display: none; }
-div.map .caption { display: flex; align-items: center; gap: 6px; margin: 0; padding: 0; border: 0; background: none; color: var(--ink-2); font-size: 11px; font-weight: 600; line-height: 16px; text-align: left; overflow: hidden; }
+div.map.narrow .block.gateway .block-text, div.map.narrow .block.gateway .block-stats, div.map.narrow .block.slot:not([data-state="preview"]) .block-text, div.map.narrow .block-action { display: none; }
+div.map.narrow .block[aria-expanded] > .port.r { display: none; }
+div.map.narrow .block.gateway .block-tile { margin-bottom: 0; }
+div.map .caption { display: flex; align-items: center; gap: 6px; margin: 0; padding: 0; border: 0; background: none; color: var(--ink-2); font-size: 11px; font-weight: 600; line-height: 16px; text-align: left; white-space: nowrap; }
+div.map .caption .quiet { font-weight: 400; color: var(--ink-3); }
 div.map .caption svg { flex: none; color: var(--ink-3); }
 div.map .caption svg[data-icon="info"] { color: var(--lamp-warn); }
 div.map button.caption { cursor: pointer; }
@@ -703,10 +721,16 @@ div.map.finding .link.hov, div.map.finding .link.picked { stroke-opacity: 1; }
    with the preview line on the preview fill, joined to the gateway by a quiet accent link. */
 div.map .block:has(> .block-grip) { cursor: grab; touch-action: none; }
 div.map .block.dragging { z-index: 3; border-color: var(--route); background: var(--panel-raised); box-shadow: var(--shadow-pop); transition: none; }
-div.map .block.outside.dragging::before { display: none; }
 div.map.dropping .block.slot[data-state="preview"] { border-style: solid; border-color: var(--route); }
-div.map .block.preview { border: 1px solid var(--preview-line); background: var(--preview-fill); }
-div.map .block.preview .block-meta { color: var(--ink-2); }
+/* In preview: the dashed preview line on the preview fill and accent words; under the pointer or
+   keyboard focus its edge is accent and an 18 px × says a press takes it out. */
+div.map .block.preview { border: 1px dashed var(--preview-line); background: var(--preview-fill); }
+div.map .block.preview .block-meta { color: var(--route); }
+div.map .block.preview:hover { border-color: var(--route); }
+div.map .block-x { position: absolute; top: -8px; right: -8px; z-index: 2; display: grid; place-items: center; width: 18px; height: 18px; border: 1px solid var(--route); border-radius: 50%; background: var(--panel); color: var(--route); opacity: 0; scale: 0.5; pointer-events: none; transition: opacity 180ms ease, scale 320ms var(--spring); }
+div.map .block:hover > .block-x, div.map .block:focus-visible > .block-x { opacity: 1; scale: 1; }
+/* Leaving: a change in the tray takes it out, or it fades off the map. */
+div.map .block.leaving { filter: opacity(0.45); border-style: dashed; }
 
 /* The preview tray's bar (docs/design.md, Preview tray). The dock sits at the bottom left of the page,
    above the hint line, over the map; the band it sits in takes no clicks, the dock does. One change

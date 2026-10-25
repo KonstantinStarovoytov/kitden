@@ -13,7 +13,9 @@ What Kitden does today and what comes next. Ideas and bugs:
   the mockup's colours in both themes, a new side rail and top bar, and calm motion with one
   shared timing.
 - **Gateway map:** blocks glide and unfold in place, links take the pointer (× to remove, by
-  keyboard too), and a selected block dims everything off its path.
+  keyboard too), and a selected block dims everything off its path. Blocks look like the mockup:
+  lamps, ports, the gateway's counts that roll, and on each tool how many projects have a rule of
+  their own for it.
 - **Preview tray:** every change, from a switch in Details to a drag on the map, waits in one tray
   at the bottom left. Apply all writes them as one change, all or nothing, and Undo all takes them
   back. "Show changes" opens one row's full review.

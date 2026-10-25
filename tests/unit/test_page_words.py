@@ -291,10 +291,13 @@ def test_lamps_marks_and_ports_follow_one_lamp_language():
     assert "background: transparent" in preview and "1.5px dashed var(--route)" in preview
     outside = rule(".lamp.out, .mark.out")
     assert "background: transparent" in outside and "1.5px solid var(--lamp-off)" in outside
-    # A lamp that turns on pops from 2.2 times its size, on the calm curve.
+    # A lamp that turns on or off pops, on the calm curve: from 2.2 times its size, a client's from
+    # 2.4 and a tool's mark from 1.9.
     pop = rule(".lamp.pop, .mark.pop")
     assert "200ms var(--calm)" in pop and "lamp-pop" in pop
-    assert "@keyframes lamp-pop { from { transform: scale(2.2); } }" in CSS
+    assert "@keyframes lamp-pop { from { transform: scale(var(--pop)); } }" in CSS
+    assert "--pop: 2.2" in lamp and "--pop: 1.9" in rule(".mark")
+    assert "--pop: 2.4" in rule("div.map .block.client .lamp")
     port = rule(".port")
     for part in (
         "width: 9px",
@@ -603,6 +606,57 @@ def test_the_map_words():
     # The map shows no state word; a screen reader hears one, the same as the words it shows.
     states = 'STATE_SAID = { on: "On", off: "Off", unk: "Not known", preview: "Preview" }'
     assert states in script("map.js")
+
+
+def test_the_map_blocks_look_like_the_mockup():
+    # docs/mockup/gateway-notes.md 1: words, sizes and times of each block.
+    text = gw()
+    assert '"Outside the gateway · drag one in"' in text
+    assert '"In preview. Click to take it out."' in text
+    # The Kitden gateway says where it runs, in the words of the gateway view.
+    assert '"where": "On this Mac"' in (STATIC.parents[1] / "views/gateway_view.py").read_text()
+    assert "gateway.where" in script("gateway.js")
+    # Names are Inter, not mono; a block's edge is the line color.
+    assert "--mono" not in rule("div.map .block-name")
+    assert "border: 1px solid var(--wire);" in rule("div.map .block")
+    # The count badge is 20 px round and hides while its server is open; the right port of a block
+    # that folds shows only then.
+    badge = rule("div.map .block-count")
+    for part in (
+        "min-width: 20px",
+        "height: 20px",
+        "border-radius: 10px",
+        "opacity 200ms ease",
+        "scale 300ms var(--spring)",
+    ):
+        assert part in badge, part
+    assert "opacity: 0; scale: 0.3;" in rule('div.map .block[aria-expanded="true"] > .block-count')
+    assert "opacity: 0; scale: 0.4;" in rule('div.map .block[aria-expanded="false"] > .port.r')
+    assert "border-color: var(--lamp-off)" in rule(".port.out")
+    # A preview: dashed preview line on the preview fill, accent words, an 18 px × on hover or
+    # keyboard focus.
+    preview = rule("div.map .block.preview")
+    assert "1px dashed var(--preview-line)" in preview and "var(--preview-fill)" in preview
+    cross = rule("div.map .block-x")
+    for part in (
+        "width: 18px",
+        "height: 18px",
+        "opacity: 0",
+        "scale: 0.5",
+        "opacity 180ms ease",
+        "scale 320ms var(--spring)",
+        "pointer-events: none",
+    ):
+        assert part in cross, part
+    assert "opacity: 1; scale: 1;" in rule(
+        "div.map .block:hover > .block-x, div.map .block:focus-visible > .block-x"
+    )
+    # Leaving: dimmed and dashed; a block that leaves the map is no Tab stop while it fades.
+    assert "filter: opacity(0.45); border-style: dashed;" in rule("div.map .block.leaving")
+    assert 'setAttribute("tabindex", "-1")' in script("map-view.js")
+    # The gateway: 150 x 124, its stats 11 px with icons, its numbers roll.
+    assert "rollTo(" in script("map-view.js")
+    assert "margin-top: 7px" in rule("div.map .block-stats")
 
 
 def test_the_map_says_the_link_is_the_state():

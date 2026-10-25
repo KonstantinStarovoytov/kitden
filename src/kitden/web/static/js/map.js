@@ -8,17 +8,22 @@
 //   "+ Add" beside the caption. Wide only: `colGap` is the space before the column (GAP unless
 //   set), `top` the y of its first block (CAPTION_ROW) and `rowGap` the space between its blocks.
 // - blocks: [{ id, column, parent, kind, name, meta, state, tag, count, grip, action, details, h,
-//   icon, before, rowGap }]. The children of a block are the blocks whose `parent` it is. A block
-//   with an `h` is that high, whatever its column says. A group block is a caption at the top of
-//   its stack (a button when it has `details`), CAPTION_H high unless `h` says more (its words
-//   take two lines); its children sit under it, in its column, and always show. Wide, a group
+//   icon, before, rowGap, lamp, stats, projects, ports, takeOut, leaving }]. The children of a
+//   block are the blocks whose `parent` it is. A block with an `h` is that high, whatever its
+//   column says. A group block is a caption at the top of its stack (a button when it has
+//   `details`), CAPTION_H high unless `h` says otherwise; its words after a " · " are quiet; its
+//   children sit under it, in its column, and always show. Wide, a group
 //   sits `before` more space under the block above it, its children are CAPTION_GAP under it and
 //   `rowGap` apart; `icon` (a lucide name) is drawn before its words. Any other block shows its
 //   children only while it is open. `state`: "on", "off", "unk" or "preview". `count`: what a
 //   folded block holds. `grip`: it can be dragged. `action`: what pressing it does, in words
 //   ("Set up…"). `stateInMeta`: no state word is spoken; its meta says the state already ("On in
-//   2 projects") or all there is to say (a gateway's clients and servers). `dot`: a client's dot
-//   when it is not its state (a client found on a first run).
+//   2 projects") or all there is to say (a gateway's clients and servers). How it looks
+//   (map-view.js): `lamp` "on", "off", "preview" or "out" (works outside the gateway), at the start
+//   of its meta line, or as a tool's mark; `stats`, a gateway's counts, [{ icon, words }]; `projects`,
+//   a tool's { words, own }; `ports`, { left, right }, each true or a look ("out"); `takeOut`, the
+//   words of a block in preview, which a press takes out (it shows an ×); `leaving`, a change in the
+//   tray takes it out.
 // - links: [{ from, to, kind, unk, leaving }], kind "on", "faint", "direct" or "preview". The link
 //   is the state: something on has a link, something off has none. `unk`: Kitden does not know
 //   whether it is on, so the line is dashed; it only shows who has the entry. `leaving`: a change
@@ -483,9 +488,10 @@ export function findChip(found) {
   return found.matches.size ? plural(found.matches.size, "match", "matches") : "No matches";
 }
 
-// What a screen reader hears for a block: its whole name, meta, tag, the state word that matches
-// its link (none where the meta says it), and its action.
+// What a screen reader hears for a block: its whole name, meta, counts, tag, projects, the state
+// word that matches its link (none where the meta says it), and its action.
 export function blockLabel(block) {
   const state = block.stateInMeta ? null : STATE_SAID[block.state];
-  return [block.name, block.meta, block.tag, state, block.action].filter(Boolean).join(", ");
+  const stats = block.stats ? block.stats.map((stat) => stat.words).join(" · ") : null;
+  return [block.name, block.meta, stats, block.tag, block.projects && block.projects.words, state, block.action].filter(Boolean).join(", ");
 }

@@ -121,11 +121,23 @@ def test_the_first_run_slot_is_readable_in_both_themes():
 
 
 def test_a_preview_on_the_map_is_readable_in_both_themes():
-    # A preview block's "Preview" is --ink-2 on the preview fill.
-    assert "div.map .block.preview .block-meta { color: var(--ink-2); }" in CSS
+    # A preview block's "Preview" is the accent on the preview fill.
+    assert "div.map .block.preview .block-meta { color: var(--route); }" in CSS
     for theme in (LIGHT, DARK, {**LIGHT, **DARK_AUTO}):
         fill = blend(theme["--preview-fill"], theme["--canvas"])
-        assert contrast(theme["--ink-2"], fill) >= 4.5
+        assert contrast(theme["--route"], fill) >= 4.5
+
+
+def test_lamps_and_marks_keep_3_to_1_on_every_block_fill_in_both_themes():
+    # WCAG 1.4.11: a lamp or a tool's mark says on (green), off or outside the gateway (grey) or
+    # preview (an accent ring). Each keeps 3:1 on every fill a block takes: the panel, the
+    # gateway's raised panel, an outside block's dim fill, a selected block's tint and a preview.
+    for theme in (LIGHT, DARK, {**LIGHT, **DARK_AUTO}):
+        fills = [theme[f] for f in ("--panel", "--panel-raised", "--dim", "--route-soft")]
+        fills.append(blend(theme["--preview-fill"], theme["--canvas"]))
+        for lamp in ("--lamp-on", "--lamp-off", "--route"):
+            for fill in fills:
+                assert contrast(theme[lamp], fill) >= 3.0, (lamp, fill)
 
 
 def test_the_preview_tokens_are_the_frames_values():

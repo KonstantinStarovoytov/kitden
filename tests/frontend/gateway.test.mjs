@@ -139,7 +139,8 @@ test('the Gateway map has the mockup numbers', () => {
   assert.deepEqual(['group:kitden:remote', 'held:kitden:tracker', 'group:kitden:local', 'held:kitden:files'].map(y), [58, 81, 154, 177]);
   assert.equal(y('group:outside'), 268);
   const outside = l.blocks.filter((b) => b.kind === 'outside');
-  assert.deepEqual([outside[0].y, outside[1].y, outside[0].h], [309, 365, 50]);
+  // Its caption is one line, as in the mockup: the first block is 21 under it.
+  assert.deepEqual([outside[0].y, outside[1].y, outside[0].h], [289, 345, 50]);
   assert.equal(wideWidth(gatewayTree(MEDIUM_VIEW, OPTS)), 836);
 });
 
@@ -225,7 +226,7 @@ test('tags say where a rule comes from', () => {
   ];
   const view = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers }] };
   const tree = gatewayTree(view, { ...OPTS, picked: 'atlas' });
-  assert.equal(block(tree, 'tool:files/write_file').tag, 'This project');
+  assert.deepEqual(block(tree, 'tool:files/write_file').projects, { words: 'This project', own: true });
   assert.equal(block(tree, 'held:kitden:files').tag, 'Only this project');
   assert.equal(block(tree, 'held:kitden:tracker').tag, 'This project');
   assert.equal(block(gatewayTree(MEDIUM_VIEW, OPTS), 'held:kitden:files').tag, null);
@@ -354,10 +355,10 @@ test('a first run shows the gateway as a slot to set up and no grips', () => {
   assert.ok(m.blocks.filter((b) => b.kind === 'outside').every((b) => !b.grip));
   assert.equal(m.blocks.find((b) => b.id === 'client:codex').meta, 'Found · 0.48');
   assert.equal(m.blocks.find((b) => b.id === 'client:cursor').meta, 'Found');
-  // Found lights the dot, but no client reaches a gateway yet: its state, and the word a screen
+  // Found lights the lamp, but no client reaches a gateway yet: its state, and the word a screen
   // reader hears, stay Off, as the map shows no link.
   const codex = m.blocks.find((b) => b.id === 'client:codex');
-  assert.deepEqual([codex.dot, codex.state], ['on', 'off']);
+  assert.deepEqual([codex.lamp, codex.state], ['on', 'off']);
   assert.equal(blockLabel(codex), 'Codex, Found · 0.48, Off');
   // Direct lines are elbows on a first run too.
   assert.ok(m.links.filter((l) => l.to.startsWith('outside:')).every((l) => l.kind === 'direct'));
@@ -374,9 +375,9 @@ test('a first run shows the gateway as a slot to set up and no grips', () => {
 test('the map columns, and the Kitden gateway says its clients and servers', () => {
   assert.deepEqual(GATEWAY_COLUMNS.map((c) => c.caption), ['Clients', 'Gateway', 'Servers', 'Tools']);
   const tree = gatewayTree(MEDIUM_VIEW, OPTS);
-  assert.equal(block(tree, 'gateway:kitden').meta, '2 clients · 2 servers');
+  assert.deepEqual(block(tree, 'gateway:kitden').stats.map((s) => s.words), ['2 clients', '2 servers']);
   // Not read: no count of clients it does not know.
-  assert.equal(block(gatewayTree(MEDIUM_VIEW, { ...OPTS, setup: null }), 'gateway:kitden').meta, '2 servers');
+  assert.deepEqual(block(gatewayTree(MEDIUM_VIEW, { ...OPTS, setup: null }), 'gateway:kitden').stats.map((s) => s.words), ['2 servers']);
 });
 
 test('no grip where the row stays', () => {
@@ -428,11 +429,12 @@ test('an outside server Kitden does not know to be on has a dashed line and says
 });
 
 test('a gateway block speaks no state word, and one Kitden could not read is not known', () => {
-  // Its meta says its clients and servers: an "On" beside it would say more than Kitden knows.
+  // Its words say where it runs and its clients and servers: an "On" beside them would say more
+  // than Kitden knows.
   const tree = gatewayTree(MEDIUM_VIEW, OPTS);
-  assert.equal(blockLabel(block(tree, 'gateway:kitden')), 'Kitden gateway, 2 clients · 2 servers');
+  assert.equal(blockLabel(block(tree, 'gateway:kitden')), 'Kitden gateway, On this Mac, 2 clients · 2 servers');
   const none = ['claude_code', 'codex', 'cursor'].map((c) => entry(c, 'missing'));
-  assert.equal(blockLabel(block(gatewayTree(MEDIUM_VIEW, { ...OPTS, setup: none }), 'gateway:kitden')), 'Kitden gateway, 0 clients · 2 servers');
+  assert.equal(blockLabel(block(gatewayTree(MEDIUM_VIEW, { ...OPTS, setup: none }), 'gateway:kitden')), 'Kitden gateway, On this Mac, 0 clients · 2 servers');
   const broken = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers: [], problem: 'Kitden could not read the gateway settings.' }] };
   const unread = block(gatewayTree(broken, OPTS), 'gateway:kitden');
   assert.equal(unread.state, 'unk');
@@ -1135,4 +1137,95 @@ test('a drag keeps the pointer inside the block when the layout changes its size
     assert.ok(x + 6 > at.x + now.w - 40, 'and it stays near the same edge of the block');
     heard.pointerup[0]({ type: 'pointerup', clientX: x + 6, clientY: y });
   } finally { delete globalThis.document; }
+});
+
+test('a server block carries its lamp and on count', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+  // Its lamp is on while any of its tools is on; the number before "of" rolls on the map. It folds,
+  // so it has a right port too (the map shows it only while it is open).
+  const files = block(tree, 'held:kitden:files');
+  assert.deepEqual([files.lamp, files.meta, files.icon, files.ports], ['on', '3 of 4 on', 'hard-drive', { left: true, right: true }]);
+  // Off for all projects (on in one): none of its tools is on, so its lamp is off.
+  const tracker = block(tree, 'held:kitden:tracker');
+  assert.deepEqual([tracker.lamp, tracker.icon], ['off', 'globe']);
+  // On, with every tool off: off too. One whose tools Kitden does not know follows its switch, and
+  // does not fold.
+  const none = { ...MEDIUM_VIEW.gateways[0].servers[0], on_count: 0 };
+  const n8n = { name: 'n8n', kind: 'local', state: 'on', tools: null, on_count: 0, on_in: 0, tool_list: [] };
+  const view = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers: [none, n8n] }] };
+  const other = gatewayTree(view, OPTS);
+  assert.equal(block(other, 'held:kitden:files').lamp, 'off');
+  assert.deepEqual([block(other, 'held:kitden:n8n').lamp, block(other, 'held:kitden:n8n').ports], ['on', { left: true, right: false }]);
+  // A client: its lamp is on while it is connected, and its port is on its right.
+  assert.deepEqual(['claude_code', 'cursor'].map((id) => [block(tree, `client:${id}`).lamp, block(tree, `client:${id}`).ports]), [['on', { right: true }], ['off', { right: true }]]);
+  assert.equal(block(gatewayTree(MEDIUM_VIEW, { ...OPTS, setup: null }), 'client:codex').lamp, 'off');
+  // A server whose removal waits in the tray looks leaving until Apply.
+  const removing = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [trayRow(REMOVE_FILES)] });
+  assert.deepEqual([block(removing, 'held:kitden:files').leaving, block(removing, 'held:kitden:tracker').leaving], [true, undefined]);
+});
+
+test('the gateway block counts clients and servers, one in the singular', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+  const kitden = block(tree, 'gateway:kitden');
+  assert.deepEqual([kitden.meta, kitden.lamp, kitden.ports], ['On this Mac', 'on', { left: true, right: true }]);
+  assert.deepEqual(kitden.stats, [{ icon: 'monitor', words: '2 clients' }, { icon: 'server', words: '2 servers' }]);
+  assert.equal(blockLabel(kitden), 'Kitden gateway, On this Mac, 2 clients · 2 servers');
+  const one = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers: [MEDIUM_VIEW.gateways[0].servers[0]] }] };
+  const alone = [entry('claude_code', 'added'), entry('codex', 'missing'), entry('cursor', 'missing')];
+  assert.deepEqual(block(gatewayTree(one, { ...OPTS, setup: alone }), 'gateway:kitden').stats.map((s) => s.words), ['1 client', '1 server']);
+  // A server in preview is not in the gateway yet.
+  assert.deepEqual(block(gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [moveRow(GITHUB)] }), 'gateway:kitden').stats.map((s) => s.words), ['2 clients', '2 servers']);
+  // Without the setup read, no count of clients; with no settings read, no count at all and no lamp.
+  assert.deepEqual(block(gatewayTree(MEDIUM_VIEW, { ...OPTS, setup: null }), 'gateway:kitden').stats.map((s) => s.words), ['2 servers']);
+  const broken = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers: [], problem: 'Kitden could not read the gateway settings.' }] };
+  const unread = block(gatewayTree(broken, OPTS), 'gateway:kitden');
+  assert.deepEqual([unread.meta, unread.lamp, unread.stats], ['Could not read its settings.', undefined, null]);
+  // A registered gateway says where nothing runs: it has its counts only.
+  const obot = { id: 'gw-1', kind: 'obot', url: 'http://127.0.0.1:8080/mcp-connect/x', movable: true, managed: true };
+  const both = { ...MEDIUM_VIEW, gateways: [...MEDIUM_VIEW.gateways, obot], connections: { ...MEDIUM_VIEW.connections, 'gw-1': { codex: ['x'] } } };
+  const registered = block(gatewayTree(both, { ...OPTS, held: new Map([['gw-1', { servers: [{ name: 'x', type: 'STREAMABLE_HTTP' }] }]]) }), 'gateway:gw-1');
+  assert.deepEqual([registered.meta, registered.lamp, registered.stats.map((s) => s.words)], [null, undefined, ['1 client', '1 server']]);
+  assert.equal(blockLabel(registered), 'Obot, 1 client · 1 server');
+});
+
+test('a tool says how many projects have their own rule, also under All projects', () => {
+  const files = MEDIUM_VIEW.gateways[0].servers[0];
+  const tool_list = [
+    tool('read_file', 'on', 'reads', { own_in: 2 }),
+    tool('write_file', 'on', 'writes', { own_in: 1 }),
+    tool('delete_file', 'off', 'may write', { own_in: 0 }),
+  ];
+  const view = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers: [{ ...files, tool_list }] }] };
+  const all = gatewayTree(view, OPTS);
+  const shown = (tree, name) => block(tree, `tool:files/${name}`);
+  assert.deepEqual(['read_file', 'write_file', 'delete_file'].map((name) => shown(all, name).projects), [{ words: '2 projects', own: false }, { words: '1 project', own: false }, null]);
+  // A round mark: on or off; a left port where its link comes in.
+  assert.deepEqual([shown(all, 'read_file').lamp, shown(all, 'delete_file').lamp, shown(all, 'read_file').ports], ['on', 'off', { left: true }]);
+  assert.equal(blockLabel(shown(all, 'read_file')), 'read_file, 2 projects, On');
+  // In a project, "This project" in the accent when that project has a rule of its own.
+  const own = { ...view, gateways: [{ ...view.gateways[0], servers: [{ ...files, tool_list: [tool('read_file', 'off', 'reads', { origin: 'project', own_in: 2 }), tool('write_file', 'on', 'writes', { own_in: 1 })] }] }] };
+  const atlas = gatewayTree(own, { ...OPTS, picked: 'atlas' });
+  assert.deepEqual([shown(atlas, 'read_file').projects, shown(atlas, 'write_file').projects], [{ words: 'This project', own: true }, null]);
+  // While a rule for it in the scope shown waits in the tray, its mark is a dashed ring.
+  const off = (project) => trayRow(ruleBody('files', 'read_file', 'off', project));
+  assert.equal(shown(gatewayTree(view, { ...OPTS, rows: [off(null)] }), 'read_file').lamp, 'preview');
+  assert.equal(shown(gatewayTree(own, { ...OPTS, picked: 'atlas', rows: [off('atlas')] }), 'read_file').lamp, 'preview');
+  assert.equal(shown(gatewayTree(own, { ...OPTS, picked: 'atlas', rows: [off(null)] }), 'read_file').lamp, 'off');
+  assert.equal(shown(gatewayTree(view, { ...OPTS, rows: [off(null)] }), 'write_file').lamp, 'on');
+  assert.equal(shown(gatewayTree(view, { ...OPTS, rows: [trayRow(ruleBody('files', 'read_file', 'off', null), null)] }), 'read_file').lamp, 'on');
+});
+
+test('an outside block has a grey-ring lamp and a grip only where the gateway can take it', () => {
+  const plugin = { name: 'linear', clients: ['claude_code'], columns: ['claude_code'], items: [], stays: 'linear comes with a plugin; it stays with the plugin.' };
+  const tree = gatewayTree({ ...MEDIUM_VIEW, groups: { ...MEDIUM_VIEW.groups, plugin: [plugin] } }, OPTS);
+  const shown = (id) => { const b = block(tree, id); return [b.lamp, b.ports, b.icon, Boolean(b.grip), b.meta]; };
+  assert.deepEqual(shown('outside:move:github'), ['out', { left: 'out' }, 'globe', true, 'In Claude Code']);
+  assert.deepEqual(shown('outside:local:files'), ['out', { left: 'out' }, 'hard-drive', true, 'In Cursor']);
+  assert.deepEqual(shown('outside:plugin:linear'), ['out', { left: 'out' }, 'package-open', false, 'In Claude Code']);
+  // The caption asks for a drag on the map; the List, which has no drag, keeps its own words.
+  assert.equal(block(tree, 'group:outside').name, 'Outside the gateway · drag one in');
+  assert.ok(listRows(tree).some((r) => r.name === "Outside the gateway · calls skip Kitden's rules"));
+  // A move in the tray: its block is the preview look, with a left port and the words of a press.
+  const moving = block(gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [moveRow(GITHUB)] }), 'preview:github');
+  assert.deepEqual([moving.lamp, moving.ports, moving.icon, moving.takeOut], ['preview', { left: true }, 'globe', 'In preview. Click to take it out.']);
 });

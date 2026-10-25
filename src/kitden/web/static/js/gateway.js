@@ -1,6 +1,6 @@
 // Gateway: the clients, the gateways and the MCP servers they reach, as a Map or a List. Each
 // row opens its Details beside the page (gateway-details.js).
-import { $, button, el, gridKey, joinWords, plural, reportError, withFocusKey } from "./dom.js";
+import { $, button, el, gridKey, icon, joinWords, plural, reportError, withFocusKey } from "./dom.js";
 import { addForm, heldServer, liveHeld, movesTo, ruleBody, SETUP_NOTE, showClient, showGateway, showHeld, showOutside, showTool } from "./gateway-details.js";
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { findIn, foldable, isNarrow, keepOpen, layoutTree, linkKey, litFrom, litPath, pressOpen, toggleOpen, wideWidth } from "./map.js";
@@ -16,14 +16,22 @@ import { addToTray, inTray, keyFor, onTray, takeOut, tray } from "./tray.js";
 export { heldServer, kitdenLinks, SETUP_NOTE } from "./gateway-details.js";
 
 const WRITABLE = ["claude_code", "codex", "cursor"];
+// The group of servers outside the gateway: the List's words, and the map's, which asks for a drag.
 const OUTSIDE = "Outside the gateway · calls skip Kitden's rules";
-// On the map these words take two lines in their column, and an outside server's block is 50 high.
-const OUTSIDE_H = 36;
+const OUTSIDE_MAP = "Outside the gateway · drag one in";
+// On the map these words take one line, wider than their column, and an outside server's block is
+// 50 high.
+const OUTSIDE_H = 16;
 const OUTSIDE_BLOCK_H = 50;
 // The groups of servers outside the gateway in /api/gateway-view, in the order the page lists them.
 const OUTSIDE_GROUPS = ["move", "local", "plugin"];
-// The icon of a server outside the gateway, by its group.
-const OUTSIDE_ICONS = { move: "remote", local: "local", plugin: "plugin" };
+// The icon of a server on the map, by what it is: one reached over the network, one that runs on
+// this Mac, one that comes with a plugin. Kitden knows no icon of a server's own.
+const SERVER_ICONS = { remote: "globe", local: "hard-drive", plugin: "package-open" };
+// ... and of a server outside the gateway, by its group.
+const OUTSIDE_ICONS = { move: SERVER_ICONS.remote, local: SERVER_ICONS.local, plugin: SERVER_ICONS.plugin };
+// What a block in preview says under the pointer: a press takes its row out of the tray (D12).
+const IN_PREVIEW = "In preview. Click to take it out.";
 // A gateway's own groups, each with the icon of its caption.
 const KINDS = [["remote", "Remote", "cloud"], ["local", "Local", "hard-drive"]];
 // A gateway's block, or on a first run the slot of the Kitden gateway.
@@ -224,23 +232,21 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
     const found = (clients || []).find((c) => c.id === id && c.status === "found");
     // Without the setup read, a client is neither connected nor not.
     let meta = known ? (on ? "Connected" : "Not connected") : NOT_KNOWN;
-    // Found lights the dot; the state stays what the link shows: no gateway reached yet.
-    let dot = null;
-    if (first && found) [meta, dot] = [found.version ? `Found · ${found.version}` : "Found", "on"];
-    blocks.push({ id: `client:${id}`, column: "clients", kind: "client", name: CLIENT_NAMES[id], meta, dot, state: known ? (on ? "on" : "off") : "unk", client: id });
+    // Found lights the lamp; the state stays what the link shows: no gateway reached yet.
+    let lamp = on ? "on" : "off";
+    if (first && found) [meta, lamp] = [found.version ? `Found · ${found.version}` : "Found", "on"];
+    blocks.push({ id: `client:${id}`, column: "clients", kind: "client", name: CLIENT_NAMES[id], meta, lamp, state: known ? (on ? "on" : "off") : "unk", client: id, ports: { right: true } });
   }
   // A gateway block joined to the clients it `reaches` (null when not read), then its servers in
   // their groups; `server(block, word)` adds what each server's block says. `unread` says why
   // Kitden does not know what it holds, so no count shows: a problem is not an empty gateway.
   // `ends` are blocks for the end of a group (each `{ kind, block }`), which open that group if
   // need be.
-  // A gateway block speaks no state word: its meta says its clients and servers, or what Kitden
-  // could not read, and then its state is not known.
+  // A gateway block speaks no state word: it says where it runs and its clients and servers, or
+  // what Kitden could not read, and then its state is not known.
   const addGateway = (gateway, reaches, servers, kindOf, server, unread = null, ends = []) => {
     const id = `gateway:${gateway.id}`;
-    const n = plural(servers.length, "server", "servers");
-    const counts = reaches ? `${plural(reaches.length, "client", "clients")} · ${n}` : n;
-    blocks.push({ id, column: "gateway", kind: "gateway", name: gatewayName(gateway), meta: unread === null ? counts : unread || null, state: unread ? "unk" : "on", stateInMeta: true, gateway, unread });
+    blocks.push({ id, column: "gateway", kind: "gateway", name: gatewayName(gateway), ...gatewayFace(gateway, reaches, servers, unread), state: unread ? "unk" : "on", stateInMeta: true, gateway, unread, ports: { left: true, right: true } });
     for (const client of reaches || []) links.push({ from: `client:${client}`, to: id, kind: "on" });
     for (const [kind, word, mark] of KINDS) {
       const mine = servers.filter((s) => kindOf(s) === kind);
@@ -249,7 +255,7 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
       const group = `group:${gateway.id}:${kind}`;
       blocks.push({ id: group, column: "servers", kind: "group", name: word, icon: mark, before: 3, under: id });
       for (const each of mine) {
-        const block = { id: `held:${gateway.id}:${each.name}`, column: "servers", parent: group, kind: "held", name: each.name, state: "on", icon: kind, server: each, gateway };
+        const block = { id: `held:${gateway.id}:${each.name}`, column: "servers", parent: group, kind: "held", name: each.name, state: "on", lamp: "on", icon: SERVER_ICONS[kind], ports: { left: true }, server: each, gateway };
         server(block, word);
         blocks.push(block);
         if (block.state === "on") links.push({ from: id, to: block.id, kind: "on" });
@@ -267,26 +273,16 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
     const action = targets.length ? { action: "Set up…", setup: { action: "setup_server.register", targets, params: {} } } : {};
     blocks.push({ id: `gateway:${kitden.id}`, column: "gateway", kind: "slot", name: "No gateway yet", meta: "One place for servers, rules and logins.", gateway: kitden, unread: null, ...action });
   } else if (kitden) {
+    const waiting = waitingTools(rows, picked);
     addGateway(kitden, known ? linked : null, kitden.servers || [], (s) => s.kind, (block, word) => {
-      const server = block.server;
-      const list = server.tool_list || [];
-      block.state = server.state === "off" ? "off" : "on";
-      block.onCount = list.length ? `${server.on_count} of ${list.length} on` : null;
-      block.onIn = !picked && server.on_in ? `On in ${plural(server.on_in, "project", "projects")}` : null;
-      block.meta = block.onIn || block.onCount || word;
-      // "On in 2 projects" says the state itself; a lone On or Off beside it would contradict it.
-      block.stateInMeta = Boolean(block.onIn);
-      block.tag = heldTag(server, block.state === "on");
-      block.count = server.tools;
-      for (const tool of list) {
-        // `effective` counts the server's switch too: a tool of a server that is off is off.
-        const on = (tool.effective ?? tool.state) === "on";
-        const id = `tool:${server.name}/${tool.name}`;
-        tools.push({ id, column: "tools", parent: block.id, kind: "tool", name: tool.name, state: on ? "on" : "off", tag: tool.origin === "project" ? ORIGIN_WORDS.override : null, tool, server });
-        if (on) links.push({ from: block.id, to: id, kind: "on" });
+      kitdenServer(block, word, picked);
+      for (const tool of block.server.tool_list || []) {
+        const shown = toolBlock(block, tool, picked, waiting);
+        tools.push(shown);
+        if (shown.state === "on") links.push({ from: block.id, to: shown.id, kind: "on" });
       }
     }, kitden.problem ? "Could not read its settings." : null, adds);
-    leaveLinks(links, kitden, rows, picked);
+    leaveParts(blocks, links, kitden, rows, picked);
   }
   for (const other of usedFirst(view, view.gateways.filter((g) => g.kind !== "kitden"))) {
     const per = view.connections[other.id] || {};
@@ -301,7 +297,7 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
   }
   blocks.push(...tools);
   const outside = OUTSIDE_GROUPS.flatMap((key) => (view.groups[key] || []).map((row) => [key, row]));
-  if (outside.length) blocks.push({ id: "group:outside", column: "servers", kind: "group", name: OUTSIDE, icon: "info", h: OUTSIDE_H, before: 21, rowGap: 6 });
+  if (outside.length) blocks.push({ id: "group:outside", column: "servers", kind: "group", name: OUTSIDE_MAP, icon: "info", h: OUTSIDE_H, before: 21, rowGap: 6 });
   for (const [key, row] of outside) {
     const id = `outside:${key}:${row.name}`;
     const columns = (row.columns || row.clients).filter((c) => WRITABLE.includes(c));
@@ -313,7 +309,7 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
     // needs no second one.
     const grip = targets.some((g) => g.kind === "kitden") && !first && !moved.has(id);
     const state = row.unknown ? "unk" : "on";
-    blocks.push({ id, column: "servers", parent: "group:outside", kind: "outside", name: row.name, meta, tag, state, h: OUTSIDE_BLOCK_H, icon: OUTSIDE_ICONS[key], row, groupKey: key, columns, move, grip });
+    blocks.push({ id, column: "servers", parent: "group:outside", kind: "outside", name: row.name, meta, tag, state, lamp: "out", h: OUTSIDE_BLOCK_H, icon: OUTSIDE_ICONS[key], ports: { left: "out" }, row, groupKey: key, columns, move, grip });
     const line = row.unknown ? { kind: "direct", unk: true } : { kind: "direct" };
     if (!moved.has(id)) for (const client of columns) links.push({ from: `client:${client}`, to: id, ...line });
   }
@@ -341,8 +337,8 @@ function movesIn(view, kitden, rows, drop) {
       for (const each of view.groups[group] || []) {
         if (!each.items.length || !each.items.every((item) => items.has(item))) continue;
         const outside = `outside:${group}:${each.name}`;
-        const icon = group === "local" ? "local" : "remote";
-        add(group, each.name, row.part ? { id: `preview:${each.name}`, column: "servers", kind: "preview", name: each.name, meta: "Preview", stateInMeta: true, state: "preview", icon, row: row.key, outside } : slot(each.name));
+        const look = { icon: SERVER_ICONS[group === "local" ? "local" : "remote"], lamp: "preview", ports: { left: true }, takeOut: IN_PREVIEW };
+        add(group, each.name, row.part ? { id: `preview:${each.name}`, column: "servers", kind: "preview", name: each.name, meta: "Preview", stateInMeta: true, state: "preview", ...look, row: row.key, outside } : slot(each.name));
       }
     }
   }
@@ -350,19 +346,80 @@ function movesIn(view, kitden, rows, drop) {
   return { adds, moved };
 }
 
-// The links a change in the tray takes out, once its row has its part: a server's link from the
-// Kitden gateway, and a tool's link from its server when the rule is for the scope shown
-// (`picked`, "" for all projects). They are drawn leaving.
-function leaveLinks(links, kitden, rows, picked) {
+// What a change in the tray takes out, once its row has its part: a server's link from the Kitden
+// gateway, and the server itself, which looks leaving; and a tool's link from its server when the
+// rule is for the scope shown (`picked`, "" for all projects). The links are drawn leaving.
+function leaveParts(blocks, links, kitden, rows, picked) {
   for (const row of rows) {
     if (!row.part) continue;
     const { action, params = {} } = row.body;
     let key = null;
-    if (action === "gateway.remove") key = `gateway:${kitden.id}>held:${kitden.id}:${params.server}`;
-    else if (action === "gateway.rule" && params.state === "off" && (params.project || "") === (picked || "")) key = `held:${kitden.id}:${params.server}>tool:${params.server}/${params.tool}`;
+    if (action === "gateway.remove") {
+      key = `gateway:${kitden.id}>held:${kitden.id}:${params.server}`;
+      const server = blocks.find((b) => b.id === `held:${kitden.id}:${params.server}`);
+      if (server) server.leaving = true;
+    } else if (action === "gateway.rule" && params.state === "off" && (params.project || "") === (picked || "")) key = `held:${kitden.id}:${params.server}>tool:${params.server}/${params.tool}`;
     const link = key && links.find((l) => linkKey(l) === key);
     if (link) Object.assign(link, { leaving: true, row: row.key });
   }
+}
+
+// The tools whose rule for the scope shown (`picked`, "" for all projects) waits in the tray, once
+// its row has its part, as "server/tool": their mark is a dashed ring until Apply.
+function waitingTools(rows, picked) {
+  const waiting = new Set();
+  for (const row of rows) {
+    const { action, params = {} } = row.body;
+    if (row.part && action === "gateway.rule" && params.tool && (params.project || "") === (picked || "")) waiting.add(`${params.server}/${params.tool}`);
+  }
+  return waiting;
+}
+
+// What a gateway's block says under its name: the Kitden gateway's lamp and where it runs, then
+// how many clients it reaches (when the setup was read, `reaches`) and how many servers it holds,
+// each with its icon. A gateway Kitden could not read says why instead (`unread`), and one it is
+// still reading says nothing.
+function gatewayFace(gateway, reaches, servers, unread) {
+  if (unread !== null) return { meta: unread || null, stats: null };
+  const stats = [{ icon: "server", words: plural(servers.length, "server", "servers") }];
+  if (reaches) stats.unshift({ icon: "monitor", words: plural(reaches.length, "client", "clients") });
+  return gateway.kind === "kitden" ? { meta: gateway.where, lamp: "on", stats } : { meta: null, stats };
+}
+
+// A server of the Kitden gateway (`block`, with `word`, Remote or Local, for one whose tools Kitden
+// does not know): how many of its tools are on ("3 of 4 on") or, with All projects, in how many
+// projects it is on; its lamp, on while any of its tools is on (by its switch while Kitden knows
+// none); its tag in a project; its tool count, so it folds; and then a right port too.
+function kitdenServer(block, word, picked) {
+  const server = block.server;
+  const list = server.tool_list || [];
+  block.state = server.state === "off" ? "off" : "on";
+  block.onCount = list.length ? `${server.on_count} of ${list.length} on` : null;
+  block.onIn = !picked && server.on_in ? `On in ${plural(server.on_in, "project", "projects")}` : null;
+  block.meta = block.onIn || block.onCount || word;
+  // "On in 2 projects" says the state itself; a lone On or Off beside it would contradict it.
+  block.stateInMeta = Boolean(block.onIn);
+  block.tag = heldTag(server, block.state === "on");
+  block.count = server.tools;
+  block.lamp = (list.length ? server.on_count > 0 : block.state === "on") ? "on" : "off";
+  block.ports = { left: true, right: typeof block.count === "number" };
+}
+
+// "This project" for a tool whose rule is the picked project's own.
+const ownTag = (tool) => (tool.origin === "project" ? ORIGIN_WORDS.override : null);
+
+// A tool of a server in the Kitden gateway (`held`, its block): on or off (`effective` counts the
+// server's switch too: a tool of a server that is off is off), its mark (a dashed ring while a rule
+// for it in the scope shown waits in the tray, `waiting`), and which projects have a rule of their
+// own for it: with All projects how many (`own_in`), in a project "This project" when it is one.
+function toolBlock(held, tool, picked, waiting) {
+  const server = held.server;
+  const on = (tool.effective ?? tool.state) === "on";
+  const own = picked ? ownTag(tool) : null;
+  let projects = own ? { words: own, own: true } : null;
+  if (!picked && tool.own_in) projects = { words: plural(tool.own_in, "project", "projects"), own: false };
+  const lamp = waiting.has(`${server.name}/${tool.name}`) ? "preview" : on ? "on" : "off";
+  return { id: `tool:${server.name}/${tool.name}`, column: "tools", parent: held.id, kind: "tool", name: tool.name, state: on ? "on" : "off", lamp, projects, ports: { left: true }, tool, server };
 }
 
 // The List's rows, in order, from the tree: a "Clients" group of client rows; each gateway's own
@@ -412,14 +469,14 @@ export function listRows(model, open = new Set(), folded = new Set()) {
         const opened = tools.length ? open.has(server.id) : undefined;
         const own = server.gateway.kind === "kitden";
         row(server, g.id, 2, { usedBy: server.state === "on" ? linked : [], tools: own ? server.onCount : null, meta: own ? server.onIn : server.meta, expanded: opened });
-        if (opened) for (const t of tools) row(t, server.id, 3, { tag: HINT_TAGS[t.tool.hint] || null, scope: t.tag || null });
+        if (opened) for (const t of tools) row(t, server.id, 3, { tag: HINT_TAGS[t.tool.hint] || null, scope: ownTag(t.tool) });
       });
     }
   }
   const outside = model.blocks.find((b) => b.id === "group:outside");
   // An outside server no client is known to load says so; the others are on.
   const outsideRow = (b) => row(b, outside.id, 1, { usedBy: b.columns, action: b.move ? "move" : "open", meta: b.state === "unk" ? NOT_KNOWN : null });
-  if (outside) group(outside.id, outside.name, null, 0, children.get(outside.id) || [], outsideRow);
+  if (outside) group(outside.id, OUTSIDE, null, 0, children.get(outside.id) || [], outsideRow);
   return rows;
 }
 
@@ -836,28 +893,9 @@ function focusGateway({ fromDock }) {
   if (node) node.focus({ preventScroll: true });
 }
 
-const SVG = "http://www.w3.org/2000/svg";
-// Small line icons on a 16-unit grid, in the text color: a remote server (a globe), a local one
-// (a terminal) and one that comes with a plugin (a box).
-const ICONS = {
-  remote: "M8 1.75a6.25 6.25 0 1 0 0 12.5a6.25 6.25 0 1 0 0-12.5M1.75 8h12.5M8 1.75c-2.2 2.4-2.2 10.1 0 12.5M8 1.75c2.2 2.4 2.2 10.1 0 12.5",
-  local: "M1.75 3.25h12.5v9.5H1.75zM4.5 6.25l2 1.75-2 1.75M8 10h3.5",
-  plugin: "M8 1.75l5.5 3v6.5L8 14.25l-5.5-3v-6.5zM2.5 4.75L8 7.75l5.5-3M8 7.75v6.5",
-};
-
-function icon(name) {
-  const svg = document.createElementNS(SVG, "svg");
-  for (const [key, value] of Object.entries({ viewBox: "0 0 16 16", width: "16", height: "16", fill: "none", stroke: "currentColor", "stroke-width": "1.3", "stroke-linecap": "round", "stroke-linejoin": "round" })) svg.setAttribute(key, value);
-  const path = document.createElementNS(SVG, "path");
-  path.setAttribute("d", ICONS[name] || ICONS.remote);
-  svg.append(path);
-  const holder = el("span", "block-icon");
-  holder.append(svg);
-  return holder;
-}
-
 // What a block shows before its name: a client's tile, the Kitden house (it keeps its own color),
-// a registered gateway's mark, or what kind of server it is. The slot of a drag shows nothing.
+// a registered gateway's mark, or the icon of what kind of server it is (15 px, on a tile of its
+// own except outside the gateway, style.css). The slot of a drag shows nothing.
 function tile(block) {
   if (block.kind === "client") return mark(block.client);
   if (GATEWAY_KINDS.includes(block.kind) && block.gateway) {
@@ -867,7 +905,10 @@ function tile(block) {
     house.alt = "";
     return house;
   }
-  return block.icon ? icon(block.icon) : null;
+  if (!block.icon) return null;
+  const holder = el("span", "block-icon");
+  holder.append(icon(block.icon, 15));
+  return holder;
 }
 
 // The List, a tree grid: the servers that show their tools (`open`), the groups and gateways the
