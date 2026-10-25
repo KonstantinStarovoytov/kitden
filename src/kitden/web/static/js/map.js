@@ -35,7 +35,8 @@ import { plural } from "./dom.js";
 export const GAP = 46; // between two columns
 export const NARROW_GAP = 28; // between two columns in a narrow window
 export const GROUP_H = 22; // narrow: a group caption's height
-export const GROUP_MAX = 6; // a group with more children shows five and "N more"
+export const GROUP_MAX = 6; // a group with more children pages: five a page and "N more"
+const PAGE = 5; // the children a page of a group shows
 export const CAPTION_H = 18; // a column's caption, at the top of its column; a group's too
 export const CAPTION_ROW = 24; // the blocks of a column start under its caption
 export const CAPTION_GAP = 5; // between a group's caption and its first block
@@ -91,17 +92,80 @@ function childrenOf(model) {
 
 // What a group always shows whole: a preview and the slot of a drag are never behind "N more".
 const PINNED = ["preview", "slot"];
+// The words of "N more" on a group's last page: a press goes back to the first.
+const FIRST_PAGE = "Show the first 5";
 
-// The children a block shows: a group's always (past GROUP_MAX the first five and a block
-// "N more", then a preview or a slot, unless the group is open), any other block's only while it
-// is open.
-function shownChildren(block, children, open) {
-  if (block.kind !== "group") return open.has(block.id) ? children : [];
+// How a group of more than GROUP_MAX children pages: the children that page (not a preview or a
+// slot), how many pages, and the page it shows (`pages`, from 0; past the last, the last). Null
+// for any other block.
+function paging(block, children, pages = new Map()) {
+  if (block.kind !== "group") return null;
   const rest = children.filter((child) => !PINNED.includes(child.kind));
-  if (rest.length <= GROUP_MAX || open.has(block.id)) return children;
+  if (rest.length <= GROUP_MAX) return null;
+  const count = Math.ceil(rest.length / PAGE);
+  return { rest, count, page: Math.min(Math.max(0, pages.get(block.id) || 0), count - 1) };
+}
+
+// The children a block shows: a group's always (past GROUP_MAX the five of its page, each marked
+// as turning with it, and a block "N more", then a preview or a slot), any other block's only
+// while it is open.
+function shownChildren(block, children, open, pages) {
+  if (block.kind !== "group") return open.has(block.id) ? children : [];
+  const paged = paging(block, children, pages);
+  if (!paged) return children;
+  const { rest, page } = paged;
+  const after = rest.length - (page + 1) * PAGE;
   // "N more" is as high as the blocks it stands for (an outside server's block is higher than the column's).
-  const more = { id: `more:${block.id}`, column: block.column, parent: block.id, kind: "more", name: `${rest.length - GROUP_MAX + 1} more`, ...(rest[0].h ? { h: rest[0].h } : {}) };
-  return [...rest.slice(0, GROUP_MAX - 1), more, ...children.filter((child) => PINNED.includes(child.kind))];
+  const more = { id: `more:${block.id}`, column: block.column, parent: block.id, kind: "more", name: after > 0 ? `${after} more` : FIRST_PAGE, ...(rest[0].h ? { h: rest[0].h } : {}) };
+  const shown = rest.slice(page * PAGE, (page + 1) * PAGE).map((child) => ({ ...child, turns: block.id }));
+  return [...shown, more, ...children.filter((child) => PINNED.includes(child.kind))];
+}
+
+// What the layout says of a block beyond its place: the words of "N more"; a group that pages,
+// the page it shows and its caption with which ones ("Remote · 6–10 of 12"); a block on a page,
+// the group it turns with.
+function pageParts(block, children, pages) {
+  if (block.kind === "more") return { name: block.name };
+  const parts = block.turns ? { turns: block.turns } : {};
+  const paged = paging(block, children, pages);
+  if (!paged) return parts;
+  const { rest, page } = paged;
+  return { ...parts, page, name: `${block.name} · ${page * PAGE + 1}–${Math.min(rest.length, (page + 1) * PAGE)} of ${rest.length}` };
+}
+
+// The pages after a press on "N more" (`more:<group id>`): its group shows its next five, and its
+// last page the first five again.
+export function turnPage(model, pages, id) {
+  const group = model.blocks.find((block) => `more:${block.id}` === id);
+  const paged = group && paging(group, childrenOf(model).get(group.id) || [], pages);
+  if (!paged) return pages;
+  return new Map(pages).set(group.id, (paged.page + 1) % paged.count);
+}
+
+// The pages that show `ids` (a search's matches, a selection): a group that pages turns to the page
+// of the first one it holds, or holds a block above, unless the page shown holds one already. An
+// id that is no block turns nothing. `pages` itself when nothing turns.
+export function pagesWith(model, pages, ids) {
+  const byId = new Map(model.blocks.map((block) => [block.id, block]));
+  const children = childrenOf(model);
+  const wanted = new Map(); // group id -> the pages that hold one of `ids`
+  for (const id of ids) {
+    for (let at = byId.get(id); at; at = byId.get(at.parent)) {
+      const group = byId.get(at.parent);
+      const paged = group && paging(group, children.get(group.id) || [], pages);
+      const i = paged ? paged.rest.indexOf(at) : -1;
+      if (i < 0) continue;
+      if (!wanted.has(group.id)) wanted.set(group.id, { shown: paged.page, holds: [] });
+      wanted.get(group.id).holds.push(Math.floor(i / PAGE));
+    }
+  }
+  let next = pages;
+  for (const [group, { shown, holds }] of wanted) {
+    if (holds.includes(shown)) continue;
+    if (next === pages) next = new Map(pages);
+    next.set(group, holds[0]);
+  }
+  return next;
 }
 
 // Where each shown block goes, for any tree model: `{ columns: [{id, x, w}], blocks: [{id, kind,
@@ -118,8 +182,9 @@ function shownChildren(block, children, open) {
 // blocks are drawn: `shape` is "rail", "step" (a direct line) or "curve", and `d` its SVG path. A
 // direct line carries the `chan` it turns on, how far right of its client: wide, one of CHANNELS by
 // the place of its block among those with a direct line, so the lines to blocks one after the other
-// run side by side; narrow, NARROW_CHANNEL.
-export function layoutTree(model, { open = new Set(), width = 0, narrow = isNarrow(width) } = {}) {
+// run side by side; narrow, NARROW_CHANNEL. A group of more than GROUP_MAX shows five a page, the
+// page `pages` names (group id -> from 0), and "N more".
+export function layoutTree(model, { open = new Set(), pages = new Map(), width = 0, narrow = isNarrow(width) } = {}) {
   const byId = new Map(model.blocks.map((block) => [block.id, block]));
   const children = childrenOf(model);
   const own = new Set(model.blocks.filter((block) => !byId.has(block.parent)).map((block) => block.column));
@@ -152,7 +217,7 @@ export function layoutTree(model, { open = new Set(), width = 0, narrow = isNarr
     const h = block.h ?? (group ? (narrow ? GROUP_H : CAPTION_H) : size.h);
     const at = { id: block.id, kind: block.kind, x: left, y, w, h };
     if (opener) at.opener = opener;
-    if (block.kind === "more") at.name = block.name;
+    Object.assign(at, pageParts(block, children.get(block.id) || [], pages));
     if (block.details) at.details = true;
     placed.set(block.id, at);
     blocks.push(at);
@@ -161,7 +226,7 @@ export function layoutTree(model, { open = new Set(), width = 0, narrow = isNarr
     const between = wideGroup && block.rowGap !== undefined ? block.rowGap : size.row;
     let gap = wideGroup ? CAPTION_GAP : size.row;
     let bottom = y + h;
-    for (const child of shownChildren(block, children.get(block.id) || [], open)) {
+    for (const child of shownChildren(block, children.get(block.id) || [], open, pages)) {
       if (child.column === block.column) bottom = stack(child, left, w, bottom + gap, opener);
       else if (narrow) bottom = stack(child, left + RAIL, Math.min(w - RAIL, sizes.get(child.column).w), bottom + gap, block.id);
       else continue;
@@ -299,28 +364,39 @@ export function midPoint(d) {
 // What changes from the layout `before` (null: nothing drawn yet) to `after`: the block ids that
 // enter, stay and leave, and the link keys likewise, in layout order (what leaves in the order of
 // `before`). A block enters as an unfold when its opener showed before, and leaves as a fold when
-// its opener still shows after.
+// its opener still shows after; a block of a group that turned its page does the same.
 export function drawPlan(before, after) {
   const was = new Map((before ? before.blocks : []).map((at) => [at.id, at]));
   const now = new Map(after.blocks.map((at) => [at.id, at]));
   const plan = { enter: [], stay: [], leave: [], unfold: [], fold: [], linksIn: [], linksStay: [], linksOut: [] };
+  const turned = (at) => Boolean(at.turns) && turnedPage(was.get(at.turns), now.get(at.turns));
   for (const at of after.blocks) {
     if (was.has(at.id)) plan.stay.push(at.id);
     else {
       plan.enter.push(at.id);
-      if (at.opener && was.has(at.opener)) plan.unfold.push(at.id);
+      if ((at.opener && was.has(at.opener)) || turned(at)) plan.unfold.push(at.id);
     }
   }
   for (const at of was.values()) {
     if (now.has(at.id)) continue;
     plan.leave.push(at.id);
-    if (at.opener && now.has(at.opener)) plan.fold.push(at.id);
+    if ((at.opener && now.has(at.opener)) || turned(at)) plan.fold.push(at.id);
   }
   const drawn = new Set((before ? before.links : []).map(linkKey));
   const shown = new Set(after.links.map(linkKey));
   for (const key of shown) plan[drawn.has(key) ? "linksStay" : "linksIn"].push(key);
   for (const key of drawn) if (!shown.has(key)) plan.linksOut.push(key);
   return plan;
+}
+
+// Whether a group shows another page now (`now`) than before (`was`): both show, and both page.
+function turnedPage(was, now) {
+  return Boolean(was && now) && was.page !== undefined && now.page !== undefined && was.page !== now.page;
+}
+
+// The block a block of a fold goes back into: its opener, or the group whose page turned.
+export function foldsInto(at) {
+  return at.opener || at.turns;
 }
 
 // How wide the map is when it lays out wide: every column and the gaps between them.
@@ -400,16 +476,17 @@ export function pressOpen(model, open, found, id) {
 }
 
 // What the person has open after they select `block`, so it stays on the map when the search that
-// showed it ends. A block that shows already changes nothing. Otherwise the blocks above it open,
-// the outermost first, as presses would open them: one open block per column.
-export function keepOpen(model, open, block) {
-  const shown = (set) => layoutTree(model, { open: set, narrow: false }).blocks.some((at) => at.id === block.id);
+// showed it ends. A block that shows already (on the `pages` shown) changes nothing. Otherwise the
+// blocks above it open, the outermost first, as presses would open them: one open block per
+// column. A group never opens: it always shows its page.
+export function keepOpen(model, open, block, pages = new Map()) {
+  const shown = (set) => layoutTree(model, { open: set, pages, narrow: false }).blocks.some((at) => at.id === block.id);
   if (shown(open)) return open;
   const byId = new Map(model.blocks.map((b) => [b.id, b]));
   const above = [];
   for (let at = byId.get(block.parent); at && !above.includes(at.id); at = byId.get(at.parent)) above.unshift(at.id);
   let next = open;
-  for (const id of above) if (!next.has(id)) next = toggleOpen(model, next, id);
+  for (const id of above) if (!next.has(id) && byId.get(id).kind !== "group") next = toggleOpen(model, next, id);
   return next;
 }
 

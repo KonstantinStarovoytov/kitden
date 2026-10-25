@@ -3,12 +3,12 @@
 import { $, button, el, gridKey, icon, joinWords, plural, reportError, withFocusKey } from "./dom.js";
 import { addForm, connectAction, connectBody, heldServer, liveHeld, movesTo, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool, TAKE_OUT } from "./gateway-details.js";
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
-import { findIn, foldable, isNarrow, keepOpen, layoutTree, linkKey, litFrom, litPath, pressOpen, toggleOpen, wideWidth } from "./map.js";
+import { findIn, foldable, isNarrow, keepOpen, layoutTree, linkKey, litFrom, litPath, pagesWith, pressOpen, toggleOpen, turnPage, wideWidth } from "./map.js";
 import { mapView } from "./map-view.js";
 import { afterOldPage, D, entrance, glide, rise, riseHead } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, openInfo, panelState, projectLabel, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, folderName, gatewayName, kitdenClients, mark, opens, ORIGIN_WORDS, scopeBar, skeleton, STATE_WORDS, staleNote } from "./parts.js";
-import { arrival, current, currentError, data, go, goTo, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
+import { arrival, current, currentError, data, go, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
 import { addToTray, inTray, keyFor, onTray, takeOut, tray } from "./tray.js";
 
 // Overview sets a client up with the same note. A server the Kitden gateway holds, and its
@@ -642,11 +642,6 @@ export function findRows(model, found, open, folded) {
   return listRows(model, new Set([...open, ...found.open]), unfolded).map((row) => ({ ...row, found: found.matches.has(row.id), kept: above.has(row.id) }));
 }
 
-// "N more" (`more:group:<id>`) and a group (`group:<id>`) open the List at that group.
-export function listAt(id) {
-  return { mode: "list", selected: { kind: "group", name: id.replace(/^more:/, "").replace(/^group:/, "") } };
-}
-
 // The map lays out narrow by the window rule (isNarrow: under 1024 px), and also when its box (null
 // before it is measured) is too small for the wide map, so it never needs to scroll sideways where
 // the narrow one fits. Details float over it, so they never make it narrow.
@@ -694,10 +689,10 @@ function keepBeside() {
 
 // The map: the blocks open and the one selected, its view (map-view.js, one per visit) and the
 // tree it shows, what the search found, and the box's width as last measured. Kept across redraws
-// of one project.
+// of one project. `pages`: the page each group that pages shows (map.js), kept across projects too.
 const onMap = {
   project: null, open: new Set(), selected: null, view: null, model: null, found: null, width: null, narrow: false, watch: null,
-  unfolds: false,
+  unfolds: false, pages: new Map(),
 };
 
 // What a selection lights: a link's key lights its two ends and itself, a client what it reaches,
@@ -758,7 +753,15 @@ function gatewayMap(main, model, found) {
   // it to narrow in the middle of its entrance.
   if (fresh) onMap.width = contentWidth(onMap.view.box) ?? onMap.width;
   Object.assign(onMap, { model, found });
+  bringPages(model, found, { fresh });
   drawOnMap(model, { fresh, projectChanged });
+}
+
+// A search's matches bring the page that holds them, and it stays after the search; a new map (a
+// visit, or the List before) brings the page of what is selected.
+function bringPages(model, found, { fresh = false } = {}) {
+  const ids = [...(found ? found.matches : []), ...(fresh && onMap.selected ? [onMap.selected] : [])];
+  if (ids.length) onMap.pages = pagesWith(model, onMap.pages, ids);
 }
 
 // The blocks of a model by id. Every link asks, so it is built once for a model.
@@ -994,7 +997,7 @@ function drawOnMap(model, { fresh = false, projectChanged = false, lightLater = 
   const flipped = narrow !== onMap.narrow;
   onMap.narrow = narrow;
   const open = openNow();
-  const layout = layoutTree(model, { open, narrow });
+  const layout = layoutTree(model, { open, pages: onMap.pages, narrow });
   // A selected block lights every client's path to it; a selected client lights what it reaches; a
   // selected link its two ends. A selection the model no longer has is none.
   const lit = litFor(model, onMap.selected);
@@ -1036,15 +1039,13 @@ function letGoIfSelected() {
   if (onMap.selected) letGoOnMap();
 }
 
-// A press on a block (a held server opened or folded first, by onOpen). "N more" opens the List
-// at its group, focused there, so Details close first. A second press on the selected block lets
-// go. The first run's slot adds the change that sets every client up; the slot of a drag does
-// nothing. A preview block takes its row out of the tray (D12). Any other block is selected.
+// A press on a block (a held server opened or folded first, by onOpen). "N more" turns its group's
+// page (turnOnMap). A second press on the selected block lets go. The first run's slot adds the
+// change that sets every client up; the slot of a drag does nothing. A preview block takes its row
+// out of the tray (D12). Any other block is selected.
 export function pressBlock(model, id) {
   if (id.startsWith("more:")) {
-    closePanel({ instant: true, focus: false });
-    const { mode, selected } = listAt(id);
-    goTo("gateway", selected, { mode }).catch(reportError);
+    turnOnMap(model, id);
     return;
   }
   const block = model.blocks.find((b) => b.id === id);
@@ -1058,12 +1059,28 @@ export function pressBlock(model, id) {
   else if (block.kind !== "slot" || block.gateway) selectOnMap(block);
 }
 
+// "N more" turns its group to the next five in place, and the last page back to the first; focus
+// stays on it. A selection the turn hides is let go, so its Details close.
+function turnOnMap(model, id) {
+  onMap.pages = turnPage(model, onMap.pages, id);
+  if (onMap.selected && !shownOnMap(model, onMap.selected)) letGoOnMap();
+  else drawAgain();
+}
+
+// Whether the map shows a block, or both ends of a link (its key), as it lays out now.
+function shownOnMap(model, selected) {
+  const link = model.links.find((l) => linkKey(l) === selected);
+  const shown = new Set(layoutTree(model, { open: openNow(), pages: onMap.pages, narrow: onMap.narrow }).blocks.map((at) => at.id));
+  return (link ? [link.from, link.to] : [selected]).every((id) => shown.has(id));
+}
+
 // Select a block: the map lights it and is drawn again, then its Details open beside the page.
 // The List takes the Tab key on the same row.
 function selectOnMap(block) {
-  // What a search opened to show it stays open, so the selection is still on the map when the
-  // search ends.
-  onMap.open = keepOpen(onMap.model, onMap.open, block);
+  // Its page shows, and what a search opened to show it stays open, so the selection is still on
+  // the map when the search ends.
+  onMap.pages = pagesWith(onMap.model, onMap.pages, [block.id]);
+  onMap.open = keepOpen(onMap.model, onMap.open, block, onMap.pages);
   onMap.selected = block.id;
   onList.current = block.id;
   const lightLater = onMap.unfolds;
@@ -1117,6 +1134,7 @@ function drawRows() {
   if (!view || !onMap.view || !onMap.view.box.isConnected) return Promise.resolve();
   const model = treeFor(view);
   Object.assign(onMap, { model, found: state.q.trim() ? findIn(model, state.q) : null });
+  bringPages(model, onMap.found);
   return drawOnMap(model);
 }
 

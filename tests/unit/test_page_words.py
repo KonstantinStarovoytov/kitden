@@ -630,9 +630,12 @@ def test_the_map_marks_when_it_is_drawn():
 
 
 def test_the_map_words():
-    # A group over six shows five and "N more"; the outside group says why it is apart.
+    # A group over six pages five at a time: "N more", on its last page "Show the first 5", and
+    # its caption says which ones show; the outside group says why it is apart.
     assert '"Outside the gateway · calls skip Kitden\'s rules"' in script("gateway.js")
     assert " more`" in script("map.js")
+    assert 'FIRST_PAGE = "Show the first 5"' in script("map.js")
+    assert "`${block.name} · ${page * PAGE + 1}–${" in script("map.js")
     # The map shows no state word; a screen reader hears one, the same as the words it shows.
     states = 'STATE_SAID = { on: "On", off: "Off", unk: "Not known", preview: "In preview" }'
     assert states in script("map.js")

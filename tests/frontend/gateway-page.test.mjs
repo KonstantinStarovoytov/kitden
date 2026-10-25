@@ -69,7 +69,7 @@ function element(tagName) {
   return node;
 }
 const pages = {};
-for (const id of ['#main', '#drawer', '.shell', '#dock']) {
+for (const id of ['#main', '#drawer', '#scrim', '.shell', '#dock']) {
   pages[id] = element('DIV');
   pages[id].root = true;
 }
@@ -103,7 +103,7 @@ const batch = (id) => (sent) => ({
 
 const { renderGateway } = await import('../../src/kitden/web/static/js/gateway.js');
 const { dropBody } = await import('../../src/kitden/web/static/js/gateway-drag.js');
-const { data, setRenderer, state } = await import('../../src/kitden/web/static/js/store.js');
+const { arrival, data, setRenderer, state } = await import('../../src/kitden/web/static/js/store.js');
 const { addToTray, cancelTray, keyFor, takeOut } = await import('../../src/kitden/web/static/js/tray.js');
 const { reducedMotion } = await import('../../src/kitden/web/static/js/motion.js');
 
@@ -295,4 +295,75 @@ test('the List draws none of them', async (t) => {
   const cursor = rows.find((n) => n.dataset.row === 'client:cursor');
   assert.deepEqual(walk(cursor).filter((n) => n.className === 'meta').map((n) => n.textContent), ['Not connected']);
   assert.ok(!walk(list).some((n) => /\bleaving\b|block-wait/.test(n.className)));
+});
+
+// Twelve servers outside the gateway: three pages of five.
+const TWELVE = { ...VIEW, groups: { move: Array.from({ length: 12 }, (_, i) => ({ name: `direct-${i}`, clients: ['codex'], columns: ['codex'], items: [`d${i}`], stays: null })), local: [], plugin: [] } };
+const outsideShown = (box) => walk(box).filter((n) => n.dataset.focus?.startsWith('block:outside:')).map((n) => n.dataset.focus.split(':').at(-1));
+async function onTwelve(t) {
+  data.gateway = TWELVE;
+  t.after(() => {
+    data.gateway = VIEW;
+    state.q = '';
+    state.selected = null;
+  });
+  const box = freshMap();
+  return box;
+}
+
+test('a press on N more turns the page in place; focus stays on it', async (t) => {
+  const box = await onTwelve(t);
+  const more = node(box, 'block:more:group:outside');
+  assert.deepEqual(outsideShown(box), ['direct-0', 'direct-1', 'direct-2', 'direct-3', 'direct-4']);
+  more.focus();
+  more.listeners.click[0]();
+  settle();
+  assert.deepEqual(outsideShown(box), ['direct-5', 'direct-6', 'direct-7', 'direct-8', 'direct-9']);
+  // The List does not open: the same map and button, its focus kept.
+  assert.deepEqual([state.mode, map(), node(box, 'block:more:group:outside'), document.activeElement], ['map', box, more, more]);
+  assert.equal(more.getAttribute('aria-label'), '2 more');
+  more.listeners.click[0]();
+  settle();
+  assert.equal(more.getAttribute('aria-label'), 'Show the first 5');
+  more.listeners.click[0]();
+  settle();
+  assert.deepEqual(outsideShown(box), ['direct-0', 'direct-1', 'direct-2', 'direct-3', 'direct-4']);
+  // A turn that hides the selected server lets go of it.
+  node(box, 'block:outside:move:direct-1').listeners.click[0]();
+  settle();
+  assert.match(node(box, 'block:outside:move:direct-1').className, /\bselected\b/);
+  more.listeners.click[0]();
+  settle();
+  assert.ok(!walk(box).some((n) => /\bselected\b/.test(n.className)));
+  more.listeners.click[0]();
+  more.listeners.click[0]();
+  settle();
+});
+
+// Review Focus
+test('a search match on page 3 shows page 3 and stays after the search', async (t) => {
+  const box = await onTwelve(t);
+  state.q = 'direct-11';
+  renderGateway(main, { again: true });
+  settle();
+  assert.deepEqual(outsideShown(box), ['direct-10', 'direct-11']);
+  // The search ends: its page stays.
+  state.q = '';
+  renderGateway(main, { again: true });
+  settle();
+  assert.deepEqual(outsideShown(box), ['direct-10', 'direct-11']);
+  // Turn back to the first page for the next test.
+  node(box, 'block:more:group:outside').listeners.click[0]();
+  settle();
+});
+
+test('an arrival on another page brings its page and selects its server', async (t) => {
+  const box = await onTwelve(t);
+  state.selected = { kind: 'mcp_server', name: 'direct-7' };
+  arrival.pending = true;
+  renderGateway(main, { again: true });
+  await new Promise((resolve) => setImmediate(resolve));
+  settle();
+  assert.deepEqual(outsideShown(box), ['direct-5', 'direct-6', 'direct-7', 'direct-8', 'direct-9']);
+  assert.match(node(box, 'block:outside:move:direct-7').className, /\bselected\b/);
 });

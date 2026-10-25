@@ -5,7 +5,7 @@
 // small × on its middle. A selection dims what is off its path and lays an accent line over each
 // lit link. The page gives the hooks; the view knows nothing of servers, tools or clients.
 import { button, cutName, el, icon } from "./dom.js";
-import { blockLabel, drawPlan, enterDelays, foldable, LINK_MS, linkClass, linkDashed, linkKey, linkPath, midPoint, unfoldDelays } from "./map.js";
+import { blockLabel, drawPlan, enterDelays, foldable, foldsInto, LINK_MS, linkClass, linkDashed, linkKey, linkPath, midPoint, unfoldDelays } from "./map.js";
 import { afterOldPage, animateTo, CALM, D, IN3, OUT3, RETRACT, rollTo, unscaled } from "./motion.js";
 
 const SVG = "http://www.w3.org/2000/svg";
@@ -371,8 +371,10 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     else if (item.node.getAttribute("tabindex") !== null) item.node.removeAttribute("tabindex");
   }
 
-  // A block's node as this draw shows it: its look, words, size and what a screen reader hears.
-  function fill(item, place, block, { selected, lit, found, open }) {
+  // A block's node as this draw shows it: its look, words, size and what a screen reader hears. The
+  // layout's words win (a group that pages names which ones show).
+  function fill(item, place, source, { selected, lit, found, open }) {
+    const block = place.name !== undefined && source !== place ? { ...source, name: place.name } : source;
     const { node } = item;
     const name = String(block.name || "");
     const matched = Boolean(found && found.matches.has(place.id));
@@ -957,7 +959,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
         drop(item);
         continue;
       }
-      const to = leaveTo(item, plan.fold.includes(id) ? after.get(before.get(id).opener) : null);
+      const to = leaveTo(item, plan.fold.includes(id) ? after.get(foldsInto(before.get(id))) : null);
       go(item, to, { dur: D(GO_MS), ease: IN3, start, then: drop });
     }
 
@@ -972,7 +974,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
         item = { key, path: document.createElementNS(SVG, "path"), hit: null, over: null, link, d: "", look: "", free: 0, drawing: 0, exit: 0, overOut: 0 };
         svg.insertBefore(item.path, layer);
         links.set(key, item);
-        if (opened.has(link.to) && before.has(link.from)) drawsIn.push([key, start + D(delays[unfold.get(link.to)] + FADE_MS)]);
+        if (opened.has(link.to) && before.has(link.from) && !linkDashed(link)) drawsIn.push([key, start + D(delays[unfold.get(link.to)] + FADE_MS)]);
         else if (linksMove && before.has(link.from) && before.has(link.to)) arrives.push(key);
       }
       item.link = link;
@@ -1158,7 +1160,8 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
   }
 
   // A link grows from its start. It shows whole while it draws; its own dashes come back when it
-  // ends, by time.
+  // ends, by time. So an unfold draws in only its solid links: a dotted or dashed one comes in
+  // with its block.
   function drawIn(key, ms = DRAW_MS) {
     const item = links.get(key);
     const dur = D(ms);

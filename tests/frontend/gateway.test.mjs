@@ -10,11 +10,11 @@ globalThis.window = {
   addEventListener: (type, fn) => { (windowHeard[type] ||= []).push(fn); },
   removeEventListener: (type, fn) => { windowHeard[type] = (windowHeard[type] || []).filter((f) => f !== fn); },
 };
-const { GATEWAY_COLUMNS, afterPress, besideBy, bringBeside, clickLink, contentWidth, findRows, gatewayTree, glanceFor, heldServer, kitdenLinks, letGoCloses, linkRemoval, linkTip, listAt, listRows, litFor, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, serverCount, stillSelected, takesPointer } = await import('../../src/kitden/web/static/js/gateway.js');
+const { GATEWAY_COLUMNS, afterPress, besideBy, bringBeside, clickLink, contentWidth, findRows, gatewayTree, glanceFor, heldServer, kitdenLinks, letGoCloses, linkRemoval, linkTip, listRows, litFor, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, serverCount, stillSelected, takesPointer } = await import('../../src/kitden/web/static/js/gateway.js');
 const { DRAGS, dropBody, movingOn, pointOf, pressGrip, placeMoved, startDrag } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
 const { offersSwitch, ruleBody } = await import('../../src/kitden/web/static/js/gateway-details.js');
-const { blockLabel, findChip, findIn, isNarrow, keepOpen, layoutTree, linkClass, pressOpen, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
+const { blockLabel, findChip, findIn, isNarrow, keepOpen, layoutTree, linkClass, pagesWith, pressOpen, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
 const { kitdenClients } = await import('../../src/kitden/web/static/js/parts.js');
 const { CALM } = await import('../../src/kitden/web/static/js/motion.js');
 const { data, state, viewMode } = await import('../../src/kitden/web/static/js/store.js');
@@ -492,16 +492,13 @@ test('in atlas the docs block says This project', () => {
   assert.equal(block(gatewayTree(view, OPTS), 'outside:move:docs').tag, null);
 });
 
-test('N more and a group address open the List at that group', () => {
+test('N more is as high as the blocks it stands for', () => {
   const rows = Array.from({ length: 8 }, (_, i) => ({ name: `direct-${i}`, clients: ['codex'], columns: ['codex'], items: ['x'], stays: null, override: false }));
   const tree = gatewayTree({ ...MEDIUM_VIEW, groups: { move: rows, local: [], plugin: [] } }, OPTS);
   const more = layoutTree(tree, { open: new Set(), narrow: false }).blocks.find((b) => b.kind === 'more');
   assert.equal(more.id, 'more:group:outside');
-  // "N more" is as high as the blocks it stands for (an outside server's block is 50), not a plain 60.
+  // An outside server's block is 50 high, not a plain 60.
   assert.equal(more.h, 50);
-  assert.deepEqual(listAt(more.id), { mode: 'list', selected: { kind: 'group', name: 'outside' } });
-  assert.deepEqual(listAt('group:outside'), { mode: 'list', selected: { kind: 'group', name: 'outside' } });
-  assert.deepEqual(listAt('more:group:kitden:remote').selected, { kind: 'group', name: 'kitden:remote' });
 });
 
 test('the map goes narrow by the window rule, or where the wide map does not fit its box', () => {
@@ -565,13 +562,36 @@ test('find lights both docs and opens what hides them', () => {
   assert.ok(tool.open.has('held:kitden:tracker') && tool.open.has('group:kitden:remote'));
 });
 
-test('a match behind N more shows its group whole', () => {
-  const rows = Array.from({ length: 8 }, (_, i) => ({ name: `direct-${i}`, clients: ['codex'], columns: ['codex'], items: ['x'], stays: null, override: false }));
-  const tree = gatewayTree({ ...MEDIUM_VIEW, groups: { move: rows, local: [], plugin: [] } }, OPTS);
-  const shown = (open) => layoutTree(tree, { open, narrow: false }).blocks.map((b) => b.id);
-  assert.ok(shown(new Set()).includes('more:group:outside') && !shown(new Set()).includes('outside:move:direct-7'));
-  const found = findIn(tree, 'direct-7');
-  assert.ok(shown(found.open).includes('outside:move:direct-7') && !shown(found.open).includes('more:group:outside'));
+// Twelve servers outside the gateway: three pages of five.
+const twelve = () => {
+  const rows = Array.from({ length: 12 }, (_, i) => ({ name: `direct-${i}`, clients: ['codex'], columns: ['codex'], items: ['x'], stays: null, override: false }));
+  return gatewayTree({ ...MEDIUM_VIEW, groups: { move: rows, local: [], plugin: [] } }, OPTS);
+};
+const shownWith = (tree, pages, open = new Set()) => layoutTree(tree, { open, pages, narrow: false }).blocks.map((b) => b.id);
+
+test('a search match turns its group to the page that holds it; a match on the page shown turns nothing', () => {
+  const tree = twelve();
+  const found = findIn(tree, 'direct-11');
+  // The search no longer shows the group whole: its page shows, with the block that turns it.
+  assert.ok(!shownWith(tree, new Map(), found.open).includes('outside:move:direct-11'));
+  const pages = pagesWith(tree, new Map(), found.matches);
+  assert.deepEqual([...pages], [['group:outside', 2]]);
+  assert.ok(shownWith(tree, pages).includes('outside:move:direct-11') && shownWith(tree, pages).includes('more:group:outside'));
+  // Every server matches "direct", and the page shown has some: nothing turns.
+  assert.equal(pagesWith(tree, pages, findIn(tree, 'direct').matches), pages);
+  // A selection that is no block (a link's key) turns nothing.
+  assert.equal(pagesWith(tree, pages, ['client:codex>outside:move:direct-1']), pages);
+});
+
+test('a selection or an arrival on another page brings its page', () => {
+  const tree = twelve();
+  const target = block(tree, 'outside:move:direct-7');
+  const mine = new Set(['held:kitden:files']);
+  const pages = pagesWith(tree, new Map(), [target.id]);
+  assert.deepEqual([...pages], [['group:outside', 1]]);
+  // On its page it shows: what the person opened stays as it is, and no group opens.
+  assert.equal(keepOpen(tree, mine, target, pages), mine);
+  assert.ok(!keepOpen(tree, new Set(), target).has('group:outside'));
 });
 
 test('the List lights a match and opens what holds it, without changing what the person folded', () => {

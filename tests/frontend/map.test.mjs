@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js (for its columns) needs only this from a browser to load.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { CAPTION_H, GAP, NARROW_GAP, blockOrder, drawPlan, enterDelays, findChip, findIn, foldable, isNarrow, layoutTree, linkClass, linkDashed, linkKey, linkPath, litFrom, litPath, midPoint, toggleOpen, unfoldDelays, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
+const { CAPTION_H, GAP, NARROW_GAP, blockOrder, drawPlan, enterDelays, findChip, findIn, foldable, isNarrow, layoutTree, linkClass, linkDashed, linkKey, linkPath, litFrom, litPath, midPoint, toggleOpen, turnPage, unfoldDelays, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
 const { cutName } = await import('../../src/kitden/web/static/js/dom.js');
 const { GATEWAY_COLUMNS } = await import('../../src/kitden/web/static/js/gateway.js');
 
@@ -201,6 +201,71 @@ test('a group with more than six servers shows five and N more', () => {
   // A line to a hidden server is not drawn; six or fewer show whole.
   assert.equal(l.links.filter((link) => link.kind === 'direct').length, 5);
   assert.ok(!layoutTree(model(0, 6), { open: new Set(), ...WIDE }).blocks.some((b) => b.id.startsWith('more:')));
+});
+
+// "N more" pages in place (Task 4.9): five a page.
+const outsideShown = (l) => l.blocks.filter((b) => b.id.startsWith('outside:')).map((b) => b.id.split(':').at(-1));
+const groupWords = (l) => l.blocks.find((b) => b.id === 'group:outside').name;
+const moreWords = (l) => l.blocks.find((b) => b.id === 'more:group:outside').name;
+const onPage = (m, page) => layoutTree(m, { open: new Set(), pages: new Map([['group:outside', page]]), ...WIDE });
+
+test('a group of 12 shows five and 7 more', () => {
+  const l = layoutTree(model(0, 12), { open: new Set(), ...WIDE });
+  assert.deepEqual(outsideShown(l), ['docs', 'analytics', 'n8n', 'direct-3', 'direct-4']);
+  assert.equal(moreWords(l), '7 more');
+  // The caption says which ones show; a group of six shows all and names no page.
+  assert.equal(groupWords(l), 'Outside the gateway · 1–5 of 12');
+  assert.equal(groupWords(layoutTree(model(0, 6), { open: new Set(), ...WIDE })), undefined);
+});
+
+test('a press turns to the next five and the caption names them', () => {
+  const m = model(0, 12);
+  const first = layoutTree(m, { open: new Set(), ...WIDE });
+  const none = new Map();
+  const pages = turnPage(m, none, 'more:group:outside');
+  assert.deepEqual([[...none], [...pages]], [[], [['group:outside', 1]]]);
+  const next = layoutTree(m, { open: new Set(), pages, ...WIDE });
+  assert.deepEqual(outsideShown(next), ['direct-5', 'direct-6', 'direct-7', 'direct-8', 'direct-9']);
+  assert.equal(moreWords(next), '2 more');
+  assert.equal(groupWords(next), 'Outside the gateway · 6–10 of 12');
+  // The next five take the places of the five shown, and "N more" stays where it is.
+  const ys = (l) => l.blocks.filter((b) => b.id.startsWith('outside:') || b.kind === 'more').map((b) => b.y);
+  assert.deepEqual(ys(next), ys(first));
+  // The five shown fold into their caption and the next five unfold, as a server's tools do.
+  const plan = drawPlan(first, next);
+  assert.deepEqual(plan.fold, first.blocks.filter((b) => b.id.startsWith('outside:')).map((b) => b.id));
+  assert.deepEqual(plan.unfold, next.blocks.filter((b) => b.id.startsWith('outside:')).map((b) => b.id));
+  assert.ok(plan.stay.includes('more:group:outside') && plan.stay.includes('group:outside'));
+  // A server that only moves up (one before it left) comes in as any new block, not as a turn.
+  const gone = 'outside:local:analytics';
+  const fewer = { ...m, blocks: m.blocks.filter((b) => b.id !== gone), links: m.links.filter((l) => l.to !== gone) };
+  const up = drawPlan(first, layoutTree(fewer, { open: new Set(), ...WIDE }));
+  assert.ok(up.enter.includes('outside:local:direct-5'));
+  assert.deepEqual([up.unfold, up.fold], [[], []]);
+});
+
+test('the last page offers the first five again', () => {
+  const m = model(0, 12);
+  const last = onPage(m, 2);
+  assert.deepEqual(outsideShown(last), ['direct-10', 'direct-11']);
+  assert.equal(moreWords(last), 'Show the first 5');
+  assert.equal(groupWords(last), 'Outside the gateway · 11–12 of 12');
+  assert.deepEqual([...turnPage(m, new Map([['group:outside', 2]]), 'more:group:outside')], [['group:outside', 0]]);
+  // A page past the end (the group has fewer servers now) shows the last one.
+  assert.deepEqual(outsideShown(onPage(m, 9)), ['direct-10', 'direct-11']);
+});
+
+test('a preview is never behind the page', () => {
+  const m = model(0, 12);
+  m.blocks.push({ id: 'preview:x', column: 'servers', parent: 'group:outside', kind: 'preview', name: 'x', state: 'preview' });
+  for (const page of [0, 1, 2]) {
+    const ids = onPage(m, page).blocks.map((b) => b.id);
+    assert.equal(ids.at(-1), 'preview:x', `page ${page}`);
+    assert.equal(ids.at(-2), 'more:group:outside');
+  }
+  // It counts in no page.
+  assert.equal(groupWords(onPage(m, 0)), 'Outside the gateway · 1–5 of 12');
+  assert.equal(moreWords(onPage(m, 0)), '7 more');
 });
 
 test('selecting a tool lights the path from every client that reaches it', () => {
