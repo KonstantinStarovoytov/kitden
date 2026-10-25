@@ -1,6 +1,6 @@
 # Kitden roadmap
 
-Last updated: 2026-10-22
+Last updated: 2026-10-25
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
@@ -9,11 +9,19 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not released yet
 
+- **The mockup's look:** Inter and JetBrains Mono come with Kitden, line icons in every place,
+  the mockup's colours in both themes, a new side rail and top bar, and calm motion with one
+  shared timing.
+- **Gateway map:** blocks glide and unfold in place, links take the pointer (× to remove, by
+  keyboard too), and a selected block dims everything off its path.
+- **Preview tray:** every change, from a switch in Details to a drag on the map, waits in one tray
+  at the bottom left. Apply all writes them as one change, all or nothing, and Undo all takes them
+  back. "Show changes" opens one row's full review.
 - **Library:** one page in place of Load map and Discover. Only the clients on this computer get
   a column, and the action sits in the client's cell: "+ Add", or why there is none. A server
   another client has points to the gateway; a marketplace says it comes with its first plugin.
   "Add…" for several clients warns, like "+ Add", when a client would load two of the same name.
-- **Add skills:** a client that cannot install a plugin takes its skills instead, in one review
+- **Add skills:** a client that cannot install a plugin takes its skills instead, in one change
   with Undo. It reads plugins from Codex's marketplaces and the ones Cursor installed itself.
   A skill the client already loads, from its folders or another plugin, is left out.
 - **Hide a column:** the "−" on a client's column head hides it on the page, and "Show" brings it
@@ -26,7 +34,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Kitden gateway:** on the Gateway page, pick a project and turn a whole MCP server or single
   tools on or off for it, in every client; its folders and worktrees follow it. Local servers
   move in too, and moving a server the gateway holds again updates it, for a new token. Each
-  switch is one review with Undo; no deploy, no account.
+  switch waits in the preview tray and has Undo; no deploy, no account.
 - **Overview:** knows the Kitden gateway and says whether it is set up.
 - **Add scope:** in a project, the Library says an Add puts the item in all your projects.
 - **Kitden's own entries:** no cross-client note for them.
@@ -38,7 +46,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Turned off means refused:** a tool you turn off is refused at once, in open sessions too.
   Folders Kitden does not know follow the All projects switches, and the page says so.
 - **Reads and writes:** each tool shows a quiet word, from the server or its name.
-  "Turn off every writing tool…" is one review, with the token advice.
+  "Turn off every writing tool…" is one change, with the token advice.
 - **Calls counted:** hover a tool to see how often it was called and when last.
 - **Remove a plugin:** "Remove from <client>…" in its Details. Undo installs it again, but not
   its saved options.
@@ -49,7 +57,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Add an MCP server to another client:** "+ Add" copies the entry; a `${VAR}` reference stays a
   reference where that client reads one.
 - **Add into one project:** a skill, or a Claude Code plugin, for that project only.
-- **Add missing:** in a project, one review adds what one client loads there and another lacks.
+- **Add missing:** in a project, one change adds what one client loads there and another lacks.
 - **Honest Undo:** Undo of a mixed change runs the client's own commands too, and a failed
   Apply says what it could not put back.
 - **Versions in the background:** the page reads the clients' versions from a file on disk and
