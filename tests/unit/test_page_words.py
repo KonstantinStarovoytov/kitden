@@ -536,6 +536,12 @@ def test_gateway_wires_do_not_fake_traffic():
         assert "flow" not in script(name), name
 
 
+def test_a_link_says_what_its_x_does():
+    assert "} from the gateway`" in gw() and "`Turn off ${" in gw()
+    view = script("map-view.js")
+    assert "} to ${" in view and '"Connections"' in view and '"aria-keyshortcuts", "Delete"' in view
+
+
 def test_the_gateway_rises_on_its_own_when_the_place_changes():
     assert "html.map-entrance::view-transition-new(page) { animation: none; }" in CSS
     assert '"map-entrance"' in script("store.js")

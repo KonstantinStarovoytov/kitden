@@ -1,10 +1,10 @@
 // Gateway: the clients, the gateways and the MCP servers they reach, as a Map or a List. Each
 // row opens its Details beside the page (gateway-details.js).
 import { $, button, el, gridKey, joinWords, plural, reportError, withFocusKey } from "./dom.js";
-import { addForm, heldServer, liveHeld, movesTo, SETUP_NOTE, showClient, showGateway, showHeld, showOutside, showTool } from "./gateway-details.js";
+import { addForm, heldServer, liveHeld, movesTo, ruleBody, SETUP_NOTE, showClient, showGateway, showHeld, showOutside, showTool } from "./gateway-details.js";
 import { endedMove, movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { leaveMap, mapReviewLeft, previewBar, redrawPreview, showMapReview } from "./map-review.js";
-import { findIn, isNarrow, keepOpen, layoutTree, litFrom, litPath, pressOpen, toggleOpen, wideWidth } from "./map.js";
+import { findIn, isNarrow, keepOpen, layoutTree, linkKey, litFrom, litPath, pressOpen, toggleOpen, wideWidth } from "./map.js";
 import { mapView } from "./map-view.js";
 import { entrance, glide, rise, riseHead } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, openInfo, review } from "./panel.js";
@@ -410,9 +410,40 @@ function gatewayMap(main, model, found) {
   if (bar) main.append(bar);
 }
 
+// What the × of a link does, as `{ tip, body }` (`body` is the change to preview), or null where
+// the map does not act on the link: a server in the Kitden gateway comes out of it, and a tool of
+// such a server turns off, for the picked project (`picked`, "" for all).
+export function linkRemoval(model, link, picked) {
+  const from = model.blocks.find((b) => b.id === link.from);
+  const to = model.blocks.find((b) => b.id === link.to);
+  if (!from || !to || !from.gateway || from.gateway.kind !== "kitden") return null;
+  if (from.kind === "gateway" && to.kind === "held") {
+    return { tip: `Remove ${to.name} from the gateway`, body: { action: "gateway.remove", targets: [], params: { server: to.name } } };
+  }
+  if (from.kind === "held" && to.kind === "tool") {
+    return { tip: `Turn off ${to.name}`, body: ruleBody(from.name, to.name, "off", picked || null) };
+  }
+  return null;
+}
+
+// The hooks of the links the map acts on (the model is the one drawn last). A press on a link
+// selects it and opens the Details of its far block, until a link has a panel of its own.
+const LINK_HOOKS = {
+  canHit: (link) => Boolean(linkRemoval(onMap.model, link, state.project)),
+  tip: (link) => linkRemoval(onMap.model, link, state.project)?.tip ?? "",
+  onClick: (link) => {
+    const far = onMap.model.blocks.find((b) => b.id === link.to);
+    if (far) selectOnMap(far, linkKey(link));
+  },
+  onRemove: (link) => {
+    const removal = linkRemoval(onMap.model, link, state.project);
+    if (removal) review(removal.body).catch(reportError);
+  },
+};
+
 // A new map for this visit, with what its box listens to, once.
 function newMap() {
-  const view = mapView({ tile, onOpen: openBlock, onSelect: (id) => pressBlock(onMap.model, id) });
+  const view = mapView({ tile, onOpen: openBlock, onSelect: (id) => pressBlock(onMap.model, id), links: LINK_HOOKS });
   // Escape clears the selection first; open Details then close too (panel.js).
   view.box.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || !onMap.selected) return;
@@ -517,12 +548,13 @@ function pressBlock(model, id) {
 }
 
 // Select a block: the map lights it and is drawn again, then its Details open beside the page.
-// The List takes the Tab key on the same row.
-function selectOnMap(block) {
+// The List takes the Tab key on the same row. A press on a link selects it (`selected` is its key)
+// and opens the Details of its far block.
+function selectOnMap(block, selected = block.id) {
   // What a search opened to show it stays open, so the selection is still on the map when the
   // search ends.
   onMap.open = keepOpen(onMap.model, onMap.open, block);
-  onMap.selected = block.id;
+  onMap.selected = selected;
   onList.current = block.id;
   drawAgain();
   openDetails(block);

@@ -39,6 +39,9 @@ const CORNER = 6; // the round corners of a direct line and of a rail
 const CHILD_MS = 15; // between two children of an unfold
 const ENTER_STEP = 22; // between two blocks of the entrance
 const ENTER_WAVE = 440; // the entrance starts its last block by now, however many there are
+const CURVE_STEPS = 16; // a curve is cut into this many straight pieces to measure it
+// How many numbers each command of a link's path takes.
+const COORDS = { M: 2, H: 1, V: 1, C: 6, Q: 4 };
 // The links a lit path follows.
 const PATH_KINDS = ["on", "direct", "faint"];
 // What a screen reader hears for a block's state; the map itself shows no state word.
@@ -212,6 +215,54 @@ export function linkClass(link) {
 export function linkPath(link, from, to) {
   if (link.shape === "rail") return railPath(from, to);
   return link.shape === "step" ? elbow(from, to) : curve(from, to);
+}
+
+// The point at t (0 to 1) of the curve through `points` (de Casteljau).
+function along(points, t) {
+  let now = points;
+  while (now.length > 1) now = now.slice(1).map(([x, y], i) => [now[i][0] + (x - now[i][0]) * t, now[i][1] + (y - now[i][1]) * t]);
+  return now[0];
+}
+
+// The point at half the length of a path of absolute M, H, V, C and Q commands, as `linkPath`
+// gives them: where a link's × sits.
+export function midPoint(d) {
+  const words = String(d).match(/[A-Z]|-?\d*\.?\d+(?:e[-+]?\d+)?/g) || [];
+  const pieces = []; // the path as straight pieces, each [x0, y0, x1, y1]
+  let at = [0, 0];
+  for (let i = 0; i < words.length; ) {
+    const command = words[i++];
+    const n = words.slice(i, i + (COORDS[command] || 0)).map(Number);
+    i += n.length;
+    if (command === "M") {
+      at = [n[0], n[1]];
+      continue;
+    }
+    const points = [at];
+    if (command === "H") points.push([n[0], at[1]]);
+    else if (command === "V") points.push([at[0], n[0]]);
+    else for (let k = 0; k < n.length; k += 2) points.push([n[k], n[k + 1]]);
+    const cuts = points.length > 2 ? CURVE_STEPS : 1;
+    let from = at;
+    for (let cut = 1; cut <= cuts; cut++) {
+      const to = cut === cuts ? points.at(-1) : along(points, cut / cuts);
+      pieces.push([...from, ...to]);
+      from = to;
+    }
+    at = points.at(-1);
+  }
+  const lengths = pieces.map(([x0, y0, x1, y1]) => Math.hypot(x1 - x0, y1 - y0));
+  let left = lengths.reduce((sum, length) => sum + length, 0) / 2;
+  for (const [i, length] of lengths.entries()) {
+    if (left > length && i < lengths.length - 1) {
+      left -= length;
+      continue;
+    }
+    const [x0, y0, x1, y1] = pieces[i];
+    const t = length ? Math.min(1, left / length) : 0;
+    return { x: x0 + (x1 - x0) * t, y: y0 + (y1 - y0) * t };
+  }
+  return { x: at[0], y: at[1] };
 }
 
 // What changes from the layout `before` (null: nothing drawn yet) to `after`: the block ids that

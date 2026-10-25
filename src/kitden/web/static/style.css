@@ -598,12 +598,22 @@ div.map .block, div.map .caption, div.map .map-caption { position: absolute; lef
 div.map .map-caption { display: flex; align-items: center; gap: 6px; color: var(--ink-3); font-size: 11px; white-space: nowrap; }
 div.map .map-area { position: relative; }
 div.map .map-links { position: absolute; inset: 0; z-index: 0; overflow: visible; pointer-events: none; }
+/* The links the page acts on: a hit stroke 14 px wide over each (after the blocks in the page, under
+   them in the picture, so a block wins where they meet) and the × on the middle of the one pointed
+   at. A hit shows no focus ring; focus gives it the hover look. */
+div.map .map-hits { position: absolute; inset: 0; z-index: 0; overflow: visible; pointer-events: none; }
+div.map .hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer; outline: none; }
+div.map .link-x { position: absolute; left: 0; top: 0; z-index: 2; display: grid; place-items: center; width: 16px; height: 16px; box-sizing: border-box; margin: 0; padding: 0; border: 1px solid var(--route); border-radius: 50%; background: var(--panel); color: var(--route); cursor: pointer; transition: background-color 120ms ease, color 120ms ease; }
+div.map .link-x::before { content: ""; position: absolute; inset: -6px; border-radius: 50%; }
+div.map .link-x:hover { background: var(--route); color: var(--panel); }
+div.map .link-x:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 div.map .link { fill: none; stroke: var(--link); stroke-width: 1.3; stroke-linecap: round; transition: stroke var(--t-fast) ease; }
 div.map .link.direct { stroke: var(--lamp-warn); stroke-width: 1.2; stroke-opacity: 0.55; }
 /* A client has the entry, but Kitden does not know that it loads it: the line does not say on. */
 div.map .link.direct.unk { stroke-dasharray: 3 3; }
 div.map .link.faint { stroke-opacity: 0.5; }
 div.map .link.lit { stroke: var(--route); stroke-width: 1.6; stroke-opacity: 1; }
+div.map .link.hov, div.map .link.picked { stroke: var(--route); stroke-width: 2.4; stroke-opacity: 1; }
 div.map .block { display: flex; align-items: center; gap: 8px; margin: 0; padding: 0 10px; border: 1px solid var(--wire-strong); border-radius: 8px; background: var(--panel); color: var(--ink); text-align: left; cursor: pointer; transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease, filter 300ms ease, scale 260ms var(--spring); }
 div.map .block:hover { border-color: color-mix(in srgb, var(--ink-3) 60%, transparent); }
 div.map .block:active { scale: 0.98; transition-duration: var(--t-fast), var(--t-fast), 300ms, 80ms; }
@@ -690,6 +700,8 @@ div.map .link.preview { stroke: var(--route); stroke-opacity: 0.6; }
 .review-bar .btn:not(.primary)[aria-disabled="true"] { opacity: 0.5; }
 /* A drag on the map: the pointer says it holds something, and no text is selected on the way. */
 .grabbing, .grabbing * { cursor: grabbing !important; user-select: none; }
+/* While a block is dragged no link takes the pointer. */
+.grabbing .map-hits .hit { pointer-events: none; }
 /* A spinner that waits a moment first, so a quick answer never shows it. */
 .spinner.late { flex: none; animation: spin 600ms linear infinite, fade-in 180ms var(--ease-out) 150ms both; }
 

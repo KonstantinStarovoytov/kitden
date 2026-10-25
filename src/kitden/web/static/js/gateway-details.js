@@ -379,7 +379,9 @@ function nobody(linked) {
   return linked.length ? null : "No client uses the Kitden gateway yet.";
 }
 
-function ruleBody(server, tool, state, project) {
+// The change that sets a rule on a server (`tool` null) or on one of its tools, for all projects
+// (`project` null) or for one.
+export function ruleBody(server, tool, state, project) {
   return { action: "gateway.rule", targets: [], params: { server, tool, state, project } };
 }
 

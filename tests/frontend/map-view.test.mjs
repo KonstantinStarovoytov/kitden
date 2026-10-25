@@ -94,7 +94,7 @@ beforeEach(() => {
   globalThis.document.activeElement = null;
 });
 
-const { blockOrder, layoutTree, linkKey, linkPath } = await import('../../src/kitden/web/static/js/map.js');
+const { blockOrder, layoutTree, linkKey, linkPath, midPoint } = await import('../../src/kitden/web/static/js/map.js');
 const { CALM } = await import('../../src/kitden/web/static/js/motion.js');
 const { mapView } = await import('../../src/kitden/web/static/js/map-view.js');
 
@@ -340,4 +340,106 @@ test('a big entrance starts its last block at 440 ms, not 22 ms per block', asyn
   assert.ok(layout.blocks.length > 21);
   tick(440); assert.equal(last.style.opacity, '0');
   tick(260); assert.equal(last.style.opacity, '');
+});
+
+const clicked = []; const removed = [];
+const LINKS = { canHit: (l) => l.to === 's1', tip: (l) => `Remove ${l.to}`, onClick: (l) => clicked.push(l), onRemove: (l) => removed.push(l) };
+const hitOf = (v) => walk(v.area).find((n) => n.classList?.contains('hit'));
+const xOf = (v) => walk(v.area).find((n) => n.classList?.contains('link-x'));
+
+test('only a link the page acts on takes the pointer, after the blocks, named for keyboards', async () => {
+  reduce(true);
+  const v = view({ links: LINKS });
+  await v.draw(TREE, lay(), {});
+  const hits = walk(v.area).filter((n) => n.classList?.contains('hit'));
+  assert.equal(hits.length, 1);
+  const h = hits[0];
+  assert.deepEqual(['tabindex', 'role', 'aria-label', 'aria-description', 'aria-keyshortcuts'].map((a) => h.getAttribute(a)), ['0', 'button', 'Codex to github', 'Remove s1', 'Delete']);
+  const svg = h.parentNode;
+  assert.equal(svg.getAttribute('aria-label'), 'Connections');
+  assert.ok(v.area.children.indexOf(svg) > v.area.children.findLastIndex((n) => n.dataset?.focus));
+});
+
+test('pointing at a link gives it the hover look and puts the × on its middle', async () => {
+  const v = view({ links: LINKS });
+  await v.draw(TREE, lay(), { motion: 'none' });
+  hitOf(v).dispatch('pointerover');
+  const m = midPoint(v.node('c1>s1').getAttribute('d')); const x = xOf(v);
+  assert.ok(v.node('c1>s1').classList.contains('hov'));
+  assert.equal(x.hidden, false);
+  assert.equal(x.style.transform, `translate(${Math.round(m.x - 8)}px, ${Math.round(m.y - 8)}px)`);
+  assert.equal(x.getAttribute('aria-label'), 'Remove s1');
+  assert.deepEqual([x.animations[0].options.duration, x.animations[0].options.easing], [120, CALM]);
+});
+
+test('the × waits 240 ms after the pointer leaves, also under reduced motion, and the pointer on it keeps it', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  reduce(true);
+  const v = view({ links: LINKS });
+  await v.draw(TREE, lay(), {});
+  const [h, x] = [hitOf(v), xOf(v)];
+  h.dispatch('pointerover'); h.dispatch('pointerout');
+  t.mock.timers.tick(239); assert.equal(x.hidden, false);
+  t.mock.timers.tick(1); assert.equal(x.hidden, true); assert.ok(!v.node('c1>s1').classList.contains('hov'));
+  h.dispatch('pointerover'); h.dispatch('pointerout'); x.dispatch('pointerenter');
+  t.mock.timers.tick(500); assert.equal(x.hidden, false);
+  x.dispatch('pointerleave'); t.mock.timers.tick(240); assert.equal(x.hidden, true);
+});
+
+test('Enter on a link is its click, Delete and the × are its removal', async () => {
+  reduce(true); clicked.length = 0; removed.length = 0;
+  const v = view({ links: LINKS });
+  await v.draw(TREE, lay(), {});
+  const h = hitOf(v);
+  h.dispatch('keydown', { key: 'Enter' }); h.dispatch('click');
+  h.dispatch('keydown', { key: 'Delete' }); h.dispatch('keydown', { key: 'Backspace' }); xOf(v).dispatch('click');
+  assert.deepEqual([clicked.length, removed.length], [2, 3]);
+  h.focus(); assert.ok(v.node('c1>s1').classList.contains('hov'));
+});
+
+test('a link fainter than half takes no pointer', async () => {
+  const v = view({ links: { ...LINKS, canHit: (l) => l.to === 's2' } });
+  await v.draw(TREE, lay(), { motion: 'none' });
+  v.draw(without('s2'), layoutTree(without('s2'), { open: new Set(), narrow: false }), {});
+  tick(90); assert.equal(hitOf(v).style.display, '');
+  tick(60); assert.equal(hitOf(v).style.display, 'none');
+});
+
+test('a link takes the × to another link at once, and a hit has a focus key for the page to restore', async () => {
+  reduce(true);
+  const v = view({ links: { ...LINKS, canHit: () => true, tip: (l) => `Remove ${l.to}` } });
+  await v.draw(TREE, lay(), {});
+  const [a, b] = walk(v.area).filter((n) => n.classList?.contains('hit'));
+  assert.deepEqual([a.dataset.focus, b.dataset.focus], ['link:c1>s1', 'link:c1>s2']);
+  a.dispatch('pointerover'); b.dispatch('pointerover');
+  assert.equal(xOf(v).getAttribute('aria-label'), 'Remove s2');
+  assert.deepEqual([v.node('c1>s1').classList.contains('hov'), v.node('c1>s2').classList.contains('hov')], [false, true]);
+});
+
+test('blocks that come or flip order still sit before the hits and the ×', async () => {
+  reduce(true);
+  const v = view({ links: LINKS });
+  const smaller = without('s2');
+  await v.draw(smaller, layoutTree(smaller, { open: new Set(), narrow: false }), {});
+  await v.draw(TREE, lay(['s1'], true), {});
+  await v.draw(TREE, lay(['s1']), {});
+  const svg = hitOf(v).parentNode;
+  assert.ok(v.area.children.indexOf(svg) > v.area.children.findLastIndex((n) => n.dataset?.focus));
+  assert.equal(v.area.children.at(-1), xOf(v));
+});
+
+test('a hit follows its link while blocks move, and goes with it', async () => {
+  const v = view({ links: { ...LINKS, canHit: (l) => l.to === 's2' } });
+  await v.draw(TREE, lay([], true), { motion: 'none' });
+  const first = hitOf(v).getAttribute('d');
+  v.draw(TREE, lay(['s1'], true), {});
+  tick(130);
+  assert.notEqual(hitOf(v).getAttribute('d'), first);
+  assert.equal(hitOf(v).getAttribute('d'), v.node('c1>s2').getAttribute('d'));
+  hitOf(v).dispatch('pointerover');
+  settle();
+  const gone = without('s2');
+  await v.draw(gone, layoutTree(gone, { open: new Set(), narrow: false }), { motion: 'none' });
+  assert.equal(hitOf(v), undefined);
+  assert.equal(xOf(v).hidden, true);
 });

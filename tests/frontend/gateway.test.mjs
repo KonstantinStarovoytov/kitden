@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js needs only this from a browser to load; the tests call its pure parts.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { GATEWAY_COLUMNS, findRows, gatewayTree, heldServer, kitdenLinks, listAt, listRows, mapMotion, narrowFor, serverCount } = await import('../../src/kitden/web/static/js/gateway.js');
+const { GATEWAY_COLUMNS, findRows, gatewayTree, heldServer, kitdenLinks, linkRemoval, listAt, listRows, mapMotion, narrowFor, serverCount } = await import('../../src/kitden/web/static/js/gateway.js');
 const { dropBody, dropTarget } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
 const { offersSwitch } = await import('../../src/kitden/web/static/js/gateway-details.js');
@@ -621,4 +621,15 @@ test('the map enters when it is new, jumps for a new project or width, and moves
   assert.equal(mapMotion({ fresh: false, projectChanged: true, narrowChanged: false }), 'none');
   assert.equal(mapMotion({ fresh: false, projectChanged: false, narrowChanged: true }), 'none');
   assert.equal(mapMotion({ fresh: false, projectChanged: false, narrowChanged: false }), 'move');
+});
+
+test('a link the map can act on says what its × does', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+  const link = (key) => tree.links.find((l) => `${l.from}>${l.to}` === key);
+  assert.deepEqual(linkRemoval(tree, link('gateway:kitden>held:kitden:files'), ''),
+    { tip: 'Remove files from the gateway', body: { action: 'gateway.remove', targets: [], params: { server: 'files' } } });
+  assert.deepEqual(linkRemoval(tree, link('held:kitden:files>tool:files/read_file'), 'website'),
+    { tip: 'Turn off read_file', body: { action: 'gateway.rule', targets: [], params: { server: 'files', tool: 'read_file', state: 'off', project: 'website' } } });
+  assert.equal(linkRemoval(tree, link('client:codex>gateway:kitden'), ''), null);
+  assert.equal(linkRemoval(tree, link('client:codex>outside:local:docs'), ''), null);
 });

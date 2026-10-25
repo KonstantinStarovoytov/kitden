@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js (for its columns) needs only this from a browser to load.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { CAPTION_H, GAP, NARROW_GAP, blockOrder, drawPlan, dropAt, enterDelays, findChip, groupBox, findIn, foldable, isNarrow, layoutTree, linkClass, linkKey, litFrom, litPath, toggleOpen, unfoldDelays, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
+const { CAPTION_H, GAP, NARROW_GAP, blockOrder, drawPlan, dropAt, enterDelays, findChip, groupBox, findIn, foldable, isNarrow, layoutTree, linkClass, linkKey, litFrom, litPath, midPoint, toggleOpen, unfoldDelays, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
 const { cutName } = await import('../../src/kitden/web/static/js/dom.js');
 const { GATEWAY_COLUMNS } = await import('../../src/kitden/web/static/js/gateway.js');
 
@@ -357,4 +357,11 @@ test('a preview or a slot in a long group always shows, after N more', () => {
   assert.deepEqual(shown.slice(5), ['more:group:outside', 'preview:x']);
   // "N more" counts only what it hides.
   assert.equal(l.blocks.find((b) => b.id === 'more:group:outside').name, '4 more');
+});
+
+test('the middle of a path is the point at half its length', () => {
+  assert.deepEqual(midPoint('M 0 0 H 100'), { x: 50, y: 0 });
+  assert.deepEqual(midPoint('M 0 0 H 10 V 100 H 20'), { x: 10, y: 50 });
+  const c = midPoint('M 0 0 C 50 0, 50 100, 100 100');
+  assert.ok(Math.abs(c.x - 50) < 0.5 && Math.abs(c.y - 50) < 0.5);
 });

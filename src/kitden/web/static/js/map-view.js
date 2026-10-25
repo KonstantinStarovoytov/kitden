@@ -1,9 +1,10 @@
 // The map on a page: HTML blocks over one SVG of links, where map.js lays them out. A view keeps
 // one node per block, column caption and link across draws. A block moves by `transform` on one
-// frame clock, and every link is drawn again from its two blocks on each frame. The page gives the
-// hooks; the view knows nothing of servers, tools or clients.
+// frame clock, and every link is drawn again from its two blocks on each frame. A link the page
+// acts on takes the pointer: a wide hit stroke, a hover look and a small × on its middle. The page
+// gives the hooks; the view knows nothing of servers, tools or clients.
 import { button, cutName, el, icon } from "./dom.js";
-import { blockLabel, drawPlan, enterDelays, foldable, LINK_MS, linkClass, linkKey, linkPath, unfoldDelays } from "./map.js";
+import { blockLabel, drawPlan, enterDelays, foldable, LINK_MS, linkClass, linkKey, linkPath, midPoint, unfoldDelays } from "./map.js";
 import { animateTo, CALM, D, IN3, OUT3 } from "./motion.js";
 
 const SVG = "http://www.w3.org/2000/svg";
@@ -15,6 +16,11 @@ const FOLD_IN = 100; // a folded child goes this far left of its opener's right 
 const ROOM = 24; // under the lowest block
 const ENTER_RISE = 6; // an entering block starts this far below its place
 const CAPTION_ICON = 13; // a group caption's icon
+const CROSS_MS = 120; // the × fades in
+const CROSS_R = 8; // half the × (16 px): it sits with its middle on the link's
+const GRACE_MS = 240; // the × stays this long after the pointer leaves, so the pointer can reach it
+const HIT_MIN = 0.5; // a link fainter than this takes no pointer
+const NO_LINKS = { canHit: () => false }; // a page that acts on no link
 
 // A part a screen reader skips: the block's label says it already.
 function quiet(node) {
@@ -80,7 +86,8 @@ function boxOf({ x, y, w, h, s }) {
 }
 
 // One map. `view.box` (div.map) goes where the page wants it and keeps every node when it is taken
-// out and put back; `view.area` holds the links' SVG, then the blocks in reading order.
+// out and put back; `view.area` holds the links' SVG, the blocks in reading order, then the hits of
+// the links and the ×.
 // - draw(model, layout, { selected, lit, found, open, motion }): show `layout` (map.js layoutTree)
 //   of `model`. `motion` "move" moves what changed; "enter" lets every block rise into its place;
 //   "none" (and the first draw of a "move", reduced motion or a hidden page) shows the end at
@@ -91,7 +98,10 @@ function boxOf({ x, y, w, h, s }) {
 // A press on a block opens or folds it when it folds (`onOpen(id)`), then selects it
 // (`onSelect(id)`); "+ Add" beside a column's caption calls `onAdd(column)`. `tile(block)` gives
 // what a block shows before its name.
-export function mapView({ tile, onOpen, onSelect, onAdd } = {}) {
+// `links` are the page's hooks for the links it acts on: `canHit(link)`, `tip(link)` (what its
+// × does, in words), `onClick(link)` and `onRemove(link)`. After the blocks the area holds the
+// hit of each such link (a button for a keyboard: Enter opens, Delete removes) and one ×.
+export function mapView({ tile, onOpen, onSelect, onAdd, links: pointer = NO_LINKS } = {}) {
   const box = el("div", "map");
   const area = el("div", "map-area");
   const svg = document.createElementNS(SVG, "svg");
@@ -99,15 +109,28 @@ export function mapView({ tile, onOpen, onSelect, onAdd } = {}) {
   svg.setAttribute("aria-hidden", "true");
   svg.setAttribute("width", "100%");
   svg.setAttribute("height", "100%");
-  area.append(svg);
+  const hits = document.createElementNS(SVG, "svg");
+  hits.setAttribute("class", "map-hits");
+  hits.setAttribute("role", "group");
+  hits.setAttribute("aria-label", "Connections");
+  hits.setAttribute("width", "100%");
+  hits.setAttribute("height", "100%");
+  const cross = el("button", "link-x");
+  cross.type = "button";
+  cross.setAttribute("tabindex", "-1");
+  cross.hidden = true;
+  cross.append(icon("x", 10));
+  area.append(svg, hits, cross);
   box.append(area);
 
   // Each block: its node, where it shows now (x, y, scale s, opacity o), its size, its place in the
   // last layout (`home`), its move, and whether it goes, is held or glides back from a hold.
   const blocks = new Map();
-  // Each link: its path, the layout's link, the path drawn, and until when it shows whole while it
-  // draws in (`free`).
+  // Each link: its key, its path, the hit that takes the pointer for it (if the page acts on it),
+  // the layout's link, the path drawn, and until when it shows whole while it draws in (`free`).
   const links = new Map();
+  let pointed = null; // the key of the link with the hover look and the ×
+  let wait = 0; // the timer that ends it
   const moving = new Set(); // the blocks with a move
   const waiting = []; // what waits for every motion to end
   let last = null; // the layout drawn last
@@ -222,8 +245,99 @@ export function mapView({ tile, onOpen, onSelect, onAdd } = {}) {
   }
 
   function unlink(key) {
-    links.get(key).path.remove();
+    const item = links.get(key);
+    item.path.remove();
+    dropHit(item);
     links.delete(key);
+  }
+
+  // The hover look and the × go at once.
+  function unpoint() {
+    clearTimeout(wait);
+    const item = pointed && links.get(pointed);
+    if (item) item.path.classList.remove("hov");
+    pointed = null;
+    cross.hidden = true;
+  }
+
+  // ... or after the grace, which the clock of the motions does not scale, so a pointer that is
+  // on its way to the × always has the time.
+  function unpointSoon() {
+    clearTimeout(wait);
+    wait = setTimeout(unpoint, GRACE_MS);
+  }
+
+  // The × on the middle of the link with the hover look. It follows the link; it moves to another
+  // link at once, and fades in only when it was hidden.
+  function placeCross() {
+    const item = pointed && links.get(pointed);
+    if (!item || !item.hit || !item.d) return;
+    const mid = midPoint(item.d);
+    cross.style.transform = `translate(${Math.round(mid.x - CROSS_R)}px, ${Math.round(mid.y - CROSS_R)}px)`;
+    if (!cross.hidden) return;
+    cross.hidden = false;
+    animateTo(cross, [{ opacity: 0 }, { opacity: 1 }], { dur: CROSS_MS, ease: CALM });
+  }
+
+  function pointAt(item) {
+    clearTimeout(wait);
+    if (pointed && pointed !== item.key) links.get(pointed)?.path.classList.remove("hov");
+    pointed = item.key;
+    item.path.classList.add("hov");
+    const tip = pointer.tip(item.link);
+    cross.title = tip;
+    cross.setAttribute("aria-label", tip);
+    placeCross();
+  }
+
+  // A press on a link points at it, so its × is there for what comes next.
+  function pressLink(item) {
+    pointAt(item);
+    pointer.onClick(item.link);
+  }
+
+  function keyOnHit(event, item) {
+    const press = event.key === "Enter" || event.key === " ";
+    if (!press && event.key !== "Delete" && event.key !== "Backspace") return;
+    event.preventDefault();
+    if (press) pressLink(item);
+    else pointer.onRemove(item.link);
+  }
+
+  // A link's hit: a wide stroke over it, and a button for a keyboard.
+  function makeHit(item) {
+    const hit = document.createElementNS(SVG, "path");
+    hit.setAttribute("class", "hit");
+    hit.setAttribute("tabindex", "0");
+    hit.setAttribute("role", "button");
+    hit.setAttribute("aria-keyshortcuts", "Delete");
+    hit.dataset.focus = `link:${item.key}`; // a redraw of the page gives focus back to it
+    if (item.d) hit.setAttribute("d", item.d);
+    hit.addEventListener("pointerover", () => pointAt(item));
+    hit.addEventListener("pointerout", unpointSoon);
+    hit.addEventListener("focus", () => pointAt(item));
+    hit.addEventListener("blur", unpointSoon);
+    hit.addEventListener("click", () => pressLink(item));
+    hit.addEventListener("keydown", (event) => keyOnHit(event, item));
+    return hit;
+  }
+
+  function dropHit(item) {
+    if (!item.hit) return;
+    if (pointed === item.key) unpoint();
+    item.hit.remove();
+    item.hit = null;
+  }
+
+  // A link has a hit while the page acts on it, named for a screen reader by its two blocks.
+  function syncHit(item, names) {
+    if (!pointer.canHit(item.link)) {
+      dropHit(item);
+      return;
+    }
+    if (!item.hit) item.hit = makeHit(item);
+    const said = { "aria-label": `${names.get(item.link.from)} to ${names.get(item.link.to)}`, "aria-description": pointer.tip(item.link) };
+    for (const [name, value] of Object.entries(said)) if (item.hit.getAttribute(name) !== value) item.hit.setAttribute(name, value);
   }
 
   // A block that went: its node and its links leave the page.
@@ -236,7 +350,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd } = {}) {
   }
 
   // Every link drawn again from its two blocks as they show now. Its opacity is the lower of
-  // theirs, except while it draws in.
+  // theirs, except while it draws in. The × follows its link.
   function paintLinks(now) {
     for (const item of links.values()) {
       const a = blocks.get(item.link.from);
@@ -245,10 +359,18 @@ export function mapView({ tile, onOpen, onSelect, onAdd } = {}) {
       const d = linkPath(item.link, boxOf(a), boxOf(b));
       if (d !== item.d) {
         item.path.setAttribute("d", d);
+        if (item.hit) item.hit.setAttribute("d", d);
         item.d = d;
       }
-      fade(item.path, now < item.free ? 1 : Math.min(a.o, b.o));
+      const o = now < item.free ? 1 : Math.min(a.o, b.o);
+      fade(item.path, o);
+      // A link that fades away takes no pointer.
+      if (!item.hit) continue;
+      const display = o < HIT_MIN ? "none" : "";
+      if (item.hit.style.display !== display) item.hit.style.display = display;
+      if (display && pointed === item.key) unpoint();
     }
+    placeCross();
   }
 
   // The area takes the last layout's size; while blocks move, the larger of that and its own.
@@ -307,7 +429,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd } = {}) {
   // place, so focus stays on them; only a layout that reads them in another order (a narrow flip)
   // puts every node in order again, and focus goes back where it was.
   function order(layout) {
-    let next = null;
+    let next = hits;
     for (let i = layout.blocks.length - 1; i >= 0; i--) {
       const { node } = blocks.get(layout.blocks[i].id);
       if (!node.parentNode) area.insertBefore(node, next);
@@ -317,7 +439,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd } = {}) {
     const nodes = layout.blocks.map((place) => blocks.get(place.id).node);
     if (nodes.every((node, i) => i === 0 || at.get(nodes[i - 1]) < at.get(node))) return;
     const focused = document.activeElement;
-    area.append(...nodes);
+    for (const node of nodes) area.insertBefore(node, hits);
     if (focused && focused !== document.activeElement && area.contains(focused)) focused.focus({ preventScroll: true });
   }
 
@@ -383,19 +505,24 @@ export function mapView({ tile, onOpen, onSelect, onAdd } = {}) {
     }
 
     const drawsIn = [];
+    const names = new Map(model.blocks.map((block) => [block.id, String(block.name || "")]));
     for (const link of layout.links) {
       const key = linkKey(link);
       let item = links.get(key);
       if (!item) {
-        item = { path: document.createElementNS(SVG, "path"), link, d: "", look: "", free: 0, drawing: 0 };
+        item = { key, path: document.createElementNS(SVG, "path"), hit: null, link, d: "", look: "", free: 0, drawing: 0 };
         svg.append(item.path);
         links.set(key, item);
         if (opened.has(link.to) && before.has(link.from)) drawsIn.push([key, start + D(delays[unfold.get(link.to)] + FADE_MS)]);
       }
       item.link = link;
       const look = `${linkClass(link)}${lit.has(key) ? " lit" : ""}`;
-      if (look !== item.look) item.path.setAttribute("class", look);
+      if (look !== item.look) {
+        item.path.setAttribute("class", look);
+        item.path.classList.toggle("hov", key === pointed);
+      }
       item.look = look;
+      syncHit(item, names);
     }
     const shownLinks = new Set(layout.links.map(linkKey));
     for (const [key, item] of links) {
@@ -404,6 +531,14 @@ export function mapView({ tile, onOpen, onSelect, onAdd } = {}) {
       const goes = [item.link.from, item.link.to].some((id) => blocks.get(id)?.leaving && blocks.get(id).move);
       if (goes) item.free = 0;
       else unlink(key);
+    }
+    // The hits keep the order of the links, so Tab does.
+    let next = null;
+    for (const link of [...layout.links].reverse()) {
+      const { hit } = links.get(linkKey(link));
+      if (!hit) continue;
+      if (!hit.parentNode) hits.insertBefore(hit, next);
+      next = hit;
     }
     // Lit links are drawn last, over the others.
     const litPaths = layout.links.filter((link) => lit.has(linkKey(link))).map((link) => links.get(linkKey(link)).path);
@@ -475,6 +610,13 @@ export function mapView({ tile, onOpen, onSelect, onAdd } = {}) {
       }, dur);
     });
   }
+
+  cross.addEventListener("pointerenter", () => clearTimeout(wait));
+  cross.addEventListener("pointerleave", unpointSoon);
+  cross.addEventListener("click", () => {
+    const item = pointed && links.get(pointed);
+    if (item) pointer.onRemove(item.link);
+  });
 
   function node(idOrKey) {
     return blocks.get(idOrKey)?.node || links.get(idOrKey)?.path || null;
