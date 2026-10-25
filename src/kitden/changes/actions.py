@@ -330,8 +330,7 @@ def disconnect_steps(
         if mine is None or adapter is None:
             if entries:
                 raise ValueError(
-                    f"{words} gets Kitden from the Claude Code plugin. "
-                    "Turn the plugin off to disconnect it."
+                    f"{words} gets Kitden from a plugin. Turn the plugin off to disconnect it."
                 )
             raise ValueError(f"{words} is not connected to Kitden.")
         steps.append(adapter.remove_step(mine))

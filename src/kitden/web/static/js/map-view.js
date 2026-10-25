@@ -777,6 +777,20 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     if (focused && focused !== document.activeElement && area.contains(focused)) focused.focus({ preventScroll: true });
   }
 
+  // The hits keep the order of the links, so Tab does, except that the hits of the lines that skip
+  // the gateway come first: those lines cross the clients' solid links, and the hit drawn later
+  // takes the pointer, so a solid link wins where they cross.
+  function orderHits(layout) {
+    const direct = (link) => link.kind === "direct";
+    let next = null;
+    for (const link of [...layout.links.filter(direct), ...layout.links.filter((link) => !direct(link))].reverse()) {
+      const { hit } = links.get(linkKey(link));
+      if (!hit) continue;
+      if (!hit.parentNode) hits.insertBefore(hit, next);
+      next = hit;
+    }
+  }
+
   function draw(model, layout, { selected = null, lit = new Set(), found = null, open = new Set(), motion = "move" } = {}) {
     performance.mark("kitden:map-start");
     const enters = motion === "enter" && canMove();
@@ -884,17 +898,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
       if (!linksMove || !stay) unlink(key);
       else if (!item.exit) retire(key);
     }
-    // The hits keep the order of the links, so Tab does, except that the hits of the lines that skip
-    // the gateway come first: those lines cross the clients' solid links, and the hit drawn later
-    // takes the pointer, so a solid link wins where they cross.
-    const direct = (link) => link.kind === "direct";
-    let next = null;
-    for (const link of [...layout.links.filter(direct), ...layout.links.filter((link) => !direct(link))].reverse()) {
-      const { hit } = links.get(linkKey(link));
-      if (!hit) continue;
-      if (!hit.parentNode) hits.insertBefore(hit, next);
-      next = hit;
-    }
+    orderHits(layout);
     showHits();
     // Lit links are drawn last, over the others (the accent lines sit over them all).
     const litPaths = layout.links.filter((link) => shown.has(linkKey(link))).map((link) => links.get(linkKey(link)).path);

@@ -154,6 +154,8 @@ test('a connected client offers Disconnect, a free one Connect', () => {
   assert.ok(codex.tile.childNodes[0].className.startsWith('client-mark'));
   assert.deepEqual(mainOf(codex), [['Disconnect from the gateway…', false], ['See what it loads in Library', false]]);
   assert.deepEqual(codex.actions[0].body, DISCONNECT('codex'));
+  // Its note says what Codex loses, in the words of the review's after line.
+  assert.equal(codex.actions[0].note, "Codex loses the Kitden gateway's servers and Kitden's own read of your setup. Servers it sets up on its own stay.");
   assert.equal(typeof codex.actions[1].run, 'function');
   // Its app opens from under More (D18).
   assert.deepEqual(moreLabels(codex), ['Open ChatGPT']);
@@ -470,15 +472,9 @@ test('Projects with a rule of their own lists each and Show picks it', async () 
   // It sits between the facts and the sentence.
   const [, body] = detailsCard(card);
   assert.deepEqual(body.children.map((node) => node.className), ['facts', 'own-rules', 'why']);
-  // Show picks that project, as the menu at the top does.
+  // Show names its project (what it does is tested on the page below).
   const show = rows[0].children[3];
   assert.equal(show.attributes['aria-label'], 'Show atlas');
-  try {
-    await click(show);
-    assert.equal(state.project, 'atlas');
-  } finally {
-    state.project = '';
-  }
   // None without a rule of a project's own, and none without each project's rules.
   assert.equal(medium('read_file').list, null);
   assert.equal(medium('write_file', { rules: {} }).list, null);
@@ -781,6 +777,8 @@ async function onGatewayPage(reply, run) {
       offsetLeft: 1081, focus() {}, contains: () => false, getAnimations: () => [], getBoundingClientRect: () => ({ top: 0, bottom: 83, right: 1345 }),
     });
   }
+  // The project button at the top takes focus.
+  page['#where'] = fakeNode('button');
   // `#drawer .body` is the body the drawer shows now, skeleton or card.
   const querySelector = (selector) => (selector === '#drawer .body' ? page['#drawer'].children.find((node) => node.className.split(' ').includes('body')) : page[selector] ?? null);
   globalThis.document = { ...saved.document, activeElement: null, body: {}, documentElement: { classList: { remove() {} } }, querySelector, querySelectorAll: () => [], addEventListener() {} };
@@ -809,6 +807,10 @@ test("an outside server's read that fails at once still says it could not load t
     const [head, body] = drawer.children;
     assert.equal(head.children[1].textContent, 'github');
     assert.ok(textOf(body).includes('Could not load the details.'), textOf(body));
+    // Drawn again (back from a review), it still says so.
+    panelState.from.draw();
+    await wait(50);
+    assert.ok(textOf(drawer.children[1]).includes('Could not load the details.'), textOf(drawer.children[1]));
   });
 });
 
@@ -878,6 +880,42 @@ async function onFilesPanel(run, { rules = FILES_TOOLS, refuse = null, open = ()
 }
 // The open panel's control with this focus key.
 const control = (drawer, key) => drawer.querySelectorAll('[data-focus]').find((node) => node.dataset.focus === key);
+
+test('Show opens the same tool in that project, focus inside; a tool gone there leaves focus on the project button', async () => {
+  const { closeForProject } = await import('../../src/kitden/web/static/js/panel.js');
+  const { setSwitcher } = await import('../../src/kitden/web/static/js/store.js');
+  // As app.js does: another project closes Details, then the page reads it (`there`).
+  let there = null;
+  setSwitcher(async () => {
+    closeForProject();
+    if (there) data.gateway = there;
+    data.scope.gateway = state.project;
+  });
+  const open = () => showTool('files', 'write_file');
+  try {
+    await onFilesPanel(async (drawer) => {
+      const show = control(drawer, 'show:atlas');
+      await click(show);
+      await wait(400);
+      assert.equal(state.project, 'atlas');
+      assert.equal(isPanelOpen(), true);
+      assert.deepEqual(panelState.current, { type: 'tool', server: 'files', tool: 'write_file' });
+      assert.equal(globalThis.document.activeElement, drawer);
+    }, { open, projects: MEDIUM_PROJECTS });
+    state.project = '';
+    // In atlas the files server no longer lists write_file: the panel closes, focus on the project button.
+    there = { ...VIEW, gateways: [{ ...KITDEN, servers: [{ ...FILES_HELD, tool_list: FILES_HELD.tool_list.filter((t) => t.name !== 'write_file') }] }] };
+    await onFilesPanel(async (drawer) => {
+      await click(control(drawer, 'show:atlas'));
+      await wait(400);
+      assert.equal(isPanelOpen(), false);
+      assert.equal(globalThis.document.activeElement, globalThis.document.querySelector('#where'));
+    }, { open, projects: MEDIUM_PROJECTS });
+  } finally {
+    state.project = '';
+    setSwitcher(async () => {});
+  }
+});
 const MOVE = 'action:Move out of the gateway…';
 
 test('Move out steps to a client choice and a pick adds one move-out row', async () => {
@@ -992,7 +1030,8 @@ test("in some projects: a tick adds that project's row, an untick takes only it 
     assert.equal(textOf(title), 'Turn off write_file in the projects you pick');
     const [say, follows, find, picks] = body.children;
     assert.equal(textOf(say), 'The shared rule stays on.');
-    assert.equal(follows.hidden, true);
+    // An empty live region stays in the page (it has no height), so what it says next is heard.
+    assert.deepEqual([Boolean(follows.hidden), follows.attributes['aria-live'], follows.children], [false, 'polite', []]);
     assert.deepEqual(['placeholder', 'aria-label'].map((name) => find.children.at(-1).attributes[name]), ['Find a project…', 'Find a project…']);
     // Focus goes to Find.
     assert.equal(focused(), 'find');
@@ -1016,7 +1055,7 @@ test("in some projects: a tick adds that project's row, an untick takes only it 
     assert.equal(row('sandbox').className, 'pick multi on');
     assert.equal(textOf(foot), '2 projects in preview. Apply them from the tray.');
     // No known project lies inside sandbox or website: nothing follows them.
-    assert.deepEqual([follows.hidden, follows.children], [true, []]);
+    assert.deepEqual([Boolean(follows.hidden), follows.children], [false, []]);
     // An untick takes exactly that project's row out; the other stays.
     await click(row('sandbox'));
     assert.deepEqual(tray.rows.map((r) => r.body), [offIn('write_file', 'site')]);
@@ -1080,12 +1119,12 @@ test('a whole server turns on or off in some projects, from More, and Back keeps
     await click(picks.children[0]);
     assert.deepEqual(tray.rows.map((r) => r.body), [offIn(null, 'atlas')]);
     // atlas/web has no rule of its own for files: it follows atlas, and the step says so.
-    assert.deepEqual([follows.hidden, follows.children.map(textOf)], [false, ['web follows atlas and changes with it.']]);
+    assert.deepEqual(follows.children.map(textOf), ['web follows atlas and changes with it.']);
     await click(picks.children[4]);
     assert.deepEqual(follows.children.map(textOf), ['web follows atlas and changes with it.']);
     // Unticked, atlas no longer says it.
     await click(picks.children[0]);
-    assert.deepEqual([follows.hidden, follows.children], [true, []]);
+    assert.deepEqual([Boolean(follows.hidden), follows.children], [false, []]);
     await click(picks.children[0]);
     // Back steps to the server's panel, with its warning.
     await click(head.children[0].children[0]);
@@ -1191,7 +1230,7 @@ test('a tick names the projects whose chain reaches it, as the gateway decides',
     await held(FILES_HELD, { detail: rules, projects }).more.find((a) => a.label === 'Turn off in some projects…').run();
     await wait(50);
     const follows = drawer.children[1].children[1];
-    const lines = () => (follows.hidden ? [] : follows.children.map(textOf));
+    const lines = () => follows.children.map(textOf);
     // The home folder: nobody follows it.
     await click(control(drawer, 'tick:home'));
     assert.deepEqual(lines(), []);
@@ -1267,6 +1306,13 @@ test('a bypass, a registered and a plugin client link open their panel; only the
   // Where it is written says only what is true: a plugin's files for a plugin's entry or server;
   // nothing for a line that also, or only, comes from the Desktop Code tab.
   assert.deepEqual(facts(plugin).at(-1), ['Written in', "A plugin's files"]);
+  // The same client's route to a registered gateway is its own entry: written in its settings.
+  const routes = { ...view, connections: { ...view.connections, 'gw-2': { claude_code: [], codex: ['x'], cursor: ['x'] } } };
+  const pluginSetup = [...SETUP.slice(0, 2), entry('cursor', 'plugin')];
+  const ownTree = gatewayTree(routes, { setup: pluginSetup, clients: CLIENTS, held: new Map([['gw-2', { servers: [{ name: 'x', type: 'STREAMABLE_HTTP' }] }]]) });
+  const ownRoute = linkParts(ownTree, 'client:cursor>gateway:gw-2', '');
+  assert.equal(ownRoute.from.viaPlugin, true);
+  assert.deepEqual(facts(linkCard(ownRoute, { linked: ['claude_code', 'codex', 'cursor'], view: routes })).at(-1), ['Written in', "Cursor's settings"]);
   const linear = row('linear', 'claude_code', [], { stays: 'with the plugin' });
   const desktop = { ...row('notion', 'claude_code', ['n']), clients: ['claude_desktop_code_tab'] };
   const both = { ...row('slack', 'claude_code', ['s1', 's2']), clients: ['claude_code', 'claude_desktop_code_tab'] };

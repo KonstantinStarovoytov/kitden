@@ -495,11 +495,13 @@ export function findChip(found) {
   return found.matches.size ? plural(found.matches.size, "match", "matches") : "No matches";
 }
 
-// What a screen reader hears for a block: its whole name, meta, counts, tag, projects, the state
-// word that matches its link (none where the meta says it), "Leaving" while a change in the tray
-// takes it out, and its action.
+// What a screen reader hears for a block: its whole name, meta, what waits for it ("in
+// preview", its `wait` words without the dot), counts, tag, projects, the state word that matches
+// its link (none where the meta says it), "Leaving" while a change in the tray takes it out, and
+// its action.
 export function blockLabel(block) {
   const state = block.stateInMeta ? null : STATE_SAID[block.state];
+  const wait = block.wait ? block.wait.replace(/^[\s·]+/, "") : null;
   const stats = block.stats ? block.stats.map((stat) => stat.words).join(" · ") : null;
-  return [block.name, block.meta, stats, block.tag, block.projects && block.projects.said, state, block.leaving && "Leaving", block.action].filter(Boolean).join(", ");
+  return [block.name, block.meta, wait, stats, block.tag, block.projects && block.projects.said, state, block.leaving && "Leaving", block.action].filter(Boolean).join(", ");
 }

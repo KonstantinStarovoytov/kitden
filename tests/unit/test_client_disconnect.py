@@ -14,9 +14,16 @@ CLIENTS = ["claude_code", "codex", "cursor"]
 FILE = {"claude_code": ".claude.json", "codex": ".codex/config.toml", "cursor": ".cursor/mcp.json"}
 CODEX_ENTRY = '\n[mcp_servers.kitden]\ncommand = "/opt/kitden/bin/kitden"\nargs = ["mcp"]\n'
 PLUGIN_DIR = Path(__file__).resolve().parents[2] / "plugins/kitden"
-PLUGIN_WORDS = (
-    "Claude Code gets Kitden from the Claude Code plugin. Turn the plugin off to disconnect it."
-)
+PLUGIN_WORDS = "Claude Code gets Kitden from a plugin. Turn the plugin off to disconnect it."
+NAMES = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
+
+
+def lost(client):
+    """What Disconnect says the client loses, and what stays."""
+    return (
+        f"{NAMES[client]} loses the Kitden gateway's servers and Kitden's own read of your "
+        "setup. Servers it sets up on its own stay."
+    )
 
 
 @pytest.fixture
@@ -60,7 +67,9 @@ def test_disconnect_removes_the_entry_and_undo_puts_it_back(home, client):
         change = answer.json()
         assert _files(home) == before
         assert [(s["client"], s["name"]) for s in change["steps"]] == [(client, "kitden")]
-        assert change["after"] == [{"client": client, "state": "off", "word": "Removed"}]
+        assert change["after"] == [
+            {"client": client, "state": "off", "word": "Removed", "note": lost(client)}
+        ]
         applied = page.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
         assert applied["state"] == "verified"
         assert setup_state(page, client) == "missing"

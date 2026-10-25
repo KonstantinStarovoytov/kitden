@@ -739,6 +739,7 @@ div.map .caption.found { color: var(--ink); }
 div.map.finding .block:not(.found), div.map.finding .caption:not(.found) { filter: opacity(0.35); }
 div.map.finding .link { stroke-opacity: 0.25; }
 div.map.finding .link.direct.lit { stroke-opacity: 0.25; }
+div.map.finding .link.leaving.lit:not(.hov):not(.picked), div.map.finding .link.direct.preview.lit:not(.hov):not(.picked) { stroke-opacity: 0.25; }
 div.map.finding .link.hov, div.map.finding .link.picked { stroke-opacity: 1; }
 /* A move on the map (S.8, 4.6): a block with a grip can be dragged; it lifts while it follows the
    pointer or waits on the slot, which lights while the pointer is over Servers. A preview is drawn
@@ -953,6 +954,8 @@ h2.sw-head { margin: 0; font-size: 11px; font-weight: 600; color: var(--ink-2); 
    the state already cannot be ticked. Find narrows the rows. */
 .pick.multi > .ic { flex: none; color: var(--ink-3); }
 .follows { display: grid; gap: 4px; }
+/* The live region stays in the page so what it says is heard; empty, it takes no row. */
+.drawer .body > .follows:empty { position: absolute; }
 .follows p { margin: 0; color: var(--ink-2); }
 .pick:disabled { opacity: 0.45; cursor: default; }
 .pick:disabled:hover { border-color: var(--wire); }

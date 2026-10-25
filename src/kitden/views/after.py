@@ -5,6 +5,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from kitden.changes.actions import (
+    CLIENT_DISCONNECT,
     GATEWAY_KEYCHAIN,
     GATEWAY_MOVE_OUT,
     GATEWAY_PUT_BACK,
@@ -692,6 +693,26 @@ def _align_words(
     return out
 
 
+# What Disconnect takes from a client: the kitden entry gives both the gateway's servers and
+# Kitden's own read of the setup. The twin of gateway-details.js disconnectNote.
+DISCONNECT_NOTE = (
+    "{client} loses the Kitden gateway's servers and Kitden's own read of your setup. "
+    "Servers it sets up on its own stay."
+)
+
+
+def _disconnect_words(change: Change) -> list[dict]:
+    """Each client loses its kitden entry, and the note says what that takes."""
+    out = []
+    for step in change.steps:
+        if any(e["client"] == step.client for e in out):
+            continue
+        state, word = AFTER_WORDS[CLIENT_DISCONNECT]
+        note = DISCONNECT_NOTE.format(client=CLIENT_WORDS.get(step.client, step.client))
+        out.append({"client": step.client, "state": state, "word": word, "note": note})
+    return out
+
+
 def after_words(
     change: Change,
     inventory,
@@ -724,6 +745,8 @@ def after_words(
         return _put_back_words(change, inventory, home)
     if change.action == GATEWAY_MOVE_OUT and change.steps and home is not None:
         return _move_out_words(change, inventory, home)
+    if change.action == CLIENT_DISCONNECT:
+        return _disconnect_words(change)
     if change.action == MCP_ADD and home is not None:
         return _add_server_words(change, home)
     if change.action == PROJECT_ALIGN:

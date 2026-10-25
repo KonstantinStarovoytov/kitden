@@ -569,6 +569,12 @@ def test_a_link_says_what_its_x_does():
     assert '"A plugin\'s files"' in gw()
 
 
+def test_the_follows_live_region_stays_in_the_page():
+    # It is never hidden, so what it says is heard; empty, it takes no row of the panel's grid.
+    assert "follows.hidden" not in gw()
+    assert "position: absolute" in rule(".drawer .body > .follows:empty")
+
+
 def test_a_pointed_link_keeps_its_look_in_a_search():
     rule = "div.map.finding .link.hov, div.map.finding .link.picked { stroke-opacity: 1; }"
     assert rule in CSS
@@ -720,6 +726,12 @@ def test_the_map_says_the_link_is_the_state():
     # A search dims every link, a lit bypass line too (it is lit at full strength otherwise).
     assert "stroke-opacity: 0.25" in rule("div.map.finding .link")
     assert "stroke-opacity: 0.25" in rule("div.map.finding .link.direct.lit")
+    # Lit preview and leaving lines dim in a search too; a pointed or picked one stays full.
+    lit = (
+        "div.map.finding .link.leaving.lit:not(.hov):not(.picked), "
+        "div.map.finding .link.direct.preview.lit:not(.hov):not(.picked)"
+    )
+    assert "stroke-opacity: 0.25" in rule(lit)
     # A line to a server Kitden does not know to be on is dashed: it does not say "on".
     assert "div.map .link.direct.unk { stroke-dasharray: 3 3; }" in CSS
     assert 'const NOT_KNOWN = "Not known";' in script("gateway.js")
@@ -1754,6 +1766,8 @@ def test_the_client_gateway_link_and_outside_panels_say_the_mockups_words():
         " through Kitden, so Kitden's rules apply to them.`",
         " on its own and skip",
         "gets Kitden from a plugin: turn the plugin off to disconnect it.`",
+        " loses the Kitden gateway's servers and Kitden's own read of your setup. Servers it"
+        " sets up on its own stay.`",
         "`Kitden did not find ${",
         'connection: "Connection"',
         '"Route through the gateway"',
@@ -2300,3 +2314,10 @@ def test_the_dock_stands_above_the_scrim_and_the_drawer_keeps_its_room():
     # The Tab loop of the modal drawer takes the dock's buttons, the bar's and the toast's.
     shell = script("panel.js")
     assert 'const dock = $("#dock");' in shell and '"button:not([disabled])", dock' in shell
+
+
+def test_the_map_views_draw_puts_its_hits_in_order_with_a_helper():
+    # `draw` does not grow (the plan's rule): the hit order is its own small helper beside it.
+    view = script("map-view.js")
+    assert "  function orderHits(layout) {" in view
+    assert "    orderHits(layout);\n" in view

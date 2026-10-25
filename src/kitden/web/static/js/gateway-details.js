@@ -8,7 +8,7 @@ import { $, busyWhile, button, el, icon, joinWords, plural, reportError, withFoc
 import { loadLibraryFor, raceSlow } from "./library.js";
 import { animateTo, fold } from "./motion.js";
 import { projectNote } from "./offer.js";
-import { callsText, closePanel, contextLinks, detailsCard, followTray, heldActions, keepFrom, linksRow, loadPanel, moveBody, moveInto, moveTargets, NO_TOOLS, offerLabel, offNote, openPanel, panelState, previewButton, refreshTools, review, stepTo, swapContent, switchList, techRows, technical, toast, toolRows, toolsHead, writingToolsOn } from "./panel.js";
+import { callsText, closePanel, contextLinks, detailsCard, followTray, heldActions, isPanelOpen, keepFrom, linksRow, loadPanel, moveBody, moveInto, moveTargets, NO_TOOLS, offerLabel, offNote, openPanel, panelState, previewButton, refreshTools, review, stepTo, swapContent, switchList, techRows, technical, toast, toolRows, toolsHead, writingToolsOn } from "./panel.js";
 import { ALL_PROJECTS, callout, CLIENT_NAMES, clientCheck, FIND_PROJECT, folderName, GATEWAY_NOTE, gatewayName, kindOf, kitdenClients, mark, menuItems, originText, STATE_WORDS, versionsOpen } from "./parts.js";
 import { arrival, current, data, freshness, go, libraryChoice, projectPath, reload, render, setState, state, switchProject } from "./store.js";
 import { addToTray, iconFor, inTray, keyFor, takeOut, tray } from "./tray.js";
@@ -16,6 +16,8 @@ import { addToTray, iconFor, inTray, keyFor, takeOut, tray } from "./tray.js";
 const WRITABLE = ["claude_code", "codex", "cursor"];
 // The kitden entry is the same one that lets agents read this setup.
 export const SETUP_NOTE = "The kitden entry shows your setup to agents and offers the tools in the Kitden gateway.";
+// What Disconnect takes from a client, as the review's after line says it (views/after.py).
+const disconnectNote = (name) => `${name} loses the Kitden gateway's servers and Kitden's own read of your setup. Servers it sets up on its own stay.`;
 // The kind word each card shows at its top, and its skeleton too while it loads: one source, so a
 // card never comes after a skeleton of another kind.
 const KIND = { client: "Client", gateway: "Gateway", server: "Server", tool: "Tool", connection: "Connection" };
@@ -268,7 +270,7 @@ export function clientCard(client, { setup, clients, progress = data.progress, v
   const why = clientSay(name, { known, on, entry, found, turnsOn, through, place: placeWords(picked, folder), own });
   const actions = [];
   if (action && action.connect) actions.push({ label: action.update ? "Update the Kitden entry…" : "Connect to the gateway…", body: action.body, note: SETUP_NOTE, primary: true });
-  else if (action) actions.push({ label: "Disconnect from the gateway…", body: action.body });
+  else if (action) actions.push({ label: "Disconnect from the gateway…", body: action.body, note: disconnectNote(name) });
   actions.push({ label: "See what it loads in Library", run: seeInLibrary });
   const more = [];
   if (turnsOn) more.push({ label: `Turn it on in ${name}…`, body: { action: "setup_server.enable", targets: [{ client }], params: {} }, note: SETUP_NOTE });
@@ -376,7 +378,7 @@ const ROW_WORDS = {
 function rowButton(client, { connect, update, body }) {
   const name = CLIENT_NAMES[client];
   const [label, hover] = ROW_WORDS[update ? "update" : connect ? "connect" : "disconnect"];
-  const node = previewButton(label, body, { note: connect ? SETUP_NOTE : null, look: "btn small" });
+  const node = previewButton(label, body, { note: connect ? SETUP_NOTE : disconnectNote(name), look: "btn small" });
   node.append(el("span", "sr-only", ` ${name}`));
   node.title = hover(name);
   node.dataset.focus = `conn:${client}`;
@@ -692,7 +694,7 @@ export function toolCard(tool, server, { linked, picked = "", folder = "", detai
   // The name goes under a title the server gives; without one it is the title.
   const title = tool.title || name;
   const known = knownIn(rules, projects);
-  const card = { kind: KIND.tool, title, id: tool.title ? name : null, facts, list: picked ? null : ownRules(name, known), warning };
+  const card = { kind: KIND.tool, title, id: tool.title ? name : null, facts, list: picked ? null : ownRules(server.name, name, known), warning };
   if (detail.description) card.technical = technical([{ title: "Description", summary: detail.description }]);
   if (tool.why === "server_off") {
     const place = placeWords(picked, folder);
@@ -755,15 +757,16 @@ function toolActions(server, tool, { picked, folder, detail, shared, some }) {
 
 // Under All projects, the known projects with a rule of their own for the tool (`own` in the
 // server's answer, as the map counts them), each with that rule and "Show", which picks the
-// project as the menu at the top does. Null without one, or without the answer.
-function ownRules(name, known) {
+// project as the menu at the top does and opens the tool there (showIn). Null without one, or
+// without the answer.
+function ownRules(server, name, known) {
   const own = (known || []).filter((p) => (p.entry.own || []).includes(name));
   if (!own.length) return null;
   const section = el("section", "own-rules");
   section.append(el("h2", "sw-head", "Projects with a rule of their own"));
   for (const p of own) {
     const on = ruleIn(name)(p.entry) === "on";
-    const show = button("Show", () => switchProject(p.id), "btn small");
+    const show = button("Show", () => showIn(p.id, server, name).catch(reportError), "btn small");
     show.setAttribute("aria-label", `Show ${p.name}`);
     show.dataset.focus = `show:${p.id}`;
     const row = el("div", "own-row");
@@ -771,6 +774,15 @@ function ownRules(name, known) {
     section.append(row);
   }
   return section;
+}
+
+// Picking another project closes Details; open the same tool's panel there again, focus inside
+// it. A tool that is gone there leaves focus on the project button. (Phase 4B switches in place.)
+async function showIn(project, server, name) {
+  await switchProject(project);
+  await showTool(server, name);
+  const where = $("#where");
+  if (!isPanelOpen() && where) where.focus();
 }
 
 // Details of a server in the Kitden gateway, for the picked project, as the mockup's server panel
@@ -875,7 +887,8 @@ const DESKTOP_TAB = "claude_desktop_code_tab";
 // come from the Desktop app's Code tab.
 function writtenIn(kind, from, to) {
   if (kind === "change") return "Not written yet";
-  if (kind === "client") return from.viaPlugin ? "A plugin's files" : `${from.name}'s settings`;
+  // A plugin gives a client only its kitden entry; its route to a registered gateway is its own.
+  if (kind === "client") return from.viaPlugin && to.gateway.kind === "kitden" ? "A plugin's files" : `${from.name}'s settings`;
   if (kind === "direct") {
     if (to.groupKey === "plugin") return "A plugin's files";
     const own = (to.row.clients || []).includes(from.client) && !(from.client === "claude_code" && to.row.clients.includes(DESKTOP_TAB));
@@ -1103,7 +1116,6 @@ function projectsNodes({ server, tool, title, target, shared, rules }, projects,
     const ticks = rows.filter((p, at) => ticked(bodies[at]));
     words.textContent = ticks.length ? `${plural(ticks.length, "project", "projects")} in preview. Apply them from the tray.` : "Tick projects. Each one waits in preview until Apply.";
     follows.replaceChildren(...ticks.map((p) => followLine(p, rows, ownOf, ticks)).filter(Boolean));
-    follows.hidden = !follows.children.length;
   };
   const picks = el("div", "picks");
   picks.setAttribute("role", "group");
@@ -1273,7 +1285,7 @@ export async function showOutside(group, name) {
 
 function drawOutside(row, group, definitions, shown, warning = null) {
   const card = { ...outsideCard(row, group, definitions, { view: current("gateway"), linked: heldContext().linked }), warning };
-  openCard(card, shown, () => drawOutside(row, group, definitions, shown), () => showOutside(group, row.name));
+  openCard(card, shown, () => drawOutside(row, group, definitions, shown, warning), () => showOutside(group, row.name));
 }
 
 // A link's Connection panel. `find()` gives the link's parts from the map as the page has it now

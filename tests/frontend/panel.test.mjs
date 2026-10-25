@@ -193,7 +193,8 @@ test('an add names its scope in the title and, with All projects, in the lede', 
   // Only an add names a scope; a removal or a switch says its place another way.
   assert.equal(addScope('plugin.disable', ''), null);
   assert.equal(addScope('plugin.skills', ''), ' for all projects');
-  // A marketplace and the setup entry are adds too, and always for all projects.
+  // A marketplace is an add too, always for all projects. Connect (the setup entry) is not: it
+  // names its place in its title, so its lede does not say "Adds for all projects."
   const market = { action: 'marketplace.add', steps: [{ client: 'codex', name: 'acme' }] };
   assert.deepEqual(changeWords(market), { title: 'Add the acme marketplace to Codex for all projects', done: 'Added the marketplace acme to Codex for all projects' });
   const setup = { action: 'setup_server.register', steps: [{ client: 'cursor', name: 'kitden' }] };

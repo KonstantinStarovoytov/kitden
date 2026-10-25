@@ -77,7 +77,8 @@ What Kitden does today and what comes next. Ideas and bugs:
   one change. A Keychain secret is written into that client's file as plain text; the review says
   so. Undo brings both back.
 - **Disconnect a client from Kitden:** removes the client's `kitden` entry, so it no longer reaches
-  the gateway. Undo puts it back. Adding that entry now reads "Connect … to Kitden".
+  the gateway, and the review says what it loses (the gateway's servers and Kitden's read of the
+  setup). Undo puts it back. Adding that entry now reads "Connect … to Kitden".
 - **Add an MCP server to another client:** "+ Add" copies the entry; a `${VAR}` reference stays a
   reference where that client reads one.
 - **Add into one project:** a skill, or a Claude Code plugin, for that project only.

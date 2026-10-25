@@ -935,6 +935,15 @@ const moveOut = (server, client) => ({ action: 'gateway.move_out', targets: [{ c
 const removeDirect = (...items) => ({ action: 'mcp.remove_direct', targets: items.map((item) => ({ item })), params: {} });
 const laidOut = (tree) => layoutTree(tree, { open: new Set(), narrow: false });
 
+test('a client is heard by its meta once, and a change that waits is still heard', () => {
+  // The meta says the state, so no state word follows it.
+  const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+  assert.equal(blockLabel(block(tree, 'client:claude_code')), 'Claude Code, Connected');
+  assert.equal(blockLabel(block(tree, 'client:cursor')), 'Cursor, Not connected');
+  // Without the setup read: "Not known" once.
+  assert.equal(blockLabel(block(gatewayTree(MEDIUM_VIEW, { ...OPTS, setup: null }), 'client:codex')), 'Codex, Not known');
+});
+
 test('a connect row draws a dashed link to the gateway', () => {
   const row = trayRow(CONNECT_CURSOR);
   const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [row] });
@@ -946,7 +955,7 @@ test('a connect row draws a dashed link to the gateway', () => {
   const cursor = block(tree, 'client:cursor');
   // A no-break space keeps the dot with "Not connected" when the words wrap.
   assert.deepEqual([cursor.meta, cursor.wait, cursor.lamp, cursor.state], ['Not connected', '\u00a0· in preview', 'preview', 'preview']);
-  assert.equal(blockLabel(cursor), 'Cursor, Not connected, In preview');
+  assert.equal(blockLabel(cursor), 'Cursor, Not connected, in preview');
   assert.deepEqual(block(tree, 'gateway:kitden').stats.map((s) => s.words), ['2 clients', '2 servers']);
   // A press on the link takes the row out.
   assert.equal(linkTip(tree, link, ''), 'Take it out of the preview');
@@ -985,10 +994,12 @@ test('a move-out row shows the server outside, moving to its client', () => {
   const row = trayRow(moveOut('files', 'claude_code'));
   const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [row] });
   // files is not drawn in the gateway: nor its tools, its links, or its Local group; the gateway
-  // counts it until Apply.
+  // counts only the servers not in preview (gateway-notes 4.1), and counts it again once the row
+  // is taken out.
   assert.ok(!['held:kitden:files', 'group:kitden:local', 'tool:files/read_file'].some((id) => block(tree, id)));
   assert.ok(!tree.links.some((l) => [l.from, l.to].includes('held:kitden:files')));
-  assert.deepEqual(block(tree, 'gateway:kitden').stats.map((s) => s.words), ['2 clients', '2 servers']);
+  assert.deepEqual(block(tree, 'gateway:kitden').stats.map((s) => s.words), ['2 clients', '1 server']);
+  assert.deepEqual(block(gatewayTree(MEDIUM_VIEW, OPTS), 'gateway:kitden').stats.map((s) => s.words), ['2 clients', '2 servers']);
   // It shows outside, after the local rows (Cursor's own files stays apart), moving to Claude Code.
   const shown = block(tree, 'preview-out:files');
   assert.deepEqual([shown.kind, shown.parent, shown.name, shown.meta, shown.lamp, shown.state, shown.icon, shown.h], ['preview', 'group:outside', 'files', 'Moves to Claude Code', 'preview', 'preview', 'hard-drive', 50]);

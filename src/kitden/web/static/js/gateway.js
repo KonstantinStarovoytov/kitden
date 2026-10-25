@@ -231,7 +231,7 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
   for (const id of WRITABLE) blocks.push(clientBlock(id, { setup, linked, known, first, clients, wait: waits.get(id) }));
   // A gateway block joined to the clients it `reaches` (null when not read), then its `servers` in
   // their groups (`kindOf` says which), but those that show elsewhere (`away`, by name); it counts
-  // them all.
+  // only those not in preview (gateway-notes 4.1), so a server moving out is not counted.
   // `server(block, word)` adds what each server's block says. `unread` says why Kitden does not
   // know what it holds, so no count shows: a problem is not an empty gateway. `ends` are blocks
   // for the end of a group (each `{ kind, block }`), which open that group if need be.
@@ -239,7 +239,7 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
   // what Kitden could not read, and then its state is not known.
   const addGateway = (gateway, { reaches, servers, kindOf, server, unread = null, ends = [], away = new Map() }) => {
     const id = `gateway:${gateway.id}`;
-    blocks.push({ id, column: "gateway", kind: "gateway", name: gatewayName(gateway), ...gatewayFace(gateway, reaches, servers, unread), state: unread ? "unk" : "on", stateInMeta: true, gateway, unread, ports: { left: true, right: true } });
+    blocks.push({ id, column: "gateway", kind: "gateway", name: gatewayName(gateway), ...gatewayFace(gateway, reaches, servers.filter((s) => !away.has(s.name)), unread), state: unread ? "unk" : "on", stateInMeta: true, gateway, unread, ports: { left: true, right: true } });
     for (const client of reaches || []) links.push({ from: `client:${client}`, to: id, kind: "on" });
     for (const [kind, word, mark] of KINDS) {
       const mine = servers.filter((s) => kindOf(s) === kind && !away.has(s.name));
@@ -407,7 +407,8 @@ function connectParts(links, kitden, waits) {
 // version; the change that disconnects it (`disconnect`) where its link's × can (connectAction),
 // and whether a plugin gives it its kitden entry (`viaPlugin`), which Kitden cannot take out.
 // While a change that connects it waits in the tray (`wait`, connectRows), its lamp is the dashed
-// ring and its meta says so (`wait`, in the accent).
+// ring and its meta says so (`wait`, in the accent). Its meta says its state, so a screen reader
+// hears no state word after it; on a first run, "Found" does not, and Off is heard.
 function clientBlock(id, { setup, linked, known, first, clients, wait = null }) {
   const on = linked.includes(id);
   const found = (clients || []).find((c) => c.id === id && c.status === "found");
@@ -416,11 +417,12 @@ function clientBlock(id, { setup, linked, known, first, clients, wait = null }) 
   // Found lights the lamp; the state stays what the link shows: no gateway reached yet. A client
   // whose state Kitden does not know has no lamp: a grey one would say off.
   let lamp = known ? (on ? "on" : "off") : null;
-  if (first && found) [meta, lamp] = [found.version ? `Found · ${found.version}` : "Found", "on"];
+  const firstFound = Boolean(first && found);
+  if (firstFound) [meta, lamp] = [found.version ? `Found · ${found.version}` : "Found", "on"];
   const action = on ? connectAction(id, setup) : null;
   const disconnect = action && !action.connect ? action.body : null;
   const viaPlugin = on && (setup || []).some((e) => e.client === id && e.state === "plugin");
-  const block = { id: `client:${id}`, column: "clients", kind: "client", name: CLIENT_NAMES[id], meta, lamp, state: known ? (on ? "on" : "off") : "unk", client: id, ports: { right: true }, disconnect, viaPlugin };
+  const block = { id: `client:${id}`, column: "clients", kind: "client", name: CLIENT_NAMES[id], meta, lamp, state: known ? (on ? "on" : "off") : "unk", stateInMeta: !firstFound, client: id, ports: { right: true }, disconnect, viaPlugin };
   // The dot stays with the words before it (a no-break space), so a wrap never starts a line with it.
   return wait && wait.connect ? { ...block, lamp: "preview", state: "preview", wait: "\u00a0· in preview" } : block;
 }
