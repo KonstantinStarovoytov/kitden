@@ -1119,6 +1119,19 @@ test('open Details are read again after Apply all and after Undo all, focus left
   closePanel({ focus: false });
 });
 
+test('a tool list of a server off by the shared rule says how many projects decide otherwise', async () => {
+  await fresh();
+  // All projects: files is off by the shared rule, two known projects turn it on.
+  const projects = [{ id: 'a', server: 'on', tools: {} }, { id: 'b', server: 'on', tools: {} }, { id: 'c', server: 'off', tools: {} }];
+  queue('/api/gateway/tools?server=files', { status: 200, json: { server: 'files', state: 'off', shared: 'off', strict: false, tools: [{ name: 'read_file', state: 'on', effective: 'off', hint: 'reads' }], projects } });
+  const section = toolsSection('files', () => {});
+  pages['#drawer'].replaceChildren(section);
+  await settle();
+  assert.ok(section.textContent.includes('files is off by the shared rule, so none of its tools are offered. 2 projects decide otherwise.'), section.textContent);
+  assert.ok(!section.textContent.includes('off in all projects'), section.textContent);
+  pages['#drawer'].replaceChildren();
+});
+
 test('a tool list drawn again gives focus to Refresh tools when the control asked for is gone', async () => {
   await fresh();
   // The writing tools are off now: "Turn off every writing tool…" is not drawn.

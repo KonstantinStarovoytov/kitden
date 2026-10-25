@@ -47,10 +47,15 @@ export const toolsHead = (where) => `Tools · ${where || ALL_PROJECTS}`;
 export const NO_TOOLS = "Kitden does not know its tools yet. Refresh tools asks the server.";
 
 // Over the switches of a server that is off: its tools keep their own switches, but none is
-// offered. Null while it is on.
+// offered. With All projects it is off by the shared rule, never "in all projects": the known
+// projects whose own rule turns it on are counted (as the map block says "On in 2 projects").
+// Null while it is on.
 export function offNote(answer, where) {
   if (answer.state !== "off") return null;
-  return el("p", "muted", `${answer.server} is off in ${where || "all projects"}, so none of its tools are offered there.`);
+  if (where) return el("p", "muted", `${answer.server} is off in ${where}, so none of its tools are offered there.`);
+  const others = answer.shared ? (answer.projects || []).filter((p) => p.server && p.server !== answer.shared).length : 0;
+  const otherwise = others ? ` ${plural(others, "project decides", "projects decide")} otherwise.` : "";
+  return el("p", "muted", `${answer.server} is off by the shared rule, so none of its tools are offered.${otherwise}`);
 }
 
 // A server's switches as the mockup lists them (`rows` from toolRows): the whole server first,

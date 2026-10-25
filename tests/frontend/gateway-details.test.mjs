@@ -26,6 +26,7 @@ function fakeNode(tag) {
     getAttribute: (name) => (name in node.attributes ? node.attributes[name] : null),
     removeAttribute(name) { delete node.attributes[name]; },
     addEventListener(type, listener) { (node.listeners[type] ||= []).push(listener); },
+    focus() { globalThis.document.activeElement = node; },
     querySelector: (selector) => (selector === ':scope > summary' ? node.childNodes.find((child) => child.tag === 'summary') || null : null),
   };
   return node;
@@ -445,7 +446,12 @@ test('the server panel lists its tools with a switch each and a Whole server row
   const off = held({ ...FILES_HELD, state: 'off', on_count: 0 }, { detail: allOff });
   assert.deepEqual(facts(off)[0], ['Tools', '0 of 4 on']);
   assert.deepEqual(listRows(off)[0], ['sw-row whole', 'Whole server', 'Every tool is off', 'false']);
-  assert.deepEqual(listLines(off), ['Tools · All projects', 'files is off in all projects, so none of its tools are offered there.']);
+  assert.deepEqual(listLines(off), ['Tools · All projects', 'files is off by the shared rule, so none of its tools are offered.']);
+  // Off by the shared rule but on in two projects: the list says so, as the map block does.
+  const someOn = { ...allOff, shared: 'off', projects: MEDIUM_RULES.projects.map((p, at) => ({ ...p, server: at < 2 ? 'on' : 'off' })) };
+  assert.deepEqual(listLines(held({ ...FILES_HELD, state: 'off', on_count: 0, on_in: 2 }, { detail: someOn }))[1], 'files is off by the shared rule, so none of its tools are offered. 2 projects decide otherwise.');
+  // In a project it names the project, and nothing else.
+  assert.deepEqual(listLines(held({ ...FILES_HELD, state: 'off', on_count: 0 }, { picked: 'web', folder: 'web', detail: someOn }))[1], 'files is off in web, so none of its tools are offered there.');
   // Before Kitden knows its tools: the facts say so and the list asks for a refresh.
   const unknown = held({ ...FILES_HELD, tool_list: [], on_count: 0, tools: null }, { detail: { ...FILES_TOOLS, tools: [] } });
   assert.deepEqual(facts(unknown)[0], ['Tools', 'Not known yet']);
@@ -534,6 +540,10 @@ test("every action of today's server panel is still there, under More", () => {
   assert.deepEqual(web.more.slice(0, 5).map((a) => a.label), ["Use atlas's rule…", 'Turn off for all projects…', 'Turn on in one project…', 'Turn strict mode off…', 'Refresh tools']);
   assert.deepEqual(web.more[0].body, { action: 'gateway.rule', targets: [], params: { server: 'files', tool: null, state: null, project: 'w' } });
   assert.deepEqual(web.more[1].body, { action: 'gateway.rule', targets: [], params: { server: 'files', tool: null, state: 'off', project: null } });
+  // The server's answer did not come: no switches, so the rule for all projects waits under More.
+  const unread = held(FILES_HELD, { detail: {} });
+  assert.equal(unread.list, null);
+  assert.deepEqual(unread.more[0], { label: 'Turn off for all projects…', body: { action: 'gateway.rule', targets: [], params: { server: 'files', tool: null, state: 'off', project: null } } });
   // No client Kitden can write: no move out; without each project's rules, no choice.
   const alone = held(FILES_HELD, { clients: [], detail: { ...FILES_TOOLS, projects: undefined } });
   assert.deepEqual([alone.actions, alone.more.map((a) => a.label).includes('Turn off in one project…')], [[], false]);
@@ -723,65 +733,135 @@ test('a held server opens on its skeleton and fills in; drawn again it shows no 
   });
 });
 
-test('Move out steps to a client choice and a pick adds one move-out row', async () => {
-  // The server's rules, then a batch preview with one row per request.
+// The Gateway with the files server's panel open (its rules from `rules`, null: the read fails),
+// a batch preview that refuses a move into `refuse`, and the panel's controls following the tray.
+// `run(drawer, sent)` gets the panel and every address asked.
+async function onFilesPanel(run, { rules = FILES_TOOLS, refuse = null } = {}) {
+  const sent = [];
   const reply = (url, options = {}) => {
+    sent.push(url);
     if (url === '/api/batch/preview') {
       const { requests } = JSON.parse(options.body);
+      if (refuse && requests.some((r) => r.targets[0] && r.targets[0].client === refuse)) return Response.json({ detail: 'Cursor already has files.' }, { status: 422 });
       return Response.json({
-        id: 'c1', action: 'batch', state: 'previewed', error: null, undo_note: null, steps: [{ client: 'codex', name: 'files' }],
+        id: `c${sent.length}`, action: 'batch', state: 'previewed', error: null, undo_note: null, steps: [{ client: 'codex', name: 'files' }],
         rows: requests.map((r, at) => ({ id: r.id, kind: r.kind, title: r.title, detail: '', project: null, steps: [at], after: [] })),
       });
     }
-    return Response.json(url.startsWith('/api/gateway/tools') ? FILES_TOOLS : {});
+    if (url.startsWith('/api/gateway/tools')) return rules ? Response.json(rules) : Response.json({}, { status: 500 });
+    return Response.json({});
   };
   const view = { ...VIEW, gateways: [{ ...KITDEN, servers: [FILES_HELD] }] };
   await onGatewayPage(reply, async (drawer) => {
     data.gateway = view;
     data.scope.gateway = state.project;
     const all = (node) => (node && typeof node === 'object' ? [node, ...node.childNodes.flatMap(all)] : []);
-    drawer.querySelectorAll = (selector) => (selector === '[data-tray]' ? all(drawer).filter((node) => node.dataset && node.dataset.tray) : []);
+    drawer.querySelectorAll = (selector) => all(drawer).filter((node) => node.dataset && (selector === '[data-tray]' ? node.dataset.tray : selector === '[data-focus]' ? node.dataset.focus : false));
+    drawer.contains = (node) => all(drawer).includes(node);
+    drawer.focus = () => { globalThis.document.activeElement = drawer; };
     const stop = onTray(syncTray);
     try {
       await showHeld('files');
       await wait(400);
-      const move = all(drawer).find((node) => node.dataset.focus === 'action:Move out of the gateway…');
-      await click(move);
-      await wait(50);
-      // The next step in the panel: Back, where it came from, Close, and the question.
-      const [head, body, foot] = drawer.children;
-      const [top, title] = head.children;
-      assert.deepEqual(top.children.map((node) => node.attributes['aria-label'] || textOf(node)), ['Back', 'Server · files', 'Close']);
-      assert.equal(textOf(title), 'Move files out of the gateway');
-      const [say, picks] = body.children;
-      assert.equal(textOf(say), 'Pick the client that keeps it.');
-      // One row each: the client's tile, its name over whether it uses the gateway, and the radio.
-      assert.deepEqual(picks.children.map((node) => node.children.map((part) => part.className.split(' ')[0])), Array(3).fill(['client-mark', 'pk-tx', 'radio']));
-      assert.deepEqual(picks.children.map((node) => textOf(node.children[1])), ['Claude CodeUses the gateway now', 'CodexUses the gateway now', 'CursorNot connected to the gateway']);
-      assert.equal(picks.children[2].attributes['aria-label'], 'Cursor, Not connected to the gateway');
-      assert.equal(textOf(foot), "The other clients lose files's tools.");
-      assert.deepEqual(panelState.current, { type: 'moveout', name: 'files' });
-      // A pick adds the move at once; its row marks it picked.
-      const [, codex, cursor] = picks.children;
-      await click(codex);
-      const out = (client) => ({ action: 'gateway.move_out', targets: [{ client }], params: { server: 'files' } });
-      assert.deepEqual(tray.rows.map((r) => r.body), [out('codex')]);
-      assert.deepEqual(picks.children.map((node) => node.attributes['aria-pressed']), ['false', 'true', 'false']);
-      // Another pick replaces it: one server moves out to one client.
-      await click(cursor);
-      assert.deepEqual(tray.rows.map((r) => r.body), [out('cursor')]);
-      assert.deepEqual(picks.children.map((node) => node.className), ['pick', 'pick', 'pick on']);
-      // A second press on the picked client takes its row out.
-      await click(cursor);
-      assert.deepEqual(tray.rows, []);
-      // Back steps to the server's panel.
-      await click(top.children[0]);
-      await wait(50);
-      assert.equal(textOf(drawer.children[0].children[1]), 'files');
-      assert.deepEqual(panelState.current, { type: 'held', name: 'files' });
+      await run(drawer, sent);
     } finally {
       stop();
       await cancelTray();
     }
   });
+}
+// The open panel's control with this focus key.
+const control = (drawer, key) => drawer.querySelectorAll('[data-focus]').find((node) => node.dataset.focus === key);
+const MOVE = 'action:Move out of the gateway…';
+
+test('Move out steps to a client choice and a pick adds one move-out row', async () => {
+  await onFilesPanel(async (drawer) => {
+    await click(control(drawer, MOVE));
+    await wait(50);
+    // The next step in the panel: Back, where it came from, Close, and the question.
+    const [head, body, foot] = drawer.children;
+    const [top, title] = head.children;
+    assert.deepEqual(top.children.map((node) => node.attributes['aria-label'] || textOf(node)), ['Back', 'Server · files', 'Close']);
+    assert.equal(textOf(title), 'Move files out of the gateway');
+    const [say, picks] = body.children;
+    assert.equal(textOf(say), 'Pick the client that keeps it.');
+    // One row each: the client's tile, its name over whether it uses the gateway, and the radio.
+    assert.deepEqual(picks.children.map((node) => node.children.map((part) => part.className.split(' ')[0])), Array(3).fill(['client-mark', 'pk-tx', 'radio']));
+    assert.deepEqual(picks.children.map((node) => textOf(node.children[1])), ['Claude CodeUses the gateway now', 'CodexUses the gateway now', 'CursorNot connected to the gateway']);
+    assert.equal(picks.children[2].attributes['aria-label'], 'Cursor, Not connected to the gateway');
+    assert.equal(textOf(foot), "The other clients lose files's tools.");
+    assert.deepEqual(panelState.current, { type: 'moveout', name: 'files' });
+    // A pick adds the move at once; its row marks it picked.
+    const [, codex, cursor] = picks.children;
+    await click(codex);
+    const out = (client) => ({ action: 'gateway.move_out', targets: [{ client }], params: { server: 'files' } });
+    assert.deepEqual(tray.rows.map((r) => r.body), [out('codex')]);
+    assert.deepEqual(picks.children.map((node) => node.attributes['aria-pressed']), ['false', 'true', 'false']);
+    // Another pick replaces it: one server moves out to one client.
+    await click(cursor);
+    assert.deepEqual(tray.rows.map((r) => r.body), [out('cursor')]);
+    assert.deepEqual(picks.children.map((node) => node.className), ['pick', 'pick', 'pick on']);
+    // A second press on the picked client takes its row out.
+    await click(cursor);
+    assert.deepEqual(tray.rows, []);
+    // Back steps to the server's panel.
+    await click(top.children[0]);
+    await wait(50);
+    assert.equal(textOf(drawer.children[0].children[1]), 'files');
+    assert.deepEqual(panelState.current, { type: 'held', name: 'files' });
+  });
+});
+
+test('Move out takes focus to the client picked, and Back to Move out', async () => {
+  await onFilesPanel(async (drawer) => {
+    const focused = () => globalThis.document.activeElement.dataset.focus;
+    control(drawer, MOVE).focus();
+    await click(control(drawer, MOVE));
+    await wait(50);
+    // Nothing picked yet: the first client.
+    assert.equal(focused(), 'pick:claude_code');
+    await click(control(drawer, 'pick:codex'));
+    await click(drawer.children[0].children[0].children[0]);
+    await wait(50);
+    assert.equal(focused(), MOVE);
+    // With the move into Codex waiting, the step opens on Codex.
+    await click(control(drawer, MOVE));
+    await wait(50);
+    assert.equal(focused(), 'pick:codex');
+  });
+});
+
+test('a quick second press on a client sends one preview; a refused pick keeps the row before it', async () => {
+  await onFilesPanel(async (drawer, sent) => {
+    await click(control(drawer, MOVE));
+    await wait(50);
+    const codex = control(drawer, 'pick:codex');
+    const asked = () => sent.filter((url) => url === '/api/batch/preview').length;
+    // Two presses before the first answer: one ask.
+    for (const listener of codex.listeners.click) listener({});
+    for (const listener of codex.listeners.click) listener({});
+    await wait(20);
+    assert.equal(asked(), 1);
+    const out = (client) => ({ action: 'gateway.move_out', targets: [{ client }], params: { server: 'files' } });
+    assert.deepEqual(tray.rows.map((r) => r.body), [out('codex')]);
+    // Cursor has a server of that name already: the tray keeps Codex, and says why.
+    await click(control(drawer, 'pick:cursor'));
+    await wait(20);
+    assert.deepEqual(tray.rows.map((r) => r.body), [out('codex')]);
+    assert.equal(tray.refused.reason, 'Cursor already has files.');
+    assert.deepEqual(['pick:codex', 'pick:cursor'].map((key) => control(drawer, key).className), ['pick on', 'pick']);
+  }, { refuse: 'cursor' });
+});
+
+test('back from Move out keeps the warning the panel had', async () => {
+  await onFilesPanel(async (drawer) => {
+    const says = () => textOf(drawer.children[1]).includes('Could not load the details.');
+    assert.equal(says(), true);
+    await click(control(drawer, MOVE));
+    await wait(50);
+    await click(drawer.children[0].children[0].children[0]);
+    await wait(50);
+    assert.equal(textOf(drawer.children[0].children[1]), 'files');
+    assert.equal(says(), true);
+  }, { rules: null });
 });

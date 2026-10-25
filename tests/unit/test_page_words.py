@@ -1524,7 +1524,8 @@ def test_add_missing_and_a_refused_list_go_back_to_details():
     # again (details.test.mjs tests keepFrom and backToDetails).
     assert "keepFrom(" in details
     assert "keepFrom(draw, nodes, read)" in gw()
-    assert "() => drawHeld(name, detail, { choosing }), () => showHeld(name), step)" in gw()
+    redraw = "() => drawHeld(name, detail, { choosing, warning }), () => showHeld(name), step)"
+    assert redraw in gw()
     assert "() => showTool(serverName, name))" in gw()
     for key in ("`offer:", '"move"', "`add:", '"add:form"', "`held:", '"more"', '"commands"'):
         assert key in panel() + script("offer.js"), key
@@ -1673,6 +1674,9 @@ def test_the_server_panel_says_the_mockups_words():
     ):
         assert words in tools, words
     assert "Sign in" not in text and "Signed in" not in text
+    # A server off by the shared rule is never "off in all projects": projects may turn it on.
+    assert "is off by the shared rule, so none of its tools are offered.${otherwise}`" in tools
+    assert 'off in ${where || "all projects"}' not in tools
     # A server moves out to one client: a second pick replaces the first row.
     assert "`moveout:${params.server}`" in script("tray.js")
 
