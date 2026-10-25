@@ -4,11 +4,11 @@ import { test } from 'node:test';
 // gateway.js needs only this from a browser to load; the tests call its pure parts.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { GATEWAY_COLUMNS, afterPress, clickLink, contentWidth, findRows, gatewayTree, glanceFor, heldServer, kitdenLinks, letGoCloses, linkRemoval, linkTip, listAt, listRows, litFor, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, serverCount, stillSelected } = await import('../../src/kitden/web/static/js/gateway.js');
+const { GATEWAY_COLUMNS, afterPress, besideBy, clickLink, contentWidth, findRows, gatewayTree, glanceFor, heldServer, kitdenLinks, letGoCloses, linkRemoval, linkTip, listAt, listRows, litFor, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, serverCount, stillSelected } = await import('../../src/kitden/web/static/js/gateway.js');
 const { dropBody, dropTarget, pressGrip, placeMoved } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
 const { offersSwitch, ruleBody } = await import('../../src/kitden/web/static/js/gateway-details.js');
-const { blockLabel, findChip, findIn, keepOpen, layoutTree, pressOpen, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
+const { blockLabel, findChip, findIn, isNarrow, keepOpen, layoutTree, pressOpen, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
 const { kitdenClients } = await import('../../src/kitden/web/static/js/parts.js');
 const { data, state, viewMode } = await import('../../src/kitden/web/static/js/store.js');
 const { addToTray, applyTray, cancelTray, endApplied, keyFor, tray } = await import('../../src/kitden/web/static/js/tray.js');
@@ -499,15 +499,27 @@ test('N more and a group address open the List at that group', () => {
 
 test('the map goes narrow by the window rule, or where the wide map does not fit its box', () => {
   const tree = gatewayTree(MEDIUM_VIEW, OPTS);
-  // 1440 px with Details beside the page leaves the map 840 px: the wide map fits.
-  assert.equal(narrowFor(tree, { window: 1440, box: 840, docked: true }), false);
-  assert.equal(narrowFor(tree, { window: 1100, box: 836, docked: false }), false);
-  assert.equal(narrowFor(tree, { window: 1100, box: 500, docked: true }), true);
-  assert.equal(narrowFor(tree, { window: 900, box: 868, docked: false }), true);
-  // 1366 px with Details: the window rule says wide, but 766 px is too small.
-  assert.equal(narrowFor(tree, { window: 1366, box: 766, docked: true }), true);
+  assert.equal(narrowFor(tree, { window: 1100, box: 836 }), false);
+  assert.equal(narrowFor(tree, { window: 1100, box: 500 }), true);
+  assert.equal(narrowFor(tree, { window: 900, box: 868 }), true);
   // Before the box is measured, the window rule alone.
-  assert.equal(narrowFor(tree, { window: 1440, box: null, docked: false }), false);
+  assert.equal(narrowFor(tree, { window: 1440, box: null }), false);
+});
+
+test('opening Details no longer makes the map narrow', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+  // Details float over the map: at 1100 px and 1366 px the box keeps its whole width, and the wide
+  // map fits it. Only a window under 1024 px is narrow.
+  assert.equal(isNarrow(1100), false);
+  assert.equal(isNarrow(1279), false);
+  assert.equal(isNarrow(1023), true);
+  assert.equal(narrowFor(tree, { window: 1100, box: 874 }), false);
+  assert.equal(narrowFor(tree, { window: 1366, box: 1140 }), false);
+  // What the page said about open Details before counts no more.
+  assert.equal(narrowFor(tree, { window: 1100, box: 874, docked: true }), false);
+  // A selected block the floating Details cover scrolls left until it ends 16 px before them.
+  assert.equal(besideBy(1023, 1081), 0);
+  assert.equal(besideBy(1023, 921), 118);
 });
 
 test('find lights both docs and opens what hides them', () => {

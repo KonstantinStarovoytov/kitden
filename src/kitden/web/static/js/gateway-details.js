@@ -7,7 +7,7 @@ import { getJson, postJson, query } from "./api.js";
 import { $, busyWhile, el, joinWords, plural, reportError, withFocusKey } from "./dom.js";
 import { fold } from "./motion.js";
 import { projectNote } from "./offer.js";
-import { callsText, closePanel, contextLinks, detailsCard, heldActions, keepFrom, linksRow, moveBody, moveInto, moveTargets, offerLabel, openPanel, panelState, projectChoice, refreshTools, review, techRows, technical, toast, writingToolsOn } from "./panel.js";
+import { callsText, closePanel, contextLinks, detailsCard, heldActions, keepFrom, linksRow, loadPanel, moveBody, moveInto, moveTargets, offerLabel, openPanel, panelState, projectChoice, refreshTools, review, techRows, technical, toast, writingToolsOn } from "./panel.js";
 import { callout, CLIENT_NAMES, clientCheck, folderName, GATEWAY_NOTE, gatewayName, kindOf, kitdenClients, mark, originText, STATE_WORDS, versionWords } from "./parts.js";
 import { arrival, current, data, freshness, projectPath, reload, render, setState, state } from "./store.js";
 
@@ -510,9 +510,20 @@ export function heldCard(server, { linked, picked = "", folder = "", view = null
 
 // Showing a card -----------------------------------------------------------------------------
 
+// Whether the panel shows `shown` now (the same card, drawn again), field by field.
+function showing(shown) {
+  const now = panelState.current;
+  const keys = Object.keys(shown);
+  return Boolean(now) && Object.keys(now).length === keys.length && keys.every((key) => now[key] === shown[key]);
+}
+
 // Open a card beside the page, its warning first. A press in it comes back to it: `draw` draws it
-// again from what it read, `read` reads first (after Apply all).
+// again from what it read, `read` reads first (after Apply all). Another card than the one shown
+// comes through its skeleton (loadPanel); one drawn again, or one whose skeleton shows while its
+// read ends, does not.
 function openCard(card, shown, draw, read = draw) {
+  const loads = panelState.current && panelState.current.type === "loading" && panelState.current.kind === card.kind;
+  if (!showing(shown) && !loads) loadPanel(card.kind);
   panelState.current = shown;
   const nodes = detailsCard(card);
   if (card.warning) nodes[1].prepend(callout(card.warning));
@@ -583,9 +594,11 @@ async function readRules(server) {
 }
 
 // Read the server's rules, then `draw(answer)` (null when the read failed), unless the person
-// pressed something else or picked another project meanwhile.
-async function readThen(server, draw) {
+// pressed something else, closed the panel or picked another project meanwhile. A card the panel
+// does not show yet (`shown`) shows its skeleton (`kind`) while it reads.
+async function readThen(server, draw, { shown, kind }) {
   const asked = ++reads;
+  if (!showing(shown)) loadPanel(kind);
   const { current: before } = panelState;
   const project = state.project;
   const answer = await readRules(server);
@@ -609,9 +622,12 @@ function focusChoice(choosing) {
   box.focus();
 }
 
+// What a server in the Kitden gateway shows as, and the kind its skeleton names.
+const heldShown = (name) => ({ shown: { type: "held", name }, kind: "MCP server" });
+
 export async function showHeld(name) {
   setState({ selected: { kind: "mcp_server", name } });
-  await readThen(name, (answer) => drawHeld(name, answer || {}, { warning: answer ? answer.problem : "Could not load the details." }));
+  await readThen(name, (answer) => drawHeld(name, answer || {}, { warning: answer ? answer.problem : "Could not load the details." }), heldShown(name));
 }
 
 // A server that is gone from the gateway since closes its Details.
@@ -629,7 +645,7 @@ function drawHeld(name, detail, { choosing = false, warning = null } = {}) {
 
 export async function showTool(server, name) {
   setState({ selected: { kind: "tool", name: `${server}/${name}` } });
-  await readThen(server, (answer) => drawTool(server, name, answer || {}, { warning: answer ? null : "Could not load the details." }));
+  await readThen(server, (answer) => drawTool(server, name, answer || {}, { warning: answer ? null : "Could not load the details." }), { shown: { type: "tool", server, tool: name }, kind: "Tool" });
 }
 
 // `rules` is the server's /api/gateway/tools answer. A tool that is gone since (its server left
@@ -659,7 +675,7 @@ async function refreshHeld(name) {
     drawHeld(name, answer || {}, { warning: error || (answer ? answer.problem : "Could not load the details.") });
     const again = withFocusKey($("#drawer"), "action:Refresh tools");
     if (again && $("#drawer").contains(document.activeElement)) again.focus();
-  });
+  }, heldShown(name));
 }
 
 // Forms --------------------------------------------------------------------------------------

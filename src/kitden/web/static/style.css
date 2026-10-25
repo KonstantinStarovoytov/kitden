@@ -602,6 +602,10 @@ div.map { position: relative; margin: 22px 0 12px -6px; padding: 6px 6px 10px; o
 div.map .block, div.map .caption, div.map .map-caption { position: absolute; left: 0; top: 0; z-index: 1; transform-origin: center; will-change: translate, transform; }
 div.map .map-caption { display: flex; align-items: center; gap: 6px; color: var(--ink-3); font-size: 11px; white-space: nowrap; }
 div.map .map-area { position: relative; }
+/* While Details float over part of the map, the map takes room at its right, as wide as they are and
+   16 px, so it can scroll sideways to what they cover; a selected block under them scrolls left
+   beside them (gateway.js keepBeside). */
+div.map.beside .map-area::after { content: ""; position: absolute; top: 0; left: 100%; width: 336px; height: 1px; }
 div.map .map-links { position: absolute; inset: 0; z-index: 0; overflow: visible; pointer-events: none; }
 /* The links the page acts on: a hit stroke 14 px wide over each (after the blocks in the page, under
    them in the picture, so a block wins where they meet) and the × on the middle of the one pointed
@@ -786,13 +790,12 @@ div.map .block.leaving:focus-visible { filter: none; }
 /* Side panel: details and review share one surface */
 .scrim { position: fixed; inset: 0; z-index: 20; background: rgba(10, 12, 16, 0.22); opacity: 0; pointer-events: none; transition: opacity var(--t-panel) ease; }
 .scrim.open { opacity: 1; pointer-events: auto; }
-/* The panel stays inside the frame's edge: 16 px from the window, like the gutter. */
-.drawer { position: fixed; z-index: 21; top: 16px; right: 16px; bottom: 16px; width: min(520px, calc(100vw - 32px)); border-radius: 12px; overflow: hidden; background: var(--panel-raised); box-shadow: var(--shadow-pop); transform: translateX(104%); visibility: hidden; transition: transform var(--t-panel) var(--ease-drawer), visibility 0s linear var(--t-panel); display: flex; flex-direction: column; overscroll-behavior: contain; outline: none; }
-/* The dock stands above the drawer, so while it shows a bar or a toast the modal drawer ends 8 px above
-   it (`--dock-room` on the root, set by toast.js) and its footer is never hidden. The room is measured
-   from the frame's content, which ends 17 px above the window (the 16 px gutter and the frame's line),
-   hence + 25 px. The column beside the page needs no room: the dock is in the page. */
-.drawer:not(.docked) { bottom: max(16px, calc(var(--dock-room, 0px) + 25px)); }
+/* The panel stays inside the frame's edge: 16 px from the window, like the gutter. The dock stands
+   above it, so while the dock shows a bar or a toast the drawer ends 8 px above it (`--dock-room` on
+   the root, set by toast.js) and its footer is never hidden. The room is measured from the frame's
+   content, which ends 17 px above the window (the 16 px gutter and the frame's line), hence + 25 px;
+   with an empty dock it is -9 px, so the drawer ends 16 px above the window. */
+.drawer { position: fixed; z-index: 21; top: 16px; right: 16px; bottom: max(16px, calc(var(--dock-room, -9px) + 25px)); width: min(520px, calc(100vw - 32px)); border-radius: 12px; overflow: hidden; background: var(--panel-raised); box-shadow: var(--shadow-pop); transform: translateX(104%); visibility: hidden; transition: transform var(--t-panel) var(--ease-drawer), visibility 0s linear var(--t-panel); display: flex; flex-direction: column; overscroll-behavior: contain; outline: none; }
 .drawer.open { transform: none; visibility: visible; transition: transform var(--t-panel) var(--ease-drawer), visibility 0s; }
 .drawer.instant, .scrim.instant { transition: none; }
 .drawer header { padding: 16px 20px 12px; border-bottom: 1px solid var(--wire); display: grid; gap: 4px; }
@@ -808,16 +811,29 @@ div.map .block.leaving:focus-visible { filter: none; }
 .drawer .btn[aria-disabled="true"]:active { transform: none; }
 .drawer footer .note { margin-right: auto; color: var(--ink-3); font-size: 12px; }
 .drawer footer .note.side { margin-right: 0; margin-left: auto; text-align: right; }
-/* Details beside the page (Gateway, Library and Changes, from 1024 px): the same panel as a 320 px
-   column with no scrim. The page keeps room for it and stays usable. It slides in like the drawer,
-   and the page takes its room at once. The dock sits in the page, so the bar and the toast stay clear
-   of the column. */
-.shell.docked #content { padding-right: 336px; }
-#drawer.docked { width: 320px; box-shadow: none; border-left: 1px solid var(--wire); border-radius: 0 12px 12px 0; }
-/* A column stacks the footer's buttons, full width. A Details card does it in the drawer too. */
-#drawer.docked footer, .drawer footer.stack { flex-direction: column; align-items: stretch; flex-wrap: nowrap; }
-#drawer.docked footer .btn, .drawer footer.stack .btn { justify-content: center; }
-#drawer.docked footer .note, #drawer.docked footer .note.side { margin: 0; text-align: left; }
+/* Details beside the page (Gateway, Library and Changes, from 1024 px) float over the right of the
+   content, as in the mockup: 22 px from its right and 46 px above its bottom, level with the dock's
+   bar (the frame's content ends 17 px inside the window: the 16 px gutter and its line), from the
+   top of what the page shows under its head (--float-top, panel.js). No scrim: the page keeps its
+   width and stays usable, and the dock stays above. panel.js moves it in and out; `.leaving` keeps
+   it seen while it goes. Its parts stack 16 px apart and the whole panel scrolls; Technical details
+   sit at its foot. */
+#drawer.floating { top: var(--float-top, 120px); right: 39px; bottom: 63px; width: 320px; padding: 18px; gap: 16px; overflow: auto; border: 1px solid var(--wire); border-radius: 10px; background: var(--panel); box-shadow: var(--shadow); transform: none; transition: none; }
+#drawer.floating.leaving { visibility: visible; }
+#drawer.floating > * { flex: none; }
+#drawer.floating header, #drawer.floating .body, #drawer.floating footer { padding: 0; border: 0; overflow: visible; }
+#drawer.floating > details.tech { margin-top: auto; max-height: none; overflow: visible; padding: 10px 0 0; }
+/* The floating panel stacks the footer's buttons, full width. A Details card does it in the drawer too. */
+#drawer.floating footer, .drawer footer.stack { flex-direction: column; align-items: stretch; flex-wrap: nowrap; }
+#drawer.floating footer .btn, .drawer footer.stack .btn { justify-content: center; }
+#drawer.floating footer .note, #drawer.floating footer .note.side { margin: 0; text-align: left; }
+/* A panel that loads (panel.js skeleton): still bars where its title, facts, sentence and first
+   button will be. Nothing loops. */
+.sk { display: block; height: 10px; border-radius: 5px; background: var(--wire-soft); }
+.sk-title, .sk-facts { display: grid; gap: 8px; }
+.sk-title .sk:first-child { height: 16px; }
+.sk-facts { gap: 12px; padding: 12px 0; border-block: 1px solid var(--wire); }
+.sk-button .sk { height: 30px; border-radius: 7px; }
 /* A Details card (details.js detailsCard): the facts, one sentence, the stacked actions, and the
    evidence folded at the bottom, in a strip that scrolls on its own when it is long. */
 .facts { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 8px 12px; margin: 0; }

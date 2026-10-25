@@ -231,8 +231,7 @@ test('the find chip says how many blocks match', () => {
 });
 
 test('narrow: tools unfold down inside the server; the gateway is a small tile', () => {
-  assert.equal(isNarrow(1023, false), true); assert.equal(isNarrow(1279, true), true); assert.equal(isNarrow(1280, true), false);
-  assert.equal(isNarrow(1100, false), false);
+  assert.equal(isNarrow(1023), true); assert.equal(isNarrow(1024), false);
   const l = layoutTree(model(3, 0, { open: 'github' }), { open: new Set(['held:kitden:github']), width: 900, narrow: true });
   const server = l.blocks.find((b) => b.id === 'held:kitden:github');
   const tool = l.blocks.find((b) => b.id === 'tool:github/read_repo');

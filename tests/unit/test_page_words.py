@@ -51,12 +51,23 @@ def test_the_side_panel_is_four_modules():
     assert "function showReview" in script("review.js")
 
 
-def test_details_sit_beside_the_page_without_a_scrim():
+def test_details_float_beside_the_page_without_a_scrim():
     shell = script("panel.js")
-    assert "export const DOCK_MIN = 1024;" in shell and 'removeAttribute("aria-modal")' in shell
+    assert "export const FLOAT_MIN = 1024;" in shell and 'removeAttribute("aria-modal")' in shell
     details = script("details.js")
     assert "export function factsBlock(" in details and "export function detailsCard(" in details
-    assert "#drawer.docked" in CSS and ".shell.docked" in CSS and ".facts" in CSS
+    assert "#drawer.floating" in CSS and ".facts" in CSS
+    # The page keeps its width: no column beside it, and the map does not go narrow for Details.
+    assert "docked" not in CSS and "docked" not in shell and "docked" not in gw()
+    assert "export function isNarrow(width) {" in script("map.js")
+    # The floating panel's look: 320 px, 10 px corners, padding 18, the panel fill, a line and the
+    # shadow. Its skeleton's bars are still: nothing loops.
+    floating = rule("#drawer.floating")
+    looks = ("width: 320px;", "border-radius: 10px;", "border: 1px solid var(--wire);")
+    for part in (*looks, "background: var(--panel);", "box-shadow: var(--shadow);"):
+        assert part in floating, part
+    assert "padding: 18px;" in floating and "gap: 16px;" in floating
+    assert "animation" not in rule(".sk")
 
 
 def test_rail_counts_only_attention_and_changes():
@@ -1929,8 +1940,8 @@ def test_finding_keeps_the_place_and_the_details():
     # Escape in the search clears it on a map page, and only then keeps Details open.
     assert 'event.key !== "Escape" || !MAP_PAGES.includes(state.view)' in app
     assert "event.stopPropagation();" in app.split('$("#q").addEventListener("keydown"')[1]
-    # "/" works beside docked Details, not under the modal drawer.
-    assert '!$("#drawer").classList.contains("docked")' in app
+    # "/" works beside floating Details, not under the modal drawer.
+    assert '!$("#drawer").classList.contains("floating")' in app
     assert 'if (event.key === "/" && !typing && !modal) {' in app
     # The Gateway only lights, dims and opens blocks for the view: it asks nothing of a client.
     text = script("gateway.js")
@@ -2096,8 +2107,9 @@ def test_the_dock_stands_above_the_scrim_and_the_drawer_keeps_its_room():
     assert "const root = document.documentElement;" in makeRoom
     assert 'root.style.setProperty("--dock-room"' in makeRoom
     # The room is measured from the frame's content, 17 px above the window's bottom (the 16 px
-    # gutter and the frame's 1 px line): + 25 px ends the drawer 8 px above the dock.
-    assert "calc(var(--dock-room, 0px) + 25px)" in rule(".drawer:not(.docked)")
+    # gutter and the frame's 1 px line): + 25 px ends the drawer 8 px above the dock. With an empty
+    # dock the room is -9 px, so the drawer ends 16 px above the window, like the frame.
+    assert "bottom: max(16px, calc(var(--dock-room, -9px) + 25px));" in rule(".drawer")
     # The Tab loop of the modal drawer takes the dock's buttons, the bar's and the toast's.
     shell = script("panel.js")
     assert 'const dock = $("#dock");' in shell and '"button:not([disabled])", dock' in shell

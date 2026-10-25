@@ -16,6 +16,9 @@ What Kitden does today and what comes next. Ideas and bugs:
   keyboard too), and a selected block dims everything off its path. Blocks look like the mockup:
   lamps, ports, the gateway's counts that roll, and on each tool how many projects have a rule of
   their own for it.
+- **Details float beside the map:** on Gateway, Library and Changes, Details float over the right
+  of the page as in the mockup; the page keeps its width and the map stays wide. Another block's
+  Details swap in place through a quiet skeleton.
 - **Preview tray:** every change, from a switch in Details to a drag on the map, waits in one tray
   at the bottom left. Apply all writes them as one change, all or nothing, and Undo all takes them
   back. "Show changes" opens one row's full review.

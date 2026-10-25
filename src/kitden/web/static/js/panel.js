@@ -6,7 +6,7 @@
 import { openItem, syncTray } from "./details.js";
 import { $, $$, button, el, focusKey } from "./dom.js";
 import { onOpenItem } from "./library.js";
-import { finishTransition } from "./motion.js";
+import { animateTo, D, finishTransition, rise } from "./motion.js";
 import { arrival, setState, state } from "./store.js";
 import { reloadTools } from "./tools.js";
 import { onTray, tray } from "./tray.js";
@@ -23,33 +23,50 @@ export const panelState = { current: null, from: null };
 // Details drawn again by the page itself, not by a press (after Apply all or an Undo): while
 // `quiet`, focus and the way back stay where the person has them, unless focus was in Details.
 let quiet = false;
-// Beside the page: on these places, in a window this wide, Details are a 320 px column with no
-// scrim and no focus trap, and the page stays usable. Anywhere else they are the drawer.
-export const DOCK_MIN = 1024;
-export const DOCKS = ["gateway", "library", "changes"];
-export const docksAt = (view, width) => DOCKS.includes(view) && width >= DOCK_MIN;
-const isWide = () => matchMedia(`(min-width: ${DOCK_MIN}px)`).matches;
-// How the open panel sits: `docked` beside the page, else the drawer. `wantsDock` is what the opener
-// asked for, so a window that changes size while the panel is open can pick again.
-let docked = false;
-let wantsDock = false;
+// Beside the page: on these places, in a window this wide, Details float over the right of the
+// page with no scrim and no focus trap; the page keeps its width and stays usable. Anywhere else
+// they are the drawer.
+export const FLOAT_MIN = 1024;
+export const FLOATS = ["gateway", "library", "changes"];
+export const floatsAt = (view, width) => FLOATS.includes(view) && width >= FLOAT_MIN;
+const isWide = () => matchMedia(`(min-width: ${FLOAT_MIN}px)`).matches;
+// How the open panel sits: `floating` beside the page, else the drawer. `wantsFloat` is what the
+// opener asked for, so a window that changes size while the panel is open can pick again.
+let floating = false;
+let wantsFloat = false;
 let opener = null;
 // What finds the opener again after a redraw: its data-focus key, and its row's key.
 let openerKeys = [];
 // The project the panel's content was drawn in: its switches and reviews are for that project.
 let openedIn = null;
+// A panel that loads (loadPanel): when its skeleton came, the content that waits to replace it and
+// the timer that brings it.
+let loading = null;
+// How many times the panel's content was put in, and the last step asked: a step whose parts went
+// out while other content came, or another step, does not come in.
+let drawn = 0;
+let stepping = 0;
+// The timer that stops showing the floating panel once it has gone out (floatOut).
+let leaving = null;
 
 export function isPanelOpen() {
   return $("#drawer").classList.contains("open");
 }
 
 // New content for an open panel; focus stays inside it (the old buttons are gone). Beside the
-// page focus may be on the page, and a redraw does not take it from there.
+// page focus may be on the page, and a redraw does not take it from there. It also takes the
+// place of content a loading panel waits for.
 export function swapContent(content) {
+  stopLoading();
+  put(content);
+}
+
+function put(content) {
   const drawer = $("#drawer");
   const had = drawer.contains(document.activeElement);
+  drawn += 1;
   drawer.replaceChildren(...content);
-  if (isPanelOpen() && (had || (!docked && !quiet)) && !drawer.contains(document.activeElement)) drawer.focus();
+  if (isPanelOpen() && (had || (!floating && !quiet)) && !drawer.contains(document.activeElement)) drawer.focus();
 }
 
 // Draw open Details again (`draw`, which may read first) without taking focus from the dock or the
@@ -63,22 +80,68 @@ export async function drawQuietly(draw) {
   }
 }
 
-// The panel as a column beside the page (`on`) or as the drawer over it. The column is a region:
-// the page stays usable, so it is not modal. The page makes room for it.
+// The panel floating beside the page (`on`) or as the drawer over it. Floating it is a region
+// beside the map: the page stays usable, so it is not modal.
 function place(on) {
-  docked = on;
+  floating = on;
   const drawer = $("#drawer");
-  drawer.classList.toggle("docked", on);
-  $(".shell").classList.toggle("docked", on);
+  drawer.classList.toggle("floating", on);
   if (on) {
-    drawer.setAttribute("role", "region");
+    drawer.setAttribute("role", "complementary");
     drawer.removeAttribute("aria-modal");
     drawer.removeAttribute("aria-labelledby");
+    placeTop();
   } else {
     drawer.setAttribute("role", "dialog");
     drawer.setAttribute("aria-modal", "true");
     drawer.setAttribute("aria-labelledby", "panel-title");
   }
+}
+
+// The page's head: its title, lede and scope line, and the Library's tabs. What comes after it is
+// the stage (the map, a list); the floating panel starts level with its top.
+const HEAD = "h1, .page-head, .lede, .scope-bar, .tabs";
+const UNDER_BAR = 22;
+
+// The floating panel's top in the window: level with the stage's top (`stage`), and at least 22 px
+// under the top bar's bottom (`bar`) once the page has scrolled the stage up.
+export function floatTop(stage, bar) {
+  return Math.round(Math.max(stage, bar + UNDER_BAR));
+}
+
+// Read again when the panel floats and when the page scrolls or the window changes, so the panel
+// stays in view and never covers the page's head.
+function placeTop() {
+  if (!floating) return;
+  const bar = $("#topbar").getBoundingClientRect().bottom;
+  const stage = [...$("#main").children].find((node) => !node.matches(HEAD));
+  const top = stage ? stage.getBoundingClientRect().top : bar;
+  $("#drawer").style.setProperty("--float-top", `${floatTop(top, bar)}px`);
+}
+
+// The floating panel comes in from 28 px to the right, a little smaller, in 240 ms; a keyboard
+// open is instant.
+function floatIn(drawer, instant) {
+  if (!instant) animateTo(drawer, [{ opacity: 0, transform: "translateX(28px) scale(.98)" }, { opacity: 1, transform: "none" }], { dur: 240 });
+}
+
+// It goes 22 px to the right in 180 ms ease-in. `.leaving` keeps it seen until then, and is taken
+// off by time, not by the animation's end.
+function floatOut(drawer) {
+  const dur = D(180);
+  if (!dur) return;
+  drawer.classList.add("leaving");
+  animateTo(drawer, [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateX(22px)" }], { dur: 180, ease: "ease-in", fill: "forwards" });
+  leaving = setTimeout(() => settleLeaving(drawer), dur);
+}
+
+// The floating panel has gone out, or opens again while it goes: it lets go of its last motion.
+function settleLeaving(drawer) {
+  if (!leaving) return;
+  clearTimeout(leaving);
+  leaving = null;
+  drawer.classList.remove("leaving");
+  for (const motion of drawer.getAnimations()) motion.cancel();
 }
 
 // What opened the panel, so closing it can give focus back. A redraw makes new nodes: the opener's
@@ -94,9 +157,10 @@ function rememberOpener() {
 // Put content in the panel and slide it in. Keyboard opens are instant. New content belongs to
 // the project picked now: Details drawn again after an Apply is for the project picked during it.
 // A panel the person opens wins over an arrival still waiting for its page (store.js).
-// `dock`: sit beside the page where the window is wide enough. An open panel keeps how it sits,
-// so a review opened from the column stays in the column.
-export function openPanel(content, { instant = false, dock = DOCKS.includes(state.view) } = {}) {
+// `float`: float beside the page where the window is wide enough. An open panel keeps how it sits,
+// so a review opened from the floating panel stays in it. A loading panel takes its content when
+// its skeleton has shown long enough (loadPanel).
+export function openPanel(content, { instant = false, float = FLOATS.includes(state.view) } = {}) {
   arrival.pending = false;
   finishTransition();
   const drawer = $("#drawer");
@@ -104,21 +168,102 @@ export function openPanel(content, { instant = false, dock = DOCKS.includes(stat
   if (isPanelOpen()) {
     // Beside the page another row may be pressed: the way back is to that row, and focus moves in.
     const active = document.activeElement;
-    const elsewhere = !quiet && docked && active && active !== document.body && !drawer.contains(active);
+    const elsewhere = !quiet && floating && active && active !== document.body && !drawer.contains(active);
     if (elsewhere) rememberOpener();
-    swapContent(content);
+    if (loading) settle(content);
+    else put(content);
     if (elsewhere) drawer.focus();
     return;
   }
+  settleLeaving(drawer);
+  drawn += 1;
   drawer.replaceChildren(...content);
   rememberOpener();
-  wantsDock = dock;
-  place(dock && isWide());
-  for (const node of docked ? [drawer] : [drawer, $("#scrim")]) {
+  wantsFloat = float;
+  place(float && isWide());
+  for (const node of floating ? [drawer] : [drawer, $("#scrim")]) {
     node.classList.toggle("instant", instant);
     node.classList.add("open");
   }
+  if (floating) floatIn(drawer, instant);
   drawer.focus();
+}
+
+// A panel that loads: its kind and Close at once, and still bars where its title, facts, sentence
+// and first button will be.
+export function skeleton(kind) {
+  const head = el("header");
+  const top = el("div", "top");
+  top.append(el("span", "kicker", kind), button("Close", () => closePanel(), "btn ghost small"));
+  head.append(top, bars("sk-title", [62, 38]));
+  const body = el("div", "body sk-body");
+  body.append(bars("sk-facts", [70, 54, 80, 46, 60]), bars("sk-line", [90]), bars("sk-button", [55]));
+  return [head, body];
+}
+
+function bars(className, widths) {
+  const box = el("div", className);
+  box.setAttribute("aria-hidden", "true");
+  for (const width of widths) {
+    const bar = el("span", "sk");
+    bar.style.width = `${width}%`;
+    box.append(bar);
+  }
+  return box;
+}
+
+// Details that load: the skeleton of `kind` shows at once (the panel opens, or keeps its place and
+// shows it), and the content openPanel brings next takes its place no sooner than 160 ms after it.
+// Meanwhile `panelState.current` is the mark this returns, so a read that ends after the panel
+// closed, or after something else opened, draws nothing. Under reduced motion no skeleton shows:
+// the panel keeps what it shows until the content comes.
+export function loadPanel(kind) {
+  stopLoading();
+  const mark = { type: "loading", kind };
+  if (D(160)) {
+    openPanel(skeleton(kind));
+    loading = { since: performance.now(), content: null, timer: null };
+  }
+  panelState.current = mark;
+  return mark;
+}
+
+// Content for a loading panel lands once the skeleton has shown 160 ms, or at once when it came
+// later; its parts rise in, 20 ms apart. Content that comes meanwhile takes its place.
+function settle(content) {
+  loading.content = content;
+  const rest = loading.since + D(160) - performance.now();
+  if (rest <= 0) land();
+  else loading.timer ||= setTimeout(land, rest);
+}
+
+function land() {
+  const { content } = loading;
+  loading = null;
+  put(content);
+  rise([...$("#drawer").children], { step: 20 });
+}
+
+function stopLoading() {
+  if (loading) clearTimeout(loading.timer);
+  loading = null;
+}
+
+// The next step inside one panel (a choice, then what it asks): the parts shown go out together,
+// 18 px to the left in 130 ms ease-in, then the new ones come in from 22 px to the right in 220 ms.
+// "back" is the mirror. Done once the new content is in; a step, other content or a close that
+// comes meanwhile wins.
+export async function stepTo(content, dir = "fwd") {
+  const drawer = $("#drawer");
+  const sign = dir === "back" ? -1 : 1;
+  const step = ++stepping;
+  const at = drawn;
+  stopLoading();
+  const out = [{ opacity: 1, transform: "none" }, { opacity: 0, transform: `translateX(${-18 * sign}px)` }];
+  await Promise.all([...drawer.children].map((node) => animateTo(node, out, { dur: 130, ease: "ease-in", fill: "forwards" })));
+  if (step !== stepping || at !== drawn || !isPanelOpen()) return;
+  put(content);
+  for (const node of drawer.children) animateTo(node, [{ opacity: 0, transform: `translateX(${22 * sign}px)` }, { opacity: 1, transform: "none" }], { dur: 220 });
 }
 
 // The tray keeps its rows: they wait for the bar's Apply or Cancel, whatever the panel shows.
@@ -126,13 +271,15 @@ export function closePanel({ instant = false, keepSelection = false, focus = tru
   if (!isPanelOpen()) return;
   panelState.current = null;
   panelState.from = null;
-  for (const node of [$("#drawer"), $("#scrim")]) {
+  stopLoading();
+  const drawer = $("#drawer");
+  for (const node of [drawer, $("#scrim")]) {
     node.classList.toggle("instant", instant);
     node.classList.remove("open");
   }
-  // The page takes its room back at once; the column slides out as it was.
-  $(".shell").classList.remove("docked");
-  docked = false;
+  // The floating panel goes as it was; the page never moved for it.
+  if (floating && !instant) floatOut(drawer);
+  floating = false;
   if (!keepSelection) {
     setState({ selected: null });
     for (const row of $$('tr[aria-selected="true"], [role="row"][aria-selected="true"]')) row.setAttribute("aria-selected", "false");
@@ -190,9 +337,9 @@ export function openChange(title, body, onUndo) {
 
 // Wiring ---------------------------------------------------------------------------------
 
-// The drawer keeps Tab inside it; the column beside the page does not.
+// The drawer keeps Tab inside it; the floating panel does not.
 function trapFocus(event) {
-  if (event.key !== "Tab" || !isPanelOpen() || docked) return;
+  if (event.key !== "Tab" || !isPanelOpen() || floating) return;
   const drawer = $("#drawer");
   // Only what is drawn: a closed Details hides everything but its summary. The dock stands above
   // the scrim and the drawer, so what it shows (the tray's bar, or a toast after a tool switch) is
@@ -224,13 +371,17 @@ export function initPanel() {
   drawer.setAttribute("role", "dialog");
   drawer.setAttribute("aria-modal", "true");
   drawer.setAttribute("aria-labelledby", "panel-title");
-  // A window that grows or shrinks while the panel is open switches the column and the drawer.
-  matchMedia(`(min-width: ${DOCK_MIN}px)`).addEventListener("change", (event) => {
+  // A window that grows or shrinks while the panel is open switches the floating panel and the
+  // drawer.
+  matchMedia(`(min-width: ${FLOAT_MIN}px)`).addEventListener("change", (event) => {
     if (!isPanelOpen()) return;
-    place(wantsDock && event.matches);
-    $("#scrim").classList.toggle("open", !docked);
-    if (!docked && !drawer.contains(document.activeElement)) drawer.focus();
+    place(wantsFloat && event.matches);
+    $("#scrim").classList.toggle("open", !floating);
+    if (!floating && !drawer.contains(document.activeElement)) drawer.focus();
   });
+  // The floating panel keeps its place in the window while the page scrolls or the window changes.
+  $("#content").addEventListener("scroll", placeTop, { passive: true });
+  addEventListener("resize", placeTop);
   onOpenItem((row, tr, how) => openItem(row, { instant: how === "keyboard" }));
   // A refresh of the gateway's tool lists ended: an open tool list reads them again.
   document.addEventListener("kitden:tools", reloadTools);

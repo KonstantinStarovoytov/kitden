@@ -56,9 +56,9 @@ const PATH_KINDS = ["on", "direct", "faint"];
 // What a screen reader hears for a block's state; the map itself shows no state word.
 const STATE_SAID = { on: "On", off: "Off", unk: "Not known", preview: "Preview" };
 
-// Narrow: under 1024 px, or under 1280 px with Details open beside the page.
-export function isNarrow(width, detailsOpen) {
-  return width < 1024 || (Boolean(detailsOpen) && width < 1280);
+// Narrow: under 1024 px. Details float over the map (panel.js), so they never make it narrow.
+export function isNarrow(width) {
+  return width < 1024;
 }
 
 // When each child of an unfold starts to fade in: after its links have drawn, 15 ms apart, however
@@ -115,7 +115,7 @@ function shownChildren(block, children, open) {
 // direct line carries the `chan` it turns on, how far right of its client: wide, one of CHANNELS by
 // the place of its block among those with a direct line, so the lines to blocks one after the other
 // run side by side; narrow, NARROW_CHANNEL.
-export function layoutTree(model, { open = new Set(), width = 0, narrow = isNarrow(width, false) } = {}) {
+export function layoutTree(model, { open = new Set(), width = 0, narrow = isNarrow(width) } = {}) {
   const byId = new Map(model.blocks.map((block) => [block.id, block]));
   const children = childrenOf(model);
   const own = new Set(model.blocks.filter((block) => !byId.has(block.parent)).map((block) => block.column));

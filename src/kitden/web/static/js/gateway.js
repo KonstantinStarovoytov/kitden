@@ -5,7 +5,7 @@ import { addForm, heldServer, liveHeld, movesTo, ruleBody, SETUP_NOTE, showClien
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { findIn, foldable, isNarrow, keepOpen, layoutTree, linkKey, litFrom, litPath, pressOpen, toggleOpen, wideWidth } from "./map.js";
 import { mapView } from "./map-view.js";
-import { afterOldPage, entrance, glide, rise, riseHead } from "./motion.js";
+import { afterOldPage, D, entrance, glide, rise, riseHead } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, openInfo, panelState, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, folderName, gatewayName, kitdenClients, mark, opens, ORIGIN_WORDS, scopeBar, skeleton, STATE_WORDS, staleNote } from "./parts.js";
 import { arrival, current, currentError, data, go, goTo, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
@@ -504,11 +504,41 @@ export function listAt(id) {
   return { mode: "list", selected: { kind: "group", name: id.replace(/^more:/, "").replace(/^group:/, "") } };
 }
 
-// The map lays out narrow by the window rule (isNarrow: under 1024 px, or under 1280 px with
-// Details beside the page), and also when its box (null before it is measured) is too small for
-// the wide map, so it never needs to scroll sideways where the narrow one fits.
-export function narrowFor(model, { window: width, box = null, docked = false }) {
-  return isNarrow(width, docked) || (box !== null && box < wideWidth(model));
+// The map lays out narrow by the window rule (isNarrow: under 1024 px), and also when its box (null
+// before it is measured) is too small for the wide map, so it never needs to scroll sideways where
+// the narrow one fits. Details float over it, so they never make it narrow.
+export function narrowFor(model, { window: width, box = null }) {
+  return isNarrow(width) || (box !== null && box < wideWidth(model));
+}
+
+// Details float over the right of the map (panel.js). How far the map scrolls so a block whose
+// right edge is at `right` ends 16 px before their left edge at `left` (both in the window); 0
+// when it is clear of them.
+export function besideBy(right, left) {
+  return Math.max(0, Math.round(right + 16 - left));
+}
+
+const floatingNow = () => isPanelOpen() && $("#drawer").classList.contains("floating");
+
+// While Details float over part of the map, the map takes room at its right (`.beside`,
+// style.css) so it can scroll sideways to show what they cover, and the selected block they cover
+// scrolls left into view beside them. When they close the map scrolls home, and gives the room
+// back once it is there (newMap).
+function keepBeside() {
+  const box = onMap.view && onMap.view.box;
+  if (!box || !box.isConnected) return;
+  const behavior = D(1) ? "smooth" : "instant";
+  if (!floatingNow()) {
+    if (box.scrollLeft) box.scrollTo({ left: 0, behavior });
+    else box.classList.remove("beside");
+    return;
+  }
+  const left = $("#drawer").offsetLeft;
+  const area = $(".map-area", box);
+  if (area && besideBy(area.getBoundingClientRect().right + box.scrollLeft, left)) box.classList.add("beside");
+  const node = withFocusKey(box, `block:${onList.current}`);
+  const by = node ? besideBy(node.getBoundingClientRect().right, left) : 0;
+  if (by) box.scrollBy({ left: by, behavior });
 }
 
 // The map: the blocks open and the one selected, its view (map-view.js, one per visit) and the
@@ -693,6 +723,9 @@ function newMap() {
     drawAgain();
   });
   view.box.addEventListener("pointerdown", (event) => pressGrip(event, letGoIfSelected));
+  view.box.addEventListener("scroll", () => {
+    if (!view.box.scrollLeft && !floatingNow()) view.box.classList.remove("beside");
+  }, { passive: true });
   watchMap(view.box);
   return view;
 }
@@ -705,9 +738,9 @@ function openBlock(id) {
   onMap.unfolds = onMap.open.has(id);
 }
 
-// A new width of the box (the window, or Details beside the page) may change the layout: it is
-// drawn again, at once in its new shape. Details closing (Escape, Close or
-// another place) clears what the map lights; the panel's class says when it closes.
+// A new width of the box (the window) may change the layout: it is drawn again, at once in its new
+// shape. Details closing (Escape, Close or another place) clears what the map lights; the panel's
+// class says when it closes. Details that open, close or show another block keep it beside them.
 function watchMap(box) {
   if (!onMap.watch) {
     onMap.watch = new ResizeObserver((entries) => {
@@ -717,6 +750,7 @@ function watchMap(box) {
       if (narrowNow(onMap.model) !== onMap.narrow) drawAgain();
     });
     new MutationObserver(() => {
+      keepBeside();
       if (isPanelOpen() || !onMap.selected) return;
       onMap.selected = null;
       drawAgain();
@@ -727,8 +761,7 @@ function watchMap(box) {
 }
 
 function narrowNow(model) {
-  const docked = isPanelOpen() && $(".shell").classList.contains("docked");
-  return narrowFor(model, { window: innerWidth, box: onMap.width, docked });
+  return narrowFor(model, { window: innerWidth, box: onMap.width });
 }
 
 // The blocks open now: those the person opened, and those a search opens to show a match (a

@@ -364,8 +364,8 @@ function start() {
   });
   document.addEventListener("keydown", (event) => {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
-    // Details beside the page leave the page usable; only the drawer over it is modal.
-    const modal = isPanelOpen() && !$("#drawer").classList.contains("docked");
+    // Details floating beside the page leave the page usable; only the drawer over it is modal.
+    const modal = isPanelOpen() && !$("#drawer").classList.contains("floating");
     if (event.key === "/" && !typing && !modal) {
       event.preventDefault();
       $("#q").focus();

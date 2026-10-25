@@ -89,7 +89,9 @@ def test_diff_text_is_readable_on_its_tint_and_on_the_panel():
         for text, lamp in (("--diff-add", "--lamp-on"), ("--diff-del", "--danger")):
             tint = over(theme[lamp], 0.09, theme["--inset"])
             assert contrast(theme[text], tint) >= 4.5, (text, theme[text], tint)
-            assert contrast(theme[text], theme["--panel-raised"]) >= 4.5, (text, theme[text])
+            # The modal drawer is the raised panel; the floating one is the panel.
+            for fill in ("--panel-raised", "--panel"):
+                assert contrast(theme[text], theme[fill]) >= 4.5, (text, theme[text], fill)
     for name in ("--diff-add", "--diff-del"):
         assert DARK_AUTO[name] == DARK_RULE[name]
 
@@ -147,11 +149,13 @@ def test_the_preview_tokens_are_the_frames_values():
         assert DARK_AUTO[name] == DARK_RULE[name]
 
 
-def test_facts_text_is_readable_on_the_details_column_in_both_themes():
-    # A fact's label is --ink-3 and an accent value is --route, on the raised panel.
+def test_facts_text_is_readable_in_details_in_both_themes():
+    # A fact's label is --ink-3 and an accent value is --route, on the modal drawer (the raised
+    # panel) and on the floating panel (the panel).
     for theme in (LIGHT, DARK):
         for ink in ("--ink-3", "--route"):
-            assert contrast(theme[ink], theme["--panel-raised"]) >= 4.5, ink
+            for fill in ("--panel-raised", "--panel"):
+                assert contrast(theme[ink], theme[fill]) >= 4.5, (ink, fill)
 
 
 def test_the_find_chip_and_a_lit_list_row_are_readable_in_both_themes():
