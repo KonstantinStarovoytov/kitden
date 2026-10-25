@@ -125,12 +125,12 @@ The mockup breaks several written rules. Each line gives the rule, what the mock
 
 **Files:** new `src/kitden/changes/batch.py`, `src/kitden/web/app.py` (route), `src/kitden/changes/engine.py` (progress per row), new `static/js/tray.js`, `static/js/panel.js` (toast), `static/js/map-review.js` (replaced by the tray), tests `tests/unit/test_batch.py`, `tests/frontend/tray.test.mjs`. **Mockup:** `tray`, `dock`; motion-spec M4. **Decisions:** D10, D11, D12, D20.
 
-- [ ] **Task 3.1 One change from many requests.** `POST /api/batch/preview` takes `{"requests": [ {id, kind, …} ]}` and returns one previewed change with `rows: [{id, title, detail, project, steps: [int]}]`. It uses each request's existing step builder and the engine's own merge. Tests: two requests on the same Cursor `mcp.json` apply without going stale; a failing last step puts every file back.
-- [ ] **Task 3.2 Refuse clashes at add time.** `POST /api/batch/check` with the current rows plus the new one returns `{ok}` or `{reason}` (same entry twice, one entry inside another, two registered gateways). The tray shakes the new row and shows the reason. Test: "remove GitHub" + "turn off a GitHub tool" is refused with a plain reason.
-- [ ] **Task 3.3 Apply all and Undo all.** Apply and Undo use today's `change_action` verbs on the combined change. Progress events carry the row id, so each row spins in turn; checks show only on `verified` (D20). Undo all is one undo; rows undo in reverse order on the map, 120 ms apart.
-- [ ] **Task 3.4 Tray UI.** One change: title, detail, Cancel, Apply. Two or more: "N changes in preview", list rows (dashed preview look, row ×, "Show changes"), Cancel all, Apply all with "Applying i of N", meter (480 ease-out per step), spinner. Failure: accent edge, shake 380, "Nothing was changed", Try again (fresh preview). Bar in 220 CALM, resize 200, row in 200 with 80 delay, out 160. **Mockup:** `tray.render`, `tray.apply`.
-- [ ] **Task 3.5 Toast in the dock.** Bottom left, "Applied N changes" + "Undo all" (+ an optional second button), 9 s green life bar that pauses under the pointer, leaves 160. Replaces the centred 6 s toast (`panel.js:229-268`).
-- [ ] **Task 3.6 Wire every action to the tray.** Details buttons, switches, ×, drags and cards add tray rows instead of opening a review. A click on a preview block or link takes its row out (D12). Remove the one-preview rule (`review.js:234-253`, `map-review.js:24`).
+- [x] **Task 3.1 One change from many requests.** `POST /api/batch/preview` takes `{"requests": [ {id, kind, …} ]}` and returns one previewed change with `rows: [{id, title, detail, project, steps: [int]}]`. It uses each request's existing step builder and the engine's own merge. Tests: two requests on the same Cursor `mcp.json` apply without going stale; a failing last step puts every file back.
+- [x] **Task 3.2 Refuse clashes at add time.** `POST /api/batch/check` with the current rows plus the new one returns `{ok}` or `{reason}` (same entry twice, one entry inside another, two registered gateways). The tray shakes the new row and shows the reason. Test: "remove GitHub" + "turn off a GitHub tool" is refused with a plain reason.
+- [x] **Task 3.3 Apply all and Undo all.** Apply and Undo use today's `change_action` verbs on the combined change. Progress events carry the row id, so each row spins in turn; checks show only on `verified` (D20). Undo all is one undo; rows undo in reverse order on the map, 120 ms apart.
+- [x] **Task 3.4 Tray UI.** One change: title, detail, Cancel, Apply. Two or more: "N changes in preview", list rows (dashed preview look, row ×, "Show changes"), Cancel all, Apply all with "Applying i of N", meter (480 ease-out per step), spinner. Failure: accent edge, shake 380, "Nothing was changed", Try again (fresh preview). Bar in 220 CALM, resize 200, row in 200 with 80 delay, out 160. **Mockup:** `tray.render`, `tray.apply`.
+- [x] **Task 3.5 Toast in the dock.** Bottom left, "Applied N changes" + "Undo all" (+ an optional second button), 9 s green life bar that pauses under the pointer, leaves 160. Replaces the centred 6 s toast (`panel.js:229-268`).
+- [x] **Task 3.6 Wire every action to the tray.** Details buttons, switches, ×, drags and cards add tray rows instead of opening a review. A click on a preview block or link takes its row out (D12). Remove the one-preview rule (`review.js:234-253`, `map-review.js:24`).
 
 ## Phase 4: Gateway page
 
@@ -141,6 +141,20 @@ The mockup breaks several written rules. Each line gives the rule, what the mock
 - A hovered, lit bypass link in a search stays at 0.25 once bypass links take the pointer; add a hover rule.
 - 4.8: the skeleton, the error banner and the "No gateway yet" card show without a rise; Map → List has no rise; the head snaps when data arrives within ~440 ms of a cold visit; the "First visit" row in design.md.
 - 4.7: a dragged block keeps the 0.98 press scale while the pointer is down.
+
+**Carried from Phase 3:**
+- The map's per-row landing in tray order, 60 ms apart, and Undo all's reverse order, 120 ms apart; Undo's 480 ms link draw-in (the tray can pass the cause). Today the page is drawn again once after the reload.
+- The review floats over the lowest blocks at a 900 px window.
+- The step number in "Applying 2 of 5" changes without rolling.
+- The modal drawer's bottom jumps with no transition when the dock's bar or toast comes and goes, and it has no minimum height in a short window.
+- The dock (z 22) paints over the sticky top bar and the project menu in a short window.
+- While the tray writes, every link loses its hit for a few seconds (keyboard focus on a link hit is dropped); no test yet that the hits come back after a failed Apply.
+- Cancel of a single move from the dock hands focus to `#main` (the old bar gave it to the outside server).
+- Apply, the toast's Undo and a link's × give no sign when pressed while another change is written; they do nothing.
+- The search chip's count can go stale when the tray redraws the map in place during a search.
+- `undoChange`'s tool-list branch moves focus to `tools.flipped` whatever had focus.
+- `quiet` stays set across `detailsAgain`'s awaited re-read (a docked-column press in that window skips `rememberOpener`), and a re-read can draw old Details over a row opened during the await.
+- A row's review keeps the row it was opened with: a row added again under the same key shows its old part until the review is opened again.
 
 **Carried from Phase 1:**
 - `gateway.js` has its own local `icon()` and `ICONS` (~line 543). Remove them before importing `icon` from `dom.js`, or the module fails to parse.
@@ -166,12 +180,16 @@ The mockup breaks several written rules. Each line gives the rule, what the mock
 
 **Files:** backend `gateway.add` and `/api/market-servers` (Part 5 Task 10, reused), `static/js/gateway-add.js` (new), `style.css`. **Mockup:** `openAdd`, `resRow`, `preview`, `resDrag`, `commitAdd`; motion-spec M6.
 
+**Carried from Phase 3:** "In preview" is missing on the add-gateway form (`addForm`), the tool and server project choice (`gateway-details.js` ~451, ~503) and the Connect clients form (~716): none says it while its row waits in the tray. Give each the `previewButton` look (details.js).
+
 - [ ] **Task 5.1 Backend.** List marketplace MCP servers; `gateway.add` writes the gateway entry for all projects. It refuses OAuth servers, SSE/WebSocket and any `${…}` value, with a plain reason; such rows show greyed with the reason. No tool counts (D24).
 - [ ] **Task 5.2 Panel.** "+ Add" opens the panel: search, All/Community/Team pill, rows grouped by source, "In the gateway" rows greyed. A click adds a preview block in its group (slot, link fade, tray row). A drag flies a ghost card onto the map; the gateway and the slot light; a drop over the panel cancels.
 
 ## Phase 6: Library
 
 **Carried from Phase 2:** `map-view.js` reads `afterOldPage()` from motion.js to delay its entrance after a place change; give `draw` an `enterDelay` option when the Library reuses `mapView`.
+
+**Carried from Phase 3:** "In preview" is missing on the Library's add choice and the `offer.js` add forms: neither says it while its row waits in the tray. Give each the `previewButton` look (details.js).
 
 Reuses Part 5 backend Tasks 1, 2, 7 (local settings, plugin parts, `skill.rule`) and Part 6 Tasks 1–3 (imports). **Files:** `static/js/library.js`, `details.js` (move to `detailsCard`), `style.css`, `app.js:35` (`MAP_PAGES` adds `library`). **Mockup:** `Library` (`plugin`, `pluginPanel`, `wirePlugin`, `add`, `pickClient`, `dropWhy`, `dragStart`, `select`, `skill`, `file`, `imp`, `removeFrom`); motion-spec M7.
 
@@ -184,6 +202,8 @@ Reuses Part 5 backend Tasks 1, 2, 7 (local settings, plugin parts, `skill.rule`)
 
 ## Phase 7: Overview and Changes
 
+**Carried from Phase 3:** the Changes page names a change of many tray rows "batch …": name each row by its steps (`changeTitle(part)`) before any release from this branch. The server keeps "New change" as the request title of a row's first preview.
+
 Reuses Part 6 backend Task 5 (cards with `icon`, `name`, `clients`). **Files:** `static/js/overview.js`, `changes.js`, `review.js` (undo toast), `src/kitden/views/overview.py`. **Mockup:** `Overview`, `Changes`; motion-spec M8.
 
 - [ ] **Task 7.1 Overview.** "Your setup, connected." + counted lede + scope; cards with icon tile, name, one line, client tiles, one button (adds a tray preview, D22); hover a card focuses the mini-map; "Your setup" mini-map with foot "N projects · N have their own rules"; notes fold open as sentences. Fix the mockup's collapse jump: collapse the card and skip FLIP.
@@ -192,6 +212,8 @@ Reuses Part 6 backend Task 5 (cards with `icon`, `name`, `clients`). **Files:** 
 ## Phase 8: Check and finish
 
 **Carried from Phase 2:** Safari's `:focus-visible` on SVG link paths; the Gateway view transition in both themes; the 39-server long-task check with a selection and a glance; a timer backstop so a draw lands even if frames stall while the page is visible.
+
+**Carried from Phase 3:** README still describes the old one-change review (README.md ~169). ROADMAP.md needs the tray line once the owner settles their own edit to it.
 
 **Carried from Phase 1:** `docs/images/how-it-works-dark.svg:47` still uses the old amber #E0A347. The active-option ring in the project menu also shows on the picked row when the menu opens by mouse; the mockup has no ring (owner to judge).
 
