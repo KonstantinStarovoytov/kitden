@@ -119,16 +119,12 @@ def test_the_first_run_slot_is_readable_in_both_themes():
             assert contrast(theme[ink], fill) >= 4.5, (ink, fill)
 
 
-def test_a_preview_on_the_map_and_its_bar_are_readable_in_both_themes():
-    # A preview block's "Preview" is --ink-2 on the preview fill; the review bar's outcome line is
-    # --ink-2 on the raised panel.
+def test_a_preview_on_the_map_is_readable_in_both_themes():
+    # A preview block's "Preview" is --ink-2 on the preview fill.
     assert "div.map .block.preview .block-meta { color: var(--ink-2); }" in CSS
-    assert ".review-bar .bar-outcome { margin: 0; color: var(--ink-2);" in CSS
     for theme in (LIGHT, DARK, {**LIGHT, **DARK_AUTO}):
         fill = blend(theme["--preview-fill"], theme["--canvas"])
         assert contrast(theme["--ink-2"], fill) >= 4.5
-        for ink in ("--ink", "--ink-2"):
-            assert contrast(theme[ink], theme["--panel-raised"]) >= 4.5, ink
 
 
 def test_the_preview_tokens_are_the_frames_values():

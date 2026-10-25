@@ -4,13 +4,48 @@ import { test } from 'node:test';
 // gateway.js needs only this from a browser to load; the tests call its pure parts.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { GATEWAY_COLUMNS, afterPress, contentWidth, findRows, gatewayTree, glanceFor, heldServer, kitdenLinks, linkRemoval, listAt, listRows, litFor, lightsLater, mapMotion, narrowFor, serverCount, stillSelected } = await import('../../src/kitden/web/static/js/gateway.js');
+const { GATEWAY_COLUMNS, afterPress, clickLink, contentWidth, findRows, gatewayTree, glanceFor, heldServer, kitdenLinks, linkRemoval, linkTip, listAt, listRows, litFor, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, serverCount, stillSelected } = await import('../../src/kitden/web/static/js/gateway.js');
 const { dropBody, dropTarget, pressGrip, placeMoved } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
-const { offersSwitch } = await import('../../src/kitden/web/static/js/gateway-details.js');
+const { offersSwitch, ruleBody } = await import('../../src/kitden/web/static/js/gateway-details.js');
 const { blockLabel, findChip, findIn, keepOpen, layoutTree, pressOpen, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
 const { kitdenClients } = await import('../../src/kitden/web/static/js/parts.js');
-const { viewMode } = await import('../../src/kitden/web/static/js/store.js');
+const { data, state, viewMode } = await import('../../src/kitden/web/static/js/store.js');
+const { addToTray, applyTray, cancelTray, endApplied, keyFor, tray } = await import('../../src/kitden/web/static/js/tray.js');
+
+// A stand-in server for the tray: each address answers from its own queue (a reply, or a function
+// of the request body that gives one); an address with nothing queued answers 200 with no body.
+const calls = [];
+const replies = new Map();
+globalThis.fetch = (url, init = {}) => {
+  calls.push({ url, method: init.method || 'GET', body: init.body ? JSON.parse(init.body) : null });
+  const waiting = replies.get(url) || [];
+  const next = waiting.length ? waiting.shift() : { status: 200, json: {} };
+  const reply = typeof next === 'function' ? next(calls.at(-1).body) : next;
+  return Promise.resolve(reply).then((made) => ({ ok: made.status < 400, status: made.status, json: async () => made.json }));
+};
+const queue = (url, ...items) => replies.set(url, [...(replies.get(url) || []), ...items]);
+const posted = () => calls.filter((call) => call.method === 'POST').map((call) => call.url);
+const PREVIEW = '/api/batch/preview';
+// The server's answer to a batch preview: one step and one row per request.
+const batch = (id) => (sent) => ({
+  status: 200,
+  json: {
+    id, action: 'batch', state: 'previewed', error: null, target: { scope: 'all' }, undo_note: null,
+    steps: sent.requests.map(() => ({ client: 'kitden', name: 'x' })),
+    rows: sent.requests.map((request, index) => ({ id: request.id, kind: request.kind, title: request.title, detail: '', project: null, steps: [index], target: { scope: 'all' }, after: [], undo_note: null })),
+  },
+});
+// The microtasks of a stand-in answer run (a mocked setTimeout does not hold this up).
+const flush = () => new Promise((resolve) => setImmediate(resolve));
+// An empty tray and a quiet server.
+async function freshTray() {
+  await cancelTray();
+  endApplied();
+  calls.length = 0;
+  replies.clear();
+  state.project = '';
+}
 
 const entry = (client, state, fields = {}) => ({ client, state, item: null, enabled: true, ...fields });
 
@@ -557,8 +592,17 @@ test("a drag takes only its own row's entries", () => {
   assert.deepEqual(dropBody(docs, MEDIUM_VIEW).targets, docs.items.map((item) => ({ item })));
 });
 
-test('a preview shows a preview block and link in the right group', () => {
-  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, preview: { name: 'github', kind: 'remote' } });
+// A tray row as the map reads it: its key, its body, and its part of the preview (null while it is
+// still being asked).
+const trayRow = (body, part = {}) => ({ key: keyFor(body), body, part });
+const GITHUB = MEDIUM_VIEW.groups.move.find((r) => r.name === 'github');
+const LOCAL_DOCS = MEDIUM_VIEW.groups.local.find((r) => r.name === 'docs');
+const moveRow = (row, part = {}) => trayRow(dropBody(row, MEDIUM_VIEW), part);
+const REMOVE_FILES = { action: 'gateway.remove', targets: [], params: { server: 'files' } };
+const linkOf = (tree, key) => tree.links.find((l) => `${l.from}>${l.to}` === key);
+
+test('a move in the tray shows a preview block and link in the right group', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [moveRow(GITHUB)] });
   const shown = block(tree, 'preview:github');
   assert.deepEqual([shown.parent, shown.kind, shown.state, shown.column, shown.meta], ['group:kitden:remote', 'preview', 'preview', 'servers', 'Preview']);
   assert.equal(blockLabel(shown), 'github, Preview');
@@ -569,16 +613,234 @@ test('a preview shows a preview block and link in the right group', () => {
   // The row being moved hides its direct line while the preview is there; the other docs keeps its own.
   assert.ok(!keys(tree).includes('client:claude_code>outside:move:github direct'));
   assert.ok(keys(tree).includes('client:claude_code>outside:move:docs direct'));
-  // One preview at a time: no grips while it shows.
-  assert.ok(tree.blocks.every((b) => !b.grip));
   // A local server goes to Local; a group the gateway does not have yet comes with it, Remote first.
-  const local = gatewayTree(MEDIUM_VIEW, { ...OPTS, preview: { name: 'docs', kind: 'local' } });
+  const local = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [moveRow(LOCAL_DOCS)] });
   assert.equal(block(local, 'preview:docs').parent, 'group:kitden:local');
   assert.ok(!keys(local).includes('client:codex>outside:local:docs direct') && keys(local).includes('client:claude_code>outside:move:docs direct'));
   const onlyLocal = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers: [MEDIUM_VIEW.gateways[0].servers[0]] }] };
-  const fresh = gatewayTree(onlyLocal, { ...OPTS, preview: { name: 'github', kind: 'remote' } });
+  const fresh = gatewayTree(onlyLocal, { ...OPTS, rows: [moveRow(GITHUB)] });
   assert.deepEqual(fresh.blocks.filter((b) => b.column === 'servers').map((b) => b.id).slice(0, 4), ['group:kitden:remote', 'preview:github', 'group:kitden:local', 'held:kitden:files']);
   assert.equal(block(fresh, 'group:kitden:remote').name, 'Remote');
+  // A move into another gateway is not drawn on the Kitden gateway.
+  const other = trayRow(moveBody({ id: 'gw-1', kind: 'obot' }, GITHUB.items));
+  assert.ok(!gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [other] }).blocks.some((b) => b.kind === 'preview'));
+});
+
+test('two moves in the tray show two preview blocks', () => {
+  const rows = [moveRow(GITHUB), moveRow(LOCAL_DOCS)];
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows });
+  assert.deepEqual([block(tree, 'preview:github').parent, block(tree, 'preview:github').row], ['group:kitden:remote', rows[0].key]);
+  assert.deepEqual([block(tree, 'preview:docs').parent, block(tree, 'preview:docs').row], ['group:kitden:local', rows[1].key]);
+  assert.ok(keys(tree).includes('gateway:kitden>preview:github preview') && keys(tree).includes('gateway:kitden>preview:docs preview'));
+  // Each outside row a move takes hides its direct lines; the other docs keeps its own.
+  assert.ok(!keys(tree).includes('client:claude_code>outside:move:github direct'));
+  assert.ok(!keys(tree).includes('client:codex>outside:local:docs direct'));
+  assert.ok(keys(tree).includes('client:claude_code>outside:move:docs direct'));
+  // A server whose move is in the tray has no grip; every other one keeps its own.
+  assert.deepEqual(tree.blocks.filter((b) => b.kind === 'outside').map((b) => [b.id, Boolean(b.grip)]), [
+    ['outside:move:docs', true], ['outside:move:github', false], ['outside:local:docs', false], ['outside:local:files', true]]);
+  // A move still being asked shows the slot "Drop to add" in its place.
+  const asked = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [moveRow(GITHUB, null), moveRow(LOCAL_DOCS)] });
+  assert.deepEqual([block(asked, 'slot:github').name, block(asked, 'slot:github').parent], ['Drop to add', 'group:kitden:remote']);
+  assert.ok(!block(asked, 'preview:github') && block(asked, 'preview:docs'));
+  assert.ok(!keys(asked).includes('client:claude_code>outside:move:github direct'));
+});
+
+test('a removal in the tray makes its link leave', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [trayRow(REMOVE_FILES)] });
+  const link = linkOf(tree, 'gateway:kitden>held:kitden:files');
+  assert.deepEqual([link.kind, link.leaving, link.row], ['on', true, keyFor(REMOVE_FILES)]);
+  assert.equal(layoutTree(tree, { open: new Set(), narrow: false }).links.find((l) => l.to === 'held:kitden:files').leaving, true);
+  // The server stays where it is until Apply; its other links are as they were.
+  assert.equal(block(tree, 'held:kitden:files').state, 'on');
+  assert.equal(linkOf(tree, 'held:kitden:files>tool:files/read_file').leaving, undefined);
+  // A row still being asked changes nothing on the map yet, nor does an empty tray.
+  assert.equal(linkOf(gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [trayRow(REMOVE_FILES, null)] }), 'gateway:kitden>held:kitden:files').leaving, undefined);
+  assert.equal(linkOf(gatewayTree(MEDIUM_VIEW, OPTS), 'gateway:kitden>held:kitden:files').leaving, undefined);
+});
+
+test('a tool turned off in the tray makes its link leave', () => {
+  const off = (project) => trayRow(ruleBody('files', 'read_file', 'off', project));
+  const leaving = (opts) => linkOf(gatewayTree(MEDIUM_VIEW, { ...OPTS, ...opts }), 'held:kitden:files>tool:files/read_file').leaving;
+  // For all projects with All projects picked, or in the project picked at the top.
+  assert.equal(leaving({ rows: [off(null)] }), true);
+  assert.equal(leaving({ picked: 'website', rows: [off('website')] }), true);
+  // A rule for another scope than the one shown leaves no link.
+  assert.equal(leaving({ rows: [off('website')] }), undefined);
+  assert.equal(leaving({ picked: 'website', rows: [off(null)] }), undefined);
+  // Turning a tool on takes no link out.
+  assert.equal(leaving({ rows: [trayRow(ruleBody('files', 'read_file', 'on', null))] }), undefined);
+  // Its link shows only while its server is open.
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [off(null)] });
+  const shown = (open) => layoutTree(tree, { open: new Set(open), narrow: false }).links.find((l) => l.to === 'tool:files/read_file');
+  assert.equal(shown([]), undefined);
+  assert.equal(shown(['held:kitden:files']).leaving, true);
+});
+
+test('the map draws no rows once the change is applied', () => {
+  const rows = [moveRow(GITHUB)];
+  assert.equal(rowsOnMap({ phase: 'ready', rows }), rows);
+  assert.equal(rowsOnMap({ phase: 'applying', rows }), rows);
+  assert.deepEqual(rowsOnMap({ phase: 'applied', rows }), []);
+});
+
+test('a press on a preview block takes its row out', async () => {
+  await freshTray();
+  queue(PREVIEW, batch('c1'), batch('c2'), batch('c3'));
+  await addToTray(dropBody(GITHUB, MEDIUM_VIEW));
+  await addToTray(REMOVE_FILES, { icon: 'x' });
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: rowsOnMap(tray) });
+  pressBlock(tree, 'preview:github');
+  await flush();
+  // The rest is previewed again as one change.
+  assert.deepEqual(tray.rows.map((r) => r.key), [keyFor(REMOVE_FILES)]);
+  assert.deepEqual([tray.phase, tray.change.id], ['ready', 'c3']);
+  assert.deepEqual(calls.filter((c) => c.url === PREVIEW).at(-1).body.requests.map((r) => r.kind), ['gateway.remove']);
+  await freshTray();
+});
+
+test('a click on a leaving link takes its row out', async () => {
+  await freshTray();
+  queue(PREVIEW, batch('c1'), batch('c2'), batch('c3'));
+  await addToTray(dropBody(GITHUB, MEDIUM_VIEW));
+  await addToTray(REMOVE_FILES, { icon: 'x' });
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: rowsOnMap(tray) });
+  // A link the tray draws says what a press on it does.
+  assert.equal(linkTip(tree, linkOf(tree, 'gateway:kitden>held:kitden:files'), ''), 'Take it out of the preview');
+  assert.equal(linkTip(tree, linkOf(tree, 'gateway:kitden>preview:github'), ''), 'Take it out of the preview');
+  assert.equal(linkTip(tree, linkOf(tree, 'held:kitden:files>tool:files/read_file'), ''), 'Turn off read_file');
+  clickLink(tree, linkOf(tree, 'gateway:kitden>held:kitden:files'));
+  await flush();
+  assert.deepEqual(tray.rows.map((r) => r.key), [keyFor(dropBody(GITHUB, MEDIUM_VIEW))]);
+  // A click on the preview link of a move takes it out too: the last row out cancels the change.
+  const now = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: rowsOnMap(tray) });
+  clickLink(now, linkOf(now, 'gateway:kitden>preview:github'));
+  await flush();
+  assert.deepEqual([tray.rows, tray.phase, posted().at(-1)], [[], 'idle', '/api/changes/c3/cancel']);
+});
+
+test('the × of a link in the tray takes it out, else adds it', async () => {
+  await freshTray();
+  state.project = 'website';
+  queue(PREVIEW, batch('c1'));
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, picked: 'website' });
+  const tool = 'held:kitden:files>tool:files/read_file';
+  // Not in the tray: the × adds its change, with the × icon.
+  await removeLink(tree, linkOf(tree, tool), 'website');
+  assert.deepEqual(tray.rows.map((r) => [r.key, r.icon, r.body]), [['rule:files/read_file@website', 'x', ruleBody('files', 'read_file', 'off', 'website')]]);
+  // In the tray: the × of its leaving link takes it out.
+  const drawn = gatewayTree(MEDIUM_VIEW, { ...OPTS, picked: 'website', rows: rowsOnMap(tray) });
+  assert.equal(linkOf(drawn, tool).leaving, true);
+  await removeLink(drawn, linkOf(drawn, tool), 'website');
+  assert.deepEqual(tray.rows, []);
+  // A row still being asked is in the tray too: a second × takes it out before it answers.
+  state.project = '';
+  let answer;
+  queue(PREVIEW, () => new Promise((resolve) => { answer = resolve; }));
+  const gone = 'gateway:kitden>held:kitden:files';
+  const adding = removeLink(tree, linkOf(tree, gone), '');
+  assert.deepEqual(tray.rows.map((r) => [r.key, r.part]), [[keyFor(REMOVE_FILES), null]]);
+  await removeLink(tree, linkOf(tree, gone), '');
+  answer(batch('c2')({ requests: calls.filter((c) => c.url === PREVIEW).at(-1).body.requests }));
+  assert.equal(await adding, false);
+  assert.deepEqual(tray.rows, []);
+  // A link the map does not act on does nothing.
+  assert.equal(removeLink(tree, linkOf(tree, 'client:codex>gateway:kitden'), ''), null);
+  await freshTray();
+});
+
+test('a drop adds a move to the tray', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const heard = {};
+  globalThis.document = { addEventListener: (type, fn) => { (heard[type] ||= []).push(fn); }, removeEventListener() {}, documentElement: { classList: { add() {}, remove() {} } }, createElement: (tag) => ({ tag }) };
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  data.scope.gateway = '';
+  try {
+    const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+    const layout = layoutTree(tree, { open: new Set(), narrow: false });
+    const held = [];
+    const node = { dataset: { focus: 'block:outside:move:github' }, getBoundingClientRect: () => ({ left: 0, top: 0 }), querySelector: () => null, querySelectorAll: () => [], setAttribute() {}, removeAttribute() {}, append() {} };
+    const view = { node: () => node, hold: (id, at, how) => held.push([id, at, how]), letGo: (id) => held.push(['letGo', id]), box: { isConnected: true, classList: { toggle() {}, remove() {} } }, area: { getBoundingClientRect: () => ({ left: 0, top: 0 }) } };
+    placeMoved({ view, model: tree, layout });
+    const home = layout.blocks.find((b) => b.id === 'outside:move:github');
+    const files = layout.blocks.find((b) => b.id === 'held:kitden:files');
+    let answer;
+    queue(PREVIEW, (sent) => new Promise((resolve) => { answer = () => resolve(batch('c1')(sent)); }));
+    pressGrip({ button: 0, target: { closest: () => node }, clientX: home.x + 10, clientY: home.y + 10 });
+    heard.pointermove[0]({ clientX: home.x + 16, clientY: home.y + 10 });
+    heard.pointermove[0]({ clientX: files.x + 10, clientY: files.y + 10 });
+    heard.pointerup[0]({ type: 'pointerup', clientX: files.x + 10, clientY: files.y + 10 });
+    // The same move as "Move into the gateway…", in the tray at once.
+    const body = dropBody(GITHUB, MEDIUM_VIEW);
+    assert.deepEqual(tray.rows.map((r) => [r.key, r.body, r.part]), [[keyFor(body), body, null]]);
+    // Until it answers the slot shows, and the block waits on it.
+    const asked = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: rowsOnMap(tray) });
+    const askedLayout = layoutTree(asked, { open: new Set(), narrow: false });
+    const slot = askedLayout.blocks.find((b) => b.id === 'slot:github');
+    held.length = 0;
+    placeMoved({ view, model: asked, layout: askedLayout });
+    assert.deepEqual(held, [['outside:move:github', { x: slot.x, y: slot.y }, { glide: true }]]);
+    // Its answer puts the preview block in the slot's place, and the block goes home.
+    answer();
+    await flush();
+    const answered = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: rowsOnMap(tray) });
+    assert.ok(block(answered, 'preview:github') && !block(answered, 'slot:github'));
+    held.length = 0;
+    placeMoved({ view, model: answered, layout: layoutTree(answered, { open: new Set(), narrow: false }) });
+    assert.deepEqual(held, [['letGo', 'outside:move:github']]);
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    await freshTray();
+  }
+});
+
+// Just enough of a page for the focus after Apply: the map in #main (the gateway block and a
+// client block) and Apply in the dock.
+function focusPage() {
+  const node = (focus) => ({ dataset: focus ? { focus } : {}, focus() { globalThis.document.activeElement = this; } });
+  const gateway = node('block:gateway:kitden');
+  const client = node('block:client:codex');
+  const apply = node('tray:apply');
+  const main = { dataset: {}, querySelectorAll: () => [gateway, client], contains: (other) => [gateway, client].includes(other), focus() { globalThis.document.activeElement = this; } };
+  const dock = { contains: (other) => other === apply };
+  const body = {};
+  globalThis.document = { activeElement: body, body, querySelector: (selector) => ({ '#main': main, '#dock': dock })[selector] ?? null, addEventListener() {}, removeEventListener() {} };
+  return { gateway, client, apply, main, body };
+}
+
+test('focus goes to the gateway after an applied removal', async () => {
+  await freshTray();
+  const page = focusPage();
+  try {
+    const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+    // The × of a server's link, focus somewhere, then Apply in the dock; the change is verified.
+    const applyRemoval = async (focus) => {
+      queue(PREVIEW, batch('c1'));
+      queue('/api/changes/c1/apply', { status: 200, json: { id: 'c1', state: 'verified', steps: [] } });
+      await removeLink(tree, linkOf(tree, 'gateway:kitden>held:kitden:files'), '');
+      focus();
+      const focused = globalThis.document.activeElement;
+      await applyTray();
+      // Applied: the map draws no row now, and focus has not moved yet.
+      assert.deepEqual([tray.phase, rowsOnMap(tray), globalThis.document.activeElement], ['applied', [], focused]);
+      endApplied();
+      await flush();
+    };
+    // Focus on Apply, whose bar leaves: it goes to the gateway block, not to the page.
+    await applyRemoval(() => page.apply.focus());
+    assert.equal(globalThis.document.activeElement, page.gateway);
+    // Focus the change took away (its link went, so focus is on nothing): the same.
+    await applyRemoval(() => { globalThis.document.activeElement = page.body; });
+    assert.equal(globalThis.document.activeElement, page.gateway);
+    // Focus on a block that is still there stays.
+    await applyRemoval(() => page.client.focus());
+    assert.equal(globalThis.document.activeElement, page.client);
+  } finally {
+    await freshTray();
+    delete globalThis.document;
+  }
 });
 
 test('a drag opens the slot "Drop to add" in its group, and its line hides', () => {

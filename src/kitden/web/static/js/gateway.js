@@ -2,14 +2,14 @@
 // row opens its Details beside the page (gateway-details.js).
 import { $, button, el, gridKey, joinWords, plural, reportError, withFocusKey } from "./dom.js";
 import { addForm, heldServer, liveHeld, movesTo, ruleBody, SETUP_NOTE, showClient, showGateway, showHeld, showOutside, showTool } from "./gateway-details.js";
-import { endedMove, movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
-import { leaveMap, mapReviewLeft, previewBar, redrawPreview, showMapReview } from "./map-review.js";
+import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { findIn, foldable, isNarrow, keepOpen, layoutTree, linkKey, litFrom, litPath, pressOpen, toggleOpen, wideWidth } from "./map.js";
 import { mapView } from "./map-view.js";
 import { afterOldPage, entrance, glide, rise, riseHead } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, openInfo, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, folderName, gatewayName, kitdenClients, mark, opens, ORIGIN_WORDS, scopeBar, skeleton, STATE_WORDS, staleNote } from "./parts.js";
 import { arrival, current, currentError, data, go, goTo, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
+import { addToTray, inTray, keyFor, onTray, takeOut, tray } from "./tray.js";
 
 // Overview sets a client up with the same note. A server the Kitden gateway holds, and its
 // links, are found where its Details are drawn.
@@ -96,11 +96,9 @@ export function renderGateway(main, { again = false } = {}) {
     return;
   }
   const mode = viewMode(state, serverCount(view));
-  // A preview started on the map lives there: the List leaves one that is only previewed.
-  if (mode !== "map") leaveMap();
   const seg = modeSwitch(mode);
   head.append(seg);
-  const model = gatewayTree(view, { setup: data.setupServer, clients: data.clients, held: liveHeld(view), picked: state.project, ...movingOn() });
+  const model = treeFor(view);
   // The search finds here: matches light up, the rest dims, and what hides a match opens (S.6).
   // It changes nothing in a client and moves no Details.
   const found = state.q.trim() ? findIn(model, state.q) : null;
@@ -114,6 +112,18 @@ export function renderGateway(main, { again = false } = {}) {
   if (!performance.getEntriesByName("kitden:gateway-drawn").length) performance.mark("kitden:gateway-drawn");
   openArrival(view, model, mode).catch(reportError);
   return found;
+}
+
+// The Gateway as one tree, as the page shows it now: what Kitden read, the picked project, the
+// tray's rows and a drag.
+function treeFor(view) {
+  return gatewayTree(view, { setup: data.setupServer, clients: data.clients, held: liveHeld(view), picked: state.project, rows: rowsOnMap(tray), ...movingOn() });
+}
+
+// The tray rows the map draws: none once their change is applied, as the page then reads the result
+// and shows the servers as they are.
+export function rowsOnMap(t) {
+  return t.phase === "applied" ? [] : t.rows;
 }
 
 function noGateway() {
@@ -188,22 +198,21 @@ function heldTag(server, on) {
 // On a first run (no client has the kitden entry, on or off, and the Kitden gateway holds nothing)
 // the clients say they are found, with their version (`clients`, /api/clients), the gateway is a
 // slot to set up, and nothing has a grip. `picked` is the picked project ("" for All projects).
-// A move started on the map (S.8, 4.6) is `{ name, kind }` (kind "remote" or "local"): while it is
-// dragged or prepared (`drop`) the slot "Drop to add" opens in that group of the Kitden gateway,
-// and while its preview shows (`preview`) a preview block `preview:<name>` stands there; either
-// way a preview link joins it to the gateway, the outside row it moves hides its direct lines,
-// and no block has a grip: one preview at a time.
-export function gatewayTree(view, { setup, clients = [], held = new Map(), picked = "", preview = null, drop = null } = {}) {
+// `rows` are the tray's rows (tray.js, as rowsOnMap gives them). A move into the Kitden gateway
+// puts a preview block `preview:<name>` at the end of its group once its row has its part (the
+// slot "Drop to add" while it is asked), joined to the gateway by a preview link; the outside row
+// it moves hides its direct lines and its grip. A server taken out of the Kitden gateway, or a
+// tool turned off in the scope shown, has its link drawn leaving. Each block and link a row draws
+// names it (`row`, its key). While a server is dragged (`drop`, `{ name, kind }`, kind "remote"
+// or "local") the slot opens in that group too.
+export function gatewayTree(view, { setup, clients = [], held = new Map(), picked = "", rows = [], drop = null } = {}) {
   const { linked, off, known, setup: offers } = kitdenClients(setup);
   const kitden = view.gateways.find((g) => g.kind === "kitden");
   const first = known && !linked.length && !off.length && Boolean(kitden) && !kitden.problem && !(kitden.servers || []).length;
   const blocks = [];
   const links = [];
-  const moving = preview || drop;
-  // What the move puts in its group of the Kitden gateway.
-  let extra = null;
-  if (preview) extra = { id: `preview:${preview.name}`, column: "servers", kind: "preview", name: preview.name, meta: "Preview", stateInMeta: true, state: "preview", icon: preview.kind };
-  else if (drop) extra = { id: `slot:${drop.name}`, column: "servers", kind: "slot", name: "Drop to add", stateInMeta: true, state: "preview" };
+  // What the moves put in the groups of the Kitden gateway, and the outside rows they take.
+  const { adds, moved } = movesIn(view, kitden, rows, drop);
   for (const id of WRITABLE) {
     const on = linked.includes(id);
     const found = (clients || []).find((c) => c.id === id && c.status === "found");
@@ -217,10 +226,11 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
   // A gateway block joined to the clients it `reaches` (null when not read), then its servers in
   // their groups; `server(block, word)` adds what each server's block says. `unread` says why
   // Kitden does not know what it holds, so no count shows: a problem is not an empty gateway.
-  // `adds` is a block for the end of one group (`adds.kind`), which opens that group if need be.
+  // `ends` are blocks for the end of a group (each `{ kind, block }`), which open that group if
+  // need be.
   // A gateway block speaks no state word: its meta says its clients and servers, or what Kitden
   // could not read, and then its state is not known.
-  const addGateway = (gateway, reaches, servers, kindOf, server, unread = null, adds = null) => {
+  const addGateway = (gateway, reaches, servers, kindOf, server, unread = null, ends = []) => {
     const id = `gateway:${gateway.id}`;
     const n = plural(servers.length, "server", "servers");
     const counts = reaches ? `${plural(reaches.length, "client", "clients")} · ${n}` : n;
@@ -228,8 +238,8 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
     for (const client of reaches || []) links.push({ from: `client:${client}`, to: id, kind: "on" });
     for (const [kind, word, mark] of KINDS) {
       const mine = servers.filter((s) => kindOf(s) === kind);
-      const end = adds && adds.kind === kind ? adds.block : null;
-      if (!mine.length && !end) continue;
+      const last = ends.filter((end) => end.kind === kind).map((end) => end.block);
+      if (!mine.length && !last.length) continue;
       const group = `group:${gateway.id}:${kind}`;
       blocks.push({ id: group, column: "servers", kind: "group", name: word, icon: mark, before: 3, under: id });
       for (const each of mine) {
@@ -238,9 +248,9 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
         blocks.push(block);
         if (block.state === "on") links.push({ from: id, to: block.id, kind: "on" });
       }
-      if (end) {
+      for (const end of last) {
         blocks.push({ ...end, parent: group });
-        links.push({ from: id, to: end.id, kind: "preview" });
+        links.push({ from: id, to: end.id, kind: "preview", ...(end.row ? { row: end.row } : {}) });
       }
     }
   };
@@ -269,7 +279,8 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
         tools.push({ id, column: "tools", parent: block.id, kind: "tool", name: tool.name, state: on ? "on" : "off", tag: tool.origin === "project" ? ORIGIN_WORDS.override : null, tool, server });
         if (on) links.push({ from: block.id, to: id, kind: "on" });
       }
-    }, kitden.problem ? "Could not read its settings." : null, extra && { kind: moving.kind, block: extra });
+    }, kitden.problem ? "Could not read its settings." : null, adds);
+    leaveLinks(links, kitden, rows, picked);
   }
   for (const other of usedFirst(view, view.gateways.filter((g) => g.kind !== "kitden"))) {
     const per = view.connections[other.id] || {};
@@ -283,25 +294,69 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
     }, unread);
   }
   blocks.push(...tools);
-  const rows = OUTSIDE_GROUPS.flatMap((key) => (view.groups[key] || []).map((row) => [key, row]));
-  if (rows.length) blocks.push({ id: "group:outside", column: "servers", kind: "group", name: OUTSIDE, icon: "info", h: OUTSIDE_H, before: 21, rowGap: 6 });
-  // The outside row a move on the map takes.
-  const moved = moving ? `outside:${moving.kind === "local" ? "local" : "move"}:${moving.name}` : null;
-  for (const [key, row] of rows) {
+  const outside = OUTSIDE_GROUPS.flatMap((key) => (view.groups[key] || []).map((row) => [key, row]));
+  if (outside.length) blocks.push({ id: "group:outside", column: "servers", kind: "group", name: OUTSIDE, icon: "info", h: OUTSIDE_H, before: 21, rowGap: 6 });
+  for (const [key, row] of outside) {
     const id = `outside:${key}:${row.name}`;
     const columns = (row.columns || row.clients).filter((c) => WRITABLE.includes(c));
     const meta = `In ${joinWords(columns.map((c) => CLIENT_NAMES[c]))}`;
     const targets = movesTo(view, key, row);
     const move = targets.length > 0;
     const tag = picked && row.override ? ORIGIN_WORDS.override : null;
-    // A drop moves into the Kitden gateway only, so a grip needs it.
-    const grip = targets.some((g) => g.kind === "kitden") && !first && !moving;
+    // A drop moves into the Kitden gateway only, so a grip needs it; a move already in the tray
+    // needs no second one.
+    const grip = targets.some((g) => g.kind === "kitden") && !first && !moved.has(id);
     const state = row.unknown ? "unk" : "on";
     blocks.push({ id, column: "servers", parent: "group:outside", kind: "outside", name: row.name, meta, tag, state, h: OUTSIDE_BLOCK_H, icon: OUTSIDE_ICONS[key], row, groupKey: key, columns, move, grip });
     const line = row.unknown ? { kind: "direct", unk: true } : { kind: "direct" };
-    if (id !== moved) for (const client of columns) links.push({ from: `client:${client}`, to: id, ...line });
+    if (!moved.has(id)) for (const client of columns) links.push({ from: `client:${client}`, to: id, ...line });
   }
   return { columns: GATEWAY_COLUMNS, blocks, links };
+}
+
+// The moves into the Kitden gateway the map shows: each one in the tray (`rows`), for the outside
+// rows whose entries it takes, then a drag (`drop`). Each puts a block at the end of its group of
+// the gateway (`adds`, each `{ kind, block }`): the preview block once its row has its part, else
+// the slot. `moved` holds the ids of the outside rows they take.
+function movesIn(view, kitden, rows, drop) {
+  const adds = [];
+  const moved = new Set();
+  const slot = (name) => ({ id: `slot:${name}`, column: "servers", kind: "slot", name: "Drop to add", stateInMeta: true, state: "preview" });
+  // The outside row `name` of `group` ("move" or "local") goes in as `block`.
+  const add = (group, name, block) => {
+    moved.add(`outside:${group}:${name}`);
+    if (!adds.some((other) => other.block.id === block.id)) adds.push({ kind: group === "local" ? "local" : "remote", block });
+  };
+  for (const row of rows) {
+    const { action, targets = [], params = {} } = row.body;
+    if (action !== "gateway.move" || !kitden || params.gateway !== kitden.id) continue;
+    const items = new Set(targets.map((target) => target.item));
+    for (const group of ["move", "local"]) {
+      for (const each of view.groups[group] || []) {
+        if (!each.items.length || !each.items.every((item) => items.has(item))) continue;
+        const outside = `outside:${group}:${each.name}`;
+        const icon = group === "local" ? "local" : "remote";
+        add(group, each.name, row.part ? { id: `preview:${each.name}`, column: "servers", kind: "preview", name: each.name, meta: "Preview", stateInMeta: true, state: "preview", icon, row: row.key, outside } : slot(each.name));
+      }
+    }
+  }
+  if (drop) add(drop.kind === "local" ? "local" : "move", drop.name, slot(drop.name));
+  return { adds, moved };
+}
+
+// The links a change in the tray takes out, once its row has its part: a server's link from the
+// Kitden gateway, and a tool's link from its server when the rule is for the scope shown
+// (`picked`, "" for all projects). They are drawn leaving.
+function leaveLinks(links, kitden, rows, picked) {
+  for (const row of rows) {
+    if (!row.part) continue;
+    const { action, params = {} } = row.body;
+    let key = null;
+    if (action === "gateway.remove") key = `gateway:${kitden.id}>held:${kitden.id}:${params.server}`;
+    else if (action === "gateway.rule" && params.state === "off" && (params.project || "") === (picked || "")) key = `held:${kitden.id}:${params.server}>tool:${params.server}/${params.tool}`;
+    const link = key && links.find((l) => linkKey(l) === key);
+    if (link) Object.assign(link, { leaving: true, row: row.key });
+  }
 }
 
 // The List's rows, in order, from the tree: a "Clients" group of client rows; each gateway's own
@@ -385,11 +440,10 @@ export function narrowFor(model, { window: width, box = null, docked = false }) 
 
 // The map: the blocks open and the one selected, its view (map-view.js, one per visit) and the
 // tree it shows, what the search found, and the box's width as last measured. Kept across redraws
-// of one project. What the map showed of a move started on it (`shows`; the move is
-// gateway-drag.js's).
+// of one project.
 const onMap = {
   project: null, open: new Set(), selected: null, view: null, model: null, found: null, width: null, narrow: false, watch: null,
-  shows: "", unfolds: false,
+  unfolds: false,
 };
 
 // What a selection lights: a link's key lights its two ends and itself, a client what it reaches,
@@ -449,10 +503,8 @@ function gatewayMap(main, model, found) {
   // A new map knows its width before its first draw, so the observer's first report does not flip
   // it to narrow in the middle of its entrance.
   if (fresh) onMap.width = contentWidth(onMap.view.box) ?? onMap.width;
-  Object.assign(onMap, { model, found, shows: JSON.stringify(movingOn()) });
+  Object.assign(onMap, { model, found });
   drawOnMap(model, { fresh, projectChanged });
-  const bar = previewBar(redrawMove);
-  if (bar) main.append(bar);
 }
 
 // The blocks of a model by id. Every link asks, so it is built once for a model.
@@ -479,18 +531,66 @@ export function linkRemoval(model, link, picked) {
   return null;
 }
 
-// The hooks of the links the map acts on (the model is the one drawn last). A press on a link
-// selects it and opens the Details of its far block, until a link has a panel of its own.
+const TAKE_OUT = "Take it out of the preview";
+
+// The key of the tray row a link of the map draws (a preview link, or one leaving), else null.
+function rowOfLink(model, link) {
+  const shown = model.links.find((l) => linkKey(l) === linkKey(link));
+  return (shown && shown.row) || null;
+}
+
+// What the × of a link does, in words: a link the tray draws is taken out of it, and the map acts
+// on the others as linkRemoval says. "" where it does not act on the link.
+export function linkTip(model, link, picked) {
+  if (rowOfLink(model, link)) return TAKE_OUT;
+  return linkRemoval(model, link, picked)?.tip ?? "";
+}
+
+// The × of a link: a link the tray draws, or whose change is in the tray already (still being
+// asked), is taken out of it; any other the map acts on adds its change to the tray. Null where the
+// map does not act on the link.
+export function removeLink(model, link, picked) {
+  const drawn = rowOfLink(model, link);
+  if (drawn) return takeOutHere(model, drawn);
+  const removal = linkRemoval(model, link, picked);
+  if (!removal) return null;
+  const key = keyFor(removal.body);
+  return inTray(key) ? takeOut(key) : addToTray(removal.body, { icon: "x" });
+}
+
+// A press on a link: one the tray draws is taken out of it (D12); any other is selected and opens
+// the Details of its far block, until a link has a panel of its own.
+export function clickLink(model, link) {
+  const key = rowOfLink(model, link);
+  if (key) {
+    takeOutHere(model, key).catch(reportError);
+    return;
+  }
+  const far = model.blocks.find((b) => b.id === link.to);
+  if (far) selectOnMap(far, linkKey(link));
+}
+
+// A row taken out on the map. A move's preview block and link go with it, so focus on either goes
+// to the server outside the gateway that it would have moved.
+function takeOutHere(model, key) {
+  const box = onMap.view ? onMap.view.box : null;
+  const shown = model.blocks.find((b) => b.row === key && b.outside);
+  const focus = box && shown ? document.activeElement?.dataset?.focus : null;
+  const taken = takeOut(key);
+  const lost = Boolean(focus) && (focus === `block:${shown.id}` || focus.endsWith(`>${shown.id}`));
+  if (lost) withFocusKey(box, `block:${shown.outside}`)?.focus({ preventScroll: true });
+  return taken;
+}
+
+// The hooks of the links the map acts on (the model is the one drawn last): a link has a hit while
+// its × does something.
 const LINK_HOOKS = {
-  canHit: (link) => Boolean(linkRemoval(onMap.model, link, state.project)),
-  tip: (link) => linkRemoval(onMap.model, link, state.project)?.tip ?? "",
-  onClick: (link) => {
-    const far = onMap.model.blocks.find((b) => b.id === link.to);
-    if (far) selectOnMap(far, linkKey(link));
-  },
+  canHit: (link) => Boolean(linkTip(onMap.model, link, state.project)),
+  tip: (link) => linkTip(onMap.model, link, state.project),
+  onClick: (link) => clickLink(onMap.model, link),
   onRemove: (link) => {
-    const removal = linkRemoval(onMap.model, link, state.project);
-    if (removal) review(removal.body).catch(reportError);
+    const done = removeLink(onMap.model, link, state.project);
+    if (done) done.catch(reportError);
   },
 };
 
@@ -526,8 +626,7 @@ function openBlock(id) {
 
 // A new width of the box (the window, or Details beside the page) may change the layout: it is
 // drawn again, at once in its new shape. Details closing (Escape, Close or
-// another place) clears what the map lights; the panel's class says when it closes. A preview
-// shown in Details ends on the map when its review leaves there without Apply.
+// another place) clears what the map lights; the panel's class says when it closes.
 function watchMap(box) {
   if (!onMap.watch) {
     onMap.watch = new ResizeObserver((entries) => {
@@ -537,10 +636,6 @@ function watchMap(box) {
       if (narrowNow(onMap.model) !== onMap.narrow) drawAgain();
     });
     new MutationObserver(() => {
-      if (mapReviewLeft()) {
-        redrawMove();
-        return;
-      }
       if (isPanelOpen() || !onMap.selected) return;
       onMap.selected = null;
       drawAgain();
@@ -597,7 +692,7 @@ function drawOnMap(model, { fresh = false, projectChanged = false, lightLater = 
   const later = lightsLater({ unfolds: lightLater, lit });
   const drawn = view.draw(model, layout, { selected: lit.size ? selected : null, lit: later ? new Set() : lit, found: onMap.found, open, motion });
   // A block a move took off its place stays where it is shown (gateway-drag.js).
-  placeMoved({ view, model, layout, redraw: redrawMove });
+  placeMoved({ view, model, layout });
   if (later) drawn.then(() => stillSelected({ view, selected }, onMap) && drawAgain());
   return drawn;
 }
@@ -625,9 +720,8 @@ function letGoIfSelected() {
 // A press on a block (a held server opened or folded first, by onOpen). "N more" opens the List
 // at its group, focused there, so Details close first. A second press on the selected block lets
 // go. The first run's slot opens the review that sets every client up; the slot of a drag does
-// nothing. A preview opens its full review in Details, as "Show changes" does. Any other block is
-// selected.
-function pressBlock(model, id) {
+// nothing. A preview block takes its row out of the tray (D12). Any other block is selected.
+export function pressBlock(model, id) {
   if (id.startsWith("more:")) {
     closePanel({ instant: true, focus: false });
     const { mode, selected } = listAt(id);
@@ -641,7 +735,7 @@ function pressBlock(model, id) {
     return;
   }
   if (block.kind === "slot" && block.setup) review(block.setup, { note: SETUP_NOTE }).catch(reportError);
-  else if (block.kind === "preview") showMapReview(redrawMove);
+  else if (block.kind === "preview") takeOutHere(model, block.row).catch(reportError);
   else if (block.kind !== "slot" || block.gateway) selectOnMap(block);
 }
 
@@ -681,14 +775,41 @@ function arriveOnMap(model, found) {
   if (byId.has(id)) selectOnMap(byId.get(id));
 }
 
-// The page drawn again for the preview of a move on the map (map-review.js and the drag call it).
-// Only the bar changes while the map shows the same of the move as when it was drawn. A move that
-// ended gives focus to its server where it is now: in the gateway after Apply, outside after
-// Cancel.
-function redrawMove() {
-  const ended = endedMove();
-  const same = !ended && JSON.stringify(movingOn()) === onMap.shows;
-  redrawPreview(redrawMove, { same, ended: ended ? [`held:kitden:${ended.name}`, ended.id] : [] });
+// The tray as the map last heard it, so it knows when an applied change has landed.
+let trayWas = tray.phase;
+onTray(trayChanged);
+
+// The tray changed: the map draws its rows again in place, while it shows. Not while its change is
+// applied: the page reads the result first and draws that. Once it has landed (the tray empties),
+// focus it took away goes to the gateway block.
+function trayChanged(t) {
+  const landed = trayWas === "applied" && t.phase === "idle";
+  trayWas = t.phase;
+  if (t.phase === "applied") return;
+  const drawn = drawRows();
+  if (!landed) return;
+  focusGateway({ fromDock: true });
+  drawn.then(() => focusGateway({ fromDock: false }));
+}
+
+// The map drawn again in place with the tray as it is now: not on the List or another place.
+// The promise ends with its motions.
+function drawRows() {
+  const view = current("gateway");
+  if (!view || !onMap.view || !onMap.view.box.isConnected) return Promise.resolve();
+  const model = treeFor(view);
+  Object.assign(onMap, { model, found: state.q.trim() ? findIn(model, state.q) : null });
+  return drawOnMap(model);
+}
+
+// After an applied change, focus on nothing or on the page itself (a block or link that went) goes
+// to the Kitden gateway's block, when the map shows it; so does focus in the dock as its bar
+// leaves (`fromDock`, only right away: later a toast may hold it). Focus anywhere else stays.
+function focusGateway({ fromDock }) {
+  const active = document.activeElement;
+  const lost = !active || active === document.body || active === $("#main") || (fromDock && $("#dock").contains(active));
+  const node = lost ? withFocusKey($("#main"), "block:gateway:kitden") : null;
+  if (node) node.focus({ preventScroll: true });
 }
 
 const SVG = "http://www.w3.org/2000/svg";

@@ -7,7 +7,6 @@ import { renderChanges } from "./changes.js";
 import { drawTray, initDock } from "./dock.js";
 import { renderGateway } from "./gateway.js";
 import { loadLibrary, loadLibraryFor, morphOnNextRender, raceSlow, renderLibrary, settleRows, showSources, snapshotRows } from "./library.js";
-import { leaveMap } from "./map-review.js";
 import { findChip } from "./map.js";
 import { renderOverview } from "./overview.js";
 import { closeForProject, closePanel, initPanel, isPanelOpen } from "./panel.js";
@@ -38,8 +37,6 @@ const MAP_PAGES = ["gateway"];
 
 function renderPlace() {
   if (shownView !== state.view && isPanelOpen()) closePanel({ instant: true, keepSelection: true, focus: false });
-  // A preview started on the Gateway map stays there: another place cancels one only previewed.
-  if (state.view !== "gateway") leaveMap();
   const samePlace = shownView === state.view;
   shownView = state.view;
   const main = $("#main");

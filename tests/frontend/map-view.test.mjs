@@ -908,6 +908,18 @@ test('a selection dims what is off its path and lays an overlay on each lit link
   assert.deepEqual([a.keyframes, a.options.duration, a.options.easing], [[{ opacity: 0 }, { opacity: 1 }], 180, CALM]);
 });
 
+test('a selection lays no overlay on a link that a change in preview takes out or adds', async () => {
+  // The link keeps its dashed look, so the tray's change shows also on the selection's path.
+  for (const fields of [{ leaving: true }, { kind: 'preview' }]) {
+    const m = { ...TREE, links: TREE.links.map((l) => (l.to === 's1' ? { ...l, ...fields } : l)) };
+    const v = view();
+    await v.draw(m, drawn(m), { motion: 'none' });
+    v.draw(m, drawn(m), { selected: 's1', lit: LIT });
+    assert.ok(v.node('c1>s1').classList.contains('lit'));
+    assert.equal(overs(v).length, 0, JSON.stringify(fields));
+  }
+});
+
 test('a selected block with nothing lit dims nothing and lays no line; a later draw lights its path', async () => {
   // The page draws a press that opens a server this way, and lights the path when its tools are in.
   const v = view();

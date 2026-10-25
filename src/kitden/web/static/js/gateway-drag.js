@@ -1,48 +1,38 @@
-// Gateway: drag a server from outside the gateway onto the map to preview its move (4.6, S.8).
+// Gateway: drag a server from outside the gateway onto the map to add its move to the tray (4.6,
+// S.8).
 import { el, reportError } from "./dom.js";
-import { mapPreview, previewOnMap } from "./map-review.js";
 import { dropAt, groupBox } from "./map.js";
 import { moveBody } from "./panel.js";
 import { busy, current, render } from "./store.js";
+import { addToTray, inTray, keyFor, tray } from "./tray.js";
 
 // How far a pointer moves on a block with a grip before the block follows it.
 const DRAG_START = 4;
 
 // The map as gateway.js drew it last, as it gives it (placeMoved): its view (map-view.js), the tree
-// and the layout, and how the page draws again for the move's preview. A move started on the map:
-// the block being dragged (`drag`), the server whose preview it started (`moving`, { id, name,
-// kind }), and the block the map holds off its place (`home`, its id).
-const onMap = { view: null, model: null, layout: null, redraw: () => {}, drag: null, moving: null, home: null };
+// and the layout. A move started on the map: the block being dragged (`drag`), the server whose
+// move was dropped and is still being asked (`moving`, { id, name, key }: `key` is its row's in
+// the tray), and the block the map holds off its place (`home`, its id).
+const onMap = { view: null, model: null, layout: null, drag: null, moving: null, home: null };
 
-// What a move started on the map shows (gatewayTree's `drop` or `preview`): the slot once the
-// dragged block left its own group, and while its preview is prepared; the preview block while
-// the preview is open (also from Details); else nothing.
+// What a drag shows (gatewayTree's `drop`): the slot once the dragged block left its own group.
+// A move dropped and still being asked shows its slot from its row in the tray.
 export function movingOn() {
-  const shown = onMap.drag || onMap.moving;
-  const move = shown ? { name: shown.name, kind: shown.kind } : null;
-  if (onMap.drag) return onMap.drag.open ? { drop: move } : {};
-  // A preview that ended elsewhere (the List, another place) leaves nothing to show.
-  if (mapPreview.phase === "idle") onMap.moving = null;
-  if (!onMap.moving) return {};
-  if (mapPreview.phase === "loading") return { drop: move };
-  return mapPreview.change ? { preview: move } : {};
+  const { drag } = onMap;
+  return drag && drag.open ? { drop: { name: drag.name, kind: drag.kind } } : {};
 }
 
-// The move whose preview ended ({ id, name, kind }), once: the map forgets it. Null while its
-// preview runs, or with no move.
-export function endedMove() {
-  const ended = mapPreview.phase === "idle" ? onMap.moving : null;
-  if (ended) onMap.moving = null;
-  return ended;
-}
+// The row of a dropped move is still being asked: in the tray, without its part yet.
+const asked = (key) => tray.rows.some((row) => row.key === key && !row.part);
 
-// gateway.js drew the map in `view`, from `model` laid out as `layout`; `redraw` draws the page
-// again for the move's preview. A block off its place stays where the map holds it: with the
-// pointer, or on the slot while its preview is prepared. Let go, it glides back to its place.
-export function placeMoved({ view, model, layout, redraw }) {
-  Object.assign(onMap, { view, model, layout, redraw });
+// gateway.js drew the map in `view`, from `model` laid out as `layout`. A block off its place stays
+// where the map holds it: with the pointer, or on the slot while its move is asked. Once its row
+// answers or leaves the tray, it glides back to its place.
+export function placeMoved({ view, model, layout }) {
+  Object.assign(onMap, { view, model, layout });
+  if (onMap.moving && !asked(onMap.moving.key)) onMap.moving = null;
   if (onMap.drag) follow();
-  else if (mapPreview.phase === "loading" && onMap.moving) park();
+  else if (onMap.moving) park();
   else if (onMap.home) goHome();
 }
 
@@ -71,7 +61,7 @@ export function dropBody(row, view) {
 // A pointer goes down on a block with a grip. Once it moves 4 px the block follows it; once it
 // leaves its own group, the slot "Drop to add" opens in its group of the Kitden gateway and its
 // dotted line hides (so a click that wobbles moves nothing on the map). Let go on the Servers
-// column, away from its own group, it starts the same preview as "Move into the gateway…";
+// column, away from its own group, it adds the same move as "Move into the gateway…" to the tray;
 // Escape, or a drop anywhere else, puts it back. Nothing is written before Apply. A click without
 // a move selects the block as before; a grip press while a change is written does nothing. When
 // the block first follows the pointer, `onStart()` runs before the map holds it: the page lets go
@@ -155,9 +145,9 @@ function follow() {
   view.box.classList.toggle("dropping", dropTarget(onMap.model, onMap.layout, point.x, point.y) === "servers");
 }
 
-// While its preview is prepared, the block waits on the slot (it glides there from where it was
-// let go), and after a moment a spinner says the server is asked. The page draws again meanwhile,
-// so the spinner is added once.
+// While its move is asked, the block waits on the slot (it glides there from where it was let go),
+// and after a moment a spinner says the server is asked. The page draws again meanwhile, so the
+// spinner is added once.
 function park() {
   const { moving, layout, view } = onMap;
   const node = view.node(moving.id);
@@ -183,8 +173,9 @@ function goHome() {
 }
 
 // The pointer lets go at `point` (page coordinates), or Escape or a lost pointer (null). On the
-// Servers column, away from its own group, the preview of the move into the Kitden gateway
-// starts; else the block goes back.
+// Servers column, away from its own group, the move into the Kitden gateway joins the tray at once
+// (the map draws again as it joins, and the block waits on the slot); else, or when nothing can
+// join now, the block goes back.
 function letGo(point) {
   const drag = onMap.drag;
   onMap.drag = null;
@@ -195,9 +186,9 @@ function letGo(point) {
   const target = at ? dropTarget(onMap.model, onMap.layout, at.x, at.y) : null;
   const body = target === "servers" ? dropBody(drag.row, current("gateway")) : null;
   if (body) {
-    onMap.moving = { id: drag.id, name: drag.name, kind: drag.kind };
-    previewOnMap(body, onMap.redraw).catch(reportError);
-    if (mapPreview.phase === "loading") return;
+    onMap.moving = { id: drag.id, name: drag.name, key: keyFor(body) };
+    addToTray(body).catch(reportError);
+    if (inTray(onMap.moving.key)) return;
     onMap.moving = null;
   }
   render();

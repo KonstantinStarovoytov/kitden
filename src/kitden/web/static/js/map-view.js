@@ -771,9 +771,10 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
       if (linkDashed(link)) animateTo(path, [{ opacity: 0 }, { opacity: 1 }], { dur: FADE_IN_MS, ease: CALM });
       else drawIn(key, DRAW_MS);
     }
-    // A selected block lays an accent line over each lit link on its way, a bypass line excepted; a
-    // picked link has none.
-    const lines = new Set(selecting && !picked ? layout.links.filter((link) => link.kind !== "direct" && shown.has(linkKey(link))).map(linkKey) : []);
+    // A selected block lays an accent line over each lit link on its way, except a bypass line and
+    // a link a change in preview adds or takes out (it keeps its dashes). A picked link has none.
+    const lined = (link) => link.kind !== "direct" && link.kind !== "preview" && !link.leaving;
+    const lines = new Set(selecting && !picked ? layout.links.filter((link) => lined(link) && shown.has(linkKey(link))).map(linkKey) : []);
     for (const key of lines) lay(links.get(key));
     for (const item of links.values()) if (item.over && !lines.has(item.key)) lift(item);
     fit(moves);

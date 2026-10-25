@@ -26,14 +26,14 @@ PANEL = ("panel.js", "details.js", "tools.js", "review.js")
 
 def panel() -> str:
     """The side panel's modules as one text, so a pin does not depend on which file holds it. The
-    review bar on a map shares its Apply, so it is read too, and so is the tray, which reads how
-    an Apply or an Undo ended."""
-    return "\n".join(script(name) for name in (*PANEL, "tray.js", "map-review.js"))
+    tray reads how an Apply or an Undo ended, and its bar in the dock shares the review's words, so
+    both are read too."""
+    return "\n".join(script(name) for name in (*PANEL, "tray.js", "dock.js"))
 
 
 def reviews() -> str:
-    """The change review and the review bar on a map as one text: one module until Part 4."""
-    return script("review.js") + "\n" + script("map-review.js")
+    """The change review and the tray's bar in the dock as one text: they share their words."""
+    return script("review.js") + "\n" + script("dock.js")
 
 
 def gw() -> str:
@@ -1103,7 +1103,8 @@ def test_client_checkboxes_come_from_one_named_part():
 
 
 def test_apply_waits_for_work_not_for_a_timer():
-    code, css = panel(), (STATIC / "style.css").read_text()
+    # The review in Details; the tray's bar in the dock rests and shakes on purpose (dock.js).
+    code, css = "\n".join(script(name) for name in PANEL), (STATIC / "style.css").read_text()
     assert "520 - (performance.now()" not in code and "wait(450)" not in code
     assert "shake(" not in code
     assert ".drawer.open .body > *:nth-child(2)" not in css and "line-in" not in css
@@ -1112,7 +1113,8 @@ def test_apply_waits_for_work_not_for_a_timer():
 
 
 def test_apply_sets_its_label_at_once_and_a_failure_focuses_the_button():
-    code = panel()
+    # The review in Details; the tray's bar in the dock rests on purpose (dock.js).
+    code = "\n".join(script(name) for name in PANEL)
     flow = code.split("function brokeAfterAnswer")[1].split("function showEffect")[0]
     # No timer in the Apply flow, so a late label cannot land on a button already reset.
     assert "setTimeout" not in flow and "const wait" not in code
@@ -1839,62 +1841,49 @@ def test_finding_keeps_the_place_and_the_details():
     assert "postJson" not in find and "review(" not in find and "setState" not in find
 
 
-def test_the_map_review_bar_waits_for_verified():
-    review, bar = script("review.js"), script("map-review.js")
+def test_the_map_previews_are_tray_rows():
+    # The map has no review of its own any more: a link's ×, a drop, and a press on a preview block
+    # or a link the tray draws add or take out rows of the one tray (dock.js draws its bar).
+    assert not (STATIC / "js" / "map-review.js").exists()
+    for path in (STATIC / "js").glob("*.js"):
+        assert "map-review" not in path.read_text(), path.name
+    review = script("review.js")
+    assert "setMapReview" not in review and "mapReview" not in review
+    text = gw()
     for words in (
-        '"Show changes"',
-        '"Try again"',
-        "export function reviewBar(",
-        "previewOnMap(",
+        'const TAKE_OUT = "Take it out of the preview";',
+        'addToTray(removal.body, { icon: "x" })',
+        "addToTray(body)",
+        "takeOut(",
+        "onTray(trayChanged);",
     ):
-        assert words in bar, words
-    # What is written is said in dock.js, which the tray's bar shares.
-    assert "A backup is kept." in script("dock.js") and 'from "./dock.js"' in bar
-    # The bar says it with the one word of review.js (barWords).
-    assert '"Nothing was changed."' in review and "`${refused} ${NOTHING}`" in bar
-    assert '"Drop to add"' in gw() and "dropBody(" in gw() and "moveBody(" in script("details.js")
-    assert "Sign in after Apply" not in review + bar
-
-
-def test_the_map_review_bar_words_and_look():
-    review, bar = script("review.js"), script("map-review.js")
-    # What is written, in the owner's words (dock.js, shared with the tray's bar); the step count
-    # comes from the server.
+        assert words in text, words
+    assert "review(removal.body)" not in text
+    assert '"Drop to add"' in text and "dropBody(" in text and "moveBody(" in script("details.js")
+    # The bar the map's rows join says what is written, and what Apply did, in dock.js.
     dock = script("dock.js")
+    assert "A backup is kept." in dock and '"Nothing was changed"' in dock
+    assert "Sign in after Apply" not in review + dock
+
+
+def test_the_map_preview_words_and_look():
+    dock = script("dock.js")
+    # What is written, in the owner's words; the step count comes from the server.
     assert "`Writing ${names[0]}'s settings. A backup is kept.`" in dock
     assert "`Writing the settings of ${joinWords(names)}. A backup is kept.`" in dock
-    assert '"the Kitden gateway"' in dock and 'stepText("Applying", done, total)' in bar
-    # A refusal says why and keeps only Cancel; the bar is a region with a status line.
-    assert '"Could not prepare this change"' in bar
-    assert 'setAttribute("role", "region")' in bar and 'setAttribute("role", "status")' in bar
-    # Both reviews end with the one toast that offers Undo.
-    assert "appliedToast(after, previewBody);" in review and "appliedToast(after, body);" in bar
-    # An end that is not verified reads the same in Details and on the bar; "Nothing was changed."
-    # only when the engine put everything back. Off the map, a toast says it, with Changes.
-    assert 'callout(stoppedWords(after, failure), "error")' in review
-    assert "outcome: stoppedWords(" in bar and "allPutBack(after.error)" in review
-    # The bar and its toast leave out the engine's words (paths, commands): they stay in Details.
-    assert "{ detail: false }" in bar
-    assert '"Not everything was put back. Check Changes before trying again."' in review
-    assert 'extra: { label: "Open Changes", run: () => go("changes") }' in bar
+    assert '"the Kitden gateway"' in dock and 'stepText("Applying", t.done, t.total)' in dock
+    # A refusal says why; the bar is a region with a status line.
+    assert '"Could not prepare this change"' in dock
+    assert 'setAttribute("role", "region")' in dock and 'setAttribute("role", "status")' in dock
     # The preview block says it is a preview; it sits on the preview fill with the preview line.
     assert '"Preview"' in script("gateway.js")
     look = r"div\.map \.block\.preview \{[^}]*var\(--preview-line\)[^}]*var\(--preview-fill\)"
     assert re.search(look, CSS)
-    assert ".review-bar {" in CSS
+    # The map's own review bar went with map-review.js.
+    assert ".review-bar" not in CSS
     # A drag starts after 4 px; the keyboard path stays "Move in…".
     assert "const DRAG_START = 4;" in script("gateway-drag.js")
     assert '"Move in…"' in script("gateway.js")
-
-
-def test_the_map_review_reads_no_gateway_module():
-    # Part 5 puts the review bar on the Library map, so it reads no Gateway module. review.js never
-    # reads it back (no import cycle): the map review tells it how they take turns.
-    bar = script("map-review.js")
-    for name in ("gateway.js", "gateway-details.js", "gateway-drag.js"):
-        assert f'from "./{name}"' not in bar, name
-    assert 'from "./map-review.js"' not in script("review.js")
-    assert "setMapReview(TURNS)" in bar and "export function setMapReview(" in script("review.js")
 
 
 def test_the_tray_bar_sits_in_the_dock_and_says_its_words():

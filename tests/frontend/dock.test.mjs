@@ -267,6 +267,25 @@ test('barWords says Nothing was changed only when true', () => {
   }
 });
 
+test("the bar never shows the engine's own words: no path, no command", () => {
+  // What the engine says when a change stops: paths, commands and Keychain names. They stay in
+  // Details and on Changes.
+  const ends = [
+    { state: 'stale', error: '/Users/me/.codex/config.toml changed since preview; review the change again' },
+    { state: 'restored', error: '`claude mcp add` failed in /Users/me/.claude.json. The original settings were restored.' },
+    { state: 'restored', error: '`claude mcp add` failed. github/TOKEN in your Keychain keeps the new value.' },
+    { state: 'cancelled', error: '/Users/me/.claude.json' }, { state: null, error: null },
+  ];
+  for (const failure of ends) {
+    for (const rows of [[row('Move github into the Kitden gateway')], [row('a'), row('b')]]) {
+      const words = barWords(trayOf(rows, { phase: 'failed', failure }));
+      for (const text of Object.values(words).filter((value) => typeof value === 'string')) {
+        assert.ok(!/[/~`]/.test(text) && !text.includes('review the change again'), text);
+      }
+    }
+  }
+});
+
 test('barWords shows a refusal with no rows', () => {
   assert.deepEqual(barWords(trayOf([], { phase: 'idle', refused: { reason: 'Nothing to change.' } })), {
     head: 'Could not prepare this change', line: 'Nothing to change.', cancel: 'Close', apply: null, applyWaits: false, retry: false, changes: false,

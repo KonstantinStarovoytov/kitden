@@ -10,7 +10,7 @@ import { busy, reload, render, setBusy, state } from "./store.js";
 import { projectLabel, tools } from "./tools.js";
 import { changeOutcome, LOST, readChange, takeOut } from "./tray.js";
 
-// changeOutcome lives in tray.js; panel.js and the map's bar still import it from here.
+// changeOutcome lives in tray.js; panel.js still exports it from here.
 export { changeOutcome };
 
 // Node before 21 (the tests) has no navigator.
@@ -234,13 +234,6 @@ export function leftOutText(leftOut) {
   return `Left out: ${leftOut.map((s) => `${s.name} (${s.why})`).join(", ")}.`;
 }
 
-// A preview on a map (map-review.js) and the reviews here take turns, one preview at a time. The
-// map review says how when it asks its first preview, so this module never imports it: `back` is
-// the way back of its own review here, `makeRoom()` ends it before a review asked elsewhere (false
-// while its change is written), and `applied()` ends it once its review here is verified.
-let mapReview = { back: null, makeRoom: () => true, applied: () => {} };
-export function setMapReview(turns) { mapReview = turns; }
-
 // Ask the server for a preview and show it. Used by the Library, Gateway and Agents places.
 // `note` shows as a callout above the result, for example that an add is for every project.
 // `back({ error, verified })` returns to the Details the review came from (a tool switch):
@@ -253,9 +246,6 @@ export function canShowReview(result) {
 }
 
 export async function review(previewBody, { note = null, back = null } = {}) {
-  // One preview at a time: one on the map that is only previewed goes first; while the map's change
-  // is written nothing else is asked. Its own review in Details asks again with its own `back`.
-  if (back !== mapReview.back && !mapReview.makeRoom()) return;
   const asked = state.project;
   // The Details this review is asked from, if any: Cancel and a refusal go back only there.
   const from = panelState.from;
@@ -574,17 +564,14 @@ export async function checkStale() {
 
 // The server said `verified`: the button turns green while the page reloads, then the panel
 // leaves at once and the toast offers Undo. From a tool switch, its Details comes back instead,
-// with the switch flipped, and the page behind shows the new state. A preview from the map ends
-// before the page is drawn, so the map shows the server's block and link where they belong.
+// with the switch flipped, and the page behind shows the new state.
 async function showApplied(after, apply, label, previewBody, back) {
   for (const spin of apply.querySelectorAll(".spinner")) spin.remove();
   apply.prepend(checkMark());
   apply.classList.add("done");
   label.textContent = "Applied";
   await reloadAll();
-  const fromMap = Boolean(back) && back === mapReview.back;
-  if (fromMap) mapReview.applied();
-  if (back && !fromMap) {
+  if (back) {
     // The change is done: this review lets its place go to the Details `back` draws again.
     if (panelState.current) panelState.current.handingBack = true;
     render();

@@ -713,17 +713,6 @@ div.map.dropping .block.slot[data-state="preview"] { border-style: solid; border
 div.map .block.preview { border: 1px solid var(--preview-line); background: var(--preview-fill); }
 div.map .block.preview .block-meta { color: var(--ink-2); }
 
-/* The review bar of a preview on the map (S.8): what it will do, Cancel, Apply and "Show changes".
-   It sits under the map at the left and stays in sight while the page scrolls. While Apply runs,
-   Cancel and Apply stay in place and wait. */
-.review-bar { position: sticky; bottom: 16px; z-index: 3; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; width: fit-content; max-width: 100%; margin: 0 0 12px; padding: 10px 12px 10px 14px; border-radius: 10px; background: var(--panel-raised); box-shadow: var(--shadow-pop); }
-.review-bar.failed { box-shadow: var(--shadow-pop), inset 3px 0 0 var(--danger); }
-.review-bar .bar-words { display: grid; gap: 2px; min-width: 0; max-width: 460px; }
-.review-bar .bar-title { font-size: 13px; font-weight: 600; }
-.review-bar .bar-outcome { margin: 0; color: var(--ink-2); font-size: 12px; }
-.review-bar .bar-actions { display: flex; gap: 6px; }
-.review-bar .btn[aria-disabled="true"] { cursor: progress; }
-.review-bar .btn:not(.primary)[aria-disabled="true"] { opacity: 0.5; }
 /* The preview tray's bar (docs/design.md, Preview tray). The dock sits at the bottom left of the page,
    above the hint line, over the map; the band it sits in takes no clicks, the dock does. One change
    is a row of words and buttons; two or more are a list. */
