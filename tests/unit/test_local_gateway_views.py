@@ -339,6 +339,8 @@ def test_tools_view_names_the_tools_each_project_has_its_own_rule_for():
         "c": ("off", []),
         "none": ("off", []),
     }
+    # And whether it has a rule of its own for the whole server (the step names who follows it).
+    assert [p["id"] for p in view["projects"] if p["own_server"]] == ["c"]
 
 
 def test_an_empty_tool_list_shows_no_count():

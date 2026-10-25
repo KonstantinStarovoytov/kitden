@@ -144,26 +144,27 @@ function wordsKey(block) {
 
 // What a block's parts showed (`drawn`, as blockParts gave them, for `block`), for its next draw:
 // its lamp, the last on or off it showed (`was` keeps it through a preview), its numbers, and how
-// many projects' rules its tag said wait in the tray.
+// many projects' rules its tag said wait in the tray, in which words.
 function shownOf(drawn, block, was) {
   const solid = SOLID.includes(block.lamp) ? block.lamp : (was && was.solid) || null;
   const pending = (block.projects && block.projects.pending) || 0;
-  return { lamp: block.lamp || null, solid, nums: new Map([...drawn.nums].map(([slot, num]) => [slot, num.value])), pending };
+  return { lamp: block.lamp || null, solid, nums: new Map([...drawn.nums].map(([slot, num]) => [slot, num.value])), pending, pendingWords: pending ? block.projects.words : null };
 }
 
 // Parts drawn again (`drawn`, for `block`) move what changed since the last draw (`was`; none on a
 // block's first): a lamp fades from its old colour to the new one in 400 ms ease and pops, from
 // --pop times its size in 200 ms CALM, when it turns on or off; a number rolls from its old value
 // (rollTo); a tool's tag of projects whose rules wait in the tray pops in, from opacity 0 and .7 of
-// its size in 180 ms CALM, when it comes or names more of them. Web Animations, not CSS: a redraw
-// of the page takes the map off the page and puts it back, which would cut a transition short and
-// start a CSS animation again. The page calls it only while motion runs: reduced motion and a
-// hidden page show the end at once.
+// its size in 180 ms CALM, when it comes, names more of them, or names another at the same count.
+// Web Animations, not CSS: a redraw of the page takes the map off the page and puts it back, which
+// would cut a transition short and start a CSS animation again. The page calls it only while motion
+// runs: reduced motion and a hidden page show the end at once.
 function liven(drawn, block, was) {
   if (!was) return;
   const { lamp } = drawn;
   const pending = (block.projects && block.projects.pending) || 0;
-  if (drawn.projects && pending > (was.pending || 0)) {
+  const other = pending && pending === was.pending && block.projects.words !== was.pendingWords;
+  if (drawn.projects && (pending > (was.pending || 0) || other)) {
     animateTo(drawn.projects, [{ opacity: 0, transform: "scale(0.7)" }, { opacity: 1, transform: "none" }], { dur: TAG_POP_MS, ease: CALM });
   }
   if (lamp && was.lamp && was.lamp !== block.lamp) {

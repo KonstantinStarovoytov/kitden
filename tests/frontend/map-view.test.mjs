@@ -1234,7 +1234,7 @@ test('a count rolls only from its own old value, when another count comes or goe
   assert.ok(nums.every((n) => n.children.every((c) => !c.animations.length)));
 });
 
-test("a tool's pending tag pops in when it comes or grows, not when it shrinks or goes", async () => {
+test("a tool's pending tag pops in when it comes, grows or names another project, not when it shrinks or goes", async () => {
   const as = (projects) => ({ ...LOOKS, blocks: LOOKS.blocks.map((b) => (b.id === 't1' ? { ...b, projects } : b)) });
   const usual = { words: '2 projects', said: 'own rule in 2 projects', own: false };
   const pending = (words, n) => ({ words, said: `in preview for ${words}`, own: true, pending: n });
@@ -1251,12 +1251,17 @@ test("a tool's pending tag pops in when it comes or grows, not when it shrinks o
   assert.deepEqual(pops(), [pop]);
   await v.draw(as(pending('atlas', 1)), looks(['s1']), open);
   assert.deepEqual(pops(), []);
+  // Another project at the same count pops too.
+  await v.draw(as(pending('website', 1)), looks(['s1']), open);
+  assert.deepEqual(pops(), [pop]);
   await v.draw(as(usual), looks(['s1']), open);
   assert.deepEqual([tag().className, pops()], ['block-projects', []]);
   // Under reduced motion it shows at once.
   reduce(true);
   await v.draw(as(pending('atlas', 1)), looks(['s1']), open);
   assert.deepEqual([tag().className, pops()], ['block-projects own pend', []]);
+  await v.draw(as(pending('website', 1)), looks(['s1']), open);
+  assert.deepEqual(pops(), []);
 });
 
 test('a lamp fades to its new colour, and pops when it turns on or off', async () => {

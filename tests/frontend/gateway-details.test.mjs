@@ -38,6 +38,7 @@ globalThis.fetch = async (url) => { asked.push(url); return { ok: true, status: 
 
 const { SETUP_NOTE, clientCard, gatewayCard, heldCard, outsideCard, reported, toolCard, toolState } = await import('../../src/kitden/web/static/js/gateway-details.js');
 const { detailsCard, moveBody, syncTray } = await import('../../src/kitden/web/static/js/details.js');
+const { review } = await import('../../src/kitden/web/static/js/review.js');
 const { data, state } = await import('../../src/kitden/web/static/js/store.js');
 const { cancelTray, onTray, tray } = await import('../../src/kitden/web/static/js/tray.js');
 const { GATEWAY_NOTE } = await import('../../src/kitden/web/static/js/parts.js');
@@ -343,6 +344,12 @@ test("in a project the tool panel says what the project follows, or its own rule
   const alone = toolCard(tool({ state: 'on', effective: 'on', origin: 'project' }), HELD_GITHUB, { linked: LINKED, picked: 'w', folder: 'web', detail: { shared: 'on', follows: 'atlas' }, rules: rulesFor({ a: 'on', m: 'on', w: 'off' }, { own: ['w'] }), projects: CHOICE });
   assert.equal(alone.why, "Claude Code and Codex can call this tool in web. Every other project has it on.");
   assert.equal(alone.actions[0].label, "Use atlas's rule…");
+  // atlas turns the server on, which is off for all projects: other projects call the tool only
+  // where they turn the server on too.
+  const serverOff = { ...rulesFor({ a: 'on', m: 'on', w: 'on' }, { own: ['a'] }), shared: 'off' };
+  serverOff.projects = serverOff.projects.map((p) => ({ ...p, server: p.id === 'm' ? 'off' : 'on' }));
+  const atlasOn = toolCard(tool({ state: 'on', effective: 'on', origin: 'project' }), HELD_GITHUB, { linked: LINKED, picked: 'a', folder: 'atlas', detail: { shared: 'on' }, rules: serverOff, projects: CHOICE });
+  assert.equal(atlasOn.why, 'Claude Code and Codex can call this tool in atlas. Every other project still has it off, except web, where it is on.');
   // A project's own rule says no client when none uses the gateway; what a project follows needs no client.
   assert.equal(at('a', 'atlas', { state: 'on', effective: 'on', origin: 'project' }, []).why, 'No client uses the Kitden gateway yet.');
   assert.equal(at('m', 'mcp-gateway', {}, []).why, 'mcp-gateway follows the shared rule: off.');
@@ -397,6 +404,11 @@ test('a tool of a server that is off says so and offers nothing', () => {
   const rules = rulesFor({ a: 'on', m: 'on', w: 'on' }, { shared: 'off', server: { a: 'on', m: 'off', w: 'on' } });
   const shared = toolCard(tool({ state: 'on', effective: 'off', why: 'server_off' }), { name: 'files', kind: 'local', state: 'off' }, { linked: LINKED, picked: '', folder: '', detail: { shared: 'on' }, rules });
   assert.equal(shared.why, 'files is off by the shared rule, so none of its tools can be called. 2 projects decide otherwise.');
+  // Its projects with a rule of their own still show, each with Show.
+  const own = toolCard(tool({ state: 'on', effective: 'off', why: 'server_off' }), { name: 'files', kind: 'local', state: 'off' }, { linked: LINKED, picked: '', folder: '', detail: { shared: 'on' }, rules: { ...rules, projects: rules.projects.map((p) => ({ ...p, own: p.id === 'a' ? ['push_files'] : [] })) }, projects: CHOICE });
+  assert.deepEqual(own.list.children.slice(1).map((row) => row.children.map((part) => part.dataset.icon || textOf(part))), [['folder', 'atlas', 'On', 'Show']]);
+  // In a project there is none.
+  assert.ok(!card.list);
 });
 
 test('a tool says where its state comes from', () => {
@@ -874,7 +886,7 @@ test('back from Move out keeps the warning the panel had', async () => {
 
 const SOME = 'action:Turn off in some projects…';
 // The step's rows, each as [name, its quiet line, disabled, ticked].
-const pickRows = (drawer) => drawer.children[1].children[2].children.map((row) => [textOf(row.children[1].children[0]), textOf(row.children[1].children[1]), Boolean(row.disabled), row.attributes['aria-checked']]);
+const pickRows = (drawer) => drawer.children[1].children[3].children.map((row) => [textOf(row.children[1].children[0]), textOf(row.children[1].children[1]), Boolean(row.disabled), row.attributes['aria-checked']]);
 const offIn = (tool, project) => ({ action: 'gateway.rule', targets: [], params: { server: 'files', tool, state: 'off', project } });
 
 test("in some projects: a tick adds that project's row, an untick takes only it out", async () => {
@@ -888,8 +900,9 @@ test("in some projects: a tick adds that project's row, an untick takes only it 
     const [top, title] = head.children;
     assert.deepEqual(top.children.map((node) => node.attributes['aria-label'] || textOf(node)), ['Back', 'Tool · write_file', 'Close']);
     assert.equal(textOf(title), 'Turn off write_file in the projects you pick');
-    const [say, find, picks] = body.children;
-    assert.equal(textOf(say), 'Every other project keeps the shared rule: on.');
+    const [say, follows, find, picks] = body.children;
+    assert.equal(textOf(say), 'The shared rule stays on.');
+    assert.equal(follows.hidden, true);
     assert.deepEqual(['placeholder', 'aria-label'].map((name) => find.children.at(-1).attributes[name]), ['Find a project…', 'Find a project…']);
     // Focus goes to Find.
     assert.equal(focused(), 'find');
@@ -912,6 +925,8 @@ test("in some projects: a tick adds that project's row, an untick takes only it 
     assert.deepEqual(pickRows(drawer).map((r) => r[3]), ['false', 'false', 'true', 'false', 'true']);
     assert.equal(row('sandbox').className, 'pick multi on');
     assert.equal(textOf(foot), '2 projects in preview. Apply them from the tray.');
+    // No known project lies inside sandbox or website: nothing follows them.
+    assert.deepEqual([follows.hidden, follows.children], [true, []]);
     // An untick takes exactly that project's row out; the other stays.
     await click(row('sandbox'));
     assert.deepEqual(tray.rows.map((r) => r.body), [offIn('write_file', 'site')]);
@@ -931,7 +946,7 @@ test('a project already at the value cannot be ticked, and Find narrows the rows
   await onFilesPanel(async (drawer, sent) => {
     await click(control(drawer, SOME));
     await wait(50);
-    const [, find, picks, none] = drawer.children[1].children;
+    const [, , find, picks, none] = drawer.children[1].children;
     const atlas = picks.children[0];
     assert.equal(atlas.attributes['aria-label'], 'atlas, 1 own rule · already off');
     await click(atlas);
@@ -971,8 +986,17 @@ test('a whole server turns on or off in some projects, from More, and Back keeps
       ['web', '1 own rule · on now', false],
       ['website', 'on now', false],
     ]);
-    await click(drawer.children[1].children[2].children[0]);
+    const [, follows, , picks] = drawer.children[1].children;
+    await click(picks.children[0]);
     assert.deepEqual(tray.rows.map((r) => r.body), [offIn(null, 'atlas')]);
+    // atlas/web has no rule of its own for files: it follows atlas, and the step says so.
+    assert.deepEqual([follows.hidden, follows.children.map(textOf)], [false, ['web follows atlas and changes with it.']]);
+    await click(picks.children[4]);
+    assert.deepEqual(follows.children.map(textOf), ['web follows atlas and changes with it.']);
+    // Unticked, atlas no longer says it.
+    await click(picks.children[0]);
+    assert.deepEqual([follows.hidden, follows.children], [true, []]);
+    await click(picks.children[0]);
     // Back steps to the server's panel, with its warning.
     await click(head.children[0].children[0]);
     await wait(50);
@@ -985,11 +1009,79 @@ test('a whole server turns on or off in some projects, from More, and Back keeps
 test('a step action hands its button no wait, so the button never turns busy and drops focus', async () => {
   // A button that waits more than 150 ms turns busy and disabled (dom.js busyWhile), and focus on a
   // disabled button falls to the page. A step takes 130 ms and more on a slow page: it must not wait.
-  await onFilesPanel(async () => {
+  await onFilesPanel(async (drawer) => {
     const card = held(FILES_HELD, { detail: FILES_TOOLS, projects: MEDIUM_PROJECTS });
     assert.equal(card.actions[0].run(), undefined);
     await wait(50);
+    assert.deepEqual(panelState.current, { type: 'moveout', name: 'files' });
     assert.equal(card.more.find((a) => a.label === 'Turn off in some projects…').run(), undefined);
     await wait(50);
+    assert.deepEqual(panelState.current, { type: 'projects', server: 'files', tool: null });
+    assert.equal(textOf(drawer.children[0].children[1]), 'Turn off files in the projects you pick');
   }, { projects: MEDIUM_PROJECTS });
+});
+
+test('an error after a step starts is reported, not lost', async () => {
+  await onFilesPanel(async (drawer) => {
+    const saved = { error: console.error, byId: globalThis.document.getElementById };
+    const logged = [];
+    console.error = (error) => logged.push(error);
+    globalThis.document.getElementById = () => null;
+    drawer.contains = () => { throw new Error('the panel broke'); };
+    try {
+      held(FILES_HELD, { detail: FILES_TOOLS, projects: MEDIUM_PROJECTS }).actions[0].run();
+      await wait(50);
+    } finally {
+      Object.assign(console, { error: saved.error });
+      globalThis.document.getElementById = saved.byId;
+    }
+    assert.deepEqual(logged.map((error) => error.message), ['the panel broke']);
+  }, { projects: MEDIUM_PROJECTS });
+});
+
+test("a tick replaces a row for that project that waits with another state", async () => {
+  await onFilesPanel(async (drawer) => {
+    // sandbox's "Use the shared rule…" waits for write_file: same project, another state.
+    await review({ action: 'gateway.rule', targets: [], params: { server: 'files', tool: 'write_file', state: null, project: 'sand' } });
+    await click(control(drawer, SOME));
+    await wait(50);
+    const sandbox = control(drawer, 'tick:sand');
+    assert.deepEqual([sandbox.attributes['aria-checked'], textOf(drawer.children[3])], ['false', 'Tick projects. Each one waits in preview until Apply.']);
+    await click(sandbox);
+    assert.deepEqual(tray.rows.map((r) => r.body), [offIn('write_file', 'sand')]);
+    assert.equal(sandbox.attributes['aria-checked'], 'true');
+  }, { open: () => showTool('files', 'write_file'), projects: MEDIUM_PROJECTS });
+});
+
+test('turning on in some projects says which have it on already', async () => {
+  // delete_file is off for all projects; atlas turns it on.
+  const rules = { ...FILES_TOOLS, projects: FILES_TOOLS.projects.map((p) => ({ ...p, tools: { delete_file: p.id === 'atlas' ? 'on' : 'off' }, own: p.id === 'atlas' ? ['delete_file'] : [] })) };
+  await onFilesPanel(async (drawer) => {
+    await click(control(drawer, 'action:Turn on in some projects…'));
+    await wait(50);
+    assert.equal(textOf(drawer.children[0].children[1]), 'Turn on delete_file in the projects you pick');
+    assert.equal(textOf(drawer.children[1].children[0]), 'The shared rule stays off.');
+    assert.deepEqual(pickRows(drawer).map((r) => r.slice(0, 3)), [
+      ['atlas', '1 own rule · already on', true],
+      ['old-app', 'Folder missing · off now', false],
+      ['sandbox', 'off now', false],
+      ['web', '1 own rule · off now', false],
+      ['website', 'off now', false],
+    ]);
+  }, { rules, open: () => showTool('files', 'delete_file'), projects: MEDIUM_PROJECTS });
+});
+
+test('back from the tool step keeps the warning the panel had', async () => {
+  await onFilesPanel(async (drawer) => {
+    const says = () => textOf(drawer.children[1]).includes('files did not list its tools.');
+    const write = FILES_HELD.tool_list.find((t) => t.name === 'write_file');
+    const card = toolCard(write, FILES_HELD, { linked: LINKED, detail: FILES_TOOLS.tools[1], rules: FILES_TOOLS, projects: MEDIUM_PROJECTS, warning: 'files did not list its tools.' });
+    card.actions.find((a) => a.label === 'Turn off in some projects…').run();
+    await wait(50);
+    assert.equal(textOf(drawer.children[0].children[1]), 'Turn off write_file in the projects you pick');
+    await click(drawer.children[0].children[0].children[0]);
+    await wait(50);
+    assert.equal(textOf(drawer.children[0].children[1]), 'write_file');
+    assert.equal(says(), true);
+  }, { open: () => showTool('files', 'write_file'), projects: MEDIUM_PROJECTS });
 });

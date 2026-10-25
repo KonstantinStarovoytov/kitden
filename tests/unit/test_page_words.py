@@ -1608,8 +1608,8 @@ def test_tool_and_server_details_use_the_owner_words():
     ):
         assert words in text, words
     assert "Allowed" not in text and "Blocked" not in text and "Sign in" not in text
-    # With All projects a card says "in any project" only with every known project that decides
-    # otherwise after it ("Except atlas, where it is on."); never "Other projects follow".
+    # With All projects a card says "in every project" or "in any project", then each known project
+    # that decides otherwise ("Except atlas, where it is on."); never "Other projects follow".
     assert "Other projects follow" not in gw() and '"Read only"' not in gw()
 
 
@@ -1704,7 +1704,9 @@ def test_the_tool_panel_says_the_mockups_words():
         '"Turn on in some projects…"',
         '"Turn off in some projects…"',
         " in the projects you pick`",
-        "`Every other project keeps the shared rule: ${",
+        "`The shared rule stays ${",
+        "follows ${p.name} and changes with it.`",
+        "follow ${p.name} and change with it.`",
         "FIND_PROJECT",
         '"No project matches."',
         '"Tick projects. Each one waits in preview until Apply."',
@@ -1715,8 +1717,10 @@ def test_the_tool_panel_says_the_mockups_words():
         "`Tool · ${",
     ):
         assert words in text, words
-    # The project choice of one project is gone from the Gateway: the step ticks several.
+    # The project choice of one project is gone from the Gateway: the step ticks several. The step
+    # never says every other project keeps the shared rule: one may keep its own, or follow another.
     assert "projectChoice" not in text and "projectChoice" not in script("details.js")
+    assert "Every other project keeps" not in text
     # While a project's rows wait, the map's tool block names the project, or how many.
     assert "`in preview for ${" in script("gateway.js")
     for selector in (".pick.multi", ".own-row", ".facts dd.warn", ".find-project"):

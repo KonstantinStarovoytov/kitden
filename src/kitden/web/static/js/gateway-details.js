@@ -337,8 +337,8 @@ const MOVE_OUT = "Move out of the gateway…";
 const other = (state) => (state === "on" ? "off" : "on");
 // An action that steps to the next part of the panel (`open`). Its button is not handed the step
 // to wait for: one that waits over 150 ms turns busy and disabled (busyWhile), and focus on it
-// would fall to the page.
-const stepAction = (label, open) => ({ label, run: () => { open(); } });
+// would fall to the page. An error after the step starts is still reported.
+const stepAction = (label, open) => ({ label, run: () => { Promise.resolve(open()).catch(reportError); } });
 
 // A tool's or a server's state in the picked project ("" for All projects), from `effective`: a
 // tool of a server that is off is off, and says so. With All projects "On" or "Off"; in a project
@@ -388,11 +388,13 @@ const ruleIn = (name) => (p) => p.tools && p.tools[name];
 const callableIn = (name) => (p) => (p.server === "off" ? "off" : ruleIn(name)(p));
 
 // The known projects (`projects`, as the menu lists them, by folder name) that the server's answer
-// (`rules`) has a state for, each with its entry (`entry`); null without the answer.
+// (`rules`) has a state for, each with its folder (`path`) and its entry (`entry`); null without
+// the answer.
 function knownIn(rules, projects) {
   if (!Array.isArray(rules.projects)) return null;
   const entries = new Map(rules.projects.map((p) => [p.id, p]));
-  return menuItems(projects.filter((p) => entries.has(p.id)), "").filter((item) => item.id).map((item) => ({ ...item, entry: entries.get(item.id) }));
+  const paths = new Map(projects.map((p) => [p.id, p.path]));
+  return menuItems(projects.filter((p) => entries.has(p.id)), "").filter((item) => item.id).map((item) => ({ ...item, path: paths.get(item.id), entry: entries.get(item.id) }));
 }
 
 // The clients that reach the Kitden gateway, as a fact; null when Kitden could not read them.
@@ -453,7 +455,8 @@ export function toolCard(tool, server, { linked, picked = "", folder = "", detai
   ];
   // The name goes under a title the server gives; without one it is the title.
   const title = tool.title || name;
-  const card = { kind: KIND.tool, title, id: tool.title ? name : null, facts, warning };
+  const known = knownIn(rules, projects);
+  const card = { kind: KIND.tool, title, id: tool.title ? name : null, facts, list: picked ? null : ownRules(name, known), warning };
   if (detail.description) card.technical = technical([{ title: "Description", summary: detail.description }]);
   if (tool.why === "server_off") {
     const place = placeWords(picked, folder);
@@ -465,11 +468,10 @@ export function toolCard(tool, server, { linked, picked = "", folder = "", detai
   const target = other(shared || (on ? "on" : "off"));
   const step = { server: server.name, tool: name, title, target, shared, rules, warning };
   const some = changedIn(projects, rules.projects, target, ruleIn(name)).length ? stepAction(IN_SOME[target], () => projectsStep(step)) : null;
-  const known = knownIn(rules, projects);
   const others = known && known.map((p) => ({ id: p.id, name: p.name, state: callableIn(name)(p.entry) })).filter((p) => p.state);
   const who = linked && linked.length ? joinWords(linked.map((c) => CLIENT_NAMES[c])) : null;
-  const why = toolSay({ who, none: nobody(linked), on, picked, folder, tool, shared, others });
-  return { ...card, why, list: picked ? null : ownRules(name, known), ...toolActions(server.name, tool, { picked, folder, detail, shared, some }) };
+  const why = toolSay({ who, none: nobody(linked), on, picked, folder, tool, shared, serverShared: rules.shared, others });
+  return { ...card, why, ...toolActions(server.name, tool, { picked, folder, detail, shared, some }) };
 }
 
 // "atlas, where it is on; web, where it is off": each project and its state.
@@ -478,9 +480,10 @@ const whereItIs = (list) => list.map((p) => `${p.name}, where it is ${p.state}`)
 // What the tool panel says. With All projects: whether the clients that reach the gateway (`who`)
 // can call it in every project, then each known project that decides otherwise (`others`, null
 // when Kitden did not read them: then only what the shared rule does). In a project with a rule of
-// its own: whether they can call it there, then what every other project has. In a project
-// without one: what it follows, which names no client. `none` says why nobody can call it.
-function toolSay({ who, none, on, picked, folder, tool, shared, others }) {
+// its own: whether they can call it there, then what every other project has: the tool's shared
+// rule, or off while the server is off for all projects (`serverShared`). In a project without
+// one: what it follows, which names no client. `none` says why nobody can call it.
+function toolSay({ who, none, on, picked, folder, tool, shared, serverShared, others }) {
   const state = on ? "on" : "off";
   if (picked && tool.origin === "parent") return `${folder} follows ${tool.origin_from}'s rule: ${state}.`;
   if (picked && tool.origin !== "project") return `${folder} follows the shared rule: ${state}.`;
@@ -492,9 +495,10 @@ function toolSay({ who, none, on, picked, folder, tool, shared, others }) {
     return differ.length ? `${all} Except ${whereItIs(differ)}.` : all;
   }
   const here = `${who} ${on ? "can" : "can't"} call this tool in ${folder}.`;
-  if (!others || !shared) return here;
-  const differ = others.filter((p) => p.id !== picked && p.state !== shared);
-  const every = shared === "on" ? "Every other project has it on" : "Every other project still has it off";
+  const base = serverShared === "off" ? "off" : shared;
+  if (!others || !base) return here;
+  const differ = others.filter((p) => p.id !== picked && p.state !== base);
+  const every = base === "on" ? "Every other project has it on" : "Every other project still has it off";
   return `${here} ${every}${differ.length ? `, except ${whereItIs(differ)}` : ""}.`;
 }
 
@@ -707,7 +711,8 @@ function pressOnce(node, press) {
 // (gateway-notes 5), the next step in its panel: one checkbox row per known project, by folder
 // name, saying what it has now; a project that has `target` already cannot be ticked. A tick adds
 // that project's rule to the tray at once (one row per project, D13), an untick takes exactly that
-// row out. Find narrows the rows as you type. Back and Done step back to the panel (with its
+// row out; the step names the known projects inside a ticked one that change with it. Find
+// narrows the rows as you type. Back and Done step back to the panel (with its
 // `warning`), focus on "in some projects…" or the More it waits under; focus comes to Find. Drawn
 // again (`dir` null) in place.
 function projectsStep(step, dir = "fwd") {
@@ -721,16 +726,22 @@ function projectsStep(step, dir = "fwd") {
   return stepTo(nodes, dir).then(() => focusAfterStep("find"));
 }
 
-// The step's parts: Back, where it came from and Close; the question; what every other project
-// keeps; Find, a row per project and the words when none matches; Done; and how many wait.
+// The step's parts: Back, where it came from and Close; the question; that the shared rule stays,
+// and who changes with a ticked project; Find, a row per project and the words when none matches;
+// Done; and how many wait.
 function projectsNodes({ server, tool, title, target, shared, rules }, projects, back) {
   const stateIn = tool ? ruleIn(tool) : (p) => p.server;
+  const ownOf = tool ? (p) => (p.entry.own || []).includes(tool) : (p) => Boolean(p.entry.own_server);
   const rows = (knownIn(rules, projects) || []).map((p) => ({ ...p, now: stateIn(p.entry) })).filter((p) => p.now);
   const words = el("span");
+  const follows = el("div", "follows");
+  follows.setAttribute("aria-live", "polite");
   const bodies = rows.map((p) => ruleBody(server, tool, target, p.id));
   const count = () => {
-    const n = bodies.filter((body) => ticked(body)).length;
-    words.textContent = n ? `${plural(n, "project", "projects")} in preview. Apply them from the tray.` : "Tick projects. Each one waits in preview until Apply.";
+    const ticks = rows.filter((p, at) => ticked(bodies[at]));
+    words.textContent = ticks.length ? `${plural(ticks.length, "project", "projects")} in preview. Apply them from the tray.` : "Tick projects. Each one waits in preview until Apply.";
+    follows.replaceChildren(...ticks.map((p) => followLine(p, rows, ownOf, ticks)).filter(Boolean));
+    follows.hidden = !follows.children.length;
   };
   const picks = el("div", "picks");
   picks.setAttribute("role", "group");
@@ -739,8 +750,8 @@ function projectsNodes({ server, tool, title, target, shared, rules }, projects,
   const none = el("p", "muted", "No project matches.");
   none.hidden = true;
   const body = el("div", "body");
-  if (shared) body.append(el("p", "why", `Every other project keeps the shared rule: ${shared}.`));
-  body.append(findField(picks, none), picks, none);
+  if (shared) body.append(el("p", "why", `The shared rule stays ${shared}.`));
+  body.append(follows, findField(picks, none), picks, none);
   const done = el("footer", "stack");
   done.append(button("Done", back, "btn"));
   const crumb = tool ? `Tool · ${title}` : `Server · ${server}`;
@@ -748,6 +759,17 @@ function projectsNodes({ server, tool, title, target, shared, rules }, projects,
   foot.setAttribute("aria-live", "polite");
   count();
   return [stepHead(crumb, `Turn ${target} ${title} in the projects you pick`, back), body, done, foot];
+}
+
+// The known projects inside a ticked project `p` (`rows`, by folder) that follow its rule, so they
+// change with it: no rule of their own (`ownOf`), not ticked themselves (`ticks`), and none between
+// them that decides. One sentence, or null when none does.
+function followLine(p, rows, ownOf, ticks) {
+  const inside = (q, r) => Boolean(q.path && r.path) && q.path.startsWith(`${r.path}/`);
+  const decides = (q) => ownOf(q) || ticks.includes(q);
+  const names = rows.filter((q) => inside(q, p) && !decides(q) && !rows.some((m) => decides(m) && inside(m, p) && inside(q, m))).map((q) => q.name);
+  if (!names.length) return null;
+  return el("p", null, names.length === 1 ? `${names[0]} follows ${p.name} and changes with it.` : `${names.join(", ")} follow ${p.name} and change with it.`);
 }
 
 // Whether the rule `body` waits in the tray as it is: a row for that project with another state

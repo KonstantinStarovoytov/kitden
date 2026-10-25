@@ -882,7 +882,7 @@ def create_app(
         if server not in settings["servers"]:
             return _error("Unknown server.", 404)
         path = project["path"] if project else None
-        # Every known project's chain, by its id: what "in one project" would change there.
+        # Every known project's chain, by its id: what "in some projects" would change there.
         ids = {p["path"]: p["id"] for p in state.data["projects"]}
         chains = {ids[k]: chain for k, chain in _chains().items() if k in ids}
         calls = load_calls(home)
