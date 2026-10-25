@@ -564,6 +564,9 @@ def test_a_link_says_what_its_x_does():
     view = script("map-view.js")
     assert "} to ${" in view and '"Connections"' in view
     assert '"aria-keyshortcuts": tip ? "Delete" : null' in view
+    # The hits of lines that skip the gateway sit under the others and are narrower.
+    assert 'link.kind === "direct"' in view and "div.map .hit.direct { stroke-width: 8; }" in CSS
+    assert '"A plugin\'s files"' in gw()
 
 
 def test_a_pointed_link_keeps_its_look_in_a_search():

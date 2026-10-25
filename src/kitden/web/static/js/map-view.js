@@ -605,20 +605,22 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
 
   // Enter or Space opens the link, once: a key held down only keeps the page from scrolling.
   // Delete or Backspace removes it, once: a key held down or one with a modifier is not that.
+  // A link with no removal leaves Delete and Backspace to the page.
   function keyOnHit(event, item) {
     const press = event.key === "Enter" || event.key === " ";
     const plain = !event.repeat && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
-    const remove = plain && (event.key === "Delete" || event.key === "Backspace");
+    const remove = plain && (event.key === "Delete" || event.key === "Backspace") && Boolean(pointer.tip(item.link));
     if (!press && !remove) return;
     event.preventDefault();
     if (press && !event.repeat) pressLink(item);
-    else if (remove && pointer.tip(item.link)) pointer.onRemove(item.link);
+    else if (remove) pointer.onRemove(item.link);
   }
 
-  // A link's hit: a wide stroke over it, and a button for a keyboard.
+  // A link's hit: a wide stroke over it (narrower over a line that skips the gateway), and a button
+  // for a keyboard.
   function makeHit(item) {
     const hit = document.createElementNS(SVG, "path");
-    hit.setAttribute("class", "hit");
+    hit.setAttribute("class", item.link.kind === "direct" ? "hit direct" : "hit");
     hit.setAttribute("tabindex", "0");
     hit.setAttribute("role", "button");
     hit.dataset.focus = `link:${item.key}`; // a redraw of the page gives focus back to it
@@ -879,9 +881,12 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
       if (!linksMove || !stay) unlink(key);
       else if (!item.exit) retire(key);
     }
-    // The hits keep the order of the links, so Tab does.
+    // The hits keep the order of the links, so Tab does, except that the hits of the lines that skip
+    // the gateway come first: those lines cross the clients' solid links, and the hit drawn later
+    // takes the pointer, so a solid link wins where they cross.
+    const direct = (link) => link.kind === "direct";
     let next = null;
-    for (const link of [...layout.links].reverse()) {
+    for (const link of [...layout.links.filter(direct), ...layout.links.filter((link) => !direct(link))].reverse()) {
       const { hit } = links.get(linkKey(link));
       if (!hit) continue;
       if (!hit.parentNode) hits.insertBefore(hit, next);
@@ -892,9 +897,10 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     const litPaths = layout.links.filter((link) => shown.has(linkKey(link))).map((link) => links.get(linkKey(link)).path);
     const paths = [...svg.children].slice(0, -1);
     if (litPaths.some((path, i) => paths[paths.length - litPaths.length + i] !== path)) for (const path of litPaths) svg.insertBefore(path, layer);
-    // The × stays on the picked link while the pointer is on none.
-    const rest = picked && !pointed && links.get(picked);
-    if (rest && rest.hit) aimCross(rest);
+    // The × says what it does now (a removal that waits in the tray takes it out), on the link pointed
+    // at, else on the picked link.
+    const aimed = links.get(pointed || picked);
+    if (aimed && aimed.hit) aimCross(aimed);
 
     order(layout);
     box.classList.toggle("narrow", Boolean(layout.narrow));

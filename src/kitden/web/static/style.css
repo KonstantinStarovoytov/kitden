@@ -616,6 +616,9 @@ div.map .map-links { position: absolute; inset: 0; z-index: 0; overflow: visible
    at. A hit shows no focus ring; keyboard focus gives it the hover look. */
 div.map .map-hits { position: absolute; inset: 0; z-index: 0; overflow: visible; pointer-events: none; }
 div.map .hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer; outline: none; }
+/* A line that skips the gateway runs through the gap of the clients' links: its hit is 8 px, one
+   channel's pitch, and sits under theirs (map-view.js). */
+div.map .hit.direct { stroke-width: 8; }
 div.map .link-x { position: absolute; left: 0; top: 0; z-index: 2; display: grid; place-items: center; width: 16px; height: 16px; box-sizing: border-box; margin: 0; padding: 0; border: 1px solid var(--route); border-radius: 50%; background: var(--panel); color: var(--route); cursor: pointer; transition: background-color 120ms ease, color 120ms ease; }
 div.map .link-x::before { content: ""; position: absolute; inset: -6px; border-radius: 50%; }
 div.map .link-x:hover { background: var(--route); color: var(--panel); }

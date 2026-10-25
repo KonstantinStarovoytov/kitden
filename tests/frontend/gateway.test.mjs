@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js needs only this from a browser to load; the tests call its pure parts.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { GATEWAY_COLUMNS, afterPress, besideBy, bringBeside, clickLink, contentWidth, findRows, gatewayTree, glanceFor, heldServer, kitdenLinks, letGoCloses, linkRemoval, linkTip, listAt, listRows, litFor, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, serverCount, stillSelected } = await import('../../src/kitden/web/static/js/gateway.js');
+const { GATEWAY_COLUMNS, afterPress, besideBy, bringBeside, clickLink, contentWidth, findRows, gatewayTree, glanceFor, heldServer, kitdenLinks, letGoCloses, linkRemoval, linkTip, listAt, listRows, litFor, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, serverCount, stillSelected, takesPointer } = await import('../../src/kitden/web/static/js/gateway.js');
 const { dropBody, dropTarget, pressGrip, placeMoved } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
 const { offersSwitch, ruleBody } = await import('../../src/kitden/web/static/js/gateway-details.js');
@@ -800,7 +800,8 @@ test('while the tray is written a link offers no × and a press takes nothing ou
   try {
     const applying = applyTray();
     assert.equal(tray.phase, 'applying');
-    // No link has a × (a hit takes the pointer only while there is a tip), and nothing leaves.
+    // No link takes the pointer or has a ×, and nothing leaves.
+    assert.equal(takesPointer(), false);
     assert.deepEqual(links.map((key) => linkTip(tree, linkOf(tree, key), '')), ['', '', '']);
     pressBlock(tree, 'preview:github');
     clickLink(tree, linkOf(tree, 'gateway:kitden>held:kitden:files'));
@@ -810,9 +811,11 @@ test('while the tray is written a link offers no × and a press takes nothing ou
     verify();
     await applying;
     assert.equal(linkTip(tree, linkOf(tree, links[0]), ''), '');
-    // Once it has landed, the links offer their × again.
+    assert.equal(takesPointer(), false);
+    // Once it has landed, the links take the pointer and offer their × again.
     endApplied();
     const now = gatewayTree(MEDIUM_VIEW, OPTS);
+    assert.equal(takesPointer(), true);
     assert.equal(linkTip(now, linkOf(now, links[0]), ''), 'Remove files from the gateway');
   } finally {
     await freshTray();
@@ -896,6 +899,9 @@ test("a bypass link's × removes that client's own entry", async () => {
   assert.deepEqual(linkRemoval(tree, link, ''), { tip: 'Remove docs from Codex', body });
   await removeLink(tree, link, '');
   assert.deepEqual(tray.rows.map((r) => [r.body, r.icon]), [[body, 'x']]);
+  // While it waits, the link's hit and × say a press takes it out, as other tray links do.
+  assert.equal(linkTip(tree, link, ''), 'Take it out of the preview');
+  assert.equal(linkTip(gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: rowsOnMap(tray) }), link, ''), 'Take it out of the preview');
   // A server a plugin brings has no entry of the client's own to remove.
   const plugin = { ...MEDIUM_VIEW, groups: { ...MEDIUM_VIEW.groups, plugin: [{ name: 'linear', clients: ['codex'], columns: ['codex'], items: [], client_items: {}, stays: 'with the plugin' }] } };
   const withPlugin = gatewayTree(plugin, OPTS);

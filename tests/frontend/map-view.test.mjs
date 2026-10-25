@@ -529,10 +529,39 @@ test('a link the page opens but cannot remove takes the pointer with no × and n
   b.dispatch('pointerover');
   assert.ok(v.node('c1>s2').classList.contains('hov'));
   assert.equal(xOf(v).hidden, true);
-  b.dispatch('keydown', { key: 'Delete' }); b.dispatch('keydown', { key: 'Enter' });
-  assert.deepEqual([clicked.length, removed.length], [1, 0]);
+  // Delete on it does nothing, and leaves the key to the page.
+  const del = b.dispatch('keydown', { key: 'Delete' }); b.dispatch('keydown', { key: 'Enter' });
+  assert.deepEqual([clicked.length, removed.length, del.defaultPrevented], [1, 0, false]);
   a.dispatch('pointerover');
   assert.equal(xOf(v).hidden, false);
+});
+
+test('the hits of lines that skip the gateway sit under the others, so a solid link wins where they cross', async () => {
+  reduce(true);
+  // c1 sets up a server on its own (a direct line) and reaches s1 and s2 (solid links).
+  const direct = { from: 'c1', to: 's2', kind: 'direct' };
+  const tree = { ...TREE, links: [{ from: 'c1', to: 's1', kind: 'on' }, direct] };
+  const v = view({ links: { ...LINKS, canHit: () => true } });
+  await v.draw(tree, layoutTree(tree, { open: new Set(), narrow: false }), {});
+  const order = () => walk(v.area).filter((n) => n.classList?.contains('hit')).map((n) => [n.dataset.focus, n.getAttribute('class')]);
+  assert.deepEqual(order(), [['link:c1>s2', 'hit direct'], ['link:c1>s1', 'hit']]);
+  // A solid link drawn later still goes after the direct one, and a direct line drawn later before
+  // every solid one.
+  const later = { ...tree, links: [...tree.links, { from: 's1', to: 't1', kind: 'on' }, { from: 'c1', to: 't2', kind: 'direct' }] };
+  await v.draw(later, layoutTree(later, { open: new Set(['s1']), narrow: false }), {});
+  assert.deepEqual(order().map(([key]) => key), ['link:c1>s2', 'link:c1>t2', 'link:c1>s1', 'link:s1>t1']);
+});
+
+test("the × of the link pointed at says what it does after a draw, as its change joins the tray", async () => {
+  reduce(true);
+  let waits = false;
+  const v = view({ links: { ...LINKS, tip: (l) => (waits ? 'Take it out of the preview' : `Remove ${l.to}`) } });
+  await v.draw(TREE, lay(), {});
+  hitOf(v).dispatch('pointerover');
+  assert.equal(xOf(v).getAttribute('aria-label'), 'Remove s1');
+  waits = true;
+  await v.draw(TREE, lay(), {});
+  assert.deepEqual([xOf(v).getAttribute('aria-label'), hitOf(v).getAttribute('aria-description')], ['Take it out of the preview', 'Take it out of the preview']);
 });
 
 test('a link fainter than half takes no pointer', async () => {

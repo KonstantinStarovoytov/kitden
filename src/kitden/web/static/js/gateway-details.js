@@ -865,12 +865,22 @@ function linkKind(from, to) {
   return to.kind === "held" ? "held" : "change";
 }
 
-// Where a change to a link is written, in words, never a path: the client's settings, or the Kitden
-// gateway's own file, which holds its servers and its rules (gateway.json: there is no rules file of
-// its own). A registered gateway keeps its servers itself, which Kitden does not see: null.
-function writtenIn(kind, from) {
-  if (kind === "client" || kind === "direct") return `${from.name}'s settings`;
+// The Claude Desktop app's Code tab: the map draws its servers from Claude Code (gateway_view.py).
+const DESKTOP_TAB = "claude_desktop_code_tab";
+
+// Where a change to a link is written, in words, never a path: the client's settings, a plugin's
+// files (for an entry or a server a plugin gives), or the Kitden gateway's own file, which holds its
+// servers and its rules (gateway.json: there is no rules file of its own). Null where Kitden does
+// not say: a registered gateway keeps its servers itself, and a Claude Code line may also, or only,
+// come from the Desktop app's Code tab.
+function writtenIn(kind, from, to) {
   if (kind === "change") return "Not written yet";
+  if (kind === "client") return from.viaPlugin ? "A plugin's files" : `${from.name}'s settings`;
+  if (kind === "direct") {
+    if (to.groupKey === "plugin") return "A plugin's files";
+    const own = (to.row.clients || []).includes(from.client) && !(from.client === "claude_code" && to.row.clients.includes(DESKTOP_TAB));
+    return own ? `${from.name}'s settings` : null;
+  }
   return kind === "tool" || from.gateway.kind === "kitden" ? "Kitden's gateway file" : null;
 }
 
@@ -945,7 +955,7 @@ export function linkCard({ from, to, unk = false, removal = null, row = null }, 
   const kind = linkKind(from, to);
   const key = row || (removal ? keyFor(removal.body) : null);
   const waits = () => Boolean(key) && (row ? inTray(row) : ticked(removal.body));
-  const written = writtenIn(kind, from);
+  const written = writtenIn(kind, from, to);
   const facts = [{ label: "From", value: from.name }, { label: "To", value: to.name }, stateFact(key, waits, kind === "direct")];
   if (written) facts.push({ label: "Written in", value: written });
   const say = linkSay(kind, from, to, { linked, view, picked, folder, unk });

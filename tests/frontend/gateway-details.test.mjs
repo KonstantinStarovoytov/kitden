@@ -1264,6 +1264,17 @@ test('a bypass, a registered and a plugin client link open their panel; only the
   const plugin = linkCard(linkFor('client:cursor>gateway:kitden', { setup: [...SETUP.slice(0, 2), entry('cursor', 'plugin')] }), { linked: ['claude_code', 'codex', 'cursor'], view: FILES_VIEW });
   assert.deepEqual(labels(plugin), []);
   assert.ok(textOf(plugin.why).endsWith('Cursor gets Kitden from a plugin: turn the plugin off to disconnect it.'), textOf(plugin.why));
+  // Where it is written says only what is true: a plugin's files for a plugin's entry or server;
+  // nothing for a line that also, or only, comes from the Desktop Code tab.
+  assert.deepEqual(facts(plugin).at(-1), ['Written in', "A plugin's files"]);
+  const linear = row('linear', 'claude_code', [], { stays: 'with the plugin' });
+  const desktop = { ...row('notion', 'claude_code', ['n']), clients: ['claude_desktop_code_tab'] };
+  const both = { ...row('slack', 'claude_code', ['s1', 's2']), clients: ['claude_code', 'claude_desktop_code_tab'] };
+  const more = { ...FILES_VIEW, groups: { move: [desktop, both], local: [], plugin: [linear] } };
+  const lineIn = (key) => linkCard(linkParts(gatewayTree(more, { setup: SETUP, clients: CLIENTS }), key, ''), { linked: LINKED, view: more });
+  assert.deepEqual(facts(lineIn('client:claude_code>outside:plugin:linear')).at(-1), ['Written in', "A plugin's files"]);
+  assert.deepEqual(facts(lineIn('client:claude_code>outside:move:notion')).map(([label]) => label), ['From', 'To', 'State']);
+  assert.deepEqual(facts(lineIn('client:claude_code>outside:move:slack')).map(([label]) => label), ['From', 'To', 'State']);
 });
 
 test('a second click on a picked link whose change waits lets go and keeps the change', async () => {

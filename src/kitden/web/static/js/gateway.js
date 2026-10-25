@@ -681,13 +681,21 @@ function rowOfLink(model, link) {
 // or taken out of it now.
 const writing = () => tray.phase === "applying" || tray.phase === "applied";
 
-// What the × of a link does, in words: a link the tray draws is taken out of it, and the map acts
-// on the others as linkRemoval says. "" where it does not act on the link, and while the tray's
-// change is written: the link then has no ×.
+// What the × of a link does, in words: a link the tray draws, or whose removal waits in the tray,
+// is taken out of it, and the map acts on the others as linkRemoval says. "" where it does not act
+// on the link, and while the tray's change is written: the link then has no ×.
 export function linkTip(model, link, picked) {
   if (writing()) return "";
   if (rowOfLink(model, link)) return TAKE_OUT;
-  return linkRemoval(model, link, picked)?.tip ?? "";
+  const removal = linkRemoval(model, link, picked);
+  if (!removal) return "";
+  return inTray(keyFor(removal.body)) ? TAKE_OUT : removal.tip;
+}
+
+// Whether the links take the pointer: every link does, so a click opens its panel, except while
+// the tray's change is written.
+export function takesPointer() {
+  return !writing();
 }
 
 // The × of a link: a link the tray draws, or whose change is in the tray already (still being
@@ -753,11 +761,10 @@ function takeOutHere(model, key) {
   return taken;
 }
 
-// The hooks of the links of the map (the model is the one drawn last): every link has a hit, so a
-// click opens its panel, except while the tray's change is written; it has a × while that does
-// something (linkTip).
+// The hooks of the links of the map (the model is the one drawn last): every link has a hit while
+// they take the pointer (takesPointer), and a × while it does something (linkTip).
 const LINK_HOOKS = {
-  canHit: () => !writing(),
+  canHit: takesPointer,
   tip: (link) => linkTip(onMap.model, link, state.project),
   onClick: (link) => clickLink(onMap.model, link),
   onRemove: (link) => {
