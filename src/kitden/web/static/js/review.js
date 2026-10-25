@@ -1,5 +1,5 @@
 // Change review: the preview, Apply and its motion, and Undo.
-import { getJson, postJson } from "./api.js";
+import { postJson } from "./api.js";
 import { backToDetails, clientName, KIND_WORDS } from "./details.js";
 import { $, $$, button, el, joinWords, plural, reportError, shortPath, shortPaths } from "./dom.js";
 import { loadLibrary, morphOnNextRender } from "./library.js";
@@ -8,6 +8,10 @@ import { cancelPreview, checkMark, closePanel, header, hideToast, isPanelOpen, o
 import { allPutBack, callout, checkBox, CLIENT_ORDER, diffCounts, kitdenMove, mark, movedNames, notesSection, PLACE_IN_TITLE, ruleText, rulesText, skillRemoval, socket, stepText, strictText, targetWords } from "./parts.js";
 import { busy, reload, render, setBusy, state } from "./store.js";
 import { projectLabel, tools } from "./tools.js";
+import { changeOutcome, LOST, readChange } from "./tray.js";
+
+// changeOutcome lives in tray.js; panel.js and the map's bar still import it from here.
+export { changeOutcome };
 
 // Node before 21 (the tests) has no navigator.
 const APPLY_KEY = typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "⌘ Enter to apply" : "Ctrl Enter to apply";
@@ -425,13 +429,6 @@ const STOPPED = {
   restored: "The change did not check out.",
 };
 export const NOTHING = "Nothing was changed.";
-// The states a change can end in after each verb. Read back in any other state it has not
-// ended, so the page cannot say how it went.
-const ENDED = {
-  apply: ["verified", "stale", "restored", "cancelled", "undone", "undo_blocked"],
-  undo: ["undone", "undo_blocked"],
-};
-const LOST = "Could not confirm the result. Check Changes before trying again.";
 const NOT_ALL_BACK = "Not everything was put back. Check Changes before trying again.";
 
 // The engine put back everything a change that did not check out wrote: its words then end "The
@@ -453,40 +450,6 @@ export function stoppedWords(after, failure, { detail = true } = {}) {
   if (nothingChanged(after)) return `${reason}${words} ${NOTHING}`;
   if (!detail && after.state === "restored") return `${reason} ${NOT_ALL_BACK}`;
   return `${reason}${words}`;
-}
-
-// The change as the server holds it now, or null when it cannot be read.
-async function readChange(id) {
-  try {
-    return await getJson(`/api/changes/${encodeURIComponent(id)}`);
-  } catch {
-    return null;
-  }
-}
-
-// How the change ended, read back from the server, when the answer cannot say.
-async function readOutcome(id, verb) {
-  const read = await readChange(id);
-  return { after: read && ENDED[verb].includes(read.state) ? read : null, failure: LOST };
-}
-
-// How an Apply or an Undo ("apply", "undo") ended: the change as the server holds it, or why
-// it failed.
-export async function changeOutcome(id, verb) {
-  const name = verb === "undo" ? "Undo" : "Apply";
-  let result;
-  try {
-    result = await postJson(`/api/changes/${encodeURIComponent(id)}/${verb}`);
-    if (!result.data) throw new Error(`The ${name} answer had no body (${result.status}).`);
-  } catch (error) {
-    // No answer, or one with no body, yet the change may have run: ask the server how it ended.
-    console.error(error);
-    return readOutcome(id, verb);
-  }
-  if (result.data.id) return { after: result.data, failure: null };
-  // 409 with no change: it had moved on already, for example by an Apply whose answer was lost.
-  if (result.status === 409) return readOutcome(id, verb);
-  return { after: null, failure: result.data.detail || `${name} failed (${result.status}).` };
 }
 
 // Apply → Applying… (spinner) → Applied (the check draws); then the panel leaves and the

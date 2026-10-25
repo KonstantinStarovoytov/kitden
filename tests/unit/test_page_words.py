@@ -26,8 +26,9 @@ PANEL = ("panel.js", "details.js", "tools.js", "review.js")
 
 def panel() -> str:
     """The side panel's modules as one text, so a pin does not depend on which file holds it. The
-    review bar on a map shares its Apply, so it is read too."""
-    return "\n".join(script(name) for name in (*PANEL, "map-review.js"))
+    review bar on a map shares its Apply, so it is read too, and so is the tray, which reads how
+    an Apply or an Undo ended."""
+    return "\n".join(script(name) for name in (*PANEL, "tray.js", "map-review.js"))
 
 
 def reviews() -> str:
