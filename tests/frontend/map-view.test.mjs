@@ -254,6 +254,41 @@ test('a held block stays where it is put across draws, and glides home when let 
   assert.ok(!v.node('s2').classList.contains('dragging'));
 });
 
+test('a block that glides home when a draw shows the end at once keeps no .dragging', async () => {
+  // A narrow flip or a project change draws with no motion; a hidden page jumps every motion.
+  for (const how of ['none', 'hidden']) {
+    const v = view();
+    await v.draw(TREE, lay([], true), { motion: 'none' });
+    v.hold('s2', { x: 500, y: 300 });
+    v.letGo('s2'); tick(100);
+    assert.ok(v.node('s2').classList.contains('dragging'), 'it still glides');
+    const layout = lay(['s1'], true);
+    if (how === 'hidden') document.hidden = true;
+    v.draw(TREE, layout, how === 'none' ? { motion: 'none' } : {});
+    assert.ok(!v.node('s2').classList.contains('dragging'), how);
+    assert.deepEqual(pos(v.node('s2')), { x: place(layout, 's2').x, y: place(layout, 's2').y, s: 1 }, how);
+    settle(); document.hidden = false;
+    assert.ok(!v.node('s2').classList.contains('dragging'), how);
+  }
+});
+
+test('a block held with a glide arrives held; letting go of a block the map does not have does nothing', async () => {
+  const v = view();
+  await v.draw(TREE, lay([], true), { motion: 'none' });
+  const from = pos(v.node('s2'));
+  v.hold('s2', { x: 500, y: 300 }, { glide: true });
+  assert.ok(v.node('s2').classList.contains('dragging'));
+  tick(130); assert.ok(near(pos(v.node('s2')).x, from.x + (500 - from.x) * 0.875));
+  tick(130); assert.deepEqual(pos(v.node('s2')), { x: 500, y: 300, s: 1 });
+  assert.ok(v.node('s2').classList.contains('dragging'), 'held until let go');
+  await v.letGo('nope');
+  assert.equal(v.node('nope'), null);
+  assert.ok(v.node('s2').classList.contains('dragging'));
+  v.letGo('s2'); settle();
+  assert.ok(!v.node('s2').classList.contains('dragging'));
+  assert.equal(v.node('s2').style.opacity, '');
+});
+
 // Review Focus
 test('a draw during a move ends at the newer layout, one node per id', async () => {
   const v = view();

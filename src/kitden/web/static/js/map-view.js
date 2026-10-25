@@ -650,6 +650,11 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
       if (!moves) {
         stop(item);
         put(item, end);
+        // A block that glided home lands here at once, and lets go of its drag look.
+        if (item.back) {
+          item.back = false;
+          paint(item);
+        }
       } else if (enters) {
         // The entrance: it waits below its place, unseen, then rises in its turn.
         put(item, { ...end, y: end.y + ENTER_RISE, o: 0 });
