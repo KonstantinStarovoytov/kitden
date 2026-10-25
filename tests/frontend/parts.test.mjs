@@ -40,7 +40,7 @@ function element(tag) {
 // Each test starts with motion on; a test that needs reduced motion sets it itself.
 beforeEach(() => { media.matches = false; });
 globalThis.document = { createElement: element, createElementNS: (namespace, tag) => element(tag) };
-const { backupNote, banner, changeTitle, checkBox, clientCheck, demoTag, folderName, gatewayName, menuItems, morphSocket, opens, optionAfter, originText, projectButton, projectMenu, scopeBar, scopeText, setHint, socket, strictText, TOOL_ORIGIN_WORDS } = await import('../../src/kitden/web/static/js/parts.js');
+const { backupNote, banner, changeTitle, checkBox, clientCheck, demoTag, folderName, gatewayName, menuItems, morphSocket, opens, optionAfter, originText, PLACE_IN_TITLE, projectButton, projectMenu, scopeBar, scopeText, setHint, socket, strictText, TOOL_ORIGIN_WORDS } = await import('../../src/kitden/web/static/js/parts.js');
 const { CALM } = await import('../../src/kitden/web/static/js/motion.js');
 // details.js builds the switch and loads with the same stand-in.
 const { switchNode } = await import('../../src/kitden/web/static/js/details.js');
@@ -220,6 +220,15 @@ test('the Changes page names what moved into the Kitden gateway and which rule c
   assert.equal(changeTitle({ action: 'gateway.rule', steps: slow }), 'Changed the rule for slow · Kitden gateway');
   // The kitden entry turned on again names its client.
   assert.equal(changeTitle({ action: 'setup_server.enable', steps: [{ client: 'codex', name: 'kitden' }] }), 'Turned on the kitden entry · Codex');
+});
+
+test('the Changes page names a client connected to or disconnected from Kitden', () => {
+  const entry = (action, ...clients) => ({ action, steps: clients.map((client) => ({ client, name: 'kitden' })), target: { scope: 'all' } });
+  assert.equal(changeTitle(entry('client.disconnect', 'codex')), 'Disconnected from Kitden · Codex');
+  assert.equal(changeTitle(entry('setup_server.register', 'claude_code', 'cursor')), 'Connected to Kitden · Claude Code, Cursor');
+  // A line from before Kitden kept the target reads the same.
+  assert.equal(changeTitle({ ...entry('setup_server.register', 'cursor'), target: undefined }), 'Connected to Kitden · Cursor');
+  for (const action of ['setup_server.register', 'client.disconnect']) assert.ok(PLACE_IN_TITLE.includes(action), action);
 });
 
 test('a rule says where its state comes from', () => {

@@ -11,7 +11,7 @@ import urllib.request
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
 from kitden.changes import json_splice, toml_edit
@@ -45,6 +45,10 @@ from kitden.model import (
     Step,
 )
 from kitden.redact import redact
+from kitden.views.setup_server import is_own_entry
+
+if TYPE_CHECKING:
+    from kitden.views.inventory import Inventory
 
 GATEWAY_CONNECT = "gateway.connect"
 GATEWAY_MOVE = "gateway.move"
@@ -57,6 +61,8 @@ CLIENT_WORDS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Curso
 SETUP_SERVER_UPDATE = "setup_server.update"
 # Turns a client's `kitden` entry back on, where its docs name the switch (views/setup_server.py).
 SETUP_SERVER_ENABLE = "setup_server.enable"
+# Takes the `kitden` entry out of a client: the client is then not connected to Kitden.
+CLIENT_DISCONNECT = "client.disconnect"
 NEEDS_COMMAND = "The setup server needs the absolute path of the kitden command"
 ENTRY_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}")
 
@@ -305,6 +311,30 @@ def setup_server_steps(
         if adapter is None:
             raise ValueError(f"The setup server cannot be added to {client}")
         steps.append(adapter.setup_server_step(command, ["mcp"]))
+    return steps
+
+
+def disconnect_steps(
+    adapters: dict[str, ClientAdapter], inventory: "Inventory", clients: list[str]
+) -> list[Step]:
+    """Remove the user-scope `kitden` entry from each chosen client, with that client's own
+    remove step. An entry a plugin provides stays: the plugin is how to turn it off."""
+    if not clients:
+        raise ValueError("Choose at least one client")
+    steps = []
+    for client in dict.fromkeys(clients):
+        words = CLIENT_WORDS.get(client, client)
+        entries = [i for i in inventory.items if i.client == client and is_own_entry(i)]
+        mine = next((i for i in entries if i.scope is Scope.USER), None)
+        adapter = adapters.get(client)
+        if mine is None or adapter is None:
+            if entries:
+                raise ValueError(
+                    f"{words} gets Kitden from the Claude Code plugin. "
+                    "Turn the plugin off to disconnect it."
+                )
+            raise ValueError(f"{words} is not connected to Kitden.")
+        steps.append(adapter.remove_step(mine))
     return steps
 
 

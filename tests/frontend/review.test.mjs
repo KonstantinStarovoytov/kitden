@@ -79,7 +79,7 @@ globalThis.fetch = (url, init = {}) => {
 const queue = (url, ...items) => replies.set(url, [...(replies.get(url) || []), ...items]);
 const posted = () => calls.filter((call) => call.method === 'POST').map((call) => call.url);
 
-const { PLACE_IN_TITLE, changeWords, review, reviewLede, showRowReview, targetWords } = await import('../../src/kitden/web/static/js/review.js');
+const { PLACE_IN_TITLE, addScope, changeWords, review, reviewLede, showRowReview, targetWords } = await import('../../src/kitden/web/static/js/review.js');
 const { isPanelOpen, openPanel, panelState } = await import('../../src/kitden/web/static/js/panel.js');
 const { addToTray, cancelTray, tray } = await import('../../src/kitden/web/static/js/tray.js');
 const { busy, state } = await import('../../src/kitden/web/static/js/store.js');
@@ -164,6 +164,24 @@ test('a title that names its place, or has none, gets no scope words', () => {
   assert.equal(changeWords(keychain, { params: { server: 'files' } }).title, 'Move the secrets of files to the Keychain');
   const gone = { action: 'gateway.remove', steps: [{ client: 'kitden', name: 'files' }], target: target('mixed') };
   assert.equal(changeWords(gone, { params: { server: 'files' } }).done, 'Removed files from the Kitden gateway');
+});
+
+test('connecting a client to Kitden and disconnecting it name their place and no scope', () => {
+  for (const action of ['setup_server.register', 'client.disconnect']) assert.ok(PLACE_IN_TITLE.includes(action), action);
+  const connect = { action: 'setup_server.register', steps: [{ client: 'cursor', name: 'kitden' }], target: target('all') };
+  assert.deepEqual(changeWords(connect), { title: 'Connect Cursor to Kitden', done: 'Connected Cursor to Kitden' });
+  // Several clients, in the page's order.
+  const two = { ...connect, steps: [{ client: 'codex', name: 'kitden' }, { client: 'claude_code', name: 'kitden' }] };
+  assert.deepEqual(changeWords(two), { title: 'Connect Claude Code and Codex to Kitden', done: 'Connected Claude Code and Codex to Kitden' });
+  const gone = { action: 'client.disconnect', steps: [{ client: 'codex', name: 'kitden' }], target: target('all') };
+  assert.deepEqual(changeWords(gone), { title: 'Disconnect Codex from Kitden', done: 'Disconnected Codex from Kitden' });
+  // The same without a target, as a change from before the server named it.
+  assert.equal(changeWords({ ...gone, target: undefined }).title, 'Disconnect Codex from Kitden');
+  assert.equal(changeWords({ ...connect, target: undefined }).title, 'Connect Cursor to Kitden');
+  // Neither is an add that needs a scope in its lede.
+  assert.equal(addScope('setup_server.register', ''), null);
+  assert.equal(addScope('client.disconnect', ''), null);
+  assert.equal(reviewLede({ action: 'client.disconnect' }, ''), 'Nothing is written until you press Apply. A backup is kept.');
 });
 
 test('the scope words are the folder, all projects, or none', () => {

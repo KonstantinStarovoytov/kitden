@@ -11,7 +11,7 @@ export const GONE_PROJECT = "This project is no longer on the list.";
 export const folderName = (path) => (path ? path.split("/").filter(Boolean).pop() || path : "");
 
 // Actions whose title names its place already, or has none: no place words are added.
-export const PLACE_IN_TITLE = ["gateway.rule", "gateway.rules", "gateway.strict", "project.align", "setup_server.update", "setup_server.enable", "gateway.remove", "gateway.keychain"];
+export const PLACE_IN_TITLE = ["gateway.rule", "gateway.rules", "gateway.strict", "project.align", "setup_server.register", "setup_server.update", "setup_server.enable", "client.disconnect", "gateway.remove", "gateway.keychain"];
 
 // Where a change's steps go (`target`, from the server), as a title ends: " in website",
 // " for all projects", " for all projects except website" (that project's own definition wins
@@ -598,7 +598,8 @@ const ACTION_WORDS = {
   "plugin.disable": "Turned off",
   "plugin.remove": "Removed",
   "skill.remove": "Removed",
-  "setup_server.register": "Added show my setup",
+  "setup_server.register": "Connected to Kitden",
+  "client.disconnect": "Disconnected from Kitden",
   "setup_server.update": "Updated show my setup to Kitden",
   "setup_server.enable": "Turned on the kitden entry",
   "gateway.rule": "Changed the rule for",
@@ -703,7 +704,7 @@ export function changeTitle(entry) {
   }
   // A plugin's skills can be many; the line counts them, the change lists them.
   if (entry.action === "plugin.skills") return `${verb} ${plural(names.length, "skill", "skills")}${place} · ${clients.join(", ")}`;
-  const whole = ["gateway.connect", "gateway.switch", "setup_server.register", "setup_server.update", "setup_server.enable", "project.align"].includes(entry.action);
+  const whole = ["gateway.connect", "gateway.switch", "setup_server.register", "setup_server.update", "setup_server.enable", "client.disconnect", "project.align"].includes(entry.action);
   const what = whole ? "" : ` ${names.join(", ")}`;
   if (kitden) return `${verb}${what} into the Kitden gateway${place} · ${clients.join(", ")}`;
   return `${verb}${what}${place} · ${clients.join(", ")}`;

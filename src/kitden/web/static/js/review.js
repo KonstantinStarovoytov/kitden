@@ -17,7 +17,7 @@ export { changeOutcome };
 const DONE_WORDS = {
   "plugin.disable": "Turned off", "plugin.enable": "Turned on", "mcp.remove_direct": "Removed", "plugin.remove": "Removed",
   "skill.remove": "Removed",
-  "gateway.connect": "Connected the gateway", "setup_server.register": "Added show my setup",
+  "gateway.connect": "Connected the gateway", "setup_server.register": "Connected", "client.disconnect": "Disconnected",
   "setup_server.update": "Updated show my setup to Kitden", "gateway.move": "Moved",
   "setup_server.enable": "Turned on the kitden entry",
   "gateway.switch": "Switched the gateway", "plugin.install": "Added", "marketplace.add": "Added the marketplace",
@@ -28,11 +28,11 @@ const DONE_WORDS = {
 
 // Actions whose words say "from" a client.
 const REMOVES = ["mcp.remove_direct", "plugin.remove", "skill.remove"];
-// Actions that add an item: the review names where it goes before the click. A marketplace, the
-// setup entry, a gateway's entry and a server put back always go to all projects. app.py's
-// ADD_ACTIONS has two more: Add missing names its project in its title already, and
-// setup_server.update changes an entry where it is.
-export const ADDS = ["mcp.add", "skill.install", "plugin.install", "plugin.skills", "marketplace.add", "setup_server.register", "gateway.connect", "gateway.put_back"];
+// Actions that add an item: the review names where it goes before the click. A marketplace, a
+// gateway's entry and a server put back always go to all projects. app.py's ADD_ACTIONS has
+// three more: Add missing names its project in its title already, setup_server.update changes an
+// entry where it is, and setup_server.register says "to Kitden".
+export const ADDS = ["mcp.add", "skill.install", "plugin.install", "plugin.skills", "marketplace.add", "gateway.connect", "gateway.put_back"];
 // Where the steps go, as the title ends (parts.js, so the Changes page says it too).
 export { PLACE_IN_TITLE, targetWords };
 // No promise of Undo for every change: the server names the known limit (`undo_note`).
@@ -102,7 +102,8 @@ export function changeWords(change, previewBody) {
     "plugin.skills": `Add ${plugin}'s skills to ${clients}`,
     // Each client's last step adds the new entry; it is named after the gateway.
     "gateway.switch": `Use ${steps.length ? steps[steps.length - 1].name : "the new gateway"} in ${clients}`,
-    "setup_server.register": `Add “show my setup” to ${clients}`,
+    "setup_server.register": `Connect ${clients} to Kitden`,
+    "client.disconnect": `Disconnect ${clients} from Kitden`,
     "setup_server.update": `Update “show my setup” to Kitden in ${clients}`,
     "setup_server.enable": `Turn on the kitden entry in ${clients}`,
     "gateway.remove": `Remove ${server} from the Kitden gateway`,
@@ -122,8 +123,12 @@ export function changeWords(change, previewBody) {
     what = `${verb} ${joinWords([...new Set(steps.filter((s) => s.name.includes("@")).map((s) => s.name.split("@")[0]))])} to ${clients}`;
   } else if (["marketplace.add", "skill.install", "mcp.add"].includes(change.action)) {
     what = `${verb} ${short} to ${clients}`;
-  } else if (["gateway.connect", "gateway.switch", "setup_server.register", "setup_server.update", "setup_server.enable"].includes(change.action)) {
+  } else if (["gateway.connect", "gateway.switch", "setup_server.update", "setup_server.enable"].includes(change.action)) {
     what = `${verb} ${["setup_server.update", "setup_server.enable", "gateway.switch"].includes(change.action) ? "in" : "to"} ${clients}`;
+  } else if (change.action === "setup_server.register") {
+    what = `${verb} ${clients} to Kitden`;
+  } else if (change.action === "client.disconnect") {
+    what = `${verb} ${clients} from Kitden`;
   } else if (change.action === "gateway.move") {
     what = `${verb} ${short} into ${kitden ? "the Kitden gateway" : "the gateway"}`;
   } else if (change.action === "gateway.remove") {

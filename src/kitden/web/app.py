@@ -20,6 +20,7 @@ from starlette.staticfiles import StaticFiles
 
 from kitden import __version__
 from kitden.changes.actions import (
+    CLIENT_DISCONNECT,
     CLIENT_WORDS,
     GATEWAY_CONNECT,
     GATEWAY_KEYCHAIN,
@@ -41,6 +42,7 @@ from kitden.changes.actions import (
     SKILL_INSTALL,
     add_server_steps,
     connect_steps,
+    disconnect_steps,
     install_steps,
     keychain_steps,
     local_move_steps,
@@ -462,8 +464,8 @@ class State:
 
 
 # The actions that add something: a refusal into a file Kitden could not read says "add". The
-# page's ADDS (review.js) names their scope in the review; it leaves out PROJECT_ALIGN and
-# SETUP_SERVER_UPDATE, which say their place another way.
+# page's ADDS (review.js) names their scope in the review; it leaves out PROJECT_ALIGN,
+# SETUP_SERVER and SETUP_SERVER_UPDATE, which say their place another way.
 ADD_ACTIONS = frozenset(
     {
         MCP_ADD,
@@ -1079,6 +1081,9 @@ def create_app(
             if entry is None or entry["state"] != "added" or entry["enabled"] is not False:
                 raise ValueError("The kitden entry there is not turned off.")
             steps = enable_steps(adapters, clients[0])
+        elif action == CLIENT_DISCONNECT:
+            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
+            steps = disconnect_steps(adapters, state.inventory, clients)
         elif action == GATEWAY_MOVE and params.get("gateway") == KITDEN_GATEWAY:
             ids = [str(t.get("item")) for t in targets if isinstance(t, dict)]
             items = [_item(i) for i in ids]

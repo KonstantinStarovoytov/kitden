@@ -101,7 +101,7 @@ export function keyFor(body) {
 const REMOVES = ["mcp.remove_direct", "plugin.remove", "skill.remove", "gateway.remove"];
 const SWITCHES = ["gateway.rule", "gateway.rules", "gateway.strict", "plugin.enable", "plugin.disable", "setup_server.enable"];
 const MOVES = ["gateway.move", "gateway.put_back", "gateway.keychain"];
-const PLUGS = ["gateway.connect", "gateway.switch", "setup_server.register", "setup_server.update"];
+const PLUGS = ["gateway.connect", "gateway.switch", "setup_server.register", "setup_server.update", "client.disconnect"];
 const ADDS = ["mcp.add", "plugin.install", "plugin.skills", "skill.install", "marketplace.add"];
 
 // The icon of a row in the bar.

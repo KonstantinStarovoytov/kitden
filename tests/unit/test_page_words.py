@@ -1571,6 +1571,27 @@ def test_tool_and_server_details_say_what_they_know():
     assert '`${plural(calls.count, "call", "calls")} · last ${day} ${time}`' in panel()
 
 
+def test_connect_and_disconnect_say_kitden():
+    # The `kitden` entry is how a client reaches Kitden: Gateway and Agents say it the same way.
+    review, parts = script("review.js"), script("parts.js")
+    for words in (
+        "`Connect ${clients} to Kitden`",
+        "`Disconnect ${clients} from Kitden`",
+        "`${verb} ${clients} to Kitden`",
+        "`${verb} ${clients} from Kitden`",
+        '"setup_server.register": "Connected"',
+        '"client.disconnect": "Disconnected"',
+    ):
+        assert words in review, words
+    assert '"setup_server.register": "Connected to Kitden"' in parts
+    assert '"client.disconnect": "Disconnected from Kitden"' in parts
+    place = parts.split("export const PLACE_IN_TITLE")[1].split("\n")[0]
+    assert '"setup_server.register"' in place and '"client.disconnect"' in place
+    # The old words are gone; the update of an old entry keeps its own.
+    for old in ("Add “show my setup”", "Added show my setup"):
+        assert old not in review and old not in parts, old
+
+
 def test_the_tool_list_has_a_strict_switch():
     code = panel()
     assert "Strict: only tools that are on" in code

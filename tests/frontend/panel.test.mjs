@@ -195,9 +195,9 @@ test('an add names its scope in the title and, with All projects, in the lede', 
   const market = { action: 'marketplace.add', steps: [{ client: 'codex', name: 'acme' }] };
   assert.deepEqual(changeWords(market), { title: 'Add the acme marketplace to Codex for all projects', done: 'Added the marketplace acme to Codex for all projects' });
   const setup = { action: 'setup_server.register', steps: [{ client: 'cursor', name: 'kitden' }] };
-  assert.deepEqual(changeWords(setup), { title: 'Add “show my setup” to Cursor for all projects', done: 'Added show my setup to Cursor for all projects' });
+  assert.deepEqual(changeWords(setup), { title: 'Connect Cursor to Kitden', done: 'Connected Cursor to Kitden' });
   assert.equal(reviewLede({ action: 'marketplace.add' }, ''), 'Adds for all projects. Nothing is written until you press Apply. A backup is kept.');
-  assert.equal(reviewLede({ action: 'setup_server.register' }, ''), 'Adds for all projects. Nothing is written until you press Apply. A backup is kept.');
+  assert.equal(reviewLede({ action: 'setup_server.register' }, ''), 'Nothing is written until you press Apply. A backup is kept.');
   // Connecting a gateway and putting a server back write each client's own entry: for all
   // projects. The page and the server agree on the adds (test_api_changes.py).
   const connect = { action: 'gateway.connect', steps: [{ client: 'codex', name: 'gateway' }] };

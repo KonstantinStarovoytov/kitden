@@ -965,9 +965,10 @@ def test_a_refusal_into_an_unreadable_file_follows_the_action():
 def test_the_page_and_the_server_agree_on_what_an_add_is():
     review = (Path(__file__).parents[2] / "src/kitden/web/static/js/review.js").read_text()
     adds = set(re.findall(r'"([a-z_.]+)"', review.split("export const ADDS = [")[1].split("]")[0]))
-    # Add missing names its project in its title; an update changes an entry where it is, so
-    # neither names a scope in the review. Both still refuse a broken file as adds.
-    assert ADD_ACTIONS - adds == {"project.align", "setup_server.update"}
+    # Add missing names its project in its title; an update changes an entry where it is;
+    # connecting a client says "to Kitden". None names a scope in the review. All three still
+    # refuse a broken file as adds.
+    assert ADD_ACTIONS - adds == {"project.align", "setup_server.update", "setup_server.register"}
     assert adds <= ADD_ACTIONS
     assert unread_refusal("marketplace.add", "/h/.claude/settings.json") == (
         "Can't add while settings.json can't be read."

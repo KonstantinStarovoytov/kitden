@@ -54,6 +54,8 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Remove from the Kitden gateway:** a held server leaves with its switches; open sessions refuse
   its tools at once.
 - **Put back:** a held server's entry goes into a client again.
+- **Disconnect a client from Kitden:** removes the client's `kitden` entry, so it no longer reaches
+  the gateway. Undo puts it back. Adding that entry now reads "Connect … to Kitden".
 - **Add an MCP server to another client:** "+ Add" copies the entry; a `${VAR}` reference stays a
   reference where that client reads one.
 - **Add into one project:** a skill, or a Claude Code plugin, for that project only.
