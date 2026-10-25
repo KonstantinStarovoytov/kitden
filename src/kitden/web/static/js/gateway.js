@@ -142,12 +142,13 @@ function modeSwitch(mode) {
 // The Gateway's map columns: clients, the gateway, servers, tools, each with its blocks' size,
 // wide and narrow, and (wide) the space before it, the y of its first block and the space between
 // its blocks (map.js). The numbers are the mockup's: columns at x 0, 196, 396 and 636, 836 wide.
-// Narrow, the gateway is a small tile and tools are rows inside their server.
+// The mockup has no narrow map: narrow keeps its old sizes, the gateway a small tile and tools
+// rows inside their server, 190 wide.
 export const GATEWAY_COLUMNS = [
   { id: "clients", caption: "Clients", w: 150, h: 54, top: 124, rowGap: 18, narrowW: 140 },
   { id: "gateway", caption: "Gateway", w: 150, h: 124, colGap: 46, top: 124, rowGap: 18, narrowW: 56, narrowH: 56 },
   { id: "servers", caption: "Servers", w: 170, h: 60, colGap: 50, top: 58, rowGap: 10, narrowW: 220, narrowH: 54 },
-  { id: "tools", caption: "Tools", w: 200, h: 34, colGap: 70, narrowH: 30 },
+  { id: "tools", caption: "Tools", w: 200, h: 34, colGap: 70, narrowW: 190, narrowH: 30 },
 ];
 
 // The registered gateways, the one the clients use first.
@@ -567,9 +568,21 @@ export function mapMotion({ fresh, projectChanged, narrowChanged }) {
   return projectChanged || narrowChanged ? "none" : "move";
 }
 
-// Draw the map as it is now, as `mapMotion` says. With `lightLater` the selection shows, but its
-// path lights (the dims and the accent lines) when every motion of this draw has ended: a server's
-// tools come in first. The promise ends with the last motion.
+// A press that opened a block (`unfolds`) draws its selection first and lights its path when the
+// motions end, as its tools come in first. With no path there is nothing to wait for.
+export function lightsLater({ unfolds, lit }) {
+  return Boolean(unfolds) && lit.size > 0;
+}
+
+// When those motions end, the path lights only if the map and the selection are still the ones that
+// were drawn (`drawn`, against `now`: { view, selected }); a newer selection lights its own.
+export function stillSelected(drawn, now) {
+  return drawn.view === now.view && drawn.selected === now.selected;
+}
+
+// Draw the map as it is now, as `mapMotion` says. With `lightLater` (a press that opened a block)
+// the selection shows, but its path lights (the dims and the accent lines) when every motion of
+// this draw has ended: a server's tools come in first. The promise ends with the last motion.
 function drawOnMap(model, { fresh = false, projectChanged = false, lightLater = false } = {}) {
   const narrow = narrowNow(model);
   const flipped = narrow !== onMap.narrow;
@@ -581,10 +594,11 @@ function drawOnMap(model, { fresh = false, projectChanged = false, lightLater = 
   const lit = litFor(model, onMap.selected);
   const motion = mapMotion({ fresh, projectChanged, narrowChanged: flipped });
   const { view, selected } = onMap;
-  const drawn = view.draw(model, layout, { selected: lit.size ? selected : null, lit: lightLater ? new Set() : lit, found: onMap.found, open, motion });
+  const later = lightsLater({ unfolds: lightLater, lit });
+  const drawn = view.draw(model, layout, { selected: lit.size ? selected : null, lit: later ? new Set() : lit, found: onMap.found, open, motion });
   // A block a move took off its place stays where it is shown (gateway-drag.js).
   placeMoved({ view, model, layout, redraw: redrawMove });
-  if (lightLater && lit.size) drawn.then(() => onMap.view === view && onMap.selected === selected && drawAgain());
+  if (later) drawn.then(() => stillSelected({ view, selected }, onMap) && drawAgain());
   return drawn;
 }
 

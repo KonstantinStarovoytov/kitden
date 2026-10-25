@@ -90,6 +90,7 @@ function shownChildren(block, children, open) {
   if (block.kind !== "group") return open.has(block.id) ? children : [];
   const rest = children.filter((child) => !PINNED.includes(child.kind));
   if (rest.length <= GROUP_MAX || open.has(block.id)) return children;
+  // "N more" is as high as the blocks it stands for (an outside server's block is higher than the column's).
   const more = { id: `more:${block.id}`, column: block.column, parent: block.id, kind: "more", name: `${rest.length - GROUP_MAX + 1} more`, ...(rest[0].h ? { h: rest[0].h } : {}) };
   return [...rest.slice(0, GROUP_MAX - 1), more, ...children.filter((child) => PINNED.includes(child.kind))];
 }
@@ -147,9 +148,9 @@ export function layoutTree(model, { open = new Set(), width = 0, narrow = isNarr
     placed.set(block.id, at);
     blocks.push(at);
     // Wide, a group's first block is CAPTION_GAP under it, and its blocks are its own `rowGap` apart.
-    const caption = group && !narrow;
-    const between = caption && block.rowGap !== undefined ? block.rowGap : size.row;
-    let gap = caption ? CAPTION_GAP : size.row;
+    const wideGroup = group && !narrow;
+    const between = wideGroup && block.rowGap !== undefined ? block.rowGap : size.row;
+    let gap = wideGroup ? CAPTION_GAP : size.row;
     let bottom = y + h;
     for (const child of shownChildren(block, children.get(block.id) || [], open)) {
       if (child.column === block.column) bottom = stack(child, left, w, bottom + gap, opener);
@@ -182,9 +183,9 @@ export function layoutTree(model, { open = new Set(), width = 0, narrow = isNarr
       (children.get(parent.id) || []).filter((child) => child.column === column.id).forEach((child, i) => {
         bottom = stack(child, left, w, i ? bottom + row : 0, parent.id);
       });
-      const at = Math.max(y, middle(placed.get(parent.id)) - bottom / 2);
-      for (const placing of blocks.slice(from)) placing.y += at;
-      y = at + bottom + row;
+      const base = Math.max(y, middle(placed.get(parent.id)) - bottom / 2);
+      for (const placing of blocks.slice(from)) placing.y += base;
+      y = base + bottom + row;
     }
     if (!column.caption || blocks.length === first) continue;
     const caption = { id: `column:${column.id}`, kind: "column", column: column.id, x: left, y: 0, w, h: CAPTION_H };
@@ -203,10 +204,10 @@ export function layoutTree(model, { open = new Set(), width = 0, narrow = isNarr
     if (!from || !to) continue;
     const child = byId.get(link.to);
     const rail = narrow && child.parent === link.from && child.column !== byId.get(link.from).column;
-    const at = { from: link.from, to: link.to, kind: link.kind, shape: rail ? "rail" : link.kind === "direct" ? "step" : "curve", ...(link.unk ? { unk: true } : {}), ...(link.leaving ? { leaving: true } : {}) };
-    if (link.kind === "direct") at.chan = narrow ? NARROW_CHANNEL : CHANNELS[places.indexOf(link.to) % CHANNELS.length];
-    at.d = linkPath(at, from, to);
-    links.push(at);
+    const drawn = { from: link.from, to: link.to, kind: link.kind, shape: rail ? "rail" : link.kind === "direct" ? "step" : "curve", ...(link.unk ? { unk: true } : {}), ...(link.leaving ? { leaving: true } : {}) };
+    if (link.kind === "direct") drawn.chan = narrow ? NARROW_CHANNEL : CHANNELS[places.indexOf(link.to) % CHANNELS.length];
+    drawn.d = linkPath(drawn, from, to);
+    links.push(drawn);
   }
   const height = blocks.reduce((most, block) => Math.max(most, block.y + block.h), 0);
   return { columns, blocks, links, height, narrow };

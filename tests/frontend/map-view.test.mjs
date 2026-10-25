@@ -404,7 +404,45 @@ test('in the entrance a link shows only as much as the fainter of its two blocks
   v.draw(TREE, layout, { motion: 'enter' });
   const later = layout.blocks.findIndex((b) => b.id === 's2');
   tick(22 * later + 130);
+  assert.notEqual(v.node('s2').style.opacity, '', 'the block is still on its way');
   assert.equal(v.node('c1>s2').style.opacity, v.node('s2').style.opacity);
+});
+
+test('a hidden page shows the entrance at once: nothing rises, no frame is asked for', async () => {
+  document.hidden = true;
+  const v = view(); const layout = lay();
+  const done = v.draw(TREE, layout, { motion: 'enter' });
+  assert.equal(frames.length, 0);
+  for (const { id } of layout.blocks) {
+    assert.deepEqual(pos(v.node(id)), { x: place(layout, id).x, y: place(layout, id).y, s: 1 }, id);
+    assert.equal(v.node(id).style.opacity, '', id);
+  }
+  assert.ok(walk(v.area).every((n) => !n.animations?.length));
+  for (const n of walk(v.area)) assert.equal(n.style?.opacity ?? '', '');
+  await done;
+});
+
+test('an entrance that is drawn over keeps one node per id and leaves nothing half-way', async () => {
+  const v = view();
+  v.draw(TREE, lay(), { motion: 'enter' });
+  tick(50);
+  // The layout changes while the blocks still rise, and then the same layout is drawn again.
+  v.draw(TREE, lay(['s1']), {});
+  tick(30);
+  v.draw(TREE, lay(['s1']), {});
+  settle();
+  const ids = v.area.children.map((n) => n.dataset?.focus).filter(Boolean);
+  assert.equal(new Set(ids).size, ids.length);
+  assert.deepEqual(ids.map((id) => id.slice('block:'.length)).sort(), blockOrder(lay(['s1'])).sort());
+  for (const { id } of lay(['s1']).blocks) {
+    assert.deepEqual(pos(v.node(id)), { x: place(lay(['s1']), id).x, y: place(lay(['s1']), id).y, s: 1 }, id);
+    assert.equal(v.node(id).style.opacity, '', id);
+  }
+  for (const n of walk(v.area)) assert.equal(n.style?.opacity ?? '', '');
+  // And back to the first layout, which also has to settle.
+  v.draw(TREE, lay(), {}); settle();
+  assert.equal(v.node('t1'), null);
+  for (const n of walk(v.area)) assert.equal(n.style?.opacity ?? '', '');
 });
 
 test('under reduced motion the entrance leaves every block and link visible at once', async () => {

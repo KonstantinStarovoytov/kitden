@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js needs only this from a browser to load; the tests call its pure parts.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { GATEWAY_COLUMNS, afterPress, contentWidth, findRows, gatewayTree, glanceFor, heldServer, kitdenLinks, linkRemoval, listAt, listRows, litFor, mapMotion, narrowFor, serverCount } = await import('../../src/kitden/web/static/js/gateway.js');
+const { GATEWAY_COLUMNS, afterPress, contentWidth, findRows, gatewayTree, glanceFor, heldServer, kitdenLinks, linkRemoval, listAt, listRows, litFor, lightsLater, mapMotion, narrowFor, serverCount, stillSelected } = await import('../../src/kitden/web/static/js/gateway.js');
 const { dropBody, dropTarget, pressGrip, placeMoved } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
 const { offersSwitch } = await import('../../src/kitden/web/static/js/gateway-details.js');
@@ -106,6 +106,15 @@ test('the Gateway map has the mockup numbers', () => {
   const outside = l.blocks.filter((b) => b.kind === 'outside');
   assert.deepEqual([outside[0].y, outside[1].y, outside[0].h], [309, 365, 50]);
   assert.equal(wideWidth(gatewayTree(MEDIUM_VIEW, OPTS)), 836);
+});
+
+test('narrow, a tool is 190 wide as it was before the mockup made the wide one 200', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+  const wide = layoutTree(tree, { open: new Set(['held:kitden:files']), narrow: false });
+  const narrow = layoutTree(tree, { open: new Set(['held:kitden:files']), narrow: true });
+  const tools = (layout) => layout.blocks.filter((b) => b.kind === 'tool');
+  assert.ok(tools(wide).length > 0 && tools(wide).every((b) => b.w === 200));
+  assert.ok(tools(narrow).length > 0 && tools(narrow).every((b) => b.w === 190 && b.h === 30));
 });
 
 test('group captions carry their icons', () => {
@@ -444,6 +453,8 @@ test('N more and a group address open the List at that group', () => {
   const tree = gatewayTree({ ...MEDIUM_VIEW, groups: { move: rows, local: [], plugin: [] } }, OPTS);
   const more = layoutTree(tree, { open: new Set(), narrow: false }).blocks.find((b) => b.kind === 'more');
   assert.equal(more.id, 'more:group:outside');
+  // "N more" is as high as the blocks it stands for (an outside server's block is 50), not a plain 60.
+  assert.equal(more.h, 50);
   assert.deepEqual(listAt(more.id), { mode: 'list', selected: { kind: 'group', name: 'outside' } });
   assert.deepEqual(listAt('group:outside'), { mode: 'list', selected: { kind: 'group', name: 'outside' } });
   assert.deepEqual(listAt('more:group:kitden:remote').selected, { kind: 'group', name: 'kitden:remote' });
@@ -672,6 +683,21 @@ test('a second press on the selected block lets go, unless the press opened it',
   assert.equal(afterPress({ selected: 'client:codex', id: 'client:codex', opened: false }), 'letGo');
   assert.equal(afterPress({ selected: 'held:kitden:files', id: 'held:kitden:files', opened: true }), 'select');
   assert.equal(afterPress({ selected: null, id: 'client:codex', opened: false }), 'select');
+});
+
+test('the path of a press that opened a server lights when its tools are in, if that is still the selection', () => {
+  const lit = new Set(['client:codex', 'held:kitden:files']);
+  // Only a press that opened its block waits, and only when there is a path to light.
+  assert.equal(lightsLater({ unfolds: true, lit }), true);
+  assert.equal(lightsLater({ unfolds: false, lit }), false);
+  assert.equal(lightsLater({ unfolds: true, lit: new Set() }), false);
+  // When the motions end: the same map and the same selection, else a newer one lights its own path.
+  const view = {};
+  const drawn = { view, selected: 'held:kitden:files' };
+  assert.equal(stillSelected(drawn, { view, selected: 'held:kitden:files', width: 900 }), true);
+  assert.equal(stillSelected(drawn, { view, selected: 'client:codex' }), false);
+  assert.equal(stillSelected(drawn, { view, selected: null }), false);
+  assert.equal(stillSelected(drawn, { view: {}, selected: 'held:kitden:files' }), false);
 });
 
 test('pointing at a client or a server outside the gateway previews its paths; a selected link lights its two ends', () => {

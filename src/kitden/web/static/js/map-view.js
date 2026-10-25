@@ -417,7 +417,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     const item = pointed && links.get(pointed);
     if (item) item.path.classList.remove("hov");
     pointed = null;
-    const focused = [...links.values()].find((at) => at.hit && at.hit === document.activeElement && at.hit.style.display !== "none");
+    const focused = [...links.values()].find((other) => other.hit && other.hit === document.activeElement && other.hit.style.display !== "none");
     if (focused && keyboardFocus(focused.hit)) {
       pointAt(focused);
       return;
@@ -624,9 +624,9 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
       if (!node.parentNode) area.insertBefore(node, next);
       next = node;
     }
-    const at = new Map([...area.children].map((node, i) => [node, i]));
+    const index = new Map([...area.children].map((node, i) => [node, i]));
     const nodes = layout.blocks.map((place) => blocks.get(place.id).node);
-    if (nodes.every((node, i) => i === 0 || at.get(nodes[i - 1]) < at.get(node))) return;
+    if (nodes.every((node, i) => i === 0 || index.get(nodes[i - 1]) < index.get(node))) return;
     const focused = document.activeElement;
     for (const node of nodes) area.insertBefore(node, hits);
     if (focused && focused !== document.activeElement && area.contains(focused)) focused.focus({ preventScroll: true });
@@ -657,7 +657,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     const waves = enterDelays(layout.blocks.length); // when each block of an entrance starts
     const opened = new Set(); // new blocks of an unfold: their links draw in first
 
-    for (const [at, place] of layout.blocks.entries()) {
+    for (const [i, place] of layout.blocks.entries()) {
       const block = place.kind === "column" ? columns.get(place.column) : byId.get(place.id) || place;
       let item = blocks.get(place.id);
       const fresh = !item;
@@ -680,7 +680,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
       } else if (enters) {
         // The entrance: it waits below its place, unseen, then rises in its turn.
         put(item, { ...end, y: end.y + ENTER_RISE, o: 0 });
-        go(item, end, { dur: D(MOVE_MS), ease: OUT3, start: start + D(waves[at] + afterOldPage()) });
+        go(item, end, { dur: D(MOVE_MS), ease: OUT3, start: start + D(waves[i] + afterOldPage()) });
       } else if (fresh && unfold.has(place.id)) {
         // An unfold: it waits at its place while its links draw, then fades in.
         opened.add(place.id);
