@@ -116,7 +116,7 @@ The Library has one row per item and one column per client found on this compute
 | Instruction file Details | Each file's line says when the client reads it. Its path and its first 12 lines sit under Technical details, the lines in a quiet mono block on the inset color (common secret shapes hidden, values that span lines and key blocks too, each line cut at 200 characters). The badge says "On", or "In a project" for another project's file; never "Not loaded". With All projects picked only the files for all projects show lines; a project's files show theirs when that project is picked. Agents asking through Kitden's MCP server get no file lines: they stay on the local page. |
 | Add missing | In a project, a small plain "Add missing…" in the toolbar (not on Instructions, where Kitden adds nothing). Its review lists what each client lacks as checkboxes, one group per client; each line says where it goes. An add that would make a duplicate (a name in another case, or a skill another client would load twice) starts unchecked and says why. A change previews again; with none checked, Apply waits. Names loaded from another source are listed under "Not the same; not touched". |
 
-Every pressable area is at least 24 px tall and wide (WCAG 2.2 AA target size, checked 2026-10-19). The plugin switch keeps its 34 x 20 track inside a 24 px button, and a client checkbox is pressed through its 24 px label.
+Every pressable area is at least 24 px tall and wide (WCAG 2.2 AA target size, checked 2026-10-19), except a map link: its hit is 14 px wide. The far block and its Details hold the same actions, so the link is never the only way, and its × is a 28 px target (16 px and 6 px of reach on each side). The plugin switch keeps its 34 x 20 track inside a 24 px button, and a client checkbox is pressed through its 24 px label.
 
 The Gateway page shows the clients, the Kitden gateway, any registered gateway (Obot, MetaMCP) and the MCP servers they reach. Its head says "Connect your agents. Shape what they can use.", with a Map | List switch beside the title and the scope bar under it. The address keeps the choice (`view=map|list`); with none, the page opens in List past 15 servers. Rows show a name, the clients and an action; the command and address stay in Details.
 
@@ -153,9 +153,10 @@ has verified it. Calm beats bouncy: a tool that edits files must feel steady.
    the button that failed. No success animation can follow an error.
 5. **Interruptible.** Every animation can be cut short; the true state is always the resting
    style, never something an animation must finish to reach.
-6. **Transform and opacity.** Only these animate, with five small exceptions (the client
+6. **Transform and opacity.** Only these animate, with seven small exceptions (the client
    counts row, a folded `<details>`, the sliding mark, a check or a map link drawing, undrawing or blending its
-   stroke, a map link redrawn as its blocks move), all on small elements.
+   stroke, a map link redrawn as its blocks move, the `filter` that dims a map block off the lit path,
+   the `stroke`, `stroke-width` and `stroke-opacity` of a map link as its look changes), all on small elements.
 
 ### Tokens
 
@@ -208,7 +209,7 @@ All helpers live in `src/kitden/web/static/js/motion.js`.
 | Toast check | `toast(text, undo, { ok: true })` | Only for verified and undone |
 | Map draw | `mapView().draw` (map-view.js): nodes stay; a block's place is its `translate` property and its scale the `transform`, so the `scale` of a press turns about the block's own middle; a block that moves glides 260 ms OUT3, a new one fades in at its place in 260 ms, one that goes fades out in 180 ms IN3; an opened block's links draw in 170 ms, then its children fade in 120 ms, 15 ms apart; a folded block's children shrink back to its right side in 180 ms; links follow their blocks every frame; a new project or width shows the map at once; reduced motion and a hidden page land at once | Gateway map |
 | Focus | `draw(…, { selected, lit })` and `glance` of `mapView` (map-view.js): while a path is lit the box takes `.focus` and every block and link off it dims over 300 ms ease (blocks to 40 % with less colour, links to 16 %). A selected server also lights its tools and the gateway its servers; a press that opens a server shows its tools first, and the path lights when they are in (`lightLater` in gateway.js); a block that is dragged or has keyboard focus is never dimmed (its focus ring keeps 3:1). A selected block lays a 2.1 px accent line over each lit link that is not a bypass line: it fades in over 180 ms `--calm` (after the link has drawn, for one that draws in), fades out over 160 ms ease-in when the selection goes, and is removed by time. A selected link is picked and has no line. Pointing at a client or at a server outside the gateway, while nothing is selected, lights its paths with no line; a selection or a drag ends that. Reduced motion and a hidden page show the end at once | Gateway map |
-| Link pointer | `links` hooks of `mapView` (map-view.js): a link the page acts on has a 14 px hit stroke, off while the link is under half opacity. Pointer or focus gives the link the hover look (2.4 px, accent) and puts a 16 px × at half its length: it fades in over 120 ms `--calm`, follows the link, and jumps to another link with no motion. Leaving waits 240 ms, a plain timer that does not scale and also runs under reduced motion; the pointer on the × cancels it | Gateway map |
+| Link pointer | `links` hooks of `mapView` (map-view.js): a link the page acts on has a 14 px hit stroke, off while the link is under half opacity. Pointer or keyboard focus gives the link the hover look (2.4 px, accent) and puts a 16 px × at half its length: it fades in over 120 ms `--calm`, follows the link, and jumps to another link with no motion. A link with keyboard focus gets the look back when the pointer leaves another link. Leaving waits 240 ms, a plain timer that does not scale and also runs under reduced motion; the pointer on the × cancels it | Gateway map |
 | Link motion | `draw` of `mapView` (map-view.js), for a link between two blocks that stay: a new solid link draws in over 260 ms `--calm`; a new dashed one (a preview) fades in over 300 ms; a dashed one that goes fades out over 240 ms ease-out and a solid one draws back to its start over 380 ms; a link that changes look blends its dashes and opacity over 300 ms, a solid line counting as dashes "8 0". A link that goes takes no pointer and is removed by time; one that comes back meanwhile shows whole at once. A link to a block that comes or goes shows as much as the fainter of its two blocks. Reduced motion and a hidden page show the end at once | Gateway map |
 | Map preview | `previewOnMap` and `applyOnMap` (map-review.js): the preview block fades in and its dashed link to the gateway fades in with it when the preview opens. Only after `verified` does the preview go: its block and link fade out, the server's block and its solid link fade in at their place in the group, and the toast offers Undo. The map holds a dragged block (`hold` in map-view.js): it follows the pointer at once and glides onto the slot (260 ms OUT3); let go (`letGo`), it glides home in 260 ms OUT3; reduced motion moves nothing by itself | Gateway map |
 
@@ -216,7 +217,9 @@ All helpers live in `src/kitden/web/static/js/motion.js`.
 
 - One motion per change. A change that morphs cells does not also cross-fade the page.
 - A new control gets the press (`transform`), a hover colour and a visible focus ring; nothing else.
-- Lists stagger, single things do not. Total stagger under 500 ms.
+- Lists stagger, single things do not. Total stagger under 500 ms. Two map waves have their own
+  rule: the entrance fits in 440 ms however many blocks there are, and a server's unfold has no
+  cap (15 ms between its tools, however many it has).
 - A drawer has one motion: it slides in. Its blocks and diff lines are there at once. The column
   beside the page slides in the same way, and the page takes its room at once.
 - Put the resting style in CSS and the animation in a class or keyframe, so a skipped animation
@@ -236,8 +239,10 @@ All helpers live in `src/kitden/web/static/js/motion.js`.
   a row key) gets focus back. Arrow keys, Home and End move between tabs and select (`tabKeys()`
   in `dom.js`). The review's Tab loop includes its "Show file change" summary. After a page's
   Retry, focus goes to the new Retry if the read failed again, else to the page's first control.
-- A link the page can act on is a button after the blocks, named "<from> to <to>": focus gives it
-  the hover look and its ×, Enter opens it, Delete does what its × does.
+- A link the page can act on is a button after the blocks, named "<from> to <to>": keyboard focus
+  (`:focus-visible`; a mouse click does not) gives it the hover look and its ×, Enter or Space
+  opens it once, Delete does what its × does. The group of these buttons is hidden from a screen
+  reader while it holds none.
 - Live regions: the toast is `role="status"`; errors are `role="alert"`.
 
 ### Performance

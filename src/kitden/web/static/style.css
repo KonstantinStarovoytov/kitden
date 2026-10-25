@@ -602,7 +602,7 @@ div.map .map-area { position: relative; }
 div.map .map-links { position: absolute; inset: 0; z-index: 0; overflow: visible; pointer-events: none; }
 /* The links the page acts on: a hit stroke 14 px wide over each (after the blocks in the page, under
    them in the picture, so a block wins where they meet) and the × on the middle of the one pointed
-   at. A hit shows no focus ring; focus gives it the hover look. */
+   at. A hit shows no focus ring; keyboard focus gives it the hover look. */
 div.map .map-hits { position: absolute; inset: 0; z-index: 0; overflow: visible; pointer-events: none; }
 div.map .hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer; outline: none; }
 div.map .link-x { position: absolute; left: 0; top: 0; z-index: 2; display: grid; place-items: center; width: 16px; height: 16px; box-sizing: border-box; margin: 0; padding: 0; border: 1px solid var(--route); border-radius: 50%; background: var(--panel); color: var(--route); cursor: pointer; transition: background-color 120ms ease, color 120ms ease; }

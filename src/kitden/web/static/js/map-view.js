@@ -1,9 +1,9 @@
 // The map on a page: HTML blocks over one SVG of links, where map.js lays them out. A view keeps
-// one node per block, column caption and link across draws. A block moves by `transform` on one
-// frame clock, and every link is drawn again from its two blocks on each frame. A link the page
-// acts on takes the pointer: a wide hit stroke, a hover look and a small × on its middle. A
-// selection dims what is off its path and lays an accent line over each lit link. The page gives
-// the hooks; the view knows nothing of servers, tools or clients.
+// one node per block, column caption and link across draws. A block moves by its `translate` (its
+// scale is the `transform`) on one frame clock, and every link is drawn again from its two blocks
+// on each frame. A link the page acts on takes the pointer: a wide hit stroke, a hover look and a
+// small × on its middle. A selection dims what is off its path and lays an accent line over each
+// lit link. The page gives the hooks; the view knows nothing of servers, tools or clients.
 import { button, cutName, el, icon } from "./dom.js";
 import { blockLabel, drawPlan, enterDelays, foldable, LINK_MS, linkClass, linkDashed, linkKey, linkPath, midPoint, unfoldDelays } from "./map.js";
 import { afterOldPage, animateTo, CALM, D, IN3, OUT3, RETRACT, unscaled } from "./motion.js";
@@ -107,7 +107,8 @@ function boxOf({ x, y, w, h, s }) {
 // - draw(model, layout, { selected, lit, found, open, motion }): show `layout` (map.js layoutTree)
 //   of `model`. `motion` "move" moves what changed; "enter" lets every block rise into its place;
 //   "none" (and the first draw of a "move", reduced motion or a hidden page) shows the end at
-//   once. It resolves when every motion ends.
+//   once. It resolves when the motions of the blocks end; the motions of the links are not
+//   waited for.
 // - hold(id, point, { glide }): the block shows at that map point until letGo; letGo(id): it
 //   glides back to its place.
 // - drawIn(key, ms): a link grows from its start. node(idOrKey): a block's node or a link's path.
