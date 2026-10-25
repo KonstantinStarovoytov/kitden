@@ -1037,7 +1037,7 @@ function moveOutNodes(name, clients, linked, back) {
   picks.setAttribute("aria-label", "Client that keeps it");
   picks.append(...clients.map((client) => clientPick(name, client, linked)));
   const body = el("div", "body");
-  body.append(el("p", "why", "Pick the client that keeps it."), picks);
+  body.append(el("p", "why", `Pick the client that keeps it. You can also drag ${name} onto a client on the map.`), picks);
   return [stepHead(`Server · ${name}`, `Move ${name} out of the gateway`, back), body, stepFoot(`The other clients lose ${name}'s tools.`)];
 }
 

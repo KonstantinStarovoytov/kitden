@@ -1,9 +1,13 @@
 // Gateway: the drags of the map (4.7, gateway-notes 6). One engine (`startDrag`) runs each of
-// them; a drop only adds a row to the tray. Today: a server from outside the gateway into it.
+// them; a drop only adds a row to the tray. Today: a server from outside the gateway into it, and a
+// server in the Kitden gateway onto a client.
 import { el, reportError } from "./dom.js";
+import { foundClients } from "./gateway-details.js";
 import { linkKey } from "./map.js";
+import { shake } from "./motion.js";
 import { moveBody } from "./panel.js";
-import { busy, current } from "./store.js";
+import { CLIENT_NAMES } from "./parts.js";
+import { busy, current, data } from "./store.js";
 import { addToTray, inTray, keyFor, tray } from "./tray.js";
 
 // How far a pointer moves on a block before the drag starts: less is a click.
@@ -17,11 +21,16 @@ const HOME_MS = 220;
 const ZONE = { left: 66, right: 134, above: 4 };
 // What a drop never lands on: the floating Details and the dock.
 const COVERS = ["#drawer.open", "#dock"];
+// A server dragged out of the gateway: what its tip says until it is over a client, and where a
+// client takes it: the pointer in the client's box, widened 24 px left, 40 right, 16 up and down.
+const ON_CLIENT = "Drop on a client";
+const NEAR_CLIENT = { left: 24, right: 40, up: 16, down: 16 };
 
 // The map as gateway.js drew it last, as it gives it (placeMoved): its view (map-view.js), the tree,
 // the layout and how to draw the map again in place (`redraw`). A drag on the map (`drag`), the
-// server whose move was dropped and is still being asked (`moving`, { id, name, key }: `key` is its
-// row's in the tray), and the block the map holds off its place (`home`, its id).
+// server whose move was dropped and is still being asked (`moving`, { id, name, key, at }: `key` is
+// its row's in the tray, `at` where it waits, or none: on its slot), and the block the map holds off
+// its place (`home`, its id).
 const onMap = { view: null, model: null, layout: null, redraw: () => {}, drag: null, moving: null, home: null };
 
 // What a drag shows (gatewayTree's `drop`): the slot, while the block is over the gateway.
@@ -71,16 +80,35 @@ export function inZone(layout, centre, line) {
 // block (`view.tip(text)`) or by the pointer (`view.tip(text, { at: pointOf(drag) })`).
 export const DRAGS = {
   in: { begin: beginIn, over: overIn, drop: dropIn },
+  out: { begin: beginOut, over: overOut, drop: dropOut },
 };
 
-// A pointer goes down on the map. A server outside the gateway with a grip starts a drag into it;
-// a press while a change is written, or on anything else, does nothing here. `onStart()` runs when
-// the drag starts, before the map holds the block: the page lets go of its selection there.
+// A pointer goes down on the map. A server outside the gateway with a grip starts a drag into it,
+// and a server in the Kitden gateway (the whole block: it has no grip) a drag onto a client. A
+// press while a change is written, while another server's dropped move is asked, or on anything
+// else, does nothing here. `onStart()` runs when the drag starts, before the map holds the block:
+// the page lets go of its selection there.
 export function pressGrip(event, onStart = () => {}) {
   if (event.button !== 0 || busy.change || onMap.drag || !onMap.model) return;
   const node = event.target.closest("button.block");
   const block = node && onMap.model.blocks.find((b) => node.dataset.focus === `block:${b.id}`);
-  if (block && block.grip) startDrag(event, block, "in", onStart);
+  if (!block || (onMap.moving && onMap.moving.id !== block.id)) return;
+  if (block.grip) startDrag(event, block, "in", onStart);
+  else if (leavesGateway(block)) startDrag(event, block, "out", onStart);
+}
+
+// A server the Kitden gateway holds can move out to a client, unless a change takes it out.
+const leavesGateway = (block) => block.kind === "held" && block.gateway.kind === "kitden" && !block.leaving;
+
+// Why `client` cannot take the server `name`, when the page knows: the client is not on this Mac,
+// or it sets up a server of that name on its own. Null when it can (the server may still refuse).
+function whyNot(name, client) {
+  const who = CLIENT_NAMES[client];
+  if (data.clients && !foundClients().includes(client)) return `${who} is not on this Mac.`;
+  const view = current("gateway");
+  const rows = Object.values((view && view.groups) || {}).flat();
+  if (rows.some((row) => row.name === name && (row.columns || row.clients || []).includes(client))) return `${who} already has ${name}.`;
+  return null;
 }
 
 // One drag of `block` (`kind`, DRAGS). The block takes the pointer (pointer capture) at the press;
@@ -247,15 +275,16 @@ function dropIn(drag, at) {
   return false;
 }
 
-// While its move is asked, the block waits on the slot (it flies there from where it was let go,
-// and the slot hides at once under it), and after a moment a spinner says the server is asked. The page draws again meanwhile, so the
-// spinner is added once.
+// While its move is asked, the block waits where it was let go (`at`), or on the slot (it flies
+// there from where it was let go, and the slot hides at once under it), and after a moment a
+// spinner says the server is asked. The page draws again meanwhile, so the spinner is added once.
 function park() {
   const { moving, layout, view } = onMap;
   const node = view.node(moving.id);
-  const slot = layout.blocks.find((b) => b.id === `slot:${moving.name}`);
-  if (!node || !slot) return;
-  view.hold(moving.id, { x: slot.x, y: slot.y }, { glide: true, ms: DROP_MS, onto: slot.id });
+  const slot = moving.at ? null : layout.blocks.find((b) => b.id === `slot:${moving.name}`);
+  if (!node || !(slot || moving.at)) return;
+  if (slot) view.hold(moving.id, { x: slot.x, y: slot.y }, { glide: true, ms: DROP_MS, onto: slot.id });
+  else view.hold(moving.id, moving.at);
   onMap.home = moving.id;
   if (node.querySelector(".spinner")) return;
   node.setAttribute("aria-busy", "true");
@@ -266,12 +295,94 @@ function park() {
 function goHome() {
   const { view, home } = onMap;
   onMap.home = null;
-  const node = view.node(home);
-  if (node) {
-    node.removeAttribute("aria-busy");
-    for (const spinner of node.querySelectorAll(".spinner")) spinner.remove();
-  }
+  unpark(home);
   view.homeIn(home, HOME_MS);
+}
+
+// A block that waited while its move was asked loses its spinner.
+function unpark(id) {
+  const node = onMap.view.node(id);
+  if (!node) return;
+  node.removeAttribute("aria-busy");
+  for (const spinner of node.querySelectorAll(".spinner")) spinner.remove();
+}
+
+// A server in the Kitden gateway: the block, every client and its link from the gateway light, as a
+// glance does, and the tip asks for a client. One whose dropped move is still asked is with the
+// pointer again, so it waits nowhere now; a second drop replaces its row.
+function beginOut(drag) {
+  const { model, view } = onMap;
+  if (onMap.moving && onMap.moving.id === drag.id) {
+    onMap.moving = null;
+    unpark(drag.id);
+  }
+  Object.assign(drag, { target: null, why: null });
+  const clients = model.blocks.filter((b) => b.kind === "client").map((b) => b.id);
+  const lines = model.links.filter((l) => l.to === drag.id && l.from.startsWith("gateway:")).map(linkKey);
+  view.glance(new Set([drag.id, ...clients, ...lines]));
+  tipOut(drag);
+}
+
+// The pointer over a client, and not over Details or the dock: a client that can take the server
+// lights, and a wire runs from it to the block and follows it; one that cannot stays as it is and
+// the tip says why. Off a client the light goes and the wire fades.
+function overOut(drag) {
+  const { view } = onMap;
+  const point = covered(drag.at) ? null : pointOf(drag);
+  const client = point ? clientAt(point) : null;
+  if ((client && client.id) !== (drag.target && drag.target.id)) {
+    drag.target = client;
+    drag.why = client ? whyNot(drag.name, client.client) : null;
+    view.unlightTarget();
+    view.unwire();
+    if (client && !drag.why) {
+      view.lightTarget(client.id);
+      view.wire(client.id, drag.id);
+    }
+  }
+  tipOut(drag);
+}
+
+// What a drop does there: nothing yet, the reason a client cannot take it (plain), or the move.
+function tipOut(drag) {
+  const client = drag.target;
+  const words = client ? drag.why || `Move into ${CLIENT_NAMES[client.client]}` : ON_CLIENT;
+  onMap.view.tip(words, { on: Boolean(client && !drag.why) });
+}
+
+// The client block a map point is near: the first in order whose box, widened by NEAR_CLIENT,
+// holds it; null for none.
+function clientAt(point) {
+  const { model, layout } = onMap;
+  const near = (place) => Boolean(place) && point.x > place.x - NEAR_CLIENT.left && point.x < place.x + place.w + NEAR_CLIENT.right && point.y > place.y - NEAR_CLIENT.up && point.y < place.y + place.h + NEAR_CLIENT.down;
+  return model.blocks.find((b) => b.kind === "client" && near(layout.blocks.find((place) => place.id === b.id))) || null;
+}
+
+// A drop on a client that can take the server adds its move out to the tray, the same change as
+// the server panel's step (one row per server: a second drop replaces it), and the block waits
+// where it was let go while the move is asked; its answer draws the preview, which glides from
+// there into the Outside list. A drop on a client that cannot take it shakes the client, and the
+// block goes home. The wire fades on any let go.
+function dropOut(drag, at) {
+  const { view } = onMap;
+  view.unwire();
+  const client = at && drag.target;
+  if (!client) return false;
+  if (drag.why) {
+    const node = view.node(client.id);
+    if (node) shake(node);
+    return false;
+  }
+  const held = heldAt(drag);
+  const body = { action: "gateway.move_out", targets: [{ client: client.client }], params: { server: drag.name } };
+  onMap.moving = { id: drag.id, name: drag.name, key: keyFor(body), at: held && held.at };
+  addToTray(body).catch(reportError);
+  if (inTray(onMap.moving.key)) {
+    park();
+    return true;
+  }
+  onMap.moving = null;
+  return false;
 }
 
 // The pointer lets go at `point` (page coordinates), or Escape, a lost pointer or a blur (null). The tip, the

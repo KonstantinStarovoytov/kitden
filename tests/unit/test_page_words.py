@@ -1672,7 +1672,7 @@ def test_the_server_panel_says_the_mockups_words():
         '"Move out of the gateway…"',
         "`Server · ${name}`",
         "`Move ${name} out of the gateway`",
-        '"Pick the client that keeps it."',
+        "`Pick the client that keeps it. You can also drag ${name} onto a client on the map.`",
         '"Uses the gateway now"',
         '"Not connected to the gateway"',
         "`The other clients lose ${name}'s tools.`",
@@ -2228,6 +2228,21 @@ def test_a_drag_keeps_its_press_lights_its_target_and_has_a_tip():
     assert "div.map.dropping" not in CSS
     # The slot a dropped block flies onto hides at once; looks never set a block's opacity.
     assert "visibility: hidden" in rule("div.map .block.covered")
+
+
+def test_a_server_drags_onto_a_client():
+    # gateway-notes 6.2: the tip asks for a client, then says where a drop moves the server; a
+    # client that cannot take it says why before the drop, in the tip's plain look.
+    drag = script("gateway-drag.js")
+    for words in (
+        'const ON_CLIENT = "Drop on a client";',
+        "`Move into ${CLIENT_NAMES[client.client]}`",
+        "`${who} already has ${name}.`",
+        "`${who} is not on this Mac.`",
+    ):
+        assert words in drag, words
+    # Its client's box is widened 24 px left, 40 right and 16 up and down.
+    assert "const NEAR_CLIENT = { left: 24, right: 40, up: 16, down: 16 };" in drag
 
 
 def test_the_tray_bar_sits_in_the_dock_and_says_its_words():

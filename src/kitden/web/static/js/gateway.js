@@ -308,8 +308,9 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
 // has its line drawn leaving, and the server, once every client loses it, looks leaving too and
 // has no grip. After the rows of its kind, a server whose move out of the Kitden gateway waits in
 // the tray (`out`) shows in preview, "Moves to <Client>", joined to that client by a preview line;
-// it is a block of its own, also where that server is outside the gateway already. Its link from
-// the Kitden gateway is drawn leaving.
+// it is a block of its own, also where that server is outside the gateway already. It takes the
+// place of the server's block in the gateway (`from`: it starts where that one shows, a drop's
+// spot too, and glides into the list). Its link from the Kitden gateway is drawn leaving.
 function outsideParts(view, kitden, { picked, first, moved, out, gone }) {
   const blocks = [];
   const links = [];
@@ -340,7 +341,8 @@ function outsideParts(view, kitden, { picked, first, moved, out, gone }) {
       const server = ((kitden && kitden.servers) || []).find((s) => s.name === name);
       if (!server || (server.kind === "local" ? "local" : "move") !== group) continue;
       const id = `preview-out:${name}`;
-      blocks.push({ id, column: "servers", parent: "group:outside", kind: "preview", name, meta: `Moves to ${CLIENT_NAMES[move.client]}`, state: "preview", lamp: "preview", h: OUTSIDE_BLOCK_H, icon: OUTSIDE_ICONS[group], ports: { left: "out" }, takeOut: IN_PREVIEW, row: move.key, backTo: `held:${kitden.id}:${name}` });
+      const backTo = `held:${kitden.id}:${name}`;
+      blocks.push({ id, column: "servers", parent: "group:outside", kind: "preview", name, meta: `Moves to ${CLIENT_NAMES[move.client]}`, state: "preview", lamp: "preview", h: OUTSIDE_BLOCK_H, icon: OUTSIDE_ICONS[group], ports: { left: "out" }, takeOut: IN_PREVIEW, row: move.key, backTo, from: backTo });
       links.push({ from: `client:${move.client}`, to: id, kind: "direct", preview: true, row: move.key });
       links.push({ from: `gateway:${kitden.id}`, to: id, kind: "on", leaving: true, row: move.key });
     }
@@ -533,6 +535,8 @@ function kitdenServer(block, word, picked) {
   block.count = server.tools;
   block.lamp = (list.length ? server.on_count > 0 : block.state === "on") ? "on" : "off";
   block.ports = { left: true, right: typeof block.count === "number" };
+  // Back from a move out taken out of the tray, it starts where its preview was.
+  block.from = `preview-out:${server.name}`;
 }
 
 // "This project" for a tool whose rule is the picked project's own.

@@ -928,7 +928,7 @@ test('Move out steps to a client choice and a pick adds one move-out row', async
     assert.deepEqual(top.children.map((node) => node.attributes['aria-label'] || textOf(node)), ['Back', 'Server · files', 'Close']);
     assert.equal(textOf(title), 'Move files out of the gateway');
     const [say, picks] = body.children;
-    assert.equal(textOf(say), 'Pick the client that keeps it.');
+    assert.equal(textOf(say), 'Pick the client that keeps it. You can also drag files onto a client on the map.');
     // One row each: the client's tile, its name over whether it uses the gateway, and the radio.
     assert.deepEqual(picks.children.map((node) => node.children.map((part) => part.className.split(' ')[0])), Array(3).fill(['client-mark', 'pk-tx', 'radio']));
     assert.deepEqual(picks.children.map((node) => textOf(node.children[1])), ['Claude CodeUses the gateway now', 'CodexUses the gateway now', 'CursorNot connected to the gateway']);
@@ -953,6 +953,15 @@ test('Move out steps to a client choice and a pick adds one move-out row', async
     await wait(50);
     assert.equal(textOf(drawer.children[0].children[1]), 'files');
     assert.deepEqual(panelState.current, { type: 'held', name: 'files' });
+  });
+});
+
+test('the move-out step says it can be dragged', async () => {
+  await onFilesPanel(async (drawer) => {
+    await click(control(drawer, MOVE));
+    await wait(50);
+    const [say] = drawer.children[1].children;
+    assert.equal(textOf(say), 'Pick the client that keeps it. You can also drag files onto a client on the map.');
   });
 });
 

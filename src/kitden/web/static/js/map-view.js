@@ -325,6 +325,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
   let target = null; // the block with the drop look
   let tipNode = null; // the drag tip, while a drag shows one
   let tipAt = null; // the pointer it is placed by, or null: by the held block
+  let wired = null; // the wire of a drag, while one shows: { from, to, path }
   let coming = new Map(); // how the new blocks of the last draw arrive (arrivals), by id
   let replacing = new Map(); // a block that goes -> the new block that takes its place
 
@@ -796,6 +797,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     }
     placeCross();
     placeTip();
+    placeWire();
   }
 
   // The area takes the last layout's size; while blocks move, the larger of that and its own.
@@ -1117,6 +1119,38 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     if (from) tipNode.style.transform = `translate(${from.x + by.x}px, ${from.y + by.y}px)`;
   }
 
+  // The wire of a drag, from the right port of `from` to the left port of `to`, in the accent
+  // dashes of a preview, lit. It shows at once and follows the two blocks; it is no link of the map.
+  function wire(from, to) {
+    if (wired && wired.from === from && wired.to === to) return;
+    unwire();
+    const path = document.createElementNS(SVG, "path");
+    path.setAttribute("class", "link preview lit");
+    svg.insertBefore(path, layer);
+    wired = { from, to, path };
+    placeWire();
+  }
+
+  // The wire fades out (240 ms ease-out) and is removed by time; reduced motion and a hidden page
+  // take it away at once.
+  function unwire() {
+    if (!wired) return;
+    const { path } = wired;
+    wired = null;
+    if (!canMove()) {
+      path.remove();
+      return;
+    }
+    animateTo(path, [{ opacity: 1 }, { opacity: 0 }], { dur: FADE_OUT_MS, ease: "ease-out", fill: "forwards" });
+    setTimeout(() => path.remove(), D(FADE_OUT_MS));
+  }
+
+  function placeWire() {
+    const a = wired && blocks.get(wired.from);
+    const b = wired && blocks.get(wired.to);
+    if (a && b) wired.path.setAttribute("d", linkPath({}, boxOf(a), boxOf(b)));
+  }
+
   // A link grows from its start. It shows whole while it draws; its own dashes come back when it
   // ends, by time.
   function drawIn(key, ms = DRAW_MS) {
@@ -1199,5 +1233,5 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     return blocks.get(idOrKey)?.node || links.get(idOrKey)?.path || null;
   }
 
-  return { box, area, draw, glance, hold, homeIn, lightTarget, unlightTarget, tip, untip, drawIn, node };
+  return { box, area, draw, glance, hold, homeIn, lightTarget, unlightTarget, tip, untip, wire, unwire, drawIn, node };
 }

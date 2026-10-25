@@ -1228,6 +1228,8 @@ function dragMap({ covers = {}, id = 'outside:move:github', view: shown = MEDIUM
     glance: (set) => asked.push(['glance', set ? [...set] : null]),
     tip: (text, how = {}) => asked.push(['tip', text, how]),
     untip() {},
+    wire: (from, to) => asked.push(['wire', from, to]),
+    unwire: () => asked.push(['unwire']),
     box: { isConnected: true, classList: { toggle() {}, remove() {} } },
     area: { getBoundingClientRect: () => ({ left: 0, top: 0 }) },
   };
@@ -1246,6 +1248,7 @@ function dragMap({ covers = {}, id = 'outside:move:github', view: shown = MEDIUM
   Object.assign(map, {
     at,
     home,
+    redraw,
     // A press 10 px into the block, and the moves and the let go of that pointer.
     press: (onStart) => pressGrip({ button: 0, pointerId: 7, target: { closest: () => node }, clientX: home.x + 10, clientY: home.y + 10 }, onStart),
     move: (x, y) => { for (const fn of heard.pointermove || []) fn({ clientX: x, clientY: y }); },
@@ -1515,6 +1518,159 @@ test("its client's dotted line runs to the preview block", () => {
   // It is drawn at right angles, as a dotted line from a client is.
   const layout = layoutTree(tree, { open: new Set(), narrow: false });
   assert.equal(layout.links.find((l) => l.from === 'client:claude_code' && l.to === 'preview:github').shape, 'step');
+});
+
+// A drag of a held server onto a client (Task 4.7, gateway-notes 6.2): the tips the drag gave.
+const tips = (map) => map.asked.filter(([what]) => what === 'tip');
+const startOn = (map) => {
+  map.press();
+  map.move(map.home.x + 16, map.home.y + 10);
+};
+
+test('a held server shows the client tip and a wire that follows it', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW, clients: CLIENTS });
+  try {
+    const map = dragMap({ id: 'held:kitden:files' });
+    // No grip: the whole block takes the pointer.
+    assert.ok(!block(map.tree, 'held:kitden:files').grip);
+    startOn(map);
+    assert.deepEqual(map.captured, [7]);
+    // The block, every client and its link from the gateway light; the tip asks for a client.
+    assert.deepEqual(map.asked.find(([what]) => what === 'glance'), ['glance', ['held:kitden:files', 'client:claude_code', 'client:codex', 'client:cursor', 'gateway:kitden>held:kitden:files']]);
+    assert.deepEqual(tips(map).at(-1), ['tip', 'Drop on a client', { on: false }]);
+    // The pointer over Codex, whose box is widened 40 px on the right and 16 down: Codex lights, a
+    // wire runs from it to the block, and the tip says what a drop does.
+    const codex = map.at('client:codex');
+    map.move(codex.x + codex.w + 39, codex.y + codex.h + 15);
+    assert.deepEqual(map.asked.filter(([what]) => what === 'light'), [['light', 'client:codex']]);
+    assert.deepEqual(map.asked.filter(([what]) => what === 'wire'), [['wire', 'client:codex', 'held:kitden:files']]);
+    assert.deepEqual(tips(map).at(-1), ['tip', 'Move into Codex', { on: true }]);
+    // The block moves on over Codex: it is held where the pointer is, and the wire stays one.
+    map.move(codex.x - 23, codex.y + 10);
+    assert.deepEqual(map.asked.filter(([what]) => what === 'hold').at(-1), ['hold', 'held:kitden:files', { x: codex.x - 33, y: codex.y }, { pressed: true }]);
+    assert.equal(map.asked.filter(([what]) => what === 'wire').length, 1);
+    // Off the client the light and the wire go, and the tip asks again.
+    map.asked.length = 0;
+    map.move(codex.x + codex.w + 41, codex.y + 10);
+    assert.deepEqual(map.asked.filter(([what]) => what !== 'hold'), [['unlight'], ['unwire'], ['tip', 'Drop on a client', { on: false }]]);
+    // A drop on nothing glides home and leaves the tray as it was.
+    map.up(codex.x + codex.w + 41, codex.y + 10);
+    await flush();
+    assert.deepEqual(map.asked.at(-1), ['homeIn', 'held:kitden:files', 220]);
+    assert.deepEqual([tray.rows, posted()], [[], []]);
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null, clients: null });
+    await freshTray();
+  }
+});
+
+test('a drop on a client adds one move-out row and the preview is carried to the Outside list', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW, clients: CLIENTS });
+  try {
+    const map = dragMap({ id: 'held:kitden:tracker' });
+    let answer;
+    queue(PREVIEW, (sent) => new Promise((resolve) => { answer = () => resolve(batch('c1')(sent)); }));
+    startOn(map);
+    const codex = map.at('client:codex');
+    const [x, y] = [codex.x + 20, codex.y + 20];
+    map.move(x, y);
+    const before = map.asked.length;
+    map.up(x, y);
+    // The same change as the server panel's move out, with its icon, at once; the wire goes.
+    assert.deepEqual(tray.rows.map((r) => [r.key, r.body, r.icon]), [['moveout:tracker', moveOut('tracker', 'codex'), 'log-out']]);
+    assert.ok(map.asked.slice(before).some(([what]) => what === 'unwire'));
+    assert.ok(!map.asked.some(([what]) => what === 'homeIn'));
+    // Until its row answers the block waits where it was let go (the press was 10 px into it).
+    map.asked.length = 0;
+    map.redraw();
+    assert.deepEqual(map.asked, [['hold', 'held:kitden:tracker', { x: x - 10, y: y - 10 }, {}]]);
+    // Its answer draws the preview block in the Outside list in its place: it starts where the
+    // block was (`from`), and nothing is sent home.
+    answer();
+    await flush();
+    map.asked.length = 0;
+    map.redraw();
+    assert.deepEqual(map.asked, []);
+    assert.ok(!block(map.tree, 'held:kitden:tracker'));
+    const shown = block(map.tree, 'preview-out:tracker');
+    assert.deepEqual([shown.parent, shown.meta, shown.from], ['group:outside', 'Moves to Codex', 'held:kitden:tracker']);
+    assert.equal(tray.rows.length, 1);
+    // Taken out, the server comes back from where its preview was.
+    assert.equal(block(gatewayTree(MEDIUM_VIEW, OPTS), 'held:kitden:tracker').from, 'preview-out:tracker');
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null, clients: null });
+    await freshTray();
+  }
+});
+
+test('a second drop on another client replaces the row', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW, clients: CLIENTS });
+  try {
+    const map = dragMap({ id: 'held:kitden:tracker' });
+    queue(PREVIEW, batch('c1'), batch('c2'));
+    const dropOn = (id) => {
+      const client = map.at(id);
+      startOn(map);
+      map.move(client.x + 20, client.y + 20);
+      map.up(client.x + 20, client.y + 20);
+    };
+    dropOn('client:codex');
+    // The page draws the tray while the row is asked: the block waits where it was let go.
+    map.redraw();
+    dropOn('client:claude_code');
+    await flush();
+    assert.deepEqual(tray.rows.map((r) => [r.key, r.body]), [['moveout:tracker', moveOut('tracker', 'claude_code')]]);
+    assert.equal(tray.phase, 'ready');
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null, clients: null });
+    await freshTray();
+  }
+});
+
+test('a client that has the name refuses before the drop, with the reason, and shakes on release', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW, clients: CLIENTS });
+  try {
+    const refused = async (id, clients, why) => {
+      data.clients = clients;
+      const map = dragMap({ id });
+      const shook = [];
+      const cursorNode = { animate: (frames, how) => { shook.push([frames.map((f) => f.transform), how.duration, how.easing]); return { finished: Promise.resolve() }; } };
+      map.view.node = (which) => (which === 'client:cursor' ? cursorNode : map.node);
+      startOn(map);
+      const cursor = map.at('client:cursor');
+      map.move(cursor.x + 20, cursor.y + 20);
+      // The tip says why in its plain look; Cursor does not light and gets no wire.
+      assert.deepEqual(tips(map).at(-1), ['tip', why, { on: false }], why);
+      assert.ok(!map.asked.some(([what]) => what === 'light' || what === 'wire'), why);
+      assert.deepEqual(shook, [], why);
+      // On release the block goes home, the tray is as it was, and Cursor shakes once.
+      map.up(cursor.x + 20, cursor.y + 20);
+      await flush();
+      assert.deepEqual(map.asked.at(-1), ['homeIn', id, 220], why);
+      assert.deepEqual([tray.rows, posted()], [[], []], why);
+      assert.deepEqual(shook, [[['translateX(0)', 'translateX(-7px)', 'translateX(6px)', 'translateX(-3px)', 'translateX(0)'], 380, 'ease-out']], why);
+    };
+    // Cursor sets up its own files.
+    await refused('held:kitden:files', CLIENTS, 'Cursor already has files.');
+    // Cursor is not on this Mac.
+    const away = CLIENTS.map((c) => (c.id === 'cursor' ? { ...c, status: 'missing' } : c));
+    await refused('held:kitden:tracker', away, 'Cursor is not on this Mac.');
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null, clients: null });
+    await freshTray();
+  }
 });
 
 test('a grip shows only where the Kitden gateway can take the server', () => {

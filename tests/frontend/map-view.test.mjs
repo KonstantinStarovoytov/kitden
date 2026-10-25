@@ -477,6 +477,41 @@ test('a block dropped onto another hides that one at once, until it goes home', 
   assert.ok(!v.node('g1').classList.contains('covered'));
 });
 
+test("a drag's wire runs from a client's right port to the held block's left port, follows it, and fades out in 240 ms", async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const v = view();
+  const layout = lay();
+  await v.draw(TREE, layout, { motion: 'none' });
+  const svg = v.area.children.find((n) => n.className === 'map-links');
+  const wires = () => svg.children.filter((n) => n.className === 'link preview lit');
+  const c1 = place(layout, 'c1');
+  const s2 = place(layout, 's2');
+  v.hold('s2', { x: 500, y: 300 }, { pressed: true });
+  v.wire('c1', 's2');
+  // The accent dashes of a preview, lit; at once, with no fade in.
+  assert.equal(wires().length, 1);
+  const wire = wires()[0];
+  assert.deepEqual([wire.getAttribute('d'), wire.animations], [linkPath({}, c1, { x: 500, y: 300, w: s2.w, h: s2.h }), []]);
+  // It follows the held block; the same wire again is the same one.
+  v.hold('s2', { x: 520, y: 340 }, { pressed: true });
+  assert.equal(wire.getAttribute('d'), linkPath({}, c1, { x: 520, y: 340, w: s2.w, h: s2.h }));
+  v.wire('c1', 's2');
+  assert.deepEqual(wires(), [wire]);
+  // Off the client it fades out in 240 ms ease-out, then goes.
+  v.unwire();
+  const fade = wire.animations.at(-1);
+  assert.deepEqual([fade.keyframes, fade.options.duration, fade.options.easing], [[{ opacity: 1 }, { opacity: 0 }], 240, 'ease-out']);
+  assert.equal(wire.parentNode, svg);
+  t.mock.timers.tick(240);
+  assert.equal(wire.parentNode, null);
+  // Under reduced motion it goes at once.
+  reduce(true);
+  v.wire('c1', 's2');
+  const again = wires()[0];
+  v.unwire();
+  assert.deepEqual([again.parentNode, again.animations], [null, []]);
+});
+
 test('the drag tip can go by the pointer: 12 px right of it and 30 px over it', async () => {
   const v = view();
   await v.draw(TREE, lay(), { motion: 'none' });
