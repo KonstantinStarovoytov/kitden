@@ -213,6 +213,22 @@ test("a block's words are drawn again only when they change", async () => {
   assert.notEqual(v.node('s1').firstElementChild, words);
 });
 
+test("a group's caption draws its icon before its words, 13 px; a caption with no icon is words only", async () => {
+  reduce(true);
+  const groups = { columns: TREE.columns, blocks: [{ id: 'g1', column: 'b', kind: 'group', name: 'Remote', icon: 'cloud' }, { id: 'g2', column: 'b', kind: 'group', name: 'Local' }], links: [] };
+  const v = view();
+  await v.draw(groups, layoutTree(groups, { open: new Set(), narrow: false }), {});
+  const [mark, words] = v.node('g1').children;
+  assert.deepEqual([mark.dataset.icon, mark.getAttribute('width'), words.textContent], ['cloud', '13', 'Remote']);
+  assert.deepEqual([v.node('g2').children.length, v.node('g2').textContent], [0, 'Local']);
+  // The same caption drawn again keeps its icon node; a new icon replaces it.
+  await v.draw(groups, layoutTree(groups, { open: new Set(), narrow: false }), {});
+  assert.equal(v.node('g1').children[0], mark);
+  const changed = { ...groups, blocks: [{ ...groups.blocks[0], icon: 'info' }, groups.blocks[1]] };
+  await v.draw(changed, layoutTree(changed, { open: new Set(), narrow: false }), {});
+  assert.equal(v.node('g1').children[0].dataset.icon, 'info');
+});
+
 test('a held block stays where it is put across draws, and glides home when let go', async () => {
   const v = view();
   await v.draw(TREE, lay([], true), { motion: 'none' });

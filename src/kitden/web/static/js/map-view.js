@@ -2,7 +2,7 @@
 // one node per block, column caption and link across draws. A block moves by `transform` on one
 // frame clock, and every link is drawn again from its two blocks on each frame. The page gives the
 // hooks; the view knows nothing of servers, tools or clients.
-import { button, cutName, el } from "./dom.js";
+import { button, cutName, el, icon } from "./dom.js";
 import { blockLabel, drawPlan, enterDelays, foldable, LINK_MS, linkClass, linkKey, linkPath, unfoldDelays } from "./map.js";
 import { animateTo, CALM, D, IN3, OUT3 } from "./motion.js";
 
@@ -14,6 +14,7 @@ const FOLD_SCALE = 0.3; // how small a folded child gets as it goes
 const FOLD_IN = 100; // a folded child goes this far left of its opener's right side
 const ROOM = 24; // under the lowest block
 const ENTER_RISE = 6; // an entering block starts this far below its place
+const CAPTION_ICON = 13; // a group caption's icon
 
 // A part a screen reader skips: the block's label says it already.
 function quiet(node) {
@@ -56,6 +57,12 @@ function blockParts(block, { tile, open }) {
 // Everything a block's words depend on, as one key: they are drawn again only when it changes.
 function wordsKey(block, open) {
   return JSON.stringify([block.kind, block.name, block.meta, block.tag, block.count, open, block.action, block.state, block.dot, block.grip]);
+}
+
+// A group's caption: its words, with its icon (a lucide name, if it has one) before them.
+function captionWords(node, name, mark) {
+  if (!mark) node.textContent = name;
+  else node.replaceChildren(icon(mark, CAPTION_ICON), el("span", null, name));
 }
 
 // A column's caption and a group's caption without Details are words; any other block is a button.
@@ -160,8 +167,9 @@ export function mapView({ tile, onOpen, onSelect, onAdd } = {}) {
       }
     } else if (item.div) {
       item.look = matched ? "caption found" : "caption";
-      if (item.words !== name) node.textContent = name;
-      item.words = name;
+      const words = JSON.stringify([name, block.icon]);
+      if (item.words !== words) captionWords(node, name, block.icon);
+      item.words = words;
       node.title = name;
     } else {
       const group = place.kind === "group";
@@ -173,10 +181,10 @@ export function mapView({ tile, onOpen, onSelect, onAdd } = {}) {
       else delete node.dataset.state;
       node.title = name;
       node.setAttribute("aria-label", blockLabel(block));
-      const words = group ? name : wordsKey(block, opened);
+      const words = group ? JSON.stringify([name, block.icon]) : wordsKey(block, opened);
       if (words !== item.words) {
         item.words = words;
-        if (group) node.textContent = name;
+        if (group) captionWords(node, name, block.icon);
         else node.replaceChildren(...blockParts(block, { tile, open: opened }));
       }
       // A block that folds says whether it is open by what is open, not by what shows yet.

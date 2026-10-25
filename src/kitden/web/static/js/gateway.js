@@ -17,14 +17,15 @@ export { heldServer, kitdenLinks, SETUP_NOTE } from "./gateway-details.js";
 
 const WRITABLE = ["claude_code", "codex", "cursor"];
 const OUTSIDE = "Outside the gateway · calls skip Kitden's rules";
-// On the map these words take two lines in their column.
+// On the map these words take two lines in their column, and an outside server's block is 50 high.
 const OUTSIDE_H = 36;
+const OUTSIDE_BLOCK_H = 50;
 // The groups of servers outside the gateway in /api/gateway-view, in the order the page lists them.
 const OUTSIDE_GROUPS = ["move", "local", "plugin"];
 // The icon of a server outside the gateway, by its group.
 const OUTSIDE_ICONS = { move: "remote", local: "local", plugin: "plugin" };
-// A gateway's own groups.
-const KINDS = [["remote", "Remote"], ["local", "Local"]];
+// A gateway's own groups, each with the icon of its caption.
+const KINDS = [["remote", "Remote", "cloud"], ["local", "Local", "hard-drive"]];
 // A gateway's block, or on a first run the slot of the Kitden gateway.
 const GATEWAY_KINDS = ["gateway", "slot"];
 // What a client or an outside server says when Kitden does not know its state.
@@ -139,12 +140,14 @@ function modeSwitch(mode) {
 }
 
 // The Gateway's map columns: clients, the gateway, servers, tools, each with its blocks' size,
-// wide and narrow. Narrow, the gateway is a small tile and tools are rows inside their server.
+// wide and narrow, and (wide) the space before it, the y of its first block and the space between
+// its blocks (map.js). The numbers are the mockup's: columns at x 0, 196, 396 and 636, 836 wide.
+// Narrow, the gateway is a small tile and tools are rows inside their server.
 export const GATEWAY_COLUMNS = [
-  { id: "clients", caption: "Clients", w: 150, h: 54, narrowW: 140 },
-  { id: "gateway", caption: "Gateway", w: 150, h: 124, narrowW: 56, narrowH: 56 },
-  { id: "servers", caption: "Servers", w: 170, h: 54, narrowW: 220 },
-  { id: "tools", caption: "Tools", w: 190, h: 34, narrowH: 30 },
+  { id: "clients", caption: "Clients", w: 150, h: 54, top: 124, rowGap: 18, narrowW: 140 },
+  { id: "gateway", caption: "Gateway", w: 150, h: 124, colGap: 46, top: 124, rowGap: 18, narrowW: 56, narrowH: 56 },
+  { id: "servers", caption: "Servers", w: 170, h: 60, colGap: 50, top: 58, rowGap: 10, narrowW: 220, narrowH: 54 },
+  { id: "tools", caption: "Tools", w: 200, h: 34, colGap: 70, narrowH: 30 },
 ];
 
 // The registered gateways, the one the clients use first.
@@ -222,12 +225,12 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
     const counts = reaches ? `${plural(reaches.length, "client", "clients")} · ${n}` : n;
     blocks.push({ id, column: "gateway", kind: "gateway", name: gatewayName(gateway), meta: unread === null ? counts : unread || null, state: unread ? "unk" : "on", stateInMeta: true, gateway, unread });
     for (const client of reaches || []) links.push({ from: `client:${client}`, to: id, kind: "on" });
-    for (const [kind, word] of KINDS) {
+    for (const [kind, word, mark] of KINDS) {
       const mine = servers.filter((s) => kindOf(s) === kind);
       const end = adds && adds.kind === kind ? adds.block : null;
       if (!mine.length && !end) continue;
       const group = `group:${gateway.id}:${kind}`;
-      blocks.push({ id: group, column: "servers", kind: "group", name: word, under: id });
+      blocks.push({ id: group, column: "servers", kind: "group", name: word, icon: mark, before: 3, under: id });
       for (const each of mine) {
         const block = { id: `held:${gateway.id}:${each.name}`, column: "servers", parent: group, kind: "held", name: each.name, state: "on", icon: kind, server: each, gateway };
         server(block, word);
@@ -280,7 +283,7 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
   }
   blocks.push(...tools);
   const rows = OUTSIDE_GROUPS.flatMap((key) => (view.groups[key] || []).map((row) => [key, row]));
-  if (rows.length) blocks.push({ id: "group:outside", column: "servers", kind: "group", name: OUTSIDE, h: OUTSIDE_H });
+  if (rows.length) blocks.push({ id: "group:outside", column: "servers", kind: "group", name: OUTSIDE, icon: "info", h: OUTSIDE_H, before: 21, rowGap: 6 });
   // The outside row a move on the map takes.
   const moved = moving ? `outside:${moving.kind === "local" ? "local" : "move"}:${moving.name}` : null;
   for (const [key, row] of rows) {
@@ -293,7 +296,7 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
     // A drop moves into the Kitden gateway only, so a grip needs it.
     const grip = targets.some((g) => g.kind === "kitden") && !first && !moving;
     const state = row.unknown ? "unk" : "on";
-    blocks.push({ id, column: "servers", parent: "group:outside", kind: "outside", name: row.name, meta, tag, state, icon: OUTSIDE_ICONS[key], row, groupKey: key, columns, move, grip });
+    blocks.push({ id, column: "servers", parent: "group:outside", kind: "outside", name: row.name, meta, tag, state, h: OUTSIDE_BLOCK_H, icon: OUTSIDE_ICONS[key], row, groupKey: key, columns, move, grip });
     const line = row.unknown ? { kind: "direct", unk: true } : { kind: "direct" };
     if (id !== moved) for (const client of columns) links.push({ from: `client:${client}`, to: id, ...line });
   }

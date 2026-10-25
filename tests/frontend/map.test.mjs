@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js (for its columns) needs only this from a browser to load.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { CAPTION_H, GAP, NARROW_GAP, blockOrder, drawPlan, dropAt, enterDelays, findChip, groupBox, findIn, foldable, isNarrow, layoutTree, linkClass, linkKey, litFrom, litPath, toggleOpen, unfoldDelays } = await import('../../src/kitden/web/static/js/map.js');
+const { CAPTION_H, GAP, NARROW_GAP, blockOrder, drawPlan, dropAt, enterDelays, findChip, groupBox, findIn, foldable, isNarrow, layoutTree, linkClass, linkKey, litFrom, litPath, toggleOpen, unfoldDelays, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
 const { cutName } = await import('../../src/kitden/web/static/js/dom.js');
 const { GATEWAY_COLUMNS } = await import('../../src/kitden/web/static/js/gateway.js');
 
@@ -68,8 +68,8 @@ test('columns sit at fixed x and blocks take their column size', () => {
   const l = layoutTree(model(3, 2), { open: new Set(), width: 1248, narrow: false });
   const at = (id) => l.blocks.find((b) => b.id === id);
   assert.deepEqual([at('client:codex').x, at('gateway:kitden').x], [0, 150 + GAP]);
-  assert.deepEqual([at('held:kitden:github').w, at('held:kitden:github').h], [170, 54]);
-  assert.ok(l.blocks.every((b) => b.w >= 132 && b.w <= 220 && (b.h <= 54 || b.id === 'gateway:kitden')));
+  assert.deepEqual([at('held:kitden:github').w, at('held:kitden:github').h], [170, 60]);
+  assert.ok(l.blocks.every((b) => b.w >= 132 && b.w <= 220 && (b.h <= 60 || b.id === 'gateway:kitden')));
 });
 
 test('any tree lays out by its own columns, wide and narrow', () => {
@@ -92,11 +92,63 @@ test('a folded server shows its count; opening it shows its tools and links', ()
   const tools = opened.blocks.filter((b) => b.id.startsWith('tool:github/'));
   const column = opened.columns.find((c) => c.id === 'tools');
   assert.equal(tools.length, 4);
-  assert.ok(tools.every((b) => b.x === column.x && b.w === 190 && b.h === 34));
-  // The tools start beside their server.
-  assert.ok(tools[0].y >= opened.blocks.find((b) => b.id === 'held:kitden:github').y);
+  assert.ok(tools.every((b) => b.x === column.x && b.w === 200 && b.h === 34));
+  // The tools start where the centring puts them: their middle is their server's middle.
+  const server = opened.blocks.find((b) => b.id === 'held:kitden:github');
+  assert.equal(tools[0].y, 31);
+  assert.equal((tools[0].y + tools.at(-1).y + tools.at(-1).h) / 2, server.y + server.h / 2);
   const link = opened.links.find((l) => key(l) === 'held:kitden:github>tool:github/read_repo');
   assert.ok(link && link.d.startsWith('M ') && link.d.includes(' C '));
+});
+
+test('tools are 200×34, 42 apart, centred on their server, never above y 24', () => {
+  const l = layoutTree(model(3, 0, { open: 'github' }), { open: new Set(['held:kitden:github']), ...WIDE });
+  const tools = l.blocks.filter((b) => b.id.startsWith('tool:github/'));
+  assert.deepEqual(tools.map((b) => [b.y, b.w, b.h]), [[31, 200, 34], [73, 200, 34], [115, 200, 34], [157, 200, 34]]);
+  const tall = { columns: GATEWAY_COLUMNS, blocks: [{ id: 'g', column: 'servers', kind: 'group', name: 'Remote' }, { id: 's', column: 'servers', parent: 'g', kind: 'held', name: 's', count: 8 },
+    ...Array.from({ length: 8 }, (_, i) => ({ id: `t${i}`, column: 'tools', parent: 's', kind: 'tool', name: `t${i}` }))], links: [] };
+  assert.equal(layoutTree(tall, { open: new Set(['s']), ...WIDE }).blocks.find((b) => b.id === 't0').y, 24);
+});
+
+test('a column and a block may set their own sizes and spaces; narrow keeps the plain rules', () => {
+  const m = {
+    columns: [{ id: 'a', w: 100, h: 40, top: 50, rowGap: 12 }, { id: 'b', w: 120, h: 30, colGap: 70, narrowW: 90 }],
+    blocks: [
+      { id: 'x', column: 'a' }, { id: 'y', column: 'a', h: 20 },
+      { id: 'g', column: 'a', kind: 'group', name: 'G', before: 9, rowGap: 4 }, { id: 'g1', column: 'a', parent: 'g' }, { id: 'g2', column: 'a', parent: 'g' },
+    ],
+    links: [],
+  };
+  const ids = ['x', 'y', 'g', 'g1', 'g2'];
+  const wide = layoutTree(m, { open: new Set(), ...WIDE });
+  const ys = (l) => ids.map((id) => l.blocks.find((b) => b.id === id).y);
+  // From the top of the column: x is 40 high, a gap of 12, y is 20 high, the group 9 more below
+  // with its caption 18 high, its first block 5 under it and its blocks 4 apart.
+  assert.deepEqual(ys(wide), [50, 102, 143, 166, 210]);
+  assert.deepEqual(wide.blocks.filter((b) => ids.includes(b.id)).map((b) => b.h), [40, 20, CAPTION_H, 40, 40]);
+  assert.deepEqual(wide.columns.map((c) => c.x), [0, 170]);
+  assert.equal(wideWidth(m), 290);
+  // Narrow: from the caption row, 8 apart, a group caption 22 high; a block's own h still counts.
+  const narrow = layoutTree(m, { open: new Set(), width: 600, narrow: true });
+  assert.deepEqual(ys(narrow), [24, 72, 100, 130, 178]);
+  assert.equal(narrow.blocks.find((b) => b.id === 'y').h, 20);
+  assert.deepEqual(narrow.columns.map((c) => c.id), ['a']);
+});
+
+test('two open blocks: the second stack never starts above the bottom of the first', () => {
+  const m = {
+    columns: [{ id: 'a', w: 100, h: 30 }, { id: 'b', w: 100, h: 30 }],
+    blocks: [{ id: 'p1', column: 'a' }, { id: 'p2', column: 'a' },
+      ...['c1', 'c2', 'c3'].map((id) => ({ id, column: 'b', parent: 'p1' })), { id: 'd1', column: 'b', parent: 'p2' }],
+    links: [],
+  };
+  const l = layoutTree(m, { open: new Set(['p1', 'p2']), ...WIDE });
+  const y = (id) => l.blocks.find((b) => b.id === id).y;
+  // p1 is at 24, so its middle is 39 and three blocks 8 apart (106 high) would start above the
+  // caption row: they start at 24. d1 is level with p2 (middle 77), but the column holds c3 to
+  // 130, and a gap of 8 more.
+  assert.deepEqual(['c1', 'c2', 'c3', 'd1'].map(y), [24, 62, 100, 138]);
+  assert.equal(l.blocks.find((b) => b.id === 'd1').opener, 'p2');
 });
 
 test('the link is the state: an off tool has no link', () => {
@@ -110,7 +162,7 @@ test('a direct line is an elbow with round corners on a trunk at x 170', () => {
   const l = layoutTree(model(0, 2), { open: new Set(), ...WIDE });
   const line = l.links.find((link) => key(link) === 'client:claude_code>outside:move:docs');
   assert.equal(line.kind, 'direct');
-  assert.match(line.d, /^M 150 \d+ H 164 Q 170 \d+ 170 \d+ V \d+ Q 170 \d+ 176 \d+ H 392$/);
+  assert.match(line.d, /^M 150 \d+ H 164 Q 170 \d+ 170 \d+ V \d+ Q 170 \d+ 176 \d+ H 396$/);
 });
 
 test('one block per column is open', () => {

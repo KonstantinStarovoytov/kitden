@@ -551,6 +551,11 @@ def test_the_map_rules_never_reach_the_library_table():
     assert not re.search(r"^\.map\s*\{", css, re.MULTILINE)
 
 
+def test_the_gateway_page_takes_the_whole_width():
+    assert '.page[data-place="gateway"] { max-width: none; }' in CSS
+    assert "main.dataset.place = state.view" in script("app.js")
+
+
 def test_the_map_marks_when_it_is_drawn():
     assert '"kitden:map-drawn"' in script("map-view.js") and '"kitden:gateway-drawn"' in script(
         "gateway.js"

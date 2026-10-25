@@ -8,7 +8,7 @@ const { GATEWAY_COLUMNS, findRows, gatewayTree, heldServer, kitdenLinks, listAt,
 const { dropBody, dropTarget } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
 const { offersSwitch } = await import('../../src/kitden/web/static/js/gateway-details.js');
-const { blockLabel, findChip, findIn, keepOpen, layoutTree, pressOpen } = await import('../../src/kitden/web/static/js/map.js');
+const { blockLabel, findChip, findIn, keepOpen, layoutTree, pressOpen, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
 const { kitdenClients } = await import('../../src/kitden/web/static/js/parts.js');
 const { viewMode } = await import('../../src/kitden/web/static/js/store.js');
 
@@ -94,6 +94,24 @@ const CLIENTS = ['claude_code', 'codex', 'cursor'].map((id) => ({ id, status: 'f
 const OPTS = { setup: SETUP, clients: CLIENTS, open: new Set(), held: new Map() };
 const keys = (tree) => tree.links.map((l) => `${l.from}>${l.to} ${l.kind}`);
 const block = (tree, id) => tree.blocks.find((b) => b.id === id);
+
+test('the Gateway map has the mockup numbers', () => {
+  const l = layoutTree(gatewayTree(MEDIUM_VIEW, OPTS), { open: new Set(), narrow: false });
+  const y = (id) => l.blocks.find((b) => b.id === id).y;
+  assert.deepEqual(l.columns.map((c) => c.x), [0, 196, 396, 636]);
+  assert.deepEqual(['client:claude_code', 'client:codex', 'client:cursor'].map(y), [124, 196, 268]);
+  assert.deepEqual([y('gateway:kitden'), l.blocks.find((b) => b.id === 'gateway:kitden').h], [124, 124]);
+  assert.deepEqual(['group:kitden:remote', 'held:kitden:tracker', 'group:kitden:local', 'held:kitden:files'].map(y), [58, 81, 154, 177]);
+  assert.equal(y('group:outside'), 268);
+  const outside = l.blocks.filter((b) => b.kind === 'outside');
+  assert.deepEqual([outside[0].y, outside[1].y, outside[0].h], [309, 365, 50]);
+  assert.equal(wideWidth(gatewayTree(MEDIUM_VIEW, OPTS)), 836);
+});
+
+test('group captions carry their icons', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+  assert.deepEqual(['group:kitden:remote', 'group:kitden:local', 'group:outside'].map((id) => block(tree, id).icon), ['cloud', 'hard-drive', 'info']);
+});
 
 test('the tree joins linked clients to the gateway and each outside row to its clients', () => {
   const tree = gatewayTree(MEDIUM_VIEW, OPTS);

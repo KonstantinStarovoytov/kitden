@@ -3,17 +3,21 @@
 // page: map-view.js draws it.
 //
 // The tree model:
-// - columns: [{ id, caption, add, w, h, narrowW, narrowH }]. Each column has its blocks' size,
-//   wide and narrow (the narrow size is the wide one unless set). `add` puts "+ Add" beside the
-//   caption.
-// - blocks: [{ id, column, parent, kind, name, meta, state, tag, count, grip, action, details, h }].
-//   The children of a block are the blocks whose `parent` it is. A group block is a caption at
-//   the top of its stack (a button when it has `details`), `h` high when its words take two lines;
-//   its children sit under it, in its column, and always show. Any other block shows its children
-//   only while it is open. `state`: "on", "off", "unk" or "preview". `count`: what a folded block
-//   holds. `grip`: it can be dragged. `action`: what pressing it does, in words ("Set up…").
-//   `stateInMeta`: no state word is spoken; its meta says the state already ("On in 2
-//   projects") or all there is to say (a gateway's clients and servers). `dot`: a client's dot
+// - columns: [{ id, caption, add, w, h, narrowW, narrowH, colGap, top, rowGap }]. Each column has
+//   its blocks' size, wide and narrow (the narrow size is the wide one unless set). `add` puts
+//   "+ Add" beside the caption. Wide only: `colGap` is the space before the column (GAP unless
+//   set), `top` the y of its first block (CAPTION_ROW) and `rowGap` the space between its blocks.
+// - blocks: [{ id, column, parent, kind, name, meta, state, tag, count, grip, action, details, h,
+//   icon, before, rowGap }]. The children of a block are the blocks whose `parent` it is. A block
+//   with an `h` is that high, whatever its column says. A group block is a caption at the top of
+//   its stack (a button when it has `details`), CAPTION_H high unless `h` says more (its words
+//   take two lines); its children sit under it, in its column, and always show. Wide, a group
+//   sits `before` more space under the block above it, its children are CAPTION_GAP under it and
+//   `rowGap` apart; `icon` (a lucide name) is drawn before its words. Any other block shows its
+//   children only while it is open. `state`: "on", "off", "unk" or "preview". `count`: what a
+//   folded block holds. `grip`: it can be dragged. `action`: what pressing it does, in words
+//   ("Set up…"). `stateInMeta`: no state word is spoken; its meta says the state already ("On in
+//   2 projects") or all there is to say (a gateway's clients and servers). `dot`: a client's dot
 //   when it is not its state (a client found on a first run).
 // - links: [{ from, to, kind, unk }], kind "on", "faint", "direct" or "preview". The link is the
 //   state: something on has a link, something off has none. `unk`: Kitden does not know whether
@@ -22,10 +26,11 @@ import { plural } from "./dom.js";
 
 export const GAP = 46; // between two columns
 export const NARROW_GAP = 28; // between two columns in a narrow window
-export const GROUP_H = 22; // a group caption's height
+export const GROUP_H = 22; // narrow: a group caption's height
 export const GROUP_MAX = 6; // a group with more children shows five and "N more"
-export const CAPTION_H = 18; // a column's caption, at the top of its column
+export const CAPTION_H = 18; // a column's caption, at the top of its column; a group's too
 export const CAPTION_ROW = 24; // the blocks of a column start under its caption
+export const CAPTION_GAP = 5; // between a group's caption and its first block
 export const LINK_MS = 170; // an unfold draws its links first, then its children fade in
 const ROW_GAP = 8; // between two blocks of a column
 const RAIL = 16; // narrow: children sit this far inside their parent, beside its rail
@@ -78,16 +83,18 @@ function shownChildren(block, children, open) {
   if (block.kind !== "group") return open.has(block.id) ? children : [];
   const rest = children.filter((child) => !PINNED.includes(child.kind));
   if (rest.length <= GROUP_MAX || open.has(block.id)) return children;
-  const more = { id: `more:${block.id}`, column: block.column, parent: block.id, kind: "more", name: `${rest.length - GROUP_MAX + 1} more` };
+  const more = { id: `more:${block.id}`, column: block.column, parent: block.id, kind: "more", name: `${rest.length - GROUP_MAX + 1} more`, ...(rest[0].h ? { h: rest[0].h } : {}) };
   return [...rest.slice(0, GROUP_MAX - 1), more, ...children.filter((child) => PINNED.includes(child.kind))];
 }
 
 // Where each shown block goes, for any tree model: `{ columns: [{id, x, w}], blocks: [{id, kind,
 // x, y, w, h, opener}], links: [{from, to, kind, shape, d}], height, narrow }`. Columns sit at fixed
-// x, one after the other; a block takes its column's size. A column that shows a block has its
-// caption at its top, a block `column:<id>` of kind "column", and its blocks start under it. Wide,
-// the children of an open block go to their own column, beside it, and every column keeps its
-// place. Narrow, the narrow sizes apply and they unfold down inside it, on a rail; a column with no
+// x, one after the other; a block takes its column's size (or its own `h`). A column that shows a
+// block has its caption at its top, a block `column:<id>` of kind "column", and its blocks start
+// under it (wide, at the column's `top`, `rowGap` apart; narrow, at CAPTION_ROW, ROW_GAP apart).
+// Wide, the children of an open block go to their own column, beside it, in a stack centred on it
+// (never above the bottom of what the column holds already), and every column keeps its place.
+// Narrow, the narrow sizes apply and they unfold down inside it, on a rail; a column with no
 // block of its own (tools inside their server) then takes no room. A block that shows because a
 // block of another column is open (wide) or on that block's rail (narrow) names it as its
 // `opener`, and so does the caption of a column whose blocks all do. Only links between shown
@@ -102,45 +109,72 @@ export function layoutTree(model, { open = new Set(), width = 0, narrow = isNarr
   for (const column of model.columns) {
     const w = narrow ? column.narrowW ?? column.w : column.w;
     const h = narrow ? column.narrowH ?? column.h : column.h;
-    sizes.set(column.id, { x, w, h });
-    if (narrow && !own.has(column.id)) continue;
+    const top = narrow ? CAPTION_ROW : column.top ?? CAPTION_ROW;
+    const row = narrow ? ROW_GAP : column.rowGap ?? ROW_GAP;
+    if (narrow && !own.has(column.id)) {
+      sizes.set(column.id, { x, w, h, top, row });
+      continue;
+    }
+    if (columns.length) x += narrow ? NARROW_GAP : column.colGap ?? GAP;
+    sizes.set(column.id, { x, w, h, top, row });
     columns.push({ id: column.id, x, w });
-    x += w + (narrow ? NARROW_GAP : GAP);
+    x += w;
   }
 
   const placed = new Map();
   const blocks = []; // in reading order: column by column, top to bottom
   // A block at (left, y), `w` wide, then the children it shows under it: those of its own
   // column, and narrow every one, inside it beside the rail (never wider than its own column).
-  // `opener` is the block whose opening shows it. Returns the y under them.
+  // `opener` is the block whose opening shows it. Returns the y of the bottom of them all.
   const stack = (block, left, w, y, opener) => {
-    const h = block.kind === "group" ? block.h || GROUP_H : sizes.get(block.column).h;
+    const size = sizes.get(block.column);
+    const group = block.kind === "group";
+    const h = block.h ?? (group ? (narrow ? GROUP_H : CAPTION_H) : size.h);
     const at = { id: block.id, kind: block.kind, x: left, y, w, h };
     if (opener) at.opener = opener;
     if (block.kind === "more") at.name = block.name;
     if (block.details) at.details = true;
     placed.set(block.id, at);
     blocks.push(at);
-    let below = y + h + ROW_GAP;
+    // Wide, a group's first block is CAPTION_GAP under it, and its blocks are its own `rowGap` apart.
+    const caption = group && !narrow;
+    const between = caption && block.rowGap !== undefined ? block.rowGap : size.row;
+    let gap = caption ? CAPTION_GAP : size.row;
+    let bottom = y + h;
     for (const child of shownChildren(block, children.get(block.id) || [], open)) {
-      if (child.column === block.column) below = stack(child, left, w, below, opener);
-      else if (narrow) below = stack(child, left + RAIL, Math.min(w - RAIL, sizes.get(child.column).w), below, block.id);
+      if (child.column === block.column) bottom = stack(child, left, w, bottom + gap, opener);
+      else if (narrow) bottom = stack(child, left + RAIL, Math.min(w - RAIL, sizes.get(child.column).w), bottom + gap, block.id);
+      else continue;
+      gap = between;
     }
-    return below;
+    return bottom;
   };
   for (const column of model.columns) {
-    const { x: left, w } = sizes.get(column.id);
+    const { x: left, w, top, row } = sizes.get(column.id);
     const first = blocks.length;
-    let y = CAPTION_ROW;
+    const centred = new Set(); // the open blocks whose children have their place in this column
+    let y = top;
     for (const block of model.blocks) {
       if (block.column !== column.id) continue;
       const parent = byId.get(block.parent);
-      if (parent) {
-        // It shows through its parent: under it, or (wide) here, from the open parent's top.
-        if (narrow || parent.column === column.id || !open.has(parent.id) || !placed.has(parent.id)) continue;
-        y = Math.max(y, placed.get(parent.id).y);
+      if (!parent) {
+        // Wide, a block sits `before` more space under the one above it.
+        if (!narrow && block.before && blocks.length > first) y += block.before;
+        y = stack(block, left, w, y, null) + row;
+        continue;
       }
-      y = stack(block, left, w, y, parent ? parent.id : null);
+      // It shows through its parent: under it, or (wide) here, beside the open parent.
+      if (narrow || parent.column === column.id || !open.has(parent.id) || !placed.has(parent.id) || centred.has(parent.id)) continue;
+      centred.add(parent.id);
+      // All its children in this column, from 0, then the whole stack down to be centred on it.
+      const from = blocks.length;
+      let bottom = 0;
+      (children.get(parent.id) || []).filter((child) => child.column === column.id).forEach((child, i) => {
+        bottom = stack(child, left, w, i ? bottom + row : 0, parent.id);
+      });
+      const at = Math.max(y, middle(placed.get(parent.id)) - bottom / 2);
+      for (const placing of blocks.slice(from)) placing.y += at;
+      y = at + bottom + row;
     }
     if (!column.caption || blocks.length === first) continue;
     const caption = { id: `column:${column.id}`, kind: "column", column: column.id, x: left, y: 0, w, h: CAPTION_H };
@@ -227,7 +261,7 @@ export function groupBox(model, layout, id) {
 
 // How wide the map is when it lays out wide: every column and the gaps between them.
 export function wideWidth(model) {
-  return model.columns.reduce((sum, column) => sum + column.w, 0) + GAP * (model.columns.length - 1);
+  return model.columns.reduce((sum, column, i) => sum + column.w + (i ? column.colGap ?? GAP : 0), 0);
 }
 
 // The blocks a person can press, in the order the map draws them, which is the reading order:

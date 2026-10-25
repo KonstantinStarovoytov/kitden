@@ -41,6 +41,8 @@ function renderPlace() {
   const samePlace = shownView === state.view;
   shownView = state.view;
   const main = $("#main");
+  // The page says which place it shows, for the few rules that differ by place.
+  main.dataset.place = state.view;
   // A redraw of the same place keeps keyboard focus on the same row, tab, filter or menu.
   const focused = samePlace && main.contains(document.activeElement) ? document.activeElement.closest(FOCUSABLE) : null;
   const key = focused ? focusKey(focused) : null;
