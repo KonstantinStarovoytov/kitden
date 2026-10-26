@@ -124,6 +124,47 @@ def _inside(folder: Path, entry: dict) -> dict:
     }
 
 
+# Folder -> (signature, what it holds). A plugin folder is read again only when its files change.
+_HELD: dict[Path, tuple[tuple[int, int], dict]] = {}
+
+
+def _signature(folder: Path) -> tuple[int, int]:
+    """The newest mtime and the count of the files `_inside` reads, from stat alone."""
+    names = (*PLUGIN_FILES, ".mcp.json", "mcp.json", "hooks/hooks.json")
+    files = [folder / name for name in names]
+    for pattern in ("skills/*/SKILL.md", "commands/*.md", "agents/*.md"):
+        files += folder.glob(pattern)
+    stamps = []
+    for path in files:
+        try:
+            stamps.append(path.stat().st_mtime_ns)
+        except OSError:
+            continue
+    return (max(stamps, default=0), len(stamps))
+
+
+def installed_inside(adapters: dict[str, ClientAdapter]) -> dict[str, dict]:
+    """What each installed plugin holds, by plugin id: skills, commands, agents, hooks and MCP
+    server names. Read from the installed folder of Claude Code, Codex and Cursor; the first
+    client that has the plugin answers. Nothing is read again until a plugin file changes."""
+    out: dict[str, dict] = {}
+    for client in ("claude_code", "codex", "cursor"):
+        if client not in adapters:
+            continue
+        for plugin_id, folder in adapters[client].plugin_folders().items():
+            if plugin_id in out:
+                continue
+            signature = _signature(folder)
+            kept = _HELD.get(folder)
+            if kept is None or kept[0] != signature:
+                inside = _inside(folder, {})
+                servers = [server["name"] for server in inside["mcp_servers"]]
+                held = {k: inside[k] for k in ("skills", "commands", "agents", "hooks")}
+                kept = _HELD[folder] = (signature, {**held, "mcp_servers": servers})
+            out[plugin_id] = {k: list(v) for k, v in kept[1].items()}
+    return out
+
+
 def _category_name(raw: Any) -> str | None:
     key = category_key(raw)
     return key[:1].upper() + key[1:] if key else None

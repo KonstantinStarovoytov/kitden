@@ -478,6 +478,26 @@ class CodexAdapter(ClientAdapter):
         name, _, marketplace = plugin_id.partition("@")
         return self.codex_home / "plugins/cache" / marketplace / name
 
+    def plugin_folders(self) -> dict[str, Path]:
+        """Plugin id -> its folder in Codex's plugin cache.
+
+        The cache is `plugins/cache/<marketplace>/<plugin>/`, and the files may sit one version
+        folder down (the newest one is used). Hidden folders are skipped.
+        """
+
+        def folders(parent: Path) -> list[Path]:
+            found = parent.iterdir() if parent.is_dir() else []
+            return sorted(p for p in found if p.is_dir() and not p.name.startswith("."))
+
+        out: dict[str, Path] = {}
+        for marketplace in folders(self.codex_home / "plugins/cache"):
+            for plugin in folders(marketplace):
+                versions = folders(plugin)
+                has_files = (plugin / ".codex-plugin").is_dir() or not versions
+                newest = plugin if has_files else max(versions, key=lambda v: v.stat().st_mtime)
+                out[f"{plugin.name}@{marketplace.name}"] = newest
+        return out
+
     def _plugin_servers(self, read: Reader, folder: Path, enabled: Enabled) -> list[Item]:
         """MCP servers a plugin bundles: `mcp.json` (the portable format) or `.mcp.json`, in the
         plugin folder or in one of its version folders (feature 003, research R8)."""

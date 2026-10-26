@@ -326,6 +326,18 @@ class ClaudeCodeAdapter(ClientAdapter):
                 roots[name] = Path(where)
         return roots
 
+    def plugin_folders(self) -> dict[str, Path]:
+        """Plugin id -> its install folder, the first one in `installed_plugins.json` on disk."""
+        record = _dict(Reader(CLIENT).json(self.home / ".claude/plugins/installed_plugins.json"))
+        out: dict[str, Path] = {}
+        for plugin_id, installs in _dict(record.get("plugins")).items():
+            for install in installs if isinstance(installs, list) else []:
+                where = _dict(install).get("installPath")
+                if isinstance(where, str) and Path(where).is_dir():
+                    out[plugin_id] = Path(where)
+                    break
+        return out
+
     def gateway_step(self, gateway: Gateway, name: str) -> Step:
         value: dict[str, Any] = {"type": "http", "url": gateway.url}
         headers = bearer_header(gateway, "${{{}}}")

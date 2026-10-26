@@ -364,6 +364,10 @@ class ClientAdapter(ABC):
         """Marketplace name -> the folder on this computer that holds its marketplace file."""
         return {}
 
+    def plugin_folders(self) -> dict[str, Path]:
+        """Plugin id -> the folder of that installed plugin on this computer."""
+        return {}
+
     def marketplace_add_step(self, name: str, source: str) -> Step:
         """Add a marketplace with the client's own command."""
         raise ValueError(f"{self.id} cannot add a marketplace from here")
