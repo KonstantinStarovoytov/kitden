@@ -11,6 +11,10 @@ const SHOWS = ["mine", "new", "all"];
 // keeps it as `mode`, because `view` names the place.
 const MODE_PLACES = ["gateway", "library"];
 const MODES = ["map", "list"];
+// An old Library address names a kind and no view (`#library?kind=hook`): the Library had one
+// table then. Each kind now lives here: MCP servers on the Gateway's List, hooks and marketplaces on
+// the Library's map, the rest on its List.
+const OLD_KINDS = { mcp_server: { view: "gateway", mode: "list" }, hook: { mode: "map" }, marketplace: { mode: "map" } };
 // With no choice in the address, a page opens in List past this many blocks in its middle column.
 export const MAP_AT = 15;
 // The kinds of item the address can select: `sel=mcp_server:github`, `sel=tool:github/push_files`,
@@ -56,7 +60,7 @@ export const freshness = { reloadStartedAt: 0, lastGoodRead: null, lastReadFaile
 // scope: the project each read was for. readAt: when each read last worked.
 // errorScope: the project each failed read was for.
 export const data = {
-  clients: null, projects: null, overview: null, map: null, gateway: null, changes: null, setupServer: null,
+  clients: null, projects: null, overview: null, map: null, gateway: null, changes: null, setupServer: null, libraryMap: null,
   progress: null, // where the first scan is, from /api/progress and its events
   errors: {}, scope: {}, readAt: {}, errorScope: {},
 };
@@ -127,8 +131,9 @@ export function parseHash(hash) {
   const show = params.get("show");
   let kind = params.get("kind") || "mcp_server";
   if (place === "discover") kind = kind === "skill" ? "skill" : "plugin";
-  const view = old ? "library" : VIEWS.includes(place) ? place : "overview";
-  const mode = params.get("view");
+  const moved = oldLibraryLink(place, params);
+  const view = moved ? moved.view || "library" : old ? "library" : VIEWS.includes(place) ? place : "overview";
+  const mode = moved ? moved.mode : params.get("view");
   return {
     view,
     kind,
@@ -142,9 +147,23 @@ export function parseHash(hash) {
   };
 }
 
+// Where an old Library address (oldLibraryLink above) lands, or null for any other address.
+function oldLibraryLink(place, params) {
+  if (place !== "library" || !params.get("kind") || params.get("view")) return null;
+  return OLD_KINDS[params.get("kind")] || { mode: "list" };
+}
+
+// An address that is an old one: the page writes its new form in its place.
+export function isOldAddress(hash) {
+  const [place, rest] = String(hash || "").replace(/^#/, "").split("?");
+  return Boolean(OLD_VIEWS[place] || oldLibraryLink(place, new URLSearchParams(rest || "")));
+}
+
+// The Library's address names its kind only where it can be read back as it is: the first kind
+// (MCP servers) only with the List, since a kind with no view is an old address.
 export function hashFor(s) {
   const library = s.view === "library"
-    ? { kind: s.kind, show: s.show === "mine" ? "" : s.show, category: s.category, attention: s.attention ? "1" : "" }
+    ? { kind: s.kind === "mcp_server" && s.mode !== "list" ? "" : s.kind, show: s.show === "mine" ? "" : s.show, category: s.category, attention: s.attention ? "1" : "" }
     : {};
   const mode = MODE_PLACES.includes(s.view) ? s.mode : "";
   return `#${s.view}${query({ ...library, view: mode, project: s.project, q: s.q, sel: selFor(s.selected) })}`;
@@ -161,8 +180,10 @@ function writeHash(addEntry = false) {
 
 // A place change keeps the rail and the top bar still. The Gateway rises on its own (head, then its
 // map or List), so its change only fades the old page out (style.css).
+// The Library's map rises the same way; its List does not.
+const RISES_ON_ITS_OWN = (s) => s.view === "gateway" || (s.view === "library" && s.mode !== "list");
 function show(moving) {
-  if (moving) transition(() => { renderPlace(); document.getElementById("content").scrollTop = 0; }, state.view === "gateway" ? "map-entrance" : "place-change");
+  if (moving) transition(() => { renderPlace(); document.getElementById("content").scrollTop = 0; }, RISES_ON_ITS_OWN(state) ? "map-entrance" : "place-change");
   else renderPlace();
 }
 
@@ -185,9 +206,10 @@ export function go(view, params = {}) {
   place(view, params);
 }
 
-// The Library tab and choice that show a selected item: its kind, under Installed, no search.
+// The Library tab and choice that show a selected item: its kind, under Installed, no search, on
+// the List.
 export function libraryChoice(selected) {
-  return { kind: selected.kind, show: "mine", category: "", attention: false, q: "" };
+  return { kind: selected.kind, show: "mine", category: "", attention: false, q: "", mode: "list" };
 }
 
 // Open a place with an item selected; the place opens its Details. The project stays, unless
@@ -232,8 +254,8 @@ export function followAddress(next, { draw = true } = {}) {
 // the Library and the address says so.
 export function followHash(hash) {
   const view = String(hash || "").replace(/^#/, "").split("?")[0];
-  const old = Boolean(OLD_VIEWS[view]);
-  if (!VIEWS.includes(view) && !old) return null;
+  const old = isOldAddress(hash);
+  if (!VIEWS.includes(view) && !OLD_VIEWS[view]) return null;
   const next = parseHash(hash);
   const same = ["view", "project", "kind", "show", "category", "attention", "mode", "q"].every((key) => next[key] === state[key])
     && sameSel(next.selected, state.selected);
@@ -313,6 +335,11 @@ function markGatewayData() {
   }
 }
 
+export async function loadLibraryMap() {
+  const { project } = state;
+  await guarded("libraryMap", `/api/library-map${query({ project })}`, (v) => { data.libraryMap = v; }, project);
+}
+
 export async function loadChanges() {
   await guarded("changes", "/api/changes", (v) => { data.changes = v; });
 }
@@ -327,7 +354,7 @@ export async function loadSetupServer() {
 export async function reload() {
   freshness.reloadStartedAt = performance.now();
   await loadShared();
-  const reads = projectGone() ? [] : [loadOverview(), loadMap(), loadGateway()];
+  const reads = projectGone() ? [] : [loadOverview(), loadMap(), loadGateway(), loadLibraryMap()];
   await Promise.all([...reads, loadSetupServer()]);
   freshness.lastReadFailed = Object.keys(data.errors).length > 0;
   if (!freshness.lastReadFailed) freshness.lastGoodRead = Date.now();

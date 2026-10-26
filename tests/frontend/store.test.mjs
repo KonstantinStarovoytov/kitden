@@ -18,7 +18,7 @@ function fetchAnswers(map) { answers = map; failing = null; }
 function fetchFails(url) { failing = url; }
 const ALL_OK = {};
 
-const { current, currentError, data, followHash, freshness, go, goTo, hashFor, loadMap, MAP_AT, parseHash, parseSel, projectGone, reload, retry, selFor, setRenderer, setSwitcher, state, switchProject, takeArrival, toolSel, viewMode } = await import('../../src/kitden/web/static/js/store.js');
+const { current, currentError, data, followHash, freshness, go, goTo, hashFor, isOldAddress, loadMap, MAP_AT, parseHash, parseSel, projectGone, reload, retry, selFor, setRenderer, setSwitcher, state, switchProject, takeArrival, toolSel, viewMode } = await import('../../src/kitden/web/static/js/store.js');
 
 beforeEach(() => { state.project = ''; });
 
@@ -114,7 +114,9 @@ test('every place writes the selection and the project into the address', () => 
   const s = { ...parseHash('#gateway?project=a&sel=mcp_server%3Agithub') };
   assert.deepEqual(s.selected, { kind: 'mcp_server', name: 'github' });
   assert.equal(hashFor(s), '#gateway?project=a&sel=mcp_server%3Agithub');
-  assert.equal(hashFor({ ...s, view: 'library', kind: 'mcp_server', show: 'mine' }), '#library?kind=mcp_server&project=a&sel=mcp_server%3Agithub');
+  assert.equal(hashFor({ ...s, view: 'library', kind: 'mcp_server', show: 'mine', mode: 'list' }), '#library?kind=mcp_server&view=list&project=a&sel=mcp_server%3Agithub');
+  // With no view the first kind is left out: a kind with no view is an old address.
+  assert.equal(hashFor({ ...s, view: 'library', kind: 'mcp_server', show: 'mine' }), '#library?project=a&sel=mcp_server%3Agithub');
 });
 
 test('an arrival opens once', () => {
@@ -169,6 +171,22 @@ test('Back to another project on the Gateway waits for the read: the page draws 
   }
 });
 
+test('old kind links land in their new place', () => {
+  // MCP servers moved to the Gateway's List; hooks and marketplaces are on the Library's map; the
+  // other kinds keep the List. An address with a view is not old.
+  assert.deepEqual([parseHash('#library?kind=mcp_server&sel=mcp_server%3Agithub')].map((s) => [s.view, s.mode, s.selected.name]), [['gateway', 'list', 'github']]);
+  assert.deepEqual(['hook', 'marketplace', 'plugin', 'skill', 'instructions'].map((kind) => parseHash(`#library?kind=${kind}`).mode), ['map', 'map', 'list', 'list', 'list']);
+  assert.equal(parseHash('#library?kind=hook').kind, 'hook');
+  assert.equal(parseHash('#library?kind=mcp_server&view=map').view, 'library');
+  assert.equal(parseHash('#library').mode, '');
+  assert.equal(isOldAddress('#library?kind=skill'), true);
+  assert.equal(isOldAddress('#library?kind=skill&view=list'), false);
+  assert.equal(isOldAddress('#library'), false);
+  assert.equal(isOldAddress('#map'), true);
+  // What the page writes back reads back the same.
+  for (const hash of ['#library', '#library?view=map', '#library?kind=mcp_server&view=list', '#library?kind=hook&view=map']) assert.equal(hashFor(parseHash(hash)), hash);
+});
+
 test('Back switches Map and List, and a mode passed to go wins over the clear', () => {
   followHash('#gateway?view=map');
   assert.equal(state.mode, 'map');
@@ -190,8 +208,9 @@ test('Back switches Map and List, and a mode passed to go wins over the clear', 
   assert.equal(state.mode, '');
   go('gateway', { mode: 'list' });
   assert.equal(state.mode, 'list');
+  // A selection opens on the Library's List, where its Details are.
   goTo('library', { kind: 'skill', name: 'tidy' });
-  assert.equal(state.mode, '');
+  assert.equal(state.mode, 'list');
   goTo('gateway', { kind: 'tool', name: 'files/read_file' }, { mode: 'map' });
   assert.equal(state.mode, 'map');
   assert.deepEqual(takeArrival(), { kind: 'tool', name: 'files/read_file' });

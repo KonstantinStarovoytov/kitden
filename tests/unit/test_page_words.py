@@ -281,9 +281,11 @@ def test_the_pill_is_the_mockups_segmented_control_and_glides_in_280_ms():
     marker = rule(".seg .ink")
     assert "background: var(--panel-raised)" in marker and "0 1px 2px rgb(0 0 0 / .25)" in marker
     # Every pill passes the pill time to glide (the rail and the tabs keep the 300 ms default).
-    assert len(re.findall(r"\{ duration: 280 \}", script("gateway.js"))) == 1
+    # Map | List glides through the shared pill (map-page.js), under each page's own key.
+    assert len(re.findall(r"\{ duration: 280 \}", script("map-page.js"))) == 1
+    assert "glide(seg, choice, key, { duration: 280 })" in script("map-page.js")
     assert len(re.findall(r"\{ duration: 280 \}", script("library.js"))) == 2
-    assert '"gateway-view", { duration: 280 }' in script("gateway.js")
+    assert '"gateway-view")' in script("gateway.js")
     assert '"library-show", { duration: 280 }' in script("library.js")
 
 
@@ -672,8 +674,8 @@ def test_the_map_words():
     # its caption says which ones show; the outside group says why it is apart.
     assert '"Outside the gateway · calls skip Kitden\'s rules"' in script("gateway.js")
     assert " more`" in script("map.js")
-    assert 'FIRST_PAGE = "Show the first 5"' in script("map.js")
-    assert "`${block.pageName || block.name} · ${page * PAGE + 1}–${" in script("map.js")
+    assert "firstPage = (size) => `Show the first ${size}`" in script("map.js")
+    assert "`${block.pageName || block.name} · ${page * size + 1}–${" in script("map.js")
     # While the Outside group pages its caption drops "drag one in" for the range, and a caption
     # never runs into the next column: what does not fit ends in "…".
     assert 'const OUTSIDE_PAGED = "Outside the gateway";' in script("gateway.js")
@@ -1451,7 +1453,9 @@ def test_tabs_and_filters_read_first_then_the_list_settles():
     assert "snapshot: snapshotRows, settle: settleRows" in app
     assert "const before = samePlace && place.snapshot ? place.snapshot() : null;" in app
     # A place change: only the page moves, and the Library's rows are read first.
-    assert 'state.view === "gateway" ? "map-entrance" : "place-change");' in store
+    # The Gateway and the Library's map rise on their own; the List moves as one page.
+    assert 'RISES_ON_ITS_OWN(state) ? "map-entrance" : "place-change");' in store
+    assert '(s.view === "library" && s.mode !== "list")' in store
     assert "html.place-change #main, html.map-entrance #main { view-transition-name: page; }" in css
     assert "::view-transition-new(page) { animation: 260ms var(--ease-out) both page-in; }" in css
     assert 'if (view === "library" && state.view !== "library") await raceSlow(' in app
@@ -2199,7 +2203,7 @@ def test_the_gateway_says_what_it_could_not_read():
 
 def test_search_on_a_map_page_finds_on_that_page():
     app = script("app.js")
-    assert 'MAP_PAGES = ["gateway"]' in app and 'go("library", { q })' in app
+    assert 'MAP_PAGES = ["gateway", "library"]' in app and 'go("library", { q })' in app
     # The chip's words are shared by every map page, so they live in map.js.
     assert '"match", "matches"' in script("map.js") and '"No matches"' in script("map.js")
     assert '<span class="find-chip" id="find-chip" role="status"></span>' in INDEX
@@ -2516,12 +2520,14 @@ def test_the_list_has_the_mockups_columns_and_quiet_read_and_write_words():
 def test_the_view_switch_goes_out_in_120_and_comes_in_in_260():
     # gateway-notes 7.1: the view that shows goes up 4 px and out (120 ease-in), the page draws
     # the other, which comes in from 6 px below (rise: 260 CALM). The selection lets go.
-    text = gw()
-    assert 'animateTo(old, keyframes, { dur: 120, ease: "ease-in", fill: "forwards" })' in text
-    assert '{ opacity: 0, transform: "translateY(-4px)" }' in text
-    assert "if (switched) rise([" in text
-    switch = text.split("function switchView(")[1].split("\n}\n")[0]
-    assert "letGoIfSelected();" in switch and "!D(1)" in switch
+    # The switch is shared by the map pages (map-page.js).
+    shared = script("map-page.js")
+    assert 'animateTo(node, keyframes, { dur: 120, ease: "ease-in", fill: "forwards" })' in shared
+    assert '{ opacity: 0, transform: "translateY(-4px)" }' in shared
+    assert "if (switched) rise([" in gw() and "if (switched) rise([" in script("library-map.js")
+    switch = shared.split("function switchView(")[1].split("\n}\n")[0]
+    assert "letGo();" in switch and "!D(1)" in shared.split("function leaveThen(")[1]
+    assert "letGo: letGoIfSelected" in gw()
 
 
 def test_the_dot_grid_lies_under_the_page_below_the_top_bar_and_takes_no_pointer():
@@ -2671,3 +2677,34 @@ def test_gateway_forms_say_in_preview_while_their_row_waits():
     # A project pick says it on its small line and in its name for a screen reader.
     assert "`${sub} · in preview`" in gateway
     assert "`${p.name}, ${said}`" in gateway
+
+
+def test_the_library_map_words_and_looks():
+    text = script("library-map.js")
+    for words in (
+        '"Follow the source. Connect only what you need."',
+        '"Point at a link for its Details · click a plugin to see what it holds · Turn off… '
+        'waits in preview, then Apply"',
+        '[["plugins", "Plugins and skills"], ["instructions", "Instructions"]]',
+        'caption: "Clients"',
+        'caption: "Plugins and skills"',
+        'caption: "Inside"',
+        'plural(item.count, "item", "items")',
+        '["skills", "Skill", "sparkles"], ["commands", "Command", "square-terminal"]',
+        '["agents", "Agent", "bot"]',
+        '["hooks", "Hook", "webhook"], ["mcp_servers", "MCP server", "server"]',
+        'hook: { icon: "webhook", words: "Hook" }',
+    ):
+        assert words in text, words
+    # The scope bar names only the project on the map; the Library's head keeps its title.
+    assert "if (count === undefined) return `Project ${folder}`;" in script("parts.js")
+    assert 'el("h1", null, "Library")' in script("library.js")
+    # The map never says "N of M on", and its entrance waits as the page says.
+    assert " of ${" not in text and "enterDelay: afterOldPage()" in text
+    assert "enterDelay: afterOldPage()" in gw() and "afterOldPage()" not in script("map-view.js")
+    # Library map looks: the kind word, slim rows like tools, and the Unknown lamp.
+    assert "color: var(--ink-3); font-size: 10.5px;" in rule("div.map .block-label")
+    unk = ".lamp.unk, .mark.unk { background: transparent; border: 1.5px dashed var(--lamp-warn); }"
+    assert unk in CSS
+    assert ".seg.map-tabs { margin: -6px 0 18px; }" in CSS
+    assert 'const MAP_PAGES = ["gateway", "library"];' in script("app.js")

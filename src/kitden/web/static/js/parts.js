@@ -234,9 +234,10 @@ export function projectMenu(projects, picked, onPick, from = null) {
 // differ from it. `folder` is the project's folder name, "" with All projects. `count` is the
 // project's own rules on this page, null when Kitden could not read them. Kitden counts only
 // the rules this page has, so none is "no rules of its own": the rest of the project's setup
-// may still differ.
+// may still differ. A page that counts no rules (the Library's map) names only the project.
 export function scopeText(folder, count) {
   if (!folder) return "Shared setup · project overrides stay separate";
+  if (count === undefined) return `Project ${folder}`;
   if (count === null) return `Project ${folder} · rules not known`;
   if (count > 0) return `Project ${folder} · ${plural(count, "rule differs", "rules differ")} from the shared setup`;
   return `Project ${folder} · no rules of its own`;

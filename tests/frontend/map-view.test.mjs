@@ -735,20 +735,20 @@ test('the entrance: each block rises 6 px in 260 ms OUT3, 22 ms apart in layout 
   tick(130); assert.equal(pos(last).y, place(layout, ids.at(-1)).y); assert.equal(last.style.opacity, '');
 });
 
-test('an entrance that comes with a Gateway place change starts after the old page has left, 120 ms later', async () => {
-  globalThis.document.documentElement = { classList: { add() {}, remove() {} } };
-  globalThis.document.startViewTransition = (change) => { change(); return { ready: Promise.resolve(), finished: new Promise(() => {}), skipTransition() {} }; };
-  try {
-    const v = view(); const layout = lay();
-    transition(() => { v.draw(TREE, layout, { motion: 'enter' }); }, 'map-entrance');
-    const first = v.node(layout.blocks[0].id); const at = layout.blocks[0].y;
-    tick(110); assert.equal(pos(first).y, at + 6); assert.equal(first.style.opacity, '0');
-    tick(140); assert.ok(near(pos(first).y, at + 6 * 0.125));  // 130 ms into its rise, which starts at 120
-  } finally {
-    finishTransition();
-    delete globalThis.document.documentElement;
-    delete globalThis.document.startViewTransition;
-  }
+test('the entrance waits enterDelay and rises 22 apart', async () => {
+  // The Gateway passes afterOldPage(): 120 ms while the old page leaves in its place change.
+  const v = view({ enterDelay: 120 }); const layout = lay();
+  v.draw(TREE, layout, { motion: 'enter' });
+  const [first, second] = layout.blocks; const a = v.node(first.id); const b = v.node(second.id);
+  tick(110); assert.equal(pos(a).y, first.y + 6); assert.equal(a.style.opacity, '0');
+  tick(140); assert.ok(near(pos(a).y, first.y + 6 * 0.125)); // 130 ms into its rise, which starts at 120
+  assert.ok(near(pos(b).y, second.y + 6 * (1 - 108 / 260) ** 3)); // 22 ms after the first
+  settle(); assert.equal(pos(a).y, first.y); assert.equal(a.style.opacity, '');
+});
+
+test('the map view reads no page change itself: the page gives the delay', () => {
+  const text = mapView.toString();
+  assert.ok(!text.includes('afterOldPage'));
 });
 
 test('in the entrance a link shows only as much as the fainter of its two blocks', async () => {

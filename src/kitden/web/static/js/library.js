@@ -1,9 +1,12 @@
-// Library: what each client loads, and what you can add to it. One tab per kind, one column per
-// client found on this computer. Each cell shows a state, the one action for that client, or a
-// dash that says why not. The server builds the rows and cells (views/library.py).
+// Library: what each client loads, and what you can add to it, as a Map (library-map.js) or a
+// List. The List has one tab per kind, one column per client found on this computer. Each cell
+// shows a state, the one action for that client, or a dash that says why not. The server builds the
+// rows and cells (views/library.py).
 import { getJson, query } from "./api.js";
 import { button, el, tabKeys } from "./dom.js";
-import { CALM, animate, entrance, glide, land, reducedMotion, rollTo } from "./motion.js";
+import { leaveLibraryMap, libraryMode, renderLibraryMap } from "./library-map.js";
+import { glidePill, modeSwitch, switchedNow } from "./map-page.js";
+import { CALM, afterOldPage, animate, entrance, glide, land, reducedMotion, rise, rollTo } from "./motion.js";
 import { marketplaceForm, projectNote, showOffer, showSkill } from "./offer.js";
 import { isPanelOpen, openInfo, projectLabel, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, lookFor, mark, morphSocket, opens, skeleton, socket, sourceLines, staleNote } from "./parts.js";
@@ -328,8 +331,34 @@ export function loadLibraryFor(choice) {
   return afterShared(() => read(choice));
 }
 
-export function renderLibrary(main) {
-  main.append(el("h1", null, "Library"));
+// Which view the page drew last ("map" or "list"), so a switch that lands late draws nothing.
+const libraryShows = { mode: "" };
+
+// The page: its head (the title, and Map | List at its right), then the Map or the List. The Map
+// returns what the top search found there (app.js shows the chip); the List searches its rows.
+// A view that Map | List brings comes in from 6 px below.
+export function renderLibrary(main, { again = false } = {}) {
+  const switched = switchedNow();
+  const mode = libraryMode();
+  libraryShows.mode = mode;
+  const head = el("div", "page-head");
+  head.append(el("h1", null, "Library"));
+  const seg = modeSwitch("library", mode, { old: () => main.querySelector(mode === "map" ? ":scope > div.map" : ":scope > .table-scroll"), letGo: () => {}, shows: () => libraryShows.mode });
+  head.append(seg);
+  main.append(head);
+  let found = null;
+  if (mode === "map") found = renderLibraryMap(main, { head, again, switched });
+  else {
+    leaveLibraryMap();
+    renderList(main);
+    if (switched) rise([...main.children].slice(1), { delay: afterOldPage() });
+  }
+  glidePill(seg, seg.querySelector('[aria-pressed="true"]'), "library-view");
+  return found;
+}
+
+// The List: today's table, one tab per kind.
+function renderList(main) {
   // The project goes by its folder name, as in the project picker.
   const folder = projectPath().split("/").filter(Boolean).pop();
   const lede = el("p", "lede", folder

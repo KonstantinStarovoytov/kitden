@@ -306,3 +306,14 @@ def test_the_add_panel_rows_are_readable_in_both_themes():
         # The accent edge of a row in preview keeps 3:1 on the panel round it.
         for fill in ("--panel", "--panel-raised"):
             assert contrast(theme["--route"], theme[fill]) >= 3.0, fill
+
+
+def test_the_unknown_lamp_keeps_3_to_1_on_every_block_fill_in_both_themes():
+    # The Library map's Unknown lamp is a dashed --lamp-warn ring, on the same fills as the others.
+    unk = ".lamp.unk, .mark.unk { background: transparent; border: 1.5px dashed var(--lamp-warn); }"
+    assert unk in CSS
+    for theme in (LIGHT, DARK, {**LIGHT, **DARK_AUTO}):
+        fills = [theme[f] for f in ("--panel", "--panel-raised", "--dim", "--route-soft")]
+        fills.append(blend(theme["--preview-fill"], theme["--canvas"]))
+        for fill in fills:
+            assert contrast(theme["--lamp-warn"], fill) >= 3.0, fill

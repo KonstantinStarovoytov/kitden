@@ -61,7 +61,7 @@ const model = {
 test('one project and one selection go from Overview to Library to Gateway, and Back returns', async () => {
   Object.assign(state, parseHash(entries[at]));
   goTo('library', targetSel({ view: 'map', kind: 'mcp_server', name: 'github' }));
-  assert.equal(entries[at], '#library?kind=mcp_server&project=a&sel=mcp_server%3Agithub');
+  assert.equal(entries[at], '#library?kind=mcp_server&view=list&project=a&sel=mcp_server%3Agithub');
   const opened = arrivalRow(rows);
   assert.equal(opened.key, 'row-github'); // Details opens for this row
   openRow(opened, tr, 'pointer');
@@ -95,7 +95,7 @@ test("the person's own pick wins over an arrival that comes late", async () => {
   assert.equal(arrivalRow(rows), null);
   // An arrival while a panel is open (Back into the same page) never replaces it.
   openPanel([]);
-  followHash('#library?kind=mcp_server&project=a&q=git&sel=mcp_server%3Agithub');
+  followHash('#library?kind=mcp_server&view=list&project=a&q=git&sel=mcp_server%3Agithub');
   assert.equal(arrivalRow(rows), null);
   assert.equal(isPanelOpen(), true);
   closePanel({ focus: false });
@@ -155,6 +155,6 @@ test('a link from open Details closes it first, so the other place opens the sam
   assert.equal(compare.label, 'Compare across clients');
   await followLink(compare);
   assert.equal(isPanelOpen(), false);
-  assert.equal(entries[at], '#library?kind=mcp_server&project=a&sel=mcp_server%3Agithub');
+  assert.equal(entries[at], '#library?kind=mcp_server&view=list&project=a&sel=mcp_server%3Agithub');
   assert.equal(arrivalRow(rows).key, 'row-github');
 });

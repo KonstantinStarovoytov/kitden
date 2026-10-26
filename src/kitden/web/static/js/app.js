@@ -13,7 +13,7 @@ import { renderOverview } from "./overview.js";
 import { closeForProject, closePanel, holdPanel, initPanel, isPanelOpen } from "./panel.js";
 import { callout, demoTag, GONE_PROJECT, latestChanges, projectButton, projectMenu, scanLine, setHint, versionsOpened } from "./parts.js";
 import {
-  arrival, busy, current, data, followHash, freshness, go, loadShared, OLD_VIEWS, onIdle, parseHash, projectGone, reload, setRenderer, setState, setSwitcher, state,
+  arrival, busy, current, data, followHash, freshness, go, isOldAddress, loadShared, onIdle, parseHash, projectGone, reload, setRenderer, setState, setSwitcher, state,
   switchProject,
 } from "./store.js";
 import { checkTrayStale, tray } from "./tray.js";
@@ -32,9 +32,9 @@ const FOCUSABLE = "[data-focus], tr[data-key]";
 // Places that show one project's setup. For a picked project no longer on the list they say so
 // instead; Changes and Agents draw as usual.
 const PROJECT_PLACES = ["overview", "library", "gateway"];
-// Places where the top search finds on the page itself (Part 5 adds "library"). On the others it
-// sends the search to the Library. A map page's render returns what the search found there.
-const MAP_PAGES = ["gateway"];
+// Places where the top search finds on the page itself. On the others it sends the search to the
+// Library. A map page's render returns what the search found there.
+const MAP_PAGES = ["gateway", "library"];
 
 function renderPlace() {
   if (shownView !== state.view && isPanelOpen()) closePanel({ instant: true, keepSelection: true, focus: false });
@@ -329,7 +329,7 @@ function start() {
   Object.assign(state, parseHash(location.hash));
   // A link with a selection opens that item once its place has drawn it.
   arrival.pending = Boolean(state.selected);
-  if (OLD_VIEWS[location.hash.replace(/^#/, "").split("?")[0]]) setState({});
+  if (isOldAddress(location.hash)) setState({});
   setRenderer(renderPlace);
   setSwitcher(refreshForProject);
 

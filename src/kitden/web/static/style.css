@@ -424,6 +424,7 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .lamp.warn, .mark.warn { background: var(--lamp-warn); }
 .lamp.pv, .mark.pv { background: transparent; border: 1.5px dashed var(--route); }
 .lamp.out, .mark.out { background: transparent; border: 1.5px solid var(--lamp-off); }
+.lamp.unk, .mark.unk { background: transparent; border: 1.5px dashed var(--lamp-warn); }
 /* A port: the ring where a link meets a block, on its left or right edge. A grey one (a server outside
    the gateway) never turns accent. */
 .port { position: absolute; top: 50%; width: 9px; height: 9px; margin-top: -4.5px; border-radius: 50%; border: 1.5px solid var(--link); background: var(--canvas); transition: border-color 200ms ease, opacity 200ms ease, scale 300ms var(--spring); }
@@ -749,8 +750,9 @@ div.map .block-action { flex: none; height: 24px; padding: 0 10px; border-radius
 div.map .block[aria-expanded="true"] { border-color: var(--route); }
 /* A tool: its round mark, its name in regular weight, and at its right which projects have a rule
    of their own for it (a folder; in the accent for this project). */
-div.map .block.tool { gap: 9px; padding: 0 10px; }
-div.map .block.tool .block-name { font-weight: 400; }
+div.map .block.tool, div.map .block.skill, div.map .block.hook, div.map .block.part { gap: 9px; padding: 0 10px; }
+div.map .block.tool .block-name, div.map .block.skill .block-name, div.map .block.hook .block-name, div.map .block.part .block-name { font-weight: 400; }
+div.map .block-label { flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: 4px; color: var(--ink-3); font-size: 10.5px; white-space: nowrap; }
 div.map .block-projects { flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: 4px; color: var(--ink-3); font-size: 10.5px; white-space: nowrap; }
 div.map .block-projects.own { color: var(--route); }
 /* Outside the gateway: on the dim fill, the grip where the gateway can take it, its icon with no tile
@@ -1076,6 +1078,8 @@ h2.sw-head { margin: 0; font-size: 11px; font-weight: 600; color: var(--ink-2); 
 .add-search input::placeholder { color: var(--ink-3); }
 .add-search input::-webkit-search-cancel-button { display: none; }
 .seg.sm { justify-self: start; }
+/* The Library map's tabs sit between the lede and the scope bar, 12 px from each. */
+.seg.map-tabs { margin: -6px 0 18px; }
 .seg.sm button { padding: 3px 8px; font-size: 11px; }
 .add-list { display: flex; flex-direction: column; gap: 8px; }
 .add-list > p { margin: 0; }

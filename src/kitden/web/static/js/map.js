@@ -37,7 +37,7 @@ export const GAP = 46; // between two columns
 export const NARROW_GAP = 28; // between two columns in a narrow window
 export const GROUP_H = 22; // narrow: a group caption's height
 export const GROUP_MAX = 6; // a group with more children pages: five a page and "N more"
-const PAGE = 5; // the children a page of a group shows
+const PAGE = 5; // the children a page of a group shows, unless the group has a `pageSize`
 export const CAPTION_H = 18; // a column's caption, at the top of its column; a group's too
 export const CAPTION_ROW = 24; // the blocks of a column start under its caption
 export const CAPTION_GAP = 5; // between a group's caption and its first block
@@ -94,17 +94,19 @@ function childrenOf(model) {
 // What a group always shows whole: a preview and the slot of a drag are never behind "N more".
 const PINNED = ["preview", "slot"];
 // The words of "N more" on a group's last page: a press goes back to the first.
-const FIRST_PAGE = "Show the first 5";
+const firstPage = (size) => `Show the first ${size}`;
 
-// How a group of more than GROUP_MAX children pages: the children that page (not a preview or a
-// slot), how many pages, and the page it shows (`pages`, from 0; past the last, the last). Null
-// for any other block.
+// How a group pages: past one more than a page (GROUP_MAX for five a page), its `pageSize` (PAGE
+// unless set) at a time. It gives the children that page (not a preview or a slot), the page size,
+// how many pages, and the page it shows (`pages`, from 0; past the last, the last). Null for any
+// other block.
 function paging(block, children, pages = new Map()) {
   if (block.kind !== "group") return null;
+  const size = block.pageSize || PAGE;
   const rest = children.filter((child) => !PINNED.includes(child.kind));
-  if (rest.length <= GROUP_MAX) return null;
-  const count = Math.ceil(rest.length / PAGE);
-  return { rest, count, page: Math.min(Math.max(0, pages.get(block.id) || 0), count - 1) };
+  if (rest.length <= size + 1) return null;
+  const count = Math.ceil(rest.length / size);
+  return { rest, size, count, page: Math.min(Math.max(0, pages.get(block.id) || 0), count - 1) };
 }
 
 // The children a block shows: a group's always (past GROUP_MAX the five of its page, each marked
@@ -114,11 +116,11 @@ function shownChildren(block, children, open, pages) {
   if (block.kind !== "group") return open.has(block.id) ? children : [];
   const paged = paging(block, children, pages);
   if (!paged) return children;
-  const { rest, page } = paged;
-  const after = rest.length - (page + 1) * PAGE;
+  const { rest, size, page } = paged;
+  const after = rest.length - (page + 1) * size;
   // "N more" is as high as the blocks it stands for (an outside server's block is higher than the column's).
-  const more = { id: `more:${block.id}`, column: block.column, parent: block.id, kind: "more", name: after > 0 ? `${after} more` : FIRST_PAGE, ...(rest[0].h ? { h: rest[0].h } : {}) };
-  const shown = rest.slice(page * PAGE, (page + 1) * PAGE).map((child) => ({ ...child, turns: block.id }));
+  const more = { id: `more:${block.id}`, column: block.column, parent: block.id, kind: "more", name: after > 0 ? `${after} more` : firstPage(size), ...(rest[0].h ? { h: rest[0].h } : {}) };
+  const shown = rest.slice(page * size, (page + 1) * size).map((child) => ({ ...child, turns: block.id }));
   return [...shown, more, ...children.filter((child) => PINNED.includes(child.kind))];
 }
 
@@ -134,8 +136,8 @@ function pageParts(block, children, pages) {
 }
 
 // A paged group's caption: its name and which ones show ("Remote · 6–10 of 12").
-function pageWords(block, { rest, page }) {
-  return `${block.pageName || block.name} · ${page * PAGE + 1}–${Math.min(rest.length, (page + 1) * PAGE)} of ${rest.length}`;
+function pageWords(block, { rest, size, page }) {
+  return `${block.pageName || block.name} · ${page * size + 1}–${Math.min(rest.length, (page + 1) * size)} of ${rest.length}`;
 }
 
 // The pages after a press on "N more" (`more:<group id>`): its group shows its next five, and its
@@ -178,7 +180,7 @@ export function pagesWith(model, pages, ids) {
       const i = paged ? paged.rest.indexOf(at) : -1;
       if (i < 0) continue;
       if (!wanted.has(group.id)) wanted.set(group.id, { shown: paged.page, holds: [] });
-      wanted.get(group.id).holds.push(Math.floor(i / PAGE));
+      wanted.get(group.id).holds.push(Math.floor(i / paged.size));
     }
   }
   let next = pages;
@@ -673,6 +675,24 @@ export function litFrom(model, id) {
   return reached(model.links, [id]);
 }
 
+// What a selection lights: a link's key lights its two ends and itself, a client what it reaches,
+// any other block every client's path to it and what it holds on (a gateway's servers, a server's
+// tools, a plugin's parts). Nothing selected, or a selection the model no longer has, lights nothing.
+export function litFor(model, selected) {
+  if (!selected) return new Set();
+  const link = model.links.find((l) => linkKey(l) === selected);
+  if (link) return new Set([link.from, link.to, selected]);
+  const block = model.blocks.find((b) => b.id === selected);
+  if (!block) return new Set();
+  if (block.kind === "client") return litFrom(model, block.id);
+  const lit = litPath(model, block.id);
+  for (const own of model.links.filter((l) => l.from === block.id && l.kind === "on")) {
+    lit.add(own.to);
+    lit.add(linkKey(own));
+  }
+  return lit;
+}
+
 // A selected block, and every path to it from each client that reaches it: the blocks and the
 // links on the way.
 export function litPath(model, id) {
@@ -707,13 +727,13 @@ export function findChip(found) {
   return found.matches.size ? plural(found.matches.size, "match", "matches") : "No matches";
 }
 
-// What a screen reader hears for a block: its whole name, meta, what waits for it ("in
-// preview", its `wait` words without the dot), counts, tag, projects, the state word that matches
+// What a screen reader hears for a block: its whole name, its kind word ("Skill"), meta, what
+// waits for it ("in preview", its `wait` words without the dot), counts, tag, projects, the state word that matches
 // its link (none where the meta says it), "Leaving" while a change in the tray takes it out, and
 // its action.
 export function blockLabel(block) {
   const state = block.stateInMeta ? null : STATE_SAID[block.state];
   const wait = block.wait ? block.wait.replace(/^[\s·]+/, "") : null;
   const stats = block.stats ? block.stats.map((stat) => stat.words).join(" · ") : null;
-  return [block.name, block.meta, wait, stats, block.tag, block.projects && block.projects.said, state, block.leaving && "Leaving", block.action].filter(Boolean).join(", ");
+  return [block.name, block.label && block.label.words, block.meta, wait, stats, block.tag, block.projects && block.projects.said, state, block.leaving && "Leaving", block.action].filter(Boolean).join(", ");
 }

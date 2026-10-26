@@ -5,9 +5,10 @@ import { setCancelFocus } from "./dock.js";
 import { addKind, addName, onOpenAdd, openAdd, pageRead, wasAdded } from "./gateway-add.js";
 import { addForm, connectAction, connectBody, followProject, heldServer, liveHeld, movesTo, NOT_REACHED, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool, TAKE_OUT } from "./gateway-details.js";
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
-import { findChip, findIn, foldable, isNarrow, keepOpen, landOwners, landStage, layoutTree, linkKey, litFrom, litPath, pagesNow, pagesWith, pressOpen, toggleOpen, turnPage, turnWords, wideWidth } from "./map.js";
+import { findChip, findIn, foldable, isNarrow, keepOpen, landOwners, landStage, layoutTree, linkKey, litFor, litFrom, litPath, pagesNow, pagesWith, pressOpen, toggleOpen, turnPage, turnWords, wideWidth } from "./map.js";
+import { glidePill, modeSwitch, switchedNow } from "./map-page.js";
 import { mapView } from "./map-view.js";
-import { afterOldPage, animateTo, D, glide, rise, riseHead } from "./motion.js";
+import { afterOldPage, D, rise, riseHead } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, openInfo, panelState, projectLabel, review } from "./panel.js";
 import { banner, CLIENT_NAMES, folderName, gatewayName, kitdenClients, mark, opens, ORIGIN_WORDS, scopeBar, setHint, skeleton, STATE_WORDS, staleNote } from "./parts.js";
 import { arrival, busy, current, currentError, data, gatewayShows, go, onBusy, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
@@ -17,6 +18,7 @@ import { addToTray, inTray, keyFor, onTray, takeOut, tray, undone } from "./tray
 // Overview sets a client up with the same note. A server the Kitden gateway holds, and its
 // links, are found where its Details are drawn.
 export { heldServer, kitdenLinks, SETUP_NOTE } from "./gateway-details.js";
+export { litFor } from "./map.js";
 
 const WRITABLE = ["claude_code", "codex", "cursor"];
 // The group of servers outside the gateway: the List's words, and the map's, which asks for a drag.
@@ -92,8 +94,7 @@ export function serverCount(view) {
 // (riseHead). The skeleton, the error banner and "No gateway yet" rise as they come (riseUnder).
 export function renderGateway(main, { again = false } = {}) {
   // A draw the view switch asked for: the view it draws comes in as one piece (below).
-  const switched = onSwitch.drawing;
-  onSwitch.drawing = false;
+  const switched = switchedNow();
   if (!again) onMap.view = null;
   const head = el("div", "page-head");
   head.append(el("h1", null, "Gateway"));
@@ -126,7 +127,7 @@ export function renderGateway(main, { again = false } = {}) {
   shownUnder = null;
   const mode = viewMode(state, serverCount(view));
   gatewayShows.mode = mode;
-  const seg = modeSwitch(mode);
+  const seg = modeSwitch("gateway", mode, { old: () => (mode === "map" ? onMap.view && onMap.view.box : onList.box), letGo: letGoIfSelected, shows: () => gatewayShows.mode });
   head.append(seg);
   const model = treeFor(view, mode);
   setHint(mode === "map" ? MAP_HINT : "");
@@ -139,7 +140,7 @@ export function renderGateway(main, { again = false } = {}) {
     gatewayList(main, view, model, found, { enter: !again });
   }
   if (switched) rise([mode === "map" ? onMap.view.box : onList.box], { delay: afterOldPage() });
-  glidePill(seg, seg.querySelector('[aria-pressed="true"]'));
+  glidePill(seg, seg.querySelector('[aria-pressed="true"]'), "gateway-view");
   // A performance mark for the map probe (Part 4.1): the first time the page draws with data.
   if (!performance.getEntriesByName("kitden:gateway-drawn").length) performance.mark("kitden:gateway-drawn");
   openArrival(view, model, mode).catch(reportError);
@@ -206,54 +207,6 @@ function riseUnder(kind, node, again) {
   const comes = !again || shownUnder !== kind;
   shownUnder = kind;
   if (comes) rise([node], { delay: afterOldPage() });
-}
-
-// Map or List. The address keeps the choice (view=map|list), and Back switches back.
-function modeSwitch(mode) {
-  const seg = el("div", "seg");
-  seg.setAttribute("role", "group");
-  seg.setAttribute("aria-label", "Show as");
-  for (const [id, label] of [["map", "Map"], ["list", "List"]]) {
-    const choice = button(label, () => switchView(id, mode, seg, choice), "");
-    choice.setAttribute("aria-pressed", String(mode === id));
-    choice.dataset.focus = `view:${id}`;
-    seg.append(choice);
-  }
-  return seg;
-}
-
-// The mark behind Map | List glides to a choice in 280 ms.
-const glidePill = (seg, choice) => glide(seg, choice, "gateway-view", { duration: 280 });
-
-// The view switch (gateway-notes 7.1). `leaving`: the view that shows is on its way out. `drawing`:
-// the draw `go` starts comes from the switch, so its view comes in as one piece. `turn` counts the
-// switches, so only the latest lands.
-const onSwitch = { leaving: false, drawing: false, turn: 0 };
-// The pill moves and the selection lets go; the view that shows goes up 4 px and out (120 ease-in);
-// then the page draws the other (renderGateway), which comes in from 6 px below (260 CALM). Under
-// reduced motion all of it lands at once. A second press while a view leaves does nothing, and a
-// switch whose page went meanwhile (another place, Back) draws nothing.
-function switchView(id, mode, seg, choice) {
-  if (id === mode || onSwitch.leaving) return;
-  for (const other of seg.children) if (other.dataset.focus) other.setAttribute("aria-pressed", String(other === choice));
-  glidePill(seg, choice);
-  letGoIfSelected();
-  const old = mode === "map" ? onMap.view && onMap.view.box : onList.box;
-  const turn = ++onSwitch.turn;
-  const land = () => {
-    onSwitch.leaving = false;
-    if (turn !== onSwitch.turn || state.view !== "gateway" || gatewayShows.mode !== mode) return;
-    onSwitch.drawing = true;
-    go("gateway", { mode: id });
-    onSwitch.drawing = false;
-  };
-  if (!old || !D(1)) {
-    land();
-    return;
-  }
-  onSwitch.leaving = true;
-  const keyframes = [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-4px)" }];
-  animateTo(old, keyframes, { dur: 120, ease: "ease-in", fill: "forwards" }).then(land);
 }
 
 // The Gateway's map columns: clients, the gateway, servers, tools, each with its blocks' size,
@@ -834,24 +787,6 @@ const onMap = {
   unfolds: false, pages: new Map(), searched: "", back: null,
 };
 
-// What a selection lights: a link's key lights its two ends and itself, a client what it reaches,
-// any other block every client's path to it and what it holds on (the gateway's servers, a server's
-// tools). Nothing selected, or a selection the model no longer has, lights nothing.
-export function litFor(model, selected) {
-  if (!selected) return new Set();
-  const link = model.links.find((l) => linkKey(l) === selected);
-  if (link) return new Set([link.from, link.to, selected]);
-  const block = model.blocks.find((b) => b.id === selected);
-  if (!block) return new Set();
-  if (block.kind === "client") return litFrom(model, block.id);
-  const lit = litPath(model, block.id);
-  for (const own of model.links.filter((l) => l.from === block.id && l.kind === "on")) {
-    lit.add(own.to);
-    lit.add(linkKey(own));
-  }
-  return lit;
-}
-
 // What pointing at a block lights while nothing is selected: a client's paths, or the lines from the
 // clients to a server outside the gateway. Any other block lights nothing (null).
 export function glanceFor(model, id) {
@@ -1095,6 +1030,7 @@ function newMap() {
     onEmpty: letGoIfSelected,
     onHover: (id) => view.glance(glanceFor(onMap.model, id)),
     links: LINK_HOOKS,
+    enterDelay: afterOldPage(),
   });
   holdKeys(view.box);
   // Escape clears the selection first; open Details then close too (panel.js).

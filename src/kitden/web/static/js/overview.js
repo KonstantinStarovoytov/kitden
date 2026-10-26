@@ -179,7 +179,7 @@ function loadsLine(clientId, tile) {
   if (!counts.length) line.append(el("span", "muted", "Nothing on here."));
   for (const [kind, , words] of counts) {
     line.append(button(words, async () => {
-      const choice = { kind, show: "mine", category: "", attention: false, q: "" };
+      const choice = { kind, show: "mine", category: "", attention: false, q: "", mode: "list" };
       await loadLibraryFor(choice);
       fly(tile, `client-${clientId}`);
       go("library", choice);

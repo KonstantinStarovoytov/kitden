@@ -173,7 +173,8 @@ test('old map and discover addresses open the Library', () => {
   const parsed = parseHash(hash);
   assert.deepEqual(parsed, library({ kind: 'skill', show: 'all', category: 'Design', attention: true, mode: 'list', project: 'p1', q: 'pdf' }));
   assert.equal(hashFor(parsed), hash);
-  assert.equal(hashFor(library({})), '#library?kind=mcp_server');
+  assert.equal(hashFor(library({})), '#library');
+  assert.equal(hashFor(library({ mode: 'list' })), '#library?kind=mcp_server&view=list');
   assert.equal(parseHash('#library?show=nope').show, 'mine');
   assert.equal(parseHash('#nowhere').view, 'overview');
 });

@@ -6,7 +6,7 @@
 // lit link. The page gives the hooks; the view knows nothing of servers, tools or clients.
 import { button, cutName, el, icon, showWaits } from "./dom.js";
 import { blockLabel, crossPoint, drawPlan, enterDelays, foldable, foldsInto, LINK_MS, linkClass, linkDashed, linkKey, linkPath, unfoldDelays } from "./map.js";
-import { afterOldPage, animateTo, CALM, D, IN3, OUT3, RETRACT, rollTo, unscaled } from "./motion.js";
+import { animateTo, CALM, D, IN3, OUT3, RETRACT, rollTo, unscaled } from "./motion.js";
 
 const SVG = "http://www.w3.org/2000/svg";
 const MOVE_MS = 260; // a block that moves, or a new one that fades in at its place
@@ -26,6 +26,7 @@ const GRIP_ICON = 13; // the grip of a block that can be dragged
 const STAT_ICON = 12; // the icon of a gateway's count
 const PROJECTS_ICON = 11; // the folder before a tool's projects
 const TAKE_OUT_ICON = 11; // the × of a block in preview
+const LABEL_ICON = 11; // the icon of a block's kind word ("Skill")
 const LAMP_MS = 400; // a lamp fades to its new colour
 const POP_MS = 200; // ... and pops when it turns on or off
 const POP = 2.2; // from this many times its size, unless style.css says otherwise (--pop)
@@ -54,9 +55,9 @@ function quiet(node) {
 }
 
 // A lamp's look by the block's `lamp` (style.css): grey is off, green on, a dashed accent ring in
-// preview, a grey ring works outside the gateway. It pops when it turns on or off, not when it goes
-// into a preview or comes back from one.
-const LAMP_LOOKS = { on: "on", off: "", preview: "pv", out: "out" };
+// preview, a grey ring works outside the gateway, a dashed amber ring is not known. It pops when it
+// turns on or off, not when it goes into a preview or comes back from one.
+const LAMP_LOOKS = { on: "on", off: "", preview: "pv", out: "out", unk: "unk" };
 const lampClass = (base, lamp) => [base, LAMP_LOOKS[lamp]].filter(Boolean).join(" ");
 const SOLID = ["on", "off"];
 const MOVES = ["move", "project", "undo"]; // the draws that move what changed
@@ -77,8 +78,9 @@ function rollingWords(words, nums, slot) {
 // What a block shows, left to right: the grip of one that can be dragged, its tile (the page's
 // `tile(block)`), a tool's mark, its name cut short with its meta line under it (its lamp first,
 // and after its words, in the accent, what waits in the tray: `wait`) and a gateway's counts under
-// that, which projects have a rule of their own for a tool, the count of a block that folds
-// (style.css hides it while it is open), a slot's action, its ports (the right one of a block that
+// that, which projects have a rule of their own for a tool, its kind word at its end (`label`,
+// { icon, words }: "Skill"), the count of a block that folds (style.css hides it while it is
+// open), a slot's action, its ports (the right one of a block that
 // folds shows only while it is open), and the × of a block in preview. A tag takes the meta line's
 // words where a count takes the room, else it sits beside the name; on a block with words and a
 // count (a server) the folder tag of projects sits after its name too. It gives the parts, with the
@@ -143,6 +145,11 @@ function blockParts(block, { tile }) {
     if (projectsTop) top.append(projects);
     else parts.push(projects);
   }
+  if (block.label) {
+    const label = quiet(withIcon("block-label", block.label.icon, LABEL_ICON));
+    label.append(el("span", null, block.label.words));
+    parts.push(label);
+  }
   if (counted) parts.push(quiet(el("span", "block-count", block.count)));
   if (block.action) parts.push(quiet(el("span", "block-action", block.action)));
   for (const side of ["left", "right"]) {
@@ -157,7 +164,7 @@ function blockParts(block, { tile }) {
 // it changes. Opening a block draws none of them again: its count and right port follow its
 // aria-expanded in style.css, so they fade.
 function wordsKey(block) {
-  return JSON.stringify([block.kind, block.name, block.meta, block.wait, block.tag, block.count, block.action, block.lamp, block.grip, block.icon, block.client, block.gateway && block.gateway.kind, block.stats, block.projects, block.ports, block.takeOut]);
+  return JSON.stringify([block.kind, block.name, block.meta, block.wait, block.tag, block.count, block.action, block.lamp, block.grip, block.icon, block.client, block.gateway && block.gateway.kind, block.stats, block.projects, block.label, block.ports, block.takeOut]);
 }
 
 // What a block's parts showed (`drawn`, as blockParts gave them, for `block`), for its next draw:
@@ -292,7 +299,8 @@ function addButton(column, onAdd) {
 // that comes or goes shows as much as the fainter block. Reduced motion and a hidden page land at once.
 // A press on a block opens or folds it when it folds (`onOpen(id)`), then selects it
 // (`onSelect(id)`); "+ Add" beside a column's caption calls `onAdd(column, button)`. `tile(block)` gives
-// what a block shows before its name.
+// what a block shows before its name. An entrance starts `enterDelay` ms late (the Gateway waits for
+// the old page to leave: motion.js afterOldPage).
 // `links` are the page's hooks for the links it acts on: `canHit(link)`, `tip(link)` (what its
 // × does, in words; "" for a link with no removal, which gets no × and no Delete), `onClick(link)`
 // and `onRemove(link)`; `waits()` says the × waits now (another change is being written: it keeps
@@ -306,7 +314,7 @@ function addButton(column, onAdd) {
 // only while the last draw selected nothing. `onEmpty()` hears a click on the map that is on no
 // block, button or link; `onHover(id | null)` the block under the pointer when it changes (null:
 // the pointer left the map), never while a block is held.
-export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links: pointer = NO_LINKS } = {}) {
+export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links: pointer = NO_LINKS, enterDelay = 0 } = {}) {
   const box = el("div", "map");
   const area = el("div", "map-area");
   const svg = document.createElementNS(SVG, "svg");
@@ -987,7 +995,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
       } else if (enters) {
         // The entrance: it waits below its place, unseen, then rises in its turn.
         put(item, { ...end, y: end.y + ENTER_RISE, o: 0 });
-        go(item, end, { dur: D(MOVE_MS), ease: OUT3, start: start + D(waves[i] + afterOldPage()) });
+        go(item, end, { dur: D(MOVE_MS), ease: OUT3, start: start + D(waves[i] + enterDelay) });
       } else if (fresh && unfold.has(place.id)) {
         // An unfold: it waits at its place while its links draw, then fades in.
         opened.add(place.id);

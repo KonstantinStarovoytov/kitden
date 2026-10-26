@@ -37,6 +37,14 @@ What Kitden does today and what comes next. Ideas and bugs:
   map says how to use it. Reasons and counts use the same words as the panels. After Apply or
   Undo the map lands its rows with no cross-fade, and a gateway Kitden cannot reach says "Not
   connected" on the map, with the reason in its Details. The add-gateway form can be cancelled.
+- **Library map:** the Library opens on a map like the Gateway's: the clients, then the plugins
+  and skills they load, under where they come from (each marketplace, your skills, your
+  settings, and in a project what only that project has), and a click on a plugin shows what it
+  holds. A plugin says how many things Kitden read inside it. Cursor's plugins through Claude
+  Code show as a faint line. Big groups and big plugins show a page at a time. Map | List keeps
+  today's table one click away, and old Library links land where their kind lives now. Kitden
+  now reads Claude Code's local project settings and its `skillOverrides`, so a skill or plugin
+  turned off in one project shows Off there.
 - **Details float beside the map:** on Gateway, Library and Changes, Details float over the right
   of the page as in the mockup; the page keeps its width and the map stays wide. Another block's
   Details swap in place through a quiet skeleton.

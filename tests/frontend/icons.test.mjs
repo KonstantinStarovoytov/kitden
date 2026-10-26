@@ -77,9 +77,9 @@ test('a name from Object.prototype is not an icon', () => {
   }
 });
 
-test('the module holds the 46 icons, sorted, as shape data', () => {
+test('the module holds the 50 icons, sorted, as shape data', () => {
   const names = Object.keys(ICONS);
-  assert.equal(names.length, 46);
+  assert.equal(names.length, 50);
   assert.deepEqual(names, [...names].sort());
   for (const shapes of Object.values(ICONS)) {
     assert.ok(Array.isArray(shapes) && shapes.length > 0);
