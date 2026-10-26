@@ -56,6 +56,7 @@ function element(tagName) {
     contains(other) { for (let at = other; at; at = at.parentNode) if (at === node) return true; return false; },
     focus() { globalThis.document.activeElement = node; },
     matches: () => false,
+    closest: () => null,
     querySelector: () => null,
     querySelectorAll(selector) {
       const key = selector.match(/^\[data-(\w+)\]$/);
@@ -1184,7 +1185,8 @@ test('the List keeps its open servers when another project is picked', (t) => {
 
 // Phase 5 Task 4: a server the Add panel adds waits in preview on the map, at the end of its group
 // of the Kitden gateway, and lands there after Apply; an Undo plays it back.
-const { openAdd } = await import('../../src/kitden/web/static/js/gateway-add.js');
+const { ADD_SERVER, openAdd, wasAdded } = await import('../../src/kitden/web/static/js/gateway-add.js');
+const { gatewayCard } = await import('../../src/kitden/web/static/js/gateway-details.js');
 const MARKET = [
   { id: 'test-helper@demo/test-status', name: 'test-status', plugin: 'test-helper', marketplace: 'demo', kind: 'remote', held: false, refusal: null },
   { id: 'db-tools@demo/db-query', name: 'db-query', plugin: 'db-tools', marketplace: 'demo', kind: 'local', held: false, refusal: null },
@@ -1270,7 +1272,10 @@ test('a click grows it from the gateway and a take-out shrinks it back', async (
   // The bar's Cancel takes it out the same way.
   await clickAdd('db-query', 'add1b');
   settle();
-  assert.ok(node(box, 'block:preview:db-query') && place);
+  // db-query is local: it shows in the Local group, under files, not where test-status was.
+  const [px, py] = at(node(box, 'block:preview:db-query'));
+  const [fx, fy] = at(local);
+  assert.deepEqual([px, py > fy, py !== place[1]], [fx, true, true]);
   await cancelTray();
   frame(180);
   assert.equal(node(box, 'block:preview:db-query'), null);
@@ -1390,4 +1395,61 @@ test('under reduced motion each lands at once', async (t) => {
   await done();
   assert.ok(!node(box, STATUS_HELD) && still());
   assert.equal(statusOf('test-status').textContent, '');
+});
+
+// Phase 5 final wave
+test('Apply fails: the row still says In preview and the preview block stays', async (t) => {
+  const box = freshMap();
+  t.after(addCleanUp);
+  await addPanel(box);
+  await clickAdd('test-status', 'add5');
+  settle();
+  queue('/api/changes/add5/apply', { status: 200, json: { id: 'add5', state: 'restored', error: 'The original settings were restored.' } });
+  await applyTray();
+  settle();
+  assert.equal(tray.phase, 'failed');
+  assert.equal(statusOf('test-status').textContent, 'In preview');
+  assert.ok(node(box, STATUS_BLOCK));
+  assert.equal(node(box, STATUS_HELD), null);
+});
+
+test('the More door lets go of the selection, as + Add does, and an empty click leaves the panel', async (t) => {
+  const box = freshMap();
+  t.after(addCleanUp);
+  const kitden = VIEW.gateways[0];
+  const more = gatewayCard(kitden, { view: VIEW, setup: [], clients: [] }).more.find((m) => m.label === ADD_SERVER);
+  const selected = () => walk(box).filter((n) => /\bselected\b/.test(n.className)).length;
+  for (const door of ['more', 'plus']) {
+    press(box, 'block:gateway:kitden');
+    settle();
+    assert.equal(selected(), 1, door);
+    queue('/api/market-servers', { status: 200, json: { servers: MARKET } });
+    if (door === 'more') await more.run();
+    else press(box, 'add:servers');
+    await done();
+    settle();
+    assert.deepEqual([selected(), panelState.current && panelState.current.type], [0, 'add'], door);
+    // A click on empty map has nothing to let go of: the panel stays.
+    for (const fn of box.listeners.click) fn({ target: box });
+    settle();
+    assert.deepEqual([isPanelOpen(), panelState.current && panelState.current.type], [true, 'add'], door);
+    closePanel({ instant: true, focus: false });
+  }
+});
+
+test('an Undo with the panel closed frees the Added mark at the next read', async (t) => {
+  const box = freshMap();
+  t.after(addCleanUp);
+  await addPanel(box);
+  await appliedAdd(box);
+  await readAgain(VIEW_ADDED, MARKET_HELD);
+  endApplied();
+  settle();
+  await done();
+  assert.equal(wasAdded('test-status'), true);
+  // The panel is closed, so no panel read frees the mark; the page's next read of Kitden does.
+  closePanel({ instant: true, focus: false });
+  Object.assign(data, { gateway: VIEW });
+  redraw();
+  assert.equal(wasAdded('test-status'), false);
 });

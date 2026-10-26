@@ -48,7 +48,7 @@ What Kitden does today and what comes next. Ideas and bugs:
   from the gateway…"; the gateway's Details list each client with its own button. A click on any
   link opens its own panel; a client's link × disconnects it, and the × on a server a client sets
   up on its own removes that entry. Every action stays, some under More.
-- **Add a server:** add a server from a marketplace: a click or a drag previews it in the Kitden
+- **Add a server:** pick one from a marketplace; a click or a drag previews it in the Kitden
   gateway; Apply adds it, Undo takes it out.
 - **Preview tray:** every change, from a switch in Details to a drag on the map, waits in one tray
   at the bottom left. Apply all writes them as one change, all or nothing, and Undo all takes them

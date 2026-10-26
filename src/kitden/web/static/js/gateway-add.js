@@ -93,12 +93,20 @@ async function readServers() {
   }
 }
 
+// Both doors ("+ Add" and Details' More) let go of what the map has selected before the panel
+// opens; the page says how (onOpenAdd).
+let letGo = () => {};
+export const onOpenAdd = (fn) => {
+  letGo = fn;
+};
+
 // Open the panel beside the map: its skeleton, then the list read from the marketplaces. `from` is
 // the button that gets focus back when it closes (the map's "+ Add"); it looks pressed until then.
 // Focus goes to the search. Opened again while it shows its list, it stays as it is (its search and
 // its pill too) and focus goes to the search.
 let opening = 0;
 export async function openAdd({ from = mapAddButton() } = {}) {
+  letGo();
   if (isPanelOpen() && panelState.current && panelState.current.type === "add" && shown && shown.node.isConnected) {
     searchBox.focus();
     return;
@@ -132,6 +140,9 @@ let reads = 0;
 export async function pageRead(view) {
   if (view === seen) return;
   seen = view;
+  // A server an Undo took out is not marked (a closed panel does not read the list to free it).
+  const held = new Set(view.gateways.filter((g) => g.kind === "kitden").flatMap((g) => (g.servers || []).map((s) => s.name)));
+  for (const id of added) if (!held.has(addName(id))) added.delete(id);
   for (const id of applied) added.add(id);
   applied = [];
   const list = shown && shown.node.isConnected ? shown : null;

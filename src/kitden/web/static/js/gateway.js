@@ -2,7 +2,7 @@
 // row opens its Details beside the page (gateway-details.js).
 import { $, button, el, gridKey, icon, joinWords, pageWaits, plural, reportError, WAITS, withFocusKey } from "./dom.js";
 import { setCancelFocus } from "./dock.js";
-import { addKind, addName, openAdd, pageRead, wasAdded } from "./gateway-add.js";
+import { addKind, addName, onOpenAdd, openAdd, pageRead, wasAdded } from "./gateway-add.js";
 import { addForm, connectAction, connectBody, followProject, heldServer, liveHeld, movesTo, NOT_REACHED, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool, TAKE_OUT } from "./gateway-details.js";
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { findChip, findIn, foldable, isNarrow, keepOpen, landOwners, landStage, layoutTree, linkKey, litFrom, litPath, pagesNow, pagesWith, pressOpen, toggleOpen, turnPage, turnWords, wideWidth } from "./map.js";
@@ -1241,10 +1241,10 @@ function letGoIfSelected() {
   if (onMap.selected) letGoOnMap();
 }
 
-// "+ Add" beside the Servers caption lets go of what is selected and opens the Add a server panel
-// (gateway-add.js).
+// "+ Add" beside the Servers caption opens the Add a server panel (gateway-add.js). Both its doors,
+// this and Details' More, let go of what is selected first.
+onOpenAdd(letGoIfSelected);
 function pressAdd(column, node) {
-  letGoIfSelected();
   return openAdd({ from: node });
 }
 

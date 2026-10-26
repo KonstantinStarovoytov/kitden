@@ -513,6 +513,8 @@ test('after Apply a row says Added once the page reads again, with focus kept; a
     : fetchWas(url, init));
   const held = SERVERS.map((r) => (r.name === 'test-status' ? { ...r, held: true, refusal: 'test-status is in the gateway already.' } : r));
   const reads = () => sent.filter((s) => s.url === '/api/market-servers').length;
+  // What Kitden read: the Kitden gateway with the named servers in it.
+  const gateway = (...names) => ({ gateways: [{ kind: 'kitden', servers: names.map((name) => ({ name })) }] });
   await open();
   try {
     fire(rows()[2], 'click');
@@ -526,7 +528,7 @@ test('after Apply a row says Added once the page reads again, with focus kept; a
     servers = held;
     const before = reads();
     motions.length = 0;
-    pageRead({});
+    pageRead(gateway('test-status'));
     await wait();
     assert.deepEqual(rowWords(row), ['test-status', 'Remote', 'Added']);
     assert.ok(row.classList.contains('done') && row.classList.contains('off') && !row.classList.contains('on'));
@@ -534,7 +536,7 @@ test('after Apply a row says Added once the page reads again, with focus kept; a
       [[[{ opacity: 0, transform: 'translateX(6px)' }, { opacity: 1, transform: 'none' }], 280, 'cubic-bezier(.2,.8,.2,1)']]);
     assert.deepEqual([isPanelOpen(), document.activeElement, reads()], [true, row, before + 1]);
     // The same read again asks nothing; the tray empties and the row stays Added.
-    const same = {};
+    const same = gateway('test-status');
     pageRead(same);
     pageRead(same);
     await wait();
@@ -555,7 +557,7 @@ test('after Apply a row says Added once the page reads again, with focus kept; a
     assert.ok(!motions.some((m) => m.node === rows()[2].children[3]));
     // An Undo: the page reads again, the gateway no longer holds it, and the row is free.
     servers = SERVERS;
-    pageRead({});
+    pageRead(gateway());
     await wait();
     assert.deepEqual([rowWords(rows()[2]), rows()[2].classList.contains('off')], [['test-status', 'Remote', ''], false]);
   } finally {

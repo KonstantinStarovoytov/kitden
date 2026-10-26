@@ -249,6 +249,14 @@ function boxOf({ x, y, w, h, s }) {
   return s === 1 ? { x, y, w, h } : { x: x + (w * (1 - s)) / 2, y: y + (h * (1 - s)) / 2, w: w * s, h: h * s };
 }
 
+// "+ Add" beside a column's caption. It opens a panel, so it says so from the start.
+function addButton(column, onAdd) {
+  const add = button("+ Add", () => onAdd && onAdd(column, add), "btn small ghost");
+  add.dataset.focus = `add:${column}`;
+  add.setAttribute("aria-expanded", "false");
+  return add;
+}
+
 // One map. `view.box` (div.map) goes where the page wants it and keeps every node when it is taken
 // out and put back; `view.area` holds the links' SVG, the blocks in reading order, then the hits of
 // the links and the ×.
@@ -408,9 +416,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
         item.words = words;
         const parts = block.caption ? [el("span", null, block.caption)] : [];
         if (block.add) {
-          const add = button("+ Add", () => onAdd && onAdd(block.id, add), "btn small ghost");
-          add.dataset.focus = `add:${block.id}`;
-          parts.push(add);
+          parts.push(addButton(block.id, onAdd));
         }
         node.replaceChildren(...parts);
       }

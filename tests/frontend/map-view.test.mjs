@@ -271,6 +271,8 @@ test('"+ Add" beside a column caption tells the page its column and the button i
   await v.draw(tree, layoutTree(tree, { open: new Set(), narrow: false }), {});
   const [, add] = v.node('column:b').children;
   assert.deepEqual([add.textContent, add.dataset.focus, v.node('column:a').children.length], ['+ Add', 'add:b', 1]);
+  // It opens a panel, so it says it is closed before the first open.
+  assert.equal(add.getAttribute('aria-expanded'), 'false');
   for (const fn of add.listeners.click) fn({});
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(pressed, [['b', add]]);
