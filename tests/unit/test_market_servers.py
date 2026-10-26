@@ -14,14 +14,16 @@ from kitden.demo import build_demo_home, demo_adapters, demo_build
 from kitden.demo.sample import MARKET
 from kitden.gateways import data_dir
 from kitden.local_gateway.settings import SETTINGS_FILE, TOOLS_FILE
-from kitden.model import Change
+from kitden.model import Change, Item, ItemKind, Scope, Source, SourceKind
 from kitden.views.after import after_words
-from kitden.views.catalog import market_entry, market_servers
+from kitden.views.catalog import known_refusal, market_entry, market_servers
 from kitden.web.app import create_app
 
 NO_SSE = "{} uses a connection the Kitden gateway does not support yet."
 BUNDLE = "{} comes as a bundle; Kitden can't run it yet."
-CANNOT_FILL = "{} reads values Kitden can't fill in."
+CANNOT_FILL = "{} reads values from your shell."
+OWN_FOLDER = "{} starts in its own folder."
+UNREADABLE = "{} could not be read from its file."
 IN_FOLDER = "{} runs a file inside its plugin folder; Kitden can't run it from the gateway."
 ORIGIN = "http://127.0.0.1:47800"
 POST = {"Origin": ORIGIN, "X-Tool-Request": "1"}
@@ -100,6 +102,31 @@ def test_entries_the_gateway_cannot_run_are_refused(home, entry, why):
     assert _row(rows, "odd")["refusal"] == why.format("odd")
 
 
+@pytest.mark.parametrize(
+    ("entry", "why"),
+    [
+        (
+            {"command": "node", "args": ["dist/index.js"], "cwd": "${CLAUDE_PLUGIN_ROOT}"},
+            OWN_FOLDER,
+        ),
+        ({"command": "uvx", "cwd": "/srv/tool"}, OWN_FOLDER),
+        ({"command": "uvx", "args": "mcp-x"}, UNREADABLE),
+        ({"command": "uvx", "env": ["A=1"]}, UNREADABLE),
+        ({"command": 5}, UNREADABLE),
+        ({"url": 5}, UNREADABLE),
+        ({"url": "https://x.example.test/mcp", "headers": ["a"]}, UNREADABLE),
+        ({"type": "http"}, UNREADABLE),
+    ],
+)
+def test_entries_with_a_folder_or_a_wrong_shape_are_refused_not_failed(home, entry, why):
+    _offer(home, "odd", entry)
+    _, _, rows = _read(home)
+    assert _row(rows, "odd")["refusal"] == why.format("odd")
+    inventory, adapters, _ = _read(home)
+    with pytest.raises(ValueError, match=why.format("odd")):
+        gateway_add_steps(adapters, inventory, home, f"extra@{MARKET}/odd")
+
+
 def test_a_name_a_client_has_offers_move_instead(home):
     inventory, _, _ = _read(home)
     taken = next(
@@ -111,6 +138,24 @@ def test_a_name_a_client_has_offers_move_instead(home):
     _, _, rows = _read(home)
     refusal = _row(rows, taken)["refusal"]
     assert refusal.endswith(f"has {taken} already. Move it into the gateway instead.")
+
+
+def _mcp(scope, name="docs", client="claude_code"):
+    source = Source(SourceKind.FILE, "/p/.mcp.json", client)
+    return Item(client, ItemKind.MCP_SERVER, name, source, scope)
+
+
+def test_a_project_s_own_server_cannot_move_so_it_is_not_offered_a_move():
+    entry = {"command": "uvx", "args": ["x"]}
+    project = SimpleNamespace(items=[_mcp(Scope.PROJECT)])
+    assert (
+        known_refusal("docs", entry, project, set()) == "Claude Code has docs in a project already."
+    )
+    # A copy that can move is named first.
+    both = SimpleNamespace(items=[_mcp(Scope.PROJECT), _mcp(Scope.USER, client="codex")])
+    assert known_refusal("docs", entry, both, set()) == (
+        "Codex has docs already. Move it into the gateway instead."
+    )
 
 
 def test_a_held_name_is_in_the_gateway_already(home):
@@ -147,7 +192,7 @@ def test_a_server_a_client_loads_from_a_plugin_is_refused_last(home):
     _offer(home, "pr-index", {"command": "uvx", "args": ["mcp-pr-index"]})
     _, _, rows = _read(home)
     extra = next(r for r in rows if r["id"] == f"extra@{MARKET}/pr-index")
-    assert extra["refusal"] == "Claude Code loads pr-index from a plugin already."
+    assert extra["refusal"] == "Claude Code has pr-index from a plugin already."
     # The plugin's own entry still says why first: it runs a file in its folder.
     own = next(r for r in rows if r["id"] == f"pr-review@{MARKET}/pr-index")
     assert own["refusal"] == IN_FOLDER.format("pr-index")
@@ -305,6 +350,20 @@ def _refused(home, server_id, words):
         assert answer.json() == {"detail": words}
         assert page.get("/api/changes").json() == log
     assert settings.read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    ("entry", "why"),
+    [
+        ({"command": "uvx", "cwd": "${CLAUDE_PLUGIN_ROOT}"}, OWN_FOLDER),
+        ({"url": 5}, UNREADABLE),
+        ({"command": "uvx", "args": "mcp-x"}, UNREADABLE),
+        ({"command": "uvx", "env": ["A=1"]}, UNREADABLE),
+    ],
+)
+def test_a_wrong_shape_or_a_folder_is_a_422_at_preview(home, entry, why):
+    _offer(home, "odd", entry)
+    _refused(home, f"extra@{MARKET}/odd", why.format("odd"))
 
 
 def test_an_oauth_server_is_refused_at_preview_and_nothing_is_written(home, monkeypatch):

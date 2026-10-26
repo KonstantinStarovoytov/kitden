@@ -13,7 +13,7 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 from kitden.clients.base import ClientAdapter
-from kitden.clients.entries import gateway_entry, reads_elsewhere
+from kitden.clients.entries import entry_refusal, gateway_entry
 from kitden.model import ItemKind, Scope, SourceKind
 from kitden.redact import redact
 from kitden.views.setup_server import CLIENT_WORDS
@@ -234,7 +234,8 @@ def known_refusal(name: str, entry: dict, inventory, held: set[str]) -> str | No
       servers (code.claude.com/docs/en/plugins-reference).
     - Codex plugins keep `mcp.json` with a transport `type`; the docs show `streamable-http`
       only (developers.openai.com/codex/plugins/build).
-    The gateway speaks streamable HTTP and stdio, so the rest is refused.
+    The gateway speaks streamable HTTP and stdio, so the rest is refused. What a move checks
+    (values from elsewhere, `cwd`, a connection type, a wrong shape) is `entry_refusal`'s.
     """
     from kitden.views.skills import SCRIPT_SUFFIXES  # skills imports this module
 
@@ -246,16 +247,19 @@ def known_refusal(name: str, entry: dict, inventory, held: set[str]) -> str | No
         if i.kind is ItemKind.MCP_SERVER and i.name == name and not i.via_gateway
     ]
     # A server an installed plugin brings is not the client's own entry; it cannot be moved.
-    has = next((i for i in same if not _from_plugin(i)), None)
+    # A project's own entry cannot be moved either, so a copy that can is named first.
+    own = [i for i in same if not _from_plugin(i)]
+    has = next((i for i in own if i.scope is not Scope.PROJECT), own[0] if own else None)
     if has is not None:
         client = CLIENT_WORDS.get(has.client, has.client)
+        if has.scope is Scope.PROJECT:
+            return f"{client} has {name} in a project already."
         return f"{client} has {name} already. Move it into the gateway instead."
+    # The move's own checks: "stays direct" there reads "cannot be added" here.
+    why = entry_refusal(name, entry)
+    if why is not None:
+        return why.removesuffix("; it stays direct for now.").rstrip(".") + "."
     server = gateway_entry(entry)
-    kind = str(entry.get("type", "")).lower()
-    if kind in ("sse", "ws") or str(server.get("url", "")).rstrip("/").endswith("/sse"):
-        return f"{name} uses a connection the Kitden gateway does not support yet."
-    if reads_elsewhere(entry, server):
-        return f"{name} reads values Kitden can't fill in."
     words = [str(server.get("command", "")), *(str(a) for a in server.get("args") or [])]
     if any(w.endswith(".mcpb") for w in words):
         return f"{name} comes as a bundle; Kitden can't run it yet."
@@ -265,14 +269,12 @@ def known_refusal(name: str, entry: dict, inventory, held: set[str]) -> str | No
     )
     if in_folder:
         return f"{name} runs a file inside its plugin folder; Kitden can't run it from the gateway."
-    if "command" not in server and "url" not in server:
-        return f"{name} could not be read from its file."
     # Last, so a plugin's own server says first why the gateway cannot run it: the client
     # would load the plugin's copy and the gateway's.
     plugin = next((i for i in same if _from_plugin(i)), None)
     if plugin is not None:
         client = CLIENT_WORDS.get(plugin.client, plugin.client)
-        return f"{client} loads {name} from a plugin already."
+        return f"{client} has {name} from a plugin already."
     return None
 
 
