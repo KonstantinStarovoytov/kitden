@@ -56,7 +56,8 @@ def step_project(step: Step, projects: list[str]) -> str | None:
     if step.scope is Scope.LOCAL and len(key) > 1 and key[0] == "projects":
         # Claude Code's entry for one project, in ~/.claude.json.
         return _known(key[1], projects)
-    if step.scope is Scope.PROJECT:
+    # A project's own file, also its local settings (`.claude/settings.local.json`).
+    if step.scope in (Scope.PROJECT, Scope.LOCAL):
         place = (
             (step.edit and step.edit.path)
             or (step.copy and step.copy.target)

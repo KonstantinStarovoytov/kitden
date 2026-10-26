@@ -54,6 +54,7 @@ from kitden.model import (
     UnknownReason,
 )
 from kitden.redact import redact
+from kitden.views.words import NO_CLAUDE_FOLDER
 
 CLIENT = "claude_code"
 WRITABLE_SCOPES = {Scope.USER, Scope.LOCAL, Scope.PROJECT}
@@ -211,6 +212,47 @@ class ClaudeCodeAdapter(ClientAdapter):
             cwd=item.project if item.scope is Scope.PROJECT else None,
             restart_note=RELOAD,
             shared_file=item.scope is Scope.PROJECT,
+        )
+
+    def _rule_file(self, project: str | None) -> Path:
+        """The user settings, or one project's local settings (its `.claude` folder must exist:
+        Kitden writes one file and makes no folder)."""
+        if project is None:
+            return self.home / ".claude/settings.json"
+        if not (Path(project) / ".claude").is_dir():
+            raise ValueError(NO_CLAUDE_FOLDER.format(folder=Path(project).name))
+        return Path(project) / ".claude/settings.local.json"
+
+    # checked 2026-10-26 (code.claude.com/docs/en/settings-reference, `skillOverrides`): any
+    # settings file may hold it, and "off" hides the skill from Claude and from `/`. The
+    # `/skills` menu saves it to `.claude/settings.local.json`. The docs still do not say whether
+    # the object merges key by key across files (also /en/settings and /en/skills, same day).
+    def skill_rule_step(self, name: str, project: str | None, off: bool) -> Step:
+        """`skillOverrides.<name>` set to "off", in the user settings or in one project's local
+        settings. With `off` False the project's key goes, so the shared rule applies there."""
+        edit = FileEdit(
+            path=str(self._rule_file(project)),
+            fmt="json",
+            key=("skillOverrides", name),
+            after="off" if off else ABSENT,
+        )
+        scope = Scope.USER if project is None else Scope.LOCAL
+        return Step(client=CLIENT, scope=scope, name=name, edit=edit, restart_note=NEW_SESSION)
+
+    # checked 2026-10-26 (code.claude.com/docs/en/settings-reference, `enabledPlugins`): "To opt
+    # out of a project-enabled plugin on your machine, set it to false in
+    # .claude/settings.local.json"; plugins/loading says the files merge key by key, local first.
+    def plugin_rule_step(self, plugin_id: str, project: str, off: bool) -> Step:
+        """`enabledPlugins.<id>` set to false in one project's local settings; with `off` False
+        the key goes, so the project follows its shared settings again."""
+        edit = FileEdit(
+            path=str(self._rule_file(project)),
+            fmt="json",
+            key=("enabledPlugins", plugin_id),
+            after=False if off else ABSENT,
+        )
+        return Step(
+            client=CLIENT, scope=Scope.LOCAL, name=plugin_id, edit=edit, restart_note=RELOAD
         )
 
     def marketplace_sources(self) -> dict[str, str | None]:

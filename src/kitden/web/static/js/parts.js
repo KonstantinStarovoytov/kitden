@@ -630,6 +630,7 @@ const ACTION_WORDS = {
   "mcp.add": "Added",
   "project.align": "Added missing items",
   "gateway.add": "Added",
+  "skill.rule": "Changed how",
 };
 
 // A Kitden gateway rule in words: "slow of echo in website", as the review's after line says
@@ -716,7 +717,7 @@ export function changeTitle(entry) {
   if (entry.action === "gateway.add" && entry.steps.length) return `${ACTION_WORDS[entry.action]} ${entry.steps[0].name} to the Kitden gateway`;
   const kitden = kitdenMove(entry);
   const verb = kitden ? "Moved" : ACTION_WORDS[entry.action] || entry.action;
-  const plugin = ["plugin.enable", "plugin.disable", "plugin.install", "plugin.remove"].includes(entry.action);
+  const plugin = ["plugin.enable", "plugin.disable", "plugin.install", "plugin.remove", "skill.rule"].includes(entry.action);
   // The gateway's own step is not a client: the line names the clients the entry left. An
   // install's marketplace steps only make the plugin reachable: the line names the plugin.
   const steps = entry.action === "gateway.move"
@@ -733,6 +734,8 @@ export function changeTitle(entry) {
     const { clients: lose, oneCopy } = skillRemoval(steps);
     return `${verb}${oneCopy ? " one copy of" : ""} ${names.join(", ")}${place} · ${lose.map((c) => CLIENT_NAMES[c] || c).join(", ")}`;
   }
+  // A skill rule turns a skill or a plugin off, or takes a project's own rule out.
+  if (entry.action === "skill.rule") return `${verb} ${names.join(", ")} loads${place} · ${clients.join(", ")}`;
   // A plugin's skills can be many; the line counts them, the change lists them.
   if (entry.action === "plugin.skills") return `${verb} ${plural(names.length, "skill", "skills")}${place} · ${clients.join(", ")}`;
   const whole = ["gateway.connect", "gateway.switch", "setup_server.register", "setup_server.update", "setup_server.enable", "client.disconnect", "project.align"].includes(entry.action);

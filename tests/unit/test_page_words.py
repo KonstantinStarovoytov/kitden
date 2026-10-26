@@ -5,8 +5,16 @@ from pathlib import Path
 
 from kitden.views.words import (
     AFTER_WORDS,
+    CODEX_NO_PROJECT,
+    CURSOR_NO_SKILL_SWITCH,
+    FOLLOWS_SHARED,
     LOADS_PLUGINS,
+    NO_CLAUDE_FOLDER,
     NO_GATEWAY_CLIENT,
+    NO_SKILL_MERGE,
+    OWN_SKILL_SETTINGS,
+    PLUGIN_ALL_PROJECTS,
+    PLUGIN_SKILL,
     READS_FOLDER,
     ROUTE_WORDS,
     STALE,
@@ -1539,6 +1547,30 @@ def test_adding_a_marketplace_server_names_the_kitden_gateway():
     assert 'if (action === "gateway.add") return `add:${params.server}`;' in tray
     assert AFTER_WORDS["gateway.add"] == ("gw", STATE_WORDS["gw"])
     assert NO_GATEWAY_CLIENT == "No client uses the Kitden gateway yet."
+
+
+def test_a_skill_rule_says_what_it_turns_off_and_where():
+    review, parts, tray = reviews(), script("parts.js"), script("tray.js")
+    assert '"skill.rule": off ? `Turn off ${short}` : `Use the shared rule for ${short}`' in review
+    assert "`${short} uses the shared rule`" in review
+    assert '"skill.rule": "Turned off"' in review and '"skill.rule": "Changed how"' in parts
+    assert '`${verb} ${names.join(", ")} loads${place} · ${clients.join(", ")}`' in parts
+    key = '`skill:${one.client}:${one.item}@${params.project || ""}`;'
+    assert f'if (action === "skill.rule") return {key}' in tray
+    assert AFTER_WORDS["skill.rule"] == ("off", STATE_WORDS["off"])
+    assert CURSOR_NO_SKILL_SWITCH == "Cursor has no switch to turn off one skill."
+    assert NO_SKILL_MERGE == (
+        "Claude Code may not merge skill settings across files; turn it off for all projects "
+        "instead."
+    )
+    assert OWN_SKILL_SETTINGS == "{folder} has its own skill settings; it may keep this skill on."
+    assert CODEX_NO_PROJECT == "Codex has no switch for one project; turn it off for all projects."
+    assert FOLLOWS_SHARED == "Follows all projects"
+    assert PLUGIN_SKILL == "A plugin's skill follows its plugin; turn the plugin off instead."
+    assert PLUGIN_ALL_PROJECTS == "Turn a plugin off for all projects with its own switch."
+    assert NO_CLAUDE_FOLDER == (
+        "{folder} has no Claude Code settings yet; start Claude Code there once first."
+    )
 
 
 def test_the_add_a_server_panel_says_what_the_mockup_says():

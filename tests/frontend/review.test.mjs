@@ -178,6 +178,20 @@ test('adding a marketplace server names the Kitden gateway and no scope', () => 
   assert.equal(reviewLede(add, ''), 'Adds for all projects. Nothing is written until you press Apply. A backup is kept.');
 });
 
+test('a skill rule says what it turns off and where', () => {
+  const step = (client, name) => ({ client, name });
+  const off = (scope) => ({ action: 'skill.rule', steps: [step('claude_code', 'deploy')], target: scope });
+  const body = (params) => ({ params });
+  assert.deepEqual(changeWords(off(target('all')), body({ scope: 'all', off: true })), { title: 'Turn off deploy for all projects', done: 'Turned off deploy for all projects' });
+  const here = target('project', '/Users/me/work/website', true);
+  assert.deepEqual(changeWords(off(here), body({ scope: 'project', project: 'p1', off: true })), { title: 'Turn off deploy in website', done: 'Turned off deploy in website' });
+  // A plugin goes by its short name.
+  const plugin = { action: 'skill.rule', steps: [step('claude_code', 'superpowers@demo-market')], target: here };
+  assert.equal(changeWords(plugin, body({ scope: 'project', project: 'p1', off: true })).title, 'Turn off superpowers in website');
+  // Back to the shared rule: the project's own key goes.
+  assert.deepEqual(changeWords(off(here), body({ scope: 'project', project: 'p1', off: false })), { title: 'Use the shared rule for deploy in website', done: 'deploy uses the shared rule in website' });
+});
+
 test('connecting a client to Kitden and disconnecting it name their place and no scope', () => {
   for (const action of ['setup_server.register', 'client.disconnect']) assert.ok(PLACE_IN_TITLE.includes(action), action);
   const connect = { action: 'setup_server.register', steps: [{ client: 'cursor', name: 'kitden' }], target: target('all') };

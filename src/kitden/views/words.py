@@ -53,6 +53,7 @@ AFTER_WORDS: dict[str, tuple[str, str]] = {
     "setup_server.enable": ("on", STATE_WORDS["on"]),
     "client.disconnect": ("off", "Removed"),
     "gateway.add": ("gw", STATE_WORDS["gw"]),
+    "skill.rule": ("off", STATE_WORDS["off"]),
 }
 
 # A change to the Kitden gateway when no client has its `kitden` entry on.
@@ -90,3 +91,17 @@ ROUTE_WORDS: dict[str, str] = {
     "plugin": "from a plugin",
     "folder": "through {}'s folder",
 }
+
+# A skill or a plugin turned off by a settings rule (`skill.rule`, spec 5.5). A refusal says why
+# there is no switch; the review's note names a project whose own skill settings may win.
+CURSOR_NO_SKILL_SWITCH = "Cursor has no switch to turn off one skill."
+CODEX_NO_PROJECT = "Codex has no switch for one project; turn it off for all projects."
+NO_SKILL_MERGE = (
+    "Claude Code may not merge skill settings across files; turn it off for all projects instead."
+)
+OWN_SKILL_SETTINGS = "{folder} has its own skill settings; it may keep this skill on."
+PLUGIN_SKILL = "A plugin's skill follows its plugin; turn the plugin off instead."
+PLUGIN_ALL_PROJECTS = "Turn a plugin off for all projects with its own switch."
+NO_CLAUDE_FOLDER = "{folder} has no Claude Code settings yet; start Claude Code there once first."
+# A project's own rule removed: the skill or the plugin then follows the shared setup.
+FOLLOWS_SHARED = "Follows all projects"

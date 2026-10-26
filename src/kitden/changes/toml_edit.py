@@ -8,6 +8,7 @@ from typing import Any
 
 import tomlkit
 from tomlkit.exceptions import TOMLKitError
+from tomlkit.items import AoT
 
 from kitden.changes.json_splice import ABSENT, UnrecognizedFormatError
 
@@ -45,8 +46,27 @@ def set_value(text: str, path: tuple[str, ...], value: Any) -> str:
         parent = parent[key]
         if not isinstance(parent, dict):
             raise UnrecognizedFormatError(f"{key} is not a table")
-    parent[path[-1]] = value
-    return tomlkit.dumps(doc)
+    current = parent.get(path[-1])
+    if (
+        isinstance(current, AoT)
+        and isinstance(value, list)
+        and value[: len(current)] == _plain(current)
+    ):
+        # More `[[tables]]` after the ones there: they are added, so the old ones keep comments.
+        # Each new table follows a blank line, as tomlkit writes a new list of tables.
+        for value_table in value[len(current) :]:
+            if len(current) and not current[-1].as_string().endswith("\n\n"):
+                current[-1].add(tomlkit.nl())
+            table = tomlkit.table()
+            table.update(value_table)
+            table.add(tomlkit.nl())
+            current.append(table)
+    else:
+        parent[path[-1]] = value
+    result = tomlkit.dumps(doc)
+    if result.endswith("\n\n") and not text.endswith("\n\n"):
+        result = result.rstrip("\n") + "\n"
+    return result
 
 
 def delete_value(text: str, path: tuple[str, ...]) -> str:

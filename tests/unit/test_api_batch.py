@@ -452,3 +452,36 @@ def test_a_failed_apply_all_with_an_add_puts_every_file_back(tmp_path):
         assert applied.status_code == 500
         assert applied.json()["state"] == "restored"
         assert _files(page.home) == before
+
+
+def test_apply_all_with_a_rule_and_a_disable_on_one_settings_file(tmp_path):
+    with _page(tmp_path) as page:
+        settings = page.home / ".claude/settings.json"
+        before = settings.read_bytes()
+        query = {"client": "claude_code", "scope": "user"}
+        found = {i["name"]: i["id"] for i in page.get("/api/items", params=query).json()}
+        rule = {
+            "id": "a",
+            "kind": "skill.rule",
+            "title": "Turn off brandkit for all projects",
+            "targets": [{"client": "claude_code", "item": found["brandkit"]}],
+            "params": {"scope": "all", "off": True},
+        }
+        disable = {
+            "id": "b",
+            "kind": "plugin.disable",
+            "title": "Turn off superpowers",
+            "targets": [{"item": found["superpowers@demo-market"]}],
+        }
+        assert _check(page, rule, disable) == {"ok": True}
+        answer = _preview(page, rule, disable)
+        assert answer.status_code == 200, answer.text
+        change = answer.json()
+        assert change["action"] == "batch" and len(change["steps"]) == 2
+        assert _apply(page, change["id"]).json()["state"] == "verified"
+        data = json.loads(settings.read_text())
+        assert data["skillOverrides"] == {"brandkit": "off"}
+        assert data["enabledPlugins"]["superpowers@demo-market"] is False
+        undone = _apply(page, change["id"], "undo")
+        assert undone.status_code == 200 and undone.json()["state"] == "undone"
+        assert settings.read_bytes() == before

@@ -42,6 +42,7 @@ from kitden.changes.actions import (
     SETUP_SERVER_ENABLE,
     SETUP_SERVER_UPDATE,
     SKILL_INSTALL,
+    SKILL_RULE,
     add_server_steps,
     connect_steps,
     disconnect_steps,
@@ -59,6 +60,7 @@ from kitden.changes.actions import (
     remove_steps,
     setup_server_steps,
     skill_remove_steps,
+    skill_rule_steps,
     skill_steps,
     switch_steps,
     tools_to_read,
@@ -1163,6 +1165,8 @@ def create_app(
             ]
         elif action == GATEWAY_KEYCHAIN:
             steps = keychain_steps(home, str(params.get("server", "")))
+        elif action == SKILL_RULE:
+            steps = skill_rule_steps(adapters, state.inventory, home, targets, params)
         elif action == MCP_ADD:
             item = _item(str(params.get("item", "")))
             if item is None:

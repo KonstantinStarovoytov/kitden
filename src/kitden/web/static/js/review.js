@@ -23,7 +23,7 @@ const DONE_WORDS = {
   "gateway.switch": "Switched the gateway", "plugin.install": "Added", "marketplace.add": "Added the marketplace",
   "skill.install": "Added", "plugin.skills": "Added",
   "gateway.remove": "Removed", "gateway.put_back": "Put", "gateway.move_out": "Moved", "mcp.add": "Added",
-  "gateway.keychain": "Moved", "gateway.add": "Added",
+  "gateway.keychain": "Moved", "gateway.add": "Added", "skill.rule": "Turned off",
 };
 
 // Actions whose words say "from" a client.
@@ -89,6 +89,8 @@ export function changeWords(change, previewBody) {
   const clients = joinWords(reached.map(clientName));
   const plugin = ((previewBody && previewBody.params && previewBody.params.plugin) || "the plugin").split("@")[0];
   const server = (previewBody && previewBody.params && previewBody.params.server) || (change.steps[0] && change.steps[0].name);
+  // A skill rule turns a skill off; `off: false` takes a project's own rule out.
+  const off = !(previewBody && previewBody.params && previewBody.params.off === false);
   // An add names the server, not its row in the Add panel ("<plugin>@<marketplace>/<name>").
   const added = change.steps[0] ? change.steps[0].name : String(server).split("/").pop();
   let title = {
@@ -114,6 +116,7 @@ export function changeWords(change, previewBody) {
     "gateway.move_out": `Move ${server} out of the gateway into ${clients}`,
     "gateway.keychain": `Move the secrets of ${server} to the Keychain`,
     "gateway.add": `Add ${added} to the Kitden gateway`,
+    "skill.rule": off ? `Turn off ${short}` : `Use the shared rule for ${short}`,
   }[change.action] || change.action;
   const verb = DONE_WORDS[change.action] || change.action;
   let what = `${verb} ${short} ${REMOVES.includes(change.action) ? "from" : "in"} ${clients}`;
@@ -146,6 +149,8 @@ export function changeWords(change, previewBody) {
     what = `${verb} the secrets of ${server} to the Keychain`;
   } else if (change.action === "gateway.add") {
     what = `${verb} ${added} to the Kitden gateway`;
+  } else if (change.action === "skill.rule") {
+    what = off ? `${verb} ${short}` : `${short} uses the shared rule`;
   } else if (change.action === "plugin.skills") {
     what = `${verb} ${plural(steps.length, "skill", "skills")} to ${clients}`;
   } else if (change.action === "project.align") {

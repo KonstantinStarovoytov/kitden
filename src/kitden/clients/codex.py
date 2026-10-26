@@ -13,6 +13,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from kitden.changes import toml_edit
 from kitden.changes.json_splice import ABSENT, PRESENT
 from kitden.clients.base import (
     PLUGIN_REMOVE,
@@ -209,6 +210,32 @@ class CodexAdapter(ClientAdapter):
         )
         return Step(
             client=CLIENT, scope=item.scope, name=item.name, edit=edit, restart_note=RESTART
+        )
+
+    # checked 2026-10-26 (learn.chatgpt.com/docs/build-skills, "Enable or disable local Codex
+    # skills"): a `[[skills.config]]` entry in ~/.codex/config.toml whose `path` is the skill's
+    # SKILL.md, with `enabled = false`, turns the skill off without deleting it; restart Codex
+    # after the change. The docs name no project file for it.
+    def skill_rule_step(self, item: Item) -> Step:
+        """Turn one skill off for all projects: its `[[skills.config]]` entry gets
+        `enabled = false`, or a new entry is added after the others."""
+        config = self.codex_home / "config.toml"
+        text = config.read_text() if config.is_file() else ""
+        found = toml_edit.get_value(text, ("skills", "config"))
+        rules = [] if found is ABSENT else found
+        if not isinstance(rules, list) or not all(isinstance(r, dict) for r in rules):
+            raise ValueError(
+                "Codex's skills settings are not a list of tables; Kitden leaves them."
+            )
+        path = str(item.source.path)
+        mine = [os.path.realpath(str(r.get("path", ""))) == path for r in rules]
+        if any(mine):
+            after = [{**r, "enabled": False} if m else r for r, m in zip(rules, mine, strict=True)]
+        else:
+            after = [*rules, {"path": path, "enabled": False}]
+        edit = FileEdit(path=str(config), fmt="toml", key=("skills", "config"), after=after)
+        return Step(
+            client=CLIENT, scope=Scope.USER, name=item.name, edit=edit, restart_note=RESTART
         )
 
     def marketplace_sources(self) -> dict[str, str | None]:

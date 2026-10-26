@@ -1,5 +1,6 @@
 """What each client shows after a change: the first line of the review (feature 004)."""
 
+import json
 import os
 from dataclasses import replace
 from pathlib import Path
@@ -17,10 +18,11 @@ from kitden.changes.actions import (
     KITDEN_GATEWAY,
     MCP_ADD,
     PROJECT_ALIGN,
+    SKILL_RULE,
     claude_allows_kitden,
 )
 from kitden.changes.json_splice import ABSENT
-from kitden.clients.base import SETUP_NAME
+from kitden.clients.base import SETUP_NAME, is_home
 from kitden.local_gateway.keychain import references_in
 from kitden.local_gateway.project import project_chain
 from kitden.local_gateway.settings import CLIENT as KITDEN
@@ -38,7 +40,14 @@ from kitden.model import GATEWAY_CLIENT, Change, ItemKind, Scope, SourceKind
 from kitden.redact import redact
 from kitden.views.effective import effective_view
 from kitden.views.setup_server import CLIENTS, kitden_on, setup_server_state
-from kitden.views.words import AFTER_WORDS, LOADS_PLUGINS, NO_GATEWAY_CLIENT, STATE_WORDS
+from kitden.views.words import (
+    AFTER_WORDS,
+    FOLLOWS_SHARED,
+    LOADS_PLUGINS,
+    NO_GATEWAY_CLIENT,
+    OWN_SKILL_SETTINGS,
+    STATE_WORDS,
+)
 
 SKILL_CLIENTS = ("claude_code", "codex", "cursor")
 CLIENT_WORDS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
@@ -724,6 +733,68 @@ def _disconnect_words(change: Change) -> list[dict]:
     return out
 
 
+def _settings(path: Path) -> dict:
+    """A Claude Code settings file as read now; {} when it is missing or not JSON."""
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _rules(path: Path, key: str) -> dict:
+    value = _settings(path).get(key)
+    return value if isinstance(value, dict) else {}
+
+
+def _skill_keepers(inventory, home: Path, name: str) -> str | None:
+    """The projects where a skill turned off for all projects may stay on, in words: a project
+    whose own `skillOverrides` (shared or local, local winning) keeps it on, and a project with
+    skill settings of its own that do not name it (the docs do not say how they merge)."""
+    keeps, may = [], []
+    for path in dict.fromkeys(p.path for p in inventory.projects):
+        root = Path(path)
+        if is_home(root, home):
+            continue  # its .claude/settings.json is the user's own file
+        rules = {
+            **_rules(root / ".claude/settings.json", "skillOverrides"),
+            **_rules(root / ".claude/settings.local.json", "skillOverrides"),
+        }
+        if name in rules and rules[name] != "off":
+            keeps.append(root.name)
+        elif rules and name not in rules:
+            may.append(root.name)
+    notes = []
+    if keeps:
+        which = "which has its own rule" if len(keeps) == 1 else "which have their own rules"
+        notes.append(f"It stays on in {_join(keeps)}, {which}.")
+    notes += [OWN_SKILL_SETTINGS.format(folder=folder) for folder in may]
+    return " ".join(notes) or None
+
+
+def _skill_rule_words(change: Change, inventory, home: Path) -> list[dict]:
+    """A skill or a plugin turned off: Off in its client. For all projects in Claude Code, the
+    note names each project whose own settings may keep it on. A project's own rule taken out:
+    the state the shared settings give it (the user's file, then the project's shared file)."""
+    out = []
+    for step in change.steps:
+        edit = step.edit
+        assert edit is not None
+        entry = {"client": step.client, "state": "off", "word": STATE_WORDS["off"]}
+        if edit.after is ABSENT:
+            key, name = edit.key
+            shared = [home / ".claude/settings.json", Path(edit.path).parent / "settings.json"]
+            values = [_rules(f, key)[name] for f in shared if name in _rules(f, key)]
+            off = bool(values) and values[-1] in ("off", False)
+            entry = {"client": step.client, "state": "off" if off else "on", "word": FOLLOWS_SHARED}
+        elif step.client == "claude_code" and step.scope is Scope.USER:
+            note = _skill_keepers(inventory, home, step.name)
+            if note:
+                entry["note"] = note
+        out.append(entry)
+    return out
+
+
 def after_words(
     change: Change,
     inventory,
@@ -760,6 +831,8 @@ def after_words(
         return _disconnect_words(change)
     if change.action == GATEWAY_ADD:
         return _gateway_add_words(inventory)
+    if change.action == SKILL_RULE and home is not None:
+        return _skill_rule_words(change, inventory, home)
     if change.action == MCP_ADD and home is not None:
         return _add_server_words(change, home)
     if change.action == PROJECT_ALIGN:

@@ -117,6 +117,12 @@ test('keyFor names a switch by what it switches', () => {
   assert.equal(keyFor({ action: 'project.align', targets: [], params: { project: 'p1', chosen: null } }), 'align:p1');
   // A marketplace server added to the Kitden gateway is keyed by its row in the Add panel.
   assert.equal(keyFor({ action: 'gateway.add', targets: [], params: { server: 'db-tools@demo-market/db-query' } }), 'add:db-tools@demo-market/db-query');
+  // A skill rule is keyed by its client, its item and its project: a second press replaces it.
+  const skill = (project, off = true) => ({ action: 'skill.rule', targets: [{ client: 'claude_code', item: 'i1' }], params: { scope: project ? 'project' : 'all', project, off } });
+  assert.equal(keyFor(skill()), 'skill:claude_code:i1@');
+  assert.equal(keyFor(skill('p1')), 'skill:claude_code:i1@p1');
+  assert.equal(keyFor(skill('p1', false)), keyFor(skill('p1')));
+  assert.notEqual(keyFor({ ...skill(), targets: [{ client: 'codex', item: 'i1' }] }), keyFor(skill()));
   // Any other change: its action, targets and params, whatever order the params came in.
   const first = { action: 'mcp.add', targets: [{ client: 'codex' }], params: { item: 'x', scope: 'user' } };
   const second = { action: 'mcp.add', targets: [{ client: 'codex' }], params: { scope: 'user', item: 'x' } };
@@ -148,7 +154,8 @@ test("iconFor picks the mockup's icon", () => {
   assert.equal(icon('gateway.rule', { project: 'p1' }), 'folder');
   assert.equal(icon('project.align', { project: 'p1' }), 'folder');
   assert.equal(icon('gateway.rule', { server: 's', project: null }), 'toggle-right');
-  for (const action of ['gateway.rules', 'gateway.strict', 'plugin.enable', 'plugin.disable', 'setup_server.enable']) assert.equal(icon(action), 'toggle-right', action);
+  for (const action of ['gateway.rules', 'gateway.strict', 'plugin.enable', 'plugin.disable', 'setup_server.enable', 'skill.rule']) assert.equal(icon(action), 'toggle-right', action);
+  assert.equal(icon('skill.rule', { scope: 'project', project: 'p1' }), 'folder');
   for (const action of ['gateway.move', 'gateway.put_back', 'gateway.keychain']) assert.equal(icon(action), 'arrow-right', action);
   assert.equal(icon('gateway.move_out', { server: 'files' }), 'log-out');
   for (const action of ['gateway.connect', 'gateway.switch', 'setup_server.register', 'setup_server.update', 'client.disconnect']) assert.equal(icon(action), 'plug', action);

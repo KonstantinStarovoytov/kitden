@@ -182,6 +182,13 @@ test('an Add skills entry on the Changes page counts the skills, not every name'
   assert.equal(changeTitle({ action: 'plugin.skills', steps: [step('a')] }), 'Added 1 skill · Codex, Cursor');
 });
 
+test('a skill rule on the Changes page says what changed and where', () => {
+  const all = { action: 'skill.rule', steps: [{ client: 'claude_code', name: 'deploy' }], target: { scope: 'all', project: null } };
+  assert.equal(changeTitle(all), 'Changed how deploy loads for all projects · Claude Code');
+  const here = { action: 'skill.rule', steps: [{ client: 'claude_code', name: 'superpowers@demo-market' }], target: { scope: 'project', project: '/Users/me/work/website' } };
+  assert.equal(changeTitle(here), 'Changed how superpowers loads in website · Claude Code');
+});
+
 test('a plugin removal on the Changes page uses the short name', () => {
   assert.equal(changeTitle({ action: 'plugin.remove', steps: [{ client: 'codex', name: 'browser@openai-bundled' }] }), 'Removed browser · Codex');
 });
