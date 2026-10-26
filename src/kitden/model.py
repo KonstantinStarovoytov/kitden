@@ -149,6 +149,8 @@ class Item:
     change_hint: str | None = None  # where to change it when the tool cannot (FR-028)
     stale_at: str | None = None  # kept from the last good read (ISO time); not part of the id
     stays_direct: str | None = None  # an MCP entry the Kitden gateway cannot run: why
+    # The settings file (user, project or local) whose rule set `enabled`; None when no rule did.
+    state_scope: Scope | None = None
     # Equal for two MCP entries the Kitden gateway would run the same way (entries.entry_key).
     # Its values can be secrets, so it stays on the server: item_dict leaves it out.
     entry_key: str | None = field(default=None, repr=False)

@@ -8,6 +8,7 @@ entry.
 """
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -89,6 +90,40 @@ def _on(value: bool | None) -> Enabled:
 
 def _dict(value: Any) -> dict:
     return value if isinstance(value, dict) else {}
+
+
+# checked 2026-10-26 (code.claude.com/docs/en/skills, "Override skill visibility from settings"):
+# `skillOverrides` maps a skill name to "on", "name-only", "user-invocable-only" or "off"; a
+# skill that is not listed is "on". Only "off" turns a skill off. Plugin skills are not affected.
+# The docs do not say how `skillOverrides` merges across settings files (their precedence list,
+# checked 2026-10-26 at /en/settings, is project local > shared project > user, for a key as a
+# whole). Kitden merges it key by key, the most specific file winning: not confirmed by the docs.
+SKILL_STATES = ("on", "name-only", "user-invocable-only", "off")
+
+
+def _skill_rules(layers: list[tuple[Scope, dict]]) -> dict[str, tuple[str, Scope]]:
+    """Skill name -> (state, file scope). `layers` run from the least to the most specific file.
+    Values the docs do not list are ignored."""
+    rules: dict[str, tuple[str, Scope]] = {}
+    for scope, settings in layers:
+        for name, state in _dict(settings.get("skillOverrides")).items():
+            if state in SKILL_STATES:
+                rules[name] = (state, scope)
+    return rules
+
+
+def _apply_rules(items: list[Item], rules: dict[str, tuple[str, Scope]]) -> list[Item]:
+    """Mark the skills a rule turns off. A rule that keeps a skill on only records its file."""
+    ruled = []
+    for item in items:
+        rule = rules.get(item.name)
+        if item.kind is ItemKind.SKILL and rule:
+            state, scope = rule
+            item = replace(
+                item, enabled=Enabled.OFF if state == "off" else Enabled.ON, state_scope=scope
+            )
+        ruled.append(item)
+    return ruled
 
 
 class ClaudeCodeAdapter(ClientAdapter):
@@ -382,7 +417,7 @@ class ClaudeCodeAdapter(ClientAdapter):
                         project=path,
                     )
                 )
-            scan.items += self._project_files(read, Path(path), data)
+            scan.items += self._project_files(read, Path(path), data, settings)
 
         # Plugins: user settings decide on/off; project settings may override.
         enabled = _dict(settings.get("enabledPlugins"))
@@ -393,6 +428,7 @@ class ClaudeCodeAdapter(ClientAdapter):
             state_on = _on(enabled.get(plugin_id)) if settings_known else Enabled.UNKNOWN
             if settings_known and plugin_id not in enabled:
                 state_on = Enabled.ON  # installed plugins are on unless turned off
+            ruled = settings_known and plugin_id in enabled
             source = file_source(settings_path, CLIENT, f"enabledPlugins.{plugin_id}")
             scan.items.append(
                 Item(
@@ -402,6 +438,7 @@ class ClaudeCodeAdapter(ClientAdapter):
                     source=source,
                     scope=Scope.USER,
                     enabled=state_on,
+                    state_scope=Scope.USER if ruled else None,
                 )
             )
             for install in installs if isinstance(installs, list) else []:
@@ -447,7 +484,10 @@ class ClaudeCodeAdapter(ClientAdapter):
         )
 
         # Skills, hooks and marketplaces.
-        scan.items += skill_items(CLIENT, self.home / ".claude/skills", Scope.USER, CLIENT)
+        user_rules = _skill_rules([(Scope.USER, settings)])
+        scan.items += _apply_rules(
+            skill_items(CLIENT, self.home / ".claude/skills", Scope.USER, CLIENT), user_rules
+        )
         scan.items += instruction_items(
             CLIENT, _instruction_files(self.home / ".claude"), Scope.USER, CLIENT
         )
@@ -482,7 +522,9 @@ class ClaudeCodeAdapter(ClientAdapter):
         scan.problems = read.problems
         return scan
 
-    def _project_files(self, read: Reader, root: Path, data: dict) -> list[Item]:
+    def _project_files(
+        self, read: Reader, root: Path, data: dict, user_settings: dict
+    ) -> list[Item]:
         path = str(root)
         items: list[Item] = []
         approved = set(data.get("enabledMcpjsonServers") or [])
@@ -511,20 +553,38 @@ class ClaudeCodeAdapter(ClientAdapter):
             )
         settings_path = root / ".claude/settings.json"
         settings = _dict(read.json(settings_path))
-        for plugin_id, value in _dict(settings.get("enabledPlugins")).items():
-            items.append(
-                Item(
-                    client=CLIENT,
-                    kind=ItemKind.PLUGIN,
-                    name=plugin_id,
-                    source=file_source(settings_path, CLIENT, f"enabledPlugins.{plugin_id}"),
-                    scope=Scope.PROJECT,
-                    project=path,
-                    enabled=_on(value),
+        local_path = root / ".claude/settings.local.json"
+        local = _dict(read.json(local_path))
+        # checked 2026-10-26 (code.claude.com/docs/en/plugins/loading, "Find where a plugin is
+        # enabled"): `enabledPlugins` is read from user, project (`.claude/settings.json`) and
+        # local (`.claude/settings.local.json`) files; the highest source that names a plugin
+        # wins, local over project over user. Each file gives its own item here, and the
+        # effective view picks the winner by scope rank.
+        for file_path, file_settings, scope in (
+            (settings_path, settings, Scope.PROJECT),
+            (local_path, local, Scope.LOCAL),
+        ):
+            for plugin_id, value in _dict(file_settings.get("enabledPlugins")).items():
+                items.append(
+                    Item(
+                        client=CLIENT,
+                        kind=ItemKind.PLUGIN,
+                        name=plugin_id,
+                        source=file_source(file_path, CLIENT, f"enabledPlugins.{plugin_id}"),
+                        scope=scope,
+                        project=path,
+                        enabled=_on(value),
+                        state_scope=scope,
+                    )
                 )
-            )
         items += self._hooks(settings, settings_path, Scope.PROJECT, project=path)
-        items += skill_items(CLIENT, root / ".claude/skills", Scope.PROJECT, CLIENT, project=path)
+        rules = _skill_rules(
+            [(Scope.USER, user_settings), (Scope.PROJECT, settings), (Scope.LOCAL, local)]
+        )
+        items += _apply_rules(
+            skill_items(CLIENT, root / ".claude/skills", Scope.PROJECT, CLIENT, project=path),
+            rules,
+        )
         # checked 2026-10-22 (code.claude.com/docs/en/memory): a project's CLAUDE.md and
         # CLAUDE.local.md at its root, besides the files in its `.claude` folder. When the
         # project is the home folder, its `.claude` files are the user's own and are skipped.
