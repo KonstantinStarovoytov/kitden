@@ -26,12 +26,17 @@ it on the rail's logo (19 px: right .9 em, up .4 em, blur .24 → .4 px); the st
 - Path, as a share of the full move (right ≈ .95 em, up ≈ .42 em): at 0 % (0, −.12) · 20 %
   (.15, .40) · 60 % (.60, .78) · 100 % (1, .92). It rises first, then the air carries it right.
   Linear timing on one clock, so the path reads as a drift, not a bounce.
-- Each puff takes 2600 ms; they start 110 ms apart, the first at 200 ms. Twelve puffs this
-  close melt into one ribbon. The last fades at 4010 ms.
-- The door's light comes first: it rises in 500 ms (CALM), holds while any smoke is in the
-  air, and goes out over the last 700 ms, 200 ms after the last puff (4210 ms in all). The
-  light is the door's warm colour (#E6B46D light / #F3CC8F dark) at .68, shaped to the arch
-  (radius 8 of a 16 × 22 door), with a faint blurred glow on the ground under it at .27.
-- Plays once when the page opens, and again when the pointer or keyboard focus comes to the
-  logo, never twice at once. In the app the logo is a link to the Overview. Under reduced motion
-  nothing moves and the door does not glow.
+- Each puff takes 2600 ms; they start 110 ms apart, the first at 500 ms. Twelve puffs this
+  close melt into one ribbon. The last fades at 4310 ms.
+- The door's light comes first: it grows over 1200 ms, slowly at first like a fire catching
+  (cubic-bezier(.45, 0, .25, 1)), holds while any smoke is in the air, and goes out over the
+  last 700 ms, 200 ms after the last puff (4510 ms in all). The
+  door is lit like a hearth: shaped to the arch (radius 8 of a 16 × 22 door), a radial gradient
+  from near-white (#FFF3DC) at the bottom middle to the warm colour (#E6B46D light / #F3CC8F
+  dark) at .92, with a soft shadow of the same colour spilling 2 px down. A glow of the warm
+  colour lies on the ground under the door at .42: a radial ellipse 56 × 42 % of the house, its
+  middle on the house's bottom edge, so its brightest part shows just under the door, blurred
+  1.5 px.
+- Plays once when the page opens, and again when the pointer or keyboard focus has stayed on
+  the logo for 200 ms (one that only passes starts nothing), never twice at once. In the app the
+  logo is a link to the Overview. Under reduced motion nothing moves and the door does not glow.

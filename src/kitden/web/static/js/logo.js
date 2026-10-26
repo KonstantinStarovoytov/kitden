@@ -3,14 +3,14 @@
 // Once, when the page opens. Nothing under reduced motion. The numbers come from
 // design/logo-motion.md; the mockup is design/kitden-cloud-smoke.html.
 import { el } from "./dom.js";
-import { CALM, D } from "./motion.js";
+import { D } from "./motion.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 // Twelve puffs on one path, 110 ms apart: this close they melt into one ribbon.
 const PUFFS = 12;
 const GAP = 110;
-const LEAD = 200; // the first puff waits for the door to light
+const LEAD = 500; // the first puff waits for the door to light
 const FLIGHT = 2600;
 const WIDTHS = [0.3, 0.32, 0.34, 0.36, 0.38]; // in em of the wordmark, cycling
 // The path as a share of the full move (right .9 em, up .4 em): it rises first, then the air
@@ -21,13 +21,15 @@ const AT = [0, 0.2, 0.6, 1];
 const FADE = [0, 0.31, 0.22, 0];
 const RIGHT = 0.9;
 const UP = 0.4;
-// The door's light: on in 500 ms, held while any smoke is in the air, out over the last 700 ms,
-// which end 200 ms after the last puff.
-const LIGHT_IN = 500;
+// The door's light grows over 1200 ms, slowly at first, like a fire catching; it is held while
+// any smoke is in the air and goes out over the last 700 ms, which end 200 ms after the last puff.
+const LIGHT_IN = 1200;
+const GROW = "cubic-bezier(.45, 0, .25, 1)";
 const LIGHT_OUT = 700;
 const AFTER = 200;
 export const TOTAL = LEAD + (PUFFS - 1) * GAP + FLIGHT + AFTER;
 const START = 400; // after the page opens
+const HOVER_WAIT = 200; // after the pointer comes to the logo
 
 // One soft puff: a rounded body with two round bumps on top, in a 28 × 20 box, drawn with DOM
 // calls like the icons.
@@ -66,7 +68,7 @@ export function puffFrames() {
 // The frames of the door's light at `strength`: each step has its own curve, so the hold holds.
 export function lightFrames(strength) {
   return [
-    { opacity: 0, easing: CALM },
+    { opacity: 0, easing: GROW },
     { opacity: strength, offset: LIGHT_IN / TOTAL, easing: "linear" },
     { opacity: strength, offset: (TOTAL - LIGHT_OUT) / TOTAL, easing: "ease-in-out" },
     { opacity: 0 },
@@ -97,11 +99,17 @@ export function startLogo(brand) {
     playing = true;
     setTimeout(() => { playing = false; }, D(TOTAL));
     puffs.forEach((node, i) => node.animate(puffFrames(), { duration: D(FLIGHT), delay: D(LEAD + i * GAP), easing: "linear" }));
-    door.animate(lightFrames(0.68), { duration: D(TOTAL) });
-    step.animate(lightFrames(0.27), { duration: D(TOTAL) });
+    door.animate(lightFrames(0.92), { duration: D(TOTAL) });
+    step.animate(lightFrames(0.42), { duration: D(TOTAL) });
   };
-  brand.addEventListener("pointerenter", play);
-  brand.addEventListener("focus", play);
+  // The pointer (or focus) must stay a moment: one that only passes starts nothing.
+  let wait = 0;
+  const soon = () => { clearTimeout(wait); wait = setTimeout(play, D(HOVER_WAIT)); };
+  const never = () => clearTimeout(wait);
+  brand.addEventListener("pointerenter", soon);
+  brand.addEventListener("focus", soon);
+  brand.addEventListener("pointerleave", never);
+  brand.addEventListener("blur", never);
   setTimeout(play, D(START));
   return play;
 }

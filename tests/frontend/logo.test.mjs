@@ -56,7 +56,7 @@ test('twelve puffs 110 ms apart on one path; the door lights first and goes out 
   const play = startLogo(node);
   play();
   const flights = puffsOf(label).map((p) => p.animations[0]);
-  assert.deepEqual(flights.map((a) => a.options.delay), Array.from({ length: 12 }, (_, i) => 200 + i * 110));
+  assert.deepEqual(flights.map((a) => a.options.delay), Array.from({ length: 12 }, (_, i) => 500 + i * 110));
   assert.ok(flights.every((a) => a.options.duration === 2600 && a.options.easing === 'linear'));
   const frames = flights[0].keyframes;
   assert.deepEqual(frames.map((f) => f.opacity), [0, 0.31, 0.22, 0]);
@@ -65,12 +65,13 @@ test('twelve puffs 110 ms apart on one path; the door lights first and goes out 
   const [step, door] = mark.children;
   const light = door.animations[0];
   assert.equal(light.options.duration, TOTAL);
-  assert.equal(TOTAL, 4210);
-  assert.equal(Math.round(light.keyframes[1].offset * TOTAL), 500);
+  assert.equal(TOTAL, 4510);
+  assert.equal(Math.round(light.keyframes[1].offset * TOTAL), 1200);
+  assert.equal(light.keyframes[0].easing, 'cubic-bezier(.45, 0, .25, 1)');
   assert.equal(Math.round(light.keyframes[2].offset * TOTAL), TOTAL - 700);
-  assert.equal(200 + 11 * 110 + 2600, TOTAL - 200);
-  assert.deepEqual(light.keyframes.map((f) => f.opacity), [0, 0.68, 0.68, 0]);
-  assert.deepEqual(step.animations[0].keyframes.map((f) => f.opacity), [0, 0.27, 0.27, 0]);
+  assert.equal(500 + 11 * 110 + 2600, TOTAL - 200);
+  assert.deepEqual(light.keyframes.map((f) => f.opacity), [0, 0.92, 0.92, 0]);
+  assert.deepEqual(step.animations[0].keyframes.map((f) => f.opacity), [0, 0.42, 0.42, 0]);
 });
 
 test('the gesture plays by itself once, 400 ms after the page opens', () => {
@@ -84,19 +85,24 @@ test('the gesture plays by itself once, 400 ms after the page opens', () => {
   assert.equal(puffsOf(label)[0].animations.length, 1);
 });
 
-test('the pointer or focus on the logo plays the gesture again, but never while it still plays', () => {
+test('the pointer or focus that stays 200 ms plays the gesture again, but never while it still plays', () => {
   const { node, label } = brand();
   startLogo(node);
   mock.timers.tick(400);
   const count = () => puffsOf(label)[0].animations.length;
   assert.equal(count(), 1);
   node.listeners.pointerenter();
-  assert.equal(count(), 1);
-  mock.timers.tick(TOTAL - 1);
-  node.listeners.focus();
-  assert.equal(count(), 1);
-  mock.timers.tick(1);
+  mock.timers.tick(200);
+  assert.equal(count(), 1); // the first gesture still plays
+  mock.timers.tick(TOTAL - 200); // now it is over
   node.listeners.pointerenter();
+  mock.timers.tick(199);
+  assert.equal(count(), 1); // the wait is not over
+  node.listeners.pointerleave();
+  mock.timers.tick(1);
+  assert.equal(count(), 1); // the pointer only passed
+  node.listeners.focus();
+  mock.timers.tick(200);
   assert.equal(count(), 2);
 });
 
