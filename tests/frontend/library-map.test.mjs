@@ -176,19 +176,18 @@ test('in a project the scope bar names it with a folder', () => {
   state.project = '';
 });
 
-test("List shows today's table and keeps its six tabs", () => {
-  Object.assign(state, { view: 'library', mode: 'list', kind: 'mcp_server', project: '', q: '' });
+test('List keeps the head and the tabs, and draws no map', () => {
+  Object.assign(state, { view: 'library', mode: 'list', kind: 'plugin', project: '', q: '' });
   main.replaceChildren();
   setHint('');
   assert.equal(renderLibrary(main), null);
-  const [head] = main.children;
+  const [head, lede, tabs] = main.children;
   assert.equal(head.children[0].textContent, 'Library');
   assert.equal(head.children.at(-1).children.find((n) => n.textContent === 'List').getAttribute('aria-pressed'), 'true');
-  assert.equal(main.children[1].textContent, 'What each client loads, and what you can add to it. Based on saved settings.');
-  const tablist = main.children.find((n) => n.getAttribute('role') === 'tablist');
-  assert.deepEqual(tablist.children.filter((n) => n.tagName === 'BUTTON').map((n) => n.dataset.kind), ['mcp_server', 'plugin', 'skill', 'hook', 'marketplace', 'instructions']);
+  assert.equal(lede.textContent, 'Follow the source. Connect only what you need.');
+  assert.deepEqual(tabs.children.filter((n) => n.tagName === 'BUTTON').map((n) => n.textContent), ['Plugins and skills', 'Instructions']);
   assert.equal(map(), null);
-  assert.equal(hintLine.hidden, true);
+  assert.equal(hintLine.children.at(-1).textContent, 'One row per item, one column per client. Right opens a plugin, Enter opens Details.');
 });
 
 test('the page opens in List past 15 plugins and skills, unless the address says', () => {
@@ -384,9 +383,9 @@ test('under reduced motion it lands at once', () => {
 test('the address the page writes reads back as the same view and tab', () => {
   for (const drawn of ['map', 'list']) {
     libraryShows.mode = drawn;
-    for (const kind of ['hook', 'skill', 'plugin', 'instructions']) {
+    for (const kind of ['plugin', 'instructions']) {
       const back = parseHash(hashFor({ ...state, view: 'library', kind, mode: '', project: '', q: '', selected: null }));
-      assert.deepEqual([back.view, back.kind, back.mode], ['library', kind, drawn], kind);
+      assert.deepEqual([back.view, back.kind, back.mode], ['library', kind, kind === 'plugin' ? '' : drawn], kind);
     }
   }
   // After a draw with no choice, the address names the view drawn.

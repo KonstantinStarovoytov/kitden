@@ -1,30 +1,36 @@
-// Library: what each client loads, and what you can add to it, as a Map (library-map.js) or a
-// List. The List has one tab per kind, one column per client found on this computer. Each cell
-// shows a state, the one action for that client, or a dash that says why not. The server builds the
-// rows and cells (views/library.py).
+// Library: what each client loads, as a Map (library-map.js) or a List. The List (spec 5.4, frame
+// L3) has the Map's two tabs. Plugins and skills: one row per source, then its plugins, skills and
+// hooks; a plugin folds over what it holds. Instructions: one row per file. There is one column per
+// client found on this computer, and a cell says On, Off, Via Claude Code, + Add, or nothing. The
+// server builds the rows and cells (views/library.py library_list). A row opens the same Details as
+// the map (library-details.js); a cell's "+ Add" only adds a row to the tray.
 import { getJson, query } from "./api.js";
-import { button, el, tabKeys } from "./dom.js";
-import { leaveLibraryMap, letGoLibraryMap, libraryMode, renderLibraryMap } from "./library-map.js";
+import { button, el, gridKey, icon, plural } from "./dom.js";
+import { INSTRUCTIONS_HINT, LEDE, leaveLibraryMap, letGoLibraryMap, libraryDetails, libraryMode, renderLibraryMap } from "./library-map.js";
 import { glidePill, modeSwitch, switchedNow } from "./map-page.js";
-import { CALM, afterOldPage, animate, entrance, glide, land, reducedMotion, rise, rollTo } from "./motion.js";
-import { marketplaceForm, projectNote, showOffer, showSkill } from "./offer.js";
-import { isPanelOpen, openInfo, projectLabel, review } from "./panel.js";
-import { banner, CLIENT_NAMES, flag, lookFor, mark, morphSocket, opens, skeleton, socket, sourceLines, staleNote } from "./parts.js";
-import { afterShared, arrival, data, freshness, go, libraryShows, projectPath, render, retry, sameSel, setState, state, takeArrival } from "./store.js";
+import { CALM, afterOldPage, animate, entrance, glide, land, reducedMotion, rise } from "./motion.js";
+import { projectNote } from "./offer.js";
+import { isPanelOpen, openInfo, panelState, projectLabel, review } from "./panel.js";
+import { banner, CLIENT_NAMES, flag, folderName, lookFor, mark, morphSocket, scopeBar, setHint, skeleton, socket, sourceLines, staleNote } from "./parts.js";
+import { afterShared, arrival, data, freshness, go, libraryKind, libraryShows, projectPath, render, retry, sameSel, setState, state, takeArrival } from "./store.js";
 
-const KINDS = [
-  ["mcp_server", "MCP servers"], ["plugin", "Plugins"], ["skill", "Skills"],
-  ["hook", "Hooks"], ["marketplace", "Marketplaces"], ["instructions", "Instructions"],
-];
-// Tabs with something to add; the others show only what is on this computer.
-const CATALOG = ["plugin", "skill"];
+// The List's tabs, as on the Map, and what it shows of Plugins and skills.
+const TABS = [["plugin", "Plugins and skills"], ["instructions", "Instructions"]];
+const SHOW = [["mine", "Installed"], ["diff", "Differences"]];
+const LIST_HINT = "One row per item, one column per client. Right opens a plugin, Enter opens Details.";
+// The quiet word after a row's name, and after a part's: what kind of thing it is.
+const KIND_WORDS = { skill: "Skill", hook: "Hook" };
+const PART_WORDS = { skill: "Skill", command: "Command", agent: "Agent", hook: "Hook", mcp_server: "MCP server" };
+// A client's column is this wide; the name takes the rest.
+const CELL_W = 150;
+const NO_DIFFERENCES = "No differences between your clients";
+// An empty tab: what is missing, and where it comes from.
+const NOTHING = {
+  plugin: ["No plugins or skills in any client", "Plugins and skills you add in Claude Code, Codex or Cursor will show up here."],
+  instructions: ["No instruction files in any client", "Instruction files you add for Claude Code, Codex or Cursor will show up here."],
+};
 // Tabs where Kitden adds nothing: no "Add missing…" and no line about where an add goes.
-const NO_ADDS = ["instructions"];
-export const hasAdds = (kind) => !NO_ADDS.includes(kind);
-const SHOW = [["mine", "Installed"], ["new", "New"], ["all", "All"]];
-const KIND_WORDS = { plugin: "Plugin", skill: "Skill" };
-// The tab's name inside a sentence: "No MCP servers in any client", "No plugins to add".
-const KIND_NOUNS = { mcp_server: "MCP servers", plugin: "plugins", skill: "skills", hook: "hooks", marketplace: "marketplaces", instructions: "instruction files" };
+export const hasAdds = (kind) => libraryKind(kind) !== "instructions";
 // Typing waits this long after the last key before asking the server.
 const TYPING_MS = 200;
 // A tab or filter waits this long for its rows before it changes the page; a slower answer
@@ -34,49 +40,20 @@ const SWAP_WAIT_MS = 300;
 const SETTLE_ROWS = 40;
 const RISE_ROWS = 12;
 
-// What each cell and flag showed last time, so a change can morph from the old state to the
-// new one and a resolved flag can shrink away instead of vanishing.
+// What each cell showed last time, so a change can morph from the old state to the new one.
 export let previousCells = {};
-let previousFlags = {};
-let lastProject = null;
 let morphNext = false;
 export function morphOnNextRender() { morphNext = true; }
 
-let opener = null;
-export function onOpenItem(fn) { opener = fn; }
-
-// The selection a row stands for: its kind and full name (a plugin's "figma@a"); a row only in
-// a marketplace goes by its entry there.
+// The selection an item stands for, in a link from another page: its kind and full name (a
+// plugin's "figma@a"); one only in a marketplace goes by its entry there.
 export function rowSel(row) {
   return { kind: row.kind, name: row.lookup || row.offer || row.name };
-}
-
-// The first row the selection names, or null when none does (it is gone, or on another tab).
-export function rowFor(rows, selected) {
-  return (selected && rows.find((row) => sameSel(rowSel(row), selected))) || null;
-}
-
-// The row an arrival opens, once its rows are in; none while a panel is open, so it never
-// replaces what the person opened.
-export function arrivalRow(rows) {
-  const arrived = takeArrival();
-  return arrived && !isPanelOpen() ? rowFor(rows, arrived) : null;
-}
-
-// Line one's small gray text: the category, then the source only when two rows share the name.
-export function metaText(row) {
-  return [row.category, row.same_name ? row.source : null].filter(Boolean).join(" · ");
 }
 
 // A Details title: the source too when two rows share the name ("superpowers · cursor-public").
 export function rowTitle(row) {
   return row.same_name && row.source ? `${row.name} · ${row.source}` : row.name;
-}
-
-// One line when the show choice hides matches of the search, or null.
-export function moreLine(answer, show) {
-  if (!answer.more || show === "all") return null;
-  return `${answer.more} more ${show === "mine" ? "in New" : "installed"} · Show all`;
 }
 
 // What a cell's add asks the review for: that one client, and with scope "project" only the
@@ -97,7 +74,7 @@ export function noteFor(add, project, scope = "all") {
 }
 
 // The two places an add with a project place can go, the project first (as the move choice).
-export function addChoices(add, folder) {
+export function addChoices() {
   return [
     { label: "Add to this project…", scope: "project", look: "btn primary" },
     { label: "Add for all projects…", scope: "all", look: "btn" },
@@ -117,7 +94,7 @@ export function startAdd(add, client, row) {
   const body = el("div", "body");
   body.append(el("p", "muted", `${CLIENT_NAMES[client] || client} can load it in ${folder} only, or in all projects.`));
   // The primary button sits last, as the move choice draws it.
-  const choices = addChoices(add, folder).map((choice) => button(choice.label, () => review(
+  const choices = addChoices().map((choice) => button(choice.label, () => review(
     previewFor(add, client, choice.scope), { note: noteFor(add, state.project, choice.scope) },
   ), choice.look));
   openInfo("Add", rowTitle(row), body, choices.reverse());
@@ -136,7 +113,7 @@ export function addName(row, client, add, project) {
   return `${to}${project ? " for all projects" : ""}`;
 }
 
-// A quiet line above the table: in a project, where an Add goes. Null on a tab with no adds.
+// A quiet line above the List: in a project, where an Add goes. Null on a tab with no adds.
 export function scopeLine(project, rows, kind = null) {
   if (!project || rows.length === 0 || !hasAdds(kind)) return null;
   const adds = rows.flatMap((r) => Object.values(r.cells || {}).map((c) => c.add).filter(Boolean));
@@ -148,13 +125,20 @@ export function scopeLine(project, rows, kind = null) {
   return adds.some((add) => add.project_only) ? `${line} ${own}` : line;
 }
 
-// One cell: a button for the one action, a state, or a dash that says why not.
+// One cell: a button for the one action, a state, or nothing. An empty cell says why in its hover
+// text, and a screen reader hears it.
 export function cellNode(row, client) {
   const cell = row.cells[client];
   if (cell.add) {
     const node = button(cell.add.label, () => startAdd(cell.add, client, row), "btn small add");
     node.setAttribute("aria-label", addName(row, client, cell.add, state.project));
     node.dataset.focus = `add:${row.key}:${client}`;
+    return node;
+  }
+  if (cell.state === "none") {
+    const node = el("span", "socket s-none");
+    node.append(el("span", "sr-only", cell.reason || "Not added"));
+    if (cell.reason) node.title = cellHint(cell);
     return node;
   }
   // Kept from the last good read of a file that now fails: a dashed dot, and the hover says when.
@@ -196,17 +180,16 @@ export function setHidden(list) {
   }
 }
 
-// The kind tab shown: an unknown one from an old address falls back to the first tab.
-const currentKind = () => asking().kind;
+// The tab shown: Instructions, or Plugins and skills for any other kind.
+const currentKind = () => libraryKind(state.kind);
 
-// The question for the server, for the shown tab or (`choice`) one about to show. Tabs without a
-// catalog show only what is on this computer.
+// The question for the server, for the shown tab or (`choice`) one about to show. Instructions has
+// no Differences.
 function asking(choice = state) {
-  const kind = KINDS.some(([id]) => id === choice.kind) ? choice.kind : "mcp_server";
-  const catalog = CATALOG.includes(kind);
+  const kind = libraryKind(choice.kind);
   return {
-    project: choice.project, kind, show: catalog ? choice.show : "mine", q: choice.q,
-    category: catalog ? choice.category : "", attention: choice.attention,
+    project: choice.project, kind, show: kind === "plugin" && choice.show === "diff" ? "diff" : "mine",
+    q: choice.q, attention: kind === "plugin" && choice.attention,
     // Sorted, so the same choice made in another order is the same question.
     hidden: hiddenClients().sort().join(","),
   };
@@ -245,7 +228,7 @@ function load(asked = asking(), draw = true) {
   lastQ = asked.q;
   const params = { ...asked, attention: asked.attention ? "1" : "" };
   const job = { key, at, draw };
-  job.promise = getJson(`/api/library${query(params)}`).then(
+  job.promise = getJson(`/api/library-list${query(params)}`).then(
     (answer) => { if (latest()) cache = { key, at, readAt: Date.now(), answer, asked, error: null, errorKey: null, failedAt: 0 }; },
     (error) => { if (latest()) Object.assign(cache, { error, errorKey: key, failedAt: at }); },
   ).finally(() => {
@@ -256,11 +239,11 @@ function load(asked = asking(), draw = true) {
   return job.promise;
 }
 
-// A row as the Library read it last, for Details drawn again after a change; null off the
-// Library or when the row is gone.
+// An item as the List read it last (`key`, its id), for Details drawn again after a change; null
+// off the Library or when it is gone.
 export function shownRow(key) {
   if (state.view !== "library" || !cache.answer) return null;
-  return cache.answer.rows.find((r) => r.key === key) || null;
+  return cache.answer.groups.flatMap((group) => group.items).find((item) => item.id === key) || null;
 }
 
 // Typing waits until it stops; any other choice asks at once.
@@ -290,15 +273,14 @@ export function raceSlow(promise, ms) {
   ]);
 }
 
-// The pressed tab or Installed / New / All choice is marked at once, and its mark slides there,
+// The pressed tab or Installed / Differences choice is marked at once, and its mark slides there,
 // so the press answers right away; the list follows when its rows are in.
 function markChoice(node) {
   const box = node && node.parentElement;
   if (!box) return;
-  const attr = box.classList.contains("tabs") ? "aria-selected" : "aria-pressed";
-  for (const choice of box.querySelectorAll(":scope > button")) choice.setAttribute(attr, String(choice === node));
-  const tabs = box.classList.contains("tabs");
-  glide(box, node, tabs ? "library-tabs" : "library-show", tabs ? {} : { duration: 280 });
+  for (const choice of box.children) if (choice.tagName === "BUTTON") choice.setAttribute("aria-pressed", String(choice === node));
+  if (box.classList.contains("map-tabs")) glidePill(box, node, "library-tabs-map");
+  else glide(box, node, "library-show", { duration: 280 });
 }
 
 // A tab or filter: read its rows first, so the list changes once, already full. The last
@@ -343,7 +325,8 @@ export function renderLibrary(main, { again = false } = {}) {
   if (!state.mode) setState({});
   const head = el("div", "page-head");
   head.append(el("h1", null, "Library"));
-  const seg = modeSwitch("library", mode, { old: () => main.querySelector(mode === "map" ? ":scope > div.map" : ":scope > .table-scroll"), letGo: letGoLibraryMap, shows: () => libraryShows.mode });
+  const letGo = () => { letGoLibraryMap(); letGoList(); };
+  const seg = modeSwitch("library", mode, { old: () => main.querySelector(mode === "map" ? ":scope > div.map" : ":scope > .table-scroll"), letGo, shows: () => libraryShows.mode });
   head.append(seg);
   main.append(head);
   let found = null;
@@ -357,22 +340,17 @@ export function renderLibrary(main, { again = false } = {}) {
   return found;
 }
 
-// The List: today's table, one tab per kind.
+// The List: the Map's lede, tabs and scope bar, then the filters and the rows.
 function renderList(main) {
-  // The project goes by its folder name, as in the project picker.
-  const folder = projectPath().split("/").filter(Boolean).pop();
-  const lede = el("p", "lede", folder
-    ? `What each client loads in the project ${folder}, and what you can add to it. Based on saved settings.`
-    : "What each client loads, and what you can add to it. Based on saved settings.");
-  // After a scope change the words rise in while the cells morph.
-  if (lastProject !== null && lastProject !== state.project) lede.classList.add("fresh");
-  lastProject = state.project;
-  main.append(lede);
+  const kind = currentKind();
+  const tabs = listTabs(kind);
+  main.append(el("p", "lede", LEDE), tabs, scopeBar(folderName(projectPath())));
+  glidePill(tabs, tabs.querySelector('[aria-pressed="true"]'), "library-tabs-map");
+  setHint(kind === "plugin" ? LIST_HINT : INSTRUCTIONS_HINT);
 
   const key = cacheKey();
   // The page's first reload reads the rows with everything else (app.js refresh).
   if (freshness.reloadStartedAt) schedule(key);
-  const kind = currentKind();
   const sameProject = cache.answer && cache.asked.project === state.project;
   // Rows of another tab or project are never shown under this one; other filters wait in place.
   const answer = sameProject && cache.asked.kind === kind ? cache.answer : null;
@@ -383,14 +361,10 @@ function renderList(main) {
     main.append(noClients());
     return;
   }
-
-  const tabBox = tabs(sameProject ? cache.answer.counts : null, kind);
-  main.append(tabBox);
-  glide(tabBox, tabBox.querySelector('[aria-selected="true"]'), "library-tabs");
   const tools = toolbar(kind, answer);
   if (tools) main.append(tools);
-  const seg = tools && tools.querySelector(".seg");
-  if (seg) glide(seg, seg.querySelector('[aria-pressed="true"]'), "library-show", { duration: 280 });
+  const show = tools && tools.querySelector(".seg");
+  if (show) glide(show, show.querySelector('[aria-pressed="true"]'), "library-show", { duration: 280 });
 
   if (!answer) {
     main.append(failed ? banner("the library", retry) : skeleton("table", 1));
@@ -401,91 +375,63 @@ function renderList(main) {
   if (hidden) main.append(hidden);
   for (const note of answer.notes) main.append(el("p", "note", note));
   main.append(sourceBox());
-  const more = moreLine(answer, asked.show);
   // A selection that arrived (from another place, Back, Forward or a link) opens once its rows
-  // are in.
-  const arrived = fresh ? arrivalRow(answer.rows) : null;
-  if (!answer.rows.length) {
-    main.append(emptyState(asked, more));
-    finish(answer.rows);
+  // are in; its group unfolds for it.
+  const arrived = fresh ? arrivalIn(answer) : null;
+  const rows = listRows(answer, searchOpen(answer, asked.q), onList.folded);
+  if (!rows.length) {
+    main.append(emptyState(asked));
+    finish(rows);
     return;
   }
-  if (more) main.append(moreNode(more));
+  const line = scopeLine(state.project, rows.filter((r) => r.cells), asked.kind);
+  if (line) main.append(el("p", "group-note", line));
   // A hidden column is still in `columns`, marked; it is not drawn.
   const columns = answer.columns.filter((c) => !c.hidden);
-  const groups = asked.show === "all" && CATALOG.includes(asked.kind);
-  const table = buildTable(columns, answer.rows, groups, morphNext);
+  const grid = listGrid(rows, columns, kind);
   const scroller = el("div", "table-scroll");
-  scroller.append(table);
-  const line = scopeLine(state.project, answer.rows, asked.kind);
-  if (line) main.append(el("p", "group-note", line));
+  scroller.append(grid);
   main.append(scroller);
-  finish(answer.rows);
-  entrance("library", [table]);
-
-  const selected = table.querySelector('tr[aria-selected="true"]');
-  if (selected) requestAnimationFrame(() => selected.scrollIntoView({ block: "nearest" }));
-  // An arrival: the row glows once and the clients that load it ping, so the eye lands on the
-  // item the other place talked about, and its Details opens.
-  if (arrived && selected) {
-    selected.classList.add("arrive");
-    for (const s of selected.querySelectorAll(".socket.s-on, .socket.s-gw")) s.classList.add("pulse");
-    openRow(arrived, selected, "pointer");
-  }
+  finish(rows);
+  entrance("library", [grid]);
+  if (arrived) showArrived(arrived);
 }
 
-// Rows are drawn: the morph is used up, and the next change morphs from what they show.
-function finish(rows) {
-  morphNext = false;
-  previousCells = Object.fromEntries(rows.map((r) => [r.key, Object.fromEntries(Object.entries(r.cells).map(([c, cell]) => [c, cellKey(cell)]))]));
-  previousFlags = Object.fromEntries(rows.map((r) => [r.key, r.flags.map((f) => ({ text: f.text, level: f.level }))]));
-}
-
-const cellKey = (cell) => `${cell.state}|${cell.where || ""}|${cell.add ? cell.add.label : ""}`;
-
-// The counts the tabs showed last, so a new count rolls from the old one.
-let lastCounts = null;
-
-function tabs(counts, kind) {
-  const box = el("div", "tabs");
-  box.setAttribute("role", "tablist");
-  for (const [id, label] of KINDS) {
-    const tab = button(label, () => choose({ kind: id, category: "", selected: null }, tab), "");
-    tab.setAttribute("role", "tab");
-    tab.setAttribute("aria-selected", String(kind === id));
-    tab.dataset.kind = id;
-    tab.dataset.focus = `tab:${id}`;
-    if (counts) {
-      const holder = el("span", "count roll");
-      const old = lastCounts ? lastCounts[id] : undefined;
-      holder.append(el("span", null, String(old === undefined ? counts[id] : old)));
-      if (old !== undefined && old !== counts[id]) rollTo(holder, counts[id]);
-      tab.append(holder);
-    }
-    box.append(tab);
+// "Plugins and skills" | "Instructions", as on the Map: a press lets go of the row whose Details
+// show, and reads the other tab first.
+function listTabs(kind) {
+  const box = el("div", "seg sm map-tabs");
+  box.setAttribute("role", "group");
+  box.setAttribute("aria-label", "Show");
+  for (const [id, label] of TABS) {
+    const choice = button(label, () => id !== currentKind() && toTab(id, choice), "");
+    choice.setAttribute("aria-pressed", String(kind === id));
+    choice.dataset.focus = `tab:${id}`;
+    box.append(choice);
   }
-  if (counts) lastCounts = counts;
-  tabKeys(box);
   return box;
 }
 
-// Plugins and skills: what to show and a category. Any tab: "Needs attention" when something
-// does. Marketplaces: a way to add one. Null when the tab has none of these.
+function toTab(id, choice) {
+  letGoList();
+  return choose({ kind: id, selected: null }, choice);
+}
+
+// Plugins and skills: Installed | Differences, "Needs attention" when something does (Overview
+// links use it), and in a project "Add missing…". Instructions has none of these.
 function toolbar(kind, answer) {
+  if (kind !== "plugin") return null;
   const bar = el("div", "toolbar");
-  if (CATALOG.includes(kind)) {
-    const seg = el("div", "seg");
-    seg.setAttribute("role", "group");
-    seg.setAttribute("aria-label", "Show");
-    for (const [id, label] of SHOW) {
-      const b = button(label, () => choose({ show: id, selected: null }, b), "");
-      b.setAttribute("aria-pressed", String(state.show === id));
-      b.dataset.focus = `show:${id}`;
-      seg.append(b);
-    }
-    bar.append(seg);
-    if (answer && (answer.categories.length || state.category)) bar.append(categoryPicker(answer.categories));
+  const seg = el("div", "seg");
+  seg.setAttribute("role", "group");
+  seg.setAttribute("aria-label", "Show");
+  for (const [id, label] of SHOW) {
+    const b = button(label, () => choose({ show: id, selected: null }, b), "");
+    b.setAttribute("aria-pressed", String(asking().show === id));
+    b.dataset.focus = `show:${id}`;
+    seg.append(b);
   }
+  bar.append(seg);
   if (answer && (answer.attention || state.attention)) {
     const toggle = button(`Needs attention · ${answer.attention}`, () => choose({ attention: !state.attention, selected: null }), "btn small toggle");
     toggle.setAttribute("aria-pressed", String(state.attention));
@@ -493,48 +439,12 @@ function toolbar(kind, answer) {
     bar.append(toggle);
   }
   // In a project: one review that adds what one client loads there and another lacks.
-  if (state.project && hasAdds(kind)) {
+  if (state.project) {
     const missing = button("Add missing…", () => review({ action: "project.align", targets: [], params: { project: state.project, chosen: null } }), "btn small");
     missing.dataset.focus = "add:missing";
     bar.append(missing);
   }
-  if (kind === "marketplace") {
-    const add = button("Add a marketplace…", () => marketplaceForm(), "btn small");
-    add.dataset.focus = "add:marketplace";
-    bar.append(add);
-  }
-  return bar.children.length ? bar : null;
-}
-
-// A menu of the categories in the results, each with its count.
-function categoryPicker(categories) {
-  const select = el("select");
-  select.setAttribute("aria-label", "Category");
-  select.dataset.focus = "filter:category";
-  select.append(new Option("All categories", ""));
-  const chosen = state.category;
-  const options = !chosen || categories.some((c) => c.name === chosen) ? categories : [{ name: chosen, count: 0 }, ...categories];
-  for (const c of options) select.append(new Option(`${c.name} (${c.count})`, c.name));
-  select.value = chosen;
-  select.addEventListener("change", () => choose({ category: select.value, selected: null }));
-  const box = el("label", "filter");
-  if (chosen) box.classList.add("on");
-  box.append(select);
-  return box;
-}
-
-// "3 more in New · Show all": the words, then a button for the last part. The line goes
-// away with the choice, so focus moves to that choice.
-function moreNode(line) {
-  const box = el("p", "more");
-  const all = button("Show all", () => {
-    go("library", { show: "all", selected: null });
-    const choice = document.querySelector('#main [data-focus="show:all"]');
-    if (choice) choice.focus();
-  }, "btn ghost small");
-  all.dataset.focus = "more:all";
-  box.append(el("span", null, `${line.split(" · ")[0]} · `), all);
-  return box;
+  return bar;
 }
 
 // Save the choice, ask again (the server leaves out the rows only hidden clients have) and draw
@@ -606,7 +516,7 @@ function showLookFor() {
 // line shows with that line and after the same wait, so a quick start never blinks one here.
 let sources = null;
 
-// The sources still read that change this tab (parts.js), one quiet line each above the table,
+// The sources still read that change this tab (parts.js), one quiet line each above the List,
 // after the files Kitden could not read.
 function sourceBox() {
   const box = el("div", "source-lines");
@@ -616,7 +526,7 @@ function sourceBox() {
 
 // The top bar's line shows, changes or goes (app.js showScan). When this tab's lines change,
 // only they are drawn again, so no row slides. A line that goes fades and keeps its place until
-// the page next draws (a rescan comes with every source that ends), so the table does not jump
+// the page next draws (a rescan comes with every source that ends), so the List does not jump
 // for it. True when this tab's lines changed.
 export function showSources(progress) {
   const kind = currentKind();
@@ -630,135 +540,185 @@ export function showSources(progress) {
   return true;
 }
 
-export function emptyState(asked, more) {
+// Nothing to show: a search, a filter or Differences that found nothing says how to go back;
+// an empty tab says what shows up here.
+export function emptyState(asked) {
   const box = el("div", "empty");
-  const label = KIND_NOUNS[asked.kind] || "items";
-  if (more) {
-    const where = asked.show === "mine" ? "installed" : "new";
-    box.append(el("strong", null, `Nothing ${where} matches “${asked.q}”`), moreNode(more));
-  } else if (asked.q) {
+  if (asked.q) {
     box.append(el("strong", null, `Nothing matches “${asked.q}”`), button("Clear search", () => go("library", { q: "" })));
-  } else if (asked.category || asked.attention) {
-    box.append(el("strong", null, "Nothing to show with this filter"), button("Show all", () => go("library", { category: "", attention: false })));
-  } else if (asked.show !== "mine") {
-    box.append(el("strong", null, `No ${label} to add`), el("p", null, "Add a marketplace from a link to see what it offers here."));
+  } else if (asked.attention) {
+    box.append(el("strong", null, "Nothing to show with this filter"), button("Show all", () => go("library", { attention: false })));
+  } else if (asked.show === "diff") {
+    box.append(el("strong", null, NO_DIFFERENCES), button("Show installed", () => go("library", { show: "mine" })));
   } else {
-    box.append(el("strong", null, `No ${label} in any client`), el("p", null, `${label[0].toUpperCase()}${label.slice(1)} you add in Claude Code, Codex or Cursor will show up here.`));
+    const [title, line] = NOTHING[libraryKind(asked.kind)];
+    box.append(el("strong", null, title), el("p", null, line));
   }
   return box;
 }
 
-function buildTable(columns, rows, groups, morph) {
-  const table = el("table", "map library");
-  const widths = el("colgroup");
-  const share = `${(58 / columns.length).toFixed(1)}%`;
-  for (const width of ["42%", ...columns.map(() => share)]) {
-    const col = el("col");
-    col.style.width = width;
-    widths.append(col);
+// The List's rows, in order, from the answer: each group's row, then (unless it is `folded`) its
+// items, and an open plugin's (`open`) parts under it. Each row: { id (the map's block id, so
+// Details are the map's), key, parent, depth, kind, name, meta (the quiet words after the name),
+// flags, cells (none on a group), sel (what the address selects it by), expanded (only on a row
+// that folds), group (Enter folds it: a group with no Details), icon (a group's), source and
+// same_name (an add's names) }.
+export function listRows(answer, open = new Set(), folded = new Set()) {
+  const rows = [];
+  for (const group of answer.groups) {
+    const id = `group:${group.key}`;
+    const details = group.kind === "marketplace";
+    const expanded = !folded.has(id);
+    rows.push({ id, key: id, parent: null, depth: 0, kind: "group", name: group.name, meta: null, flags: [], cells: null, sel: details ? { kind: "marketplace", name: group.name } : null, expanded, group: !details, icon: group.icon });
+    if (!expanded) continue;
+    for (const item of group.items) {
+      const itemId = `${item.kind === "file" ? "file" : "item"}:${item.id}`;
+      const parts = item.parts || [];
+      const opened = parts.length ? open.has(itemId) : undefined;
+      const sel = item.lookup ? { kind: item.kind, name: item.lookup } : null;
+      rows.push({ id: itemId, key: itemId, parent: id, depth: 1, kind: item.kind, name: item.name, meta: itemWords(item), flags: item.flags || [], cells: item.cells, sel, expanded: opened, group: false, source: item.source, same_name: item.same_name });
+      if (!opened) continue;
+      for (const part of parts) {
+        const partId = `part:${item.id}:${part.key}:${part.name}`;
+        rows.push({ id: partId, key: partId, parent: itemId, depth: 2, kind: "part", name: part.name, meta: PART_WORDS[part.kind], flags: [], cells: part.cells, sel: null, group: false, source: part.source, same_name: part.same_name });
+      }
+    }
   }
-  table.append(widths);
-  const head = el("thead");
-  const headRow = el("tr");
-  headRow.append(el("th", null, "Name"));
+  return rows;
+}
+
+// "Plugin · 4 items" (what Kitden read inside it), "Skill" or "Hook"; a file has none.
+function itemWords(item) {
+  if (item.kind === "plugin") return typeof item.count === "number" ? `Plugin · ${plural(item.count, "item", "items")}` : "Plugin";
+  return KIND_WORDS[item.kind] || null;
+}
+
+// The plugins open for this draw: the person's, and while searching, every plugin a part of which
+// the search found (it stays as the person left it once the search ends).
+function searchOpen(answer, q) {
+  const text = (q || "").trim().toLowerCase();
+  if (!text) return onList.open;
+  const found = answer.groups.flatMap((g) => g.items).filter((i) => (i.parts || []).some((p) => p.name.toLowerCase().includes(text)));
+  return new Set([...onList.open, ...found.map((i) => `item:${i.id}`)]);
+}
+
+// The List as the person left it: the open plugins, the folded groups, the row that takes the
+// Tab key and the one whose Details show, kept across draws; and the rows drawn now, by id.
+const onList = { open: new Set(), folded: new Set(), current: null, selected: null, nodes: new Map() };
+
+// The Details of the row the List opened let go (Map | List).
+function letGoList() {
+  if (!onList.selected) return;
+  onList.selected = null;
+  libraryDetails(null);
+}
+
+// The tree grid: a head row with Name and the clients, then a row each. The arrows move, Right
+// opens and Left folds, Enter opens Details (dom.js gridKey).
+function listGrid(rows, columns, kind) {
+  if (!rows.some((r) => r.id === onList.current)) onList.current = rows[0].id;
+  const showing = isPanelOpen() && panelState.current && panelState.current.type === "library" ? panelState.current.id : null;
+  if (onList.selected !== showing) onList.selected = null;
+  const grid = el("div", "treegrid library-list");
+  grid.setAttribute("role", "treegrid");
+  grid.setAttribute("aria-label", kind === "plugin" ? "Plugins and skills by client" : "Instruction files by client");
+  grid.style.setProperty("--tg-cols", `minmax(0, 1fr) repeat(${columns.length}, ${CELL_W}px)`);
+  grid.append(headRow(columns));
+  onList.nodes = new Map();
+  for (const row of rows) {
+    const node = listRow(row, columns, { current: row.id === onList.current, selected: row.id === onList.selected });
+    onList.nodes.set(row.id, node);
+    grid.append(node);
+  }
+  // Keys on a row's own button stay that button's.
+  grid.addEventListener("keydown", (event) => {
+    if (event.altKey || event.ctrlKey || event.metaKey || !event.target.dataset.row) return;
+    const next = gridKey(rows, rows.findIndex((r) => r.id === event.target.dataset.row), event.key);
+    if (!next) return;
+    event.preventDefault();
+    const row = rows[next.at];
+    if (next.toggle) toggleRow(row);
+    else if (next.details) openRow(row);
+    else focusRow(row.id);
+  });
+  return grid;
+}
+
+// Name, then each client: its tile (coming from the Overview, it flies here from its row), its
+// name and its "−"; a client Kitden could not read says so under its name.
+function headRow(columns) {
+  const head = el("div", "tg-head");
+  head.setAttribute("role", "row");
+  head.append(gridCell("columnheader", null, "Name"));
   for (const column of columns) {
-    const th = el("th");
-    const cap = el("div", "col-head");
+    const th = gridCell("columnheader", "col-head");
     const who = el("span", "who");
     const tile = mark(column.id);
-    // Coming from the Overview, the client's tile flies here from its row.
     land(tile, `client-${column.id}`);
     who.append(tile, el("span", null, column.name));
-    cap.append(who);
+    th.append(who);
     const hide = hideButton(column, columns);
-    if (hide) cap.append(hide);
-    th.append(cap);
-    // A client Kitden could not read keeps its column and says so under its name.
-    if (column.note) th.append(el("div", "muted", column.note));
-    headRow.append(th);
+    if (hide) th.append(hide);
+    if (column.note) th.append(el("span", "muted", column.note));
+    head.append(th);
   }
-  head.append(headRow);
-  table.append(head);
-
-  const body = el("tbody");
-  const chosen = rowFor(rows, state.selected);
-  let group = null;
-  for (const row of rows) {
-    // With All, what is on this computer comes first, then what is not, each under a line.
-    if (groups && row.mine !== group) {
-      group = row.mine;
-      const tr = el("tr", "group");
-      tr.dataset.key = row.mine ? "group:installed" : "group:new";
-      const td = el("td", null, row.mine ? "Installed" : "New");
-      td.colSpan = columns.length + 1;
-      tr.append(td);
-      body.append(tr);
-    }
-    body.append(buildRow(columns, row, morph, row === chosen));
-  }
-  table.append(body);
-  return table;
+  return head;
 }
 
-function buildRow(columns, row, morph, chosen) {
-  const tr = el("tr");
-  tr.tabIndex = 0;
-  tr.dataset.key = row.key;
-  tr.setAttribute("aria-selected", String(chosen));
-  tr.append(nameCell(row, morph));
-  for (const column of columns) {
-    const td = el("td");
-    const before = morph && previousCells[row.key] && previousCells[row.key][column.id];
-    td.append(settle(row, column.id, before));
-    tr.append(td);
-  }
-  // A cell's button does its own work; the rest of the row opens Details.
-  tr.addEventListener("click", (event) => { if (!event.target.closest("button")) openRow(row, tr, "pointer"); });
-  tr.addEventListener("keydown", (event) => onRowKey(event, row, tr));
-  return tr;
+function gridCell(role, className, text) {
+  const node = el("div", className, text);
+  node.setAttribute("role", role);
+  return node;
 }
 
-// Line one: the name, the quiet meta text and the chevron, so a narrow row keeps them readable.
-// Line two: the flags, then what it does; the flags have it to themselves when there is no
-// description, and a row with neither has one line.
-export function nameCell(row, morph) {
-  const td = el("td");
-  const line = el("div", "item");
-  const name = el("span", "mono", row.name);
-  name.title = row.name;
-  line.append(name);
-  const meta = metaText(row);
-  if (meta) line.append(el("small", "meta", meta));
-  line.append(opens());
-  td.append(line);
-  const sub = el("div", "sub");
+// One row: a fold mark where it folds, a group's icon, the name, its flags and quiet words, then a
+// cell per client. A click opens its Details, or folds it on the fold mark; a group with no
+// Details folds.
+function listRow(row, columns, { current, selected }) {
+  const node = el("div", row.kind === "group" ? "tg-row group" : `tg-row ${row.kind === "part" ? "part" : "item"}`);
+  node.setAttribute("role", "row");
+  node.setAttribute("aria-level", String(row.depth + 1));
+  if (row.expanded !== undefined) node.setAttribute("aria-expanded", String(row.expanded));
+  node.setAttribute("aria-selected", String(selected));
+  node.tabIndex = current ? 0 : -1;
+  node.dataset.row = row.id;
+  node.dataset.focus = `row:${row.id}`;
+  const name = gridCell("gridcell", "tg-name");
+  name.style.setProperty("--depth", String(row.depth));
+  const caret = el("span", row.expanded === undefined ? "caret none" : "caret", "▸");
+  caret.setAttribute("aria-hidden", "true");
+  name.append(caret);
+  if (row.icon) name.append(icon(row.icon, 13));
+  const words = el("span", row.kind === "group" ? "words" : "words mono", row.name);
+  words.title = row.name;
+  name.append(words);
   // One flag per wording: three clients with the same note make one flag, not three.
-  const shown = row.flags.filter((f, i) => row.flags.findIndex((o) => o.text === f.text) === i);
-  for (const f of shown) sub.append(flag(f));
-  // A flag that a verified change resolved shrinks away instead of vanishing.
-  const oldFlags = morph ? previousFlags[row.key] || [] : [];
-  for (const f of oldFlags.filter((o) => !shown.some((n) => n.text === o.text))) {
-    const node = flag(f);
-    node.classList.add("gone");
-    node.setAttribute("aria-hidden", "true");
-    sub.append(node);
-    setTimeout(() => node.remove(), 400);
+  for (const f of row.flags.filter((f, i) => row.flags.findIndex((o) => o.text === f.text) === i)) name.append(flag(f));
+  if (row.meta) name.append(el("span", "meta", row.meta));
+  node.append(name);
+  if (row.kind === "group") name.setAttribute("aria-colspan", String(columns.length + 1));
+  else for (const column of columns) {
+    const cell = gridCell("gridcell", "tg-cell");
+    const before = morphNext && previousCells[row.key] && previousCells[row.key][column.id];
+    cell.append(settle(row, column.id, before, current));
+    node.append(cell);
   }
-  if (row.description) {
-    const desc = el("div", "desc", row.description);
-    desc.title = row.description;
-    sub.append(desc);
-  }
-  if (sub.children.length) td.append(sub);
-  return td;
+  node.addEventListener("click", (event) => {
+    if (event.target.closest("button")) return;
+    if (row.expanded !== undefined && (row.group || event.target.closest(".caret"))) toggleRow(row);
+    else openRow(row);
+  });
+  return node;
 }
 
 // A cell after a verified change: a state that changed morphs from the old one; a state where a
-// button was pings once. Unchanged cells, and buttons, are drawn as they are.
-function settle(row, client, before) {
+// button was pings once. Unchanged cells, buttons and empty cells are drawn as they are. A cell's
+// button takes the Tab key with its row.
+function settle(row, client, before, current) {
   const cell = row.cells[client];
   const node = cellNode(row, client);
-  if (!before || before === cellKey(cell) || cell.add) return node;
+  if (cell.add) node.tabIndex = current ? 0 : -1;
+  if (!before || before === cellKey(cell) || cell.add || cell.state === "none") return node;
   const [was, where, label] = before.split("|");
   if (label) {
     if (!reducedMotion.matches) node.classList.add("pulse");
@@ -771,63 +731,87 @@ function settle(row, client, before) {
   return old;
 }
 
-// The address keeps the row's selection (no new history entry), so Back and a link return to it.
-// The person's pick wins: an arrival whose rows come later opens nothing.
-export function openRow(row, tr, how) {
+// Rows are drawn: the morph is used up, and the next change morphs from what they show.
+function finish(rows) {
+  morphNext = false;
+  previousCells = Object.fromEntries(rows.filter((r) => r.cells).map((r) => [r.key, Object.fromEntries(Object.entries(r.cells).map(([c, cell]) => [c, cellKey(cell)]))]));
+}
+
+const cellKey = (cell) => `${cell.state}|${cell.where || ""}|${cell.add ? cell.add.label : ""}`;
+
+// Move the Tab key, and focus, to another row (and to its own buttons).
+function focusRow(id) {
+  onList.current = id;
+  for (const [rowId, node] of onList.nodes) {
+    const on = rowId === id;
+    node.tabIndex = on ? 0 : -1;
+    for (const cell of [...node.children].slice(1)) for (const control of [...cell.children]) if (control.tagName === "BUTTON") control.tabIndex = on ? 0 : -1;
+    if (on) node.focus();
+  }
+}
+
+// Fold or unfold a row: a plugin shows its parts; a group hides its rows.
+function toggleRow(row) {
+  const set = row.kind === "group" ? onList.folded : onList.open;
+  if (set.has(row.id)) set.delete(row.id);
+  else set.add(row.id);
+  onList.current = row.id;
+  render();
+}
+
+// A row's Details, beside the page: the same as the map's for that block. The address keeps the
+// row's selection (no new history entry), so Back and a link return to it. The person's pick
+// wins: an arrival whose rows come later opens nothing.
+export function openRow(row) {
   arrival.pending = false;
-  setState({ selected: rowSel(row) });
-  for (const other of tr.parentElement.querySelectorAll('tr[aria-selected="true"]')) other.setAttribute("aria-selected", "false");
-  tr.setAttribute("aria-selected", "true");
-  // A row on this computer opens what each client loads; one only in a marketplace opens the
-  // marketplace's entry.
-  if (row.lookup || !row.offer) {
-    if (opener) opener(row, tr, how);
-  } else {
-    openOffer(row);
-  }
+  onList.current = row.id;
+  onList.selected = row.id;
+  for (const [id, node] of onList.nodes) node.setAttribute("aria-selected", String(id === row.id));
+  setState({ selected: row.sel });
+  libraryDetails(row.id);
 }
 
-async function openOffer(row) {
-  let offer;
-  try {
-    offer = await getJson(`/api/offer${query({ kind: row.kind, id: row.offer })}`);
-  } catch {
-    const body = el("div", "body");
-    body.append(el("p", "muted", "Could not load the details."));
-    openInfo(KIND_WORDS[row.kind], rowTitle(row), body, [button("Retry", () => openOffer(row), "btn")]);
-    return;
+// The row an arrival names, or null (none, a panel is open, or the List has no such row): an item
+// by its kind and full name, a marketplace by its name. Its group unfolds for it.
+export function arrivalIn(answer) {
+  const arrived = takeArrival();
+  if (!arrived || isPanelOpen()) return null;
+  for (const group of answer.groups) {
+    const groupId = `group:${group.key}`;
+    const market = group.kind === "marketplace" && sameSel({ kind: "marketplace", name: group.name }, arrived);
+    const item = market ? null : group.items.find((i) => i.lookup && sameSel({ kind: i.kind, name: i.lookup }, arrived));
+    if (!market && !item) continue;
+    onList.folded.delete(groupId);
+    return market ? groupId : `${item.kind === "file" ? "file" : "item"}:${item.id}`;
   }
-  if (!sameSel(state.selected, rowSel(row))) return; // another row was chosen meanwhile
-  (row.kind === "skill" ? showSkill : showOffer)(offer, row);
+  return null;
 }
 
-function onRowKey(event, row, tr) {
-  if (event.target !== tr) return;
-  if (event.key === "Enter") {
-    event.preventDefault();
-    openRow(row, tr, "keyboard");
-  } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-    event.preventDefault();
-    const step = event.key === "ArrowDown" ? "nextElementSibling" : "previousElementSibling";
-    let next = tr[step];
-    while (next && !next.dataset.key) next = next[step]; // skip the group lines
-    if (next) next.focus();
-  }
+// An arrival: the row glows once and comes into view, and its Details open.
+function showArrived(id) {
+  const node = onList.nodes.get(id);
+  if (!node) return;
+  node.classList.add("arrive");
+  if (node.scrollIntoView) requestAnimationFrame(() => node.scrollIntoView({ block: "nearest" }));
+  const row = { id, sel: state.selected };
+  focusRow(id);
+  openRow(row);
 }
 
-// Smooth changes of the list. Before the page draws again it notes where each row on screen is;
-// after, rows that stay slide from there to their new place, new rows rise in, and another tab's
-// list slides in from the side of that tab. Only transform and opacity move; with reduced motion
+// Smooth changes of the List. Before the page draws again it notes where each row on screen is;
+// after, rows that stay slide from there to their new place, new rows rise in, and the other
+// tab's list slides in from its side. Only transform and opacity move; with reduced motion
 // nothing does.
 let drawnKind = null;
 
-function rowsOnScreen(table) {
+function rowsOnScreen() {
   const rows = [];
-  for (const tr of table.querySelectorAll("tbody tr[data-key]")) {
-    const box = tr.getBoundingClientRect();
+  for (const [id, node] of onList.nodes) {
+    if (!node.isConnected) continue;
+    const box = node.getBoundingClientRect();
     if (box.bottom < 0) continue;
     if (box.top > innerHeight || rows.length >= SETTLE_ROWS) break;
-    rows.push([tr, box.top]);
+    rows.push([id, node, box.top]);
   }
   return rows;
 }
@@ -844,34 +828,35 @@ export function rowMoves(before, after) {
 
 // 1 when `to` is a tab to the right of `from`, -1 to the left, 0 for the same tab.
 export function tabDirection(from, to) {
-  const order = KINDS.map(([id]) => id);
-  return Math.sign(order.indexOf(to) - order.indexOf(from));
+  const order = TABS.map(([id]) => id);
+  return Math.sign(order.indexOf(libraryKind(to)) - order.indexOf(libraryKind(from)));
 }
 
+const listShown = () => document.querySelector("#main .table-scroll");
+
 export function snapshotRows() {
-  const table = document.querySelector("#main table.library");
-  if (!table) return null;
-  return { kind: drawnKind, tops: new Map(rowsOnScreen(table).map(([tr, top]) => [tr.dataset.key, top])) };
+  if (!listShown()) return null;
+  return { kind: drawnKind, tops: new Map(rowsOnScreen().map(([id, , top]) => [id, top])) };
 }
 
 export function settleRows(before) {
-  const table = document.querySelector("#main table.library");
-  drawnKind = table ? currentKind() : null;
-  if (!before || !before.kind || !table || reducedMotion.matches) return;
+  const scroller = listShown();
+  drawnKind = scroller ? currentKind() : null;
+  if (!before || !before.kind || !scroller || reducedMotion.matches) return;
   const direction = tabDirection(before.kind, drawnKind);
   if (direction) {
     const frames = [{ opacity: 0, transform: `translateX(${8 * direction}px)` }, { opacity: 1, transform: "none" }];
-    animate(table.closest(".table-scroll"), frames, { duration: 220 });
+    animate(scroller, frames, { duration: 220 });
     return;
   }
-  const rows = rowsOnScreen(table);
-  const byKey = new Map(rows.map(([tr]) => [tr.dataset.key, tr]));
-  const { moved, entered } = rowMoves(before.tops, new Map(rows.map(([tr, top]) => [tr.dataset.key, top])));
-  for (const [key, dy] of moved) {
-    animate(byKey.get(key), [{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: 260, easing: CALM });
+  const rows = rowsOnScreen();
+  const byId = new Map(rows.map(([id, node]) => [id, node]));
+  const { moved, entered } = rowMoves(before.tops, new Map(rows.map(([id, , top]) => [id, top])));
+  for (const [id, dy] of moved) {
+    animate(byId.get(id), [{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: 260, easing: CALM });
   }
-  entered.slice(0, RISE_ROWS).forEach((key, index) => {
+  entered.slice(0, RISE_ROWS).forEach((id, index) => {
     const frames = [{ opacity: 0, transform: "translateY(4px)" }, { opacity: 1, transform: "none" }];
-    animate(byKey.get(key), frames, { duration: 200, delay: index * 20, fill: "backwards" });
+    animate(byId.get(id), frames, { duration: 200, delay: index * 20, fill: "backwards" });
   });
 }

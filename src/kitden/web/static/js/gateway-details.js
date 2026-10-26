@@ -9,7 +9,7 @@ import { ADD_SERVER, openAdd } from "./gateway-add.js";
 import { loadLibraryFor, raceSlow } from "./library.js";
 import { animateTo, fold } from "./motion.js";
 import { projectNote } from "./offer.js";
-import { callsText, closePanel, contextLinks, detailsCard, drawQuietly, followTray, heldActions, holdPanel, isPanelOpen, keepFrom, linksRow, loadPanel, moveBody, moveInto, moveTargets, NO_TOOLS, offerLabel, offNote, openPanel, panelState, previewButton, refreshTools, review, showInPreview, stepTo, swapContent, switchList, techRows, technical, toast, toolRows, toolsHead, writingToolsOn } from "./panel.js";
+import { callsText, closePanel, detailsCard, drawQuietly, followTray, heldActions, holdPanel, isPanelOpen, keepFrom, loadPanel, moveBody, moveInto, moveTargets, NO_TOOLS, offerLabel, offNote, openPanel, panelState, previewButton, refreshTools, review, showInPreview, stepTo, swapContent, switchList, techRows, technical, toast, toolRows, toolsHead, writingToolsOn } from "./panel.js";
 import { ALL_PROJECTS, callout, CLIENT_NAMES, clientCheck, FIND_PROJECT, folderName, GATEWAY_NOTE, gatewayName, kindOf, kitdenClients, mark, menuItems, originText, STATE_WORDS, versionsOpen } from "./parts.js";
 import { arrival, current, data, freshness, gatewayShows, go, libraryChoice, projectPath, reload, render, setState, state, switchProject } from "./store.js";
 import { addToTray, iconFor, inTray, keyFor, takeOut, tray } from "./tray.js";
@@ -247,10 +247,10 @@ function clientSay(name, { known, on, entry, found, turnsOn, through, place, own
   return words.join(" ");
 }
 
-// The Library at its MCP servers, where each client's column shows what it loads. The panel
-// closes first; the tab is read first, as a link from Details reads it.
+// The Library's List of plugins and skills, where each client's column shows what it loads. The
+// panel closes first; the tab is read first, as a link from Details reads it.
 async function seeInLibrary() {
-  const choice = libraryChoice({ kind: "mcp_server" });
+  const choice = libraryChoice({ kind: "plugin" });
   closePanel({ focus: false });
   await raceSlow(loadLibraryFor(choice), 300);
   go("library", choice);
@@ -619,13 +619,6 @@ export function heldServer(model, selected) {
   return ((kitden && kitden.servers) || []).find((s) => s.name === selected.name) || null;
 }
 
-// The links in the Details of a server in the Kitden gateway: the same server in the Library,
-// which has a row for it only while some client reaches it through the gateway here.
-export function kitdenLinks(model, name) {
-  const reached = model && Object.values(model.connections.kitden || {}).some((names) => names.includes(name));
-  return reached ? contextLinks({ kind: "mcp_server", name }, [], "gateway") : [];
-}
-
 // The owner's words for the switches of a tool and of a server, by the state they turn to.
 const FOR_ALL = { on: "Turn on for all projects…", off: "Turn off for all projects…" };
 const IN_SOME = { on: "Turn on in some projects…", off: "Turn off in some projects…" };
@@ -856,9 +849,8 @@ export function heldCard(server, { linked, picked = "", folder = "", view = null
   const some = changedIn(projects, detail.projects, target, (p) => p.server).length ? stepAction(IN_SOME[target], () => projectsStep(step)) : null;
   const actions = clients.length ? [stepAction(MOVE_OUT, () => moveOutStep({ name, detail, readIn: picked, warning }))] : [];
   const more = [...heldMore(server, picked, detail, some), ...heldActions(name, clients, server.plain_secrets)];
-  const links = view ? kitdenLinks(view, name) : [];
   const id = `${server.kind === "remote" ? "Remote" : "Local"} · in the Kitden gateway`;
-  return { kind: KIND.server, title: name, id, facts, list: heldList(name, detail, picked, folder), actions, more, after: links.length ? linksRow(links) : null, warning };
+  return { kind: KIND.server, title: name, id, facts, list: heldList(name, detail, picked, folder), actions, more, warning };
 }
 
 // A held server's actions the mockup has no place for, under More (D18): back to the rule it

@@ -10,7 +10,7 @@ globalThis.window = {
   addEventListener: (type, fn) => { (windowHeard[type] ||= []).push(fn); },
   removeEventListener: (type, fn) => { windowHeard[type] = (windowHeard[type] || []).filter((f) => f !== fn); },
 };
-const { GATEWAY_COLUMNS, afterPress, besideBy, bringBeside, cancelFocusFor, clickLink, contentWidth, findRows, focusBeside, gatewayTree, glanceFor, heldServer, kitdenLinks, letGoCloses, linkRemoval, linkTip, linksWait, listRows, litFor, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, serverCount, stillSelected } = await import('../../src/kitden/web/static/js/gateway.js');
+const { GATEWAY_COLUMNS, afterPress, besideBy, bringBeside, cancelFocusFor, clickLink, contentWidth, findRows, focusBeside, gatewayTree, glanceFor, heldServer, letGoCloses, linkRemoval, linkTip, linksWait, listRows, litFor, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, serverCount, stillSelected } = await import('../../src/kitden/web/static/js/gateway.js');
 const { DRAGS, dropBody, movingOn, pointOf, pressGrip, pressRow, placeMoved, startDrag } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
 const { offersSwitch, ruleBody } = await import('../../src/kitden/web/static/js/gateway-details.js');
@@ -329,14 +329,6 @@ test('the large sample opens in List', () => {
   assert.equal(LARGE_SERVER_COUNT, 169);
   assert.equal(viewMode({ mode: '' }, LARGE_SERVER_COUNT), 'list');
   assert.equal(viewMode({ mode: '' }, serverCount(MEDIUM_VIEW)), 'map');
-});
-
-test("a held server's panel links to the Library only when a client loads it through the gateway", () => {
-  const model = { connections: { kitden: { claude_code: ['files'], codex: ['files'], cursor: [] } } };
-  assert.deepEqual(kitdenLinks(model, 'files').map((l) => [l.label, l.view, l.selected]), [['Compare across clients', 'library', { kind: 'mcp_server', name: 'files' }]]);
-  // No client reaches tracker here, so the Library has no row for it.
-  assert.deepEqual(kitdenLinks(model, 'tracker'), []);
-  assert.deepEqual(kitdenLinks(null, 'files'), []);
 });
 
 // A first run: every client found, none with a kitden entry, an empty Kitden gateway, and two

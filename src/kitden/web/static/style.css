@@ -501,71 +501,19 @@ input:focus-visible + .chk { outline: 2px solid var(--focus); outline-offset: 2p
 
 /* Library */
 .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
-.tabs { position: relative; display: flex; gap: 2px; border-bottom: 1px solid var(--wire); margin-bottom: 12px; overflow-x: auto; }
-.tabs button { position: relative; z-index: 1; border: 0; background: transparent; padding: 8px 10px; border-radius: 6px 6px 0 0; color: var(--ink-3); cursor: pointer; white-space: nowrap; transition: color var(--t-fast) ease, background-color var(--t-fast) ease, transform 260ms var(--spring); }
-.tabs button:hover { color: var(--ink); background: var(--wire-soft); }
-.tabs button:active { transform: scale(0.97); transition-duration: var(--t-fast), var(--t-fast), 80ms; }
-.tabs button[aria-selected="true"] { color: var(--route); font-weight: 600; }
-.tabs button[aria-selected="true"]:hover { background: transparent; }
-.tabs .count { margin-left: 4px; }
-.tabs .ink { top: auto; bottom: 0; height: 2px !important; border-radius: 0; background: var(--brand); box-shadow: none; }
-table.map { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--panel); border: 1px solid var(--wire); border-radius: 8px; table-layout: fixed; }
-.map th { text-align: left; font-weight: 500; color: var(--ink-3); font-size: 12px; padding: 0 12px; height: 34px; border-bottom: 1px solid var(--wire); background: var(--panel); position: sticky; top: 66px; z-index: 1; }
-.map th:first-child { border-top-left-radius: 8px; } .map th:last-child { border-top-right-radius: 8px; }
-.map th .client-mark, .map th .mono-mark { --tile: 20px; }
-.map th .client-mark[data-icon="claude"] img { padding: 3px; }
-/* A column's "−": quiet until the header is hovered or focused, and always seen where there is no hover. */
-.map th .col-head { display: flex; align-items: center; gap: 2px; min-width: 0; }
-.btn.hide-col { flex: none; width: 24px; padding: 0; justify-content: center; font-size: 16px; line-height: 1; color: var(--ink-3); }
-.btn.hide-col:hover:not(:disabled), .btn.hide-col:focus-visible { color: var(--ink); }
-.map td { padding: 0 12px; height: 34px; border-bottom: 1px solid var(--wire-soft); overflow: hidden; transition: background-color 120ms ease; }
-.map tr:last-child td { border-bottom: 0; }
-.map tbody tr { cursor: pointer; }
-.map tbody tr:hover td { background: var(--inset); }
-.map tbody tr:active td { background: var(--wire-soft); transition-duration: 60ms; }
-.map tbody tr[aria-selected="true"] td { background: var(--route-soft); }
-/* A quiet flag's soft fill lies on the accent tint of a selected row, so its words go one step
-   darker for 4.5:1. */
-.map tbody tr[aria-selected="true"] .flag.info { color: var(--ink-2); }
-.map tbody tr.arrive td { animation: arrive 1200ms var(--ease-out) both; }
-@keyframes arrive { 0%, 30% { background: color-mix(in srgb, var(--brand) 22%, var(--route-soft)); } }
-.map tbody tr:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-.map .item { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.map .item .mono { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 9ch; }
-.map tbody tr:hover .opens, .map tbody tr:focus-visible .opens { color: var(--route); }
-.table-scroll { min-width: 0; transition: opacity var(--t-fast) ease; }
-/* Library rows: line one is the name, quiet meta text and the chevron; line two holds the flags,
-   then what it does, cut to one line. A client's cell holds a state or the one button for what
-   it can add. */
-.library td { height: auto; padding-top: 7px; padding-bottom: 7px; }
-/* The name takes its whole width first and the meta text gives way, so a narrow row keeps the
-   name readable; a short name keeps no gap after it. The chevron keeps the last column. */
-.library .item { display: grid; grid-template-columns: minmax(3ch, max-content) minmax(0, 1fr) auto; column-gap: 0; }
-.library .item .mono { min-width: 3ch; }
-.library .item .meta { min-width: 0; padding-left: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-3); font-size: 12px; }
-.library .item .opens { grid-column: 3; padding-left: 8px; }
-/* Flags wrap onto their own line when a narrow row has no room for them and the words. */
-.library .sub { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; margin-top: 2px; }
-.library .desc { flex: 1 1 12em; min-width: 0; font-size: 12px; color: var(--ink-3); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; overflow-wrap: anywhere; }
-.library tbody tr.group { cursor: default; }
-.library tbody tr.group td { height: 30px; padding-top: 10px; padding-bottom: 4px; background: var(--inset); color: var(--ink-3); font-size: 12px; }
 .btn.add { color: var(--route); border-color: color-mix(in srgb, var(--route) 45%, var(--wire)); background: transparent; }
 .btn.add:hover:not(:disabled) { background: var(--route-soft); }
 .s-via { color: var(--lamp-off); }
 .s-done { color: var(--lamp-on); } .s-done .dot::after { transform: scale(1); }
 .btn.toggle[aria-pressed="true"] { background: var(--route-soft); border-color: color-mix(in srgb, var(--route) 40%, var(--wire)); color: var(--route); font-weight: 600; }
-/* One quiet line each above the table: a marketplace an add brings in first, a source still read, matches a choice hides. */
+/* One quiet line each above the List: a marketplace an add brings in first, a source still read, hidden columns. */
 .page > .note, .page > .source-lines > .note, .page > .more { margin: 0 0 8px; color: var(--ink-3); font-size: 12px; }
 /* A source line that goes fades and keeps its place until the page draws again. */
 .source-lines { transition: opacity var(--t-fast) ease, visibility 0s linear var(--t-fast); }
 .source-lines.gone { opacity: 0; visibility: hidden; }
 .more { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; }
 .more .btn { color: var(--route); padding: 0 4px; }
-.empty .more { justify-content: center; margin: 6px 0 0; }
 .toolbar .grow { flex: 1; }
-.filter select { height: 28px; max-width: 220px; padding: 0 6px; border-radius: 7px; border: 1px solid var(--wire); background: var(--panel); color: var(--ink-2); cursor: pointer; text-overflow: ellipsis; transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease; }
-.filter select:hover { border-color: var(--wire-strong); }
-.filter.on select { background: var(--route-soft); border-color: color-mix(in srgb, var(--route) 40%, var(--wire)); color: var(--route); font-weight: 600; }
 
 /* Gateway */
 .kicker { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); font-weight: 500; }
@@ -634,6 +582,31 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .tg-used { display: flex; align-items: center; gap: 3px; }
 .tg-tools { color: var(--ink-3); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tg-action { display: flex; justify-content: flex-end; }
+/* Library List (library.js, frame L3): the same tree grid, with the name and then one 150 px
+   column per client (set on the grid as --tg-cols). A group row per source, a 40 px row per plugin,
+   skill, hook or file, and a 34 px row per part of an open plugin. A cell holds a state or the one
+   button for what it can add, or nothing. */
+.table-scroll { min-width: 0; transition: opacity var(--t-fast) ease; }
+.library-list { min-width: 560px; }
+/* A column's "−": quiet until it is hovered or focused. */
+.btn.hide-col { flex: none; width: 24px; padding: 0; justify-content: center; font-size: 16px; line-height: 1; color: var(--ink-3); }
+.btn.hide-col:hover:not(:disabled), .btn.hide-col:focus-visible { color: var(--ink); }
+/* The header sticks right under the top bar. */
+.library-list > .tg-head { position: sticky; top: 66px; z-index: 1; background: var(--panel); border-radius: 8px 8px 0 0; }
+.tg-head .col-head { display: flex; align-items: center; gap: 2px; }
+.tg-head .col-head .who { gap: 6px; }
+.tg-head .col-head .who > span:last-child { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tg-head .col-head > span:not(.who) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tg-head .client-mark, .tg-head .mono-mark { --tile: 18px; border-radius: 5px; }
+.tg-head .client-mark[data-icon="claude"] img { padding: 3px; }
+.tg-row.part { min-height: 34px; }
+.tg-row.part .words.mono { font-weight: 400; }
+.tg-cell { display: flex; align-items: center; }
+/* A quiet flag's soft fill lies on the accent tint of a selected row, so its words go one step
+   darker for 4.5:1. */
+.tg-row[aria-selected="true"] .flag.info { color: var(--ink-2); }
+.tg-row.arrive { animation: arrive 1200ms var(--ease-out) both; }
+@keyframes arrive { 0%, 30% { background: color-mix(in srgb, var(--brand) 22%, var(--route-soft)); } }
 .tg-row:hover .opens, .tg-row:focus-visible .opens { color: var(--route); }
 /* A narrow window keeps the name, the tools and the action; the tiles go. */
 @media (max-width: 640px) {
@@ -1232,8 +1205,7 @@ html.map-entrance::view-transition-new(page) { animation: none; }
   .where-menu { right: 0; width: auto; }
   .page { padding: 16px 16px 40px; padding-bottom: max(40px, var(--dock-room, 0px)); }
   .table-scroll { overflow-x: auto; }
-  table.map { min-width: 600px; }
-  .map th { position: static; }
+  .library-list > .tg-head { position: static; }
   /* A narrow row keeps its name: the buttons move under it. */
   .list-row { grid-template-columns: auto minmax(0, 1fr); padding-bottom: 8px; }
   .list-row .row-actions { grid-column: 1 / -1; flex-wrap: wrap; }

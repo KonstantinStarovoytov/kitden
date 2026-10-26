@@ -40,11 +40,13 @@ globalThis.fetch = async (url) => {
   asked.push(url);
   return { ok: true, status: 200, json: async () => (url.startsWith('/api/map') ? { rows } : {}) };
 };
-// A drawn row, as openRow marks it.
-const tr = { parentElement: { querySelectorAll: () => [] }, setAttribute() {} };
+// The Library List's answer, with one skill (views/library.py library_list).
+const tidy = { kind: 'skill', name: 'tidy' };
+const answer = { groups: [{ key: 'skills', name: 'Your skills', kind: 'skills', items: [{ id: 'k-tidy', kind: 'skill', name: 'tidy', lookup: 'tidy', cells: {} }] }] };
+const tidyRow = { id: 'item:k-tidy', sel: tidy };
 
 const { data, followHash, goTo, parseHash, state } = await import('../../src/kitden/web/static/js/store.js');
-const { arrivalRow, openRow, rowSel } = await import('../../src/kitden/web/static/js/library.js');
+const { arrivalIn, openRow } = await import('../../src/kitden/web/static/js/library.js');
 const { targetSel } = await import('../../src/kitden/web/static/js/overview.js');
 const { arrivalServer } = await import('../../src/kitden/web/static/js/gateway.js');
 const { closePanel, isPanelOpen, openPanel } = await import('../../src/kitden/web/static/js/panel.js');
@@ -60,43 +62,42 @@ const model = {
 
 test('one project and one selection go from Overview to Library to Gateway, and Back returns', async () => {
   Object.assign(state, parseHash(entries[at]));
-  goTo('library', targetSel({ view: 'map', kind: 'mcp_server', name: 'github' }));
-  assert.equal(entries[at], '#library?kind=mcp_server&view=list&project=a&sel=mcp_server%3Agithub');
-  const opened = arrivalRow(rows);
-  assert.equal(opened.key, 'row-github'); // Details opens for this row
-  openRow(opened, tr, 'pointer');
-  assert.deepEqual(rowSel(opened), state.selected); // the row focus returns to
+  goTo('library', targetSel({ view: 'map', kind: 'skill', name: 'tidy' }));
+  assert.equal(entries[at], '#library?kind=plugin&view=list&project=a&sel=skill%3Atidy');
+  assert.equal(arrivalIn(answer), 'item:k-tidy'); // Details opens for this row
+  openRow(tidyRow);
+  assert.deepEqual(state.selected, tidy); // the row focus returns to
   assert.equal(entries.length, 2); // opening Details adds no history entry
-  assert.equal(arrivalRow(rows), null); // a redraw keeps focus in Details
-  goTo('gateway', state.selected); // a link to the Gateway keeps both
-  assert.equal(entries[at], '#gateway?project=a&sel=mcp_server%3Agithub');
+  assert.equal(arrivalIn(answer), null); // a redraw keeps focus in Details
+  // An MCP server's card opens the Gateway's List: the Library has no MCP servers.
+  goTo('library', targetSel({ view: 'map', kind: 'mcp_server', name: 'github' }));
+  assert.equal(entries[at], '#gateway?view=list&project=a&sel=mcp_server%3Agithub');
   assert.deepEqual(await arrivalServer(model), { outside: model.groups.move[0], group: 'move' });
   assert.equal(followHash(back()).same, false); // Back
   assert.equal(state.view, 'library');
   assert.equal(state.project, 'a');
-  assert.equal(arrivalRow(rows).key, 'row-github');
+  assert.equal(arrivalIn(answer), 'item:k-tidy');
   // The address already shown changes nothing and opens nothing; #main is not a page.
   assert.equal(followHash(entries[at]).same, true);
-  assert.equal(arrivalRow(rows), null);
+  assert.equal(arrivalIn(answer), null);
   assert.equal(followHash('#main'), null);
 });
 
 test("the person's own pick wins over an arrival that comes late", async () => {
   // The rows come after the person opened another row: nothing opens again.
-  const other = { key: 'row-other', kind: 'mcp_server', name: 'other', lookup: 'other' };
-  goTo('library', github);
-  openRow(other, tr, 'pointer');
-  assert.equal(arrivalRow([...rows, other]), null);
+  goTo('library', tidy);
+  openRow({ id: 'item:other', sel: { kind: 'skill', name: 'other' } });
+  assert.equal(arrivalIn(answer), null);
   // A panel the person opened (a review, Details) drops the arrival, also once it is closed
   // with the selection kept (as a place change closes it).
-  goTo('library', github);
+  goTo('library', tidy);
   openPanel([]);
   closePanel({ focus: false, keepSelection: true });
-  assert.equal(arrivalRow(rows), null);
+  assert.equal(arrivalIn(answer), null);
   // An arrival while a panel is open (Back into the same page) never replaces it.
   openPanel([]);
-  followHash('#library?kind=mcp_server&view=list&project=a&q=git&sel=mcp_server%3Agithub');
-  assert.equal(arrivalRow(rows), null);
+  followHash('#library?kind=plugin&view=list&project=a&q=t&sel=skill%3Atidy');
+  assert.equal(arrivalIn(answer), null);
   assert.equal(isPanelOpen(), true);
   closePanel({ focus: false });
 });
@@ -140,8 +141,9 @@ test('a selected tool opens its server, a client and a group are found in the li
 });
 
 test('a link from open Details closes it first, so the other place opens the same item', async () => {
-  // Details open in the Library: "Manage tools" opens the held server on the Gateway.
-  goTo('library', files);
+  // A server's Details open on the Overview: "Manage tools" opens the held server on the Gateway.
+  state.q = '';
+  goTo('overview', files);
   openPanel([]);
   const [manage] = contextLinks({ kind: 'mcp_server', name: 'files' }, [{ via_gateway: 'kitden' }], state.view);
   assert.equal(manage.label, 'Manage tools');
@@ -149,12 +151,14 @@ test('a link from open Details closes it first, so the other place opens the sam
   assert.equal(isPanelOpen(), false);
   assert.equal(entries[at], '#gateway?project=a&sel=mcp_server%3Afiles');
   assert.equal((await arrivalServer(model)).held.name, 'files');
-  // Details open on the Gateway: "Compare across clients" opens the row in the Library.
+  // Details open on the Gateway: a server has no link to the Library (the Gateway's List shows
+  // who uses it); a skill's "Compare across clients" opens its row in the Library's List.
   openPanel([]);
-  const [compare] = contextLinks(rows[0], [], state.view);
+  assert.deepEqual(contextLinks(rows[0], [], state.view), []);
+  const [compare] = contextLinks({ kind: 'skill', name: 'tidy', lookup: 'tidy' }, [], state.view);
   assert.equal(compare.label, 'Compare across clients');
   await followLink(compare);
   assert.equal(isPanelOpen(), false);
-  assert.equal(entries[at], '#library?kind=mcp_server&view=list&project=a&sel=mcp_server%3Agithub');
-  assert.equal(arrivalRow(rows).key, 'row-github');
+  assert.equal(entries[at], '#library?kind=plugin&view=list&project=a&sel=skill%3Atidy');
+  assert.equal(arrivalIn(answer), 'item:k-tidy');
 });

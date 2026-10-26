@@ -17,7 +17,7 @@ import { busy, current, currentError, projectPath, render, retry, setState, stat
 import { say } from "./toast.js";
 import { addToTray, inTray, keyFor, onTray, takeOut, tray } from "./tray.js";
 
-const LEDE = "Follow the source. Connect only what you need.";
+export const LEDE = "Follow the source. Connect only what you need.";
 const MAP_HINT = "Point at a link and press × to remove it · drag a plugin onto a client to add it there · + adds it for all projects · click anything for its Details";
 // The map's columns at the mockup's x (0, 250, 500) and sizes (library-notes §2.1): a client
 // 150×54, a plugin card 180×60 (a skill or hook row 34 high), an inside item 200×34. What a plugin
@@ -50,7 +50,7 @@ const mapTab = () => (state.kind === "instructions" ? "instructions" : "plugins"
 // Each tab's answer (store.js), what its banner says it could not load, and its hint line.
 const TAB_READS = { plugins: "libraryMap", instructions: "instructionsMap" };
 const TAB_BANNERS = { plugins: "the library map", instructions: "the instruction files" };
-const INSTRUCTIONS_HINT = "Kitden only reads instruction files. It never changes them.";
+export const INSTRUCTIONS_HINT = "Kitden only reads instruction files. It never changes them.";
 // The Instructions tab's columns (library-notes §6): the same clients, a file card 190×54 at x 250,
 // grouped by where it applies, and an import 200×40 at x 500.
 export const INSTRUCTION_COLUMNS = [
@@ -369,15 +369,32 @@ export function onLibrarySelect(fn) {
   selectHook = fn;
 }
 
+// The List opens the same Details as the map: `id` is a block id of the tab's tree (a row's), or
+// null to let them go.
+export function libraryDetails(id) {
+  if (selectHook) selectHook(id);
+}
+
 // What the map shows now for a selection: `{ block }`, or `{ link, from, to }` for a link's key; null
 // when the map has nothing of that id. `answer` is the /api/library-map answer it is drawn from.
+// While the List shows, the tab's tree is drawn from its answer for Details only.
 export function libraryThing(id) {
-  const model = onMap.model;
+  const { model, answer } = shownTree();
   if (!model || !id) return null;
   const byId = new Map(model.blocks.map((b) => [b.id, b]));
-  if (byId.has(id)) return { block: byId.get(id), answer: onMap.answer };
+  if (byId.has(id)) return { block: byId.get(id), answer };
   const link = model.links.find((l) => linkKey(l) === id);
-  return link ? { link, from: byId.get(link.from), to: byId.get(link.to), answer: onMap.answer } : null;
+  return link ? { link, from: byId.get(link.from), to: byId.get(link.to), answer } : null;
+}
+
+// The map's tree while it shows; else the shown tab's, kept while its answer stays the same.
+const listed = { answer: null, model: null };
+function shownTree() {
+  if (onMap.view) return onMap;
+  const tab = mapTab();
+  const answer = current(TAB_READS[tab]);
+  if (answer && listed.answer !== answer) Object.assign(listed, { answer, model: tab === "instructions" ? instructionsTree(answer) : libraryTree(answer) });
+  return answer ? listed : { model: null, answer: null };
 }
 
 // The List draws: the next Map is a new one, with an entrance.

@@ -17,7 +17,7 @@ import { addToTray, inTray, keyFor, onTray, takeOut, tray, undone } from "./tray
 
 // Overview sets a client up with the same note. A server the Kitden gateway holds, and its
 // links, are found where its Details are drawn.
-export { heldServer, kitdenLinks, SETUP_NOTE } from "./gateway-details.js";
+export { heldServer, SETUP_NOTE } from "./gateway-details.js";
 export { litFor } from "./map.js";
 
 const WRITABLE = ["claude_code", "codex", "cursor"];

@@ -16,7 +16,8 @@ from kitden.demo import build_demo_home
 from kitden.model import FindingType, Gateway
 from kitden.views.findings import find_findings, mark_gateways
 from kitden.views.inventory import LastGood, build_inventory, default_adapters, keep_last_good
-from kitden.views.library import library
+from kitden.views.library import _cell as list_cell
+from kitden.views.library import differs, library, library_list
 from kitden.views.load_map import load_map
 from kitden.web.app import create_app
 from tests.conftest import make_home, write_cursor_fixture_state
@@ -1136,3 +1137,182 @@ def test_a_project_only_server_says_why_it_has_no_add(home):
         None,
         "Kitden adds MCP servers for all projects only.",
     )
+
+
+# The List (spec 5.4) ---------------------------------------------------------------------------
+
+
+def _list(home: Path, tab: str = "plugin", project: str | None = None, **options) -> dict:
+    inventory = build_inventory(home)
+    adapters = {a.id: a for a in default_adapters(home)}
+    return library_list(inventory, adapters, project, gateway_registered=False, tab=tab, **options)
+
+
+def _items(answer: dict) -> dict[str, dict]:
+    return {i["name"]: i for g in answer["groups"] for i in g["items"]}
+
+
+def test_the_list_has_the_two_tabs_and_one_column_per_client(tmp_path):
+    home = build_demo_home(tmp_path, "medium")
+    answer = _list(home)
+    assert [c["id"] for c in answer["columns"]] == ["claude_code", "codex", "cursor"]
+    # One group row per source, as the map draws them: marketplaces, then Your skills and Your
+    # settings. Every item has one cell per client.
+    assert [(g["key"], g["kind"]) for g in answer["groups"]] == [
+        ("marketplace:cursor-public", "marketplace"),
+        ("marketplace:demo-market", "marketplace"),
+        ("marketplace:openai-bundled", "marketplace"),
+        ("skills", "skills"),
+        ("settings", "settings"),
+    ]
+    for item in _items(answer).values():
+        assert set(item["cells"]) == {"claude_code", "codex", "cursor"}
+    # MCP servers are on the Gateway now: none here.
+    assert not any(i["kind"] == "mcp_server" for i in _items(answer).values())
+
+
+def test_a_plugin_row_holds_its_parts_with_their_own_cells_or_its_plugins(tmp_path):
+    home = build_demo_home(tmp_path, "medium")
+    items = _items(_list(home))
+    superpowers = items["superpowers"]
+    assert superpowers["kind"] == "plugin" and superpowers["count"] == 2
+    assert superpowers["cells"]["codex"]["add"]["action"] == "plugin.install"
+    # A skill part has its skill row's cells: Codex can take a copy of it.
+    planning = next(p for p in superpowers["parts"] if p["name"] == "planning")
+    assert (planning["key"], planning["kind"]) == ("skills", "skill")
+    assert planning["cells"]["codex"]["add"]["action"] == "skill.install"
+    # Any other part follows its plugin, with no add.
+    index = next(p for p in items["pr-review"]["parts"] if p["name"] == "pr-index")
+    assert index["kind"] == "mcp_server"
+    assert {c: cell["state"] for c, cell in index["cells"].items()} == {
+        "claude_code": "off",
+        "codex": "none",
+        "cursor": "off",
+    }
+    assert not any(cell["add"] for cell in index["cells"].values())
+
+
+def test_hooks_sit_under_your_settings_and_marketplaces_are_group_rows(tmp_path):
+    home = build_demo_home(tmp_path, "medium")
+    answer = _list(home)
+    settings = next(g for g in answer["groups"] if g["key"] == "settings")
+    assert settings["name"] == "Your settings"
+    assert {i["kind"] for i in settings["items"]} == {"hook"}
+    assert "PreToolUse: Bash" in {i["name"] for i in settings["items"]}
+    market = next(g for g in answer["groups"] if g["key"] == "marketplace:demo-market")
+    assert (market["name"], market["icon"]) == ("demo-market", "store")
+    # Items carry what a link from another page selects them by.
+    assert _items(answer)["superpowers"]["lookup"] == "superpowers@demo-market"
+
+
+def test_differs_by_class_unknown_review_and_a_kept_cell():
+    both = ["claude_code", "codex"]
+    on, off, none = list_cell("on"), list_cell("off"), list_cell()
+    assert not differs({"claude_code": on, "codex": on}, both)
+    assert not differs({"claude_code": none, "codex": list_cell(add={"label": "+ Add"})}, both)
+    assert differs({"claude_code": on, "codex": none}, both)
+    assert differs({"claude_code": on, "codex": off}, both)
+    assert differs({"claude_code": on, "codex": list_cell("unk")}, both)
+    assert differs({"claude_code": on, "codex": list_cell("review")}, both)
+    assert differs({"claude_code": on, "codex": on, "cursor": list_cell("on", stale_at="t")}, both)
+    # Only the shown clients count.
+    assert not differs({"claude_code": on, "codex": none}, ["claude_code"])
+
+
+def test_differences_shows_only_rows_whose_cells_differ_and_a_plugin_whose_part_does(tmp_path):
+    # Review Focus, on the large sample.
+    # Nothing there is in all three clients: every item differs. With Codex hidden, the plugins
+    # Claude Code and Cursor both load do not, unless a part does.
+    home = build_demo_home(tmp_path, "large")
+    assert len(_items(_list(home, show="diff"))) == len(_items(_list(home)))
+    hidden = frozenset({"codex"})
+    everything = _items(_list(home, hidden=hidden))
+    diff = _list(home, show="diff", hidden=hidden)
+    shown = _items(diff)
+    assert shown and len(shown) < len(everything)
+    assert "plugin-01" not in shown
+    columns = [c["id"] for c in diff["columns"] if not c["hidden"] and not c["note"]]
+    assert columns == ["claude_code", "cursor"]
+    for name, item in everything.items():
+        parts = item.get("parts", [])
+        own = differs(item["cells"], columns)
+        assert (name in shown) == (own or any(differs(p["cells"], columns) for p in parts)), name
+    # No group is left with nothing in it.
+    assert all(g["items"] for g in diff["groups"])
+
+
+def test_a_plugin_differs_when_only_one_of_its_parts_does(tmp_path, monkeypatch):
+    import kitden.views.library as lib
+
+    home = build_demo_home(tmp_path, "medium")
+    real = lib._parts
+
+    def same_plugin_cells(item, cells, skills):
+        parts = real(item, cells, skills)
+        for client in cells:
+            cells[client] = list_cell("on")
+        return parts
+
+    monkeypatch.setattr(lib, "_parts", same_plugin_cells)
+    shown = _items(_list(home, show="diff"))
+    # superpowers is On everywhere now, but Codex lacks its skills: it still differs.
+    assert "superpowers" in shown
+    assert not differs(shown["superpowers"]["cells"], ["claude_code", "codex", "cursor"])
+
+
+def test_needs_attention_still_filters_the_list(home):
+    # The same rows as the plugin and skill tables flag: Cursor loads superpowers twice, and
+    # docker-expert from two folders.
+    answer = _list(home, attention=True)
+    flagged = [(i["name"], i["source"]) for g in answer["groups"] for i in g["items"]]
+    assert flagged == [
+        ("superpowers", OFFICIAL),
+        ("superpowers", "cursor-public"),
+        ("docker-expert", "Codex and Cursor"),
+    ]
+    tables = [_library(home, kind, attention=True) for kind in ("plugin", "skill", "hook")]
+    assert len(flagged) == sum(len(t["rows"]) for t in tables)
+    assert answer["attention"] == _list(home)["attention"] == 3
+
+
+def test_the_list_search_finds_a_name_or_a_part(tmp_path):
+    home = build_demo_home(tmp_path, "medium")
+    assert set(_items(_list(home, q="PLAN"))) == {"superpowers"}
+    assert set(_items(_list(home, q="brand"))) == {"brandkit"}
+
+
+def test_the_instructions_list_has_one_row_per_file(tmp_path):
+    home = build_demo_home(tmp_path, "medium")
+    answer = _list(home, "instructions")
+    assert [(g["key"], g["name"], g["icon"]) for g in answer["groups"]] == [
+        ("all", "All projects", "layers")
+    ]
+    files = answer["groups"][0]["items"]
+    assert [(f["kind"], f["name"]) for f in files] == [("file", "CLAUDE.md"), ("file", "AGENTS.md")]
+    words = {f["name"]: {c: cell["word"] for c, cell in f["cells"].items()} for f in files}
+    assert words["CLAUDE.md"] == {"claude_code": "Reads it", "codex": None, "cursor": None}
+    # A project's own files come in their own group.
+    project = str(home / "work/atlas")
+    groups = _list(home, "instructions", project)["groups"]
+    assert [g["key"] for g in groups] == ["all", "project"]
+    assert groups[1]["name"] == "Only this project · atlas"
+
+
+def test_api_library_list_takes_a_tab_and_show_diff(tmp_path):
+    home = build_demo_home(tmp_path, "medium")
+    app = create_app(lambda: build_inventory(home), token="tok", port=47800, home=home)
+    with TestClient(app, base_url=ORIGIN, follow_redirects=False) as client:
+        client.get("/?token=tok")
+        answer = client.get("/api/library-list?kind=plugin").json()
+        assert set(answer) == {"project", "columns", "groups", "attention", "notes"}
+        # An old tab or show choice gets Plugins and skills, as installed.
+        old = client.get("/api/library-list?kind=marketplace&show=new").json()
+        assert old == answer
+        diff = client.get("/api/library-list?kind=plugin&show=diff").json()
+        assert {i["name"] for g in diff["groups"] for i in g["items"]} <= {
+            i["name"] for g in answer["groups"] for i in g["items"]
+        }
+        files = client.get("/api/library-list?kind=instructions").json()
+        assert [i["kind"] for g in files["groups"] for i in g["items"]] == ["file", "file"]
+        hidden = client.get("/api/library-list?kind=plugin&hidden=codex,cursor").json()
+        assert [c["id"] for c in hidden["columns"] if c["hidden"]] == ["codex", "cursor"]

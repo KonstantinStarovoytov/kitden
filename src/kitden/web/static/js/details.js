@@ -329,12 +329,13 @@ function placeText({ scope, project, asks }, here) {
 
 // Links that keep context -------------------------------------------------------------------
 
-// The same item on another page; never the page shown. "Manage tools" only for a server in the
-// Kitden gateway: the only servers with tool switches (the Gateway opens a server by its name).
-// "Show on the map" joins them once the map exists (Part 6).
+// The same item on another page; never the page shown. "Compare across clients" for what the
+// Library's List shows (the Gateway's List shows who uses a server). "Manage tools" only for a
+// server in the Kitden gateway: the only servers with tool switches (the Gateway opens a server by
+// its name).
 export function contextLinks(row, definitions, view) {
   const links = [];
-  if (view !== "library") links.push({ label: "Compare across clients", view: "library", selected: rowSel(row) });
+  if (view !== "library" && row.kind !== "mcp_server") links.push({ label: "Compare across clients", view: "library", selected: rowSel(row) });
   if (view !== "gateway" && definitions.some((d) => d.via_gateway === "kitden")) {
     links.push({ label: "Manage tools", view: "gateway", selected: { kind: "mcp_server", name: row.name } });
   }

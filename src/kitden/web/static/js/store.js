@@ -1,19 +1,22 @@
 // Page state, data cache and navigation. The URL hash keeps the state, so links and Back work:
-// #library?kind=<kind>&show=<mine|new|all>&category=<name>&attention=1&view=<map|list>&project=<id>&q=<text>&sel=<kind>:<name>
+// #library?kind=<plugin|instructions>&show=<mine|diff>&attention=1&view=<map|list>&project=<id>&q=<text>&sel=<kind>:<name>
 import { getJson, query } from "./api.js";
 import { transition } from "./motion.js";
 
 export const VIEWS = ["overview", "library", "gateway", "changes", "agents"];
-// Places the Library replaced, and the choice each one opens it on.
-export const OLD_VIEWS = { map: "mine", discover: "new" };
-const SHOWS = ["mine", "new", "all"];
+// Places the Library replaced: they open it on what is installed.
+export const OLD_VIEWS = ["map", "discover"];
+// The List shows what is installed, or only what differs between the clients. An old New or All
+// gives way to the add panel: it opens on what is installed.
+const SHOWS = ["mine", "diff"];
 // The places with a Map and a List. The address keeps the choice as `view=map|list`; the state
 // keeps it as `mode`, because `view` names the place.
 const MODE_PLACES = ["gateway", "library"];
 const MODES = ["map", "list"];
 // An old Library address names a kind and no view (`#library?kind=hook`): the Library had one
 // table then. Each kind now lives here: MCP servers on the Gateway's List, hooks and marketplaces on
-// the Library's map, the rest on its List.
+// the Library's map, the rest on its List. The Library's tabs are Plugins and skills ("plugin", for
+// every kind but instructions) and Instructions (libraryKind).
 const OLD_KINDS = { mcp_server: { view: "gateway", mode: "list" }, hook: { mode: "map" }, marketplace: { mode: "map" } };
 // With no choice in the address, a page opens in List past this many blocks in its middle column.
 export const MAP_AT = 15;
@@ -23,8 +26,11 @@ export const SEL_KINDS = ["mcp_server", "plugin", "skill", "hook", "marketplace"
 // `selected` is the item picked on any page, { kind, name }, or null. `mode`: "map", "list" or
 // "" (no choice).
 export const state = {
-  view: "overview", kind: "mcp_server", show: "mine", category: "", attention: false, mode: "", project: "", q: "", selected: null,
+  view: "overview", kind: "plugin", show: "mine", category: "", attention: false, mode: "", project: "", q: "", selected: null,
 };
+
+// The Library's tab for a kind: Instructions, or Plugins and skills for any other.
+export const libraryKind = (kind) => (kind === "instructions" ? "instructions" : "plugin");
 
 // What a page shows: the choice in the address, else List past MAP_AT blocks, else Map.
 export function viewMode(s, count) {
@@ -129,17 +135,15 @@ export function sameSel(a, b) {
 export function parseHash(hash) {
   const [place, rest] = String(hash || "").replace(/^#/, "").split("?");
   const params = new URLSearchParams(rest || "");
-  const old = OLD_VIEWS[place];
+  const old = OLD_VIEWS.includes(place);
   const show = params.get("show");
-  let kind = params.get("kind") || "mcp_server";
-  if (place === "discover") kind = kind === "skill" ? "skill" : "plugin";
   const moved = oldLibraryLink(place, params);
   const view = moved ? moved.view || "library" : old ? "library" : VIEWS.includes(place) ? place : "overview";
   const mode = moved ? moved.mode : params.get("view");
   return {
     view,
-    kind,
-    show: old || (SHOWS.includes(show) ? show : "mine"),
+    kind: libraryKind(params.get("kind")),
+    show: !old && SHOWS.includes(show) ? show : "mine",
     category: params.get("category") || "",
     attention: params.get("attention") === "1" || (place === "map" && params.get("only") === "problems"),
     mode: MODE_PLACES.includes(view) && MODES.includes(mode) ? mode : "",
@@ -158,13 +162,12 @@ function oldLibraryLink(place, params) {
 // An address that is an old one: the page writes its new form in its place.
 export function isOldAddress(hash) {
   const [place, rest] = String(hash || "").replace(/^#/, "").split("?");
-  return Boolean(OLD_VIEWS[place] || oldLibraryLink(place, new URLSearchParams(rest || "")));
+  return Boolean(OLD_VIEWS.includes(place) || oldLibraryLink(place, new URLSearchParams(rest || "")));
 }
 
 // The Library's address reads back as it is: a kind with no view is an old address, so a kind
-// always comes with a view. With no choice made, the first kind (MCP servers) is left out, and any
-// other names the view the page drew last (the List before it drew either: only the List has
-// tabs).
+// always comes with a view. With no choice made, the first tab (Plugins and skills) is left out,
+// and Instructions names the view the page drew last (the List before it drew either).
 export function hashFor(s) {
   const library = s.view === "library" ? libraryWords(s) : {};
   const mode = MODE_PLACES.includes(s.view) ? s.mode || library.view || "" : "";
@@ -172,7 +175,7 @@ export function hashFor(s) {
 }
 
 function libraryWords(s) {
-  const kind = s.kind === "mcp_server" && s.mode !== "list" ? "" : s.kind;
+  const kind = s.kind === "plugin" && s.mode !== "list" ? "" : s.kind;
   const view = kind && !s.mode ? libraryShows.mode || "list" : "";
   return { kind, show: s.show === "mine" ? "" : s.show, category: s.category, attention: s.attention ? "1" : "", view };
 }
@@ -215,8 +218,8 @@ export function go(view, params = {}) {
   place(view, params);
 }
 
-// The Library tab and choice that show a selected item: its kind, under Installed, no search, on
-// the List.
+// The Library tab and choice that show a selected item: its kind (place() turns it into its tab,
+// or the Gateway for an MCP server), under Installed, no search, on the List.
 export function libraryChoice(selected) {
   return { kind: selected.kind, show: "mine", category: "", attention: false, q: "", mode: "list" };
 }
@@ -233,12 +236,21 @@ export async function goTo(view, selected, { project, mode } = {}) {
 // place: another place starts without one, unless `params` brings one. A switch between Map and
 // List gets its own history entry, so Back switches back.
 function place(view, params) {
+  ({ view, params } = newPlace(view, params));
   const moving = view !== state.view;
   const newProject = params.project !== undefined && params.project !== state.project;
   const newMode = params.mode !== undefined && params.mode !== state.mode;
   Object.assign(state, { view }, moving ? { mode: "" } : {}, params);
   writeHash(moving || newProject || newMode);
   show(moving);
+}
+
+// Where a place change lands: the Library's MCP servers are on the Gateway's List now, and any
+// other kind opens its Library tab.
+function newPlace(view, params) {
+  if (view !== "library" || params.kind === undefined) return { view, params };
+  if (params.kind === "mcp_server") return { view: "gateway", params: { ...params, kind: "plugin", mode: "list" } };
+  return { view, params: { ...params, kind: libraryKind(params.kind) } };
 }
 
 export function setState(params) {
@@ -264,7 +276,7 @@ export function followAddress(next, { draw = true } = {}) {
 export function followHash(hash) {
   const view = String(hash || "").replace(/^#/, "").split("?")[0];
   const old = isOldAddress(hash);
-  if (!VIEWS.includes(view) && !OLD_VIEWS[view]) return null;
+  if (!VIEWS.includes(view) && !OLD_VIEWS.includes(view)) return null;
   const next = parseHash(hash);
   const same = ["view", "project", "kind", "show", "category", "attention", "mode", "q"].every((key) => next[key] === state[key])
     && sameSel(next.selected, state.selected);

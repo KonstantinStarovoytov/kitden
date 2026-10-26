@@ -141,7 +141,7 @@ from kitden.views.inventory import (
     item_dict,
     keep_last_good,
 )
-from kitden.views.library import KINDS, SHOWS, library
+from kitden.views.library import KINDS, LIST_SHOWS, LIST_TABS, SHOWS, library, library_list
 from kitden.views.library_map import library_map
 from kitden.views.load_map import load_map, map_dict
 from kitden.views.overview import overview
@@ -840,6 +840,24 @@ def create_app(
             q=params.get("q", ""),
             category=params.get("category", ""),
             hidden=hidden,
+            attention=params.get("attention") == "1",
+        )
+        return JSONResponse({"project": project, **answer})
+
+    def _library_list(request, project, path):
+        """One tab of the Library's List: its groups, columns and the lines above them."""
+        params = request.query_params
+        tab = params.get("kind")
+        show = params.get("show")
+        answer = library_list(
+            state.inventory,
+            adapters,
+            path,
+            gateway_registered=bool(_registered()),
+            tab=tab if tab in LIST_TABS else "plugin",
+            show=show if show in LIST_SHOWS else "mine",
+            q=params.get("q", ""),
+            hidden=frozenset(c for c in params.get("hidden", "").split(",") if c),
             attention=params.get("attention") == "1",
         )
         return JSONResponse({"project": project, **answer})
@@ -1558,6 +1576,7 @@ def create_app(
             Route("/api/commands", commands),
             Route("/api/map", _read_model(_map)),
             Route("/api/library", _read_model(_library)),
+            Route("/api/library-list", _read_model(_library_list)),
             Route("/api/library-map", _read_model(_library_map)),
             Route("/api/instructions-map", _read_model(_instructions_map)),
             Route("/api/offer", offer_view),

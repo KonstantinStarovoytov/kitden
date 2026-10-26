@@ -5,7 +5,6 @@
 // never touches a change. The one write the panel starts is Undo, in a change from the Changes page.
 import { openItem, syncTray } from "./details.js";
 import { $, $$, button, el, focusKey } from "./dom.js";
-import { onOpenItem } from "./library.js";
 import { animateTo, D, finishTransition, rise } from "./motion.js";
 import { arrival, projectGone, setState, state } from "./store.js";
 import { reloadTools } from "./tools.js";
@@ -503,7 +502,6 @@ export function initPanel() {
   $("#content").addEventListener("scroll", placeSoon, { passive: true });
   addEventListener("resize", placeSoon);
   new MutationObserver(placeSoon).observe($("#main"), { childList: true });
-  onOpenItem((row, tr, how) => openItem(row, { instant: how === "keyboard" }));
   // A refresh of the gateway's tool lists ended: an open tool list reads them again.
   document.addEventListener("kitden:tools", reloadTools);
   // The tray changed: switches and buttons in Details show whether their change waits there.

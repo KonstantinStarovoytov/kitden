@@ -223,8 +223,8 @@ def test_the_top_bar_and_the_page_head_have_the_mockups_sizes():
     assert "font-size: 12px" in rule(".lede") and "color: var(--ink-3)" in rule(".lede")
     scope = rule(".scope-bar")
     assert "font-size: 11px" in scope and "gap: 6px" in scope
-    # The List header sticks right under the top bar.
-    assert "top: 66px" in rule(".map th")
+    # The Library List's header sticks right under the top bar.
+    assert "top: 66px" in rule(".library-list > .tg-head")
 
 
 def test_a_narrow_window_turns_the_rail_into_a_top_row_and_hides_the_labels():
@@ -852,7 +852,7 @@ CSS = (STATIC / "style.css").read_text()
 
 def test_controls_press_and_the_switch_waits_in_the_tray():
     assert ".switch.pending" in CSS
-    assert ".seg button:active" in CSS and ".tabs button:active" in CSS
+    assert ".seg button:active" in CSS
     # The pending look follows the tray: on while the switch's change waits there.
     text = panel()
     assert 'node.classList.toggle("pending", waiting);' in text and "onTray(syncTray);" in text
@@ -890,7 +890,7 @@ def test_apply_turns_green_only_after_verified_and_only_ok_toasts_get_a_check():
 def test_one_mark_slides_between_the_choices_of_a_group():
     assert 'glide($(".nav")' in script("app.js")
     text = script("library.js")
-    assert '"library-tabs"' in text and '"library-show"' in text
+    assert '"library-tabs-map"' in text and '"library-show"' in text
     assert "tab-ink" not in CSS and "tab-ink" not in text
 
 
@@ -902,16 +902,14 @@ def test_gateway_list_is_a_tree_grid_the_keys_move_through():
     assert "fold(box)" in gw()
 
 
-def test_library_shows_one_flag_per_wording_and_resolved_flags_shrink_away():
+def test_library_shows_one_flag_per_wording():
     text = script("library.js")
-    assert "findIndex((o) => o.text === f.text)" in text
-    assert 'classList.add("gone")' in text and ".flag.gone" in CSS
+    assert "findIndex((o) => o.text === f.text)" in text and "name.append(flag(f))" in text
 
 
 def test_scope_switch_marks_the_project_picker_and_the_lede():
     assert 'classList.toggle("project"' in script("app.js")
     assert ".where-box.project" in CSS
-    assert 'classList.add("fresh")' in script("library.js")
     # The Gateway says the scope under its head; the bar is accent with a project.
     assert "scopeBar(" in script("gateway.js") and ".scope-bar.project" in CSS
     parts = script("parts.js")
@@ -940,8 +938,9 @@ def test_a_plugin_the_page_cannot_change_shows_a_locked_switch():
 
 
 def test_library_lede_names_the_project_folder_not_its_path():
+    # The List has the Map's lede, and its scope bar names the project's folder.
     text = script("library.js")
-    assert "in the project" in text
+    assert 'el("p", "lede", LEDE), tabs, scopeBar(folderName(projectPath()))' in text
     assert "shortPath" not in text
 
 
@@ -1028,10 +1027,10 @@ def test_diagram_nodes_open_the_client_apps_and_the_gateway():
 def test_library_adds_plugins_and_marketplaces_in_one_review():
     offer, library = script("offer.js"), script("library.js")
     assert '"plugin.install"' in offer and '"marketplace.add"' in offer
-    # Adding a marketplace lives on the Marketplaces tab.
-    assert '"Add a marketplace…"' in library and 'kind === "marketplace"' in library
+    # Adding a marketplace lives in the add panel now; the List has no New or All.
+    assert '"Add a marketplace…"' in script("library-add.js")
+    assert '"Add a marketplace…"' not in library and '["new", "New"]' not in library
     assert '<a href="#library" data-view="library"><span class="label">Library</span></a>' in INDEX
-    assert '["new", "New"]' in library and 'row.mine ? "Installed" : "New"' in library
 
 
 def test_library_rows_say_what_each_client_has_or_can_add_without_details():
@@ -1043,9 +1042,9 @@ def test_library_rows_say_what_each_client_has_or_can_add_without_details():
     )
     assert "button(cell.add.label" in text and '"btn small add"' in text
     assert 'via: "Via Claude Code", done: "Has its skills"' in script("parts.js")
-    assert 'el("table", "map library")' in text and '"desc"' in text
-    # A category filter, fed by the counts the server sends.
-    assert '"All categories"' in text and "answer.categories" in text
+    # The List is a tree grid; the category filter went with New and All (the add panel).
+    assert 'el("div", "treegrid library-list")' in text
+    assert '"All categories"' not in text and "answer.categories" not in text
     # The row opens Details, so there is no Details button on it; only the box shown when no
     # client is found has one.
     assert text.count('"Details"') == 1 and 'button("Details", showLookFor' in text
@@ -1054,18 +1053,18 @@ def test_library_rows_say_what_each_client_has_or_can_add_without_details():
 # Skills beside Plugins ---------------------------------------------------------------------
 
 
-def test_library_tabs_share_one_table_and_the_add_flow():
+def test_library_tabs_share_one_grid_and_the_add_flow():
     text = script("library.js")
-    assert '["plugin", "Plugins"], ["skill", "Skills"]' in text
+    assert '[["plugin", "Plugins and skills"], ["instructions", "Instructions"]]' in text
     assert '"skill.install"' in script("offer.js") and '"Add skill"' in script("offer.js")
-    # One row builder for every kind, one table.
-    assert text.count("buildRow(") == 2 and text.count('el("table", "map library")') == 1
+    # One row builder for every row, one grid.
+    assert text.count("listRow(") == 2 and text.count('el("div", "treegrid library-list")') == 1
     assert 'show: s.show === "mine" ? "" : s.show' in script("store.js")
 
 
 def test_skill_rows_say_where_each_skill_comes_from_and_how_each_client_loads_it():
-    # Same-name rows show their source, so two skills or plugins with one name differ.
-    assert "row.same_name ? row.source : null" in script("library.js")
+    # Same-name rows name their source in a Details title and a button's name.
+    assert "row.same_name && row.source ? `${row.name} · ${row.source}`" in script("library.js")
     text = script("offer.js")
     assert '"Needs its plugin"' in text and '"Can add"' in text
     # The refusal, in the owner's words, and a way to the plugin that holds the skill.
@@ -1095,11 +1094,11 @@ def test_add_forms_name_the_source_and_every_client_the_change_reaches():
 
 def test_library_rows_keep_the_name_and_the_source_readable():
     text, css = script("library.js"), (STATIC / "style.css").read_text()
-    assert '["42%"' in text and 'el("small", "meta", meta)' in text
-    assert ".library .desc" in css and "-webkit-line-clamp: 1" in css
-    # The name takes its whole width first; the meta text gives way. (Flex shrank the name by a
-    # fraction of a pixel too, which cut it with "…".)
-    assert ".library .item { display: grid; grid-template-columns: minmax(3ch, max-content)" in css
+    # The name takes the rest of the row; each client's column is 150 px. A long name is cut
+    # with "…" and said whole in its title.
+    assert "`minmax(0, 1fr) repeat(${columns.length}, ${CELL_W}px)`" in text
+    assert "const CELL_W = 150;" in text and "words.title = row.name;" in text
+    assert ".tg-name .words { min-width: 3ch; white-space: nowrap;" in css
     # The server marks rows that share a name; the page does not count names itself.
     assert "names.get" not in text
     # A cell's button names its row's source too, or twin rows would give two buttons one name.
@@ -1127,7 +1126,6 @@ def test_a_lost_apply_answer_is_checked_not_guessed():
 
 
 def test_changes_and_the_library_say_saved_settings_and_scope():
-    assert "Based on saved settings." in script("library.js")
     changes = script("changes.js")
     assert "To take effect" in changes and 'user: "all projects"' in changes
     assert "global settings" not in changes
@@ -1217,13 +1215,12 @@ def test_direct_servers_are_options_and_details_offers_move_first():
 
 
 def test_rows_say_they_open_details_and_search_names_its_scope():
-    for name in ("library.js", "changes.js"):
-        assert "opens()" in script(name)
+    assert "opens()" in script("changes.js")
     assert ".sr-only" in CSS
     # The chevron is quiet, and takes the accent when the row is hovered or focused.
     assert re.search(r"\n\.opens \{[^}]*color: var\(--ink-3\)", CSS)
-    assert re.search(r"tr:hover \.opens[^{]*\{ color: var\(--route\)", CSS)
-    assert "li:hover .opens" in CSS and "tr:focus-visible .opens" in CSS
+    assert re.search(r"\.tg-row:hover \.opens[^{]*\{ color: var\(--route\)", CSS)
+    assert "li:hover .opens" in CSS and ".tg-row:focus-visible .opens" in CSS
     # One search for every place: the Library searches the setup and the marketplaces.
     # The placeholder trails off; the accessible name does not repeat the dots.
     assert 'placeholder="Search your setup and marketplaces…"' in INDEX
@@ -1247,19 +1244,18 @@ def test_every_control_a_render_replaces_names_itself_for_focus():
         "library.js": (
             "`tab:${id}`",
             "`show:${id}`",
-            '"filter:category"',
             '"filter:attention"',
             "`add:${row.key}:${client}`",
-            '"more:all"',
-            '"add:marketplace"',
+            '"add:missing"',
             "`hide:${column.id}`",
             '"hidden:show"',
+            "`row:${row.id}`",
         ),
     }.items():
         text = script(name)
         for key in keys:
             assert f"dataset.focus = {key}" in text, (name, key)
-        assert "tabKeys(" in text
+        assert "gridKey(" in text
 
 
 def test_client_checkboxes_come_from_one_named_part():
@@ -1342,14 +1338,25 @@ def test_library_replaces_load_map_and_discover():
     assert not (STATIC / "js" / "discover.js").exists()
     text = script("library.js")
     assert 'el("h1", null, "Library")' in text
-    assert "What each client loads, and what you can add to it. Based on saved settings." in text
-    assert '[["mine", "Installed"], ["new", "New"], ["all", "All"]]' in text
+    assert '[["mine", "Installed"], ["diff", "Differences"]]' in text
     # "Differs between clients" went away: the columns show it already.
     assert "Differs between clients" not in text
     # Old addresses open the Library; the Overview's links go there too.
-    assert 'OLD_VIEWS = { map: "mine", discover: "new" }' in script("store.js")
+    assert 'OLD_VIEWS = ["map", "discover"]' in script("store.js")
     overview = script("overview.js")
     assert 'kind: selected.kind, show: "mine"' in script("store.js")
+    # An old New or All, and an old kind, land on their tab, as installed; the Library's MCP
+    # servers are on the Gateway's List.
+    store = script("store.js")
+    assert (
+        'const SHOWS = ["mine", "diff"];' in store
+        and 'show: !old && SHOWS.includes(show) ? show : "mine"' in store
+    )
+    assert 'libraryKind = (kind) => (kind === "instructions" ? "instructions" : "plugin");' in store
+    assert (
+        'params.kind === "mcp_server") return { view: "gateway", params: { ...params, kind:'
+        in store
+    )
     assert 'goTo("library", sel)' in overview
     # A note's Details opens the item the note row names.
     assert 'follow({ view: "map", kind: row.kind, name: row.lookup })' in overview
@@ -1361,10 +1368,9 @@ def test_library_says_why_when_there_is_nothing_to_do():
     # Overview.
     assert "[cell.where, cell.route, cell.reason].filter(Boolean)" in text
     assert "Kitden found no AI coding clients." in text and '"Open Overview"' in text
-    # Search keeps the choice and says what it hides.
-    assert '"in New"' in text and '"Show all"' in text
-    # The line goes away with the choice; focus moves to that choice.
-    assert """document.querySelector('#main [data-focus="show:all"]')""" in text
+    # An empty search, filter or Differences says how to go back.
+    assert '"Clear search"' in text and '"Show all"' in text and '"Show installed"' in text
+    assert 'const NO_DIFFERENCES = "No differences between your clients";' in text
     # A morph into a dash keeps its reason for a screen reader.
     assert "label: cell.reason" in text and 'label || "Not set up"' in script("parts.js")
     assert "`Needs attention · ${answer.attention}`" in text
@@ -1405,7 +1411,7 @@ def test_library_columns_hide_with_a_quiet_minus_kept_in_this_browser():
     text, css = script("library.js"), (STATIC / "style.css").read_text()
     # The choice lives in this browser; every read and write is inside try/catch.
     assert 'const HIDDEN_KEY = "kitden-hidden-clients"' in text
-    store = text.split("export function hiddenClients")[1].split("// The kind tab shown")[0]
+    store = text.split("export function hiddenClients")[1].split("// The tab shown")[0]
     assert store.count("localStorage.") == 2
     assert store.count("try {") == 2 and store.count("catch") == 2
     # A named button per column, not drawn when no other readable column would stay; the
@@ -1466,7 +1472,6 @@ def test_tabs_and_filters_read_first_then_the_list_settles():
         "choose({ kind: id,",
         "choose({ show: id,",
         "choose({ attention:",
-        "choose({ category:",
     ):
         assert call in library
     assert ".table-scroll.waiting { opacity: 0.5; pointer-events: none; }" in css
@@ -1480,13 +1485,6 @@ def test_tabs_and_filters_read_first_then_the_list_settles():
     assert "html.place-change #main, html.map-entrance #main { view-transition-name: page; }" in css
     assert "::view-transition-new(page) { animation: 260ms var(--ease-out) both page-in; }" in css
     assert 'if (view === "library" && state.view !== "library") await raceSlow(' in app
-
-
-def test_add_a_marketplace_sits_where_the_filters_sit_on_other_tabs():
-    # Pushed to the right, it left an empty band between the tabs and the table.
-    library = script("library.js")
-    assert 'bar.append(el("span", "grow"), add);' not in library
-    assert "bar.append(add);" in library
 
 
 # The Kitden gateway (2026-10-21) ----------------------------------------------------------
@@ -2056,6 +2054,8 @@ def test_a_change_whose_backup_holds_a_secret_says_so():
 def test_library_has_an_instructions_tab():
     text = script("library.js")
     assert '["instructions", "Instructions"]' in text
+    # Its List has one row per file; a cell says "Reads it" or nothing (views/library.py).
+    assert 'READS_IT = "Reads it"' in (STATIC.parents[1] / "views/library.py").read_text()
 
 
 def test_details_shows_an_instruction_files_first_lines():
@@ -2100,8 +2100,9 @@ def test_details_say_what_the_lead_changes_and_link_to_the_other_pages():
     assert follow.index("closePanel(") < follow.index("goTo(")
     assert "raceSlow(loadLibraryFor(libraryChoice(" in follow
     assert "dataset.focus = `link:${link.view}`" in details
-    # The Details of a server in the Kitden gateway link back to the Library.
-    assert "contextLinks(" in gw()
+    # A server has no row in the Library's List: the Gateway's List shows who uses it.
+    assert 'view !== "library" && row.kind !== "mcp_server"' in details
+    assert "contextLinks(" not in gw()
 
 
 def test_the_page_and_the_server_say_why_an_add_reaches_cursor_alike():
@@ -2968,3 +2969,47 @@ def test_the_instructions_map_words():
     assert "start: start + D(turn * GROW_STEP)" in view
     assert "(tabPoint || (item.grows && item.folds) ? FOLD_BACK_MS : GO_MS)" in view
     assert "font-family: var(--mono); font-size: 11px;" in rule("div.map .block.import .block-name")
+
+
+# The Library List (Phase 6B Task 6, spec 5.4, frame L3) ------------------------------------------
+
+
+def test_the_library_list_words_and_looks():
+    text = script("library.js")
+    # The Map's tabs, Installed | Differences, and the hint line, verbatim.
+    assert (
+        'const TABS = [["plugin", "Plugins and skills"], ["instructions", "Instructions"]];' in text
+    )
+    assert 'const SHOW = [["mine", "Installed"], ["diff", "Differences"]];' in text
+    assert (
+        'const LIST_HINT = "One row per item, one column per client. Right opens a plugin, '
+        'Enter opens Details.";' in text
+    )
+    assert 'setHint(kind === "plugin" ? LIST_HINT : INSTRUCTIONS_HINT);' in text
+    # A plugin row says what Kitden read inside it; a part says what kind it is.
+    assert '`Plugin · ${plural(item.count, "item", "items")}`' in text
+    assert 'const KIND_WORDS = { skill: "Skill", hook: "Hook" };' in text
+    assert (
+        'const PART_WORDS = { skill: "Skill", command: "Command", agent: "Agent", hook: "Hook", '
+        'mcp_server: "MCP server" };' in text
+    )
+    # An empty tab, and an empty cell, say so plainly.
+    for words in (
+        '"No plugins or skills in any client"',
+        '"Plugins and skills you add in Claude Code, Codex or Cursor will show up here."',
+        '"No instruction files in any client"',
+        '"Instruction files you add for Claude Code, Codex or Cursor will show up here."',
+        'cell.reason || "Not added"',
+    ):
+        assert words in text, words
+    # A row opens the map's Details; the keys are the tree grid's.
+    assert "libraryDetails(row.id);" in text and "gridKey(rows," in text
+    assert "export function libraryDetails(id)" in script("library-map.js")
+    # The look: the Gateway List's grid, a sticky 30 px head, a 34 px part row.
+    assert ".tg-row.part { min-height: 34px; }" in CSS
+    assert ".tg-row.arrive { animation: arrive 1200ms var(--ease-out) both; }" in CSS
+    # The server's words for Differences and the tabs (views/library.py).
+    server = (STATIC.parents[1] / "views/library.py").read_text()
+    assert 'LIST_TABS = ("plugin", "instructions")' in server
+    assert 'LIST_SHOWS = ("mine", "diff")' in server
+    assert '"/api/library-list"' in (STATIC.parents[1] / "web/app.py").read_text()

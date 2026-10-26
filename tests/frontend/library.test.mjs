@@ -38,7 +38,7 @@ const requests = [];
 globalThis.fetch = (url) => new Promise((resolve) => {
   requests.push({ url, answer: (body) => resolve({ ok: true, status: 200, json: async () => body }) });
 });
-const { addChoices, addName, hasAdds, scopeLine, cellHint, cellNode, emptyState, hiddenClients, hiddenLine, hideButton, loadLibrary, loadLibraryFor, metaText, moreLine, nameCell, noClients, noteFor, showSources, previewFor, setHidden, startAdd } = await import('../../src/kitden/web/static/js/library.js');
+const { addChoices, addName, hasAdds, scopeLine, cellHint, cellNode, emptyState, hiddenClients, hiddenLine, hideButton, loadLibrary, loadLibraryFor, noClients, noteFor, showSources, previewFor, setHidden, startAdd } = await import('../../src/kitden/web/static/js/library.js');
 const { data, freshness, hashFor, loadShared, parseHash, state } = await import('../../src/kitden/web/static/js/store.js');
 const { cancelTray, tray } = await import('../../src/kitden/web/static/js/tray.js');
 const later = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -67,16 +67,16 @@ test('a cell with an add shows its label and nothing else', () => {
   assert.equal(plugin2.attributes['aria-label'], 'Add the plugin with find-owner to Cursor');
 });
 
-test('a cell with nothing to do shows a dash and says why', () => {
+test('a cell with nothing to do shows nothing and says why', () => {
   const reason = "Cursor can't install this plugin, and it has no skills to copy.";
   const node = cellNode(row({ cursor: cell({ reason }) }), 'cursor');
-  assert.equal(node.children[0].textContent, '—');
+  // Only a screen reader hears it; the hover says it too.
+  assert.deepEqual(node.children.map((c) => [c.className, c.textContent]), [['sr-only', reason]]);
   assert.equal(node.title, reason);
-  assert.equal(node.attributes['aria-label'], reason);
-  // A client that just does not have it (an MCP server) keeps the plain words.
+  // A client that just does not have it keeps the plain words.
   const plain = cellNode(row({ cursor: cell({}) }), 'cursor');
   assert.equal(plain.title, '');
-  assert.equal(plain.attributes['aria-label'], 'Not set up');
+  assert.deepEqual(plain.children.map((c) => c.textContent), ['Not added']);
 });
 
 test('a state cell says the state, and why when the server says', () => {
@@ -131,64 +131,25 @@ test('the review note warns about a twin and says a project add is for every pro
   assert.equal(noteFor(add({ warn }), 'p1'), `${warn} Adds for all projects.`);
 });
 
-test('meta text shows the source only when names repeat', () => {
-  assert.equal(metaText({ category: 'Design', source: 'openai-curated', same_name: true }), 'Design · openai-curated');
-  assert.equal(metaText({ category: 'Design', source: 'openai-curated', same_name: false }), 'Design');
-  assert.equal(metaText({ category: null, source: 'cursor-public', same_name: true }), 'cursor-public');
-  assert.equal(metaText({ category: null, source: null, same_name: true }), '');
-});
-
-test('line one is the name and its quiet text; the flags go to line two', () => {
-  const twice = { text: 'Cursor loads it twice', level: 'warning' };
-  const flagged = row({}, { category: 'Design', same_name: true, description: 'Draw things', flags: [twice, twice] });
-  const [one, two] = nameCell(flagged, false).children;
-  assert.equal(one.className, 'item');
-  assert.deepEqual(one.children.map((c) => [c.className, c.textContent]), [['mono', 'figma'], ['meta', 'Design · openai-curated'], ['opens', '']]);
-  // One flag per wording, then what it does.
-  assert.equal(two.className, 'sub');
-  assert.deepEqual(two.children.map((c) => [c.className, c.textContent]), [['flag', 'Cursor loads it twice'], ['desc', 'Draw things']]);
-  // No description: the flags have line two to themselves. Neither: one line.
-  assert.deepEqual(nameCell({ ...flagged, description: '' }, false).children[1].children.map((c) => c.className), ['flag']);
-  assert.equal(nameCell({ ...flagged, description: '', flags: [] }, false).children.length, 1);
-});
-
-test('the more line names what the choice hides', () => {
-  assert.equal(moreLine({ more: 3 }, 'mine'), '3 more in New · Show all');
-  assert.equal(moreLine({ more: 3 }, 'new'), '3 more installed · Show all');
-  assert.equal(moreLine({ more: 0 }, 'mine'), null);
-  assert.equal(moreLine({ more: 3 }, 'all'), null);
-});
-
 test('old map and discover addresses open the Library', () => {
-  const library = (fields) => ({ view: 'library', kind: 'mcp_server', show: 'mine', category: '', attention: false, mode: '', project: '', q: '', selected: null, ...fields });
+  const library = (fields) => ({ view: 'library', kind: 'plugin', show: 'mine', category: '', attention: false, mode: '', project: '', q: '', selected: null, ...fields });
   assert.deepEqual(parseHash('#map'), library({}));
   // The Load map's "Needs attention" filter carries over.
   assert.deepEqual(parseHash('#map?kind=plugin&only=problems&project=p1&q=git'), library({ kind: 'plugin', attention: true, project: 'p1', q: 'git' }));
   assert.equal(parseHash('#map?only=diff').attention, false);
-  assert.deepEqual(parseHash('#discover'), library({ kind: 'plugin', show: 'new' }));
-  assert.deepEqual(parseHash('#discover?kind=skill&q=pdf'), library({ kind: 'skill', show: 'new', q: 'pdf' }));
-  assert.deepEqual(parseHash('#discover?kind=hook'), library({ kind: 'plugin', show: 'new' }));
+  // Discover's New gives way to the add panel: it opens on what is installed.
+  assert.deepEqual(parseHash('#discover'), library({}));
+  assert.deepEqual(parseHash('#discover?kind=skill&q=pdf'), library({ q: 'pdf' }));
+  assert.deepEqual(parseHash('#discover?kind=hook'), library({}));
   // The Library's own address keeps every choice, and writes back the same.
-  const hash = '#library?kind=skill&show=all&category=Design&attention=1&view=list&project=p1&q=pdf';
+  const hash = '#library?kind=plugin&show=diff&attention=1&view=list&project=p1&q=pdf';
   const parsed = parseHash(hash);
-  assert.deepEqual(parsed, library({ kind: 'skill', show: 'all', category: 'Design', attention: true, mode: 'list', project: 'p1', q: 'pdf' }));
+  assert.deepEqual(parsed, library({ show: 'diff', attention: true, mode: 'list', project: 'p1', q: 'pdf' }));
   assert.equal(hashFor(parsed), hash);
   assert.equal(hashFor(library({})), '#library');
-  assert.equal(hashFor(library({ mode: 'list' })), '#library?kind=mcp_server&view=list');
+  assert.equal(hashFor(library({ mode: 'list' })), '#library?kind=plugin&view=list');
   assert.equal(parseHash('#library?show=nope').show, 'mine');
   assert.equal(parseHash('#nowhere').view, 'overview');
-});
-
-test('a search the choice hides shows the more line, not an empty table', () => {
-  const box = emptyState({ kind: 'plugin', show: 'mine', q: 'figma' }, moreLine({ more: 2 }, 'mine'));
-  assert.equal(box.className, 'empty');
-  assert.equal(box.children[0].textContent, 'Nothing installed matches “figma”');
-  const [words, all] = box.children[1].children;
-  assert.equal(box.children[1].className, 'more');
-  assert.equal(words.textContent, '2 more in New · ');
-  assert.equal(all.textContent, 'Show all');
-  const added = emptyState({ kind: 'skill', show: 'new', q: 'pdf' }, moreLine({ more: 1 }, 'new'));
-  assert.equal(added.children[0].textContent, 'Nothing new matches “pdf”');
 });
 
 test('no clients: the Library says what Kitden looks for, the folders and the demo behind Details', () => {
@@ -221,7 +182,7 @@ test('a source line shows with the top bar line, on its own tab, and fades in pl
     assert.equal(drawnBox, null);
     assert.ok(box.classList.contains('gone'));
     // Another tab has no line for it.
-    state.kind = 'mcp_server';
+    state.kind = 'instructions';
     assert.equal(showSources(progress(false)), false);
   } finally {
     showSources(null);
@@ -230,11 +191,13 @@ test('a source line shows with the top bar line, on its own tab, and fades in pl
   }
 });
 
-test('an empty tab names its kind the way the tab does', () => {
-  const servers = emptyState({ kind: 'mcp_server', show: 'mine', q: '' }, null);
-  assert.deepEqual(servers.children.map((c) => c.textContent), ['No MCP servers in any client', 'MCP servers you add in Claude Code, Codex or Cursor will show up here.']);
-  const plugins = emptyState({ kind: 'plugin', show: 'mine', q: '' }, null);
-  assert.deepEqual(plugins.children.map((c) => c.textContent), ['No plugins in any client', 'Plugins you add in Claude Code, Codex or Cursor will show up here.']);
+test('an empty tab names what it shows, and an empty search or filter says how to go back', () => {
+  const words = (asked) => emptyState({ kind: 'plugin', show: 'mine', q: '', attention: false, ...asked }).children.map((c) => c.textContent);
+  assert.deepEqual(words({}), ['No plugins or skills in any client', 'Plugins and skills you add in Claude Code, Codex or Cursor will show up here.']);
+  assert.deepEqual(words({ kind: 'instructions' }), ['No instruction files in any client', 'Instruction files you add for Claude Code, Codex or Cursor will show up here.']);
+  assert.deepEqual(words({ q: 'figma' }), ['Nothing matches “figma”', 'Clear search']);
+  assert.deepEqual(words({ attention: true }), ['Nothing to show with this filter', 'Show all']);
+  assert.deepEqual(words({ show: 'diff' }), ['No differences between your clients', 'Show installed']);
 });
 
 test('an older answer never replaces a newer one for the same tab', async () => {
@@ -262,7 +225,7 @@ test('a tab read before the Library shows is kept for it', async () => {
   requests.length = 0;
   const read = loadLibraryFor({ kind: 'skill', show: 'mine', category: '', attention: false, q: '' });
   assert.equal(requests.length, 1);
-  assert.match(requests[0].url, /^\/api\/library\?kind=skill&show=mine$/);
+  assert.match(requests[0].url, /^\/api\/library-list\?kind=plugin&show=mine$/);
   requests[0].answer({ rows: [] });
   await read;
   // Reading it again, or showing that tab, asks nothing new (a request starts at once).
@@ -295,7 +258,7 @@ async function libraryReadsAfterShared(projects) {
 
 test('the Library reads nothing for a project that left the list', async () => {
   assert.deepEqual(await libraryReadsAfterShared([{ id: 'a', path: '/w/a' }]), []);
-  assert.deepEqual(await libraryReadsAfterShared([{ id: 'gone', path: '/w/gone' }]), ['/api/library?project=gone&kind=skill&show=mine']);
+  assert.deepEqual(await libraryReadsAfterShared([{ id: 'gone', path: '/w/gone' }]), ['/api/library-list?project=gone&kind=plugin&show=mine']);
 });
 
 const COLUMNS = [
@@ -381,7 +344,7 @@ test('the hidden choice is part of the question, so a change asks again', async 
   setHidden(['cursor', 'codex']);
   const fewer = loadLibrary();
   assert.equal(requests.length, 2);
-  assert.match(requests[1].url, /^\/api\/library\?kind=skill&show=mine&hidden=codex%2Ccursor$/);
+  assert.match(requests[1].url, /^\/api\/library-list\?kind=plugin&show=mine&hidden=codex%2Ccursor$/);
   requests[1].answer({ rows: [] });
   await fewer;
   setHidden(['codex', 'cursor']);
@@ -429,7 +392,7 @@ test('a hide button saves the choice, asks again, then focuses the next column o
 });
 
 // Smooth changes: rows that stay slide from where they were, new rows rise in, a tab slides.
-const { raceSlow, rowFor, rowMoves, rowSel, tabDirection } = await import('../../src/kitden/web/static/js/library.js');
+const { raceSlow, rowMoves, rowSel, tabDirection } = await import('../../src/kitden/web/static/js/library.js');
 
 test('rows that stay move from their old place; new rows are the ones that rise in', () => {
   const before = new Map([['a', 100], ['b', 140], ['c', 180]]);
@@ -439,9 +402,9 @@ test('rows that stay move from their old place; new rows are the ones that rise 
 });
 
 test('a tab to the right slides in from the right, one to the left from the left', () => {
-  assert.equal(tabDirection('plugin', 'skill'), 1);
-  assert.equal(tabDirection('skill', 'mcp_server'), -1);
-  assert.equal(tabDirection('skill', 'skill'), 0);
+  assert.equal(tabDirection('plugin', 'instructions'), 1);
+  assert.equal(tabDirection('instructions', 'skill'), -1);
+  assert.equal(tabDirection('skill', 'plugin'), 0);
 });
 
 test('a quick answer is waited for; a slow one is not', async () => {
@@ -526,9 +489,6 @@ test('the scope line needs a project and rows', () => {
   assert.equal(scopeLine(null, [{}]), null);
 });
 
-test('an instructions row shows its category as the quiet word', () => {
-  assert.equal(metaText({ kind: 'instructions', name: 'review', category: 'command', source: null }), 'command');
-});
 test('the Instructions tab has no adds and no scope line', () => {
   assert.equal(hasAdds('instructions'), false);
   assert.equal(hasAdds('skill'), true);
@@ -556,11 +516,7 @@ test('a kept cell asks its socket for the dashed dot, so a morph keeps it', () =
   assert.equal(node.className, 'socket s-on stale');
 });
 
-test('the selection finds its row by kind and full name, and nothing when it is gone', () => {
-  const rows = [{ key: 'k1', kind: 'plugin', name: 'figma', lookup: 'figma@a' }, { key: 'k2', kind: 'plugin', name: 'figma', lookup: 'figma@b' }];
-  assert.equal(rowFor(rows, { kind: 'plugin', name: 'figma@b' }).key, 'k2');
-  assert.equal(rowFor(rows, { kind: 'skill', name: 'figma@b' }), null);
-  assert.equal(rowFor(rows, { kind: 'plugin', name: 'gone@a' }), null);
-  assert.equal(rowFor(rows, null), null);
-  assert.deepEqual(rowSel(rows[0]), { kind: 'plugin', name: 'figma@a' });
+test('a link from another page selects an item by its kind and full name', () => {
+  assert.deepEqual(rowSel({ key: 'k1', kind: 'plugin', name: 'figma', lookup: 'figma@a' }), { kind: 'plugin', name: 'figma@a' });
+  assert.deepEqual(rowSel({ key: 'k2', kind: 'skill', name: 'tidy', lookup: null, offer: 'tidy@x' }), { kind: 'skill', name: 'tidy@x' });
 });

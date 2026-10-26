@@ -11,6 +11,7 @@ ORIGIN = "http://127.0.0.1:47800"
 ENDPOINTS = [
     "/api/map",
     "/api/library",
+    "/api/library-list",
     "/api/overview",
     "/api/gateway-view",
     "/api/library-map",

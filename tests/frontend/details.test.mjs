@@ -279,13 +279,15 @@ test('nothing to lead, the Add form, or no answer from the server: no Affects li
 });
 
 test('links lead to another page with the same item', () => {
+  // A server has no row in the Library's List (the Gateway's List shows who uses it).
   const row = { kind: 'mcp_server', name: 'files' };
   const held = [{ via_gateway: 'kitden' }];
-  assert.deepEqual(contextLinks(row, held, 'overview').map((l) => [l.label, l.view]), [['Compare across clients', 'library'], ['Manage tools', 'gateway']]);
-  assert.deepEqual(contextLinks(row, held, 'library').map((l) => l.label), ['Manage tools']);
-  assert.deepEqual(contextLinks(row, [{ via_gateway: null }], 'gateway').map((l) => l.label), ['Compare across clients']);
-  assert.deepEqual(contextLinks(row, held, 'overview')[0].selected, { kind: 'mcp_server', name: 'files' });
+  assert.deepEqual(contextLinks(row, held, 'overview').map((l) => [l.label, l.view]), [['Manage tools', 'gateway']]);
+  assert.deepEqual(contextLinks(row, [{ via_gateway: null }], 'gateway'), []);
   assert.deepEqual(contextLinks(row, held, 'library')[0].selected, { kind: 'mcp_server', name: 'files' });
+  const skill = { kind: 'skill', name: 'tidy', lookup: 'tidy' };
+  assert.deepEqual(contextLinks(skill, [], 'overview').map((l) => [l.label, l.view]), [['Compare across clients', 'library']]);
+  assert.deepEqual(contextLinks(skill, [], 'library'), []);
   // A plugin row goes by its full name in the Library.
   assert.deepEqual(contextLinks({ kind: 'plugin', name: 'figma', lookup: 'figma@a' }, [], 'gateway')[0].selected, { kind: 'plugin', name: 'figma@a' });
 });

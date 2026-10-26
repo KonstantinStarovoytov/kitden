@@ -162,6 +162,8 @@ def _page_outputs(home) -> list[str]:
             outputs.append(page.get(f"/api/explain?name={item['name']}&kind=mcp_server").text)
         # Instruction files: Details shows their first lines.
         outputs.append(page.get("/api/library?kind=instructions").text)
+        for tab in ("plugin", "instructions"):
+            outputs.append(page.get(f"/api/library-list?kind={tab}").text)
         projects = [f"&project={p['id']}" for p in page.get("/api/projects").json()]
         for query in ["", *projects]:
             explained = page.get(f"/api/explain?name=CLAUDE.md&kind=instructions{query}").text
@@ -278,6 +280,10 @@ def _demo_outputs(home) -> list[str]:
         for kind in KINDS:
             for project in [None, projects[0]]:
                 get(f"/api/library?kind={kind}" + (f"&project={project['id']}" if project else ""))
+        for tab in ("plugin", "instructions"):
+            for project in [None, projects[0]]:
+                where = f"&project={project['id']}" if project else ""
+                get(f"/api/library-list?kind={tab}&show=diff{where}")
         items = page.get("/api/items").json()
         explained = {
             (i["name"], i["kind"])

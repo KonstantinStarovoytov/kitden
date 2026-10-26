@@ -43,8 +43,8 @@ What Kitden does today and what comes next. Ideas and bugs:
   and skills they load, under where they come from (each marketplace, your skills, your
   settings, and in a project what only that project has), and a click on a plugin shows what it
   holds. A plugin says how many things Kitden read inside it. Cursor's plugins through Claude
-  Code show as a faint line. Big groups and big plugins show a page at a time. Map | List keeps
-  today's table one click away, and old Library links land where their kind lives now. Kitden
+  Code show as a faint line. Big groups and big plugins show a page at a time. Map | List swaps to
+  the List, and old Library links land where their kind lives now. Kitden
   now reads Claude Code's local project settings and its `skillOverrides`, so a skill or plugin
   turned off in one project shows Off there. Drag a plugin or a skill onto a client to add it
   there for all projects: the client lights, or the tip says why it cannot take it. The add waits
@@ -55,7 +55,9 @@ What Kitden does today and what comes next. Ideas and bugs:
   offers, a click adds one for all projects to every client that lacks it, and a row drags onto
   one client. A plugin no client has shows on the map as a preview card while it waits. The
   Instructions tab has its own map: the clients, the instruction files each one reads, and what
-  Claude Code's CLAUDE.md files pull in; a click opens a file's Details. It only reads.
+  Claude Code's CLAUDE.md files pull in; a click opens a file's Details. It only reads. The List
+  has the same two tabs, a row per source, plugin, skill, hook or file and a column per client,
+  and Differences shows only what differs between the clients.
 - **Library Details:** a click on the Library map opens Details for a plugin, a thing inside it, a
   skill, a hook, a client, a link or a marketplace. From the Library a plugin can be turned off for
   all projects or in this project, and added to another client; a skill can be turned off for all

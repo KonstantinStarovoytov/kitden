@@ -708,8 +708,8 @@ test("every action of today's server panel is still there, under More", () => {
   assert.deepEqual(body('Remove from the Kitden gateway…'), { action: 'gateway.remove', targets: [], params: { server: 'files' } });
   assert.deepEqual(body('Put back in Codex…'), { action: 'gateway.put_back', targets: [{ client: 'codex' }], params: { server: 'files' } });
   assert.deepEqual(body('Move secrets to the Keychain…'), { action: 'gateway.keychain', targets: [], params: { server: 'files' } });
-  // Claude Code and Codex reach files through the Kitden gateway: the Library has its row.
-  assert.ok(textOf(card.after).includes('Compare across clients'));
+  // The Gateway's List shows who uses a server: there is no link to the Library.
+  assert.equal(card.after, undefined);
   // "In some projects" steps to the projects (a test below); nothing waits under the actions.
   assert.equal(typeof card.more[0].run, 'function');
   // In a project with a rule of its own: its parent's rule back, and the rule for all projects.

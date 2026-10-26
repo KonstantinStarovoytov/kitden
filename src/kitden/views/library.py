@@ -9,6 +9,7 @@ the name but another source says "Needs review" there and offers no add.
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import NamedTuple
 
 from kitden.changes.actions import (
     CLIENT_WORDS,
@@ -22,6 +23,8 @@ from kitden.clients.base import REMOVE_DIRECT, SETUP_NAME, is_direct_entry, is_h
 from kitden.model import ClientStatus, Item, ItemKind, Scope, _hash
 from kitden.views.catalog import catalog, search
 from kitden.views.gateway_view import group_of
+from kitden.views.instructions_map import instructions_map
+from kitden.views.library_map import library_map
 from kitden.views.load_map import COLUMNS, MARKS, NAMES, Row, load_map
 from kitden.views.match import Copies, catalog_keys, plugin_copies, plugin_keys, source_keys
 from kitden.views.skills import project_skills, skill_catalog
@@ -780,26 +783,23 @@ def _notes(rows: list[dict], visible: list[str]) -> list[str]:
     ]
 
 
-def library(
-    inventory,
-    adapters,
-    project: str | None,
-    *,
-    gateway_registered: bool,
-    kind: str,
-    show: str = "mine",
-    q: str = "",
-    category: str = "",
-    hidden: frozenset[str] = frozenset(),
-    attention: bool = False,
-) -> dict:
-    """The rows of one kind tab, with the columns, the tab counts and the lines above the table.
+class _Tables(NamedTuple):
+    """Every kind's rows with their cells, and what they are read against."""
 
-    `show` is "mine" (Installed), "new" (New: not on this computer yet) or "all"; the tabs
-    without a catalog always show what is on this computer. `hidden` columns stay in
-    `columns`, marked, and a row that only they have is left out; hiding every found client
-    hides none. Counts follow show, search and hidden, not the category.
-    """
+    columns: list[str]  # the found clients and those Kitden could not read
+    found: list[str]
+    hidden: frozenset[str]
+    visible: list[str]  # found clients that are not hidden
+    homes: list[Path]
+    rows: dict[str, list[dict]]  # by kind, only the rows in view
+    by_key: dict[str, Row]
+
+
+def _tables(
+    inventory, adapters, project: str | None, *, gateway_registered: bool, hidden: frozenset[str]
+) -> _Tables:
+    """The rows of every kind tab, before any finish: `hidden` columns leave out a row only they
+    have, and hiding every found client hides none."""
     status = {c.id: c.status for c in inventory.clients}
     found = [c for c in COLUMNS if status.get(c) is ClientStatus.FOUND]
     columns = [c for c in COLUMNS if c in found or status.get(c) is ClientStatus.UNREADABLE]
@@ -856,11 +856,58 @@ def library(
             elif not _in_view(r, holders, visible):
                 continue
             rows[k].append(r)
-    # After the view, so a held add keeps its row where it was.
-    _unread_cells(rows[kind], by_key, columns, found)
+    return _Tables(columns, found, hidden, visible, homes, rows, by_key)
+
+
+def _finish(t: _Tables, kind: str, inventory, adapters, project: str | None) -> list[dict]:
+    """A kind's rows with their last cells: Unknown for a client Kitden could not read, no add
+    into a file it could not read, and no add in a row that needs review. After the view, so a
+    held add keeps its row where it was."""
+    rows = t.rows[kind]
+    _unread_cells(rows, t.by_key, t.columns, t.found)
     broken = {p.path for p in inventory.problems if p.path}
-    _hold_adds(rows[kind], adapters, broken, project)
-    _no_add_in_review(rows[kind])
+    _hold_adds(rows, adapters, broken, project)
+    _no_add_in_review(rows)
+    return rows
+
+
+def _columns(t: _Tables) -> list[dict]:
+    return [
+        {
+            "id": c,
+            "name": NAMES[c],
+            "mark": MARKS[c],
+            "hidden": c in t.hidden,
+            "note": None if c in t.found else STATE_WORDS["unread"],
+        }
+        for c in t.columns
+    ]
+
+
+def library(
+    inventory,
+    adapters,
+    project: str | None,
+    *,
+    gateway_registered: bool,
+    kind: str,
+    show: str = "mine",
+    q: str = "",
+    category: str = "",
+    hidden: frozenset[str] = frozenset(),
+    attention: bool = False,
+) -> dict:
+    """The rows of one kind, with the columns, the counts and the lines above them. The List
+    (`library_list`) takes its cells from these rows.
+
+    `show` is "mine" (on this computer), "new" (not on this computer yet) or "all"; the kinds
+    without a catalog always show what is on this computer. `hidden` columns stay in
+    `columns`, marked, and a row that only they have is left out; hiding every found client
+    hides none. Counts follow show, search and hidden, not the category.
+    """
+    t = _tables(inventory, adapters, project, gateway_registered=gateway_registered, hidden=hidden)
+    rows = t.rows
+    _finish(t, kind, inventory, adapters, project)
 
     def show_for(k: str) -> str:
         return show if k in CATALOG_KINDS else "mine"
@@ -874,16 +921,7 @@ def library(
         everything = _narrowed(_chosen(rows[kind], kind, "all", q), category, attention)
         more = len(everything) - len(shown)
     return {
-        "columns": [
-            {
-                "id": c,
-                "name": NAMES[c],
-                "mark": MARKS[c],
-                "hidden": c in hidden,
-                "note": None if c in found else STATE_WORDS["unread"],
-            }
-            for c in columns
-        ],
+        "columns": _columns(t),
         "counts": {
             k: len(matched) if k == kind else len(_chosen(rows[k], k, show_for(k), q))
             for k in KINDS
@@ -892,5 +930,218 @@ def library(
         "more": more,
         "attention": len(_narrowed(matched, category, True)),
         "categories": _categories(matched) if has_catalog else [],
-        "notes": _read_notes(inventory, project, homes) + _notes(shown, visible),
+        "notes": _read_notes(inventory, project, t.homes) + _notes(shown, t.visible),
+    }
+
+
+# The List ------------------------------------------------------------------------------------
+
+# The List's tabs (spec 5.4): every plugin, skill and hook by where it comes from, or the
+# instruction files. It shows what is installed, or only what differs between the clients.
+LIST_TABS = ("plugin", "instructions")
+LIST_SHOWS = ("mine", "diff")
+# A cell for Differences: the client has it, has it off, or lacks it. Unknown, Needs review and a
+# cell kept from the last good read always differ.
+CELL_CLASS = {
+    "on": "has",
+    "gw": "has",
+    "done": "has",
+    "off": "off",
+    "none": "lacks",
+    "via": "lacks",
+}
+ALWAYS_DIFFERS = ("unk", "review")
+# A part of a plugin with no row of its own shows its plugin's states, with no add.
+FOLLOWS = ("on", "off", "unk", "review", "gw", "via")
+# What a plugin holds, by its key in the Library map answer, and the kind of its part row.
+PART_KINDS = {
+    "skills": "skill",
+    "commands": "command",
+    "agents": "agent",
+    "hooks": "hook",
+    "mcp_servers": "mcp_server",
+}
+READS_IT = "Reads it"
+FILE_ICONS = {"all": "layers", "project": "folder"}
+# A map client's link, as a cell when the tables have no row for the item.
+BY_STATES = {"on": "on", "off": "off", "unknown": "unk", "via": "via"}
+
+
+def differs(cells: dict[str, dict], visible: list[str]) -> bool:
+    """The cells of the shown clients differ: one has it and another not, or off next to on.
+    A cell Kitden does not know, one that needs review, and one kept from the last good read
+    (in any column) always differ."""
+    if any(cell["stale_at"] for cell in cells.values()):
+        return True
+    shown = [cells[c] for c in visible if c in cells]
+    if any(cell["state"] in ALWAYS_DIFFERS for cell in shown):
+        return True
+    return len({CELL_CLASS.get(cell["state"], "lacks") for cell in shown}) > 1
+
+
+def _by_cells(item: dict, columns: list[str], found: list[str]) -> dict[str, dict]:
+    """Cells from the map's links, for an item the tables have no row for."""
+    out = {}
+    for client in columns:
+        state = BY_STATES.get(item["by"].get(client), "none")
+        if client not in found and state == "none":
+            out[client] = _cell("unk", reason=CLIENT_UNREAD.format(NAMES[client]))
+        else:
+            out[client] = _cell(state, word=STATE_WORDS["via"] if state == "via" else None)
+    return out
+
+
+def _following(cells: dict[str, dict]) -> dict[str, dict]:
+    """A part's cells that follow its plugin: the plugin's states, no add and no reason."""
+    out = {}
+    for client, cell in cells.items():
+        state = cell["state"] if cell["state"] in FOLLOWS else "none"
+        word = cell["word"] if state == cell["state"] else None
+        out[client] = _cell(state, cell["where"], word=word, stale_at=cell["stale_at"])
+    return out
+
+
+def _parts(item: dict, cells: dict[str, dict], skills: dict[tuple, dict]) -> list[dict]:
+    """A plugin's parts, in the map's order: a skill with a row of its own (the skill table's
+    row with its name from this plugin) has that row's cells; any other part follows the
+    plugin."""
+    out = []
+    for key, kind in PART_KINDS.items():
+        for name in (item.get("inside") or {}).get(key, []):
+            own = skills.get((item.get("plugin"), name)) if kind == "skill" else None
+            part = {"key": key, "kind": kind, "name": name}
+            if own:
+                part.update(source=own["source"], same_name=own["same_name"], cells=own["cells"])
+            else:
+                part.update(source=item["source"], same_name=False, cells=_following(cells))
+            out.append(part)
+    return out
+
+
+def _item_groups(answer: dict, tables: dict[str, list[dict]], t: _Tables) -> list[dict]:
+    """The Library map's groups and items, each item with the cells of its row in the plugin,
+    skill or hook table, and a plugin's parts. An item only hidden clients have is left out."""
+    rows = {r["key"]: r for kind in ("plugin", "skill", "hook") for r in tables[kind]}
+    skills = {(r["source"], r["name"]): r for r in tables["skill"]}
+    out = []
+    for group in answer["groups"]:
+        items = []
+        for item in group["items"]:
+            holders = [c for c, state in item["by"].items() if state != "via"]
+            if holders and not set(holders).intersection(t.visible):
+                continue
+            row = rows.get(item["id"])
+            cells = row["cells"] if row else _by_cells(item, t.columns, t.found)
+            entry = {
+                "id": item["id"],
+                "kind": item["kind"],
+                "name": item["name"],
+                "source": row["source"] if row else item["source"],
+                "same_name": row["same_name"] if row else False,
+                "lookup": (row["lookup"] if row else None) or item.get("plugin") or item["name"],
+                "flags": row["flags"] if row else [],
+                "count": item.get("count"),
+                "cells": cells,
+            }
+            if item["kind"] == "plugin":
+                entry["parts"] = _parts(item, cells, skills)
+            items.append(entry)
+        keys = ("key", "name", "icon", "kind")
+        out.append({**{k: group[k] for k in keys}, "items": items})
+    return out
+
+
+def _file_groups(answer: dict, t: _Tables) -> list[dict]:
+    """The instruction files by where they apply, one cell per client: "Reads it" or nothing."""
+    out = []
+    for group in answer["groups"]:
+        items = []
+        for file in group["files"]:
+            if not set(file["by"]).intersection(t.visible) and set(file["by"]) & t.hidden:
+                continue
+            cells = {
+                c: _cell("on", word=READS_IT) if file["by"].get(c) else _cell() for c in t.columns
+            }
+            items.append(
+                {
+                    "id": file["id"],
+                    "kind": "file",
+                    "name": file["name"],
+                    "flags": [],
+                    "cells": cells,
+                }
+            )
+        icon = FILE_ICONS[group["key"]]
+        out.append(
+            {
+                "key": group["key"],
+                "name": group["name"],
+                "icon": icon,
+                "kind": "files",
+                "items": items,
+            }
+        )
+    return out
+
+
+def _named(item: dict, q: str) -> bool:
+    """The item's name, or one of its parts', holds the search text."""
+    text = q.strip().lower()
+    names = [item["name"], *(p["name"] for p in item.get("parts", []))]
+    return any(text in name.lower() for name in names)
+
+
+def _item_differs(item: dict, visible: list[str]) -> bool:
+    """An item differs when its cells do; a plugin also when one of its parts does."""
+    return differs(item["cells"], visible) or any(
+        differs(p["cells"], visible) for p in item.get("parts", [])
+    )
+
+
+def library_list(
+    inventory,
+    adapters,
+    project: str | None,
+    *,
+    gateway_registered: bool,
+    tab: str,
+    show: str = "mine",
+    q: str = "",
+    hidden: frozenset[str] = frozenset(),
+    attention: bool = False,
+) -> dict:
+    """The List (spec 5.4): one tab's groups, each with its items, one cell per client.
+
+    "plugin": the Library map's groups (marketplaces, Other plugins, Your skills, Your settings,
+    Only this project) with their plugins, skills and hooks, each with the cells of the plugin,
+    skill and hook tables, and a plugin's parts. "instructions": the instruction files by where
+    they apply. `show` "diff" keeps the items that differ (`differs`); `attention` keeps those
+    with a warning, and `attention` in the answer counts them; `q` keeps an item whose name, or
+    a part's, holds the text. A group with no item left is left out.
+    """
+    t = _tables(inventory, adapters, project, gateway_registered=gateway_registered, hidden=hidden)
+    if tab == "instructions":
+        groups = _file_groups(instructions_map(inventory, adapters, project), t)
+        show = "mine"
+    else:
+        tables = {
+            k: _finish(t, k, inventory, adapters, project) for k in ("plugin", "skill", "hook")
+        }
+        groups = _item_groups(library_map(inventory, adapters, project), tables, t)
+    matched = []
+    for group in groups:
+        kept = [i for i in group["items"] if not q.strip() or _named(i, q)]
+        if show == "diff":
+            kept = [i for i in kept if _item_differs(i, t.visible)]
+        matched.append({**group, "items": kept})
+    warned = sum(_needs_attention(i) for g in matched for i in g["items"])
+    if attention:
+        matched = [{**g, "items": [i for i in g["items"] if _needs_attention(i)]} for g in matched]
+    shown = [g for g in matched if g["items"]]
+    cells = [r for g in shown for i in g["items"] for r in (i, *i.get("parts", []))]
+    return {
+        "columns": _columns(t),
+        "groups": shown,
+        "attention": warned,
+        "notes": _read_notes(inventory, project, t.homes) + _notes(cells, t.visible),
     }
