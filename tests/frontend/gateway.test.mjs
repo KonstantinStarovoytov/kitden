@@ -1856,6 +1856,124 @@ test('Escape cancels a drag', async (t) => {
   }
 });
 
+// Review Focus
+test('while a dropped server or row is asked, no other drag starts', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  data.scope.gateway = '';
+  try {
+    // A row dropped and still asked: its slot waits on the map, so another row, a grip or a client
+    // starts nothing.
+    let answer;
+    queue(PREVIEW, (sent) => new Promise((resolve) => { answer = () => resolve(batch('c1')(sent)); }));
+    const map = dragMap();
+    const row = panelRow();
+    row.press();
+    map.move(...middle(map, 'gateway:kitden'));
+    map.up(...middle(map, 'gateway:kitden'));
+    map.redraw();
+    const other = panelRow({ name: 'test-status', kind: 'remote' });
+    other.press();
+    map.move(...middle(map, 'gateway:kitden'));
+    assert.deepEqual([other.node.captured, other.node.ghosts], [[], []]);
+    map.captured.length = 0;
+    map.press();
+    map.move(...map.onto('held:kitden:tracker'));
+    assert.deepEqual([map.captured, movingOn()], [[], { drop: { name: 'db-query', kind: 'local' } }]);
+    map.up(...map.onto('held:kitden:tracker'));
+    // Once it answers, a row drags again.
+    answer();
+    await flush();
+    map.redraw();
+    other.press();
+    map.move(1200, 10);
+    assert.equal(other.node.ghosts.length, 1);
+    map.up(1200, 10);
+    await flush();
+    await cancelTray();
+    // A move dropped and still asked: its block waits on the slot, so a row starts nothing.
+    let moved;
+    queue(PREVIEW, (sent) => new Promise((resolve) => { moved = () => resolve(batch('c2')(sent)); }));
+    const move = dragMap();
+    move.press();
+    move.move(...move.onto('held:kitden:tracker'));
+    move.up(...move.onto('held:kitden:tracker'));
+    assert.equal(tray.rows.length, 1);
+    const late = panelRow();
+    late.press();
+    move.move(...middle(move, 'gateway:kitden'));
+    assert.deepEqual([late.node.captured, late.node.ghosts], [[], []]);
+    move.up(...middle(move, 'gateway:kitden'));
+    moved();
+    await flush();
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    await freshTray();
+  }
+});
+
+test('a refused add leaves the row at full strength and closes the slot', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  try {
+    // Refused when its preview answers: the row leaves the tray and the slot closes.
+    queue(PREVIEW, { status: 422, json: { detail: 'No.' } });
+    const map = dragMap();
+    const row = panelRow();
+    row.press();
+    map.move(...middle(map, 'gateway:kitden'));
+    map.up(...middle(map, 'gateway:kitden'));
+    const [ghost] = row.node.ghosts;
+    await flush();
+    map.redraw();
+    assert.deepEqual([tray.rows, movingOn(), block(map.tree, 'slot:db-query')], [[], {}, undefined]);
+    assert.deepEqual([ghost.parentNode, row.node.names.has('dragging')], [null, false]);
+    // Refused at once (a change is being written): the ghost flies back, as for a miss.
+    const now = panelRow();
+    now.press();
+    map.move(...middle(map, 'gateway:kitden'));
+    setBusy(true);
+    try {
+      map.up(...middle(map, 'gateway:kitden'));
+    } finally {
+      setBusy(false);
+    }
+    const [back] = now.node.ghosts;
+    assert.equal(back.motions[0].keyframes.at(-1).transform, 'none');
+    await flush();
+    map.redraw();
+    assert.deepEqual([tray.rows, movingOn(), block(map.tree, 'slot:db-query')], [[], {}, undefined]);
+    assert.deepEqual([back.parentNode, now.node.names.has('dragging')], [null, false]);
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    await freshTray();
+  }
+});
+
+test('a redraw during a client wire drag leaves the client where it is', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW, clients: CLIENTS });
+  try {
+    const map = dragMap({ id: 'client:cursor' });
+    map.press();
+    map.move(map.home.x + 40, map.home.y + 10);
+    map.redraw();
+    map.move(map.home.x + 60, map.home.y + 10);
+    assert.ok(!map.asked.some(([what]) => what === 'hold'));
+    map.up(1200, 10);
+    assert.ok(!map.asked.some(([what]) => what === 'hold' || what === 'homeIn'));
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null, clients: null });
+    await freshTray();
+  }
+});
+
 test('under reduced motion the ghost lands at once', async (t) => {
   await freshTray();
   t.mock.timers.enable({ apis: ['setTimeout'] });

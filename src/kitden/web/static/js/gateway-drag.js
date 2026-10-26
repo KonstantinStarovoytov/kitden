@@ -59,6 +59,8 @@ export function movingOn() {
 // The row of a dropped move is still being asked: in the tray without its part yet, while the tray
 // asks. After a refused preview it may have no part while nothing is asked.
 const asked = (key) => tray.phase === "asking" && tray.rows.some((row) => row.key === key && !row.part);
+// A dropped server or row (`onMap.moving`, `onMap.adding`) whose row the tray still asks.
+const stillAsked = (dropped) => Boolean(dropped && asked(dropped.key));
 
 // gateway.js drew the map in `view`, from `model` laid out as `layout`. A block off its place stays
 // where the map holds it: with the pointer, or on the slot while its move is asked. Once its row
@@ -108,14 +110,14 @@ export const DRAGS = {
 // a server in the Kitden gateway (the whole block: it has no grip) a drag onto a client, and a
 // client that can be connected (`drags`), whose connect is not in the tray, a wire to the gateway;
 // a client a plugin connects says why it cannot. A press while a change is written, while another
-// server's dropped move is asked, while another project is read, or on anything else, does
-// nothing here. `onStart()` runs when the drag starts, before the map holds the block: the page
-// lets go of its selection there.
+// server's dropped move is asked, while a dropped row of the Add panel is asked, while another
+// project is read, or on anything else, does nothing here. `onStart()` runs when the drag starts,
+// before the map holds the block: the page lets go of its selection there.
 export function pressGrip(event, onStart = () => {}) {
   if (event.button !== 0 || busy.change || pageWaits() || onMap.drag || !onMap.model) return;
   const node = event.target.closest("button.block");
   const block = node && onMap.model.blocks.find((b) => node.dataset.focus === `block:${b.id}`);
-  if (!block || (onMap.moving && onMap.moving.id !== block.id)) return;
+  if (!block || (onMap.moving && onMap.moving.id !== block.id) || stillAsked(onMap.adding)) return;
   if (block.grip) startDrag(event, block, "in", onStart);
   else if (leavesGateway(block)) startDrag(event, block, "out", onStart);
   else if (block.drags && kitdenGateway() && !inTray(keyFor(block.connect))) startDrag(event, block, "client", onStart);
@@ -124,9 +126,10 @@ export function pressGrip(event, onStart = () => {}) {
 
 // A press on a free row of the Add a server panel (gateway-add.js gives its server's `name` and
 // `kind`, the change it adds, `body`, and its `node`) starts a drag onto the map, while the map
-// shows. The same waits as a press on the map hold it back.
+// shows. The same waits as a press on the map hold it back, and so does any dropped server or row
+// still asked: its block or its slot waits on the map.
 export function pressRow(event, row) {
-  if (event.button !== 0 || busy.change || pageWaits() || onMap.drag || !onMap.model || !mapArea()) return;
+  if (event.button !== 0 || busy.change || pageWaits() || onMap.drag || stillAsked(onMap.moving) || stillAsked(onMap.adding) || !onMap.model || !mapArea()) return;
   startDrag(event, { id: `add:${row.name}`, ...row }, "add");
 }
 

@@ -451,7 +451,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     // A group's caption in words is as wide as its words, up to what style.css lets it have.
     if (item.w !== place.w && !(item.div && place.kind === "group")) node.style.width = `${place.w}px`;
     if (item.h !== place.h) node.style.height = `${place.h}px`;
-    Object.assign(item, { w: place.w, h: place.h, home: { x: place.x, y: place.y }, growsFrom: block.growsFrom || null, growMs: block.growMs || GROW_MS });
+    Object.assign(item, { kind: place.kind, w: place.w, h: place.h, home: { x: place.x, y: place.y }, growsFrom: block.growsFrom || null, growMs: block.growMs || GROW_MS });
   }
 
   // A block that is a caption now and a button later (or back) gets a new node in the same place.
@@ -767,7 +767,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
       if (was) {
         coming.set(place.id, { x: was.x, y: was.y, s: 1, o: 1 });
         replacing.set(was.id, place.id);
-        if (was.look.split(" ").includes("slot")) slotted.add(place.id);
+        if (was.kind === "slot") slotted.add(place.id);
       } else if (opener) {
         coming.set(place.id, sideOf(opener, place));
         pace = block.growMs || GROW_MS;
