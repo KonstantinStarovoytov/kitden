@@ -1081,6 +1081,12 @@ h2.sw-head { margin: 0; font-size: 11px; font-weight: 600; color: var(--ink-2); 
 .res.off .itile { opacity: 0.55; }
 .res.off .tx b { color: var(--ink-3); }
 .res.done .st { color: var(--diff-add); }
+/* A row dragged onto the map (add-notes §4): it stays in the list at .4 while a copy of it, the
+   ghost, follows the pointer over the page. Over the gateway the ghost takes the drop look (180 ms). */
+.res:not(.off) { user-select: none; }
+.res.dragging { opacity: 0.4; }
+.res.ghost { position: fixed; z-index: 60; margin: 0; overflow: hidden; pointer-events: none; box-shadow: var(--shadow); cursor: grabbing; }
+.res.ghost.over { border-color: var(--route); background: var(--route-soft); }
 .drawer .who h2 { margin: 0; }
 .drawer .skeleton.card { height: 120px; }
 .after { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }

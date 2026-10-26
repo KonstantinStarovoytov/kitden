@@ -9,6 +9,8 @@ delete globalThis.navigator;
 globalThis.requestAnimationFrame = () => 0;
 globalThis.MutationObserver = class { observe() {} };
 globalThis.addEventListener = () => {};
+// The window a drag listens to for a blur.
+globalThis.window = { addEventListener() {}, removeEventListener() {} };
 
 const walk = (root) => root.children.flatMap((n) => [n, ...walk(n)]);
 const motions = [];
@@ -49,6 +51,17 @@ function element(tagName) {
       return key ? walk(node).filter((n) => n.dataset[key[1]] !== undefined) : [];
     },
     getBoundingClientRect: () => ({ top: 0, bottom: 0, left: 0, right: 1345 }),
+    setPointerCapture() {},
+    // A copy of the node and what it holds, with no listeners.
+    cloneNode(deep) {
+      const copy = element(tagName);
+      copy.className = node.className;
+      Object.assign(copy.dataset, node.dataset);
+      for (const [name, value] of attributes) copy.setAttribute(name, value);
+      copy.textContent = node.textContent;
+      if (deep) copy.append(...node.children.map((n) => n.cloneNode(true)));
+      return copy;
+    },
     addEventListener(type, fn) { (node.listeners[type] ||= []).push(fn); },
     animate(keyframes, options) { motions.push({ node, keyframes, options }); return { finished: Promise.resolve(), cancel() {} }; },
     getAnimations: () => [],
@@ -60,12 +73,14 @@ for (const id of ['#main', '#drawer', '#scrim', '#topbar', '#content', '#dock'])
   pages[id] = element('DIV');
   pages[id].root = true;
 }
-const docKeys = [];
+// What the document hears, by type.
+const docHeard = {};
 globalThis.document = {
   hidden: false, activeElement: null, body: element('BODY'),
   createElement: (tag) => element(tag.toUpperCase()), createElementNS: (namespace, tag) => element(tag),
   querySelector: (selector) => pages[selector] ?? null, querySelectorAll: () => [], getElementById: () => null,
-  addEventListener(type, fn) { if (type === 'keydown') docKeys.push(fn); }, removeEventListener() {},
+  addEventListener(type, fn) { (docHeard[type] ||= []).push(fn); },
+  removeEventListener(type, fn) { docHeard[type] = (docHeard[type] || []).filter((f) => f !== fn); },
   documentElement: { classList: { add() {}, remove() {} }, style: { setProperty() {}, removeProperty() {} } },
 };
 
@@ -93,6 +108,7 @@ const { closePanel, initPanel, isPanelOpen, openPanel, panelState } = await impo
 const { reducedMotion } = await import('../../src/kitden/web/static/js/motion.js');
 const { state } = await import('../../src/kitden/web/static/js/store.js');
 const { cancelTray, tray } = await import('../../src/kitden/web/static/js/tray.js');
+const { placeMoved } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 state.view = 'gateway';
 initPanel();
 
@@ -116,7 +132,8 @@ const rowWords = (row) => [text(row.children[2].children[0]), row.children[2].ch
 const fire = (node, type, event = {}) => { for (const fn of node.listeners[type] || []) fn({ preventDefault() {}, stopPropagation() {}, target: node, ...event }); };
 // A press on a button() runs its work after a tick (dom.js).
 const press = async (node) => { fire(node, 'click'); await wait(); await wait(); };
-const pressKey = (key) => { for (const fn of docKeys) fn({ key, preventDefault() {}, metaKey: false, ctrlKey: false }); };
+const pressKey = (key) => { for (const fn of [...(docHeard.keydown || [])]) fn({ key, preventDefault() {}, stopImmediatePropagation() {}, metaKey: false, ctrlKey: false }); };
+const pointer = (type, x, y) => { for (const fn of [...(docHeard[type] || [])]) fn({ type, clientX: x, clientY: y }); };
 
 // "+ Add" beside the map's Servers caption, as map-view.js draws it.
 function addButton() {
@@ -275,6 +292,7 @@ test('a list with no server says so, and a failed read offers Try again', async 
   await wait(200);
   try {
     assert.deepEqual(find((n) => n.className === 'muted add-none').map((n) => [n.hidden, n.textContent]), [[false, 'No marketplace on this computer offers an MCP server.']]);
+    closePanel({ instant: true, focus: false });
     servers = null;
     await openAdd({ from: addButton() });
     await wait(200);
@@ -344,6 +362,96 @@ test('Enter and Space click a row', async () => {
     fire(row, 'keydown', { key: 'a' });
     await wait(10);
     assert.deepEqual(tray.rows, []);
+  } finally {
+    await done();
+  }
+});
+
+test('a held Enter clicks a row once', async () => {
+  await open();
+  try {
+    const row = rows()[2];
+    fire(row, 'keydown', { key: 'Enter' });
+    await wait(10);
+    // The key held down repeats: the row stays in the tray.
+    fire(row, 'keydown', { key: 'Enter', repeat: true });
+    await wait(10);
+    assert.deepEqual(tray.rows.map((r) => r.key), ['add:test-helper@demo/test-status']);
+    fire(row, 'keydown', { key: ' ' });
+    await wait(10);
+    fire(row, 'keydown', { key: ' ', repeat: true });
+    await wait(10);
+    assert.deepEqual(tray.rows, []);
+  } finally {
+    await done();
+  }
+});
+
+test('+ Add while the panel is open keeps it as it is and gives focus to the search', async () => {
+  const from = await open();
+  try {
+    search().value = 'db';
+    fire(search(), 'input');
+    await press(pill()[2]);
+    const [body, before] = [drawer.children[1], sent.length];
+    from.focus();
+    await openAdd({ from });
+    await wait(200);
+    // Nothing is read again: the same list, its search and its pill.
+    assert.deepEqual([drawer.children[1], sent.length, search().value], [body, before, 'db']);
+    assert.deepEqual(pill().map((b) => b.getAttribute('aria-pressed')), ['false', 'false', 'true']);
+    assert.deepEqual(shown().map((r) => rowWords(r)[0]), ['db-query']);
+    assert.equal(document.activeElement, search());
+    assert.deepEqual([from.className, from.getAttribute('aria-expanded')], ['btn small primary', 'true']);
+  } finally {
+    await done();
+  }
+});
+
+// The map as the drag engine sees it (gateway-drag.js placeMoved): shown, with no gateway to drop on.
+function mapShown() {
+  const area = element('DIV');
+  const box = element('DIV');
+  box.root = true;
+  box.append(area);
+  const view = { box, area, node: () => null, tip() {}, untip() {}, lightTarget() {}, unlightTarget() {}, glance() {} };
+  placeMoved({ view, model: { blocks: [], links: [] }, layout: { blocks: [], columns: [] } });
+}
+
+// A press on a row and a move of 10 px: whether a drag started, then the release far away.
+async function dragged(row) {
+  fire(row, 'pointerdown', { button: 0, pointerId: 1, clientX: 20, clientY: 20 });
+  pointer('pointermove', 30, 20);
+  const ghost = walk(document.body).find((n) => n.className.split(' ').includes('ghost'));
+  const started = [row.classList.contains('dragging'), Boolean(ghost)];
+  pointer('pointerup', 30, 20);
+  await wait(10);
+  return { started, ghost };
+}
+
+test('a greyed or previewed row does not drag', async () => {
+  await open();
+  mapShown();
+  try {
+    const [free, refused, remote, held] = rows();
+    // A free row drags: it fades and its ghost follows the pointer; let go anywhere, it comes back.
+    const { started, ghost } = await dragged(free);
+    assert.deepEqual(started, [true, true]);
+    assert.deepEqual([free.classList.contains('dragging'), ghost.parentNode], [false, null]);
+    assert.deepEqual(ghost.children.map((n) => n.className), free.children.map((n) => n.className));
+    assert.deepEqual(tray.rows, []);
+    // A greyed row (refused, in the gateway) and one in preview do not.
+    for (const row of [refused, held]) assert.deepEqual((await dragged(row)).started, [false, false]);
+    fire(remote, 'click');
+    await wait(10);
+    assert.ok(remote.classList.contains('on'));
+    assert.deepEqual((await dragged(remote)).started, [false, false]);
+    assert.deepEqual(tray.rows.map((r) => r.key), ['add:test-helper@demo/test-status']);
+    // Only the left button drags.
+    fire(free, 'pointerdown', { button: 2, pointerId: 1, clientX: 20, clientY: 20 });
+    pointer('pointermove', 40, 20);
+    assert.equal(free.classList.contains('dragging'), false);
+    pointer('pointerup', 40, 20);
   } finally {
     await done();
   }

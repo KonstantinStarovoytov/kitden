@@ -1,11 +1,11 @@
 // Gateway: the drags of the map (4.7, gateway-notes 6). One engine (`startDrag`) runs each of
 // them; a drop only adds a row to the tray. Today: a server from outside the gateway into it, a
-// server in the Kitden gateway onto a client, and a wire from a client that is not connected onto
-// the gateway.
+// server in the Kitden gateway onto a client, a wire from a client that is not connected onto
+// the gateway, and a row of the Add a server panel onto the map.
 import { el, pageWaits, reportError } from "./dom.js";
 import { foundClients } from "./gateway-details.js";
 import { linkKey } from "./map.js";
-import { CALM, shake } from "./motion.js";
+import { CALM, animateTo, shake } from "./motion.js";
 import { moveBody } from "./panel.js";
 import { CLIENT_NAMES } from "./parts.js";
 import { busy, current, data } from "./store.js";
@@ -32,18 +32,28 @@ const NEAR_CLIENT = { left: 24, right: 40, up: 16, down: 16 };
 const ON_GATEWAY = "Drop on the gateway";
 const NEAR_GATEWAY = { side: 24, up: 16, down: 16 };
 const MISS = { ms: 180, ease: CALM };
+// A row of the Add a server panel (add-notes §4): where the pointer opens the slot, in map points,
+// from 16 px left of the Gateway column to 194 px right of the Servers column (the mockup's 180 to
+// 760, with the columns at 196 and 396 to 566), and from 20 px over the map's top to 4 px over the
+// Outside caption. Its ghost flies onto the slot, or back onto its row.
+const ADD_ZONE = { left: 16, right: 194, top: 20, above: 4 };
+const ONTO_SLOT = { dur: 200, ease: CALM };
+const BACK_HOME = { dur: 180, ease: CALM };
 
 // The map as gateway.js drew it last, as it gives it (placeMoved): its view (map-view.js), the tree,
 // the layout and how to draw the map again in place (`redraw`). A drag on the map (`drag`), the
 // server whose move was dropped and is still being asked (`moving`, { id, name, key, at }: `key` is
-// its row's in the tray, `at` where it waits, or none: on its slot), and the block the map holds off
-// its place (`home`, its id).
-const onMap = { view: null, model: null, layout: null, redraw: () => {}, drag: null, moving: null, home: null };
+// its row's in the tray, `at` where it waits, or none: on its slot), the block the map holds off
+// its place (`home`, its id), and a dropped row of the Add panel whose row is still asked (`adding`,
+// { key, name, kind }).
+const onMap = { view: null, model: null, layout: null, redraw: () => {}, drag: null, moving: null, home: null, adding: null };
 
-// What a drag shows (gatewayTree's `drop`): the slot, while the block is over the gateway.
+// What a drag shows (gatewayTree's `drop`): the slot, while the block or the row is over the
+// gateway, and while a dropped row of the Add panel is asked.
 export function movingOn() {
-  const { drag } = onMap;
-  return drag && drag.open ? { drop: { name: drag.name, kind: drag.group } } : {};
+  const { drag, adding } = onMap;
+  if (drag && drag.open) return { drop: { name: drag.name, kind: drag.group } };
+  return adding && asked(adding.key) ? { drop: { name: adding.name, kind: adding.kind } } : {};
 }
 
 // The row of a dropped move is still being asked: in the tray without its part yet, while the tray
@@ -57,9 +67,11 @@ const asked = (key) => tray.phase === "asking" && tray.rows.some((row) => row.ke
 export function placeMoved({ view, model, layout, redraw = () => {} }) {
   Object.assign(onMap, { view, model, layout, redraw });
   if (onMap.moving && !asked(onMap.moving.key)) onMap.moving = null;
+  if (onMap.adding && !asked(onMap.adding.key)) onMap.adding = null;
   if (onMap.home && !model.blocks.some((b) => b.id === onMap.home)) onMap.home = null;
-  if (onMap.drag) follow();
-  else if (onMap.moving) park();
+  if (onMap.drag) {
+    if (!DRAGS[onMap.drag.kind].still) follow();
+  } else if (onMap.moving) park();
   else if (onMap.home) goHome();
 }
 
@@ -89,6 +101,7 @@ export const DRAGS = {
   in: { begin: beginIn, over: overIn, drop: dropIn },
   out: { begin: beginOut, over: overOut, drop: dropOut },
   client: { still: true, begin: beginClient, over: overClient, drop: dropClient },
+  add: { still: true, begin: beginAdd, over: overAdd, drop: dropAdd },
 };
 
 // A pointer goes down on the map. A server outside the gateway with a grip starts a drag into it,
@@ -107,6 +120,14 @@ export function pressGrip(event, onStart = () => {}) {
   else if (leavesGateway(block)) startDrag(event, block, "out", onStart);
   else if (block.drags && kitdenGateway() && !inTray(keyFor(block.connect))) startDrag(event, block, "client", onStart);
   else if (block.kind === "client" && block.viaPlugin) sayWhy(event, block);
+}
+
+// A press on a free row of the Add a server panel (gateway-add.js gives its server's `name` and
+// `kind`, the change it adds, `body`, and its `node`) starts a drag onto the map, while the map
+// shows. The same waits as a press on the map hold it back.
+export function pressRow(event, row) {
+  if (event.button !== 0 || busy.change || pageWaits() || onMap.drag || !onMap.model || !mapArea()) return;
+  startDrag(event, { id: `add:${row.name}`, ...row }, "add");
 }
 
 // The Kitden gateway's block on the map, or null (none, or a first run's slot).
@@ -163,10 +184,10 @@ function whyNot(name, client) {
 // A let go asks the drag; one it does not take, Escape or a lost pointer glides the block home in
 // 220 ms and leaves the tray as it was. A drag that ran swallows the click that ends it; a press
 // that moved less is a click. The page hears the pointer on the document too, so a redraw that
-// puts the map back on the page loses no move.
+// puts the map back on the page loses no move. A row of the Add panel brings its own `node`.
 export function startDrag(event, block, kind, onStart = () => {}) {
   const hooks = DRAGS[kind];
-  const node = event.target.closest("button.block");
+  const node = block.node || event.target.closest("button.block");
   try {
     node.setPointerCapture(event.pointerId);
   } catch {
@@ -185,7 +206,7 @@ export function startDrag(event, block, kind, onStart = () => {}) {
     if (starts) {
       if (Math.hypot(at.x - from.x, at.y - from.y) < DRAG_START) return;
       onStart();
-      onMap.drag = { id: block.id, name: block.name, block, grab, share, at, open: false };
+      onMap.drag = { kind, id: block.id, name: block.name, block, grab, share, at, open: false };
       document.documentElement.classList.add("grabbing");
     }
     onMap.drag.at = at;
@@ -471,6 +492,88 @@ function dropClient(drag, at) {
   view.unwire({ ms: 0 });
   addToTray(drag.block.connect).catch(reportError);
   return true;
+}
+
+// A row of the Add panel: it fades (.dragging) and a copy of it (the ghost, style.css `.res.ghost`)
+// follows the pointer on the page, over the panel and the dock too. The ghost is only a picture:
+// no focus, no role. The Outside caption's top is where the gateway's room ends.
+function beginAdd(drag) {
+  const { node, kind } = drag.block;
+  const box = node.getBoundingClientRect();
+  const ghost = node.cloneNode(true);
+  ghost.classList.add("ghost");
+  for (const name of ["role", "tabindex", "aria-disabled"]) ghost.removeAttribute(name);
+  delete ghost.dataset.focus;
+  ghost.setAttribute("aria-hidden", "true");
+  Object.assign(ghost.style, { left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px` });
+  document.body.append(ghost);
+  node.classList.add("dragging");
+  const caption = onMap.layout.blocks.find((b) => b.id === "group:outside");
+  const kitden = kitdenGateway();
+  Object.assign(drag, { ghost, box, line: caption ? caption.y : Infinity, group: kind === "local" ? "local" : "remote", gateway: kitden ? kitden.id : null });
+}
+
+// The ghost keeps the spot of the press under the pointer. With the pointer in the zone (inAddZone)
+// and not over Details or the dock, the ghost takes the drop look (`.over`), the Kitden gateway
+// lights and the slot opens in the row's own group, wherever the pointer is; off it, all three go.
+function overAdd(drag) {
+  const { ghost, box, grab } = drag;
+  ghost.style.transform = `translate(${drag.at.x - box.left - grab.x}px, ${drag.at.y - box.top - grab.y}px)`;
+  const point = covered(drag.at) ? null : pointOf(drag);
+  const open = Boolean(point && drag.gateway && inAddZone(onMap.layout, point, drag.line));
+  ghost.classList.toggle("over", open);
+  if (open === drag.open) return;
+  drag.open = open;
+  if (open) onMap.view.lightTarget(drag.gateway);
+  else onMap.view.unlightTarget();
+  onMap.redraw();
+}
+
+// Whether a map point is where a row of the Add panel opens the slot (ADD_ZONE), with `line` the
+// top of the Outside caption.
+function inAddZone(layout, point, line) {
+  const gateway = layout.columns.find((c) => c.id === "gateway");
+  const servers = layout.columns.find((c) => c.id === "servers");
+  if (!gateway || !servers) return false;
+  return point.x > gateway.x - ADD_ZONE.left && point.x < servers.x + servers.w + ADD_ZONE.right && point.y > -ADD_ZONE.top && point.y < line - ADD_ZONE.above;
+}
+
+// A drop while the slot is open adds the same row as a click on the row: the slot stays while it
+// is asked (movingOn), and the ghost flies onto it (200 ms CALM). Its answer turns the slot into the
+// preview block, on the same spot (gateway.js addPreview, `from`). Any other let go, or a row the
+// tray does not take, flies the ghost back onto its row (180 ms CALM) and leaves the tray as it was.
+function dropAdd(drag, at) {
+  const { body, name } = drag.block;
+  const key = keyFor(body);
+  if (drag.open && at) {
+    onMap.adding = { key, name, kind: drag.group };
+    addToTray(body).catch(reportError);
+    if (inTray(key)) {
+      const slot = onMap.layout.blocks.find((b) => b.id === `slot:${name}`);
+      flyGhost(drag, slot && pageBox(slot), ONTO_SLOT);
+      return true;
+    }
+    onMap.adding = null;
+  }
+  flyGhost(drag, null, BACK_HOME);
+  return false;
+}
+
+// A box of the map (x, y, w, h) on the page.
+function pageBox(place) {
+  const origin = mapArea().getBoundingClientRect();
+  return { left: origin.left + place.x, top: origin.top + place.y, width: place.w, height: place.h };
+}
+
+// The ghost flies from where it is onto `to` (a page box), or back onto its row, then goes, and the
+// row comes back to full strength. Under reduced motion, and on a hidden page, it lands at once.
+function flyGhost({ ghost, box, block }, to, { dur, ease }) {
+  const size = (b) => ({ width: `${b.width}px`, height: `${b.height}px` });
+  const end = to ? { transform: `translate(${to.left - box.left}px, ${to.top - box.top}px)`, ...size(to) } : { transform: "none", ...size(box) };
+  animateTo(ghost, [{ transform: ghost.style.transform || "none", ...size(box) }, end], { dur: document.hidden ? 0 : dur, ease, fill: "forwards" }).then(() => {
+    ghost.remove();
+    block.node.classList.remove("dragging");
+  });
 }
 
 // The pointer lets go at `point` (page coordinates), or Escape, a lost pointer or a blur (null). The tip, the

@@ -273,7 +273,8 @@ function boxOf({ x, y, w, h, s }) {
 // - drawIn(key, ms): a link grows from its start. node(idOrKey): a block's node or a link's path.
 // A new block that takes the place of one that goes (its `from`, that block's id) starts where that
 // one shows, whole, and glides to its place (260 ms OUT3); the one that goes leaves at once, its
-// links fade out (240 ms ease-out), and its focus goes to the new block. A new block that grows out
+// links fade out (240 ms ease-out), and its focus goes to the new block; one that takes a slot's
+// place has its links come in as between two blocks that stay. A new block that grows out
 // of another (its `growsFrom`) starts at .4 of its size, unseen, centred on that block's right side,
 // and grows to its place in 220 ms OUT3 (or its `growMs`) while the other blocks of that draw glide
 // as long; when it goes it shrinks back there in 180 ms IN3, and the others move as long as it grew.
@@ -350,6 +351,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
   let wired = null; // the wire of a drag, while one shows: { from, to, path }
   let coming = new Map(); // how the new blocks of the last draw arrive (arrivals), by id
   let replacing = new Map(); // a block that goes -> the new block that takes its place
+  let slotted = new Set(); // the new blocks that take a slot's place (a drop's): their links come in
 
   const canMove = () => D(MOVE_MS) > 0 && !document.hidden;
 
@@ -755,6 +757,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
   function arrivals(layout, byId, after) {
     coming = new Map();
     replacing = new Map();
+    slotted = new Set();
     let pace = MOVE_MS;
     for (const place of layout.blocks) {
       const block = byId.get(place.id);
@@ -764,6 +767,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
       if (was) {
         coming.set(place.id, { x: was.x, y: was.y, s: 1, o: 1 });
         replacing.set(was.id, place.id);
+        if (was.look.split(" ").includes("slot")) slotted.add(place.id);
       } else if (opener) {
         coming.set(place.id, sideOf(opener, place));
         pace = block.growMs || GROW_MS;
@@ -1015,7 +1019,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
         svg.insertBefore(item.path, layer);
         links.set(key, item);
         if (opened.has(link.to) && before.has(link.from) && !linkDashed(link)) drawsIn.push([key, start + D(delays[unfold.get(link.to)] + FADE_MS)]);
-        else if (linksMove && before.has(link.from) && before.has(link.to)) arrives.push(key);
+        else if (linksMove && before.has(link.from) && (before.has(link.to) || slotted.has(link.to))) arrives.push(key);
       }
       item.link = link;
       setLook(item, linkLook(link, shown), linksMove);

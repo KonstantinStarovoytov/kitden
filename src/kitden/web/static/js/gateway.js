@@ -587,11 +587,12 @@ function movesIn(view, kitden, rows, drop) {
 // (withKind): its preview block, for the end of that group of the Kitden gateway (`{ kind, block }`,
 // as movesIn gives them). It takes no outside server's place: it grows out of the gateway's right
 // side and shrinks back into it (ADD_GROW_MS), and focus on it goes to the gateway when it goes.
+// After a drop it takes the place of the drop's slot instead (`from`), where that one shows.
 function addPreview(kitden, row) {
   if (!kitden || !row.part || !KINDS.some(([kind]) => kind === row.kind)) return null;
   const name = addName(row.body.params.server);
   const gateway = `gateway:${kitden.id}`;
-  const block = { id: `preview:${name}`, column: "servers", kind: "preview", name, meta: "Preview", stateInMeta: true, state: "preview", icon: SERVER_ICONS[row.kind], lamp: "preview", ports: { left: true }, takeOut: IN_PREVIEW, row: row.key, backTo: gateway, growsFrom: gateway, growMs: ADD_GROW_MS };
+  const block = { id: `preview:${name}`, column: "servers", kind: "preview", name, meta: "Preview", stateInMeta: true, state: "preview", icon: SERVER_ICONS[row.kind], lamp: "preview", ports: { left: true }, takeOut: IN_PREVIEW, row: row.key, backTo: gateway, growsFrom: gateway, growMs: ADD_GROW_MS, from: `slot:${name}` };
   return { kind: row.kind, block };
 }
 

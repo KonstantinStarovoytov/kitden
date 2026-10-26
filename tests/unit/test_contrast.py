@@ -290,8 +290,14 @@ def test_the_add_panel_rows_are_readable_in_both_themes():
     assert ".res .tx small { color: var(--ink-3); font-size: 11px; }" in CSS
     assert ".res .st { flex: none; color: var(--ink-4); font-size: 11px; }" in CSS
     assert ".res.done .st { color: var(--diff-add); }" in CSS
-    # No rule draws a whole row, or its words, fainter.
+    # No rule draws a whole row, or its words, fainter, but a row while it is dragged: its ghost,
+    # at full strength, carries its words then.
     assert not re.search(r"\.res(\.off)?(:hover)?\s*(,[^{]*)?\{[^}]*opacity", CSS)
+    assert [m.group(0) for m in re.finditer(r"\.res[^{]*\{[^}]*opacity[^}]*\}", CSS)] == [
+        ".res.off .itile { opacity: 0.55; }",
+        ".res.dragging { opacity: 0.4; }",
+    ]
+    assert ".res.ghost.over { border-color: var(--route); background: var(--route-soft); }" in CSS
     for theme in (LIGHT, DARK, {**LIGHT, **DARK_AUTO}):
         for ink in ("--ink", "--ink-3", "--route"):
             assert contrast(theme[ink], theme["--route-soft"]) >= 4.5, ink

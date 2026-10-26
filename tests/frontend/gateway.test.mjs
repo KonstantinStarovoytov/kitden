@@ -11,12 +11,12 @@ globalThis.window = {
   removeEventListener: (type, fn) => { windowHeard[type] = (windowHeard[type] || []).filter((f) => f !== fn); },
 };
 const { GATEWAY_COLUMNS, afterPress, besideBy, bringBeside, cancelFocusFor, clickLink, contentWidth, findRows, focusBeside, gatewayTree, glanceFor, heldServer, kitdenLinks, letGoCloses, linkRemoval, linkTip, linksWait, listRows, litFor, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, serverCount, stillSelected } = await import('../../src/kitden/web/static/js/gateway.js');
-const { DRAGS, dropBody, movingOn, pointOf, pressGrip, placeMoved, startDrag } = await import('../../src/kitden/web/static/js/gateway-drag.js');
+const { DRAGS, dropBody, movingOn, pointOf, pressGrip, pressRow, placeMoved, startDrag } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
 const { offersSwitch, ruleBody } = await import('../../src/kitden/web/static/js/gateway-details.js');
 const { blockLabel, findChip, findIn, isNarrow, keepOpen, layoutTree, linkClass, pagesWith, pressOpen, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
 const { kitdenClients } = await import('../../src/kitden/web/static/js/parts.js');
-const { CALM } = await import('../../src/kitden/web/static/js/motion.js');
+const { CALM, reducedMotion } = await import('../../src/kitden/web/static/js/motion.js');
 const { data, setBusy, state, viewMode } = await import('../../src/kitden/web/static/js/store.js');
 const { addToTray, applyTray, cancelTray, endApplied, keyFor, takeOut, tray } = await import('../../src/kitden/web/static/js/tray.js');
 
@@ -765,7 +765,8 @@ test('an add row draws a preview block in its own group with a dashed link', () 
   // It comes at the end of its group, and grows out of the gateway (260 ms) and back into it.
   const ids = tree.blocks.filter((b) => b.column === 'servers').map((b) => b.id);
   assert.deepEqual(ids.slice(0, 6), ['group:kitden:remote', 'held:kitden:tracker', 'preview:test-status', 'group:kitden:local', 'held:kitden:files', 'preview:db-query']);
-  assert.deepEqual([status.growsFrom, status.growMs, status.from], ['gateway:kitden', 260, undefined]);
+  // A drop's slot, where one shows, is where it stands instead (map-view.js `from`).
+  assert.deepEqual([status.growsFrom, status.growMs, status.from], ['gateway:kitden', 260, 'slot:test-status']);
   // The dashed preview link from the gateway names its row; the gateway does not count it.
   assert.ok(keys(tree).includes('gateway:kitden>preview:test-status preview'));
   assert.equal(linkOf(tree, 'gateway:kitden>preview:test-status').row, rows[0].key);
@@ -1364,6 +1365,8 @@ function dragMap({ covers = {}, id = 'outside:move:github', view: shown = MEDIUM
     documentElement: { classList: { add() {}, remove() {} } },
     querySelector: (selector) => (covers[selector] ? { getBoundingClientRect: () => covers[selector] } : null),
     createElement: (tag) => ({ tag }),
+    body: { append: (n) => { n.parentNode = 'body'; } },
+    hidden: false,
   };
   const node = { dataset: { focus: `block:${id}` }, getBoundingClientRect: () => ({ left: 0, top: 0 }), setPointerCapture: (pointer) => captured.push(pointer), querySelector: () => null, querySelectorAll: () => [], setAttribute() {}, removeAttribute() {}, append() {} };
   const view = {
@@ -1562,6 +1565,316 @@ test('a still drag leaves its block where it is; its tip can go by the pointer',
     assert.ok(!map.asked.some(([what]) => what === 'homeIn'));
   } finally {
     delete DRAGS.still;
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    await freshTray();
+  }
+});
+
+// A stand-in node of the Add panel: classes, attributes, a style, and the motions asked of it.
+function fakeNode({ classes = [], attrs = {}, dataset = {} } = {}) {
+  const names = new Set(classes);
+  const node = {
+    names, style: {}, dataset: { ...dataset }, attrs: new Map(Object.entries(attrs)), motions: [], parentNode: null,
+    classList: {
+      add: (name) => names.add(name),
+      remove: (name) => names.delete(name),
+      contains: (name) => names.has(name),
+      toggle: (name, on = !names.has(name)) => { if (on) names.add(name); else names.delete(name); return on; },
+    },
+    setAttribute: (name, value) => node.attrs.set(name, String(value)),
+    removeAttribute: (name) => node.attrs.delete(name),
+    getAttribute: (name) => (node.attrs.has(name) ? node.attrs.get(name) : null),
+    animate(keyframes, options) { node.motions.push({ keyframes, options }); return { finished: Promise.resolve() }; },
+    remove() { node.parentNode = null; },
+  };
+  return node;
+}
+
+// A free row of the Add panel at `box` (a window rect), as gateway-add.js hands it to pressRow.
+function panelRow({ name = 'db-query', kind = 'local', box = { left: 1000, top: 200, width: 300, height: 52 } } = {}) {
+  const id = `db-tools@demo/${name}`;
+  const node = fakeNode({ classes: ['res'], attrs: { role: 'button', tabindex: '0' }, dataset: { focus: `add-row:${id}` } });
+  const captured = [];
+  Object.assign(node, {
+    captured,
+    ghosts: [],
+    getBoundingClientRect: () => ({ ...box, right: box.left + box.width, bottom: box.top + box.height }),
+    setPointerCapture: (pointer) => captured.push(pointer),
+    cloneNode(deep) {
+      assert.equal(deep, true);
+      const ghost = fakeNode({ classes: [...node.names], attrs: Object.fromEntries(node.attrs), dataset: node.dataset });
+      node.ghosts.push(ghost);
+      return ghost;
+    },
+  });
+  const body = { action: 'gateway.add', targets: [], params: { server: id } };
+  const start = { x: box.left + 20, y: box.top + 10 };
+  return { id, name, kind, body, node, start, press: () => pressRow({ button: 0, pointerId: 9, target: node, clientX: start.x, clientY: start.y }, { name, kind, body, node }) };
+}
+
+// A row of the Add panel dragged over the map (dragMap): the window point at the middle of a block.
+const middle = (map, which) => [map.at(which).x + map.at(which).w / 2, map.at(which).y + map.at(which).h / 2];
+
+test('a drag starts after 5 px, the row fades and a ghost follows', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  try {
+    const map = dragMap();
+    const row = panelRow();
+    row.press();
+    // The row takes the pointer at the press.
+    assert.deepEqual(row.node.captured, [9]);
+    map.move(row.start.x + 3, row.start.y + 4 - 0.01);
+    assert.deepEqual([row.node.ghosts, row.node.names.has('dragging')], [[], false], 'under 5 px nothing starts');
+    map.move(row.start.x + 3, row.start.y + 4);
+    assert.ok(row.node.names.has('dragging'), 'the row fades (.dragging, .4 in style.css)');
+    const [ghost] = row.node.ghosts;
+    // The ghost is a copy of the row on the page, at the row's place and size, with no focus and
+    // no role: it is only a picture of the row.
+    assert.equal(ghost.parentNode, 'body');
+    assert.deepEqual([...ghost.names].sort(), ['ghost', 'res']);
+    assert.deepEqual([ghost.style.left, ghost.style.top, ghost.style.width, ghost.style.height], ['1000px', '200px', '300px', '52px']);
+    assert.deepEqual([ghost.getAttribute('aria-hidden'), ghost.getAttribute('tabindex'), ghost.getAttribute('role'), ghost.dataset.focus], ['true', null, null, undefined]);
+    assert.equal(ghost.style.transform, 'translate(3px, 4px)');
+    map.move(row.start.x - 200, row.start.y + 50);
+    assert.equal(ghost.style.transform, 'translate(-200px, 50px)');
+    // Over nothing yet: no light and no slot.
+    assert.ok(!ghost.names.has('over'));
+    assert.deepEqual(movingOn(), {});
+    map.up(row.start.x - 200, row.start.y + 50);
+    // The click that ends it adds nothing.
+    const click = { prevented: false, stopped: false, preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; } };
+    for (const fn of map.heard.click) fn(click);
+    assert.deepEqual([click.prevented, click.stopped], [true, true]);
+    await flush();
+    assert.equal(tray.rows.length, 0);
+    // A press that moves under 5 px is a click: no ghost, and its click is not swallowed.
+    map.heard.click = [];
+    const again = panelRow();
+    again.press();
+    map.move(again.start.x + 2, again.start.y + 2);
+    map.up(again.start.x + 2, again.start.y + 2);
+    assert.deepEqual([again.node.ghosts, map.heard.click], [[], []]);
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    await freshTray();
+  }
+});
+
+test("in the zone the gateway lights and the slot opens in the row's group", async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  try {
+    const map = dragMap();
+    const row = panelRow();
+    row.press();
+    map.move(row.start.x - 20, row.start.y);
+    const [ghost] = row.node.ghosts;
+    // Over the gateway: the ghost takes the drop look, the gateway lights, and the slot opens in
+    // the row's own group (Local), wherever the pointer is in the zone.
+    map.move(...middle(map, 'gateway:kitden'));
+    assert.ok(ghost.names.has('over'));
+    assert.deepEqual(map.asked.filter(([what]) => what === 'light'), [['light', 'gateway:kitden']]);
+    assert.deepEqual(movingOn(), { drop: { name: 'db-query', kind: 'local' } });
+    assert.deepEqual([block(map.tree, 'slot:db-query').parent, block(map.tree, 'slot:db-query').growsFrom], ['group:kitden:local', 'gateway:kitden']);
+    map.move(...middle(map, 'held:kitden:tracker'));
+    assert.equal(block(map.tree, 'slot:db-query').parent, 'group:kitden:local');
+    // Under the Outside caption the zone ends: the slot closes and the gateway lets go.
+    const caption = map.at('group:outside');
+    map.move(caption.x + 10, caption.y + 10);
+    assert.deepEqual([movingOn(), map.asked.at(-1), ghost.names.has('over')], [{}, ['unlight'], false]);
+    // From 16 px left of the Gateway column to 194 px right of the Servers column (the mockup's
+    // 180 to 760), and from 20 px over the map's top.
+    const [gateway, servers] = ['gateway', 'servers'].map((id) => map.layout.columns.find((c) => c.id === id));
+    const y = map.at('gateway:kitden').y;
+    for (const [x, open] of [[gateway.x - 16, false], [gateway.x - 15, true], [servers.x + servers.w + 193, true], [servers.x + servers.w + 194, false]]) {
+      map.move(x, y);
+      assert.equal(Boolean(movingOn().drop), open, `x ${x}`);
+    }
+    for (const [top, open] of [[-20, false], [-19, true]]) {
+      map.move(servers.x, top);
+      assert.equal(Boolean(movingOn().drop), open, `y ${top}`);
+    }
+    map.up(1200, 10);
+    await flush();
+    // A remote row opens its slot in Remote.
+    const remote = panelRow({ name: 'test-status', kind: 'remote' });
+    remote.press();
+    map.move(...middle(map, 'held:kitden:files'));
+    assert.deepEqual(movingOn(), { drop: { name: 'test-status', kind: 'remote' } });
+    assert.equal(block(map.tree, 'slot:test-status').parent, 'group:kitden:remote');
+    map.up(1200, 10);
+    await flush();
+    assert.equal(tray.rows.length, 0);
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    await freshTray();
+  }
+});
+
+test('a drop in the zone adds one row and the block stands in the slot', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  try {
+    let answer;
+    queue(PREVIEW, (sent) => new Promise((resolve) => { answer = () => resolve(batch('c1')(sent)); }));
+    const map = dragMap();
+    const row = panelRow();
+    row.press();
+    map.move(...middle(map, 'gateway:kitden'));
+    const [ghost] = row.node.ghosts;
+    const slot = map.at('slot:db-query');
+    map.up(...middle(map, 'gateway:kitden'));
+    // One row, the same as a click on the row.
+    assert.deepEqual(tray.rows.map((r) => [r.key, r.body]), [['add:db-tools@demo/db-query', row.body]]);
+    // The ghost flies from where it is onto the slot and takes its size, 200 ms CALM.
+    const [flight] = ghost.motions;
+    const from = { transform: ghost.style.transform, width: '300px', height: '52px' };
+    assert.deepEqual(flight.keyframes, [from, { transform: `translate(${slot.x - 1000}px, ${slot.y - 200}px)`, width: `${slot.w}px`, height: `${slot.h}px` }]);
+    assert.deepEqual([flight.options.duration, flight.options.easing, flight.options.fill], [200, CALM, 'forwards']);
+    // While the row is asked, the slot stays where the ghost landed; the gateway lets go.
+    map.redraw();
+    assert.deepEqual(movingOn(), { drop: { name: 'db-query', kind: 'local' } });
+    assert.ok(block(map.tree, 'slot:db-query'));
+    assert.deepEqual(map.asked.filter(([what]) => what === 'light' || what === 'unlight').at(-1), ['unlight']);
+    // Then the ghost goes and the row is back at full strength.
+    await flush();
+    assert.deepEqual([ghost.parentNode, row.node.names.has('dragging')], [null, false]);
+    // Once the row answers, the slot goes and the preview block takes its place there (map-view.js
+    // `from`), not grown out of the gateway as after a click.
+    answer();
+    await flush();
+    assert.ok(tray.rows[0].part);
+    map.redraw();
+    assert.deepEqual(movingOn(), {});
+    const answered = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: rowsOnMap(tray).map((r) => ({ ...r, kind: 'local' })) });
+    assert.deepEqual([block(answered, 'preview:db-query').from, block(answered, 'preview:db-query').parent], ['slot:db-query', 'group:kitden:local']);
+    assert.ok(!block(answered, 'slot:db-query'));
+    assert.equal(posted().filter((url) => url === PREVIEW).length, 1);
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    await freshTray();
+  }
+});
+
+// Review Focus
+test('a drop over the panel, over the dock or on nothing leaves the tray and the map as they were', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  try {
+    const probe = dragMap();
+    const [x, y] = middle(probe, 'gateway:kitden');
+    const over = { left: x - 50, top: y - 50, right: x + 50, bottom: y + 50, width: 100, height: 100 };
+    const cases = [
+      ['over the panel', { '#drawer.open': over }, [x, y]],
+      ['over the dock', { '#dock': over }, [x, y]],
+      ['on nothing', {}, [1200, 10]],
+      ['on its own row', {}, [1010, 210]],
+    ];
+    for (const [name, covers, [dropX, dropY]] of cases) {
+      const map = dragMap({ covers });
+      const before = map.tree;
+      const row = panelRow();
+      row.press();
+      map.move(row.start.x - 30, row.start.y);
+      map.move(dropX, dropY);
+      const [ghost] = row.node.ghosts;
+      // Over the panel or the dock the gateway never lights and no slot opens.
+      assert.ok(!ghost.names.has('over'), name);
+      assert.ok(!map.asked.some(([what]) => what === 'light'), name);
+      map.up(dropX, dropY);
+      await flush();
+      assert.deepEqual([tray.rows, posted()], [[], []], name);
+      assert.deepEqual(movingOn(), {}, name);
+      map.redraw();
+      assert.deepEqual(map.tree, before, name);
+      // The ghost flies back onto its row, 180 ms CALM, and goes; the row is at full strength.
+      const [flight] = ghost.motions;
+      assert.deepEqual(flight.keyframes.at(-1), { transform: 'none', width: '300px', height: '52px' }, name);
+      assert.deepEqual([flight.options.duration, flight.options.easing], [180, CALM], name);
+      assert.deepEqual([ghost.parentNode, row.node.names.has('dragging')], [null, false], name);
+    }
+    // A drop in the zone that closed again over the panel is a miss too.
+    const map = dragMap({ covers: { '#drawer.open': { left: 1100, top: 0, right: 1400, bottom: 900, width: 300, height: 900 } } });
+    const row = panelRow();
+    row.press();
+    map.move(x, y);
+    assert.ok(movingOn().drop);
+    map.move(1200, 300);
+    map.up(1200, 300);
+    await flush();
+    assert.deepEqual([tray.rows, movingOn(), row.node.names.has('dragging')], [[], {}, false]);
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    await freshTray();
+  }
+});
+
+test('Escape cancels a drag', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  try {
+    const map = dragMap();
+    const row = panelRow();
+    row.press();
+    map.move(...middle(map, 'gateway:kitden'));
+    const [ghost] = row.node.ghosts;
+    const escape = { key: 'Escape', preventDefault() {}, stopImmediatePropagation() { this.stopped = true; } };
+    for (const fn of map.heard.keydown) fn(escape);
+    // Before the panel or the map hear it: the panel stays open.
+    assert.ok(escape.stopped);
+    assert.deepEqual([movingOn(), map.asked.filter(([what]) => what === 'light' || what === 'unlight').at(-1)], [{}, ['unlight']]);
+    assert.equal(ghost.motions[0].keyframes.at(-1).transform, 'none');
+    await flush();
+    assert.deepEqual([tray.rows, ghost.parentNode, row.node.names.has('dragging')], [[], null, false]);
+    // The release later adds nothing either.
+    for (const fn of [...(map.heard.pointerup || [])]) fn({ type: 'pointerup', clientX: 0, clientY: 0 });
+    const click = { prevented: false, preventDefault() { this.prevented = true; }, stopPropagation() {} };
+    for (const fn of map.heard.click || []) fn(click);
+    assert.ok(click.prevented);
+    // A lost pointer is a miss too.
+    const lost = panelRow();
+    lost.press();
+    map.move(...middle(map, 'gateway:kitden'));
+    for (const fn of [...(map.heard.pointercancel || [])]) fn({ type: 'pointercancel', clientX: 0, clientY: 0 });
+    await flush();
+    assert.deepEqual([tray.rows, movingOn(), lost.node.names.has('dragging'), lost.node.ghosts[0].parentNode], [[], {}, false, null]);
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    await freshTray();
+  }
+});
+
+test('under reduced motion the ghost lands at once', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  reducedMotion.matches = true;
+  try {
+    const map = dragMap();
+    for (const [x, y] of [middle(map, 'gateway:kitden'), [1200, 10]]) {
+      const row = panelRow();
+      row.press();
+      map.move(x, y);
+      const [ghost] = row.node.ghosts;
+      map.up(x, y);
+      await flush();
+      assert.deepEqual([ghost.motions, ghost.parentNode, row.node.names.has('dragging')], [[], null, false]);
+      await cancelTray();
+    }
+  } finally {
+    reducedMotion.matches = false;
     delete globalThis.document;
     Object.assign(data, { gateway: null });
     await freshTray();

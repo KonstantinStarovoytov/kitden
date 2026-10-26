@@ -1,12 +1,14 @@
 // The Add a server panel on the Gateway (docs/mockup/add-notes.md §1–§3, §8): the MCP servers that
 // the marketplaces on this computer offer, one group per marketplace, with a search and an
-// All · Remote · Local pill. A click on a row only adds its change to the tray (tray.js); nothing
-// is written before the tray's Apply. The panel shows no path, address or command.
+// All · Remote · Local pill. A click on a row, or a drag of it onto the map (gateway-drag.js), only
+// adds its change to the tray (tray.js); nothing is written before the tray's Apply. The panel
+// shows no path, address or command.
 import { getJson } from "./api.js";
 import { $, button, el, icon, reportError, withFocusKey } from "./dom.js";
 import { KIND, SERVER_ICONS } from "./gateway-details.js";
+import { pressRow } from "./gateway-drag.js";
 import { animateTo, glide } from "./motion.js";
-import { followTray, header, loadPanel, openPanel, panelState, whenGone, whenIn } from "./panel.js";
+import { followTray, header, isPanelOpen, loadPanel, openPanel, panelState, whenGone, whenIn } from "./panel.js";
 import { addToTray, inTray, keyFor, onTray, takeOut } from "./tray.js";
 
 export const ADD_TITLE = "Add a server";
@@ -45,8 +47,9 @@ function learn(rows) {
     if (!row.held) added.delete(row.id);
   }
 }
-// The list the open panel shows (rowList), else null.
+// The list the open panel shows (rowList) and its search, else null.
 let shown = null;
+let searchBox = null;
 
 // The change a row adds to the tray.
 const addBody = (row) => ({ action: "gateway.add", targets: [], params: { server: row.id } });
@@ -92,9 +95,14 @@ async function readServers() {
 
 // Open the panel beside the map: its skeleton, then the list read from the marketplaces. `from` is
 // the button that gets focus back when it closes (the map's "+ Add"); it looks pressed until then.
-// Focus goes to the search.
+// Focus goes to the search. Opened again while it shows its list, it stays as it is (its search and
+// its pill too) and focus goes to the search.
 let opening = 0;
 export async function openAdd({ from = mapAddButton() } = {}) {
+  if (isPanelOpen() && panelState.current && panelState.current.type === "add" && shown && shown.node.isConnected) {
+    searchBox.focus();
+    return;
+  }
   const turn = ++opening;
   if (from) from.focus({ preventScroll: true });
   const mark = loadPanel(KIND.add);
@@ -109,6 +117,7 @@ export async function openAdd({ from = mapAddButton() } = {}) {
   panelState.current = { type: "add" };
   const parts = addParts(rows, () => openAdd({ from }));
   shown = parts.list;
+  searchBox = parts.focus;
   openPanel(parts.nodes);
   showPressed(from, true);
   whenGone(parts.nodes[0], () => showPressed(from, false));
@@ -229,7 +238,9 @@ function rowList(rows) {
 
 // One row: a grip, the server's icon on a tile, its name and small line, and its status. It follows
 // the tray (details.js followTray). A click, Enter or Space adds its change, or takes it out
-// while it waits. "Added" slides in from 6 px to the right (280 ms CALM) when a row turns to it.
+// while it waits; a key held down does it once. A press on a free row that moves 5 px drags it onto
+// the map instead (gateway-drag.js pressRow). "Added" slides in from 6 px to the right (280 ms CALM)
+// when a row turns to it.
 // Gives `{ row, node, paint }`: `row` is what the last read said of it.
 function rowNode(row) {
   const item = { row, node: null, paint: null };
@@ -272,7 +283,11 @@ function rowNode(row) {
   node.addEventListener("keydown", (event) => {
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
-    press();
+    if (!event.repeat) press();
+  });
+  node.addEventListener("pointerdown", (event) => {
+    if (addRowWords(item.row, { added }).off || inTray(key)) return;
+    pressRow(event, { name: addName(item.row.id), kind: item.row.kind, body: addBody(item.row), node });
   });
   return item;
 }

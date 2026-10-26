@@ -427,6 +427,28 @@ test('a block that takes the place of one that goes starts where that one shows 
 // TREE with a slot `g1` that grows out of the client c1, in column b after s1.
 const withSlot = () => ({ ...TREE, blocks: [...TREE.blocks.slice(0, 2), { id: 'g1', column: 'b', kind: 'slot', name: 'Drop to add', state: 'preview', growsFrom: 'c1' }, ...TREE.blocks.slice(2)] });
 
+test("a block that takes a slot's place stands where the slot is, and its dashed link fades in over 300 ms", async () => {
+  const v = view();
+  const slotted = { ...withSlot(), links: [...TREE.links, { from: 'c1', to: 'g1', kind: 'preview' }] };
+  const open = layoutTree(slotted, { open: new Set(), narrow: false });
+  await v.draw(slotted, open, { motion: 'none' });
+  const at = place(open, 'g1');
+  // The slot turns into the preview block p1 (a drop's), which belongs where the slot is.
+  const turned = { ...slotted, blocks: slotted.blocks.map((b) => (b.id === 'g1' ? { id: 'p1', column: 'b', kind: 'preview', name: 'db-query', state: 'preview', from: 'g1', growsFrom: 'c1' } : b)), links: [...TREE.links, { from: 'c1', to: 'p1', kind: 'preview' }] };
+  const layout = layoutTree(turned, { open: new Set(), narrow: false });
+  v.draw(turned, layout, {});
+  assert.equal(v.node('g1'), null);
+  assert.deepEqual([pos(v.node('p1')), v.node('p1').style.opacity], [{ x: at.x, y: at.y, s: 1 }, '']);
+  tick(260); assert.deepEqual(pos(v.node('p1')), { x: at.x, y: at.y, s: 1 });
+  const fade = v.node('c1>p1').animations[0];
+  assert.deepEqual([fade.keyframes, fade.options.duration, fade.options.easing], [[{ opacity: 0 }, { opacity: 1 }], 300, CALM]);
+  // A block that takes the place of one that is no slot brings its links along at once.
+  await v.draw(TREE, lay(), { motion: 'none' });
+  const moved = { ...TREE, blocks: [...TREE.blocks.filter((b) => b.id !== 's2'), { id: 'p2', column: 'b', kind: 'preview', name: 'files', state: 'preview', from: 's2' }], links: [...TREE.links.filter((l) => l.to !== 's2'), { from: 'c1', to: 'p2', kind: 'preview' }] };
+  v.draw(moved, layoutTree(moved, { open: new Set(), narrow: false }), {});
+  assert.deepEqual(v.node('c1>p2').animations, []);
+});
+
 test('a block that grows out of another starts small on its right side and grows in 220 ms OUT3; the rest glide 220 too', async () => {
   const v = view();
   const plain = layoutTree(TREE, { open: new Set(), narrow: false });
