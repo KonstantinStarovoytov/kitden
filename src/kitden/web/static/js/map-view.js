@@ -381,6 +381,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHove
   let coming = new Map(); // how the new blocks of the last draw arrive (arrivals), by id
   let replacing = new Map(); // a block that goes -> the new block that takes its place
   let slotted = new Set(); // the new blocks that take a slot's place (a drop's): their links come in
+  let tabPoint = null; // the point a tab's blocks grow from and shrink to, in this draw (`layout.swap`)
 
   const canMove = () => D(MOVE_MS) > 0 && !document.hidden;
 
@@ -483,9 +484,10 @@ export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHove
   // A block's classes: its look from the last draw, `.lit` on the lit path, `.dragging` while it is
   // held or glides back, `.pressed` while the pointer that holds it is down, `.drop` while it is the
   // drop target, `.covered` while a held block takes its spot, and `.leaving` while it leaves the map, except a child of a fold, which only
-  // shrinks back into its opener. A block that leaves is no Tab stop while it goes.
+  // shrinks back into its opener, and a block of another tab (`tabPoint`). A block that leaves is no
+  // Tab stop while it goes.
   function paint(item) {
-    const classes = [...item.look.split(" "), item.lit && "lit", (item.held || item.back) && "dragging", item.pressed && "pressed", item.id === target && "drop", item.covered && "covered", item.leaving && !item.folds && "leaving"];
+    const classes = [...item.look.split(" "), item.lit && "lit", (item.held || item.back) && "dragging", item.pressed && "pressed", item.id === target && "drop", item.covered && "covered", item.leaving && !item.folds && !tabPoint && "leaving"];
     const look = [...new Set(classes.filter(Boolean))].join(" ");
     if (item.node.className !== look) item.node.className = look;
     if (item.leaving) item.node.setAttribute("tabindex", "-1");
@@ -855,13 +857,19 @@ export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHove
   // goes (`from`, kept in `replacing`) starts where that one shows, whole; one that grows out of
   // another block (`growsFrom`) starts small on that block's right side, unseen. It gives how long
   // the blocks of the draw move: as long as a block grows or shrinks back (GROW_MS or its `growMs`),
-  // else MOVE_MS.
+  // else MOVE_MS. A layout with a `swap` point is another tab of the page: each new block grows
+  // from there in its turn (swapIn).
   function arrivals(layout, byId, after) {
     coming = new Map();
     replacing = new Map();
     slotted = new Set();
+    tabPoint = layout.swap || null;
     let pace = MOVE_MS;
     for (const place of layout.blocks) {
+      if (tabPoint && !blocks.has(place.id)) {
+        coming.set(place.id, swapIn(coming.size));
+        continue;
+      }
       const block = byId.get(place.id);
       if (!block || blocks.has(place.id)) continue;
       const was = block.from && !after.has(block.from) ? blocks.get(block.from) : null;
@@ -878,6 +886,23 @@ export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHove
     for (const item of blocks.values()) if (item.growsFrom && !after.has(item.id) && !item.leaving) pace = item.growMs;
     return pace;
   }
+
+  // Another tab (library-notes §6): a new block starts small and unseen at the swap point, and grows
+  // to its place in 220 ms OUT3, the `turn`th 15 ms after the first (comeIn); one that goes shrinks
+  // to the swap point's x at its own y in 160 ms IN3 (leaveTo, goneMs). The blocks that stay move as
+  // in any draw.
+  const swapIn = (turn) => ({ x: tabPoint.x, y: tabPoint.y, s: GROW_SCALE, o: 0, turn });
+
+  // How a block moves to its place in this draw: in its turn, as a new block of another tab grows,
+  // else in `pace` with the others.
+  function comeIn(id, pace, start) {
+    const turn = coming.get(id)?.turn;
+    return turn === undefined ? { dur: D(pace), ease: OUT3, start } : { dur: D(GROW_MS), ease: OUT3, start: start + D(turn * GROW_STEP) };
+  }
+
+  // How long a block takes to go: a child of a fold that grew, or a block of another tab, folds
+  // back fast; any other goes in GO_MS.
+  const goneMs = (item) => (tabPoint || (item.grows && item.folds) ? FOLD_BACK_MS : GO_MS);
 
   // A block of `size` small and unseen, centred on the right side of `opener` (where it grows from).
   function sideOf(opener, size) {
@@ -907,6 +932,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHove
   // Where a block that goes moves to: a child of a fold (its `opener`) shrinks back into the opener's
   // right side, a block that grew out of another shrinks back into it, anything else fades in place.
   function leaveTo(item, opener) {
+    if (tabPoint) return { x: tabPoint.x, y: item.y, s: GROW_SCALE, o: 0 };
     if (opener) return intoOpener(opener, opener, item);
     const grew = item.growsFrom && blocks.get(item.growsFrom);
     return grew ? sideOf(grew, item) : { x: item.x, y: item.y, s: item.s, o: 0 };
@@ -1112,7 +1138,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHove
         if (unfoldIn(item, place, end, { start, at: unfold.get(place.id), delays })) opened.add(place.id);
       } else {
         if (fresh) put(item, coming.get(place.id) || { ...end, o: 0 });
-        go(item, end, { dur: D(pace), ease: OUT3, start });
+        go(item, end, comeIn(place.id, pace, start));
       }
     }
 
@@ -1127,7 +1153,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHove
         continue;
       }
       const to = leaveTo(item, plan.fold.includes(id) ? after.get(foldsInto(before.get(id))) : null);
-      go(item, to, { dur: D(item.grows && item.folds ? FOLD_BACK_MS : GO_MS), ease: IN3, start, then: drop });
+      go(item, to, { dur: D(goneMs(item)), ease: IN3, start, then: drop });
     }
 
     const drawsIn = [];

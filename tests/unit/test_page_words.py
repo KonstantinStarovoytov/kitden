@@ -2917,3 +2917,54 @@ def test_a_library_link_x_removes_or_turns_off():
     assert "Customize → Plugins." in CURSOR_HINT
     # The rows Details' Turn off adds live with the x's, in one place.
     assert "export function offBodies(" in rules and "export function offBodies(" not in details
+
+
+def test_the_instructions_map_words():
+    # decisions "Instructions" (library-notes §6, frames I1 and M8·4–M8·5): the tab only reads.
+    text = script("library-map.js")
+    for words in (
+        'const INSTRUCTIONS_HINT = "Kitden only reads instruction files. It never changes them.";',
+        'const TAB_BANNERS = { plugins: "the library map", instructions: "the instruction '
+        'files" };',
+        'const TAB_KINDS = { plugins: "plugin", instructions: "instructions" };',
+        'caption: "Files", w: 190, h: 54, colGap: 100, top: 37, rowGap: 4',
+        'caption: "Pulls in", w: 200, h: 40, colGap: 60, top: 60, rowGap: 16',
+        'const FILE_GROUPS = { all: "layers", project: "folder" };',
+        'const MISSING = { icon: "triangle-alert", words: "Missing" };',
+        "const TAB_FROM = { x: 150, y: 200 };",
+        '`${who} · ${plural(file.count, "rule", "rules")}`',
+        '`${who} · ${plural(pulls, "import", "imports")}`',
+        '`${who} · ${group.key === "project" ? "this project" : ALL_PROJECTS}`',
+        'file: ["block-icon", "file-text", 15], import: ["block-icon bare", "scroll-text", 13]',
+        "const importsOf = (file) => ((file.by || {}).claude_code ? file.imports || [] : []);",
+    ):
+        assert words in text, words
+    details = script("library-details.js")
+    for words in (
+        'const FILE_KIND = "Instruction file";',
+        'const IMPORT_KIND = "Imported file";',
+        'const READS_FILE = "Kitden only reads this file.";',
+        'const READS_IT = "Kitden only reads it.";',
+        'const IMPORTS_NOTHING = "It imports nothing.";',
+        'const MAY_ASK = "Claude Code may ask before it reads this.";',
+        'const NOT_FOUND = "Kitden could not find this file.";',
+        '{ label: "Read by", value:',
+        '{ label: "Through", value: file.through }',
+        '{ label: "Size", value: plural(file.size, "line", "lines") }',
+        "`It brings in ${pulls} more.`",
+        '"Rules folder" : "File"',
+        "`Brought in by ${joinWords(by)}`",
+        'line: "File"',
+        '"Read by the client"',
+        "`${from.name} reads ${to.name}. ${READS_FILE}`",
+        '"An import"',
+        "`${from.name} brings in ${to.name}. ${READS_IT}`",
+    ):
+        assert words in details, words
+    # Another tab grows out of the gap right of the clients, 15 ms apart, and shrinks back in
+    # 160 ms.
+    view = script("map-view.js")
+    assert "({ x: tabPoint.x, y: tabPoint.y, s: GROW_SCALE, o: 0, turn })" in view
+    assert "start: start + D(turn * GROW_STEP)" in view
+    assert "(tabPoint || (item.grows && item.folds) ? FOLD_BACK_MS : GO_MS)" in view
+    assert "font-family: var(--mono); font-size: 11px;" in rule("div.map .block.import .block-name")

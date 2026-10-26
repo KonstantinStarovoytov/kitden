@@ -1,12 +1,13 @@
 // Details of the Library map (library-notes §3, with D25 and D26): a card builder for each thing the
 // map selects (a plugin, a thing inside one, a skill, a hook, a client, a link and a marketplace's
-// caption), each a plain object that detailsCard draws, so a test reads it without a page, and the
-// steps "Add to <client>…" and "Turn off in some projects…" take. A press, a tick or a switch only
+// caption; on the Instructions tab a file and what it pulls in), each a plain object that
+// detailsCard draws, so a test reads it without a page, and the steps "Add to <client>…" and "Turn
+// off in some projects…" take. A press, a tick or a switch only
 // adds a row to the tray; nothing is written before Apply. Paths stay under Technical details.
 import { button, el, icon, joinWords, plural } from "./dom.js";
 import { focusAfterStep, headTile, iconTile, lamp, openCard, pressOnce, projectChecklist, stepHead, tickRow, tiles } from "./gateway-details.js";
 import { initLibraryAdd } from "./library-add.js";
-import { addBody, lampOf, libraryThing, onLibrarySelect } from "./library-map.js";
+import { addBody, importsOf, lampOf, libraryThing, onLibrarySelect, readers } from "./library-map.js";
 import { offBodies, skillOffBodies, skillRuleWaits } from "./library-rules.js";
 import { closePanel, drawQuietly, followTray, isPanelOpen, keepFrom, panelState, previewButton, review, stepTo, swapContent, technical } from "./panel.js";
 import { ALL_PROJECTS, CLIENT_NAMES, CLIENT_ORDER, folderName, mark, menuItems, ORIGIN_WORDS, STATE_WORDS } from "./parts.js";
@@ -29,9 +30,17 @@ const ALL_FIRST = "Apply the rule for all projects first";
 const SOME_FIRST = "Apply the project rules in preview first; then Claude Code can turn it off for all projects.";
 // What a plugin holds, by its key in the answer: the word for one and for more.
 const INSIDE_WORDS = [["skills", "skill", "skills"], ["commands", "command", "commands"], ["agents", "agent", "agents"], ["hooks", "hook", "hooks"], ["mcp_servers", "MCP server", "MCP servers"]];
-const KIND_ICONS = { plugin: "puzzle", skill: "sparkles", hook: "webhook" };
+const KIND_ICONS = { plugin: "puzzle", skill: "sparkles", hook: "webhook", file: "file-text" };
 const KIND_WORDS = { plugin: "Plugin", skill: "Skill", hook: "Hook" };
 const LAMP_WORDS = { on: STATE_WORDS.on, off: STATE_WORDS.off, unk: STATE_WORDS.unk };
+// The Instructions tab (decisions "Instructions"): Kitden only reads these files.
+const FILE_KIND = "Instruction file";
+const IMPORT_KIND = "Imported file";
+const READS_FILE = "Kitden only reads this file.";
+const READS_IT = "Kitden only reads it.";
+const IMPORTS_NOTHING = "It imports nothing.";
+const MAY_ASK = "Claude Code may ask before it reads this.";
+const NOT_FOUND = "Kitden could not find this file.";
 
 // The same rows a link's × adds (library-rules.js).
 export { offBodies, skillOffBodies, skillRuleWaits };
@@ -270,12 +279,53 @@ function itemLine(item) {
 }
 
 // A client: Kitden's words for it under its name, and what it loads: "Loads in every project" (or
-// "Loads in <folder>"), its plugins, skills and hooks.
+// "Loads in <folder>"), its plugins, skills and hooks, or on the Instructions tab the files it reads.
 export function clientCard(id, c) {
   const client = c.answer.clients.find((one) => one.id === id) || { id, name: CLIENT_NAMES[id], words: "" };
-  const items = c.answer.groups.flatMap((group) => group.items).filter((item) => (item.by || {})[id] === "on");
   const head = c.project ? `Loads in ${c.folder}` : "Loads in every project";
-  return { kind: "Client", title: client.name, id: client.words, tile: headTile(mark(id)), list: itemList(head, items.map((item) => ({ kind: item.kind, name: item.name, line: itemLine(item) }))) };
+  return { kind: "Client", title: client.name, id: client.words, tile: headTile(mark(id)), list: itemList(head, clientRows(id, c.answer)) };
+}
+
+function clientRows(id, answer) {
+  return answer.groups.flatMap((group) => [
+    ...(group.items || []).filter((item) => (item.by || {})[id] === "on").map((item) => ({ kind: item.kind, name: item.name, line: itemLine(item) })),
+    ...(group.files || []).filter((file) => (file.by || {})[id]).map((file) => ({ kind: "file", name: file.name, line: "File" })),
+  ]);
+}
+
+// An instruction file: Read by, Through (Claude Code reads AGENTS.md in place of a CLAUDE.md) and
+// Size ("42 lines"; none for a file longer than Kitden reads, nor for a folder of rules); what it
+// brings in; its path and first lines (a folder: its rules) under Technical details.
+export function fileCard(block, c) {
+  const { file } = block;
+  const facts = [{ label: "Read by", value: readers(file).map((client) => CLIENT_NAMES[client]).join(", ") }];
+  if (file.through) facts.push({ label: "Through", value: file.through });
+  if (typeof file.size === "number") facts.push({ label: "Size", value: plural(file.size, "line", "lines") });
+  const pulls = importsOf(file).length;
+  const why = `${READS_FILE} ${pulls ? `It brings in ${pulls} more.` : IMPORTS_NOTHING}`;
+  const tech = file.technical || {};
+  const title = typeof file.count === "number" ? "Rules folder" : "File";
+  const rows = tech.path ? [{ title, path: tech.path, preview: tech.lines && tech.lines.length ? tech.lines : null }] : [];
+  return { kind: FILE_KIND, title: file.name, id: block.meta, tile: iconTile("file-text"), facts, why, technical: rows.length ? technical(rows) : null };
+}
+
+// A file a CLAUDE.md pulls in: which files bring it in, and that Kitden only reads it; Claude Code
+// may ask before it reads one outside the project. One Kitden could not find says so.
+export function importCard(block, c) {
+  const { imported } = block;
+  const files = (c.answer.groups || []).flatMap((group) => group.files || []).filter((file) => (imported.by_files || []).includes(file.id));
+  const by = [...new Set(files.map((file) => file.name))];
+  const why = imported.missing ? NOT_FOUND : [READS_IT, imported.outside && MAY_ASK].filter(Boolean).join(" ");
+  const path = (imported.technical || {}).path;
+  return { kind: IMPORT_KIND, title: imported.name, id: by.length ? `Brought in by ${joinWords(by)}` : null, tile: iconTile("scroll-text"), why, technical: path ? technical([{ title: "File", path }]) : null };
+}
+
+// A link on the Instructions tab: a client reads a file, or a file brings in another.
+export function readsCard({ from, to }) {
+  const title = [from.name, el("span", "arrow", " → "), to.name];
+  const facts = [{ label: "From", value: from.name }, { label: "To", value: to.name }];
+  if (from.kind === "client") return { kind: "Connection", title, id: "Read by the client", facts, why: `${from.name} reads ${to.name}. ${READS_FILE}` };
+  return { kind: "Connection", title, id: "An import", facts, why: `${from.name} brings in ${to.name}. ${READS_IT}` };
 }
 
 // Why a Cursor plugin's link has no ×: Cursor keeps its plugins in its own app. The words are
@@ -313,9 +363,11 @@ export function marketplaceCard(group) {
 }
 
 // The card of what the map shows for `id` (library-map.js libraryThing).
+const INSTRUCTION_CARDS = { file: fileCard, import: importCard };
 function cardOf(thing, c, id) {
-  if (thing.link) return connectionCard(thing, c);
+  if (thing.link) return INSTRUCTION_CARDS[thing.to.kind] ? readsCard(thing) : connectionCard(thing, c);
   const { block } = thing;
+  if (INSTRUCTION_CARDS[block.kind]) return INSTRUCTION_CARDS[block.kind](block, c);
   if (block.kind === "client") return clientCard(block.client, c);
   if (block.kind === "group") return marketplaceCard(block.group);
   if (block.kind === "part") return partCard(block, c);

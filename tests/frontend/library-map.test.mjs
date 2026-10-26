@@ -140,7 +140,7 @@ const texts = (root) => walk(root).map((n) => n.textContent).filter(Boolean);
 function showMap(sample = MEDIUM, { q = '' } = {}) {
   Object.assign(data, { libraryMap: sample, projects: [] });
   data.scope.libraryMap = '';
-  Object.assign(state, { view: 'library', mode: 'map', project: '', q, selected: null });
+  Object.assign(state, { view: 'library', mode: 'map', kind: 'plugin', project: '', q, selected: null });
   main.replaceChildren();
   setHint(''); // as app.js does before each draw
   const found = renderLibrary(main);
@@ -421,17 +421,6 @@ test('the find chip counts what lights: a plugin card once, however many of its 
   assert.equal(findChip(showMap(MEDIUM, { q: 'brainstorm' }).found), '1 match');
   assert.equal(findChip(showMap(LARGE, { q: 'zzz' }).found), 'No matches');
   state.q = '';
-});
-
-test('"Instructions" opens the List on its Instructions tab', async () => {
-  const { box } = showMap();
-  settle();
-  const tab = walk(main).find((n) => n.dataset.focus === 'map-tab:instructions');
-  tab.listeners.click[0]();
-  assert.equal(tab.getAttribute('aria-pressed'), 'true');
-  await flush();
-  assert.deepEqual([state.mode, state.kind], ['list', 'instructions']);
-  assert.ok(box);
 });
 
 test('a map with no clients, or one Kitden could not read, draws no links from it', () => {
@@ -1011,5 +1000,175 @@ test('while a change is written the × waits and removes nothing', async () => {
   } finally {
     setBusy(false);
     await cancelTray();
+  }
+});
+
+// The Instructions tab (library-notes §6, decisions "Instructions"): /api/instructions-map, cut
+// short (views/instructions_map.py). Only Claude Code's CLAUDE.md files have imports; the Codex
+// file lists one here only to show the map draws none for it.
+const { instructionsTree, INSTRUCTION_COLUMNS } = await import('../../src/kitden/web/static/js/library-map.js');
+const { setRenderer } = await import('../../src/kitden/web/static/js/store.js');
+const INSTR = {
+  clients: MEDIUM.clients,
+  groups: [
+    { key: 'all', name: 'All projects', files: [
+      { id: 'f1', name: 'CLAUDE.md', by: { claude_code: true }, imports: ['i1'], size: 4, technical: { path: '/home/u/.claude/CLAUDE.md', lines: ['# My rules'] } },
+      { id: 'f2', name: 'AGENTS.md', by: { codex: true }, imports: ['i2'], size: 3, technical: { path: '/home/u/.codex/AGENTS.md', lines: ['# Codex'] } },
+    ] },
+    { key: 'project', name: 'Only this project · website', files: [
+      { id: 'f3', name: 'CLAUDE.md', by: { claude_code: true }, imports: ['i2', 'i3', 'i4'], size: 42, technical: { path: '/home/u/work/website/CLAUDE.md', lines: ['# Working on the website', '@docs/design.md'] } },
+      { id: 'f4', name: 'AGENTS.md', by: { claude_code: true, cursor: true }, through: 'CLAUDE.md for Claude Code', imports: [], size: 10, technical: { path: '/home/u/work/website/AGENTS.md', lines: ['# Agents'] } },
+      { id: 'f5', name: '.cursor/rules', by: { cursor: true }, count: 2, imports: [], technical: { path: '/home/u/work/website/.cursor/rules', lines: ['backend:api', 'style'] } },
+    ] },
+  ],
+  imports: [
+    { id: 'i1', name: 'notes.md', by_files: ['f1'], outside: false, missing: false, technical: { path: '/home/u/.claude/notes.md' } },
+    { id: 'i2', name: 'docs/design.md', by_files: ['f3'], outside: false, missing: false, technical: { path: '/home/u/work/website/docs/design.md' } },
+    { id: 'i3', name: '~/shared.md', by_files: ['f3'], outside: true, missing: false, technical: { path: '/home/u/shared.md' } },
+    { id: 'i4', name: 'gone.md', by_files: ['f3'], outside: false, missing: true, technical: {} },
+  ],
+};
+
+// The map on a tab; a press on a tab draws the page again, as app.js does.
+function showTab(kind, sample = MEDIUM) {
+  Object.assign(data, { libraryMap: sample, instructionsMap: INSTR, projects: [] });
+  Object.assign(data.scope, { libraryMap: '', instructionsMap: '' });
+  Object.assign(state, { view: 'library', mode: 'map', kind, project: '', q: '', selected: null });
+  setRenderer(() => {
+    main.replaceChildren();
+    setHint('');
+    renderLibrary(main, { again: true });
+  });
+  main.replaceChildren();
+  setHint('');
+  renderLibrary(main);
+  return map();
+}
+const pressTab = (id) => walk(main).find((n) => n.dataset.focus === `map-tab:${id}`).listeners.click[0]();
+const done = () => setRenderer(() => {});
+
+test('the Instructions tab draws Clients, Files and Pulls in', () => {
+  try {
+    const box = showTab('instructions');
+    settle();
+    const tabs = main.children.find((n) => n.className === 'seg sm map-tabs');
+    assert.deepEqual(tabs.children.filter((n) => n.tagName === 'BUTTON').map((n) => n.getAttribute('aria-pressed')), ['false', 'true']);
+    assert.deepEqual(INSTRUCTION_COLUMNS.map((c) => [c.id, c.caption, c.w, c.h]), [['clients', 'Clients', 150, 54], ['files', 'Files', 190, 54], ['imports', 'Pulls in', 200, 40]]);
+    const layout = layoutTree(instructionsTree(INSTR), { narrow: false });
+    assert.deepEqual(layout.columns.map((c) => c.x), [0, 250, 500]);
+    for (const words of ['Clients', 'Files', 'Pulls in', 'All projects', 'Only this project', ' · website', 'CLAUDE.md', 'docs/design.md']) assert.ok(texts(box).includes(words), words);
+    // No path on the main page: only file names.
+    assert.ok(!texts(main).some((t) => t.includes('/home/')));
+    assert.equal(hintLine.children.at(-1).textContent, 'Kitden only reads instruction files. It never changes them.');
+  } finally {
+    done();
+  }
+});
+
+test('a file block names its clients and its imports', () => {
+  const blocks = byId(instructionsTree(INSTR));
+  const meta = (id) => blocks.get(`file:${id}`).meta;
+  assert.deepEqual(['f1', 'f2', 'f3', 'f4', 'f5'].map(meta), ['Claude Code · 1 import', 'Codex · all projects', 'Claude Code · 3 imports', 'Claude Code, Cursor · this project', 'Cursor · 2 rules']);
+  const file = blocks.get('file:f3');
+  assert.deepEqual([file.kind, file.name, file.lamp, file.parent, file.h], ['file', 'CLAUDE.md', 'on', 'group:project', undefined]);
+  assert.deepEqual(['all', 'project'].map((key) => blocks.get(`group:${key}`).icon), ['layers', 'folder']);
+  const imported = blocks.get('import:i2');
+  assert.deepEqual([imported.kind, imported.name, imported.column, imported.label], ['import', 'docs/design.md', 'imports', undefined]);
+  assert.deepEqual(blocks.get('import:i4').label, { icon: 'triangle-alert', words: 'Missing' });
+  // Its tile: a file's file-text tile, an import's bare scroll-text.
+  const box = showTab('instructions');
+  settle();
+  done();
+  assert.ok(walk(node(box, 'block:file:f1')).some((n) => n.className === 'block-icon'));
+  assert.ok(walk(node(box, 'block:import:i1')).some((n) => n.className === 'block-icon bare'));
+});
+
+test('only Claude Code files have import links', () => {
+  const model = instructionsTree(INSTR);
+  const into = (id) => model.links.filter((l) => l.from === `file:${id}`).map((l) => l.to).sort();
+  assert.deepEqual(into('f1'), ['import:i1']);
+  assert.deepEqual(into('f2'), []);
+  assert.deepEqual(into('f3'), ['import:i2', 'import:i3', 'import:i4']);
+  assert.deepEqual(into('f5'), []);
+  // Each client that reads a file has a link to it.
+  const from = (id) => model.links.filter((l) => l.to === `file:${id}`).map((l) => l.from);
+  assert.deepEqual(from('f4'), ['client:claude_code', 'client:cursor']);
+  assert.ok(model.links.every((l) => l.kind === 'on'));
+});
+
+test('no link here has a ×, nothing drags and nothing enters the tray', async () => {
+  try {
+    const box = showTab('instructions');
+    settle();
+    for (const id of ['client:claude_code>file:f3', 'file:f3>import:i2']) {
+      const hit = node(box, `link:${id}`);
+      assert.ok(hit, id);
+      assert.equal(hit.getAttribute('aria-description'), null, id);
+      assert.equal(hit.getAttribute('aria-keyshortcuts'), null, id);
+      hit.listeners.pointerover[0]();
+      assert.ok(walk(box).filter((n) => n.classList.contains('link-x')).every((n) => n.hidden), id);
+      hit.listeners.click[0]();
+    }
+    assert.ok(!walk(box).some((n) => n.classList.contains('drags')));
+    assert.equal(node(box, 'add:files'), null);
+    assert.equal(tray.rows.length, 0);
+  } finally {
+    done();
+    await cancelTray();
+  }
+});
+
+test('the tab switch moves clients and swaps the columns', async () => {
+  try {
+    const box = showTab('plugin');
+    settle();
+    // An open plugin is kept for the way back.
+    node(box, 'block:item:p2').listeners.click[0]();
+    await flush();
+    const client = node(box, 'block:client:codex');
+    const card = node(box, 'block:item:p2');
+    const home = card.style.translate.split(' ')[1];
+    pressTab('instructions');
+    assert.deepEqual([state.kind, map(), node(box, 'block:client:codex')], ['instructions', box, client]);
+    // What arrives starts small and unseen at x 150, y 200, and grows to its place 15 ms apart.
+    const files = ['f1', 'f2', 'f3'].map((id) => node(box, `block:file:${id}`));
+    assert.ok(files.every((n) => n.style.translate === '150px 200px' && n.style.transform === 'scale(0.4)' && n.style.opacity === '0'));
+    // What leaves shrinks to x 150 at its own y in 160 ms, with no Tab stop and no leaving look.
+    assert.deepEqual([card.getAttribute('tabindex'), card.className.split(' ').includes('leaving')], ['-1', false]);
+    tick(100);
+    const seen = files.map((n) => Number(n.style.opacity || 1));
+    assert.ok(seen[0] > seen[1] && seen[1] > seen[2], seen.join(' '));
+    // On its way to x 150, at its own y.
+    const [x, y] = card.style.translate.split(' ');
+    assert.ok(card.parentNode && Number(x.replace('px', '')) > 150 && Number(x.replace('px', '')) < 250 && y === home, card.style.translate);
+    tick(70);
+    assert.equal(node(box, 'block:item:p2'), null);
+    await flush();
+    assert.ok(files.every((n) => !n.style.opacity && !n.style.transform));
+    assert.equal(files[0].style.translate.split(' ')[0], '250px');
+    assert.equal(client.style.translate, '0px 212px');
+    // And back: the plugin is open again.
+    pressTab('plugins');
+    await flush();
+    assert.equal(state.kind, 'plugin');
+    assert.equal(node(box, 'block:item:p2').getAttribute('aria-expanded'), 'true');
+    assert.equal(node(box, 'block:file:f1'), null);
+  } finally {
+    done();
+  }
+});
+
+test('under reduced motion the tab switch lands at once', () => {
+  reducedMotion.matches = true;
+  try {
+    const box = showTab('plugin');
+    pressTab('instructions');
+    assert.equal(frames.length, 0);
+    assert.ok(node(box, 'block:file:f1'));
+    assert.equal(node(box, 'block:item:p2'), null);
+    assert.ok(walk(box).every((n) => n.style.opacity === undefined || n.style.opacity === ''));
+  } finally {
+    reducedMotion.matches = false;
+    done();
   }
 });

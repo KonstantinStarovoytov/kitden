@@ -62,7 +62,7 @@ export const freshness = { reloadStartedAt: 0, lastGoodRead: null, lastReadFaile
 // scope: the project each read was for. readAt: when each read last worked.
 // errorScope: the project each failed read was for.
 export const data = {
-  clients: null, projects: null, overview: null, map: null, gateway: null, changes: null, setupServer: null, libraryMap: null,
+  clients: null, projects: null, overview: null, map: null, gateway: null, changes: null, setupServer: null, libraryMap: null, instructionsMap: null,
   progress: null, // where the first scan is, from /api/progress and its events
   errors: {}, scope: {}, readAt: {}, errorScope: {},
 };
@@ -344,19 +344,24 @@ function markGatewayData() {
   }
 }
 
-// The Library's map is read only while the Library shows (reload) and when it opens. `fresh`: no
-// reload ran without it since it was last read.
+// The Library's maps (its tabs: plugins and skills, and instruction files) are read only while the
+// Library shows (reload) and when it opens. `fresh`: no reload ran without them since they were
+// last read, and both reads worked.
 const libraryMapRead = { fresh: false, running: null };
+const LIBRARY_READS = ["libraryMap", "instructionsMap"];
 
 export async function loadLibraryMap() {
   const { project } = state;
-  await guarded("libraryMap", `/api/library-map${query({ project })}`, (v) => { data.libraryMap = v; }, project);
-  libraryMapRead.fresh = Boolean(current("libraryMap"));
+  await Promise.all([
+    guarded("libraryMap", `/api/library-map${query({ project })}`, (v) => { data.libraryMap = v; }, project),
+    guarded("instructionsMap", `/api/instructions-map${query({ project })}`, (v) => { data.instructionsMap = v; }, project),
+  ]);
+  libraryMapRead.fresh = LIBRARY_READS.every((name) => current(name));
 }
 
 // Read the Library's map when it may be out of date (one read at a time); null when it is not.
 export function readLibraryMap() {
-  if (libraryMapRead.fresh && current("libraryMap")) return null;
+  if (libraryMapRead.fresh && LIBRARY_READS.every((name) => current(name))) return null;
   libraryMapRead.running ||= afterShared(loadLibraryMap).finally(() => { libraryMapRead.running = null; });
   return libraryMapRead.running;
 }
@@ -386,8 +391,8 @@ export async function reload() {
   if (!library) libraryMapRead.fresh = false;
   const reads = projectGone() ? [] : [loadOverview(), loadMap(), loadGateway(), ...(library ? [loadLibraryMap()] : [])];
   await Promise.all([...reads, loadSetupServer()]);
-  // The Library's map counts only while the Library shows: it is not read elsewhere.
-  freshness.lastReadFailed = Object.keys(data.errors).some((name) => name !== "libraryMap" || state.view === "library");
+  // The Library's maps count only while the Library shows: they are not read elsewhere.
+  freshness.lastReadFailed = Object.keys(data.errors).some((name) => !LIBRARY_READS.includes(name) || state.view === "library");
   if (!freshness.lastReadFailed) freshness.lastGoodRead = Date.now();
 }
 

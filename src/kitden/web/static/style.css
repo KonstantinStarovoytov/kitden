@@ -758,6 +758,11 @@ div.map .block[aria-expanded="true"] { border-color: var(--route); }
    of their own for it (a folder; in the accent for this project). */
 div.map .block.tool, div.map .block.skill, div.map .block.hook, div.map .block.part { gap: 9px; padding: 0 10px; }
 div.map .block.tool .block-name, div.map .block.skill .block-name, div.map .block.hook .block-name, div.map .block.part .block-name { font-weight: 400; }
+/* The Instructions tab: a file's name in mono 12px / 500, an import a slim row with its name in mono
+   11px (library-notes §6). */
+div.map .block.file .block-name { font-family: var(--mono); font-weight: 500; }
+div.map .block.import { gap: 9px; padding: 0 10px; }
+div.map .block.import .block-name { font-family: var(--mono); font-size: 11px; font-weight: 400; }
 div.map .block-label { flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: 4px; color: var(--ink-3); font-size: 10.5px; white-space: nowrap; }
 div.map .block-projects { flex: none; margin-left: auto; display: inline-flex; align-items: center; gap: 4px; color: var(--ink-3); font-size: 10.5px; white-space: nowrap; }
 div.map .block-projects.own { color: var(--route); }

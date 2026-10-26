@@ -161,7 +161,7 @@ const c = () => details.context(MEDIUM, '', '');
 async function showMap(sample = MEDIUM, { project = '' } = {}) {
   Object.assign(data, { libraryMap: sample, projects: PROJECTS });
   data.scope.libraryMap = project;
-  Object.assign(state, { view: 'library', mode: 'map', project, q: '', selected: null });
+  Object.assign(state, { view: 'library', mode: 'map', kind: 'plugin', project, q: '', selected: null });
   main.replaceChildren();
   setHint('');
   renderLibrary(main);
@@ -544,4 +544,98 @@ test('where the project decides, only Turn off in this project… is offered', a
   await flush();
   assert.equal(details.skillCard(mine, atlas).actions[0].node.hidden, true);
   await cancelTray();
+});
+
+// The Instructions tab's Details (decisions "Instructions", frames I1 and M8·5): a file and what it
+// pulls in. Kitden only reads them: nothing here adds a row to the tray.
+const { instructionsTree } = await import('../../src/kitden/web/static/js/library-map.js');
+const INSTR = {
+  clients: MEDIUM.clients,
+  groups: [
+    { key: 'all', name: 'All projects', files: [
+      { id: 'f2', name: 'AGENTS.md', by: { codex: true }, imports: [], size: 1, technical: { path: '/home/u/.codex/AGENTS.md', lines: ['# Codex'] } },
+    ] },
+    { key: 'project', name: 'Only this project · website', files: [
+      { id: 'f3', name: 'CLAUDE.md', by: { claude_code: true }, imports: ['i2', 'i3', 'i4'], size: 42, technical: { path: '/home/u/work/website/CLAUDE.md', lines: ['# Working on the website', '@docs/design.md'] } },
+      { id: 'f4', name: 'AGENTS.md', by: { cursor: true, claude_code: true }, through: 'CLAUDE.md for Claude Code', imports: [], size: 10, technical: { path: '/home/u/work/website/AGENTS.md', lines: ['# Agents'] } },
+      { id: 'f5', name: '.cursor/rules', by: { cursor: true }, count: 2, imports: [], technical: { path: '/home/u/work/website/.cursor/rules', lines: ['backend:api', 'style'] } },
+      { id: 'f6', name: 'CLAUDE.local.md', by: { claude_code: true }, imports: [], size: null, technical: { path: '/home/u/work/website/CLAUDE.local.md', lines: ['# Long'], cut: true } },
+    ] },
+  ],
+  imports: [
+    { id: 'i2', name: 'docs/design.md', by_files: ['f3'], outside: false, missing: false, technical: { path: '/home/u/work/website/docs/design.md' } },
+    { id: 'i3', name: '~/shared.md', by_files: ['f3'], outside: true, missing: false, technical: { path: '/home/u/shared.md' } },
+    { id: 'i4', name: 'gone.md', by_files: ['f3'], outside: false, missing: true, technical: {} },
+  ],
+};
+const instr = () => new Map(instructionsTree(INSTR).blocks.map((b) => [b.id, b]));
+const ci = () => details.context(INSTR, '', '');
+
+async function showInstructions() {
+  Object.assign(data, { libraryMap: MEDIUM, instructionsMap: INSTR, projects: PROJECTS });
+  Object.assign(data.scope, { libraryMap: '', instructionsMap: '' });
+  Object.assign(state, { view: 'library', mode: 'map', kind: 'instructions', project: '', q: '', selected: null });
+  main.replaceChildren();
+  setHint('');
+  renderLibrary(main);
+  await flush();
+  return map();
+}
+
+test('a click on a file lights its client and imports and opens its Details', async () => {
+  await reset();
+  const box = await showInstructions();
+  press(node(box, 'block:file:f3'));
+  await flush();
+  const lit = (id) => node(box, `block:${id}`).className.split(' ').includes('lit');
+  assert.match(node(box, 'block:file:f3').className, /\bselected\b/);
+  assert.deepEqual(['client:claude_code', 'import:i2', 'import:i3', 'import:i4'].map(lit), [true, true, true, true]);
+  assert.deepEqual(['client:codex', 'file:f2'].map(lit), [false, false]);
+  assert.deepEqual(panelState.current, { type: 'library', id: 'file:f3' });
+  for (const words of ['Instruction file', 'CLAUDE.md', 'Read by', 'Claude Code', '42 lines', 'Kitden only reads this file. It brings in 3 more.']) assert.ok(texts(drawer).includes(words), words);
+  // An import lights the files that bring it in, not their clients.
+  press(node(box, 'block:import:i2'));
+  await flush();
+  assert.deepEqual(['import:i2', 'file:f3', 'client:claude_code'].map(lit), [true, true, false]);
+  assert.ok(texts(drawer).includes('Imported file'));
+  // A client lists the files it reads.
+  press(node(box, 'block:client:cursor'));
+  await flush();
+  assert.ok(texts(drawer).includes('.cursor/rules'));
+  // A link opens its own Details.
+  press(node(box, 'link:client:claude_code>file:f3'));
+  await flush();
+  assert.ok(texts(drawer).includes('Claude Code reads CLAUDE.md. Kitden only reads this file.'));
+  assert.equal(tray.rows.length, 0);
+  await reset();
+});
+
+test('file Details show Read by, Through, Size and the say line; the path and first lines sit under Technical details', () => {
+  const blocks = instr();
+  const card = details.fileCard(blocks.get('file:f3'), ci());
+  assert.deepEqual([card.kind, card.title, card.id, facts(card), card.why, card.actions], ['Instruction file', 'CLAUDE.md', 'Claude Code · 3 imports', [['Read by', 'Claude Code'], ['Size', '42 lines']], 'Kitden only reads this file. It brings in 3 more.', undefined]);
+  const tech = texts(card.technical);
+  assert.ok(tech.includes('Technical details'));
+  assert.ok(tech.some((t) => t.includes('website/CLAUDE.md')), tech.join(' | '));
+  assert.ok(tech.includes('# Working on the website\n@docs/design.md'));
+  // Claude Code reads AGENTS.md in place of a CLAUDE.md: Through says so.
+  const agents = details.fileCard(blocks.get('file:f4'), ci());
+  assert.deepEqual(facts(agents), [['Read by', 'Claude Code, Cursor'], ['Through', 'CLAUDE.md for Claude Code'], ['Size', '10 lines']]);
+  assert.equal(agents.why, 'Kitden only reads this file. It imports nothing.');
+  // A file longer than Kitden reads, and a rules folder, have no Size.
+  assert.deepEqual(facts(details.fileCard(blocks.get('file:f6'), ci())), [['Read by', 'Claude Code']]);
+  const rules = details.fileCard(blocks.get('file:f5'), ci());
+  assert.deepEqual([rules.id, facts(rules)], ['Cursor · 2 rules', [['Read by', 'Cursor']]]);
+  assert.ok(texts(rules.technical).includes('backend:api\nstyle'));
+});
+
+test('an outside import says Claude Code may ask before it reads this', () => {
+  const blocks = instr();
+  const outside = details.importCard(blocks.get('import:i3'), ci());
+  assert.deepEqual([outside.kind, outside.title, outside.id, outside.why], ['Imported file', '~/shared.md', 'Brought in by CLAUDE.md', 'Kitden only reads it. Claude Code may ask before it reads this.']);
+  assert.ok(texts(outside.technical).some((t) => t.includes('shared.md')));
+  assert.equal(details.importCard(blocks.get('import:i2'), ci()).why, 'Kitden only reads it.');
+  // A missing import says so, and has no path.
+  const gone = details.importCard(blocks.get('import:i4'), ci());
+  assert.deepEqual([gone.why, gone.technical], ['Kitden could not find this file.', null]);
 });
