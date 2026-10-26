@@ -2,7 +2,7 @@
 // come from, and what an open plugin holds. It is drawn from /api/library-map
 // (views/library_map.py) with the map every map page shares (map.js, map-view.js). Nothing here
 // writes: a press only selects, unfolds and lights a path.
-import { el, icon, plural } from "./dom.js";
+import { cutName, el, icon, plural } from "./dom.js";
 import { findIn, layoutTree, litFor, litFrom, pagesNow, pagesWith, turnPage, turnWords } from "./map.js";
 import { glidePill, goSwitched, leaveThen } from "./map-page.js";
 import { mapView } from "./map-view.js";
@@ -23,6 +23,9 @@ export const LIBRARY_COLUMNS = [
 const ROW_H = 34; // a skill or hook row in the Plugins and skills column
 const GROUP_BEFORE = 15; // the space before a group caption, after the group above it
 const INSIDE_PAGE = 8; // an open plugin's Inside column shows this many a page
+// Its caption names the plugin cut to this many letters, so "<plugin> · 17–20 of 20" ends inside
+// the map.
+const INSIDE_NAME = 14;
 // What a plugin holds, in this order: its key in the answer, the kind word and its icon.
 const INSIDE_KINDS = [
   ["skills", "Skill", "sparkles"], ["commands", "Command", "square-terminal"], ["agents", "Agent", "bot"],
@@ -35,7 +38,7 @@ const CLIENT_LAMPS = { on: "on", via: "on", unreadable: null };
 // The Map's own tabs: "Instructions" opens the List's Instructions tab until its map is drawn.
 const TABS = [["plugins", "Plugins and skills"], ["instructions", "Instructions"]];
 
-// How many blocks the Plugins and skills column holds.
+// How many blocks the Plugins and skills column holds: plugins, skills and hooks.
 const itemCount = (answer) => answer.groups.reduce((n, group) => n + group.items.length, 0);
 
 // Map or List: the address's choice, else List past MAP_AT plugins and skills (viewMode), else
@@ -84,16 +87,16 @@ function clientLinks(item, to, clients) {
   return links;
 }
 
-// What an open plugin holds, in the Inside column, each joined to it. Past one more than a page
-// they sit in a group named for the plugin, which pages eight at a time. They have no state of
-// their own: they follow their plugin.
+// What a plugin holds, in the Inside column, each joined to it; the layout shows them while the
+// plugin is open. Past one more than a page they sit in a group named for the plugin, which pages
+// eight at a time. They have no state of their own: they follow their plugin.
 function insideParts(item, plugin) {
   const parts = INSIDE_KINDS.flatMap(([key, words, mark]) => ((item.inside || {})[key] || []).map((name) => ({ key, name, label: { icon: mark, words } })));
   const blocks = [];
   let parent = plugin.id;
   if (parts.length > INSIDE_PAGE + 1) {
     parent = `inside:${plugin.id}`;
-    blocks.push({ id: parent, column: "inside", parent: plugin.id, kind: "group", name: item.name, icon: "puzzle", pageSize: INSIDE_PAGE, rowGap: LIBRARY_COLUMNS[2].rowGap });
+    blocks.push({ id: parent, column: "inside", parent: plugin.id, kind: "group", name: item.name, pageName: cutName(item.name, INSIDE_NAME), icon: "puzzle", pageSize: INSIDE_PAGE, rowGap: LIBRARY_COLUMNS[2].rowGap });
   }
   for (const part of parts) blocks.push({ id: `part:${item.id}:${part.key}:${part.name}`, column: "inside", parent, kind: "part", name: part.name, label: part.label, ports: { left: true }, plugin: item });
   const links = parts.map((part) => ({ from: plugin.id, to: `part:${item.id}:${part.key}:${part.name}`, kind: "on" }));
@@ -101,9 +104,9 @@ function insideParts(item, plugin) {
 }
 
 // The Library as one tree for the map (map.js), from the /api/library-map answer: the clients, then
-// each source's group caption with its plugins, skills or hooks, in the answer's order, and what the
-// `open` plugin holds.
-export function libraryTree(answer, { open = new Set() } = {}) {
+// each source's group caption with its plugins, skills or hooks, in the answer's order, and what
+// each plugin holds (layoutTree shows it only for the open plugin).
+export function libraryTree(answer) {
   const blocks = answer.clients.map(clientBlock);
   const clients = new Set(answer.clients.map((client) => client.id));
   const links = [];
@@ -114,7 +117,6 @@ export function libraryTree(answer, { open = new Set() } = {}) {
       const block = itemBlock(item, id);
       blocks.push(block);
       links.push(...clientLinks(item, block.id, clients));
-      if (!open.has(block.id)) continue;
       const inside = insideParts(item, block);
       blocks.push(...inside.blocks);
       links.push(...inside.links);
@@ -148,6 +150,11 @@ export function leaveLibraryMap() {
   onMap.view = null;
 }
 
+// Map | List lets go of what the map has selected.
+export function letGoLibraryMap() {
+  if (onMap.selected) letGo();
+}
+
 // Draws the Map under the page head (`head`, library.js): the lede, the tabs, the scope bar and
 // the map, and the hint line. It returns what the top search found (map.js findIn), or null.
 // `switched`: Map | List brought it, so it comes in as one piece instead of its entrance.
@@ -159,13 +166,14 @@ export function renderLibraryMap(main, { head, again = false, switched = false }
   main.append(lede, tabs, scope);
   riseHead(head, lede, scope, { again });
   glidePill(tabs, tabs.querySelector('[aria-pressed="true"]'), "library-tabs-map");
+  // A new visit starts a new map, also when it first waits for the answer.
+  if (!again) onMap.view = null;
   const answer = current("libraryMap");
   if (!answer) {
     main.append(currentError("libraryMap") ? banner("the library map", retry) : skeleton("card", 2));
     return null;
   }
   setHint(MAP_HINT);
-  if (!again) onMap.view = null;
   const fresh = !onMap.view;
   // A new map opens with no plugin open and nothing selected: a real setup has no first plugin.
   if (fresh) Object.assign(onMap, { view: newMap(), open: new Set(), selected: null, pages: new Map() });
@@ -188,10 +196,21 @@ export function renderLibraryMap(main, { head, again = false, switched = false }
 // The tree for a new answer: the open plugin and the selection stay while the answer has them.
 function keepWhatShows(answer) {
   onMap.answer = answer;
-  const ids = new Set(libraryTree(answer).blocks.map((block) => block.id));
+  onMap.model = libraryTree(answer);
+  const ids = new Set(onMap.model.blocks.map((block) => block.id));
   onMap.open = new Set([...onMap.open].filter((id) => ids.has(id)));
-  onMap.model = libraryTree(answer, { open: onMap.open });
-  if (onMap.selected && !onMap.model.blocks.some((block) => block.id === onMap.selected)) onMap.selected = null;
+  if (onMap.selected && !ids.has(onMap.selected)) onMap.selected = null;
+}
+
+// What the map lights for a search: its matches, and a folded plugin that holds one (it stays
+// folded: one plugin opens at a time, by a press). The chip counts the matches only.
+function foundOnMap(found) {
+  if (!found) return null;
+  const matches = new Set(found.matches);
+  for (const block of onMap.model.blocks) {
+    if (block.kind === "part" && found.matches.has(block.id)) matches.add(`item:${block.plugin.id}`);
+  }
+  return { ...found, matches };
 }
 
 // "Plugins and skills" | "Instructions" (.seg.sm). Instructions has no map yet: the mark glides
@@ -244,7 +263,7 @@ function drawMap({ motion = "move", lightLater = false } = {}) {
   const layout = layoutTree(model, { open: onMap.open, pages: onMap.pages, narrow: false });
   const lit = litFor(model, selected);
   const later = lightLater && lit.size > 0;
-  const drawn = view.draw(model, layout, { selected: lit.size ? selected : null, lit: later ? new Set() : lit, found: onMap.found, open: onMap.open, motion });
+  const drawn = view.draw(model, layout, { selected: lit.size ? selected : null, lit: later ? new Set() : lit, found: foundOnMap(onMap.found), open: onMap.open, motion });
   if (later) drawn.then(() => onMap.view === view && onMap.selected === selected && drawMap());
   return drawn;
 }
@@ -256,7 +275,6 @@ function openPlugin(id) {
   onMap.unfolds = !onMap.folded && !onMap.open.has(id);
   if (onMap.folded) onMap.open = new Set();
   else if (onMap.unfolds) onMap.open = new Set([id]);
-  onMap.model = libraryTree(onMap.answer, { open: onMap.open });
 }
 
 // A press on a block. "N more" turns its group's page. A press that folded a plugin, or a second

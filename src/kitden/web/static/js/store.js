@@ -35,6 +35,8 @@ export function viewMode(s, count) {
 // Map or List, as the Gateway page drew it last ("" before it drew either): Details and the
 // effect of an Apply ask which one shows.
 export const gatewayShows = { mode: "" };
+// The same for the Library: its address names that view with a kind (hashFor).
+export const libraryShows = { mode: "" };
 
 // A change is being applied or undone: live rescans wait so the result can morph in.
 export const busy = { change: false };
@@ -159,14 +161,20 @@ export function isOldAddress(hash) {
   return Boolean(OLD_VIEWS[place] || oldLibraryLink(place, new URLSearchParams(rest || "")));
 }
 
-// The Library's address names its kind only where it can be read back as it is: the first kind
-// (MCP servers) only with the List, since a kind with no view is an old address.
+// The Library's address reads back as it is: a kind with no view is an old address, so a kind
+// always comes with a view. With no choice made, the first kind (MCP servers) is left out, and any
+// other names the view the page drew last (the List before it drew either: only the List has
+// tabs).
 export function hashFor(s) {
-  const library = s.view === "library"
-    ? { kind: s.kind === "mcp_server" && s.mode !== "list" ? "" : s.kind, show: s.show === "mine" ? "" : s.show, category: s.category, attention: s.attention ? "1" : "" }
-    : {};
-  const mode = MODE_PLACES.includes(s.view) ? s.mode : "";
+  const library = s.view === "library" ? libraryWords(s) : {};
+  const mode = MODE_PLACES.includes(s.view) ? s.mode || library.view || "" : "";
   return `#${s.view}${query({ ...library, view: mode, project: s.project, q: s.q, sel: selFor(s.selected) })}`;
+}
+
+function libraryWords(s) {
+  const kind = s.kind === "mcp_server" && s.mode !== "list" ? "" : s.kind;
+  const view = kind && !s.mode ? libraryShows.mode || "list" : "";
+  return { kind, show: s.show === "mine" ? "" : s.show, category: s.category, attention: s.attention ? "1" : "", view };
 }
 
 // A new place or project gets its own history entry, so Back returns to it; tabs, filters

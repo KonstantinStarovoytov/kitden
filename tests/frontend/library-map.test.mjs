@@ -91,7 +91,7 @@ globalThis.fetch = () => new Promise(() => {});
 const { libraryMode, libraryTree, LIBRARY_COLUMNS } = await import('../../src/kitden/web/static/js/library-map.js');
 const { renderLibrary } = await import('../../src/kitden/web/static/js/library.js');
 const { layoutTree } = await import('../../src/kitden/web/static/js/map.js');
-const { data, state } = await import('../../src/kitden/web/static/js/store.js');
+const { data, hashFor, libraryShows, parseHash, state } = await import('../../src/kitden/web/static/js/store.js');
 const { setHint } = await import('../../src/kitden/web/static/js/parts.js');
 const { reducedMotion } = await import('../../src/kitden/web/static/js/motion.js');
 
@@ -221,10 +221,10 @@ test('the map draws clients, captions in source order, plugin cards with n items
   assert.deepEqual([skill.kind, skill.h, skill.label, skill.tag, skill.lamp], ['skill', 34, { icon: 'sparkles', words: 'Skill' }, 'This project', 'on']);
   const hook = blocks.get('item:h1');
   assert.deepEqual([hook.kind, hook.h, hook.label], ['hook', 34, { icon: 'webhook', words: 'Hook' }]);
-  // Folded, a plugin holds nothing on the map; open, what it holds is in the Inside column, joined to it.
-  assert.ok(!model.blocks.some((b) => b.column === 'inside'));
-  const open = libraryTree(MEDIUM, { open: new Set(['item:p2']) });
-  const inside = open.blocks.filter((b) => b.column === 'inside');
+  // What a plugin holds is in the Inside column, joined to it; the layout shows it only while it is open.
+  assert.ok(!layoutTree(model, { narrow: false }).blocks.some((b) => b.id.startsWith('part:')));
+  const open = model;
+  const inside = open.blocks.filter((b) => b.column === 'inside' && b.plugin.id === 'p2');
   assert.deepEqual(inside.map((b) => [b.name, b.label.words, b.label.icon]), [['brainstorm', 'Skill', 'sparkles'], ['plan', 'Skill', 'sparkles'], ['ship', 'Command', 'square-terminal']]);
   assert.ok(inside.every((b) => open.links.some((l) => l.from === 'item:p2' && l.to === b.id && l.kind === 'on')));
   assert.ok(inside.every((b) => !b.lamp && !b.state));
@@ -239,14 +239,14 @@ test('the map draws clients, captions in source order, plugin cards with n items
 
 test('no block says N of M on', () => {
   for (const sample of [MEDIUM, LARGE]) {
-    const model = libraryTree(sample, { open: new Set(['item:p2', 'item:b0']) });
+    const model = libraryTree(sample);
     for (const block of model.blocks) assert.doesNotMatch(String(block.meta || ''), / of /, block.id);
   }
 });
 
 test('a big group and a big plugin page in place and nothing overflows', () => {
   const open = new Set(['item:b0']);
-  const model = libraryTree(LARGE, { open });
+  const model = libraryTree(LARGE);
   const layout = layoutTree(model, { open, narrow: false });
   const shown = new Map(layout.blocks.map((b) => [b.id, b]));
   // Plugins and skills page five at a time, the Inside column eight at a time, each with "N more".
@@ -336,4 +336,71 @@ test('under reduced motion it lands at once', () => {
   } finally {
     reducedMotion.matches = false;
   }
+});
+
+test('the address the page writes reads back as the same view and tab', () => {
+  for (const drawn of ['map', 'list']) {
+    libraryShows.mode = drawn;
+    for (const kind of ['hook', 'skill', 'plugin', 'instructions']) {
+      const back = parseHash(hashFor({ ...state, view: 'library', kind, mode: '', project: '', q: '', selected: null }));
+      assert.deepEqual([back.view, back.kind, back.mode], ['library', kind, drawn], kind);
+    }
+  }
+  // After a draw with no choice, the address names the view drawn.
+  showMap();
+  state.mode = '';
+  assert.equal(libraryShows.mode, 'map');
+  libraryShows.mode = '';
+});
+
+test('find matches what a folded plugin holds and lights that plugin, without opening it', () => {
+  const { box, found } = showMap(MEDIUM, { q: 'brainstorm' });
+  settle();
+  assert.deepEqual([...found.matches], ['part:p2:skills:brainstorm']);
+  assert.match(node(box, 'block:item:p2').className, /\bfound\b/);
+  assert.doesNotMatch(node(box, 'block:item:p1').className, /\bfound\b/);
+  assert.equal(node(box, 'block:part:p2:skills:brainstorm'), null);
+  assert.equal(node(box, 'block:item:p2').getAttribute('aria-expanded'), 'false');
+  // In the large sample the plugin's page comes, and only one plugin is ever open.
+  const big = showMap(LARGE, { q: 'plugin-29-skill' });
+  settle();
+  assert.match(node(big.box, 'block:item:b29').className, /\bfound\b/);
+  state.q = '';
+});
+
+test('"Instructions" opens the List on its Instructions tab', async () => {
+  const { box } = showMap();
+  settle();
+  const tab = walk(main).find((n) => n.dataset.focus === 'map-tab:instructions');
+  tab.listeners.click[0]();
+  assert.equal(tab.getAttribute('aria-pressed'), 'true');
+  await flush();
+  assert.deepEqual([state.mode, state.kind], ['list', 'instructions']);
+  assert.ok(box);
+});
+
+test('a map with no clients, or one Kitden could not read, draws no links from it', () => {
+  const none = libraryTree({ ...MEDIUM, clients: [] });
+  assert.equal(none.links.filter((l) => l.from.startsWith('client:')).length, 0);
+  assert.ok(none.blocks.some((b) => b.id === 'item:p2'));
+  const unread = { ...MEDIUM, clients: [...MEDIUM.clients.slice(0, 2), { id: 'cursor', name: 'Cursor', state: 'unreadable', words: 'Could not read' }] };
+  unread.groups = MEDIUM.groups.map((g) => ({ ...g, items: g.items.map((i) => ({ ...i, by: Object.fromEntries(Object.entries(i.by).filter(([c]) => c !== 'cursor')) })) }));
+  const model = libraryTree(unread);
+  const cursor = model.blocks.find((b) => b.id === 'client:cursor');
+  assert.deepEqual([cursor.meta, cursor.lamp, cursor.state], ['Could not read', null, 'unk']);
+  assert.ok(!model.links.some((l) => l.from === 'client:cursor'));
+  const { box } = showMap({ ...MEDIUM, clients: [] });
+  settle();
+  assert.ok(node(box, 'block:item:p2'));
+});
+
+test('long names end in "…" inside the map', () => {
+  const long = 'a-very-long-plugin-name-that-goes-on';
+  const sample = { ...LARGE, groups: [{ ...LARGE.groups[0], items: [{ ...LARGE.groups[0].items[0], name: long }] }] };
+  const open = new Set(['item:b0']);
+  const layout = layoutTree(libraryTree(sample), { open, narrow: false });
+  const caption = layout.blocks.find((b) => b.id === 'inside:item:b0');
+  assert.equal(caption.name, 'a-very-long-p… · 1–8 of 20');
+  // 11 px semibold, at most about 6.5 px a letter, with its 13 px icon and gap: it fits in its 200 px column.
+  assert.ok(caption.name.length * 6.5 + 19 <= 200);
 });

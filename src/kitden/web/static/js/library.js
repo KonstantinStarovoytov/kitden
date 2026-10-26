@@ -4,13 +4,13 @@
 // rows and cells (views/library.py).
 import { getJson, query } from "./api.js";
 import { button, el, tabKeys } from "./dom.js";
-import { leaveLibraryMap, libraryMode, renderLibraryMap } from "./library-map.js";
+import { leaveLibraryMap, letGoLibraryMap, libraryMode, renderLibraryMap } from "./library-map.js";
 import { glidePill, modeSwitch, switchedNow } from "./map-page.js";
 import { CALM, afterOldPage, animate, entrance, glide, land, reducedMotion, rise, rollTo } from "./motion.js";
 import { marketplaceForm, projectNote, showOffer, showSkill } from "./offer.js";
 import { isPanelOpen, openInfo, projectLabel, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, lookFor, mark, morphSocket, opens, skeleton, socket, sourceLines, staleNote } from "./parts.js";
-import { afterShared, arrival, data, freshness, go, projectPath, render, retry, sameSel, setState, state, takeArrival } from "./store.js";
+import { afterShared, arrival, data, freshness, go, libraryShows, projectPath, render, retry, sameSel, setState, state, takeArrival } from "./store.js";
 
 const KINDS = [
   ["mcp_server", "MCP servers"], ["plugin", "Plugins"], ["skill", "Skills"],
@@ -331,19 +331,19 @@ export function loadLibraryFor(choice) {
   return afterShared(() => read(choice));
 }
 
-// Which view the page drew last ("map" or "list"), so a switch that lands late draws nothing.
-const libraryShows = { mode: "" };
-
 // The page: its head (the title, and Map | List at its right), then the Map or the List. The Map
 // returns what the top search found there (app.js shows the chip); the List searches its rows.
 // A view that Map | List brings comes in from 6 px below.
 export function renderLibrary(main, { again = false } = {}) {
   const switched = switchedNow();
   const mode = libraryMode();
+  // The view drawn, so a switch that lands late draws nothing; with no choice in the address, the
+  // address names it with the tab (hashFor), so a reload or Back shows the same view.
   libraryShows.mode = mode;
+  if (!state.mode) setState({});
   const head = el("div", "page-head");
   head.append(el("h1", null, "Library"));
-  const seg = modeSwitch("library", mode, { old: () => main.querySelector(mode === "map" ? ":scope > div.map" : ":scope > .table-scroll"), letGo: () => {}, shows: () => libraryShows.mode });
+  const seg = modeSwitch("library", mode, { old: () => main.querySelector(mode === "map" ? ":scope > div.map" : ":scope > .table-scroll"), letGo: letGoLibraryMap, shows: () => libraryShows.mode });
   head.append(seg);
   main.append(head);
   let found = null;
