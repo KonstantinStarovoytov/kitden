@@ -1235,17 +1235,19 @@ function ticked(body) {
 
 // One row to tick: its icon or tile (`look`), its name over its quiet line ("1 own rule · on now",
 // "already off"), and a check that fills, popping in, while its change (`body`) waits in the tray as
-// it is (`ticked()`). A press adds the change, or takes it out again; a row that is `off` takes no
-// press. `changed()` hears every change of the tray.
-export function tickRow({ id, name, line, look, off = false, body, ticked: isTicked }, changed = () => {}) {
+// it is (`ticked()`). A ticked row's line says "<line> · in preview", or `onLine` when given. A
+// press adds the change, or takes it out again; a row that is `off` takes no press. `line` and
+// `off` may be functions, read again after every change of the tray, which `changed()` hears too.
+export function tickRow({ id, name, line, onLine = null, look, off = false, body, ticked: isTicked }, changed = () => {}) {
+  const now = (value) => (typeof value === "function" ? value() : value);
   const node = el("button", "pick multi");
   node.type = "button";
   node.setAttribute("role", "checkbox");
   node.dataset.focus = `tick:${id}`;
   node.dataset.name = name;
-  node.disabled = off;
+  node.disabled = now(off);
   const words = el("span", "pk-tx");
-  const small = el("small", null, line);
+  const small = el("small", null, now(line));
   words.append(el("b", null, name), small);
   const box = el("span", "chk");
   box.append(icon("check", 12));
@@ -1254,10 +1256,12 @@ export function tickRow({ id, name, line, look, off = false, body, ticked: isTic
   let was = null;
   followTray(node, keyFor(body), () => {
     const on = isTicked();
+    const text = now(line);
+    node.disabled = now(off);
     node.classList.toggle("on", on);
     node.setAttribute("aria-checked", String(on));
     // The line says it too, as a client row does: " · in preview".
-    const said = on ? (line ? `${line} · in preview` : "In preview") : line;
+    const said = on ? onLine || (text ? `${text} · in preview` : "In preview") : text;
     small.textContent = said;
     node.setAttribute("aria-label", `${name}, ${said}`);
     if (on && was === false) animateTo(box, [{ transform: "scale(0.6)" }, { transform: "none" }], { dur: 160 });

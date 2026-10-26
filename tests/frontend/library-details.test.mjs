@@ -19,6 +19,7 @@ globalThis.MutationObserver = class { constructor(fn) { this.fn = fn; } observe(
 globalThis.innerWidth = 1440;
 globalThis.getComputedStyle = () => ({ strokeDasharray: 'none', strokeOpacity: '1', paddingLeft: '0', paddingRight: '0' });
 globalThis.localStorage = { getItem: () => null, setItem() {} };
+globalThis.addEventListener = () => {};
 
 const walk = (root) => root.children.flatMap((n) => [n, ...walk(n)]);
 function detach(node) {
@@ -83,7 +84,7 @@ function element(tagName) {
   return node;
 }
 const pages = {};
-for (const id of ['#main', '#drawer', '#scrim', '.shell', '#dock', '#find-chip', '#said']) {
+for (const id of ['#main', '#drawer', '#scrim', '.shell', '#dock', '#find-chip', '#said', '#content', '#topbar']) {
   pages[id] = element('DIV');
   pages[id].root = true;
 }
@@ -92,7 +93,7 @@ globalThis.document = {
   hidden: false, activeElement: null, body: element('BODY'),
   createElement: (tag) => element(tag.toUpperCase()), createElementNS: (namespace, tag) => element(tag),
   querySelector: (selector) => pages[selector] ?? null, querySelectorAll: () => [], getElementById: (id) => (id === 'hint' ? hintLine : null),
-  addEventListener() {}, removeEventListener() {},
+  listeners: {}, addEventListener(type, fn) { (document.listeners[type] ||= []).push(fn); }, removeEventListener() {},
   documentElement: { classList: { add() {}, remove() {} }, style: { setProperty() {}, removeProperty() {} } },
 };
 // The tray's server: every preview of the tray's rows comes back as one change.
@@ -109,15 +110,14 @@ globalThis.fetch = (url, init = {}) => {
 const { renderLibrary } = await import('../../src/kitden/web/static/js/library.js');
 const details = await import('../../src/kitden/web/static/js/library-details.js');
 const { libraryTree } = await import('../../src/kitden/web/static/js/library-map.js');
-const { closePanel, closeForProject, isPanelOpen, panelState } = await import('../../src/kitden/web/static/js/panel.js');
+const { closePanel, closeForProject, initPanel, isPanelOpen, panelState } = await import('../../src/kitden/web/static/js/panel.js');
 const { data, state } = await import('../../src/kitden/web/static/js/store.js');
 const { setHint } = await import('../../src/kitden/web/static/js/parts.js');
 const { reducedMotion } = await import('../../src/kitden/web/static/js/motion.js');
-const { cancelTray, keyFor, onTray, tray } = await import('../../src/kitden/web/static/js/tray.js');
-const { syncTray } = await import('../../src/kitden/web/static/js/details.js');
+const { addToTray, cancelTray, keyFor, tray } = await import('../../src/kitden/web/static/js/tray.js');
+// As app.js does: the panel's keys and its tray looks, then the Library's Details.
+initPanel();
 details.initLibraryDetails();
-// As initPanel does: Details follow the tray.
-onTray(syncTray);
 
 // The medium sample's answer, cut short (views/library_map.py), with what Details may offer.
 const none = { skills: [], commands: [], agents: [], hooks: [], mcp_servers: [] };
@@ -246,6 +246,8 @@ test('plugin Details show the facts and Add to <client>… steps to a checklist;
   const card = details.pluginCard(SUPERPOWERS, c());
   assert.deepEqual([card.kind, card.title, card.id], ['Plugin', 'superpowers', 'demo-market']);
   assert.deepEqual(facts(card), [['State', 'On'], ['Inside', '3 skills · 1 command'], ['Clients', 'Claude Code, Cursor'], ['Comes from', 'All projects']]);
+  // A plugin no client has on: "None yet", as the mockup says.
+  assert.deepEqual(facts(details.pluginCard(MEDIUM.groups[0].items[0], c()))[2], ['Clients', 'None yet']);
   assert.equal(card.why, 'Claude Code loads it in every project. Cursor gets it through Claude Code.');
   assert.deepEqual(labels(card), [['Add to Codex…', true], ['Turn off for all projects…', false]]);
   // Paths only under Technical details.
@@ -265,7 +267,8 @@ test('plugin Details show the facts and Add to <client>… steps to a checklist;
   await flush();
   assert.deepEqual(tray.rows.map((r) => r.body), [{ action: 'plugin.install', targets: [{ client: 'codex' }], params: { plugin: 'superpowers@demo-market' } }]);
   assert.equal(codex.getAttribute('aria-checked'), 'true');
-  assert.ok(texts(codex).includes('Not added · in preview'));
+  assert.ok(texts(codex).includes('In preview'));
+  assert.equal(codex.getAttribute('aria-label'), 'Codex, In preview');
   // Done steps back, focus on the button that stepped there.
   press(walk(drawer).find((n) => n.textContent === 'Done'));
   await flush();
@@ -329,6 +332,8 @@ test('Turn off in some projects… uses the project checklist', async () => {
   const skill = MEDIUM.groups[1].items[0];
   // Offered only while no file blocks a one-project rule.
   assert.equal(details.offersSome(skill, details.context({ ...MEDIUM, skill_rules: { some: false, projects: { atlas: 'ok' } } })), false);
+  // ... and only while some project can take the rule.
+  assert.equal(details.offersSome(skill, details.context({ ...MEDIUM, skill_rules: { some: true, projects: { web: 'own', site: 'new' } } })), false);
   const box = await showMap();
   press(node(box, 'block:item:s1'));
   await flush();
@@ -413,16 +418,24 @@ test('a project switch keeps an open plugin and its Details, or lets go when it 
 test('Enter opens, Escape closes and focus returns', async () => {
   await reset();
   const box = await showMap();
-  // A block is a button: Enter and Space press it.
+  // A block is a real button: the browser presses it on Enter or Space. Nothing on the map takes
+  // the key first.
   const block = node(box, 'block:item:s1');
-  assert.equal(block.tagName, 'BUTTON');
+  assert.deepEqual([block.tagName, block.type], ['BUTTON', 'button']);
   block.focus();
+  let kept = false;
+  const enter = { key: 'Enter', target: block, preventDefault() { kept = true; }, stopPropagation() {} };
+  for (const fn of [...(block.listeners.keydown || []), ...(box.listeners.keydown || [])]) fn(enter);
+  assert.equal(kept, false);
   press(block);
   await flush();
   assert.equal(isPanelOpen(), true);
   assert.ok(drawer.contains(document.activeElement));
-  // Escape in Details (panel.js), or Close: the panel closes, focus goes back to the block and the map lets go.
-  closePanel({ instant: true });
+  // Escape in Details, by panel.js's own key: the panel closes, focus goes back to the block and
+  // the map lets go once the drawer has closed.
+  const escape = { key: 'Escape', preventDefault() {}, shiftKey: false };
+  for (const fn of document.listeners.keydown) fn(escape);
+  assert.equal(isPanelOpen(), false);
   for (const { node: watched, fn } of watchers) if (watched === drawer) fn();
   await flush();
   assert.equal(document.activeElement, block);
@@ -442,4 +455,51 @@ test('the tray rows keep their keys', () => {
   assert.equal(keyFor(details.projectBody(skill, 'atlas')), 'skill:claude_code:cc-rn@atlas');
   assert.equal(details.hereBody(SUPERPOWERS, details.context(MEDIUM, 'site', 'site')), null);
   assert.deepEqual(details.hereBody(SUPERPOWERS, details.context(MEDIUM, 'atlas', 'atlas')), { action: 'skill.rule', targets: [{ client: 'claude_code', item: 'cc-sp' }], params: { scope: 'project', project: 'atlas', off: true } });
+});
+
+test('the tray never holds a skill rule for all projects and one for a project in Claude Code', async () => {
+  await reset();
+  const skill = MEDIUM.groups[1].items[0];
+  const box = await showMap();
+  press(node(box, 'block:item:s1'));
+  await flush();
+  // A rule for all projects waits: every project row is off and says why.
+  await addToTray(details.offBodies(skill)[0]);
+  await flush();
+  press(node(drawer, 'action:Turn off in some projects…'));
+  await flush();
+  const atlas = node(drawer, 'tick:atlas');
+  assert.equal(atlas.disabled, true);
+  assert.ok(texts(atlas).includes('Apply the rule for all projects first'));
+  // Out of the tray again: the row can be ticked.
+  await cancelTray();
+  await flush();
+  assert.deepEqual([atlas.disabled, texts(atlas).includes('Apply the rule for all projects first')], [false, false]);
+  // A project rule waits: "Turn off for all projects…" leaves Claude Code out and says why.
+  press(atlas);
+  await flush();
+  assert.equal(details.skillOffBodies(skill, MEDIUM).map((b) => b.targets[0].client).join(), 'codex');
+  press(walk(drawer).find((n) => n.textContent === 'Done'));
+  await flush();
+  assert.ok(texts(drawer).includes('Apply the project rules in preview first; then Claude Code can turn it off for all projects.'));
+  press(node(drawer, 'action:Turn off for all projects…'));
+  await flush();
+  assert.deepEqual(tray.rows.map((r) => r.key), ['skill:claude_code:cc-rn@atlas', 'skill:codex:cx-rn@']);
+  // A plugin's rule in one project is not skillOverrides: it blocks nothing.
+  await cancelTray();
+  await addToTray(details.projectBody(SUPERPOWERS, 'atlas'));
+  assert.equal(details.skillRuleWaits('project', MEDIUM), false);
+  await cancelTray();
+});
+
+test('the no-switch notes say only what applies', () => {
+  const skill = MEDIUM.groups[1].items[0];
+  // Codex has it (a skill of all projects): its note; Cursor only through Claude Code but on: its note.
+  assert.match(details.skillCard(skill, c()).why, /Codex has no switch for one project\. Cursor has no switch to turn off one skill\.$/);
+  // Even when no project can take the rule, Codex still has no switch for one.
+  const closed = details.context({ ...MEDIUM, skill_rules: { some: false, projects: {} } });
+  assert.match(details.skillCard(skill, closed).why, /Codex has no switch for one project\./);
+  // Cursor off, no Codex: no notes.
+  const quiet = { ...skill, by: { claude_code: 'on', cursor: 'off' }, through: {} };
+  assert.doesNotMatch(details.skillCard(quiet, c()).why, /no switch/);
 });

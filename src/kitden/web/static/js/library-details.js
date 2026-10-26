@@ -9,7 +9,7 @@ import { lampOf, libraryThing, onLibrarySelect } from "./library-map.js";
 import { closePanel, drawQuietly, followTray, isPanelOpen, keepFrom, panelState, previewButton, review, stepTo, swapContent, technical } from "./panel.js";
 import { ALL_PROJECTS, CLIENT_NAMES, CLIENT_ORDER, folderName, mark, menuItems, ORIGIN_WORDS, STATE_WORDS } from "./parts.js";
 import { data, projectPath, state } from "./store.js";
-import { inTray, keyFor } from "./tray.js";
+import { inTray, keyFor, tray } from "./tray.js";
 
 const IN_PREVIEW = "In preview";
 const OFF_ALL = "Turn off for all projects…";
@@ -22,6 +22,9 @@ const NO_CURSOR_SWITCH = "Cursor has no switch to turn off one skill.";
 const SOME_WHY = "This turns it off in Claude Code. Codex and Cursor have no switch for one project.";
 // Why a project cannot take a one-project skill rule (library_map.py `skill_rules`).
 const PROJECT_LINES = { own: "Has its own skill settings", new: "No Claude Code settings yet" };
+// Why a tray cannot take both a skill rule for all projects and one for a project in Claude Code.
+const ALL_FIRST = "Apply the rule for all projects first";
+const SOME_FIRST = "Apply the project rules in preview first; then Claude Code can turn it off for all projects.";
 // What a plugin holds, by its key in the answer: the word for one and for more.
 const INSIDE_WORDS = [["skills", "skill", "skills"], ["commands", "command", "commands"], ["agents", "agent", "agents"], ["hooks", "hook", "hooks"], ["mcp_servers", "MCP server", "MCP servers"]];
 const KIND_ICONS = { plugin: "puzzle", skill: "sparkles", hook: "webhook" };
@@ -76,7 +79,7 @@ function stateFact(item) {
 // The clients that load it, by their tiles and names ("Claude Code, Cursor"), or by how many.
 function clientsFact(item, { count = false } = {}) {
   const clients = inOrder(clientsBy(item, "on"));
-  if (!clients.length) return { label: "Clients", value: "None", quiet: true, text: "None" };
+  if (!clients.length) return { label: "Clients", value: "None yet", quiet: true, text: "None yet" };
   const text = count ? plural(clients.length, "client", "clients") : names(clients).join(", ");
   return { label: "Clients", value: tiles(clients, text), text };
 }
@@ -129,33 +132,66 @@ export function hereBody(item, c) {
   return c.project && on && (can === "ok" || can === "own") ? projectBody(item, c.project) : null;
 }
 
+// A skill of all projects, not only of the picked one.
+const shared = (item) => item.source !== ORIGIN_WORDS.project;
+
 // "Turn off in some projects…" for a skill of all projects that Claude Code has, while the user
-// settings hold no skillOverrides (`rules.some`) and some project is there to tick.
+// settings hold no skillOverrides (`rules.some`) and some project can take the rule.
 export function offersSome(item, c) {
-  const shared = item.source !== ORIGIN_WORDS.project;
-  return Boolean(shared && (item.items || {}).claude_code && c.rules.some && Object.keys(c.rules.projects).length);
+  return Boolean(shared(item) && (item.items || {}).claude_code && c.rules.some && Object.values(c.rules.projects).includes("ok"));
 }
 
-// A button that adds every row of `bodies` to the tray, one after the other. While they all wait
-// there it says "In preview" and takes no press, as a preview button does (details.js).
+// Whether the tray holds a Claude Code skill rule of `scope` ("all" or "project"). Claude Code may
+// not merge skillOverrides across files, so the server never takes one in the user file and one in
+// a project's in one tray (changes/batch.py); the page offers neither while the other waits. A
+// plugin's rule in one project is enabledPlugins, not skillOverrides: it does not count.
+export function skillRuleWaits(scope, answer) {
+  const plugins = new Set(answer.groups.flatMap((group) => group.items).filter((item) => item.kind === "plugin").flatMap((item) => (item.items || {}).claude_code || []));
+  return tray.rows.some(({ body }) => {
+    const target = (body.targets || [])[0] || {};
+    return body.action === "skill.rule" && (body.params || {}).scope === scope && target.client === "claude_code" && !plugins.has(target.item);
+  });
+}
+
+// "Turn off for all projects…" for a skill: one row per client that can, without Claude Code's while
+// a one-project skill rule waits in the tray.
+export function skillOffBodies(item, answer) {
+  const blocked = skillRuleWaits("project", answer);
+  return offBodies(item).filter((body) => !(blocked && body.targets[0].client === "claude_code"));
+}
+
+// A button that adds every row of `bodies` (a list, or a function that gives the list now) to the
+// tray, one after the other. While they all wait there it says "In preview" and takes no press, as
+// a preview button does (details.js); with none to add now it hides.
 function rowsButton(label, bodies, look = "btn") {
-  const keys = bodies.map(keyFor);
+  const list = typeof bodies === "function" ? bodies : () => bodies;
   const words = el("span", "cut", label);
   const node = el("button", look);
   node.type = "button";
   node.title = label;
   node.dataset.focus = `action:${label}`;
   node.append(words);
-  const waiting = () => keys.every(inTray);
+  const waiting = () => list().every((body) => inTray(keyFor(body)));
   pressOnce(node, async () => {
     if (waiting()) return;
-    for (const body of bodies) if (!inTray(keyFor(body))) await review(body);
+    for (const body of list()) if (!inTray(keyFor(body))) await review(body);
   });
-  followTray(node, keys[0], () => {
+  followTray(node, keyFor(list()[0] || {}), () => {
+    node.hidden = !list().length;
     const now = waiting();
     words.textContent = now ? IN_PREVIEW : label;
     if (now) node.setAttribute("aria-disabled", "true");
     else node.removeAttribute("aria-disabled");
+  });
+  return node;
+}
+
+// Words in a quiet line that show while `when()` holds, after every change of the tray.
+function trayNote(words, when) {
+  const node = el("p", "muted");
+  followTray(node, "skill-rules", () => {
+    node.textContent = when() ? words : "";
+    node.hidden = !node.textContent;
   });
   return node;
 }
@@ -207,15 +243,15 @@ export function skillCard(item, c, { someStep = () => {} } = {}) {
   source.append(icon(item.source === ORIGIN_WORDS.project ? "folder" : "user-round", 13), el("span", null, item.source));
   const facts = [{ label: "Plugin", value: NO_PLUGIN, quiet: true }, stateFact(item), comesFrom(item, c), { label: "Source", value: source, text: item.source }, clientsFact(item, { count: true })];
   const actions = [];
-  const off = offBodies(item);
-  if (off.length) actions.push({ label: OFF_ALL, node: rowsButton(OFF_ALL, off) });
-  const some = offersSome(item, c);
-  if (some) actions.push({ label: OFF_SOME, run: someStep });
+  if (offBodies(item).length) actions.push({ label: OFF_ALL, node: rowsButton(OFF_ALL, () => skillOffBodies(item, c.answer)) });
+  if (offersSome(item, c)) actions.push({ label: OFF_SOME, run: someStep });
   const notes = [];
-  if (some && (item.by || {}).codex) notes.push(NO_PROJECT_SWITCH);
-  if ((item.by || {}).cursor) notes.push(NO_CURSOR_SWITCH);
+  if (shared(item) && (item.by || {}).codex) notes.push(NO_PROJECT_SWITCH);
+  if ((item.by || {}).cursor === "on") notes.push(NO_CURSOR_SWITCH);
   const why = [loadsSay(item, { folder: c.project ? c.folder : "", noun: "this skill" }), ...notes].join(" ");
-  return { kind: KIND_WORDS.skill, title: item.name, id: item.source, tile: kindTile("skill"), facts, why, actions, technical: techOf([{ title: "Skill file", path: (item.technical || {}).path }]) };
+  const claude = ((item.can && item.can.off) || []).includes("claude_code");
+  const after = claude ? trayNote(SOME_FIRST, () => skillRuleWaits("project", c.answer)) : null;
+  return { kind: KIND_WORDS.skill, title: item.name, id: item.source, tile: kindTile("skill"), facts, why, actions, after, technical: techOf([{ title: "Skill file", path: (item.technical || {}).path }]) };
 }
 
 // A hook: its facts and Technical details only; hooks have no switch yet.
@@ -333,7 +369,7 @@ export function addNodes(item, back) {
   picks.setAttribute("aria-label", "Clients");
   for (const client of clients) {
     const body = addBody(item, client);
-    picks.append(tickRow({ id: client, name: CLIENT_NAMES[client], line: has(client) ? "Has it already" : "Not added", look: mark(client), off: has(client), body, ticked: () => inTray(keyFor(body)) }));
+    picks.append(tickRow({ id: client, name: CLIENT_NAMES[client], line: has(client) ? "Has it already" : "Not added", onLine: IN_PREVIEW, look: mark(client), off: has(client), body, ticked: () => inTray(keyFor(body)) }));
   }
   const body = el("div", "body");
   body.append(el("p", "why", "Each client you tick waits in preview until Apply."), picks);
@@ -361,13 +397,17 @@ function addStep(id, dir = "fwd") {
 
 // "Turn off <name> in the projects you pick": the Gateway's project checklist (D13), one row per
 // project whose folder is there; a project with skill settings of its own, or none yet, cannot be
-// ticked. Each tick is one skill.rule row for Claude Code.
+// ticked, nor can any while a Claude Code skill rule for all projects waits in the tray. Each tick
+// is one skill.rule row for Claude Code.
 export function someNodes(item, c, back) {
   const known = (data.projects || []).filter((p) => c.rules.projects[p.id]);
   const rows = menuItems(known, "").filter((p) => p.id).map((p) => {
     const can = c.rules.projects[p.id];
     const body = projectBody(item, p.id);
-    return { id: p.id, name: p.name, line: PROJECT_LINES[can] || "", off: can !== "ok", body, ticked: () => inTray(keyFor(body)) };
+    const ticked = () => inTray(keyFor(body));
+    const waits = () => !ticked() && skillRuleWaits("all", c.answer);
+    const line = () => PROJECT_LINES[can] || (waits() ? ALL_FIRST : "");
+    return { id: p.id, name: p.name, line, off: () => can !== "ok" || waits(), body, ticked };
   });
   return projectChecklist({ crumb: `Skill · ${item.name}`, title: `Turn off ${item.name} in the projects you pick`, why: SOME_WHY, rows, back });
 }

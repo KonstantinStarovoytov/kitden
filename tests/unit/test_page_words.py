@@ -2685,7 +2685,7 @@ def test_gateway_forms_say_in_preview_while_their_row_waits():
     assert "showInPreview(submit, words, PREVIEW, keyFor(body()))" in gateway
     assert 'const PREVIEW = "Preview";' in gateway
     # A project pick says it on its small line and in its name for a screen reader.
-    assert "`${line} · in preview`" in gateway
+    assert "`${text} · in preview`" in gateway
     assert "`${name}, ${said}`" in gateway
 
 
@@ -2761,6 +2761,11 @@ def test_the_library_map_details_words():
         '{ title: "Plugin folder", path: tech.path }',
         '{ title: "Marketplace", summary: tech.marketplace }',
         '{ title: "Skill file", path:',
+        'const ALL_FIRST = "Apply the rule for all projects first";',
+        '"Apply the project rules in preview first; then Claude Code can turn it off for all '
+        'projects."',
+        'value: "None yet"',
+        "onLine: IN_PREVIEW",
         '{ title: "Settings file", path:',
     ):
         assert words in text, words
@@ -2769,8 +2774,8 @@ def test_the_library_map_details_words():
     # The project checklist is the Gateway's own (D13), shared, not a copy.
     assert "export function projectChecklist(" in gw() and "projectChecklist({" in text
     assert "export function tickRow(" in gw()
-    # A ticked row with no line of its own says "In preview".
-    assert '(line ? `${line} · in preview` : "In preview")' in gw()
+    # A ticked row says "In preview" when it has no line of its own, or its `onLine`.
+    assert 'onLine || (text ? `${text} · in preview` : "In preview")' in gw()
     # The Inside rows grow out of their plugin, and fold back in 160 ms.
     view = script("map-view.js")
     assert "const GROW_STEP = 15;" in view and "const FOLD_BACK_MS = 160;" in view

@@ -48,9 +48,9 @@ What Kitden does today and what comes next. Ideas and bugs:
   now reads Claude Code's local project settings and its `skillOverrides`, so a skill or plugin
   turned off in one project shows Off there.
 - **Library Details:** a click on the Library map opens Details for a plugin, a thing inside it, a
-  skill, a hook, a client, a link or a marketplace. Skills and plugins can be turned off from the
-  Library, for all projects or in some projects, and a plugin can be added to another client;
-  each waits in preview until Apply.
+  skill, a hook, a client, a link or a marketplace. From the Library a plugin can be turned off for
+  all projects or in this project, and added to another client; a skill can be turned off for all
+  projects or in some projects. Each waits in preview until Apply.
 - **Details float beside the map:** on Gateway, Library and Changes, Details float over the right
   of the page as in the mockup; the page keeps its width and the map stays wide. Another block's
   Details swap in place through a quiet skeleton.
