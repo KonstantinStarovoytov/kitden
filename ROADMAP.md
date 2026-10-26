@@ -37,6 +37,8 @@ What Kitden does today and what comes next. Ideas and bugs:
   map says how to use it. Reasons and counts use the same words as the panels. After Apply or
   Undo the map lands its rows with no cross-fade, and a gateway Kitden cannot reach says "Not
   connected" on the map, with the reason in its Details. The add-gateway form can be cancelled.
+  The round count on a server (and on a Library plugin card) is a button: it opens or folds the
+  block and nothing else, with no Details.
 - **Library map:** the Library opens on a map like the Gateway's: the clients, then the plugins
   and skills they load, under where they come from (each marketplace, your skills, your
   settings, and in a project what only that project has), and a click on a plugin shows what it

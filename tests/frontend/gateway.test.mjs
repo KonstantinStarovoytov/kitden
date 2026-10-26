@@ -2598,6 +2598,34 @@ test('a drag lets go of the selection when the block first follows the pointer, 
   } finally { delete globalThis.document; }
 });
 
+test("a press on a server's count drags the server once it moves 5 px, and holds the count; less is a click", (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const heard = {};
+  globalThis.document = { addEventListener: (type, fn) => { (heard[type] ||= []).push(fn); }, removeEventListener() {}, documentElement: { classList: { add() {}, remove() {} } }, querySelector: () => null, querySelectorAll: () => [] };
+  try {
+    const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+    const layout = layoutTree(tree, { open: new Set(), narrow: false });
+    const id = 'held:kitden:files';
+    const home = layout.blocks.find((b) => b.id === id);
+    const held = [];
+    const captured = [];
+    const server = { dataset: { focus: `block:${id}` }, getBoundingClientRect: () => ({ left: home.x, top: home.y, width: home.w, height: home.h }), setPointerCapture: () => captured.push('block'), removeAttribute() {}, querySelectorAll: () => [] };
+    const count = { dataset: { focus: `count:${id}` }, getBoundingClientRect: () => ({ left: home.x + home.w - 10, top: home.y + 20, width: 20, height: 20 }), setPointerCapture: () => captured.push('count') };
+    const view = { node: () => server, hold: (...args) => held.push(args), homeIn() {}, wire() {}, unwire() {}, lightTarget() {}, unlightTarget() {}, glance() {}, tip() {}, untip() {}, box: { isConnected: true, classList: { toggle() {}, remove() {} } }, area: { getBoundingClientRect: () => ({ left: 0, top: 0 }) } };
+    placeMoved({ view, model: tree, layout, redraw() {} });
+    const [x, y] = [home.x + home.w, home.y + home.h / 2];
+    pressGrip({ button: 0, pointerId: 3, target: { closest: () => count }, clientX: x, clientY: y });
+    assert.deepEqual(captured, ['count']);
+    heard.pointermove[0]({ clientX: x + 4, clientY: y });
+    assert.deepEqual(held, [], 'a wobble under 5 px is a click');
+    heard.pointermove[0]({ clientX: x + 6, clientY: y });
+    assert.equal(held[0][0], id);
+    // The block is held where the press was on the block, not on the count.
+    assert.equal(held[0][1].x, x + 6 - home.w);
+    heard.pointerup[0]({ type: 'pointerup', clientX: x + 6, clientY: y });
+  } finally { delete globalThis.document; }
+});
+
 test('a drag keeps the pointer inside the block when the layout changes its size under the drag', (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const heard = {};

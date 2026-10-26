@@ -712,7 +712,7 @@ div.map .block { display: flex; align-items: center; gap: 10px; margin: 0; paddi
 div.map .block:hover { border-color: color-mix(in srgb, var(--route) 38%, var(--wire)); }
 div.map .block:active { scale: 0.98; transition-duration: var(--t-fast), var(--t-fast), 300ms, 300ms, 80ms; }
 div.map .block:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-div.map .block:has(> .block-count) { padding-right: 16px; }
+div.map .block.counted { padding-right: 16px; }
 div.map .block-tile { flex: none; display: grid; place-items: center; }
 div.map .block-tile .client-mark, div.map .block-tile .mono-mark { --tile: 28px; border-radius: 6px; }
 div.map .block-tile .client-mark[data-icon="claude"] img { padding: 4px; }
@@ -727,9 +727,15 @@ div.map .block-name { min-width: 0; font-size: 12px; font-weight: 600; line-heig
 div.map .block-meta { display: flex; align-items: center; gap: 5px; min-width: 0; color: var(--ink-3); font-size: 11px; line-height: 15px; }
 div.map .block-words { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 div.map .block-tag { flex: none; color: var(--route); font-size: 11px; font-weight: 500; line-height: 15px; white-space: nowrap; }
-/* A server's tool count: a 20 px round badge on its right edge, which hides while it is open. */
-div.map .block-count { position: absolute; top: calc(50% - 10px); right: -10px; min-width: 20px; height: 20px; padding: 0 3px; border: 1px solid var(--wire); border-radius: 10px; background: var(--panel-raised); color: var(--ink-2); font-size: 10px; line-height: 18px; text-align: center; transition: opacity 200ms ease, scale 300ms var(--spring); }
-div.map .block[aria-expanded="true"] > .block-count { opacity: 0; scale: 0.3; }
+/* The count of a block that folds (a server's tools, a plugin's items): a 20 px round button over its
+   block's right edge, after the block in Tab order (map-view.js places it; a button cannot sit inside
+   a button). It opens or folds the block and nothing else, and stays while the block is open, with
+   the accent edge. It dims, hides and leaves with its block (the classes the view gives it). */
+div.map .block-count { position: absolute; left: 0; top: 0; z-index: 2; min-width: 20px; height: 20px; margin: 0; padding: 0 3px; border: 1px solid var(--wire); border-radius: 10px; background: var(--panel-raised); color: var(--ink-2); font-size: 10px; line-height: 18px; text-align: center; cursor: pointer; transform-origin: center; will-change: translate, transform; transition: border-color var(--t-fast) ease, filter 300ms ease, scale 300ms var(--spring); }
+div.map .block-count:hover { border-color: color-mix(in srgb, var(--route) 38%, var(--wire)); }
+div.map .block-count:active { scale: 0.92; }
+div.map .block-count:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+div.map .block-count[aria-expanded="true"] { border-color: var(--route); }
 /* The right port of a block that folds shows only while it is open; a port on the lit path, or of
    the selected or open block, is accent. */
 div.map .block[aria-expanded="false"] > .port.r { opacity: 0; scale: 0.4; }
@@ -770,6 +776,8 @@ div.map .block.lit { border-color: var(--route); }
 div.map.focus .block:not(.lit):not(.selected) { filter: opacity(0.4) saturate(0.6); }
 div.map.focus .block.dragging:not(.lit):not(.selected) { filter: none; }
 div.map.focus .block:focus-visible:not(.lit):not(.selected) { filter: none; }
+div.map.focus .block-count:not(.lit):not(.selected) { filter: opacity(0.4) saturate(0.6); }
+div.map.focus .block-count.dragging:not(.lit):not(.selected), div.map.focus .block-count:focus-visible:not(.lit):not(.selected), div.map.focus .block:focus-visible + .block-count:not(.lit):not(.selected) { filter: none; }
 div.map .block.selected, div.map .block.tool.selected[data-state] { background: var(--route-soft); border-color: var(--route); }
 div.map .block.selected .block-meta { color: var(--ink-2); }
 div.map.narrow .block.client .block-tile .client-mark, div.map.narrow .block.client .block-tile .mono-mark { --tile: 24px; }
@@ -808,6 +816,8 @@ div.map .block.found { border-color: var(--route); box-shadow: 0 0 0 3px var(--r
 div.map .caption.found { color: var(--ink); }
 div.map.finding .block:not(.found) { filter: opacity(0.3) saturate(0.5) blur(1.2px); }
 div.map.finding .block:not(.found):focus-visible { filter: none; }
+div.map.finding .block-count:not(.found) { filter: opacity(0.3) saturate(0.5) blur(1.2px); }
+div.map.finding .block-count:not(.found):focus-visible, div.map.finding .block:not(.found):focus-visible + .block-count { filter: none; }
 div.map.finding .link { stroke-opacity: 0.2; }
 div.map.finding .link.direct.lit:not(.hov):not(.picked) { stroke-opacity: 0.2; }
 div.map.finding .link.leaving.lit:not(.hov):not(.picked), div.map.finding .link.direct.preview.lit:not(.hov):not(.picked) { stroke-opacity: 0.2; }
@@ -825,6 +835,8 @@ div.map .block.dragging { z-index: 3; border-color: var(--route); background: va
 div.map .block.dragging.pressed { scale: 0.98; }
 div.map .block.drop { border-color: var(--route); background: var(--route-soft); scale: 1.05; }
 div.map .block.covered { visibility: hidden; }
+div.map .block-count.covered { visibility: hidden; }
+div.map .block-count.dragging { z-index: 4; }
 div.map .dragtip { position: absolute; left: 0; top: 0; z-index: 7; padding: 3px 9px; border: 1px solid var(--wire); border-radius: 10px; background: var(--panel); color: var(--ink-3); font-size: 11px; white-space: nowrap; pointer-events: none; box-shadow: var(--shadow); }
 div.map .dragtip.on { background: var(--route-soft); border-color: var(--route); color: var(--route); }
 /* In preview: the dashed preview line on the preview fill and accent words; under the pointer or
@@ -837,6 +849,8 @@ div.map .block:hover > .block-x, div.map .block:focus-visible > .block-x { opaci
 /* Leaving: a change in the tray takes it out, or it fades off the map. */
 div.map .block.leaving { filter: opacity(0.45); border-style: dashed; }
 div.map .block.leaving:focus-visible { filter: none; }
+div.map .block-count.leaving { filter: opacity(0.45); }
+div.map .block-count.leaving:focus-visible { filter: none; }
 
 /* Spotlight (glow.js): under the pointer a map block or an Overview card takes a soft glow on its edge
    and a fainter one in its fill, set from --mx and --my (the pointer's place in it) and faded in on

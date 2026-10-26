@@ -17,7 +17,8 @@
 //   sits `before` more space under the block above it, its children are CAPTION_GAP under it and
 //   `rowGap` apart; `icon` (a lucide name) is drawn before its words. Any other block shows its
 //   children only while it is open. `state`: "on", "off", "unk" or "preview". `count`: what a
-//   folded block holds. `grip`: it can be dragged. `action`: what pressing it does, in words
+//   folded block holds, in a round button that opens and folds it; `unit` ("tool" unless set) is its
+//   word. `grip`: it can be dragged. `action`: what pressing it does, in words
 //   ("Set up…"). `stateInMeta`: no state word is spoken; its meta says the state already ("On in
 //   2 projects") or all there is to say (a gateway's clients and servers). How it looks
 //   (map-view.js): `lamp` "on", "off", "preview" or "out" (works outside the gateway), at the start

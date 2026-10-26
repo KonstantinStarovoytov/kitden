@@ -71,7 +71,7 @@ function itemBlock(item, group) {
   if (item.kind !== "plugin") return { ...block, h: ROW_H, label: ROW_LABELS[item.kind] };
   const counted = typeof item.count === "number";
   Object.assign(block, { meta: counted ? plural(item.count, "item", "items") : STATE_WORDS[lamp], stateInMeta: !counted });
-  if (counted && item.count > 0) Object.assign(block, { count: item.count, ports: { left: true, right: true } });
+  if (counted && item.count > 0) Object.assign(block, { count: item.count, unit: "item", ports: { left: true, right: true } });
   return block;
 }
 
@@ -243,6 +243,7 @@ function newMap() {
   const view = mapView({
     tile,
     onOpen: openPlugin,
+    onFold: foldPlugin,
     onSelect: pressBlock,
     onEmpty: () => onMap.selected && letGo(),
     // While nothing is selected, pointing at a client lights what it loads.
@@ -275,6 +276,15 @@ function openPlugin(id) {
   onMap.unfolds = !onMap.folded && !onMap.open.has(id);
   if (onMap.folded) onMap.open = new Set();
   else if (onMap.unfolds) onMap.open = new Set([id]);
+}
+
+// A press on a plugin card's count opens it in place of the one open, or folds it, and nothing else.
+// A selection the change hides is let go.
+function foldPlugin(id) {
+  onMap.open = onMap.open.has(id) ? new Set() : new Set([id]);
+  const layout = layoutTree(onMap.model, { open: onMap.open, pages: onMap.pages, narrow: false });
+  if (onMap.selected && !layout.blocks.some((at) => at.id === onMap.selected)) letGo();
+  else drawMap();
 }
 
 // A press on a block. "N more" turns its group's page. A press that folded a plugin, or a second

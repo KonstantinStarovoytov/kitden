@@ -699,18 +699,28 @@ def test_the_map_blocks_look_like_the_mockup():
     # Names are Inter, not mono; a block's edge is the line color.
     assert "--mono" not in rule("div.map .block-name")
     assert "border: 1px solid var(--wire);" in rule("div.map .block")
-    # The count badge is 20 px round and hides while its server is open; the right port of a block
-    # that folds shows only then.
+    # The count is a 20 px round button of its own, after its block (never inside it), that stays
+    # while the block is open and takes the accent edge; the right port of a block that folds shows
+    # only while it is open. Its words are the same in the page's script.
     badge = rule("div.map .block-count")
     for part in (
         "min-width: 20px",
         "height: 20px",
         "border-radius: 10px",
-        "opacity 200ms ease",
+        "cursor: pointer",
         "scale 300ms var(--spring)",
     ):
         assert part in badge, part
-    assert "opacity: 0; scale: 0.3;" in rule('div.map .block[aria-expanded="true"] > .block-count')
+    assert "opacity" not in rule('div.map .block-count[aria-expanded="true"]')
+    assert "border-color: var(--route)" in rule('div.map .block-count[aria-expanded="true"]')
+    assert "padding-right: 16px" in rule("div.map .block.counted")
+    assert "outline: 2px solid var(--focus)" in rule("div.map .block-count:focus-visible")
+    assert "filter: opacity(0.4)" in rule("div.map.focus .block-count:not(.lit):not(.selected)")
+    assert "filter: opacity(0.3)" in rule("div.map.finding .block-count:not(.found)")
+    view = script("map-view.js")
+    assert 'const unit = block.unit || "tool";' in view
+    assert "open ? `Hide ${unit}s` : `Show ${plural(block.count, unit, `${unit}s`)}`" in view
+    assert 'unit: "item"' in script("library-map.js")
     assert "opacity: 0; scale: 0.4;" in rule('div.map .block[aria-expanded="false"] > .port.r')
     assert "border-color: var(--lamp-off)" in rule(".port.out")
     # A preview: dashed preview line on the preview fill, accent words, an 18 px × on hover or

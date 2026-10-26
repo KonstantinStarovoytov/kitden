@@ -1025,6 +1025,7 @@ function newMap() {
   const view = mapView({
     tile,
     onOpen: openBlock,
+    onFold: foldBlock,
     onSelect: (id) => pressBlock(onMap.model, id),
     onAdd: pressAdd,
     onEmpty: letGoIfSelected,
@@ -1068,6 +1069,17 @@ function openBlock(id) {
   const { model } = onMap;
   onMap.open = pressOpen(model, onMap.open, onMap.found, id);
   onMap.unfolds = onMap.open.has(id);
+}
+
+// A press on the count of a server opens or folds it and nothing else: the selection and Details stay,
+// unless the fold hides the selected block (a tool of this server), which is let go like a turn
+// of a page does.
+function foldBlock(id) {
+  const { model } = onMap;
+  onMap.open = pressOpen(model, onMap.open, onMap.found, id);
+  onMap.unfolds = false;
+  if (onMap.selected && !shownOnMap(model, onMap.selected)) letGoOnMap();
+  else drawAgain();
 }
 
 // A new width of the box (the window) may change the layout: it is drawn again, at once in its new

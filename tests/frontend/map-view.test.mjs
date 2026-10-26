@@ -209,7 +209,7 @@ test('block nodes keep the reading order in the DOM, so Tab follows it', async (
   reduce(true);
   const v = view(); const layout = lay(['s1']);
   await v.draw(TREE, lay(), {}); await v.draw(TREE, layout, {});
-  const order = v.area.children.filter((n) => n.dataset?.focus).map((n) => n.dataset.focus.slice('block:'.length));
+  const order = v.area.children.filter((n) => n.dataset?.focus?.startsWith('block:')).map((n) => n.dataset.focus.slice('block:'.length));
   assert.deepEqual(order, blockOrder(layout));
 });
 
@@ -710,9 +710,20 @@ test('a new width that reads the blocks in another order puts their nodes in tha
   await v.draw(TREE, lay(['s1'], true), {});
   v.node('s2').focus();
   await v.draw(TREE, wide, { motion: 'none' });
-  const order = v.area.children.filter((n) => n.dataset?.focus).map((n) => n.dataset.focus.slice('block:'.length));
+  const order = v.area.children.filter((n) => n.dataset?.focus?.startsWith('block:')).map((n) => n.dataset.focus.slice('block:'.length));
   assert.deepEqual(order, blockOrder(wide));
   assert.equal(document.activeElement, v.node('s2'));
+});
+
+test('a new width that reads the blocks in another order keeps each count right after its block, and focus on it', async () => {
+  reduce(true);
+  const v = view(); const wide = lay(['s1']);
+  await v.draw(TREE, lay(['s1'], true), {});
+  v.node('count:s1').focus();
+  await v.draw(TREE, wide, { motion: 'none' });
+  const kids = v.area.children;
+  for (const id of ['s1', 's2']) assert.equal(kids[kids.indexOf(v.node(id)) + 1], v.node(`count:${id}`), id);
+  assert.equal(document.activeElement, v.node('count:s1'));
 });
 
 test('a press opens a block that folds, then selects it; any other block is only selected', async () => {
@@ -783,7 +794,7 @@ test('an entrance that is drawn over keeps one node per id and leaves nothing ha
   tick(30);
   v.draw(TREE, lay(['s1']), {});
   settle();
-  const ids = v.area.children.map((n) => n.dataset?.focus).filter(Boolean);
+  const ids = v.area.children.map((n) => n.dataset?.focus).filter((key) => key?.startsWith('block:'));
   assert.equal(new Set(ids).size, ids.length);
   assert.deepEqual(ids.map((id) => id.slice('block:'.length)).sort(), blockOrder(lay(['s1'])).sort());
   for (const { id } of lay(['s1']).blocks) {
@@ -1589,11 +1600,11 @@ test("a block draws its ports, and a server's right port shows only while open",
   assert.deepEqual([ports('c1'), ports('s1'), ports('o1')], [[['port r', 'true']], [['port l', 'true'], ['port r', 'true']], [['port l out', 'true']]]);
   // Opening the server draws none of its parts again: its right port and its count only change
   // their look by its aria-expanded (style.css), so they can fade.
-  const [right, count] = [parts(v.node('s1'), 'port')[1], part(v.node('s1'), 'block-count')];
+  const [right, count] = [parts(v.node('s1'), 'port')[1], v.node('count:s1')];
   assert.deepEqual([v.node('s1').getAttribute('aria-expanded'), count.textContent], ['false', '2']);
   await v.draw(LOOKS, looks(['s1']), { open: new Set(['s1']) });
   assert.equal(v.node('s1').getAttribute('aria-expanded'), 'true');
-  assert.deepEqual([parts(v.node('s1'), 'port')[1], part(v.node('s1'), 'block-count')], [right, count]);
+  assert.deepEqual([parts(v.node('s1'), 'port')[1], v.node('count:s1')], [right, count]);
   // A tool: its round mark, its name, which projects have a rule of their own (a folder, in the
   // accent for this project), and its port on the left. It has no meta line.
   const tool = (id) => v.node(id).children.map((n) => n.className);
@@ -1775,4 +1786,145 @@ test('a lamp fades to its new colour, and pops when it turns on or off', async (
   } finally {
     globalThis.getComputedStyle = style;
   }
+});
+
+// The count of a block that folds is a control of its own: a button after its block, over its right
+// edge, never inside it (a button in a button is not valid). It opens or folds the block (`onFold`)
+// and does nothing else: no `onOpen`, no `onSelect`.
+const countView = (hooks = {}) => {
+  const calls = [];
+  const v = view({ onOpen: (id) => calls.push(['open', id]), onSelect: (id) => calls.push(['select', id]), onFold: (id) => calls.push(['fold', id]), ...hooks });
+  return { v, calls };
+};
+
+test("a block's count is a button after the block, not inside it, with its words", async () => {
+  reduce(true);
+  const { v } = countView();
+  await v.draw(TREE, lay(), {});
+  const [block, count] = [v.node('s1'), v.node('count:s1')];
+  assert.deepEqual([count.tagName, count.className, count.textContent, count.dataset.focus, count.type], ['BUTTON', 'block-count', '2', 'count:s1', 'button']);
+  assert.equal(block.tagName, 'BUTTON');
+  assert.ok(!walk(block).some((n) => n.tagName === 'BUTTON' || n.className === 'block-count'));
+  // Tab reads it right after its block.
+  const kids = v.area.children;
+  assert.equal(kids[kids.indexOf(block) + 1], count);
+  assert.deepEqual(['Show 2 tools', 'Show 2 tools', 'false'], [count.getAttribute('aria-label'), count.title, count.getAttribute('aria-expanded')]);
+  // A block with no count, and a tool, have none.
+  assert.equal(v.node('count:c1'), null);
+  assert.equal(v.node('count:t1'), null);
+});
+
+test('its words say Show or Hide, by tool or by item', async () => {
+  reduce(true);
+  const { v } = countView();
+  await v.draw(TREE, lay(['s1']), { open: new Set(['s1']) });
+  const count = v.node('count:s1');
+  assert.deepEqual([count.getAttribute('aria-label'), count.title, count.getAttribute('aria-expanded')], ['Hide tools', 'Hide tools', 'true']);
+  await v.draw(TREE, lay(), { open: new Set() });
+  assert.deepEqual([v.node('count:s1'), count.getAttribute('aria-label'), count.getAttribute('aria-expanded')], [count, 'Show 2 tools', 'false']);
+  const cards = { columns: TREE.columns, links: [], blocks: [
+    { id: 'p1', column: 'b', kind: 'plugin', name: 'pr-review', unit: 'item', count: 3 },
+    { id: 'p2', column: 'b', kind: 'plugin', name: 'one', unit: 'item', count: 1 },
+    { id: 's3', column: 'b', kind: 'held', name: 'one tool', count: 1 },
+  ] };
+  await v.draw(cards, layoutTree(cards, { open: new Set(), narrow: false }), { open: new Set() });
+  assert.deepEqual(['p1', 'p2', 's3'].map((id) => v.node(`count:${id}`).getAttribute('aria-label')), ['Show 3 items', 'Show 1 item', 'Show 1 tool']);
+  await v.draw(cards, layoutTree(cards, { open: new Set(['p1']), narrow: false }), { open: new Set(['p1']) });
+  assert.equal(v.node('count:p1').getAttribute('aria-label'), 'Hide items');
+});
+
+test('a press on the count folds the block and does nothing else', async () => {
+  reduce(true);
+  const { v, calls } = countView();
+  await v.draw(TREE, lay(), {});
+  const count = v.node('count:s1');
+  count.focus();
+  count.dispatch('click');
+  assert.deepEqual(calls, [['fold', 's1']]);
+  assert.equal(globalThis.document.activeElement, count);
+  // The page draws the open block (Enter and Space send the same click): the same node, focused.
+  await v.draw(TREE, lay(['s1']), { open: new Set(['s1']) });
+  assert.equal(v.node('count:s1'), count);
+  assert.equal(globalThis.document.activeElement, count);
+  count.dispatch('click');
+  assert.deepEqual(calls, [['fold', 's1'], ['fold', 's1']]);
+  // The block itself still opens, then selects.
+  v.node('s1').dispatch('click');
+  assert.deepEqual(calls.slice(2), [['open', 's1'], ['select', 's1']]);
+});
+
+test('the count stays whole while its block is open, and a click on it is no click on the empty map', async () => {
+  reduce(true);
+  const empty = [];
+  const { v } = countView({ onEmpty: () => empty.push(1) });
+  await v.draw(TREE, lay(['s1']), { open: new Set(['s1']) });
+  const count = v.node('count:s1');
+  assert.equal(count.style.opacity || '', '');
+  assert.ok(count.style.translate);
+  v.box.dispatch('pointerdown', { target: count });
+  count.dispatch('click');
+  assert.deepEqual(empty, []);
+});
+
+test('the count sits on its block right edge and follows its place, scale and opacity', async () => {
+  const { v } = countView();
+  await v.draw(TREE, lay([], true), { motion: 'none' });
+  const block = v.node('s2');
+  const count = v.node('count:s2');
+  const w = parseFloat(block.style.width);
+  const h = parseFloat(block.style.height);
+  const at = pos(block);
+  // Its right edge is 10 px past the block's: centred on the edge when it is 20 px wide.
+  assert.equal(count.style.translate, `calc(${at.x + w + 10}px - 100%) ${at.y + h / 2 - 10}px`);
+  // The block moves: the count moves with it in the same frame.
+  const to = place(lay(['s1'], true), 's2').y;
+  v.draw(TREE, lay(['s1'], true), {});
+  tick(130);
+  assert.equal(count.style.translate, `calc(${pos(block).x + w + 10}px - 100%) ${pos(block).y + h / 2 - 10}px`);
+  tick(130);
+  assert.equal(pos(block).y, to);
+  // A block that goes takes its count with it, fading together.
+  v.draw(without('s2'), layoutTree(without('s2'), { open: new Set(), narrow: false }), {});
+  tick(90);
+  assert.deepEqual([count.style.opacity, block.style.opacity], ['0.875', '0.875']);
+  tick(90);
+  assert.deepEqual([v.node('count:s2'), count.parentNode, block.parentNode], [null, null, null]);
+});
+
+test('the count dims, hides and leaves with its block', async () => {
+  reduce(true);
+  const { v } = countView();
+  const found = (ids) => ({ matches: new Set(ids), open: new Set() });
+  await v.draw(TREE, lay(), { lit: new Set(['s1']), selected: 's1' });
+  assert.equal(v.node('count:s1').className, 'block-count lit selected');
+  assert.equal(v.node('count:s2').className, 'block-count');
+  await v.draw(TREE, lay(), { found: found(['s2']) });
+  assert.deepEqual(['s1', 's2'].map((id) => v.node(`count:${id}`).className), ['block-count', 'block-count found']);
+  v.hold('s2', { x: 10, y: 10 }, { pressed: true });
+  assert.equal(v.node('count:s2').className, 'block-count found dragging');
+  assert.deepEqual(v.node('count:s2').style.translate.startsWith('calc('), true);
+  // The count is a Tab stop unless its block is on its way out.
+  assert.equal(v.node('count:s1').getAttribute('tabindex'), null);
+});
+
+test('hovering the count is hovering its block', async () => {
+  reduce(true);
+  const seen = [];
+  const { v } = countView({ onHover: (id) => seen.push(id) });
+  await v.draw(TREE, lay(), {});
+  v.box.dispatch('pointerover', { target: v.node('s1') });
+  v.box.dispatch('pointerover', { target: v.node('count:s1') });
+  assert.deepEqual(seen, ['s1']);
+});
+
+test('a block that gains or loses its count gets or loses the control', async () => {
+  reduce(true);
+  const { v } = countView();
+  await v.draw(TREE, lay(), {});
+  const bare = { ...TREE, blocks: TREE.blocks.map((b) => (b.id === 's1' ? { ...b, count: undefined } : b)).filter((b) => b.parent !== 's1') };
+  await v.draw(bare, layoutTree(bare, { open: new Set(), narrow: false }), {});
+  assert.equal(v.node('count:s1'), null);
+  assert.ok(!v.area.children.some((n) => n.dataset.focus === 'count:s1'));
+  await v.draw(TREE, lay(), {});
+  assert.equal(v.node('count:s1').textContent, '2');
 });

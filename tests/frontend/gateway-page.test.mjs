@@ -1453,3 +1453,91 @@ test('an Undo with the panel closed frees the Added mark at the next read', asyn
   redraw();
   assert.equal(wasAdded('test-status'), false);
 });
+
+// The count of a server is its own control: it opens or folds the server and nothing else.
+const countOf = (box) => node(box, 'count:held:kitden:files');
+const toolShown = (box) => Boolean(node(box, 'block:tool:files/read_file'));
+const countCleanUp = async () => {
+  closePanel({ instant: true, focus: false });
+  await done();
+  settle();
+  reducedMotion.matches = false;
+  Object.assign(state, { selected: null });
+  if (toolShown(map())) countOf(map()).listeners.click[0]();
+  settle();
+};
+
+test('the count unfolds and folds a server: nothing is selected and no Details open', async (t) => {
+  t.after(countCleanUp);
+  const box = freshMap();
+  const count = countOf(box);
+  count.focus();
+  count.listeners.click[0]();
+  settle();
+  assert.equal(toolShown(box), true);
+  assert.deepEqual([count.getAttribute('aria-expanded'), count.getAttribute('aria-label'), countOf(box) === count, document.activeElement === count], ['true', 'Hide tools', true, true]);
+  assert.ok(!walk(box).some((n) => /\bselected\b/.test(n.className)));
+  await done();
+  assert.deepEqual([isPanelOpen(), state.selected], [false, null]);
+  count.listeners.click[0]();
+  settle();
+  assert.deepEqual([toolShown(box), count.getAttribute('aria-label'), isPanelOpen(), document.activeElement === count], [false, 'Show 1 tool', false, true]);
+});
+
+test('a press on the block itself still opens Details and unfolds, as before', async (t) => {
+  t.after(countCleanUp);
+  const box = freshMap();
+  press(box, 'block:held:kitden:files');
+  await done();
+  settle();
+  assert.equal(toolShown(box), true);
+  assert.deepEqual([isPanelOpen(), panelState.current], [true, { type: 'held', name: 'files' }]);
+  assert.match(node(box, 'block:held:kitden:files').className, /\bselected\b/);
+});
+
+test('the count keeps the selection and its Details as they were', async (t) => {
+  t.after(countCleanUp);
+  const box = freshMap();
+  press(box, 'block:held:kitden:tracker');
+  await done();
+  settle();
+  const details = panelState.current;
+  assert.deepEqual([isPanelOpen(), details.name], [true, 'tracker']);
+  countOf(box).listeners.click[0]();
+  settle();
+  await done();
+  assert.equal(toolShown(box), true);
+  assert.deepEqual([isPanelOpen(), panelState.current], [true, details]);
+  assert.match(node(box, 'block:held:kitden:tracker').className, /\bselected\b/);
+  assert.doesNotMatch(node(box, 'block:held:kitden:files').className, /\bselected\b/);
+});
+
+test('folding a server whose tool is selected lets the selection go', async (t) => {
+  t.after(countCleanUp);
+  const box = freshMap();
+  press(box, 'block:held:kitden:files');
+  await done();
+  settle();
+  press(box, 'block:tool:files/read_file');
+  await done();
+  settle();
+  assert.match(node(box, 'block:tool:files/read_file').className, /\bselected\b/);
+  countOf(box).listeners.click[0]();
+  settle();
+  await done();
+  assert.deepEqual([toolShown(box), isPanelOpen()], [false, false]);
+  assert.ok(!walk(box).some((n) => /\bselected\b/.test(n.className)));
+});
+
+test('under reduced motion the count lands at once', async (t) => {
+  t.after(countCleanUp);
+  const box = freshMap();
+  reducedMotion.matches = true;
+  countOf(box).listeners.click[0]();
+  // No frame is needed: the tools are in their places, whole.
+  assert.equal(frames.length, 0);
+  const read = node(box, 'block:tool:files/read_file');
+  assert.ok(read);
+  assert.equal(read.style.opacity, '');
+  assert.equal(countOf(box).getAttribute('aria-expanded'), 'true');
+});

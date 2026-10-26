@@ -115,8 +115,8 @@ export const DRAGS = {
 // before the map holds the block: the page lets go of its selection there.
 export function pressGrip(event, onStart = () => {}) {
   if (event.button !== 0 || busy.change || pageWaits() || onMap.drag || !onMap.model) return;
-  const node = event.target.closest("button.block");
-  const block = node && onMap.model.blocks.find((b) => node.dataset.focus === `block:${b.id}`);
+  const node = event.target.closest("button.block, button.block-count");
+  const block = node && onMap.model.blocks.find((b) => [`block:${b.id}`, `count:${b.id}`].includes(node.dataset.focus));
   if (!block || (onMap.moving && onMap.moving.id !== block.id) || stillAsked(onMap.adding)) return;
   if (block.grip) startDrag(event, block, "in", onStart);
   else if (leavesGateway(block)) startDrag(event, block, "out", onStart);
@@ -164,6 +164,8 @@ function sayWhy(event, block) {
   window.addEventListener("blur", done);
 }
 
+const onCount = (node) => Boolean(node.dataset && node.dataset.focus && node.dataset.focus.startsWith("count:"));
+
 // A server the Kitden gateway holds can move out to a client, unless a change takes it out.
 const leavesGateway = (block) => block.kind === "held" && block.gateway.kind === "kitden" && !block.leaving;
 
@@ -190,9 +192,11 @@ function whyNot(name, client) {
 // puts the map back on the page loses no move. A row of the Add panel brings its own `node`.
 export function startDrag(event, block, kind, onStart = () => {}) {
   const hooks = DRAGS[kind];
-  const node = block.node || event.target.closest("button.block");
+  // A press on a block's count holds the count, which hears the click that ends it; the block is what moves.
+  const pressed = block.node || event.target.closest("button.block, button.block-count");
+  const node = onCount(pressed) ? onMap.view.node(block.id) : pressed;
   try {
-    node.setPointerCapture(event.pointerId);
+    pressed.setPointerCapture(event.pointerId);
   } catch {
     // A pointer that is gone already: the document still hears it.
   }

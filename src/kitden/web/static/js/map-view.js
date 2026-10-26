@@ -4,7 +4,7 @@
 // on each frame. A link the page acts on takes the pointer: a wide hit stroke, a hover look and a
 // small × on its middle. A selection dims what is off its path and lays an accent line over each
 // lit link. The page gives the hooks; the view knows nothing of servers, tools or clients.
-import { button, cutName, el, icon, showWaits } from "./dom.js";
+import { button, cutName, el, icon, plural, showWaits } from "./dom.js";
 import { blockLabel, crossPoint, drawPlan, enterDelays, foldable, foldsInto, LINK_MS, linkClass, linkDashed, linkKey, linkPath, unfoldDelays } from "./map.js";
 import { animateTo, CALM, D, IN3, OUT3, RETRACT, rollTo, unscaled } from "./motion.js";
 
@@ -47,6 +47,9 @@ const BLEND_MS = 300; // a link whose look changes blends from its old dashes to
 const OVER_IN_MS = 180; // the accent line over a lit link fades in
 const OVER_OUT_MS = 160; // ... and fades out
 const NO_LINKS = { canHit: () => false, waits: () => false }; // a page that acts on no link
+const COUNT_SIZE = 20; // a count's round badge
+const COUNT_OUT = COUNT_SIZE / 2; // ... reaches this far past its block's right edge
+const COUNT_LOOKS = ["lit", "selected", "found", "dragging", "covered", "leaving"]; // what it takes from its block
 
 // A part a screen reader skips: the block's label says it already.
 function quiet(node) {
@@ -79,8 +82,7 @@ function rollingWords(words, nums, slot) {
 // `tile(block)`), a tool's mark, its name cut short with its meta line under it (its lamp first,
 // and after its words, in the accent, what waits in the tray: `wait`) and a gateway's counts under
 // that, which projects have a rule of their own for a tool, its kind word at its end (`label`,
-// { icon, words }: "Skill"), the count of a block that folds (style.css hides it while it is
-// open), a slot's action, its ports (the right one of a block that
+// { icon, words }: "Skill"), a slot's action, its ports (the right one of a block that
 // folds shows only while it is open), and the × of a block in preview. A tag takes the meta line's
 // words where a count takes the room, else it sits beside the name; on a block with words and a
 // count (a server) the folder tag of projects sits after its name too. It gives the parts, with the
@@ -150,7 +152,6 @@ function blockParts(block, { tile }) {
     label.append(el("span", null, block.label.words));
     parts.push(label);
   }
-  if (counted) parts.push(quiet(el("span", "block-count", block.count)));
   if (block.action) parts.push(quiet(el("span", "block-action", block.action)));
   for (const side of ["left", "right"]) {
     const look = block.ports && block.ports[side];
@@ -161,10 +162,17 @@ function blockParts(block, { tile }) {
 }
 
 // Everything a block's parts depend on (its tile too), as one key: they are drawn again only when
-// it changes. Opening a block draws none of them again: its count and right port follow its
-// aria-expanded in style.css, so they fade.
+// it changes. Opening a block draws none of them again: its right port follows its aria-expanded
+// in style.css, so it fades. The count of a block that folds is no part of it (countOf).
 function wordsKey(block) {
-  return JSON.stringify([block.kind, block.name, block.meta, block.wait, block.tag, block.count, block.action, block.lamp, block.grip, block.icon, block.client, block.gateway && block.gateway.kind, block.stats, block.projects, block.label, block.ports, block.takeOut]);
+  return JSON.stringify([block.kind, block.name, block.meta, block.wait, block.tag, typeof block.count, block.action, block.lamp, block.grip, block.icon, block.client, block.gateway && block.gateway.kind, block.stats, block.projects, block.label, block.ports, block.takeOut]);
+}
+
+// What a block's count says to open it or fold it ("Show 3 tools", "Hide tools"; a plugin card holds
+// "items": its `unit`).
+function countWords(block, open) {
+  const unit = block.unit || "tool";
+  return open ? `Hide ${unit}s` : `Show ${plural(block.count, unit, `${unit}s`)}`;
 }
 
 // What a block's parts showed (`drawn`, as blockParts gave them, for `block`), for its next draw:
@@ -298,7 +306,10 @@ function addButton(column, onAdd) {
 // its start (380 ms); one that changes look (dashed or solid) blends (300 ms). One to or from a block
 // that comes or goes shows as much as the fainter block. Reduced motion and a hidden page land at once.
 // A press on a block opens or folds it when it folds (`onOpen(id)`), then selects it
-// (`onSelect(id)`); "+ Add" beside a column's caption calls `onAdd(column, button)`. `tile(block)` gives
+// (`onSelect(id)`). The count of a block that folds is a button of its own, after the block in Tab
+// order and over its right edge (a button cannot sit inside a button): a press on it calls
+// `onFold(id)`, which opens or folds the block and draws again, and nothing else: no select, no
+// Details. It stays while the block is open, to fold it again. "+ Add" beside a column's caption calls `onAdd(column, button)`. `tile(block)` gives
 // what a block shows before its name. An entrance starts `enterDelay` ms late (the Gateway waits for
 // the old page to leave: motion.js afterOldPage).
 // `links` are the page's hooks for the links it acts on: `canHit(link)`, `tip(link)` (what its
@@ -314,7 +325,7 @@ function addButton(column, onAdd) {
 // only while the last draw selected nothing. `onEmpty()` hears a click on the map that is on no
 // block, button or link; `onHover(id | null)` the block under the pointer when it changes (null:
 // the pointer left the map), never while a block is held.
-export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links: pointer = NO_LINKS, enterDelay = 0 } = {}) {
+export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHover, links: pointer = NO_LINKS, enterDelay = 0 } = {}) {
   const box = el("div", "map");
   const area = el("div", "map-area");
   const svg = document.createElementNS(SVG, "svg");
@@ -387,6 +398,75 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     return node;
   }
 
+  // The count of a block that folds, as a button of its own (see the notes above mapView).
+  function makeCount(id) {
+    const node = el("button", "block-count");
+    node.type = "button";
+    node.dataset.focus = `count:${id}`;
+    node.addEventListener("click", () => {
+      const item = blocks.get(id);
+      if (item && !item.leaving && folds.has(id) && onFold) onFold(id);
+    });
+    return node;
+  }
+
+  // A block's count as this draw shows it: made, worded and put in place, or taken away.
+  function syncCount(item, block, open) {
+    if (!block || typeof block.count !== "number") {
+      dropCount(item);
+      return;
+    }
+    if (!item.count) item.count = makeCount(item.id);
+    const { count } = item;
+    const words = countWords(block, open);
+    if (count.textContent !== String(block.count)) count.textContent = String(block.count);
+    count.setAttribute("aria-label", words);
+    count.title = words;
+    count.setAttribute("aria-expanded", String(open));
+    paintCount(item);
+    putCount(item);
+  }
+
+  function dropCount(item) {
+    if (!item.count) return;
+    item.count.remove();
+    item.count = null;
+  }
+
+  // The count takes its block's look (the dim of a path or a search, the hold of a drag), and is a
+  // Tab stop unless its block is on its way out.
+  function paintCount(item) {
+    const { count, node } = item;
+    if (!count) return;
+    const has = new Set(node.className.split(" "));
+    const look = ["block-count", ...COUNT_LOOKS.filter((name) => has.has(name))].join(" ");
+    if (count.className !== look) count.className = look;
+    if (item.leaving) count.setAttribute("tabindex", "-1");
+    else if (count.getAttribute("tabindex") !== null) count.removeAttribute("tabindex");
+  }
+
+  // The count's right side is COUNT_OUT past its block's, level with its middle: where it sits when
+  // the block is scaled (about its centre) too. Its opacity is the block's.
+  function putCount({ count, x, y, s, o, w, h }) {
+    if (!count) return;
+    count.style.translate = `calc(${x + (w * (1 + s)) / 2 + COUNT_OUT}px - 100%) ${y + h / 2 - COUNT_OUT}px`;
+    count.style.transform = s === 1 ? "" : `scale(${s})`;
+    fade(count, o);
+  }
+
+  // A count sits right after its block, so Tab reads it next. A count out of place is put there, and
+  // focus on it goes back to it.
+  function seatCounts() {
+    const focused = document.activeElement;
+    for (const { node, count } of blocks.values()) {
+      if (!count || !node.parentNode) continue;
+      const kids = [...area.children];
+      const after = kids[kids.indexOf(node) + 1] || null;
+      if (after !== count) area.insertBefore(count, after);
+    }
+    if (focused && focused !== document.activeElement && area.contains(focused)) focused.focus({ preventScroll: true });
+  }
+
   // A block at (x, y), scaled by s from its centre, at opacity o. The place is the `translate`
   // property and only the scale is `transform`: a press scales the block with the CSS `scale`
   // property, which turns about the block's own middle only when the place is not in `transform`.
@@ -395,6 +475,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     item.node.style.translate = `${x}px ${y}px`;
     item.node.style.transform = s === 1 ? "" : `scale(${s})`;
     fade(item.node, o);
+    putCount(item);
   }
 
   // A block's classes: its look from the last draw, `.lit` on the lit path, `.dragging` while it is
@@ -407,6 +488,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     if (item.node.className !== look) item.node.className = look;
     if (item.leaving) item.node.setAttribute("tabindex", "-1");
     else if (item.node.getAttribute("tabindex") !== null) item.node.removeAttribute("tabindex");
+    paintCount(item);
   }
 
   // A block's node as this draw shows it: its look, words, size and what a screen reader hears. The
@@ -438,7 +520,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
       const group = place.kind === "group";
       const folding = folds.has(place.id);
       // A block whose removal waits in the tray looks leaving too, and stays a Tab stop.
-      item.look = [group ? "caption" : `block ${place.kind}`, block.leaving && "leaving", block.drags && "drags", place.id === selected && "selected", matched && "found"].filter(Boolean).join(" ");
+      item.look = [group ? "caption" : `block ${place.kind}`, !group && folding && typeof block.count === "number" && "counted", block.leaving && "leaving", block.drags && "drags", place.id === selected && "selected", matched && "found"].filter(Boolean).join(" ");
       node.dataset.focus = `block:${place.id}`;
       if (block.state) node.dataset.state = block.state;
       else delete node.dataset.state;
@@ -466,6 +548,8 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     if (item.w !== place.w && !(item.div && place.kind === "group")) node.style.width = `${place.w}px`;
     if (item.h !== place.h) node.style.height = `${place.h}px`;
     Object.assign(item, { kind: place.kind, w: place.w, h: place.h, home: { x: place.x, y: place.y }, growsFrom: block.growsFrom || null, growMs: block.growMs || GROW_MS });
+    const counting = place.kind !== "column" && !item.div && place.kind !== "group" && folds.has(place.id);
+    syncCount(item, counting ? block : null, open.has(place.id));
   }
 
   // A block that is a caption now and a button later (or back) gets a new node in the same place.
@@ -473,6 +557,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     const node = makeNode(place.id, isWords(place));
     if (item.node.parentNode) area.insertBefore(node, item.node);
     item.node.remove();
+    dropCount(item);
     Object.assign(item, { node, div: isWords(place), words: null, look: "", w: 0, h: 0 });
     put(item, item);
   }
@@ -760,6 +845,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     stop(item);
     blocks.delete(item.id);
     item.node.remove();
+    dropCount(item);
     for (const [key, link] of links) if (link.link.from === item.id || link.link.to === item.id) unlink(key);
   }
 
@@ -816,6 +902,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     stop(item);
     blocks.delete(item.id);
     item.node.remove();
+    dropCount(item);
     if (focused) next.node.focus({ preventScroll: true });
     for (const [key, link] of links) {
       if (link.link.from !== item.id && link.link.to !== item.id) continue;
@@ -925,10 +1012,12 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     }
     const index = new Map([...area.children].map((node, i) => [node, i]));
     const nodes = layout.blocks.map((place) => blocks.get(place.id).node);
-    if (nodes.every((node, i) => i === 0 || index.get(nodes[i - 1]) < index.get(node))) return;
-    const focused = document.activeElement;
-    for (const node of nodes) area.insertBefore(node, hits);
-    if (focused && focused !== document.activeElement && area.contains(focused)) focused.focus({ preventScroll: true });
+    if (!nodes.every((node, i) => i === 0 || index.get(nodes[i - 1]) < index.get(node))) {
+      const focused = document.activeElement;
+      for (const node of nodes) area.insertBefore(node, hits);
+      if (focused && focused !== document.activeElement && area.contains(focused)) focused.focus({ preventScroll: true });
+    }
+    seatCounts();
   }
 
   // The hits in reading order, so Tab reads them so: by the blocks they join, as Tab reads the
@@ -1257,11 +1346,11 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     for (const item of links.values()) if (!item.exit) setLook(item, linkLook(item.link, shown), canMove());
   }
 
-  // The block that holds `target`, by its focus key, or null.
+  // The block that holds `target`, by its focus key (or its count's), or null.
   function blockAt(target) {
     for (let at = target; at && at !== box; at = at.parentNode) {
       const focus = at.dataset && at.dataset.focus;
-      if (focus && focus.startsWith("block:")) return focus.slice("block:".length);
+      if (focus && (focus.startsWith("block:") || focus.startsWith("count:"))) return focus.slice(focus.indexOf(":") + 1);
     }
     return null;
   }
@@ -1296,6 +1385,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
   });
 
   function node(idOrKey) {
+    if (idOrKey.startsWith("count:")) return blocks.get(idOrKey.slice("count:".length))?.count || null;
     return blocks.get(idOrKey)?.node || links.get(idOrKey)?.path || null;
   }
 

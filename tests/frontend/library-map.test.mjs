@@ -327,6 +327,49 @@ test('a click on a plugin opens what it holds and lights its path; a second clic
   assert.ok(!box.classList.contains('focus'));
 });
 
+test('the count of a plugin card opens and folds it and nothing else; its words say items', async () => {
+  const { box } = showMap();
+  settle();
+  const count = node(box, 'count:item:p2');
+  assert.deepEqual([count.tagName, count.textContent, count.getAttribute('aria-label'), count.title, count.getAttribute('aria-expanded')], ['BUTTON', '3', 'Show 3 items', 'Show 3 items', 'false']);
+  assert.equal(node(box, 'count:item:p1').getAttribute('aria-label'), 'Show 1 item');
+  // A card with nothing read, a skill and a hook have no count.
+  assert.deepEqual(['p4', 's1', 'h1'].map((id) => node(box, `count:item:${id}`)), [null, null, null]);
+  count.focus();
+  count.listeners.click[0]();
+  await flush();
+  assert.ok(node(box, 'block:part:p2:skills:brainstorm'));
+  assert.deepEqual([count.getAttribute('aria-label'), count.getAttribute('aria-expanded'), node(box, 'count:item:p2') === count, document.activeElement === count], ['Hide items', 'true', true, true]);
+  // Nothing is selected and nothing is lit.
+  assert.ok(!walk(box).some((n) => /\bselected\b/.test(n.className)));
+  assert.ok(!box.classList.contains('focus'));
+  // Another plugin's count opens it in place of this one; the same count folds it.
+  node(box, 'count:item:p1').listeners.click[0]();
+  await flush();
+  assert.deepEqual([node(box, 'block:part:p2:skills:brainstorm'), count.getAttribute('aria-label')], [null, 'Show 3 items']);
+  assert.ok(node(box, 'block:part:p1:mcp_servers:pr-index'));
+  node(box, 'count:item:p1').listeners.click[0]();
+  await flush();
+  assert.equal(node(box, 'block:part:p1:mcp_servers:pr-index'), null);
+  // The card itself still opens and selects.
+  node(box, 'block:item:p2').listeners.click[0]();
+  await flush();
+  assert.match(node(box, 'block:item:p2').className, /\bselected\b/);
+});
+
+test('folding the plugin that holds the selection lets the selection go', async () => {
+  const { box } = showMap();
+  settle();
+  node(box, 'block:item:p2').listeners.click[0]();
+  await flush();
+  node(box, 'block:part:p2:skills:brainstorm').listeners.click[0]();
+  await flush();
+  assert.match(node(box, 'block:part:p2:skills:brainstorm').className, /\bselected\b/);
+  node(box, 'count:item:p2').listeners.click[0]();
+  await flush();
+  assert.ok(!walk(box).some((n) => /\bselected\b/.test(n.className)));
+});
+
 test('under reduced motion it lands at once', () => {
   reducedMotion.matches = true;
   try {
