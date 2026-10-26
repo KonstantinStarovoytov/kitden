@@ -51,7 +51,11 @@ AFTER_WORDS: dict[str, tuple[str, str]] = {
     "setup_server.update": ("on", "Updated"),
     "setup_server.enable": ("on", STATE_WORDS["on"]),
     "client.disconnect": ("off", "Removed"),
+    "gateway.add": ("gw", STATE_WORDS["gw"]),
 }
+
+# A change to the Kitden gateway when no client has its `kitden` entry on.
+NO_GATEWAY_CLIENT = "No client uses the Kitden gateway yet."
 
 # The tag a cell carries in a project view: "This project" when the project's own settings
 # decide it (a project item that wins over a shared one), "Only this project" for an item only

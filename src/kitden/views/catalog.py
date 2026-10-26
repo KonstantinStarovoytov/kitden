@@ -14,7 +14,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 from kitden.clients.base import ClientAdapter
 from kitden.clients.entries import gateway_entry, reads_elsewhere
-from kitden.model import ItemKind, Scope
+from kitden.model import ItemKind, Scope, SourceKind
 from kitden.redact import redact
 from kitden.views.setup_server import CLIENT_WORDS
 
@@ -222,6 +222,10 @@ def _offered_servers(adapters: dict[str, ClientAdapter]):
                 yield entry["name"], marketplace, name, value
 
 
+def _from_plugin(item) -> bool:
+    return item.scope is Scope.PLUGIN or item.source.kind is SourceKind.PLUGIN
+
+
 def known_refusal(name: str, entry: dict, inventory, held: set[str]) -> str | None:
     """Why the Kitden gateway cannot take this server, from the entry alone (no network); None
     when it can. Checked against the plugin docs on 2026-10-26 (not a live client):
@@ -236,18 +240,13 @@ def known_refusal(name: str, entry: dict, inventory, held: set[str]) -> str | No
 
     if name in held:
         return f"{name} is in the gateway already."
+    same = [
+        i
+        for i in inventory.items
+        if i.kind is ItemKind.MCP_SERVER and i.name == name and not i.via_gateway
+    ]
     # A server an installed plugin brings is not the client's own entry; it cannot be moved.
-    has = next(
-        (
-            i
-            for i in inventory.items
-            if i.kind is ItemKind.MCP_SERVER
-            and i.name == name
-            and not i.via_gateway
-            and i.scope is not Scope.PLUGIN
-        ),
-        None,
-    )
+    has = next((i for i in same if not _from_plugin(i)), None)
     if has is not None:
         client = CLIENT_WORDS.get(has.client, has.client)
         return f"{client} has {name} already. Move it into the gateway instead."
@@ -268,6 +267,12 @@ def known_refusal(name: str, entry: dict, inventory, held: set[str]) -> str | No
         return f"{name} runs a file inside its plugin folder; Kitden can't run it from the gateway."
     if "command" not in server and "url" not in server:
         return f"{name} could not be read from its file."
+    # Last, so a plugin's own server says first why the gateway cannot run it: the client
+    # would load the plugin's copy and the gateway's.
+    plugin = next((i for i in same if _from_plugin(i)), None)
+    if plugin is not None:
+        client = CLIENT_WORDS.get(plugin.client, plugin.client)
+        return f"{client} loads {name} from a plugin already."
     return None
 
 

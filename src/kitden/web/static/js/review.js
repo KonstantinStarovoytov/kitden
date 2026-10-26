@@ -23,17 +23,17 @@ const DONE_WORDS = {
   "gateway.switch": "Switched the gateway", "plugin.install": "Added", "marketplace.add": "Added the marketplace",
   "skill.install": "Added", "plugin.skills": "Added",
   "gateway.remove": "Removed", "gateway.put_back": "Put", "gateway.move_out": "Moved", "mcp.add": "Added",
-  "gateway.keychain": "Moved",
+  "gateway.keychain": "Moved", "gateway.add": "Added",
 };
 
 // Actions whose words say "from" a client.
 const REMOVES = ["mcp.remove_direct", "plugin.remove", "skill.remove"];
 // Actions that add an item: the review names where it goes before the click. A marketplace, a
-// gateway's entry and a server put back always go to all projects. app.py's ADD_ACTIONS has
-// four more: Add missing names its project in its title already, setup_server.update changes an
-// entry where it is, setup_server.register says "to Kitden" and gateway.move_out names the
-// client it goes into.
-export const ADDS = ["mcp.add", "skill.install", "plugin.install", "plugin.skills", "marketplace.add", "gateway.connect", "gateway.put_back"];
+// gateway's entry, a server put back and one added to the Kitden gateway always go to all
+// projects. app.py's ADD_ACTIONS has four more: Add missing names its project in its title
+// already, setup_server.update changes an entry where it is, setup_server.register says "to
+// Kitden" and gateway.move_out names the client it goes into.
+export const ADDS = ["mcp.add", "skill.install", "plugin.install", "plugin.skills", "marketplace.add", "gateway.connect", "gateway.put_back", "gateway.add"];
 // Where the steps go, as the title ends (parts.js, so the Changes page says it too).
 export { PLACE_IN_TITLE, targetWords };
 // No promise of Undo for every change: the server names the known limit (`undo_note`).
@@ -89,6 +89,8 @@ export function changeWords(change, previewBody) {
   const clients = joinWords(reached.map(clientName));
   const plugin = ((previewBody && previewBody.params && previewBody.params.plugin) || "the plugin").split("@")[0];
   const server = (previewBody && previewBody.params && previewBody.params.server) || (change.steps[0] && change.steps[0].name);
+  // An add names the server, not its row in the Add panel ("<plugin>@<marketplace>/<name>").
+  const added = change.steps[0] ? change.steps[0].name : String(server).split("/").pop();
   let title = {
     "gateway.move": kitden ? `Move ${names} into the Kitden gateway` : `Move ${names} into the gateway`,
     "plugin.disable": `Turn off ${names} in ${clients}`,
@@ -111,6 +113,7 @@ export function changeWords(change, previewBody) {
     "gateway.put_back": `Put ${server} back in ${clients}`,
     "gateway.move_out": `Move ${server} out of the gateway into ${clients}`,
     "gateway.keychain": `Move the secrets of ${server} to the Keychain`,
+    "gateway.add": `Add ${added} to the Kitden gateway`,
   }[change.action] || change.action;
   const verb = DONE_WORDS[change.action] || change.action;
   let what = `${verb} ${short} ${REMOVES.includes(change.action) ? "from" : "in"} ${clients}`;
@@ -141,6 +144,8 @@ export function changeWords(change, previewBody) {
     what = `${verb} ${server} into ${clients}`;
   } else if (change.action === "gateway.keychain") {
     what = `${verb} the secrets of ${server} to the Keychain`;
+  } else if (change.action === "gateway.add") {
+    what = `${verb} ${added} to the Kitden gateway`;
   } else if (change.action === "plugin.skills") {
     what = `${verb} ${plural(steps.length, "skill", "skills")} to ${clients}`;
   } else if (change.action === "project.align") {
@@ -151,8 +156,9 @@ export function changeWords(change, previewBody) {
   }
   // The title says where the steps go: into one project, or for all projects. A title that
   // names its place keeps it once; a change from before the server said so names an add's.
-  const target = change.target && !PLACE_IN_TITLE.includes(change.action) ? change.target : null;
-  const scope = target ? targetWords(target) : addScope(change.action, previewBody && previewBody.params && previewBody.params.project);
+  const named = PLACE_IN_TITLE.includes(change.action);
+  const target = change.target && !named ? change.target : null;
+  const scope = target ? targetWords(target) : !named && addScope(change.action, previewBody && previewBody.params && previewBody.params.project);
   if (scope) {
     title = `${title}${scope}`;
     what = `${what}${scope}`;

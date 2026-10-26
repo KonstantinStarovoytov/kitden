@@ -45,6 +45,7 @@ from kitden.model import (
     Step,
 )
 from kitden.redact import redact
+from kitden.views.catalog import known_refusal, market_entry
 from kitden.views.setup_server import is_own_entry
 
 if TYPE_CHECKING:
@@ -475,6 +476,7 @@ GATEWAY_REMOVE = "gateway.remove"  # a held server and its rules leave the Kitde
 GATEWAY_PUT_BACK = "gateway.put_back"  # a held server's entry written into a client
 GATEWAY_MOVE_OUT = "gateway.move_out"  # a held server put back in one client and removed
 GATEWAY_KEYCHAIN = "gateway.keychain"  # a held server's plain secrets moved to the Keychain
+GATEWAY_ADD = "gateway.add"  # a server a marketplace plugin offers, added to the Kitden gateway
 # Codex waits 10 s for a server to start and 60 s for a tool call (checked 2026-10-21). The
 # Kitden gateway may take up to 20 s to list a server and 300 s for one call.
 CODEX_TIMEOUTS = {"startup_timeout_sec": 30, "tool_timeout_sec": 300}
@@ -900,6 +902,47 @@ def keychain_steps(home: Path, server: str) -> list[Step]:
     step = settings_step(home, ("servers", server), entry, server)
     step.keychain = items
     return [step]
+
+
+def gateway_add_steps(
+    adapters: dict[str, ClientAdapter],
+    inventory: "Inventory",
+    home: Path,
+    server_id: str,
+    *,
+    sign_in: Callable[[str, dict], bool] | None = None,
+    keychain_run: Runner | None = None,
+) -> list[Step]:
+    """Add one server a marketplace plugin offers (`server_id`, its row in market_servers) to
+    the Kitden gateway, in one change: its entry in the gateway settings, with its secrets as
+    Keychain items, the PATH when the settings have none, and the timeouts an existing Codex
+    `kitden` entry lacks. No client gets a `kitden` entry or any other change.
+
+    A server the gateway cannot take is refused first, with the list's reason. A remote one
+    with no headers of its own is asked once whether it signs in, as a move asks; `sign_in`
+    and `keychain_run` are as in local_move_steps.
+    """
+    name = server_id.partition("/")[2]
+    _, entry = market_entry(adapters, server_id)
+    settings = load_settings(home)
+    refusal = known_refusal(name, entry, inventory, set(settings["servers"]))
+    if refusal is not None:
+        raise ValueError(refusal)
+    server = gateway_entry(entry)
+    if "url" in server and not server.get("headers"):
+        try:
+            oauth = (sign_in or needs_sign_in)(server["url"], {})
+        except OSError:
+            raise ValueError(f"Kitden could not reach {name}.") from None
+        if oauth:
+            raise ValueError(f"{name} signs in with OAuth; Kitden can't add it yet.")
+    step = _server_step(home, name, server, None, keychain_run)
+    assert step is not None  # a new server always has its step
+    steps = [step]
+    path = os.environ.get("PATH")
+    if path and not settings.get("path"):
+        steps.append(settings_step(home, ("path",), path, "PATH"))
+    return steps + _codex_timeout_steps(adapters)
 
 
 def _refuse_if_present(step: Step, client: str, name: str) -> None:

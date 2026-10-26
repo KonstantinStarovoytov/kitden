@@ -11,7 +11,7 @@ export const GONE_PROJECT = "This project is no longer on the list.";
 export const folderName = (path) => (path ? path.split("/").filter(Boolean).pop() || path : "");
 
 // Actions whose title names its place already, or has none: no place words are added.
-export const PLACE_IN_TITLE = ["gateway.rule", "gateway.rules", "gateway.strict", "project.align", "setup_server.register", "setup_server.update", "setup_server.enable", "client.disconnect", "gateway.move_out", "gateway.remove", "gateway.keychain"];
+export const PLACE_IN_TITLE = ["gateway.rule", "gateway.rules", "gateway.strict", "project.align", "setup_server.register", "setup_server.update", "setup_server.enable", "client.disconnect", "gateway.move_out", "gateway.remove", "gateway.keychain", "gateway.add"];
 
 // Where a change's steps go (`target`, from the server), as a title ends: " in website",
 // " for all projects", " for all projects except website" (that project's own definition wins
@@ -629,6 +629,7 @@ const ACTION_WORDS = {
   "gateway.move_out": "Moved out of the gateway",
   "mcp.add": "Added",
   "project.align": "Added missing items",
+  "gateway.add": "Added",
 };
 
 // A Kitden gateway rule in words: "slow of echo in website", as the review's after line says
@@ -711,6 +712,8 @@ export function changeTitle(entry) {
   if (entry.action === "gateway.move_out" && entry.steps.length) return moveOutTitle(entry);
   if (entry.action === "gateway.remove" && entry.steps.length) return `${ACTION_WORDS[entry.action]} ${entry.steps[0].name} from the Kitden gateway`;
   if (entry.action === "gateway.keychain" && entry.steps.length) return `Moved the secrets of ${entry.steps[0].name} to the Keychain`;
+  // An add's first step is the server's entry; a PATH step and Codex's timeouts may follow.
+  if (entry.action === "gateway.add" && entry.steps.length) return `${ACTION_WORDS[entry.action]} ${entry.steps[0].name} to the Kitden gateway`;
   const kitden = kitdenMove(entry);
   const verb = kitden ? "Moved" : ACTION_WORDS[entry.action] || entry.action;
   const plugin = ["plugin.enable", "plugin.disable", "plugin.install", "plugin.remove"].includes(entry.action);

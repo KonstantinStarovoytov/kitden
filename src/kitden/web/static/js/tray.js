@@ -89,7 +89,8 @@ function sorted(value) {
 
 // What a change is about: a second press of the same switch or rule is the same row. A
 // switch is named by what it switches, so on and off share a key. A server moves out of the
-// gateway to one client: a pick of another client replaces the row.
+// gateway to one client: a pick of another client replaces the row. A marketplace server is
+// named by its row in the Add panel.
 export function keyFor(body) {
   const { action, targets = [], params = {} } = body;
   if (action === "plugin.enable" || action === "plugin.disable") return `switch:${(targets[0] || {}).item}`;
@@ -97,6 +98,7 @@ export function keyFor(body) {
   if (action === "gateway.strict") return `strict:${params.server}`;
   if (action === "gateway.move_out") return `moveout:${params.server}`;
   if (action === "project.align") return `align:${params.project}`;
+  if (action === "gateway.add") return `add:${params.server}`;
   return JSON.stringify(sorted({ action, targets, params }));
 }
 
@@ -104,7 +106,7 @@ const REMOVES = ["mcp.remove_direct", "plugin.remove", "skill.remove", "gateway.
 const SWITCHES = ["gateway.rule", "gateway.rules", "gateway.strict", "plugin.enable", "plugin.disable", "setup_server.enable"];
 const MOVES = ["gateway.move", "gateway.put_back", "gateway.keychain"];
 const PLUGS = ["gateway.connect", "gateway.switch", "setup_server.register", "setup_server.update", "client.disconnect"];
-const ADDS = ["mcp.add", "plugin.install", "plugin.skills", "skill.install", "marketplace.add"];
+const ADDS = ["mcp.add", "plugin.install", "plugin.skills", "skill.install", "marketplace.add", "gateway.add"];
 
 // The icon of a row in the bar.
 export function iconFor(body) {

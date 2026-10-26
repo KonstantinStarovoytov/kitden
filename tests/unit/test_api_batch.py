@@ -409,3 +409,46 @@ def test_each_row_keeps_the_project_it_was_asked_in(tmp_path, monkeypatch):
         }
         assert rows[1]["target"]["scope"] == "all"
         assert _apply(page, change["id"], "cancel").status_code == 200
+
+
+MARKET_FILE = ".claude/plugins/marketplaces/demo-market/.claude-plugin/marketplace.json"
+
+
+def _add(row_id, server_id, title="Add it to the Kitden gateway"):
+    params = {"server": server_id}
+    return {"id": row_id, "kind": "gateway.add", "title": title, "params": params}
+
+
+def test_two_add_rows_for_one_name_refuse_the_second(tmp_path):
+    with _page(tmp_path) as page:
+        # A second plugin of the demo marketplace offers a server named test-status too.
+        listed = page.home / MARKET_FILE
+        data = json.loads(listed.read_text())
+        data["plugins"].append({"name": "other", "source": "./plugins/other"})
+        listed.write_text(json.dumps(data))
+        other = listed.parents[1] / "plugins/other/.mcp.json"
+        other.parent.mkdir(parents=True)
+        server = {"type": "http", "url": "https://other.example.test/mcp"}
+        other.write_text(json.dumps({"mcpServers": {"test-status": server}}))
+        a = _add("a", "test-helper@demo-market/test-status")
+        b = _add("b", "other@demo-market/test-status")
+        waits = "test-status waits in preview already."
+        assert _check(page, a, b) == {"ok": False, "reason": waits, "row": "b"}
+        answer = _preview(page, a, b)
+        assert answer.status_code == 422
+        assert answer.json() == {"detail": waits, "row": "b"}
+
+
+def test_a_failed_apply_all_with_an_add_puts_every_file_back(tmp_path):
+    with _page(tmp_path, fail=["claude", "mcp", "remove"]) as page:
+        before = _files(page.home)
+        answer = _preview(
+            page,
+            _add("a", "test-helper@demo-market/test-status"),
+            _remove("b", _ids(page, "claude_code")["docs"]),
+        )
+        assert answer.status_code == 200, answer.text
+        applied = _apply(page, answer.json()["id"])
+        assert applied.status_code == 500
+        assert applied.json()["state"] == "restored"
+        assert _files(page.home) == before

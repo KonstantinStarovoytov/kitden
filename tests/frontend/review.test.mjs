@@ -166,6 +166,18 @@ test('a title that names its place, or has none, gets no scope words', () => {
   assert.equal(changeWords(gone, { params: { server: 'files' } }).done, 'Removed files from the Kitden gateway');
 });
 
+test('adding a marketplace server names the Kitden gateway and no scope', () => {
+  assert.ok(PLACE_IN_TITLE.includes('gateway.add'));
+  // The server's own step comes first; a PATH step and Codex's timeouts may follow.
+  const steps = [{ client: 'kitden', name: 'test-status' }, { client: 'codex', name: 'kitden' }];
+  const add = { action: 'gateway.add', steps, target: target('all') };
+  const words = { title: 'Add test-status to the Kitden gateway', done: 'Added test-status to the Kitden gateway' };
+  assert.deepEqual(changeWords(add, { params: { server: 'test-helper@demo-market/test-status' } }), words);
+  assert.deepEqual(changeWords({ ...add, target: undefined }), words);
+  // It is an add: the lede says it is for all projects.
+  assert.equal(reviewLede(add, ''), 'Adds for all projects. Nothing is written until you press Apply. A backup is kept.');
+});
+
 test('connecting a client to Kitden and disconnecting it name their place and no scope', () => {
   for (const action of ['setup_server.register', 'client.disconnect']) assert.ok(PLACE_IN_TITLE.includes(action), action);
   const connect = { action: 'setup_server.register', steps: [{ client: 'cursor', name: 'kitden' }], target: target('all') };

@@ -6,6 +6,7 @@ from pathlib import Path
 from kitden.views.words import (
     AFTER_WORDS,
     LOADS_PLUGINS,
+    NO_GATEWAY_CLIENT,
     READS_FOLDER,
     ROUTE_WORDS,
     STALE,
@@ -1526,6 +1527,18 @@ def test_moves_into_the_kitden_gateway_name_it():
     assert 'openInfo("Move into the gateway", title, body' in code
     # The Changes page names the server first: "Moved files into the Kitden gateway · …".
     assert "into the Kitden gateway${place} · ${clients.join" in script("parts.js")
+
+
+def test_adding_a_marketplace_server_names_the_kitden_gateway():
+    review, parts, tray = reviews(), script("parts.js"), script("tray.js")
+    assert "`Add ${added} to the Kitden gateway`" in review
+    assert "`${verb} ${added} to the Kitden gateway`" in review
+    assert '"gateway.add": "Added"' in review and '"gateway.add": "Added"' in parts
+    assert "to the Kitden gateway`" in parts.split('entry.action === "gateway.add"')[1]
+    assert '"gateway.add"' in parts.split("export const PLACE_IN_TITLE")[1].split("\n")[0]
+    assert 'if (action === "gateway.add") return `add:${params.server}`;' in tray
+    assert AFTER_WORDS["gateway.add"] == ("gw", STATE_WORDS["gw"])
+    assert NO_GATEWAY_CLIENT == "No client uses the Kitden gateway yet."
 
 
 def test_overview_offers_set_up_only_without_a_gateway():

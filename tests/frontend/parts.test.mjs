@@ -308,6 +308,11 @@ test('the Changes page names a server removed from or put back from the Kitden g
   assert.equal(changeTitle({ action: 'gateway.put_back', steps: [{ client: 'codex', name: 'files' }] }), 'Put back files · Codex');
 });
 
+test('the Changes page names a server added to the Kitden gateway', () => {
+  const steps = [{ client: 'kitden', name: 'test-status' }, { client: 'kitden', name: 'PATH' }, { client: 'codex', name: 'kitden' }];
+  assert.equal(changeTitle({ action: 'gateway.add', steps, target: { scope: 'all' } }), 'Added test-status to the Kitden gateway');
+});
+
 test('the Changes page names a held server whose secrets moved to the Keychain', () => {
   assert.equal(changeTitle({ action: 'gateway.keychain', steps: [{ client: 'kitden', name: 'files' }] }), 'Moved the secrets of files to the Keychain');
 });

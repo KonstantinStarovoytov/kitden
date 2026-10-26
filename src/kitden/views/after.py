@@ -6,6 +6,7 @@ from pathlib import Path
 
 from kitden.changes.actions import (
     CLIENT_DISCONNECT,
+    GATEWAY_ADD,
     GATEWAY_KEYCHAIN,
     GATEWAY_MOVE_OUT,
     GATEWAY_PUT_BACK,
@@ -37,7 +38,7 @@ from kitden.model import GATEWAY_CLIENT, Change, ItemKind, Scope, SourceKind
 from kitden.redact import redact
 from kitden.views.effective import effective_view
 from kitden.views.setup_server import CLIENTS, kitden_on, setup_server_state
-from kitden.views.words import AFTER_WORDS, LOADS_PLUGINS, STATE_WORDS
+from kitden.views.words import AFTER_WORDS, LOADS_PLUGINS, NO_GATEWAY_CLIENT, STATE_WORDS
 
 SKILL_CLIENTS = ("claude_code", "codex", "cursor")
 CLIENT_WORDS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
@@ -462,7 +463,7 @@ def _rule_words(change: Change, inventory, home: Path) -> list[dict]:
             line += f" It stays {_kept_words(kept, state, with_tools=False)}."
     clients = [c for c in CLIENTS if c in _offering(inventory)]
     if not clients:
-        return [{"note": f"{line} No client uses the Kitden gateway yet."}]
+        return [{"note": f"{line} {NO_GATEWAY_CLIENT}"}]
     out = [{"client": c, "state": state, "word": word} for c in clients]
     out[0]["note"] = f"{line} {AT_ONCE}"
     return out
@@ -494,7 +495,7 @@ def _rules_words(change: Change, inventory, home: Path) -> list[dict]:
     )
     clients = [c for c in CLIENTS if c in _offering(inventory)]
     if not clients:
-        return [{"note": f"{line} No client uses the Kitden gateway yet."}]
+        return [{"note": f"{line} {NO_GATEWAY_CLIENT}"}]
     out = [{"client": c, "state": state, "word": RULE_WORDS[state]} for c in clients]
     out[0]["note"] = f"{line} {AT_ONCE}"
     return out
@@ -515,7 +516,7 @@ def _strict_words(change: Change, inventory, home: Path) -> list[dict]:
     line = _strict_line(server, on, kept)
     clients = [c for c in CLIENTS if c in _offering(inventory)]
     if not clients:
-        return [{"note": f"{line} No client uses the Kitden gateway yet."}]
+        return [{"note": f"{line} {NO_GATEWAY_CLIENT}"}]
     word = "Strict" if on else "Not strict"
     out = [{"client": c, "state": "gw", "word": word} for c in clients]
     # Strict on turns tools off, so they are refused at once; strict off only adds tools.
@@ -701,6 +702,16 @@ DISCONNECT_NOTE = (
 )
 
 
+def _gateway_add_words(inventory) -> list[dict]:
+    """A server added to the Kitden gateway: each client whose `kitden` entry is on offers it.
+    No client file changes, so a client without that entry does not get it."""
+    clients = [c for c in CLIENTS if c in _offering(inventory)]
+    if not clients:
+        return [{"note": NO_GATEWAY_CLIENT}]
+    state, word = AFTER_WORDS[GATEWAY_ADD]
+    return [{"client": c, "state": state, "word": word} for c in clients]
+
+
 def _disconnect_words(change: Change) -> list[dict]:
     """Each client loses its kitden entry, and the note says what that takes."""
     out = []
@@ -747,6 +758,8 @@ def after_words(
         return _move_out_words(change, inventory, home)
     if change.action == CLIENT_DISCONNECT:
         return _disconnect_words(change)
+    if change.action == GATEWAY_ADD:
+        return _gateway_add_words(inventory)
     if change.action == MCP_ADD and home is not None:
         return _add_server_words(change, home)
     if change.action == PROJECT_ALIGN:

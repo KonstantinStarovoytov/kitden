@@ -115,6 +115,8 @@ test('keyFor names a switch by what it switches', () => {
   assert.notEqual(keyFor(rule('on', 'p1')), keyFor(rule('on')));
   assert.equal(keyFor({ action: 'gateway.strict', targets: [], params: { server: 'files', state: 'on' } }), 'strict:files');
   assert.equal(keyFor({ action: 'project.align', targets: [], params: { project: 'p1', chosen: null } }), 'align:p1');
+  // A marketplace server added to the Kitden gateway is keyed by its row in the Add panel.
+  assert.equal(keyFor({ action: 'gateway.add', targets: [], params: { server: 'db-tools@demo-market/db-query' } }), 'add:db-tools@demo-market/db-query');
   // Any other change: its action, targets and params, whatever order the params came in.
   const first = { action: 'mcp.add', targets: [{ client: 'codex' }], params: { item: 'x', scope: 'user' } };
   const second = { action: 'mcp.add', targets: [{ client: 'codex' }], params: { scope: 'user', item: 'x' } };
@@ -150,7 +152,7 @@ test("iconFor picks the mockup's icon", () => {
   for (const action of ['gateway.move', 'gateway.put_back', 'gateway.keychain']) assert.equal(icon(action), 'arrow-right', action);
   assert.equal(icon('gateway.move_out', { server: 'files' }), 'log-out');
   for (const action of ['gateway.connect', 'gateway.switch', 'setup_server.register', 'setup_server.update', 'client.disconnect']) assert.equal(icon(action), 'plug', action);
-  for (const action of ['plugin.install', 'skill.install', 'mcp.add', 'marketplace.add', 'plugin.skills']) assert.equal(icon(action), 'plus', action);
+  for (const action of ['plugin.install', 'skill.install', 'mcp.add', 'marketplace.add', 'plugin.skills', 'gateway.add']) assert.equal(icon(action), 'plus', action);
   assert.equal(icon('something.else'), 'file-text');
 });
 

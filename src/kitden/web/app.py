@@ -22,6 +22,7 @@ from kitden import __version__
 from kitden.changes.actions import (
     CLIENT_DISCONNECT,
     CLIENT_WORDS,
+    GATEWAY_ADD,
     GATEWAY_CONNECT,
     GATEWAY_KEYCHAIN,
     GATEWAY_MOVE,
@@ -44,6 +45,7 @@ from kitden.changes.actions import (
     add_server_steps,
     connect_steps,
     disconnect_steps,
+    gateway_add_steps,
     install_steps,
     keychain_steps,
     local_move_steps,
@@ -480,6 +482,7 @@ ADD_ACTIONS = frozenset(
         SETUP_SERVER_UPDATE,
         GATEWAY_PUT_BACK,
         GATEWAY_MOVE_OUT,
+        GATEWAY_ADD,
     }
 )
 
@@ -1117,6 +1120,17 @@ def create_app(
                 sign_in=sign_in,
                 keychain_run=keychain_run,
             )
+        elif action == GATEWAY_ADD:
+            # It may ask a remote server whether it signs in, so not on the event loop.
+            steps = await asyncio.to_thread(
+                gateway_add_steps,
+                adapters,
+                state.inventory,
+                home,
+                str(params.get("server", "")),
+                sign_in=sign_in,
+                keychain_run=keychain_run,
+            )
         elif action == GATEWAY_RULE:
             projects = {p["id"]: p["path"] for p in state.data["projects"]}
             steps = rule_steps(home, params, projects)
@@ -1268,7 +1282,14 @@ def create_app(
         _RowRefused with the words and the row they come from."""
         assert engine is not None
         built = []
+        added: set[str] = set()  # the server names the add rows before this one bring
         for request in requests:
+            if request["kind"] == GATEWAY_ADD:
+                # Two plugins may offer one name; the gateway holds one server per name.
+                name = str(request["params"].get("server", "")).partition("/")[2]
+                if name in added:
+                    raise _RowRefused(f"{name} waits in preview already.", request["id"])
+                added.add(name)
             try:
                 made = await _steps_for(request["kind"], request["targets"], request["params"])
             except ValueError as error:
@@ -1380,12 +1401,13 @@ def create_app(
             if verb != "cancel":
                 await state.rescan()
         if verb == "apply" and change.state is ChangeState.VERIFIED:
-            # Servers just moved into the Kitden gateway: Details shows their tools soon. In a
-            # tray change, only its move rows moved servers in.
+            # Servers just moved or added into the Kitden gateway: Details shows their tools
+            # soon. In a tray change, only its move and add rows brought servers in.
+            brings = (GATEWAY_MOVE, GATEWAY_ADD)
             if change.rows:
-                moves = [part_of(change, r) for r in change.rows if r["kind"] == GATEWAY_MOVE]
+                moves = [part_of(change, r) for r in change.rows if r["kind"] in brings]
             else:
-                moves = [change] if change.action == GATEWAY_MOVE else []
+                moves = [change] if change.action in brings else []
             moved = [name for move in moves for name in moved_in(move)]
             if moved:
                 refresh_later(moved)
