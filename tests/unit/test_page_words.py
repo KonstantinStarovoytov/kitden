@@ -2623,3 +2623,15 @@ def test_the_gateway_map_has_its_hint_line_and_the_last_words_and_looks():
     assert "height: 30px;" in rule(".form .btn:not(.small)")
     # The gateway card counts a server that is moving out as it leaves.
     assert "function serverCounts(" in script("gateway-details.js")
+
+
+def test_gateway_forms_say_in_preview_while_their_row_waits():
+    details, gateway = script("details.js"), script("gateway-details.js")
+    # One look for a button whose row waits: previewButton and the Connect clients button use it.
+    assert "export function showInPreview(node, words, label, key) {" in details
+    assert details.count("showInPreview(node, words, label, key);") == 1
+    assert "showInPreview(submit, words, PREVIEW, keyFor(body()))" in gateway
+    assert 'const PREVIEW = "Preview";' in gateway
+    # A project pick says it on its small line and in its name for a screen reader.
+    assert "`${sub} · in preview`" in gateway
+    assert "`${p.name}, ${said}`" in gateway

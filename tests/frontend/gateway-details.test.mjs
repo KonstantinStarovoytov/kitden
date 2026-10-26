@@ -1574,3 +1574,51 @@ test('the add-gateway form closes by Cancel or Escape, and focus goes back to it
     }
   });
 });
+
+test('each form says In preview while its row waits and goes back after', async () => {
+  // Connect clients: the Preview button says In preview while its row waits, takes no press, and
+  // asks again once the row has left or the choice is another.
+  const obot = { id: 'gw-1', kind: 'obot', url: 'http://127.0.0.1:8080/mcp-connect/x', ui_url: 'http://127.0.0.1:8080', movable: false, managed: true };
+  const view = { ...VIEW, gateways: [KITDEN, obot], connections: { ...VIEW.connections, 'gw-1': { claude_code: [], codex: [], cursor: [] } } };
+  const card = gatewayCard(obot, { view, setup: SETUP, projects: PROJECTS, clients: FOUND, held: { servers: [] } });
+  const all = (node) => (node && typeof node === 'object' ? [node, ...node.childNodes.flatMap(all)] : []);
+  const form = all(card.after).find((node) => node.tag === 'form');
+  const submit = all(form).find((node) => node.attributes.type === 'submit' || node.type === 'submit');
+  const send = () => Promise.all(form.listeners.submit.map((listener) => listener({ preventDefault() {} }))).then(() => wait(0));
+  const says = () => [textOf(submit), submit.attributes['aria-disabled']];
+  await withTray(() => [card.after], async (nodes, sent) => {
+    assert.deepEqual(says(), ['Preview', undefined]);
+    await send();
+    assert.equal(tray.rows.length, 1);
+    assert.deepEqual(says(), ['In preview', 'true']);
+    // Another press asks nothing more.
+    await send();
+    assert.deepEqual(sent, ['/api/batch/preview']);
+    // Another choice of clients is another change: the button asks again.
+    const boxes = all(form).filter((node) => node.tag === 'input' && node.type === 'checkbox');
+    boxes[0].checked = false;
+    for (const listener of boxes[0].listeners.change || []) listener({});
+    assert.equal(says()[0], 'Preview');
+    boxes[0].checked = true;
+    for (const listener of boxes[0].listeners.change || []) listener({});
+    assert.equal(says()[0], 'In preview');
+    // The row leaves: the plain button is back.
+    await cancelTray();
+    assert.deepEqual(says(), ['Preview', undefined]);
+  });
+});
+
+test("a project pick says in preview on its line while its rule waits, and not after", async () => {
+  await onFilesPanel(async (drawer) => {
+    await click(control(drawer, SOME));
+    await wait(50);
+    const picks = drawer.children[1].children[3];
+    const sandbox = picks.children.find((node) => textOf(node.children[1].children[0]) === 'sandbox');
+    const line = () => [textOf(sandbox.children[1].children[1]), sandbox.attributes['aria-label']];
+    assert.deepEqual(line(), ['on now', 'sandbox, on now']);
+    await click(sandbox);
+    assert.deepEqual(line(), ['on now · in preview', 'sandbox, on now · in preview']);
+    await click(sandbox);
+    assert.deepEqual(line(), ['on now', 'sandbox, on now']);
+  }, { open: () => showTool('files', 'write_file'), projects: MEDIUM_PROJECTS });
+});

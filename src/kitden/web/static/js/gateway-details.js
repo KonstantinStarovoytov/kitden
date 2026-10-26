@@ -9,7 +9,7 @@ import { ADD_SERVER, openAdd } from "./gateway-add.js";
 import { loadLibraryFor, raceSlow } from "./library.js";
 import { animateTo, fold } from "./motion.js";
 import { projectNote } from "./offer.js";
-import { callsText, closePanel, contextLinks, detailsCard, drawQuietly, followTray, heldActions, holdPanel, isPanelOpen, keepFrom, linksRow, loadPanel, moveBody, moveInto, moveTargets, NO_TOOLS, offerLabel, offNote, openPanel, panelState, previewButton, refreshTools, review, stepTo, swapContent, switchList, techRows, technical, toast, toolRows, toolsHead, writingToolsOn } from "./panel.js";
+import { callsText, closePanel, contextLinks, detailsCard, drawQuietly, followTray, heldActions, holdPanel, isPanelOpen, keepFrom, linksRow, loadPanel, moveBody, moveInto, moveTargets, NO_TOOLS, offerLabel, offNote, openPanel, panelState, previewButton, refreshTools, review, showInPreview, stepTo, swapContent, switchList, techRows, technical, toast, toolRows, toolsHead, writingToolsOn } from "./panel.js";
 import { ALL_PROJECTS, callout, CLIENT_NAMES, clientCheck, FIND_PROJECT, folderName, GATEWAY_NOTE, gatewayName, kindOf, kitdenClients, mark, menuItems, originText, STATE_WORDS, versionsOpen } from "./parts.js";
 import { arrival, current, data, freshness, gatewayShows, go, libraryChoice, projectPath, reload, render, setState, state, switchProject } from "./store.js";
 import { addToTray, iconFor, inTray, keyFor, takeOut, tray } from "./tray.js";
@@ -1232,8 +1232,8 @@ function projectPick(p, body, changed) {
   node.disabled = p.now === target;
   const sub = [p.sub, p.count, node.disabled ? `already ${target}` : `${p.now} now`].filter(Boolean).join(" · ");
   const words = el("span", "pk-tx");
-  words.append(el("b", null, p.name), el("small", null, sub));
-  node.setAttribute("aria-label", `${p.name}, ${sub}`);
+  const line = el("small", null, sub);
+  words.append(el("b", null, p.name), line);
   const box = el("span", "chk");
   box.append(icon("check", 12));
   node.append(icon("folder", 14), words, box);
@@ -1243,6 +1243,10 @@ function projectPick(p, body, changed) {
     const on = ticked(body);
     node.classList.toggle("on", on);
     node.setAttribute("aria-checked", String(on));
+    // The line says it too, as a client row does: " · in preview".
+    const said = on ? `${sub} · in preview` : sub;
+    line.textContent = said;
+    node.setAttribute("aria-label", `${p.name}, ${said}`);
     if (on && was === false) animateTo(box, [{ transform: "scale(0.6)" }, { transform: "none" }], { dur: 160 });
     was = on;
     changed();
@@ -1481,6 +1485,7 @@ const EMPTY_ADD = { url: "", ui_url: "", auth: "none", key_env_var: "", login_em
 const draft = { add: { ...EMPTY_ADD }, connect: null, connectOpen: null };
 // Every client gets the same entry name; the review shows the exact entry before Apply.
 const ENTRY_NAME = "gateway";
+const PREVIEW = "Preview";
 
 function field(label, control) {
   const box = el("label", "field");
@@ -1496,36 +1501,44 @@ function input(attrs, value, onInput) {
   return node;
 }
 
-// Connect clients to the gateway of this card, and only to it.
+// Connect clients to the gateway of this card, and only to it. The button says "In preview" while
+// the row for the clients ticked now waits in the tray.
 function connectForm(gateway, waiting) {
   if (!draft.connect || draft.connect.gateway !== gateway.id) {
     draft.connect = { gateway: gateway.id, clients: new Set(waiting) };
   }
   const chosen = draft.connect;
+  const body = () => ({ action: "gateway.connect", targets: waiting.filter((c) => chosen.clients.has(c)).map((client) => ({ client })), params: { gateway: chosen.gateway, name: ENTRY_NAME } });
   const form = el("form", "form");
   const checks = el("fieldset", "checks");
   checks.append(el("legend", null, "Add to"));
+  const submit = el("button", "btn primary");
+  const words = el("span", "cut", PREVIEW);
+  submit.type = "submit";
+  submit.append(words);
+  const follow = () => showInPreview(submit, words, PREVIEW, keyFor(body()));
   for (const client of waiting) {
     checks.append(clientCheck(client, chosen.clients.has(client), null, (checked) => {
       if (checked) chosen.clients.add(client); else chosen.clients.delete(client);
+      follow();
     }));
   }
   form.append(checks);
   const message = el("span", "form-message");
   message.setAttribute("aria-live", "polite");
-  const submit = el("button", "btn primary", "Preview");
-  submit.type = "submit";
+  follow();
   form.append(submit, message);
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    const targets = [...chosen.clients].filter((c) => waiting.includes(c)).map((client) => ({ client }));
+    const { targets } = body();
     if (!targets.length) {
       message.className = "form-message error";
       message.textContent = "Choose at least one client.";
       return;
     }
     message.textContent = "";
-    busyWhile(submit, review({ action: "gateway.connect", targets, params: { gateway: chosen.gateway, name: ENTRY_NAME } })).catch(reportError);
+    if (inTray(keyFor(body())) || submit.dataset.working) return;
+    busyWhile(submit, review(body())).catch(reportError);
   });
   return form;
 }

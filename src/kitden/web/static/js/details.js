@@ -823,12 +823,18 @@ export function previewButton(label, body, { note = null, look = "btn", back = n
       node.removeAttribute("aria-busy");
     });
   });
+  showInPreview(node, words, label, key);
+  return node;
+}
+
+// A button that says "In preview" in place of its `label` (in `words`) while the tray row `key`
+// waits, and takes no press then. Called again with another `key`, it follows that row instead.
+export function showInPreview(node, words, label, key) {
   followTray(node, key, (waiting) => {
     words.textContent = waiting ? IN_PREVIEW : label;
     if (waiting) node.setAttribute("aria-disabled", "true");
     else node.removeAttribute("aria-disabled");
   });
-  return node;
 }
 
 // The plugin's real state; the Library shows the new state after a change. Without an action

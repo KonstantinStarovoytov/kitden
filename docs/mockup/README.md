@@ -8,6 +8,8 @@ Kitden looks, moves and behaves. It is a reference only: nothing here ships.
 - `motion-spec.md`: every motion in the mockup, with times and curves (Calm values).
 - `gateway-notes.md`: the Gateway page block by block, panel by panel and drag by drag, with
   sizes, words and times, and where the owner's decisions change the mockup.
+- `add-notes.md`: the Add a server panel and its drag, with sizes, words and times, and where
+  the owner's decisions change the mockup.
 - The same design as frames: `design/kitden.pen` (the owner's file, not tracked).
 
 The plan that moves the product to it: [2026-10-24-mockup-alignment.md](../superpowers/plans/2026-10-24-mockup-alignment.md).
