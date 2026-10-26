@@ -32,8 +32,18 @@ export function viewMode(s, count) {
 export const busy = { change: false };
 let idleListener = () => {};
 export function onIdle(fn) { idleListener = fn; }
+// `fn()` each time a change starts or stops being written. Returns the way to stop.
+const busyListeners = new Set();
+export function onBusy(fn) {
+  busyListeners.add(fn);
+  return () => busyListeners.delete(fn);
+}
 export function setBusy(value) {
   busy.change = value;
+  // A drawing that breaks must not stop the change.
+  for (const fn of [...busyListeners]) {
+    try { fn(); } catch (error) { console.error(error); }
+  }
   if (!value) idleListener();
 }
 // When the last full reload started, so a skipped rescan can tell whether it was covered;

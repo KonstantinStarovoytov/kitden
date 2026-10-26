@@ -1,9 +1,11 @@
 // The toast: a short note in the dock after a change, with Undo when it can be undone. It stands
 // where the tray's bar stands (dock.js) and the two take turns: a toast takes the dock's place at
-// once, and so does a bar that is drawn while a toast shows. This module imports only dom.js and
-// motion.js, so panel.js can hand it on to every page without an import cycle through review.js.
-import { $, button, el, icon, reportError } from "./dom.js";
+// once, and so does a bar that is drawn while a toast shows. This module imports only dom.js,
+// motion.js and store.js, so panel.js can hand it on to every page without an import cycle through
+// review.js.
+import { $, button, el, icon, reportError, showWaits } from "./dom.js";
 import { animateTo, D } from "./motion.js";
+import { busy, onBusy } from "./store.js";
 
 // How long a toast lives. Reduced motion does not shorten it: it is time to read, not motion.
 const LIFE_MS = 9000;
@@ -116,12 +118,18 @@ function startLife(life) {
 }
 
 // A button of the toast: the toast leaves and the action runs at once, not after the leaving. A
-// press on a toast that is already leaving does nothing.
-function action(owner, label, run, iconName) {
+// press on a toast that is already leaving does nothing. Undo (`waits`) waits while another change
+// is written: it says why, and a press does nothing.
+function action(owner, label, run, iconName, waits = false) {
   const node = button(label, null);
   if (iconName) node.prepend(icon(iconName, 13));
+  if (waits) {
+    const follow = () => showWaits(node, busy.change);
+    follow();
+    const stop = onBusy(() => (node.isConnected ? follow() : stop()));
+  }
   node.addEventListener("click", async () => {
-    if (shown !== owner) return;
+    if (shown !== owner || (waits && busy.change)) return;
     hideToast();
     try {
       await run();
@@ -146,7 +154,7 @@ export function toast(text, onUndo, { ok = false, label = "Undo", extra = null }
   }
   node.append(el("span", null, text));
   if (extra) node.append(action(node, extra.label, extra.run));
-  if (onUndo) node.append(action(node, label, onUndo, "undo-2"));
+  if (onUndo) node.append(action(node, label, onUndo, "undo-2", true));
   const life = el("i", "life");
   life.setAttribute("aria-hidden", "true");
   node.append(life);

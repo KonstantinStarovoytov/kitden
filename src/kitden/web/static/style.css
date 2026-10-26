@@ -191,8 +191,12 @@ a { color: var(--route); }
 /* The page frame makes no stacking context of its own, so the dock inside it (.hint-dock) can stand
    above the scrim and the drawer. The page (.page) is one context at z-index 1, so the dots lie
    under all it holds; the top bar (z-index 5) and the project menu in it stay above, and the page
-   stays under the scrim and the drawer. */
+   stays under the scrim and the drawer. The dock band (z-index 22) is over them all, except an open
+   project menu. */
 .content { overflow: auto; position: relative; display: flex; flex-direction: column; }
+/* An open project menu lifts the top bar over the dock band (z-index 22), so the dock never paints
+   over it. */
+.topbar:has(.where-menu:not([hidden])) { z-index: 23; }
 .topbar { position: sticky; top: 0; z-index: 5; flex: none; height: 66px; background: var(--panel); border-bottom: 1px solid var(--wire); display: flex; align-items: center; gap: 18px; padding: 0 18px 0 22px; min-width: 0; }
 /* The scan line shows only when a scan takes a while: a quick scan (after each Apply) is over
    before the delay, so it never blinks. A slow, calm sweep while a long scan really runs. */
@@ -635,8 +639,12 @@ div.map.beside .map-area::after { content: ""; position: absolute; top: 0; left:
 div.map .map-links { position: absolute; inset: 0; z-index: 0; overflow: visible; pointer-events: none; }
 /* The links the page acts on: a hit stroke 14 px wide over each (after the blocks in the page, under
    them in the picture, so a block wins where they meet) and the × on the middle of the one pointed
-   at. A hit shows no focus ring; keyboard focus gives it the hover look. */
+   at. A hit shows no focus ring; keyboard focus gives it the hover look. Each hit has a layer of
+   its own, in reading order for Tab; a line that skips the gateway lies in the layer under the
+   others (map-view.js). */
 div.map .map-hits { position: absolute; inset: 0; z-index: 0; overflow: visible; pointer-events: none; }
+div.map .map-hit { position: absolute; inset: 0; z-index: 1; overflow: visible; pointer-events: none; }
+div.map .map-hit.under { z-index: 0; }
 div.map .hit { fill: none; stroke: transparent; stroke-width: 14; pointer-events: stroke; cursor: pointer; outline: none; }
 /* A line that skips the gateway runs through the gap of the clients' links: its hit is 8 px, one
    channel's pitch, and sits under theirs (map-view.js). */
@@ -645,6 +653,8 @@ div.map .link-x { position: absolute; left: 0; top: 0; z-index: 2; display: grid
 div.map .link-x::before { content: ""; position: absolute; inset: -6px; border-radius: 50%; }
 div.map .link-x:hover { background: var(--route); color: var(--panel); }
 div.map .link-x:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* While another change is written the × waits: the busy cursor, and its title says why. */
+div.map .link-x[aria-disabled="true"] { cursor: progress; }
 div.map .link { fill: none; stroke: var(--link); stroke-width: 1.2; stroke-linecap: round; transition: stroke 220ms ease, stroke-width 220ms ease, stroke-opacity 300ms ease; }
 /* A line that skips the gateway: grey dots, quiet. It is amber only under the pointer. */
 div.map .link.direct { stroke: var(--lamp-off); stroke-opacity: 0.8; stroke-dasharray: 1.5 4; }
@@ -828,7 +838,9 @@ div.map .block.leaving:focus-visible { filter: none; }
 .dock .num { font-variant-numeric: tabular-nums; }
 .dock .acts { display: flex; gap: 8px; }
 .dock .bar.many .acts { justify-content: flex-end; }
-.dock .tray-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 212px; overflow: auto; }
+/* A long list scrolls inside the bar; in a short window it gets shorter (down to one row), so the
+   bar never reaches up to the top bar's edge (66 px bar, 46 px under the dock, the bar's own parts). */
+.dock .tray-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: min(212px, max(44px, calc(100dvh - 248px))); overflow: auto; }
 .dock .tray-list li { display: flex; align-items: center; gap: 10px; padding: 7px 6px 7px 10px; border: 1px dashed var(--preview-line); background: var(--preview-fill); border-radius: 8px; }
 .dock .ti { display: grid; color: var(--route); }
 .dock .tt { display: flex; flex-direction: column; flex: 1; min-width: 0; }
@@ -843,6 +855,7 @@ div.map .block.leaving:focus-visible { filter: none; }
 /* Apply: its meter is a 2 px white line along the bottom edge, filled from the left by script. */
 .dock .apply { overflow: hidden; }
 .dock .apply .meter { left: 0; right: 0; bottom: 0; height: 2px; border-radius: 0; background: rgb(255 255 255 / 0.75); opacity: 1; transition: none; }
+/* Apply and the toast's Undo wait (a preview is asked, or a change is written): the busy cursor. */
 .dock .btn[aria-disabled="true"] { cursor: progress; }
 .dock .btn[aria-disabled="true"]:active { transform: none; }
 /* Applied: green fill and label (the Applied button's own tokens), and a check that draws in. */

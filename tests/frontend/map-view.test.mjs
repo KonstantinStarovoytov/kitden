@@ -791,9 +791,10 @@ test('only a link the page acts on takes the pointer, after the blocks, named fo
   assert.equal(hits.length, 1);
   const h = hits[0];
   assert.deepEqual(['tabindex', 'role', 'aria-label', 'aria-description', 'aria-keyshortcuts'].map((a) => h.getAttribute(a)), ['0', 'button', 'Codex to github', 'Remove s1', 'Delete']);
-  const svg = h.parentNode;
-  assert.equal(svg.getAttribute('aria-label'), 'Connections');
-  assert.ok(v.area.children.indexOf(svg) > v.area.children.findLastIndex((n) => n.dataset?.focus));
+  // Each hit has a layer of its own in the group of hits (a layer stacks above or under another).
+  const group = h.parentNode.parentNode;
+  assert.equal(group.getAttribute('aria-label'), 'Connections');
+  assert.ok(v.area.children.indexOf(group) > v.area.children.findLastIndex((n) => n.dataset?.focus));
 });
 
 test('pointing at a link gives it the hover look and puts the × on its middle', async () => {
@@ -850,20 +851,50 @@ test('a link the page opens but cannot remove takes the pointer with no × and n
   assert.equal(xOf(v).hidden, false);
 });
 
-test('the hits of lines that skip the gateway sit under the others, so a solid link wins where they cross', async () => {
+test('Tab reads the links in reading order; the hits of lines that skip the gateway lie under the others', async () => {
   reduce(true);
-  // c1 sets up a server on its own (a direct line) and reaches s1 and s2 (solid links).
+  // c1 sets up s2 on its own (a direct line) and reaches s1 (a solid link); the model lists a
+  // tool's link first.
   const direct = { from: 'c1', to: 's2', kind: 'direct' };
-  const tree = { ...TREE, links: [{ from: 'c1', to: 's1', kind: 'on' }, direct] };
+  const tree = { ...TREE, links: [{ from: 's1', to: 't1', kind: 'on' }, direct, { from: 'c1', to: 's1', kind: 'on' }] };
   const v = view({ links: { ...LINKS, canHit: () => true } });
-  await v.draw(tree, layoutTree(tree, { open: new Set(), narrow: false }), {});
-  const order = () => walk(v.area).filter((n) => n.classList?.contains('hit')).map((n) => [n.dataset.focus, n.getAttribute('class')]);
-  assert.deepEqual(order(), [['link:c1>s2', 'hit direct'], ['link:c1>s1', 'hit']]);
-  // A solid link drawn later still goes after the direct one, and a direct line drawn later before
-  // every solid one.
-  const later = { ...tree, links: [...tree.links, { from: 's1', to: 't1', kind: 'on' }, { from: 'c1', to: 't2', kind: 'direct' }] };
-  await v.draw(later, layoutTree(later, { open: new Set(['s1']), narrow: false }), {});
-  assert.deepEqual(order().map(([key]) => key), ['link:c1>s2', 'link:c1>t2', 'link:c1>s1', 'link:s1>t1']);
+  const open = (shape, narrow = false) => layoutTree(shape, { open: new Set(['s1']), narrow });
+  await v.draw(tree, open(tree), {});
+  // By the blocks they join, as Tab reads the blocks: from the first block, then to the first.
+  // A solid link's layer stacks above a direct line's, so it wins where they cross.
+  const order = () => walk(v.area).filter((n) => n.classList?.contains('hit')).map((n) => [n.dataset.focus, n.parentNode.getAttribute('class')]);
+  assert.deepEqual(order(), [['link:c1>s1', 'map-hit'], ['link:c1>s2', 'map-hit under'], ['link:s1>t1', 'map-hit']]);
+  // Links drawn later take their place in that order too.
+  const later = { ...tree, links: [...tree.links, { from: 's1', to: 't2', kind: 'on' }, { from: 'c1', to: 't2', kind: 'direct' }] };
+  await v.draw(later, open(later), {});
+  assert.deepEqual(order().map(([key]) => key), ['link:c1>s1', 'link:c1>s2', 'link:c1>t2', 'link:s1>t1', 'link:s1>t2']);
+  // A narrow map reads a server's tools right after it: the hits follow, and focus stays.
+  const moved = walk(v.area).find((n) => n.dataset?.focus === 'link:c1>t2');
+  moved.focus();
+  await v.draw(later, open(later, true), {});
+  assert.deepEqual(order().map(([key]) => key), ['link:c1>s1', 'link:c1>t2', 'link:c1>s2', 'link:s1>t1', 'link:s1>t2']);
+  assert.equal(globalThis.document.activeElement, moved);
+});
+
+test('while another change is written a link keeps its hit, and its × waits and says why', async () => {
+  reduce(true); removed.length = 0;
+  let waits = true;
+  const v = view({ links: { ...LINKS, waits: () => waits } });
+  await v.draw(TREE, lay(), {});
+  const h = hitOf(v);
+  h.dispatch('pointerover');
+  const x = xOf(v);
+  assert.deepEqual([x.hidden, x.getAttribute('aria-label'), x.getAttribute('aria-disabled'), x.title], [false, 'Remove s1', 'true', 'Another change is being written.']);
+  // Neither the × nor Delete removes it meanwhile; the key does not reach the page.
+  x.dispatch('click');
+  const del = h.dispatch('keydown', { key: 'Delete' });
+  assert.deepEqual([removed.length, del.defaultPrevented], [0, true]);
+  // The write ends: the × says what it does again.
+  waits = false;
+  v.aimAgain();
+  assert.deepEqual([x.getAttribute('aria-disabled'), x.title], [null, 'Remove s1']);
+  x.dispatch('click');
+  assert.equal(removed.length, 1);
 });
 
 test("the × of the link pointed at says what it does after a draw, as its change joins the tray", async () => {
@@ -904,8 +935,8 @@ test('blocks that come or flip order still sit before the hits and the ×', asyn
   await v.draw(smaller, layoutTree(smaller, { open: new Set(), narrow: false }), {});
   await v.draw(TREE, lay(['s1'], true), {});
   await v.draw(TREE, lay(['s1']), {});
-  const svg = hitOf(v).parentNode;
-  assert.ok(v.area.children.indexOf(svg) > v.area.children.findLastIndex((n) => n.dataset?.focus));
+  const group = hitOf(v).parentNode.parentNode;
+  assert.ok(v.area.children.indexOf(group) > v.area.children.findLastIndex((n) => n.dataset?.focus));
   assert.equal(v.area.children.at(-1), xOf(v));
 });
 

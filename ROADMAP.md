@@ -28,7 +28,8 @@ What Kitden does today and what comes next. Ideas and bugs:
   swaps with a short fade, the List has the mockup's columns and rows, and a search dims what does
   not match with a soft blur. Picking another project changes the map in place: counts roll,
   tools that turn on or off draw or take back their links, open servers stay open, the tray's rows
-  keep their looks, and an open tool or server panel steps to the new project.
+  keep their looks, and an open tool or server panel steps to the new project. Tab reads the links
+  in reading order, and a link keeps its focus while a change is written.
 - **Details float beside the map:** on Gateway, Library and Changes, Details float over the right
   of the page as in the mockup; the page keeps its width and the map stays wide. Another block's
   Details swap in place through a quiet skeleton.

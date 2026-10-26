@@ -4,7 +4,7 @@ import { $, $$, button, el, joinWords, plural, reportError, shortPath, withFocus
 import { loadLibraryFor, raceSlow, rowSel, rowTitle, shownRow } from "./library.js";
 import { fold } from "./motion.js";
 import { about, addButton, addOptions, addReach, mcpRows, whyNoAction } from "./offer.js";
-import { closePanel, header, isPanelOpen, openInfo, openPanel, panelState, swapContent } from "./panel.js";
+import { closePanel, header, isPanelOpen, isQuiet, openInfo, openPanel, panelState, swapContent } from "./panel.js";
 import { ALL_PROJECTS, callout, CLIENT_NAMES, CLIENT_ORDER, folderName, GATEWAY_NOTE, gatewayName, kitdenClients, mark, ROUTE_WORDS, socket, STATE_WORDS, toolsNode } from "./parts.js";
 import { review } from "./review.js";
 import { current as currentModel, currentError, data, goTo, libraryChoice, projectPath, state } from "./store.js";
@@ -984,14 +984,17 @@ export function focusAfterBack(key, keys) {
 // server): from Add missing's list, or drawn again after Apply all or an Undo. Drawn again from
 // what it read then (no new read), or read again when `stale`. `error`: why the list was refused,
 // first in the body. Focus goes back to the control pressed, unless the panel closed while it read,
-// or `refocus` is false (focus was not in Details).
+// the person opened other Details meanwhile (a quiet read, panel.js), or `refocus` is false (focus
+// was not in Details).
 export async function backToDetails({ error = null, refocus = true } = {}) {
   const from = panelState.from;
   if (!from) return;
   const { focus } = from;
   if (from.stale) {
+    const quietly = isQuiet();
     await from.read();
-    if (!isPanelOpen()) return;
+    // Other Details the person opened during the read keep their focus.
+    if (!isPanelOpen() || (quietly && !isQuiet())) return;
   } else {
     from.draw();
   }

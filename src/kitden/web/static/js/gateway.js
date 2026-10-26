@@ -1,6 +1,7 @@
 // Gateway: the clients, the gateways and the MCP servers they reach, as a Map or a List. Each
 // row opens its Details beside the page (gateway-details.js).
 import { $, button, el, gridKey, icon, joinWords, plural, reportError, withFocusKey } from "./dom.js";
+import { setCancelFocus } from "./dock.js";
 import { addForm, connectAction, connectBody, followProject, heldServer, liveHeld, movesTo, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool, TAKE_OUT } from "./gateway-details.js";
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { findChip, findIn, foldable, isNarrow, keepOpen, landOwners, landStage, layoutTree, linkKey, litFrom, litPath, pagesNow, pagesWith, pressOpen, toggleOpen, turnPage, wideWidth } from "./map.js";
@@ -8,7 +9,7 @@ import { mapView } from "./map-view.js";
 import { afterOldPage, animateTo, D, glide, rise, riseHead } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, openInfo, panelState, projectLabel, review } from "./panel.js";
 import { banner, CLIENT_NAMES, folderName, gatewayName, kitdenClients, mark, opens, ORIGIN_WORDS, scopeBar, skeleton, STATE_WORDS, staleNote } from "./parts.js";
-import { arrival, current, currentError, data, go, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
+import { arrival, busy, current, currentError, data, go, onBusy, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
 import { addToTray, inTray, keyFor, onTray, takeOut, tray, undone } from "./tray.js";
 
 // Overview sets a client up with the same note. A server the Kitden gateway holds, and its
@@ -388,7 +389,7 @@ function outsideParts(view, kitden, { picked, first, moved, out, gone }) {
         for (const client of columns) links.push({ from: `client:${client}`, to: preview.id, ...line, row: preview.row });
         continue;
       }
-      // The clients whose line leaves, each with the key of the row that takes its entries out.
+      // The clients whose line leaves, each with the keys of the rows that take its entries out.
       const leaves = new Map(columns.map((c) => [c, goneWith(row, c, gone)]).filter(([, by]) => by));
       const leaving = columns.length > 0 && leaves.size === columns.length;
       const meta = `In ${joinWords(columns.map((c) => CLIENT_NAMES[c]))}`;
@@ -399,7 +400,7 @@ function outsideParts(view, kitden, { picked, first, moved, out, gone }) {
       const grip = targets.some((g) => g.kind === "kitden") && !first && !moved.has(id) && !leaving;
       const state = row.unknown ? "unk" : "on";
       blocks.push({ id, column: "servers", parent: "group:outside", kind: "outside", name: row.name, meta, tag, state, lamp: "out", h: OUTSIDE_BLOCK_H, icon: OUTSIDE_ICONS[group], ports: { left: "out" }, row, groupKey: group, columns, move: targets.length > 0, grip, from: `preview:${row.name}`, ...(leaving ? { leaving } : {}) });
-      for (const client of columns) links.push({ from: `client:${client}`, to: id, ...line, ...(leaves.has(client) ? { leaving: true, row: leaves.get(client) } : {}) });
+      for (const client of columns) links.push({ from: `client:${client}`, to: id, ...line, ...(leaves.has(client) ? leavesWith(leaves.get(client)) : {}) });
     }
     for (const [name, move] of out) {
       const server = ((kitden && kitden.servers) || []).find((s) => s.name === name);
@@ -415,12 +416,15 @@ function outsideParts(view, kitden, { picked, first, moved, out, gone }) {
   return { blocks, links };
 }
 
-// The key of the tray row that takes out every entry of its own that `client` has of an outside
+// The keys of the tray rows that take out every entry of its own that `client` has of an outside
 // `row` (`gone`, directRemovals), or null: a client with no entry of its own keeps its line.
 function goneWith(row, client, gone) {
   const items = (row.client_items || {})[client] || [];
-  return items.length && items.every((item) => gone.has(item)) ? gone.get(items[0]) : null;
+  return items.length && items.every((item) => gone.has(item)) ? [...new Set(items.map((item) => gone.get(item)))] : null;
 }
+
+// A line drawn leaving by those rows: `row`, the first, and `rows` when more than one empty it.
+const leavesWith = (keys) => ({ leaving: true, row: keys[0], ...(keys.length > 1 ? { rows: keys } : {}) });
 
 // The entries of clients that a removal in the tray takes out (mcp.remove_direct, once its row has
 // its part), each with its row's key.
@@ -729,13 +733,21 @@ const scrolls = () => (D(1) ? "smooth" : "instant");
 
 // A block or link of the map (`node`) that floating Details cover scrolls left into view beside
 // them; the map takes room at its right for that (`.beside`, style.css). For the selected one, and
-// for one that takes keyboard focus (newMap).
+// for one that takes keyboard focus (focusBeside).
 export function bringBeside(box, node) {
   if (!node || !floatingNow()) return;
   const by = besideBy(node.getBoundingClientRect().right, $("#drawer").offsetLeft);
   if (!by) return;
   box.classList.add("beside");
   box.scrollBy({ left: by, behavior: scrolls() });
+}
+
+// Keyboard focus never sits under floating Details (WCAG 2.4.11): focus that comes in (`target`)
+// brings its block or link beside them. A mouse press focuses it too, and then nothing moves under
+// the pointer.
+export function focusBeside(box, target) {
+  if (target.matches?.(":focus-visible") === false) return;
+  bringBeside(box, target.closest("[data-focus]"));
 }
 
 // While Details float over part of the map, the map keeps that room so it can scroll sideways to
@@ -888,33 +900,36 @@ function rowOfLink(model, link) {
   return (shown && shown.row) || null;
 }
 
+// Every row a link of the map draws: a line two rows empty takes both out. Empty when none.
+function rowsOfLink(model, link) {
+  const shown = model.links.find((l) => linkKey(l) === linkKey(link));
+  return shown && shown.row ? shown.rows || [shown.row] : [];
+}
+
 // The tray's change is being written or has just been: as in the bar, nothing can be added to it
 // or taken out of it now.
 const writing = () => tray.phase === "applying" || tray.phase === "applied";
 
+// While a change is written (the tray's, or an Undo) every link keeps its hit, and so its focus,
+// and its × waits (map-view.js): it says why and removes nothing.
+export const linksWait = () => writing() || busy.change;
+
 // What the × of a link does, in words: a link the tray draws, or whose removal waits in the tray,
 // is taken out of it, and the map acts on the others as linkRemoval says. "" where it does not act
-// on the link, and while the tray's change is written: the link then has no ×.
+// on the link: the link then has no ×.
 export function linkTip(model, link, picked) {
-  if (writing()) return "";
   if (rowOfLink(model, link)) return TAKE_OUT;
   const removal = linkRemoval(model, link, picked);
   if (!removal) return "";
   return inTray(keyFor(removal.body)) ? TAKE_OUT : removal.tip;
 }
 
-// Whether the links take the pointer: every link does, so a click opens its panel, except while
-// the tray's change is written.
-export function takesPointer() {
-  return !writing();
-}
-
 // The × of a link: a link the tray draws, or whose change is in the tray already (still being
 // asked), is taken out of it; any other the map acts on adds its change to the tray. Null where the
 // map does not act on the link.
 export function removeLink(model, link, picked) {
-  const drawn = rowOfLink(model, link);
-  if (drawn) return takeOutHere(model, drawn);
+  const drawn = rowsOfLink(model, link);
+  if (drawn.length) return takeOutHere(model, drawn);
   const removal = linkRemoval(model, link, picked);
   if (!removal) return null;
   const key = keyFor(removal.body);
@@ -930,8 +945,8 @@ export function clickLink(model, link) {
     letGoOnMap();
     return;
   }
-  const row = rowOfLink(model, link);
-  if (row) takeOutHere(model, row).catch(reportError);
+  const rows = rowsOfLink(model, link);
+  if (rows.length) takeOutHere(model, rows).catch(reportError);
   else pickLink(key);
 }
 
@@ -958,30 +973,34 @@ function pickLink(key) {
   });
 }
 
-// A row taken out on the map. A move's preview block and link go with it, so focus on either goes
-// to the server the move would have taken (`backTo`): outside the gateway for a move in, in it for
-// a move out. Nothing happens while the tray's change is written.
-function takeOutHere(model, key) {
+// Rows taken out on the map (a key, or the keys of a line two rows empty). A move's preview block
+// and link go with it, so focus on either goes to the server the move would have taken (`backTo`):
+// outside the gateway for a move in, in it for a move out. Nothing happens while the tray's change
+// is written.
+function takeOutHere(model, keys) {
   if (writing()) return Promise.resolve();
+  const gone = [].concat(keys);
   const box = onMap.view ? onMap.view.box : null;
-  const shown = model.blocks.find((b) => b.row === key && b.backTo);
+  const shown = model.blocks.find((b) => gone.includes(b.row) && b.backTo);
   const focus = box && shown ? document.activeElement?.dataset?.focus : null;
   // The server comes back on its page: the draw the take-out starts brings it.
   onMap.back = shown ? shown.backTo : null;
-  const taken = takeOut(key);
+  const taken = takeOut(gone);
   onMap.back = null;
   const lost = Boolean(focus) && (focus === `block:${shown.id}` || focus.endsWith(`>${shown.id}`));
   if (lost) withFocusKey(box, `block:${shown.backTo}`)?.focus({ preventScroll: true });
   return taken;
 }
 
-// The hooks of the links of the map (the model is the one drawn last): every link has a hit while
-// they take the pointer (takesPointer), and a × while it does something (linkTip).
+// The hooks of the links of the map (the model is the one drawn last): every link has a hit, and a
+// × while it does something (linkTip); the × waits while a change is written (linksWait).
 const LINK_HOOKS = {
-  canHit: takesPointer,
+  canHit: () => true,
   tip: (link) => linkTip(onMap.model, link, state.project),
+  waits: linksWait,
   onClick: (link) => clickLink(onMap.model, link),
   onRemove: (link) => {
+    if (linksWait()) return;
     const done = removeLink(onMap.model, link, state.project);
     if (done) done.catch(reportError);
   },
@@ -1008,8 +1027,7 @@ function newMap() {
   view.box.addEventListener("scroll", () => {
     if (!view.box.scrollLeft && !floatingNow()) view.box.classList.remove("beside");
   }, { passive: true });
-  // Keyboard focus never sits under floating Details (WCAG 2.4.11).
-  view.box.addEventListener("focusin", (event) => bringBeside(view.box, event.target.closest("[data-focus]")));
+  view.box.addEventListener("focusin", (event) => focusBeside(view.box, event.target));
   watchMap(view.box);
   return view;
 }
@@ -1203,6 +1221,23 @@ function arriveOnMap(model, found) {
 // The tray as the map last heard it, so it knows when an applied change has landed.
 let trayWas = tray.phase;
 onTray(trayChanged);
+// A change that starts or stops being written: the × of the link pointed at says so.
+onBusy(() => onMap.view?.aimAgain());
+// Cancel in the dock with focus there: a single move gives focus to the server it would have taken.
+setCancelFocus((rows) => {
+  const key = onMap.view && onMap.view.box.isConnected ? cancelFocusFor(onMap.model, rows) : null;
+  // The draw the Cancel starts brings that server's page.
+  if (key) onMap.back = key.slice("block:".length);
+  return key;
+});
+
+// The focus key of the server a single move in the tray would have taken (its preview's `backTo`
+// on the map `model`), else null.
+export function cancelFocusFor(model, rows) {
+  if (!model || rows.length !== 1) return null;
+  const shown = model.blocks.find((b) => b.row === rows[0].key && b.backTo);
+  return shown ? `block:${shown.backTo}` : null;
+}
 
 // The tray changed: the map draws its rows again in place, while it shows. Not while its change is
 // applied: the page reads the result first, and its rows land on the map one by one (landRows).

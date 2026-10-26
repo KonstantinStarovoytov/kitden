@@ -80,6 +80,16 @@ export function busyWhile(node, work, delay = 150) {
   return promise;
 }
 
+// A control that waits while another change is written (an Apply or an Undo): it keeps focus and
+// its words (aria-disabled, not disabled; style.css gives it the busy cursor) and its title says why.
+// `title` is its own title when it does not wait.
+export const WAITS = "Another change is being written.";
+export function showWaits(node, waits, title = "") {
+  if (waits) node.setAttribute("aria-disabled", "true");
+  else node.removeAttribute("aria-disabled");
+  node.title = waits ? WAITS : title;
+}
+
 // A redraw replaces every node. What names a control across it: its data-focus key (a tab, a
 // filter button, a menu), or for a table row its own key. Null when it has neither.
 export function focusKey(node) {

@@ -43,6 +43,7 @@ function fakeNode(tag) {
     remove() { leave(node); if (node.parent) node.parent.childNodes = node.parent.childNodes.filter((child) => child !== node); node.parent = null; },
     contains(other) { return other === node || node.children.some((child) => child.contains(other)); },
     setAttribute(name, value) { node.attributes[name] = String(value); },
+    removeAttribute(name) { delete node.attributes[name]; },
     getAttribute: (name) => (name in node.attributes ? node.attributes[name] : null),
     addEventListener(type, listener) { (node.listeners[type] ||= []).push(listener); },
     focus(options) { node.focusOptions = options; globalThis.document.activeElement = node; },

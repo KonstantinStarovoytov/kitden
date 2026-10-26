@@ -10,14 +10,14 @@ globalThis.window = {
   addEventListener: (type, fn) => { (windowHeard[type] ||= []).push(fn); },
   removeEventListener: (type, fn) => { windowHeard[type] = (windowHeard[type] || []).filter((f) => f !== fn); },
 };
-const { GATEWAY_COLUMNS, afterPress, besideBy, bringBeside, clickLink, contentWidth, findRows, gatewayTree, glanceFor, heldServer, kitdenLinks, letGoCloses, linkRemoval, linkTip, listRows, litFor, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, serverCount, stillSelected, takesPointer } = await import('../../src/kitden/web/static/js/gateway.js');
+const { GATEWAY_COLUMNS, afterPress, besideBy, bringBeside, cancelFocusFor, clickLink, contentWidth, findRows, focusBeside, gatewayTree, glanceFor, heldServer, kitdenLinks, letGoCloses, linkRemoval, linkTip, linksWait, listRows, litFor, lightsLater, mapMotion, narrowFor, pressBlock, removeLink, rowsOnMap, serverCount, stillSelected } = await import('../../src/kitden/web/static/js/gateway.js');
 const { DRAGS, dropBody, movingOn, pointOf, pressGrip, placeMoved, startDrag } = await import('../../src/kitden/web/static/js/gateway-drag.js');
 const { moveBody, moveTargets } = await import('../../src/kitden/web/static/js/details.js');
 const { offersSwitch, ruleBody } = await import('../../src/kitden/web/static/js/gateway-details.js');
 const { blockLabel, findChip, findIn, isNarrow, keepOpen, layoutTree, linkClass, pagesWith, pressOpen, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
 const { kitdenClients } = await import('../../src/kitden/web/static/js/parts.js');
 const { CALM } = await import('../../src/kitden/web/static/js/motion.js');
-const { data, state, viewMode } = await import('../../src/kitden/web/static/js/store.js');
+const { data, setBusy, state, viewMode } = await import('../../src/kitden/web/static/js/store.js');
 const { addToTray, applyTray, cancelTray, endApplied, keyFor, takeOut, tray } = await import('../../src/kitden/web/static/js/tray.js');
 
 // A stand-in server for the tray: each address answers from its own queue (a reply, or a function
@@ -556,6 +556,25 @@ test('a map block under floating Details, selected or focused, scrolls beside th
   }
 });
 
+test('focus scrolls a block beside floating Details only when it comes from the keyboard', () => {
+  const drawer = { offsetLeft: 741, classList: { contains: (name) => ['open', 'floating'].includes(name) } };
+  globalThis.document = { querySelector: (selector) => (selector === '#drawer' ? drawer : null) };
+  const scrolled = [];
+  const box = { classList: { add() {} }, scrollBy: (options) => scrolled.push(options) };
+  const block = { getBoundingClientRect: () => ({ right: 1023 }) };
+  // The focus target (a block, or a part of it) and whether it shows keyboard focus.
+  const target = (visible) => ({ matches: (selector) => selector === ':focus-visible' && visible, closest: (selector) => (selector === '[data-focus]' ? block : null) });
+  try {
+    // A mouse press focuses the block too: the map does not move under the pointer.
+    focusBeside(box, target(false));
+    assert.equal(scrolled.length, 0);
+    focusBeside(box, target(true));
+    assert.deepEqual(scrolled, [{ left: 298, behavior: 'smooth' }]);
+  } finally {
+    delete globalThis.document;
+  }
+});
+
 test('find lights both docs and opens what hides them', () => {
   const found = findIn(gatewayTree(MEDIUM_VIEW, OPTS), 'docs');
   assert.deepEqual([...found.matches].sort(), ['outside:local:docs', 'outside:move:docs']);
@@ -835,22 +854,24 @@ test('a move left with no answer, and nothing asked, draws nothing and its block
   }
 });
 
-test('while the tray is written a link offers no × and a press takes nothing out', async () => {
+test('while the tray is written every link keeps its hit, its × waits, and a press takes nothing out', async () => {
   await freshTray();
   queue(PREVIEW, batch('c1'), batch('c2'));
   await addToTray(dropBody(GITHUB, MEDIUM_VIEW));
   await addToTray(REMOVE_FILES, { icon: 'x' });
   const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: rowsOnMap(tray) });
   const links = ['gateway:kitden>held:kitden:files', 'gateway:kitden>preview:github', 'held:kitden:files>tool:files/read_file'];
+  const tips = ['Take it out of the preview', 'Take it out of the preview', 'Turn off read_file'];
   let verify;
   queue('/api/changes/c2/apply', () => new Promise((resolve) => { verify = () => resolve({ status: 200, json: { id: 'c2', state: 'verified', steps: [] } }); }));
   globalThis.document = { activeElement: null, body: {}, querySelector: () => ({ querySelectorAll: () => [] }), addEventListener() {}, removeEventListener() {} };
   try {
+    assert.equal(linksWait(), false);
     const applying = applyTray();
     assert.equal(tray.phase, 'applying');
-    // No link takes the pointer or has a ×, and nothing leaves.
-    assert.equal(takesPointer(), false);
-    assert.deepEqual(links.map((key) => linkTip(tree, linkOf(tree, key), '')), ['', '', '']);
+    // Every link keeps its × (map-view.js keeps its hit), and the × waits; nothing leaves.
+    assert.equal(linksWait(), true);
+    assert.deepEqual(links.map((key) => linkTip(tree, linkOf(tree, key), '')), tips);
     pressBlock(tree, 'preview:github');
     clickLink(tree, linkOf(tree, 'gateway:kitden>held:kitden:files'));
     await removeLink(tree, linkOf(tree, 'gateway:kitden>held:kitden:files'), '');
@@ -858,17 +879,51 @@ test('while the tray is written a link offers no × and a press takes nothing ou
     assert.deepEqual([tray.phase, tray.rows.length], ['applying', 2]);
     verify();
     await applying;
-    assert.equal(linkTip(tree, linkOf(tree, links[0]), ''), '');
-    assert.equal(takesPointer(), false);
-    // Once it has landed, the links take the pointer and offer their × again.
+    assert.equal(linksWait(), true);
+    // Once it has landed, the × does what it says again.
     endApplied();
     const now = gatewayTree(MEDIUM_VIEW, OPTS);
-    assert.equal(takesPointer(), true);
+    assert.equal(linksWait(), false);
     assert.equal(linkTip(now, linkOf(now, links[0]), ''), 'Remove files from the gateway');
+    // An Undo being written makes the × wait too.
+    setBusy(true);
+    assert.equal(linksWait(), true);
   } finally {
+    setBusy(false);
     await freshTray();
     delete globalThis.document;
   }
+});
+
+test('a bypass line emptied by two rows takes both rows out, on a click and by its ×', async () => {
+  await freshTray();
+  // Claude Code set up github twice: each entry goes in a row of its own.
+  const twice = { name: 'github', clients: ['claude_code'], columns: ['claude_code'], items: ['g1', 'g2'], client_items: { claude_code: ['g1', 'g2'] }, stays: null };
+  const view = { ...MEDIUM_VIEW, groups: { ...MEDIUM_VIEW.groups, move: [twice] } };
+  const fill = async () => {
+    queue(PREVIEW, batch('b1'), batch('b2'), batch('b3'));
+    await addToTray(removeDirect('g1'));
+    await addToTray(removeDirect('g2'));
+    await addToTray(REMOVE_FILES, { icon: 'x' });
+    return gatewayTree(view, { ...OPTS, rows: rowsOnMap(tray) });
+  };
+  const tree = await fill();
+  const line = linkOf(tree, 'client:claude_code>outside:move:github');
+  assert.deepEqual([line.leaving, line.rows], [true, [keyFor(removeDirect('g1')), keyFor(removeDirect('g2'))]]);
+  assert.equal(linkTip(tree, line, ''), 'Take it out of the preview');
+  queue(PREVIEW, batch('b4'));
+  clickLink(tree, line);
+  await flush();
+  assert.deepEqual(tray.rows.map((r) => r.key), [keyFor(REMOVE_FILES)]);
+  // The same by its ×, in one ask for the row that stays.
+  await freshTray();
+  const again = await fill();
+  queue(PREVIEW, batch('b5'));
+  await removeLink(again, linkOf(again, 'client:claude_code>outside:move:github'), '');
+  await flush();
+  assert.deepEqual(tray.rows.map((r) => r.key), [keyFor(REMOVE_FILES)]);
+  assert.equal(calls.filter((c) => c.url === PREVIEW).length, 4);
+  await freshTray();
 });
 
 test('a press on a preview block takes its row out', async () => {
@@ -1073,6 +1128,18 @@ test('a move-out row shows the server outside, moving to its client', () => {
   assert.deepEqual(alone.blocks.filter((b) => b.column === 'servers').map((b) => b.id).slice(-2), ['group:outside', 'preview-out:files']);
   // A row still being asked changes nothing yet.
   assert.ok(block(gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [trayRow(moveOut('files', 'claude_code'), null)] }), 'held:kitden:files'));
+});
+
+test('Cancel of a single move gives focus to the server the move would have taken', () => {
+  const moveIn = trayRow(dropBody(GITHUB, MEDIUM_VIEW));
+  const out = trayRow(moveOut('files', 'claude_code'));
+  const focusFor = (rows) => cancelFocusFor(gatewayTree(MEDIUM_VIEW, { ...OPTS, rows }), rows);
+  assert.equal(focusFor([moveIn]), 'block:outside:move:github');
+  assert.equal(focusFor([out]), 'block:held:kitden:files');
+  // Anything else gives focus to the page, as the bar does.
+  assert.equal(focusFor([moveIn, trayRow(REMOVE_FILES)]), null);
+  assert.equal(focusFor([trayRow(REMOVE_FILES)]), null);
+  assert.equal(cancelFocusFor(null, [moveIn]), null);
 });
 
 test('a press on the move-out block takes its row out', async () => {

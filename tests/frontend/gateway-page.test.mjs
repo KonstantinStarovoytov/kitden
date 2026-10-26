@@ -970,3 +970,32 @@ test('data that comes while the head rises keeps it rising', (t) => {
     assert.deepEqual(delays(), [null, null, null]);
   }
 });
+
+test('a focused link keeps its hit while the tray writes, and every hit is there after a failed Apply', async () => {
+  const box = freshMap();
+  queue(PREVIEW, batch('w1'));
+  await addToTray(REMOVE_FILES);
+  settle();
+  const key = 'link:gateway:kitden>held:kitden:files';
+  const hit = node(box, key);
+  const hits = () => walk(box).filter((n) => n.classList.contains('hit')).length;
+  const count = hits();
+  hit.focus();
+  let fail;
+  queue('/api/changes/w1/apply', () => new Promise((resolve) => { fail = () => resolve({ status: 200, json: { id: 'w1', state: 'restored', error: 'The original settings were restored.' } }); }));
+  try {
+    const applying = applyTray();
+    settle();
+    // While it writes, the map is drawn again: the hits stay, and so does focus.
+    assert.equal(tray.phase, 'applying');
+    assert.deepEqual([node(box, key), document.activeElement, hits()], [hit, hit, count]);
+    fail();
+    await applying;
+    settle();
+    assert.equal(tray.phase, 'failed');
+    assert.deepEqual([node(box, key), document.activeElement, hits()], [hit, hit, count]);
+  } finally {
+    await cancelTray();
+    settle();
+  }
+});

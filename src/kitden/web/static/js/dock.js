@@ -2,12 +2,12 @@
 // with Cancel and Apply. tray.js holds the state and talks to the server; this module draws it. The
 // toast (toast.js) stands in the same dock: the bar and the toast take turns.
 import { clientName } from "./details.js";
-import { $, button, el, icon, joinWords, reportError, withFocusKey } from "./dom.js";
+import { $, button, el, icon, joinWords, reportError, showWaits, withFocusKey } from "./dom.js";
 import { animateTo, D, DRAW, rollTo, shake } from "./motion.js";
 import { closePanel, isPanelOpen, panelState } from "./panel.js";
 import { stepParts, stepText } from "./parts.js";
 import { afterParts, changeWords, detailsAgain, nothingChanged, reloadAll, showEffect, showRowReview, undoChange } from "./review.js";
-import { go, state } from "./store.js";
+import { busy, go, onBusy, state } from "./store.js";
 import { hideToast, makeRoom, onToastGone, say, toast } from "./toast.js";
 import { applyTray, cancelTray, endApplied, onTray, setTrayWords, takeOut, tray, tryAgain } from "./tray.js";
 
@@ -171,7 +171,7 @@ function build(view, status, startCount) {
     item.head.append(item.num, IN_PREVIEW);
   }
   const acts = el("div", "acts");
-  item.cancel = textButton(words.cancel, "btn", "tray:cancel", () => cancelTray());
+  item.cancel = textButton(words.cancel, "btn", "tray:cancel", cancelHere);
   acts.append(item.cancel);
   if (words.changes) {
     item.changes = textButton("Open Changes", "btn primary", "tray:changes", () => go("changes"));
@@ -291,6 +291,8 @@ function setLabel(words) {
   shown.step = { num, tail: parts[0] + parts[2] };
 }
 
+// Apply waits while its preview is asked or its change is written, and while another change (an
+// Undo) is written: then its title says why.
 function patchApply(view) {
   const { t, words } = view;
   const applied = t.phase === "applied";
@@ -298,8 +300,9 @@ function patchApply(view) {
   apply.classList.toggle("primary", !applied);
   apply.classList.toggle("ok", applied);
   setLabel(words.apply);
+  const other = busy.change && t.phase !== "applying" && !applied;
+  showWaits(apply, other);
   if (words.applyWaits) apply.setAttribute("aria-disabled", "true");
-  else apply.removeAttribute("aria-disabled");
   setApplyIcon(applied ? "check" : t.phase === "applying" ? "spin" : words.retry ? "again" : "arrow-right");
   setMeter(applied ? 1 : t.phase === "applying" && t.total > 0 ? t.done / t.total : 0);
 }
@@ -491,6 +494,23 @@ function drawBar(t) {
   react(view, false);
 }
 
+// Where focus goes when Cancel, with focus in the bar, takes the rows out: the page may name a
+// control for them by its focus key (the Gateway: the server a single move would have taken), else
+// the page itself. Set by the page.
+let cancelFocus = () => null;
+export function setCancelFocus(fn) {
+  cancelFocus = fn;
+}
+
+// Cancel and Cancel all. The tray empties at once, and the page draws what the rows showed.
+function cancelHere() {
+  const back = bar && bar.contains(document.activeElement) ? cancelFocus(tray.rows) : null;
+  const done = cancelTray();
+  const node = back ? withFocusKey($("#main"), back) : null;
+  if (node) node.focus({ preventScroll: true });
+  return done;
+}
+
 // Apply writes the tray; Try again and Preview again ask for a fresh preview. A press does nothing
 // while Apply waits.
 async function onApply() {
@@ -566,6 +586,8 @@ export function initDock() {
   host = $("#dock");
   setTrayWords(rowWords);
   onTray(trayChanged);
+  // Another change starts or stops being written: Apply says whether it waits.
+  onBusy(() => drawTray(tray, { toastStays: true }));
   // A toast that goes by itself leaves the dock empty: a tray that still has rows draws its bar.
   onToastGone(drawTray);
   // A narrower window can wrap the bar's words, so its height changes; makeRoom (toast.js) sizes

@@ -413,6 +413,23 @@ export function showRowReview(row) {
     buttons: [takeOutButton(row), button("Close", () => closePanel(), "btn")],
     onChoose: row.part.align ? (keys) => chooseAgain(row, keys) : null,
   });
+  followRow(row, row.part);
+}
+
+// While a row's review is open, a row added again under its key (a switch pressed again, a new
+// choice in Add missing) is drawn in its place once it has words, quietly: focus stays where it is.
+function followRow(row, part) {
+  const stop = onTray((t) => {
+    const open = panelState.current;
+    if (!isPanelOpen() || !open || open.type !== "row-review" || open.row !== row) {
+      stop();
+      return;
+    }
+    const now = t.rows.find((other) => other.key === row.key && other.part);
+    if (!now || (now === row && now.part === part)) return;
+    stop();
+    drawQuietly(() => showRowReview(now)).catch(reportError);
+  });
 }
 
 // "Take it out" of a row's review: the row leaves the tray, and the review closes with it (the dock
@@ -436,15 +453,12 @@ function takeOutButton(row) {
 }
 
 // A changed tick in an Add missing row's review: the row is added again with the new choice (the
-// same key, so it takes the old row's place), and the review shows the row the tray has now, the
-// new one, or the old one when the server refused the choice (the bar says why). With nothing
-// ticked there is nothing to add: the row stays as it is.
+// same key, so it takes the old row's place), and the review follows the row the tray has now
+// (followRow): the new one, or the old one when the server refused the choice (the bar says why).
+// With nothing ticked there is nothing to add: the row stays as it is.
 async function chooseAgain(row, keys) {
   if (!keys.length) return;
   await addToTray({ ...row.body, params: { ...row.body.params, chosen: keys } }, { note: row.note, icon: row.icon, picked: row.picked });
-  const now = tray.rows.find((r) => r.key === row.key && r.part);
-  const open = panelState.current;
-  if (now && open && open.type === "row-review" && open.row.key === row.key && isPanelOpen()) showRowReview(now);
 }
 
 // The engine put back everything a change that did not check out wrote: its words then end "The
@@ -501,6 +515,8 @@ export async function detailsAgain(keys) {
 // stale: the Undo may have changed its files.
 export async function undoChange(change) {
   if (busy.change) return;
+  // Focus in Details goes to the switch the Undo changes back; anywhere else it stays.
+  const inside = $("#drawer").contains(document.activeElement);
   hideToast();
   setBusy(true);
   try {
@@ -509,11 +525,12 @@ export async function undoChange(change) {
     // The Gateway map plays the change's rows back, the last one first.
     if (after && after.state === "undone" && state.view === "gateway") undone.id = change.id;
     // With a tool list's Details still open, the page behind just redraws and Details is drawn
-    // again from the files as they are now, focus on the switch the Undo changed back.
+    // again from the files as they are now; focus that was in them goes to the switch the Undo
+    // changed back.
     if (isPanelOpen() && tools && tools.section.isConnected) {
       render();
       const undone = after && after.state === "undone";
-      await tools.again({ focus: tools.flipped, flip: undone ? tools.flipped : null });
+      await tools.again({ focus: inside ? tools.flipped : null, flip: undone ? tools.flipped : null });
     } else {
       showEffect();
       // Other Details open now show the files as they are after the Undo too.

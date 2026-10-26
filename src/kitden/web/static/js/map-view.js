@@ -4,7 +4,7 @@
 // on each frame. A link the page acts on takes the pointer: a wide hit stroke, a hover look and a
 // small × on its middle. A selection dims what is off its path and lays an accent line over each
 // lit link. The page gives the hooks; the view knows nothing of servers, tools or clients.
-import { button, cutName, el, icon } from "./dom.js";
+import { button, cutName, el, icon, showWaits } from "./dom.js";
 import { blockLabel, drawPlan, enterDelays, foldable, foldsInto, LINK_MS, linkClass, linkDashed, linkKey, linkPath, midPoint, unfoldDelays } from "./map.js";
 import { afterOldPage, animateTo, CALM, D, IN3, OUT3, RETRACT, rollTo, unscaled } from "./motion.js";
 
@@ -45,7 +45,7 @@ const UNDRAW_MS = 380; // a solid link that goes draws back to its start
 const BLEND_MS = 300; // a link whose look changes blends from its old dashes to the new
 const OVER_IN_MS = 180; // the accent line over a lit link fades in
 const OVER_OUT_MS = 160; // ... and fades out
-const NO_LINKS = { canHit: () => false }; // a page that acts on no link
+const NO_LINKS = { canHit: () => false, waits: () => false }; // a page that acts on no link
 
 // A part a screen reader skips: the block's label says it already.
 function quiet(node) {
@@ -281,8 +281,10 @@ function boxOf({ x, y, w, h, s }) {
 // what a block shows before its name.
 // `links` are the page's hooks for the links it acts on: `canHit(link)`, `tip(link)` (what its
 // × does, in words; "" for a link with no removal, which gets no × and no Delete), `onClick(link)`
-// and `onRemove(link)`. After the blocks the area holds the hit of each such link (a button for a
-// keyboard: Enter opens, Delete removes) and one ×.
+// and `onRemove(link)`; `waits()` says the × waits now (another change is being written: it keeps
+// its place and says why, and neither it nor Delete removes anything). After the blocks the area
+// holds the hit of each such link (a button for a keyboard: Enter opens, Delete removes), in
+// reading order, and one ×. aimAgain() has the × say again what it does, as the hooks say now.
 // A non-empty `lit` (the blocks and "from>to" links on the path of the selection) dims all else.
 // When `selected` is a block, each lit link that is not a bypass line gets an accent line, in 180 ms;
 // letting go takes it away in 160 ms. When `selected` is a link's key, that link is picked: it keeps
@@ -298,13 +300,12 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
   svg.setAttribute("aria-hidden", "true");
   svg.setAttribute("width", "100%");
   svg.setAttribute("height", "100%");
-  const hits = document.createElementNS(SVG, "svg");
-  hits.setAttribute("class", "map-hits");
+  // Each hit has a layer of its own in this group, so Tab can read them in one order while they
+  // stack in another (makeHit).
+  const hits = el("div", "map-hits");
   hits.setAttribute("role", "group");
   hits.setAttribute("aria-label", "Connections");
   hits.setAttribute("aria-hidden", "true");
-  hits.setAttribute("width", "100%");
-  hits.setAttribute("height", "100%");
   const cross = el("button", "link-x");
   cross.type = "button";
   cross.setAttribute("tabindex", "-1");
@@ -589,8 +590,13 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
   // What the × says is for the link it sits on.
   function aimCross(item) {
     const tip = pointer.tip(item.link);
-    cross.title = tip;
     cross.setAttribute("aria-label", tip);
+    showWaits(cross, Boolean(pointer.waits?.()), tip);
+  }
+
+  function aimAgain() {
+    const item = links.get(pointed || picked);
+    if (item && item.hit) aimCross(item);
   }
 
   // The hover look goes at once, and the × with it, unless a link is selected: then the × goes to it.
@@ -661,13 +667,19 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     if (!press && !remove) return;
     event.preventDefault();
     if (press && !event.repeat) pressLink(item);
-    else if (remove) pointer.onRemove(item.link);
+    else if (remove && !pointer.waits?.()) pointer.onRemove(item.link);
   }
 
   // A link's hit: a wide stroke over it (narrower over a line that skips the gateway), and a button
-  // for a keyboard.
+  // for a keyboard. It lies in a layer of its own: a line that skips the gateway in the layer
+  // under the others (`.under`, style.css), so a solid link wins where they cross.
   function makeHit(item) {
+    const layer = document.createElementNS(SVG, "svg");
+    layer.setAttribute("class", item.link.kind === "direct" ? "map-hit under" : "map-hit");
+    layer.setAttribute("width", "100%");
+    layer.setAttribute("height", "100%");
     const hit = document.createElementNS(SVG, "path");
+    layer.append(hit);
     hit.setAttribute("class", item.link.kind === "direct" ? "hit direct" : "hit");
     hit.setAttribute("tabindex", "0");
     hit.setAttribute("role", "button");
@@ -691,7 +703,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     const { hit } = item;
     item.hit = null;
     if (pointed === item.key) unpoint();
-    hit.remove();
+    hit.parentNode.remove();
     showHits();
   }
 
@@ -891,18 +903,19 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     if (focused && focused !== document.activeElement && area.contains(focused)) focused.focus({ preventScroll: true });
   }
 
-  // The hits keep the order of the links, so Tab does, except that the hits of the lines that skip
-  // the gateway come first: those lines cross the clients' solid links, and the hit drawn later
-  // takes the pointer, so a solid link wins where they cross.
+  // The hits in reading order, so Tab reads them so: by the blocks they join, as Tab reads the
+  // blocks (from the first one, then to the first). A layer moves only when it is out of place, and
+  // focus on a hit that moves goes back to it.
   function orderHits(layout) {
-    const direct = (link) => link.kind === "direct";
-    let next = null;
-    for (const link of [...layout.links.filter(direct), ...layout.links.filter((link) => !direct(link))].reverse()) {
-      const { hit } = links.get(linkKey(link));
-      if (!hit) continue;
-      if (!hit.parentNode) hits.insertBefore(hit, next);
-      next = hit;
+    const at = new Map(layout.blocks.map((place, i) => [place.id, i]));
+    const rank = (link) => [at.get(link.from) ?? Infinity, at.get(link.to) ?? Infinity];
+    const read = layout.links.map((link) => [rank(link), links.get(linkKey(link)).hit]).filter(([, hit]) => hit);
+    read.sort(([a], [b]) => a[0] - b[0] || a[1] - b[1]);
+    const focused = document.activeElement;
+    for (const [i, [, hit]] of read.entries()) {
+      if (hits.children[i] !== hit.parentNode) hits.insertBefore(hit.parentNode, hits.children[i] || null);
     }
+    if (focused && focused !== document.activeElement && hits.contains(focused)) focused.focus({ preventScroll: true });
   }
 
   function draw(model, layout, { selected = null, lit = new Set(), found = null, open = new Set(), motion = "move" } = {}) {
@@ -1020,8 +1033,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     if (litPaths.some((path, i) => paths[paths.length - litPaths.length + i] !== path)) for (const path of litPaths) svg.insertBefore(path, layer);
     // The × says what it does now (a removal that waits in the tray takes it out), on the link pointed
     // at, else on the picked link.
-    const aimed = links.get(pointed || picked);
-    if (aimed && aimed.hit) aimCross(aimed);
+    aimAgain();
 
     order(layout);
     box.classList.toggle("narrow", Boolean(layout.narrow));
@@ -1252,12 +1264,12 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
   cross.addEventListener("pointerleave", unpointSoon);
   cross.addEventListener("click", () => {
     const item = links.get(pointed || picked);
-    if (item) pointer.onRemove(item.link);
+    if (item && !pointer.waits?.()) pointer.onRemove(item.link);
   });
 
   function node(idOrKey) {
     return blocks.get(idOrKey)?.node || links.get(idOrKey)?.path || null;
   }
 
-  return { box, area, draw, glance, hold, homeIn, lightTarget, unlightTarget, tip, untip, wire, unwire, drawIn, node };
+  return { box, area, draw, aimAgain, glance, hold, homeIn, lightTarget, unlightTarget, tip, untip, wire, unwire, drawIn, node };
 }

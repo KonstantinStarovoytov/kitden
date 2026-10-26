@@ -1501,8 +1501,8 @@ def test_tool_list_reads_again_and_keeps_focus_after_a_refresh_or_an_undo():
     code = panel()
     # Without the event stream the refresh still ends with the list read again.
     assert "if (await ended) reloadTools();" in code
-    # Undo with Details open puts focus back on the switch it changed.
-    assert "focus: tools.flipped" in code
+    # Undo with Details open puts focus back on the switch it changed, when focus was in them.
+    assert "focus: inside ? tools.flipped : null" in code
     # Only an open tool list's Details skips the page's usual effect after an Undo; a closed
     # drawer keeps its old content, so "connected" alone would reopen it.
     assert "if (isPanelOpen() && tools && tools.section.isConnected) {" in code
@@ -2383,8 +2383,14 @@ def test_the_toast_lives_in_the_dock_and_is_its_own_module():
     # Its life is 9 s, a linear line toward the left, and reduced motion does not shorten it.
     assert "LIFE_MS = 9000" in toast and 'easing: "linear"' in toast
     assert "D(LIFE_MS) || LIFE_MS" in toast
-    # It imports only dom.js and motion.js, so panel.js can hand it on without an import cycle.
-    assert sorted(re.findall(r'from "(\./[^"]+)"', toast)) == ["./dom.js", "./motion.js"]
+
+    # It imports only dom.js, motion.js and store.js (which imports none of the panel's modules),
+    # so panel.js can hand it on without an import cycle.
+    def imports(text: str) -> list[str]:
+        return sorted(re.findall(r'from "(\./[^"]+)"', text))
+
+    assert imports(toast) == ["./dom.js", "./motion.js", "./store.js"]
+    assert imports(script("store.js")) == ["./api.js", "./motion.js"]
     shell = script("panel.js")
     assert 'export { hideToast, toast } from "./toast.js";' in shell
     assert "TOAST_MS" not in shell and "#toast" not in shell
@@ -2514,3 +2520,14 @@ def test_the_spotlight_is_calmer_than_the_mockups_and_off_under_reduced_motion()
     glow = script("glow.js")
     for banned in ("innerHTML", "cssText", 'setAttribute("style"'):
         assert banned not in glow, banned
+
+
+def test_a_control_that_waits_for_another_change_says_why():
+    # Apply, the toast's Undo and a link's × keep focus while another change is written: they are
+    # aria-disabled, show the busy cursor and say why in their title (dom.js showWaits).
+    dom = script("dom.js")
+    assert 'export const WAITS = "Another change is being written.";' in dom
+    for name in ("dock.js", "toast.js", "map-view.js"):
+        assert "showWaits(" in script(name), name
+    assert '.dock .btn[aria-disabled="true"] { cursor: progress; }' in CSS
+    assert 'div.map .link-x[aria-disabled="true"] { cursor: progress; }' in CSS

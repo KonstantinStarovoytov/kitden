@@ -20,9 +20,20 @@ export { hideToast, toast } from "./toast.js";
 // Add missing's list ("align"), and so on. `from` is the Details drawn last (details.js keepFrom):
 // Add missing's Cancel goes back there, and Apply all draws it again. A closed panel forgets it.
 export const panelState = { current: null, from: null };
-// Details drawn again by the page itself, not by a press (after Apply all or an Undo): while
-// `quiet`, focus and the way back stay where the person has them, unless focus was in Details.
-let quiet = false;
+// Details drawn again by the page itself, not by a press (after Apply all, an Undo or a project
+// switch): `quiet` is what they show (whatShows), or null. While the panel shows that, focus and the
+// way back stay where the person has them, unless focus was in Details. Other Details the person
+// opens meanwhile, while the old ones are read again, are theirs: they take focus as any press does.
+let quiet = null;
+
+// What Details show, as one string: their kind and what they are about (a row's key, a name).
+function whatShows(current) {
+  if (!current) return "";
+  const about = Object.entries(current).filter(([, value]) => typeof value === "string").sort();
+  return JSON.stringify([current.row ? current.row.key : null, about]);
+}
+
+export const isQuiet = () => quiet !== null && whatShows(panelState.current) === quiet;
 // Beside the page: on these places, in a window this wide, Details float over the right of the
 // page with no scrim and no focus trap; the page keeps its width and stays usable. Anywhere else
 // they are the drawer.
@@ -70,17 +81,19 @@ function put(content) {
   drawn += 1;
   openedIn = state.project;
   drawer.replaceChildren(...content);
-  if (isPanelOpen() && (had || (!floating && !quiet)) && !drawer.contains(document.activeElement)) drawer.focus();
+  if (isPanelOpen() && (had || (!floating && !isQuiet())) && !drawer.contains(document.activeElement)) drawer.focus();
 }
 
 // Draw open Details again (`draw`, which may read first) without taking focus from the dock or the
-// page: only focus that was in Details stays in them.
+// page: only focus that was in Details stays in them. Only those Details are quiet: what the person
+// opens during the read is not.
 export async function drawQuietly(draw) {
-  quiet = true;
+  const was = quiet;
+  quiet = whatShows(panelState.current);
   try {
     await draw();
   } finally {
-    quiet = false;
+    quiet = was;
   }
 }
 
@@ -198,7 +211,7 @@ export function openPanel(content, { instant = false, float = FLOATS.includes(st
   if (isPanelOpen()) {
     // Beside the page another row may be pressed: the way back is to that row, and focus moves in.
     const active = document.activeElement;
-    const elsewhere = !quiet && floating && active && active !== document.body && !drawer.contains(active);
+    const elsewhere = !isQuiet() && floating && active && active !== document.body && !drawer.contains(active);
     if (elsewhere) rememberOpener();
     if (loading) settle(content);
     else put(content);
@@ -443,9 +456,11 @@ export function initPanel() {
     $("#scrim").classList.toggle("open", !floating);
     if (!floating && !drawer.contains(document.activeElement)) drawer.focus();
   });
-  // The floating panel follows the page's stage as it scrolls, and the window as it changes.
+  // The floating panel follows the page's stage as it scrolls, the window as it changes, and the
+  // page as it draws #main anew (its stage may start elsewhere).
   $("#content").addEventListener("scroll", placeSoon, { passive: true });
   addEventListener("resize", placeSoon);
+  new MutationObserver(placeSoon).observe($("#main"), { childList: true });
   onOpenItem((row, tr, how) => openItem(row, { instant: how === "keyboard" }));
   // A refresh of the gateway's tool lists ended: an open tool list reads them again.
   document.addEventListener("kitden:tools", reloadTools);

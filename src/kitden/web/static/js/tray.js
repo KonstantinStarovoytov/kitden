@@ -238,10 +238,12 @@ export async function addToTray(body, { key = keyFor(body), note = null, icon = 
   return false;
 }
 
-// A row leaves; the rest are previewed again. The last one leaving cancels the change.
-export async function takeOut(key) {
+// A row leaves (`keys`: its key, or the keys of several); the rest are previewed again, in one
+// ask. The last one leaving cancels the change.
+export async function takeOut(keys) {
   if (tray.phase === "applying" || tray.phase === "applied") return;
-  const rows = tray.rows.filter((row) => row.key !== key);
+  const gone = [].concat(keys);
+  const rows = tray.rows.filter((row) => !gone.includes(row.key));
   if (rows.length === tray.rows.length) return;
   if (!rows.length) return cancelTray();
   tray.rows = rows;

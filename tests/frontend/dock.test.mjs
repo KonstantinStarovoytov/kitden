@@ -134,10 +134,10 @@ const queue = (url, ...items) => replies.set(url, [...(replies.get(url) || []), 
 const posted = () => calls.filter((call) => call.method === 'POST').map((call) => call.url);
 
 const dockPath = '../../src/kitden/web/static/js/dock.js';
-const { appliedToast, barWords, drawTray, initDock, outcomeLine, rowWords, writingLine } = await import(dockPath);
-const { changeWords, undoChange } = await import('../../src/kitden/web/static/js/review.js');
+const { appliedToast, barWords, drawTray, initDock, outcomeLine, rowWords, setCancelFocus, writingLine } = await import(dockPath);
+const { changeWords, detailsAgain, undoChange } = await import('../../src/kitden/web/static/js/review.js');
 const { addToTray, cancelTray, endApplied, takeOut, tray, tryAgain } = await import('../../src/kitden/web/static/js/tray.js');
-const { busy, render, setRenderer, state } = await import('../../src/kitden/web/static/js/store.js');
+const { busy, render, setBusy, setRenderer, state } = await import('../../src/kitden/web/static/js/store.js');
 const { closePanel, hideToast, isPanelOpen, keepFrom, openPanel, panelState, toast, toolsSection } = await import('../../src/kitden/web/static/js/panel.js');
 initDock();
 
@@ -1181,4 +1181,163 @@ test('a tool list drawn again gives focus to Refresh tools when the control aske
   await settle();
   assert.equal(globalThis.document.activeElement.dataset.focus, 'tool:read_file');
   pages['#drawer'].replaceChildren();
+});
+
+const WAITS = 'Another change is being written.';
+
+test("Apply and the toast's Undo wait while another change is written, and say why", async () => {
+  await fresh();
+  queue(PREVIEW, previewed('c1'));
+  await addToTray(add('github'));
+  const apply = button(bar(), 'Apply');
+  // An Undo is being written: Apply keeps its words and focus, and says why it waits.
+  setBusy(true);
+  try {
+    assert.deepEqual([apply.attributes['aria-disabled'], apply.title], ['true', WAITS]);
+    await apply.click();
+    assert.equal(posted().filter((url) => url.endsWith('/apply')).length, 0);
+  } finally {
+    setBusy(false);
+  }
+  assert.deepEqual([apply.attributes['aria-disabled'], apply.title], [undefined, '']);
+  // The toast's Undo waits the same way; a press does nothing and the toast stays.
+  let undos = 0;
+  toast('Turned off github', () => { undos += 1; }, { ok: true });
+  const undo = button(toastNode(), 'Undo');
+  setBusy(true);
+  try {
+    assert.deepEqual([undo.attributes['aria-disabled'], undo.title], ['true', WAITS]);
+    await undo.click();
+    assert.equal(undos, 0);
+    assert.ok(toastNode(), 'the toast stays');
+  } finally {
+    setBusy(false);
+  }
+  assert.deepEqual([undo.attributes['aria-disabled'], undo.title], [undefined, '']);
+  await undo.click();
+  await settle();
+  assert.equal(undos, 1);
+  // A toast that comes while a change is written waits from the start.
+  setBusy(true);
+  try {
+    toast('Turned off neon', () => {}, { ok: true });
+    assert.equal(button(toastNode(), 'Undo').attributes['aria-disabled'], 'true');
+  } finally {
+    setBusy(false);
+    hideToast();
+  }
+});
+
+test('Cancel from the dock gives focus to the place the page names for its rows', async () => {
+  await fresh();
+  // The Gateway names the server a single move would have taken (gateway.js cancelFocusFor).
+  const server = fakeNode('div');
+  server.dataset.focus = 'block:outside:move:github';
+  pages['#main'].replaceChildren(server);
+  setCancelFocus((rows) => (rows.length === 1 ? 'block:outside:move:github' : null));
+  try {
+    queue(PREVIEW, previewed('c1'));
+    await addToTray(add('github'));
+    const cancel = button(bar(), 'Cancel');
+    cancel.focus();
+    await cancel.click();
+    assert.equal(bar(), null);
+    assert.equal(globalThis.document.activeElement, server);
+    // Anything else: focus goes to the page.
+    queue(PREVIEW, previewed('c2'), previewed('c3'));
+    await addToTray(add('github'));
+    await addToTray(add('neon'));
+    const all = button(bar(), 'Cancel all');
+    all.focus();
+    await all.click();
+    assert.equal(globalThis.document.activeElement, pages['#main']);
+  } finally {
+    setCancelFocus(() => null);
+    pages['#main'].replaceChildren();
+  }
+});
+
+test('an Undo with a tool list open leaves focus where it was, unless it was in Details', async () => {
+  await fresh();
+  const answer = { status: 200, json: { server: 'files', state: 'on', strict: false, tools: [{ name: 'read_file', state: 'on', hint: 'reads' }] } };
+  queue('/api/gateway/tools?server=files', answer);
+  const asked = [];
+  const section = toolsSection('files', (next) => { asked.push(next); }, { flip: 'tool:read_file' });
+  openPanel([section]);
+  await settle();
+  const outside = fakeNode('button');
+  pages['#main'].replaceChildren(outside);
+  try {
+    outside.focus();
+    queue('/api/changes/c0/undo', { status: 200, json: { id: 'c0', state: 'undone', steps: [] } });
+    await quietly(() => undoChange({ id: 'c0' }));
+    assert.deepEqual(asked, [{ focus: null, flip: 'tool:read_file' }]);
+    assert.equal(globalThis.document.activeElement, outside);
+    // Focus in Details goes to the switch the Undo changed back.
+    pages['#drawer'].focus();
+    queue('/api/changes/c0/undo', { status: 200, json: { id: 'c0', state: 'undone', steps: [] } });
+    await quietly(() => undoChange({ id: 'c0' }));
+    assert.deepEqual(asked[1], { focus: 'tool:read_file', flip: 'tool:read_file' });
+  } finally {
+    hideToast();
+    closePanel({ focus: false });
+    pages['#main'].replaceChildren();
+  }
+});
+
+test("a row's review follows its row when it is added again under the same key", async () => {
+  await fresh();
+  queue(PREVIEW, previewed('c1'));
+  await addToTray(add('github'), { key: 'same' });
+  await button(bar(), 'Show changes').click();
+  const title = () => tagged(pages['#drawer'], 'h1')[0].textContent;
+  assert.equal(title(), 'Add github to Codex for all projects');
+  // Focus in the bar stays there while the review follows.
+  const apply = button(bar(), 'Apply');
+  apply.focus();
+  queue(PREVIEW, previewed('c2'));
+  await addToTray(add('neon'), { key: 'same' });
+  assert.equal(panelState.current.row, tray.rows[0]);
+  assert.equal(title(), 'Add neon to Codex for all projects');
+  assert.equal(globalThis.document.activeElement, apply);
+  closePanel({ focus: false });
+});
+
+test('Details read again stay quiet only while the panel shows them; a read draws nothing over what opened meanwhile', async () => {
+  await fresh();
+  queue(PREVIEW, previewed('c1'));
+  await addToTray(add('github'));
+  // Details whose read waits, and that draw, as openItem does, only while they are what the panel
+  // shows.
+  let release;
+  const held = new Promise((resolve) => { release = resolve; });
+  const body = fakeNode('div');
+  const control = fakeNode('button');
+  control.dataset.focus = 'switch:i1';
+  body.append(control);
+  const footer = fakeNode('footer');
+  const mark = { type: 'item', name: 'github' };
+  panelState.current = mark;
+  openPanel([body, footer]);
+  keepFrom(() => {}, [body, footer], async () => {
+    await held;
+    if (panelState.current === mark) openPanel([fakeNode('div'), fakeNode('footer')]);
+  });
+  control.focus();
+  const again = detailsAgain([]);
+  // Meanwhile the person shows the row's review from the bar: it is theirs, and takes focus.
+  const show = button(bar(), 'Show changes');
+  show.focus();
+  await show.click();
+  const drawer = pages['#drawer'];
+  assert.equal(panelState.current.type, 'row-review');
+  assert.equal(globalThis.document.activeElement, drawer);
+  const out = button(drawer, 'Take it out');
+  out.focus();
+  release();
+  await again;
+  // The read ends: it draws nothing over the review, and focus stays where the person put it.
+  assert.equal(panelState.current.type, 'row-review');
+  assert.equal(globalThis.document.activeElement, out);
+  closePanel({ focus: false });
 });

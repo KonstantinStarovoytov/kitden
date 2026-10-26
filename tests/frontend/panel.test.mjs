@@ -5,6 +5,9 @@ import { test } from 'node:test';
 globalThis.matchMedia = () => ({ matches: false });
 // Node before 21 has no navigator; panel.js must load there too.
 delete globalThis.navigator;
+// What watches the page: each observer's callback and the node it observes.
+const observers = [];
+globalThis.MutationObserver = class { constructor(fn) { this.fn = fn; observers.push(this); } observe(node, options) { this.node = node; this.options = options; } };
 const { FLOAT_MIN, addScope, afterParts, alignGroups, canShowReview, closeForProject, closePanel, holdPanel, countedDefinition, changeOutcome, chosenKeys, callsText, changeWords, floatRoom, floatTop, floatsAt, footerActions, heldActions, initPanel, isPanelOpen, loadPanel, offerLabel, openItem, layerState, leftOutText, kindWord, loadsLede, moveFor, moveTargets, openPanel, panelState, plainSecrets, projectLabel, review, reviewLede, scopeWords, stepTo, swapContent, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
 const { CALM, reducedMotion } = await import('../../src/kitden/web/static/js/motion.js');
 const { readFileSync } = await import('node:fs');
@@ -967,6 +970,42 @@ test('the floating panel follows the stage as the page scrolls, read once a fram
   } finally {
     leaveFloatTest();
   }
+});
+
+test('the floating panel is placed again after the page draws #main anew', () => {
+  const page = fakePanelPage();
+  const { drawer } = page;
+  try {
+    state.view = 'gateway';
+    windowIs(true);
+    observers.length = 0;
+    initPanel();
+    openPanel([]);
+    assert.equal(drawer.style['--float-top'], '215px');
+    // The page draws again (app.js renderPlace) and the stage now starts lower: once a frame,
+    // the panel follows it.
+    const watch = observers.find((o) => o.node === page['#main']);
+    assert.deepEqual(watch.options, { childList: true });
+    page.map.rect = { top: 260, bottom: 860 };
+    watch.fn();
+    watch.fn();
+    assert.equal(frames.length, 1);
+    nextFrame();
+    assert.equal(drawer.style['--float-top'], '260px');
+    closePanel({ focus: false, instant: true });
+  } finally {
+    leaveFloatTest();
+  }
+});
+
+test('the dock stays under the open project menu and clear of the top bar', () => {
+  const css = readFileSync(new URL('../../src/kitden/web/static/style.css', import.meta.url), 'utf8');
+  // The dock band is at z-index 22, over the scrim and the drawer; an open menu lifts the top bar
+  // over it.
+  assert.match(css, /^\.hint-dock \{[^}]*z-index: 22;/m);
+  assert.match(css, /^\.topbar:has\(\.where-menu:not\(\[hidden\]\)\) \{ z-index: 23; \}/m);
+  // A long list scrolls inside the bar, so the bar never reaches up to the top bar's edge.
+  assert.match(css, /^\.dock \.tray-list \{[^}]*max-height: min\(212px, max\(44px, calc\(100dvh - 248px\)\)\);/m);
 });
 
 test('the floating panel stops floating once it has gone, and takes no press or Tab while it goes', async () => {
