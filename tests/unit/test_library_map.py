@@ -306,3 +306,41 @@ def test_the_route_answers_for_a_project_that_is_gone(tmp_path):
         assert answer["project"]["id"] == gone["id"]
         assert "superpowers" in _items(answer)
         assert page.get("/api/library-map?project=nope").status_code == 404
+
+
+def test_each_item_says_what_details_can_offer(tmp_path):
+    home = build_demo_home(tmp_path, "medium")
+    items = _items(_map(home))
+    # superpowers: Codex can still add it; Claude Code can turn it off. Cursor is never offered:
+    # it gets plugins through Claude Code, and has no switch of its own.
+    assert items["superpowers"]["can"] == {"add": ["codex"], "off": ["claude_code"]}
+    # Off already, and a bundled plugin no marketplace offers: nothing to add, only Codex's switch.
+    assert items["pr-review"]["can"] == {"add": ["codex"], "off": []}
+    assert items["browser"]["can"] == {"add": [], "off": ["codex"]}
+    assert items["ui-kit"]["can"] == {"add": [], "off": []}
+    # A skill: each client that loads its own copy has a rule; Cursor has none.
+    assert items["brandkit"]["can"] == {"off": ["claude_code"]}
+    assert items["code-review"]["can"] == {"off": ["codex"]}
+    assert items["ui-polish"]["can"] == {"off": []}
+    # A hook has no switch.
+    assert items["PreToolUse: Bash"]["can"] == {}
+
+
+def test_skill_rules_say_where_one_project_can_turn_a_skill_off(tmp_path):
+    home = build_demo_home(tmp_path, "medium")
+    inventory, adapters = _read(home)
+    ids = {Path(p.path).name: p.id for p in inventory.projects}
+    rules = library_map(inventory, adapters, None)["skill_rules"]
+    assert rules["some"] is True
+    # Only projects whose folder is there; one with no Claude Code settings yet cannot take a rule.
+    assert rules["projects"][ids["website"]] == "ok"
+    assert rules["projects"][ids["atlas"]] == "new"
+    assert ids["old-app"] not in rules["projects"]
+    # A project whose shared settings hold skillOverrides keeps its own rules.
+    _write(home / "work/website/.claude/settings.json", {"skillOverrides": {"x": "off"}})
+    rules = _map(home)["skill_rules"]
+    assert rules["projects"][ids["website"]] == "own"
+    # The user settings with skillOverrides: no one-project rule anywhere (it may not merge).
+    settings = home / ".claude/settings.json"
+    _write(settings, {**json.loads(settings.read_text()), "skillOverrides": {"y": "off"}})
+    assert _map(home)["skill_rules"]["some"] is False

@@ -19,6 +19,8 @@ const GO_MS = 180; // a block that goes, or folds back into the block that showe
 const FADE_MS = 120; // a child of an unfold fades in after its link has drawn
 const FOLD_SCALE = 0.3; // how small a folded child gets as it goes
 const FOLD_IN = 100; // a folded child goes this far left of its opener's right side
+const GROW_STEP = 15; // between two children of an unfold that grow out of their opener
+const FOLD_BACK_MS = 160; // ... and they fold back into it this fast
 const ROOM = 24; // under the lowest block
 const ENTER_RISE = 6; // an entering block starts this far below its place
 const CAPTION_ICON = 13; // a group caption's icon
@@ -547,7 +549,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHove
     // A group's caption in words is as wide as its words, up to what style.css lets it have.
     if (item.w !== place.w && !(item.div && place.kind === "group")) node.style.width = `${place.w}px`;
     if (item.h !== place.h) node.style.height = `${place.h}px`;
-    Object.assign(item, { kind: place.kind, w: place.w, h: place.h, home: { x: place.x, y: place.y }, growsFrom: block.growsFrom || null, growMs: block.growMs || GROW_MS });
+    Object.assign(item, { kind: place.kind, w: place.w, h: place.h, home: { x: place.x, y: place.y }, growsFrom: block.growsFrom || null, growMs: block.growMs || GROW_MS, grows: Boolean(block.grows) });
     const counting = place.kind !== "column" && !item.div && place.kind !== "group" && folds.has(place.id);
     syncCount(item, counting ? block : null, open.has(place.id));
   }
@@ -883,10 +885,29 @@ export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHove
     return { x: at.x + opener.w - size.w / 2, y: at.y + opener.h / 2 - size.h / 2, s: GROW_SCALE, o: 0 };
   }
 
+  // A child of an unfold, the `at`th. One that grows (`grows`: the Library's Inside rows) starts
+  // small and unseen 100 px inside its opener's right side and grows to its place, 220 ms OUT3, 15 ms
+  // apart, its links showing with it; it folds back there in 160 ms IN3 (leaveTo). Any other waits
+  // at its place while its links draw (`delays`), then fades in: true, its links draw in first.
+  function unfoldIn(item, place, end, { start, at, delays }) {
+    const opener = item.grows && blocks.get(place.opener);
+    if (opener) {
+      put(item, intoOpener(opener.home || opener, opener, item));
+      go(item, end, { dur: D(GROW_MS), ease: OUT3, start: start + D(at * GROW_STEP) });
+      return false;
+    }
+    put(item, { ...end, o: 0 });
+    go(item, end, { dur: D(FADE_MS), ease: OUT3, start: start + D(delays[at]) });
+    return true;
+  }
+
+  // Small and unseen inside the right side of an opener of size `opener` at `at`.
+  const intoOpener = (at, opener, item) => ({ x: at.x + opener.w - FOLD_IN, y: at.y + opener.h / 2 - item.h / 2, s: FOLD_SCALE, o: 0 });
+
   // Where a block that goes moves to: a child of a fold (its `opener`) shrinks back into the opener's
   // right side, a block that grew out of another shrinks back into it, anything else fades in place.
   function leaveTo(item, opener) {
-    if (opener) return { x: opener.x + opener.w - FOLD_IN, y: opener.y + opener.h / 2 - item.h / 2, s: FOLD_SCALE, o: 0 };
+    if (opener) return intoOpener(opener, opener, item);
     const grew = item.growsFrom && blocks.get(item.growsFrom);
     return grew ? sideOf(grew, item) : { x: item.x, y: item.y, s: item.s, o: 0 };
   }
@@ -1086,10 +1107,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHove
         put(item, { ...end, y: end.y + ENTER_RISE, o: 0 });
         go(item, end, { dur: D(MOVE_MS), ease: OUT3, start: start + D(waves[i] + enterDelay) });
       } else if (fresh && unfold.has(place.id)) {
-        // An unfold: it waits at its place while its links draw, then fades in.
-        opened.add(place.id);
-        put(item, { ...end, o: 0 });
-        go(item, end, { dur: D(FADE_MS), ease: OUT3, start: start + D(delays[unfold.get(place.id)]) });
+        if (unfoldIn(item, place, end, { start, at: unfold.get(place.id), delays })) opened.add(place.id);
       } else {
         if (fresh) put(item, coming.get(place.id) || { ...end, o: 0 });
         go(item, end, { dur: D(pace), ease: OUT3, start });
@@ -1107,7 +1125,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHove
         continue;
       }
       const to = leaveTo(item, plan.fold.includes(id) ? after.get(foldsInto(before.get(id))) : null);
-      go(item, to, { dur: D(GO_MS), ease: IN3, start, then: drop });
+      go(item, to, { dur: D(item.grows && item.folds ? FOLD_BACK_MS : GO_MS), ease: IN3, start, then: drop });
     }
 
     const drawsIn = [];

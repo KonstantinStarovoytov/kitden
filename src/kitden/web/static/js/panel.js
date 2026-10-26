@@ -370,12 +370,13 @@ export function closePanel({ instant = false, keepSelection = false, focus = tru
 
 // Another project picked (at the top, or by Back or an edited address) closes the panel: a switch
 // in it never acts on a project it does not name. On the Gateway the project changes in place: the
-// panel stays, and the page has it follow the project (gateway-details.js followProject). The tray
-// keeps its rows: each keeps the project it was asked in. The selection is the caller's: the
-// picker clears it, an address brings its own.
-// A project that is gone closes it on the Gateway too: the page then only says so.
+// panel stays, and the page has it follow the project (gateway-details.js followProject). The
+// Library's map does the same with its own Details (library-details.js). The tray keeps its rows:
+// each keeps the project it was asked in. The selection is the caller's: the picker clears it, an
+// address brings its own. A project that is gone closes it there too: the page then only says so.
 export function closeForProject() {
-  const inPlace = state.view === "gateway" && !projectGone();
+  const map = state.view === "gateway" || (state.view === "library" && panelState.current?.type === "library");
+  const inPlace = map && !projectGone();
   if (isPanelOpen() && openedIn !== state.project && !inPlace) closePanel({ focus: false, keepSelection: true });
 }
 

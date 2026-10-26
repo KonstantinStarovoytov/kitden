@@ -1038,6 +1038,8 @@ h2.sw-head { margin: 0; font-size: 11px; font-weight: 600; color: var(--ink-2); 
 .sw-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-top: 1px solid var(--wire); }
 .sw-row:first-child { border-top: 0; }
 .sw-row.whole { background: var(--dim); }
+/* A row of what a Library client loads, or a marketplace holds: a 24 px tile before its name. */
+.sw-row > .p-tile.p-icon { width: 24px; height: 24px; flex: none; }
 .sw-tx { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .sw-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .sw-name code { min-width: 0; font: 11px/1.4 var(--mono); color: var(--ink); overflow-wrap: anywhere; }

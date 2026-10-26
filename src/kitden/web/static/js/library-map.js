@@ -1,9 +1,9 @@
 // The Library's map (library-notes §2): the clients, the plugins and skills they load by where they
 // come from, and what an open plugin holds. It is drawn from /api/library-map
 // (views/library_map.py) with the map every map page shares (map.js, map-view.js). Nothing here
-// writes: a press only selects, unfolds and lights a path.
-import { cutName, el, icon, plural } from "./dom.js";
-import { findIn, layoutTree, litFor, litFrom, pagesNow, pagesWith, turnPage, turnWords } from "./map.js";
+// writes: a press only selects, unfolds and lights a path; Details (library-details.js) hear it.
+import { $, cutName, el, icon, plural } from "./dom.js";
+import { findIn, layoutTree, linkKey, litFor, litFrom, pagesNow, pagesWith, turnPage, turnWords } from "./map.js";
 import { glidePill, goSwitched, leaveThen } from "./map-page.js";
 import { mapView } from "./map-view.js";
 import { afterOldPage, rise, riseHead } from "./motion.js";
@@ -14,11 +14,12 @@ import { say } from "./toast.js";
 const LEDE = "Follow the source. Connect only what you need.";
 const MAP_HINT = "Point at a link for its Details · click a plugin to see what it holds · Turn off… waits in preview, then Apply";
 // The map's columns at the mockup's x (0, 250, 500) and sizes (library-notes §2.1): a client
-// 150×54, a plugin card 180×60 (a skill or hook row 34 high), an inside item 200×34.
+// 150×54, a plugin card 180×60 (a skill or hook row 34 high), an inside item 200×34. What a plugin
+// holds, and the Inside caption, grow out of the plugin as it opens (map-view.js `grows`).
 export const LIBRARY_COLUMNS = [
   { id: "clients", caption: "Clients", w: 150, h: 54, top: 140, rowGap: 18 },
   { id: "plugins", caption: "Plugins and skills", w: 180, h: 60, colGap: 100, top: 37, rowGap: 4 },
-  { id: "inside", caption: "Inside", w: 200, h: 34, colGap: 70, top: 26, rowGap: 8 },
+  { id: "inside", caption: "Inside", w: 200, h: 34, colGap: 70, top: 26, rowGap: 8, grows: true },
 ];
 const ROW_H = 34; // a skill or hook row in the Plugins and skills column
 const GROUP_BEFORE = 15; // the space before a group caption, after the group above it
@@ -50,7 +51,7 @@ export function libraryMode() {
 
 // An item's lamp: green while any client has it on, an amber dashed ring while Kitden knows of no
 // client that has it on but does not know of one, grey while it is off in all of them.
-function lampOf(item) {
+export function lampOf(item) {
   const states = Object.values(item.by || {});
   if (states.includes("on")) return "on";
   return states.includes("unknown") ? "unk" : "off";
@@ -96,9 +97,9 @@ function insideParts(item, plugin) {
   let parent = plugin.id;
   if (parts.length > INSIDE_PAGE + 1) {
     parent = `inside:${plugin.id}`;
-    blocks.push({ id: parent, column: "inside", parent: plugin.id, kind: "group", name: item.name, pageName: cutName(item.name, INSIDE_NAME), icon: "puzzle", pageSize: INSIDE_PAGE, rowGap: LIBRARY_COLUMNS[2].rowGap });
+    blocks.push({ id: parent, column: "inside", parent: plugin.id, kind: "group", name: item.name, pageName: cutName(item.name, INSIDE_NAME), icon: "puzzle", pageSize: INSIDE_PAGE, rowGap: LIBRARY_COLUMNS[2].rowGap, grows: true });
   }
-  for (const part of parts) blocks.push({ id: `part:${item.id}:${part.key}:${part.name}`, column: "inside", parent, kind: "part", name: part.name, label: part.label, ports: { left: true }, plugin: item });
+  for (const part of parts) blocks.push({ id: `part:${item.id}:${part.key}:${part.name}`, column: "inside", parent, kind: "part", name: part.name, label: part.label, ports: { left: true }, plugin: item, grows: true });
   const links = parts.map((part) => ({ from: plugin.id, to: `part:${item.id}:${part.key}:${part.name}`, kind: "on" }));
   return { blocks, links };
 }
@@ -112,7 +113,9 @@ export function libraryTree(answer) {
   const links = [];
   for (const group of answer.groups) {
     const id = `group:${group.key}`;
-    blocks.push({ id, column: "plugins", kind: "group", name: group.name, icon: group.icon, before: GROUP_BEFORE, rowGap: LIBRARY_COLUMNS[1].rowGap });
+    // A marketplace's caption opens its Details.
+    const details = group.kind === "marketplace";
+    blocks.push({ id, column: "plugins", kind: "group", name: group.name, icon: group.icon, before: GROUP_BEFORE, rowGap: LIBRARY_COLUMNS[1].rowGap, details, group });
     for (const item of group.items) {
       const block = itemBlock(item, id);
       blocks.push(block);
@@ -139,10 +142,23 @@ function tile(block) {
 // for which words, and the project it was drawn for.
 const onMap = { view: null, answer: null, model: null, open: new Set(), selected: null, pages: new Map(), found: null, searched: "", project: null, unfolds: false, folded: false };
 
-// Details of a selection (Task 6 fills it): `fn(block)` on a select, `fn(null)` on a let-go.
+// Details of a selection (library-details.js): `fn(id)` on a select (a block's id or a link's key),
+// `fn(null)` on a let-go, and `fn(id or null, { follow: true })` once another project is drawn in
+// place: the same selection, or null when that project does not have it.
 let selectHook = null;
 export function onLibrarySelect(fn) {
   selectHook = fn;
+}
+
+// What the map shows now for a selection: `{ block }`, or `{ link, from, to }` for a link's key; null
+// when the map has nothing of that id. `answer` is the /api/library-map answer it is drawn from.
+export function libraryThing(id) {
+  const model = onMap.model;
+  if (!model || !id) return null;
+  const byId = new Map(model.blocks.map((b) => [b.id, b]));
+  if (byId.has(id)) return { block: byId.get(id), answer: onMap.answer };
+  const link = model.links.find((l) => linkKey(l) === id);
+  return link ? { link, from: byId.get(link.from), to: byId.get(link.to), answer: onMap.answer } : null;
 }
 
 // The List draws: the next Map is a new one, with an entrance.
@@ -179,6 +195,7 @@ export function renderLibraryMap(main, { head, again = false, switched = false }
   if (fresh) Object.assign(onMap, { view: newMap(), open: new Set(), selected: null, pages: new Map() });
   const projectChanged = !fresh && onMap.project !== state.project;
   onMap.project = state.project;
+  const had = onMap.selected;
   keepWhatShows(answer);
   main.append(onMap.view.box);
   const text = state.q.trim();
@@ -190,14 +207,17 @@ export function renderLibraryMap(main, { head, again = false, switched = false }
   const motion = fresh ? (switched ? "none" : "enter") : projectChanged ? "project" : "move";
   drawMap({ motion });
   if (switched) rise([onMap.view.box], { delay: afterOldPage() });
+  // Details follow the project drawn in place: the same selection, or none.
+  if (projectChanged && had && selectHook) selectHook(onMap.selected, { follow: true });
   return onMap.found;
 }
 
-// The tree for a new answer: the open plugin and the selection stay while the answer has them.
+// The tree for a new answer: the open plugin and the selection (a block, or a link) stay while the
+// answer has them.
 function keepWhatShows(answer) {
   onMap.answer = answer;
   onMap.model = libraryTree(answer);
-  const ids = new Set(onMap.model.blocks.map((block) => block.id));
+  const ids = new Set([...onMap.model.blocks.map((block) => block.id), ...onMap.model.links.map(linkKey)]);
   onMap.open = new Set([...onMap.open].filter((id) => ids.has(id)));
   if (onMap.selected && !ids.has(onMap.selected)) onMap.selected = null;
 }
@@ -248,12 +268,40 @@ function newMap() {
     onEmpty: () => onMap.selected && letGo(),
     // While nothing is selected, pointing at a client lights what it loads.
     onHover: (id) => view.glance(id && id.startsWith("client:") ? litFrom(onMap.model, id) : null),
+    links: LINKS,
     enterDelay: afterOldPage(),
   });
   view.box.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && onMap.selected) letGo();
   });
+  watchDrawer();
   return view;
+}
+
+// Every link opens its Connection Details; none has a × yet (Phase 6B).
+const LINKS = { canHit: () => true, tip: () => "", waits: () => false, onClick: pressLink, onRemove: () => {} };
+
+// A press on a link selects it: its two ends light and its Details open. A second press lets go.
+function pressLink(link) {
+  const key = linkKey(link);
+  if (onMap.selected === key) {
+    letGo();
+    return;
+  }
+  onMap.selected = key;
+  drawMap();
+  if (selectHook) selectHook(key);
+}
+
+// Details closing (Escape, Close, another place) lets go of what the map selected.
+let watching = false;
+function watchDrawer() {
+  const drawer = $("#drawer");
+  if (watching || !drawer) return;
+  watching = true;
+  new MutationObserver(() => {
+    if (!drawer.classList.contains("open") && onMap.selected) letGo();
+  }).observe(drawer, { attributes: true, attributeFilter: ["class"] });
 }
 
 // Draw the map as it is now. A press that opened a plugin draws its selection first and lights
@@ -305,7 +353,7 @@ function pressBlock(id) {
   if (!block) return;
   onMap.selected = id;
   drawMap({ lightLater: unfolds });
-  if (selectHook) selectHook(block);
+  if (selectHook) selectHook(id);
 }
 
 // "N more" shows the next page in place, and a screen reader hears which ones show. A selection

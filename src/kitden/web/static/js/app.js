@@ -7,6 +7,7 @@ import { renderChanges } from "./changes.js";
 import { drawTray, initDock } from "./dock.js";
 import { drawChip, renderGateway } from "./gateway.js";
 import { startGlow } from "./glow.js";
+import { initLibraryDetails } from "./library-details.js";
 import { loadLibrary, loadLibraryFor, morphOnNextRender, raceSlow, renderLibrary, settleRows, showSources, snapshotRows } from "./library.js";
 import { startLogo } from "./logo.js";
 import { renderOverview } from "./overview.js";
@@ -127,7 +128,8 @@ async function refresh({ fade = false } = {}) {
 // Another project is picked (store.js switchProject, or an address on the Gateway): Details close,
 // the old page waits faded until the new project is read and cross-fades, and the Library's cells
 // turn into their new states. The Gateway changes in place instead (gateway.js): it neither fades
-// nor cross-fades, and its Details stay, taking no press until the read ends (holdPanel).
+// nor cross-fades, and its Details stay, taking no press until the read ends (holdPanel). The
+// Library's map keeps its Details the same way (library-details.js).
 function refreshForProject() {
   closeForProject();
   drawPicker();
@@ -137,7 +139,7 @@ function refreshForProject() {
   main.classList.add("pending");
   main.setAttribute("aria-busy", "true");
   const read = refresh({ fade: !["library", "gateway"].includes(state.view) });
-  return (state.view === "gateway" ? holdPanel(read) : read).catch(reportError).finally(() => {
+  return (MAP_PAGES.includes(state.view) ? holdPanel(read) : read).catch(reportError).finally(() => {
     main.classList.remove("pending");
     main.removeAttribute("aria-busy");
   });
@@ -375,6 +377,7 @@ function start() {
   $("#theme").addEventListener("click", switchTheme);
   $("#rescan").addEventListener("click", () => rescan().catch(reportError));
   initPanel();
+  initLibraryDetails();
   initDock();
   startGlow($("#content"));
   startLogo($(".brand"));

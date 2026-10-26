@@ -57,7 +57,7 @@ export function movesTo(model, key, row) {
 }
 
 // Client tiles and their words, as a Facts value; `text` says the same in words alone.
-function tiles(clients, text) {
+export function tiles(clients, text) {
   const node = el("span", "fact-tiles");
   node.append(...clients.map((client) => mark(client)), el("span", null, text));
   return node;
@@ -70,14 +70,14 @@ function clientsFact(clients) {
 
 // What a panel's head shows beside its title: a client's tile, the Kitden house, a registered
 // gateway's mark, or a server's icon on a tile.
-function headTile(...nodes) {
+export function headTile(...nodes) {
   const tile = el("span", "p-tile");
   tile.append(...nodes);
   return tile;
 }
 
 // A server's icon on a 28 px tile.
-function iconTile(look) {
+export function iconTile(look) {
   const tile = headTile(icon(look, 15));
   tile.classList.add("p-icon");
   return tile;
@@ -92,7 +92,7 @@ function houseTile() {
 
 // A 6 px lamp (style.css): green "on", grey "off", the grey ring "out" of a server outside the
 // gateway, the dashed "pv" of a change in preview.
-function lamp(look) {
+export function lamp(look) {
   const node = el("span", `lamp ${look}`);
   node.setAttribute("aria-hidden", "true");
   return node;
@@ -1035,7 +1035,7 @@ export function linkCard({ from, to, unk = false, removal = null, row = null }, 
 // Steps in the panel -----------------------------------------------------------------------------
 
 // A step's head: Back, where it came from (`crumb`) and Close, over its title.
-function stepHead(crumb, title, back) {
+export function stepHead(crumb, title, back) {
   const head = el("header");
   const top = el("div", "top");
   const backButton = button(null, back, "btn ghost small step-back");
@@ -1049,7 +1049,7 @@ function stepHead(crumb, title, back) {
 }
 
 // A step's quiet note at its foot, after an info icon; `words` can change.
-function stepFoot(words) {
+export function stepFoot(words) {
   const foot = el("p", "step-foot");
   foot.append(icon("info", 13), words);
   return foot;
@@ -1064,7 +1064,7 @@ function backTo(draw, read, readIn) {
 }
 
 // After a step, focus that was in the panel goes to the first control named in `keys` that is there.
-function focusAfterStep(...keys) {
+export function focusAfterStep(...keys) {
   const drawer = $("#drawer");
   if (!drawer.contains(document.activeElement)) return;
   const node = keys.map((key) => withFocusKey(drawer, key)).find(Boolean);
@@ -1132,7 +1132,7 @@ function clientPick(name, client, linked) {
 
 // A pick row's press, one at a time as a preview button's: a second one while the first is asked
 // does nothing, and so does a press on a row that is off.
-function pressOnce(node, press) {
+export function pressOnce(node, press) {
   node.addEventListener("click", () => {
     if (node.disabled || node.dataset.working) return;
     node.dataset.working = "1";
@@ -1161,38 +1161,52 @@ function projectsStep(step, dir = "fwd") {
   return stepTo(nodes, dir).then(() => focusAfterStep("find"));
 }
 
-// The step's parts: Back, where it came from and Close; the question; that the shared rule stays,
-// and who changes with a ticked project; Find, a row per project and the words when none matches;
-// Done; and how many wait.
+// The step's parts for a server or a tool: the shared rule that stays, and who changes with a
+// ticked project, over the project checklist.
 function projectsNodes({ server, tool, title, target, shared, rules }, projects, back) {
   const stateIn = tool ? ruleIn(tool) : (p) => p.server;
   const ownOf = tool ? (p) => (p.entry.own || []).includes(tool) : (p) => Boolean(p.entry.own_server);
   const rows = (knownIn(rules, projects) || []).map((p) => ({ ...p, now: stateIn(p.entry) })).filter((p) => p.now);
+  const ticks = rows.map((p) => {
+    const body = ruleBody(server, tool, target, p.id);
+    const off = p.now === target;
+    const line = [p.sub, p.count, off ? `already ${target}` : `${p.now} now`].filter(Boolean).join(" · ");
+    return { id: p.id, name: p.name, line, off, body, ticked: () => ticked(body), project: p };
+  });
+  const follows = (picked) => picked.map((t) => followLine(t.project, rows, ownOf, picked.map((x) => x.project))).filter(Boolean);
+  const crumb = tool ? `Tool · ${title}` : `Server · ${server}`;
+  return projectChecklist({ crumb, title: `Turn ${target} ${title} in the projects you pick`, why: shared ? `The shared rule stays ${shared}.` : null, rows: ticks, back, follows });
+}
+
+// The project checklist (D13), a step in a panel: Back, where it came from (`crumb`) and Close; the
+// question (`title`); a quiet line (`why`); what changes with the ticks (`follows(ticked)`, nodes);
+// Find, a row per project (tickRow, with a folder) and the words when none matches; Done (`back`);
+// and how many wait. A tick adds that project's change to the tray at once, one row per project; an
+// untick takes exactly that row out. The Gateway's tools and servers and the Library's skills use it.
+export function projectChecklist({ crumb, title, why = null, rows, back, follows = null }) {
   const words = el("span");
-  const follows = el("div", "follows");
-  follows.setAttribute("aria-live", "polite");
-  const bodies = rows.map((p) => ruleBody(server, tool, target, p.id));
+  const said = el("div", "follows");
+  said.setAttribute("aria-live", "polite");
   const count = () => {
-    const ticks = rows.filter((p, at) => ticked(bodies[at]));
+    const ticks = rows.filter((row) => row.ticked());
     words.textContent = ticks.length ? `${plural(ticks.length, "project", "projects")} in preview. Apply them from the tray.` : "Tick projects. Each one waits in preview until Apply.";
-    follows.replaceChildren(...ticks.map((p) => followLine(p, rows, ownOf, ticks)).filter(Boolean));
+    said.replaceChildren(...(follows ? follows(ticks) : []));
   };
   const picks = el("div", "picks");
   picks.setAttribute("role", "group");
   picks.setAttribute("aria-label", "Projects");
-  picks.append(...rows.map((p, at) => projectPick(p, bodies[at], count)));
+  picks.append(...rows.map((row) => tickRow({ ...row, look: icon("folder", 14) }, count)));
   const none = el("p", "muted", "No project matches.");
   none.hidden = true;
   const body = el("div", "body");
-  if (shared) body.append(el("p", "why", `The shared rule stays ${shared}.`));
-  body.append(follows, findField(picks, none), picks, none);
+  if (why) body.append(el("p", "why", why));
+  body.append(said, findField(picks, none), picks, none);
   const done = el("footer", "stack");
   done.append(button("Done", back, "btn"));
-  const crumb = tool ? `Tool · ${title}` : `Server · ${server}`;
   const foot = stepFoot(words);
   foot.setAttribute("aria-live", "polite");
   count();
-  return [stepHead(crumb, `Turn ${target} ${title} in the projects you pick`, back), body, done, foot];
+  return [stepHead(crumb, title, back), body, done, foot];
 }
 
 // The known projects that follow the rule of a ticked project `p`, so they change with it: as the
@@ -1219,34 +1233,33 @@ function ticked(body) {
   return Boolean(row) && row.body.params.state === body.params.state;
 }
 
-// One project to tick: its folder, its name over what it has now ("1 own rule · on now",
-// "already off"), and a check that fills, popping in, while its rule waits in the tray. A press
-// adds the rule, or takes it out again. `changed()` counts the ticks again.
-function projectPick(p, body, changed) {
-  const target = body.params.state;
+// One row to tick: its icon or tile (`look`), its name over its quiet line ("1 own rule · on now",
+// "already off"), and a check that fills, popping in, while its change (`body`) waits in the tray as
+// it is (`ticked()`). A press adds the change, or takes it out again; a row that is `off` takes no
+// press. `changed()` hears every change of the tray.
+export function tickRow({ id, name, line, look, off = false, body, ticked: isTicked }, changed = () => {}) {
   const node = el("button", "pick multi");
   node.type = "button";
   node.setAttribute("role", "checkbox");
-  node.dataset.focus = `tick:${p.id}`;
-  node.dataset.name = p.name;
-  node.disabled = p.now === target;
-  const sub = [p.sub, p.count, node.disabled ? `already ${target}` : `${p.now} now`].filter(Boolean).join(" · ");
+  node.dataset.focus = `tick:${id}`;
+  node.dataset.name = name;
+  node.disabled = off;
   const words = el("span", "pk-tx");
-  const line = el("small", null, sub);
-  words.append(el("b", null, p.name), line);
+  const small = el("small", null, line);
+  words.append(el("b", null, name), small);
   const box = el("span", "chk");
   box.append(icon("check", 12));
-  node.append(icon("folder", 14), words, box);
-  pressOnce(node, () => (ticked(body) ? takeOut(keyFor(body)) : review(body)));
+  node.append(look, words, box);
+  pressOnce(node, () => (isTicked() ? takeOut(keyFor(body)) : review(body)));
   let was = null;
   followTray(node, keyFor(body), () => {
-    const on = ticked(body);
+    const on = isTicked();
     node.classList.toggle("on", on);
     node.setAttribute("aria-checked", String(on));
     // The line says it too, as a client row does: " · in preview".
-    const said = on ? `${sub} · in preview` : sub;
-    line.textContent = said;
-    node.setAttribute("aria-label", `${p.name}, ${said}`);
+    const said = on ? (line ? `${line} · in preview` : "In preview") : line;
+    small.textContent = said;
+    node.setAttribute("aria-label", `${name}, ${said}`);
     if (on && was === false) animateTo(box, [{ transform: "scale(0.6)" }, { transform: "none" }], { dur: 160 });
     was = on;
     changed();
@@ -1291,7 +1304,7 @@ function showing(shown) {
 // again from what it read, `read` reads first (after Apply all). Another card than the one shown
 // comes through its skeleton (loadPanel); one drawn again, or one whose skeleton shows while its
 // read ends, does not. A `step` ("back") slides it in as the next step in the panel (stepTo).
-function openCard(card, shown, draw, read = draw, step = null) {
+export function openCard(card, shown, draw, read = draw, step = null) {
   const loads = panelState.current && panelState.current.type === "loading" && panelState.current.kind === card.kind;
   if (!step && !showing(shown) && !loads) loadPanel(card.kind);
   panelState.current = shown;

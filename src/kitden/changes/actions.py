@@ -1031,7 +1031,7 @@ def add_server_steps(
 SKILL_RULE = "skill.rule"  # a skill, or a plugin in one project, turned off by a settings rule
 
 
-def _skill_rules_in(path: Path) -> bool:
+def skill_rules_in(path: Path) -> bool:
     """The Claude Code settings file has `skillOverrides` with at least one key."""
     try:
         data = json.loads(path.read_text())
@@ -1065,7 +1065,7 @@ def _claude_rule_step(
         # higher file replaces the whole object, a new key in the local file would drop the
         # rules of the user's file, and of the project's shared file, in that project.
         shared = Path(project) / ".claude/settings.json"
-        if _skill_rules_in(home / ".claude/settings.json") or _skill_rules_in(shared):
+        if skill_rules_in(home / ".claude/settings.json") or skill_rules_in(shared):
             raise ValueError(NO_SKILL_MERGE)
     return adapter.skill_rule_step(item.name, project, off)
 

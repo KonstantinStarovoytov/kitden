@@ -2685,8 +2685,8 @@ def test_gateway_forms_say_in_preview_while_their_row_waits():
     assert "showInPreview(submit, words, PREVIEW, keyFor(body()))" in gateway
     assert 'const PREVIEW = "Preview";' in gateway
     # A project pick says it on its small line and in its name for a screen reader.
-    assert "`${sub} · in preview`" in gateway
-    assert "`${p.name}, ${said}`" in gateway
+    assert "`${line} · in preview`" in gateway
+    assert "`${name}, ${said}`" in gateway
 
 
 def test_the_library_map_words_and_looks():
@@ -2718,3 +2718,64 @@ def test_the_library_map_words_and_looks():
     assert unk in CSS
     assert ".seg.map-tabs { margin: -6px 0 18px; }" in CSS
     assert 'const MAP_PAGES = ["gateway", "library"];' in script("app.js")
+
+
+def test_the_library_map_details_words():
+    text = script("library-details.js")
+    for words in (
+        'const OFF_ALL = "Turn off for all projects…";',
+        'const OFF_SOME = "Turn off in some projects…";',
+        'const OFF_HERE = "Turn off in this project…";',
+        'const FOLLOWS = "Follows its plugin.";',
+        'const NO_PLUGIN = "None, a skill on its own";',
+        'const NO_PROJECT_SWITCH = "Codex has no switch for one project.";',
+        'const NO_CURSOR_SWITCH = "Cursor has no switch to turn off one skill.";',
+        '"This turns it off in Claude Code. Codex and Cursor have no switch for one project."',
+        'own: "Has its own skill settings", new: "No Claude Code settings yet"',
+        '["skills", "skill", "skills"], ["commands", "command", "commands"]',
+        '["mcp_servers", "MCP server", "MCP servers"]',
+        '`Add to ${names(clients).join(" or ")}…`',
+        "`Turn off ${plugin.name} in this project…`",
+        '"in every project"',
+        '`${joinWords(names(readers))} ${verb(readers, "gets", "get")} it through '
+        "${CLIENT_NAMES[owner]}.`",
+        "`It is off in ${joinWords(names(off))}.`",
+        '"Cursor gets it once Claude Code adds it."',
+        '"No client loads it."',
+        '`Plugin · ${plural(item.count, "item", "items")}`',
+        "`Loads in ${c.folder}`",
+        '"Loads in every project"',
+        '"Nothing yet"',
+        "`${owner}'s settings`",
+        "`${owner}'s skills folder`",
+        '"The plugin\'s files"',
+        '"Inside the plugin"',
+        '"Loaded by the client"',
+        "`Through ${ownerName}`",
+        "`${client} loads ${item.name} through ${ownerName}'s folder.`",
+        '"Plugins on the map"',
+        '"Has it already" : "Not added"',
+        '"Each client you tick waits in preview until Apply."',
+        "`Add ${item.name} to the clients you pick`",
+        "`Turn off ${item.name} in the projects you pick`",
+        '{ title: "Plugin folder", path: tech.path }',
+        '{ title: "Marketplace", summary: tech.marketplace }',
+        '{ title: "Skill file", path:',
+        '{ title: "Settings file", path:',
+    ):
+        assert words in text, words
+    # Cursor is never a choice for a plugin (D26), and a plugin's parts have no switch (D25).
+    assert '["claude_code", "codex"].filter((client) => item.can.add.includes(client)' in text
+    # The project checklist is the Gateway's own (D13), shared, not a copy.
+    assert "export function projectChecklist(" in gw() and "projectChecklist({" in text
+    assert "export function tickRow(" in gw()
+    # A ticked row with no line of its own says "In preview".
+    assert '(line ? `${line} · in preview` : "In preview")' in gw()
+    # The Inside rows grow out of their plugin, and fold back in 160 ms.
+    view = script("map-view.js")
+    assert "const GROW_STEP = 15;" in view and "const FOLD_BACK_MS = 160;" in view
+    assert (
+        'caption: "Inside", w: 200, h: 34, colGap: 70, top: 26, rowGap: 8, grows: true'
+        in script("library-map.js")
+    )
+    assert ".sw-row > .p-tile.p-icon { width: 24px; height: 24px; flex: none; }" in CSS

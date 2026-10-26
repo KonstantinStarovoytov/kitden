@@ -6,7 +6,10 @@ has is left out, and so are account plugins. A plugin's parts are read from its 
 and follow the plugin, so the map never says "N of M on". Paths are only under `technical`.
 """
 
-from kitden.changes.actions import CLIENT_WORDS
+from pathlib import Path
+
+from kitden.changes.actions import CLIENT_WORDS, skill_rules_in
+from kitden.clients.base import PLUGIN_DISABLE
 from kitden.model import ClientStatus, Item, ItemKind, Scope
 from kitden.views.catalog import catalog, installed_inside
 from kitden.views.effective import in_project
@@ -122,6 +125,54 @@ def _via_claude_code(row: Row, offers: dict[str, dict], cursor_imports: bool, fo
     )
 
 
+# The clients Details may offer: a plugin added to one of these, a skill rule in one of these.
+ADDS = ("claude_code", "codex")
+RULES = ("claude_code", "codex")
+
+
+def _can(row: Row, by: dict, through: dict, ids: dict, by_id, offer, found) -> dict:
+    """What Details may offer for an item, by client: `add`, the clients that can add the plugin
+    and lack it (never Cursor: it gets plugins through Claude Code), and `off`, the clients that
+    load their own copy and can turn it off for all projects (a plugin's switch, or a skill rule).
+    A hook has no switch."""
+    own = [c for c, state in by.items() if state == "on" and c not in through]
+    if row.kind is ItemKind.PLUGIN:
+        routes, installed = (offer["routes"], offer["installed"]) if offer else ({}, ())
+        add = [c for c in ADDS if c in found and c in routes and c not in installed]
+        off = [c for c in own if PLUGIN_DISABLE in by_id[ids[c][0]].actions]
+        return {"add": add, "off": off}
+    if row.kind is ItemKind.SKILL:
+        return {"off": [c for c in RULES if c in own]}
+    return {}
+
+
+def _skill_rules(inventory, adapters, found) -> dict:
+    """Where a one-project skill rule can go (Claude Code only): `some` while the user settings
+    hold no `skillOverrides` (Claude Code may not merge them across files), and per project whose
+    folder is there "ok", "own" (its shared settings hold `skillOverrides`) or "new" (no Claude
+    Code settings yet: Kitden makes no folder). The same rules as changes/actions.py."""
+    if "claude_code" not in found or "claude_code" not in adapters:
+        return {"some": False, "projects": {}}
+
+    def holds(path: Path) -> bool:
+        try:
+            return skill_rules_in(path)
+        except ValueError:
+            return True  # a file Kitden cannot read may hold them
+
+    home = adapters["claude_code"].home
+    projects: dict[str, str] = {}
+    for project in inventory.projects:
+        folder = Path(project.path)
+        if not folder.is_dir():
+            continue
+        if not (folder / ".claude").is_dir():
+            projects[project.id] = "new"
+        else:
+            projects[project.id] = "own" if holds(folder / ".claude/settings.json") else "ok"
+    return {"some": not holds(home / ".claude/settings.json"), "projects": projects}
+
+
 def _plugin_folders(adapters) -> dict[str, str]:
     """Plugin id -> its installed folder, the first client's that has it (as installed_inside)."""
     out: dict[str, str] = {}
@@ -149,7 +200,8 @@ def library_map(inventory, adapters, project: str | None) -> dict:
     """The clients and the source groups of the Library map, in the order the map draws them:
     marketplaces by name, then "Other plugins", "Your skills", "Your settings" and, with a project
     picked, "Only this project". `here` says the picked project's own settings decide the item
-    there."""
+    there; `can` what Details may offer for it, and `skill_rules` where a one-project skill rule
+    can go."""
     status = {c.id: c.status for c in inventory.clients}
     found = [c for c in COLUMNS if status.get(c) is ClientStatus.FOUND]
     cursor = adapters.get("cursor") if "cursor" in found else None
@@ -187,6 +239,7 @@ def library_map(inventory, adapters, project: str | None) -> dict:
             "items": ids,
             "here": here,
             "source": group["name"],
+            "can": _can(row, by, through, ids, by_id, offers.get(row.lookup), found),
         }
         technical: dict[str, str] = {}
         if row.kind is ItemKind.PLUGIN:
@@ -211,4 +264,8 @@ def library_map(inventory, adapters, project: str | None) -> dict:
     rest = [groups[g["key"]] for g in (OTHER, SKILLS, SETTINGS, PROJECT) if g["key"] in groups]
     for group in [*markets, *rest]:
         group["items"].sort(key=lambda i: i["name"].lower())
-    return {"clients": _clients(inventory, cursor_imports), "groups": [*markets, *rest]}
+    return {
+        "clients": _clients(inventory, cursor_imports),
+        "groups": [*markets, *rest],
+        "skill_rules": _skill_rules(inventory, adapters, found),
+    }
