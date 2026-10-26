@@ -60,7 +60,7 @@ def _ranked(item: Item, base: str) -> int | None:
     return RANKS.get(base, {}).get(item.kind, {}).get(item.scope)
 
 
-def _in_project(item: Item, project: str | None) -> Item:
+def in_project(item: Item, project: str | None) -> Item:
     """A user skill as this project's own settings leave it (see `Item.project_rules`)."""
     for path, enabled, scope in item.project_rules:
         if path == project:
@@ -72,7 +72,7 @@ def effective_view(inventory, client: str, project: str | None) -> EffectiveView
     base = "claude_code" if client == DESKTOP else client
     clients = {base, DESKTOP} if client == DESKTOP else {base}
     candidates = [
-        _in_project(i, project)
+        in_project(i, project)
         for i in inventory.items
         if i.client in clients and (i.project is None or i.project == project)
     ]

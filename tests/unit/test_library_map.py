@@ -1,22 +1,34 @@
 """The Library map's data: clients, then plugins and skills by source, then what a plugin holds."""
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
-from kitden.demo import build_demo_home, demo_adapters
+from starlette.testclient import TestClient
+
+from kitden.demo import build_demo_home, demo_adapters, demo_build
+from kitden.model import Scope
 from kitden.views.inventory import build_inventory
 from kitden.views.library_map import library_map
+from kitden.web.app import create_app
 
 MARKET = "demo-market"
+ORIGIN = "http://127.0.0.1:47800"
 
 
-def _read(home: Path):
+def _read(home: Path, broken: str | None = None):
     adapters = {a.id: a for a in demo_adapters(home)}
+    if broken:
+
+        def fail():
+            raise ValueError("a file format Kitden does not know")
+
+        adapters[broken].scan = fail
     return build_inventory(home, list(adapters.values()), []), adapters
 
 
-def _map(home: Path, project: str | None = None) -> dict:
-    inventory, adapters = _read(home)
+def _map(home: Path, project: str | None = None, broken: str | None = None) -> dict:
+    inventory, adapters = _read(home, broken)
     return library_map(inventory, adapters, project)
 
 
@@ -225,3 +237,72 @@ def test_library_map_answer_has_no_paths_outside_technical(tmp_path):
     assert superpowers["marketplace"] == str(home / ".claude/plugins/marketplaces" / MARKET)
     assert items["brandkit"]["technical"]["path"].startswith(str(home / ".claude/skills"))
     assert items["PreToolUse: Bash"]["technical"]["path"] == str(home / ".claude/settings.json")
+
+
+def test_each_item_names_the_inventory_items_of_each_client(tmp_path):
+    home = build_demo_home(tmp_path, "medium")
+    atlas = home / "work/atlas"
+    _write(
+        atlas / ".claude/settings.local.json", {"enabledPlugins": {f"superpowers@{MARKET}": False}}
+    )
+    inventory, adapters = _read(home)
+    by_id = {i.id: i for i in inventory.items}
+    items = _items(library_map(inventory, adapters, str(atlas)))
+    superpowers = items["superpowers"]["items"]
+    assert set(superpowers) == {"claude_code", "cursor"}
+    # The deciding one first: the project's local rule, then the user's install.
+    assert [by_id[i].scope for i in superpowers["claude_code"]] == [Scope.LOCAL, Scope.USER]
+    assert by_id[superpowers["cursor"][0]].client == "cursor"
+    # Every client with a state has its ids; "via" has none.
+    for item in items.values():
+        assert set(item["items"]) == {c for c, s in item["by"].items() if s != "via"}
+        assert all(item["items"].values())
+
+
+def test_a_plugin_whose_state_kitden_does_not_know_stays_on_the_map(tmp_path):
+    # Only Codex's plugin list knows whether calendar is on, and it gave no answer.
+    items = _items(_map(build_demo_home(tmp_path, "large")))
+    calendar = items["calendar"]
+    assert calendar["group"] == "marketplace:openai-curated-remote"
+    assert calendar["by"] == {"codex": "unknown"}
+    assert calendar["items"]["codex"]
+
+
+def test_a_plugin_with_no_marketplace_is_under_other_plugins(tmp_path):
+    home = build_demo_home(tmp_path, "medium")
+    inventory, adapters = _read(home)
+    cursor = next(i for i in inventory.items if i.name == "ui-kit@cursor-public")
+    inventory.items[inventory.items.index(cursor)] = replace(cursor, name="plugin 501")
+    answer = library_map(inventory, adapters, None)
+    other = next(g for g in answer["groups"] if g["key"] == "other")
+    assert (other["name"], other["icon"], other["kind"]) == ("Other plugins", "puzzle", "other")
+    assert [i["name"] for i in other["items"]] == ["plugin 501"]
+    keys = [g["key"] for g in answer["groups"]]
+    assert keys.index("other") == keys.index("skills") - 1  # after the marketplaces
+
+
+def test_a_client_kitden_could_not_read_draws_no_link(tmp_path):
+    answer = _map(build_demo_home(tmp_path, "medium"), broken="cursor")
+    clients = {c["id"]: (c["state"], c["words"]) for c in answer["clients"]}
+    assert clients["cursor"] == ("unreadable", "Could not read")
+    items = _items(answer)
+    assert not any("cursor" in i["by"] for i in items.values())
+    # What another client has stays; what only Cursor had is not on the map.
+    assert items["superpowers"]["by"] == {"claude_code": "on"}
+    assert "ui-kit" not in items and "ui-polish" not in items
+
+
+def test_the_route_answers_for_a_project_that_is_gone(tmp_path):
+    home = build_demo_home(tmp_path, "medium")
+    app = create_app(demo_build(home), token="tok", port=47800, home=home, demo=True)
+    with TestClient(app, base_url=ORIGIN, follow_redirects=False) as page:
+        page.get("/?token=tok")
+        gone = next(p for p in page.get("/api/projects").json() if p["path"].endswith("old-app"))
+        assert not gone["exists"]
+        for path in ["/api/library-map", "/api/gateway-view"]:
+            response = page.get(f"{path}?project={gone['id']}")
+            assert response.status_code == 200, path
+        answer = page.get(f"/api/library-map?project={gone['id']}").json()
+        assert answer["project"]["id"] == gone["id"]
+        assert "superpowers" in _items(answer)
+        assert page.get("/api/library-map?project=nope").status_code == 404
