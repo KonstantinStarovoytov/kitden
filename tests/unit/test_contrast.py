@@ -243,6 +243,16 @@ def test_quiet_text_on_the_soft_line_fill_is_readable_in_both_themes():
             assert contrast(theme["--ink-3"], fill) >= 4.5, (base, fill)
 
 
+def test_a_quiet_flag_in_a_selected_row_is_readable_in_both_themes():
+    # The row is on the accent tint, and the flag's soft fill is a 60% mix of the line over that
+    # tint. --ink-3 falls just under 4.5:1 there in the light theme, so the flag uses --ink-2.
+    assert '.map tbody tr[aria-selected="true"] .flag.info { color: var(--ink-2); }' in CSS
+    for theme in (LIGHT, DARK):
+        fill = over(theme["--wire"], 0.6, theme["--route-soft"])
+        assert contrast(theme["--ink-2"], fill) >= 4.5, fill
+    assert contrast(LIGHT["--ink-3"], over(LIGHT["--wire"], 0.6, LIGHT["--route-soft"])) < 4.5
+
+
 def test_the_tray_bar_is_readable_in_both_themes():
     # A row sits on the preview fill over the panel: its icon is the accent, its line --ink-3 and
     # its check the success green. A refusal in the bar's line sits on the panel itself.

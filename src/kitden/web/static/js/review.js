@@ -6,7 +6,7 @@ import { $, $$, button, el, joinWords, plural, reportError, shortPath, shortPath
 import { loadLibrary, morphOnNextRender } from "./library.js";
 import { fold, transition } from "./motion.js";
 import { closePanel, drawQuietly, header, hideToast, isPanelOpen, openPanel, panelState, toast } from "./panel.js";
-import { allPutBack, callout, checkBox, CLIENT_ORDER, diffCounts, kitdenMove, mark, movedNames, notesSection, PLACE_IN_TITLE, ruleText, rulesText, skillRemoval, socket, strictText, targetWords } from "./parts.js";
+import { allPutBack, baseNames, callout, checkBox, CLIENT_ORDER, diffCounts, kitdenMove, mark, movedNames, notesSection, PLACE_IN_TITLE, ruleText, rulesText, skillRemoval, socket, strictText, targetWords } from "./parts.js";
 import { busy, reload, render, setBusy, state } from "./store.js";
 import { projectLabel, tools } from "./tools.js";
 import { addToTray, changeOutcome, checkTrayStale, onTray, takeOut, tray, undone } from "./tray.js";
@@ -258,7 +258,7 @@ export async function review(previewBody, { note = null, back = null } = {}) {
   const joined = await addToTray(previewBody, { note });
   if (!back) return;
   if (joined) await back({ queued: true });
-  else if (tray.refused && tray.refused !== before) await back({ error: tray.refused.reason });
+  else if (tray.refused && tray.refused !== before) await back({ error: baseNames(tray.refused.reason) });
 }
 
 // Add missing's list: the server says what each client lacks and ticks what would not make a
@@ -358,7 +358,9 @@ function diffLines(text) {
 // `onChoose`), the file changes behind one summary and what follows.
 function reviewBody(change, previewBody, note, onChoose) {
   const body = el("div", "body");
-  if (note) body.append(callout(note));
+  // The After line may say the same as the note (Disconnect's own words): it is shown once.
+  const afterNotes = afterParts(change.after || []).notes;
+  if (note && !afterNotes.includes(note)) body.append(callout(note));
   if (change.after && change.after.length) body.append(afterLine(change.after));
   if (change.shared_file_warning) body.append(callout("This edits a project file that is usually shared through git."));
   if (change.align && onChoose) body.append(alignSection(change, onChoose));
@@ -416,12 +418,17 @@ export function showRowReview(row) {
   followRow(row, row.part);
 }
 
+// Whether the review of `row` is what Details shows now.
+function reviewIsOpen(row) {
+  const open = panelState.current;
+  return Boolean(isPanelOpen() && open && open.type === "row-review" && open.row === row);
+}
+
 // While a row's review is open, a row added again under its key (a switch pressed again, a new
 // choice in Add missing) is drawn in its place once it has words, quietly: focus stays where it is.
 function followRow(row, part) {
   const stop = onTray((t) => {
-    const open = panelState.current;
-    if (!isPanelOpen() || !open || open.type !== "row-review" || open.row !== row) {
+    if (!reviewIsOpen(row)) {
       stop();
       return;
     }
@@ -448,7 +455,7 @@ function takeOutButton(row) {
     else node.removeAttribute("aria-disabled");
   };
   follow();
-  const stop = onTray(() => (node.isConnected ? follow() : stop()));
+  const stop = onTray(() => (reviewIsOpen(row) ? follow() : stop()));
   return node;
 }
 

@@ -40,7 +40,7 @@ function element(tag) {
 // Each test starts with motion on; a test that needs reduced motion sets it itself.
 beforeEach(() => { media.matches = false; });
 globalThis.document = { createElement: element, createElementNS: (namespace, tag) => element(tag) };
-const { backupNote, banner, changeTitle, checkBox, clientCheck, demoTag, folderName, gatewayName, menuItems, morphSocket, opens, optionAfter, originText, PLACE_IN_TITLE, projectButton, projectMenu, scopeBar, scopeText, setHint, socket, strictText, TOOL_ORIGIN_WORDS } = await import('../../src/kitden/web/static/js/parts.js');
+const { backupNote, banner, baseNames, changeTitle, checkBox, clientCheck, demoTag, folderName, gatewayName, menuItems, morphSocket, opens, optionAfter, originText, PLACE_IN_TITLE, projectButton, projectMenu, scopeBar, scopeText, setHint, socket, strictText, TOOL_ORIGIN_WORDS } = await import('../../src/kitden/web/static/js/parts.js');
 const { CALM } = await import('../../src/kitden/web/static/js/motion.js');
 // details.js builds the switch and loads with the same stand-in.
 const { switchNode } = await import('../../src/kitden/web/static/js/details.js');
@@ -464,6 +464,19 @@ test('the scope bar leads with the layers icon, or folder in a project', () => {
   assert.equal(scopeBar(null).querySelector('svg').dataset.icon, 'layers');
   assert.equal(scopeBar('website').querySelector('svg').dataset.icon, 'folder');
   assert.equal(Number(scopeBar('website').querySelector('svg').attributes.width), 14);
+});
+
+test('baseNames keeps a file name, also when a folder has a space, and keeps a command', () => {
+  const same = 'mcp.json has a hard link; so has config.toml.';
+  assert.equal(baseNames('/Users/me/.cursor/mcp.json has a hard link; so has ~/.codex/config.toml.'), same);
+  // A folder with a space stays whole inside the path, so only the file name is left.
+  assert.equal(baseNames('Could not write /Users/me/Library/Application Support/Claude/claude_desktop_config.json.'), 'Could not write claude_desktop_config.json.');
+  assert.equal(baseNames('Copy /a/b.json to /c/d.json now'), 'Copy b.json to d.json now');
+  // A "/command" is no path: it stays with its slash.
+  assert.equal(baseNames('Run /mcp to see it, or /plugin install x.'), 'Run /mcp to see it, or /plugin install x.');
+  // Words that only look like a path stay as they are.
+  const plain = 'Turn a tool on and/or off (read/write) in "/" here.';
+  assert.equal(baseNames(plain), plain);
 });
 
 test('the hint line shows its words with an info icon, and an empty text hides it', () => {

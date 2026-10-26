@@ -1047,6 +1047,15 @@ test('a client is heard by its meta once, and a change that waits is still heard
   assert.equal(blockLabel(block(gatewayTree(MEDIUM_VIEW, { ...OPTS, setup: null }), 'client:codex')), 'Codex, Not known');
 });
 
+test('a found client on a first run is heard "in preview" once while its connect row waits', () => {
+  const tree = gatewayTree(FIRST_RUN_VIEW, { setup: NO_ENTRIES, clients: FOUND, open: new Set(), held: new Map(), rows: [trayRow(CONNECT_CURSOR)] });
+  const cursor = block(tree, 'client:cursor');
+  assert.deepEqual([cursor.meta, cursor.wait, cursor.lamp], ['Found', '\u00a0· in preview', 'preview']);
+  assert.equal(blockLabel(cursor), 'Cursor, Found, in preview');
+  // Without a row it is heard as before: its meta, then Off.
+  assert.equal(blockLabel(block(gatewayTree(FIRST_RUN_VIEW, { setup: NO_ENTRIES, clients: FOUND, open: new Set(), held: new Map() }), 'client:cursor')), 'Cursor, Found, Off');
+});
+
 test('a connect row draws a dashed link to the gateway', () => {
   const row = trayRow(CONNECT_CURSOR);
   const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [row] });
@@ -1769,6 +1778,9 @@ test('a client that has the name refuses before the drop, with the reason, and s
     // Cursor is not on this Mac.
     const away = CLIENTS.map((c) => (c.id === 'cursor' ? { ...c, status: 'missing' } : c));
     await refused('held:kitden:tracker', away, 'Cursor is not on this Mac.');
+    // Cursor is on this Mac but its settings cannot be read: the panel's reason, not "not on this Mac".
+    const unreadable = CLIENTS.map((c) => (c.id === 'cursor' ? { ...c, status: 'unreadable' } : c));
+    await refused('held:kitden:tracker', unreadable, "Cursor's settings are not readable.");
   } finally {
     delete globalThis.document;
     Object.assign(data, { gateway: null, clients: null });
@@ -1919,14 +1931,15 @@ test('a connected client cannot be dragged', async (t) => {
     assert.deepEqual([map.captured, map.asked], [[], []]);
     // One whose kitden entry comes from a plugin (on or off) says why on press, in the tip's plain
     // look by the pointer, until the pointer lets go. Nothing lights and no wire shows.
-    for (const fields of [{}, { enabled: false }]) {
+    // An entry that is off says what the panel says: its entry is off.
+    for (const [fields, words] of [[{}, 'Codex gets Kitden from a plugin.'], [{ enabled: false }, "Codex's entry is off."]]) {
       const setup = [entry('claude_code', 'added'), entry('codex', 'plugin', fields), entry('cursor', 'missing')];
       const plugin = dragMap({ id: 'client:codex', opts: { ...OPTS, setup } });
       const { x, y } = plugin.home;
       plugin.press();
-      assert.deepEqual([plugin.captured, plugin.asked], [[], [['tip', 'Codex gets Kitden from a plugin.', { at: { x: x + 10, y: y + 10 } }]]]);
+      assert.deepEqual([plugin.captured, plugin.asked], [[], [['tip', words, { at: { x: x + 10, y: y + 10 } }]]]);
       plugin.move(x + 40, y + 10);
-      assert.deepEqual(plugin.asked.at(-1), ['tip', 'Codex gets Kitden from a plugin.', { at: { x: x + 40, y: y + 10 } }]);
+      assert.deepEqual(plugin.asked.at(-1), ['tip', words, { at: { x: x + 40, y: y + 10 } }]);
       plugin.up(x + 40, y + 10);
       assert.deepEqual(plugin.asked.at(-1), ['untip']);
       assert.ok(!plugin.asked.some(([what]) => ['light', 'wire', 'hold', 'glance'].includes(what)));
@@ -2217,6 +2230,30 @@ test('the tool block shows the pending project while its rows wait', () => {
     // In atlas its own row is a ring on the mark, as before; website's row is the pending tag.
     const atlas = shown({ picked: 'a', rows: [off('a'), off('s')] });
     assert.deepEqual([atlas.lamp, atlas.projects.words], ['preview', 'website']);
+  } finally {
+    data.projects = saved;
+  }
+});
+
+test('a server block shows the projects a whole-server row waits for, as a tool does', () => {
+  const files = MEDIUM_VIEW.gateways[0].servers[0];
+  const view = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers: [{ ...files, tool_list: [tool('read_file', 'on', 'reads')] }] }] };
+  const shown = (options) => gatewayTree(view, { ...OPTS, ...options }).blocks.find((b) => b.id === 'held:kitden:files');
+  const rule = (project, part = {}) => trayRow(ruleBody('files', null, 'off', project), part);
+  const saved = data.projects;
+  data.projects = [{ id: 'a', path: '/w/atlas' }, { id: 's', path: '/w/website' }];
+  try {
+    assert.equal(shown({}).projects, undefined);
+    const one = shown({ rows: [rule('a')] });
+    assert.deepEqual(one.projects, { words: 'atlas', said: 'in preview for atlas', own: true, pending: 1 });
+    assert.match(blockLabel(one), /in preview for atlas/);
+    assert.deepEqual(shown({ rows: [rule('a'), rule('s')] }).projects, { words: '2 projects', said: 'in preview for 2 projects', own: true, pending: 2 });
+    // A row with no answer yet, a rule for all projects, the project shown or another server's row: nothing.
+    const other = trayRow(ruleBody('github', null, 'off', 'a'));
+    assert.equal(shown({ rows: [rule('a', null), rule(null), other] }).projects, undefined);
+    assert.equal(shown({ picked: 'a', rows: [rule('a')] }).projects, undefined);
+    // In atlas, website's row is still the pending tag.
+    assert.equal(shown({ picked: 'a', rows: [rule('a'), rule('s')] }).projects.words, 'website');
   } finally {
     data.projects = saved;
   }

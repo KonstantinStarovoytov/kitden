@@ -327,6 +327,17 @@ test('barWords keeps the rows of a refused add and of a refused preview', () => 
   });
 });
 
+test('barWords keeps the failure when an add is refused after a failed Apply, and adds the reason', () => {
+  const rows = [row('a'), row('b')];
+  const refused = { reason: '/Users/me/.cursor/mcp.json has a hard link.' };
+  const stale = barWords(trayOf(rows, { phase: 'failed', failure: { state: 'stale', error: 'Settings changed.' }, refused }));
+  assert.deepEqual([stale.head, stale.line, stale.apply, stale.retry], ['Nothing was changed', 'Settings changed since this preview. mcp.json has a hard link.', 'Try again', true]);
+  const lost = barWords(trayOf(rows, { phase: 'failed', failure: { state: null, error: null }, refused }));
+  assert.deepEqual([lost.head, lost.line, lost.changes, lost.apply], ['Could not confirm the result', 'Check Changes before trying again. mcp.json has a hard link.', true, null]);
+  // A refused preview with no failure behind it is as before.
+  assert.deepEqual(barWords(trayOf(rows, { phase: 'failed', refused })).head, 'Could not prepare the preview');
+});
+
 test('barWords says the preview went stale', () => {
   const words = barWords(trayOf([row('a'), row('b')], { stale: true }));
   assert.deepEqual([words.line, words.apply, words.retry, words.applyWaits], ['Settings changed since this preview.', 'Preview again', true, false]);
@@ -650,6 +661,32 @@ test('with motion the bar, its size and its rows move as the mockup says', async
   await sleep(200);
   assert.equal(section.isConnected, false);
   assert.equal(bar(), null);
+});
+
+test('a toast that comes while a row slides out stays when the row has gone', async () => {
+  await fresh();
+  reduce(false);
+  queue(PREVIEW, previewed('c1'), previewed('c2'), previewed('c3'));
+  await addToTray(add('github'));
+  await addToTray(add('neon'));
+  await addToTray(add('slack'));
+  const section = bar();
+  queue(PREVIEW, previewed('c4'));
+  const leaving = button(named(section, 'tray-list')[0].children[0], 'Take it out of the preview').click();
+  await leaving;
+  // The toast takes the dock while the row is still on its way out.
+  toast('Could not find this item in the Library.');
+  const note = toastNode();
+  assert.ok(note);
+  await sleep(260);
+  assert.ok(toastNode() === note, 'the toast stays');
+  assert.equal(note.isConnected, true);
+  assert.equal(bar(), null);
+  // When the toast has gone, the bar comes back with the rows that are left.
+  hideToast({ now: true });
+  drawTray();
+  assert.equal(named(bar(), 'tray-list')[0].children.length, 2);
+  reduce(true);
 });
 
 test('a failed Apply stays in the bar, shakes it and puts focus on Try again', async () => {

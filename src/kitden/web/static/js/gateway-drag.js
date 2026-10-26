@@ -111,11 +111,13 @@ export function pressGrip(event, onStart = () => {}) {
 // The Kitden gateway's block on the map, or null (none, or a first run's slot).
 const kitdenGateway = () => onMap.model.blocks.find((b) => b.kind === "gateway" && b.gateway.kind === "kitden") || null;
 
-// A client a plugin connects cannot be dragged: a press shows why in the tip's plain look, by the
-// pointer, until the pointer lets go.
+// A client a plugin connects cannot be dragged (nor one whose plugin entry is off): a press shows
+// why in the tip's plain look, by the pointer, until the pointer lets go.
 function sayWhy(event, block) {
   const { view } = onMap;
-  const words = `${CLIENT_NAMES[block.client]} gets Kitden from a plugin.`;
+  const name = CLIENT_NAMES[block.client];
+  // An entry that is off says what the client's panel says.
+  const words = block.pluginOff ? `${name}'s entry is off.` : `${name} gets Kitden from a plugin.`;
   const show = (e) => view.tip(words, { at: areaPoint({ x: e.clientX, y: e.clientY }) });
   const done = () => {
     document.removeEventListener("pointermove", show);
@@ -134,11 +136,15 @@ function sayWhy(event, block) {
 // A server the Kitden gateway holds can move out to a client, unless a change takes it out.
 const leavesGateway = (block) => block.kind === "held" && block.gateway.kind === "kitden" && !block.leaving;
 
-// Why `client` cannot take the server `name`, when the page knows: the client is not on this Mac,
-// or it sets up a server of that name on its own. Null when it can (the server may still refuse).
+// Why `client` cannot take the server `name`, when the page knows: the client is not on this Mac
+// (or its settings cannot be read, as its panel says), or it sets up a server of that name on its
+// own. Null when it can (the server may still refuse).
 function whyNot(name, client) {
   const who = CLIENT_NAMES[client];
-  if (data.clients && !foundClients().includes(client)) return `${who} is not on this Mac.`;
+  if (data.clients && !foundClients().includes(client)) {
+    const unreadable = data.clients.some((c) => c.id === client && c.status === "unreadable");
+    return unreadable ? `${who}'s settings are not readable.` : `${who} is not on this Mac.`;
+  }
   const view = current("gateway");
   const rows = Object.values((view && view.groups) || {}).flat();
   if (rows.some((row) => row.name === name && (row.columns || row.clients || []).includes(client))) return `${who} already has ${name}.`;

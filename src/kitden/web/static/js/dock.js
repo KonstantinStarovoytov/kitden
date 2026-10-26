@@ -5,7 +5,7 @@ import { clientName } from "./details.js";
 import { $, button, el, icon, joinWords, reportError, showWaits, withFocusKey } from "./dom.js";
 import { animateTo, D, DRAW, rollTo, shake } from "./motion.js";
 import { closePanel, isPanelOpen, panelState } from "./panel.js";
-import { stepParts, stepText } from "./parts.js";
+import { baseNames, stepParts, stepText } from "./parts.js";
 import { afterParts, changeWords, detailsAgain, nothingChanged, reloadAll, showEffect, showRowReview, undoChange } from "./review.js";
 import { busy, go, onBusy, state } from "./store.js";
 import { hideToast, makeRoom, onToastGone, say, toast } from "./toast.js";
@@ -35,27 +35,24 @@ export function rowWords(part, body, note) {
   return { title: changeWords(part, body).title, detail: outcomeLine(part) || note || "" };
 }
 
-// A reason from the engine may name a file by its full path ("/Users/me/.cursor/mcp.json", or one
-// under "~/"). The bar and its spoken words name the file only ("mcp.json"); the full words stay on
-// Changes.
-export function baseNames(text) {
-  return String(text).replace(/(^|[\s"'(`])(~?\/[^\s"'`)]+)/g, (whole, lead, path) => lead + (path.split("/").filter(Boolean).at(-1) || path));
-}
-
 const STALE = "Settings changed since this preview.";
 const CHECK_CHANGES = "Check Changes before trying again.";
 const IN_PREVIEW = " changes in preview";
 
 // How a tray that did not go through ends: the head and line, and what Apply's place holds.
 // "Nothing was changed" only when that is true (nothingChanged, review.js); the engine's own words
-// name paths and commands, so they stay behind Details and on Changes.
+// name paths and commands, so they stay behind Details and on Changes. An add that the server
+// refused after a failed Apply keeps those words and adds the reason to the line.
 function endWords({ failure, refused }, reason) {
-  if (refused) return { head: "Could not prepare the preview", line: reason, apply: "Try again", retry: true };
+  if (refused && !failure) return { head: "Could not prepare the preview", line: reason, apply: "Try again", retry: true };
   const { state: ended = null, error = null } = failure || {};
+  let words;
   if (nothingChanged({ state: ended, error })) {
-    return { head: "Nothing was changed", line: ended === "stale" ? STALE : "The change did not check out. Kitden put the files back.", apply: "Try again", retry: true };
+    words = { head: "Nothing was changed", line: ended === "stale" ? STALE : "The change did not check out. Kitden put the files back.", apply: "Try again", retry: true };
+  } else {
+    words = { head: ended === "restored" ? "Not everything was put back" : "Could not confirm the result", line: CHECK_CHANGES, apply: null, changes: true };
   }
-  return { head: ended === "restored" ? "Not everything was put back" : "Could not confirm the result", line: CHECK_CHANGES, apply: null, changes: true };
+  return refused ? { ...words, line: `${words.line} ${reason}` } : words;
 }
 
 // The bar's words for a tray whose rows all have words (`t.rows`; drawTray leaves out a row still
@@ -358,6 +355,7 @@ function forgetBar() {
   shown = null;
   growing = null;
   reacted = null;
+  carried = null;
 }
 
 // The last row out, Cancel all, or an Apply taken in: the bar goes down 10 px and fades; then it is
@@ -392,7 +390,8 @@ function slideOut(keys) {
   const finish = () => {
     sliding = null;
     dropRows(keys);
-    drawTray();
+    // A toast that took the dock meanwhile stays; the bar comes back when it has gone.
+    drawTray(tray, { toastStays: true });
   };
   if (D(180) > 0) sliding = setTimeout(finish, D(180));
   else finish();

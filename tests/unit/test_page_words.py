@@ -1351,7 +1351,7 @@ def test_a_cell_add_reviews_one_client_and_the_review_shows_its_note():
     assert "{ note: formNote(row, clients, state.project) }" in offer
     code = panel()
     assert "export async function review(previewBody, { note = null, back = null } = {})" in code
-    assert "if (note) body.append(callout(note));" in code
+    assert "if (note && !afterNotes.includes(note)) body.append(callout(note));" in code
     # The row keeps the note, and its review shows it.
     assert "addToTray(previewBody, { note })" in code
     # Details of a row with a repeated name name its source.
@@ -1493,7 +1493,7 @@ def test_a_tool_switch_flips_only_after_the_change_is_verified():
     assert 'toggle.classList.add("flipped")' in code
     assert ".switch.flipped .thumb" in CSS and "@keyframes thumb-on" in CSS
     # A refused change stays as a callout in Details, and focus goes back to the switch.
-    assert "await back({ error: tray.refused.reason });" in code
+    assert "await back({ error: baseNames(tray.refused.reason) });" in code
     assert 'callout(error, "error")' in code
 
 
@@ -2288,7 +2288,7 @@ def test_a_client_drags_onto_the_gateway():
     for words in (
         'const ON_GATEWAY = "Drop on the gateway";',
         "`Connect ${CLIENT_NAMES[drag.block.client]}`",
-        "`${CLIENT_NAMES[block.client]} gets Kitden from a plugin.`",
+        "`${name} gets Kitden from a plugin.`",
     ):
         assert words in drag, words
     # The gateway's box is widened 24 px each side and 16 up and down.
@@ -2342,7 +2342,8 @@ def test_a_screen_reader_hears_the_tray_change():
         ": taken out of the preview.",
     ):
         assert words in dock, words
-    assert "export function baseNames(text) {" in dock
+    assert "export function baseNames(text) {" in script("parts.js")
+    assert "baseNames" in script("review.js") and "baseNames" in dock
     # A switch whose change waits says so in its name: its checked state stays the real one.
     assert "(in preview)" in script("details.js")
     # A row's review cannot take its row out while the tray is written.
@@ -2531,3 +2532,23 @@ def test_a_control_that_waits_for_another_change_says_why():
         assert "showWaits(" in script(name), name
     assert '.dock .btn[aria-disabled="true"] { cursor: progress; }' in CSS
     assert 'div.map .link-x[aria-disabled="true"] { cursor: progress; }' in CSS
+
+
+def test_the_gateway_map_has_its_hint_line_and_the_last_words_and_looks():
+    gateway = script("gateway.js")
+    # The map names how to use it, as the mockup does (gateway-notes 8); the List has none.
+    assert (
+        '"Point at a link and press × to remove it · click anything for its Details · several '
+        'changes wait in preview, then Apply all · drag a server onto a client"'
+    ) in gateway
+    assert 'setHint(mode === "map" ? MAP_HINT : "");' in gateway
+    assert "flex: none" in rule(".hint-line svg")
+    # A client whose settings cannot be read says so, as its panel does; so does a plugin entry
+    # that is off.
+    drag = script("gateway-drag.js")
+    assert "`${who}'s settings are not readable.`" in drag
+    assert "`${name}'s entry is off.`" in drag
+    # A plain button beside the 30 px inputs of the Add forms is as tall as they are.
+    assert "height: 30px;" in rule(".form .btn:not(.small)")
+    # The gateway card counts a server that is moving out as it leaves.
+    assert "function serverCounts(" in script("gateway-details.js")

@@ -232,6 +232,17 @@ test("the client panel's Gateway fact says when its change waits in preview", as
   });
 });
 
+test('the gateway panel counts a server whose move out waits in the tray as outside', () => {
+  const before = tray.rows;
+  tray.rows = [{ key: 'moveout:files', body: { action: 'gateway.move_out', targets: [{ client: 'codex' }], params: { server: 'files' } }, part: {} }];
+  try {
+    const card = gatewayCard(KITDEN_TOOLS, { view: VIEW_TOOLS, setup: SETUP, projects: PROJECTS, clients: FOUND });
+    assert.deepEqual(facts(card)[0], ['Servers', '1 in the gateway · 5 outside']);
+  } finally {
+    tray.rows = before;
+  }
+});
+
 test('the gateway panel lists every client with its own button', async () => {
   const card = gatewayCard(KITDEN_TOOLS, { view: VIEW_TOOLS, setup: SETUP, projects: PROJECTS, clients: FOUND });
   assert.deepEqual([card.kind, card.title, card.id], ['Gateway', 'Kitden gateway', 'On this Mac']);

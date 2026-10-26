@@ -73,10 +73,13 @@ for (const id of ['#main', '#drawer', '#scrim', '.shell', '#dock', '#find-chip']
   pages[id] = element('DIV');
   pages[id].root = true;
 }
+// The hint line under the dock (index.html), hidden until a page gives it words.
+const hintLine = element('P');
+hintLine.hidden = true;
 globalThis.document = {
   hidden: false, activeElement: null, body: element('BODY'),
   createElement: (tag) => element(tag.toUpperCase()), createElementNS: (namespace, tag) => element(tag),
-  querySelector: (selector) => pages[selector] ?? null, querySelectorAll: () => [], getElementById: () => null,
+  querySelector: (selector) => pages[selector] ?? null, querySelectorAll: () => [], getElementById: (id) => (id === 'hint' ? hintLine : null),
   addEventListener() {}, removeEventListener() {},
   documentElement: { classList: { add() {}, remove() {} }, style: { setProperty() {}, removeProperty() {} } },
 };
@@ -160,6 +163,17 @@ test('a tray change draws the Gateway map again in place: no new page, no entran
   settle();
   assert.doesNotMatch(filesLink(box).className, /\bleaving\b/);
   assert.equal(renders, 0);
+});
+
+test('the map gives the hint line its words, and the List hides it', () => {
+  const heard = () => (hintLine.hidden ? '' : hintLine.children.at(-1).textContent);
+  freshMap();
+  assert.equal(heard(), 'Point at a link and press × to remove it · click anything for its Details · several changes wait in preview, then Apply all · drag a server onto a client');
+  state.mode = 'list';
+  main.replaceChildren();
+  renderGateway(main);
+  assert.equal(heard(), '');
+  state.mode = 'map';
 });
 
 test('on the List, or once the page shows another place, a tray change draws nothing', async () => {

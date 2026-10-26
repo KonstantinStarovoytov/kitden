@@ -8,7 +8,7 @@ import { findChip, findIn, foldable, isNarrow, keepOpen, landOwners, landStage, 
 import { mapView } from "./map-view.js";
 import { afterOldPage, animateTo, D, glide, rise, riseHead } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, openInfo, panelState, projectLabel, review } from "./panel.js";
-import { banner, CLIENT_NAMES, folderName, gatewayName, kitdenClients, mark, opens, ORIGIN_WORDS, scopeBar, skeleton, STATE_WORDS, staleNote } from "./parts.js";
+import { banner, CLIENT_NAMES, folderName, gatewayName, kitdenClients, mark, opens, ORIGIN_WORDS, scopeBar, setHint, skeleton, STATE_WORDS, staleNote } from "./parts.js";
 import { arrival, busy, current, currentError, data, go, onBusy, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
 import { addToTray, inTray, keyFor, onTray, takeOut, tray, undone } from "./tray.js";
 
@@ -42,6 +42,9 @@ const NOT_KNOWN = "Not known";
 // A tool's row says "Read" or "Write" only when the server says so; a guess from its name says
 // "May write".
 const HINT_TAGS = { reads: "Read", writes: "Write", "may write": "May write" };
+
+// The hint line under the dock on the map (gateway-notes 8); the List has none.
+const MAP_HINT = "Point at a link and press × to remove it · click anything for its Details · several changes wait in preview, then Apply all · drag a server onto a client";
 
 // What an arrival with a selection (Back, Forward or a link) opens, once: a server the Kitden
 // gateway holds (`held`, and `tool` for one of its tools), a server outside it by its name (its
@@ -118,6 +121,7 @@ export function renderGateway(main, { again = false } = {}) {
   const seg = modeSwitch(mode);
   head.append(seg);
   const model = treeFor(view, mode);
+  setHint(mode === "map" ? MAP_HINT : "");
   // The search finds here: matches light up, the rest dims, and what hides a match opens (S.6).
   // It changes nothing in a client and moves no Details.
   const found = state.q.trim() ? findIn(model, state.q) : null;
@@ -335,7 +339,7 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
   } else if (kitden) {
     const waiting = waitingTools(rows, picked);
     const server = (block, word) => {
-      kitdenServer(block, word, picked);
+      kitdenServer(block, word, picked, waiting);
       for (const tool of block.server.tool_list || []) {
         const shown = toolBlock(block, tool, picked, waiting);
         tools.push(shown);
@@ -488,7 +492,8 @@ function connectParts(links, kitden, waits) {
 // connectBody) and can be dragged onto the gateway (`drags`). While a change that connects it waits
 // in the tray (`wait`, connectRows), its lamp is the dashed ring and its meta says so (`wait`, in
 // the accent), and it does not drag. Its meta says its state, so a screen reader hears no state
-// word after it; on a first run, "Found" does not, and Off is heard.
+// word after it; on a first run, "Found" does not, and Off is heard, unless its connect waits:
+// then "in preview" says it, once.
 function clientBlock(id, { setup, linked, known, first, clients, wait = null }) {
   const on = linked.includes(id);
   const found = (clients || []).find((c) => c.id === id && c.status === "found");
@@ -502,12 +507,13 @@ function clientBlock(id, { setup, linked, known, first, clients, wait = null }) 
   const action = on ? connectAction(id, setup) : null;
   const disconnect = action && !action.connect ? action.body : null;
   const viaPlugin = (setup || []).some((e) => e.client === id && e.state === "plugin");
+  const pluginOff = (setup || []).some((e) => e.client === id && e.state === "plugin" && e.enabled === false);
   const connect = !on && !first ? connectBody(id, setup) : null;
-  const block = { id: `client:${id}`, column: "clients", kind: "client", name: CLIENT_NAMES[id], meta, lamp, state: known ? (on ? "on" : "off") : "unk", stateInMeta: !firstFound, client: id, ports: { right: true }, disconnect, viaPlugin, connect, drags: Boolean(connect) };
+  const block = { id: `client:${id}`, column: "clients", kind: "client", name: CLIENT_NAMES[id], meta, lamp, state: known ? (on ? "on" : "off") : "unk", stateInMeta: !firstFound, client: id, ports: { right: true }, disconnect, viaPlugin, pluginOff, connect, drags: Boolean(connect) };
   if (!wait) return block;
   // The dot stays with the words before it (a no-break space), so a wrap never starts a line with it.
   // Its row lands on the map in its turn (`landsWith`, map.js landOwners).
-  const waits = wait.connect ? { lamp: "preview", state: "preview", wait: "\u00a0· in preview", connect: null, drags: false } : {};
+  const waits = wait.connect ? { lamp: "preview", state: "preview", wait: "\u00a0· in preview", stateInMeta: true, connect: null, drags: false } : {};
   return { ...block, ...waits, landsWith: wait.key };
 }
 
@@ -565,20 +571,28 @@ function leaveParts(blocks, links, kitden, rows, picked) {
   }
 }
 
-// The tools whose rule waits in the tray, once its row has its part, by "server/tool": for the
-// scope shown (`picked`, "" for all projects) their mark is a dashed ring until Apply (`ring`,
-// with the row's key); for other projects the tool names them (`others`, the project ids).
+// The rules that wait in the tray, once their row has its part. For a tool, by "server/tool": in
+// the scope shown (`picked`, "" for all projects) its mark is a dashed ring until Apply (`ring`,
+// with the row's key); for other projects the tool names them (`others`, the project ids). A rule
+// for a whole server (no tool) is named the same way by the server's name, for other projects only.
 function waitingTools(rows, picked) {
   const ring = new Map();
   const others = new Map();
   for (const row of rows) {
     const { action, params = {} } = row.body;
-    if (!row.part || action !== "gateway.rule" || !params.tool) continue;
-    const key = `${params.server}/${params.tool}`;
-    if ((params.project || "") === (picked || "")) ring.set(key, row.key);
-    else if (params.project) others.set(key, [...(others.get(key) || []), params.project]);
+    if (!row.part || action !== "gateway.rule") continue;
+    const key = params.tool ? `${params.server}/${params.tool}` : params.server;
+    if (params.tool && (params.project || "") === (picked || "")) ring.set(key, row.key);
+    else if (params.project && params.project !== (picked || "")) others.set(key, [...(others.get(key) || []), params.project]);
   }
   return { ring, others };
+}
+
+// What a tool's or a server's tag of projects says while rules for other projects wait: that
+// project's name or how many, in the accent (`pending`, their count).
+function pendingProjects(ids) {
+  const words = ids.length === 1 ? projectLabel(ids[0]) : plural(ids.length, "project", "projects");
+  return { words, said: `in preview for ${words}`, own: true, pending: ids.length };
 }
 
 // What a gateway's block says under its name: the Kitden gateway's lamp and where it runs, then
@@ -596,7 +610,7 @@ function gatewayFace(gateway, reaches, servers, unread) {
 // does not know): how many of its tools are on ("3 of 4 on") or, with All projects, in how many
 // projects it is on; its lamp, on while any of its tools is on (by its switch while Kitden knows
 // none); its tag in a project; its tool count, so it folds; and then a right port too.
-function kitdenServer(block, word, picked) {
+function kitdenServer(block, word, picked, waiting) {
   const server = block.server;
   const list = server.tool_list || [];
   block.state = server.state === "off" ? "off" : "on";
@@ -606,6 +620,9 @@ function kitdenServer(block, word, picked) {
   // "On in 2 projects" says the state itself; a lone On or Off beside it would contradict it.
   block.stateInMeta = Boolean(block.onIn);
   block.tag = heldTag(server, block.state === "on");
+  // A rule for the whole server that waits for other projects: the block names them like a tool.
+  const pending = waiting.others.get(server.name);
+  if (pending) block.projects = pendingProjects(pending);
   block.count = server.tools;
   block.lamp = (list.length ? server.on_count > 0 : block.state === "on") ? "on" : "off";
   block.ports = { left: true, right: typeof block.count === "number" };
@@ -635,10 +652,7 @@ function toolBlock(held, tool, picked, waiting) {
     projects = { words, said: `own rule in ${words}`, own: false };
   }
   const pending = waiting.others.get(key);
-  if (pending) {
-    const words = pending.length === 1 ? projectLabel(pending[0]) : plural(pending.length, "project", "projects");
-    projects = { words, said: `in preview for ${words}`, own: true, pending: pending.length };
-  }
+  if (pending) projects = pendingProjects(pending);
   const lamp = waiting.ring.has(key) ? "preview" : on ? "on" : "off";
   const lands = waiting.ring.has(key) ? { landsWith: waiting.ring.get(key) } : {};
   return { id: `tool:${server.name}/${tool.name}`, column: "tools", parent: held.id, kind: "tool", name: tool.name, state: on ? "on" : "off", lamp, projects, ports: { left: true }, tool, server, ...lands };

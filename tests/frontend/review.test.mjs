@@ -80,7 +80,7 @@ const queue = (url, ...items) => replies.set(url, [...(replies.get(url) || []), 
 const posted = () => calls.filter((call) => call.method === 'POST').map((call) => call.url);
 
 const { PLACE_IN_TITLE, addScope, changeWords, review, reviewLede, showRowReview, targetWords } = await import('../../src/kitden/web/static/js/review.js');
-const { isPanelOpen, openPanel, panelState } = await import('../../src/kitden/web/static/js/panel.js');
+const { closePanel, isPanelOpen, openPanel, panelState } = await import('../../src/kitden/web/static/js/panel.js');
 const { addToTray, cancelTray, tray } = await import('../../src/kitden/web/static/js/tray.js');
 const { busy, state } = await import('../../src/kitden/web/static/js/store.js');
 
@@ -313,6 +313,56 @@ test('a refused add calls back with the reason', async () => {
     busy.change = false;
   }
   assert.equal(heard.length, heardBefore);
+});
+
+test('a refusal that goes back to a tool list names a file, not its path', async () => {
+  await fresh();
+  const heard = [];
+  queue(PREVIEW, refusal('/Users/me/.cursor/mcp.json has a hard link; so has ~/.codex/config.toml.'));
+  await review(ADD, { back: async (answer) => { heard.push(answer); } });
+  assert.deepEqual(heard, [{ error: 'mcp.json has a hard link; so has config.toml.' }]);
+});
+
+test('a review shows a note once when its After line says the same', async () => {
+  await fresh();
+  const NOTE_TWICE = "Codex loses the Kitden gateway's servers. Servers it sets up on its own stay.";
+  queue(PREVIEW, (sent) => {
+    const answer = previewed('c1')(sent);
+    answer.json.rows[0].after = [{ client: 'codex', state: 'off', word: 'Off', note: NOTE_TWICE }];
+    return answer;
+  });
+  await addToTray(ADD, { note: NOTE_TWICE });
+  showRowReview(tray.rows[0]);
+  assert.equal(pages['#drawer'].textContent.split(NOTE_TWICE).length - 1, 1);
+  // A different note is still shown beside it.
+  await fresh();
+  queue(PREVIEW, (sent) => {
+    const answer = previewed('c2')(sent);
+    answer.json.rows[0].after = [{ client: 'codex', state: 'off', word: 'Off', note: NOTE_TWICE }];
+    return answer;
+  });
+  await addToTray(ADD, { note: 'Adds for all projects.' });
+  showRowReview(tray.rows[0]);
+  assert.match(pages['#drawer'].textContent, /Adds for all projects\./);
+  assert.equal(pages['#drawer'].textContent.split(NOTE_TWICE).length - 1, 1);
+});
+
+test("a row review's Take it out stops following the tray when its review closes", async () => {
+  await fresh();
+  queue(PREVIEW, previewed('c1'), previewed('c2'));
+  await addToTray(ADD);
+  showRowReview(tray.rows[0]);
+  const out = button(pages['#drawer'], 'Take it out');
+  let follows = 0;
+  const real = out.removeAttribute;
+  out.removeAttribute = (name) => { follows += 1; real(name); };
+  // While its review is open it follows the tray.
+  await addToTray({ ...ADD, params: { item: 'neon' } });
+  assert.ok(follows > 0);
+  closePanel();
+  follows = 0;
+  await addToTray({ ...ADD, params: { item: 'sqlite' } });
+  assert.equal(follows, 0);
 });
 
 test('a list that answers after another project was picked opens nothing, and the server forgets it', async () => {

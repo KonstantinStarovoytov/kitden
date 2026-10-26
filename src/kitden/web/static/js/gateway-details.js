@@ -396,6 +396,13 @@ function rowButton(client, { connect, update, body }) {
   return node;
 }
 
+// "2 in the gateway · 4 outside". A server whose move out waits in the tray counts as outside
+// already, as the map draws it.
+function serverCounts(servers, outside) {
+  const leaving = servers.filter((s) => movingTo(s.name)).length;
+  return `${servers.length - leaving} in the gateway · ${outside.length + leaving} outside`;
+}
+
 // The Kitden gateway, as the mockup's gateway panel (gateway-notes 3.6): the house, where it runs;
 // its servers and the servers outside it, how many of their tools are on; one row per client with
 // its own Connect or Disconnect (not without the setup read: the warning says so); the sentence of
@@ -408,7 +415,7 @@ function kitdenCard(gateway, { view, setup, clientList, adding }) {
   const facts = [];
   // Settings it cannot read are a problem, not an empty gateway: the callout says so.
   if (!gateway.problem) {
-    facts.push({ label: "Servers", value: `${servers.length} in the gateway · ${outside.length} outside` }, { label: "Tools", value: toolsWords(servers) });
+    facts.push({ label: "Servers", value: serverCounts(servers, outside) }, { label: "Tools", value: toolsWords(servers) });
   }
   // A name in two outside groups is set up differently in two clients: a move refuses it until
   // the person keeps one, so it moves on its own and "Move all" leaves it out.

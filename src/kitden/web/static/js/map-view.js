@@ -80,7 +80,8 @@ function rollingWords(words, nums, slot) {
 // that, which projects have a rule of their own for a tool, the count of a block that folds
 // (style.css hides it while it is open), a slot's action, its ports (the right one of a block that
 // folds shows only while it is open), and the × of a block in preview. A tag takes the meta line's
-// words where a count takes the room, else it sits beside the name. It gives the parts, with the
+// words where a count takes the room, else it sits beside the name; on a block with words and a
+// count (a server) the folder tag of projects sits after its name too. It gives the parts, with the
 // lamp and the numbers that move when they change.
 function blockParts(block, { tile }) {
   const parts = [];
@@ -110,6 +111,9 @@ function blockParts(block, { tile }) {
   const counted = typeof block.count === "number";
   const tag = block.tag ? el("span", "block-tag", block.tag) : null;
   if (tag && !(counted && block.meta)) top.append(tag);
+  // A block that has its words and a count (a server) has no room at its end: the folder tag of
+  // projects goes after its name.
+  const projectsTop = Boolean(block.projects && counted && block.meta);
   if (block.meta) {
     const line = el("span", "block-meta");
     if (block.lamp) {
@@ -136,7 +140,8 @@ function blockParts(block, { tile }) {
   if (block.projects) {
     projects = withIcon(["block-projects", block.projects.own && "own", block.projects.pending && "pend"].filter(Boolean).join(" "), "folder", PROJECTS_ICON);
     projects.append(el("span", null, block.projects.words));
-    parts.push(projects);
+    if (projectsTop) top.append(projects);
+    else parts.push(projects);
   }
   if (counted) parts.push(quiet(el("span", "block-count", block.count)));
   if (block.action) parts.push(quiet(el("span", "block-action", block.action)));

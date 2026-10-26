@@ -236,6 +236,7 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
    bottom space keeps its end clear. */
 .hint-dock { position: sticky; bottom: 0; z-index: 22; flex: none; height: 0; margin: 0 22px; pointer-events: none; }
 .hint-line { position: absolute; left: 0; right: 0; bottom: 14px; margin: 0; display: flex; align-items: center; gap: 6px; color: var(--ink-3); font-size: 11px; }
+.hint-line svg { flex: none; }
 .lede.fresh { animation: rise 320ms var(--ease-out) both; }
 
 /* Controls */
@@ -312,6 +313,8 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .field input:focus-visible, .field select:focus-visible { background: var(--panel); }
 .form { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 10px 0; }
 .form .grow { flex: 1 1 280px; }
+/* A plain button beside the 30 px inputs of the Add forms is as tall as they are. */
+.form .btn:not(.small) { height: 30px; padding-top: 0; padding-bottom: 0; }
 .checks { display: flex; gap: 14px; align-items: center; border: 0; padding: 0; margin: 0; }
 .checks legend { color: var(--ink-3); font-size: 12px; padding: 0; margin-bottom: 4px; }
 .checks label { position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 24px; cursor: pointer; }
@@ -499,6 +502,9 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .map tbody tr:hover td { background: var(--inset); }
 .map tbody tr:active td { background: var(--wire-soft); transition-duration: 60ms; }
 .map tbody tr[aria-selected="true"] td { background: var(--route-soft); }
+/* A quiet flag's soft fill lies on the accent tint of a selected row, so its words go one step
+   darker for 4.5:1. */
+.map tbody tr[aria-selected="true"] .flag.info { color: var(--ink-2); }
 .map tbody tr.arrive td { animation: arrive 1200ms var(--ease-out) both; }
 @keyframes arrive { 0%, 30% { background: color-mix(in srgb, var(--brand) 22%, var(--route-soft)); } }
 .map tbody tr:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }

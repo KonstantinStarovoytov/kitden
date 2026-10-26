@@ -258,6 +258,18 @@ export function setHint(text) {
   if (text) line.append(icon("info", 13), el("span", null, text));
 }
 
+// A reason from the engine may name a file by its full path ("/Users/me/.cursor/mcp.json", or one
+// under "~/"). The bar, the tool list and their spoken words name the file only ("mcp.json"); the
+// full words stay on Changes. A folder in the path may hold a space or two ("Application
+// Support"), a file name may not. A lone "/command" with no dot ("/mcp") is a command, not a path.
+const PATH_IN_TEXT = /(^|[\s"'(`])(~?(?:\/[^/\s"'`)]+(?: [^/\s"'`).,;:~]+){0,2}(?=\/))*\/[^\s/"'`)]+)/g;
+export function baseNames(text) {
+  return String(text).replace(PATH_IN_TEXT, (whole, lead, path) => {
+    if (/^\/[^/.~]+$/.test(path)) return whole;
+    return lead + (path.split("/").filter(Boolean).at(-1) || path);
+  });
+}
+
 // The twin of views/words.py STATE_WORDS.
 export const STATE_WORDS = {
   on: "On", off: "Off", over: "Overridden", unk: "Unknown", review: "Needs review", gw: "Via gateway",

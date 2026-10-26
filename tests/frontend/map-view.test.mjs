@@ -1548,6 +1548,20 @@ test("a block draws its ports, and a server's right port shows only while open",
   assert.deepEqual(['c1', 's1', 'o1'].map((id) => part(v.node(id), 'block-meta').children[0].className), ['lamp on', 'lamp on', 'lamp out']);
 });
 
+test('a server with a count shows the projects whose rule waits beside its name', async () => {
+  reduce(true);
+  const model = { columns: TREE.columns, links: [], blocks: [
+    { id: 's1', column: 'b', kind: 'held', name: 'github', meta: '1 of 2 on', lamp: 'on', state: 'on', count: 2, projects: { words: 'atlas', said: 'in preview for atlas', own: true, pending: 1 }, ports: { left: true, right: true } },
+  ] };
+  const v = view();
+  await v.draw(model, layoutTree(model, { open: new Set(), narrow: false }), {});
+  const top = part(v.node('s1'), 'block-top');
+  assert.deepEqual(top.children.map((n) => n.className), ['block-name', 'block-projects own pend']);
+  // Its meta line keeps its words, and the tag is drawn once.
+  assert.deepEqual(parts(part(v.node('s1'), 'block-meta'), 'block-words').length, 1);
+  assert.equal(parts(v.node('s1'), 'block-projects').length, 1);
+});
+
 test('a preview block has its × badge and its take-out title', async () => {
   reduce(true);
   const words = 'In preview. Click to take it out.';
