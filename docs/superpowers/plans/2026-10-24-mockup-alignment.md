@@ -212,8 +212,14 @@ The mockup breaks several written rules. Each line gives the rule, what the mock
 
 **Carried from Phase 3:** "In preview" is missing on the add-gateway form (`addForm`), the tool and server project choice (`gateway-details.js` ~451, ~503) and the Connect clients form (~716): none says it while its row waits in the tray. Give each the `previewButton` look (details.js).
 
-- [ ] **Task 5.1 Backend.** List marketplace MCP servers; `gateway.add` writes the gateway entry for all projects. It refuses OAuth servers, SSE/WebSocket and any `${…}` value, with a plain reason; such rows show greyed with the reason. No tool counts (D24).
-- [ ] **Task 5.2 Panel.** "+ Add" opens the panel: search, All/Community/Team pill, rows grouped by source, "In the gateway" rows greyed. A click adds a preview block in its group (slot, link fade, tray row). A drag flies a ghost card onto the map; the gateway and the slot light; a drop over the panel cancels.
+**Notes from Phase 5** (plan `2026-10-26-align-phase5-add-panel.md`, done 2026-10-26). Built as above, with these changes: the pill is All · Remote · Local (Kitden has no community or team kinds); OAuth is refused when the row is added, since listing makes no network call; `gateway.add` changes no client file. Left for later:
+- Each tray change asks every remote add row's server again whether it signs in (moves do the same); a cache per address for the tray's life would save the waits.
+- The open Add panel reads the list again on every new Gateway view.
+- The narrow drawer from the More door gives focus back to the gateway block, not to "+ Add".
+- The Add panel and the Details module import each other (safe today); `KIND` and `SERVER_ICONS` could move to parts.js.
+
+- [x] **Task 5.1 Backend.** List marketplace MCP servers; `gateway.add` writes the gateway entry for all projects. It refuses OAuth servers, SSE/WebSocket and any `${…}` value, with a plain reason; such rows show greyed with the reason. No tool counts (D24).
+- [x] **Task 5.2 Panel.** "+ Add" opens the panel: search, All/Community/Team pill, rows grouped by source, "In the gateway" rows greyed. A click adds a preview block in its group (slot, link fade, tray row). A drag flies a ghost card onto the map; the gateway and the slot light; a drop over the panel cancels.
 
 ## Phase 6: Library
 
