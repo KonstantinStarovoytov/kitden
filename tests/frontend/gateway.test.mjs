@@ -1890,6 +1890,20 @@ test('the map enters when it is new, changes in place for a new project, jumps f
   assert.equal(mapMotion({ fresh: false, projectChanged: false, narrowChanged: false }), 'move');
   // The view switch brings the map in as one piece, so its blocks do not rise one by one too.
   assert.equal(mapMotion({ fresh: true, projectChanged: false, narrowChanged: false, switched: true }), 'none');
+  // The read after an Undo moves what changed, and a link that comes back draws in slower.
+  assert.equal(mapMotion({ fresh: false, projectChanged: false, narrowChanged: false, undo: true }), 'undo');
+  assert.equal(mapMotion({ fresh: false, projectChanged: false, narrowChanged: true, undo: true }), 'none');
+});
+
+// After Apply all each row lands on the map in its turn (map.js landOwners): a block a row changes
+// says which row.
+test('a block a tray row changes names that row', () => {
+  const rows = [trayRow(CONNECT_CURSOR), trayRow(DISCONNECT_CODEX), trayRow(REMOVE_FILES), trayRow(ruleBody('tracker', 'list_issues', 'off', null))];
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows });
+  const named = (id) => block(tree, id).landsWith;
+  assert.deepEqual([named('client:cursor'), named('client:codex'), named('held:kitden:files'), named('tool:tracker/list_issues')], rows.map((row) => row.key));
+  // With no rows nothing names one.
+  assert.ok(gatewayTree(MEDIUM_VIEW, OPTS).blocks.every((b) => !b.landsWith));
 });
 
 test('a link the map can act on says what its × does', () => {

@@ -37,6 +37,8 @@ const GRACE_MS = 240; // the × stays this long after the pointer leaves, so the
 const HIT_MIN = 0.5; // a link fainter than this takes no pointer
 const DRAW_MS = 260; // a new solid link draws in
 const SWITCH_DRAW_MS = 240; // ... or in 240 ms as another project shows (a tool it turns on)
+const UNDO_DRAW_MS = 480; // ... or in 480 ms as an Undo brings it back
+const DRAW_BY_MOTION = { project: SWITCH_DRAW_MS, undo: UNDO_DRAW_MS };
 const FADE_IN_MS = 300; // a new dashed link fades in
 const FADE_OUT_MS = 240; // a dashed link that goes fades out
 const UNDRAW_MS = 380; // a solid link that goes draws back to its start
@@ -57,7 +59,7 @@ function quiet(node) {
 const LAMP_LOOKS = { on: "on", off: "", preview: "pv", out: "out" };
 const lampClass = (base, lamp) => [base, LAMP_LOOKS[lamp]].filter(Boolean).join(" ");
 const SOLID = ["on", "off"];
-const MOVES = ["move", "project"]; // the draws that move what changed
+const MOVES = ["move", "project", "undo"]; // the draws that move what changed
 
 // Words whose first number rolls when it changes ("3 of 4 on", "2 clients"): the number in a holder
 // of its own (kept in `nums` by its `slot`), then the rest. Other words are plain.
@@ -247,8 +249,9 @@ function boxOf({ x, y, w, h, s }) {
 // the links and the ×.
 // - draw(model, layout, { selected, lit, found, open, motion }): show `layout` (map.js layoutTree)
 //   of `model`. `motion` "move" moves what changed; "project" does too, for another project: a
-//   tool's link it turns on draws in over 240 ms and every tool's tag pops; "enter" lets every
-//   block rise into its place;
+//   tool's link it turns on draws in over 240 ms and every tool's tag pops; "undo" does too, for
+//   what an Undo put back: a link that comes back draws in over 480 ms; "enter" lets every block
+//   rise into its place;
 //   "none" (and the first draw of a "move", reduced motion or a hidden page) shows the end at
 //   once. It resolves when the motions of the blocks end; the motions of the links are not
 //   waited for.
@@ -1032,7 +1035,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     for (const key of arrives) {
       const { path, link } = links.get(key);
       if (linkDashed(link)) animateTo(path, [{ opacity: 0 }, { opacity: 1 }], { dur: FADE_IN_MS, ease: CALM });
-      else drawIn(key, motion === "project" ? SWITCH_DRAW_MS : DRAW_MS);
+      else drawIn(key, DRAW_BY_MOTION[motion] || DRAW_MS);
     }
     // A selected block lays an accent line over each lit link on its way, except a bypass line and
     // a link a change in preview adds or takes out (it keeps its dashes). A picked link has none.

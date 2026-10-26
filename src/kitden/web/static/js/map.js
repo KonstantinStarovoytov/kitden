@@ -399,6 +399,100 @@ export function drawPlan(before, after) {
   return plan;
 }
 
+// Landing (motion-spec M4 step 6): a change of many tray rows, applied or undone, shows on the map
+// one row at a time. These two say which row each part of the tree belongs to, and what the tree
+// looks like while some rows still wait.
+
+// A block that changes into another one as its row lands has a twin: the other tree's block of the
+// same column and name that only that tree has (a move's preview block and the server it becomes).
+// Tools and groups have none.
+const NO_TWIN = ["tool", "group"];
+function twinOf(block, mine, other) {
+  if (NO_TWIN.includes(block.kind)) return null;
+  return other.blocks.find((b) => !mine.has(b.id) && !NO_TWIN.includes(b.kind) && b.column === block.column && b.name === block.name) || null;
+}
+
+// The tray row each part of the map belongs to (a block by its id, a link by its key): `from` is
+// the tree drawn before, `to` the tree after, `keys` the rows. A part a row draws says so: `row` on
+// a link or a preview block, `landsWith` on a block it changes; `known` is what an earlier landing
+// found (an Undo plays an Apply back). A part only one tree has then takes the row of one of its
+// links, of its parent or of its twin; a link only one tree has, the row of one of its ends. Any
+// other part belongs to no row: it changes at once.
+export function landOwners(from, to, keys, known = new Map()) {
+  const rows = new Set(keys);
+  const owners = new Map();
+  const own = (id, row) => {
+    if (!row || !rows.has(row) || owners.has(id)) return false;
+    owners.set(id, row);
+    return true;
+  };
+  for (const [id, row] of known) own(id, row);
+  for (const block of [...from.blocks, ...to.blocks]) own(block.id, block.landsWith || (typeof block.row === "string" ? block.row : null));
+  for (const link of [...from.links, ...to.links]) own(linkKey(link), link.row);
+  const sides = [[from, to], [to, from]].map(([tree, other]) => ({
+    tree, other, mine: new Set(tree.blocks.map((b) => b.id)), there: new Set(other.blocks.map((b) => b.id)), linked: new Set(other.links.map(linkKey)),
+  }));
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const { tree, other, mine, there, linked } of sides) {
+      for (const block of tree.blocks) {
+        if (owners.has(block.id) || there.has(block.id)) continue;
+        const link = tree.links.find((l) => (l.from === block.id || l.to === block.id) && owners.has(linkKey(l)));
+        const twin = twinOf(block, mine, other);
+        grew = own(block.id, (link && owners.get(linkKey(link))) || owners.get(block.parent) || (twin && owners.get(twin.id))) || grew;
+      }
+      for (const link of tree.links) {
+        const key = linkKey(link);
+        if (!owners.has(key) && !linked.has(key)) grew = own(key, owners.get(link.from) || owners.get(link.to)) || grew;
+      }
+    }
+  }
+  return owners;
+}
+
+// The tree while the rows in `waiting` have not landed: each part of theirs as `from` has it (none,
+// where only `to` has it), every other part as `to` has it. Blocks keep `to`'s order; one only
+// `from` has goes after the block before it there, with its parent; a group left with no block in
+// it goes. A block that lands in its twin's place starts where the twin shows (`from`,
+// map-view.js).
+export function landStage(from, to, owners, waiting = new Set()) {
+  const waits = (id) => waiting.has(owners.get(id));
+  const was = new Map(from.blocks.map((b) => [b.id, b]));
+  const now = new Set(to.blocks.map((b) => b.id));
+  const blocks = [];
+  for (const block of to.blocks) {
+    if (waits(block.id)) {
+      if (was.has(block.id)) blocks.push(was.get(block.id));
+      continue;
+    }
+    const twin = !was.has(block.id) && owners.has(block.id) ? twinOf(block, now, from) : null;
+    blocks.push(twin && owners.get(twin.id) === owners.get(block.id) ? { ...block, from: twin.id } : block);
+  }
+  const placed = new Set(blocks.map((b) => b.id));
+  const keep = (block) => {
+    if (placed.has(block.id)) return;
+    if (was.has(block.parent)) keep(was.get(block.parent));
+    const i = from.blocks.indexOf(block);
+    const before = from.blocks.slice(0, i).findLast((b) => placed.has(b.id));
+    blocks.splice(before ? blocks.findIndex((b) => b.id === before.id) + 1 : 0, 0, block);
+    placed.add(block.id);
+  };
+  for (const block of from.blocks) if (!now.has(block.id) && waits(block.id)) keep(block);
+  const parents = new Set(blocks.map((b) => b.parent));
+  const shown = blocks.filter((b) => b.kind !== "group" || parents.has(b.id));
+  const ids = new Set(shown.map((b) => b.id));
+  const wasLinks = new Map(from.links.map((l) => [linkKey(l), l]));
+  const nowLinks = new Set(to.links.map(linkKey));
+  const links = [];
+  for (const link of to.links) {
+    const key = linkKey(link);
+    if (!waits(key)) links.push(link);
+    else if (wasLinks.has(key)) links.push(wasLinks.get(key));
+  }
+  for (const [key, link] of wasLinks) if (!nowLinks.has(key) && waits(key)) links.push(link);
+  return { ...to, blocks: shown, links: links.filter((l) => ids.has(l.from) && ids.has(l.to)) };
+}
+
 // Whether a group shows another page now (`now`) than before (`was`): both show, and both page.
 function turnedPage(was, now) {
   return Boolean(was && now) && was.page !== undefined && now.page !== undefined && was.page !== now.page;

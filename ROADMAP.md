@@ -1,6 +1,6 @@
 # Kitden roadmap
 
-Last updated: 2026-10-25
+Last updated: 2026-10-26
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
@@ -46,7 +46,8 @@ What Kitden does today and what comes next. Ideas and bugs:
   up on its own removes that entry. Every action stays, some under More.
 - **Preview tray:** every change, from a switch in Details to a drag on the map, waits in one tray
   at the bottom left. Apply all writes them as one change, all or nothing, and Undo all takes them
-  back. "Show changes" opens one row's full review.
+  back. "Show changes" opens one row's full review. On the map each change lands in its turn after
+  Apply all, and Undo all takes them back the last one first.
 - **Library:** one page in place of Load map and Discover. Only the clients on this computer get
   a column, and the action sits in the client's cell: "+ Add", or why there is none. A server
   another client has points to the gateway; a marketplace says it comes with its first plugin.

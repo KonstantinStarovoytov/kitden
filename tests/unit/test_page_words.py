@@ -630,8 +630,10 @@ def test_the_gateway_rises_on_its_own_when_the_place_changes():
     )
     assert root + " { animation: none; }" in CSS
     assert '"map-entrance"' in script("store.js")
-    # A redraw of the same page does not lift the head again.
-    assert "if (!again) riseHead(" in script("gateway.js")
+    # A redraw of the same page does not lift the head again; one while it still rises (its data
+    # came) goes on lifting it, and one later leaves it still (riseHead, motion.js).
+    assert "riseHead(head, lede, scope, { again })" in script("gateway.js")
+    assert "if (since >= headRise.wait + HEAD_DELAYS[2] + HEAD_MS) return;" in script("motion.js")
 
 
 def test_the_map_rules_never_reach_the_library_table():

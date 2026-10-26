@@ -1069,6 +1069,24 @@ test('a new link between two blocks that stay draws from its start in 260 ms', a
   t.mock.timers.tick(260); assert.equal(link.getAttribute('pathLength'), null); assert.equal(link.style.strokeDasharray, '');
 });
 
+test('in an Undo a link that comes back draws in over 480 ms; under reduced motion it shows at once', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const v = view();
+  await v.draw(NO_LINK, drawn(NO_LINK), { motion: 'none' });
+  v.draw(TREE, drawn(TREE), { motion: 'undo' });
+  const link = v.node('c1>s2'); const a = link.animations[0];
+  assert.deepEqual([a.keyframes, a.options.duration, a.options.easing], [[{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], 480, CALM]);
+  t.mock.timers.tick(480); assert.equal(link.getAttribute('pathLength'), null);
+  // The rest of an Undo's draw moves as any other: a block that goes fades out.
+  v.draw(without('s2'), drawn(without('s2')), { motion: 'undo' });
+  assert.ok(v.node('s2').classList.contains('leaving'));
+  reduce(true);
+  const calm = view();
+  await calm.draw(NO_LINK, drawn(NO_LINK), { motion: 'none' });
+  await calm.draw(TREE, drawn(TREE), { motion: 'undo' });
+  assert.deepEqual([calm.node('c1>s2').animations.length, calm.node('c1>s2').style.opacity || ''], [0, '']);
+});
+
 test('a new preview link fades in over 300 ms', async () => {
   const v = view();
   await v.draw(NO_LINK, drawn(NO_LINK), { motion: 'none' });

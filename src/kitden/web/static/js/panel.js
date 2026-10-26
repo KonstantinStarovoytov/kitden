@@ -121,8 +121,8 @@ export function floatRoom(right, left) {
 }
 
 // Where the floating panel sits: the room a list or a table keeps on its right (`--float-room` and
-// `.floats` on the page, style.css; the Gateway map keeps its width), then its top (floatTop), read
-// with that room in place. Read when the panel floats, then at most once a frame while the page
+// `.floats` on the page, style.css: it opens in 240 ms with the panel; the Gateway map keeps its
+// width), then its top (floatTop), read with that room in place. Read when the panel floats, then at most once a frame while the page
 // scrolls or the window changes (placeSoon).
 function placeFloat() {
   placing = 0;
@@ -313,7 +313,7 @@ export function closePanel({ instant = false, keepSelection = false, focus = tru
     node.classList.toggle("instant", instant);
     node.classList.remove("open");
   }
-  // The floating panel goes as it was; a list takes its room back at once.
+  // The floating panel goes as it was; a list gives back its room as it goes (180 ms, style.css).
   if (floating) floatOut(drawer, instant);
   floating = false;
   $("#main").classList.remove("floats");

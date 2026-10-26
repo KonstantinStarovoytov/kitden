@@ -64,11 +64,23 @@ export function rise(nodes, { delay = 0, step = 0, y = 6, dur = 260 } = {}) {
 
 // The page head rises as a place opens: the title at once, the lede after 120 ms and the scope
 // line after 180 ms. Any of them may be null. While the Gateway comes by a view transition they
-// wait for the old page to leave (afterOldPage).
+// wait for the old page to leave (afterOldPage). A draw of the same place (`again`) while the head
+// still rises, as when its data comes, draws new nodes: they go on rising from where the old ones
+// were, so the head does not jump, and a part that was not there before rises in its turn. A later
+// draw leaves the head still.
 const HEAD_DELAYS = [0, 120, 180];
-export function riseHead(title, lede, scope) {
-  [title, lede, scope].forEach((node, index) => {
-    if (node) rise([node], { delay: HEAD_DELAYS[index] + afterOldPage() });
+const HEAD_MS = 260;
+let headRise = { at: -Infinity, wait: 0, shown: [] };
+export function riseHead(title, lede, scope, { again = false } = {}) {
+  const parts = [title, lede, scope];
+  if (!again) headRise = { at: performance.now(), wait: afterOldPage(), shown: parts.map(Boolean) };
+  const since = again ? unscaled(performance.now() - headRise.at) : 0;
+  if (since >= headRise.wait + HEAD_DELAYS[2] + HEAD_MS) return;
+  parts.forEach((node, index) => {
+    if (!node) return;
+    const delay = headRise.wait + HEAD_DELAYS[index] - since;
+    rise([node], { delay: headRise.shown[index] ? delay : Math.max(0, delay) });
+    headRise.shown[index] = true;
   });
 }
 

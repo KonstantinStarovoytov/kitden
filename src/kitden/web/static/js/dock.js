@@ -5,7 +5,7 @@ import { clientName } from "./details.js";
 import { $, button, el, icon, joinWords, reportError, withFocusKey } from "./dom.js";
 import { animateTo, D, DRAW, rollTo, shake } from "./motion.js";
 import { closePanel, isPanelOpen, panelState } from "./panel.js";
-import { stepText } from "./parts.js";
+import { stepParts, stepText } from "./parts.js";
 import { afterParts, changeWords, detailsAgain, nothingChanged, reloadAll, showEffect, showRowReview, undoChange } from "./review.js";
 import { go, state } from "./store.js";
 import { hideToast, makeRoom, onToastGone, say, toast } from "./toast.js";
@@ -271,13 +271,33 @@ function setMeter(ratio) {
   if (ratio > from) animateTo(shown.meter, [{ transform: `scaleX(${from})` }, { transform: `scaleX(${ratio})` }], { dur: 480, ease: "ease-out" });
 }
 
+// Apply's words. While it counts ("Applying 2 of 5") only the step number changes: it rolls
+// (rollTo) from the second step on, as in the mockup; any other words are set as they are.
+function setLabel(words) {
+  const parts = stepParts(words);
+  const step = shown.step;
+  if (parts && step && step.tail === parts[0] + parts[2]) {
+    rollTo(step.num, parts[1]);
+    return;
+  }
+  shown.step = null;
+  if (!parts) {
+    set(shown.label, words);
+    return;
+  }
+  const num = el("span", "num roll");
+  num.append(el("span", null, parts[1]));
+  shown.label.replaceChildren(parts[0], num, parts[2]);
+  shown.step = { num, tail: parts[0] + parts[2] };
+}
+
 function patchApply(view) {
   const { t, words } = view;
   const applied = t.phase === "applied";
   const { apply } = shown;
   apply.classList.toggle("primary", !applied);
   apply.classList.toggle("ok", applied);
-  set(shown.label, words.apply);
+  setLabel(words.apply);
   if (words.applyWaits) apply.setAttribute("aria-disabled", "true");
   else apply.removeAttribute("aria-disabled");
   setApplyIcon(applied ? "check" : t.phase === "applying" ? "spin" : words.retry ? "again" : "arrow-right");

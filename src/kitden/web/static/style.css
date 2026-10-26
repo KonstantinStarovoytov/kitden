@@ -211,7 +211,7 @@ a { color: var(--route); }
 .dots { display: block; position: sticky; top: var(--glow-top, 66px); z-index: 0; flex: none; width: 100%; height: var(--glow-h, 0px); margin-bottom: calc(var(--glow-h, 0px) * -1); pointer-events: none; }
 /* The bottom keeps the end of the page clear of the hint line, and of whatever the dock shows, the
    tray's bar or a toast (--dock-room, set on the root by toast.js: its height and the dock's 46 px). */
-.page { position: relative; z-index: 1; flex: 1 0 auto; padding: 26px 22px 64px; padding-bottom: max(64px, var(--dock-room, 0px)); max-width: 1180px; outline: none; transition: opacity var(--t-fast) ease; }
+.page { position: relative; z-index: 1; flex: 1 0 auto; padding: 26px 22px 64px; padding-bottom: max(64px, var(--dock-room, 0px)); max-width: 1180px; outline: none; transition: opacity var(--t-fast) ease, padding-right 180ms ease-in; }
 .page.pending { opacity: 0.5; pointer-events: none; }
 /* The Gateway changes in place as another project is read (gateway.js): it does not fade, and the
    progress cursor says why a press waits. Details take no press meanwhile (panel.js holdPanel). */
@@ -219,9 +219,10 @@ a { color: var(--route); }
 .content:has(> .page.pending[data-place="gateway"]), .drawer.pending, .drawer.pending * { cursor: progress; }
 .page[data-place="gateway"] { max-width: none; }
 /* While Details float, a list or a table keeps room on its right for them (--float-room, panel.js),
-   so no control sits under the panel. The Gateway map keeps its width: a block under the panel
-   scrolls beside it (gateway.js). */
-#main.floats:not(:has(> div.map)) { padding-right: var(--float-room); }
+   so no control sits under the panel. The room opens with the panel (240 ms) and closes with it
+   (180 ms ease-in, .page). The Gateway map keeps its width: a block under the panel scrolls beside
+   it (gateway.js). */
+#main.floats:not(:has(> div.map)) { padding-right: var(--float-room); transition: opacity var(--t-fast) ease, padding-right 240ms var(--calm); }
 h1 { font-size: 18px; margin: 0; letter-spacing: -0.015em; font-weight: 600; text-wrap: balance; }
 .page h1 { font-size: 24px; letter-spacing: -0.018em; }
 h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
@@ -870,8 +871,10 @@ div.map .block.leaving:focus-visible { filter: none; }
    the root, set by toast.js) and its footer is never hidden. The room is measured from the frame's
    content, which ends 17 px above the window (the 16 px gutter and the frame's line), hence + 25 px;
    with an empty dock it is -9 px, so the drawer ends 16 px above the window. */
-.drawer { position: fixed; z-index: 21; top: 16px; right: 16px; bottom: max(16px, calc(var(--dock-room, -9px) + 25px)); width: min(520px, calc(100vw - 32px)); border-radius: 12px; overflow: hidden; background: var(--panel-raised); box-shadow: var(--shadow-pop); transform: translateX(104%); visibility: hidden; transition: transform var(--t-panel) var(--ease-drawer), visibility 0s linear var(--t-panel); display: flex; flex-direction: column; overscroll-behavior: contain; outline: none; }
-.drawer.open { transform: none; visibility: visible; transition: transform var(--t-panel) var(--ease-drawer), visibility 0s; }
+/* The drawer ends above whatever the dock shows (--dock-room) and moves with it in 200 ms as the
+   bar or a toast comes or goes; in a short window it keeps 240 px. */
+.drawer { position: fixed; z-index: 21; top: 16px; right: 16px; bottom: max(16px, calc(var(--dock-room, -9px) + 25px)); min-height: 240px; width: min(520px, calc(100vw - 32px)); border-radius: 12px; overflow: hidden; background: var(--panel-raised); box-shadow: var(--shadow-pop); transform: translateX(104%); visibility: hidden; transition: transform var(--t-panel) var(--ease-drawer), visibility 0s linear var(--t-panel), bottom 200ms var(--calm); display: flex; flex-direction: column; overscroll-behavior: contain; outline: none; }
+.drawer.open { transform: none; visibility: visible; transition: transform var(--t-panel) var(--ease-drawer), visibility 0s, bottom 200ms var(--calm); }
 .drawer.instant, .scrim.instant { transition: none; }
 .drawer header { padding: 16px 20px 12px; border-bottom: 1px solid var(--wire); display: grid; gap: 4px; }
 .drawer header .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }

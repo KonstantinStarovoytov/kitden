@@ -527,6 +527,40 @@ test('drawTray disables Cancel and × while Apply runs, then shows Applied', asy
   hideToast();
 });
 
+// motion-spec M4 step 3: the step number rolls (rollTo) from the second step on.
+test('the step number of "Applying 2 of 5" rolls from step 2; under reduced motion it changes at once', async () => {
+  for (const calm of [false, true]) {
+    await fresh();
+    queue(PREVIEW, previewed('c1'), previewed('c2'));
+    await addToTray(add('github'));
+    await addToTray(add('neon'));
+    reduce(calm);
+    const writing = slow();
+    queue('/api/changes/c2/apply', writing.reply);
+    const running = button(bar(), 'Apply all').click();
+    const apply = button(bar(), 'Applying…');
+    document.fire('kitden:progress', { id: 'c2', done: 1, total: 5, row: tray.rows[0].id });
+    const label = apply.children[0];
+    const num = label.children[0];
+    assert.deepEqual([label.textContent, num.className], ['Applying 1 of 5', 'num roll']);
+    // The first number shows as it is.
+    assert.deepEqual(num.children.map((n) => [n.textContent, n.animations.length]), [['1', 0]]);
+    document.fire('kitden:progress', { id: 'c2', done: 2, total: 5, row: tray.rows[1].id });
+    assert.equal(label.children[0], num);
+    if (calm) assert.ok(num.children.every((n) => n.animations.length === 0));
+    else {
+      const [old, next] = num.children;
+      assert.deepEqual([old.textContent, next.textContent], ['1', '2']);
+      assert.deepEqual([old.animations[0].options.duration, next.animations[0].options.duration, next.animations[0].options.delay], [140, 200, 140]);
+    }
+    await sleep(160);
+    assert.equal(label.textContent, 'Applying 2 of 5');
+    writing.release(verified('c2'));
+    await running;
+    hideToast();
+  }
+});
+
 test('drawTray waits while a preview is asked: Apply takes no press', async () => {
   await fresh();
   queue(PREVIEW, previewed('c1'));

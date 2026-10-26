@@ -519,6 +519,13 @@ export function stepText(verb, done, total) {
   return total > 1 ? `${verb} ${done} of ${total}` : `${verb}…`;
 }
 
+// The words of stepText cut around the step number ("Applying ", "2", " of 5"), so the number can
+// roll on its own; null for words with no step number ("Applying…").
+export function stepParts(text) {
+  const found = /^(.* )(\d+)( of \d+)$/.exec(text);
+  return found ? found.slice(1) : null;
+}
+
 export function flag({ text, level }) {
   return el("span", level === "warning" ? "flag" : "flag info", text);
 }

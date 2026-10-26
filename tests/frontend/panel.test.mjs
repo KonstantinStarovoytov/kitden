@@ -1050,6 +1050,26 @@ test('under 1024 px Details are the modal drawer, with the dock above it', () =>
   assert.match(rule('#drawer.floating'), /right: 39px;/);
 });
 
+// The drawer's bottom moves with the dock's room (the bar or a toast comes or goes) in 200 ms
+// CALM, and the drawer keeps 240 px in a short window. Under reduced motion only colours and
+// opacity change over time, so it lands at once.
+test("the modal drawer's bottom follows the dock in 200 ms and keeps 240 px", () => {
+  const css = readFileSync(new URL('../../src/kitden/web/static/style.css', import.meta.url), 'utf8');
+  const rule = (selector) => css.match(new RegExp(`^${selector.replace(/[.#()>:]/g, '\\$&')} \\{([^}]*)\\}`, 'm'))[1];
+  assert.match(rule('.drawer'), /min-height: 240px;/);
+  for (const selector of ['.drawer', '.drawer.open']) assert.match(rule(selector), /transition: [^;]*bottom 200ms var\(--calm\)/, selector);
+  assert.match(css, /transition-property: opacity, color, background-color !important;/);
+});
+
+// A list or a table keeps room for the floating panel (--float-room): the room opens with the
+// panel (240 ms CALM) and closes with it (180 ms ease-in), not at once. Reduced motion: at once.
+test('the list room opens and closes with the floating panel', () => {
+  const css = readFileSync(new URL('../../src/kitden/web/static/style.css', import.meta.url), 'utf8');
+  const rule = (selector) => css.match(new RegExp(`^${selector.replace(/[.#()>:]/g, '\\$&')} \\{([^}]*)\\}`, 'm'))[1];
+  assert.match(rule('#main.floats:not(:has(> div.map))'), /transition: [^;]*padding-right 240ms var\(--calm\)/);
+  assert.match(rule('.page'), /transition: [^;]*padding-right 180ms ease-in/);
+});
+
 test('a panel shows its skeleton, then its content rises', async () => {
   const { drawer } = fakePanelPage();
   try {

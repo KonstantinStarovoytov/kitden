@@ -3,13 +3,13 @@
 import { $, button, el, gridKey, icon, joinWords, plural, reportError, withFocusKey } from "./dom.js";
 import { addForm, connectAction, connectBody, followProject, heldServer, liveHeld, movesTo, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool, TAKE_OUT } from "./gateway-details.js";
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
-import { findChip, findIn, foldable, isNarrow, keepOpen, layoutTree, linkKey, litFrom, litPath, pagesNow, pagesWith, pressOpen, toggleOpen, turnPage, wideWidth } from "./map.js";
+import { findChip, findIn, foldable, isNarrow, keepOpen, landOwners, landStage, layoutTree, linkKey, litFrom, litPath, pagesNow, pagesWith, pressOpen, toggleOpen, turnPage, wideWidth } from "./map.js";
 import { mapView } from "./map-view.js";
-import { afterOldPage, animateTo, D, entrance, glide, rise, riseHead } from "./motion.js";
+import { afterOldPage, animateTo, D, glide, rise, riseHead } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, openInfo, panelState, projectLabel, review } from "./panel.js";
 import { banner, CLIENT_NAMES, folderName, gatewayName, kitdenClients, mark, opens, ORIGIN_WORDS, scopeBar, skeleton, STATE_WORDS, staleNote } from "./parts.js";
 import { arrival, current, currentError, data, go, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
-import { addToTray, inTray, keyFor, onTray, takeOut, tray } from "./tray.js";
+import { addToTray, inTray, keyFor, onTray, takeOut, tray, undone } from "./tray.js";
 
 // Overview sets a client up with the same note. A server the Kitden gateway holds, and its
 // links, are found where its Details are drawn.
@@ -79,7 +79,8 @@ export function serverCount(view) {
 // Draws the page. It returns what the top search found on it (map.js findIn), or null with no
 // search or no page to search: app.js shows the chip. The map keeps its blocks while the page
 // draws `again`; a new visit, or the List, starts a new one. A new visit also lifts the head
-// (title, lede, scope line), and then the map or List.
+// (title, lede, scope line), and then the map or List; a draw soon after goes on lifting it
+// (riseHead). The skeleton, the error banner and "No gateway yet" rise as they come (riseUnder).
 export function renderGateway(main, { again = false } = {}) {
   // A draw the view switch asked for: the view it draws comes in as one piece (below).
   const switched = onSwitch.drawing;
@@ -91,22 +92,27 @@ export function renderGateway(main, { again = false } = {}) {
   main.append(head, lede);
   const view = current("gateway");
   if (!view) {
-    if (!again) riseHead(head, lede, null);
-    if (currentError("gateway")) main.append(banner("the gateway", retry));
-    else main.append(skeleton("card", 2));
+    riseHead(head, lede, null, { again });
+    const failed = Boolean(currentError("gateway"));
+    const under = failed ? banner("the gateway", retry) : skeleton("card", 2);
+    main.append(under);
+    riseUnder(failed ? "banner" : "skeleton", under, again);
     return;
   }
   // Under the head: what the page shows, the shared setup or a project's rules that differ from it.
   const scope = scopeBar(folderName(projectPath()), view.own_rules);
   main.append(scope);
-  if (!again) riseHead(head, lede, scope);
+  riseHead(head, lede, scope, { again });
   switchInPlace(again, scope);
   if (currentError("gateway")) main.append(staleNote(data.readAt.gateway));
   // Only without any gateway, the Kitden one included (no home folder to change).
   if (!view.gateways.length) {
-    main.append(noGateway());
+    const card = noGateway();
+    main.append(card);
+    riseUnder("empty", card, again);
     return;
   }
+  shownUnder = null;
   const mode = viewMode(state, serverCount(view));
   const seg = modeSwitch(mode);
   head.append(seg);
@@ -161,8 +167,17 @@ function noGateway() {
   card.append(el("h2", null, "No gateway yet"));
   card.append(el("p", "muted", "A gateway keeps your MCP servers in one place: each client needs one entry, and you turn tools on or off once."));
   card.append(addForm());
-  entrance("gateway", [card]);
   return card;
+}
+
+// What the page showed under its head on its last draw, while it has no map or List: "skeleton",
+// "banner" or "empty" ("No gateway yet"). One that comes on this draw rises as the map or List
+// would on a first visit (6 px, 260 ms CALM); drawn again, it stays still.
+let shownUnder = null;
+function riseUnder(kind, node, again) {
+  const comes = !again || shownUnder !== kind;
+  shownUnder = kind;
+  if (comes) rise([node], { delay: afterOldPage() });
 }
 
 // Map or List. The address keeps the choice (view=map|list), and Back switches back.
@@ -485,8 +500,11 @@ function clientBlock(id, { setup, linked, known, first, clients, wait = null }) 
   const viaPlugin = (setup || []).some((e) => e.client === id && e.state === "plugin");
   const connect = !on && !first ? connectBody(id, setup) : null;
   const block = { id: `client:${id}`, column: "clients", kind: "client", name: CLIENT_NAMES[id], meta, lamp, state: known ? (on ? "on" : "off") : "unk", stateInMeta: !firstFound, client: id, ports: { right: true }, disconnect, viaPlugin, connect, drags: Boolean(connect) };
+  if (!wait) return block;
   // The dot stays with the words before it (a no-break space), so a wrap never starts a line with it.
-  return wait && wait.connect ? { ...block, lamp: "preview", state: "preview", wait: "\u00a0· in preview", connect: null, drags: false } : block;
+  // Its row lands on the map in its turn (`landsWith`, map.js landOwners).
+  const waits = wait.connect ? { lamp: "preview", state: "preview", wait: "\u00a0· in preview", connect: null, drags: false } : {};
+  return { ...block, ...waits, landsWith: wait.key };
 }
 
 // The moves into the Kitden gateway the map shows: each one in the tray (`rows`), for the outside
@@ -536,7 +554,7 @@ function leaveParts(blocks, links, kitden, rows, picked) {
     if (action === "gateway.remove") {
       key = `gateway:${kitden.id}>held:${kitden.id}:${params.server}`;
       const server = blocks.find((b) => b.id === `held:${kitden.id}:${params.server}`);
-      if (server) server.leaving = true;
+      if (server) Object.assign(server, { leaving: true, landsWith: row.key });
     } else if (action === "gateway.rule" && params.state === "off" && (params.project || "") === (picked || "")) key = `held:${kitden.id}:${params.server}>tool:${params.server}/${params.tool}`;
     const link = key && links.find((l) => linkKey(l) === key);
     if (link) Object.assign(link, { leaving: true, row: row.key });
@@ -544,16 +562,16 @@ function leaveParts(blocks, links, kitden, rows, picked) {
 }
 
 // The tools whose rule waits in the tray, once its row has its part, by "server/tool": for the
-// scope shown (`picked`, "" for all projects) their mark is a dashed ring until Apply (`ring`);
-// for other projects the tool names them (`others`, the project ids).
+// scope shown (`picked`, "" for all projects) their mark is a dashed ring until Apply (`ring`,
+// with the row's key); for other projects the tool names them (`others`, the project ids).
 function waitingTools(rows, picked) {
-  const ring = new Set();
+  const ring = new Map();
   const others = new Map();
   for (const row of rows) {
     const { action, params = {} } = row.body;
     if (!row.part || action !== "gateway.rule" || !params.tool) continue;
     const key = `${params.server}/${params.tool}`;
-    if ((params.project || "") === (picked || "")) ring.add(key);
+    if ((params.project || "") === (picked || "")) ring.set(key, row.key);
     else if (params.project) others.set(key, [...(others.get(key) || []), params.project]);
   }
   return { ring, others };
@@ -618,7 +636,8 @@ function toolBlock(held, tool, picked, waiting) {
     projects = { words, said: `in preview for ${words}`, own: true, pending: pending.length };
   }
   const lamp = waiting.ring.has(key) ? "preview" : on ? "on" : "off";
-  return { id: `tool:${server.name}/${tool.name}`, column: "tools", parent: held.id, kind: "tool", name: tool.name, state: on ? "on" : "off", lamp, projects, ports: { left: true }, tool, server };
+  const lands = waiting.ring.has(key) ? { landsWith: waiting.ring.get(key) } : {};
+  return { id: `tool:${server.name}/${tool.name}`, column: "tools", parent: held.id, kind: "tool", name: tool.name, state: on ? "on" : "off", lamp, projects, ports: { left: true }, tool, server, ...lands };
 }
 
 // The List's rows, in order, from the tree: a "Clients" group of client rows; each gateway's own
@@ -804,8 +823,14 @@ function gatewayMap(main, model, found, { switched = false } = {}) {
   // A new map knows its width before its first draw, so the observer's first report does not flip
   // it to narrow in the middle of its entrance.
   if (fresh) onMap.width = contentWidth(onMap.view.box) ?? onMap.width;
+  const was = onMap.model;
   Object.assign(onMap, { model, found });
   bringPages(model, { fresh, projectChanged });
+  // An Undo the page has just read: the map plays its rows back (landRows).
+  const undid = undone.id;
+  undone.id = null;
+  if (fresh || projectChanged) landing.due = null;
+  else if (landRows(was, model, undid)) return;
   drawOnMap(model, { fresh, projectChanged, switched });
 }
 
@@ -1033,10 +1058,11 @@ function openNow() {
 // view switch brings, which comes in as one piece (renderGateway); a new width shows at once;
 // another project changes the map in place (map-view.js "project"), and anything else moves what
 // changed.
-export function mapMotion({ fresh, projectChanged, narrowChanged, switched = false }) {
+export function mapMotion({ fresh, projectChanged, narrowChanged, switched = false, undo = false }) {
   if (fresh) return switched ? "none" : "enter";
   if (narrowChanged) return "none";
-  return projectChanged ? "project" : "move";
+  if (projectChanged) return "project";
+  return undo ? "undo" : "move";
 }
 
 // A press that opened a block (`unfolds`) draws its selection first and lights its path when the
@@ -1051,10 +1077,12 @@ export function stillSelected(drawn, now) {
   return drawn.view === now.view && drawn.selected === now.selected;
 }
 
-// Draw the map as it is now, as `mapMotion` says. With `lightLater` (a press that opened a block)
-// the selection shows, but its path lights (the dims and the accent lines) when every motion of
-// this draw has ended: a server's tools come in first. The promise ends with the last motion.
-function drawOnMap(model, { fresh = false, projectChanged = false, lightLater = false, switched = false } = {}) {
+// Draw the map as it is now, as `mapMotion` says (`undo`: what an Undo put back). With `lightLater`
+// (a press that opened a block) the selection shows, but its path lights (the dims and the accent
+// lines) when every motion of this draw has ended: a server's tools come in first. The promise ends
+// with the last motion. Any draw but a step of a landing (`staged`) ends the landing that runs.
+function drawOnMap(model, { fresh = false, projectChanged = false, lightLater = false, switched = false, undo = false, staged = false } = {}) {
+  if (!staged) stopLanding();
   const narrow = narrowNow(model);
   const flipped = narrow !== onMap.narrow;
   onMap.narrow = narrow;
@@ -1063,7 +1091,7 @@ function drawOnMap(model, { fresh = false, projectChanged = false, lightLater = 
   // A selected block lights every client's path to it; a selected client lights what it reaches; a
   // selected link its two ends. A selection the model no longer has is none.
   const lit = litFor(model, onMap.selected);
-  const motion = mapMotion({ fresh, projectChanged, narrowChanged: flipped, switched });
+  const motion = mapMotion({ fresh, projectChanged, narrowChanged: flipped, switched, undo });
   const { view, selected } = onMap;
   const later = lightsLater({ unfolds: lightLater, lit });
   const drawn = view.draw(model, layout, { selected: lit.size ? selected : null, lit: later ? new Set() : lit, found: onMap.found, open, motion });
@@ -1177,13 +1205,18 @@ let trayWas = tray.phase;
 onTray(trayChanged);
 
 // The tray changed: the map draws its rows again in place, while it shows. Not while its change is
-// applied: the page reads the result first and draws that. Once it has landed (the tray empties),
-// focus it took away goes to the gateway block.
+// applied: the page reads the result first, and its rows land on the map one by one (landRows).
+// Once it has landed (the tray empties), focus it took away goes to the gateway block.
 function trayChanged(t) {
   const landed = trayWas === "applied" && t.phase === "idle";
   trayWas = t.phase;
-  if (t.phase === "applied") return;
+  if (t.phase === "applied") {
+    if (onMap.view && onMap.view.box.isConnected) landing.due = { keys: t.rows.map((row) => row.key), id: t.change.id, view: current("gateway") };
+    return;
+  }
   const drawn = drawRows();
+  // A result the page could not read again lands nothing later.
+  if (landed) landing.due = null;
   if (!landed) return;
   focusGateway({ fromDock: true });
   drawn.then(() => focusGateway({ fromDock: false }));
@@ -1195,10 +1228,75 @@ function drawRows() {
   const view = current("gateway");
   if (!view || !onMap.view || !onMap.view.box.isConnected) return Promise.resolve();
   const model = treeFor(view);
+  const was = onMap.model;
   Object.assign(onMap, { model, found: state.q.trim() ? findIn(model, state.q) : null });
   drawChip(onMap.found);
   bringPages(model);
-  return drawOnMap(model);
+  return landRows(was, model) || drawOnMap(model);
+}
+
+// Landing (motion-spec M4 step 6): after a verified Apply all the map shows each row's change in
+// tray order, 60 ms apart; an Undo of it plays them back in reverse, 120 ms apart, and a link that
+// comes back draws in over 480 ms. `due`: an Apply whose result the page has not read yet ({ keys,
+// id, view }: its rows, its change and the read it was applied on). `last`: what each part of the
+// map belonged to in the last landing, for its Undo. While one runs: its timers, the end of its
+// promise (`end`) and the promise (`done`).
+const landing = { due: null, last: null, timers: [], end: null, done: null };
+const LAND_GAP = 60;
+const UNDO_GAP = 120;
+
+// A draw of what Kitden read again (`model`, after `was`): the rows of an Apply whose result it is
+// land in turn; an Undo (`undid`, its change's id) plays the rows of the last landing back, and any
+// other Undo moves at once with the Undo's draw-in. While a landing runs the draw waits for it: its
+// last step draws the newest tree. Null when the caller draws as usual.
+function landRows(was, model, undid = null) {
+  if (landing.timers.length) return landing.done;
+  const { due, last } = landing;
+  if (due && current("gateway") !== due.view) {
+    landing.due = null;
+    const owners = landOwners(was, model, due.keys);
+    landing.last = { id: due.id, keys: due.keys, owners };
+    return playRows(was, model, due.keys, owners, { gap: LAND_GAP });
+  }
+  if (!undid) return null;
+  if (!last || last.id !== undid) return drawOnMap(model, { undo: true });
+  landing.last = null;
+  const keys = [...last.keys].reverse();
+  return playRows(was, model, keys, landOwners(was, model, keys, last.owners), { gap: UNDO_GAP, undo: true });
+}
+
+// The rows' changes one at a time, `gap` ms apart: at each step the rows after it still wait
+// (map.js landStage). The promise ends with the motions of the last step, or when another draw
+// ends the landing. Reduced motion draws the end at once.
+function playRows(was, model, keys, owners, { gap, undo = false }) {
+  const end = keys.length - 1;
+  const step = (i) => drawOnMap(landStage(was, i === end ? onMap.model : model, owners, new Set(keys.slice(i + 1))), { undo, staged: true });
+  if (end < 1 || !D(gap)) return step(end);
+  stopLanding();
+  landing.done = new Promise((resolve) => {
+    landing.end = resolve;
+    step(0);
+    for (let i = 1; i <= end; i++) {
+      landing.timers.push(setTimeout(() => {
+        if (i < end) {
+          step(i);
+          return;
+        }
+        landing.timers = [];
+        landing.end = null;
+        step(end).then(resolve);
+      }, D(i * gap)));
+    }
+  });
+  return landing.done;
+}
+
+// A landing that runs stops where it is; the draw that stops it shows the map as it is now.
+function stopLanding() {
+  for (const timer of landing.timers) clearTimeout(timer);
+  landing.timers = [];
+  if (landing.end) landing.end();
+  landing.end = null;
 }
 
 // The chip in the search box says how many blocks the search found on a map page (`found`, else

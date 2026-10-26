@@ -816,3 +816,157 @@ test('Show switches in place through the page, and the panel waits for its step'
   assert.ok(asked.includes('/api/gateway/tools?server=files&project=atlas'), asked.join(' '));
   assert.equal(map(), box);
 });
+
+// After a verified Apply all each row lands on the map in tray order, 60 ms apart (motion-spec M4
+// step 6). Undo all plays the rows back in reverse, 120 ms apart, and a link that comes back draws
+// in over 480 ms. Here files leaves the gateway, then Codex is disconnected.
+const { applyTray, endApplied, undone } = await import('../../src/kitden/web/static/js/tray.js');
+const SETUP_BEFORE = data.setupServer;
+const SETUP_AFTER = [entry('claude_code', 'added'), entry('codex', 'missing'), entry('cursor', 'missing')];
+const VIEW_AFTER = { ...VIEW, gateways: [{ ...VIEW.gateways[0], servers: [TRACKER] }] };
+const lampOf = (box, id) => partOf(box, `block:${id}`, 'lamp').className;
+const FILES_BLOCK = 'block:held:kitden:files';
+
+async function appliedTwo(t) {
+  const box = freshMap();
+  t.after(() => {
+    Object.assign(data, { gateway: VIEW, setupServer: SETUP_BEFORE });
+    undone.id = null;
+    reducedMotion.matches = false;
+    redraw();
+    settle();
+  });
+  queue(PREVIEW, batch('land0'), batch('land1'));
+  await addToTray(REMOVE_FILES);
+  await addToTray(DISCONNECT_CODEX);
+  settle();
+  queue('/api/changes/land1/apply', { status: 200, json: { id: 'land1', state: 'verified', error: null } });
+  await applyTray();
+  assert.equal(tray.phase, 'applied');
+  return box;
+}
+
+// What the page does once the Apply is verified (dock.js): it reads the result, draws it, and the
+// tray empties.
+function drawApplied() {
+  Object.assign(data, { gateway: VIEW_AFTER, setupServer: SETUP_AFTER });
+  redraw();
+  endApplied();
+}
+
+// What undoChange (review.js) has the page do once the Undo is verified.
+function drawUndone() {
+  undone.id = 'land1';
+  Object.assign(data, { gateway: VIEW, setupServer: SETUP_BEFORE });
+  redraw();
+}
+
+test('after Apply all the rows land in tray order, 60 ms apart; Undo all plays them back in reverse, 120 ms apart', async (t) => {
+  const box = await appliedTwo(t);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  drawApplied();
+  settle();
+  // The first row landed: files has gone. The second still waits: Codex is still connected.
+  assert.equal(node(box, FILES_BLOCK), null);
+  assert.equal(lampOf(box, 'client:codex'), 'lamp on');
+  t.mock.timers.tick(59);
+  settle();
+  assert.equal(lampOf(box, 'client:codex'), 'lamp on');
+  t.mock.timers.tick(1);
+  settle();
+  assert.equal(lampOf(box, 'client:codex'), 'lamp');
+  assert.equal(linkLine(box, 'client:codex>gateway:kitden'), null);
+  t.mock.timers.tick(1000);
+  settle();
+  // Undo all: the last row first. Codex's link comes back and draws in over 480 ms; files waits.
+  drawUndone();
+  assert.equal(lampOf(box, 'client:codex'), 'lamp on');
+  assert.deepEqual(lastMotion(linkLine(box, 'client:codex>gateway:kitden')), [[{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], 480, CALM]);
+  settle();
+  assert.equal(node(box, FILES_BLOCK), null);
+  t.mock.timers.tick(119);
+  settle();
+  assert.equal(node(box, FILES_BLOCK), null);
+  t.mock.timers.tick(1);
+  settle();
+  assert.ok(node(box, FILES_BLOCK));
+  t.mock.timers.tick(1000);
+  settle();
+});
+
+test('under reduced motion every row lands at once, and an Undo puts everything back at once', async (t) => {
+  const box = await appliedTwo(t);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  reducedMotion.matches = true;
+  drawApplied();
+  assert.deepEqual([node(box, FILES_BLOCK), lampOf(box, 'client:codex')], [null, 'lamp']);
+  drawUndone();
+  assert.ok(node(box, FILES_BLOCK));
+  assert.equal(lampOf(box, 'client:codex'), 'lamp on');
+  assert.equal(linkLine(box, 'client:codex>gateway:kitden').animations.length, 0);
+});
+
+// A first visit (motion-spec M1): what shows under the head before the map, the skeleton, the error
+// banner or "No gateway yet", rises as the rest of the visit does; drawn again it stays still.
+// Under reduced motion it is there at once.
+test('the skeleton, the error banner and "No gateway yet" rise when they come', (t) => {
+  t.after(() => {
+    Object.assign(data, { gateway: VIEW });
+    delete data.errors.gateway;
+    delete data.errorScope.gateway;
+    reducedMotion.matches = false;
+    freshMap();
+  });
+  const under = () => main.children.at(-1);
+  const steps = [
+    ['skeleton', () => { data.gateway = null; }, (n) => n.getAttribute('aria-busy') === 'true'],
+    ['banner', () => Object.assign(data.errors, { gateway: 'down' }) && Object.assign(data.errorScope, { gateway: '' }), (n) => n.className === 'banner'],
+    ['no gateway', () => { delete data.errors.gateway; data.gateway = { ...VIEW, gateways: [] }; }, (n) => n.className === 'card'],
+  ];
+  for (const calm of [false, true]) {
+    reducedMotion.matches = calm;
+    steps.forEach(([name, set, is], i) => {
+      set();
+      main.replaceChildren();
+      renderGateway(main, { again: i > 0 });
+      assert.ok(is(under()), name);
+      if (calm) assert.equal(under().animations.length, 0, name);
+      else assert.deepEqual(lastMotion(under()), IN, name);
+      // Drawn again as it is, it stays still.
+      main.replaceChildren();
+      renderGateway(main, { again: true });
+      assert.equal(under().animations.length, 0, name);
+    });
+    delete data.errorScope.gateway;
+  }
+});
+
+// The head rises on a first visit (riseHead): data that comes while it rises draws a new head,
+// which goes on rising from where the old one was, so it does not jump; a scope line that was not
+// there rises in its turn. Data that comes later draws the head still.
+test('data that comes while the head rises keeps it rising', (t) => {
+  t.after(() => {
+    data.gateway = VIEW;
+    reducedMotion.matches = false;
+    freshMap();
+  });
+  const delays = () => main.children.slice(0, 3).map((n) => (n.animations.length ? n.animations.at(-1).options.delay : null));
+  for (const calm of [false, true]) {
+    reducedMotion.matches = calm;
+    data.gateway = null;
+    now = 100000;
+    main.replaceChildren();
+    renderGateway(main);
+    assert.deepEqual(delays().slice(0, 2), calm ? [null, null] : [0, 120]);
+    now += 200;
+    data.gateway = VIEW;
+    main.replaceChildren();
+    renderGateway(main, { again: true });
+    assert.deepEqual(delays(), calm ? [null, null, null] : [-200, -80, 0]);
+    settle();
+    now += 1000;
+    main.replaceChildren();
+    renderGateway(main, { again: true });
+    assert.deepEqual(delays(), [null, null, null]);
+  }
+});

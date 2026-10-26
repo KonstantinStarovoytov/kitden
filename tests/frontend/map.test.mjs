@@ -434,3 +434,76 @@ test('the middle of a path is the point at half its length', () => {
   const c = midPoint('M 0 0 C 50 0, 50 100, 100 100');
   assert.ok(Math.abs(c.x - 50) < 0.5 && Math.abs(c.y - 50) < 0.5);
 });
+
+// Landing (motion-spec M4 step 6): after Apply all each tray row shows on the map in its turn. A
+// move in of "github" (row "m") and a removal of "files" (row "r"): before, a preview block in the
+// gateway and a leaving server; after, github held and files gone.
+const { landOwners, landStage } = await import('../../src/kitden/web/static/js/map.js');
+const BEFORE = {
+  columns: [],
+  blocks: [
+    { id: 'client:codex', column: 'clients', kind: 'client', name: 'Codex' },
+    { id: 'gateway:kitden', column: 'gateway', kind: 'gateway', name: 'Kitden gateway' },
+    { id: 'group:remote', column: 'servers', kind: 'group', name: 'Remote' },
+    { id: 'held:files', column: 'servers', parent: 'group:remote', kind: 'held', name: 'files', leaving: true, landsWith: 'r' },
+    { id: 'tool:files/read', column: 'tools', parent: 'held:files', kind: 'tool', name: 'read' },
+    { id: 'preview:github', column: 'servers', parent: 'group:remote', kind: 'preview', name: 'github', row: 'm' },
+  ],
+  links: [
+    { from: 'client:codex', to: 'gateway:kitden', kind: 'on' },
+    { from: 'gateway:kitden', to: 'held:files', kind: 'on', leaving: true, row: 'r' },
+    { from: 'held:files', to: 'tool:files/read', kind: 'on' },
+    { from: 'gateway:kitden', to: 'preview:github', kind: 'preview', row: 'm' },
+    { from: 'client:codex', to: 'preview:github', kind: 'direct', row: 'm' },
+  ],
+};
+const AFTER = {
+  columns: [],
+  blocks: [
+    { id: 'client:codex', column: 'clients', kind: 'client', name: 'Codex' },
+    { id: 'gateway:kitden', column: 'gateway', kind: 'gateway', name: 'Kitden gateway', meta: '1 server' },
+    { id: 'group:remote', column: 'servers', kind: 'group', name: 'Remote' },
+    { id: 'held:github', column: 'servers', parent: 'group:remote', kind: 'held', name: 'github', from: 'preview-out:github' },
+    { id: 'tool:github/push', column: 'tools', parent: 'held:github', kind: 'tool', name: 'push' },
+  ],
+  links: [
+    { from: 'client:codex', to: 'gateway:kitden', kind: 'on' },
+    { from: 'gateway:kitden', to: 'held:github', kind: 'on' },
+    { from: 'held:github', to: 'tool:github/push', kind: 'on' },
+  ],
+};
+const ids = (tree) => tree.blocks.map((b) => b.id);
+const keys = (tree) => tree.links.map(linkKey);
+
+test('each part of the map belongs to the tray row that changes it', () => {
+  const owners = landOwners(BEFORE, AFTER, ['m', 'r']);
+  assert.deepEqual(Object.fromEntries(owners), {
+    // What the rows draw says so; what only one map has follows its links, its parent or its twin.
+    'held:files': 'r', 'preview:github': 'm',
+    'gateway:kitden>held:files': 'r', 'gateway:kitden>preview:github': 'm', 'client:codex>preview:github': 'm',
+    'tool:files/read': 'r', 'held:files>tool:files/read': 'r',
+    'held:github': 'm', 'tool:github/push': 'm', 'gateway:kitden>held:github': 'm', 'held:github>tool:github/push': 'm',
+  });
+  // A row that is not one of the keys owns nothing; what an earlier landing found counts first.
+  assert.equal(landOwners(BEFORE, AFTER, ['m']).has('held:files'), false);
+  assert.equal(landOwners(AFTER, BEFORE, ['m', 'r'], new Map([['held:github', 'r']])).get('held:github'), 'r');
+});
+
+test('a stage shows the rows that wait as before and the rest as after', () => {
+  const owners = landOwners(BEFORE, AFTER, ['m', 'r']);
+  // The move landed, the removal waits: files and its tool stay where they were, github is held.
+  const first = landStage(BEFORE, AFTER, owners, new Set(['r']));
+  assert.deepEqual(ids(first), ['client:codex', 'gateway:kitden', 'group:remote', 'held:files', 'tool:files/read', 'held:github', 'tool:github/push']);
+  assert.deepEqual(keys(first), ['client:codex>gateway:kitden', 'gateway:kitden>held:github', 'held:github>tool:github/push', 'gateway:kitden>held:files', 'held:files>tool:files/read']);
+  // The block that lands takes the place of its preview: it starts where the preview shows.
+  assert.equal(first.blocks.find((b) => b.id === 'held:github').from, 'preview:github');
+  // The gateway, which no row owns, is as after at once.
+  assert.equal(first.blocks.find((b) => b.id === 'gateway:kitden').meta, '1 server');
+  // Nothing waits: the map after, with the same blocks and links.
+  const last = landStage(BEFORE, AFTER, owners, new Set());
+  assert.deepEqual([ids(last), keys(last)], [ids(AFTER), keys(AFTER)]);
+  // Everything waits: the map before, with a group kept for the blocks it holds.
+  const none = landStage(BEFORE, AFTER, owners, new Set(['m', 'r']));
+  assert.deepEqual(new Set(ids(none)), new Set(ids(BEFORE)));
+  assert.deepEqual(new Set(keys(none)), new Set(keys(BEFORE)));
+});

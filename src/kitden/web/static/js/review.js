@@ -9,7 +9,7 @@ import { closePanel, drawQuietly, header, hideToast, isPanelOpen, openPanel, pan
 import { allPutBack, callout, checkBox, CLIENT_ORDER, diffCounts, kitdenMove, mark, movedNames, notesSection, PLACE_IN_TITLE, ruleText, rulesText, skillRemoval, socket, strictText, targetWords } from "./parts.js";
 import { busy, reload, render, setBusy, state } from "./store.js";
 import { projectLabel, tools } from "./tools.js";
-import { addToTray, changeOutcome, checkTrayStale, onTray, takeOut, tray } from "./tray.js";
+import { addToTray, changeOutcome, checkTrayStale, onTray, takeOut, tray, undone } from "./tray.js";
 
 // changeOutcome lives in tray.js; panel.js still exports it from here.
 export { changeOutcome };
@@ -495,7 +495,8 @@ export async function detailsAgain(keys) {
 }
 
 // Undo, from the toast or the Changes page. Whatever the answer, the page reloads first: the
-// server may have put the files back even when its answer was lost. Details that cannot be read
+// server may have put the files back even when its answer was lost. On the Gateway the map then
+// plays the change's rows back (`undone`, tray.js). Details that cannot be read
 // again never keep the toast from saying how it went. Then the tray asks whether its preview is
 // stale: the Undo may have changed its files.
 export async function undoChange(change) {
@@ -505,6 +506,8 @@ export async function undoChange(change) {
   try {
     const { after, failure } = await changeOutcome(change.id, "undo");
     await reloadAll();
+    // The Gateway map plays the change's rows back, the last one first.
+    if (after && after.state === "undone" && state.view === "gateway") undone.id = change.id;
     // With a tool list's Details still open, the page behind just redraws and Details is drawn
     // again from the files as they are now, focus on the switch the Undo changed back.
     if (isPanelOpen() && tools && tools.section.isConnected) {

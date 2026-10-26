@@ -308,6 +308,10 @@ export function endApplied() {
   empty();
 }
 
+// The change an Undo has just put back (its id), until the Gateway map draws what Kitden read
+// after it: the map then plays that change's rows back (gateway.js). undoChange (review.js) sets it.
+export const undone = { id: null };
+
 // After a rescan, whether the files changed since the preview. Only a ready tray is asked, and
 // never while a change is written; an answer that comes after the tray moved on is dropped.
 export async function checkTrayStale() {
