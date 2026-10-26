@@ -13,6 +13,10 @@ What Kitden does today and what comes next. Ideas and bugs:
   the mockup's colours in both themes, a new side rail and top bar, and calm motion with one
   shared timing. Under the pointer a grid of dots shows on the page, and a map block or an
   Overview card takes a soft glow; both are off under reduced motion.
+- **The logo's gesture:** when the page opens, and when the pointer comes to the logo, the door
+  of the house on the rail glows warm and a soft stream of smoke leaves the d and drifts right,
+  about four seconds; nothing under reduced motion. The logo is a link to the Overview. The
+  shape and times are in `design/logo-motion.md`.
 - **Gateway map:** blocks glide and unfold in place, links take the pointer (× to remove, by
   keyboard too), and a selected block dims everything off its path. Blocks look like the mockup:
   lamps, ports, the gateway's counts that roll, and on each tool how many projects have a rule of

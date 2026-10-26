@@ -64,7 +64,7 @@ def test_index_loads_the_app_as_a_module():
 
 def test_page_is_named_kitden():
     index = INDEX.read_text()
-    assert "<title>Kitden</title>" in index and ">Kitden</span></div>" in index
+    assert "<title>Kitden</title>" in index and ">Kitden</span></a>" in index
     for path in [INDEX, *SCRIPTS]:
         assert "Agent setup" not in path.read_text(), path.name
 

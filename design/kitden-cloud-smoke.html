@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kitden logo motion</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600&display=swap">
+<style>
+  :root {
+    color-scheme: light dark;
+    --kd-bg: light-dark(#F5F6F8, #171A20);
+    --kd-page: light-dark(#ECEEF1, #111318);
+    --kd-panel: light-dark(#FFFFFF, #20242C);
+    --kd-ink: light-dark(#161A21, #F2F3F5);
+    --kd-muted: light-dark(#626977, #A5ADBA);
+    --kd-line: light-dark(#E1E4E9, #3B424D);
+    --kd-warm: light-dark(#E6B46D, #F3CC8F);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px 16px 40px; background: var(--kd-page); color: var(--kd-ink); font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif; }
+  .kd-preview { max-width: 640px; margin: 0 auto; background: var(--kd-bg); border: 1px solid var(--kd-line); border-radius: 12px; padding: 26px 22px 22px; }
+  .kd-hero { display: flex; align-items: center; justify-content: center; min-height: 154px; }
+  .kd-lockup { display: inline-flex; align-items: center; gap: 13px; font-size: 48px; line-height: 1; white-space: nowrap; }
+  .kd-house { width: 60px; height: 60px; display: inline-block; position: relative; flex-shrink: 0; }
+  .kd-house img { width: 100%; height: 100%; display: block; position: relative; z-index: 1; }
+  .kd-word { font-weight: 600; letter-spacing: -.055em; }
+  .kd-d { position: relative; display: inline-block; }
+  /* The door is a 16 x 22 box with a round arch of radius 8, so the top corners are 8/22 tall. */
+  .kd-light { position: absolute; left: 18.75%; top: 56.25%; width: 25%; height: 34.375%; border-radius: 50% 50% 0 0 / 36.4% 36.4% 0 0; background: var(--kd-warm); opacity: 0; }
+  .kd-step { position: absolute; left: 13%; top: 89%; width: 36%; height: 9%; border-radius: 50%; background: var(--kd-warm); filter: blur(3px); opacity: 0; }
+  /* The smoke's anchor: just right of the d's stem, at the top of the x-height. */
+  .kd-smoke { position: absolute; left: 80%; bottom: 89%; width: 0; height: 0; pointer-events: none; }
+  .kd-puff { position: absolute; left: -.06em; bottom: 0; width: var(--w, .3em); opacity: 0; transform-origin: 30% 85%; }
+  .kd-puff svg { display: block; width: 100%; height: auto; overflow: visible; fill: var(--kd-muted); }
+  .kd-footer { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; padding-top: 20px; border-top: 1px solid var(--kd-line); }
+  .kd-label { color: var(--kd-muted); font-size: 12px; line-height: 1.4; margin-bottom: 13px; }
+  .kd-small .kd-lockup { font-size: 20px; gap: 8px; }
+  .kd-small .kd-house { width: 28px; height: 28px; }
+  .kd-play { appearance: none; font: 500 13px/1.2 Inter, -apple-system, BlinkMacSystemFont, sans-serif; color: var(--kd-ink); background: var(--kd-panel); border: 1px solid var(--kd-line); border-radius: 7px; padding: 10px 14px; min-height: 38px; cursor: pointer; }
+  .kd-status { min-height: 18px; margin-top: 17px; color: var(--kd-muted); font-size: 12px; line-height: 1.5; }
+  @media (pointer: coarse) { .kd-play { min-height: 44px; } }
+</style>
+</head>
+<body>
+<!-- Kitden logo motion, chosen 2026-10-26: the door lights, a soft stream of smoke leaves
+     the d and the wind carries it right. Values in logo-motion.md. -->
+<div class="kd-preview">
+  <div class="kd-hero" role="img" aria-label="Kitden logo with a warm doorway and a soft stream of smoke drifting right from d">
+    <div class="kd-lockup" aria-hidden="true">
+      <span class="kd-house">
+        <span class="kd-light"></span><span class="kd-step"></span>
+        <img src="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Cpath%20fill%3D%22%23C85835%22%20d%3D%22M6%2058C3.8%2058%202%2056.2%202%2054V32.5C2%2030.5%202.9%2028.8%204.5%2027.6L15.5%2019.6C16.6%2018.8%2017.3%2017.7%2017.6%2016.4L19.3%209.2C20.1%205.8%2023.6%204.5%2026.6%206.2L59%2025.4C61%2026.6%2062%2028.5%2062%2030.8V54C62%2056.2%2060.2%2058%2058%2058H28V44C28%2039.6%2024.4%2036%2020%2036S12%2039.6%2012%2044V58Z%22%2F%3E%3C%2Fsvg%3E" alt="">
+      </span>
+      <span class="kd-word">Kit<span class="kd-d">d<span class="kd-smoke"></span></span>en</span>
+    </div>
+  </div>
+  <div class="kd-footer">
+    <div class="kd-small"><div class="kd-label">Sidebar size</div><div class="kd-small-logo" aria-hidden="true"></div></div>
+    <button class="kd-play" type="button">Play animation</button>
+  </div>
+  <div class="kd-status" role="status" aria-live="polite">One short gesture</div>
+</div>
+
+<script>
+(() => {
+  // One soft puff: a rounded body with two bumps, the Codex shape. Twelve of them, 110 ms
+  // apart, overlap into one smooth ribbon.
+  const PUFF = '<svg viewBox="0 -5 28 20"><rect x="0" y="0" width="22" height="14.4" rx="7"/><ellipse cx="8" cy="1.8" rx="7.5" ry="6.75"/><ellipse cx="19.5" cy="4" rx="8.5" ry="6.3"/></svg>';
+  const smoke = {
+    count: 12, gap: 110, lead: 200, duration: 2600,
+    width: [.3, .32, .34, .36, .38],   // em of the wordmark, cycling
+    grow: [.7, 1.4],                   // scale from birth to the end
+    peak: .31,                         // opacity at 20 %; 70 % of it at 60 %; 0 at the end
+    blur: [.6, 1],                     // px, growing as the puff fades (40 % at sidebar size)
+    // The path, as a share of the full move: it rises first, then the air carries it right.
+    path: [[0, -.12], [.15, .4], [.6, .78], [1, .92]],
+    offsets: [0, .2, .6, 1]
+  };
+  const CALM = 'cubic-bezier(.2,.8,.2,1)';
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  const preview = document.querySelector('.kd-preview');
+  const hero = preview.querySelector('.kd-hero');
+  preview.querySelector('.kd-small-logo').append(hero.querySelector('.kd-lockup').cloneNode(true));
+  preview.querySelectorAll('.kd-smoke').forEach(holder => {
+    for (let i = 0; i < smoke.count; i++) {
+      holder.insertAdjacentHTML('beforeend', `<i class="kd-puff" style="--w:${smoke.width[i % smoke.width.length]}em">${PUFF}</i>`);
+    }
+  });
+  const button = preview.querySelector('.kd-play');
+  const status = preview.querySelector('.kd-status');
+  let running = [];
+  let finishTimer;
+
+  function stop() {
+    running.forEach(a => a.cancel());
+    running = [];
+    clearTimeout(finishTimer);
+    button.textContent = 'Play animation';
+    status.textContent = 'One short gesture';
+  }
+
+  function play() {
+    stop();
+    if (reducedMotion.matches) {
+      status.textContent = 'Reduced motion: static logo';
+      return;
+    }
+    button.textContent = 'Replay';
+    status.textContent = 'Playing once';
+    preview.querySelectorAll('.kd-smoke').forEach(holder => {
+      const small = Boolean(holder.closest('.kd-small'));
+      const right = small ? 18 : 46;
+      const up = small ? 8 : 20;
+      const blur = small ? smoke.blur.map(b => b * .4) : smoke.blur;
+      const fade = [0, smoke.peak, smoke.peak * .7, 0];
+      holder.querySelectorAll('.kd-puff').forEach((puff, i) => {
+        const frames = smoke.path.map(([x, y], k) => {
+          const t = smoke.offsets[k];
+          const scale = smoke.grow[0] + (smoke.grow[1] - smoke.grow[0]) * t;
+          return {
+            offset: t, opacity: fade[k],
+            transform: `translate(${right * x}px, ${-up * y}px) scale(${scale})`,
+            filter: `blur(${blur[0] + (blur[1] - blur[0]) * t}px)`
+          };
+        });
+        running.push(puff.animate(frames, {duration: smoke.duration, delay: smoke.lead + i * smoke.gap, easing: 'linear'}));
+      });
+    });
+    // The door's light: on in 500 ms (calm), held while the smoke goes, out over the last
+    // 700 ms, 200 ms after the last puff. Each step has its own curve, so the hold holds.
+    const total = smoke.lead + (smoke.count - 1) * smoke.gap + smoke.duration + 200;
+    preview.querySelectorAll('.kd-light, .kd-step').forEach(el => {
+      const strength = el.classList.contains('kd-step') ? .27 : .684;
+      running.push(el.animate([
+        {opacity: 0, easing: CALM},
+        {opacity: strength, offset: 500 / total, easing: 'linear'},
+        {opacity: strength, offset: (total - 700) / total, easing: 'ease-in-out'},
+        {opacity: 0}
+      ], {duration: total}));
+    });
+    finishTimer = setTimeout(() => {
+      status.textContent = 'At rest';
+      button.textContent = 'Replay';
+    }, total + 20);
+  }
+
+  button.addEventListener('click', play);
+  reducedMotion.addEventListener('change', () => {
+    stop();
+    status.textContent = reducedMotion.matches ? 'Reduced motion: static logo' : 'One short gesture';
+  });
+  if (reducedMotion.matches) status.textContent = 'Reduced motion: static logo';
+  else setTimeout(play, 400);
+})();
+</script>
+</body>
+</html>

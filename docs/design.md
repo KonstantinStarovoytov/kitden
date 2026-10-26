@@ -16,6 +16,8 @@ Canonical asset: `src/kitden/web/static/brand/kitden.svg`. The rail and favicon 
 
 **The house is always #C85835.** Never recolor it for dark mode, use a white fallback, apply opacity, or add gradients. Use the same silhouette in both themes. Keep clear space around it. The rail renders it at 28 px; favicon has a 64-unit viewBox and a simple silhouette for small sizes.
 
+When the page opens, the logo on the rail plays one short gesture, as if the stove is lit: the door glows warm (`--hearth`, #E6B46D light / #F3CC8F dark, behind the house) and a soft stream of twelve faint grey puffs (`--ink-3`) leaves the top of the d, rises a little and drifts right over "en", where it thins out. About four seconds, then it rests; it plays again when the pointer or keyboard focus comes to the logo, never twice at once; nothing under reduced motion. The logo is a link to the Overview, with the rail's press and the focus ring, and the gesture is its hover look. `startLogo` in `logo.js` builds and plays it; the shape, path and times are in [design/logo-motion.md](../design/logo-motion.md), with the mockup beside it. It is the one piece of motion that explains nothing (see Motion).
+
 ## Color roles
 
 | Role | Light | Dark |
@@ -157,8 +159,9 @@ Keep the existing motion, keyboard focus, and reduced-motion support. Text is In
 
 
 Kitden edits real settings files. Motion has one job: explain what changed and where. It never
-decorates, never suggests work the page cannot see, and never shows a result before the server
-has verified it. Calm beats bouncy: a tool that edits files must feel steady.
+decorates (the one exception is the logo's gesture when the page opens, under Identity), never
+suggests work the page cannot see, and never shows a result before the server has verified it.
+Calm beats bouncy: a tool that edits files must feel steady.
 
 ### Principles
 
@@ -175,9 +178,10 @@ has verified it. Calm beats bouncy: a tool that edits files must feel steady.
    the button that failed. No success animation can follow an error.
 5. **Interruptible.** Every animation can be cut short; the true state is always the resting
    style, never something an animation must finish to reach.
-6. **Transform and opacity.** Only these animate, with nine small exceptions (the client
+6. **Transform and opacity.** Only these animate, with ten small exceptions (the client
    counts row, a folded `<details>`, the sliding mark, a check or a map link drawing, undrawing or blending its
-   stroke, a map link redrawn as its blocks move, the `filter` that dims a map block off the lit path,
+   stroke, a map link redrawn as its blocks move, the `filter` that dims a map block off the lit path
+   or blurs the logo's smoke,
    the `stroke`, `stroke-width` and `stroke-opacity` of a map link as its look changes, the width and height
    of the tray bar as rows join or leave, the color of a lamp on the map), all on small elements.
    The dot grid is a canvas drawn with its 2D context, not animated CSS.
@@ -246,6 +250,7 @@ All helpers live in `src/kitden/web/static/js/motion.js`.
 | Landing | `landRows` (gateway.js), `landOwners` and `landStage` (map.js), motion-spec M4 step 6: after a verified Apply all the map shows each row's change in tray order, 60 ms apart, as a Map draw: a preview block turns into its server where it shows and glides to its place, a leaving link goes, a new link draws in. Each part of the map belongs to the row that draws it (`row`, `landsWith`), or to the row of its links, its parent or the block it turns into; a part of no row changes with the first. An added server's preview turns into the server in the same way. Undo all plays the rows back in reverse, 120 ms apart (`undone`, tray.js); a server added since the page loaded shrinks back into the gateway (180 ms IN3) as its preview would, and a link that comes back draws in over 480 ms `--calm` (`draw(…, { motion: "undo" })`); any other Undo moves at once with that draw-in. Any other draw of the map meanwhile shows it as it is now. Reduced motion lands it all at once | Gateway map |
 | Details step | `stepTo(content, "fwd" \| "back")` (panel.js): the parts go out together 18 px left in 130 ms ease-in, the new ones come from 22 px right in 220 ms `--calm`; back is the mirror. In the drawer the new parts are there at once | A choice inside one panel |
 | Shake | `shake(node)` (motion.js): 0, −7, 6, −3, 0 px sideways in 380 ms ease-out; nothing under reduced motion | A tray bar that failed or refused an add |
+| Logo | `startLogo(brand)` (logo.js), 400 ms after the page opens: the door's light rises in 500 ms `--calm`, holds, and goes out over the last 700 ms; from 200 ms twelve puffs leave the d 110 ms apart, each on one 2600 ms linear path up .4 em and right .9 em, born at 70 % of its size and growing to 140 %, faint (0 → .31 → .22 → 0) and a little blurred; the whole gesture ends at 4210 ms. Nothing under reduced motion | The rail's logo: when the page opens, and when the pointer or focus comes to it, never twice at once |
 
 ### Conventions
 
