@@ -381,6 +381,17 @@ test('a hook, a client, a link and a marketplace have their own Details', async 
   assert.ok(texts(drawer).includes('Claude Code loads superpowers in every project.'));
 });
 
+test("a Cursor plugin's link has no ×, and its Details say where to remove it", () => {
+  const ui = plugin('p9', 'ui-kit', { by: { cursor: 'on' }, items: { cursor: ['cu-ui'] }, can: { add: [], off: [], remove: [] } });
+  const cursor = { id: 'client:cursor', kind: 'client', client: 'cursor', name: 'Cursor' };
+  const link = details.connectionCard({ from: cursor, to: { id: 'item:p9', kind: 'plugin', name: 'ui-kit', item: ui } }, c());
+  assert.equal(link.why, 'Cursor loads ui-kit in every project. Cursor keeps its plugins in its own database. Remove it in Cursor: Customize → Plugins.');
+  // A plugin Claude Code removes has no such line.
+  const claude = { id: 'client:claude_code', kind: 'client', client: 'claude_code', name: 'Claude Code' };
+  const other = details.connectionCard({ from: claude, to: { id: 'item:p2', kind: 'plugin', name: 'superpowers', item: SUPERPOWERS } }, c());
+  assert.equal(other.why, 'Claude Code loads superpowers in every project.');
+});
+
 test('a project switch keeps an open plugin and its Details, or lets go when it is gone', async () => {
   await reset();
   const box = await showMap();

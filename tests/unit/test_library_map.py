@@ -313,17 +313,48 @@ def test_each_item_says_what_details_can_offer(tmp_path):
     items = _items(_map(home))
     # superpowers: Codex can still add it; Claude Code can turn it off. Cursor is never offered:
     # it gets plugins through Claude Code, and has no switch of its own.
-    assert items["superpowers"]["can"] == {"add": ["codex"], "off": ["claude_code"]}
+    assert items["superpowers"]["can"] == {
+        "add": ["codex"],
+        "off": ["claude_code"],
+        "remove": ["claude_code"],
+    }
     # Off already, and a bundled plugin no marketplace offers: nothing to add, only Codex's switch.
-    assert items["pr-review"]["can"] == {"add": ["codex"], "off": []}
-    assert items["browser"]["can"] == {"add": [], "off": ["codex"]}
-    assert items["ui-kit"]["can"] == {"add": [], "off": []}
+    assert items["pr-review"]["can"] == {"add": ["codex"], "off": [], "remove": []}
+    assert items["browser"]["can"] == {"add": [], "off": ["codex"], "remove": ["codex"]}
+    assert items["ui-kit"]["can"] == {"add": [], "off": [], "remove": []}
     # A skill: each client that loads its own copy has a rule; Cursor has none.
-    assert items["brandkit"]["can"] == {"add": ["codex"], "off": ["claude_code"]}
-    assert items["code-review"]["can"] == {"add": ["claude_code"], "off": ["codex"]}
-    assert items["ui-polish"]["can"] == {"add": ["claude_code", "codex"], "off": []}
+    assert items["brandkit"]["can"] == {
+        "add": ["codex"],
+        "off": ["claude_code"],
+        "remove": ["claude_code"],
+    }
+    assert items["code-review"]["can"] == {
+        "add": ["claude_code"],
+        "off": ["codex"],
+        "remove": ["codex"],
+    }
+    assert items["ui-polish"]["can"] == {
+        "add": ["claude_code", "codex"],
+        "off": [],
+        "remove": ["cursor"],
+    }
     # A hook has no switch.
     assert items["PreToolUse: Bash"]["can"] == {}
+
+
+def test_each_item_says_which_clients_can_remove_their_own_entry(tmp_path):
+    # A link's x removes or turns off. A plugin's file entry and a skill's own folder can be
+    # removed; Cursor's plugin (it gets it through Claude Code) and a skill read through another
+    # client's folder cannot.
+    home = build_demo_home(tmp_path, "medium")
+    items = _items(_map(home))
+    assert items["superpowers"]["can"]["remove"] == ["claude_code"]
+    assert items["browser"]["can"]["remove"] == ["codex"]
+    assert items["ui-kit"]["can"]["remove"] == []
+    assert items["pr-review"]["can"]["remove"] == []
+    assert items["ui-polish"]["can"]["remove"] == ["cursor"]
+    assert items["shared-style"]["can"]["remove"] == []
+    assert "remove" not in items["PreToolUse: Bash"]["can"]
 
 
 def test_a_skill_says_which_clients_can_take_a_copy_cursor_too(tmp_path):
@@ -332,8 +363,16 @@ def test_a_skill_says_which_clients_can_take_a_copy_cursor_too(tmp_path):
     home = build_demo_home(tmp_path, "medium")
     items = _items(_map(home))
     assert items["brandkit"]["skill"] == "brandkit@skills"
-    assert items["brandkit"]["can"] == {"add": ["codex"], "off": ["claude_code"]}
-    assert items["ui-polish"]["can"] == {"add": ["claude_code", "codex"], "off": []}
+    assert items["brandkit"]["can"] == {
+        "add": ["codex"],
+        "off": ["claude_code"],
+        "remove": ["claude_code"],
+    }
+    assert items["ui-polish"]["can"] == {
+        "add": ["claude_code", "codex"],
+        "off": [],
+        "remove": ["cursor"],
+    }
     # A plugin's can stays as it was: never Cursor.
     assert items["superpowers"]["can"]["add"] == ["codex"]
     inventory, adapters = _read(home)

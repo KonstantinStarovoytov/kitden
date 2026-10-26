@@ -6,10 +6,11 @@
 import { button, el, icon, joinWords, plural } from "./dom.js";
 import { focusAfterStep, headTile, iconTile, lamp, openCard, pressOnce, projectChecklist, stepHead, tickRow, tiles } from "./gateway-details.js";
 import { addBody, lampOf, libraryThing, onLibrarySelect } from "./library-map.js";
+import { offBodies, skillOffBodies, skillRuleWaits } from "./library-rules.js";
 import { closePanel, drawQuietly, followTray, isPanelOpen, keepFrom, panelState, previewButton, review, stepTo, swapContent, technical } from "./panel.js";
 import { ALL_PROJECTS, CLIENT_NAMES, CLIENT_ORDER, folderName, mark, menuItems, ORIGIN_WORDS, STATE_WORDS } from "./parts.js";
 import { data, projectPath, state } from "./store.js";
-import { inTray, keyFor, tray } from "./tray.js";
+import { inTray, keyFor } from "./tray.js";
 
 const IN_PREVIEW = "In preview";
 const OFF_ALL = "Turn off for all projects…";
@@ -30,6 +31,9 @@ const INSIDE_WORDS = [["skills", "skill", "skills"], ["commands", "command", "co
 const KIND_ICONS = { plugin: "puzzle", skill: "sparkles", hook: "webhook" };
 const KIND_WORDS = { plugin: "Plugin", skill: "Skill", hook: "Hook" };
 const LAMP_WORDS = { on: STATE_WORDS.on, off: STATE_WORDS.off, unk: STATE_WORDS.unk };
+
+// The same rows a link's × adds (library-rules.js).
+export { offBodies, skillOffBodies, skillRuleWaits };
 
 const inOrder = (clients) => [...clients].sort((a, b) => CLIENT_ORDER.indexOf(a) - CLIENT_ORDER.indexOf(b));
 const names = (clients) => inOrder(clients).map((client) => CLIENT_NAMES[client] || client);
@@ -101,18 +105,6 @@ function techOf(rows) {
 
 // The tray rows -----------------------------------------------------------------------------------
 
-// Turn it off for all projects: one row per client that loads its own copy and has a switch (`can.off`,
-// library_map.py): a plugin's own switch, or a skill rule. Its first item is then the user's own
-// entry; where the project's entry decides, `can.off` leaves the client out.
-export function offBodies(item) {
-  const clients = (item.can && item.can.off) || [];
-  return clients.map((client) => {
-    const target = item.items[client][0];
-    if (item.kind === "plugin") return { action: "plugin.disable", targets: [{ item: target }], params: {} };
-    return { action: "skill.rule", targets: [{ client, item: target }], params: { scope: "all", off: true } };
-  });
-}
-
 // A skill rule in one project, for Claude Code (a skill's skillOverrides, a plugin's
 // enabledPlugins in the project's local settings).
 export function projectBody(item, project) {
@@ -143,25 +135,6 @@ export function skillHereBody(item, c) {
 // settings hold no skillOverrides (`rules.some`) and some project can take the rule.
 export function offersSome(item, c) {
   return Boolean(shared(item) && (item.items || {}).claude_code && c.rules.some && Object.values(c.rules.projects).includes("ok"));
-}
-
-// Whether the tray holds a Claude Code skill rule of `scope` ("all" or "project"). Claude Code may
-// not merge skillOverrides across files, so the server never takes one in the user file and one in
-// a project's in one tray (changes/batch.py); the page offers neither while the other waits. A
-// plugin's rule in one project is enabledPlugins, not skillOverrides: it does not count.
-export function skillRuleWaits(scope, answer) {
-  const plugins = new Set(answer.groups.flatMap((group) => group.items).filter((item) => item.kind === "plugin").flatMap((item) => (item.items || {}).claude_code || []));
-  return tray.rows.some(({ body }) => {
-    const target = (body.targets || [])[0] || {};
-    return body.action === "skill.rule" && (body.params || {}).scope === scope && target.client === "claude_code" && !plugins.has(target.item);
-  });
-}
-
-// "Turn off for all projects…" for a skill: one row per client that can, without Claude Code's while
-// a one-project skill rule waits in the tray.
-export function skillOffBodies(item, answer) {
-  const blocked = skillRuleWaits("project", answer);
-  return offBodies(item).filter((body) => !(blocked && body.targets[0].client === "claude_code"));
 }
 
 // A button that adds every row of `bodies` (a list, or a function that gives the list now) to the
@@ -304,6 +277,10 @@ export function clientCard(id, c) {
   return { kind: "Client", title: client.name, id: client.words, tile: headTile(mark(id)), list: itemList(head, items.map((item) => ({ kind: item.kind, name: item.name, line: itemLine(item) }))) };
 }
 
+// Why a Cursor plugin's link has no ×: Cursor keeps its plugins in its own app. The words are
+// clients/cursor.py CURSOR_HINT (checked 2026-10-22, cursor.com/docs/plugins).
+const CURSOR_PLUGINS = "Cursor keeps its plugins in its own database. Remove it in Cursor: Customize → Plugins.";
+
 // Where a link's change would be written, in words, never a path.
 const WRITTEN = { plugin: (owner) => `${owner}'s settings`, skill: (owner) => `${owner}'s skills folder`, hook: (owner) => `${owner}'s settings` };
 
@@ -322,7 +299,8 @@ export function connectionCard({ from, to }, c) {
   const owner = (item.through || {})[from.client];
   const ownerName = owner ? CLIENT_NAMES[owner] : client;
   const facts = [{ label: "From", value: from.name }, { label: "To", value: to.name }, { label: "State", value: on, text: STATE_WORDS.on }, { label: "Written in", value: WRITTEN[item.kind](ownerName) }];
-  const why = owner ? `${client} loads ${item.name} through ${ownerName}'s folder.` : `${client} loads ${item.name} ${c.project ? `in ${c.folder}` : "in every project"}.`;
+  const loads = owner ? `${client} loads ${item.name} through ${ownerName}'s folder.` : `${client} loads ${item.name} ${c.project ? `in ${c.folder}` : "in every project"}.`;
+  const why = item.kind === "plugin" && from.client === "cursor" && !owner ? `${loads} ${CURSOR_PLUGINS}` : loads;
   return { kind: "Connection", title, id: owner ? `Through ${ownerName}` : "Loaded by the client", facts, why };
 }
 

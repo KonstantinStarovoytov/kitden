@@ -814,3 +814,201 @@ test('a redraw in the middle of a drag keeps the block with the pointer', async 
   }
 });
 
+
+// The × of a link (library-notes §5, decisions "Link ×"). It only adds a row to the tray.
+const { setBusy } = await import('../../src/kitden/web/static/js/store.js');
+const { linkRemoval } = await import('../../src/kitden/web/static/js/library-rules.js');
+
+// Superpowers: Claude Code removes its own entry, Cursor reads it through Claude Code (faint).
+// browser: Codex's own. ui-kit: Cursor's own plugin. release-notes: a skill Claude Code and Codex
+// load on their own. ui-polish: a skill in Cursor's own folder. calendar: Codex is not sure.
+const X_SAMPLE = {
+  ...MEDIUM,
+  groups: [
+    { key: 'marketplace:demo-market', name: 'demo-market', icon: 'store', kind: 'marketplace', items: [
+      plugin('p2', 'superpowers', { by: { claude_code: 'on', cursor: 'on' }, through: { cursor: 'claude_code' }, items: { claude_code: ['cc-sp'], cursor: ['cu-sp'] }, inside: { ...none, skills: ['brainstorm'] }, count: 1, can: { add: ['codex'], off: ['claude_code'], remove: ['claude_code'] } }),
+      plugin('p5', 'browser', { by: { codex: 'on' }, items: { codex: ['cx-br'] }, can: { add: [], off: ['codex'], remove: ['codex'] } }),
+      plugin('p6', 'ui-kit', { by: { cursor: 'on' }, items: { cursor: ['cu-ui'] }, can: { add: [], off: [], remove: [] } }),
+    ] },
+    { key: 'other', name: 'Other plugins', icon: 'puzzle', kind: 'other', items: [plugin('p4', 'calendar', { by: { codex: 'unknown' }, items: { codex: ['cx-cal'] }, can: { add: [], off: [], remove: [] } })] },
+    { key: 'skills', name: 'Your skills', icon: 'user-round', kind: 'skills', items: [
+      own('s1', 'release-notes', 'skill', { by: { claude_code: 'on', codex: 'on' }, items: { claude_code: ['cc-rn'], codex: ['cx-rn'] }, can: { add: [], off: ['claude_code', 'codex'], remove: ['claude_code', 'codex'] } }),
+      own('s2', 'ui-polish', 'skill', { by: { cursor: 'on' }, items: { cursor: ['cu-pol'] }, can: { add: [], off: [], remove: ['cursor'] } }),
+    ] },
+    { key: 'settings', name: 'Your settings', icon: 'settings', kind: 'settings', items: [own('h1', 'PreToolUse: Bash', 'hook', { by: { claude_code: 'on' }, items: { claude_code: ['cc-h'] }, can: {} })] },
+  ],
+};
+
+// Pointing at a link, as the page hears it: its hit takes the pointer, and the × shows. Delete is
+// the key the hit hears.
+function linkX(sample = X_SAMPLE) {
+  const { box } = showMap(sample);
+  settle();
+  const crossOf = () => walk(box).find((n) => n.classList.contains('link-x'));
+  const x = {
+    box,
+    hit: (id) => node(box, `link:${id}`),
+    // The words the × would say, and whether there is one at all.
+    tip: (id) => x.hit(id).getAttribute('aria-description'),
+    point(id) {
+      x.hit(id).listeners.pointerover[0]();
+      return crossOf();
+    },
+    press(id) {
+      const cross = x.point(id);
+      assert.equal(cross.hidden, false, `${id} shows a ×`);
+      cross.listeners.click[0]();
+    },
+    del(id, extra = {}) {
+      const event = { key: 'Delete', repeat: false, altKey: false, ctrlKey: false, metaKey: false, shiftKey: false, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, ...extra };
+      x.hit(id).listeners.keydown[0](event);
+      return event;
+    },
+    leaving: () => walk(box).filter((n) => /^link /.test(n.className) && n.classList.contains('leaving')).length,
+  };
+  return x;
+}
+const bodies = () => tray.rows.map((r) => r.body);
+
+test("a client→plugin link's × adds plugin.remove for that client", async () => {
+  const x = linkX();
+  try {
+    assert.equal(x.tip('client:claude_code>item:p2'), 'Remove superpowers from Claude Code');
+    assert.equal(x.hit('client:claude_code>item:p2').getAttribute('aria-keyshortcuts'), 'Delete');
+    assert.equal(x.point('client:claude_code>item:p2').getAttribute('aria-label'), 'Remove superpowers from Claude Code');
+    assert.equal(x.tip('client:codex>item:p5'), 'Remove browser from Codex');
+    x.press('client:claude_code>item:p2');
+    assert.deepEqual(bodies(), [{ action: 'plugin.remove', targets: [{ item: 'cc-sp' }], params: {} }]);
+    assert.equal(tray.rows[0].icon, 'x');
+    // Nothing is written: the row waits in the tray, and its link is drawn leaving.
+    await flush();
+    assert.equal(x.leaving(), 1);
+    assert.equal(x.tip('client:claude_code>item:p2'), 'Take it out of the preview');
+    // The × again takes the row out, and the link is whole again.
+    x.press('client:claude_code>item:p2');
+    await flush();
+    assert.equal(tray.rows.length, 0);
+    assert.equal(x.leaving(), 0);
+    assert.equal(x.tip('client:claude_code>item:p2'), 'Remove superpowers from Claude Code');
+  } finally {
+    await cancelTray();
+  }
+});
+
+test("a client→skill link's × turns it off in Claude Code or Codex, and removes Cursor's own copy", async () => {
+  const x = linkX();
+  try {
+    assert.equal(x.tip('client:claude_code>item:s1'), 'Turn off release-notes in Claude Code');
+    assert.equal(x.tip('client:codex>item:s1'), 'Turn off release-notes in Codex');
+    assert.equal(x.tip('client:cursor>item:s2'), 'Remove ui-polish from Cursor');
+    x.press('client:codex>item:s1');
+    x.press('client:cursor>item:s2');
+    assert.deepEqual(bodies(), [
+      { action: 'skill.rule', targets: [{ client: 'codex', item: 'cx-rn' }], params: { scope: 'all', off: true } },
+      { action: 'skill.remove', targets: [{ item: 'cu-pol' }], params: {} },
+    ]);
+    // The same rows as Details' "Turn off for all projects…".
+    const { offBodies } = await import('../../src/kitden/web/static/js/library-details.js');
+    assert.deepEqual(bodies()[0], offBodies(X_SAMPLE.groups[2].items[0])[1]);
+    await flush();
+    // The row of Details is the same row: the × says so.
+    assert.equal(x.tip('client:codex>item:s1'), 'Take it out of the preview');
+  } finally {
+    await cancelTray();
+  }
+});
+
+test("Claude Code's skill × waits for a skill rule of a project in the tray, as Details does", async () => {
+  const x = linkX();
+  try {
+    addToTray({ action: 'skill.rule', targets: [{ client: 'claude_code', item: 'cc-rn' }], params: { scope: 'project', project: 'atlas', off: true } });
+    await flush();
+    assert.equal(x.tip('client:claude_code>item:s1'), null);
+    assert.equal(x.tip('client:codex>item:s1'), 'Turn off release-notes in Codex');
+  } finally {
+    await cancelTray();
+  }
+});
+
+test("a preview link's × takes the row out", async () => {
+  const x = linkX();
+  try {
+    addToTray(addBody(X_SAMPLE.groups[0].items[0], 'codex'));
+    await flush();
+    assert.equal(x.tip('client:codex>item:p2'), 'Take it out of the preview');
+    x.press('client:codex>item:p2');
+    await flush();
+    assert.equal(tray.rows.length, 0);
+    assert.equal(node(x.box, 'link:client:codex>item:p2'), null);
+  } finally {
+    await cancelTray();
+  }
+});
+
+test('plugin→inside, Cursor plugin, faint, Unknown and hook links have no ×', async () => {
+  const x = linkX();
+  try {
+    // The Unknown client has no link; a Cursor plugin, a faint line and a hook link have no ×.
+    assert.equal(node(x.box, 'link:client:codex>item:p4'), null);
+    for (const id of ['client:cursor>item:p6', 'client:cursor>item:p2', 'client:claude_code>item:h1']) {
+      assert.ok(x.hit(id), id);
+      assert.equal(x.tip(id), null, id);
+      assert.equal(x.hit(id).getAttribute('aria-keyshortcuts'), null, id);
+      x.hit(id).listeners.pointerover[0]();
+      assert.ok(walk(x.box).filter((n) => n.classList.contains('link-x')).every((n) => n.hidden), id);
+    }
+    // A plugin's inside link: the plugin opens, its link takes the pointer and says nothing.
+    node(x.box, 'block:item:p2').listeners.click[0]();
+    await flush();
+    const inside = 'item:p2>part:p2:skills:brainstorm';
+    assert.ok(x.hit(inside));
+    assert.equal(x.tip(inside), null);
+    // Delete on a link with no × is left to the page.
+    assert.equal(x.del('client:cursor>item:p6').defaultPrevented, false);
+    assert.equal(tray.rows.length, 0);
+    // None of them can be removed from the helper either.
+    assert.equal(linkRemoval(X_SAMPLE.groups[0].items[2], 'cursor', X_SAMPLE), null);
+    assert.equal(linkRemoval(X_SAMPLE.groups[0].items[0], 'cursor', X_SAMPLE), null);
+  } finally {
+    await cancelTray();
+  }
+});
+
+test('Delete on a focused link does what its × does', async () => {
+  const x = linkX();
+  try {
+    // A held key or a key with a modifier is not a press.
+    for (const extra of [{ repeat: true }, { metaKey: true }]) {
+      x.del('client:codex>item:p5', extra);
+      assert.equal(tray.rows.length, 0);
+    }
+    const event = x.del('client:codex>item:p5');
+    assert.equal(event.defaultPrevented, true);
+    assert.deepEqual(bodies(), [{ action: 'plugin.remove', targets: [{ item: 'cx-br' }], params: {} }]);
+    await flush();
+    // Delete again takes the row out.
+    x.del('client:codex>item:p5');
+    await flush();
+    assert.equal(tray.rows.length, 0);
+  } finally {
+    await cancelTray();
+  }
+});
+
+test('while a change is written the × waits and removes nothing', async () => {
+  const x = linkX();
+  try {
+    setBusy(true);
+    const cross = x.point('client:codex>item:p5');
+    assert.equal(cross.getAttribute('aria-disabled'), 'true');
+    assert.equal(cross.title, 'Another change is being written.');
+    cross.listeners.click[0]();
+    x.del('client:codex>item:p5');
+    assert.equal(tray.rows.length, 0);
+    setBusy(false);
+    assert.equal(x.point('client:codex>item:p5').getAttribute('aria-disabled'), null);
+  } finally {
+    setBusy(false);
+    await cancelTray();
+  }
+});

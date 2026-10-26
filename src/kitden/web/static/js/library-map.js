@@ -3,16 +3,17 @@
 // (views/library_map.py) with the map every map page shares (map.js, map-view.js). Nothing here
 // writes: a press only selects, unfolds and lights a path; Details (library-details.js) hear it. A
 // plugin or a skill drags onto a client (map-drag.js), which only adds a row to the tray.
-import { $, cutName, el, icon, joinWords, pageWaits, plural, reportError } from "./dom.js";
+import { $, cutName, el, icon, joinWords, pageWaits, plural, reportError, WAITS } from "./dom.js";
 import { findIn, layoutTree, linkKey, litFor, litFrom, pagesNow, pagesWith, turnPage, turnWords } from "./map.js";
 import { clientAt, covered, follow, ON_CLIENT, pointOf, startDrag } from "./map-drag.js";
 import { glidePill, goSwitched, leaveThen } from "./map-page.js";
+import { linkRemoval } from "./library-rules.js";
 import { mapView } from "./map-view.js";
 import { afterOldPage, rise, riseHead, shake } from "./motion.js";
 import { banner, CLIENT_NAMES, folderName, mark, ORIGIN_WORDS, scopeBar, setHint, skeleton, STATE_WORDS } from "./parts.js";
 import { busy, current, currentError, projectPath, retry, state, viewMode } from "./store.js";
 import { say } from "./toast.js";
-import { addToTray, onTray, takeOut, tray } from "./tray.js";
+import { addToTray, inTray, keyFor, onTray, takeOut, tray } from "./tray.js";
 
 const LEDE = "Follow the source. Connect only what you need.";
 const MAP_HINT = "Point at a link for its Details · click a plugin to see what it holds · drag a plugin onto a client to add it there";
@@ -48,6 +49,9 @@ const CURSOR_PLUGINS = "Cursor gets plugins through Claude Code";
 const WAITS_ALREADY = "Already in preview";
 // A block whose add waits in the tray: a press takes it out.
 const IN_PREVIEW = "In preview. Click to take it out.";
+// What the × of a link that the tray draws says, and the × while a change is written.
+const TAKE_OUT = "Take it out of the preview";
+const OWN_WAITS = "Your change is being written.";
 
 // How many blocks the Plugins and skills column holds: plugins, skills and hooks.
 const itemCount = (answer) => answer.groups.reduce((n, group) => n + group.items.length, 0);
@@ -185,6 +189,19 @@ export function withWaiting(model, rows, project) {
   return model;
 }
 
+// A link whose removal or turning off waits in the tray is drawn leaving, and names its row: a press
+// on it, or its ×, takes the row out. `answer` is the /api/library-map answer the model is from.
+export function withLeaving(model, rows, answer) {
+  const byId = new Map(model.blocks.map((b) => [b.id, b]));
+  for (const link of model.links.filter((l) => l.kind === "on")) {
+    const [from, to] = [byId.get(link.from), byId.get(link.to)];
+    const change = from && from.client && to && to.item && linkRemoval(to.item, from.client, answer);
+    const row = change && rows.find((r) => r.key === keyFor(change.body));
+    if (row) Object.assign(link, { leaving: true, row: row.key });
+  }
+  return model;
+}
+
 // What a block shows before its name: a client's tile, a plugin's puzzle tile.
 function tile(block) {
   if (block.kind === "client") return mark(block.client);
@@ -276,7 +293,8 @@ export function renderLibraryMap(main, { head, again = false, switched = false }
 // answer has them.
 function keepWhatShows(answer) {
   onMap.answer = answer;
-  onMap.model = withWaiting(libraryTree(answer), rowsShown(tray), state.project || "");
+  const rows = rowsShown(tray);
+  onMap.model = withLeaving(withWaiting(libraryTree(answer), rows, state.project || ""), rows, answer);
   const ids = new Set([...onMap.model.blocks.map((block) => block.id), ...onMap.model.links.map(linkKey)]);
   onMap.open = new Set([...onMap.open].filter((id) => ids.has(id)));
   if (onMap.selected && !ids.has(onMap.selected)) onMap.selected = null;
@@ -347,16 +365,59 @@ function newMap() {
   return view;
 }
 
-// Every link opens its Connection Details; none has a × yet (Phase 6B).
-const LINKS = { canHit: () => true, tip: () => "", waits: () => false, onClick: pressLink, onRemove: () => {} };
+// Every link opens its Connection Details. A link has a × while the map can add its change to the
+// tray (changeOf), or its change waits there: the × then takes it out. A link with none stays read
+// only: it keeps its Details and leaves Delete to the page.
+const LINKS = { canHit: () => true, tip: linkTip, waits: linksWait, onClick: pressLink, onRemove: removeLink };
+
+// The tray row a link draws (a preview, or leaving), by its key; null for any other link. The
+// layout's links do not carry the row, the map's do.
+function rowOfLink(link) {
+  const drawn = onMap.model && onMap.model.links.find((l) => linkKey(l) === linkKey(link));
+  return (drawn && drawn.row) || null;
+}
+
+// What a link's × would add: from a client to a plugin or skill that loads there on its own. A
+// faint line, a Cursor plugin, a hook and a plugin's inside items have none.
+function changeOf(link) {
+  const byId = onMap.model && new Map(onMap.model.blocks.map((b) => [b.id, b]));
+  const [from, to] = byId ? [byId.get(link.from), byId.get(link.to)] : [];
+  if (link.kind !== "on" || !from || from.kind !== "client" || !to || !to.item) return null;
+  return linkRemoval(to.item, from.client, onMap.answer);
+}
+
+// What a link's × says; "" for no ×. A change already in the tray is taken out.
+function linkTip(link) {
+  if (rowOfLink(link)) return TAKE_OUT;
+  const change = changeOf(link);
+  if (!change) return "";
+  return inTray(keyFor(change.body)) ? TAKE_OUT : change.tip;
+}
+
+// The × waits while a change is written, and says why.
+function linksWait() {
+  return tray.phase === "applying" || tray.phase === "applied" ? OWN_WAITS : busy.change && WAITS;
+}
+
+// The × of a link, or Delete on it: a row it draws, or its own change already in the tray, is taken
+// out; any other change is added to the tray.
+function removeLink(link) {
+  if (linksWait()) return;
+  const row = rowOfLink(link);
+  const change = row ? null : changeOf(link);
+  let done = null;
+  if (row) done = takeOut(row);
+  else if (change) done = inTray(keyFor(change.body)) ? takeOut(keyFor(change.body)) : addToTray(change.body);
+  if (done) done.catch(reportError);
+}
 
 // A press on a link selects it: its two ends light and its Details open. A second press lets go.
-// A preview link's press takes its row out instead.
+// A link the tray draws (a preview, or leaving) is taken out of it instead.
 function pressLink(link) {
   const key = linkKey(link);
-  const preview = onMap.model.links.find((l) => l.row && linkKey(l) === key);
-  if (preview) {
-    takeOutWaiting([preview.row]);
+  const row = rowOfLink(link);
+  if (row) {
+    takeOutWaiting([row]);
     return;
   }
   if (onMap.selected === key) {

@@ -76,6 +76,41 @@ def test_removing_a_claude_code_plugin_runs_uninstall_and_undo_installs_it_again
     assert _settings(client)["enabledPlugins"][SUPERPOWERS] is True
 
 
+def _tray_row(row_id, title, item_id):
+    return {
+        "id": row_id,
+        "kind": "plugin.remove",
+        "title": title,
+        "targets": [{"item": item_id}],
+        "params": {},
+    }
+
+
+def test_the_review_of_a_claude_code_removal_in_the_tray_says_its_saved_options_are_not_back(
+    client,
+):
+    # A link's x on the Library map adds this row to the tray. The tray's one review says what
+    # Undo cannot bring back, only for the row that removes a Claude Code plugin.
+    claude = _tray_row("a", "Remove superpowers from Claude Code", _item(client, SUPERPOWERS)["id"])
+    codex = _tray_row("b", "Remove browser from Codex", _item(client, BROWSER, "codex")["id"])
+    only_codex = client.post("/api/batch/preview", json={"requests": [codex]}, headers=POST)
+    assert only_codex.status_code == 200, only_codex.text
+    assert only_codex.json()["undo_note"] is None
+    client.post(f"/api/changes/{only_codex.json()['id']}/cancel", headers=POST)
+    both = client.post("/api/batch/preview", json={"requests": [claude, codex]}, headers=POST)
+    assert both.status_code == 200, both.text
+    change = both.json()
+    assert change["undo_note"] == REMOVE_NOTE
+    assert [r["undo_note"] for r in change["rows"]] == [REMOVE_NOTE, None]
+    assert client.post(f"/api/changes/{change['id']}/apply", headers=POST).json()["state"] == (
+        "verified"
+    )
+    assert SUPERPOWERS not in _settings(client)["enabledPlugins"]
+    undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
+    assert undone["state"] == "undone", undone.get("error")
+    assert _settings(client)["enabledPlugins"][SUPERPOWERS] is True
+
+
 def test_cursor_loses_a_claude_code_plugin_it_only_imports(client):
     added = _preview(client, LINTER, ["claude_code"]).json()
     assert client.post(f"/api/changes/{added['id']}/apply", headers=POST).json()["state"] == (

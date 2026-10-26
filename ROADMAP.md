@@ -48,7 +48,9 @@ What Kitden does today and what comes next. Ideas and bugs:
   now reads Claude Code's local project settings and its `skillOverrides`, so a skill or plugin
   turned off in one project shows Off there. Drag a plugin or a skill onto a client to add it
   there for all projects: the client lights, or the tip says why it cannot take it. The add waits
-  in preview as a dashed link, and a click on it takes it out.
+  in preview as a dashed link, and a click on it takes it out. A link's × removes a plugin from a
+  client, turns a skill off in Claude Code or Codex, or removes Cursor's own copy of a skill; it
+  only adds a row to the preview, and the link shows it leaving.
 - **Library Details:** a click on the Library map opens Details for a plugin, a thing inside it, a
   skill, a hook, a client, a link or a marketplace. From the Library a plugin can be turned off for
   all projects or in this project, and added to another client; a skill can be turned off for all

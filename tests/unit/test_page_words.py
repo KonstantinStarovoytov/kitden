@@ -3,6 +3,7 @@
 import re
 from pathlib import Path
 
+from kitden.clients.cursor import CURSOR_HINT
 from kitden.views.words import (
     AFTER_WORDS,
     CODEX_NO_PROJECT,
@@ -2825,3 +2826,41 @@ def test_a_plugin_or_skill_drags_onto_a_client():
     assert "color: var(--route);" in rule(
         'div.map .block:is(.plugin, .skill)[data-state="preview"] .block-meta'
     )
+
+
+def test_a_library_link_x_removes_or_turns_off():
+    # decisions "Link ×" (library-notes §5): the × words, the rows, and what has no ×.
+    rules = script("library-rules.js")
+    for words in (
+        "`Remove ${name} from ${who}`",
+        "`Turn off ${name} in ${who}`",
+        'action: "plugin.remove", targets: [{ item: target }], params: {}',
+        'action: "skill.remove", targets: [{ item: target }], params: {}',
+        "skillOffBodies(item, answer).find(",
+        'action: "skill.rule", targets: [{ client, item: target }], params: { scope: "all", ',
+    ):
+        assert words in rules, words
+    # Cursor's plugin has no x (D26); a Cursor skill is removed, not turned off.
+    assert 'item.kind === "plugin" && (can.remove || []).includes(client)' in rules
+    assert 'if (client === "cursor") {' in rules
+    text = script("library-map.js")
+    for words in (
+        'const TAKE_OUT = "Take it out of the preview";',
+        'const OWN_WAITS = "Your change is being written.";',
+        "const LINKS = { canHit: () => true, tip: linkTip, waits: linksWait, onClick: pressLink, "
+        "onRemove: removeLink };",
+        "inTray(keyFor(change.body)) ? TAKE_OUT : change.tip",
+        "Object.assign(link, { leaving: true, row: row.key })",
+        "WAITS",
+    ):
+        assert words in text, words
+    # The Details of a Cursor plugin's link say where to remove it (words of CURSOR_HINT, checked
+    # 2026-10-22).
+    details = script("library-details.js")
+    assert (
+        '"Cursor keeps its plugins in its own database. Remove it in Cursor: '
+        'Customize → Plugins."' in details
+    )
+    assert "Customize → Plugins." in CURSOR_HINT
+    # The rows Details' Turn off adds live with the x's, in one place.
+    assert "export function offBodies(" in rules and "export function offBodies(" not in details

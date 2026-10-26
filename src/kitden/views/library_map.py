@@ -9,7 +9,7 @@ and follow the plugin, so the map never says "N of M on". Paths are only under `
 from pathlib import Path
 
 from kitden.changes.actions import CLIENT_WORDS, skill_rules_in
-from kitden.clients.base import PLUGIN_DISABLE
+from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_REMOVE, SKILL_REMOVE
 from kitden.model import ClientStatus, Item, ItemKind, Scope
 from kitden.views.catalog import catalog, installed_inside
 from kitden.views.effective import in_project
@@ -136,7 +136,8 @@ def _can(row: Row, by: dict, through: dict, ids: dict, by_id, offer, found, proj
     the plugin and lack it (never Cursor: it gets plugins through Claude Code), or that can take a
     copy of the skill (Cursor too, when the skill catalog gives it a route), and `off`, the
     clients that load their own copy and can turn it off for all projects (a plugin's switch, or a
-    skill rule).
+    skill rule), and `remove`, the clients whose own entry (the deciding one, also a project's)
+    Kitden can remove: a plugin's file entry, or a skill's own folder. A faint link has none.
     `off` acts on the user's own entry, the client's first item: a client where the project's own
     entry or rule decides is left out (Details offers "Turn off in this project…" there). A hook
     has no switch."""
@@ -147,15 +148,24 @@ def _can(row: Row, by: dict, through: dict, ids: dict, by_id, offer, found, proj
         and c not in through
         and not any(project and _decides_here(by_id[i], project) for i in ids[c])
     ]
+    on = [c for c, state in by.items() if state == "on" and c not in through]
+
+    def removable(action: str) -> list[str]:
+        return [c for c in on if action in by_id[ids[c][0]].actions]
+
     if row.kind is ItemKind.PLUGIN:
         routes, installed = (offer["routes"], offer["installed"]) if offer else ({}, ())
         add = [c for c in ADDS if c in found and c in routes and c not in installed]
         off = [c for c in own if PLUGIN_DISABLE in by_id[ids[c][0]].actions]
-        return {"add": add, "off": off}
+        return {"add": add, "off": off, "remove": removable(PLUGIN_REMOVE)}
     if row.kind is ItemKind.SKILL:
         routes = offer["routes"] if offer else {}
         add = [c for c in COLUMNS if c in found and c in routes]
-        return {"add": add, "off": [c for c in RULES if c in own]}
+        return {
+            "add": add,
+            "off": [c for c in RULES if c in own],
+            "remove": removable(SKILL_REMOVE),
+        }
     return {}
 
 
