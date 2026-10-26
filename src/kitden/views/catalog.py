@@ -13,8 +13,10 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 from kitden.clients.base import ClientAdapter
-from kitden.model import ItemKind
+from kitden.clients.entries import gateway_entry, reads_elsewhere
+from kitden.model import ItemKind, Scope
 from kitden.redact import redact
+from kitden.views.setup_server import CLIENT_WORDS
 
 # Clients whose command line installs plugins (Cursor keeps its plugins in the account).
 INSTALLERS = ("claude_code", "codex")
@@ -89,12 +91,18 @@ def _names(folder: Path, pattern: str) -> list[str]:
     return sorted(p.parent.name if p.name == "SKILL.md" else p.stem for p in folder.glob(pattern))
 
 
-def _inside(folder: Path, entry: dict) -> dict:
-    manifest = _first(folder, PLUGIN_FILES) or {}
+def _servers(folder: Path, manifest: dict) -> dict:
+    """The plugin's MCP servers by name: the manifest's `mcpServers`, else `.mcp.json`."""
     servers: Any = manifest.get("mcpServers")
     if not isinstance(servers, dict):
         mcp = _first(folder, (".mcp.json", "mcp.json")) or {}
         servers = mcp.get("mcpServers", mcp) if isinstance(mcp, dict) else {}
+    return servers
+
+
+def _inside(folder: Path, entry: dict) -> dict:
+    manifest = _first(folder, PLUGIN_FILES) or {}
+    servers = _servers(folder, manifest)
     hooks: set[str] = set()
     for raw in (manifest.get("hooks"), entry.get("hooks"), _load(folder / "hooks/hooks.json")):
         if isinstance(raw, dict):
@@ -141,6 +149,18 @@ def _can_add(client: str, marketplace: str, sources: dict[str, dict[str, str | N
     return False
 
 
+def _listed(adapters: dict[str, ClientAdapter]):
+    """Each plugin a client's marketplaces list, as (client, marketplace, root, entry)."""
+    for client in INSTALLERS:
+        if client not in adapters:
+            continue
+        for marketplace, root in adapters[client].marketplace_roots().items():
+            listed = _first(root, MARKETPLACE_FILES) or {}
+            for entry in listed.get("plugins") or []:
+                if isinstance(entry, dict) and isinstance(entry.get("name"), str):
+                    yield client, marketplace, root, entry
+
+
 def catalog(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
     """Every plugin the marketplaces on this computer offer, once, with how each client gets it.
 
@@ -155,43 +175,132 @@ def catalog(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
             if item.client not in clients:
                 clients.append(item.client)
     offers: dict[str, dict] = {}
-    for client in INSTALLERS:
-        if client not in adapters:
+    for client, marketplace, root, entry in _listed(adapters):
+        plugin_id = f"{entry['name']}@{marketplace}"
+        if plugin_id in offers:
+            offers[plugin_id]["routes"][client] = "ready"
             continue
-        for marketplace, root in adapters[client].marketplace_roots().items():
-            listed = _first(root, MARKETPLACE_FILES) or {}
-            for entry in listed.get("plugins") or []:
-                if not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
-                    continue
-                plugin_id = f"{entry['name']}@{marketplace}"
-                if plugin_id in offers:
-                    offers[plugin_id]["routes"][client] = "ready"
-                    continue
-                folder = _plugin_dir(root, entry.get("source"))
-                inside = _inside(folder, entry) if folder else None
-                description = entry.get("description") or (inside or {}).get("description")
-                offers[plugin_id] = {
-                    "id": plugin_id,
-                    "kind": "plugin",
-                    "name": entry["name"],
-                    "marketplace": marketplace,
-                    "description": description if isinstance(description, str) else "",
-                    "category": _category_name(entry.get("category")),
-                    "author": _author(entry.get("author")),
-                    "homepage": entry.get("homepage")
-                    if isinstance(entry.get("homepage"), str)
-                    else None,
-                    "source": _source(entry.get("source")),
-                    "inside": inside,
-                    "routes": {client: "ready"},
-                    "installed": installed.get(plugin_id, []),
-                }
+        folder = _plugin_dir(root, entry.get("source"))
+        inside = _inside(folder, entry) if folder else None
+        description = entry.get("description") or (inside or {}).get("description")
+        offers[plugin_id] = {
+            "id": plugin_id,
+            "kind": "plugin",
+            "name": entry["name"],
+            "marketplace": marketplace,
+            "description": description if isinstance(description, str) else "",
+            "category": _category_name(entry.get("category")),
+            "author": _author(entry.get("author")),
+            "homepage": entry.get("homepage") if isinstance(entry.get("homepage"), str) else None,
+            "source": _source(entry.get("source")),
+            "inside": inside,
+            "routes": {client: "ready"},
+            "installed": installed.get(plugin_id, []),
+        }
     for offer in offers.values():
         for client in INSTALLERS:
             missing = client in adapters and client not in offer["routes"]
             if missing and _can_add(client, offer["marketplace"], sources):
                 offer["routes"][client] = "add_marketplace"
     return sorted(offers.values(), key=lambda o: (o["name"].lower(), o["marketplace"]))
+
+
+def _offered_servers(adapters: dict[str, ClientAdapter]):
+    """Each MCP server inside a plugin folder the marketplaces offer, once, as
+    (plugin, marketplace, name, raw entry). The same plugins as `catalog`, and the entry is
+    read as `_inside` reads it, but whole: the page never gets it, only the checks do."""
+    seen: set[str] = set()
+    for _, marketplace, root, entry in _listed(adapters):
+        plugin_id = f"{entry['name']}@{marketplace}"
+        folder = _plugin_dir(root, entry.get("source"))
+        if plugin_id in seen or folder is None:
+            continue
+        seen.add(plugin_id)
+        servers = _servers(folder, _first(folder, PLUGIN_FILES) or {})
+        for name, value in sorted(servers.items()):
+            if isinstance(value, dict):
+                yield entry["name"], marketplace, name, value
+
+
+def known_refusal(name: str, entry: dict, inventory, held: set[str]) -> str | None:
+    """Why the Kitden gateway cannot take this server, from the entry alone (no network); None
+    when it can. Checked against the plugin docs on 2026-10-26 (not a live client):
+    - Claude Code reads `mcpServers` from plugin.json or `.mcp.json`; it also takes `.mcpb` and
+      `.dxt` bundles, runs stdio servers from `${CLAUDE_PLUGIN_ROOT}`, and has http, sse and ws
+      servers (code.claude.com/docs/en/plugins-reference).
+    - Codex plugins keep `mcp.json` with a transport `type`; the docs show `streamable-http`
+      only (developers.openai.com/codex/plugins/build).
+    The gateway speaks streamable HTTP and stdio, so the rest is refused.
+    """
+    from kitden.views.skills import SCRIPT_SUFFIXES  # skills imports this module
+
+    if name in held:
+        return f"{name} is in the gateway already."
+    # A server an installed plugin brings is not the client's own entry; it cannot be moved.
+    has = next(
+        (
+            i
+            for i in inventory.items
+            if i.kind is ItemKind.MCP_SERVER
+            and i.name == name
+            and not i.via_gateway
+            and i.scope is not Scope.PLUGIN
+        ),
+        None,
+    )
+    if has is not None:
+        client = CLIENT_WORDS.get(has.client, has.client)
+        return f"{client} has {name} already. Move it into the gateway instead."
+    server = gateway_entry(entry)
+    kind = str(entry.get("type", "")).lower()
+    if kind in ("sse", "ws") or str(server.get("url", "")).rstrip("/").endswith("/sse"):
+        return f"{name} uses a connection the Kitden gateway does not support yet."
+    if reads_elsewhere(entry, server):
+        return f"{name} reads values Kitden can't fill in."
+    words = [str(server.get("command", "")), *(str(a) for a in server.get("args") or [])]
+    if any(w.endswith(".mcpb") for w in words):
+        return f"{name} comes as a bundle; Kitden can't run it yet."
+    in_folder = any(
+        w.startswith(("./", "../")) or ("/" not in w and Path(w).suffix.lower() in SCRIPT_SUFFIXES)
+        for w in words
+    )
+    if in_folder:
+        return f"{name} runs a file inside its plugin folder; Kitden can't run it from the gateway."
+    if "command" not in server and "url" not in server:
+        return f"{name} could not be read from its file."
+    return None
+
+
+def market_servers(inventory, adapters: dict[str, ClientAdapter], held: set[str]) -> list[dict]:
+    """One row for each MCP server in a marketplace plugin on this computer. A row has no
+    address and no command: the page shows a name, a kind and why it cannot be added."""
+    rows = []
+    for plugin, marketplace, name, entry in _offered_servers(adapters):
+        remote = isinstance(entry.get("url"), str) or str(entry.get("type")).lower() in (
+            "http",
+            "streamable-http",
+        )
+        rows.append(
+            {
+                "id": f"{plugin}@{marketplace}/{name}",
+                "name": name,
+                "plugin": plugin,
+                "marketplace": marketplace,
+                "kind": "remote" if remote else "local",
+                "held": name in held,
+                "refusal": known_refusal(name, entry, inventory, held),
+            }
+        )
+    return sorted(rows, key=lambda r: (r["marketplace"], r["name"].lower()))
+
+
+def market_entry(adapters: dict[str, ClientAdapter], server_id: str) -> tuple[str, dict]:
+    """The raw entry of a listed server, with its plugin's id; for the preview, not the page."""
+    plugin_id, _, wanted = server_id.partition("/")
+    for plugin, marketplace, name, entry in _offered_servers(adapters):
+        if f"{plugin}@{marketplace}" == plugin_id and name == wanted:
+            return plugin_id, entry
+    raise ValueError("This server is no longer offered.")
 
 
 # Marketplaces name the same category in different ways; one key per category.

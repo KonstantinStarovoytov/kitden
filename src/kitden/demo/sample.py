@@ -204,6 +204,12 @@ def _plugin_files(folder: Path, name: str, version: str) -> None:
     elif name == "pr-review":
         server = {"command": "node", "args": ["server.js"]}
         _json(folder / ".mcp.json", {"mcpServers": {"pr-index": server}})
+    elif name == "db-tools":
+        server = {"command": "uvx", "args": ["mcp-db-query"]}
+        _json(folder / ".mcp.json", {"mcpServers": {"db-query": server}})
+    elif name == "test-helper":
+        server = {"type": "http", "url": "https://status.example.test/mcp"}
+        _json(folder / ".mcp.json", {"mcpServers": {"test-status": server}})
 
 
 def _marketplace(market: Path) -> None:

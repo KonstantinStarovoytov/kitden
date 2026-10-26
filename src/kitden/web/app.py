@@ -122,7 +122,7 @@ from kitden.marketplace_link import LinkError, read_marketplace
 from kitden.model import Change, ChangeState, Gateway, GatewayAuth, GatewayEdit, ItemKind, Step
 from kitden.redact import masked_command, redact_text
 from kitden.views.after import after_words
-from kitden.views.catalog import catalog
+from kitden.views.catalog import catalog, market_servers
 from kitden.views.commands import commands_for
 from kitden.views.effective import project_views
 from kitden.views.explain import explain, with_page_fields
@@ -1441,6 +1441,13 @@ def create_app(
             return _error("Not on this computer.", 404)
         return JSONResponse({**found, "inherits": _inherits()})
 
+    async def market_server_list(request: Request) -> JSONResponse:
+        """The MCP servers that marketplace plugins on this computer bring, for the Add panel,
+        each with why the gateway cannot take it (if so). No address and no command."""
+        held = set(load_settings(home)["servers"]) if home is not None else set()
+        rows = await asyncio.to_thread(market_servers, state.inventory, adapters, held)
+        return JSONResponse({"servers": rows})
+
     async def commands(request: Request) -> JSONResponse:
         """Steps the developer runs themselves (FR-029, FR-035). Never run by the tool."""
         item = _item(request.query_params.get("item", ""))
@@ -1502,6 +1509,7 @@ def create_app(
             Route("/api/map", _read_model(_map)),
             Route("/api/library", _read_model(_library)),
             Route("/api/offer", offer_view),
+            Route("/api/market-servers", market_server_list),
             Route("/api/explain", _read_model(_explain)),
             Route("/api/overview", _read_model(_overview)),
             Route("/api/gateway-view", _read_model(_gateway_view)),

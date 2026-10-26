@@ -17,6 +17,7 @@ from kitden.local_gateway.project import project_chain
 from kitden.local_gateway.settings import deciding_project, load_calls, load_settings, load_tools
 from kitden.local_gateway.views import held_servers, tools_view
 from kitden.model import ClientStatus, Enabled, ItemKind, Scope
+from kitden.views.catalog import market_servers
 from kitden.views.effective import effective_view
 from kitden.views.inventory import build_inventory
 from kitden.views.setup_server import setup_server_state
@@ -207,3 +208,12 @@ def test_a_home_that_exists_is_not_written_over(tmp_path):
     (tmp_path / "home").mkdir()
     with pytest.raises(FileExistsError):
         build_demo_home(tmp_path, "small")
+
+
+def test_the_demo_marketplace_has_two_servers_the_gateway_can_add(tmp_path):
+    home = build_demo_home(tmp_path, "medium")
+    inventory = demo_build(home)()
+    adapters = {a.id: a for a in demo_adapters(home)}
+    rows = market_servers(inventory, adapters, set())
+    free = {(r["name"], r["kind"]) for r in rows if r["refusal"] is None}
+    assert free == {("db-query", "local"), ("test-status", "remote")}
