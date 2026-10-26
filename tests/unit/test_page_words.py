@@ -2438,3 +2438,40 @@ def test_the_view_switch_goes_out_in_120_and_comes_in_in_260():
     assert "if (switched) rise([" in text
     switch = text.split("function switchView(")[1].split("\n}\n")[0]
     assert "letGoIfSelected();" in switch and "!D(1)" in switch
+
+
+def test_the_dot_grid_lies_under_the_page_below_the_top_bar_and_takes_no_pointer():
+    # The one effect taken from the mockup's Rich mode, with the spotlight (Task 4.10): a canvas in
+    # the page column, below the top bar, not read by a screen reader, and under the page.
+    assert re.search(r'<canvas class="dots" id="dots" aria-hidden="true"></canvas>', INDEX)
+    assert INDEX.index('id="topbar"') < INDEX.index('id="dots"') < INDEX.index('id="main"')
+    dots = rule(".dots")
+    assert "pointer-events: none" in dots and "position: sticky" in dots
+    assert "z-index: 0" in dots and "var(--glow-top" in dots and "var(--glow-h" in dots
+    assert "z-index: 1" in rule(".page") and "position: relative" in rule(".page")
+    assert 'startGlow($("#content"))' in script("app.js")
+
+
+def test_the_glow_colour_is_the_mockups_in_both_themes_and_no_text_uses_it():
+    assert CSS.count("--glow: 196 84 50;") == 1 and CSS.count("--glow: 240 154 124;") == 2
+    assert CSS.index("--glow: 196 84 50;") < CSS.index("--glow: 240 154 124;")
+    assert not re.search(r"(?<!-)color:\s*rgb\(var\(--glow", CSS)
+
+
+def test_the_spotlight_is_calmer_than_the_mockups_and_off_under_reduced_motion():
+    # The mockup's edge glow is 130 px at .85 and its fill 200 px at .08; Kitden's is .35 and .04,
+    # fading in 250 ms on hover. Only map blocks and Overview cards have it.
+    start = CSS.index("@media (prefers-reduced-motion: no-preference) {\n  /* Spotlight")
+    spot = CSS[start : CSS.index("\n}\n", start)]
+    assert "130px circle at var(--mx, -300px) var(--my, -300px), rgb(var(--glow) / .35)" in spot
+    assert "200px circle at var(--mx, -300px) var(--my, -300px), rgb(var(--glow) / .04)" in spot
+    assert "opacity 250ms" in spot and ":hover::before" in spot and ":hover::after" in spot
+    assert "div.map .block::before" in spot and 'data-place="overview"' in spot
+    assert ".85" not in spot and ".08" not in spot
+    assert "pointer-events: none" in spot
+    # Nothing loops: no beam, dash march, ripple, spark or sheen from Rich mode.
+    for word in ("beam", "march", "ripple", "spark", "sheen"):
+        assert word not in spot and word not in script("glow.js"), word
+    glow = script("glow.js")
+    for banned in ("innerHTML", "cssText", 'setAttribute("style"'):
+        assert banned not in glow, banned

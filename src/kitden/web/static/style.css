@@ -85,6 +85,8 @@
   --preview-line: #a4422680;
   --shadow: 0 18px 44px -18px rgb(26 31 42 / .28);
   --shadow-pop: 0 0 0 1px var(--wire), 0 8px 24px rgba(16, 24, 40, 0.10);
+  /* The pointer glow (dots and spotlight, glow.js): R G B numbers, so it takes an alpha. Not a text colour. */
+  --glow: 196 84 50;
   --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
@@ -112,6 +114,7 @@
     --danger: #f07070; --focus: #f09a7c;
     --diff-add: #47c27a; --diff-del: #f07070;
     --dim: #1b1f26; --preview-fill: #f09a7c10; --preview-line: #f09a7c80;
+    --glow: 240 154 124;
     --shadow: 0 18px 44px -14px rgb(0 0 0 / .7);
     --shadow-pop: 0 0 0 1px var(--wire-strong), 0 12px 32px rgba(0, 0, 0, 0.45);
   }
@@ -127,6 +130,7 @@
   --danger: #f07070; --focus: #f09a7c;
   --diff-add: #47c27a; --diff-del: #f07070;
   --dim: #1b1f26; --preview-fill: #f09a7c10; --preview-line: #f09a7c80;
+  --glow: 240 154 124;
   --shadow: 0 18px 44px -14px rgb(0 0 0 / .7);
   --shadow-pop: 0 0 0 1px var(--wire-strong), 0 12px 32px rgba(0, 0, 0, 0.45);
 }
@@ -185,8 +189,9 @@ a { color: var(--route); }
 .roll > span { grid-area: 1 / 1; }
 
 /* The page frame makes no stacking context of its own, so the dock inside it (.hint-dock) can stand
-   above the scrim and the drawer. What the page holds has z-index 5 or less (and the project menu
-   sits in the top bar's own context), so all of it stays under both. */
+   above the scrim and the drawer. The page (.page) is one context at z-index 1, so the dots lie
+   under all it holds; the top bar (z-index 5) and the project menu in it stay above, and the page
+   stays under the scrim and the drawer. */
 .content { overflow: auto; position: relative; display: flex; flex-direction: column; }
 .topbar { position: sticky; top: 0; z-index: 5; flex: none; height: 66px; background: var(--panel); border-bottom: 1px solid var(--wire); display: flex; align-items: center; gap: 18px; padding: 0 18px 0 22px; min-width: 0; }
 /* The scan line shows only when a scan takes a while: a quick scan (after each Apply) is over
@@ -200,9 +205,13 @@ a { color: var(--route); }
 .scan-status { position: absolute; top: calc(100% + 6px); right: 18px; max-width: calc(100% - 40px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 8px; border-radius: 6px; background: var(--canvas); color: var(--ink-3); font-size: 12px; opacity: 0; pointer-events: none; transition: opacity 200ms ease; }
 .topbar.progress .scan-status { opacity: 1; }
 @keyframes sweep { to { transform: translateX(100%); } }
+/* The dot grid (glow.js): a canvas as big as the column below the top bar, held there while the page
+   scrolls, under the page, taking no pointer. It takes no room: its height is taken back below.
+   glow.js sets --glow-top and --glow-h to the top bar's and the canvas's heights. */
+.dots { display: block; position: sticky; top: var(--glow-top, 66px); z-index: 0; flex: none; width: 100%; height: var(--glow-h, 0px); margin-bottom: calc(var(--glow-h, 0px) * -1); pointer-events: none; }
 /* The bottom keeps the end of the page clear of the hint line, and of whatever the dock shows, the
    tray's bar or a toast (--dock-room, set on the root by toast.js: its height and the dock's 46 px). */
-.page { flex: 1 0 auto; padding: 26px 22px 64px; padding-bottom: max(64px, var(--dock-room, 0px)); max-width: 1180px; outline: none; transition: opacity var(--t-fast) ease; }
+.page { position: relative; z-index: 1; flex: 1 0 auto; padding: 26px 22px 64px; padding-bottom: max(64px, var(--dock-room, 0px)); max-width: 1180px; outline: none; transition: opacity var(--t-fast) ease; }
 .page.pending { opacity: 0.5; pointer-events: none; }
 /* The Gateway changes in place as another project is read (gateway.js): it does not fade, and the
    progress cursor says why a press waits. Details take no press meanwhile (panel.js holdPanel). */
@@ -666,6 +675,7 @@ div.map .block:hover { border-color: color-mix(in srgb, var(--route) 38%, var(--
 div.map .block:active { scale: 0.98; transition-duration: var(--t-fast), var(--t-fast), 300ms, 300ms, 80ms; }
 div.map .block:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 div.map .block:has(> .block-count) { padding-right: 16px; }
+}
 div.map .block-tile { flex: none; display: grid; place-items: center; }
 div.map .block-tile .client-mark, div.map .block-tile .mono-mark { --tile: 28px; border-radius: 6px; }
 div.map .block-tile .client-mark[data-icon="claude"] img { padding: 4px; }
@@ -787,6 +797,16 @@ div.map .block:hover > .block-x, div.map .block:focus-visible > .block-x { opaci
 /* Leaving: a change in the tray takes it out, or it fades off the map. */
 div.map .block.leaving { filter: opacity(0.45); border-style: dashed; }
 div.map .block.leaving:focus-visible { filter: none; }
+
+/* Spotlight (glow.js): under the pointer a map block or an Overview card takes a soft glow on its edge
+   and a fainter one in its fill, set from --mx and --my (the pointer's place in it) and faded in on
+   hover. Calmer than the mockup's Rich mode, and off under reduced motion (glow.js sets nothing). */
+@media (prefers-reduced-motion: no-preference) {
+  /* Spotlight: map blocks and Overview cards */
+  #main[data-place="overview"] :is(.card, .issue) { position: relative; }
+  div.map .block::before, #main[data-place="overview"] :is(.card, .issue)::before { content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; background: radial-gradient(130px circle at var(--mx, -300px) var(--my, -300px), rgb(var(--glow) / .35), transparent 70%); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); opacity: 0; transition: opacity 250ms ease; pointer-events: none; }
+  div.map .block::after, #main[data-place="overview"] :is(.card, .issue)::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: radial-gradient(200px circle at var(--mx, -300px) var(--my, -300px), rgb(var(--glow) / .04), transparent 65%); opacity: 0; transition: opacity 250ms ease; pointer-events: none; }
+  div.map .block:hover::before, div.map .block:hover::after, #main[data-place="overview"] :is(.card, .issue):hover::before, #main[data-place="overview"] :is(.card, .issue):hover::after { opacity: 1; }
 
 /* The preview tray's bar (docs/design.md, Preview tray). The dock sits at the bottom left of the page,
    above the hint line, over the map; the band it sits in takes no clicks, the dock does. One change

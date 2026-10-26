@@ -11,7 +11,8 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 - **The mockup's look:** Inter and JetBrains Mono come with Kitden, line icons in every place,
   the mockup's colours in both themes, a new side rail and top bar, and calm motion with one
-  shared timing.
+  shared timing. Under the pointer a grid of dots shows on the page, and a map block or an
+  Overview card takes a soft glow; both are off under reduced motion.
 - **Gateway map:** blocks glide and unfold in place, links take the pointer (× to remove, by
   keyboard too), and a selected block dims everything off its path. Blocks look like the mockup:
   lamps, ports, the gateway's counts that roll, and on each tool how many projects have a rule of
