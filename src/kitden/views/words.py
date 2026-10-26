@@ -10,6 +10,7 @@ STATE_WORDS: dict[str, str] = {
     "via": "Via Claude Code",
     "done": "Has its skills",
     "unread": "Could not read",
+    "missing": "Not installed",
 }
 
 # What Kitden could not read: a whole client, or one file on its first read. An add or a change

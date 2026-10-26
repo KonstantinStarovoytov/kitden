@@ -13,6 +13,7 @@ ENDPOINTS = [
     "/api/library",
     "/api/overview",
     "/api/gateway-view",
+    "/api/library-map",
     "/api/explain?name=x",
 ]
 

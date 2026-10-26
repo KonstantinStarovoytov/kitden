@@ -152,6 +152,7 @@ def _page_outputs(home) -> list[str]:
             "/api/overview",
             "/api/map",
             "/api/gateway-view",
+            "/api/library-map",
             "/api/market-servers",
         ]:
             outputs.append(page.get(path).text)
@@ -166,6 +167,7 @@ def _page_outputs(home) -> list[str]:
             outputs.append(explained)
         for project in page.get("/api/projects").json():
             outputs.append(page.get(f"/api/projects/{project['id']}/effective").text)
+            outputs.append(page.get(f"/api/library-map?project={project['id']}").text)
             outputs.append(page.get(f"/api/findings?project={project['path']}").text)
         for item in page.get("/api/items").json():
             if item["kind"] in ("plugin", "marketplace"):
@@ -253,7 +255,7 @@ def _demo_outputs(home) -> list[str]:
         projects = page.get("/api/projects").json()
         for project in [None, *projects]:
             query = f"?project={project['id']}" if project else ""
-            for path in ["/api/overview", "/api/map", "/api/gateway-view"]:
+            for path in ["/api/overview", "/api/map", "/api/gateway-view", "/api/library-map"]:
                 get(path + query)
             get("/api/findings" + (f"?project={quote(project['path'])}" if project else ""))
         for kind in KINDS:

@@ -139,6 +139,7 @@ from kitden.views.inventory import (
     keep_last_good,
 )
 from kitden.views.library import KINDS, SHOWS, library
+from kitden.views.library_map import library_map
 from kitden.views.load_map import load_map, map_dict
 from kitden.views.overview import overview
 from kitden.views.review import change_target, mark_reach, undo_note
@@ -832,6 +833,11 @@ def create_app(
             hidden=hidden,
             attention=params.get("attention") == "1",
         )
+        return JSONResponse({"project": project, **answer})
+
+    def _library_map(request, project, path):
+        """The Library map: clients, plugins and skills by source, and what each plugin holds."""
+        answer = library_map(state.inventory, adapters, path)
         return JSONResponse({"project": project, **answer})
 
     def _explain(request, project, path):
@@ -1530,6 +1536,7 @@ def create_app(
             Route("/api/commands", commands),
             Route("/api/map", _read_model(_map)),
             Route("/api/library", _read_model(_library)),
+            Route("/api/library-map", _read_model(_library_map)),
             Route("/api/offer", offer_view),
             Route("/api/market-servers", market_server_list),
             Route("/api/explain", _read_model(_explain)),

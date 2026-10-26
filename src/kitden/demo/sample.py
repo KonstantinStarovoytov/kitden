@@ -432,9 +432,9 @@ def _gateway(home: Path, medium: bool) -> None:
 
 def _bulk(home: Path) -> None:
     """The large sample's extra items, written over the medium sample: 150 MCP servers (50 in
-    each client), 30 Claude Code plugins, 120 skills, 12 projects, 10 held servers with their
-    tools, and one Codex plugin whose on/off only Codex's plugin list knows. Some names are long
-    (`LONG`). Nothing here holds a secret."""
+    each client), 30 Claude Code plugins (the first with twenty skills), 120 skills, 12 projects,
+    10 held servers with their tools, and one Codex plugin whose on/off only Codex's plugin list
+    knows. Some names are long (`LONG`). Nothing here holds a secret."""
     claude = json.loads((home / ".claude.json").read_text())
     cursor = json.loads((home / ".cursor/mcp.json").read_text())
     codex = []
@@ -473,7 +473,9 @@ def _bulk(home: Path) -> None:
         name = f"plugin-{n:02d}"
         folder = home / ".claude/plugins/cache/bench-market" / name / "1.0.0"
         _json(folder / ".claude-plugin/plugin.json", {"name": name, "version": "1.0.0"})
-        _skill(folder / "skills", f"{name}-skill")
+        skills = [f"{name}-skill-{k:02d}" for k in range(1, 21)] if n == 0 else [f"{name}-skill"]
+        for skill in skills:
+            _skill(folder / "skills", skill)
         installed["plugins"][f"{name}@bench-market"] = _record(folder, "1.0.0")
     _json(installed_file, installed)
 
