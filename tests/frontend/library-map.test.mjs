@@ -161,7 +161,7 @@ test('the head has the tabs, the lede, the scope bar and Map | List', () => {
   assert.ok(texts(scope).includes('Shared setup · project overrides stay separate'));
   assert.ok(map());
   assert.equal(hintLine.hidden, false);
-  assert.equal(hintLine.children.at(-1).textContent, 'Point at a link for its Details · click a plugin to see what it holds · drag a plugin onto a client to add it there');
+  assert.equal(hintLine.children.at(-1).textContent, 'Point at a link and press × to remove it · drag a plugin onto a client to add it there · + adds it for all projects · click anything for its Details');
 });
 
 test('in a project the scope bar names it with a folder', () => {
@@ -745,7 +745,8 @@ test('a waiting add for two clients, or for one project, says Already in preview
       await cancelTray();
     }
   }
-  // A project's add draws only while that project is picked; the two-client one draws for both.
+  // A project's add draws only while that project is picked; the two-client one draws for both,
+  // and says it adds for all projects (decisions, the add panel).
   const rows = [{ key: 'k1', body: one }];
   const card = (model) => model.blocks.find((b) => b.id === 'item:p2');
   const all = withWaiting(libraryTree(DRAG_SAMPLE), rows, '');
@@ -754,7 +755,7 @@ test('a waiting add for two clients, or for one project, says Already in preview
   const atlas = withWaiting(libraryTree(DRAG_SAMPLE), rows, '/work/atlas');
   assert.deepEqual([card(atlas).meta, card(atlas).rows], ['Preview · Codex', ['k1']]);
   const two = withWaiting(libraryTree(DRAG_SAMPLE), [{ key: 'k2', body: both }], '');
-  assert.equal(card(two).meta, 'Preview · Codex and Claude Code');
+  assert.equal(card(two).meta, 'Preview · for all projects');
   assert.deepEqual(two.links.filter((l) => l.kind === 'preview').map((l) => l.from), ['client:codex', 'client:claude_code']);
 });
 

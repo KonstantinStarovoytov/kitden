@@ -5,24 +5,24 @@
 // plugin or a skill drags onto a client (map-drag.js), which only adds a row to the tray.
 import { $, cutName, el, icon, joinWords, pageWaits, plural, reportError, WAITS } from "./dom.js";
 import { findIn, layoutTree, linkKey, litFor, litFrom, pagesNow, pagesWith, turnPage, turnWords } from "./map.js";
-import { clientAt, covered, follow, ON_CLIENT, pointOf, startDrag } from "./map-drag.js";
+import { clientAt, covered, flyGhost, follow, liftGhost, mapArea, moveGhost, ON_CLIENT, pointOf, startDrag } from "./map-drag.js";
 import { glidePill, goSwitched, leaveThen } from "./map-page.js";
 import { linkRemoval } from "./library-rules.js";
 import { mapView } from "./map-view.js";
-import { afterOldPage, rise, riseHead, shake } from "./motion.js";
+import { afterOldPage, CALM, rise, riseHead, shake } from "./motion.js";
 import { banner, CLIENT_NAMES, folderName, mark, ORIGIN_WORDS, scopeBar, setHint, skeleton, STATE_WORDS } from "./parts.js";
 import { busy, current, currentError, projectPath, retry, state, viewMode } from "./store.js";
 import { say } from "./toast.js";
 import { addToTray, inTray, keyFor, onTray, takeOut, tray } from "./tray.js";
 
 const LEDE = "Follow the source. Connect only what you need.";
-const MAP_HINT = "Point at a link for its Details · click a plugin to see what it holds · drag a plugin onto a client to add it there";
+const MAP_HINT = "Point at a link and press × to remove it · drag a plugin onto a client to add it there · + adds it for all projects · click anything for its Details";
 // The map's columns at the mockup's x (0, 250, 500) and sizes (library-notes §2.1): a client
 // 150×54, a plugin card 180×60 (a skill or hook row 34 high), an inside item 200×34. What a plugin
 // holds, and the Inside caption, grow out of the plugin as it opens (map-view.js `grows`).
 export const LIBRARY_COLUMNS = [
   { id: "clients", caption: "Clients", w: 150, h: 54, top: 140, rowGap: 18 },
-  { id: "plugins", caption: "Plugins and skills", w: 180, h: 60, colGap: 100, top: 37, rowGap: 4 },
+  { id: "plugins", caption: "Plugins and skills", add: true, w: 180, h: 60, colGap: 100, top: 37, rowGap: 4 },
   { id: "inside", caption: "Inside", w: 200, h: 34, colGap: 70, top: 26, rowGap: 8, grows: true },
 ];
 const ROW_H = 34; // a skill or hook row in the Plugins and skills column
@@ -47,8 +47,10 @@ const INSTALLS = { plugin: "plugin.install", skill: "skill.install" };
 // Why a client cannot take a dragged item, before the drop (decisions, in this order).
 const CURSOR_PLUGINS = "Cursor gets plugins through Claude Code";
 const WAITS_ALREADY = "Already in preview";
-// A block whose add waits in the tray: a press takes it out.
+// A block whose add waits in the tray: a press takes it out. Its meta names the clients, or says
+// it adds for all projects when it adds to several clients at once ("+ Add").
 const IN_PREVIEW = "In preview. Click to take it out.";
+const ALL_PROJECTS = "for all projects";
 // What the × of a link that the tray draws says, and the × while a change is written.
 const TAKE_OUT = "Take it out of the preview";
 const OWN_WAITS = "Your change is being written.";
@@ -174,19 +176,86 @@ export function addsOf(item, rows) {
 export function withWaiting(model, rows, project) {
   const clients = new Set(model.blocks.filter((b) => b.kind === "client").map((b) => b.id));
   for (const block of model.blocks.filter((b) => b.drags)) {
-    const wait = { names: [], rows: [] };
-    for (const add of addsOf(block.item, rows)) {
-      if (add.project && add.project !== project) continue;
-      for (const client of add.clients) {
-        if (!clients.has(`client:${client}`)) continue;
-        model.links.push({ from: `client:${client}`, to: block.id, kind: "preview", row: add.key });
-        if (!wait.names.includes(CLIENT_NAMES[client])) wait.names.push(CLIENT_NAMES[client]);
-        if (!wait.rows.includes(add.key)) wait.rows.push(add.key);
-      }
+    const wait = waitOn(block, addsOf(block.item, rows), project, clients, model);
+    if (wait.rows.length) Object.assign(block, waitLook(wait));
+  }
+  return withNewCards(model, rows, project, clients);
+}
+
+// The adds of one block that show for `project`: a dashed link from each client they add to (in
+// `model`), and the clients' names and the rows. `all`: each adds for all projects to several
+// clients at once.
+function waitOn(block, adds, project, clients, model) {
+  const wait = { names: [], rows: [], all: true };
+  for (const add of adds) {
+    if (add.project && add.project !== project) continue;
+    for (const client of add.clients) {
+      if (!clients.has(`client:${client}`)) continue;
+      model.links.push({ from: `client:${client}`, to: block.id, kind: "preview", row: add.key });
+      if (!wait.names.includes(CLIENT_NAMES[client])) wait.names.push(CLIENT_NAMES[client]);
+      if (!wait.rows.includes(add.key)) wait.rows.push(add.key);
     }
-    if (wait.rows.length) Object.assign(block, { meta: `Preview · ${joinWords(wait.names)}`, lamp: "preview", state: "preview", stateInMeta: true, takeOut: IN_PREVIEW, rows: wait.rows });
+    if (add.project || add.clients.length < 2) wait.all = false;
+  }
+  return wait;
+}
+
+// How a block whose add waits looks: "Preview · Codex", or "Preview · for all projects".
+function waitLook(wait) {
+  const meta = `Preview · ${wait.all ? ALL_PROJECTS : joinWords(wait.names)}`;
+  return { meta, lamp: "preview", state: "preview", stateInMeta: true, takeOut: IN_PREVIEW, rows: wait.rows };
+}
+
+// What Kitden knows of the plugins and skills the marketplaces offer, by id (the add panel's read,
+// library-add.js): { kind, name, marketplace }.
+const offered = new Map();
+export function learnOffers(rows) {
+  for (const row of rows || []) offered.set(row.id, { kind: row.kind, name: row.name, marketplace: row.marketplace });
+}
+
+// A plugin or skill a marketplace offers, as the map draws it: what the add panel read of it,
+// else, for a plugin, its id ("<name>@<marketplace>"). Null when Kitden knows nothing of it.
+function offerOf(kind, id) {
+  const known = offered.get(id);
+  if (known && known.kind === kind) return known;
+  const at = id.lastIndexOf("@");
+  return kind === "plugin" && at > 0 ? { kind, name: id.slice(0, at), marketplace: id.slice(at + 1) } : null;
+}
+
+// An add in the tray of something the map does not show (a plugin no client has, a skill inside
+// a plugin) gets a preview card of its own at the end of its marketplace's group, a new group
+// when the map has none; it looks and goes as any waiting add.
+function withNewCards(model, rows, project, clients) {
+  const shown = new Set(model.blocks.filter((b) => b.drags).map((b) => `${b.kind}:${b.kind === "skill" ? b.item.skill : b.item.plugin}`));
+  const cards = new Map();
+  for (const row of rows) {
+    const kind = Object.keys(INSTALLS).find((k) => INSTALLS[k] === row.body.action);
+    const id = kind && (row.body.params || {})[kind];
+    if (!id || shown.has(`${kind}:${id}`) || cards.has(`${kind}:${id}`)) continue;
+    const offer = offerOf(kind, id);
+    if (offer) cards.set(`${kind}:${id}`, { kind, id, offer });
+  }
+  for (const { kind, id, offer } of cards.values()) {
+    const item = { kind, name: offer.name, [kind]: id };
+    const block = { id: `item:new:${kind}:${id}`, column: "plugins", kind, name: offer.name, item, ports: { left: true } };
+    if (kind === "skill") Object.assign(block, { h: ROW_H, label: ROW_LABELS.skill });
+    const wait = waitOn(block, addsOf(item, rows), project, clients, model);
+    if (!wait.rows.length) continue;
+    model.blocks.push(Object.assign(block, waitLook(wait), { parent: marketGroup(model, offer.marketplace) }));
   }
   return model;
+}
+
+// The id of a marketplace's group on the map; a new caption, in name order among the marketplaces
+// and before the other groups, when the map has none.
+function marketGroup(model, name) {
+  const id = `group:marketplace:${name}`;
+  if (model.blocks.some((b) => b.id === id)) return id;
+  const roots = model.blocks.filter((b) => b.kind === "group" && b.column === "plugins" && !b.parent);
+  const next = roots.find((b) => !b.group || b.group.kind !== "marketplace" || b.name.toLowerCase() > name.toLowerCase());
+  const caption = { id, column: "plugins", kind: "group", name, icon: "store", before: GROUP_BEFORE, rowGap: LIBRARY_COLUMNS[1].rowGap };
+  model.blocks.splice(next ? model.blocks.indexOf(next) : model.blocks.length, 0, caption);
+  return id;
 }
 
 // A link whose removal or turning off waits in the tray is drawn leaving, and names its row: a press
@@ -217,6 +286,12 @@ function tile(block) {
 // It is the drag engine's map too (map-drag.js): the layout drawn last, the drag that runs, the
 // block held off its place, and how to draw again.
 const onMap = { view: null, answer: null, model: null, open: new Set(), selected: null, pages: new Map(), found: null, searched: "", project: null, unfolds: false, folded: false, layout: null, drag: null, home: null, redraw: () => drawMap() };
+
+// "+ Add" beside the Plugins and skills caption: `fn(button)` opens the add panel (library-add.js).
+let addHook = null;
+export function onLibraryAdd(fn) {
+  addHook = fn;
+}
 
 // Details of a selection (library-details.js): `fn(id)` on a select (a block's id or a link's key),
 // `fn(null)` on a let-go, and `fn(id or null, { follow: true })` once another project is drawn in
@@ -351,6 +426,7 @@ function newMap() {
     onOpen: openPlugin,
     onFold: foldPlugin,
     onSelect: pressBlock,
+    onAdd: (column, node) => addHook && addHook(node),
     onEmpty: () => onMap.selected && letGo(),
     // While nothing is selected, pointing at a client lights what it loads.
     onHover: (id) => view.glance(id && id.startsWith("client:") ? litFrom(onMap.model, id) : null),
@@ -536,9 +612,12 @@ onTray((t) => {
   drawMap();
 });
 
-// The Library's drags, by kind, as the engine hears them (map-drag.js). Only plugin cards and
-// skill rows drag.
-export const DRAGS = { item: { begin: beginItem, over: overItem, drop: dropItem } };
+// The Library's drags, by kind, as the engine hears them (map-drag.js): plugin cards and skill
+// rows of the map, and rows of the add panel.
+export const DRAGS = {
+  item: { begin: beginItem, over: overItem, drop: dropItem },
+  row: { still: true, begin: beginRow, over: overRow, drop: dropRow },
+};
 
 // A pointer goes down on a plugin card or a skill row (its count too): once it moves 5 px it drags
 // onto a client, and the selection lets go. A press while a change is written, or while another
@@ -608,5 +687,62 @@ function dropItem(drag, at) {
     const node = view.node(client.id);
     if (node) shake(node);
   } else if (client) addToTray(addBody(drag.block.item, client.client)).catch(reportError);
+  return false;
+}
+
+// A row of the add panel goes back onto its row after any let go.
+const BACK_HOME = { dur: 180, ease: CALM };
+
+// A press on a free row of the add panel (library-add.js gives its `item`, as the map's blocks
+// have it, and its `node`) starts a drag onto a client, while the map shows. The same waits as a
+// press on the map hold it back.
+export function pressRow(event, row) {
+  if (event.button !== 0 || busy.change || pageWaits() || onMap.drag || !onMap.model || !mapArea(onMap)) return;
+  startDrag(event, { id: `row:${row.item.kind}:${row.item.name}`, name: row.item.name, ...row }, "row", { hooks: DRAGS, map: onMap, onStart: () => onMap.selected && letGo() });
+}
+
+// The row lifts (its ghost follows the pointer), and every client lights, as a glance does.
+function beginRow(drag) {
+  Object.assign(drag, liftGhost(drag.block.node), { target: null, why: null });
+  onMap.view.glance(new Set(onMap.model.blocks.filter((b) => b.kind === "client").map((b) => b.id)));
+}
+
+// Over a client, and not over Details or the dock: a client that can take the item lights, the
+// ghost takes the drop look and a dashed wire runs from the client to the pointer; the tip goes by
+// the pointer. One that cannot stays as it is, and the tip says why.
+function overRow(drag) {
+  const { view } = onMap;
+  moveGhost(drag);
+  const point = covered(drag.at) ? null : pointOf(onMap, drag);
+  const client = point ? clientAt(onMap, point) : null;
+  if ((client && client.id) !== (drag.target && drag.target.id)) {
+    drag.target = client;
+    drag.why = client ? whyNot(drag.block.item, client.client) : null;
+    view.unlightTarget();
+    if (client && !drag.why) view.lightTarget(client.id);
+  }
+  const on = Boolean(client && !drag.why);
+  drag.ghost.classList.toggle("over", on);
+  if (on) view.wire(client.id, point);
+  else view.unwire();
+  if (!point) {
+    view.untip();
+    return;
+  }
+  const words = client ? drag.why || `Add to ${CLIENT_NAMES[client.client]}` : ON_CLIENT;
+  view.tip(words, { on, at: point });
+}
+
+// A drop on a client that can take the item adds it there for all projects (one row, that client
+// only); one on a client that cannot shakes it. The ghost always flies back onto its row.
+function dropRow(drag, at) {
+  const { view } = onMap;
+  view.unwire();
+  const client = at && drag.target;
+  if (client && drag.why) {
+    const node = view.node(client.id);
+    if (node) shake(node);
+  } else if (client) addToTray(addBody(drag.block.item, client.client)).catch(reportError);
+  flyGhost(drag, null, BACK_HOME);
   return false;
 }

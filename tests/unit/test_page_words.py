@@ -1379,7 +1379,8 @@ def test_a_cell_add_reviews_one_client_and_the_review_shows_its_note():
     assert '"Adds for all projects."' in offer
     # Every add in a project view says so, a marketplace too. The plugin form adds the
     # warnings of the checked clients, as their cells do.
-    assert offer.count("{ note: projectNote(state.project) }") == 2
+    assert offer.count("{ note: projectNote(state.project) }") == 1
+    assert "{ note: projectNote(state.project), back }" in offer
     assert "{ note: formNote(row, clients, state.project) }" in offer
     code = panel()
     assert "export async function review(previewBody, { note = null, back = null } = {})" in code
@@ -1602,16 +1603,19 @@ def test_a_skill_rule_says_what_it_turns_off_and_where():
 
 def test_the_add_a_server_panel_says_what_the_mockup_says():
     add, details = script("gateway-add.js"), script("gateway-details.js")
+    # The search, the failed read and Try again are the shared panel's (add-panel.js).
+    shared = script("add-panel.js")
     assert 'export const ADD_TITLE = "Add a server";' in add
     assert 'export const ADD_SERVER = "Add a server…";' in add
     assert "{ label: ADD_SERVER, run: () => openAdd() }" in details
-    assert 'const SEARCH = "Search the marketplaces";' in add
-    assert "input.placeholder = `${SEARCH}…`;" in add
+    assert 'const SEARCH = "Search the marketplaces";' in shared
+    assert "input.placeholder = `${SEARCH}…`;" in shared
     assert 'const FOOT = "Click a server or drag it onto the map to preview it.";' in add
     assert 'const NO_MATCH = "No servers match.";' in add
     assert 'const NONE = "No marketplace on this computer offers an MCP server.";' in add
-    assert 'const FAILED = "Could not read the marketplaces.";' in add
-    assert 'button("Try again", retry, "btn ghost small")' in add
+    assert 'const FAILED = "Could not read the marketplaces.";' in shared
+    assert 'button("Try again", retry, "btn ghost small")' in shared
+    assert "return openAddPanel(GATEWAY, options);" in add
     statuses = '{ added: "Added", held: "In the gateway", preview: "In preview" }'
     assert f"export const STATUS = {statuses};" in add
     assert 'const KIND_WORDS = { remote: "Remote", local: "Local" };' in add
@@ -2705,8 +2709,8 @@ def test_the_library_map_words_and_looks():
     text = script("library-map.js")
     for words in (
         '"Follow the source. Connect only what you need."',
-        '"Point at a link for its Details · click a plugin to see what it holds · drag a plugin '
-        'onto a client to add it there"',
+        '"Point at a link and press × to remove it · drag a plugin onto a client to add it there '
+        '· + adds it for all projects · click anything for its Details"',
         '[["plugins", "Plugins and skills"], ["instructions", "Instructions"]]',
         'caption: "Clients"',
         'caption: "Plugins and skills"',
@@ -2808,7 +2812,8 @@ def test_a_plugin_or_skill_drags_onto_a_client():
         "`Already in ${who}`",
         'const WAITS_ALREADY = "Already in preview";',
         "`${who} cannot get ${item.name}`",
-        "meta: `Preview · ${joinWords(wait.names)}`",
+        "const meta = `Preview · ${wait.all ? ALL_PROJECTS : joinWords(wait.names)}`;",
+        'const ALL_PROJECTS = "for all projects";',
         'const IN_PREVIEW = "In preview. Click to take it out.";',
         'const INSTALLS = { plugin: "plugin.install", skill: "skill.install" };',
         'kind: "preview", row: add.key',
@@ -2826,6 +2831,41 @@ def test_a_plugin_or_skill_drags_onto_a_client():
     assert "color: var(--route);" in rule(
         'div.map .block:is(.plugin, .skill)[data-state="preview"] .block-meta'
     )
+
+
+def test_the_library_add_panel_says_the_decided_words():
+    # decisions "The add panel for plugins and skills" (frame L4).
+    text = script("library-add.js")
+    for words in (
+        'export const LIBRARY_ADD_TITLE = "Add a plugin or skill";',
+        'const FOOT = "Click to preview, or drag onto a client.";',
+        'const NO_MATCH = "No plugins or skills match.";',
+        'const NONE = "No marketplace on this computer offers a plugin or skill.";',
+        'const ADD_MARKETPLACE = "Add a marketplace…";',
+        'export const LIBRARY_STATUS = { added: "Added", every: "In every client", '
+        'preview: "In preview" };',
+        'const PILL = [["all", "All"], ["plugin", "Plugins"], ["skill", "Skills"]];',
+        "`Plugin · ${plural(row.count, row.unit, `${row.unit}s`)}`",
+        'return "Skill";',
+        'const ADD_KEY = "add:plugins";',
+        "return openAddPanel(LIBRARY, options);",
+    ):
+        assert words in text, words
+    # First match wins: Added, In every client, the refusal, In preview.
+    order = [
+        text.index(w)
+        for w in ("LIBRARY_STATUS.added, off", "LIBRARY_STATUS.every", "line: row.refusal")
+    ]
+    assert order == sorted(order)
+    # The map's caption carries "+ Add", and a row of the panel drags onto a client.
+    lib_map = script("library-map.js")
+    assert 'caption: "Plugins and skills", add: true,' in lib_map
+    assert "row: { still: true, begin: beginRow, over: overRow, drop: dropRow }," in lib_map
+    assert "liftGhost" in script("gateway-drag.js") and "export function liftGhost(" in script(
+        "map-drag.js"
+    )
+    # A skill that needs its plugin says the same words as the copy refuses with.
+    assert "This skill needs the rest of its plugin. Add the plugin instead." in script("offer.js")
 
 
 def test_a_library_link_x_removes_or_turns_off():

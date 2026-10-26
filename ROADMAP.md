@@ -50,7 +50,10 @@ What Kitden does today and what comes next. Ideas and bugs:
   there for all projects: the client lights, or the tip says why it cannot take it. The add waits
   in preview as a dashed link, and a click on it takes it out. A link's × removes a plugin from a
   client, turns a skill off in Claude Code or Codex, or removes Cursor's own copy of a skill; it
-  only adds a row to the preview, and the link shows it leaving.
+  only adds a row to the preview, and the link shows it leaving. "+ Add" opens "Add a plugin or
+  skill", the same panel as the Gateway's "Add a server": the plugins and skills each marketplace
+  offers, a click adds one for all projects to every client that lacks it, and a row drags onto
+  one client. A plugin no client has shows on the map as a preview card while it waits.
 - **Library Details:** a click on the Library map opens Details for a plugin, a thing inside it, a
   skill, a hook, a client, a link or a marketplace. From the Library a plugin can be turned off for
   all projects or in this project, and added to another client; a skill can be turned off for all

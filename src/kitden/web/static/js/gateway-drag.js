@@ -5,7 +5,7 @@
 import { el, pageWaits, reportError } from "./dom.js";
 import { foundClients } from "./gateway-details.js";
 import { linkKey } from "./map.js";
-import { areaPoint, clientAt, covered, DRAG_START, flyGhost, follow, goHome, heldAt, mapArea, ON_CLIENT, pageBox, pointOf as pointIn, startDrag as runDrag } from "./map-drag.js";
+import { areaPoint, clientAt, covered, DRAG_START, flyGhost, follow, goHome, heldAt, liftGhost, mapArea, moveGhost, ON_CLIENT, pageBox, pointOf as pointIn, startDrag as runDrag } from "./map-drag.js";
 import { CALM, shake } from "./motion.js";
 import { moveBody } from "./panel.js";
 import { CLIENT_NAMES } from "./parts.js";
@@ -359,20 +359,11 @@ function dropClient(drag, at) {
   return true;
 }
 
-// A row of the Add panel: it fades (.dragging) and a copy of it (the ghost, style.css `.res.ghost`)
-// follows the pointer on the page, over the panel and the dock too. The ghost is only a picture:
-// no focus, no role. The Outside caption's top is where the gateway's room ends.
+// A row of the Add panel lifts (map-drag.js liftGhost): its ghost follows the pointer on the page.
+// The Outside caption's top is where the gateway's room ends.
 function beginAdd(drag) {
   const { node, kind } = drag.block;
-  const box = node.getBoundingClientRect();
-  const ghost = node.cloneNode(true);
-  ghost.classList.add("ghost");
-  for (const name of ["role", "tabindex", "aria-disabled"]) ghost.removeAttribute(name);
-  delete ghost.dataset.focus;
-  ghost.setAttribute("aria-hidden", "true");
-  Object.assign(ghost.style, { left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px` });
-  document.body.append(ghost);
-  node.classList.add("dragging");
+  const { ghost, box } = liftGhost(node);
   const caption = onMap.layout.blocks.find((b) => b.id === "group:outside");
   const kitden = kitdenGateway();
   Object.assign(drag, { ghost, box, line: caption ? caption.y : Infinity, group: kind === "local" ? "local" : "remote", gateway: kitden ? kitden.id : null });
@@ -382,8 +373,8 @@ function beginAdd(drag) {
 // and not over Details or the dock, the ghost takes the drop look (`.over`), the Kitden gateway
 // lights and the slot opens in the row's own group, wherever the pointer is; off it, all three go.
 function overAdd(drag) {
-  const { ghost, box, grab } = drag;
-  ghost.style.transform = `translate(${drag.at.x - box.left - grab.x}px, ${drag.at.y - box.top - grab.y}px)`;
+  const { ghost } = drag;
+  moveGhost(drag);
   const point = covered(drag.at) ? null : pointOf(drag);
   const open = Boolean(point && drag.gateway && inAddZone(onMap.layout, point, drag.line));
   ghost.classList.toggle("over", open);

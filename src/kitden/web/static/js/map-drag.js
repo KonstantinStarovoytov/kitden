@@ -177,6 +177,28 @@ export function pageBox(map, place) {
   return { left: origin.left + place.x, top: origin.top + place.y, width: place.w, height: place.h };
 }
 
+// A row of an Add panel lifts: it fades (.dragging) and a copy of it (the ghost, style.css
+// `.res.ghost`) goes on the page over it, to follow the pointer over the panel and the dock too.
+// The ghost is only a picture: no focus, no role. Gives { ghost, box }, `box` the row's place.
+export function liftGhost(node) {
+  const box = node.getBoundingClientRect();
+  const ghost = node.cloneNode(true);
+  ghost.classList.add("ghost");
+  for (const name of ["role", "tabindex", "aria-disabled"]) ghost.removeAttribute(name);
+  delete ghost.dataset.focus;
+  ghost.setAttribute("aria-hidden", "true");
+  Object.assign(ghost.style, { left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px` });
+  document.body.append(ghost);
+  node.classList.add("dragging");
+  return { ghost, box };
+}
+
+// The ghost keeps the spot of the press under the pointer.
+export function moveGhost(drag) {
+  const { ghost, box, grab, at } = drag;
+  ghost.style.transform = `translate(${at.x - box.left - grab.x}px, ${at.y - box.top - grab.y}px)`;
+}
+
 // A panel row's ghost flies from where it is onto `to` (a page box), or back onto its row, then
 // goes, and the row comes back to full strength. Under reduced motion, and on a hidden page, it
 // lands at once.

@@ -30,6 +30,8 @@ from kitden.views.catalog import (
     _category_name,
     _first,
     _plugin_dir,
+    catalog,
+    held_count,
 )
 
 CLIENTS = ("claude_code", "codex", "cursor")
@@ -432,3 +434,41 @@ def skill_keepers(inventory, item, readers: list[str]) -> list[str]:
         and (i.scope in (Scope.USER, Scope.PLUGIN) or (project and i.project == project))
     }
     return [c for c in CLIENTS if c in keeps]
+
+
+def _offer_row(offer: dict, routes: dict, installed: list[str], refusal: str | None) -> dict:
+    row = {
+        "id": offer["id"],
+        "kind": offer["kind"],
+        "name": offer["name"],
+        "marketplace": offer["marketplace"],
+        "routes": routes,
+        "installed": installed,
+        "refusal": refusal,
+    }
+    held = held_count(offer.get("inside")) if offer["kind"] == "plugin" else None
+    if held:
+        row["count"], row["unit"] = held
+    return row
+
+
+def library_offers(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
+    """The Library's add panel: each plugin and skill a marketplace on this computer offers, by
+    marketplace and name. `routes` names the found clients that can add it, `installed` the ones
+    that load it already, and `refusal` why no found client can take it. No paths."""
+    found = {c.id for c in inventory.clients if c.status is ClientStatus.FOUND and c.id in CLIENTS}
+    rows = []
+    for offer in catalog(inventory, adapters):
+        routes = {c: r for c, r in offer["routes"].items() if c in found}
+        installed = [c for c in offer["installed"] if c in found]
+        lacks = any(c not in installed for c in routes)
+        refusal = None if lacks or installed else f"No client here can get {offer['name']}."
+        rows.append(_offer_row(offer, routes, installed, refusal))
+    for skill in skill_catalog(inventory, adapters):
+        if not skill["marketplace"]:
+            continue
+        installed = [c for c in CLIENTS if c in skill["installed"] and c in found]
+        lacks = any(c not in installed for c in found)
+        refusal = NEEDS_PLUGIN if lacks and not skill["self_contained"] else None
+        rows.append(_offer_row(skill, dict(skill["routes"]), installed, refusal))
+    return sorted(rows, key=lambda r: (r["marketplace"].lower(), r["name"].lower(), r["kind"]))

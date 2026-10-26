@@ -358,8 +358,9 @@ export function addSkillForm(skill) {
   });
 }
 
-// Add a marketplace from a folder here or a GitHub repository.
-export function marketplaceForm() {
+// Add a marketplace from a folder here or a GitHub repository. `back`, when the Library's add panel
+// opens it: what runs once its row is in the tray (review.js), so the panel comes back.
+export function marketplaceForm({ back = null } = {}) {
   const body = el("div", "body");
   const field = el("label", "field grow");
   const input = el("input");
@@ -371,7 +372,7 @@ export function marketplaceForm() {
   const chosen = new Set(INSTALLERS);
   const form = addFormBody(clientChecks(INSTALLERS, chosen), chosen, () => review(
     { action: "marketplace.add", targets: [...chosen].map((client) => ({ client })), params: { source: input.value.trim() } },
-    { note: projectNote(state.project) },
+    { note: projectNote(state.project), back },
   ));
   form.prepend(field);
   body.append(el("p", "muted", "For a GitHub repository, Kitden reads its marketplace file once to name it. Cursor keeps its marketplaces in the Cursor account: add them in Cursor."), form);

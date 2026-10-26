@@ -1089,9 +1089,11 @@ h2.sw-head { margin: 0; font-size: 11px; font-weight: 600; color: var(--ink-2); 
 .own-state.on { color: var(--route); }
 .drawer > .step-foot { display: flex; align-items: center; gap: 6px; margin: 0; padding: 12px 20px; border-top: 1px solid var(--wire); color: var(--ink-3); font-size: 12px; }
 #drawer.floating > .step-foot { margin-top: auto; padding: 10px 0 0; }
-/* The Add a server panel (gateway-add.js, docs/mockup/add-notes.md §2). A greyed row keeps its
-   words readable: its tile fades, its name and lines are --ink-3 (tests/unit/test_contrast.py). */
+/* The add panel (add-panel.js; the Gateway's and the Library's, docs/mockup/add-notes.md §2). A
+   greyed row keeps its words readable: its tile fades, its name and lines are --ink-3
+   (tests/unit/test_contrast.py). The Library's quiet "Add a marketplace…" ends the list. */
 #drawer .add-body { gap: 16px; }
+#drawer .add-body > .add-more { justify-self: start; }
 .add-search { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--wire); border-radius: 7px; background: var(--inset); color: var(--ink-3); }
 .add-search:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
 .add-search input { flex: 1; min-width: 0; border: 0; background: transparent; outline: none; font-size: 12px; color: var(--ink); }

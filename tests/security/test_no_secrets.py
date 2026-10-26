@@ -154,6 +154,7 @@ def _page_outputs(home) -> list[str]:
             "/api/gateway-view",
             "/api/library-map",
             "/api/market-servers",
+            "/api/library-offers",
         ]:
             outputs.append(page.get(path).text)
         for item in page.get("/api/items?kind=mcp_server").json():

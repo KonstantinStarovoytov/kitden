@@ -5,6 +5,7 @@
 // adds a row to the tray; nothing is written before Apply. Paths stay under Technical details.
 import { button, el, icon, joinWords, plural } from "./dom.js";
 import { focusAfterStep, headTile, iconTile, lamp, openCard, pressOnce, projectChecklist, stepHead, tickRow, tiles } from "./gateway-details.js";
+import { initLibraryAdd } from "./library-add.js";
 import { addBody, lampOf, libraryThing, onLibrarySelect } from "./library-map.js";
 import { offBodies, skillOffBodies, skillRuleWaits } from "./library-rules.js";
 import { closePanel, drawQuietly, followTray, isPanelOpen, keepFrom, panelState, previewButton, review, stepTo, swapContent, technical } from "./panel.js";
@@ -431,4 +432,6 @@ export function initLibraryDetails() {
   onLibrarySelect((id, how) => {
     heard(id, how).catch((error) => console.error(error));
   });
+  // The map's "+ Add" opens the add panel.
+  initLibraryAdd();
 }

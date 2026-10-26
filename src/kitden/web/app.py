@@ -146,7 +146,13 @@ from kitden.views.load_map import load_map, map_dict
 from kitden.views.overview import overview
 from kitden.views.review import change_target, mark_reach, undo_note
 from kitden.views.setup_server import enable_steps, is_old_entry, setup_server_state
-from kitden.views.skills import project_skills, skill_catalog, skill_keepers, skill_readers
+from kitden.views.skills import (
+    library_offers,
+    project_skills,
+    skill_catalog,
+    skill_keepers,
+    skill_readers,
+)
 from kitden.views.words import CHANGE_UNREAD, KEPT_UNREAD, NO_ADD_UNREAD, ONLY_IN_PROJECT
 from kitden.watch import Watcher
 from kitden.web.security import SecurityMiddleware
@@ -1480,6 +1486,12 @@ def create_app(
         rows = await asyncio.to_thread(market_servers, state.inventory, adapters, held)
         return JSONResponse({"servers": rows})
 
+    async def library_offer_list(request: Request) -> JSONResponse:
+        """The plugins and skills the marketplaces on this computer offer, for the Library's add
+        panel, each with the clients that can add it. No paths."""
+        rows = await asyncio.to_thread(library_offers, state.inventory, adapters)
+        return JSONResponse({"offers": rows})
+
     async def commands(request: Request) -> JSONResponse:
         """Steps the developer runs themselves (FR-029, FR-035). Never run by the tool."""
         item = _item(request.query_params.get("item", ""))
@@ -1543,6 +1555,7 @@ def create_app(
             Route("/api/library-map", _read_model(_library_map)),
             Route("/api/offer", offer_view),
             Route("/api/market-servers", market_server_list),
+            Route("/api/library-offers", library_offer_list),
             Route("/api/explain", _read_model(_explain)),
             Route("/api/overview", _read_model(_overview)),
             Route("/api/gateway-view", _read_model(_gateway_view)),

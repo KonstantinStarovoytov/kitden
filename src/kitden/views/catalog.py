@@ -246,6 +246,18 @@ def catalog(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
     return sorted(offers.values(), key=lambda o: (o["name"].lower(), o["marketplace"]))
 
 
+def held_count(inside: dict | None) -> tuple[int, str] | None:
+    """How many things Kitden read inside a plugin, and their word: "skill" when it holds only
+    skills, else "item". None when nothing was read."""
+    if not inside:
+        return None
+    kinds = ("skills", "commands", "agents", "hooks", "mcp_servers")
+    count = sum(len(inside.get(kind) or []) for kind in kinds)
+    if not count:
+        return None
+    return count, "skill" if count == len(inside.get("skills") or []) else "item"
+
+
 def _offered_servers(adapters: dict[str, ClientAdapter]):
     """Each MCP server inside a plugin folder the marketplaces offer, once, as
     (plugin, marketplace, name, raw entry). The same plugins as `catalog`, and the entry is
