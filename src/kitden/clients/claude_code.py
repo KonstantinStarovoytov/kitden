@@ -112,17 +112,39 @@ def _skill_rules(layers: list[tuple[Scope, dict]]) -> dict[str, tuple[str, Scope
     return rules
 
 
-def _apply_rules(items: list[Item], rules: dict[str, tuple[str, Scope]]) -> list[Item]:
-    """Mark the skills a rule turns off. A rule that keeps a skill on only records its file."""
+def _apply_rules(
+    items: list[Item], rules: dict[str, tuple[str, Scope]], known: bool = True
+) -> list[Item]:
+    """Mark the skills a rule turns off. A rule that keeps a skill on only records its file.
+    When a settings file could not be read (`known` is False) the skills' state is unknown."""
     ruled = []
     for item in items:
         rule = rules.get(item.name)
-        if item.kind is ItemKind.SKILL and rule:
+        if item.kind is not ItemKind.SKILL:
+            pass
+        elif not known:
+            item = replace(item, enabled=Enabled.UNKNOWN)
+        elif rule:
             state, scope = rule
             item = replace(
                 item, enabled=Enabled.OFF if state == "off" else Enabled.ON, state_scope=scope
             )
         ruled.append(item)
+    return ruled
+
+
+def _project_rules(
+    items: list[Item], by_project: dict[str, dict[str, tuple[str, Scope]]]
+) -> list[Item]:
+    """Give each user skill the rules that a project's own settings hold for it."""
+    ruled = []
+    for item in items:
+        found = []
+        for path, rules in by_project.items():
+            rule = rules.get(item.name)
+            if item.kind is ItemKind.SKILL and rule and rule[1] is not Scope.USER:
+                found.append((path, Enabled.OFF if rule[0] == "off" else Enabled.ON, rule[1]))
+        ruled.append(replace(item, project_rules=tuple(found)) if found else item)
     return ruled
 
 
@@ -402,6 +424,7 @@ class ClaudeCodeAdapter(ClientAdapter):
                     Scope.USER,
                 )
             )
+        project_skill_rules: dict[str, dict[str, tuple[str, Scope]]] = {}
         for path, data in _dict(state.get("projects")).items():
             data = _dict(data)
             scan.projects.append(project(path, CLIENT))
@@ -417,7 +440,10 @@ class ClaudeCodeAdapter(ClientAdapter):
                         project=path,
                     )
                 )
-            scan.items += self._project_files(read, Path(path), data, settings)
+            found, rules = self._project_files(read, Path(path), data, settings, settings_known)
+            scan.items += found
+            if rules is not None:
+                project_skill_rules[path] = rules
 
         # Plugins: user settings decide on/off; project settings may override.
         enabled = _dict(settings.get("enabledPlugins"))
@@ -484,10 +510,12 @@ class ClaudeCodeAdapter(ClientAdapter):
         )
 
         # Skills, hooks and marketplaces.
-        user_rules = _skill_rules([(Scope.USER, settings)])
-        scan.items += _apply_rules(
-            skill_items(CLIENT, self.home / ".claude/skills", Scope.USER, CLIENT), user_rules
+        user_skills = _apply_rules(
+            skill_items(CLIENT, self.home / ".claude/skills", Scope.USER, CLIENT),
+            _skill_rules([(Scope.USER, settings)]),
+            settings_known,
         )
+        scan.items += _project_rules(user_skills, project_skill_rules)
         scan.items += instruction_items(
             CLIENT, _instruction_files(self.home / ".claude"), Scope.USER, CLIENT
         )
@@ -523,8 +551,9 @@ class ClaudeCodeAdapter(ClientAdapter):
         return scan
 
     def _project_files(
-        self, read: Reader, root: Path, data: dict, user_settings: dict
-    ) -> list[Item]:
+        self, read: Reader, root: Path, data: dict, user_settings: dict, user_known: bool
+    ) -> tuple[list[Item], dict[str, tuple[str, Scope]] | None]:
+        """The project's items, and its skill rules (None when a settings file was unreadable)."""
         path = str(root)
         items: list[Item] = []
         approved = set(data.get("enabledMcpjsonServers") or [])
@@ -581,9 +610,11 @@ class ClaudeCodeAdapter(ClientAdapter):
         rules = _skill_rules(
             [(Scope.USER, user_settings), (Scope.PROJECT, settings), (Scope.LOCAL, local)]
         )
+        known = user_known and not (read.failed(settings_path) or read.failed(local_path))
         items += _apply_rules(
             skill_items(CLIENT, root / ".claude/skills", Scope.PROJECT, CLIENT, project=path),
             rules,
+            known,
         )
         # checked 2026-10-22 (code.claude.com/docs/en/memory): a project's CLAUDE.md and
         # CLAUDE.local.md at its root, besides the files in its `.claude` folder. When the
@@ -592,7 +623,7 @@ class ClaudeCodeAdapter(ClientAdapter):
         if not is_home(root, self.home):
             files += _instruction_files(root / ".claude")
         items += instruction_items(CLIENT, files, Scope.PROJECT, CLIENT, project=path)
-        return items
+        return items, (rules if known else None)
 
     def _plugin_parts(self, read: Reader, root: Path, enabled: Enabled) -> list[Item]:
         if not root.is_dir():

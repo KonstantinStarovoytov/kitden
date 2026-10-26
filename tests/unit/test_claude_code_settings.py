@@ -133,3 +133,89 @@ def test_unknown_skill_override_values_are_ignored(tmp_path, no_version):
     assert _skill_state(items, "review", Scope.PROJECT) == (Enabled.ON, None)
     # The bad local value does not hide the valid user rule.
     assert _skill_state(items, "deploy", Scope.USER) == (Enabled.OFF, Scope.USER)
+
+
+def _state_in(home, project, name, scope=Scope.USER):
+    view = effective_view(build_inventory(home), "claude_code", project)
+    found = [i for i in view.items if i.kind is ItemKind.SKILL and i.name == name]
+    # An Off skill is not in the loaded list: look it up in the inventory instead.
+    if not found:
+        inventory = build_inventory(home)
+        (item,) = [
+            i
+            for i in inventory.items
+            if i.kind is ItemKind.SKILL and i.name == name and i.scope is scope
+        ]
+        return Enabled.OFF, item
+    return Enabled.ON, found[0]
+
+
+def test_a_local_rule_turns_a_user_skill_on_in_that_project_only(tmp_path, no_version):
+    home, root = _home(
+        tmp_path,
+        user={"skillOverrides": {"deploy": "off"}},
+        local={"skillOverrides": {"deploy": "on"}},
+    )
+    state, item = _state_in(home, str(root), "deploy")
+    assert (state, item.state_scope) == (Enabled.ON, Scope.LOCAL)
+    state, item = _state_in(home, None, "deploy")
+    assert (state, item.state_scope) == (Enabled.OFF, Scope.USER)
+    # There is still one deploy item: nothing is duplicated in the inventory.
+    names = [i.name for i in build_inventory(home).items if i.kind is ItemKind.SKILL]
+    assert names.count("deploy") == 1
+
+
+def test_a_local_rule_turns_a_user_skill_off_in_that_project_only(tmp_path, no_version):
+    home, root = _home(tmp_path, local={"skillOverrides": {"deploy": "off"}})
+    inventory = build_inventory(home)
+    (user_skill,) = [i for i in inventory.items if i.name == "deploy"]
+    assert (user_skill.enabled, user_skill.state_scope) == (Enabled.ON, None)
+    inside = effective_view(inventory, "claude_code", str(root))
+    assert "deploy" not in {i.name for i in inside.items}
+    state, _ = _state_in(home, str(root), "deploy")
+    assert state is Enabled.OFF
+    outside = effective_view(inventory, "claude_code", None)
+    assert "deploy" in {i.name for i in outside.items}
+    # The rule source in that project is the local file.
+    assert user_skill.project_rules == ((str(root), Enabled.OFF, Scope.LOCAL),)
+
+
+def test_a_project_off_plugin_with_a_local_off_shows_on_under_all_projects(tmp_path, no_version):
+    home, root = _home(
+        tmp_path,
+        user={"enabledPlugins": {PLUGIN: True}},
+        local={"enabledPlugins": {PLUGIN: False}},
+    )
+    inventory = build_inventory(home)
+    local = [i for i in inventory.items if i.name == PLUGIN and i.scope is Scope.LOCAL]
+    assert [(i.enabled, i.state_scope) for i in local] == [(Enabled.OFF, Scope.LOCAL)]
+    everywhere = effective_view(inventory, "claude_code", None)
+    (plugin,) = [i for i in everywhere.items if i.name == PLUGIN]
+    assert (plugin.scope, plugin.enabled) == (Scope.USER, Enabled.ON)
+    assert not [
+        i for i in effective_view(inventory, "claude_code", str(root)).items if i.name == PLUGIN
+    ]
+
+
+def test_skill_overrides_merge_across_files_for_one_project_skill(tmp_path, no_version):
+    home, _ = _home(
+        tmp_path,
+        user={"skillOverrides": {"review": "off"}},
+        local={"skillOverrides": {"other": "on"}},
+    )
+    items = _scan(home, no_version)
+    assert _skill_state(items, "review", Scope.PROJECT) == (Enabled.OFF, Scope.USER)
+
+
+def test_unreadable_settings_leave_skill_states_unknown(tmp_path, no_version):
+    home, root = _home(tmp_path)
+    (home / ".claude/settings.json").write_text("{ not json")
+    items = _scan(home, no_version)
+    assert _skill_state(items, "deploy", Scope.USER) == (Enabled.UNKNOWN, None)
+    assert _skill_state(items, "review", Scope.PROJECT) == (Enabled.UNKNOWN, None)
+
+    home, root = _home(tmp_path / "two", project={})
+    (root / ".claude/settings.local.json").write_text("{ not json")
+    items = _scan(home, no_version)
+    assert _skill_state(items, "review", Scope.PROJECT) == (Enabled.UNKNOWN, None)
+    assert _skill_state(items, "deploy", Scope.USER) == (Enabled.ON, None)

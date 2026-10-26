@@ -151,6 +151,9 @@ class Item:
     stays_direct: str | None = None  # an MCP entry the Kitden gateway cannot run: why
     # The settings file (user, project or local) whose rule set `enabled`; None when no rule did.
     state_scope: Scope | None = None
+    # A user skill that a project's own settings turn on or off: (project, state, rule file).
+    # The effective view applies the one for its project; the item itself shows the user's rule.
+    project_rules: tuple[tuple[str, Enabled, Scope], ...] = ()
     # Equal for two MCP entries the Kitden gateway would run the same way (entries.entry_key).
     # Its values can be secrets, so it stays on the server: item_dict leaves it out.
     entry_key: str | None = field(default=None, repr=False)
