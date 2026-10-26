@@ -62,8 +62,13 @@ def preview(item: Item) -> list[str] | None:
     """The first lines of an instruction file, secrets hidden; None when it cannot be read."""
     if item.kind is not ItemKind.INSTRUCTIONS or not item.source.path:
         return None
+    return first_lines(item.source.path)
+
+
+def first_lines(path: str) -> list[str] | None:
+    """The first lines of a text file, secrets hidden; None when it cannot be read."""
     try:
-        with Path(item.source.path).open(encoding="utf-8-sig", errors="replace") as file:
+        with Path(path).open(encoding="utf-8-sig", errors="replace") as file:
             text = file.read(PREVIEW_READ)  # a file with no line breaks is not read whole
     except OSError:
         return None

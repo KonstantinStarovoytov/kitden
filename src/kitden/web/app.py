@@ -132,6 +132,7 @@ from kitden.views.effective import project_views
 from kitden.views.explain import explain, with_page_fields
 from kitden.views.findings import find_bypasses, find_findings, finding_dict, mark_gateways
 from kitden.views.gateway_view import gateway_dict, gateway_view
+from kitden.views.instructions_map import instructions_map
 from kitden.views.inventory import (
     Inventory,
     LastGood,
@@ -848,6 +849,11 @@ def create_app(
         answer = library_map(state.inventory, adapters, path)
         return JSONResponse({"project": project, **answer})
 
+    def _instructions_map(request, project, path):
+        """The Instructions map: clients, the instruction files they read, and their imports."""
+        answer = instructions_map(state.inventory, adapters, path)
+        return JSONResponse({"project": project, **answer})
+
     def _explain(request, project, path):
         name = request.query_params.get("name")
         if not name:
@@ -1553,6 +1559,7 @@ def create_app(
             Route("/api/map", _read_model(_map)),
             Route("/api/library", _read_model(_library)),
             Route("/api/library-map", _read_model(_library_map)),
+            Route("/api/instructions-map", _read_model(_instructions_map)),
             Route("/api/offer", offer_view),
             Route("/api/market-servers", market_server_list),
             Route("/api/library-offers", library_offer_list),

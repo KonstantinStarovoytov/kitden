@@ -153,6 +153,7 @@ def _page_outputs(home) -> list[str]:
             "/api/map",
             "/api/gateway-view",
             "/api/library-map",
+            "/api/instructions-map",
             "/api/market-servers",
             "/api/library-offers",
         ]:
@@ -169,6 +170,7 @@ def _page_outputs(home) -> list[str]:
         for project in page.get("/api/projects").json():
             outputs.append(page.get(f"/api/projects/{project['id']}/effective").text)
             outputs.append(page.get(f"/api/library-map?project={project['id']}").text)
+            outputs.append(page.get(f"/api/instructions-map?project={project['id']}").text)
             outputs.append(page.get(f"/api/findings?project={project['path']}").text)
         for item in page.get("/api/items").json():
             if item["kind"] in ("plugin", "marketplace"):
@@ -201,7 +203,12 @@ async def _mcp_outputs(build, home, names) -> list[str]:
 
 @pytest.mark.anyio
 async def test_no_secret_in_any_output_and_no_network(home, network_attempts, capsys):
+    # An imported file holds a secret: the Instructions map names the import, never its text.
+    claude = home / ".claude/CLAUDE.md"
+    claude.write_text(claude.read_text() + "@notes.md\n")
+    (home / ".claude/notes.md").write_text("api_key = SENTINEL_SECRET_IMPORTED\n")
     outputs = _page_outputs(home)
+    assert any('"name":"~/.claude/notes.md"' in text for text in outputs)
     store = data_dir(home)
     outputs.append((store / "changes.log").read_text())
     outputs += [p.read_text() for p in store.glob("changes/*/manifest.json")]
@@ -256,7 +263,13 @@ def _demo_outputs(home) -> list[str]:
         projects = page.get("/api/projects").json()
         for project in [None, *projects]:
             query = f"?project={project['id']}" if project else ""
-            for path in ["/api/overview", "/api/map", "/api/gateway-view", "/api/library-map"]:
+            for path in [
+                "/api/overview",
+                "/api/map",
+                "/api/gateway-view",
+                "/api/library-map",
+                "/api/instructions-map",
+            ]:
                 get(path + query)
             get("/api/findings" + (f"?project={quote(project['path'])}" if project else ""))
         for kind in KINDS:
