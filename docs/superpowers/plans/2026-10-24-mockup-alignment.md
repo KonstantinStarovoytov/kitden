@@ -229,8 +229,20 @@ The mockup breaks several written rules. Each line gives the rule, what the mock
 
 Reuses Part 5 backend Tasks 1, 2, 7 (local settings, plugin parts, `skill.rule`) and Part 6 Tasks 1–3 (imports). **Files:** `static/js/library.js`, `details.js` (move to `detailsCard`), `style.css`, `app.js:35` (`MAP_PAGES` adds `library`). **Mockup:** `Library` (`plugin`, `pluginPanel`, `wirePlugin`, `add`, `pickClient`, `dropWhy`, `dragStart`, `select`, `skill`, `file`, `imp`, `removeFrom`); motion-spec M7.
 
-- [ ] **Task 6.1 Two tabs and the map.** "Plugins and skills" | "Instructions" pill; Map | List; lede "Follow the source. Connect only what you need." + scope bar. Map: Clients → source captions → plugin cards (180×60) and slim skill rows → Inside column. A plugin nobody has shows only in the add panel (spec call #3 stays unless the owner says otherwise).
-- [ ] **Task 6.2 Select, unfold, Details.** Click a plugin: select, open Inside, light the path, Plugin Details ("Add to <client>…" with a checklist, several clients → tray rows; "Turn off for all projects…"). Skill on its own: "Turn off for all projects…" / "in some projects…" via `skillOverrides` (Claude Code) and `[[skills.config]]` (Codex). Items inside a plugin: no switch (D25).
+**Notes from Phase 6A** (plan `2026-10-26-align-phase6a-library-map.md`, done 2026-10-26). Built: the reads of Claude Code's local settings and `skillOverrides` (per-project rules for user skills), what an installed plugin holds, `/api/library-map`, the `skill.rule` change, the Library map with paging and find, select/unfold/Details, and the owner's count button that folds a block without Details (Gateway and Library). The List is still today's six-tab table; the Instructions tab on the Map goes to it. For Phase 6B:
+- "Use the shared rule…" (the backend takes `off: false`) and an "already off there" line on the project checklist.
+- A Codex skill that exists only in one project has no action yet; Codex rules go by path, so offer "Turn off this copy in Codex…".
+- `here` is decided per row, not per client: another client's project copy can offer "Turn off in this project…" for Claude Code.
+- A project-only Claude Code skill gets no action and no reason while the user file holds `skillOverrides`.
+- Claude Code v2.1.211+ keeps `.claude/settings.local.json` at the git root when started in a subfolder (docs checked 2026-10-26); Kitden reads and writes the project folder's file only.
+- The NEW_LOCAL_FILE words say "only when it makes it", which overstates (Claude Code's global git exclude covers any repository once set).
+- The find chip counts matches on unshown pages and counts several lit parts as one; one rule for Gateway and Library.
+- A fold made with the count during a search reopens on the next full redraw (design.md says it stays folded).
+- A failed library-map read can be taken as fresh; a read from before a Gateway reload can mark old data fresh.
+- Smaller: the card's "This project" tag replaces "<n> items"; a tick row that turns off while focused loses focus; `_can` takes seven parameters; `_plugin_folders` repeats `installed_inside`'s walk; the installed-inside cache misses a rename that keeps mtimes; the Codex version-folder rule.
+
+- [x] **Task 6.1 Two tabs and the map.** "Plugins and skills" | "Instructions" pill; Map | List; lede "Follow the source. Connect only what you need." + scope bar. Map: Clients → source captions → plugin cards (180×60) and slim skill rows → Inside column. A plugin nobody has shows only in the add panel (spec call #3 stays unless the owner says otherwise).
+- [x] **Task 6.2 Select, unfold, Details.** Click a plugin: select, open Inside, light the path, Plugin Details ("Add to <client>…" with a checklist, several clients → tray rows; "Turn off for all projects…"). Skill on its own: "Turn off for all projects…" / "in some projects…" via `skillOverrides` (Claude Code) and `[[skills.config]]` (Codex). Items inside a plugin: no switch (D25).
 - [ ] **Task 6.3 Drag a plugin onto a client.** Client lights + dashed wire; a blocked client (already has it, Cursor per D26) gives the reason and shakes.
 - [ ] **Task 6.4 Link ×.** client→plugin = remove from that client (`plugin.remove`; note that Claude Code's reinstall on Undo loses the plugin's saved options); client→skill = turn off; no × inside a plugin; instruction links read-only.
 - [ ] **Task 6.5 Instructions map.** Clients → files → imports; import links only where the client follows them (D27); file lines under Technical details.
