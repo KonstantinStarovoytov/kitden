@@ -1484,6 +1484,26 @@ test('the count unfolds and folds a server: nothing is selected and no Details o
   assert.deepEqual([toolShown(box), count.getAttribute('aria-label'), isPanelOpen(), document.activeElement === count], [false, 'Show 1 tool', false, true]);
 });
 
+test('during a search the count of a server the search opened folds it', async (t) => {
+  t.after(() => {
+    state.q = '';
+    return countCleanUp();
+  });
+  state.q = 'read_file';
+  const box = freshMap();
+  const count = countOf(box);
+  assert.deepEqual([toolShown(box), count.getAttribute('aria-label')], [true, 'Hide tools']);
+  count.focus();
+  count.listeners.click[0]();
+  settle();
+  assert.deepEqual([toolShown(box), count.getAttribute('aria-label'), isPanelOpen()], [false, 'Show 1 tool', false]);
+  // A second press opens it again.
+  count.listeners.click[0]();
+  settle();
+  assert.equal(toolShown(box), true);
+  state.q = '';
+});
+
 test('a press on the block itself still opens Details and unfolds, as before', async (t) => {
   t.after(countCleanUp);
   const box = freshMap();

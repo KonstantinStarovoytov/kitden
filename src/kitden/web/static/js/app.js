@@ -14,7 +14,7 @@ import { renderOverview } from "./overview.js";
 import { closeForProject, closePanel, holdPanel, initPanel, isPanelOpen } from "./panel.js";
 import { callout, demoTag, GONE_PROJECT, latestChanges, projectButton, projectMenu, scanLine, setHint, versionsOpened } from "./parts.js";
 import {
-  arrival, busy, current, data, followHash, freshness, go, isOldAddress, loadShared, onIdle, parseHash, projectGone, reload, setRenderer, setState, setSwitcher, state,
+  arrival, busy, current, data, followHash, freshness, go, isOldAddress, loadShared, onIdle, parseHash, projectGone, readLibraryMap, reload, setRenderer, setState, setSwitcher, state,
   switchProject,
 } from "./store.js";
 import { checkTrayStale, tray } from "./tray.js";
@@ -270,10 +270,10 @@ function readScan() {
 }
 
 // A rail link opens its place fresh: the project stays, and no Details opens. The Library's rows
-// are read first (up to a moment), so the page changes once, already full, instead of a skeleton
-// turning into a table after the change.
+// and its map are read first (up to a moment), so the page changes once, already full, instead of
+// a skeleton turning into a table after the change.
 async function openPlace(view) {
-  if (view === "library" && state.view !== "library") await raceSlow(loadLibraryFor({}), 300);
+  if (view === "library" && state.view !== "library") await raceSlow(Promise.all([loadLibraryFor({}), readLibraryMap()]), 300);
   go(view);
 }
 

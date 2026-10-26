@@ -9,6 +9,7 @@ from starlette.testclient import TestClient
 
 from kitden import mcp_server
 from kitden.clients import version_cache
+from kitden.demo import build_demo_home, demo_build
 from kitden.mcp_server import create_server
 from kitden.views.inventory import build_inventory
 from kitden.web.app import create_app
@@ -201,3 +202,16 @@ async def test_a_same_name_note_names_the_client_with_another_source(home):
     (note,) = [f for f in data["findings"] if f["type"] == "same_name_other_source"]
     assert note["clients"] == ["claude_code", "codex"]
     assert note["explanation"].endswith("but codex's neon comes from another source")
+
+
+async def test_explain_item_sees_a_skill_turned_off_in_one_project(tmp_path):
+    home = build_demo_home(tmp_path, "medium")
+    atlas = home / "work/atlas"
+    local = atlas / ".claude/settings.local.json"
+    local.parent.mkdir(parents=True, exist_ok=True)
+    local.write_text(json.dumps({"skillOverrides": {"brandkit": "off"}}))
+    server = create_server(demo_build(home), cwd=lambda: str(atlas))
+    data = await call(server, "explain_item", name="brandkit", kind="skill")
+    claude = next(d for d in data["definitions"] if d["client"] == "claude_code")
+    assert claude["enabled"] == "off"
+    assert claude["why"] == "Does not load: it is turned off."

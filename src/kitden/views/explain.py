@@ -9,7 +9,7 @@ from kitden.local_gateway.views import tool_count
 from kitden.model import Enabled, Item, ItemKind
 from kitden.redact import redact_lines
 from kitden.views.affects import affects
-from kitden.views.effective import effective_view
+from kitden.views.effective import effective_view, in_project
 from kitden.views.findings import base_name
 from kitden.views.load_map import category as category_of
 
@@ -160,6 +160,7 @@ def explain(
             continue
         if item.project is not None and project is not None and item.project != project:
             continue
+        item = in_project(item, project)  # a user skill as this project's settings leave it
         if item.client not in views:
             views[item.client] = effective_view(inventory, item.client, project)
         view = views[item.client]

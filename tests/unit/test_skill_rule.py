@@ -16,8 +16,10 @@ from kitden.views.words import (
     CHANGE_UNREAD,
     CODEX_NO_PROJECT,
     CURSOR_NO_SKILL_SWITCH,
+    NEW_LOCAL_FILE,
     NO_CLAUDE_FOLDER,
     NO_SKILL_MERGE,
+    PROJECT_SKILL_ALL,
 )
 from kitden.web.app import create_app
 
@@ -324,3 +326,60 @@ def test_a_tray_never_writes_skill_rules_in_the_user_and_a_project_file(tmp_path
         for first, then in ((everywhere, here), (here, everywhere)):
             answer = page.post("/api/batch/check", json={"requests": [first, then]}, headers=POST)
             assert answer.json() == {"ok": False, "reason": NO_SKILL_MERGE, "row": then["id"]}
+
+
+def test_a_project_only_skill_is_never_turned_off_in_the_users_file(tmp_path):
+    home, app, _ = _home(tmp_path)
+    _skill(app / ".claude/skills", "app-notes")
+    with _page(home) as page:
+        item = _item(page, "claude_code", "app-notes")
+        answer = _preview(page, _rule("claude_code", item))
+        assert answer.json() == {"detail": PROJECT_SKILL_ALL, "row": "r1"}
+        assert (
+            PROJECT_SKILL_ALL == "This skill is only in one project; turn it off in that project."
+        )
+        # In its project, the rule goes to the project's local settings.
+        _round_trip(page, _rule("claude_code", item, "project", _project(page, app)))
+    assert json.loads((app / ".claude/settings.local.json").read_text()) == {
+        "skillOverrides": {"app-notes": "off"}
+    }
+    assert (home / ".claude/settings.json").read_text() == USER
+
+
+def test_codex_skills_written_as_an_inline_list_are_refused_when_the_row_is_added(tmp_path):
+    home, _, _ = _home(tmp_path)
+    config = home / ".codex/config.toml"
+    skill = os.path.realpath(home / ".agents/skills/other/SKILL.md")
+    inline = [
+        f'skills = {{ config = [ {{ path = "{skill}", enabled = true }} ] }}\n',
+        f'[skills]\nconfig = [ {{ path = "{skill}", enabled = true }} ]\n',
+    ]
+    for text in inline:
+        config.write_text(CODEX.split("[mcp_servers")[0] + text)
+        before = config.read_text()
+        with _page(home) as page:
+            answer = _preview(page, _rule("codex", _item(page, "codex", "lint-fix")))
+        assert answer.status_code == 422, text
+        assert answer.json() == {
+            "detail": "Codex's skills settings are not a list of tables; Kitden leaves them.",
+            "row": "r1",
+        }
+        assert config.read_text() == before
+
+
+def test_a_rule_that_makes_the_local_settings_file_says_so_once(tmp_path):
+    home, app, _ = _home(tmp_path)
+    with _page(home) as page:
+        project = _project(page, app)
+        skill = _rule("claude_code", _item(page, "claude_code", "deploy"), "project", project)
+        answer = _preview(page, skill)
+        (after,) = answer.json()["rows"][0]["after"]
+        assert after["note"] == NEW_LOCAL_FILE.format(folder="app")
+        assert NEW_LOCAL_FILE == (
+            "Kitden creates .claude/settings.local.json in {folder}. Claude Code keeps this file "
+            "out of git only when it makes it, so add it to .gitignore if git lists it."
+        )
+        # The file is there already: nothing to say.
+        _write(app / ".claude/settings.local.json", {})
+        (after,) = _preview(page, skill).json()["rows"][0]["after"]
+        assert "note" not in after

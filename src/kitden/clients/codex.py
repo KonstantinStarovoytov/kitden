@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from kitden.changes import toml_edit
-from kitden.changes.json_splice import ABSENT, PRESENT
+from kitden.changes.json_splice import ABSENT, PRESENT, UnrecognizedFormatError
 from kitden.clients.base import (
     PLUGIN_REMOVE,
     REMOVE_DIRECT,
@@ -51,7 +51,7 @@ from kitden.model import (
     Step,
     UnknownReason,
 )
-from kitden.views.words import CHANGE_UNREAD
+from kitden.views.words import CHANGE_UNREAD, CODEX_SKILLS_NOT_TABLES
 
 CLIENT = "codex"
 RESTART = "Restart Codex (the app and any open CLI sessions) for this to take effect."
@@ -229,14 +229,18 @@ class CodexAdapter(ClientAdapter):
         found = toml_edit.get_value(text, ("skills", "config"))
         rules = [] if found is ABSENT else found
         if not isinstance(rules, list) or not all(isinstance(r, dict) for r in rules):
-            raise ValueError(
-                "Codex's skills settings are not a list of tables; Kitden leaves them."
-            )
+            raise ValueError(CODEX_SKILLS_NOT_TABLES)
         path = str(item.source.path)
         # A table may spell the path another way (a link); the scan compares real paths.
         mine = [r for r in rules if os.path.realpath(str(r.get("path", ""))) == path]
         after = {**mine[-1], "enabled": False} if mine else {"path": path, "enabled": False}
         key = ("skills", "config", toml_edit.pick(str(after["path"])))
+        try:
+            # An inline list (`config = [ {...} ]`) reads as tables but cannot take the edit:
+            # say so now, not at Apply.
+            toml_edit.set_value(text, key, after)
+        except UnrecognizedFormatError:
+            raise ValueError(CODEX_SKILLS_NOT_TABLES) from None
         edit = FileEdit(path=str(config), fmt="toml", key=key, after=after)
         return Step(
             client=CLIENT, scope=Scope.USER, name=item.name, edit=edit, restart_note=RESTART

@@ -913,18 +913,20 @@ export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHove
   }
 
   // A block whose place a new block takes (arrivals) leaves at once, and its focus goes to that
-  // block, which takes its node's place. Its links fade out where they are (240 ms ease-out, with
-  // `fades`) and are removed by time; they are no links of the map any more. False for any other.
+  // block (to its count, when the focus was on a count and it has one), which takes its node's
+  // place. Its links fade out where they are (240 ms ease-out, with `fades`) and are removed by
+  // time; they are no links of the map any more. False for any other.
   function handOver(item, fades) {
     const next = blocks.get(replacing.get(item.id));
     if (!next || blocks.get(item.id) !== item) return false;
-    const focused = item.node.contains(document.activeElement);
+    const onCount = Boolean(item.count?.contains(document.activeElement));
+    const focused = onCount || item.node.contains(document.activeElement);
     if (item.node.parentNode) area.insertBefore(next.node, item.node);
     stop(item);
     blocks.delete(item.id);
     item.node.remove();
     dropCount(item);
-    if (focused) next.node.focus({ preventScroll: true });
+    if (focused) ((onCount && next.count) || next.node).focus({ preventScroll: true });
     for (const [key, link] of links) {
       if (link.link.from !== item.id && link.link.to !== item.id) continue;
       if (!fades) {

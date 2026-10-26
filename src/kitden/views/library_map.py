@@ -130,12 +130,20 @@ ADDS = ("claude_code", "codex")
 RULES = ("claude_code", "codex")
 
 
-def _can(row: Row, by: dict, through: dict, ids: dict, by_id, offer, found) -> dict:
+def _can(row: Row, by: dict, through: dict, ids: dict, by_id, offer, found, project) -> dict:
     """What Details may offer for an item, by client: `add`, the clients that can add the plugin
     and lack it (never Cursor: it gets plugins through Claude Code), and `off`, the clients that
     load their own copy and can turn it off for all projects (a plugin's switch, or a skill rule).
-    A hook has no switch."""
-    own = [c for c, state in by.items() if state == "on" and c not in through]
+    `off` acts on the user's own entry, the client's first item: a client where the project's own
+    entry or rule decides is left out (Details offers "Turn off in this project…" there). A hook
+    has no switch."""
+    own = [
+        c
+        for c, state in by.items()
+        if state == "on"
+        and c not in through
+        and not any(project and _decides_here(by_id[i], project) for i in ids[c])
+    ]
     if row.kind is ItemKind.PLUGIN:
         routes, installed = (offer["routes"], offer["installed"]) if offer else ({}, ())
         add = [c for c in ADDS if c in found and c in routes and c not in installed]
@@ -239,7 +247,7 @@ def library_map(inventory, adapters, project: str | None) -> dict:
             "items": ids,
             "here": here,
             "source": group["name"],
-            "can": _can(row, by, through, ids, by_id, offers.get(row.lookup), found),
+            "can": _can(row, by, through, ids, by_id, offers.get(row.lookup), found, project),
         }
         technical: dict[str, str] = {}
         if row.kind is ItemKind.PLUGIN:

@@ -55,6 +55,7 @@ from kitden.views.words import (
     NO_SKILL_MERGE,
     PLUGIN_ALL_PROJECTS,
     PLUGIN_SKILL,
+    PROJECT_SKILL_ALL,
 )
 
 if TYPE_CHECKING:
@@ -1057,6 +1058,8 @@ def _claude_rule_step(
         raise ValueError("Choose a skill or a plugin.")
     if item.scope is Scope.PLUGIN:
         raise ValueError(PLUGIN_SKILL)
+    if project is None and item.project is not None:
+        raise ValueError(PROJECT_SKILL_ALL)  # a rule in the user's file would hide every copy
     real = os.path.realpath
     if item.scope is Scope.PROJECT and project and real(str(item.project)) != real(project):
         raise ValueError("This skill is in another project.")

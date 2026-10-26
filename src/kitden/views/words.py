@@ -96,15 +96,24 @@ ROUTE_WORDS: dict[str, str] = {
 # there is no switch; the review's note names a project whose own skill settings may win.
 CURSOR_NO_SKILL_SWITCH = "Cursor has no switch to turn off one skill."
 CODEX_NO_PROJECT = "Codex has no switch for one project; turn it off for all projects."
+CODEX_SKILLS_NOT_TABLES = "Codex's skills settings are not a list of tables; Kitden leaves them."
 NO_SKILL_MERGE = (
     "Claude Code may not merge skill settings across files; turn it off for all projects instead."
 )
 OWN_SKILL_SETTINGS = "{folder} has its own skill settings; it may keep this skill on."
+# checked 2026-10-26 (code.claude.com/docs/en/settings): Claude Code adds
+# `**/.claude/settings.local.json` to the global git excludes the first time it writes the file;
+# a file made another way must be added to .gitignore by hand.
+NEW_LOCAL_FILE = (
+    "Kitden creates .claude/settings.local.json in {folder}. Claude Code keeps this file out of "
+    "git only when it makes it, so add it to .gitignore if git lists it."
+)
 # A project whose own skill rule keeps the skill on, named by an all-projects change.
 KEEPS_ITS_RULE = "It stays on in {folders}, which has its own rule."
 KEEP_THEIR_RULES = "It stays on in {folders}, which have their own rules."
 PLUGIN_SKILL = "A plugin's skill follows its plugin; turn the plugin off instead."
 PLUGIN_ALL_PROJECTS = "Turn a plugin off for all projects with its own switch."
+PROJECT_SKILL_ALL = "This skill is only in one project; turn it off in that project."
 NO_CLAUDE_FOLDER = "{folder} has no Claude Code settings yet; start Claude Code there once first."
 # A project's own rule removed: the skill or the plugin then follows the shared setup.
 FOLLOWS_SHARED = "Follows all projects"

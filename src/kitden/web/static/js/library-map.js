@@ -172,7 +172,8 @@ export function letGoLibraryMap() {
 }
 
 // Draws the Map under the page head (`head`, library.js): the lede, the tabs, the scope bar and
-// the map, and the hint line. It returns what the top search found (map.js findIn), or null.
+// the map, and the hint line. It returns what the top search lights, for the chip (chipFound), or
+// null.
 // `switched`: Map | List brought it, so it comes in as one piece instead of its entrance.
 export function renderLibraryMap(main, { head, again = false, switched = false } = {}) {
   const lede = el("p", "lede", LEDE);
@@ -209,7 +210,7 @@ export function renderLibraryMap(main, { head, again = false, switched = false }
   if (switched) rise([onMap.view.box], { delay: afterOldPage() });
   // Details follow the project drawn in place: the same selection, or none.
   if (projectChanged && had && selectHook) selectHook(onMap.selected, { follow: true });
-  return onMap.found;
+  return chipFound(onMap.found);
 }
 
 // The tree for a new answer: the open plugin and the selection (a block, or a link) stay while the
@@ -223,7 +224,7 @@ function keepWhatShows(answer) {
 }
 
 // What the map lights for a search: its matches, and a folded plugin that holds one (it stays
-// folded: one plugin opens at a time, by a press). The chip counts the matches only.
+// folded: one plugin opens at a time, by a press).
 function foundOnMap(found) {
   if (!found) return null;
   const matches = new Set(found.matches);
@@ -231,6 +232,14 @@ function foundOnMap(found) {
     if (block.kind === "part" && found.matches.has(block.id)) matches.add(`item:${block.plugin.id}`);
   }
   return { ...found, matches };
+}
+
+// What the chip counts (app.js): what lights, with a plugin card once however many of its parts
+// match, open or folded.
+function chipFound(found) {
+  if (!found) return null;
+  const parts = new Set(onMap.model.blocks.filter((block) => block.kind === "part").map((block) => block.id));
+  return { ...found, matches: new Set([...foundOnMap(found).matches].filter((id) => !parts.has(id))) };
 }
 
 // "Plugins and skills" | "Instructions" (.seg.sm). Instructions has no map yet: the mark glides

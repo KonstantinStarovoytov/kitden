@@ -50,7 +50,10 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Library Details:** a click on the Library map opens Details for a plugin, a thing inside it, a
   skill, a hook, a client, a link or a marketplace. From the Library a plugin can be turned off for
   all projects or in this project, and added to another client; a skill can be turned off for all
-  projects or in some projects. Each waits in preview until Apply.
+  projects, in this project or in some projects. "For all projects" only ever changes your own
+  settings, never a project's file. Each waits in preview until Apply. A review says when Kitden
+  makes a project's local settings file, since git may not ignore it. The Library's map is read
+  only while the Library shows.
 - **Details float beside the map:** on Gateway, Library and Changes, Details float over the right
   of the page as in the mockup; the page keeps its width and the map stays wide. Another block's
   Details swap in place through a quiet skeleton.

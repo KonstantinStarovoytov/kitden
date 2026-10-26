@@ -631,6 +631,14 @@ export function pressOpen(model, open, found, id) {
   return found && found.open.has(id) ? open : toggleOpen(model, open, id);
 }
 
+// What the person has open after a press on the count of `id`. The count opens and folds, also a
+// block a search holds open: it leaves `found.open` and folds for the rest of that search.
+export function pressCount(model, open, found, id) {
+  if (!found || !found.open.has(id)) return toggleOpen(model, open, id);
+  found.open.delete(id);
+  return open.has(id) ? toggleOpen(model, open, id) : open;
+}
+
 // What the person has open after they select `block`, so it stays on the map when the search that
 // showed it ends. A block that shows already (on the `pages` shown) changes nothing. Otherwise the
 // blocks above it open, the outermost first, as presses would open them: one open block per

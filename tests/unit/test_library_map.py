@@ -344,3 +344,53 @@ def test_skill_rules_say_where_one_project_can_turn_a_skill_off(tmp_path):
     settings = home / ".claude/settings.json"
     _write(settings, {**json.loads(settings.read_text()), "skillOverrides": {"y": "off"}})
     assert _map(home)["skill_rules"]["some"] is False
+
+
+def test_details_of_a_skill_turned_off_in_one_project_say_so(tmp_path):
+    # Claude Code's /skills menu writes skillOverrides in the project's settings.local.json.
+    home = build_demo_home(tmp_path, "medium")
+    atlas = home / "work/atlas"
+    _write(atlas / ".claude/settings.local.json", {"skillOverrides": {"brandkit": "off"}})
+    app = create_app(demo_build(home), token="tok", port=47800, home=home, demo=True)
+    with TestClient(app, base_url=ORIGIN, follow_redirects=False) as page:
+        page.get("/?token=tok")
+        project = next(p for p in page.get("/api/projects").json() if p["path"] == str(atlas))
+        url = f"/api/explain?kind=skill&name=brandkit&project={project['id']}"
+        found = page.get(url).json()["definitions"]
+        claude = next(d for d in found if d["client"] == "claude_code")
+        assert claude["enabled"] == "off"
+        assert claude["loads"] is False
+        assert claude["why"] == "Does not load: it is turned off."
+        # With no project picked, the shared setup still loads it.
+        shared = page.get("/api/explain?kind=skill&name=brandkit").json()["definitions"]
+        assert next(d for d in shared if d["client"] == "claude_code")["enabled"] == "on"
+
+
+def test_turn_off_for_all_projects_acts_only_on_the_users_own_entry(tmp_path):
+    home = build_demo_home(tmp_path, "medium")
+    atlas = home / "work/atlas"
+    # The project's shared settings turn two plugins on: one the user has off, one on.
+    plugins = {f"pr-review@{MARKET}": True, f"superpowers@{MARKET}": True}
+    _write(atlas / ".claude/settings.json", {"enabledPlugins": plugins})
+    here = _items(_map(home, str(atlas)))
+    # The project's entry decides: only "Turn off in this project…", never its shared file.
+    assert here["pr-review"]["can"]["off"] == []
+    assert here["superpowers"]["can"]["off"] == []
+    # With no project picked, the user's own entry decides.
+    assert _items(_map(home))["superpowers"]["can"]["off"] == ["claude_code"]
+    # A user skill a project's rule decides: no rule for all projects from there either.
+    _write(atlas / ".claude/settings.local.json", {"skillOverrides": {"brandkit": "on"}})
+    assert _items(_map(home, str(atlas)))["brandkit"]["can"]["off"] == []
+
+
+def test_a_project_only_skill_gets_no_rule_for_all_projects(tmp_path):
+    home = build_demo_home(tmp_path, "medium")
+    website = home / "work/website"
+    skill = website / ".claude/skills/site-notes/SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text("---\nname: site-notes\ndescription: Notes for the site.\n---\nWrite notes.\n")
+    items = _items(_map(home, str(website)))
+    assert items["site-notes"]["group"] == "project"
+    assert items["site-notes"]["by"]["claude_code"] == "on"
+    # Not the user's settings file: Details offers a rule in this project instead.
+    assert items["site-notes"]["can"]["off"] == []

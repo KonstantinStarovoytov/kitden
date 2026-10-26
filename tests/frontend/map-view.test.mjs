@@ -426,6 +426,28 @@ test('a block that takes the place of one that goes starts where that one shows 
   assert.deepEqual([pos(v.node('s2')), frames.length], [{ x: place(withS2, 's2').x, y: place(withS2, 's2').y, s: 1 }, 0]);
 });
 
+test('focus on the count of a block that goes moves to the count of the block that takes its place', async () => {
+  reduce(true);
+  const v = view();
+  await v.draw(TREE, lay(), { motion: 'none' });
+  v.node('count:s2').focus();
+  const others = { ...TREE, blocks: TREE.blocks.filter((b) => b.id !== 's2'), links: TREE.links.filter((l) => l.to !== 's2') };
+  const counted = { ...others, blocks: [...others.blocks, { id: 'p2', column: 'b', kind: 'held', name: 'files', state: 'on', count: 3, from: 's2' }], links: [...others.links, { from: 'c1', to: 'p2', kind: 'on' }] };
+  v.draw(counted, layoutTree(counted, { open: new Set(), narrow: false }), {});
+  assert.equal(document.activeElement, v.node('count:p2'));
+  // A block with no count takes the focus itself.
+  v.node('count:p2').focus();
+  const plain = { ...others, blocks: [...others.blocks, { id: 'p3', column: 'b', kind: 'preview', name: 'files', state: 'preview', from: 'p2' }], links: [...others.links, { from: 'c1', to: 'p3', kind: 'direct' }] };
+  v.draw(plain, layoutTree(plain, { open: new Set(), narrow: false }), {});
+  assert.equal(document.activeElement, v.node('p3'));
+  // Focus on the block itself stays on the block, also when the new one has a count.
+  v.node('p3').focus();
+  const again = { ...counted, blocks: counted.blocks.map((b) => (b.id === 'p2' ? { ...b, from: 'p3' } : b)) };
+  v.draw(again, layoutTree(again, { open: new Set(), narrow: false }), {});
+  assert.equal(document.activeElement, v.node('p2'));
+  reduce(false);
+});
+
 // TREE with a slot `g1` that grows out of the client c1, in column b after s1.
 const withSlot = () => ({ ...TREE, blocks: [...TREE.blocks.slice(0, 2), { id: 'g1', column: 'b', kind: 'slot', name: 'Drop to add', state: 'preview', growsFrom: 'c1' }, ...TREE.blocks.slice(2)] });
 

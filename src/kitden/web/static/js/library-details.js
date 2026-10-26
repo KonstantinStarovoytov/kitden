@@ -102,7 +102,8 @@ function techOf(rows) {
 // The tray rows -----------------------------------------------------------------------------------
 
 // Turn it off for all projects: one row per client that loads its own copy and has a switch (`can.off`,
-// library_map.py): a plugin's own switch, or a skill rule.
+// library_map.py): a plugin's own switch, or a skill rule. Its first item is then the user's own
+// entry; where the project's entry decides, `can.off` leaves the client out.
 export function offBodies(item) {
   const clients = (item.can && item.can.off) || [];
   return clients.map((client) => {
@@ -134,6 +135,15 @@ export function hereBody(item, c) {
 
 // A skill of all projects, not only of the picked one.
 const shared = (item) => item.source !== ORIGIN_WORDS.project;
+
+// "Turn off in this project…" for a skill the picked project decides (its own skill, or its rule
+// for a skill of all projects): Claude Code has it on there and the project can take a rule. A
+// rule for all projects would write the user's file instead (library_map.py `_can`).
+export function skillHereBody(item, c) {
+  const on = (item.by || {}).claude_code === "on" && (item.items || {}).claude_code;
+  const decides = !shared(item) || item.here;
+  return c.project && on && decides && c.rules.some && c.rules.projects[c.project] === "ok" ? projectBody(item, c.project) : null;
+}
 
 // "Turn off in some projects…" for a skill of all projects that Claude Code has, while the user
 // settings hold no skillOverrides (`rules.some`) and some project can take the rule.
@@ -236,17 +246,20 @@ export function partCard(block, c) {
 }
 
 // A skill on its own: Plugin ("None, a skill on its own"), State, Comes from, Source and Clients;
-// where it loads, and which clients have no switch; "Turn off for all projects…" and "Turn off in
-// some projects…" (the project checklist, `someStep`); its file under Technical details.
+// where it loads, and which clients have no switch; "Turn off for all projects…", "Turn off in
+// this project…" where the project decides, and "Turn off in some projects…" (the project
+// checklist, `someStep`); its file under Technical details.
 export function skillCard(item, c, { someStep = () => {} } = {}) {
   const source = el("span", "fact-mark");
   source.append(icon(item.source === ORIGIN_WORDS.project ? "folder" : "user-round", 13), el("span", null, item.source));
   const facts = [{ label: "Plugin", value: NO_PLUGIN, quiet: true }, stateFact(item), comesFrom(item, c), { label: "Source", value: source, text: item.source }, clientsFact(item, { count: true })];
   const actions = [];
   if (offBodies(item).length) actions.push({ label: OFF_ALL, node: rowsButton(OFF_ALL, () => skillOffBodies(item, c.answer)) });
+  const here = skillHereBody(item, c);
+  if (here) actions.push({ label: OFF_HERE, node: rowsButton(OFF_HERE, () => (skillRuleWaits("all", c.answer) ? [] : [here])) });
   if (offersSome(item, c)) actions.push({ label: OFF_SOME, run: someStep });
   const notes = [];
-  if (shared(item) && (item.by || {}).codex) notes.push(NO_PROJECT_SWITCH);
+  if (shared(item) && (item.by || {}).codex === "on") notes.push(NO_PROJECT_SWITCH);
   if ((item.by || {}).cursor === "on") notes.push(NO_CURSOR_SWITCH);
   const why = [loadsSay(item, { folder: c.project ? c.folder : "", noun: "this skill" }), ...notes].join(" ");
   const claude = ((item.can && item.can.off) || []).includes("claude_code");

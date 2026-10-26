@@ -502,4 +502,35 @@ test('the no-switch notes say only what applies', () => {
   // Cursor off, no Codex: no notes.
   const quiet = { ...skill, by: { claude_code: 'on', cursor: 'off' }, through: {} };
   assert.doesNotMatch(details.skillCard(quiet, c()).why, /no switch/);
+  // Off in Codex: no Codex note either.
+  const codexOff = { ...skill, by: { claude_code: 'on', codex: 'off', cursor: 'off' }, through: {} };
+  assert.doesNotMatch(details.skillCard(codexOff, c()).why, /no switch/);
+});
+
+test('where the project decides, only Turn off in this project… is offered', async () => {
+  await reset();
+  const atlas = details.context(MEDIUM, 'atlas', 'atlas');
+  // A plugin the project's shared settings turn on: no switch for all projects (library_map.py).
+  const decided = { ...SUPERPOWERS, here: true, can: { add: [], off: [] } };
+  assert.deepEqual(labels(details.pluginCard(decided, atlas)), [['Turn off in this project…', false]]);
+  // A project's own skill: a rule in this project, never the user's file.
+  const mine = own('s9', 'site-notes', 'skill', { source: 'Only this project', by: { claude_code: 'on' }, items: { claude_code: ['cc-sn'] } });
+  const card = details.skillCard(mine, atlas);
+  assert.deepEqual(labels(card), [['Turn off in this project…', false]]);
+  assert.deepEqual(details.skillHereBody(mine, atlas), { action: 'skill.rule', targets: [{ client: 'claude_code', item: 'cc-sn' }], params: { scope: 'project', project: 'atlas', off: true } });
+  // Not where the project cannot take the rule, nor with no project picked.
+  assert.equal(details.skillHereBody(mine, details.context(MEDIUM, 'web', 'web')), null);
+  assert.equal(details.skillHereBody(mine, c()), null);
+  // A skill of all projects that the project does not decide keeps its usual actions.
+  assert.equal(details.skillHereBody(MEDIUM.groups[1].items[0], atlas), null);
+  // Its button adds the one row, and hides while a rule for all projects waits.
+  const button = card.actions[0].node;
+  press(button);
+  await flush();
+  assert.deepEqual(tray.rows.map((r) => r.key), ['skill:claude_code:cc-sn@atlas']);
+  await cancelTray();
+  await addToTray(details.offBodies(MEDIUM.groups[1].items[0])[0]);
+  await flush();
+  assert.equal(details.skillCard(mine, atlas).actions[0].node.hidden, true);
+  await cancelTray();
 });

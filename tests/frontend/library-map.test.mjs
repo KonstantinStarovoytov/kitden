@@ -90,7 +90,7 @@ globalThis.fetch = () => new Promise(() => {});
 
 const { libraryMode, libraryTree, LIBRARY_COLUMNS } = await import('../../src/kitden/web/static/js/library-map.js');
 const { renderLibrary } = await import('../../src/kitden/web/static/js/library.js');
-const { layoutTree } = await import('../../src/kitden/web/static/js/map.js');
+const { findChip, layoutTree } = await import('../../src/kitden/web/static/js/map.js');
 const { data, hashFor, libraryShows, parseHash, state } = await import('../../src/kitden/web/static/js/store.js');
 const { setHint } = await import('../../src/kitden/web/static/js/parts.js');
 const { reducedMotion } = await import('../../src/kitden/web/static/js/motion.js');
@@ -399,7 +399,8 @@ test('the address the page writes reads back as the same view and tab', () => {
 test('find matches what a folded plugin holds and lights that plugin, without opening it', () => {
   const { box, found } = showMap(MEDIUM, { q: 'brainstorm' });
   settle();
-  assert.deepEqual([...found.matches], ['part:p2:skills:brainstorm']);
+  // The chip counts the plugin card that lights.
+  assert.deepEqual([...found.matches], ['item:p2']);
   assert.match(node(box, 'block:item:p2').className, /\bfound\b/);
   assert.doesNotMatch(node(box, 'block:item:p1').className, /\bfound\b/);
   assert.equal(node(box, 'block:part:p2:skills:brainstorm'), null);
@@ -408,6 +409,17 @@ test('find matches what a folded plugin holds and lights that plugin, without op
   const big = showMap(LARGE, { q: 'plugin-29-skill' });
   settle();
   assert.match(node(big.box, 'block:item:b29').className, /\bfound\b/);
+  state.q = '';
+});
+
+test('the find chip counts what lights: a plugin card once, however many of its parts match', () => {
+  // plugin-00 and its 20 skills match; one card lights.
+  const { found } = showMap(LARGE, { q: 'plugin-00' });
+  settle();
+  assert.equal(findChip(found), '1 match');
+  // A skill on its own and a plugin each count.
+  assert.equal(findChip(showMap(MEDIUM, { q: 'brainstorm' }).found), '1 match');
+  assert.equal(findChip(showMap(LARGE, { q: 'zzz' }).found), 'No matches');
   state.q = '';
 });
 

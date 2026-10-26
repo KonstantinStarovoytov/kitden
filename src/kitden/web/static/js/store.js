@@ -193,6 +193,7 @@ const RISES_ON_ITS_OWN = (s) => s.view === "gateway" || (s.view === "library" &&
 function show(moving) {
   if (moving) transition(() => { renderPlace(); document.getElementById("content").scrollTop = 0; }, RISES_ON_ITS_OWN(state) ? "map-entrance" : "place-change");
   else renderPlace();
+  if (moving && state.view === "library") openLibraryMap();
 }
 
 // A place opened with a selection (goTo, Back, Forward or a link) opens that item's Details once,
@@ -343,9 +344,28 @@ function markGatewayData() {
   }
 }
 
+// The Library's map is read only while the Library shows (reload) and when it opens. `fresh`: no
+// reload ran without it since it was last read.
+const libraryMapRead = { fresh: false, running: null };
+
 export async function loadLibraryMap() {
   const { project } = state;
   await guarded("libraryMap", `/api/library-map${query({ project })}`, (v) => { data.libraryMap = v; }, project);
+  libraryMapRead.fresh = Boolean(current("libraryMap"));
+}
+
+// Read the Library's map when it may be out of date (one read at a time); null when it is not.
+export function readLibraryMap() {
+  if (libraryMapRead.fresh && current("libraryMap")) return null;
+  libraryMapRead.running ||= afterShared(loadLibraryMap).finally(() => { libraryMapRead.running = null; });
+  return libraryMapRead.running;
+}
+
+// The Library opens: a map that may be out of date is read, and the page is drawn again with the
+// answer while the Library still shows.
+function openLibraryMap() {
+  const read = readLibraryMap();
+  if (read) read.then(() => { if (state.view === "library") renderPlace(); }).catch((error) => console.error(error));
 }
 
 export async function loadChanges() {
@@ -357,14 +377,17 @@ export async function loadSetupServer() {
   markGatewayData();
 }
 
-// Everything the current place shows, after a scan or a change. Nothing is read for a project
-// no longer on the list.
+// Everything the current place shows, after a scan or a change (the Library's map only on the
+// Library). Nothing is read for a project no longer on the list.
 export async function reload() {
   freshness.reloadStartedAt = performance.now();
   await loadShared();
-  const reads = projectGone() ? [] : [loadOverview(), loadMap(), loadGateway(), loadLibraryMap()];
+  const library = state.view === "library";
+  if (!library) libraryMapRead.fresh = false;
+  const reads = projectGone() ? [] : [loadOverview(), loadMap(), loadGateway(), ...(library ? [loadLibraryMap()] : [])];
   await Promise.all([...reads, loadSetupServer()]);
-  freshness.lastReadFailed = Object.keys(data.errors).length > 0;
+  // The Library's map counts only while the Library shows: it is not read elsewhere.
+  freshness.lastReadFailed = Object.keys(data.errors).some((name) => name !== "libraryMap" || state.view === "library");
   if (!freshness.lastReadFailed) freshness.lastGoodRead = Date.now();
 }
 

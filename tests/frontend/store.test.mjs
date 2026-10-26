@@ -262,3 +262,43 @@ test('switching a project writes a new address entry and runs the switcher once'
     setRenderer(() => {});
   }
 });
+
+test("the Library's map is read only while the Library shows, and when it opens", async () => {
+  const drawn = [];
+  setRenderer(() => drawn.push(state.view));
+  try {
+    fetchAnswers({ '/api/library-map': { groups: ['g'] } });
+    go('gateway');
+    asked.length = 0;
+    await reload();
+    assert.ok(!asked.includes('/api/library-map'));
+    // Opening the Library reads it, and draws the page again with the answer.
+    drawn.length = 0;
+    go('library');
+    assert.deepEqual(drawn, ['library']);
+    await new Promise((done) => setImmediate(done));
+    assert.ok(asked.includes('/api/library-map'));
+    assert.deepEqual([current('libraryMap'), drawn], [{ groups: ['g'] }, ['library', 'library']]);
+    // Back again with no reload since: nothing to read.
+    go('gateway');
+    asked.length = 0;
+    go('library');
+    await new Promise((done) => setImmediate(done));
+    assert.ok(!asked.includes('/api/library-map'));
+    // While it shows, a reload reads it.
+    asked.length = 0;
+    await reload();
+    assert.ok(asked.includes('/api/library-map'));
+    // A failed read there marks only the Library: another page's reload is no failure.
+    fetchFails('/api/library-map');
+    await reload();
+    assert.equal(freshness.lastReadFailed, true);
+    go('gateway');
+    fetchAnswers(ALL_OK);
+    await reload();
+    assert.equal(freshness.lastReadFailed, false);
+  } finally {
+    setRenderer(() => {});
+    go('overview', { project: '', selected: null });
+  }
+});

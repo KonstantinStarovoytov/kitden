@@ -46,6 +46,7 @@ from kitden.views.words import (
     KEEP_THEIR_RULES,
     KEEPS_ITS_RULE,
     LOADS_PLUGINS,
+    NEW_LOCAL_FILE,
     NO_GATEWAY_CLIENT,
     OWN_SKILL_SETTINGS,
     STATE_WORDS,
@@ -777,12 +778,18 @@ def _skill_keepers(inventory, home: Path, name: str) -> str | None:
 def _skill_rule_words(change: Change, inventory, home: Path) -> list[dict]:
     """A skill or a plugin turned off: Off in its client. For all projects in Claude Code, the
     note names each project whose own settings may keep it on. A project's own rule taken out:
-    the state the shared settings give it (the user's file, then the project's shared file)."""
+    the state the shared settings give it (the user's file, then the project's shared file). A
+    rule that makes a project's local settings file names it once (git may not ignore it)."""
     out = []
+    made: set[str] = set()
     for step in change.steps:
         edit = step.edit
         assert edit is not None
         entry = {"client": step.client, "state": "off", "word": STATE_WORDS["off"]}
+        new_file = step.scope is Scope.LOCAL and not Path(edit.path).exists()
+        if new_file and edit.after is not ABSENT and edit.path not in made:
+            made.add(edit.path)
+            entry["note"] = NEW_LOCAL_FILE.format(folder=Path(edit.path).parent.parent.name)
         if edit.after is ABSENT:
             key, name = edit.key
             shared = [home / ".claude/settings.json", Path(edit.path).parent / "settings.json"]

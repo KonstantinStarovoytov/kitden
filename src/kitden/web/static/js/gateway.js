@@ -5,7 +5,7 @@ import { setCancelFocus } from "./dock.js";
 import { addKind, addName, onOpenAdd, openAdd, pageRead, wasAdded } from "./gateway-add.js";
 import { addForm, connectAction, connectBody, followProject, heldServer, liveHeld, movesTo, NOT_REACHED, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool, TAKE_OUT } from "./gateway-details.js";
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
-import { findChip, findIn, foldable, isNarrow, keepOpen, landOwners, landStage, layoutTree, linkKey, litFor, litFrom, litPath, pagesNow, pagesWith, pressOpen, toggleOpen, turnPage, turnWords, wideWidth } from "./map.js";
+import { findChip, findIn, foldable, isNarrow, keepOpen, landOwners, landStage, layoutTree, linkKey, litFor, litFrom, litPath, pagesNow, pagesWith, pressCount, pressOpen, toggleOpen, turnPage, turnWords, wideWidth } from "./map.js";
 import { glidePill, modeSwitch, switchedNow } from "./map-page.js";
 import { mapView } from "./map-view.js";
 import { afterOldPage, D, rise, riseHead } from "./motion.js";
@@ -1076,7 +1076,7 @@ function openBlock(id) {
 // of a page does.
 function foldBlock(id) {
   const { model } = onMap;
-  onMap.open = pressOpen(model, onMap.open, onMap.found, id);
+  onMap.open = pressCount(model, onMap.open, onMap.found, id);
   onMap.unfolds = false;
   if (onMap.selected && !shownOnMap(model, onMap.selected)) letGoOnMap();
   else drawAgain();
