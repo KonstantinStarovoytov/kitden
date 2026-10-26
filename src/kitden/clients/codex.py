@@ -51,6 +51,7 @@ from kitden.model import (
     Step,
     UnknownReason,
 )
+from kitden.views.words import CHANGE_UNREAD
 
 CLIENT = "codex"
 RESTART = "Restart Codex (the app and any open CLI sessions) for this to take effect."
@@ -217,10 +218,14 @@ class CodexAdapter(ClientAdapter):
     # SKILL.md, with `enabled = false`, turns the skill off without deleting it; restart Codex
     # after the change. The docs name no project file for it.
     def skill_rule_step(self, item: Item) -> Step:
-        """Turn one skill off for all projects: its `[[skills.config]]` entry gets
-        `enabled = false`, or a new entry is added after the others."""
+        """Turn one skill off for all projects: its `[[skills.config]]` table gets
+        `enabled = false`, or a new table is added after the others. The step edits that one
+        table (toml_edit.pick), so a change to another skill is another entry."""
         config = self.codex_home / "config.toml"
-        text = config.read_text() if config.is_file() else ""
+        try:
+            text = config.read_text() if config.is_file() else ""
+        except (OSError, UnicodeDecodeError):
+            raise ValueError(CHANGE_UNREAD.format(config.name)) from None
         found = toml_edit.get_value(text, ("skills", "config"))
         rules = [] if found is ABSENT else found
         if not isinstance(rules, list) or not all(isinstance(r, dict) for r in rules):
@@ -228,12 +233,11 @@ class CodexAdapter(ClientAdapter):
                 "Codex's skills settings are not a list of tables; Kitden leaves them."
             )
         path = str(item.source.path)
-        mine = [os.path.realpath(str(r.get("path", ""))) == path for r in rules]
-        if any(mine):
-            after = [{**r, "enabled": False} if m else r for r, m in zip(rules, mine, strict=True)]
-        else:
-            after = [*rules, {"path": path, "enabled": False}]
-        edit = FileEdit(path=str(config), fmt="toml", key=("skills", "config"), after=after)
+        # A table may spell the path another way (a link); the scan compares real paths.
+        mine = [r for r in rules if os.path.realpath(str(r.get("path", ""))) == path]
+        after = {**mine[-1], "enabled": False} if mine else {"path": path, "enabled": False}
+        key = ("skills", "config", toml_edit.pick(str(after["path"])))
+        edit = FileEdit(path=str(config), fmt="toml", key=key, after=after)
         return Step(
             client=CLIENT, scope=Scope.USER, name=item.name, edit=edit, restart_note=RESTART
         )

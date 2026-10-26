@@ -43,6 +43,8 @@ from kitden.views.setup_server import CLIENTS, kitden_on, setup_server_state
 from kitden.views.words import (
     AFTER_WORDS,
     FOLLOWS_SHARED,
+    KEEP_THEIR_RULES,
+    KEEPS_ITS_RULE,
     LOADS_PLUGINS,
     NO_GATEWAY_CLIENT,
     OWN_SKILL_SETTINGS,
@@ -766,8 +768,8 @@ def _skill_keepers(inventory, home: Path, name: str) -> str | None:
             may.append(root.name)
     notes = []
     if keeps:
-        which = "which has its own rule" if len(keeps) == 1 else "which have their own rules"
-        notes.append(f"It stays on in {_join(keeps)}, {which}.")
+        words = KEEPS_ITS_RULE if len(keeps) == 1 else KEEP_THEIR_RULES
+        notes.append(words.format(folders=_join(keeps)))
     notes += [OWN_SKILL_SETTINGS.format(folder=folder) for folder in may]
     return " ".join(notes) or None
 

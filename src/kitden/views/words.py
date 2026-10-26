@@ -100,6 +100,9 @@ NO_SKILL_MERGE = (
     "Claude Code may not merge skill settings across files; turn it off for all projects instead."
 )
 OWN_SKILL_SETTINGS = "{folder} has its own skill settings; it may keep this skill on."
+# A project whose own skill rule keeps the skill on, named by an all-projects change.
+KEEPS_ITS_RULE = "It stays on in {folders}, which has its own rule."
+KEEP_THEIR_RULES = "It stays on in {folders}, which have their own rules."
 PLUGIN_SKILL = "A plugin's skill follows its plugin; turn the plugin off instead."
 PLUGIN_ALL_PROJECTS = "Turn a plugin off for all projects with its own switch."
 NO_CLAUDE_FOLDER = "{folder} has no Claude Code settings yet; start Claude Code there once first."

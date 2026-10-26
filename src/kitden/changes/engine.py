@@ -202,10 +202,7 @@ def _render(edit: FileEdit, value: Any) -> list[str]:
         return [f'"{edit.key[-1]}": added by the client']
     shown = redact(value)[0]
     if edit.fmt == "toml":
-        nested: Any = shown
-        for key in reversed(edit.key):
-            nested = {key: nested}
-        return tomlkit.dumps(nested).strip().splitlines()
+        return tomlkit.dumps(toml_edit.nested(edit.key, shown)).strip().splitlines()
     return json.dumps({edit.key[-1]: shown}, indent=2, ensure_ascii=False).splitlines()
 
 

@@ -70,3 +70,30 @@ def test_toml_missing_value_is_absent():
 def test_bad_toml_is_refused():
     with pytest.raises(UnrecognizedFormatError):
         toml_edit.get_value("model = = 1", ("model",))
+
+
+SKILLS = (
+    '# mine\n\n[[skills.config]]\npath = "/a/SKILL.md"  # first\nenabled = true  # on\n\n'
+    '[mcp_servers.docs]\ncommand = "docs"\n'
+)
+
+
+def test_toml_changes_a_picked_table_in_place():
+    key = ("skills", "config", toml_edit.pick("/a/SKILL.md"))
+    assert toml_edit.get_value(SKILLS, key) == {"path": "/a/SKILL.md", "enabled": True}
+    edited = toml_edit.set_value(SKILLS, key, {"path": "/a/SKILL.md", "enabled": False})
+    assert edited == SKILLS.replace("enabled = true", "enabled = false")
+
+
+def test_toml_adds_a_picked_table_after_the_others_and_takes_it_out():
+    key = ("skills", "config", toml_edit.pick("/b/SKILL.md"))
+    assert toml_edit.get_value(SKILLS, key) is ABSENT
+    edited = toml_edit.set_value(SKILLS, key, {"path": "/b/SKILL.md", "enabled": False})
+    assert edited == SKILLS.replace(
+        "# on\n\n", '# on\n\n[[skills.config]]\npath = "/b/SKILL.md"\nenabled = false\n\n'
+    )
+    assert toml_edit.delete_value(edited, key) == SKILLS
+    # A file with no skill tables gets its first one; taking it out gives the file back.
+    alone = toml_edit.set_value("x = 1\n", key, {"path": "/b/SKILL.md", "enabled": False})
+    assert alone == 'x = 1\n\n[[skills.config]]\npath = "/b/SKILL.md"\nenabled = false\n'
+    assert toml_edit.delete_value(alone, key) == "x = 1\n"

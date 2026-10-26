@@ -13,6 +13,7 @@ from starlette.testclient import TestClient
 
 from kitden.views.inventory import build_inventory
 from kitden.views.words import (
+    CHANGE_UNREAD,
     CODEX_NO_PROJECT,
     CURSOR_NO_SKILL_SWITCH,
     NO_CLAUDE_FOLDER,
@@ -261,3 +262,65 @@ def test_an_all_projects_change_names_a_project_that_keeps_its_own_rule(tmp_path
         "It stays on in app, which has its own rule. "
         "site has its own skill settings; it may keep this skill on."
     )
+
+
+def _row(row_id, rule):
+    return {**rule, "id": row_id}
+
+
+def test_two_codex_skills_turn_off_in_one_tray_and_undo(tmp_path):
+    home, _, _ = _home(tmp_path)
+    _skill(home / ".agents/skills", "tidy")
+    # A table Codex has already, with comments of its own: it stays as it is.
+    config = home / ".codex/config.toml"
+    before = CODEX + '\n[[skills.config]]\npath = "/elsewhere/SKILL.md"  # mine\nenabled = false\n'
+    config.write_text(before)
+    with _page(home) as page:
+        rows = [
+            _row("a", _rule("codex", _item(page, "codex", "lint-fix"))),
+            _row("b", _rule("codex", _item(page, "codex", "tidy"))),
+        ]
+        change, _, undo = _round_trip(page, *rows)
+        assert len(change["steps"]) == 2
+        text = config.read_text()
+        assert text.startswith(before)
+        paths = [r["path"] for r in tomllib.loads(text)["skills"]["config"]]
+        assert paths[0] == "/elsewhere/SKILL.md" and len(paths) == 3
+        off = {i.name for i in _skills(home, "codex") if str(i.enabled) == "off"}
+        assert off == {"lint-fix", "tidy"}
+        assert undo()["state"] == "undone"
+    assert config.read_text() == before
+
+
+def test_an_existing_codex_entry_is_turned_off_where_it_is(tmp_path):
+    home, _, _ = _home(tmp_path)
+    skill = os.path.realpath(home / ".agents/skills/lint-fix/SKILL.md")
+    config = home / ".codex/config.toml"
+    before = f'{CODEX}\n[[skills.config]]\npath = "{skill}"  # mine\nenabled = true  # on for now\n'
+    config.write_text(before)
+    with _page(home) as page:
+        _, _, undo = _round_trip(page, _rule("codex", _item(page, "codex", "lint-fix")))
+        assert config.read_text() == before.replace("enabled = true", "enabled = false")
+        assert undo()["state"] == "undone"
+    assert config.read_text() == before
+
+
+def test_a_codex_file_kitden_cannot_read_is_named(tmp_path):
+    home, _, _ = _home(tmp_path)
+    with _page(home) as page:
+        item = _item(page, "codex", "lint-fix")
+        (home / ".codex/config.toml").write_bytes(b"\xff\xfe not text")
+        answer = _preview(page, _rule("codex", item))
+    assert answer.status_code == 422
+    assert answer.json() == {"detail": CHANGE_UNREAD.format("config.toml"), "row": "r1"}
+
+
+def test_a_tray_never_writes_skill_rules_in_the_user_and_a_project_file(tmp_path):
+    home, app, _ = _home(tmp_path)
+    with _page(home) as page:
+        item = _item(page, "claude_code", "deploy")
+        everywhere = _row("a", _rule("claude_code", item))
+        here = _row("b", _rule("claude_code", item, "project", _project(page, app)))
+        for first, then in ((everywhere, here), (here, everywhere)):
+            answer = page.post("/api/batch/check", json={"requests": [first, then]}, headers=POST)
+            assert answer.json() == {"ok": False, "reason": NO_SKILL_MERGE, "row": then["id"]}

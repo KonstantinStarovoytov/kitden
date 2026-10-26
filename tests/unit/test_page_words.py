@@ -8,6 +8,8 @@ from kitden.views.words import (
     CODEX_NO_PROJECT,
     CURSOR_NO_SKILL_SWITCH,
     FOLLOWS_SHARED,
+    KEEP_THEIR_RULES,
+    KEEPS_ITS_RULE,
     LOADS_PLUGINS,
     NO_CLAUDE_FOLDER,
     NO_GATEWAY_CLIENT,
@@ -1566,6 +1568,8 @@ def test_a_skill_rule_says_what_it_turns_off_and_where():
     assert OWN_SKILL_SETTINGS == "{folder} has its own skill settings; it may keep this skill on."
     assert CODEX_NO_PROJECT == "Codex has no switch for one project; turn it off for all projects."
     assert FOLLOWS_SHARED == "Follows all projects"
+    assert KEEPS_ITS_RULE == "It stays on in {folders}, which has its own rule."
+    assert KEEP_THEIR_RULES == "It stays on in {folders}, which have their own rules."
     assert PLUGIN_SKILL == "A plugin's skill follows its plugin; turn the plugin off instead."
     assert PLUGIN_ALL_PROJECTS == "Turn a plugin off for all projects with its own switch."
     assert NO_CLAUDE_FOLDER == (
