@@ -12,7 +12,7 @@ import { afterOldPage, rise, riseHead, shake } from "./motion.js";
 import { banner, CLIENT_NAMES, folderName, mark, ORIGIN_WORDS, scopeBar, setHint, skeleton, STATE_WORDS } from "./parts.js";
 import { busy, current, currentError, projectPath, retry, state, viewMode } from "./store.js";
 import { say } from "./toast.js";
-import { addToTray, inTray, keyFor, onTray, takeOut, tray } from "./tray.js";
+import { addToTray, onTray, takeOut, tray } from "./tray.js";
 
 const LEDE = "Follow the source. Connect only what you need.";
 const MAP_HINT = "Point at a link for its Details · click a plugin to see what it holds · drag a plugin onto a client to add it there";
@@ -152,27 +152,35 @@ function rowsShown(t) {
   return t.phase === "asking" ? t.rows : t.rows.filter((row) => row.part);
 }
 
+// The adds of `item` in `rows`, each with the clients it adds to: any row of its install action
+// for its plugin or skill, for one client or several, for all projects or for one. The map's
+// waiting look and "Already in preview" both read it, so they always agree.
+export function addsOf(item, rows) {
+  const id = item.kind === "skill" ? item.skill : item.plugin;
+  if (!INSTALLS[item.kind] || !id) return [];
+  const named = (params = {}) => (item.kind === "skill" ? params.skill : params.plugin) === id;
+  return rows
+    .filter((row) => row.body.action === INSTALLS[item.kind] && named(row.body.params))
+    .map((row) => ({ key: row.key, clients: (row.body.targets || []).map((t) => t.client), project: (row.body.params || {}).project || "" }));
+}
+
 // Each add in the tray for an item on the map: a dashed link from each client it adds to, and the
-// item says so ("Preview · Codex"); a press on either takes the row out.
-function withWaiting(model, rows) {
-  const blocks = new Map(model.blocks.filter((b) => b.drags).map((b) => [b.id, b]));
+// item says so ("Preview · Codex"); a press on either takes the row out. An add for one project
+// shows only while that project is picked (`project`, "" for all projects).
+export function withWaiting(model, rows, project) {
   const clients = new Set(model.blocks.filter((b) => b.kind === "client").map((b) => b.id));
-  const waits = new Map();
-  for (const row of rows) {
-    const { action, targets = [], params = {} } = row.body;
-    const block = [...blocks.values()].find((b) => INSTALLS[b.kind] === action && (b.kind === "skill" ? b.item.skill === params.skill : b.item.plugin === params.plugin));
-    if (!block) continue;
-    for (const { client } of targets) {
-      if (!clients.has(`client:${client}`)) continue;
-      model.links.push({ from: `client:${client}`, to: block.id, kind: "preview", row: row.key });
-      const wait = waits.get(block.id) || { names: [], rows: [] };
-      wait.names.push(CLIENT_NAMES[client]);
-      if (!wait.rows.includes(row.key)) wait.rows.push(row.key);
-      waits.set(block.id, wait);
+  for (const block of model.blocks.filter((b) => b.drags)) {
+    const wait = { names: [], rows: [] };
+    for (const add of addsOf(block.item, rows)) {
+      if (add.project && add.project !== project) continue;
+      for (const client of add.clients) {
+        if (!clients.has(`client:${client}`)) continue;
+        model.links.push({ from: `client:${client}`, to: block.id, kind: "preview", row: add.key });
+        if (!wait.names.includes(CLIENT_NAMES[client])) wait.names.push(CLIENT_NAMES[client]);
+        if (!wait.rows.includes(add.key)) wait.rows.push(add.key);
+      }
     }
-  }
-  for (const [id, wait] of waits) {
-    Object.assign(blocks.get(id), { meta: `Preview · ${joinWords(wait.names)}`, lamp: "preview", state: "preview", stateInMeta: true, takeOut: IN_PREVIEW, rows: wait.rows });
+    if (wait.rows.length) Object.assign(block, { meta: `Preview · ${joinWords(wait.names)}`, lamp: "preview", state: "preview", stateInMeta: true, takeOut: IN_PREVIEW, rows: wait.rows });
   }
   return model;
 }
@@ -268,7 +276,7 @@ export function renderLibraryMap(main, { head, again = false, switched = false }
 // answer has them.
 function keepWhatShows(answer) {
   onMap.answer = answer;
-  onMap.model = withWaiting(libraryTree(answer), rowsShown(tray));
+  onMap.model = withWaiting(libraryTree(answer), rowsShown(tray), state.project || "");
   const ids = new Set([...onMap.model.blocks.map((block) => block.id), ...onMap.model.links.map(linkKey)]);
   onMap.open = new Set([...onMap.open].filter((id) => ids.has(id)));
   if (onMap.selected && !ids.has(onMap.selected)) onMap.selected = null;
@@ -516,13 +524,14 @@ function tipItem(drag) {
 }
 
 // Why `client` cannot take the item, first match wins; null when it can (the server may still
-// refuse, and the bar says why).
+// refuse, and the bar says why). Any add of it for that client in the tray, for any project,
+// says "Already in preview".
 function whyNot(item, client) {
   const who = CLIENT_NAMES[client];
   if (item.kind === "plugin" && client === "cursor") return CURSOR_PLUGINS;
   const has = (item.by || {})[client];
   if (has && has !== "via") return `Already in ${who}`;
-  if (inTray(keyFor(addBody(item, client)))) return WAITS_ALREADY;
+  if (addsOf(item, tray.rows).some((add) => add.clients.includes(client))) return WAITS_ALREADY;
   if (!((item.can && item.can.add) || []).includes(client)) return `${who} cannot get ${item.name}`;
   return null;
 }

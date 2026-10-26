@@ -2810,7 +2810,8 @@ def test_a_plugin_or_skill_drags_onto_a_client():
         "meta: `Preview · ${joinWords(wait.names)}`",
         'const IN_PREVIEW = "In preview. Click to take it out.";',
         'const INSTALLS = { plugin: "plugin.install", skill: "skill.install" };',
-        'kind: "preview", row: row.key',
+        'kind: "preview", row: add.key',
+        "addsOf(item, tray.rows).some((add) => add.clients.includes(client))",
     ):
         assert words in text, words
     order = [

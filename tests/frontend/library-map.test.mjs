@@ -461,9 +461,9 @@ test('long names end in "…" inside the map', () => {
 });
 
 // Drags on the Library map (library-notes §4, decisions "Drag a plugin or skill onto a client").
-const { DRAGS, addBody } = await import('../../src/kitden/web/static/js/library-map.js');
+const { DRAGS, addBody, withWaiting } = await import('../../src/kitden/web/static/js/library-map.js');
 const { previewFor } = await import('../../src/kitden/web/static/js/library.js');
-const { cancelTray, tray } = await import('../../src/kitden/web/static/js/tray.js');
+const { addToTray, cancelTray, tray } = await import('../../src/kitden/web/static/js/tray.js');
 globalThis.window ||= { addEventListener() {}, removeEventListener() {} };
 
 // The medium sample with what Details may offer: superpowers can go to Codex, pr-review nowhere;
@@ -498,13 +498,15 @@ function libraryDrag(sample = DRAG_SAMPLE, { covers = {} } = {}) {
   const at = (id) => layout.blocks.find((b) => b.id === id);
   const drag = {
     box, heard, at,
-    // A press 10 px into the block.
-    press(id) {
+    // A press 10 px into the block (or on its count, `count: true`).
+    press(id, { count = false } = {}) {
       const block = node(box, `block:${id}`);
       const home = at(id);
       block.getBoundingClientRect = () => ({ left: home.x, top: home.y, width: home.w, height: home.h });
       block.setPointerCapture = () => {};
-      const event = { button: 0, pointerId: 1, target: { closest: () => block }, clientX: home.x + 10, clientY: home.y + 10 };
+      const pressed = count ? node(box, `count:${id}`) : block;
+      pressed.setPointerCapture = () => {};
+      const event = { button: 0, pointerId: 1, target: { closest: () => pressed }, clientX: home.x + 10, clientY: home.y + 10 };
       for (const fn of box.listeners.pointerdown || []) fn(event);
       drag.move(home.x + 16, home.y + 10);
     },
@@ -517,6 +519,8 @@ function libraryDrag(sample = DRAG_SAMPLE, { covers = {} } = {}) {
   return drag;
 }
 const looks = (box, id) => node(box, `block:${id}`).className.split(' ');
+// The links the map draws, by the focus key of their hits.
+const linkKeys = (box) => walk(box).map((n) => n.dataset.focus).filter((key) => key && key.startsWith('link:')).sort();
 const shook = (box, id) => node(box, `block:${id}`).animations.some((a) => JSON.stringify(a.keyframes).includes('-7px'));
 
 test('a plugin dragged onto Codex adds one plugin.install row for Codex', async () => {
@@ -613,6 +617,7 @@ test('a drop over Details, the dock or nothing leaves the tray as it was', async
   for (const [name, covers, [dropX, dropY]] of cases) {
     const map = libraryDrag(DRAG_SAMPLE, { covers });
     try {
+      const links = linkKeys(map.box);
       map.press('item:p2');
       map.move(dropX, dropY);
       assert.ok(!looks(map.box, 'client:codex').includes('drop'), name);
@@ -620,6 +625,9 @@ test('a drop over Details, the dock or nothing leaves the tray as it was', async
       await flush();
       assert.equal(tray.rows.length, 0, name);
       assert.ok(!looks(map.box, 'item:p2').includes('dragging'), name);
+      // The map's links are as they were: no preview link, no wire.
+      assert.deepEqual(linkKeys(map.box), links, name);
+      assert.ok(!walk(map.box).some((n) => n.className === 'link preview' || n.className === 'link preview lit'), name);
     } finally {
       map.restore();
     }
@@ -716,3 +724,93 @@ test('under reduced motion a drag lands at once', async () => {
     await cancelTray();
   }
 });
+
+test('a waiting add for two clients, or for one project, says Already in preview and adds nothing', async () => {
+  const plugin = 'superpowers@demo-market';
+  const both = { action: 'plugin.install', targets: [{ client: 'codex' }, { client: 'claude_code' }], params: { plugin } };
+  const one = { action: 'plugin.install', targets: [{ client: 'codex' }], params: { plugin, project: '/work/atlas' } };
+  for (const [name, body] of [['two clients', both], ['one project', one]]) {
+    addToTray(body);
+    const map = libraryDrag();
+    try {
+      map.press('item:p2');
+      map.move(...map.onto('client:codex'));
+      assert.equal(map.tip().textContent, 'Already in preview', name);
+      assert.ok(!looks(map.box, 'client:codex').includes('drop'), name);
+      map.up(...map.onto('client:codex'));
+      assert.ok(shook(map.box, 'client:codex'), name);
+      assert.deepEqual(tray.rows.map((r) => r.body), [body], name);
+    } finally {
+      map.restore();
+      await cancelTray();
+    }
+  }
+  // A project's add draws only while that project is picked; the two-client one draws for both.
+  const rows = [{ key: 'k1', body: one }];
+  const card = (model) => model.blocks.find((b) => b.id === 'item:p2');
+  const all = withWaiting(libraryTree(DRAG_SAMPLE), rows, '');
+  assert.equal(card(all).meta, '3 items');
+  assert.ok(!all.links.some((l) => l.kind === 'preview'));
+  const atlas = withWaiting(libraryTree(DRAG_SAMPLE), rows, '/work/atlas');
+  assert.deepEqual([card(atlas).meta, card(atlas).rows], ['Preview · Codex', ['k1']]);
+  const two = withWaiting(libraryTree(DRAG_SAMPLE), [{ key: 'k2', body: both }], '');
+  assert.equal(card(two).meta, 'Preview · Codex and Claude Code');
+  assert.deepEqual(two.links.filter((l) => l.kind === 'preview').map((l) => l.from), ['client:codex', 'client:claude_code']);
+});
+
+test('a drop on a client that already has it shakes the client and leaves the tray as it was', async () => {
+  const map = libraryDrag();
+  try {
+    map.press('item:p2');
+    map.move(...map.onto('client:claude_code'));
+    map.up(...map.onto('client:claude_code'));
+    assert.ok(shook(map.box, 'client:claude_code'));
+    assert.equal(tray.rows.length, 0);
+    await flush();
+    assert.ok(!looks(map.box, 'item:p2').includes('dragging'));
+  } finally {
+    map.restore();
+    await cancelTray();
+  }
+});
+
+test("a press on a plugin card's count, then a 5 px move, drags the card", async () => {
+  const map = libraryDrag();
+  try {
+    map.press('item:p2', { count: true });
+    assert.equal(map.tip().textContent, 'Drop on a client');
+    assert.ok(looks(map.box, 'item:p2').includes('dragging'));
+    map.move(...map.onto('client:codex'));
+    map.up(...map.onto('client:codex'));
+    assert.equal(tray.rows.length, 1);
+  } finally {
+    map.restore();
+    await cancelTray();
+  }
+});
+
+test('a redraw in the middle of a drag keeps the block with the pointer', async () => {
+  const map = libraryDrag();
+  try {
+    map.press('item:p2');
+    map.move(600, 300);
+    const card = node(map.box, 'block:item:p2');
+    // The press was 10 px into the block.
+    assert.equal(card.style.translate, '590px 290px');
+    // Another change joins the tray: the map draws again in place.
+    addToTray({ action: 'plugin.install', targets: [{ client: 'codex' }], params: { plugin: 'pr-review@demo-market' } });
+    await flush();
+    assert.equal(card.style.translate, '590px 290px');
+    assert.ok(looks(map.box, 'item:p2').includes('dragging'));
+    assert.equal(map.tip().textContent, 'Drop on a client');
+    map.move(610, 300);
+    assert.equal(card.style.translate, '600px 290px');
+    map.up(610, 300);
+    await flush();
+    assert.ok(!looks(map.box, 'item:p2').includes('dragging'));
+  } finally {
+    map.restore();
+    await cancelTray();
+  }
+});
+
