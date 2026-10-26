@@ -675,7 +675,6 @@ div.map .block:hover { border-color: color-mix(in srgb, var(--route) 38%, var(--
 div.map .block:active { scale: 0.98; transition-duration: var(--t-fast), var(--t-fast), 300ms, 300ms, 80ms; }
 div.map .block:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 div.map .block:has(> .block-count) { padding-right: 16px; }
-}
 div.map .block-tile { flex: none; display: grid; place-items: center; }
 div.map .block-tile .client-mark, div.map .block-tile .mono-mark { --tile: 28px; border-radius: 6px; }
 div.map .block-tile .client-mark[data-icon="claude"] img { padding: 4px; }
@@ -806,7 +805,11 @@ div.map .block.leaving:focus-visible { filter: none; }
   #main[data-place="overview"] :is(.card, .issue) { position: relative; }
   div.map .block::before, #main[data-place="overview"] :is(.card, .issue)::before { content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; background: radial-gradient(130px circle at var(--mx, -300px) var(--my, -300px), rgb(var(--glow) / .35), transparent 70%); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); opacity: 0; transition: opacity 250ms ease; pointer-events: none; }
   div.map .block::after, #main[data-place="overview"] :is(.card, .issue)::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: radial-gradient(200px circle at var(--mx, -300px) var(--my, -300px), rgb(var(--glow) / .04), transparent 65%); opacity: 0; transition: opacity 250ms ease; pointer-events: none; }
+}
+/* Only where a pointer can hover, so a tap leaves no glow stuck. */
+@media (prefers-reduced-motion: no-preference) and (hover: hover) {
   div.map .block:hover::before, div.map .block:hover::after, #main[data-place="overview"] :is(.card, .issue):hover::before, #main[data-place="overview"] :is(.card, .issue):hover::after { opacity: 1; }
+}
 
 /* The preview tray's bar (docs/design.md, Preview tray). The dock sits at the bottom left of the page,
    above the hint line, over the map; the band it sits in takes no clicks, the dock does. One change

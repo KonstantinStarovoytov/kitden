@@ -35,6 +35,7 @@ export function startGlow(column) {
   const canvas = column.querySelector("#dots");
   const topbar = column.querySelector(".topbar");
   let ctx = null;
+  let scale = 1; // the device pixel ratio the canvas was sized for
   let width = 0;
   let height = 0;
   const dots = { x: 0, y: 0, level: 0, goal: 0, moved: false, running: false, colour: "" };
@@ -44,14 +45,16 @@ export function startGlow(column) {
     ctx.clearRect(0, 0, width, height);
     if (dots.level >= 0.01) drawDots(ctx, dots);
   };
+  // An empty read (the token is missing for a moment) keeps the last good colour.
   const readColour = () => {
-    dots.colour = getComputedStyle(document.documentElement).getPropertyValue("--glow").trim();
+    const colour = getComputedStyle(document.documentElement).getPropertyValue("--glow").trim();
+    if (colour) dots.colour = colour;
     paint();
   };
   // The canvas covers the column below the top bar; CSS pins it there (--glow-top, --glow-h).
   const size = () => {
     const top = topbar.offsetHeight;
-    const scale = devicePixelRatio || 1;
+    scale = devicePixelRatio || 1;
     width = column.clientWidth;
     height = Math.max(0, column.clientHeight - top);
     canvas.style.setProperty("--glow-top", `${top}px`);
@@ -77,6 +80,8 @@ export function startGlow(column) {
   };
   const kick = () => {
     if (dots.running) return;
+    // A window moved to another screen changes the pixel ratio without changing the size.
+    if ((devicePixelRatio || 1) !== scale) size();
     dots.running = true;
     requestAnimationFrame(frame);
   };

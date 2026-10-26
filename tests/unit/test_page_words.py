@@ -2458,17 +2458,54 @@ def test_the_glow_colour_is_the_mockups_in_both_themes_and_no_text_uses_it():
     assert not re.search(r"(?<!-)color:\s*rgb\(var\(--glow", CSS)
 
 
+def media_blocks(query: str) -> list[tuple[int, str]]:
+    """Each `@media` block that starts with `query`: where it starts and its text."""
+    found = []
+    for start in [m.start() for m in re.finditer(re.escape(query), CSS)]:
+        depth = 0
+        for at in range(CSS.index("{", start), len(CSS)):
+            depth += CSS[at] == "{"
+            depth -= CSS[at] == "}"
+            if depth == 0:
+                found.append((start, CSS[start : at + 1]))
+                break
+    return found
+
+
+def test_the_stylesheets_braces_balance_and_never_go_below_zero():
+    text = re.sub(r"/\*.*?\*/", "", CSS, flags=re.DOTALL)
+    depth = 0
+    for char in text:
+        depth += char == "{"
+        depth -= char == "}"
+        assert depth >= 0, "a closing brace with nothing open"
+    assert depth == 0
+
+
 def test_the_spotlight_is_calmer_than_the_mockups_and_off_under_reduced_motion():
     # The mockup's edge glow is 130 px at .85 and its fill 200 px at .08; Kitden's is .35 and .04,
     # fading in 250 ms on hover. Only map blocks and Overview cards have it.
-    start = CSS.index("@media (prefers-reduced-motion: no-preference) {\n  /* Spotlight")
-    spot = CSS[start : CSS.index("\n}\n", start)]
+    [(start, spot)] = media_blocks("@media (prefers-reduced-motion: no-preference) {")
     assert "130px circle at var(--mx, -300px) var(--my, -300px), rgb(var(--glow) / .35)" in spot
     assert "200px circle at var(--mx, -300px) var(--my, -300px), rgb(var(--glow) / .04)" in spot
-    assert "opacity 250ms" in spot and ":hover::before" in spot and ":hover::after" in spot
+    assert "opacity: 0; transition: opacity 250ms" in spot
     assert "div.map .block::before" in spot and 'data-place="overview"' in spot
     assert ".85" not in spot and ".08" not in spot
     assert "pointer-events: none" in spot
+    # The block ends before the tray's rules and holds none of them or the map's other rules.
+    assert start < CSS.index("/* The preview tray's bar") and start + len(spot) < CSS.index(
+        ".dock {"
+    )
+    for outside in (".dock {", "div.map .block-tile", ".scrim {", "#drawer.floating"):
+        assert outside not in spot, outside
+    assert CSS.index("div.map .block-tile") < start
+    # The glow shows only where a pointer hovers, so a tap leaves none stuck.
+    [(_, hover)] = media_blocks(
+        "@media (prefers-reduced-motion: no-preference) and (hover: hover) {"
+    )
+    assert ":hover::before" in hover and ":hover::after" in hover and "opacity: 1" in hover
+    assert ":hover" not in spot
+    assert ".dock {" not in hover and hover.count("{") == 2
     # Nothing loops: no beam, dash march, ripple, spark or sheen from Rich mode.
     for word in ("beam", "march", "ripple", "spark", "sheen"):
         assert word not in spot and word not in script("glow.js"), word

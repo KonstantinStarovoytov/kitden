@@ -229,3 +229,34 @@ test('the spotlight follows the pointer on a block and is off under reduced moti
   move(150, 100, { closest: () => quiet });
   assert.equal(quiet.style['--mx'], undefined);
 });
+
+test('an empty read of the glow colour keeps the last good one', () => {
+  startGlow(column);
+  move(121, 121);
+  settle();
+  theme.glow = '';
+  observers[0].fn();
+  assert.ok(canvas.drawn.length > 20);
+  assert.ok(canvas.drawn.every((dot) => dot.style.startsWith('rgb(240 154 124 /')));
+});
+
+test('a new pixel ratio sizes the canvas again when the pointer next moves', () => {
+  startGlow(column);
+  assert.equal(canvas.width, 1600);
+  globalThis.devicePixelRatio = 1;
+  try {
+    move(121, 121);
+    assert.equal(canvas.width, 800);
+    assert.equal(canvas.height, 600);
+    assert.deepEqual(canvas.ctx.transform, [1, 0, 0, 1, 0, 0]);
+    tick();
+    assert.ok(canvas.drawn.length > 20);
+    // The same ratio again is no new size.
+    canvas.width = 1;
+    settle();
+    move(130, 121);
+    assert.equal(canvas.width, 1);
+  } finally {
+    globalThis.devicePixelRatio = 2;
+  }
+});
