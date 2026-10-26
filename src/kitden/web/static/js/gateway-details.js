@@ -10,7 +10,7 @@ import { animateTo, fold } from "./motion.js";
 import { projectNote } from "./offer.js";
 import { callsText, closePanel, contextLinks, detailsCard, drawQuietly, followTray, heldActions, holdPanel, isPanelOpen, keepFrom, linksRow, loadPanel, moveBody, moveInto, moveTargets, NO_TOOLS, offerLabel, offNote, openPanel, panelState, previewButton, refreshTools, review, stepTo, swapContent, switchList, techRows, technical, toast, toolRows, toolsHead, writingToolsOn } from "./panel.js";
 import { ALL_PROJECTS, callout, CLIENT_NAMES, clientCheck, FIND_PROJECT, folderName, GATEWAY_NOTE, gatewayName, kindOf, kitdenClients, mark, menuItems, originText, STATE_WORDS, versionsOpen } from "./parts.js";
-import { arrival, current, data, freshness, go, libraryChoice, projectPath, reload, render, setState, state, switchProject } from "./store.js";
+import { arrival, current, data, freshness, gatewayShows, go, libraryChoice, projectPath, reload, render, setState, state, switchProject } from "./store.js";
 import { addToTray, iconFor, inTray, keyFor, takeOut, tray } from "./tray.js";
 
 const WRITABLE = ["claude_code", "codex", "cursor"];
@@ -396,11 +396,24 @@ function rowButton(client, { connect, update, body }) {
   return node;
 }
 
-// "2 in the gateway · 4 outside". A server whose move out waits in the tray counts as outside
-// already, as the map draws it.
+// The Servers fact, "2 in the gateway · 4 outside". A server whose move out waits in the tray, once
+// its row has its part, counts as outside already, as the map draws it. The words follow the tray
+// while the panel shows: their key is no row's, so they are counted again on every change of it.
 function serverCounts(servers, outside) {
-  const leaving = servers.filter((s) => movingTo(s.name)).length;
-  return `${servers.length - leaving} in the gateway · ${outside.length + leaving} outside`;
+  const value = el("span");
+  const count = () => {
+    const leaving = servers.filter((s) => movesOutNow(s.name)).length;
+    value.textContent = `${servers.length - leaving} in the gateway · ${outside.length + leaving} outside`;
+  };
+  followTray(value, "counts", count);
+  return { label: "Servers", value, text: value.textContent };
+}
+
+// Whether the move out of the server `name` waits in the tray with its part, as the map draws it
+// (gateway.js rowsOnMap): not once it is applied.
+function movesOutNow(name) {
+  const key = keyFor({ action: "gateway.move_out", params: { server: name } });
+  return tray.phase !== "applied" && tray.rows.some((row) => row.key === key && row.part);
 }
 
 // The Kitden gateway, as the mockup's gateway panel (gateway-notes 3.6): the house, where it runs;
@@ -415,7 +428,7 @@ function kitdenCard(gateway, { view, setup, clientList, adding }) {
   const facts = [];
   // Settings it cannot read are a problem, not an empty gateway: the callout says so.
   if (!gateway.problem) {
-    facts.push({ label: "Servers", value: serverCounts(servers, outside) }, { label: "Tools", value: toolsWords(servers) });
+    facts.push(serverCounts(servers, outside), { label: "Tools", value: toolsWords(servers) });
   }
   // A name in two outside groups is set up differently in two clients: a move refuses it until
   // the person keeps one, so it moves on its own and "Move all" leaves it out.
@@ -426,23 +439,35 @@ function kitdenCard(gateway, { view, setup, clientList, adding }) {
     const targets = rows.flatMap((row) => row.items).map((item) => ({ item }));
     more.push({ label: `Move all ${rows.length}…`, body: { action: "gateway.move", targets, params: { gateway: gateway.id } } });
   }
-  more.push({ label: "Add another gateway…", run: () => showGateway(gateway.id, { adding: true }) });
+  // While the form is open its own heading stands in the place of its entry.
+  if (!adding) more.push({ label: ADD_ANOTHER, run: () => showGateway(gateway.id, { adding: true }) });
   let warning = known ? null : "Kitden could not read which clients use it.";
   if (gateway.problem) warning = gateway.problem;
   let after = null;
   if (adding) {
     after = el("section", "add-gateway");
-    after.append(el("h2", null, "Add another gateway"), addForm());
+    after.append(el("h2", null, "Add another gateway"), addForm({ onCancel: () => stopAdding(gateway.id) }));
   }
   const why = "The gateway controls only the servers in it. Direct entries and terminal tools are outside it.";
   return { kind: KIND.gateway, title: gateway.name, id: gateway.where, tile: houseTile(), facts, list: known ? clientRows(setup, clientList) : null, why, actions: [], more, after, warning };
 }
 
+// A registered gateway Kitden could not read says only this on the map, in the List and as its
+// Servers fact; its Details say why in a callout (heldProblem). The reason may name a variable or
+// an address, which stay behind Details.
+export const NOT_REACHED = "Not connected";
+
 // What a registered gateway holds, as its Servers fact.
 function heldWords(entry) {
   if (!entry || entry.loading) return "Reading what it holds…";
-  if (!entry.servers) return entry.error || "Could not read what the gateway holds.";
+  if (!entry.servers) return NOT_REACHED;
   return plural(entry.servers.length, "server", "servers");
+}
+
+// Why Kitden could not read what a registered gateway holds, or null.
+function heldProblem(entry) {
+  if (!entry || entry.loading || entry.servers) return null;
+  return entry.error || "Could not read what the gateway holds.";
 }
 
 // One sentence on where its servers and tools are set.
@@ -487,7 +512,18 @@ function registeredCard(gateway, { view, held: entry, clients }) {
     after = fold(box);
   }
   const rows = [{ title: "MCP address", summary: gateway.url }, ...(gateway.ui_url ? [{ title: "Interface link", summary: gateway.ui_url }] : [])];
-  return { kind: KIND.gateway, title: name, id: null, tile: headTile(mark("gateway")), facts, why: heldWhy(gateway, entry), actions, after, technical: technical(rows) };
+  const warning = gateway.managed ? heldProblem(entry) : null;
+  return { kind: KIND.gateway, title: name, id: null, tile: headTile(mark("gateway")), facts, why: heldWhy(gateway, entry), actions, after, technical: technical(rows), warning };
+}
+
+// Cancel, or Escape in the form: the card is drawn again without it, focus on its entry (or on More,
+// which it waits under again).
+const ADD_ANOTHER = "Add another gateway…";
+function stopAdding(id) {
+  showGateway(id);
+  const drawer = $("#drawer");
+  const back = withFocusKey(drawer, `action:${ADD_ANOTHER}`) || withFocusKey(drawer, "more");
+  if (back) back.focus();
 }
 
 // Details of a gateway: the Kitden one, or a registered one. `clients` are the found clients Kitden
@@ -722,7 +758,7 @@ export function toolCard(tool, server, { linked, picked = "", folder = "", detai
   }
   const shared = sharedOf(tool, detail);
   const target = other(shared || (on ? "on" : "off"));
-  const step = { server: server.name, tool: name, title, target, shared, rules, warning };
+  const step = { server: server.name, tool: name, title, target, shared, rules, readIn: picked, warning };
   const some = changedIn(projects, rules.projects, target, ruleIn(name)).length ? stepAction(IN_SOME[target], () => projectsStep(step)) : null;
   const others = known && known.map((p) => ({ id: p.id, name: p.name, state: callableIn(name)(p.entry) })).filter((p) => p.state);
   const who = linked && linked.length ? joinWords(linked.map((c) => CLIENT_NAMES[c])) : null;
@@ -813,9 +849,9 @@ export function heldCard(server, { linked, picked = "", folder = "", view = null
   ];
   const shared = sharedOf(server, detail);
   const target = other(shared || server.state);
-  const step = { server: name, tool: null, title: name, target, shared, rules: detail, warning };
+  const step = { server: name, tool: null, title: name, target, shared, rules: detail, readIn: picked, warning };
   const some = changedIn(projects, detail.projects, target, (p) => p.server).length ? stepAction(IN_SOME[target], () => projectsStep(step)) : null;
-  const actions = clients.length ? [stepAction(MOVE_OUT, () => moveOutStep(name, detail, warning))] : [];
+  const actions = clients.length ? [stepAction(MOVE_OUT, () => moveOutStep({ name, detail, readIn: picked, warning }))] : [];
   const more = [...heldMore(server, picked, detail, some), ...heldActions(name, clients, server.plain_secrets)];
   const links = view ? kitdenLinks(view, name) : [];
   const id = `${server.kind === "remote" ? "Remote" : "Local"} · in the Kitden gateway`;
@@ -1017,10 +1053,10 @@ function stepFoot(words) {
 }
 
 // Back from a step to its panel: drawn from the rules read for it (`draw`), or read again
-// (`read`) when another project is picked since (a project switch in place), so it never shows
-// one project's rules under another's name.
-function backTo(draw, read) {
-  const readIn = state.project;
+// (`read`) when the project picked now is not the one they were read in (`readIn`: a project
+// switch in place, also before the step was drawn again), so it never shows one project's rules
+// under another's name.
+function backTo(draw, read, readIn) {
   return () => (state.project === readIn ? draw() : read());
 }
 
@@ -1036,26 +1072,29 @@ function focusAfterStep(...keys) {
 // client Kitden can write, saying whether it uses the gateway now. A press adds the move into that
 // client to the tray at once (one row per server: another press replaces it); a press on the
 // client picked takes it out. Focus goes to the client picked, else the first. Back steps to the
-// server's panel with its `warning`. Drawn again (`dir` null) in place.
-function moveOutStep(name, detail, warning, dir = "fwd") {
+// server's panel with its `warning`. `detail` is the server's rules, read in the project `readIn`.
+// Drawn again (`dir` null) in place.
+function moveOutStep(read, dir = "fwd") {
+  const { name, detail, readIn, warning } = read;
   panelState.current = { type: "moveout", name };
   const { linked } = heldContext();
-  const back = backTo(() => drawHeld(name, detail, { step: "back", warning }), () => showHeld(name, { step: "back", focus: [`action:${MOVE_OUT}`] }));
+  const back = backTo(() => drawHeld(name, detail, { step: "back", warning }), () => showHeld(name, { step: "back", focus: [`action:${MOVE_OUT}`] }), readIn);
   const nodes = moveOutNodes(name, foundClients(), linked, back);
-  keepFrom(() => moveOutStep(name, detail, warning, null), nodes, () => showHeld(name));
+  keepFrom(() => moveOutStep(read, null), nodes, () => showHeld(name));
   if (!dir) return swapContent(nodes);
   return stepTo(nodes, dir).then(() => focusAfterStep(`pick:${movingTo(name) || foundClients()[0]}`));
 }
 
-// The step's parts: Back, where it came from and Close; the question; a row per client; and what
-// the other clients lose.
+// The step's parts: Back, where it came from and Close; the question (on the map, that a drag does
+// the same; the List has no drag); a row per client; and what the other clients lose.
 function moveOutNodes(name, clients, linked, back) {
   const picks = el("div", "picks");
   picks.setAttribute("role", "group");
   picks.setAttribute("aria-label", "Client that keeps it");
   picks.append(...clients.map((client) => clientPick(name, client, linked)));
   const body = el("div", "body");
-  body.append(el("p", "why", `Pick the client that keeps it. You can also drag ${name} onto a client on the map.`), picks);
+  const drag = gatewayShows.mode === "list" ? "" : ` You can also drag ${name} onto a client on the map.`;
+  body.append(el("p", "why", `Pick the client that keeps it.${drag}`), picks);
   return [stepHead(`Server · ${name}`, `Move ${name} out of the gateway`, back), body, stepFoot(`The other clients lose ${name}'s tools.`)];
 }
 
@@ -1112,7 +1151,7 @@ function projectsStep(step, dir = "fwd") {
   const { server, tool } = step;
   panelState.current = { type: "projects", server, tool };
   const again = { warning: step.warning, step: "back", focus: [`action:${IN_SOME[step.target]}`, "more"] };
-  const back = backTo(() => (tool ? drawTool(server, tool, step.rules, again) : drawHeld(server, step.rules, again)), () => (tool ? showTool(server, tool, again) : showHeld(server, again)));
+  const back = backTo(() => (tool ? drawTool(server, tool, step.rules, again) : drawHeld(server, step.rules, again)), () => (tool ? showTool(server, tool, again) : showHeld(server, again)), step.readIn);
   const nodes = projectsNodes(step, heldContext().projects, back);
   keepFrom(() => projectsStep(step, null), nodes, () => (tool ? showTool(server, tool) : showHeld(server)));
   if (!dir) return swapContent(nodes);
@@ -1386,8 +1425,8 @@ export async function showTool(server, name, { step = null, focus = [] } = {}) {
 // a gateway's, an outside server's or a link's are drawn again at once for it, so no button in
 // them acts on the old project; a client's keeps its place in the address. A step inside a panel
 // (the project picker, a move out) and a row's review stay as they are: Back from a step reads
-// again (backTo). A panel still loading for the old project closes. The panel takes no press
-// until a step has landed (holdPanel).
+// again (backTo). A panel still loading for the old project closes. The panel takes no press, key
+// or Tab until a step has landed or a panel drawn again has read (holdPanel).
 const REDRAWN = ["client", "gateway", "outside", "link"];
 export function followProject() {
   const shown = panelState.current;
@@ -1396,7 +1435,7 @@ export function followProject() {
   if (shown.type === "held") return holdPanel(showHeld(shown.name, { step: "fwd" }));
   if (shown.type === "client") setState({ selected: { kind: "client", name: shown.client } });
   if (shown.type === "loading") closePanel({ focus: false });
-  else if (REDRAWN.includes(shown.type) && panelState.from) return drawQuietly(panelState.from.read);
+  else if (REDRAWN.includes(shown.type) && panelState.from) return holdPanel(drawQuietly(panelState.from.read));
   return Promise.resolve();
 }
 
@@ -1489,7 +1528,9 @@ function connectForm(gateway, waiting) {
 }
 
 // Add a registered gateway. Saved, its Details open, where clients connect to it.
-export function addForm() {
+// The form to add a gateway. `onCancel`: it ends with a quiet Cancel too, which Escape in the form
+// presses (the panel stays open).
+export function addForm({ onCancel = null } = {}) {
   const typed = draft.add;
   const form = el("form", "form");
   const url = input({ type: "url", required: true, placeholder: "http://127.0.0.1:12008/metamcp/local/mcp or http://127.0.0.1:8080/mcp-connect/<id>", autocomplete: "off" }, typed.url, (v) => { typed.url = v; showFields(); });
@@ -1533,7 +1574,19 @@ export function addForm() {
   message.setAttribute("aria-live", "polite");
   const submit = el("button", "btn primary", "Save gateway");
   submit.type = "submit";
-  form.append(urlField, uiField, field("Login", login), keyField, emailField, passwordField, submit, message);
+  form.append(urlField, uiField, field("Login", login), keyField, emailField, passwordField, submit);
+  if (onCancel) {
+    const cancel = button("Cancel", () => onCancel(), "btn");
+    cancel.dataset.focus = "add-cancel";
+    form.append(cancel);
+    form.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      onCancel();
+    });
+  }
+  form.append(message);
   async function save() {
     // The person's own action wins over an arrival still waiting (store.js).
     arrival.pending = false;

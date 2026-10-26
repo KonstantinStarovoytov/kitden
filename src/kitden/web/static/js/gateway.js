@@ -1,15 +1,16 @@
 // Gateway: the clients, the gateways and the MCP servers they reach, as a Map or a List. Each
 // row opens its Details beside the page (gateway-details.js).
-import { $, button, el, gridKey, icon, joinWords, plural, reportError, withFocusKey } from "./dom.js";
+import { $, button, el, gridKey, icon, joinWords, pageWaits, plural, reportError, WAITS, withFocusKey } from "./dom.js";
 import { setCancelFocus } from "./dock.js";
-import { addForm, connectAction, connectBody, followProject, heldServer, liveHeld, movesTo, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool, TAKE_OUT } from "./gateway-details.js";
+import { addForm, connectAction, connectBody, followProject, heldServer, liveHeld, movesTo, NOT_REACHED, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool, TAKE_OUT } from "./gateway-details.js";
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
-import { findChip, findIn, foldable, isNarrow, keepOpen, landOwners, landStage, layoutTree, linkKey, litFrom, litPath, pagesNow, pagesWith, pressOpen, toggleOpen, turnPage, wideWidth } from "./map.js";
+import { findChip, findIn, foldable, isNarrow, keepOpen, landOwners, landStage, layoutTree, linkKey, litFrom, litPath, pagesNow, pagesWith, pressOpen, toggleOpen, turnPage, turnWords, wideWidth } from "./map.js";
 import { mapView } from "./map-view.js";
 import { afterOldPage, animateTo, D, glide, rise, riseHead } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, openInfo, panelState, projectLabel, review } from "./panel.js";
 import { banner, CLIENT_NAMES, folderName, gatewayName, kitdenClients, mark, opens, ORIGIN_WORDS, scopeBar, setHint, skeleton, STATE_WORDS, staleNote } from "./parts.js";
-import { arrival, busy, current, currentError, data, go, onBusy, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
+import { arrival, busy, current, currentError, data, gatewayShows, go, onBusy, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
+import { say } from "./toast.js";
 import { addToTray, inTray, keyFor, onTray, takeOut, tray, undone } from "./tray.js";
 
 // Overview sets a client up with the same note. A server the Kitden gateway holds, and its
@@ -118,6 +119,7 @@ export function renderGateway(main, { again = false } = {}) {
   }
   shownUnder = null;
   const mode = viewMode(state, serverCount(view));
+  gatewayShows.mode = mode;
   const seg = modeSwitch(mode);
   head.append(seg);
   const model = treeFor(view, mode);
@@ -203,21 +205,26 @@ function modeSwitch(mode) {
 const glidePill = (seg, choice) => glide(seg, choice, "gateway-view", { duration: 280 });
 
 // The view switch (gateway-notes 7.1). `leaving`: the view that shows is on its way out. `drawing`:
-// the next draw comes from the switch, so its view comes in as one piece.
-const onSwitch = { leaving: false, drawing: false };
+// the draw `go` starts comes from the switch, so its view comes in as one piece. `turn` counts the
+// switches, so only the latest lands.
+const onSwitch = { leaving: false, drawing: false, turn: 0 };
 // The pill moves and the selection lets go; the view that shows goes up 4 px and out (120 ease-in);
 // then the page draws the other (renderGateway), which comes in from 6 px below (260 CALM). Under
-// reduced motion all of it lands at once. A second press while a view leaves does nothing.
+// reduced motion all of it lands at once. A second press while a view leaves does nothing, and a
+// switch whose page went meanwhile (another place, Back) draws nothing.
 function switchView(id, mode, seg, choice) {
   if (id === mode || onSwitch.leaving) return;
   for (const other of seg.children) if (other.dataset.focus) other.setAttribute("aria-pressed", String(other === choice));
   glidePill(seg, choice);
   letGoIfSelected();
   const old = mode === "map" ? onMap.view && onMap.view.box : onList.box;
+  const turn = ++onSwitch.turn;
   const land = () => {
     onSwitch.leaving = false;
+    if (turn !== onSwitch.turn || state.view !== "gateway" || gatewayShows.mode !== mode) return;
     onSwitch.drawing = true;
     go("gateway", { mode: id });
+    onSwitch.drawing = false;
   };
   if (!old || !D(1)) {
     land();
@@ -356,8 +363,8 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
     const answer = held.get(other.id);
     // A server the gateway runs itself (uvx, npx, a container) is local to it.
     const kindOf = (s) => (heldKind(s) === "Hosted" ? "local" : "remote");
-    // Not read yet, or not readable from here: no count, and a failed read says so.
-    const unread = answer && answer.servers ? null : (answer && answer.error) || "";
+    // Not read yet, or not readable here: no count; a failed read says NOT_REACHED.
+    const unread = answer && answer.servers ? null : answer && answer.error ? NOT_REACHED : "";
     const server = (block) => {
       block.meta = heldKind(block.server);
     };
@@ -863,12 +870,34 @@ function gatewayMap(main, model, found, { switched = false } = {}) {
 // The pages a draw shows, before it: those of groups that still page, then the page of a block a
 // row taken out gives back, of a search's matches when its text is new (or the map or the project
 // is: so a turn during a search stays, and the page stays after it), and on a new map (a visit, or
-// the List before) of what is selected.
+// the List before) of what is selected. A search does not turn the selected block away: its page
+// counts as one with a match. A selection a search still hides (a link whose end it turns away)
+// is let go, as a turn by hand does.
 function bringPages(model, { fresh = false, projectChanged = false } = {}) {
   const text = state.q.trim();
-  const ids = [onMap.back, ...(onMap.found && (fresh || projectChanged || text !== onMap.searched) ? onMap.found.matches : []), fresh && onMap.selected].filter(Boolean);
+  const matches = onMap.found && (fresh || projectChanged || text !== onMap.searched) ? [...onMap.found.matches] : [];
+  const ids = [onMap.back, matches.length && onMap.selected, ...matches, fresh && onMap.selected].filter(Boolean);
   Object.assign(onMap, { searched: text, back: null });
   onMap.pages = pagesWith(model, pagesNow(model, onMap.pages), ids);
+  if (matches.length) letGoHidden(model);
+}
+
+// Let go of a selection the map has but does not show now, before the draw that follows (so it
+// draws nothing again itself): its Details close, as letGoOnMap's do.
+function letGoHidden(model) {
+  const { selected } = onMap;
+  const known = selected && (model.blocks.some((b) => b.id === selected) || model.links.some((l) => linkKey(l) === selected));
+  if (!known || shownOnMap(model, selected)) return;
+  onMap.selected = null;
+  if (isPanelOpen() && letGoCloses(panelState.current)) closePanel({ focus: false });
+  else setState({ selected: null });
+}
+
+// The server a row taken out gives back (the `backTo` of its preview on the map `model`), so the
+// draw brings its page; null for any other row.
+function givenBack(model, keys) {
+  const shown = model && keys.length ? model.blocks.find((b) => keys.includes(b.row) && b.backTo) : null;
+  return shown ? shown.backTo : null;
 }
 
 // The blocks of a model by id. Every link asks, so it is built once for a model.
@@ -925,8 +954,10 @@ function rowsOfLink(model, link) {
 const writing = () => tray.phase === "applying" || tray.phase === "applied";
 
 // While a change is written (the tray's, or an Undo) every link keeps its hit, and so its focus,
-// and its × waits (map-view.js): it says why and removes nothing.
-export const linksWait = () => writing() || busy.change;
+// and its × waits (map-view.js): it says why and removes nothing. Its words: the tray's own Apply
+// is "your change", an Undo or another change is "another change". False while nothing is written.
+export const OWN_WAITS = "Your change is being written.";
+export const linksWait = () => (writing() ? OWN_WAITS : busy.change && WAITS);
 
 // What the × of a link does, in words: a link the tray draws, or whose removal waits in the tray,
 // is taken out of it, and the map acts on the others as linkRemoval says. "" where it does not act
@@ -997,10 +1028,8 @@ function takeOutHere(model, keys) {
   const box = onMap.view ? onMap.view.box : null;
   const shown = model.blocks.find((b) => gone.includes(b.row) && b.backTo);
   const focus = box && shown ? document.activeElement?.dataset?.focus : null;
-  // The server comes back on its page: the draw the take-out starts brings it.
-  onMap.back = shown ? shown.backTo : null;
+  // The server comes back on its page: the draw the take-out starts brings it (trayChanged).
   const taken = takeOut(gone);
-  onMap.back = null;
   const lost = Boolean(focus) && (focus === `block:${shown.id}` || focus.endsWith(`>${shown.id}`));
   if (lost) withFocusKey(box, `block:${shown.backTo}`)?.focus({ preventScroll: true });
   return taken;
@@ -1030,6 +1059,7 @@ function newMap() {
     onHover: (id) => view.glance(glanceFor(onMap.model, id)),
     links: LINK_HOOKS,
   });
+  holdKeys(view.box);
   // Escape clears the selection first; open Details then close too (panel.js).
   view.box.addEventListener("keydown", (event) => {
     if (event.key !== "Escape" || !onMap.selected) return;
@@ -1044,6 +1074,19 @@ function newMap() {
   view.box.addEventListener("focusin", (event) => focusBeside(view.box, event.target));
   watchMap(view.box);
   return view;
+}
+
+// While another project is read the map and the List take no key but Tab (design.md Project
+// switch): a key on a link, a block or a row would act on the project they were drawn for. The
+// box hears the key first and keeps it from them.
+function holdKeys(box) {
+  const hold = (event) => {
+    if (event.key === "Tab" || !pageWaits()) return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  box.addEventListener("keydown", hold, true);
+  box.addEventListener("keyup", hold, true);
 }
 
 // A press on a block that folds opens or folds it, before it is selected. `unfolds` says that the
@@ -1182,9 +1225,11 @@ export function pressBlock(model, id) {
 }
 
 // "N more" turns its group to the next five in place, and the last page back to the first; focus
-// stays on it. A selection the turn hides is let go, so its Details close.
+// stays on it, and a screen reader hears the caption once ("Remote · 6–10 of 12", in the page's live
+// region). A selection the turn hides is let go, so its Details close.
 function turnOnMap(model, id) {
   onMap.pages = turnPage(model, onMap.pages, id);
+  say(turnWords(model, onMap.pages, id));
   if (onMap.selected && !shownOnMap(model, onMap.selected)) letGoOnMap();
   else drawAgain();
 }
@@ -1234,16 +1279,13 @@ function arriveOnMap(model, found) {
 
 // The tray as the map last heard it, so it knows when an applied change has landed.
 let trayWas = tray.phase;
+let trayKeys = tray.rows.map((row) => row.key);
 onTray(trayChanged);
 // A change that starts or stops being written: the × of the link pointed at says so.
 onBusy(() => onMap.view?.aimAgain());
 // Cancel in the dock with focus there: a single move gives focus to the server it would have taken.
-setCancelFocus((rows) => {
-  const key = onMap.view && onMap.view.box.isConnected ? cancelFocusFor(onMap.model, rows) : null;
-  // The draw the Cancel starts brings that server's page.
-  if (key) onMap.back = key.slice("block:".length);
-  return key;
-});
+// The draw the Cancel starts brings that server's page (trayChanged).
+setCancelFocus((rows) => (onMap.view && onMap.view.box.isConnected ? cancelFocusFor(onMap.model, rows) : null));
 
 // The focus key of the server a single move in the tray would have taken (its preview's `backTo`
 // on the map `model`), else null.
@@ -1255,15 +1297,21 @@ export function cancelFocusFor(model, rows) {
 
 // The tray changed: the map draws its rows again in place, while it shows. Not while its change is
 // applied: the page reads the result first, and its rows land on the map one by one (landRows).
-// Once it has landed (the tray empties), focus it took away goes to the gateway block.
+// Once it has landed (the tray empties), focus it took away goes to the gateway block. A row taken
+// out by any way (the map, the bar's ×, Cancel, Details) gives its server back on its page.
 function trayChanged(t) {
-  const landed = trayWas === "applied" && t.phase === "idle";
+  const applied = trayWas === "applied";
+  const landed = applied && t.phase === "idle";
+  const left = trayKeys.filter((key) => !t.rows.some((row) => row.key === key));
   trayWas = t.phase;
+  trayKeys = t.rows.map((row) => row.key);
   if (t.phase === "applied") {
     if (onMap.view && onMap.view.box.isConnected) landing.due = { keys: t.rows.map((row) => row.key), id: t.change.id, view: current("gateway") };
     return;
   }
+  onMap.back = applied ? null : givenBack(onMap.model, left);
   const drawn = drawRows();
+  onMap.back = null;
   // A result the page could not read again lands nothing later.
   if (landed) landing.due = null;
   if (!landed) return;
@@ -1387,11 +1435,11 @@ function tile(block) {
 }
 
 // The List, a tree grid: the servers that show their tools (`open`), the groups and gateways the
-// person folded, and the row that takes the Tab key, kept across redraws of one project.
-const onList = { project: null, open: new Set(), folded: new Set(), current: null, box: null };
+// person folded, and the row that takes the Tab key, kept across redraws and other projects (a row
+// that is gone gives the Tab key to the first).
+const onList = { open: new Set(), folded: new Set(), current: null, box: null };
 
 function gatewayList(main, view, model, found, { enter = false } = {}) {
-  if (onList.project !== state.project) Object.assign(onList, { project: state.project, open: new Set(), current: null });
   const rows = findRows(model, found, onList.open, onList.folded);
   const byId = new Map(model.blocks.map((block) => [block.id, block]));
   if (!rows.some((r) => r.id === onList.current)) onList.current = rows.length ? rows[0].id : null;
@@ -1414,6 +1462,7 @@ function gatewayList(main, view, model, found, { enter = false } = {}) {
   for (const row of rows) grid.append(listRow(row, byId.get(row.id), { current: row.id === onList.current, selected: row.id === chosen, view, press }));
   // One row takes the Tab key; the arrows move between rows, Right and Left fold, Enter opens.
   // Keys on a row's own button stay that button's.
+  holdKeys(grid);
   grid.addEventListener("keydown", (event) => {
     if (event.altKey || event.ctrlKey || event.metaKey || !event.target.dataset.row) return;
     const next = gridKey(rows, rows.findIndex((r) => r.id === event.target.dataset.row), event.key);

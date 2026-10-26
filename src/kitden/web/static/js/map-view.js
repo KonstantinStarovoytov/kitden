@@ -5,7 +5,7 @@
 // small × on its middle. A selection dims what is off its path and lays an accent line over each
 // lit link. The page gives the hooks; the view knows nothing of servers, tools or clients.
 import { button, cutName, el, icon, showWaits } from "./dom.js";
-import { blockLabel, drawPlan, enterDelays, foldable, foldsInto, LINK_MS, linkClass, linkDashed, linkKey, linkPath, midPoint, unfoldDelays } from "./map.js";
+import { blockLabel, crossPoint, drawPlan, enterDelays, foldable, foldsInto, LINK_MS, linkClass, linkDashed, linkKey, linkPath, unfoldDelays } from "./map.js";
 import { afterOldPage, animateTo, CALM, D, IN3, OUT3, RETRACT, rollTo, unscaled } from "./motion.js";
 
 const SVG = "http://www.w3.org/2000/svg";
@@ -596,7 +596,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
   function aimCross(item) {
     const tip = pointer.tip(item.link);
     cross.setAttribute("aria-label", tip);
-    showWaits(cross, Boolean(pointer.waits?.()), tip);
+    showWaits(cross, pointer.waits?.() || false, tip);
   }
 
   function aimAgain() {
@@ -629,20 +629,24 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
   }
 
   // The × on the middle of the link with the hover look, else of the selected link, when that link
-  // has a removal. It follows the link; it moves to another link at once, and fades in only when it
-  // was hidden.
+  // has a removal: of the part of it no block covers (a line that runs behind a block keeps its ×
+  // off it). It follows the link; it moves to another link at once, and fades in only when it was
+  // hidden.
   function placeCross() {
     const item = links.get(pointed || picked);
     if (!item || !item.hit || !item.d || !pointer.tip(item.link)) {
       cross.hidden = true;
       return;
     }
-    const mid = midPoint(item.d);
+    const mid = crossPoint(item.d, blockBoxes(), CROSS_R);
     cross.style.transform = `translate(${Math.round(mid.x - CROSS_R)}px, ${Math.round(mid.y - CROSS_R)}px)`;
     if (!cross.hidden) return;
     cross.hidden = false;
     animateTo(cross, [{ opacity: 0 }, { opacity: 1 }], { dur: CROSS_MS, ease: CALM });
   }
+
+  // Where the blocks that show are now, as boxes.
+  const blockBoxes = () => [...blocks.values()].filter((item) => item.o > 0).map(boxOf);
 
   // Focus from a keyboard, not from a click (a mouse click focuses the hit too).
   const keyboardFocus = (hit) => hit.matches?.(":focus-visible") !== false;

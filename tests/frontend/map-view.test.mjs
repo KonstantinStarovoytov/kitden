@@ -809,6 +809,21 @@ test('pointing at a link gives it the hover look and puts the × on its middle',
   assert.deepEqual([x.animations[0].options.duration, x.animations[0].options.easing], [120, CALM]);
 });
 
+// Final wave: a link that runs behind a block (a direct line behind the gateway) keeps its × off it.
+test('the × of a link that runs behind a block sits off that block', async () => {
+  reduce(true);
+  const layout = lay();
+  const m = midPoint(linkPath({ from: 'c1', to: 's1', kind: 'on', shape: 'curve' }, place(layout, 'c1'), place(layout, 's1')));
+  const cover = { id: 'gw', column: 'b', kind: 'gateway', name: 'Kitden gateway', x: Math.round(m.x - 10), y: Math.round(m.y - 40), w: 20, h: 80 };
+  const tree = { ...TREE, blocks: [...TREE.blocks, { id: 'gw', column: 'b', kind: 'gateway', name: 'Kitden gateway' }] };
+  const v = view({ links: LINKS });
+  await v.draw(tree, { ...layout, blocks: [...layout.blocks, cover] }, { motion: 'none' });
+  hitOf(v).dispatch('pointerover');
+  const [x, y] = xOf(v).style.transform.match(/-?\d+/g).map(Number).map((n) => n + 8);
+  // The link is short and runs between blocks: the × is on the free part, never on the block.
+  assert.ok(!(x > cover.x && x < cover.x + cover.w && y > cover.y && y < cover.y + cover.h), `${x}, ${y}`);
+});
+
 test('the × waits 240 ms after the pointer leaves, also under reduced motion, and the pointer on it keeps it', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   reduce(true);
@@ -889,6 +904,10 @@ test('while another change is written a link keeps its hit, and its × waits and
   x.dispatch('click');
   const del = h.dispatch('keydown', { key: 'Delete' });
   assert.deepEqual([removed.length, del.defaultPrevented], [0, true]);
+  // The page's own words for it: the tray's own Apply is "your change".
+  waits = 'Your change is being written.';
+  v.aimAgain();
+  assert.deepEqual([x.getAttribute('aria-disabled'), x.title], ['true', 'Your change is being written.']);
   // The write ends: the × says what it does again.
   waits = false;
   v.aimAgain();

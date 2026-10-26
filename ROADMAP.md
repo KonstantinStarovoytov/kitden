@@ -30,7 +30,9 @@ What Kitden does today and what comes next. Ideas and bugs:
   tools that turn on or off draw or take back their links, open servers stay open, the tray's rows
   keep their looks, and an open tool or server panel steps to the new project. Tab reads the links
   in reading order, and a link keeps its focus while a change is written. A hint line under the
-  map says how to use it. Reasons and counts use the same words as the panels.
+  map says how to use it. Reasons and counts use the same words as the panels. After Apply or
+  Undo the map lands its rows with no cross-fade, and a gateway Kitden cannot reach says "Not
+  connected" on the map, with the reason in its Details. The add-gateway form can be cancelled.
 - **Details float beside the map:** on Gateway, Library and Changes, Details float over the right
   of the page as in the mockup; the page keeps its width and the map stays wide. Another block's
   Details swap in place through a quiet skeleton.

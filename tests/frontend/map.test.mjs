@@ -435,6 +435,22 @@ test('the middle of a path is the point at half its length', () => {
   assert.ok(Math.abs(c.x - 50) < 0.5 && Math.abs(c.y - 50) < 0.5);
 });
 
+// Final wave: a link's × sits off every block, in the middle of the longest stretch no block covers.
+test("a link's × sits on the middle of the longest stretch no block covers", async () => {
+  const { crossPoint } = await import('../../src/kitden/web/static/js/map.js');
+  assert.deepEqual(crossPoint('M 0 0 H 300'), { x: 150, y: 0 });
+  // A block over x 100 to 250, widened 8 px: the free stretches are 0 to 92 and 258 to 300.
+  const at = crossPoint('M 0 0 H 300', [{ x: 100, y: -20, w: 150, h: 40 }], 8);
+  assert.ok(Math.abs(at.x - 46) <= 2 && at.y === 0, JSON.stringify(at));
+  // A path under blocks all the way: the middle of what is free unwidened, else of the path.
+  const tight = crossPoint('M 0 0 H 300', [{ x: -5, y: -20, w: 140, h: 40 }, { x: 140, y: -20, w: 170, h: 40 }], 8);
+  assert.ok(Math.abs(tight.x - 137.5) <= 2, JSON.stringify(tight));
+  assert.deepEqual(crossPoint('M 0 0 H 300', [{ x: -10, y: -20, w: 400, h: 40 }], 8), { x: 150, y: 0 });
+  // A right-angle line behind a block keeps its × off it.
+  const elbow = crossPoint('M 0 0 H 20 V 200 H 300', [{ x: 100, y: 150, w: 120, h: 100 }], 8);
+  assert.ok(!(elbow.x > 92 && elbow.x < 228 && elbow.y > 142 && elbow.y < 258), JSON.stringify(elbow));
+});
+
 // Landing (motion-spec M4 step 6): after Apply all each tray row shows on the map in its turn. A
 // move in of "github" (row "m") and a removal of "files" (row "r"): before, a preview block in the
 // gateway and a leaving server; after, github held and files gone.

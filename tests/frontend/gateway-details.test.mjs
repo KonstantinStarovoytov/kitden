@@ -234,13 +234,28 @@ test("the client panel's Gateway fact says when its change waits in preview", as
 
 test('the gateway panel counts a server whose move out waits in the tray as outside', () => {
   const before = tray.rows;
-  tray.rows = [{ key: 'moveout:files', body: { action: 'gateway.move_out', targets: [{ client: 'codex' }], params: { server: 'files' } }, part: {} }];
+  const row = { key: 'moveout:files', body: { action: 'gateway.move_out', targets: [{ client: 'codex' }], params: { server: 'files' } }, part: {} };
   try {
+    tray.rows = [row];
     const card = gatewayCard(KITDEN_TOOLS, { view: VIEW_TOOLS, setup: SETUP, projects: PROJECTS, clients: FOUND });
     assert.deepEqual(facts(card)[0], ['Servers', '1 in the gateway · 5 outside']);
+    // A row still asked, with no part yet, is not on the map: it does not count yet.
+    tray.rows = [{ ...row, part: null }];
+    const asked = gatewayCard(KITDEN_TOOLS, { view: VIEW_TOOLS, setup: SETUP, projects: PROJECTS, clients: FOUND });
+    assert.deepEqual(facts(asked)[0], ['Servers', '2 in the gateway · 4 outside']);
   } finally {
     tray.rows = before;
   }
+});
+
+// Final wave: the count follows the tray while the panel shows.
+test("the gateway panel's server count follows the tray", async () => {
+  const card = gatewayCard(KITDEN_TOOLS, { view: VIEW_TOOLS, setup: SETUP, projects: PROJECTS, clients: FOUND });
+  await withTray(() => [card.facts[0].value], async ([servers]) => {
+    assert.equal(textOf(servers), '2 in the gateway · 4 outside');
+    await review({ action: 'gateway.move_out', targets: [{ client: 'codex' }], params: { server: 'files' } });
+    assert.equal(textOf(servers), '1 in the gateway · 5 outside');
+  });
 });
 
 test('the gateway panel lists every client with its own button', async () => {
@@ -283,8 +298,10 @@ test('the gateway panel lists every client with its own button', async () => {
   assert.deepEqual(smallOf(off), ['Not connected · its entry is off', 'Not connected · settings not readable', 'Not connected']);
   // An old entry is updated, not connected.
   assert.equal(textOf(off.list.children[1].children[2].children[2].childNodes[0]), 'Update…');
-  // "Add another gateway…" shows the form in the panel.
-  assert.ok(gatewayCard(KITDEN, { view: VIEW, setup: SETUP, projects: PROJECTS, clients: FOUND, adding: true }).after);
+  // "Add another gateway…" shows the form in the panel; while it shows, its entry is not offered.
+  const adding = gatewayCard(KITDEN, { view: VIEW, setup: SETUP, projects: PROJECTS, clients: FOUND, adding: true });
+  assert.ok(adding.after);
+  assert.ok(!moreLabels(adding).includes('Add another gateway…'));
 });
 
 test("Move all leaves out a name set up differently in two clients, as the medium sample's docs", () => {
@@ -340,8 +357,13 @@ test('a registered gateway says what it holds and offers to take the clients ove
   assert.ok(textOf(card.after).includes('Connect clients'));
   assert.ok(textOf(card.technical).includes(obot.url));
   // The gateway in use: its clients and no switch; a failed read says so.
-  const used = gatewayCard(meta, { view, setup: SETUP, projects: PROJECTS, clients: FOUND, held: { servers: null, error: 'Could not read what the gateway holds.' } });
-  assert.deepEqual(facts(used), [['Clients', '1 client'], ['Servers', 'Could not read what the gateway holds.'], ['State', 'Used']]);
+  // The reason of a failed read is the callout of its Details; the fact says the short state, as
+  // the map and the List do.
+  const used = gatewayCard(meta, { view, setup: SETUP, projects: PROJECTS, clients: FOUND, held: { servers: null, error: 'Set OBOT_API_KEY in the environment before starting Kitden' } });
+  assert.deepEqual(facts(used), [['Clients', '1 client'], ['Servers', 'Not connected'], ['State', 'Used']]);
+  assert.equal(used.warning, 'Set OBOT_API_KEY in the environment before starting Kitden');
+  assert.equal(gatewayCard(meta, { view, setup: SETUP, projects: PROJECTS, clients: FOUND, held: { servers: null } }).warning, 'Could not read what the gateway holds.');
+  assert.equal(gatewayCard(meta, { view, setup: SETUP, projects: PROJECTS, clients: FOUND, held: { loading: true } }).warning, null);
   assert.ok(!labels(used).includes('Use this gateway…'));
   // Saved without what Kitden needs to read it: the sentence says what to add.
   const unread = gatewayCard({ ...obot, managed: false }, { view, setup: SETUP, projects: PROJECTS, clients: FOUND });
@@ -968,6 +990,20 @@ test('Back from a step after a project switch reads the panel again for that pro
       assert.equal(textOf(drawer.children[0].children[1]), 'files');
     }, { projects: MEDIUM_PROJECTS });
     pick('');
+    // The step drawn again after the switch (as after a review's round trip) still knows its rules
+    // were read for all projects: Back reads them again for atlas.
+    await onFilesPanel(async (drawer, sent) => {
+      await click(control(drawer, MOVE));
+      await wait(50);
+      pick('atlas');
+      panelState.from.draw();
+      await wait(50);
+      sent.length = 0;
+      await back(drawer);
+      await wait(400);
+      assert.deepEqual(reads(sent), ['/api/gateway/tools?server=files&project=atlas']);
+    }, { projects: MEDIUM_PROJECTS });
+    pick('');
     // A tool's "in some projects" step: the same.
     await onFilesPanel(async (drawer, sent) => {
       await click(control(drawer, 'action:Turn off in some projects…'));
@@ -983,6 +1019,32 @@ test('Back from a step after a project switch reads the panel again for that pro
   } finally {
     pick('');
   }
+});
+
+// Final wave: a panel drawn again for the new project (an outside server's) is held while it reads,
+// as a step forward is.
+test('an outside server panel drawn again for a new project takes no press while it reads', async () => {
+  const { followProject } = await import('../../src/kitden/web/static/js/gateway-details.js');
+  let answer = null;
+  const reply = (url) => {
+    if (!url.startsWith('/api/explain')) return Response.json({});
+    if (!url.includes('atlas')) return Response.json({ definitions: [] });
+    return new Promise((resolve) => { answer = () => resolve(Response.json({ definitions: [] })); });
+  };
+  await onGatewayPage(reply, async (drawer) => {
+    await showOutside('move', 'github');
+    await wait(400);
+    Object.assign(state, { project: 'atlas' });
+    Object.assign(data, { projects: MEDIUM_PROJECTS });
+    data.scope.gateway = 'atlas';
+    const following = followProject();
+    await wait(20);
+    assert.deepEqual([drawer.inert, drawer.classList.contains('pending')], [true, true]);
+    answer();
+    await following;
+    assert.deepEqual([drawer.inert, drawer.classList.contains('pending')], [false, false]);
+  });
+  state.project = '';
 });
 
 test('after a project switch a client panel keeps its place in the address', async () => {
@@ -1039,13 +1101,18 @@ test('Move out steps to a client choice and a pick adds one move-out row', async
   });
 });
 
-test('the move-out step says it can be dragged', async () => {
-  await onFilesPanel(async (drawer) => {
-    await click(control(drawer, MOVE));
-    await wait(50);
-    const [say] = drawer.children[1].children;
-    assert.equal(textOf(say), 'Pick the client that keeps it. You can also drag files onto a client on the map.');
-  });
+test('the move-out step says it can be dragged, on the map only', async () => {
+  const { gatewayShows } = await import('../../src/kitden/web/static/js/store.js');
+  for (const [mode, words] of [['map', 'Pick the client that keeps it. You can also drag files onto a client on the map.'], ['list', 'Pick the client that keeps it.']]) {
+    gatewayShows.mode = mode;
+    await onFilesPanel(async (drawer) => {
+      await click(control(drawer, MOVE));
+      await wait(50);
+      const [say] = drawer.children[1].children;
+      assert.equal(textOf(say), words, mode);
+    });
+  }
+  gatewayShows.mode = '';
 });
 
 test('Move out takes focus to the client picked, and Back to Move out', async () => {
@@ -1480,4 +1547,30 @@ test('a click on a link opens the connection panel; a second click lets go', asy
     clickLink(tree, link);
     assert.equal(isPanelOpen(), false);
   }, { open });
+});
+
+// Final wave (owner, 2026-10-26): the add form closes again. Cancel, or Escape in the form, draws the
+// card without it and gives focus back to its entry, which waits under More again (the card's own
+// test checks the entry is not offered while the form shows, and is back after).
+test('the add-gateway form closes by Cancel or Escape, and focus goes back to its entry', async () => {
+  const { showGateway } = await import('../../src/kitden/web/static/js/gateway-details.js');
+  await onGatewayPage(() => Response.json({}), async (drawer) => {
+    const all = (node) => (node && typeof node === 'object' ? [node, ...node.childNodes.flatMap(all)] : []);
+    drawer.querySelectorAll = (selector) => all(drawer).filter((node) => node.dataset && (selector === '[data-focus]' ? node.dataset.focus : selector === '[data-tray]' ? node.dataset.tray : false));
+    const form = () => all(drawer).find((node) => node.tag === 'form') || null;
+    for (const how of ['cancel', 'escape']) {
+      showGateway('kitden', { adding: true });
+      await wait(400);
+      assert.ok(form(), how);
+      let kept = false;
+      if (how === 'cancel') await click(control(drawer, 'add-cancel'));
+      else for (const fn of form().listeners.keydown) fn({ key: 'Escape', preventDefault() {}, stopPropagation() { kept = true; } });
+      await wait(50);
+      assert.equal(form(), null, how);
+      assert.equal(isPanelOpen(), true, how);
+      assert.equal(globalThis.document.activeElement, control(drawer, 'more'), how);
+      // Escape there closes the form, not the panel: it goes no further.
+      if (how === 'escape') assert.equal(kept, true);
+    }
+  });
 });

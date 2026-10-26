@@ -28,6 +28,10 @@ export function viewMode(s, count) {
   return count > MAP_AT ? "list" : "map";
 }
 
+// Map or List, as the Gateway page drew it last ("" before it drew either): Details and the
+// effect of an Apply ask which one shows.
+export const gatewayShows = { mode: "" };
+
 // A change is being applied or undone: live rescans wait so the result can morph in.
 export const busy = { change: false };
 let idleListener = () => {};

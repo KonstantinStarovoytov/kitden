@@ -27,7 +27,7 @@ function fakeNode(tag) {
     get isConnected() { let up = node; while (up.parent) up = up.parent; return up.root === true; },
     append(...items) { for (const child of items) { if (typeof child !== 'string') child.parent = node; node.childNodes.push(child); } },
     prepend(...items) { for (const child of items) { if (typeof child !== 'string') child.parent = node; } node.childNodes.unshift(...items); },
-    replaceChildren(...items) { node.childNodes = []; node.append(...items); },
+    replaceChildren(...items) { for (const child of node.children) child.parent = null; node.childNodes = []; node.append(...items); },
     replaceWith(...items) { const up = node.parent; if (!up) return; const at = up.childNodes.indexOf(node); for (const child of items) child.parent = up; up.childNodes.splice(at, 1, ...items); },
     contains(other) { return other === node || node.children.some((child) => child.contains(other)); },
     setAttribute(name, value) { node.attributes[name] = String(value); },
@@ -424,4 +424,73 @@ test("an Add missing row's review shows its ticks, and a changed tick adds the r
   assert.equal(calls.length, asked);
   assert.match(pages['#drawer'].textContent, /Choose at least one item\./);
   assert.equal(tray.rows.length, 1);
+});
+
+// Final wave: one motion per change. After Apply or Undo the Library morphs its cells and the
+// Gateway map lands its rows, so neither cross-fades the page; the List and other places do.
+test('the effect of a change draws the Gateway map and the Library with no cross-fade', async () => {
+  const { showEffect } = await import('../../src/kitden/web/static/js/review.js');
+  const { reducedMotion } = await import('../../src/kitden/web/static/js/motion.js');
+  const { gatewayShows, setRenderer } = await import('../../src/kitden/web/static/js/store.js');
+  const fades = [];
+  let renders = 0;
+  setRenderer(() => { renders += 1; });
+  globalThis.document.startViewTransition = (change) => {
+    fades.push(state.view);
+    change();
+    return { finished: Promise.resolve(), ready: Promise.resolve(), skipTransition() {} };
+  };
+  reducedMotion.matches = false;
+  const was = state.view;
+  try {
+    for (const [view, mode, fade] of [['gateway', 'map', false], ['gateway', 'list', true], ['library', '', false], ['changes', '', true]]) {
+      fades.length = 0;
+      renders = 0;
+      state.view = view;
+      gatewayShows.mode = mode;
+      showEffect();
+      assert.deepEqual([fades.length > 0, renders], [fade, 1], `${view} ${mode}`);
+    }
+  } finally {
+    delete globalThis.document.startViewTransition;
+    reducedMotion.matches = true;
+    state.view = was;
+    gatewayShows.mode = '';
+    setRenderer(() => {});
+  }
+});
+
+// Final wave: Add missing's list that the server refuses names a file by its base name.
+test("a refused Add missing list names a file, not its path", async () => {
+  await fresh();
+  queue(LIST, refusal('Could not read /Users/me/.codex/config.toml.'));
+  await review(ALIGN);
+  const text = pages['#drawer'].textContent;
+  assert.match(text, /Could not read config\.toml\./);
+  assert.doesNotMatch(text, /\/Users\/me/);
+  closePanel({ instant: true, focus: false });
+});
+
+// Final wave: a row's review drawn again leaves its old Take it out behind: that one stops
+// following the tray.
+test("a row's review drawn again: the old Take it out stops following the tray", async () => {
+  await fresh();
+  queue(PREVIEW, previewed('c1'));
+  await addToTray(ADD);
+  showRowReview(tray.rows[0]);
+  const old = button(pages['#drawer'], 'Take it out');
+  showRowReview(tray.rows[0]);
+  const now = button(pages['#drawer'], 'Take it out');
+  assert.notEqual(old, now);
+  let answer;
+  queue('/api/changes/c1/apply', () => new Promise((resolve) => { answer = resolve; }));
+  const { applyTray } = await import('../../src/kitden/web/static/js/tray.js');
+  const applying = applyTray();
+  await settle();
+  assert.equal(tray.phase, 'applying');
+  assert.deepEqual([now.getAttribute('aria-disabled'), old.getAttribute('aria-disabled')], ['true', null]);
+  answer({ status: 200, json: { id: 'c1', state: 'restored', error: 'Put back.' } });
+  await applying;
+  await settle();
+  closePanel({ instant: true, focus: false });
 });

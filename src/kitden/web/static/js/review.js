@@ -7,7 +7,7 @@ import { loadLibrary, morphOnNextRender } from "./library.js";
 import { fold, transition } from "./motion.js";
 import { closePanel, drawQuietly, header, hideToast, isPanelOpen, openPanel, panelState, toast } from "./panel.js";
 import { allPutBack, baseNames, callout, checkBox, CLIENT_ORDER, diffCounts, kitdenMove, mark, movedNames, notesSection, PLACE_IN_TITLE, ruleText, rulesText, skillRemoval, socket, strictText, targetWords } from "./parts.js";
-import { busy, reload, render, setBusy, state } from "./store.js";
+import { busy, gatewayShows, reload, render, setBusy, state } from "./store.js";
 import { projectLabel, tools } from "./tools.js";
 import { addToTray, changeOutcome, checkTrayStale, onTray, takeOut, tray, undone } from "./tray.js";
 
@@ -273,7 +273,7 @@ async function chooseMissing(previewBody, note) {
   // Another project was picked while it was prepared: it opens nothing.
   if (state.project !== asked) return;
   if (!canShowReview(result)) {
-    const reason = (result.data && result.data.detail) || `Could not prepare this change (${result.status}).`;
+    const reason = baseNames((result.data && result.data.detail) || `Could not prepare this change (${result.status}).`);
     if (from && panelState.from === from) {
       backToDetails({ error: reason });
       return;
@@ -455,7 +455,7 @@ function takeOutButton(row) {
     else node.removeAttribute("aria-disabled");
   };
   follow();
-  const stop = onTray(() => (reviewIsOpen(row) ? follow() : stop()));
+  const stop = onTray(() => (node.isConnected && reviewIsOpen(row) ? follow() : stop()));
   return node;
 }
 
@@ -482,12 +482,15 @@ export async function reloadAll() {
 // The page shows the effect where it happened: the Library morphs its cells, every other
 // place cross-fades to its new state.
 export function showEffect() {
-  if (state.view === "library") {
-    morphOnNextRender();
-    render();
-  } else {
-    transition(render);
-  }
+  if (state.view === "library") morphOnNextRender();
+  if (drawsInPlace()) render();
+  else transition(render);
+}
+
+// The Library morphs its cells and the Gateway map lands its rows (gateway.js landRows): each is the
+// one motion of the change, so neither cross-fades the page too. Other places cross-fade.
+export function drawsInPlace(view = state.view, mode = gatewayShows.mode) {
+  return view === "library" || (view === "gateway" && mode === "map");
 }
 
 // After Apply all or an Undo, the Details open now are drawn again from what the files say: a tool

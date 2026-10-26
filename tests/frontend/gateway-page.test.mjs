@@ -69,7 +69,7 @@ function element(tagName) {
   return node;
 }
 const pages = {};
-for (const id of ['#main', '#drawer', '#scrim', '.shell', '#dock', '#find-chip']) {
+for (const id of ['#main', '#drawer', '#scrim', '.shell', '#dock', '#find-chip', '#said']) {
   pages[id] = element('DIV');
   pages[id].root = true;
 }
@@ -128,7 +128,12 @@ Object.assign(data, { gateway: VIEW, setupServer: [entry('claude_code', 'added')
 data.scope.gateway = '';
 state.view = 'gateway';
 let renders = 0;
-setRenderer(() => { renders += 1; });
+// The renderer only counts, unless a test asks it to draw the page as store.js would (`drawing`).
+let drawing = false;
+setRenderer(() => {
+  renders += 1;
+  if (drawing) redraw();
+});
 
 const main = pages['#main'];
 const map = () => main.children.find((n) => n.classList.contains('map')) || null;
@@ -481,9 +486,11 @@ function redraw() {
   renderGateway(main, { again: true });
 }
 
-test('Map to List and back move out and in', async () => {
+test('Map to List and back move out and in', async (t) => {
   const box = freshMap();
   renders = 0;
+  drawing = true;
+  t.after(() => { drawing = false; });
   // A server is selected: the switch lets go of it.
   press(box, 'block:outside:move:github');
   settle();
@@ -506,7 +513,6 @@ test('Map to List and back move out and in', async () => {
   leave();
   await tick();
   assert.deepEqual([state.mode, renders], ['list', 1]);
-  redraw();
   const list = listBox();
   assert.deepEqual(lastMotion(list), IN);
   assert.equal(state.selected, null);
@@ -515,7 +521,6 @@ test('Map to List and back move out and in', async () => {
   await tick();
   assert.deepEqual(lastMotion(list), OUT);
   assert.deepEqual([state.mode, renders], ['map', 2]);
-  redraw();
   const again = map();
   assert.deepEqual(lastMotion(again), IN);
   // Its blocks do not rise one by one on top of that, and none is selected.
@@ -551,17 +556,49 @@ test('under reduced motion the switch lands at once', async () => {
   const box = freshMap();
   renders = 0;
   reducedMotion.matches = true;
+  drawing = true;
   try {
     node(main, 'view:list').listeners.click[0]();
     await tick();
     assert.deepEqual([box.animations.length, state.mode, renders], [0, 'list', 1]);
-    redraw();
     assert.equal(listBox().animations.length, 0);
     assert.equal(listBox().style.opacity, undefined);
   } finally {
     reducedMotion.matches = false;
+    drawing = false;
     state.mode = 'map';
   }
+});
+
+// Final wave: a switch whose page went while the old view left draws nothing: it does not take
+// the person back to the Gateway, and the next draw of the map is not taken for the switch's.
+test('a view switch lands only while the Gateway still shows the view it left', async (t) => {
+  const box = freshMap();
+  renders = 0;
+  let leave;
+  const real = box.animate;
+  box.animate = (keyframes, options) => {
+    const animation = real(keyframes, options);
+    animation.finished = new Promise((resolve) => { leave = resolve; });
+    return animation;
+  };
+  t.after(() => { state.view = 'gateway'; state.mode = 'map'; });
+  node(main, 'view:list').listeners.click[0]();
+  await tick();
+  // Another place opens while the map leaves.
+  state.view = 'library';
+  leave();
+  await tick();
+  assert.deepEqual([state.view, state.mode, renders], ['library', 'map', 0]);
+  // Back on the Gateway, the next draw is not taken for the switch's: the map does not rise as one
+  // piece.
+  state.view = 'gateway';
+  const risen = (n) => n.animations.filter((a) => a.options.duration === 260 && a.keyframes[0].transform === 'translateY(6px)').length;
+  const before = risen(box);
+  main.replaceChildren();
+  renderGateway(main, { again: true });
+  assert.equal(risen(map()), before);
+  settle();
 });
 
 // The List (gateway-notes 7.2): a header with "Name", "Used by" and "Tools"; group rows with their
@@ -1012,4 +1049,132 @@ test('a focused link keeps its hit while the tray writes, and every hit is there
     await cancelTray();
     settle();
   }
+});
+
+// Final wave: while another project is read (`#main.pending`) the map and the List take no key but
+// Tab. The box hears a key first (capture) and keeps it from what it holds.
+test('while another project is read, keys on the map and the List do nothing; Tab still moves', async (t) => {
+  t.after(() => main.classList.remove('pending'));
+  // A key as the browser sends it: the box first, then the control, unless the box stopped it.
+  const press = (box, target, key) => {
+    const event = { key, target, stopped: false, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; } };
+    box.listeners.keydown[0](event);
+    if (!event.stopped) for (const fn of target.listeners.keydown || []) fn(event);
+    return event;
+  };
+  const box = freshMap();
+  const hit = node(box, 'link:gateway:kitden>held:kitden:files');
+  const client = node(box, 'block:client:codex');
+  main.classList.add('pending');
+  for (const [target, key] of [[hit, 'Delete'], [hit, 'Enter'], [client, 'Enter'], [client, ' ']]) {
+    const event = press(box, target, key);
+    assert.deepEqual([event.stopped, event.defaultPrevented], [true, true], key);
+  }
+  assert.deepEqual([press(box, hit, 'Tab').stopped, tray.rows.length], [false, 0]);
+  // The read ends: Delete removes the link again.
+  main.classList.remove('pending');
+  queue(PREVIEW, batch('k1'));
+  press(box, hit, 'Delete');
+  await tick();
+  assert.deepEqual(tray.rows.map((r) => r.body.action), ['gateway.remove']);
+  await cancelTray();
+  settle();
+  // The List: its arrows do nothing while the read runs.
+  state.mode = 'list';
+  main.replaceChildren();
+  renderGateway(main);
+  const list = listBox();
+  main.classList.add('pending');
+  const first = walk(list).find((n) => n.dataset.row);
+  assert.equal(press(list, first, 'ArrowDown').stopped, true);
+  state.mode = 'map';
+  main.classList.remove('pending');
+  freshMap();
+});
+
+// Final wave: a turn says the group's caption once, in the page's live region.
+test('a turn of a page says which ones show to a screen reader', async (t) => {
+  const box = await onTwelve(t);
+  const said = pages['#said'];
+  // The live region takes its words in a later timer task (toast.js say).
+  const heard = () => new Promise((resolve) => setTimeout(resolve, 5));
+  press(box, 'block:more:group:outside');
+  await heard();
+  assert.equal(said.textContent, 'Outside the gateway · 6–10 of 12');
+  press(box, 'block:more:group:outside');
+  await heard();
+  assert.equal(said.textContent, 'Outside the gateway · 11–12 of 12');
+  press(box, 'block:more:group:outside');
+  await heard();
+  assert.equal(said.textContent, 'Outside the gateway · 1–5 of 12');
+  settle();
+});
+
+// Final wave: a search does not turn the page away from the selected block; it stays selected.
+test('a search keeps the page of the selected block, and the selection with it', async (t) => {
+  const box = await onTwelve(t);
+  press(box, 'block:outside:move:direct-1');
+  settle();
+  state.q = 'direct-7';
+  renderGateway(main, { again: true });
+  settle();
+  assert.deepEqual(outsideShown(box), ['direct-0', 'direct-1', 'direct-2', 'direct-3', 'direct-4']);
+  assert.match(node(box, 'block:outside:move:direct-1').className, /\bselected\b/);
+  // Let go: the same search words bring nothing, new ones bring their page.
+  press(box, 'block:outside:move:direct-1');
+  settle();
+  state.q = 'direct-8';
+  renderGateway(main, { again: true });
+  settle();
+  assert.ok(outsideShown(box).includes('direct-8'));
+  state.q = '';
+  renderGateway(main, { again: true });
+  press(box, 'block:more:group:outside');
+  press(box, 'block:more:group:outside');
+  settle();
+  assert.deepEqual(outsideShown(box), ['direct-0', 'direct-1', 'direct-2', 'direct-3', 'direct-4']);
+});
+
+// Final wave: a row taken out by the bar's × (takeOut) or Cancel all brings its server back on its
+// page too, as a press on the map does.
+test("a move taken out by the bar's × or by Cancel brings its server back on its page", async (t) => {
+  const box = await onTwelve(t);
+  t.after(() => cancelTray());
+  for (const takeAway of [() => takeOut(keyFor(dropBody(TWELVE.groups.move[11], TWELVE))), () => cancelTray()]) {
+    press(box, 'block:more:group:outside');
+    press(box, 'block:more:group:outside');
+    settle();
+    queue(PREVIEW, batch('x1'));
+    await addToTray(dropBody(TWELVE.groups.move[11], TWELVE));
+    settle();
+    press(box, 'block:more:group:outside');
+    settle();
+    assert.deepEqual(outsideShown(box), ['direct-0', 'direct-1', 'direct-2', 'direct-3', 'direct-4']);
+    await takeAway();
+    await done();
+    settle();
+    assert.deepEqual(outsideShown(box), ['direct-10', 'direct-11']);
+    press(box, 'block:more:group:outside');
+    settle();
+  }
+});
+
+// Final wave: the List keeps its open servers across projects (design.md Project switch).
+test('the List keeps its open servers when another project is picked', (t) => {
+  t.after(() => { state.mode = 'map'; state.project = ''; data.scope.gateway = ''; freshMap(); });
+  state.mode = 'list';
+  main.replaceChildren();
+  renderGateway(main);
+  const files = walk(listBox()).find((n) => n.dataset.row === 'held:kitden:files');
+  const shownRows = () => walk(listBox()).filter((n) => n.dataset.row).map((n) => n.dataset.row);
+  // Right on its row unfolds files.
+  for (const fn of listBox().listeners.keydown) fn({ key: 'ArrowRight', target: files, preventDefault() {}, stopPropagation() {} });
+  main.replaceChildren();
+  renderGateway(main, { again: true });
+  assert.ok(shownRows().includes('tool:files/read_file'));
+  state.project = 'atlas';
+  data.scope.gateway = 'atlas';
+  main.replaceChildren();
+  renderGateway(main, { again: true });
+  assert.ok(shownRows().includes('tool:files/read_file'));
 });

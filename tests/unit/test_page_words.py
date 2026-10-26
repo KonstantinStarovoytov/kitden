@@ -1707,7 +1707,8 @@ def test_the_server_panel_says_the_mockups_words():
         '"Move out of the gateway…"',
         "`Server · ${name}`",
         "`Move ${name} out of the gateway`",
-        "`Pick the client that keeps it. You can also drag ${name} onto a client on the map.`",
+        "`Pick the client that keeps it.${drag}`",
+        "` You can also drag ${name} onto a client on the map.`",
         '"Uses the gateway now"',
         '"Not connected to the gateway"',
         "`The other clients lose ${name}'s tools.`",
@@ -2100,6 +2101,9 @@ def test_the_gateway_lists_by_group_and_keeps_every_action():
         '"Remove direct entry…"',
         "Move all ${",
         '"Add another gateway…"',
+        # Its form closes again: a quiet Cancel beside Save gateway (Escape in the form too).
+        'el("h2", null, "Add another gateway")',
+        'button("Cancel", () => onCancel(), "btn")',
         '"Use this gateway…"',
         "Set up in",
         '"Connect your agents. Shape what they can use."',
@@ -2532,6 +2536,38 @@ def test_a_control_that_waits_for_another_change_says_why():
         assert "showWaits(" in script(name), name
     assert '.dock .btn[aria-disabled="true"] { cursor: progress; }' in CSS
     assert 'div.map .link-x[aria-disabled="true"] { cursor: progress; }' in CSS
+    # During the tray's own Apply a link's × says the change is the person's own.
+    assert 'export const OWN_WAITS = "Your change is being written.";' in script("gateway.js")
+
+
+def test_a_gateway_kitden_cannot_reach_says_a_short_state_and_no_block_words_run_out():
+    # The reason (it may name a variable) waits in the gateway's Details; the map and the List say
+    # a short state (2026-10-26 owner screenshot: Obot's error ran out of its block).
+    assert 'export const NOT_REACHED = "Not connected";' in script("gateway-details.js")
+    assert "? NOT_REACHED :" in script("gateway.js")
+    # A block's lines end in "…" inside it, also where the gateway centres them.
+    assert "div.map .block-text > *, div.map .block-stats { max-width: 100%; min-width: 0; }" in CSS
+    for rule in ("div.map .block-name {", "div.map .block-words {"):
+        body = CSS.split(rule, 1)[1].split("}", 1)[0]
+        for part in ("overflow: hidden", "text-overflow: ellipsis", "white-space: nowrap"):
+            assert part in body, (rule, part)
+
+
+def test_a_rail_count_always_fits_whole():
+    # 2026-10-26 owner screenshot: ten changes showed "1C", cut by the rail's edge. The count never
+    # shrinks; the words beside it give way first and end in "…".
+    assert ".nav .count { flex: none; margin: 0 -5px; }" in CSS
+    label = CSS.split(".nav .label {", 1)[1].split("}", 1)[0]
+    for part in ("flex: 1", "min-width: 0", "text-overflow: ellipsis", "white-space: nowrap"):
+        assert part in label, part
+    assert ".shell { display: grid; grid-template-columns: 148px minmax(0, 1fr);" in CSS
+
+
+def test_figures_are_of_one_width_only_in_counts():
+    # Tabular figures on the whole page gave Inter's hyphen a figure's width ("langfuse - docs").
+    body = CSS.split("\nbody {", 1)[1].split("}", 1)[0]
+    assert "font-variant-numeric" not in body
+    assert ".count, .num { font-variant-numeric: tabular-nums; }" in CSS
 
 
 def test_the_gateway_map_has_its_hint_line_and_the_last_words_and_looks():

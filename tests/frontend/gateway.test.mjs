@@ -290,11 +290,14 @@ test('what Kitden could not read says so, never a state', () => {
   // The gateway's settings were not read: no "0 servers".
   const broken = { ...MEDIUM_VIEW, gateways: [{ ...MEDIUM_VIEW.gateways[0], servers: [], problem: 'Could not read gateway.json.' }] };
   assert.equal(listRows(gatewayTree(broken, OPTS), new Set()).find((r) => r.id === 'gateway:kitden').meta, 'Could not read its settings.');
-  // A registered gateway says its failed read, and nothing while it reads.
+  // A registered gateway says a short state for a failed read, in the List and on the map, never
+  // the reason (it may name a variable: its Details say it), and nothing while it reads.
   const obot = { id: 'gw-1', kind: 'obot', url: 'http://127.0.0.1:8080/mcp-connect/x', managed: true };
   const view = { ...MEDIUM_VIEW, gateways: [...MEDIUM_VIEW.gateways, obot], connections: { ...MEDIUM_VIEW.connections, 'gw-1': {} } };
   const meta = (held) => listRows(gatewayTree(view, { ...OPTS, held }), new Set()).find((r) => r.id === 'gateway:gw-1').meta;
-  assert.equal(meta(new Map([['gw-1', { servers: null, error: 'Could not read what the gateway holds.' }]])), 'Could not read what the gateway holds.');
+  const failed = new Map([['gw-1', { servers: null, error: 'Set OBOT_API_KEY in the environment before starting Kitden' }]]);
+  assert.equal(meta(failed), 'Not connected');
+  assert.equal(block(gatewayTree(view, { ...OPTS, held: failed }), 'gateway:gw-1').meta, 'Not connected');
   assert.equal(meta(new Map([['gw-1', { loading: true }]])), null);
   assert.equal(meta(new Map([['gw-1', { servers: [] }]])), '0 servers');
 });
@@ -869,8 +872,9 @@ test('while the tray is written every link keeps its hit, its × waits, and a pr
     assert.equal(linksWait(), false);
     const applying = applyTray();
     assert.equal(tray.phase, 'applying');
-    // Every link keeps its × (map-view.js keeps its hit), and the × waits; nothing leaves.
-    assert.equal(linksWait(), true);
+    // Every link keeps its × (map-view.js keeps its hit), and the × waits, saying the change being
+    // written is the person's own; nothing leaves.
+    assert.equal(linksWait(), 'Your change is being written.');
     assert.deepEqual(links.map((key) => linkTip(tree, linkOf(tree, key), '')), tips);
     pressBlock(tree, 'preview:github');
     clickLink(tree, linkOf(tree, 'gateway:kitden>held:kitden:files'));
@@ -879,15 +883,15 @@ test('while the tray is written every link keeps its hit, its × waits, and a pr
     assert.deepEqual([tray.phase, tray.rows.length], ['applying', 2]);
     verify();
     await applying;
-    assert.equal(linksWait(), true);
+    assert.equal(linksWait(), 'Your change is being written.');
     // Once it has landed, the × does what it says again.
     endApplied();
     const now = gatewayTree(MEDIUM_VIEW, OPTS);
     assert.equal(linksWait(), false);
     assert.equal(linkTip(now, linkOf(now, links[0]), ''), 'Remove files from the gateway');
-    // An Undo being written makes the × wait too.
+    // An Undo being written makes the × wait too: that is another change.
     setBusy(true);
-    assert.equal(linksWait(), true);
+    assert.equal(linksWait(), 'Another change is being written.');
   } finally {
     setBusy(false);
     await freshTray();
@@ -1929,15 +1933,24 @@ test('a connected client cannot be dragged', async (t) => {
     map.move(map.home.x + 40, map.home.y + 10);
     map.up(map.home.x + 40, map.home.y + 10);
     assert.deepEqual([map.captured, map.asked], [[], []]);
-    // One whose kitden entry comes from a plugin (on or off) says why on press, in the tip's plain
-    // look by the pointer, until the pointer lets go. Nothing lights and no wire shows.
-    // An entry that is off says what the panel says: its entry is off.
+    // One whose kitden entry comes from a plugin (on or off) says why once the pointer moves as far
+    // as a drag would start (5 px), in the tip's plain look by the pointer, until the pointer lets
+    // go; a click shows nothing. Nothing lights and no wire shows. An entry that is off says what
+    // the panel says: its entry is off.
     for (const [fields, words] of [[{}, 'Codex gets Kitden from a plugin.'], [{ enabled: false }, "Codex's entry is off."]]) {
       const setup = [entry('claude_code', 'added'), entry('codex', 'plugin', fields), entry('cursor', 'missing')];
+      const click = dragMap({ id: 'client:codex', opts: { ...OPTS, setup } });
+      click.press();
+      click.move(click.home.x + 12, click.home.y + 12);
+      click.up(click.home.x + 12, click.home.y + 12);
+      assert.deepEqual([click.captured, click.asked], [[], []]);
       const plugin = dragMap({ id: 'client:codex', opts: { ...OPTS, setup } });
       const { x, y } = plugin.home;
       plugin.press();
-      assert.deepEqual([plugin.captured, plugin.asked], [[], [['tip', words, { at: { x: x + 10, y: y + 10 } }]]]);
+      plugin.move(x + 13, y + 12);
+      assert.deepEqual([plugin.captured, plugin.asked], [[], []]);
+      plugin.move(x + 15, y + 10);
+      assert.deepEqual([plugin.captured, plugin.asked], [[], [['tip', words, { at: { x: x + 15, y: y + 10 } }]]]);
       plugin.move(x + 40, y + 10);
       assert.deepEqual(plugin.asked.at(-1), ['tip', words, { at: { x: x + 40, y: y + 10 } }]);
       plugin.up(x + 40, y + 10);
@@ -1951,6 +1964,26 @@ test('a connected client cannot be dragged', async (t) => {
   } finally {
     delete globalThis.document;
     Object.assign(data, { gateway: null, clients: null });
+    await freshTray();
+  }
+});
+
+// Final wave: while another project is read (`#main.pending`) a press on a grip starts nothing.
+test('a press on a grip while another project is read starts no drag', async () => {
+  await freshTray();
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  try {
+    const map = dragMap();
+    const page = { classList: { contains: (name) => name === 'pending' } };
+    const find = globalThis.document.querySelector;
+    globalThis.document.querySelector = (selector) => (selector === '#main' ? page : find(selector));
+    map.press();
+    map.move(map.home.x + 60, map.home.y + 10);
+    map.up(map.home.x + 60, map.home.y + 10);
+    assert.deepEqual([map.captured, map.asked, tray.rows], [[], [], []]);
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
     await freshTray();
   }
 });

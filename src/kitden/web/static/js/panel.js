@@ -351,6 +351,9 @@ export function closeForProject() {
 // While the page reads another project and Details follow it (`work`, a promise), the panel takes
 // no press, key or Tab (inert, and `.pending`: the progress cursor), so nothing in it acts on the
 // project it was drawn for. Holds may overlap; focus that was inside comes back when the last ends.
+// A hold lets go after HOLD_MAX at the latest, so a panel whose work never ends (a step's motion in
+// a hidden tab) never stays held.
+const HOLD_MAX = 5000;
 let holds = 0;
 let heldFocus = false;
 export async function holdPanel(work) {
@@ -360,14 +363,21 @@ export async function holdPanel(work) {
     drawer.inert = true;
     drawer.classList.add("pending");
   }
+  let held = true;
+  const letGo = () => {
+    if (!held) return;
+    held = false;
+    if (--holds) return;
+    drawer.classList.remove("pending");
+    if (!drawer.classList.contains("leaving")) drawer.inert = false;
+    if (heldFocus && isPanelOpen() && !drawer.contains(document.activeElement)) drawer.focus();
+  };
+  const backstop = setTimeout(letGo, HOLD_MAX);
   try {
     return await work;
   } finally {
-    if (!--holds) {
-      drawer.classList.remove("pending");
-      if (!drawer.classList.contains("leaving")) drawer.inert = false;
-      if (heldFocus && isPanelOpen() && !drawer.contains(document.activeElement)) drawer.focus();
-    }
+    clearTimeout(backstop);
+    letGo();
   }
 }
 

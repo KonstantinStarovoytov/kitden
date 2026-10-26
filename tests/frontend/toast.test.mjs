@@ -369,3 +369,20 @@ test('with no animation in the browser, or one that fails, the toast still goes 
     t.mock.timers.reset();
   }
 });
+
+// Final wave: the Undo of a toast that is hidden stops following whether a change is written: the
+// toast that leaves (still on the page for 160 ms) does not change, and nothing is left listening.
+test("a hidden toast's Undo stops following the busy state", async (t) => {
+  fresh();
+  reduce(false);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { setBusy } = await import('../../src/kitden/web/static/js/store.js');
+  toast('Removed neon from Codex.', () => {}, { ok: true });
+  const undo = buttonOf('Undo');
+  hideToast();
+  assert.equal(undo.isConnected, true);
+  setBusy(true);
+  assert.equal(undo.attributes['aria-disabled'], undefined);
+  setBusy(false);
+  t.mock.timers.tick(200);
+});

@@ -18,6 +18,7 @@ let timer = null;
 let left = 0;
 let since = 0;
 let line = null;
+let stopWaits = () => {}; // the toast's Undo stops following the busy state (action)
 // Told when a toast has gone by itself, so the tray can draw its bar again (dock.js).
 let afterToast = null;
 
@@ -63,6 +64,8 @@ export function hideToast({ now = false } = {}) {
   const node = shown;
   if (!node) return;
   shown = null;
+  stopWaits();
+  stopWaits = () => {};
   clearTimeout(timer);
   timer = null;
   line = null;
@@ -119,14 +122,15 @@ function startLife(life) {
 
 // A button of the toast: the toast leaves and the action runs at once, not after the leaving. A
 // press on a toast that is already leaving does nothing. Undo (`waits`) waits while another change
-// is written: it says why, and a press does nothing.
+// is written: it says why, and a press does nothing. It stops following once the toast is hidden
+// (`stopWaits`, hideToast).
 function action(owner, label, run, iconName, waits = false) {
   const node = button(label, null);
   if (iconName) node.prepend(icon(iconName, 13));
   if (waits) {
     const follow = () => showWaits(node, busy.change);
     follow();
-    const stop = onBusy(() => (node.isConnected ? follow() : stop()));
+    stopWaits = onBusy(follow);
   }
   node.addEventListener("click", async () => {
     if (shown !== owner || (waits && busy.change)) return;

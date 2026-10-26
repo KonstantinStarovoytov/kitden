@@ -757,6 +757,31 @@ test('while another project is read the panel takes no press, and focus inside c
   }
 });
 
+// Final wave: a hold whose work never ends (a step's motion in a hidden tab) lets go after 5 s.
+test('a held panel lets go after 5 s at the latest', async (t) => {
+  const { drawer } = fakePanelPage();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    openPanel([]);
+    holdPanel(new Promise(() => {}));
+    assert.deepEqual([drawer.inert, drawer.classList.contains('pending')], [true, true]);
+    t.mock.timers.tick(4999);
+    assert.equal(drawer.inert, true);
+    t.mock.timers.tick(1);
+    assert.deepEqual([drawer.inert, drawer.classList.contains('pending')], [false, false]);
+    // The next hold holds again, and ends as its work does.
+    let done;
+    const next = holdPanel(new Promise((resolve) => { done = resolve; }));
+    assert.equal(drawer.inert, true);
+    done();
+    await next;
+    assert.equal(drawer.inert, false);
+  } finally {
+    closePanel({ instant: true, focus: false });
+    delete globalThis.document;
+  }
+});
+
 test('a project switch closes the panel and leaves the selection to the address', () => {
   fakePanelPage();
   const github = { kind: 'mcp_server', name: 'github' };

@@ -170,8 +170,9 @@ def test_the_find_chip_and_a_lit_list_row_are_readable_in_both_themes():
     # The chip sits on the search box (--inset); a lit List row's quiet words sit on the accent
     # tint and are --ink-2 there.
     assert ".tg-row.found .meta, .tg-row.found .tg-tools { color: var(--ink-2); }" in CSS
-    # Only a group row's words need it: a match's own words stay --ink, never weaker than the rest.
-    assert ".tg-row.group.found { color: var(--ink-2); }" in CSS
+    # A match's own words stay --ink, never weaker than the rest. A group row is never a match, so
+    # it needs no rule of its own.
+    assert ".tg-row.group.found" not in CSS
     assert ".tg-row.found { background: var(--route-soft); }" in CSS
     for theme in (LIGHT, DARK):
         assert contrast(theme["--ink-2"], theme["--inset"]) >= 4.5

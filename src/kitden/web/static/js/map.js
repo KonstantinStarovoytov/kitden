@@ -130,8 +130,12 @@ function pageParts(block, children, pages) {
   const parts = block.turns ? { turns: block.turns } : {};
   const paged = paging(block, children, pages);
   if (!paged) return parts;
-  const { rest, page } = paged;
-  return { ...parts, page, name: `${block.pageName || block.name} · ${page * PAGE + 1}–${Math.min(rest.length, (page + 1) * PAGE)} of ${rest.length}` };
+  return { ...parts, page: paged.page, name: pageWords(block, paged) };
+}
+
+// A paged group's caption: its name and which ones show ("Remote · 6–10 of 12").
+function pageWords(block, { rest, page }) {
+  return `${block.pageName || block.name} · ${page * PAGE + 1}–${Math.min(rest.length, (page + 1) * PAGE)} of ${rest.length}`;
 }
 
 // The pages after a press on "N more" (`more:<group id>`): its group shows its next five, and its
@@ -141,6 +145,14 @@ export function turnPage(model, pages, id) {
   const paged = group && paging(group, childrenOf(model).get(group.id) || [], pages);
   if (!paged) return pages;
   return new Map(pages).set(group.id, (paged.page + 1) % paged.count);
+}
+
+// What the caption of the group of "N more" (`more:<group id>`) says with `pages`, or "" when it
+// does not page: a turn says it to a screen reader.
+export function turnWords(model, pages, id) {
+  const group = model.blocks.find((block) => `more:${block.id}` === id);
+  const paged = group && paging(group, childrenOf(model).get(group.id) || [], pages);
+  return paged ? pageWords(group, paged) : "";
 }
 
 // The pages of the groups that page now: a group that stopped paging (or went) forgets its page, so
@@ -330,11 +342,11 @@ function along(points, t) {
   return now[0];
 }
 
-// The point at half the length of a path of absolute M, H, V, C and Q commands, as `linkPath`
-// gives them: where a link's × sits.
-export function midPoint(d) {
+// A path of absolute M, H, V, C and Q commands, as `linkPath` gives them, as straight pieces, each
+// [x0, y0, x1, y1] (a curve cut in CURVE_STEPS), with their lengths.
+function pathPieces(d) {
   const words = String(d).match(/[A-Z]|-?\d*\.?\d+(?:e[-+]?\d+)?/g) || [];
-  const pieces = []; // the path as straight pieces, each [x0, y0, x1, y1]
+  const pieces = [];
   let at = [0, 0];
   for (let i = 0; i < words.length; ) {
     const command = words[i++];
@@ -358,7 +370,11 @@ export function midPoint(d) {
     at = points.at(-1);
   }
   const lengths = pieces.map(([x0, y0, x1, y1]) => Math.hypot(x1 - x0, y1 - y0));
-  let left = lengths.reduce((sum, length) => sum + length, 0) / 2;
+  return { pieces, lengths, end: { x: at[0], y: at[1] }, total: lengths.reduce((sum, length) => sum + length, 0) };
+}
+
+// The point `left` px along a path's pieces.
+function pointAlong({ pieces, lengths, end }, left) {
   for (const [i, length] of lengths.entries()) {
     if (left > length && i < lengths.length - 1) {
       left -= length;
@@ -368,7 +384,40 @@ export function midPoint(d) {
     const t = length ? Math.min(1, left / length) : 0;
     return { x: x0 + (x1 - x0) * t, y: y0 + (y1 - y0) * t };
   }
-  return { x: at[0], y: at[1] };
+  return end;
+}
+
+// The point at half the length of a path.
+export function midPoint(d) {
+  const path = pathPieces(d);
+  return pointAlong(path, path.total / 2);
+}
+
+// Where a link's × sits: the middle of the longest stretch of its path that no block covers
+// (`boxes`, { x, y, w, h }, each widened by `pad`, the ×'s half, so the × does not touch one); a
+// path that runs behind a block keeps its × off it. With no such stretch, the same without the
+// widening; with none at all, the middle of the path.
+const CROSS_STEP = 2; // px between the points tried along a path
+export function crossPoint(d, boxes = [], pad = 0) {
+  const path = pathPieces(d);
+  for (const grow of pad ? [pad, 0] : [0]) {
+    const covered = (p) => boxes.some((b) => p.x > b.x - grow && p.x < b.x + b.w + grow && p.y > b.y - grow && p.y < b.y + b.h + grow);
+    let best = null;
+    let from = null;
+    const steps = Math.max(1, Math.ceil(path.total / CROSS_STEP));
+    for (let k = 0; k <= steps; k++) {
+      const at = (path.total * k) / steps;
+      const free = !covered(pointAlong(path, at));
+      if (free && from === null) from = at;
+      if (from !== null && (!free || k === steps)) {
+        const to = free ? at : (path.total * (k - 1)) / steps;
+        if (!best || to - from > best.to - best.from) best = { from, to };
+        from = null;
+      }
+    }
+    if (best) return pointAlong(path, (best.from + best.to) / 2);
+  }
+  return pointAlong(path, path.total / 2);
 }
 
 // What changes from the layout `before` (null: nothing drawn yet) to `after`: the block ids that

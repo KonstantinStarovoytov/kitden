@@ -2,7 +2,7 @@
 // them; a drop only adds a row to the tray. Today: a server from outside the gateway into it, a
 // server in the Kitden gateway onto a client, and a wire from a client that is not connected onto
 // the gateway.
-import { el, reportError } from "./dom.js";
+import { el, pageWaits, reportError } from "./dom.js";
 import { foundClients } from "./gateway-details.js";
 import { linkKey } from "./map.js";
 import { CALM, shake } from "./motion.js";
@@ -95,10 +95,11 @@ export const DRAGS = {
 // a server in the Kitden gateway (the whole block: it has no grip) a drag onto a client, and a
 // client that can be connected (`drags`), whose connect is not in the tray, a wire to the gateway;
 // a client a plugin connects says why it cannot. A press while a change is written, while another
-// server's dropped move is asked, or on anything else, does nothing here. `onStart()` runs when
-// the drag starts, before the map holds the block: the page lets go of its selection there.
+// server's dropped move is asked, while another project is read, or on anything else, does
+// nothing here. `onStart()` runs when the drag starts, before the map holds the block: the page
+// lets go of its selection there.
 export function pressGrip(event, onStart = () => {}) {
-  if (event.button !== 0 || busy.change || onMap.drag || !onMap.model) return;
+  if (event.button !== 0 || busy.change || pageWaits() || onMap.drag || !onMap.model) return;
   const node = event.target.closest("button.block");
   const block = node && onMap.model.blocks.find((b) => node.dataset.focus === `block:${b.id}`);
   if (!block || (onMap.moving && onMap.moving.id !== block.id)) return;
@@ -111,22 +112,28 @@ export function pressGrip(event, onStart = () => {}) {
 // The Kitden gateway's block on the map, or null (none, or a first run's slot).
 const kitdenGateway = () => onMap.model.blocks.find((b) => b.kind === "gateway" && b.gateway.kind === "kitden") || null;
 
-// A client a plugin connects cannot be dragged (nor one whose plugin entry is off): a press shows
-// why in the tip's plain look, by the pointer, until the pointer lets go.
+// A client a plugin connects cannot be dragged (nor one whose plugin entry is off): once the
+// pointer moves as far as a drag would start, the tip says why in its plain look, by the pointer,
+// until the pointer lets go. A click shows nothing.
 function sayWhy(event, block) {
   const { view } = onMap;
   const name = CLIENT_NAMES[block.client];
   // An entry that is off says what the client's panel says.
   const words = block.pluginOff ? `${name}'s entry is off.` : `${name} gets Kitden from a plugin.`;
-  const show = (e) => view.tip(words, { at: areaPoint({ x: e.clientX, y: e.clientY }) });
+  const start = { x: event.clientX, y: event.clientY };
+  let shown = false;
+  const show = (e) => {
+    if (!shown && Math.hypot(e.clientX - start.x, e.clientY - start.y) < DRAG_START) return;
+    shown = true;
+    view.tip(words, { at: areaPoint({ x: e.clientX, y: e.clientY }) });
+  };
   const done = () => {
     document.removeEventListener("pointermove", show);
     document.removeEventListener("pointerup", done);
     document.removeEventListener("pointercancel", done);
     window.removeEventListener("blur", done);
-    view.untip();
+    if (shown) view.untip();
   };
-  show(event);
   document.addEventListener("pointermove", show);
   document.addEventListener("pointerup", done);
   document.addEventListener("pointercancel", done);

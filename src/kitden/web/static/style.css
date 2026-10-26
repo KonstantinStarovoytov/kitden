@@ -142,7 +142,6 @@ body {
   background: var(--out); color: var(--ink);
   font: 13px/1.45 var(--sans);
   -webkit-font-smoothing: antialiased;
-  font-variant-numeric: tabular-nums;
   /* The gutter around the app frame (.shell). */
   padding-block: 16px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
@@ -175,8 +174,15 @@ a { color: var(--route); }
 /* One mark slides between the choices of a group (rail, tabs, filters); the choice itself is instant. */
 .ink { position: absolute; left: 0; top: 0; z-index: 0; border-radius: 6px; background: var(--route-soft); pointer-events: none; opacity: 0; transition: opacity var(--t-fast) ease; }
 .nav .ink { border-radius: 8px; border: 1px solid color-mix(in srgb, var(--route) 30%, transparent); box-shadow: inset 2px 0 0 var(--brand); }
+/* Figures of one width only where numbers must line up or roll in place: on the whole page they
+   would give Inter's hyphen a figure's width too ("langfuse - docs"). */
+.count, .num { font-variant-numeric: tabular-nums; }
 .count { font-size: 11px; color: var(--ink-3); }
-.nav .count { margin-left: auto; }
+/* A count always fits whole beside its link's words ("Changes 100" in the 148 px rail): it never
+   shrinks and sits a little closer to the words and the link's edge; words that still do not fit
+   end in "…". */
+.nav .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav .count { flex: none; margin: 0 -5px; }
 .count.warn { color: var(--lamp-warn); font-weight: 600; }
 .rail-foot { margin-top: auto; padding: 0 8px; display: flex; flex-direction: column; gap: 14px; color: var(--ink-3); font-size: 11px; }
 .rail-foot a { display: flex; align-items: center; min-height: 24px; }
@@ -587,10 +593,9 @@ table.map { width: 100%; border-collapse: separate; border-spacing: 0; backgroun
 .tg-row.group .tg-name { gap: 7px; }
 .tg-row.group .ic { flex: none; width: 13px; height: 13px; }
 .tg-row.group > [role="gridcell"] { grid-column: 1 / -1; }
-/* The same search in the List: a matching row is lit and the others dim to 35%. Words that are quiet
+/* The same search in the List: a matching row is lit and the others dim. A lit row's quiet words
    (--ink-3) go one step darker on the tint, for 4.5:1. */
 .tg-row.found { background: var(--route-soft); }
-.tg-row.group.found { color: var(--ink-2); }
 .tg-row.found .meta, .tg-row.found .tg-tools { color: var(--ink-2); }
 .treegrid.finding .tg-row:not(.found) { opacity: 0.35; }
 .tg-row > .tg-name { display: flex; align-items: center; gap: 6px; padding-left: calc(8px + var(--depth, 0) * 18px); }
@@ -698,11 +703,13 @@ div.map .block-tile .client-mark[data-icon="claude"] img { padding: 4px; }
 div.map .block-icon { width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid var(--wire); border-radius: 6px; background: var(--inset); color: var(--ink-2); }
 div.map .block-house { display: block; width: 26px; height: 26px; }
 div.map .block-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+/* No words run outside their block: a line that does not fit ends in "…" (block-name, block-words),
+   also where the gateway centres its lines (a centred grid item is as wide as its words). */
+div.map .block-text > *, div.map .block-stats { max-width: 100%; min-width: 0; }
 div.map .block-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
 div.map .block-name { min-width: 0; font-size: 12px; font-weight: 600; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 div.map .block-meta { display: flex; align-items: center; gap: 5px; min-width: 0; color: var(--ink-3); font-size: 11px; line-height: 15px; }
 div.map .block-words { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-div.map .block .num { font-variant-numeric: tabular-nums; }
 div.map .block-tag { flex: none; color: var(--route); font-size: 11px; font-weight: 500; line-height: 15px; white-space: nowrap; }
 /* A server's tool count: a 20 px round badge on its right edge, which hides while it is open. */
 div.map .block-count { position: absolute; top: calc(50% - 10px); right: -10px; min-width: 20px; height: 20px; padding: 0 3px; border: 1px solid var(--wire); border-radius: 10px; background: var(--panel-raised); color: var(--ink-2); font-size: 10px; line-height: 18px; text-align: center; transition: opacity 200ms ease, scale 300ms var(--spring); }
@@ -841,7 +848,6 @@ div.map .block.leaving:focus-visible { filter: none; }
 .dock .bar small { font-size: 11px; color: var(--ink-3); overflow-wrap: anywhere; }
 .dock .bar small.bad { color: var(--route); }
 .dock .tx .btn { align-self: flex-start; margin: 2px 0 -4px -9px; }
-.dock .num { font-variant-numeric: tabular-nums; }
 .dock .acts { display: flex; gap: 8px; }
 .dock .bar.many .acts { justify-content: flex-end; }
 /* A long list scrolls inside the bar; in a short window it gets shorter (down to one row), so the
@@ -1129,6 +1135,7 @@ html.map-entrance::view-transition-new(page) { animation: none; }
   .brand { padding: 0 4px; }
   .nav { flex-direction: row; gap: 2px; }
   .nav a { height: 32px; padding: 0 9px; white-space: nowrap; }
+  .nav .count { margin: 0; }
   .rail-foot { margin: 0 0 0 auto; padding: 0; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
   .scan-line { flex-direction: row; align-items: center; gap: 6px; }
   .rail-foot .btn { margin-left: 0; }
