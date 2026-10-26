@@ -2,6 +2,7 @@
 // Apply all and Undo all write everything or nothing. This module holds the state and talks to
 // the server; the dock draws it.
 import { getJson, postJson } from "./api.js";
+import { CLIENT_ORDER } from "./parts.js";
 import { busy, setBusy, state } from "./store.js";
 
 // The states a change can end in after each verb. Read back in any other state it has not
@@ -101,7 +102,16 @@ export function keyFor(body) {
   if (action === "gateway.add") return `add:${params.server}`;
   const one = targets[0] || {};
   if (action === "skill.rule") return `skill:${one.client}:${one.item}@${params.project || ""}`;
-  return JSON.stringify(sorted({ action, targets, params }));
+  return JSON.stringify(sorted({ action, targets: inClientOrder(action, targets), params }));
+}
+
+// An add of a plugin or a skill is the same change whatever order its clients were picked in: the
+// List's forms, the add panel and a drag give it one key.
+const ADD_ORDER = ["plugin.install", "skill.install"];
+function inClientOrder(action, targets) {
+  if (!ADD_ORDER.includes(action)) return targets;
+  const at = (target) => (CLIENT_ORDER.includes(target.client) ? CLIENT_ORDER.indexOf(target.client) : CLIENT_ORDER.length);
+  return [...targets].sort((a, b) => at(a) - at(b));
 }
 
 const REMOVES = ["mcp.remove_direct", "plugin.remove", "skill.remove", "gateway.remove"];

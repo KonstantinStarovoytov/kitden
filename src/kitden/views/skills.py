@@ -37,6 +37,8 @@ from kitden.views.catalog import (
 CLIENTS = ("claude_code", "codex", "cursor")
 CLIENT_WORDS = {"claude_code": "Claude Code", "codex": "Codex", "cursor": "Cursor"}
 NEEDS_PLUGIN = "This skill needs the rest of its plugin. Add the plugin instead."
+# Why the Library's add panel cannot offer a plugin: no client found here can take it.
+NO_CLIENT = "No client here can get {name}."
 # Files the agent may run. Everything else is read as text or data.
 SCRIPT_SUFFIXES = {
     ".sh",
@@ -462,7 +464,7 @@ def library_offers(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
         routes = {c: r for c, r in offer["routes"].items() if c in found}
         installed = [c for c in offer["installed"] if c in found]
         lacks = any(c not in installed for c in routes)
-        refusal = None if lacks or installed else f"No client here can get {offer['name']}."
+        refusal = None if lacks or installed else NO_CLIENT.format(name=offer["name"])
         rows.append(_offer_row(offer, routes, installed, refusal))
     for skill in skill_catalog(inventory, adapters):
         if not skill["marketplace"]:

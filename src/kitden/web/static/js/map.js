@@ -26,7 +26,7 @@
 //   change for it waits in the tray; `stats`, a gateway's counts, [{ icon, words }]; `projects`,
 //   a tool's { words, said, own }; `ports`, { left, right }, each true or a look ("out"); `takeOut`, the
 //   words of a block in preview, which a press takes out (it shows an ×); `leaving`, a change in the
-//   tray takes it out.
+//   tray takes it out; `pinned`, a group never pages it away (a card the tray adds).
 // - links: [{ from, to, kind, unk, leaving, preview }], kind "on", "faint", "direct" or "preview".
 //   The link is the state: something on has a link, something off has none. `unk`: Kitden does not
 //   know whether it is on, so the line is dashed; it only shows who has the entry. `leaving`: a
@@ -92,8 +92,10 @@ function childrenOf(model) {
   return children;
 }
 
-// What a group always shows whole: a preview and the slot of a drag are never behind "N more".
+// What a group always shows whole: a preview, the slot of a drag and a block marked `pinned` (a
+// card the tray adds) are never behind "N more".
 const PINNED = ["preview", "slot"];
+const pinned = (child) => Boolean(child.pinned) || PINNED.includes(child.kind);
 // The words of "N more" on a group's last page: a press goes back to the first.
 const firstPage = (size) => `Show the first ${size}`;
 
@@ -104,7 +106,7 @@ const firstPage = (size) => `Show the first ${size}`;
 function paging(block, children, pages = new Map()) {
   if (block.kind !== "group") return null;
   const size = block.pageSize || PAGE;
-  const rest = children.filter((child) => !PINNED.includes(child.kind));
+  const rest = children.filter((child) => !pinned(child));
   if (rest.length <= size + 1) return null;
   const count = Math.ceil(rest.length / size);
   return { rest, size, count, page: Math.min(Math.max(0, pages.get(block.id) || 0), count - 1) };
@@ -122,7 +124,7 @@ function shownChildren(block, children, open, pages) {
   // "N more" is as high as the blocks it stands for (an outside server's block is higher than the column's).
   const more = { id: `more:${block.id}`, column: block.column, parent: block.id, kind: "more", name: after > 0 ? `${after} more` : firstPage(size), ...(rest[0].h ? { h: rest[0].h } : {}) };
   const shown = rest.slice(page * size, (page + 1) * size).map((child) => ({ ...child, turns: block.id }));
-  return [...shown, more, ...children.filter((child) => PINNED.includes(child.kind))];
+  return [...shown, more, ...children.filter(pinned)];
 }
 
 // What the layout says of a block beyond its place: the words of "N more"; a group that pages,

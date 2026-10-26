@@ -660,7 +660,7 @@ test('a waiting add draws a dashed link and Preview · <Client>; a press takes i
     assert.ok(walk(map.box).some((n) => n.className === 'link preview'));
     const card = node(map.box, 'block:item:p2');
     assert.equal(card.getAttribute('aria-label'), 'superpowers, Preview · Codex');
-    assert.equal(card.title, 'In preview. Click to take it out.');
+    assert.equal(card.title, 'Preview · Codex. Click to take it out.');
     // A press on the card takes the row out, and opens nothing.
     card.listeners.click[0]();
     await flush();
@@ -755,7 +755,7 @@ test('a waiting add for two clients, or for one project, says Already in preview
   const atlas = withWaiting(libraryTree(DRAG_SAMPLE), rows, '/work/atlas');
   assert.deepEqual([card(atlas).meta, card(atlas).rows], ['Preview · Codex', ['k1']]);
   const two = withWaiting(libraryTree(DRAG_SAMPLE), [{ key: 'k2', body: both }], '');
-  assert.equal(card(two).meta, 'Preview · for all projects');
+  assert.equal(card(two).meta, 'Preview · all projects');
   assert.deepEqual(two.links.filter((l) => l.kind === 'preview').map((l) => l.from), ['client:codex', 'client:claude_code']);
 });
 

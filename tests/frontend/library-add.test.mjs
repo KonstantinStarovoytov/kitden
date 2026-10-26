@@ -127,7 +127,8 @@ globalThis.fetch = async (url, init = {}) => {
   return { ok: true, status: 200, json: async () => ({}) };
 };
 
-const { initLibraryAdd, libraryRowWords, openLibraryAdd } = await import('../../src/kitden/web/static/js/library-add.js');
+const { allBody, libraryRowWords, openLibraryAdd } = await import('../../src/kitden/web/static/js/library-add.js');
+const { initLibraryDetails } = await import('../../src/kitden/web/static/js/library-details.js');
 const { libraryTree, withWaiting } = await import('../../src/kitden/web/static/js/library-map.js');
 const { renderLibrary } = await import('../../src/kitden/web/static/js/library.js');
 const { layoutTree } = await import('../../src/kitden/web/static/js/map.js');
@@ -135,9 +136,10 @@ const { closePanel, initPanel, isPanelOpen, panelState } = await import('../../s
 const { reducedMotion } = await import('../../src/kitden/web/static/js/motion.js');
 const { data, state } = await import('../../src/kitden/web/static/js/store.js');
 const { setHint } = await import('../../src/kitden/web/static/js/parts.js');
-const { applyTray, cancelTray, endApplied, tray } = await import('../../src/kitden/web/static/js/tray.js');
+const { addToTray, applyTray, cancelTray, endApplied, inTray, keyFor, tray } = await import('../../src/kitden/web/static/js/tray.js');
 initPanel();
-initLibraryAdd();
+// Library Details open what the map selects, and the map's "+ Add" opens the panel.
+initLibraryDetails();
 
 // The map's answer: superpowers is on in Claude Code and can go to Codex; pr-review is in both.
 const none = { skills: [], commands: [], agents: [], hooks: [], mcp_servers: [] };
@@ -188,8 +190,8 @@ const press = async (target) => { fire(target, 'click'); await wait(); await wai
 const pointer = (type, x, y) => { for (const fn of [...(docHeard[type] || [])]) fn({ type, clientX: x, clientY: y }); };
 const bodies = () => tray.rows.map((r) => r.body);
 
-function showMap() {
-  Object.assign(data, { libraryMap: MAP, projects: [] });
+function showMap(sample = MAP) {
+  Object.assign(data, { libraryMap: sample, projects: [] });
   data.scope.libraryMap = '';
   Object.assign(state, { view: 'library', mode: 'map', project: '', q: '', selected: null });
   main.replaceChildren();
@@ -200,9 +202,9 @@ function showMap() {
 }
 
 // The map drawn, then "+ Add" beside its Plugins and skills caption pressed, and the offers read.
-async function open() {
-  offers = OFFERS;
-  const box = showMap();
+async function open(sample = MAP, rows = OFFERS) {
+  offers = rows;
+  const box = showMap(sample);
   const add = node(box, 'add:plugins');
   await press(add);
   await wait(10);
@@ -336,7 +338,9 @@ test('a plugin no client has shows as a preview card with dashed links while it 
     const id = 'item:new:plugin:db-tools@demo-market';
     const card = node(box, `block:${id}`);
     assert.ok(card, 'a new card');
-    assert.equal(card.getAttribute('aria-label'), 'db-tools, Preview · for all projects');
+    assert.equal(card.getAttribute('aria-label'), 'db-tools, Preview · all projects');
+    // A meta too long for the card ends in "…"; its title says it whole.
+    assert.equal(card.title, 'Preview · all projects. Click to take it out.');
     assert.equal(card.dataset.state, 'preview');
     assert.ok(node(box, `link:client:claude_code>${id}`) && node(box, `link:client:codex>${id}`));
     // It sits in its marketplace's group, after the plugins the map had.
@@ -422,6 +426,106 @@ test('a panel row dragged onto Codex adds for Codex only', async () => {
     await flush();
     assert.ok(node(box, 'block:client:claude_code').animations.some((a) => JSON.stringify(a.keyframes).includes('-7px')));
     assert.equal(bodies().length, 1);
+  } finally {
+    await done();
+  }
+});
+
+// A marketplace with seven plugins pages five at a time; the last, zeta, is on in Claude Code and
+// can go to Codex.
+const BIG = {
+  ...MAP,
+  groups: [{ ...MAP.groups[0], items: [...MAP.groups[0].items, ...['alpha', 'beta', 'gamma', 'delta'].map((name, at) => plugin(`q${at}`, name, { by: { claude_code: 'on' } })), plugin('p7', 'zeta', { by: { claude_code: 'on' }, can: { add: ['codex'], off: [] } })] }, MAP.groups[1]],
+};
+const ZETA = { id: 'zeta@demo-market', kind: 'plugin', name: 'zeta', marketplace: 'demo-market', routes: { claude_code: 'ready', codex: 'ready' }, installed: ['claude_code'], refusal: null };
+const shownOn = (box, id) => Boolean(node(box, `block:${id}`));
+
+test('in a group that pages, a new card stays in view and an item on another page comes to it', async () => {
+  const { box } = await open(BIG, [...OFFERS, ZETA]);
+  try {
+    assert.ok(shownOn(box, 'more:group:marketplace:demo-market'), 'the group pages');
+    await press(row('db-tools'));
+    await flush();
+    // The new card is never behind "N more", and the group pages as it did.
+    const id = 'item:new:plugin:db-tools@demo-market';
+    assert.ok(shownOn(box, id), 'the new card shows');
+    const layout = layoutTree(withWaiting(libraryTree(BIG), tray.rows, ''), { open: new Set(), narrow: false });
+    assert.ok(layout.blocks.some((b) => b.id === id));
+    assert.ok(layout.blocks.some((b) => b.id === 'more:group:marketplace:demo-market'));
+    assert.equal(text(node(box, 'block:more:group:marketplace:demo-market')), '2 more');
+    // zeta is on the second page: its add brings that page.
+    assert.equal(shownOn(box, 'item:p7'), false);
+    await press(row('zeta'));
+    await flush();
+    assert.ok(shownOn(box, 'item:p7'), 'zeta shows');
+    assert.equal(node(box, 'block:item:p7').getAttribute('aria-label'), 'zeta, Preview · Codex');
+    assert.ok(shownOn(box, id), 'the new card still shows');
+  } finally {
+    await done();
+  }
+});
+
+test('two new marketplace groups keep name order, and a new caption opens its Details', async () => {
+  const add = (plugin, key) => ({ key, body: { action: 'plugin.install', targets: [{ client: 'codex' }], params: { plugin } } });
+  const model = withWaiting(libraryTree(MAP), [add('toolbox@team-market', 'k1'), add('kit@zz-market', 'k2'), add('kit@alpha-market', 'k3')], '');
+  const groups = model.blocks.filter((b) => b.kind === 'group' && b.column === 'plugins' && !b.parent).map((b) => b.id);
+  assert.deepEqual(groups, ['group:marketplace:alpha-market', 'group:marketplace:demo-market', 'group:marketplace:team-market', 'group:marketplace:zz-market', 'group:skills']);
+  const caption = model.blocks.find((b) => b.id === 'group:marketplace:team-market');
+  assert.deepEqual([caption.details, caption.group.kind, caption.group.name], [true, 'marketplace', 'team-market']);
+  const { box } = await open();
+  try {
+    await press(row('toolbox'));
+    await flush();
+    const shown = node(box, 'block:group:marketplace:team-market');
+    assert.ok(shown, 'the caption is a button');
+    shown.listeners.click[0]();
+    await flush();
+    await wait(10);
+    const [head] = drawer.children;
+    assert.deepEqual([text(head.children[0]), text(head.children[1])].map((t) => t.split(' ')[0]), ['Marketplace', 'team-market']);
+  } finally {
+    await done();
+  }
+});
+
+test('an add for the same clients in another order is the same tray row', async () => {
+  const body = (...clients) => ({ action: 'plugin.install', targets: clients.map((client) => ({ client })), params: { plugin: 'db-tools@demo-market' } });
+  assert.equal(keyFor(body('codex', 'claude_code')), keyFor(body('claude_code', 'codex')));
+  assert.equal(keyFor({ ...body('cursor', 'codex'), action: 'skill.install' }), keyFor({ ...body('codex', 'cursor'), action: 'skill.install' }));
+  // Other changes keep their order.
+  assert.notEqual(keyFor({ ...body('codex', 'claude_code'), action: 'marketplace.add' }), keyFor({ ...body('claude_code', 'codex'), action: 'marketplace.add' }));
+  // The List's form picked Codex first: the panel's click finds the same row and takes it out.
+  await open();
+  try {
+    addToTray(body('codex', 'claude_code'));
+    await flush();
+    assert.ok(inTray(keyFor(allBody(OFFERS[0]))));
+    assert.equal(rowWords(row('db-tools'))[2], 'In preview');
+    await press(row('db-tools'));
+    await flush();
+    assert.deepEqual(tray.rows, []);
+  } finally {
+    await done();
+  }
+});
+
+test("a new card gives way to the real card after the read that follows Apply", async () => {
+  const { box } = await open();
+  try {
+    await press(row('db-tools'));
+    await flush();
+    assert.ok(shownOn(box, 'item:new:plugin:db-tools@demo-market'));
+    await applyTray();
+    // The page reads again: db-tools is on in both clients now, and the tray empties.
+    const read = { ...MAP, groups: [{ ...MAP.groups[0], items: [plugin('p0', 'db-tools', { by: { claude_code: 'on', codex: 'on' }, inside: { ...none, mcp_servers: ['db-query'] }, count: 1 }), ...MAP.groups[0].items] }, MAP.groups[1]] };
+    data.libraryMap = read;
+    main.replaceChildren();
+    renderLibrary(main);
+    endApplied();
+    await flush();
+    const now = map();
+    assert.equal(shownOn(now, 'item:new:plugin:db-tools@demo-market'), false);
+    assert.equal(node(now, 'block:item:p0').getAttribute('aria-label'), 'db-tools, 1 item, On');
   } finally {
     await done();
   }

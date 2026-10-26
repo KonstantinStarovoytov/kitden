@@ -48,9 +48,10 @@ const INSTALLS = { plugin: "plugin.install", skill: "skill.install" };
 const CURSOR_PLUGINS = "Cursor gets plugins through Claude Code";
 const WAITS_ALREADY = "Already in preview";
 // A block whose add waits in the tray: a press takes it out. Its meta names the clients, or says
-// it adds for all projects when it adds to several clients at once ("+ Add").
-const IN_PREVIEW = "In preview. Click to take it out.";
-const ALL_PROJECTS = "for all projects";
+// it adds for all projects when it adds to several clients at once ("+ Add"); a meta too long for
+// the card ends in "…", so its title says it whole.
+const CLICK_OUT = "Click to take it out.";
+const ALL_PROJECTS = "all projects";
 // What the × of a link that the tray draws says, and the × while a change is written.
 const TAKE_OUT = "Take it out of the preview";
 const OWN_WAITS = "Your change is being written.";
@@ -200,10 +201,10 @@ function waitOn(block, adds, project, clients, model) {
   return wait;
 }
 
-// How a block whose add waits looks: "Preview · Codex", or "Preview · for all projects".
+// How a block whose add waits looks: "Preview · Codex", or "Preview · all projects".
 function waitLook(wait) {
   const meta = `Preview · ${wait.all ? ALL_PROJECTS : joinWords(wait.names)}`;
-  return { meta, lamp: "preview", state: "preview", stateInMeta: true, takeOut: IN_PREVIEW, rows: wait.rows };
+  return { meta, lamp: "preview", state: "preview", stateInMeta: true, takeOut: `${meta}. ${CLICK_OUT}`, rows: wait.rows };
 }
 
 // What Kitden knows of the plugins and skills the marketplaces offer, by id (the add panel's read,
@@ -224,7 +225,7 @@ function offerOf(kind, id) {
 
 // An add in the tray of something the map does not show (a plugin no client has, a skill inside
 // a plugin) gets a preview card of its own at the end of its marketplace's group, a new group
-// when the map has none; it looks and goes as any waiting add.
+// when the map has none; it looks and goes as any waiting add, and its group never pages it away.
 function withNewCards(model, rows, project, clients) {
   const shown = new Set(model.blocks.filter((b) => b.drags).map((b) => `${b.kind}:${b.kind === "skill" ? b.item.skill : b.item.plugin}`));
   const cards = new Map();
@@ -241,19 +242,20 @@ function withNewCards(model, rows, project, clients) {
     if (kind === "skill") Object.assign(block, { h: ROW_H, label: ROW_LABELS.skill });
     const wait = waitOn(block, addsOf(item, rows), project, clients, model);
     if (!wait.rows.length) continue;
-    model.blocks.push(Object.assign(block, waitLook(wait), { parent: marketGroup(model, offer.marketplace) }));
+    model.blocks.push(Object.assign(block, waitLook(wait), { pinned: true, parent: marketGroup(model, offer.marketplace) }));
   }
   return model;
 }
 
 // The id of a marketplace's group on the map; a new caption, in name order among the marketplaces
-// and before the other groups, when the map has none.
+// and before the other groups, when the map has none. It opens its Details as any marketplace's.
 function marketGroup(model, name) {
   const id = `group:marketplace:${name}`;
   if (model.blocks.some((b) => b.id === id)) return id;
   const roots = model.blocks.filter((b) => b.kind === "group" && b.column === "plugins" && !b.parent);
   const next = roots.find((b) => !b.group || b.group.kind !== "marketplace" || b.name.toLowerCase() > name.toLowerCase());
-  const caption = { id, column: "plugins", kind: "group", name, icon: "store", before: GROUP_BEFORE, rowGap: LIBRARY_COLUMNS[1].rowGap };
+  const group = { key: `marketplace:${name}`, name, icon: "store", kind: "marketplace", items: [] };
+  const caption = { id, column: "plugins", kind: "group", name, icon: "store", before: GROUP_BEFORE, rowGap: LIBRARY_COLUMNS[1].rowGap, details: true, group };
   model.blocks.splice(next ? model.blocks.indexOf(next) : model.blocks.length, 0, caption);
   return id;
 }
@@ -369,10 +371,19 @@ export function renderLibraryMap(main, { head, again = false, switched = false }
 function keepWhatShows(answer) {
   onMap.answer = answer;
   const rows = rowsShown(tray);
+  const waited = waitingIds(onMap.model);
   onMap.model = withLeaving(withWaiting(libraryTree(answer), rows, state.project || ""), rows, answer);
+  // An item whose add has just come into the tray shows: its group turns to its page.
+  const fresh = [...waitingIds(onMap.model)].filter((id) => !waited.has(id));
+  if (fresh.length) onMap.pages = pagesWith(onMap.model, pagesNow(onMap.model, onMap.pages), fresh);
   const ids = new Set([...onMap.model.blocks.map((block) => block.id), ...onMap.model.links.map(linkKey)]);
   onMap.open = new Set([...onMap.open].filter((id) => ids.has(id)));
   if (onMap.selected && !ids.has(onMap.selected)) onMap.selected = null;
+}
+
+// The blocks of a tree whose add waits in the tray.
+function waitingIds(model) {
+  return new Set(model ? model.blocks.filter((b) => b.rows).map((b) => b.id) : []);
 }
 
 // What the map lights for a search: its matches, and a folded plugin that holds one (it stays

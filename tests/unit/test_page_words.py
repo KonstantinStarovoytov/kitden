@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 
 from kitden.clients.cursor import CURSOR_HINT
+from kitden.views.skills import NEEDS_PLUGIN, NO_CLIENT
 from kitden.views.words import (
     AFTER_WORDS,
     CODEX_NO_PROJECT,
@@ -2813,8 +2814,11 @@ def test_a_plugin_or_skill_drags_onto_a_client():
         'const WAITS_ALREADY = "Already in preview";',
         "`${who} cannot get ${item.name}`",
         "const meta = `Preview · ${wait.all ? ALL_PROJECTS : joinWords(wait.names)}`;",
-        'const ALL_PROJECTS = "for all projects";',
-        'const IN_PREVIEW = "In preview. Click to take it out.";',
+        'const ALL_PROJECTS = "all projects";',
+        'const CLICK_OUT = "Click to take it out.";',
+        "takeOut: `${meta}. ${CLICK_OUT}`",
+        "pinned: true, parent: marketGroup(model, offer.marketplace)",
+        "details: true, group };",
         'const INSTALLS = { plugin: "plugin.install", skill: "skill.install" };',
         'kind: "preview", row: add.key',
         "addsOf(item, tray.rows).some((add) => add.clients.includes(client))",
@@ -2866,6 +2870,15 @@ def test_the_library_add_panel_says_the_decided_words():
     )
     # A skill that needs its plugin says the same words as the copy refuses with.
     assert "This skill needs the rest of its plugin. Add the plugin instead." in script("offer.js")
+    # Why the panel offers a plugin to no client, beside it in views/skills.py.
+    assert NO_CLIENT == "No client here can get {name}."
+    assert NEEDS_PLUGIN == "This skill needs the rest of its plugin. Add the plugin instead."
+    # A card the tray adds is never behind "N more" (map.js), and an add of a plugin or skill is one
+    # row whatever order its clients come in (tray.js).
+    assert "const pinned = (child) => Boolean(child.pinned) || PINNED.includes(child.kind);" in (
+        script("map.js")
+    )
+    assert 'const ADD_ORDER = ["plugin.install", "skill.install"];' in script("tray.js")
 
 
 def test_a_library_link_x_removes_or_turns_off():
