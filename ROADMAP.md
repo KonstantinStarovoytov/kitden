@@ -46,7 +46,9 @@ What Kitden does today and what comes next. Ideas and bugs:
   Code show as a faint line. Big groups and big plugins show a page at a time. Map | List keeps
   today's table one click away, and old Library links land where their kind lives now. Kitden
   now reads Claude Code's local project settings and its `skillOverrides`, so a skill or plugin
-  turned off in one project shows Off there.
+  turned off in one project shows Off there. Drag a plugin or a skill onto a client to add it
+  there for all projects: the client lights, or the tip says why it cannot take it. The add waits
+  in preview as a dashed link, and a click on it takes it out.
 - **Library Details:** a click on the Library map opens Details for a plugin, a thing inside it, a
   skill, a hook, a client, a link or a marketplace. From the Library a plugin can be turned off for
   all projects or in this project, and added to another client; a skill can be turned off for all

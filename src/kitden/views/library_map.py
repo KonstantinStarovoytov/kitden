@@ -15,6 +15,7 @@ from kitden.views.catalog import catalog, installed_inside
 from kitden.views.effective import in_project
 from kitden.views.load_map import COLUMNS, Row, load_map, row_key
 from kitden.views.setup_server import kitden_on, setup_server_state
+from kitden.views.skills import skill_catalog
 from kitden.views.words import ORIGIN_WORDS, STATE_WORDS
 
 # A client's words, from its `kitden` entry, as on the Gateway.
@@ -131,9 +132,11 @@ RULES = ("claude_code", "codex")
 
 
 def _can(row: Row, by: dict, through: dict, ids: dict, by_id, offer, found, project) -> dict:
-    """What Details may offer for an item, by client: `add`, the clients that can add the plugin
-    and lack it (never Cursor: it gets plugins through Claude Code), and `off`, the clients that
-    load their own copy and can turn it off for all projects (a plugin's switch, or a skill rule).
+    """What Details and a drag may offer for an item, by client: `add`, the clients that can add
+    the plugin and lack it (never Cursor: it gets plugins through Claude Code), or that can take a
+    copy of the skill (Cursor too, when the skill catalog gives it a route), and `off`, the
+    clients that load their own copy and can turn it off for all projects (a plugin's switch, or a
+    skill rule).
     `off` acts on the user's own entry, the client's first item: a client where the project's own
     entry or rule decides is left out (Details offers "Turn off in this project…" there). A hook
     has no switch."""
@@ -150,8 +153,20 @@ def _can(row: Row, by: dict, through: dict, ids: dict, by_id, offer, found, proj
         off = [c for c in own if PLUGIN_DISABLE in by_id[ids[c][0]].actions]
         return {"add": add, "off": off}
     if row.kind is ItemKind.SKILL:
-        return {"off": [c for c in RULES if c in own]}
+        routes = offer["routes"] if offer else {}
+        add = [c for c in COLUMNS if c in found and c in routes]
+        return {"add": add, "off": [c for c in RULES if c in own]}
     return {}
+
+
+def _skill_offers(inventory, adapters) -> dict[str, dict]:
+    """The skill catalog's row for each skill name, a client's own skill first: what a skill of
+    "Your skills" is copied from (its id) and the clients that can take a copy (its routes)."""
+    out: dict[str, dict] = {}
+    for offer in skill_catalog(inventory, adapters):
+        if offer["name"] not in out or offer["id"].endswith("@skills"):
+            out[offer["name"]] = offer
+    return out
 
 
 def _skill_rules(inventory, adapters, found) -> dict:
@@ -208,8 +223,8 @@ def library_map(inventory, adapters, project: str | None) -> dict:
     """The clients and the source groups of the Library map, in the order the map draws them:
     marketplaces by name, then "Other plugins", "Your skills", "Your settings" and, with a project
     picked, "Only this project". `here` says the picked project's own settings decide the item
-    there; `can` what Details may offer for it, and `skill_rules` where a one-project skill rule
-    can go."""
+    there; `can` what Details and a drag may offer for it; `skill` the skill catalog's id a skill
+    of "Your skills" is copied from; and `skill_rules` where a one-project skill rule can go."""
     status = {c.id: c.status for c in inventory.clients}
     found = [c for c in COLUMNS if status.get(c) is ClientStatus.FOUND]
     cursor = adapters.get("cursor") if "cursor" in found else None
@@ -217,6 +232,7 @@ def library_map(inventory, adapters, project: str | None) -> dict:
     by_id = {i.id: i for i in inventory.items}
     present = _present(inventory, project)
     offers = {o["id"]: o for o in catalog(inventory, adapters)}
+    skill_offers = _skill_offers(inventory, adapters)
     held = installed_inside(adapters)
     folders = _plugin_folders(adapters)
     sources = _marketplace_sources(inventory)
@@ -238,6 +254,9 @@ def library_map(inventory, adapters, project: str | None) -> dict:
             and group["key"] != PROJECT["key"]
             and any(_decides_here(i, project) for i in deciding)
         )
+        # Only a skill of "Your skills" adds from the skill catalog; a project's own one does not.
+        skill = skill_offers.get(row.name) if group["key"] == SKILLS["key"] else None
+        offer = skill if row.kind is ItemKind.SKILL else offers.get(row.lookup)
         entry = {
             "id": row.key,
             "name": row.name,
@@ -247,8 +266,10 @@ def library_map(inventory, adapters, project: str | None) -> dict:
             "items": ids,
             "here": here,
             "source": group["name"],
-            "can": _can(row, by, through, ids, by_id, offers.get(row.lookup), found, project),
+            "can": _can(row, by, through, ids, by_id, offer, found, project),
         }
+        if skill:
+            entry["skill"] = skill["id"]
         technical: dict[str, str] = {}
         if row.kind is ItemKind.PLUGIN:
             entry["plugin"] = row.lookup

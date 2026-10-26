@@ -319,11 +319,30 @@ def test_each_item_says_what_details_can_offer(tmp_path):
     assert items["browser"]["can"] == {"add": [], "off": ["codex"]}
     assert items["ui-kit"]["can"] == {"add": [], "off": []}
     # A skill: each client that loads its own copy has a rule; Cursor has none.
-    assert items["brandkit"]["can"] == {"off": ["claude_code"]}
-    assert items["code-review"]["can"] == {"off": ["codex"]}
-    assert items["ui-polish"]["can"] == {"off": []}
+    assert items["brandkit"]["can"] == {"add": ["codex"], "off": ["claude_code"]}
+    assert items["code-review"]["can"] == {"add": ["claude_code"], "off": ["codex"]}
+    assert items["ui-polish"]["can"] == {"add": ["claude_code", "codex"], "off": []}
     # A hook has no switch.
     assert items["PreToolUse: Bash"]["can"] == {}
+
+
+def test_a_skill_says_which_clients_can_take_a_copy_cursor_too(tmp_path):
+    # A drag onto a client adds the skill there: the skill catalog's id and its routes. Cursor
+    # can take one when the catalog gives it a route; here it reads Claude Code's folder.
+    home = build_demo_home(tmp_path, "medium")
+    items = _items(_map(home))
+    assert items["brandkit"]["skill"] == "brandkit@skills"
+    assert items["brandkit"]["can"] == {"add": ["codex"], "off": ["claude_code"]}
+    assert items["ui-polish"]["can"] == {"add": ["claude_code", "codex"], "off": []}
+    # A plugin's can stays as it was: never Cursor.
+    assert items["superpowers"]["can"]["add"] == ["codex"]
+    inventory, adapters = _read(home)
+    inventory.items[:] = [
+        i for i in inventory.items if not (i.client == "cursor" and i.name == "brandkit")
+    ]
+    brandkit = _items(library_map(inventory, adapters, None))["brandkit"]
+    assert "cursor" not in brandkit["by"]
+    assert brandkit["can"]["add"] == ["codex", "cursor"]
 
 
 def test_skill_rules_say_where_one_project_can_turn_a_skill_off(tmp_path):

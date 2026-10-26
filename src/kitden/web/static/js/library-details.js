@@ -5,7 +5,7 @@
 // adds a row to the tray; nothing is written before Apply. Paths stay under Technical details.
 import { button, el, icon, joinWords, plural } from "./dom.js";
 import { focusAfterStep, headTile, iconTile, lamp, openCard, pressOnce, projectChecklist, stepHead, tickRow, tiles } from "./gateway-details.js";
-import { lampOf, libraryThing, onLibrarySelect } from "./library-map.js";
+import { addBody, lampOf, libraryThing, onLibrarySelect } from "./library-map.js";
 import { closePanel, drawQuietly, followTray, isPanelOpen, keepFrom, panelState, previewButton, review, stepTo, swapContent, technical } from "./panel.js";
 import { ALL_PROJECTS, CLIENT_NAMES, CLIENT_ORDER, folderName, mark, menuItems, ORIGIN_WORDS, STATE_WORDS } from "./parts.js";
 import { data, projectPath, state } from "./store.js";
@@ -111,12 +111,6 @@ export function offBodies(item) {
     if (item.kind === "plugin") return { action: "plugin.disable", targets: [{ item: target }], params: {} };
     return { action: "skill.rule", targets: [{ client, item: target }], params: { scope: "all", off: true } };
   });
-}
-
-// Add a plugin to one client, for all projects: the same body as a cell's add (library.js
-// previewFor).
-export function addBody(item, client) {
-  return { action: "plugin.install", targets: [{ client }], params: { plugin: item.plugin } };
 }
 
 // A skill rule in one project, for Claude Code (a skill's skillOverrides, a plugin's

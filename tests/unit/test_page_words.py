@@ -568,7 +568,14 @@ def test_gateway_wires_do_not_fake_traffic():
     assert not any(
         ("map" in line or ".routes" in line) and "infinite" in line for line in css.splitlines()
     )
-    for name in ("gateway.js", "gateway-details.js", "gateway-drag.js", "map.js", "map-view.js"):
+    for name in (
+        "gateway.js",
+        "gateway-details.js",
+        "gateway-drag.js",
+        "map.js",
+        "map-view.js",
+        "map-drag.js",
+    ):
         assert "flow" not in script(name), name
 
 
@@ -1152,8 +1159,9 @@ def test_a_banner_retry_reads_everything_again():
         text = script(name)
         assert re.search(r"banner\([^;]*, retry\)", text), name
         assert "render(); })" not in text, name
-    # The drag left gateway.js; it holds no such retry either.
+    # The drag left gateway.js; it holds no such retry either, nor does the shared engine.
     assert "render(); })" not in script("gateway-drag.js")
+    assert "render(); })" not in script("map-drag.js")
 
 
 def test_the_rail_time_follows_every_render_not_only_a_refresh():
@@ -2319,8 +2327,8 @@ def test_the_map_preview_words_and_look():
     assert re.search(look, CSS)
     # The map's own review bar went with map-review.js.
     assert ".review-bar" not in CSS
-    # A drag starts after 5 px; the keyboard path stays "Move in…".
-    assert "const DRAG_START = 5;" in script("gateway-drag.js")
+    # A drag starts after 5 px (the engine every map shares); the keyboard path stays "Move in…".
+    assert "export const DRAG_START = 5;" in script("map-drag.js")
     assert '"Move in…"' in script("gateway.js")
 
 
@@ -2347,9 +2355,12 @@ def test_a_drag_keeps_its_press_lights_its_target_and_has_a_tip():
     accent = ("background: var(--route-soft)", "border-color: var(--route)", "color: var(--route)")
     for words in accent:
         assert words in on, words
-    # The drag holds the pointer on its block and is one engine for every drag.
-    drag = script("gateway-drag.js")
-    assert "setPointerCapture(" in drag and "export function startDrag(event, block, kind" in drag
+    # The drag holds the pointer on its block and is one engine for every drag of every map.
+    drag = script("map-drag.js")
+    assert "setPointerCapture(" in drag
+    assert "export function startDrag(event, block, kind, { hooks, map, onStart" in drag
+    assert "setPointerCapture(" not in script("gateway-drag.js")
+    assert 'from "./map-drag.js"' in script("gateway-drag.js") + script("library-map.js")
     assert "div.map.dropping" not in CSS
     # The slot a dropped block flies onto hides at once; looks never set a block's opacity.
     assert "visibility: hidden" in rule("div.map .block.covered")
@@ -2359,15 +2370,15 @@ def test_a_server_drags_onto_a_client():
     # gateway-notes 6.2: the tip asks for a client, then says where a drop moves the server; a
     # client that cannot take it says why before the drop, in the tip's plain look.
     drag = script("gateway-drag.js")
+    assert 'export const ON_CLIENT = "Drop on a client";' in script("map-drag.js")
     for words in (
-        'const ON_CLIENT = "Drop on a client";',
         "`Move into ${CLIENT_NAMES[client.client]}`",
         "`${who} already has ${name}.`",
         "`${who} is not on this Mac.`",
     ):
         assert words in drag, words
-    # Its client's box is widened 24 px left, 40 right and 16 up and down.
-    assert "const NEAR_CLIENT = { left: 24, right: 40, up: 16, down: 16 };" in drag
+    # Its client's box is widened 24 px left, 40 right and 16 up and down (map-drag.js).
+    assert "const NEAR_CLIENT = { left: 24, right: 40, up: 16, down: 16 };" in script("map-drag.js")
 
 
 def test_a_client_drags_onto_the_gateway():
@@ -2693,8 +2704,8 @@ def test_the_library_map_words_and_looks():
     text = script("library-map.js")
     for words in (
         '"Follow the source. Connect only what you need."',
-        '"Point at a link for its Details · click a plugin to see what it holds · Turn off… '
-        'waits in preview, then Apply"',
+        '"Point at a link for its Details · click a plugin to see what it holds · drag a plugin '
+        'onto a client to add it there"',
         '[["plugins", "Plugins and skills"], ["instructions", "Instructions"]]',
         'caption: "Clients"',
         'caption: "Plugins and skills"',
@@ -2784,3 +2795,32 @@ def test_the_library_map_details_words():
         in script("library-map.js")
     )
     assert ".sw-row > .p-tile.p-icon { width: 24px; height: 24px; flex: none; }" in CSS
+
+
+def test_a_plugin_or_skill_drags_onto_a_client():
+    # decisions "Drag a plugin or skill onto a client" (library-notes §4): the tip's words, the
+    # refusals in order, and the look of an add that waits.
+    text = script("library-map.js")
+    for words in (
+        "`Add to ${CLIENT_NAMES[client.client]}`",
+        'const CURSOR_PLUGINS = "Cursor gets plugins through Claude Code";',
+        "`Already in ${who}`",
+        'const WAITS_ALREADY = "Already in preview";',
+        "`${who} cannot get ${item.name}`",
+        "meta: `Preview · ${joinWords(wait.names)}`",
+        'const IN_PREVIEW = "In preview. Click to take it out.";',
+        'const INSTALLS = { plugin: "plugin.install", skill: "skill.install" };',
+        'kind: "preview", row: row.key',
+    ):
+        assert words in text, words
+    order = [
+        text.index(w)
+        for w in ("CURSOR_PLUGINS;", "`Already in ${who}`", "WAITS_ALREADY;", "cannot get")
+    ]
+    assert order == sorted(order)
+    # It looks like the Gateway's preview block; its words are in the accent.
+    look = rule('div.map .block:is(.plugin, .skill)[data-state="preview"]')
+    assert "var(--preview-line)" in look and "var(--preview-fill)" in look
+    assert "color: var(--route);" in rule(
+        'div.map .block:is(.plugin, .skill)[data-state="preview"] .block-meta'
+    )

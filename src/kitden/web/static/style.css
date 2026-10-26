@@ -844,6 +844,10 @@ div.map .dragtip.on { background: var(--route-soft); border-color: var(--route);
 div.map .block.preview { border: 1px dashed var(--preview-line); background: var(--preview-fill); }
 div.map .block.preview .block-meta { color: var(--route); }
 div.map .block.preview:hover { border-color: var(--route); }
+/* A Library plugin or skill whose add waits in the tray takes the same look ("Preview · Codex"). */
+div.map .block:is(.plugin, .skill)[data-state="preview"] { border: 1px dashed var(--preview-line); background: var(--preview-fill); }
+div.map .block:is(.plugin, .skill)[data-state="preview"] .block-meta { color: var(--route); }
+div.map .block:is(.plugin, .skill)[data-state="preview"]:hover { border-color: var(--route); }
 div.map .block-x { position: absolute; top: -8px; right: -8px; z-index: 2; display: grid; place-items: center; width: 18px; height: 18px; border: 1px solid var(--route); border-radius: 50%; background: var(--panel); color: var(--route); opacity: 0; scale: 0.5; pointer-events: none; transition: opacity 180ms ease, scale 320ms var(--spring); }
 div.map .block:hover > .block-x, div.map .block:focus-visible > .block-x { opacity: 1; scale: 1; }
 /* Leaving: a change in the tray takes it out, or it fades off the map. */

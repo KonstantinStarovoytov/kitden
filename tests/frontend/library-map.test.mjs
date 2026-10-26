@@ -161,7 +161,7 @@ test('the head has the tabs, the lede, the scope bar and Map | List', () => {
   assert.ok(texts(scope).includes('Shared setup · project overrides stay separate'));
   assert.ok(map());
   assert.equal(hintLine.hidden, false);
-  assert.equal(hintLine.children.at(-1).textContent, 'Point at a link for its Details · click a plugin to see what it holds · Turn off… waits in preview, then Apply');
+  assert.equal(hintLine.children.at(-1).textContent, 'Point at a link for its Details · click a plugin to see what it holds · drag a plugin onto a client to add it there');
 });
 
 test('in a project the scope bar names it with a folder', () => {
@@ -458,4 +458,261 @@ test('long names end in "…" inside the map', () => {
   assert.equal(caption.name, 'a-very-long-p… · 1–8 of 20');
   // 11 px semibold, at most about 6.5 px a letter, with its 13 px icon and gap: it fits in its 200 px column.
   assert.ok(caption.name.length * 6.5 + 19 <= 200);
+});
+
+// Drags on the Library map (library-notes §4, decisions "Drag a plugin or skill onto a client").
+const { DRAGS, addBody } = await import('../../src/kitden/web/static/js/library-map.js');
+const { previewFor } = await import('../../src/kitden/web/static/js/library.js');
+const { cancelTray, tray } = await import('../../src/kitden/web/static/js/tray.js');
+globalThis.window ||= { addEventListener() {}, removeEventListener() {} };
+
+// The medium sample with what Details may offer: superpowers can go to Codex, pr-review nowhere;
+// brandkit is a skill Claude Code has, with a route to Codex and to Cursor.
+const withCan = (item, can) => ({ ...item, can });
+const DRAG_SAMPLE = {
+  ...MEDIUM,
+  groups: MEDIUM.groups.map((g) => {
+    if (g.key === 'marketplace:demo-market') return { ...g, items: g.items.map((i) => withCan(i, i.id === 'p2' ? { add: ['codex'], off: ['claude_code'] } : { add: [], off: [] })) };
+    if (g.key === 'skills') return { ...g, items: [...g.items.map((i) => withCan(i, { off: [] })), own('s3', 'brandkit', 'skill', { by: { claude_code: 'on' }, skill: 'brandkit@skills', can: { add: ['codex', 'cursor'], off: ['claude_code'] } })] };
+    return g;
+  }),
+};
+
+// The map drawn, with the document and the window hearing the pointer. The map's area is at the
+// window's top left, so a map point is a window point. Details and the dock cover what `covers`
+// says (window rects by selector), else nothing.
+function libraryDrag(sample = DRAG_SAMPLE, { covers = {} } = {}) {
+  const heard = {};
+  const doc = globalThis.document;
+  const saved = { add: doc.addEventListener, remove: doc.removeEventListener, query: doc.querySelector };
+  doc.addEventListener = (type, fn) => { (heard[type] ||= []).push(fn); };
+  doc.removeEventListener = (type, fn) => { heard[type] = (heard[type] || []).filter((f) => f !== fn); };
+  doc.querySelector = (selector) => {
+    if (covers[selector]) return { getBoundingClientRect: () => covers[selector] };
+    return ['#drawer.open', '#dock'].includes(selector) ? null : saved.query(selector);
+  };
+  const { box } = showMap(sample);
+  settle();
+  walk(box).find((n) => n.classList.contains('map-area')).getBoundingClientRect = () => ({ left: 0, top: 0 });
+  const layout = layoutTree(libraryTree(sample), { open: new Set(), narrow: false });
+  const at = (id) => layout.blocks.find((b) => b.id === id);
+  const drag = {
+    box, heard, at,
+    // A press 10 px into the block.
+    press(id) {
+      const block = node(box, `block:${id}`);
+      const home = at(id);
+      block.getBoundingClientRect = () => ({ left: home.x, top: home.y, width: home.w, height: home.h });
+      block.setPointerCapture = () => {};
+      const event = { button: 0, pointerId: 1, target: { closest: () => block }, clientX: home.x + 10, clientY: home.y + 10 };
+      for (const fn of box.listeners.pointerdown || []) fn(event);
+      drag.move(home.x + 16, home.y + 10);
+    },
+    move: (x, y) => { for (const fn of [...(heard.pointermove || [])]) fn({ clientX: x, clientY: y }); },
+    up: (x, y) => { for (const fn of [...(heard.pointerup || [])]) fn({ type: 'pointerup', clientX: x, clientY: y }); },
+    onto: (id) => [at(id).x + 10, at(id).y + 10],
+    tip: () => walk(box).find((n) => n.className.split(' ').includes('dragtip')) || null,
+    restore: () => Object.assign(doc, { addEventListener: saved.add, removeEventListener: saved.remove, querySelector: saved.query }),
+  };
+  return drag;
+}
+const looks = (box, id) => node(box, `block:${id}`).className.split(' ');
+const shook = (box, id) => node(box, `block:${id}`).animations.some((a) => JSON.stringify(a.keyframes).includes('-7px'));
+
+test('a plugin dragged onto Codex adds one plugin.install row for Codex', async () => {
+  const map = libraryDrag();
+  try {
+    // A hook, a client and a thing inside a plugin do not drag.
+    for (const id of ['item:h1', 'client:codex']) {
+      map.press(id);
+      assert.equal(map.tip(), null, id);
+      map.up(0, 0);
+    }
+    assert.ok(DRAGS.item && looks(map.box, 'item:p2').includes('drags') && looks(map.box, 'item:s1').includes('drags'));
+    assert.ok(!looks(map.box, 'item:h1').includes('drags'));
+    map.press('item:p2');
+    assert.equal(map.tip().textContent, 'Drop on a client');
+    assert.ok(looks(map.box, 'item:p2').includes('dragging'));
+    map.move(...map.onto('client:codex'));
+    assert.deepEqual([map.tip().textContent, map.tip().className], ['Add to Codex', 'dragtip on']);
+    assert.ok(looks(map.box, 'client:codex').includes('drop'));
+    assert.ok(walk(map.box).some((n) => n.className === 'link preview lit'), 'a dashed wire runs from the client');
+    map.up(...map.onto('client:codex'));
+    assert.deepEqual(tray.rows.map((r) => r.body), [{ action: 'plugin.install', targets: [{ client: 'codex' }], params: { plugin: 'superpowers@demo-market' } }]);
+    // The same body as a cell's add.
+    assert.deepEqual(addBody(DRAG_SAMPLE.groups[0].items[1], 'codex'), previewFor({ action: 'plugin.install', plugin: 'superpowers@demo-market' }, 'codex'));
+    assert.equal(map.tip(), null);
+    await flush();
+    // The block always comes home.
+    assert.ok(!looks(map.box, 'item:p2').includes('dragging'));
+    assert.ok(!looks(map.box, 'client:codex').includes('drop'));
+  } finally {
+    map.restore();
+    await cancelTray();
+  }
+});
+
+test('a plugin over Cursor says Cursor gets plugins through Claude Code and Cursor shakes on release', async () => {
+  const map = libraryDrag();
+  try {
+    map.press('item:p2');
+    map.move(...map.onto('client:cursor'));
+    assert.deepEqual([map.tip().textContent, map.tip().className], ['Cursor gets plugins through Claude Code', 'dragtip']);
+    assert.ok(!looks(map.box, 'client:cursor').includes('drop'));
+    assert.ok(!walk(map.box).some((n) => n.className === 'link preview lit'));
+    map.up(...map.onto('client:cursor'));
+    assert.ok(shook(map.box, 'client:cursor'));
+    assert.equal(tray.rows.length, 0);
+    await flush();
+    assert.ok(!looks(map.box, 'item:p2').includes('dragging'));
+  } finally {
+    map.restore();
+    await cancelTray();
+  }
+});
+
+test('a client that has it says Already in <Client>; a waiting add says Already in preview', async () => {
+  const map = libraryDrag();
+  try {
+    map.press('item:p2');
+    map.move(...map.onto('client:claude_code'));
+    assert.equal(map.tip().textContent, 'Already in Claude Code');
+    map.move(...map.onto('client:codex'));
+    map.up(...map.onto('client:codex'));
+    await flush();
+    map.press('item:p2');
+    map.move(...map.onto('client:codex'));
+    assert.equal(map.tip().textContent, 'Already in preview');
+    map.up(...map.onto('client:codex'));
+    assert.equal(tray.rows.length, 1);
+    await flush();
+    // No route: the client cannot get it.
+    map.press('item:p1');
+    map.move(...map.onto('client:codex'));
+    assert.equal(map.tip().textContent, 'Codex cannot get pr-review');
+    map.up(...map.onto('client:codex'));
+    assert.ok(shook(map.box, 'client:codex'));
+    assert.equal(tray.rows.length, 1);
+  } finally {
+    map.restore();
+    await cancelTray();
+  }
+});
+
+// Review Focus
+test('a drop over Details, the dock or nothing leaves the tray as it was', async () => {
+  const probe = libraryDrag();
+  const [x, y] = probe.onto('client:codex');
+  probe.restore();
+  const over = { left: x - 50, top: y - 50, right: x + 50, bottom: y + 50, width: 100, height: 100 };
+  const cases = [
+    ['over Details', { '#drawer.open': over }, [x, y]],
+    ['over the dock', { '#dock': over }, [x, y]],
+    ['on nothing', {}, [1200, 10]],
+  ];
+  for (const [name, covers, [dropX, dropY]] of cases) {
+    const map = libraryDrag(DRAG_SAMPLE, { covers });
+    try {
+      map.press('item:p2');
+      map.move(dropX, dropY);
+      assert.ok(!looks(map.box, 'client:codex').includes('drop'), name);
+      map.up(dropX, dropY);
+      await flush();
+      assert.equal(tray.rows.length, 0, name);
+      assert.ok(!looks(map.box, 'item:p2').includes('dragging'), name);
+    } finally {
+      map.restore();
+    }
+  }
+  // Escape does the same.
+  const map = libraryDrag();
+  try {
+    map.press('item:p2');
+    map.move(x, y);
+    const escape = { key: 'Escape', preventDefault() {}, stopImmediatePropagation() {} };
+    for (const fn of [...map.heard.keydown]) fn(escape);
+    await flush();
+    assert.equal(tray.rows.length, 0);
+    assert.ok(!looks(map.box, 'item:p2').includes('dragging'));
+  } finally {
+    map.restore();
+    await cancelTray();
+  }
+});
+
+test('a waiting add draws a dashed link and Preview · <Client>; a press takes it out', async () => {
+  const map = libraryDrag();
+  try {
+    map.press('item:p2');
+    map.move(...map.onto('client:codex'));
+    map.up(...map.onto('client:codex'));
+    await flush();
+    const link = node(map.box, 'link:client:codex>item:p2');
+    assert.ok(link, 'the preview link takes the pointer');
+    assert.ok(walk(map.box).some((n) => n.className === 'link preview'));
+    const card = node(map.box, 'block:item:p2');
+    assert.equal(card.getAttribute('aria-label'), 'superpowers, Preview · Codex');
+    assert.equal(card.title, 'In preview. Click to take it out.');
+    // A press on the card takes the row out, and opens nothing.
+    card.listeners.click[0]();
+    await flush();
+    assert.equal(tray.rows.length, 0);
+    assert.equal(node(map.box, 'block:part:p2:skills:brainstorm'), null);
+    assert.equal(node(map.box, 'block:item:p2').getAttribute('aria-label'), 'superpowers, 3 items, On');
+    assert.equal(node(map.box, 'link:client:codex>item:p2'), null);
+    // A press on the link does too.
+    map.press('item:p2');
+    map.move(...map.onto('client:codex'));
+    map.up(...map.onto('client:codex'));
+    await flush();
+    node(map.box, 'link:client:codex>item:p2').listeners.click[0]();
+    await flush();
+    assert.equal(tray.rows.length, 0);
+  } finally {
+    map.restore();
+    await cancelTray();
+  }
+});
+
+test('a skill may drop on Cursor when it has a route', async () => {
+  const map = libraryDrag();
+  try {
+    map.press('item:s3');
+    map.move(...map.onto('client:cursor'));
+    assert.deepEqual([map.tip().textContent, map.tip().className], ['Add to Cursor', 'dragtip on']);
+    map.up(...map.onto('client:cursor'));
+    assert.deepEqual(tray.rows.map((r) => r.body), [{ action: 'skill.install', targets: [{ client: 'cursor' }], params: { skill: 'brandkit@skills' } }]);
+    assert.deepEqual(addBody(DRAG_SAMPLE.groups[2].items[2], 'cursor'), previewFor({ action: 'skill.install', skill: 'brandkit@skills' }, 'cursor'));
+    await flush();
+    assert.equal(node(map.box, 'block:item:s3').getAttribute('aria-label'), 'brandkit, Skill, Preview · Cursor');
+    // A skill with no route there cannot go.
+    map.press('item:s2');
+    map.move(...map.onto('client:codex'));
+    assert.equal(map.tip().textContent, 'Codex cannot get ui-polish');
+    map.up(...map.onto('client:codex'));
+    assert.equal(tray.rows.length, 1);
+  } finally {
+    map.restore();
+    await cancelTray();
+  }
+});
+
+test('under reduced motion a drag lands at once', async () => {
+  reducedMotion.matches = true;
+  const map = libraryDrag();
+  try {
+    map.press('item:p2');
+    map.move(...map.onto('client:codex'));
+    map.up(...map.onto('client:codex'));
+    const home = map.at('item:p2');
+    const card = node(map.box, 'block:item:p2');
+    assert.equal(card.style.translate, `${home.x}px ${home.y}px`);
+    assert.ok(!looks(map.box, 'item:p2').includes('dragging'));
+    assert.equal(tray.rows.length, 1);
+    assert.ok(walk(map.box).every((n) => n.style.opacity === undefined || n.style.opacity === '' || n.style.opacity === '1'));
+  } finally {
+    reducedMotion.matches = false;
+    map.restore();
+    await cancelTray();
+  }
 });

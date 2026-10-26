@@ -1,31 +1,23 @@
-// Gateway: the drags of the map (4.7, gateway-notes 6). One engine (`startDrag`) runs each of
-// them; a drop only adds a row to the tray. Today: a server from outside the gateway into it, a
+// Gateway: the drags of the map (4.7, gateway-notes 6). The shared engine (map-drag.js) runs each
+// of them; a drop only adds a row to the tray. Today: a server from outside the gateway into it, a
 // server in the Kitden gateway onto a client, a wire from a client that is not connected onto
 // the gateway, and a row of the Add a server panel onto the map.
 import { el, pageWaits, reportError } from "./dom.js";
 import { foundClients } from "./gateway-details.js";
 import { linkKey } from "./map.js";
-import { CALM, animateTo, shake } from "./motion.js";
+import { areaPoint, clientAt, covered, DRAG_START, flyGhost, follow, goHome, heldAt, mapArea, ON_CLIENT, pageBox, pointOf as pointIn, startDrag as runDrag } from "./map-drag.js";
+import { CALM, shake } from "./motion.js";
 import { moveBody } from "./panel.js";
 import { CLIENT_NAMES } from "./parts.js";
 import { busy, current, data } from "./store.js";
 import { addToTray, inTray, keyFor, tray } from "./tray.js";
 
-// How far a pointer moves on a block before the drag starts: less is a click.
-const DRAG_START = 5;
-// A dropped block flies onto its slot; one let go anywhere else glides home.
+// A dropped block flies onto its slot.
 const DROP_MS = 200;
-const HOME_MS = 220;
 // Where a server outside the gateway goes in: its centre between 66 px left of the Servers column
 // and 134 px right of it (the mockup's 330 to 700, with the column at 396 to 566), and above 4 px
 // over the Outside caption as it was when the drag started.
 const ZONE = { left: 66, right: 134, above: 4 };
-// What a drop never lands on: the floating Details and the dock.
-const COVERS = ["#drawer.open", "#dock"];
-// A server dragged out of the gateway: what its tip says until it is over a client, and where a
-// client takes it: the pointer in the client's box, widened 24 px left, 40 right, 16 up and down.
-const ON_CLIENT = "Drop on a client";
-const NEAR_CLIENT = { left: 24, right: 40, up: 16, down: 16 };
 // A client's wire: what its tip says until it is over the gateway, where the gateway takes it (the
 // pointer in the gateway's box, widened 24 px each side and 16 up and down), and how a wire that
 // misses fades.
@@ -45,8 +37,9 @@ const BACK_HOME = { dur: 180, ease: CALM };
 // server whose move was dropped and is still being asked (`moving`, { id, name, key, at }: `key` is
 // its row's in the tray, `at` where it waits, or none: on its slot), the block the map holds off
 // its place (`home`, its id), and a dropped row of the Add panel whose row is still asked (`adding`,
-// { key, name, kind }).
-const onMap = { view: null, model: null, layout: null, redraw: () => {}, drag: null, moving: null, home: null, adding: null };
+// { key, name, kind }). It is the engine's map (map-drag.js): a block that goes home loses the
+// spinner it waited with (`onHome`).
+const onMap = { view: null, model: null, layout: null, redraw: () => {}, drag: null, moving: null, home: null, adding: null, onHome: unpark };
 
 // What a drag shows (gatewayTree's `drop`): the slot, while the block or the row is over the
 // gateway, and while a dropped row of the Add panel is asked.
@@ -72,9 +65,9 @@ export function placeMoved({ view, model, layout, redraw = () => {} }) {
   if (onMap.adding && !asked(onMap.adding.key)) onMap.adding = null;
   if (onMap.home && !model.blocks.some((b) => b.id === onMap.home)) onMap.home = null;
   if (onMap.drag) {
-    if (!DRAGS[onMap.drag.kind].still) follow();
+    if (!DRAGS[onMap.drag.kind].still) follow(onMap);
   } else if (onMap.moving) park();
-  else if (onMap.home) goHome();
+  else if (onMap.home) goHome(onMap);
 }
 
 // The preview request of a server dragged into the gateway: the same as "Move into the gateway…"
@@ -93,12 +86,9 @@ export function inZone(layout, centre, line) {
   return centre.x > column.x - ZONE.left && centre.x < column.x + column.w + ZONE.right && centre.y < line - ZONE.above;
 }
 
-// The drags, by kind. Each says what it does as the drag starts (`begin(drag)`), as the pointer
-// moves (`over(drag)`; `drag.at` is the pointer in the page) and on a let go (`drop(drag, at)`, true
-// when it took the drop; `at` is a map point, null for Escape, a lost pointer, a blur of the window
-// or a point over Details or the dock). The engine holds the block with the pointer, unless the
-// kind is `still` (the block stays where it is, as a client's wire does). A kind's tip goes by the
-// block (`view.tip(text)`) or by the pointer (`view.tip(text, { at: pointOf(drag) })`).
+// The Gateway's drags, by kind, as the engine hears them (map-drag.js: `begin`, `over`, `drop`,
+// `still`). A kind's tip goes by the block (`view.tip(text)`) or by the pointer
+// (`view.tip(text, { at: pointOf(drag) })`).
 export const DRAGS = {
   in: { begin: beginIn, over: overIn, drop: dropIn },
   out: { begin: beginOut, over: overOut, drop: dropOut },
@@ -129,7 +119,7 @@ export function pressGrip(event, onStart = () => {}) {
 // shows. The same waits as a press on the map hold it back, and so does any dropped server or row
 // still asked: its block or its slot waits on the map.
 export function pressRow(event, row) {
-  if (event.button !== 0 || busy.change || pageWaits() || onMap.drag || stillAsked(onMap.moving) || stillAsked(onMap.adding) || !onMap.model || !mapArea()) return;
+  if (event.button !== 0 || busy.change || pageWaits() || onMap.drag || stillAsked(onMap.moving) || stillAsked(onMap.adding) || !onMap.model || !mapArea(onMap)) return;
   startDrag(event, { id: `add:${row.name}`, ...row }, "add");
 }
 
@@ -149,7 +139,7 @@ function sayWhy(event, block) {
   const show = (e) => {
     if (!shown && Math.hypot(e.clientX - start.x, e.clientY - start.y) < DRAG_START) return;
     shown = true;
-    view.tip(words, { at: areaPoint({ x: e.clientX, y: e.clientY }) });
+    view.tip(words, { at: areaPoint(onMap, { x: e.clientX, y: e.clientY }) });
   };
   const done = () => {
     document.removeEventListener("pointermove", show);
@@ -163,8 +153,6 @@ function sayWhy(event, block) {
   document.addEventListener("pointercancel", done);
   window.addEventListener("blur", done);
 }
-
-const onCount = (node) => Boolean(node.dataset && node.dataset.focus && node.dataset.focus.startsWith("count:"));
 
 // A server the Kitden gateway holds can move out to a client, unless a change takes it out.
 const leavesGateway = (block) => block.kind === "held" && block.gateway.kind === "kitden" && !block.leaving;
@@ -184,129 +172,15 @@ function whyNot(name, client) {
   return null;
 }
 
-// One drag of `block` (`kind`, DRAGS). The block takes the pointer (pointer capture) at the press;
-// once it moves 5 px the block follows it 1:1 and keeps its press scale while the pointer is down.
-// A let go asks the drag; one it does not take, Escape or a lost pointer glides the block home in
-// 220 ms and leaves the tray as it was. A drag that ran swallows the click that ends it; a press
-// that moved less is a click. The page hears the pointer on the document too, so a redraw that
-// puts the map back on the page loses no move. A row of the Add panel brings its own `node`.
+// One drag of `block` (`kind`, DRAGS) on the Gateway's map, run by the shared engine (map-drag.js).
+// `onStart()` runs when the drag starts, before the map holds the block.
 export function startDrag(event, block, kind, onStart = () => {}) {
-  const hooks = DRAGS[kind];
-  // A press on a block's count holds the count, which hears the click that ends it; the block is what moves.
-  const pressed = block.node || event.target.closest("button.block, button.block-count");
-  const node = onCount(pressed) ? onMap.view.node(block.id) : pressed;
-  try {
-    pressed.setPointerCapture(event.pointerId);
-  } catch {
-    // A pointer that is gone already: the document still hears it.
-  }
-  const from = { x: event.clientX, y: event.clientY };
-  const box = node.getBoundingClientRect();
-  const grab = { x: from.x - box.left, y: from.y - box.top };
-  // Where on the block the press is, as a share of its size: a layout that gives the block another
-  // size under the drag (the map turns wide when Details close) keeps the pointer on it.
-  const place = onMap.layout && onMap.layout.blocks.find((b) => b.id === block.id);
-  const share = place && place.w && place.h ? { x: grab.x / place.w, y: grab.y / place.h } : null;
-  const move = (e) => {
-    const at = { x: e.clientX, y: e.clientY };
-    const starts = !onMap.drag;
-    if (starts) {
-      if (Math.hypot(at.x - from.x, at.y - from.y) < DRAG_START) return;
-      onStart();
-      onMap.drag = { kind, id: block.id, name: block.name, block, grab, share, at, open: false };
-      document.documentElement.classList.add("grabbing");
-    }
-    onMap.drag.at = at;
-    if (!hooks.still) follow();
-    if (starts) hooks.begin(onMap.drag);
-    hooks.over(onMap.drag);
-  };
-  const stop = () => {
-    document.removeEventListener("pointermove", move);
-    document.removeEventListener("pointerup", done);
-    document.removeEventListener("pointercancel", done);
-    document.removeEventListener("keydown", escape, true);
-    window.removeEventListener("blur", lost);
-  };
-  // A let go where the last move was not lands where it is.
-  const done = (e) => {
-    stop();
-    if (!onMap.drag) return;
-    const up = e && e.type === "pointerup";
-    if (up) move(e);
-    letGo(hooks, up ? { x: e.clientX, y: e.clientY } : null);
-  };
-  // Escape puts the block back before Details or the map hear it. The pointer is still down: the
-  // click of its release, which the captured block would hear, selects nothing either.
-  const escape = (e) => {
-    if (e.key !== "Escape" || !onMap.drag) return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    done(null);
-    document.addEventListener("pointerup", swallowClick, { capture: true, once: true });
-  };
-  // A window that loses focus (another app, a dialog) ends the drag: nothing stays held.
-  const lost = () => done(null);
-  document.addEventListener("pointermove", move);
-  document.addEventListener("pointerup", done);
-  document.addEventListener("pointercancel", done);
-  document.addEventListener("keydown", escape, true);
-  window.addEventListener("blur", lost);
+  runDrag(event, block, kind, { hooks: DRAGS, map: onMap, onStart });
 }
 
-// The map's block area, and a point of the page (`at`) in the area's own terms (`pointOf` for a
-// drag's pointer): null over the floating Details or the dock, where nothing lands.
-const mapArea = () => (onMap.view && onMap.view.box.isConnected ? onMap.view.area : null);
 // The pointer of a drag in the map, also over Details or the dock (for its tip).
 export function pointOf(drag) {
-  return areaPoint(drag.at);
-}
-
-function areaPoint(at) {
-  const area = mapArea();
-  if (!area || !at) return null;
-  const origin = area.getBoundingClientRect();
-  return { x: at.x - origin.left, y: at.y - origin.top };
-}
-
-function mapPoint(at) {
-  return at && !covered(at) ? areaPoint(at) : null;
-}
-
-function covered(at) {
-  return COVERS.some((selector) => {
-    const node = document.querySelector(selector);
-    const box = node && node.getBoundingClientRect();
-    return Boolean(box && box.width && box.height) && at.x >= box.left && at.x <= box.right && at.y >= box.top && at.y <= box.bottom;
-  });
-}
-
-// Where the pointer holds the dragged block, from its top left: the spot of the press, in the size
-// the layout gives the block now.
-function grabOf(drag) {
-  const place = drag.share && onMap.layout.blocks.find((b) => b.id === drag.id);
-  return place ? { x: drag.share.x * place.w, y: drag.share.y * place.h } : drag.grab;
-}
-
-// The dragged block's top left at the pointer, in the map, and its centre. Null where the map is
-// gone. Over Details or the dock the block still follows the pointer.
-function heldAt(drag) {
-  const area = mapArea();
-  if (!area) return null;
-  const origin = area.getBoundingClientRect();
-  const grab = grabOf(drag);
-  const at = { x: drag.at.x - origin.left - grab.x, y: drag.at.y - origin.top - grab.y };
-  const place = onMap.layout.blocks.find((b) => b.id === drag.id);
-  return { at, centre: place ? { x: at.x + place.w / 2, y: at.y + place.h / 2 } : at };
-}
-
-// The dragged block where the pointer holds it, pressed.
-function follow() {
-  const { drag, view } = onMap;
-  const held = heldAt(drag);
-  if (!held || !view.node(drag.id)) return;
-  view.hold(drag.id, held.at, { pressed: true });
-  onMap.home = drag.id;
+  return pointIn(onMap, drag);
 }
 
 // A server from outside the gateway: the block, the gateway and its dotted lines light, as a glance
@@ -325,7 +199,7 @@ function beginIn(drag) {
 // Its centre over the gateway (inZone), and not over Details or the dock: the gateway lights and the
 // slot opens at the end of the block's own group (the map draws again in place); off it, both go.
 function overIn(drag) {
-  const held = heldAt(drag);
+  const held = heldAt(onMap, drag);
   const open = Boolean(held && drag.gateway && !covered(drag.at) && inZone(onMap.layout, held.centre, drag.line));
   if (open === drag.open) return;
   drag.open = open;
@@ -366,14 +240,6 @@ function park() {
   node.append(el("span", "spinner late"));
 }
 
-// Back to its place: the map lets go of the block, and it glides there from where it was.
-function goHome() {
-  const { view, home } = onMap;
-  onMap.home = null;
-  unpark(home);
-  view.homeIn(home, HOME_MS);
-}
-
 // A block that waited while its move was asked loses its spinner.
 function unpark(id) {
   const node = onMap.view.node(id);
@@ -404,7 +270,7 @@ function beginOut(drag) {
 function overOut(drag) {
   const { view } = onMap;
   const point = covered(drag.at) ? null : pointOf(drag);
-  const client = point ? clientAt(point) : null;
+  const client = point ? clientAt(onMap, point) : null;
   if ((client && client.id) !== (drag.target && drag.target.id)) {
     drag.target = client;
     drag.why = client ? whyNot(drag.name, client.client) : null;
@@ -425,14 +291,6 @@ function tipOut(drag) {
   onMap.view.tip(words, { on: Boolean(client && !drag.why) });
 }
 
-// The client block a map point is near: the first in order whose box, widened by NEAR_CLIENT,
-// holds it; null for none.
-function clientAt(point) {
-  const { model, layout } = onMap;
-  const near = (place) => Boolean(place) && point.x > place.x - NEAR_CLIENT.left && point.x < place.x + place.w + NEAR_CLIENT.right && point.y > place.y - NEAR_CLIENT.up && point.y < place.y + place.h + NEAR_CLIENT.down;
-  return model.blocks.find((b) => b.kind === "client" && near(layout.blocks.find((place) => place.id === b.id))) || null;
-}
-
 // A drop on a client that can take the server adds its move out to the tray, the same change as
 // the server panel's step (one row per server: a second drop replaces it), and the block waits
 // where it was let go while the move is asked; its answer draws the preview, which glides from
@@ -448,7 +306,7 @@ function dropOut(drag, at) {
     if (node) shake(node);
     return false;
   }
-  const held = heldAt(drag);
+  const held = heldAt(onMap, drag);
   const body = { action: "gateway.move_out", targets: [{ client: client.client }], params: { server: drag.name } };
   onMap.moving = { id: drag.id, name: drag.name, key: keyFor(body), at: held && held.at };
   addToTray(body).catch(reportError);
@@ -557,55 +415,11 @@ function dropAdd(drag, at) {
     addToTray(body).catch(reportError);
     if (inTray(key)) {
       const slot = onMap.layout.blocks.find((b) => b.id === `slot:${name}`);
-      flyGhost(drag, slot && pageBox(slot), ONTO_SLOT);
+      flyGhost(drag, slot && pageBox(onMap, slot), ONTO_SLOT);
       return true;
     }
     onMap.adding = null;
   }
   flyGhost(drag, null, BACK_HOME);
   return false;
-}
-
-// A box of the map (x, y, w, h) on the page.
-function pageBox(place) {
-  const origin = mapArea().getBoundingClientRect();
-  return { left: origin.left + place.x, top: origin.top + place.y, width: place.w, height: place.h };
-}
-
-// The ghost flies from where it is onto `to` (a page box), or back onto its row, then goes, and the
-// row comes back to full strength. Under reduced motion, and on a hidden page, it lands at once.
-function flyGhost({ ghost, box, block }, to, { dur, ease }) {
-  const size = (b) => ({ width: `${b.width}px`, height: `${b.height}px` });
-  const end = to ? { transform: `translate(${to.left - box.left}px, ${to.top - box.top}px)`, ...size(to) } : { transform: "none", ...size(box) };
-  animateTo(ghost, [{ transform: ghost.style.transform || "none", ...size(box) }, end], { dur: document.hidden ? 0 : dur, ease, fill: "forwards" }).then(() => {
-    ghost.remove();
-    block.node.classList.remove("dragging");
-  });
-}
-
-// The pointer lets go at `point` (page coordinates), or Escape, a lost pointer or a blur (null). The tip, the
-// target's light and the glance go; the drag takes the drop, or the block glides home. A slot that
-// was open closes as the map draws again.
-function letGo(hooks, point) {
-  const drag = onMap.drag;
-  onMap.drag = null;
-  document.documentElement.classList.remove("grabbing");
-  swallowClick();
-  const { view } = onMap;
-  view.untip();
-  view.unlightTarget();
-  view.glance(null);
-  if (hooks.drop(drag, point && mapPoint(point))) return;
-  if (drag.open) onMap.redraw();
-  if (onMap.home) goHome();
-}
-
-// The click that ends a drag selects nothing.
-function swallowClick() {
-  const swallow = (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-  };
-  document.addEventListener("click", swallow, { capture: true, once: true });
-  setTimeout(() => document.removeEventListener("click", swallow, { capture: true }), 0);
 }
