@@ -5,6 +5,7 @@
 // gateway holds.
 import { getJson, postJson, query } from "./api.js";
 import { $, busyWhile, button, el, icon, joinWords, plural, reportError, withFocusKey } from "./dom.js";
+import { ADD_SERVER, openAdd } from "./gateway-add.js";
 import { loadLibraryFor, raceSlow } from "./library.js";
 import { animateTo, fold } from "./motion.js";
 import { projectNote } from "./offer.js";
@@ -19,8 +20,9 @@ export const SETUP_NOTE = "The kitden entry shows your setup to agents and offer
 // What Disconnect takes from a client, as the review's after line says it (views/after.py).
 const disconnectNote = (name) => `${name} loses the Kitden gateway's servers and Kitden's own read of your setup. Servers it sets up on its own stay.`;
 // The kind word each card shows at its top, and its skeleton too while it loads: one source, so a
-// card never comes after a skeleton of another kind.
-const KIND = { client: "Client", gateway: "Gateway", server: "Server", tool: "Tool", connection: "Connection" };
+// card never comes after a skeleton of another kind. The Add a server panel (gateway-add.js) is
+// about the gateway too.
+export const KIND = { client: "Client", gateway: "Gateway", server: "Server", tool: "Tool", connection: "Connection", add: "Gateway" };
 // What a server outside the gateway is, by the Gateway's group for it.
 const GROUP_KINDS = { move: "Remote", local: "Local", plugin: "From a plugin" };
 // The icon of a server, by what it is: one reached over the network, one that runs on this Mac,
@@ -419,8 +421,9 @@ function movesOutNow(name) {
 // The Kitden gateway, as the mockup's gateway panel (gateway-notes 3.6): the house, where it runs;
 // its servers and the servers outside it, how many of their tools are on; one row per client with
 // its own Connect or Disconnect (not without the setup read: the warning says so); the sentence of
-// what it controls. Under More (D18): "Move all N…", every outside server a move can take, in one
-// review, and "Add another gateway…", which shows the form in the panel (`adding`).
+// what it controls. Under More (D18): "Add a server…", which opens the Add a server panel, "Move
+// all N…", every outside server a move can take, in one review, and "Add another gateway…", which
+// shows the form in the panel (`adding`).
 function kitdenCard(gateway, { view, setup, clientList, adding }) {
   const { known } = kitdenClients(setup);
   const servers = gateway.servers || [];
@@ -434,7 +437,7 @@ function kitdenCard(gateway, { view, setup, clientList, adding }) {
   // the person keeps one, so it moves on its own and "Move all" leaves it out.
   const twice = (row) => outside.filter((other) => other.name === row.name).length > 1;
   const rows = ["move", "local"].flatMap((key) => (view.groups[key] || []).filter((row) => !twice(row) && movesTo(view, key, row).some((g) => g.id === gateway.id)));
-  const more = [];
+  const more = [{ label: ADD_SERVER, run: () => openAdd() }];
   if (rows.length) {
     const targets = rows.flatMap((row) => row.items).map((item) => ({ item }));
     more.push({ label: `Move all ${rows.length}…`, body: { action: "gateway.move", targets, params: { gateway: gateway.id } } });

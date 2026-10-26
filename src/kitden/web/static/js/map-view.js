@@ -282,7 +282,7 @@ function boxOf({ x, y, w, h, s }) {
 // its start (380 ms); one that changes look (dashed or solid) blends (300 ms). One to or from a block
 // that comes or goes shows as much as the fainter block. Reduced motion and a hidden page land at once.
 // A press on a block opens or folds it when it folds (`onOpen(id)`), then selects it
-// (`onSelect(id)`); "+ Add" beside a column's caption calls `onAdd(column)`. `tile(block)` gives
+// (`onSelect(id)`); "+ Add" beside a column's caption calls `onAdd(column, button)`. `tile(block)` gives
 // what a block shows before its name.
 // `links` are the page's hooks for the links it acts on: `canHit(link)`, `tip(link)` (what its
 // × does, in words; "" for a link with no removal, which gets no × and no Delete), `onClick(link)`
@@ -406,7 +406,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
         item.words = words;
         const parts = block.caption ? [el("span", null, block.caption)] : [];
         if (block.add) {
-          const add = button("+ Add", () => onAdd && onAdd(block.id), "btn small ghost");
+          const add = button("+ Add", () => onAdd && onAdd(block.id, add), "btn small ghost");
           add.dataset.focus = `add:${block.id}`;
           parts.push(add);
         }

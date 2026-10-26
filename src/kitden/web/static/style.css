@@ -1052,6 +1052,35 @@ h2.sw-head { margin: 0; font-size: 11px; font-weight: 600; color: var(--ink-2); 
 .own-state.on { color: var(--route); }
 .drawer > .step-foot { display: flex; align-items: center; gap: 6px; margin: 0; padding: 12px 20px; border-top: 1px solid var(--wire); color: var(--ink-3); font-size: 12px; }
 #drawer.floating > .step-foot { margin-top: auto; padding: 10px 0 0; }
+/* The Add a server panel (gateway-add.js, docs/mockup/add-notes.md §2). A greyed row keeps its
+   words readable: its tile fades, its name and lines are --ink-3 (tests/unit/test_contrast.py). */
+#drawer .add-body { gap: 16px; }
+.add-search { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--wire); border-radius: 7px; background: var(--inset); color: var(--ink-3); }
+.add-search:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
+.add-search input { flex: 1; min-width: 0; border: 0; background: transparent; outline: none; font-size: 12px; color: var(--ink); }
+.add-search input::placeholder { color: var(--ink-3); }
+.add-search input::-webkit-search-cancel-button { display: none; }
+.seg.sm { justify-self: start; }
+.seg.sm button { padding: 3px 8px; font-size: 11px; }
+.add-list { display: flex; flex-direction: column; gap: 8px; }
+.add-list > p { margin: 0; }
+.add-group { display: flex; align-items: center; gap: 6px; margin-top: 4px; color: var(--ink-2); font-size: 11px; font-weight: 600; }
+.res { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid var(--wire); border-radius: 8px; background: var(--panel); cursor: pointer; transition: border-color var(--t-fast) ease, background-color var(--t-fast) ease; }
+.res:hover { border-color: color-mix(in srgb, var(--route) 40%, var(--wire)); }
+.res:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.res .grip { flex: none; margin-right: -4px; color: var(--lamp-off); cursor: grab; }
+.res .grip.gone { visibility: hidden; }
+.res .itile { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border: 1px solid var(--wire); border-radius: 6px; background: var(--inset); color: var(--ink-2); }
+.res .tx { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.res .tx b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); font-size: 12px; font-weight: 700; }
+.res .tx small { color: var(--ink-3); font-size: 11px; }
+.res .st { flex: none; color: var(--ink-4); font-size: 11px; }
+.res.on { border-color: var(--route); background: var(--route-soft); }
+.res.on .st { color: var(--route); }
+.res.off, .res.off:hover { border-color: var(--wire); cursor: default; }
+.res.off .itile { opacity: 0.55; }
+.res.off .tx b { color: var(--ink-3); }
+.res.done .st { color: var(--diff-add); }
 .drawer .who h2 { margin: 0; }
 .drawer .skeleton.card { height: 120px; }
 .after { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }

@@ -1541,6 +1541,28 @@ def test_adding_a_marketplace_server_names_the_kitden_gateway():
     assert NO_GATEWAY_CLIENT == "No client uses the Kitden gateway yet."
 
 
+def test_the_add_a_server_panel_says_what_the_mockup_says():
+    add, details = script("gateway-add.js"), script("gateway-details.js")
+    assert 'export const ADD_TITLE = "Add a server";' in add
+    assert 'export const ADD_SERVER = "Add a server…";' in add
+    assert "{ label: ADD_SERVER, run: () => openAdd() }" in details
+    assert 'const SEARCH = "Search the marketplaces";' in add
+    assert "input.placeholder = `${SEARCH}…`;" in add
+    assert 'const FOOT = "Click a server or drag it onto the map to preview it.";' in add
+    assert 'const NO_MATCH = "No servers match.";' in add
+    assert 'const NONE = "No marketplace on this computer offers an MCP server.";' in add
+    assert 'const FAILED = "Could not read the marketplaces.";' in add
+    assert 'button("Try again", retry, "btn ghost small")' in add
+    statuses = '{ added: "Added", held: "In the gateway", preview: "In preview" }'
+    assert f"export const STATUS = {statuses};" in add
+    assert 'const KIND_WORDS = { remote: "Remote", local: "Local" };' in add
+    assert 'const PILL = [["all", "All"], ["remote", "Remote"], ["local", "Local"]];' in add
+    assert 'add: "Gateway" }' in details
+    # No tool count and no sign-in words (D23, D24); no path, address or command.
+    for word in ("tools", "Sign-in", "Sign in", "Community", "Team"):
+        assert word not in add.split("export const ADD_TITLE")[1], word
+
+
 def test_overview_offers_set_up_only_without_a_gateway():
     overview = script("overview.js")
     assert overview.count('"No gateway yet."') == 1

@@ -276,3 +276,27 @@ def test_a_tools_read_or_write_word_is_readable_on_a_lit_or_selected_row():
     for theme in (LIGHT, DARK):
         assert contrast(theme["--ink-3"], theme["--panel"]) >= 4.5
         assert contrast(theme["--ink-2"], theme["--route-soft"]) >= 4.5
+
+
+def test_the_add_panel_rows_are_readable_in_both_themes():
+    # A row sits on the panel fill; one in preview (.on) on the accent tint with an accent edge.
+    # A greyed row (.off) fades only its tile: its name and its small line (a refusal's reason)
+    # are --ink-3, so they stay readable. "Added" is green text (--diff-add).
+    assert ".res { display: flex;" in CSS and "background: var(--panel);" in block(".res {")
+    assert ".res.on { border-color: var(--route); background: var(--route-soft); }" in CSS
+    assert ".res.on .st { color: var(--route); }" in CSS
+    assert ".res.off .itile { opacity: 0.55; }" in CSS
+    assert ".res.off .tx b { color: var(--ink-3); }" in CSS
+    assert ".res .tx small { color: var(--ink-3); font-size: 11px; }" in CSS
+    assert ".res .st { flex: none; color: var(--ink-4); font-size: 11px; }" in CSS
+    assert ".res.done .st { color: var(--diff-add); }" in CSS
+    # No rule draws a whole row, or its words, fainter.
+    assert not re.search(r"\.res(\.off)?(:hover)?\s*(,[^{]*)?\{[^}]*opacity", CSS)
+    for theme in (LIGHT, DARK, {**LIGHT, **DARK_AUTO}):
+        for ink in ("--ink", "--ink-3", "--route"):
+            assert contrast(theme[ink], theme["--route-soft"]) >= 4.5, ink
+        for ink in ("--ink", "--ink-3", "--ink-4", "--diff-add"):
+            assert contrast(theme[ink], theme["--panel"]) >= 4.5, ink
+        # The accent edge of a row in preview keeps 3:1 on the panel round it.
+        for fill in ("--panel", "--panel-raised"):
+            assert contrast(theme["--route"], theme[fill]) >= 3.0, fill

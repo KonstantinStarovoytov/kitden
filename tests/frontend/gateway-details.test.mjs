@@ -270,9 +270,9 @@ test('the gateway panel lists every client with its own button', async () => {
   assert.deepEqual(rowWords(), [[['Claude Code', 'Connected'], 'Disconnect…'], [['Codex', 'Connected'], 'Disconnect…'], [['Cursor', 'Not connected'], 'Connect…']]);
   // The button names its client for a screen reader.
   assert.equal(textOf(list.children[2].children[2]), 'Connect… Cursor');
-  // Move all and Add another gateway wait under More (D18).
-  assert.deepEqual([labels(card), moreLabels(card)], [[], ['Move all 2…', 'Add another gateway…']]);
-  assert.deepEqual(card.more[0].body, { action: 'gateway.move', targets: [{ item: 'g' }, { item: 'c' }], params: { gateway: 'kitden' } });
+  // Add a server, Move all and Add another gateway wait under More (D18).
+  assert.deepEqual([labels(card), moreLabels(card)], [[], ['Add a server…', 'Move all 2…', 'Add another gateway…']]);
+  assert.deepEqual(card.more[1].body, { action: 'gateway.move', targets: [{ item: 'g' }, { item: 'c' }], params: { gateway: 'kitden' } });
   assert.equal(card.why, 'The gateway controls only the servers in it. Direct entries and terminal tools are outside it.');
   await withTray(() => [list], async ([rows], sent) => {
     await click(rows.children[2].children[2]);
@@ -287,7 +287,7 @@ test('the gateway panel lists every client with its own button', async () => {
   // Tools Kitden does not know yet, and an empty gateway.
   assert.deepEqual(facts(gatewayCard(KITDEN, { view: VIEW, setup: SETUP, projects: PROJECTS, clients: FOUND })).at(-1), ['Tools', 'Not known yet']);
   const empty = gatewayCard({ ...KITDEN, servers: [] }, { view: { ...VIEW, groups: { move: [], local: [], plugin: [] } }, setup: SETUP, projects: [], clients: FOUND });
-  assert.deepEqual([facts(empty), moreLabels(empty)], [[['Servers', '0 in the gateway · 0 outside'], ['Tools', 'Nothing yet']], ['Add another gateway…']]);
+  assert.deepEqual([facts(empty), moreLabels(empty)], [[['Servers', '0 in the gateway · 0 outside'], ['Tools', 'Nothing yet']], ['Add a server…', 'Add another gateway…']]);
   // A client a plugin connects, or one not on this Mac, has no button.
   const plugin = gatewayCard(KITDEN, { view: VIEW, setup: [entry('claude_code', 'plugin'), entry('codex', 'not_installed', { enabled: null }), entry('cursor', 'missing')], projects: PROJECTS, clients: FOUND });
   assert.deepEqual(plugin.list.children[1].children.map((r) => r.children.length), [2, 2, 3]);
@@ -312,15 +312,15 @@ test("Move all leaves out a name set up differently in two clients, as the mediu
     plugin: [],
   } };
   const card = gatewayCard(KITDEN, { view, setup: SETUP, projects: PROJECTS, clients: FOUND });
-  assert.equal(card.more[0].label, 'Move all 5…');
-  assert.deepEqual(card.more[0].body.targets.map((t) => t.item), ['an', 'g', 'bt', 'c', 'n8']);
+  assert.equal(card.more[1].label, 'Move all 5…');
+  assert.deepEqual(card.more[1].body.targets.map((t) => t.item), ['an', 'g', 'bt', 'c', 'n8']);
   // Only the pair left: nothing to move all of.
   const pair = gatewayCard(KITDEN, { view: { ...VIEW, groups: { move: [DOCS], local: [DOCS_LOCAL], plugin: [] } }, setup: SETUP, projects: PROJECTS, clients: FOUND });
-  assert.deepEqual(moreLabels(pair), ['Add another gateway…']);
+  assert.deepEqual(moreLabels(pair), ['Add a server…', 'Add another gateway…']);
   // A stays reason keeps a row out too.
   const stays = "docs is in the project's own files; it stays there.";
   const kept = gatewayCard(KITDEN, { view: { ...VIEW, groups: { move: [{ ...GITHUB, stays }], local: [FILES], plugin: [] } }, setup: SETUP, projects: PROJECTS, clients: FOUND });
-  assert.equal(kept.more[0].label, 'Move all 1…');
+  assert.equal(kept.more[1].label, 'Move all 1…');
 });
 
 test('Move all leaves out a name set up differently in two clients of one group', () => {
@@ -328,8 +328,8 @@ test('Move all leaves out a name set up differently in two clients of one group'
   const files = { ...row('files', 'codex', ['c', 'd']), clients: ['codex', 'cursor'], columns: ['codex', 'cursor'], stays };
   const view = { ...VIEW, groups: { move: [GITHUB], local: [files], plugin: [] } };
   const card = gatewayCard(KITDEN, { view, setup: SETUP, projects: PROJECTS, clients: FOUND });
-  assert.equal(card.more[0].label, 'Move all 1…');
-  assert.deepEqual(card.more[0].body.targets.map((t) => t.item), ['g']);
+  assert.equal(card.more[1].label, 'Move all 1…');
+  assert.deepEqual(card.more[1].body.targets.map((t) => t.item), ['g']);
 });
 
 test('the Kitden gateway says what it could not read', () => {

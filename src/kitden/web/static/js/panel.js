@@ -82,6 +82,36 @@ function put(content) {
   openedIn = state.project;
   drawer.replaceChildren(...content);
   if (isPanelOpen() && (had || (!floating && !isQuiet())) && !drawer.contains(document.activeElement)) drawer.focus();
+  heard();
+}
+
+// Content that hears when one of its nodes comes into the panel (`coming`) or leaves it (`going`):
+// { node, fn }, one of each. A loading panel shows its content later (loadPanel), so the content
+// cannot do this itself.
+let coming = null;
+let going = null;
+
+// `fn` runs once `node` is in the panel: at once, or when the content that waits comes in. Other
+// content that comes first drops it.
+export function whenIn(node, fn) {
+  if (node.isConnected) fn();
+  else coming = { node, fn };
+}
+
+// `fn` runs once `node` has left the panel: other content came, or the panel closed.
+export function whenGone(node, fn) {
+  going = { node, fn };
+}
+
+function heard(closing = false) {
+  const come = coming;
+  coming = null;
+  if (come && !closing && come.node.isConnected) come.fn();
+  if (going && (closing || !going.node.isConnected)) {
+    const { fn } = going;
+    going = null;
+    fn();
+  }
 }
 
 // Draw open Details again (`draw`, which may read first) without taking focus from the dock or the
@@ -321,6 +351,7 @@ export function closePanel({ instant = false, keepSelection = false, focus = tru
   panelState.current = null;
   panelState.from = null;
   stopLoading();
+  heard(true);
   const drawer = $("#drawer");
   for (const node of [drawer, $("#scrim")]) {
     node.classList.toggle("instant", instant);

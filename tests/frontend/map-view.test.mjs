@@ -262,6 +262,20 @@ test("a group's caption draws its icon before its words, 13 px; a caption with n
   assert.equal(v.node('g1').children[0].dataset.icon, 'info');
 });
 
+test('"+ Add" beside a column caption tells the page its column and the button itself', async () => {
+  reduce(true);
+  const columns = TREE.columns.map((c) => (c.id === 'b' ? { ...c, add: true } : c));
+  const pressed = [];
+  const v = view({ onAdd: (column, node) => pressed.push([column, node]) });
+  const tree = { ...TREE, columns };
+  await v.draw(tree, layoutTree(tree, { open: new Set(), narrow: false }), {});
+  const [, add] = v.node('column:b').children;
+  assert.deepEqual([add.textContent, add.dataset.focus, v.node('column:a').children.length], ['+ Add', 'add:b', 1]);
+  for (const fn of add.listeners.click) fn({});
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(pressed, [['b', add]]);
+});
+
 test('a held block stays where it is put across draws, and glides home in 220 ms OUT3', async () => {
   const v = view();
   await v.draw(TREE, lay([], true), { motion: 'none' });

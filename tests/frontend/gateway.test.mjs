@@ -389,6 +389,8 @@ test('a first run shows the gateway as a slot to set up and no grips', () => {
 
 test('the map columns, and the Kitden gateway says its clients and servers', () => {
   assert.deepEqual(GATEWAY_COLUMNS.map((c) => c.caption), ['Clients', 'Gateway', 'Servers', 'Tools']);
+  // "+ Add" beside the Servers caption opens the Add a server panel (gateway-add.js).
+  assert.deepEqual(GATEWAY_COLUMNS.filter((c) => c.add).map((c) => c.id), ['servers']);
   const tree = gatewayTree(MEDIUM_VIEW, OPTS);
   assert.deepEqual(block(tree, 'gateway:kitden').stats.map((s) => s.words), ['2 clients', '2 servers']);
   // Not read: no count of clients it does not know.

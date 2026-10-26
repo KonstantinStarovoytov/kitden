@@ -2,6 +2,7 @@
 // row opens its Details beside the page (gateway-details.js).
 import { $, button, el, gridKey, icon, joinWords, pageWaits, plural, reportError, WAITS, withFocusKey } from "./dom.js";
 import { setCancelFocus } from "./dock.js";
+import { openAdd } from "./gateway-add.js";
 import { addForm, connectAction, connectBody, followProject, heldServer, liveHeld, movesTo, NOT_REACHED, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool, TAKE_OUT } from "./gateway-details.js";
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { findChip, findIn, foldable, isNarrow, keepOpen, landOwners, landStage, layoutTree, linkKey, litFrom, litPath, pagesNow, pagesWith, pressOpen, toggleOpen, turnPage, turnWords, wideWidth } from "./map.js";
@@ -243,7 +244,7 @@ function switchView(id, mode, seg, choice) {
 export const GATEWAY_COLUMNS = [
   { id: "clients", caption: "Clients", w: 150, h: 54, top: 124, rowGap: 18, narrowW: 140 },
   { id: "gateway", caption: "Gateway", w: 150, h: 124, colGap: 46, top: 124, rowGap: 18, narrowW: 56, narrowH: 56 },
-  { id: "servers", caption: "Servers", w: 170, h: 60, colGap: 50, top: 58, rowGap: 10, narrowW: 220, narrowH: 54 },
+  { id: "servers", caption: "Servers", add: true, w: 170, h: 60, colGap: 50, top: 58, rowGap: 10, narrowW: 220, narrowH: 54 },
   { id: "tools", caption: "Tools", w: 200, h: 34, colGap: 70, narrowW: 190, narrowH: 30 },
 ];
 
@@ -1055,6 +1056,7 @@ function newMap() {
     tile,
     onOpen: openBlock,
     onSelect: (id) => pressBlock(onMap.model, id),
+    onAdd: pressAdd,
     onEmpty: letGoIfSelected,
     onHover: (id) => view.glance(glanceFor(onMap.model, id)),
     links: LINK_HOOKS,
@@ -1202,6 +1204,13 @@ function letGoOnMap() {
 // A click on empty map, or the start of a drag, lets go of what is selected.
 function letGoIfSelected() {
   if (onMap.selected) letGoOnMap();
+}
+
+// "+ Add" beside the Servers caption lets go of what is selected and opens the Add a server panel
+// (gateway-add.js).
+function pressAdd(column, node) {
+  letGoIfSelected();
+  return openAdd({ from: node });
 }
 
 // A press on a block (a held server opened or folded first, by onOpen). "N more" turns its group's
