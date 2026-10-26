@@ -395,6 +395,68 @@ test('under reduced motion it opens and rises at once', async () => {
   }
 });
 
+// Review Focus: the panel open while the tray applies and the page reads again.
+test('after Apply a row says Added once the page reads again, with focus kept; an Undo frees it', async () => {
+  const { pageRead } = await import('../../src/kitden/web/static/js/gateway-add.js');
+  const { applyTray, endApplied } = await import('../../src/kitden/web/static/js/tray.js');
+  const fetchWas = globalThis.fetch;
+  globalThis.fetch = (url, init) => (/^\/api\/changes\/[^/]+\/apply$/.test(url)
+    ? Promise.resolve({ ok: true, status: 200, json: async () => ({ id: url.split('/')[3], state: 'verified', error: null }) })
+    : fetchWas(url, init));
+  const held = SERVERS.map((r) => (r.name === 'test-status' ? { ...r, held: true, refusal: 'test-status is in the gateway already.' } : r));
+  const reads = () => sent.filter((s) => s.url === '/api/market-servers').length;
+  await open();
+  try {
+    fire(rows()[2], 'click');
+    await wait(10);
+    await applyTray();
+    assert.equal(tray.phase, 'applied');
+    const row = rows()[2];
+    row.focus();
+    // The page reads Kitden again: the row says Added, sliding in from 6 px (280 ms CALM), and the
+    // panel reads the marketplaces again. The panel stays open and focus stays on the row.
+    servers = held;
+    const before = reads();
+    motions.length = 0;
+    pageRead({});
+    await wait();
+    assert.deepEqual(rowWords(row), ['test-status', 'Remote', 'Added']);
+    assert.ok(row.classList.contains('done') && row.classList.contains('off') && !row.classList.contains('on'));
+    assert.deepEqual(motions.filter((m) => m.node === row.children[3]).map((m) => [m.keyframes, m.options.duration, m.options.easing]),
+      [[[{ opacity: 0, transform: 'translateX(6px)' }, { opacity: 1, transform: 'none' }], 280, 'cubic-bezier(.2,.8,.2,1)']]);
+    assert.deepEqual([isPanelOpen(), document.activeElement, reads()], [true, row, before + 1]);
+    // The same read again asks nothing; the tray empties and the row stays Added.
+    const same = {};
+    pageRead(same);
+    pageRead(same);
+    await wait();
+    assert.equal(reads(), before + 2);
+    endApplied();
+    assert.equal(rowWords(row)[2], 'Added');
+    // A press on it does nothing.
+    fire(row, 'click');
+    await wait(10);
+    assert.deepEqual(tray.rows, []);
+    // Opened again later, it still says Added, with no motion.
+    closePanel({ instant: true, focus: false });
+    motions.length = 0;
+    servers = held;
+    await openAdd({ from: addButton() });
+    await wait(200);
+    assert.equal(rowWords(rows()[2])[2], 'Added');
+    assert.ok(!motions.some((m) => m.node === rows()[2].children[3]));
+    // An Undo: the page reads again, the gateway no longer holds it, and the row is free.
+    servers = SERVERS;
+    pageRead({});
+    await wait();
+    assert.deepEqual([rowWords(rows()[2]), rows()[2].classList.contains('off')], [['test-status', 'Remote', ''], false]);
+  } finally {
+    globalThis.fetch = fetchWas;
+    servers = SERVERS;
+    await done();
+  }
+});
+
 test('the panel shows no path, address or command, and uses no inline style or markup', () => {
   const code = readFileSync(new URL('../../src/kitden/web/static/js/gateway-add.js', import.meta.url), 'utf8');
   assert.doesNotMatch(code, /innerHTML|cssText|style\s*=|\.style\./);

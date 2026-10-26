@@ -752,6 +752,35 @@ test('two moves in the tray show two preview blocks', () => {
   assert.ok(keys(asked).includes('client:claude_code>outside:move:github direct') && !block(asked, 'outside:move:github').grip);
 });
 
+// A row that adds a marketplace server, with the kind the Add panel read for it (treeFor gives it).
+const addRow = (server, kind, part = {}) => ({ ...trayRow({ action: 'gateway.add', targets: [], params: { server } }, part), kind });
+
+test('an add row draws a preview block in its own group with a dashed link', () => {
+  const rows = [addRow('test-helper@demo/test-status', 'remote'), addRow('db-tools@demo/db-query', 'local')];
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, rows });
+  const status = block(tree, 'preview:test-status');
+  assert.deepEqual([status.parent, status.kind, status.state, status.column, status.meta, status.icon, status.row, status.takeOut], ['group:kitden:remote', 'preview', 'preview', 'servers', 'Preview', 'globe', rows[0].key, 'In preview. Click to take it out.']);
+  assert.equal(blockLabel(status), 'test-status, Preview');
+  assert.deepEqual([block(tree, 'preview:db-query').parent, block(tree, 'preview:db-query').icon], ['group:kitden:local', 'hard-drive']);
+  // It comes at the end of its group, and grows out of the gateway (260 ms) and back into it.
+  const ids = tree.blocks.filter((b) => b.column === 'servers').map((b) => b.id);
+  assert.deepEqual(ids.slice(0, 6), ['group:kitden:remote', 'held:kitden:tracker', 'preview:test-status', 'group:kitden:local', 'held:kitden:files', 'preview:db-query']);
+  assert.deepEqual([status.growsFrom, status.growMs, status.from], ['gateway:kitden', 260, undefined]);
+  // The dashed preview link from the gateway names its row; the gateway does not count it.
+  assert.ok(keys(tree).includes('gateway:kitden>preview:test-status preview'));
+  assert.equal(linkOf(tree, 'gateway:kitden>preview:test-status').row, rows[0].key);
+  assert.deepEqual(block(tree, 'gateway:kitden').stats.map((s) => s.words), ['2 clients', '2 servers']);
+  // It takes no outside server's place, and the List shows none of it.
+  assert.equal(tree.blocks.filter((b) => b.kind === 'outside').length, 4);
+  assert.ok(!listRows(tree, new Set()).some((r) => r.id.startsWith('preview:')));
+  // Still asked, or of no kind the panel read: nothing yet.
+  for (const row of [addRow('test-helper@demo/test-status', 'remote', null), addRow('x@demo/x', null)]) {
+    assert.ok(!gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [row] }).blocks.some((b) => ['preview', 'slot'].includes(b.kind)));
+  }
+  // A press on it takes its row out (as for a move), and focus that was on it goes to the gateway.
+  assert.equal(cancelFocusFor(tree, [rows[0]]), 'block:gateway:kitden');
+});
+
 test('the List shows no block of the tray and counts none', () => {
   const plain = listRows(gatewayTree(MEDIUM_VIEW, OPTS), new Set());
   // A move that has answered (a preview block) and one still being asked (the slot).

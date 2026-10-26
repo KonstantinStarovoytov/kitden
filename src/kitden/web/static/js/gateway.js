@@ -2,7 +2,7 @@
 // row opens its Details beside the page (gateway-details.js).
 import { $, button, el, gridKey, icon, joinWords, pageWaits, plural, reportError, WAITS, withFocusKey } from "./dom.js";
 import { setCancelFocus } from "./dock.js";
-import { openAdd } from "./gateway-add.js";
+import { addKind, addName, openAdd, pageRead, wasAdded } from "./gateway-add.js";
 import { addForm, connectAction, connectBody, followProject, heldServer, liveHeld, movesTo, NOT_REACHED, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool, TAKE_OUT } from "./gateway-details.js";
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { findChip, findIn, foldable, isNarrow, keepOpen, landOwners, landStage, layoutTree, linkKey, litFrom, litPath, pagesNow, pagesWith, pressOpen, toggleOpen, turnPage, turnWords, wideWidth } from "./map.js";
@@ -33,6 +33,9 @@ const OUTSIDE_BLOCK_H = 50;
 const OUTSIDE_GROUPS = ["move", "local", "plugin"];
 // What a block in preview says under the pointer: a press takes its row out of the tray (D12).
 const IN_PREVIEW = "In preview. Click to take it out.";
+// A server the Add panel adds grows out of the gateway in this long, and shrinks back into it; the
+// blocks below make room as long (add-notes §3).
+const ADD_GROW_MS = 260;
 // A gateway's own groups, each with the icon of its caption.
 const KINDS = [["remote", "Remote", "cloud"], ["local", "Local", "hard-drive"]];
 // A gateway's block, or on a first run the slot of the Kitden gateway.
@@ -105,6 +108,8 @@ export function renderGateway(main, { again = false } = {}) {
     riseUnder(failed ? "banner" : "skeleton", under, again);
     return;
   }
+  // An open Add panel follows what Kitden read (gateway-add.js).
+  pageRead(view).catch(reportError);
   // Under the head: what the page shows, the shared setup or a project's rules that differ from it.
   const scope = scopeBar(folderName(projectPath()), view.own_rules);
   main.append(scope);
@@ -158,8 +163,23 @@ function switchInPlace(again, scope) {
 // on the map (`mode`) the tray's rows and a drag. The List shows what is set up, so its search
 // finds only that.
 function treeFor(view, mode = "map") {
-  const onMapOnly = mode === "map" ? { rows: rowsOnMap(tray), ...movingOn() } : {};
-  return gatewayTree(view, { setup: data.setupServer, clients: data.clients, held: liveHeld(view), picked: state.project, ...onMapOnly });
+  const onMapOnly = mode === "map" ? { rows: rowsOnMap(tray).map(withKind), ...movingOn() } : {};
+  return growBack(gatewayTree(view, { setup: data.setupServer, clients: data.clients, held: liveHeld(view), picked: state.project, ...onMapOnly }));
+}
+
+// A row that adds a marketplace server, with its kind ("remote" or "local"), which the Add panel
+// read: the map puts its preview in that group. Any other row as it is.
+function withKind(row) {
+  return row.body.action === "gateway.add" ? { ...row, kind: addKind(row.body.params.server) } : row;
+}
+
+// A server an Apply added from a marketplace since the page loaded shrinks back into the gateway
+// when an Undo takes it out, as its preview did (ADD_GROW_MS).
+function growBack(model) {
+  for (const block of model.blocks) {
+    if (block.kind === "held" && block.gateway.kind === "kitden" && wasAdded(block.name)) Object.assign(block, { growsFrom: `gateway:${block.gateway.id}`, growMs: ADD_GROW_MS });
+  }
+  return model;
 }
 
 // The tray rows the map draws: none once their change is applied, as the page then reads the result
@@ -546,6 +566,8 @@ function movesIn(view, kitden, rows, drop) {
   };
   for (const row of rows) {
     const { action, targets = [], params = {} } = row.body;
+    const added = action === "gateway.add" && addPreview(kitden, row);
+    if (added) adds.push(added);
     if (action !== "gateway.move" || !kitden || params.gateway !== kitden.id) continue;
     const items = new Set(targets.map((target) => target.item));
     for (const group of ["move", "local"]) {
@@ -559,6 +581,18 @@ function movesIn(view, kitden, rows, drop) {
   }
   if (drop) put(drop.kind === "local" ? "local" : "move", slot(drop.name));
   return { adds, moved };
+}
+
+// A row that adds a marketplace server (gateway.add), once it has its part and its kind
+// (withKind): its preview block, for the end of that group of the Kitden gateway (`{ kind, block }`,
+// as movesIn gives them). It takes no outside server's place: it grows out of the gateway's right
+// side and shrinks back into it (ADD_GROW_MS), and focus on it goes to the gateway when it goes.
+function addPreview(kitden, row) {
+  if (!kitden || !row.part || !KINDS.some(([kind]) => kind === row.kind)) return null;
+  const name = addName(row.body.params.server);
+  const gateway = `gateway:${kitden.id}`;
+  const block = { id: `preview:${name}`, column: "servers", kind: "preview", name, meta: "Preview", stateInMeta: true, state: "preview", icon: SERVER_ICONS[row.kind], lamp: "preview", ports: { left: true }, takeOut: IN_PREVIEW, row: row.key, backTo: gateway, growsFrom: gateway, growMs: ADD_GROW_MS };
+  return { kind: row.kind, block };
 }
 
 // What a change in the tray takes out, once its row has its part: a server's link from the Kitden

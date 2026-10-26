@@ -7,7 +7,7 @@ import { $, button, el, icon, reportError, withFocusKey } from "./dom.js";
 import { KIND, SERVER_ICONS } from "./gateway-details.js";
 import { animateTo, glide } from "./motion.js";
 import { followTray, header, loadPanel, openPanel, panelState, whenGone, whenIn } from "./panel.js";
-import { addToTray, inTray, keyFor, takeOut } from "./tray.js";
+import { addToTray, inTray, keyFor, onTray, takeOut } from "./tray.js";
 
 export const ADD_TITLE = "Add a server";
 // Its door in the Kitden gateway's Details, under More.
@@ -23,8 +23,30 @@ const PILL = [["all", "All"], ["remote", "Remote"], ["local", "Local"]];
 // The data-focus key of "+ Add" beside the map's Servers caption (map-view.js).
 const ADD_KEY = "add:servers";
 
-// The rows an Apply added since the page loaded, by row id. Nothing fills it yet.
+// The rows an Apply added since the page loaded, by row id, while the gateway still holds them: a
+// read that says one is not held (after an Undo) frees it.
 const added = new Set();
+// The rows of an Apply that the page has not read again yet: they are added once it has (pageRead).
+let applied = [];
+onTray((t) => {
+  if (t.phase === "applied") applied = t.rows.filter((row) => row.body.action === "gateway.add").map((row) => row.body.params.server);
+});
+// The kind of each row read so far, by row id: the map puts a row of the tray in its group by it.
+const kinds = new Map();
+export const addKind = (id) => kinds.get(id) || null;
+// The name of the server a row adds: its id is "<plugin>@<marketplace>/<name>".
+export const addName = (id) => id.slice(id.indexOf("/") + 1);
+// Whether an Apply since the page loaded added a server of this name, and the gateway holds it.
+export const wasAdded = (name) => [...added].some((id) => addName(id) === name);
+// What a read of the list says: each row's kind, and which added rows the gateway still holds.
+function learn(rows) {
+  for (const row of rows || []) {
+    kinds.set(row.id, row.kind);
+    if (!row.held) added.delete(row.id);
+  }
+}
+// The list the open panel shows (rowList), else null.
+let shown = null;
 
 // The change a row adds to the tray.
 const addBody = (row) => ({ action: "gateway.add", targets: [], params: { server: row.id } });
@@ -83,12 +105,34 @@ export async function openAdd({ from = mapAddButton() } = {}) {
     showPressed(from, false);
     return;
   }
+  learn(rows);
   panelState.current = { type: "add" };
   const parts = addParts(rows, () => openAdd({ from }));
+  shown = parts.list;
   openPanel(parts.nodes);
   showPressed(from, true);
   whenGone(parts.nodes[0], () => showPressed(from, false));
   whenIn(parts.focus, parts.landed);
+}
+
+// The page read Kitden again (`view`, its new Gateway read; the same one again does nothing): the
+// rows of an Apply say Added now, and an open panel reads the marketplaces again, so each row says
+// what is held now. The panel stays open and focus stays where it is.
+let seen = null;
+let reads = 0;
+export async function pageRead(view) {
+  if (view === seen) return;
+  seen = view;
+  for (const id of applied) added.add(id);
+  applied = [];
+  const list = shown && shown.node.isConnected ? shown : null;
+  if (!list) return;
+  list.paint();
+  const turn = ++reads;
+  const rows = await readServers();
+  if (!rows || turn !== reads || !list.node.isConnected) return;
+  learn(rows);
+  list.update(rows);
 }
 
 // The panel's nodes: the head, the search, the pill and the list (or why there is none), and the
@@ -101,7 +145,7 @@ function addParts(rows, retry) {
   if (!rows) {
     const again = button("Try again", retry, "btn ghost small");
     body.append(el("p", "muted", FAILED), again);
-    return { nodes: [head, body, foot], focus: again, landed: () => again.focus() };
+    return { nodes: [head, body, foot], focus: again, landed: () => again.focus(), list: null };
   }
   const list = rowList(rows);
   const input = el("input");
@@ -113,7 +157,7 @@ function addParts(rows, retry) {
   const pill = kindPill((kind) => list.filter(input.value, kind));
   input.addEventListener("input", () => list.filter(input.value, pill.kind()));
   body.append(search, pill.node, list.node);
-  return { nodes: [head, body, foot], focus: input, landed: () => { input.focus(); pill.place(); } };
+  return { nodes: [head, body, foot], focus: input, landed: () => { input.focus(); pill.place(); }, list };
 }
 
 // The pill All · Remote · Local: `pick(kind)` on a press; the raised mark glides to it in 280 ms
@@ -138,7 +182,8 @@ function kindPill(pick) {
 
 // The groups, one per marketplace in the order the list has them (by name), each a caption and its
 // rows. `filter(query, kind)` hides the rows that do not match and a group with none left; a row
-// that comes back rises (opacity, 4 px down, 240 ms).
+// that comes back rises (opacity, 4 px down, 240 ms). `update(rows)` gives each row what a new read
+// says of it, and `paint()` draws every row again in place.
 function rowList(rows) {
   const node = el("div", "add-list");
   const note = el("p", "muted add-none", rows.length ? NO_MATCH : NONE);
@@ -153,16 +198,17 @@ function rowList(rows) {
       groups.push(group);
       node.append(caption);
     }
-    const item = { row, node: rowNode(row) };
+    const item = rowNode(row);
     group.items.push(item);
     node.append(item.node);
   }
   node.append(note);
+  const items = groups.flatMap((group) => group.items);
   const filter = (query, kind) => {
-    const kept = new Set(matchRows(rows, query, kind));
+    const kept = new Set(matchRows(items.map((item) => item.row), query, kind).map((row) => row.id));
     for (const group of groups) {
       for (const item of group.items) {
-        const show = kept.has(item.row);
+        const show = kept.has(item.row.id);
         if (show && item.node.hidden) animateTo(item.node, [{ opacity: 0, transform: "translateY(-4px)" }, { opacity: 1, transform: "none" }], { dur: 240 });
         item.node.hidden = !show;
       }
@@ -170,13 +216,23 @@ function rowList(rows) {
     }
     note.hidden = rows.length > 0 && kept.size > 0;
   };
-  return { node, filter };
+  const paint = () => {
+    for (const item of items) item.paint();
+  };
+  const update = (fresh) => {
+    const byId = new Map(fresh.map((row) => [row.id, row]));
+    for (const item of items) if (byId.has(item.row.id)) item.row = byId.get(item.row.id);
+    paint();
+  };
+  return { node, filter, paint, update };
 }
 
 // One row: a grip, the server's icon on a tile, its name and small line, and its status. It follows
 // the tray (details.js followTray). A click, Enter or Space adds its change, or takes it out
-// while it waits.
+// while it waits. "Added" slides in from 6 px to the right (280 ms CALM) when a row turns to it.
+// Gives `{ row, node, paint }`: `row` is what the last read said of it.
 function rowNode(row) {
+  const item = { row, node: null, paint: null };
   const key = keyFor(addBody(row));
   const node = el("div", "res");
   node.setAttribute("role", "button");
@@ -190,8 +246,11 @@ function rowNode(row) {
   text.append(el("b", null, row.name), line);
   const status = el("span", "st");
   node.append(grip, tile, text, status);
-  followTray(node, key, (waiting) => {
-    const words = addRowWords(row, { inTray: waiting, added });
+  let painted = false;
+  const look = (waiting) => {
+    const words = addRowWords(item.row, { inTray: waiting, added });
+    const turns = painted && words.status === STATUS.added && status.textContent !== STATUS.added;
+    painted = true;
     node.classList.toggle("off", words.off);
     node.classList.toggle("on", words.status === STATUS.preview);
     node.classList.toggle("done", words.status === STATUS.added);
@@ -200,9 +259,12 @@ function rowNode(row) {
     grip.classList.toggle("gone", words.off);
     line.textContent = words.line;
     status.textContent = words.status;
-  });
+    if (turns) animateTo(status, [{ opacity: 0, transform: "translateX(6px)" }, { opacity: 1, transform: "none" }], { dur: 280 });
+  };
+  followTray(node, key, look);
+  Object.assign(item, { node, paint: () => look(inTray(key)) });
   const press = () => {
-    if (addRowWords(row, { added }).off) return;
+    if (addRowWords(item.row, { added }).off) return;
     const work = inTray(key) ? takeOut(key) : addToTray(addBody(row));
     Promise.resolve(work).catch(reportError);
   };
@@ -212,5 +274,5 @@ function rowNode(row) {
     event.preventDefault();
     press();
   });
-  return node;
+  return item;
 }

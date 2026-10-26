@@ -275,8 +275,8 @@ function boxOf({ x, y, w, h, s }) {
 // one shows, whole, and glides to its place (260 ms OUT3); the one that goes leaves at once, its
 // links fade out (240 ms ease-out), and its focus goes to the new block. A new block that grows out
 // of another (its `growsFrom`) starts at .4 of its size, unseen, centred on that block's right side,
-// and grows to its place in 220 ms OUT3 while the other blocks of that draw glide in 220 ms too; when
-// it goes it shrinks back there in 180 ms IN3.
+// and grows to its place in 220 ms OUT3 (or its `growMs`) while the other blocks of that draw glide
+// as long; when it goes it shrinks back there in 180 ms IN3, and the others move as long as it grew.
 // A link between two blocks that stay moves on its own: a new solid one draws in (260 ms), a new
 // dashed one fades in (300 ms); a dashed one that goes fades out (240 ms), a solid one draws back to
 // its start (380 ms); one that changes look (dashed or solid) blends (300 ms). One to or from a block
@@ -449,7 +449,7 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
     // A group's caption in words is as wide as its words, up to what style.css lets it have.
     if (item.w !== place.w && !(item.div && place.kind === "group")) node.style.width = `${place.w}px`;
     if (item.h !== place.h) node.style.height = `${place.h}px`;
-    Object.assign(item, { w: place.w, h: place.h, home: { x: place.x, y: place.y }, growsFrom: block.growsFrom || null });
+    Object.assign(item, { w: place.w, h: place.h, home: { x: place.x, y: place.y }, growsFrom: block.growsFrom || null, growMs: block.growMs || GROW_MS });
   }
 
   // A block that is a caption now and a button later (or back) gets a new node in the same place.
@@ -750,7 +750,8 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
   // How the new blocks of a draw arrive (`coming`, by id): one that takes the place of a block that
   // goes (`from`, kept in `replacing`) starts where that one shows, whole; one that grows out of
   // another block (`growsFrom`) starts small on that block's right side, unseen. It gives how long
-  // the blocks of the draw move: GROW_MS while a block grows or shrinks back, else MOVE_MS.
+  // the blocks of the draw move: as long as a block grows or shrinks back (GROW_MS or its `growMs`),
+  // else MOVE_MS.
   function arrivals(layout, byId, after) {
     coming = new Map();
     replacing = new Map();
@@ -765,10 +766,10 @@ export function mapView({ tile, onOpen, onSelect, onAdd, onEmpty, onHover, links
         replacing.set(was.id, place.id);
       } else if (opener) {
         coming.set(place.id, sideOf(opener, place));
-        pace = GROW_MS;
+        pace = block.growMs || GROW_MS;
       }
     }
-    for (const item of blocks.values()) if (item.growsFrom && !after.has(item.id) && !item.leaving) pace = GROW_MS;
+    for (const item of blocks.values()) if (item.growsFrom && !after.has(item.id) && !item.leaving) pace = item.growMs;
     return pace;
   }
 

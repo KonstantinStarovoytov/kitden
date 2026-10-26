@@ -57,7 +57,10 @@ function element(tagName) {
     focus() { globalThis.document.activeElement = node; },
     matches: () => false,
     querySelector: () => null,
-    querySelectorAll: (selector) => (selector === '[data-focus]' ? walk(node).filter((n) => n.dataset.focus) : []),
+    querySelectorAll(selector) {
+      const key = selector.match(/^\[data-(\w+)\]$/);
+      return key ? walk(node).filter((n) => n.dataset[key[1]]) : [];
+    },
     addEventListener(type, fn) { (node.listeners[type] ||= []).push(fn); },
     animate(keyframes, options) {
       const animation = { keyframes, options, cancelled: false, finished: Promise.resolve(), cancel() { animation.cancelled = true; } };
@@ -1177,4 +1180,214 @@ test('the List keeps its open servers when another project is picked', (t) => {
   main.replaceChildren();
   renderGateway(main, { again: true });
   assert.ok(shownRows().includes('tool:files/read_file'));
+});
+
+// Phase 5 Task 4: a server the Add panel adds waits in preview on the map, at the end of its group
+// of the Kitden gateway, and lands there after Apply; an Undo plays it back.
+const { openAdd } = await import('../../src/kitden/web/static/js/gateway-add.js');
+const MARKET = [
+  { id: 'test-helper@demo/test-status', name: 'test-status', plugin: 'test-helper', marketplace: 'demo', kind: 'remote', held: false, refusal: null },
+  { id: 'db-tools@demo/db-query', name: 'db-query', plugin: 'db-tools', marketplace: 'demo', kind: 'local', held: false, refusal: null },
+];
+const MARKET_HELD = [{ ...MARKET[0], held: true, refusal: 'test-status is in the gateway already.' }, MARKET[1]];
+const STATUS_SERVER = { name: 'test-status', kind: 'remote', state: 'on', differs: false, origin: 'default', tools: 0, on_count: 0, on_in: 0, projects: 0, tool_list: [] };
+const VIEW_ADDED = { ...VIEW, gateways: [{ ...VIEW.gateways[0], servers: [...VIEW.gateways[0].servers, STATUS_SERVER] }] };
+const STATUS_BLOCK = 'block:preview:test-status';
+const STATUS_HELD = 'block:held:kitden:test-status';
+// Where a block shows: its x and y on the map.
+const at = (n) => n.style.translate.split(' ').map(parseFloat);
+// One frame of the clock, `ms` after the last.
+const frame = (ms) => { now += ms; const run = frames; frames = []; for (const fn of run) fn(now); };
+// The Add panel open beside the map, read with `servers`. Its rows follow the tray as panel.js
+// has them do (initPanel).
+const { syncTray } = await import('../../src/kitden/web/static/js/details.js');
+const { onTray } = await import('../../src/kitden/web/static/js/tray.js');
+let followed = false;
+async function addPanel(box, servers = MARKET) {
+  if (!followed) onTray(syncTray);
+  followed = true;
+  queue('/api/market-servers', { status: 200, json: { servers } });
+  await openAdd({ from: node(box, 'add:servers') });
+  await done();
+}
+const addRowOf = (name) => walk(pages['#drawer']).find((n) => n.dataset.focus === `add-row:${MARKET.find((r) => r.name === name).id}`);
+const statusOf = (name) => addRowOf(name).children[3];
+// A click on the panel's row of `name`, and the preview's answer (`id`).
+async function clickAdd(name, id) {
+  queue(PREVIEW, batch(id));
+  addRowOf(name).listeners.click[0]();
+  await done();
+  await done();
+}
+async function addCleanUp() {
+  closePanel({ instant: true, focus: false });
+  await cancelTray();
+  Object.assign(data, { gateway: VIEW });
+  undone.id = null;
+  reducedMotion.matches = false;
+  redraw();
+  settle();
+}
+
+test('a click grows it from the gateway and a take-out shrinks it back', async (t) => {
+  const box = freshMap();
+  t.after(addCleanUp);
+  await addPanel(box);
+  const [gx, gy] = at(node(box, 'block:gateway:kitden'));
+  const local = node(box, 'block:held:kitden:files');
+  const [, localWas] = at(local);
+  await clickAdd('test-status', 'add1');
+  assert.equal(statusOf('test-status').textContent, 'In preview');
+  const shown = node(box, STATUS_BLOCK);
+  // It starts at .4 of its size, unseen, on the middle of the gateway's right side ...
+  assert.deepEqual([at(shown), shown.style.transform, shown.style.opacity], [[gx + 150 - 85, gy + 62 - 30], 'scale(0.4)', '0']);
+  // ... and grows to its place in 260 ms, while files, in the Local group below, makes room as long.
+  frame(259);
+  assert.notEqual(shown.style.transform, '');
+  assert.ok(at(local)[1] > localWas);
+  const localAt = at(local)[1];
+  frame(1);
+  assert.deepEqual([shown.style.transform, shown.style.opacity], ['', '']);
+  assert.ok(at(local)[1] > localAt);
+  const place = at(shown);
+  assert.match(linkLine(box, 'gateway:kitden>preview:test-status').className, /\bpreview\b/);
+  // A press on it takes it out: it shrinks back into the gateway in 180 ms, and the blocks below
+  // move up in 260 ms. Focus that was on it goes to the gateway.
+  shown.focus();
+  shown.listeners.click[0]();
+  await done();
+  await done();
+  frame(179);
+  assert.ok(shown.parentNode);
+  frame(1);
+  assert.equal(node(box, STATUS_BLOCK), null);
+  assert.deepEqual([at(shown), shown.style.transform, shown.style.opacity], [[gx + 150 - 85, gy + 62 - 30], 'scale(0.4)', '0']);
+  assert.notEqual(at(local)[1], localWas);
+  frame(80);
+  assert.equal(at(local)[1], localWas);
+  assert.equal(document.activeElement, node(box, 'block:gateway:kitden'));
+  assert.equal(statusOf('test-status').textContent, '');
+  // The bar's Cancel takes it out the same way.
+  await clickAdd('db-query', 'add1b');
+  settle();
+  assert.ok(node(box, 'block:preview:db-query') && place);
+  await cancelTray();
+  frame(180);
+  assert.equal(node(box, 'block:preview:db-query'), null);
+  settle();
+});
+
+// The tray applied with test-status in it, and the page then reads Kitden again (dock.js land).
+async function appliedAdd(box) {
+  await clickAdd('test-status', 'add2');
+  settle();
+  queue('/api/changes/add2/apply', { status: 200, json: { id: 'add2', state: 'verified', error: null } });
+  await applyTray();
+  assert.equal(tray.phase, 'applied');
+}
+async function readAgain(view, servers) {
+  queue('/api/market-servers', { status: 200, json: { servers } });
+  Object.assign(data, { gateway: view });
+  redraw();
+}
+
+// Review Focus
+test("Apply lands it and the open panel's row says Added, with focus kept", async (t) => {
+  const box = freshMap();
+  t.after(addCleanUp);
+  await addPanel(box);
+  await appliedAdd(box);
+  const place = at(node(box, STATUS_BLOCK));
+  const row = addRowOf('test-status');
+  row.focus();
+  await readAgain(VIEW_ADDED, MARKET_HELD);
+  endApplied();
+  // The server takes the preview's place: it starts where the preview shows, joined by a solid link.
+  assert.equal(node(box, STATUS_BLOCK), null);
+  const held = node(box, STATUS_HELD);
+  assert.deepEqual(at(held), place);
+  // (The preview's own dashed link fades out on the same line meanwhile.)
+  const hit = node(box, 'link:gateway:kitden>held:kitden:test-status');
+  const lines = walk(box).filter((n) => n.tagName === 'path' && /\blink\b/.test(n.className) && n.getAttribute('d') === hit.getAttribute('d'));
+  assert.deepEqual(lines.map((n) => /\bpreview\b/.test(n.className)).sort(), [false, true]);
+  settle();
+  await done();
+  // The panel stays open; its row says Added, sliding in from 6 px (280 ms CALM); focus stays.
+  assert.equal(isPanelOpen(), true);
+  assert.deepEqual([statusOf('test-status').textContent, document.activeElement], ['Added', row]);
+  assert.ok(row.classList.contains('done') && row.classList.contains('off'));
+  assert.deepEqual(lastMotion(statusOf('test-status')), [[{ opacity: 0, transform: 'translateX(6px)' }, { opacity: 1, transform: 'none' }], 280, CALM]);
+  // The page read the marketplaces again; the row is still Added, with no second motion.
+  assert.equal(statusOf('test-status').animations.length, 1);
+});
+
+test('Undo takes it out and the row is free again', async (t) => {
+  const box = freshMap();
+  t.after(addCleanUp);
+  await addPanel(box);
+  await appliedAdd(box);
+  await readAgain(VIEW_ADDED, MARKET_HELD);
+  endApplied();
+  settle();
+  await done();
+  const [gx, gy] = at(node(box, 'block:gateway:kitden'));
+  const row = addRowOf('test-status');
+  row.focus();
+  // The Undo: the server shrinks back into the gateway (180 ms IN3), as its preview would.
+  undone.id = 'add2';
+  await readAgain(VIEW, MARKET);
+  const held = node(box, STATUS_HELD);
+  frame(179);
+  assert.ok(held.parentNode);
+  frame(1);
+  assert.equal(node(box, STATUS_HELD), null);
+  assert.deepEqual([at(held), held.style.transform, held.style.opacity], [[gx + 150 - 85, gy + 62 - 30], 'scale(0.4)', '0']);
+  settle();
+  await done();
+  // The panel's row is free again, and focus stays on it.
+  assert.deepEqual([statusOf('test-status').textContent, row.classList.contains('off'), document.activeElement], ['', false, row]);
+});
+
+test('a project switch keeps the preview block', async (t) => {
+  const box = freshMap();
+  t.after(async () => { pickProject('', VIEW); await addCleanUp(); });
+  await addPanel(box);
+  await clickAdd('test-status', 'add3');
+  settle();
+  const shown = node(box, STATUS_BLOCK);
+  pickProject('atlas', ATLAS);
+  settle();
+  assert.equal(node(box, STATUS_BLOCK), shown);
+  assert.deepEqual([shown.style.transform, shown.style.opacity], ['', '']);
+  assert.ok(linkLine(box, 'gateway:kitden>preview:test-status'));
+  assert.deepEqual([isPanelOpen(), statusOf('test-status').textContent], [true, 'In preview']);
+});
+
+test('under reduced motion each lands at once', async (t) => {
+  const box = freshMap();
+  t.after(addCleanUp);
+  reducedMotion.matches = true;
+  await addPanel(box);
+  const still = () => walk(box).every((n) => n.style.opacity !== '0' && !/scale/.test(n.style.transform || ''));
+  // A click: the block is at its place at once.
+  await clickAdd('test-status', 'add4');
+  assert.ok(node(box, STATUS_BLOCK) && still());
+  // A take-out: it is gone at once.
+  node(box, STATUS_BLOCK).listeners.click[0]();
+  await done();
+  await done();
+  assert.equal(node(box, STATUS_BLOCK), null);
+  // Apply: the server is there at once, and the row says Added with no motion.
+  await appliedAdd(box);
+  await readAgain(VIEW_ADDED, MARKET_HELD);
+  endApplied();
+  await done();
+  assert.ok(node(box, STATUS_HELD) && still());
+  assert.deepEqual([statusOf('test-status').textContent, statusOf('test-status').animations.length], ['Added', 0]);
+  // Undo: it is gone at once, and the row is free.
+  undone.id = 'add2';
+  await readAgain(VIEW, MARKET);
+  await done();
+  assert.ok(!node(box, STATUS_HELD) && still());
+  assert.equal(statusOf('test-status').textContent, '');
 });
