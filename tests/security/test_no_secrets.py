@@ -204,11 +204,14 @@ async def _mcp_outputs(build, home, names) -> list[str]:
 @pytest.mark.anyio
 async def test_no_secret_in_any_output_and_no_network(home, network_attempts, capsys):
     # An imported file holds a secret: the Instructions map names the import, never its text.
+    # A token written after `@` is hidden in the name and the path, found or missing.
     claude = home / ".claude/CLAUDE.md"
-    claude.write_text(claude.read_text() + "@notes.md\n")
+    named = "ghp_SENTINEL_SECRET_IN_A_FILE_NAME"
+    claude.write_text(claude.read_text() + f"@notes.md @{named}.md @ghp_SENTINEL_SECRET_MISSING\n")
     (home / ".claude/notes.md").write_text("api_key = SENTINEL_SECRET_IMPORTED\n")
+    (home / f".claude/{named}.md").write_text("# Named\n")
     outputs = _page_outputs(home)
-    assert any('"name":"~/.claude/notes.md"' in text for text in outputs)
+    assert any('"name":"notes.md"' in text for text in outputs)
     store = data_dir(home)
     outputs.append((store / "changes.log").read_text())
     outputs += [p.read_text() for p in store.glob("changes/*/manifest.json")]

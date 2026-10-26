@@ -23,7 +23,8 @@ def test_an_import_is_read_relative_to_its_file_and_home_works(tmp_path):
     _write(project / ".claude/guide.md", "# Guide\n")
     _write(home / "notes/me.md", "# Me\n")
     found = imports(claude, project, home)
-    assert _names(found) == [".claude/guide.md", "~/notes/me.md"]
+    # Each name is what the file says after `@`.
+    assert _names(found) == ["guide.md", "~/notes/me.md"]
     guide, mine = found
     assert guide["target"] == str((project / ".claude/guide.md").resolve())
     assert guide["via"] == str(claude.resolve())
@@ -104,8 +105,8 @@ def test_an_import_outside_the_project_is_marked_outside(tmp_path):
     claude = _write(project / "CLAUDE.md", "@../shared.md\n")
     found = imports(claude, project, home)
     assert [(i["name"], i["outside"]) for i in found] == [
-        ("~/work/shared.md", True),
-        ("~/work/deeper.md", True),
+        ("../shared.md", True),
+        ("deeper.md", True),
     ]
     # In the user's own CLAUDE.md nothing is outside: Claude Code loads its imports without asking.
     user = _write(home / ".claude/CLAUDE.md", "@~/work/shared.md\n")
@@ -124,7 +125,7 @@ def test_an_import_outside_the_home_folder_is_named_but_never_read(tmp_path):
     assert [(i["name"], i["outside"], i["missing"]) for i in found] == [
         ("secret.md", True, False),
         ("zero", True, True),
-        ("also.md", True, False),
+        ("link.md", True, False),
     ]
 
 
@@ -132,3 +133,35 @@ def test_a_long_file_is_read_only_so_far(tmp_path):
     home = tmp_path / "home"
     claude = _write(home / "app/CLAUDE.md", "x" * 300_000 + "\n@late.md\n")
     assert imports(claude, claude.parent, home) == []
+
+
+def test_a_project_outside_the_home_folder_is_read_but_nothing_beyond_it(tmp_path):
+    home = tmp_path / "home"
+    project = tmp_path / "srv/app"
+    claude = _write(project / "CLAUDE.md", "@a.md @../away.md\n")
+    _write(project / "a.md", "@b.md\n")
+    _write(project / "b.md", "# B\n")
+    _write(tmp_path / "srv/away.md", "@never.md\n")
+    _write(tmp_path / "srv/never.md", "# Never\n")
+    found = imports(claude, project, home)
+    assert [(i["name"], i["depth"], i["outside"]) for i in found] == [
+        ("a.md", 1, False),
+        ("../away.md", 1, True),
+        ("b.md", 2, False),
+    ]
+
+
+def test_a_nul_character_or_a_bad_path_is_skipped(tmp_path):
+    home = tmp_path / "home"
+    project = home / "app"
+    _write(project / "blob.md", "@a\x00b.md @ok.md\n")
+    _write(project / "ok.md", "# OK\n")
+    claude = _write(project / "CLAUDE.md", "@blob.md @c\x00d.md\n")
+    assert _names(imports(claude, project, home)) == ["blob.md", "ok.md"]
+
+
+def test_a_token_after_the_at_sign_is_hidden_in_the_name(tmp_path):
+    home = tmp_path / "home"
+    claude = _write(home / "app/CLAUDE.md", "@ghp_abcdefghijklmnopqrstuvwxyz0123456789\n")
+    found = imports(claude, claude.parent, home)
+    assert "ghp_" not in found[0]["name"]

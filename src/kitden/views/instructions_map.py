@@ -13,7 +13,8 @@ from pathlib import Path
 
 from kitden.clients.base import is_home
 from kitden.model import ClientStatus, ItemKind, _hash
-from kitden.views.explain import first_lines
+from kitden.redact import redact_line
+from kitden.views.explain import PREVIEW_READ, head
 from kitden.views.imports import imports, read_text
 from kitden.views.library_map import _clients
 from kitden.views.load_map import COLUMNS, category
@@ -28,7 +29,8 @@ CLAUDE_FILES = ("CLAUDE.md", "CLAUDE.local.md")
 # .claude/CLAUDE.md or CLAUDE.local.md in the working folder or a folder above it;
 # ~/.claude/CLAUDE.md does not count. It reads AGENTS.md itself, not through an import.
 # Not read here: the "Project instructions" setting that can change this, `.claude/AGENTS.md`,
-# AGENTS.md in folders above, and the imports inside an AGENTS.md (no import links for it, D27).
+# AGENTS.md in folders above, and the imports inside an AGENTS.md: spec 6.1 reads imports from
+# Claude Code's CLAUDE.md files only.
 AGENTS_SINCE = (2, 1, 277)
 THROUGH_AGENTS = "CLAUDE.md for Claude Code"
 
@@ -105,11 +107,12 @@ def _blocks(inventory, project: str | None) -> dict[str, dict]:
 
 def instructions_map(inventory, adapters, project: str | None) -> dict:
     """The clients, the file groups and the imported files of the Instructions map. A file is
-    `{id, name, by, through?, count?, size?, imports, technical: {path, lines}}`: `through` says
-    Claude Code reads an AGENTS.md as its CLAUDE.md, `count` is a Cursor rules folder's number of
-    rules (its `lines` are their names), `size` a file's number of lines, `lines` its first lines
-    with secrets hidden, and `imports` the ids of every file it brings in, nested ones too. An
-    imported file is `{id, name, by_files, outside, missing, technical: {path}}`."""
+    `{id, name, by, through?, count?, size?, imports, technical: {path, lines, cut?}}`: `through`
+    says Claude Code reads an AGENTS.md as its CLAUDE.md, `count` is a Cursor rules folder's
+    number of rules (its `lines` are their names), `size` a file's number of lines (None, with
+    `cut`, when the file is longer than Kitden reads), `lines` its first lines with secrets
+    hidden, and `imports` the ids of every file it brings in, nested ones too. An imported file is
+    `{id, name, by_files, outside, missing, technical: {path?}}`; a missing one has no path."""
     home = next((a.home for a in adapters.values()), None)
     status = {c.id: c.status for c in inventory.clients}
     cursor = adapters.get("cursor") if status.get("cursor") is ClientStatus.FOUND else None
@@ -151,11 +154,18 @@ def instructions_map(inventory, adapters, project: str | None) -> dict:
             entry["count"] = len(block["rules"])
             entry["technical"]["lines"] = sorted(block["rules"])
         else:
-            entry["size"] = len(read_text(Path(path)).splitlines())
-            entry["technical"]["lines"] = first_lines(path) or []
+            # One read gives the size, the first lines and the imports. A file longer than the
+            # read has no size: `cut` says so.
+            text, cut = read_text(Path(path))
+            entry["size"] = None if cut else len(text.splitlines())
+            if cut:
+                entry["technical"]["cut"] = True
+            entry["technical"]["lines"] = head(
+                text[:PREVIEW_READ], cut=cut or len(text) > PREVIEW_READ
+            )
         if home is not None and block["claude_md"]:
             root = Path(project) if block["group"] == "project" and project else None
-            for found in imports(Path(path), root, home):
+            for found in imports(Path(path), root, home, text):
                 import_id = _hash("imported-file", found["target"])
                 one = imported.setdefault(
                     import_id,
@@ -165,7 +175,10 @@ def instructions_map(inventory, adapters, project: str | None) -> dict:
                         "by_files": [],
                         "outside": False,
                         "missing": found["missing"],
-                        "technical": {"path": found["target"]},
+                        # A missing import's path is only what the file says: it is left out.
+                        "technical": (
+                            {} if found["missing"] else {"path": redact_line(found["target"])}
+                        ),
                     },
                 )
                 one["outside"] = one["outside"] or found["outside"]

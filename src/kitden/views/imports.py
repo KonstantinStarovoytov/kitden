@@ -1,7 +1,8 @@
 """Claude Code's `@path` imports in a CLAUDE.md file, and the imports of those files.
 
-Kitden only reads these files. It never reads a file outside the home folder or anything that
-is not a plain file, reads at most `READ_LIMIT` characters of each, and reads each file once.
+Kitden only reads these files. It reads a file only inside the home folder or the picked
+project, and only a plain file; it reads at most `READ_LIMIT` characters of each, and each file
+once.
 
 checked 2026-10-26 (code.claude.com/docs/en/memory, "Import additional files"):
 - CLAUDE.md files import other files with `@path/to/import`. Relative and absolute paths both
@@ -33,13 +34,15 @@ _SPAN = re.compile(r"(?<!`)(`+)(?!`).+?(?<!`)\1(?!`)")
 _IMPORT = re.compile(r"(?:^|(?<=\s))@((?:\\ |\S)+)")
 
 
-def read_text(path: Path) -> str:
-    """At most `READ_LIMIT` characters of a file; empty when it cannot be read."""
+def read_text(path: Path) -> tuple[str, bool]:
+    """At most `READ_LIMIT` characters of a file, and whether the file goes on past them; empty
+    when it cannot be read."""
     try:
         with path.open(encoding="utf-8-sig", errors="replace") as file:
-            return file.read(READ_LIMIT)
+            text = file.read(READ_LIMIT + 1)
     except OSError:
-        return ""
+        return "", False
+    return text[:READ_LIMIT], len(text) > READ_LIMIT
 
 
 def _written(text: str) -> list[str]:
@@ -57,34 +60,34 @@ def _written(text: str) -> list[str]:
             fence = mark.group(1)
             continue
         for written in _IMPORT.findall(_SPAN.sub(" ", line)):
-            if not written.startswith(("'", '"')):
+            # A path in quotes is no import, and no path holds a NUL character.
+            if not written.startswith(("'", '"')) and "\x00" not in written:
                 found.append(written.replace("\\ ", " "))
     return found
 
 
-def _target(written: str, file: Path, home: Path) -> Path:
-    if written.startswith("~/"):
-        return Path(os.path.realpath(home / written[2:]))
-    return Path(os.path.realpath(file.parent / written))
+def _target(written: str, file: Path, home: Path) -> Path | None:
+    """The full path an import names; None when it names no path the system can take."""
+    try:
+        if written.startswith("~/"):
+            return Path(os.path.realpath(home / written[2:]))
+        return Path(os.path.realpath(file.parent / written))
+    except (OSError, ValueError):
+        return None
 
 
-def _name(target: Path, root: Path | None, home: Path) -> str:
-    """The import's name on the page: the path in the project, `~/...` in the home folder, else
-    only the file's name, so no full path leaves `technical`."""
-    if root is not None and target.is_relative_to(root):
-        name = str(target.relative_to(root))
-    elif target.is_relative_to(home):
-        name = "~/" + str(target.relative_to(home))
-    else:
-        name = target.name
-    return redact_line(name)
+def _name(written: str) -> str:
+    """The import's name on the page: what the file says after `@`, secrets hidden. A full path
+    shows only its file's name, so no full path leaves `technical`."""
+    return redact_line(Path(written).name if os.path.isabs(written) else written)
 
 
-def imports(path: Path, root: Path | None, home: Path) -> list[dict]:
+def imports(path: Path, root: Path | None, home: Path, text: str | None = None) -> list[dict]:
     """The files a CLAUDE.md imports, nearest first: `name`, `target` (the full path), `depth`
     (1 for the file's own imports), `outside` (outside the project `root`; with no root, a user
-    file, nothing is), `missing` (not a plain file) and `via` (the file that imports it). Each
-    target is listed once; a file outside the home folder is named but never read."""
+    file, nothing is), `missing` (not a plain file) and `via` (the file that imports it). `text`
+    is the file's own text when the caller has read it already. Each target is listed once; a
+    file outside both the home folder and `root` is named but never read."""
     home = Path(os.path.realpath(home))
     root = Path(os.path.realpath(root)) if root is not None else None
     start = Path(os.path.realpath(path))
@@ -93,15 +96,16 @@ def imports(path: Path, root: Path | None, home: Path) -> list[dict]:
     queue = [(start, 1)]
     while queue:
         file, depth = queue.pop(0)
-        for written in _written(read_text(file)):
+        own = text if file == start and text is not None else read_text(file)[0]
+        for written in _written(own):
             target = _target(written, file, home)
-            if target in seen:
-                continue  # a loop, or a file already listed: stop here
+            if target is None or target in seen:
+                continue  # no path, a loop, or a file already listed: stop here
             seen.add(target)
             missing = not target.is_file()
             found.append(
                 {
-                    "name": _name(target, root, home),
+                    "name": _name(written),
                     "target": str(target),
                     "depth": depth,
                     "outside": root is not None and not target.is_relative_to(root),
@@ -109,6 +113,7 @@ def imports(path: Path, root: Path | None, home: Path) -> list[dict]:
                     "via": str(file),
                 }
             )
-            if depth < MAX_HOPS and not missing and target.is_relative_to(home):
+            inside = target.is_relative_to(home) or bool(root and target.is_relative_to(root))
+            if depth < MAX_HOPS and not missing and inside:
                 queue.append((target, depth + 1))
     return found

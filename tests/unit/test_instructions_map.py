@@ -112,12 +112,10 @@ def test_claude_code_files_list_their_imports(home):
     files = _files(answer)
     root, inner = files["project", "CLAUDE.md"], files["project", ".claude/CLAUDE.md"]
     imports = {i["id"]: i for i in answer["imports"]}
-    assert [imports[i]["name"] for i in root["imports"]] == [
-        "docs/design.md",
-        "~/notes.md",
-        "docs/development.md",
-    ]
-    assert [imports[i]["name"] for i in inner["imports"]] == ["docs/development.md"]
+    assert [imports[i]["name"] for i in root["imports"][:2]] == ["docs/design.md", "~/notes.md"]
+    # The same file through two paths is one block, named as the file that brings it first says.
+    assert root["imports"][2] == inner["imports"][0]
+    assert imports[root["imports"][2]]["name"] in ("development.md", "../docs/development.md")
     development = imports[inner["imports"][0]]
     # One block per imported file, with the files that bring it in.
     assert sorted(development["by_files"]) == sorted([root["id"], inner["id"]])
@@ -190,3 +188,27 @@ def test_the_page_reads_the_map_behind_the_page_cookie(home):
         assert picked["project"]["id"] == project["id"]
         assert [g["key"] for g in picked["groups"]] == ["all", "project"]
         assert page.get("/api/instructions-map?project=nope").status_code == 404
+
+
+def test_a_missing_import_has_no_path_and_a_found_one_hides_secrets(home):
+    website = home / "work/website"
+    token = "ghp_abcdefghijklmnopqrstuvwxyz0123456789"
+    _write(website / "CLAUDE.md", f"@{token} @docs/{token}.md @bad\x00.md\n")
+    _write(website / f"docs/{token}.md", "# Kept\n")
+    answer = _map(home, str(website))
+    assert token not in json.dumps(answer)
+    missing, found = answer["imports"]
+    assert (missing["missing"], missing["technical"]) == (True, {})
+    assert found["missing"] is False
+    assert found["technical"]["path"].startswith(str(website.resolve()))
+
+
+def test_a_file_longer_than_the_read_has_no_size(home):
+    website = home / "work/website"
+    _write(website / "CLAUDE.md", "# Big\n" + "line\n" * 60_000)
+    files = _files(_map(home, str(website)))
+    big = files["project", "CLAUDE.md"]
+    assert big["size"] is None
+    assert big["technical"]["cut"] is True
+    assert big["technical"]["lines"][0] == "# Big"
+    assert "cut" not in files["all", "CLAUDE.md"]["technical"]
