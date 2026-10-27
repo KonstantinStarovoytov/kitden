@@ -44,19 +44,17 @@ def test_readme_says_unknown_is_not_missing():
 
 def test_readme_says_what_a_project_view_adds():
     readme = " ".join((ROOT / "README.md").read_text().split())
-    assert '"This project" when the project\'s own settings decide it' in readme
-    assert '"Only this project"' in readme
+    assert '"This project" marks a cell the project\'s own settings decide' in readme
+    assert '"Only this project" an item only that project has' in readme
     assert 'A cell says "On" when the client has the item' in readme
-    assert "is in the cell's hover text" in readme
     assert '"Needs review" means another client has an item with the same name' in readme
-    assert "a skill only this project has adds into this project" in readme
+    assert 'asks "Add to this project…" or "Add for all projects…"' in readme
 
 
 def test_readme_names_the_management_actions():
     readme = " ".join((ROOT / "README.md").read_text().split())
     for words in (
         "Remove from",  # a plugin or a skill, with Undo
-        '"+ Add" on an MCP server copies its entry to another client',
         "Add to this project…",
         "Add missing plugins and skills…",
         "Put back in",
@@ -73,7 +71,7 @@ def test_readme_shows_the_gateway_as_a_tree_with_a_list():
     for words in (
         "Map | List",
         '"Use the shared rule…"',
-        '"Turn off in one project…"',
+        '"Turn off in some projects…"',
         "a call already running is not stopped",
         "Outside the gateway",
         "Drop to add",
@@ -143,3 +141,28 @@ def test_walkthrough_script_one_has_the_seven_tasks_and_a_results_table():
     assert "| Task | Done | Wrong turns | Time | What was confusing |" in text
     assert '"Loads" or "Available"' in text
     assert '"On" and "Off" or "Allowed" and "Blocked"' in text
+
+
+IMAGES = "https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/"
+
+
+def test_every_readme_image_is_a_full_address_to_a_file_we_have():
+    import re
+
+    readme = (ROOT / "README.md").read_text()
+    images = re.findall(r'(?:src|srcset)="([^"]+)"', readme)
+    assert images
+    for image in images:
+        assert image.startswith(IMAGES), image
+        assert (ROOT / "docs/images" / image.removeprefix(IMAGES)).is_file(), image
+    # The four pages, light and dark, and no screenshot that nothing shows.
+    shots = {image.removeprefix(IMAGES) for image in images if image.endswith(".jpg")}
+    pages = ("overview", "gateway", "library", "changes")
+    assert shots == {f"{page}{theme}.jpg" for page in pages for theme in ("", "-dark")}
+    assert {p.name for p in (ROOT / "docs/images").glob("*.jpg")} == shots
+
+
+def test_the_readme_names_no_old_review():
+    readme = " ".join((ROOT / "README.md").read_text().split())
+    assert "Every change opens a review first" not in readme
+    assert "review.jpg" not in readme

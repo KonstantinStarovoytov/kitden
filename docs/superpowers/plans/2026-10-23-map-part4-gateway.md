@@ -68,7 +68,7 @@
 - Produces in `gateway.js`: `GATEWAY_COLUMNS` (clients 150×54, narrow 132; gateway 150×124, narrow a 56×56 tile; servers 170×54, narrow 220; tools 190×34, narrow rows 30 high); `gatewayTree(view, { setup, clients, open, tools, picked }) -> model`, first version: three client blocks (`client:<id>`, `on` link to `gateway:kitden` when `kitdenClients(setup).linked` has it), the Kitden gateway block, groups `group:kitden:remote` / `group:kitden:local` of held blocks `held:kitden:<name>` (`on` link from the gateway unless the server is off), group `group:outside` of `outside:<move|local|plugin>:<name>` blocks with a `direct` link from each client in `row.clients`, and, for an open held server, its tools `tool:<server>/<tool>` from `tools[server]` (the `/api/gateway/tools` answer in this task; Task 6 switches to `tool_list`); a tool block's `state` and its `on` link come from the tool's `effective` state (Task 4 adds it; until then the probe uses `state`).
 - Produces in `scripts/measure-start.py`: `PROBE_SERVERS = 20`; `build_probe(root: Path) -> Path` (the medium sample plus direct servers `probe-01` … in `~/.claude.json` and `~/.codex/config.toml` until held plus outside rows make 20); `measure()` also returns `gateway_view` (seconds to the first answer of `/api/gateway-view`, timed after first usable) and `main()` prints `gateway view: N ms`; `--probe` builds the probe sample, starts the demo page on it, prints the page link and waits for Ctrl-C.
 
-- [ ] **Step 1: Write the failing tests** (`tests/frontend/map.test.mjs`; helpers build models)
+- [x] **Step 1: Write the failing tests** (`tests/frontend/map.test.mjs`; helpers build models)
 
 ```js
 const { GAP, layoutTree, toggleOpen, litPath, litFrom, findIn, isNarrow, unfoldDelays } = await import('../../src/kitden/web/static/js/map.js');
@@ -188,21 +188,21 @@ def test_the_map_marks_when_it_is_drawn():
 
   In `test_library_replaces_load_map_and_discover` the `map.js` half goes; `assert not (STATIC / "js" / "discover.js").exists()` stays.
 
-- [ ] **Step 2: Run them to see them fail:** `node --test tests/frontend/map.test.mjs tests/frontend/store.test.mjs tests/frontend/gateway.test.mjs`; `uv run pytest tests/unit/test_measure_start.py tests/unit/test_page_words.py -q`.
-- [ ] **Step 3: Implement** the interfaces above. On the Gateway page, `state.mode === "map"` draws the map in place of today's cards (the probe only; Task 6 adds the switch); clicking a held block toggles it open and reads its tools from `/api/gateway/tools`. Today's page and the map both mark `kitden:gateway-drawn` the first time they draw with data, and `kitden:gateway-data` once `/api/gateway-view` and `/api/setup-server` have both answered. CSS: blocks on `--panel` with a `--wire` border, radius 8 (tool 7), the gateway on `--panel-raised` with a `--route` border; links `--wire-strong` 1.3 px; `.link.direct` `--lamp-warn` 1.2 px at 0.55 opacity; `.link.draw` uses the existing `wire-draw` keyframes; the reduced-motion rule at the end of `style.css` covers them.
+- [x] **Step 2: Run them to see them fail:** `node --test tests/frontend/map.test.mjs tests/frontend/store.test.mjs tests/frontend/gateway.test.mjs`; `uv run pytest tests/unit/test_measure_start.py tests/unit/test_page_words.py -q`.
+- [x] **Step 3: Implement** the interfaces above. On the Gateway page, `state.mode === "map"` draws the map in place of today's cards (the probe only; Task 6 adds the switch); clicking a held block toggles it open and reads its tools from `/api/gateway/tools`. Today's page and the map both mark `kitden:gateway-drawn` the first time they draw with data, and `kitden:gateway-data` once `/api/gateway-view` and `/api/setup-server` have both answered. CSS: blocks on `--panel` with a `--wire` border, radius 8 (tool 7), the gateway on `--panel-raised` with a `--route` border; links `--wire-strong` 1.3 px; `.link.direct` `--lamp-warn` 1.2 px at 0.55 opacity; `.link.draw` uses the existing `wire-draw` keyframes; the reduced-motion rule at the end of `style.css` covers them.
   Builder call: the hash's `view` lives in `state.mode`, because `state.view` already names the place.
   Builder call: the probe sample is `build_probe` in `scripts/measure-start.py`, not a fourth `SIZES` entry.
   Builder call: a group over `GROUP_MAX` folds in `layoutTree` for every map page, so Part 5 gets the same rule.
-- [ ] **Step 4: Run** the tests of Step 1 and the four checks → PASS.
-- [ ] **Step 5: Commit**
+- [x] **Step 4: Run** the tests of Step 1 and the four checks → PASS.
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kitden/web/static/js/map.js src/kitden/web/static/js/dom.js src/kitden/web/static/js/store.js src/kitden/web/static/js/gateway.js src/kitden/web/static/style.css scripts/measure-start.py tests/frontend/map.test.mjs tests/frontend/store.test.mjs tests/frontend/gateway.test.mjs tests/unit/test_measure_start.py tests/unit/test_page_words.py
 git commit -m "Map: the core layout and a probe on the Gateway"
 ```
 
-- [ ] **Step 6: Run the probe (controller).** `uv run python scripts/measure-start.py` (note `gateway view`), then `uv run python scripts/measure-start.py --probe`. In a browser at the printed link, load `#gateway` five times and `#gateway?view=map` five times and read `performance.getEntriesByName(...)` for `kitden:gateway-drawn` (first usable view, from navigation start), `kitden:gateway-data` (complete data) and `kitden:map-draw`. Run the same on `main` for today's page (`kitden:gateway-drawn` only; add the mark there in a scratch copy, never committed). Note the medians and the machine.
-- [ ] **Step 7: The pass rule.** The probe passes when the median `kitden:map-draw` is under 50 ms on the probe sample and `the layout of 20 servers and of the large sample stays under 16 ms` passes. **If either fails, the controller stops this part here and reports the numbers to the owner; no later task starts.**
+- [x] **Step 6: Run the probe (controller).** `uv run python scripts/measure-start.py` (note `gateway view`), then `uv run python scripts/measure-start.py --probe`. In a browser at the printed link, load `#gateway` five times and `#gateway?view=map` five times and read `performance.getEntriesByName(...)` for `kitden:gateway-drawn` (first usable view, from navigation start), `kitden:gateway-data` (complete data) and `kitden:map-draw`. Run the same on `main` for today's page (`kitden:gateway-drawn` only; add the mark there in a scratch copy, never committed). Note the medians and the machine.
+- [x] **Step 7: The pass rule.** The probe passes when the median `kitden:map-draw` is under 50 ms on the probe sample and `the layout of 20 servers and of the large sample stays under 16 ms` passes. **If either fails, the controller stops this part here and reports the numbers to the owner; no later task starts.**
 
 ---
 
@@ -216,8 +216,8 @@ git commit -m "Map: the core layout and a probe on the Gateway"
 - Produces: Python `STATE_WORDS["on"] = "On"` (After chips follow through `AFTER_WORDS`); `ORIGIN_WORDS: dict[str, str] = {"override": "This project", "project": "Only this project"}`; a cell's `where` in a project is `ORIGIN_WORDS.get(origin)` (None for a cell that follows the shared setup), and None with All projects. JS twin in `parts.js`: `export const ORIGIN_WORDS = { override: "This project", project: "Only this project" };`, `STATE_WORDS.on: "On"`. `socket({ where })` draws `where` as `span.tag` (accent, no "· " before it).
 - Words: `loadsLede` → `` `On in ${joinWords(on)}.` `` and, with none, `"Not on here."`; Overview's empty client line → `"Nothing on here."`.
 
-- [ ] **Step 1: Rename through the tables, not by find-and-replace.** Change the two tables and the code that reads them, then update the pins in the listed tests by meaning: a state word "Available" → "On"; a cell `where` of "project override" → "This project"; a cell `where` of "this project" → "Only this project"; a cell `where` of "all projects" → None (the cell carries nothing). Sentences that say "this project" in lowercase (`review.js` `PLACE_WORDS`, `changes.js` `SCOPE_WORDS`, Affects "In this project.", the Why lines) keep their words; so does `scopeWords` in `details.js` ("This project" for a definition in the picked project: its state comes from the project's own settings, which is the new meaning). `tests/unit/test_docs_words.py`'s historical pin on `walkthrough-script-1.md` stays.
-- [ ] **Step 2: Write the new tests**
+- [x] **Step 1: Rename through the tables, not by find-and-replace.** Change the two tables and the code that reads them, then update the pins in the listed tests by meaning: a state word "Available" → "On"; a cell `where` of "project override" → "This project"; a cell `where` of "this project" → "Only this project"; a cell `where` of "all projects" → None (the cell carries nothing). Sentences that say "this project" in lowercase (`review.js` `PLACE_WORDS`, `changes.js` `SCOPE_WORDS`, Affects "In this project.", the Why lines) keep their words; so does `scopeWords` in `details.js` ("This project" for a definition in the picked project: its state comes from the project's own settings, which is the new meaning). `tests/unit/test_docs_words.py`'s historical pin on `walkthrough-script-1.md` stays.
+- [x] **Step 2: Write the new tests**
 
 ```python
 # test_page_words.py
@@ -252,11 +252,11 @@ assert.equal(cellHint({ where: 'This project', route: "through Codex's folder", 
 // panel.test.mjs: 'the Details lede says where it loads, and where it may' expects 'On in Claude Code and Codex.' and 'Not on here.'
 ```
 
-- [ ] **Step 3: Run them to see them fail**, then **implement** the table change.
-- [ ] **Step 4: Update `docs/design.md`:** "Cell state": "like Available" → "like On"; Instructions cells say "On". "Scope word" row becomes "Tag": in a project, a cell whose state comes from the project's own settings carries the short accent tag "This project"; an item only that project has carries "Only this project" (Part 5 moves such items under a group of that name); cells that follow the shared setup carry nothing, and the scope bar says so; the hover text still names the tag, the route and the reason. "Instruction file Details": the badge says "On". **README:** the project view paragraph says a cell in a project carries "This project" when the project's own settings decide it, and "Only this project" for an item only that project has; a cell says "On" when the client has the item. Update `test_readme_says_what_a_project_view_adds` to `'"This project" when the project\'s own settings decide it'` and `'"Only this project"'`.
+- [x] **Step 3: Run them to see them fail**, then **implement** the table change.
+- [x] **Step 4: Update `docs/design.md`:** "Cell state": "like Available" → "like On"; Instructions cells say "On". "Scope word" row becomes "Tag": in a project, a cell whose state comes from the project's own settings carries the short accent tag "This project"; an item only that project has carries "Only this project" (Part 5 moves such items under a group of that name); cells that follow the shared setup carry nothing, and the scope bar says so; the hover text still names the tag, the route and the reason. "Instruction file Details": the badge says "On". **README:** the project view paragraph says a cell in a project carries "This project" when the project's own settings decide it, and "Only this project" for an item only that project has; a cell says "On" when the client has the item. Update `test_readme_says_what_a_project_view_adds` to `'"This project" when the project\'s own settings decide it'` and `'"Only this project"'`.
   Builder call: until Part 5 groups them, a Library cell of an item only the project has shows "Only this project" as its tag.
-- [ ] **Step 5: Run** the four checks and `uv run pytest tests/unit/test_mcp_server.py -q` → PASS.
-- [ ] **Step 6: Commit**
+- [x] **Step 5: Run** the four checks and `uv run pytest tests/unit/test_mcp_server.py -q` → PASS.
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/kitden/views/words.py src/kitden/views/load_map.py src/kitden/views/library.py src/kitden/web/static/js/parts.js src/kitden/web/static/js/details.js src/kitden/web/static/js/overview.js src/kitden/web/static/style.css docs/design.md README.md tests/unit/test_page_words.py tests/unit/test_docs_words.py tests/unit/test_load_map.py tests/unit/test_library.py tests/unit/test_project_add.py tests/unit/test_after.py tests/unit/test_add_server.py tests/unit/test_api_skill_install.py tests/unit/test_api_plugin_install.py tests/unit/test_gateway_remove.py tests/unit/test_align.py tests/frontend/parts.test.mjs tests/frontend/library.test.mjs tests/frontend/panel.test.mjs
@@ -276,7 +276,7 @@ git commit -m "Words: On, This project and Only this project"
 - Produces in `panel.js`: `DOCK_MIN = 1024`; `DOCKS = ["gateway", "library", "changes"]`; `docksAt(view, width) -> boolean` (`DOCKS.includes(view) && width >= DOCK_MIN`); `openPanel(content, { instant = false, dock = DOCKS.includes(state.view) })`. Docked: `#drawer.docked` and `.shell.docked`, no scrim, `role="region"` with `aria-label="Details"` and no `aria-modal`, no focus trap; the page stays usable. Not docked: today's drawer (dialog, `aria-modal`, scrim, trap). A `matchMedia("(min-width: 1024px)")` change while open switches between the two. Escape closes both; `restoreFocus` finds the opener by its `focusKey` (`data-focus` or a row key) after a redraw.
 - Produces in `details.js`: `factsBlock(rows: {label: string, value: string | Node, accent?: boolean}[]) -> HTMLElement` (`dl.facts`, label column 86 px); `detailsCard({ kind, title, id = null, facts = [], why = null, actions = [], more = [], after = null, technical = null }) -> Node[]` for `openPanel`: header (kind and Close; the title, the id quiet under it), the facts, one explanation paragraph, `footer.stack` with the actions in order, then `more` behind one "More" button, then `after` (a quiet node under the actions), and `technical` (from `technical(rows)`) folded last as "Technical details". An action is `{ label, run?, body?, primary? }`: `run()` is called on press, else `review(body)`; `primary` draws the action fill (at most one). Card builders return this plain object, so node tests read its fields.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # test_contrast.py
@@ -310,12 +310,12 @@ def test_details_sit_beside_the_page_without_a_scrim():
 ```
 
   Edit `test_focus_returns_to_the_control_and_the_review_reaches_its_summary` only if `trapFocus` moves; its assertions stay.
-- [ ] **Step 2: Run them to see them fail.**
-- [ ] **Step 3: Implement.** The docked column is 320 px, fixed at the right under the top bar, full height; `.shell.docked #content` gets `padding-right: 336px`; the column keeps the drawer's one motion (it slides in; keyboard opens are instant). In the column the footer stacks its buttons full width. Reviews open in the same column (they call `openPanel`).
+- [x] **Step 2: Run them to see them fail.**
+- [x] **Step 3: Implement.** The docked column is 320 px, fixed at the right under the top bar, full height; `.shell.docked #content` gets `padding-right: 336px`; the column keeps the drawer's one motion (it slides in; keyboard opens are instant). In the column the footer stacks its buttons full width. Reviews open in the same column (they call `openPanel`).
   Builder call: Library Details keep their content in this part and only dock; Part 5 moves them to `detailsCard`.
-- [ ] **Step 4: Update `docs/design.md`:** Color roles: three rows for `--dim` (outside blocks, off tools), `--preview-fill` and `--preview-line` (a preview block), and the line "The frames' `kd-faint` is for icons, grips and hollow marks only (`--lamp-off`); text uses `--ink-3`." Components: "Details beside the page": on Gateway, Library and Changes at 1024 px and wider, a 320 px column with no scrim; Escape closes it and focus goes back to what opened it; narrower, and on Overview, the drawer; the order kind and Close, title and id, Facts, one sentence, stacked actions, "Technical details" folded.
-- [ ] **Step 5: Run** the four checks → PASS. Look at it in `uv run kitden demo --size medium` at 1440 and 900 px, both themes: the Library's Details docks and drawers; Tab leaves the docked column; Escape returns focus to the row.
-- [ ] **Step 6: Commit**
+- [x] **Step 4: Update `docs/design.md`:** Color roles: three rows for `--dim` (outside blocks, off tools), `--preview-fill` and `--preview-line` (a preview block), and the line "The frames' `kd-faint` is for icons, grips and hollow marks only (`--lamp-off`); text uses `--ink-3`." Components: "Details beside the page": on Gateway, Library and Changes at 1024 px and wider, a 320 px column with no scrim; Escape closes it and focus goes back to what opened it; narrower, and on Overview, the drawer; the order kind and Close, title and id, Facts, one sentence, stacked actions, "Technical details" folded.
+- [x] **Step 5: Run** the four checks → PASS. Look at it in `uv run kitden demo --size medium` at 1440 and 900 px, both themes: the Library's Details docks and drawers; Tab leaves the docked column; Escape returns focus to the row.
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/kitden/web/static/style.css src/kitden/web/static/js/panel.js src/kitden/web/static/js/details.js docs/design.md tests/unit/test_contrast.py tests/frontend/panel.test.mjs tests/unit/test_page_words.py
@@ -341,7 +341,7 @@ git commit -m "Details: a column beside the page from 1024 px, and the map token
   - Rows of `groups.move`, `groups.local` and `groups.plugin` gain `columns: list[str]` (client columns in `COLUMNS` order, the Desktop Code tab counted as `claude_code`) `override: bool` (in a project view, a loaded entry of the row is the project's own definition that replaces a shared one, from `effective_view(...).shadowed`) and `stays: str | None`, the first reason a move would refuse that Kitden knows without the network: a plugin row → `"{name} comes with a plugin; it stays with the plugin."`; an entry in a project's own file (`Scope.PROJECT`) → `_movable`'s `"{name} is in the project's own files; it stays there."`; an item's `stays_direct`; an item kept from the last good read → `KEPT_UNREAD.format(<file name>)`.
   - `src/kitden/clients/entries.py`: `gateway_entry(entry)` and `reads_elsewhere(entry, server)` (moved from `actions.py` with their bodies), and `entry_refusal(name: str, entry: dict) -> str | None`: the entry checks of `_movable` with its exact sentences (values from the shell or `${…}`, `cwd`, SSE or WebSocket, an entry that cannot be read as a server). `_movable` calls it; `mcp_item` sets `Item.stays_direct: str | None = None` from it.
 
-- [ ] **Step 1: Write the failing tests** (`tests/unit/test_gateway_access.py`; its own `home` fixture and helpers as `test_local_gateway_views.py` builds them)
+- [x] **Step 1: Write the failing tests** (`tests/unit/test_gateway_access.py`; its own `home` fixture and helpers as `test_local_gateway_views.py` builds them)
 
 ```python
 SITE, WEB = "/w/site", "/w/site/web"
@@ -414,12 +414,12 @@ def test_a_project_definition_that_replaces_a_shared_one_is_an_override(tmp_path
 ```
 
   In `test_mcp_server.py`, assert the projects answer has no `own_rules`. Update the exact dicts in `test_local_gateway_views.py` (`test_tools_api_marks_project_differences` and the held-server cards) with the new keys.
-- [ ] **Step 2: Run them to see them fail:** `uv run pytest tests/unit/test_gateway_access.py tests/unit/test_local_gateway_views.py tests/unit/test_gateway_view.py -q`.
-- [ ] **Step 3: Implement.** `app.py`: `_kitden(path)` passes `chains = {p.path: _chain(p.path) for p in state.inventory.projects}`; `_gateway_view` adds `own_rules`; `projects` answers `[{**p, "own_rules": own_rules(settings, _chain(p["path"]))} …]`. `entries.py` imports nothing from `kitden.changes.actions` (no import cycle: `uv run python -c "import kitden.clients.base, kitden.changes.actions"`).
+- [x] **Step 2: Run them to see them fail:** `uv run pytest tests/unit/test_gateway_access.py tests/unit/test_local_gateway_views.py tests/unit/test_gateway_view.py -q`.
+- [x] **Step 3: Implement.** `app.py`: `_kitden(path)` passes `chains = {p.path: _chain(p.path) for p in state.inventory.projects}`; `_gateway_view` adds `own_rules`; `projects` answers `[{**p, "own_rules": own_rules(settings, _chain(p["path"]))} …]`. `entries.py` imports nothing from `kitden.changes.actions` (no import cycle: `uv run python -c "import kitden.clients.base, kitden.changes.actions"`).
   Builder call: a move's offline refusal is read with the entry, at scan time (`Item.stays_direct`): `_movable` per row re-reads each file and took 256 ms on the large sample (157 rows, measured 2026-10-24).
   Builder call: Codex's project layers (`_codex_layers`) are not part of `stays`; the preview still refuses them.
-- [ ] **Step 4: Run** Step 2's tests, `tests/unit/test_mcp_server.py`, `tests/security` and the four checks → PASS. Run `uv run python scripts/measure-start.py`; `gateway view` stays within 5 ms of Task 1's number.
-- [ ] **Step 5: Commit**
+- [x] **Step 4: Run** Step 2's tests, `tests/unit/test_mcp_server.py`, `tests/security` and the four checks → PASS. Run `uv run python scripts/measure-start.py`; `gateway view` stays within 5 ms of Task 1's number.
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kitden/clients/entries.py src/kitden/model.py src/kitden/clients/base.py src/kitden/changes/actions.py src/kitden/local_gateway/views.py src/kitden/views/gateway_view.py src/kitden/web/app.py tests/unit/test_gateway_access.py tests/unit/test_local_gateway_views.py tests/unit/test_gateway_view.py tests/unit/test_api_views.py tests/unit/test_mcp_server.py
@@ -442,7 +442,7 @@ git commit -m "Gateway data: tool lists, origins, on counts and why a row stays 
   - `scopeText(folder, count) -> string` (`library.js` keeps its own `scopeLine`): no folder → "Shared setup · project overrides stay separate"; `count` > 0 → `` `Project ${folder} · ${plural(count, "rule differs", "rules differ")} from the shared setup` ``; 0 → `` `Project ${folder} · follows the shared setup` ``. `scopeBar(folder, count)` draws it (accent with a project).
 - Produces in `store.js`: `switchProject(id: string) -> Promise<void>`: sets `state.project`, clears the selection, writes the address as a new entry, then runs the switcher registered with `setSwitcher(fn)` (as `setRenderer`); `goTo(view, selected, { project, mode } = {})`: with a `project` other than the picked one it awaits `switchProject(project)` first. `app.js` registers `refreshForProject()`, today's `change` handler body after the state change (`closeForProject()`, the Library morph, the waiting page, the refresh); the menu's `onPick` calls `switchProject(id)`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```js
 test('the project menu lists All projects first, then projects by name with their own rules', () => {
@@ -475,13 +475,13 @@ def test_project_picker_says_project_not_where():  # replaces the select pins
 ```
 
   `test_another_project_closes_the_panel` splits on `function refreshForProject(` instead of the `change` listener (`closeForProject();` there and in `fromAddress`). `test_a_project_no_longer_on_the_list_is_said_not_swapped`: `"No longer on the list"` is now in `parts.js` (`menuItems`); `projectGone()` stays in `app.js`. `test_scope_switch_marks_the_project_picker_and_the_lede`: `classList.toggle("project"` stays in `app.js` on the menu's box, `.where-box.project` stays in CSS, and `scopeBar(` is in `gateway.js`.
-- [ ] **Step 2: Run them to see them fail.**
-- [ ] **Step 3: Implement.** The Gateway shows `scopeBar(folderName(projectPath()), model.own_rules)` under its head; `scopeBar` draws `scopeText`.
+- [x] **Step 2: Run them to see them fail.**
+- [x] **Step 3: Implement.** The Gateway shows `scopeBar(folderName(projectPath()), model.own_rules)` under its head; `scopeBar` draws `scopeText`.
   Builder call: All projects stays first while filtering, so the way back is always one key away.
   Builder call: with no own rules the bar says "follows the shared setup", not "0 rules differ".
-- [ ] **Step 4: Update `docs/design.md`:** the picker is a menu ("Find a project…", "All projects" with "What applies in every project", each project with "N own rules", no paths; keys); the scope bar under a page head says "Shared setup · …" or "Project <name> · N rules differ …".
-- [ ] **Step 5: Run** the four checks → PASS. Pick a project by keyboard only in the demo.
-- [ ] **Step 6: Commit**
+- [x] **Step 4: Update `docs/design.md`:** the picker is a menu ("Find a project…", "All projects" with "What applies in every project", each project with "N own rules", no paths; keys); the scope bar under a page head says "Shared setup · …" or "Project <name> · N rules differ …".
+- [x] **Step 5: Run** the four checks → PASS. Pick a project by keyboard only in the demo.
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/kitden/web/static/index.html src/kitden/web/static/js/app.js src/kitden/web/static/js/store.js src/kitden/web/static/js/parts.js src/kitden/web/static/js/gateway.js src/kitden/web/static/style.css docs/design.md tests/frontend/parts.test.mjs tests/frontend/store.test.mjs tests/unit/test_page_words.py
@@ -511,7 +511,7 @@ git commit -m "Project menu with own rules, and a scope bar on the Gateway"
   - The page head: title "Gateway", lede "Connect your agents. Shape what they can use.", a Map | List switch (`button[aria-pressed]`, `data-focus` `view:map` / `view:list`, it calls `go("gateway", { mode })`), then the scope bar. The body draws `viewMode(state, serverCount)`; Map is Task 1's map until Task 8.
   - `arrivalServer(model) -> Promise<{ held } | { outside } | null>` stays exported and finds the row in the gateway model; it never reads `/api/map`. Arrival: a selected `mcp_server` opens its row's Details (held, or outside by name); `tool` opens its server and the tool row; `client` selects the client row; `group` opens that group and focuses it. Selecting a server, tool or client writes `sel`; a gateway row writes none.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```js
 // gateway.test.mjs (old tests of serverFor, visibleRows go; offersSwitch, heldServer, kitdenLinks stay)
@@ -573,14 +573,14 @@ def test_the_gateway_lists_by_group_and_keeps_every_action():
   - `test_client_checkboxes_come_from_one_named_part`: the loop reads `offer.js` and `gateway-details.js`.
   - `test_gateway_rows_keep_addresses_behind_a_details_button`: `opens()` in `gateway.js`, no `row.summary`.
   - `test_the_gateway_opens_and_keeps_the_selected_server`: the outside pin is `setState({ selected: { kind: "mcp_server", name: row.name } })`.
-- [ ] **Step 2: Run them to see them fail.**
-- [ ] **Step 3: Implement.** The List is a `div[role=treegrid]` of `div[role=row]` with `aria-level`, `aria-expanded`, one row in the Tab order (roving `tabindex`), `data-focus` `row:<id>`; columns Name, Used by (18 px tiles), Tools, Action. A row's ›, or Enter, opens its Details docked; a gateway row and a client row open theirs.
+- [x] **Step 2: Run them to see them fail.**
+- [x] **Step 3: Implement.** The List is a `div[role=treegrid]` of `div[role=row]` with `aria-level`, `aria-expanded`, one row in the Tab order (roving `tabindex`), `data-focus` `row:<id>`; columns Name, Used by (18 px tiles), Tools, Action. A row's ›, or Enter, opens its Details docked; a gateway row and a client row open theirs.
   Builder call: the List starts with a Clients group and each gateway has its own row, so every Details the map opens has a keyboard path.
   Builder call: a tool row's tag says "Read" or "Write" only when the server says so; a guess from the name says "May write".
   Builder call: an outside row shows no tool count: Kitden does not know it.
-- [ ] **Step 4: Update `docs/design.md`:** the Gateway section's intro and the "Kitden gateway card" row become a "Gateway List" row (groups, columns, keys, "Move in…") and an "Outside server, client and gateway Details" row; the Client marks sentence about the route diagram goes; Motion principle 2 says "A link on a map draws once when it appears, then rests."; the "Route focus" pattern row goes.
-- [ ] **Step 5: Run** the four checks → PASS. In the demo (medium and large), with the keyboard only: open each kind of Details from the List, Move in…, Set up in Codex…, Add another gateway….
-- [ ] **Step 6: Commit**
+- [x] **Step 4: Update `docs/design.md`:** the Gateway section's intro and the "Kitden gateway card" row become a "Gateway List" row (groups, columns, keys, "Move in…") and an "Outside server, client and gateway Details" row; the Client marks sentence about the route diagram goes; Motion principle 2 says "A link on a map draws once when it appears, then rests."; the "Route focus" pattern row goes.
+- [x] **Step 5: Run** the four checks → PASS. In the demo (medium and large), with the keyboard only: open each kind of Details from the List, Move in…, Set up in Codex…, Add another gateway….
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/kitden/web/static/js/gateway.js src/kitden/web/static/js/gateway-details.js src/kitden/web/static/js/dom.js src/kitden/web/static/js/panel.js src/kitden/web/static/style.css docs/design.md tests/frontend/gateway.test.mjs tests/frontend/focus.test.mjs tests/frontend/context.test.mjs tests/frontend/gateway-details.test.mjs tests/unit/test_page_words.py
@@ -609,8 +609,8 @@ git commit -m "Gateway: a List with Details for clients, gateways and outside se
   - `tools.js` (the Library's switch list until Part 5): the strict line "Only tools that are on are offered; a new tool waits." and `aria-label` "Strict: only tools that are on".
   - `SETUP_SERVER_ENABLE = "setup_server.enable"`; `enable_steps(adapters, client) -> list[Step]` turns the client's `kitden` entry back on, only where Step 1's docs check confirms the key; the client card then offers `` `Turn it on in ${client}…` ``; other clients get the sentence `` `Turn it on in ${client}'s own MCP settings.` ``. Review title `` `Turn on the kitden entry in ${client}` `` (in `PLACE_IN_TITLE`); Changes line "Turned on the kitden entry · <client>".
 
-- [ ] **Step 1: Check the client docs** for turning an MCP entry back on: Codex's `[mcp_servers.<name>] enabled` (developers.openai.com/codex, MCP and config reference), Cursor's MCP settings, Claude Code's settings for a user entry. Write the check date in a comment beside `enable_steps`. Build the step only for what the docs confirm and Kitden already reads as "off" (`codex.py` reads `enabled`); anything else is "not checked" and gets the sentence.
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 1: Check the client docs** for turning an MCP entry back on: Codex's `[mcp_servers.<name>] enabled` (developers.openai.com/codex, MCP and config reference), Cursor's MCP settings, Claude Code's settings for a user entry. Write the check date in a comment beside `enable_steps`. Build the step only for what the docs confirm and Kitden already reads as "off" (`codex.py` reads `enabled`); anything else is "not checked" and gets the sentence.
+- [x] **Step 2: Write the failing tests**
 
 ```js
 // gateway-details.test.mjs
@@ -665,14 +665,14 @@ def test_tool_and_server_details_use_the_owner_words():
 ```
 
   Update `test_the_tool_list_has_a_strict_switch` to `"Strict: only tools that are on"`; `AT_ONCE` copies in `test_after.py` and `test_local_gateway_views.py`; `test_cancel_and_a_refused_preview_go_back_to_details` to `keepFrom(() => showHeld(`; `test_readme_names_the_management_actions` keeps passing.
-- [ ] **Step 3: Run them to see them fail.**
-- [ ] **Step 4: Implement.** The tool card reads `/api/gateway/tools?server=&project=` for `detail` (description, calls, `follows`, and `shared`: add `shared` to each tool in `tools_view`, its state with an empty chain). A review opened from these cards comes back to them (`keepFrom`). In `docs/development.md` step 5 reads: 'Turn strict mode on in the server's Details ("Turn strict mode on…") and turn one tool off.'
+- [x] **Step 3: Run them to see them fail.**
+- [x] **Step 4: Implement.** The tool card reads `/api/gateway/tools?server=&project=` for `detail` (description, calls, `follows`, and `shared`: add `shared` to each tool in `tools_view`, its state with an empty chain). A review opened from these cards comes back to them (`keepFrom`). In `docs/development.md` step 5 reads: 'Turn strict mode on in the server's Details ("Turn strict mode on…") and turn one tool off.'
   Builder call: with its server off a tool offers no action, only a way to its server: a tool rule there would change nothing anyone can call.
   Builder call: "for all projects" flips the shared state; "in one project" flips the state shown.
   Builder call: the Library's Details of a held server keep `tools.js`'s switch list until Part 5 moves servers to the Gateway.
-- [ ] **Step 5: Update `docs/design.md`:** "Tool switches" and "A switch changes" become "Tool Details" (facts, the sentence, actions in order, the project choice in the column, "Server off") and "Server Details" (facts, every server action, strict words); a switch no longer flips in place on the Gateway: the block's mark and link change after `verified`.
-- [ ] **Step 6: Run** the four checks and `tests/unit/test_mcp_server.py` → PASS.
-- [ ] **Step 7: Commit**
+- [x] **Step 5: Update `docs/design.md`:** "Tool switches" and "A switch changes" become "Tool Details" (facts, the sentence, actions in order, the project choice in the column, "Server off") and "Server Details" (facts, every server action, strict words); a switch no longer flips in place on the Gateway: the block's mark and link change after `verified`.
+- [x] **Step 6: Run** the four checks and `tests/unit/test_mcp_server.py` → PASS.
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/kitden/web/static/js/gateway-details.js src/kitden/web/static/js/details.js src/kitden/web/static/js/gateway.js src/kitden/web/static/js/parts.js src/kitden/web/static/js/tools.js src/kitden/web/static/js/review.js src/kitden/views/after.py src/kitden/changes/actions.py src/kitden/views/setup_server.py src/kitden/local_gateway/views.py src/kitden/web/app.py docs/design.md docs/development.md tests/frontend/gateway-details.test.mjs tests/frontend/parts.test.mjs tests/frontend/panel.test.mjs tests/unit/test_after.py tests/unit/test_local_gateway_views.py tests/unit/test_setup_server.py tests/unit/test_page_words.py tests/unit/test_docs_words.py
@@ -693,7 +693,7 @@ git commit -m "Gateway Details for tools and servers in the owner's words"
 - Width: `isNarrow(box width, isPanelOpen() && docked)` picks the narrow layout; a `ResizeObserver` on the map box redraws without drawing links again.
 - Links: on the first draw of the page every link is put in `drawn` (they show at once); a link that appears later (an unfold, or after Task 10's `verified`) draws once; nothing moves while idle. An unfold uses `unfoldDelays`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```js
 // gateway.test.mjs
@@ -723,13 +723,13 @@ def test_the_map_says_the_link_is_the_state():
     assert ".link.direct" in CSS and "var(--lamp-warn)" in CSS.split(".link.direct")[1].split("}")[0]
 ```
 
-- [ ] **Step 2: Run them to see them fail.**
-- [ ] **Step 3: Implement.** Blocks (Components frame): client 150×54 with its 28 px tile, name 12/600 and a 6 px dot (`--lamp-on` / `--lamp-off`) before its state; held 170 wide with a 28 px icon tile, name, meta and a fold count pill on the right edge; open: `--route` border and handle; tool 190×34 with an 8 px square mark, filled `--route` when its `effective` state is on, hollow (`--lamp-off` border) on `--dim` when off; outside on `--dim` with the grip (`--lamp-off`) and a `--lamp-warn` in-handle; the tag "This project" / "Only this project" in `--route` 11 px; selected: `--route-soft` fill and `--route` border; lit links `--route` 1.6 px; a cut name keeps the whole name in `title` and `aria-label`.
+- [x] **Step 2: Run them to see them fail.**
+- [x] **Step 3: Implement.** Blocks (Components frame): client 150×54 with its 28 px tile, name 12/600 and a 6 px dot (`--lamp-on` / `--lamp-off`) before its state; held 170 wide with a 28 px icon tile, name, meta and a fold count pill on the right edge; open: `--route` border and handle; tool 190×34 with an 8 px square mark, filled `--route` when its `effective` state is on, hollow (`--lamp-off` border) on `--dim` when off; outside on `--dim` with the grip (`--lamp-off`) and a `--lamp-warn` in-handle; the tag "This project" / "Only this project" in `--route` 11 px; selected: `--route-soft` fill and `--route` border; lit links `--route` 1.6 px; a cut name keeps the whole name in `title` and `aria-label`.
   Builder call: direct lines are always elbows; R1's curves are not drawn, so one look means one thing.
   Builder call: links shown on the page's first draw do not draw; only links that appear later do.
-- [ ] **Step 4: Update `docs/design.md`:** Color roles: "A server a client sets up on its own is joined to that client by a faint amber elbow (`--lamp-warn` at 55%): its calls skip Kitden's rules. Amber here marks a route outside the rules, not a fault." (the old "Gateway routes use the accent family" sentence goes). Gateway section rows: "Gateway map" (columns, blocks, the link is the state, groups and "N more", outside and grips, tags, selection lights every client's path, narrow N1, first run R1). Motion: an "Unfold" row (links draw, then children fade 15 ms apart, at most 300 ms; reduced motion shows the end) and "Link" (draws once when it appears).
-- [ ] **Step 5: Run** the four checks → PASS. Look at it: demo medium at 1440 px with Details open and closed, 1100 px, 900 px; both themes (T1); reduced motion; Tab through every block; nothing moves while idle.
-- [ ] **Step 6: Commit**
+- [x] **Step 4: Update `docs/design.md`:** Color roles: "A server a client sets up on its own is joined to that client by a faint amber elbow (`--lamp-warn` at 55%): its calls skip Kitden's rules. Amber here marks a route outside the rules, not a fault." (the old "Gateway routes use the accent family" sentence goes). Gateway section rows: "Gateway map" (columns, blocks, the link is the state, groups and "N more", outside and grips, tags, selection lights every client's path, narrow N1, first run R1). Motion: an "Unfold" row (links draw, then children fade 15 ms apart, at most 300 ms; reduced motion shows the end) and "Link" (draws once when it appears).
+- [x] **Step 5: Run** the four checks → PASS. Look at it: demo medium at 1440 px with Details open and closed, 1100 px, 900 px; both themes (T1); reduced motion; Tab through every block; nothing moves while idle.
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/kitden/web/static/js/gateway.js src/kitden/web/static/js/map.js src/kitden/web/static/style.css docs/design.md tests/frontend/gateway.test.mjs tests/frontend/map.test.mjs tests/unit/test_page_words.py
@@ -749,7 +749,7 @@ git commit -m "Gateway: the map with lit paths, grips, tags and a first run"
 - Produces: `const MAP_PAGES = ["gateway"]` in `app.js`, not exported (`app.js` runs `start()` on import; Part 5 adds `"library"` there): on such a page typing in `#q` calls `go(state.view, { q })` and stays; elsewhere today's behaviour stays (`go("library", { q })`). The Gateway runs `findIn(model, state.q)`: matches lit, every other block at opacity 0.35 and links at 0.25 (`.map.finding`), the `open` set added to the open blocks (a match behind "N more" shows its group whole), the same rows lit and parents opened in the List, and a chip `plural(n, "match", "matches")` beside the search (`role="status"`). Escape in `#q` on a map page clears `q`.
 - Produces in `map.js` (exported, for every map page): `findChip(found) -> string | null`: null for no search, "No matches" for none, else `plural(n, "match", "matches")`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```js
 test('find lights both docs and opens what hides them', () => {
@@ -769,10 +769,10 @@ def test_search_on_a_map_page_finds_on_that_page():
     assert ".map.finding" in CSS
 ```
 
-- [ ] **Step 2: Run them to see them fail.** Then **implement**.
-- [ ] **Step 3: Update `docs/design.md`:** on the Gateway the search finds on the page: matches light up, the rest dims to 35%, a folded server opens to show a matching tool, a chip says "N matches", Escape clears; Overview and Changes still send a search to the Library.
-- [ ] **Step 4: Run** the four checks → PASS.
-- [ ] **Step 5: Commit**
+- [x] **Step 2: Run them to see them fail.** Then **implement**.
+- [x] **Step 3: Update `docs/design.md`:** on the Gateway the search finds on the page: matches light up, the rest dims to 35%, a folded server opens to show a matching tool, a chip says "N matches", Escape clears; Overview and Changes still send a search to the Library.
+- [x] **Step 4: Run** the four checks → PASS.
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kitden/web/static/js/app.js src/kitden/web/static/js/gateway.js src/kitden/web/static/js/map.js src/kitden/web/static/style.css docs/design.md tests/frontend/gateway.test.mjs tests/unit/test_page_words.py
@@ -803,7 +803,7 @@ git commit -m "Gateway: the search finds on the page"
 - Moved since (Task 12): the map review now lives in `map-review.js` and the drag (with `dropBody`) in `gateway-drag.js`; `appliedToast` stays in `review.js`.
 - Produces in `gatewayTree`: option `preview: { name, kind } | null` (`kind` `"remote"` or `"local"`): a block `preview:<name>` (kind and state `"preview"`) in `group:kitden:<kind>`, with a `preview` link from `gateway:kitden`; the outside row being moved hides its `direct` links while it is there.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```js
 // review.test.mjs
@@ -844,14 +844,14 @@ def test_the_map_review_bar_waits_for_verified():
     assert "Sign in after Apply" not in review
 ```
 
-- [ ] **Step 2: Run them to see them fail.** Then **implement.**
+- [x] **Step 2: Run them to see them fail.** Then **implement.**
   Builder call: the bar names every client the steps write, not the one being written: the engine's progress event names no step, and it writes copies, removals, files and then gateway steps, not in the preview's order.
   Builder call: "Show changes" moves the same preview into the docked column; Cancel there ends it, so one change never has two Apply buttons.
   Builder call: a refused map preview keeps only Cancel: trying again would be refused for the same reason.
   Builder call: a drop always previews a move into the Kitden gateway; a registered gateway stays reachable through "Move into the gateway…".
-- [ ] **Step 3: Update `docs/design.md`:** Components "Review bar" (A1–A3: what it says, Apply counts steps, Cancel waits, an error stays and says "Nothing was changed.", "Try again", "Show changes"); Gateway "Drag a server in" (grip, "Drop to add", the preview, the keyboard path "Move in…"); Motion "Map preview" (the preview block turns solid and its link draws once only after `verified`; the toast offers Undo).
-- [ ] **Step 4: Run** the four checks → PASS. In the demo: drag `github` in, Apply, see the block turn solid and its link draw once, Undo from the toast; a drag cancelled with Escape; the same by "Move in…" in the List.
-- [ ] **Step 5: Commit**
+- [x] **Step 3: Update `docs/design.md`:** Components "Review bar" (A1–A3: what it says, Apply counts steps, Cancel waits, an error stays and says "Nothing was changed.", "Try again", "Show changes"); Gateway "Drag a server in" (grip, "Drop to add", the preview, the keyboard path "Move in…"); Motion "Map preview" (the preview block turns solid and its link draws once only after `verified`; the toast offers Undo).
+- [x] **Step 4: Run** the four checks → PASS. In the demo: drag `github` in, Apply, see the block turn solid and its link draw once, Undo from the toast; a drag cancelled with Escape; the same by "Move in…" in the List.
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kitden/web/static/js/review.js src/kitden/web/static/js/details.js src/kitden/web/static/js/gateway.js src/kitden/web/static/js/map.js src/kitden/web/static/style.css docs/design.md tests/frontend/review.test.mjs tests/frontend/gateway.test.mjs tests/frontend/map.test.mjs tests/unit/test_page_words.py
@@ -866,7 +866,7 @@ git commit -m "Map: a review bar on the canvas, and drag a server in"
 - Modify: `README.md` ("Use one gateway for every client", "The Kitden gateway: tools per project"), `docs/development.md` ("Speed": the gateway view number; "Check before a release": a drag step), `docs/design.md` (one read-through), `tests/unit/test_docs_words.py`
 - `ROADMAP.md` only under the master plan's rule.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 def test_readme_shows_the_gateway_as_a_tree_with_a_list():
@@ -878,19 +878,19 @@ def test_readme_shows_the_gateway_as_a_tree_with_a_list():
         assert gone not in readme, gone
 ```
 
-- [ ] **Step 2: Run it to see it fail.**
-- [ ] **Step 3: Write the README paragraphs,** short and plain: the Gateway is a tree (clients, the gateway, its servers, their tools) or a List; a link is the state; a server a client sets up on its own sits under "Outside the gateway", joined by a faint amber line; click a server to see its tools and a tool to see its path and Details; Details sit beside the page and hold every action ("Turn off for all projects…", "Turn off in one project…", "Use the shared rule…", strict mode, Remove, Put back, the Keychain); drag an outside server onto the servers to see the Move preview on the map, or use "Move in…"; nothing changes until Apply, and a call already running is not stopped. Keep every pinned README sentence.
-- [ ] **Step 4: docs/development.md:** "Speed" names the `gateway view` number and `--probe`, and records the probe's numbers with the date and machine; "Check before a release" gains one step numbered after the last existing one (24 today; check the file first): "Drag a server onto the servers on the Gateway map, Apply, and check a new session reaches it through the gateway; Undo from the toast." and "Not run yet for step <N>: Part 4 was tested with sandbox files only."
-- [ ] **Step 5: Read `docs/design.md` once** for this part's rows (Color roles, Details beside the page, picker and scope bar, Gateway List, Details, map, find, review bar, drag, Motion): one voice, no repeats, every new word pinned.
-- [ ] **Step 6: Run** all four checks and `uv run python scripts/measure-start.py` → PASS.
-- [ ] **Step 7: Commit**
+- [x] **Step 2: Run it to see it fail.**
+- [x] **Step 3: Write the README paragraphs,** short and plain: the Gateway is a tree (clients, the gateway, its servers, their tools) or a List; a link is the state; a server a client sets up on its own sits under "Outside the gateway", joined by a faint amber line; click a server to see its tools and a tool to see its path and Details; Details sit beside the page and hold every action ("Turn off for all projects…", "Turn off in one project…", "Use the shared rule…", strict mode, Remove, Put back, the Keychain); drag an outside server onto the servers to see the Move preview on the map, or use "Move in…"; nothing changes until Apply, and a call already running is not stopped. Keep every pinned README sentence.
+- [x] **Step 4: docs/development.md:** "Speed" names the `gateway view` number and `--probe`, and records the probe's numbers with the date and machine; "Check before a release" gains one step numbered after the last existing one (24 today; check the file first): "Drag a server onto the servers on the Gateway map, Apply, and check a new session reaches it through the gateway; Undo from the toast." and "Not run yet for step <N>: Part 4 was tested with sandbox files only."
+- [x] **Step 5: Read `docs/design.md` once** for this part's rows (Color roles, Details beside the page, picker and scope bar, Gateway List, Details, map, find, review bar, drag, Motion): one voice, no repeats, every new word pinned.
+- [x] **Step 6: Run** all four checks and `uv run python scripts/measure-start.py` → PASS.
+- [x] **Step 7: Commit**
 
 ```bash
 git add README.md docs/development.md docs/design.md tests/unit/test_docs_words.py
 git commit -m "Docs: the Gateway map and list"
 ```
 
-- [ ] **Step 8: Report.** The probe's numbers (Task 1, both versions, and `gateway view` before and after Task 4). If `git status` still shows `ROADMAP.md` modified by the owner, give this line for "### Not released yet" instead of editing it: "**The Gateway is a map and a list:** clients, the gateway, its servers and their tools in one tree, or a List past 15 servers; a link is the state; Details sit beside the page with every action in the owner's words ("On", "Off", "Use the shared rule…"); servers outside the gateway are joined by a faint amber line and can be dragged in, with the preview on the map; the project menu counts each project's own rules; the search finds on the page." Once the owner has committed it, move Part 4's line from "## Planned" to "### Not released yet" with these words, and stage `ROADMAP.md` too.
+- [x] **Step 8: Report.** The probe's numbers (Task 1, both versions, and `gateway view` before and after Task 4). If `git status` still shows `ROADMAP.md` modified by the owner, give this line for "### Not released yet" instead of editing it: "**The Gateway is a map and a list:** clients, the gateway, its servers and their tools in one tree, or a List past 15 servers; a link is the state; Details sit beside the page with every action in the owner's words ("On", "Off", "Use the shared rule…"); servers outside the gateway are joined by a faint amber line and can be dragged in, with the preview on the map; the project menu counts each project's own rules; the search finds on the page." Once the owner has committed it, move Part 4's line from "## Planned" to "### Not released yet" with these words, and stage `ROADMAP.md` too.
 
 ---
 

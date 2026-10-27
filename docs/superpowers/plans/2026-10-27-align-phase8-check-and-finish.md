@@ -124,25 +124,25 @@
   - full `https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/…` addresses;
   - `docs/images/logo.svg` stays, because other places may link to it.
 
-- [ ] **Step 1: Write the failing tests** in `tests/unit/test_hero.py`. They read the two committed files and parse them with `xml.etree`:
+- [x] **Step 1: Write the failing tests** in `tests/unit/test_hero.py`. They read the two committed files and parse them with `xml.etree`:
   - `test_the_hero_loads_nothing_and_draws_its_words_as_paths`: no `<text>`, `<script>`, `<foreignObject>`, `@import`, `url(http` or `href` to another file;
   - `test_the_hero_has_twelve_puffs_with_the_logo_times`: 12 puffs; their delays are 900 + 110·i ms (400 + 500 + 110·i); the cycle is 10 510 ms; `infinite`; the puff and light keyframes match the times above;
   - `test_between_plays_the_hero_is_the_plain_logo` (Review Focus 3): from the active end to 100 %, every puff keyframe has opacity 0 and the light 0, and the 0 % frames are 0;
   - `test_reduced_motion_stills_the_hero` (Review Focus 4): the media rule sets `animation: none`, and the base opacity of puffs and light is 0;
   - `test_the_hero_colours_follow_the_theme` (Review Focus 2): light and dark colours as above, the house #C85835 in both, and the wordmark at least 3:1 on #FFFFFF and on #0D1117 (use the helper `test_contrast.py` already has);
   - `test_the_readme_shows_the_hero_and_the_slogan`: `<picture>` with both files at full `https://` addresses, and the slogan line.
-- [ ] **Step 2: Run** `uv run pytest tests/unit/test_hero.py -q`. Expected: FAIL (no files).
-- [ ] **Step 3: Write `scripts/make_hero.py`.**
+- [x] **Step 2: Run** `uv run pytest tests/unit/test_hero.py -q`. Expected: FAIL (no files).
+- [x] **Step 3: Write `scripts/make_hero.py`.**
   - **Font:** fontTools `TTFont`, then `varLib.instancer.instantiateVariableFont(font, {"wght": 600})`.
   - **Glyph paths:** use `SVGPathPen`, with the kerning from GPOS where it is easy and plain advance widths otherwise. The script must not need the network.
   - **Anchor:** measure the d's bounding box from its glyph for the smoke anchor.
   - **Comment:** one comment at the top names the source values (logo-motion.md) and the command that runs it.
-- [ ] **Step 4:** Run the script, then `uv run pytest tests/unit/test_hero.py -q`. Expected: PASS.
-- [ ] **Step 5: Look at it.**
+- [x] **Step 4:** Run the script, then `uv run pytest tests/unit/test_hero.py -q`. Expected: PASS.
+- [x] **Step 5: Look at it.**
   - **In the browser:** serve `docs/images` with your own `python -m http.server` (stop it by its pid). Open both files in the browser, beside `design/kitden-cloud-smoke.html`, with light and dark. The stream must read like the mockup: a soft ribbon over "en", not twelve dots.
   - **On GitHub:** check how GitHub and PyPI show an animated SVG in an `<img>`, from their docs or a known repository, and write the date and source in design.md's new line.
-- [ ] **Step 6: Edit README.md's top block and design.md, and run all four checks.**
-- [ ] **Step 7: Commit:** `README: an animated hero with the slogan`.
+- [x] **Step 6: Edit README.md's top block and design.md, and run all four checks.**
+- [x] **Step 7: Commit:** `README: an animated hero with the slogan`.
 
 ### Task 2: The carried fixes
 
@@ -162,19 +162,19 @@
 - **Safari and `:focus-visible` on SVG.** Safari does not always match `:focus-visible` on SVG paths. A hit path is reached by Tab and its look is the hover look, so the rule uses `:focus` for the hit paths. A click that focuses a path shows the same hover look, which is harmless.
 - **The project menu's active ring.** The mockup decides the look (master plan), and it has no ring when the menu opens by mouse. So the ring shows only when the menu was opened by keyboard, or after an arrow key.
 
-- [ ] **Step 1: Write the failing tests.**
+- [x] **Step 1: Write the failing tests.**
   - `drawSoon draws once on the next frame and clears its timer`;
   - `drawSoon draws once after 120 ms when no frame comes` (Review Focus 5; a fake `frame` that never fires);
   - `the hit paths take the hover look on keyboard focus without focus-visible` (a CSS rule test);
   - `the project menu opened by mouse shows no active ring; an arrow key shows it`;
   - `how-it-works-dark.svg uses no old amber`.
-- [ ] **Step 2: Run** them. Expected: FAIL.
-- [ ] **Step 3: Implement.**
+- [x] **Step 2: Run** them. Expected: FAIL.
+- [x] **Step 3: Implement.**
   - mapView's motion clock (`kick`, map-view.js ~1034) waits for a frame through `drawSoon`.
   - A stalled frame then still steps the motions to their end and settles `run`'s promise.
   - Keep `draw` itself the same size.
-- [ ] **Step 4: Run** all four checks. Expected: PASS.
-- [ ] **Step 5: Commit:** `Map: a draw lands without frames; Safari focus; menu ring`.
+- [x] **Step 4: Run** all four checks. Expected: PASS.
+- [x] **Step 5: Commit:** `Map: a draw lands without frames; Safari focus; menu ring`.
 
 ### Task 3: Check against the mockup and the motion spec
 
@@ -199,10 +199,10 @@
   - record a performance trace in the browser and look for long tasks over 50 ms during the select;
   - note them and fix one only if it is simple.
 
-- [ ] **Step 1:** Start the demo and the mockup server. Walk every frame and motion, and write `docs/mockup/phase8-check.md` as you go.
-- [ ] **Step 2:** For each small difference: write the failing test (for a behaviour; a look-only CSS fix needs no test), fix it, and run the four checks. Commit in small plain commits, e.g. `Gateway: the List row height of the mockup`.
-- [ ] **Step 3:** Move each left difference into ROADMAP.md "Next" in one line.
-- [ ] **Step 4:** Stop your demo and server by their pids. Run the four checks. Commit `docs/mockup/phase8-check.md`: `Check: Phase 8 side by side with the mockup`.
+- [x] **Step 1:** Start the demo and the mockup server. Walk every frame and motion, and write `docs/mockup/phase8-check.md` as you go.
+- [x] **Step 2:** For each small difference: write the failing test (for a behaviour; a look-only CSS fix needs no test), fix it, and run the four checks. Commit in small plain commits, e.g. `Gateway: the List row height of the mockup`.
+- [x] **Step 3:** Move each left difference into ROADMAP.md "Next" in one line.
+- [x] **Step 4:** Stop your demo and server by their pids. Run the four checks. Commit `docs/mockup/phase8-check.md`: `Check: Phase 8 side by side with the mockup`.
 
 ### Task 4: Docs
 
@@ -235,8 +235,8 @@
   - tick Tasks 8.1–8.3 and the Part 4 checkboxes that are done;
   - add "Notes from Phase 8".
 
-- [ ] **Step 1: Write the failing test** `test_every_readme_image_is_a_full_address_to_a_file_we_have`. Every `src` and `srcset` in README.md starts with `https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/`, and the file exists in `docs/images/`. Add `test_the_readme_names_no_old_review` (no "Every change opens a review first").
-- [ ] **Step 2: Run** it. Expected: FAIL (review.jpg and the old text are still there).
-- [ ] **Step 3: Update the docs.** Take the shots and rewrite the README sections. Update design.md (link `docs/mockup/phase8-check.md`) and ROADMAP.md, write the release notes draft, and tick the plan.
-- [ ] **Step 4: Run** all four checks. Expected: PASS.
-- [ ] **Step 5: Commit:** `Docs: README, design and roadmap for the new look`.
+- [x] **Step 1: Write the failing test** `test_every_readme_image_is_a_full_address_to_a_file_we_have`. Every `src` and `srcset` in README.md starts with `https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/`, and the file exists in `docs/images/`. Add `test_the_readme_names_no_old_review` (no "Every change opens a review first").
+- [x] **Step 2: Run** it. Expected: FAIL (review.jpg and the old text are still there).
+- [x] **Step 3: Update the docs.** Take the shots and rewrite the README sections. Update design.md (link `docs/mockup/phase8-check.md`) and ROADMAP.md, write the release notes draft, and tick the plan.
+- [x] **Step 4: Run** all four checks. Expected: PASS.
+- [x] **Step 5: Commit:** `Docs: README, design and roadmap for the new look`.

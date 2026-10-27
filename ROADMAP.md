@@ -12,7 +12,13 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **The mockup's look:** Inter and JetBrains Mono come with Kitden, line icons in every place,
   the mockup's colours in both themes, a new side rail and top bar, and calm motion with one
   shared timing. Under the pointer a grid of dots shows on the page, and a map block or an
-  Overview card takes a soft glow; both are off under reduced motion.
+  Overview card takes a soft glow; both are off under reduced motion. Overview, Gateway and
+  Library use the whole width, and the buttons in Details are as wide as their words. The page
+  was checked beside the mockup, frame by frame and motion by motion
+  ([phase8-check.md](docs/mockup/phase8-check.md)).
+- **README:** an animated hero at the top (the door glows and smoke drifts from the d, then it
+  rests), the slogan "Your AI coding tools, under one roof.", and new screenshots of the four
+  pages in light and dark.
 - **The logo's gesture:** when the page opens, and when the pointer comes to the logo, the door
   of the house on the rail glows warm and a soft stream of smoke leaves the d and drifts right,
   about four seconds; nothing under reduced motion. The logo is a link to the Overview. The
@@ -163,6 +169,12 @@ What Kitden does today and what comes next. Ideas and bugs:
   checks them after it opens, so it never waits for a client to start.
 - **Measured start:** a script reports the time to the first usable page and to complete data on a
   large sandbox setup: 0.1 s and 0.2 s on an M4 Max.
+- **Try it on a sample:** `kitden demo` opens the page on a sample setup in a temporary folder; it
+  runs no client, uses no Keychain and stays offline.
+- **Secrets in the Keychain:** a server moved into the Kitden gateway keeps its secrets in your
+  macOS Keychain, and a backup or a change record says when it holds a secret.
+- **Instructions:** CLAUDE.md, AGENTS.md, Cursor rules, Claude Code's commands and agents, and a
+  tool count for each server in the gateway.
 
 ### 0.2.0
 
@@ -203,11 +215,11 @@ and a master plan with one plan per part,
 [docs/superpowers/plans/2026-10-21-review-follow-up.md](docs/superpowers/plans/2026-10-21-review-follow-up.md).
 The parts, in order:
 
-5. **Secrets have a lifecycle:** gateway secrets in the Keychain; backups say when they hold a
-   secret; logins in one place, so OAuth servers move into the gateway too.
-6. **The whole picture:** an Instructions tab (CLAUDE.md, AGENTS.md, Cursor rules, commands,
-   agents); tool counts.
-7. **Linux and Windows.**
+- **Part 5, logins in one place,** so OAuth servers move into the gateway too. Its Keychain part
+  is done.
+- **Part 7, Linux and Windows.**
+
+Part 6, the Instructions tab and tool counts, is done.
 
 ## Next
 
@@ -219,6 +231,34 @@ The parts, in order:
 - Overview: the setup map's numbers count up (900 ms, at 500 and 560 ms), as in the mockup.
 - Client tiles in the light theme: the mockup's are dark, Kitden's follow the theme (owner to
   judge).
+- Owner to check in Safari: a map link's look on Tab, the project menu's ring, and the README
+  hero's smoke ([phase8-check.md](docs/mockup/phase8-check.md)).
+
+Left for later in the alignment plan's phase notes:
+
+- Gateway map: a long count or tag can still run out of its block; while blocks move, a link's ×
+  can jump along it; links that run behind the gateway block look as if they enter it (owner to
+  decide).
+- Gateway: the Map | List pill takes a key while another project is read; the add-gateway form
+  closes on a quiet redraw.
+- Disconnect a client from a registered gateway (Obot, MetaMCP), and forget a registered gateway.
+- The rail's Overview label gives way with "…" at a three-digit count.
+- Add a server: ask each remote server once per tray whether it signs in; read the list once per
+  open panel; the narrow drawer from More gives focus back to "+ Add".
+- Library: whether to draw the `@` imports Claude Code follows inside an AGENTS.md; a
+  "has it in <folder>" note in Add missing can be wrong for a plugin a project only turns off;
+  in a project, Add missing still lists MCP servers (an "Add missing servers…" on the Gateway
+  instead).
+- Library: "See it on the map" opens a Library item in the List, since the map has no arrival yet.
+- Library, smaller: a refusal can go stale during a drag, nested imports name only the top file, a
+  fold outlives a retyped search in the List, and the find chip can flash while rows land.
+- Screen readers: announce "Copied" after Copy.
+- Overview: one Update… for every old entry, so its card says In preview for an Agents-page row
+  too; read the gateway settings and the notes fewer times.
+- Changes: Redo… stays hidden after a later change that reversed the same request.
+- Code tidy-ups: the narrower project id for local items, the dead `flip` switch option, the
+  imports between the Add panel and Details, smaller Library helpers, and old frontend tests
+  that print a whole element when they fail.
 
 ## Later
 

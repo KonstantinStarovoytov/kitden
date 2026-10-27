@@ -16,6 +16,8 @@ export const OUT3 = (t) => 1 - (1 - t) ** 3;
 export const IN3 = (t) => t ** 3;
 
 // ?slow=2 in the address makes every time twice as long (for looking at a motion; never in the UI).
+// The start link's token redirect drops the query, so add it after the page has loaded once:
+// /?slow=4#gateway.
 const slow = (() => {
   if (typeof location === "undefined") return 1;
   const value = Number(new URLSearchParams(location.search).get("slow"));

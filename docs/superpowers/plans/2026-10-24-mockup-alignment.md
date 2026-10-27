@@ -12,7 +12,7 @@
 
 ## Where things stand (2026-10-24, main at 0270e9f)
 
-- Part 4 (Gateway map and list, shared pieces S.1–S.8) is built: all 11 tasks are on main, although its checkboxes are not ticked.
+- Part 4 (Gateway map and list, shared pieces S.1–S.8) is built: all 11 tasks are on main (its checkboxes were ticked in Phase 8, 2026-10-27).
 - Parts 5 (Library), 6 (Instructions, Overview, Changes), 7 (leftovers) and 8 are not started. This plan replaces their page work with the mockup's version. Their backend tasks stay and are reused (named per phase below).
 - Already there and reusable: the change engine (all-or-nothing inside one change, progress events), connect a client (`SETUP_SERVER`), remove a server (`GATEWAY_REMOVE`), move an outside server in (`GATEWAY_MOVE`, `local_move_steps`), tool rules (`rule_steps`, `rules_steps`), plugin install and remove for Claude Code and Codex, the drag of an outside server into the gateway (`gateway-drag.js`), the one-preview review bar (`map-review.js`).
 
@@ -285,9 +285,11 @@ Reuses Part 6 backend Task 5 (cards with `icon`, `name`, `clients`). **Files:** 
 
 **Carried from Phase 1:** `docs/images/how-it-works-dark.svg:47` still uses the old amber #E0A347. The active-option ring in the project menu also shows on the picked row when the menu opens by mouse; the mockup has no ring (owner to judge).
 
-- [ ] **Task 8.1 Side-by-side check.** For every frame in `design/kitden.pen`: run Kitden on the demo home (`docs/development.md`), set the same state, compare at 1440×900 in both themes. Use the Pencil MCP: `browser` `load-page` on the local Kitden URL and `return-screenshot`, next to `TakeScreenshot` of the frame. Note: Pencil's browser node swallows synthetic clicks, so set states through the page's own functions or check interactions in a normal browser.
-- [ ] **Task 8.2 Motion check.** Walk motion-spec M1–M8 with the page at "slow" (a dev-only `?slow=4` URL flag that multiplies `D()`; not shown in the UI) and confirm each duration and curve.
-- [ ] **Task 8.3 Docs.** `docs/design.md` sections, README screenshots, `ROADMAP.md`, release notes (`docs/development.md`). Tick the Part 4 checkboxes that are done.
+- [x] **Task 8.1 Side-by-side check.** For every frame in `design/kitden.pen`: run Kitden on the demo home (`docs/development.md`), set the same state, compare at 1440×900 in both themes. Use the Pencil MCP: `browser` `load-page` on the local Kitden URL and `return-screenshot`, next to `TakeScreenshot` of the frame. Note: Pencil's browser node swallows synthetic clicks, so set states through the page's own functions or check interactions in a normal browser.
+- [x] **Task 8.2 Motion check.** Walk motion-spec M1–M8 with the page at "slow" (a dev-only `?slow=4` URL flag that multiplies `D()`; not shown in the UI) and confirm each duration and curve.
+- [x] **Task 8.3 Docs.** `docs/design.md` sections, README screenshots, `ROADMAP.md`, release notes (`docs/development.md`). Tick the Part 4 checkboxes that are done.
+
+**Notes from Phase 8** (plan `2026-10-27-align-phase8-check-and-finish.md`, done 2026-10-27). Built: the README's animated hero with the slogan, a map draw that lands when the browser holds frames back, link focus after a key (Safari), the project menu's ring only for a keyboard, and six look fixes from the side-by-side check (`docs/mockup/phase8-check.md`): "+ Add", the List look, the whole width, Details buttons as wide as their words, the lede, the project menu's items. The docs, the README screenshots and the release notes draft (`docs/releases/v0.3.0.md`) are up to date. Left for later: the lines in ROADMAP.md "Next" (the Details head, the Changes history line, the setup map's count-up, the client tiles in light, and every "Left for later" note above), and the Safari checks in phase8-check.md for the owner.
 
 ---
 
