@@ -1,6 +1,6 @@
 # Phase 7: Overview and Changes — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Bring the Overview and Changes pages in line with the mockup.
 
@@ -194,7 +194,7 @@
 
   There are no paths in any field.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `test_a_server_that_skips_the_gateway_is_a_move_in_card_with_its_body`;
   - `test_more_than_three_servers_give_one_more_card` (Review Focus, large sample);
   - `test_a_client_not_connected_gets_a_connect_card`;
@@ -203,10 +203,10 @@
   - `test_the_map_counts_servers_tools_plugins_skills_and_own_rules`;
   - `test_no_card_or_map_field_holds_a_path`;
   - the secrets sweep.
-- [ ] **Step 2: Run** them — expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** all four checks — expected: PASS.
-- [ ] **Step 5: Commit** — `Overview: cards with one action and the setup map's data`.
+- [x] **Step 2: Run** them — expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** all four checks — expected: PASS.
+- [x] **Step 5: Commit** — `Overview: cards with one action and the setup map's data`.
 
 ### Task 2: The Overview page
 
@@ -228,7 +228,7 @@
   - presses on the map blocks;
   - reduced motion that lands at once.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `the head says Your setup, connected. and the lede counts`;
   - `a card shows its icon, name, line, client tiles and one button`;
   - `Move in… adds its row; the button says In preview while it waits`;
@@ -241,11 +241,11 @@
   - `the Kitden gateway and Library blocks open their pages; a client block focuses its links`;
   - `under reduced motion everything lands at once`;
   - the pins and the contrast checks.
-- [ ] **Step 2: Run** them — expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Update `docs/design.md` and `ROADMAP.md`;** run all four checks — expected: PASS.
-- [ ] **Step 5: Check in a real browser** on the medium and large demo, at 1440×900 in both themes, beside the mockup's Overview.
-- [ ] **Step 6: Commit** — `Overview: your setup, connected`.
+- [x] **Step 2: Run** them — expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Update `docs/design.md` and `ROADMAP.md`;** run all four checks — expected: PASS.
+- [x] **Step 5: Check in a real browser** on the medium and large demo, at 1440×900 in both themes, beside the mockup's Overview.
+- [x] **Step 6: Commit** — `Overview: your setup, connected`.
 
 ### Task 3: Change entries
 
@@ -267,7 +267,7 @@
   - **A new change keeps its request** (`request`) in its record and its log line, with secrets kept out exactly as the rows' bodies are.
   - **A several-row change's title** is the first row's title plus " and <n> more".
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `test_one_entry_per_change_with_its_history_in_order`;
   - `test_a_several_row_change_is_titled_by_its_rows` (Review Focus);
   - `test_backup_words_follow_the_state`;
@@ -277,10 +277,10 @@
   - `test_entries_hold_no_paths_outside_technical`;
   - the secrets sweep;
   - a node test for the title.
-- [ ] **Step 2: Run** them — expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run** all four checks — expected: PASS.
-- [ ] **Step 5: Commit** — `Changes: one entry per change, with its history`.
+- [x] **Step 2: Run** them — expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run** all four checks — expected: PASS.
+- [x] **Step 5: Commit** — `Changes: one entry per change, with its history`.
 
 ### Task 4: The Changes page
 
@@ -308,7 +308,7 @@
   - Redo… as a fresh preview;
   - reduced motion that lands at once.
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `the timeline groups by Today, Yesterday and a date, with a rail and a dot per row`;
   - `a row shows time, title, client tiles, state and Undo`;
   - `undone and cancelled rows are muted with a strike; failed rows keep their phrase`;
@@ -320,8 +320,8 @@
   - `Technical details hold the paths`;
   - `under reduced motion everything lands at once`;
   - the pins and the contrast checks.
-- [ ] **Step 2: Run** them — expected: FAIL.
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Update `docs/design.md` and `ROADMAP.md`;** run all four checks — expected: PASS.
-- [ ] **Step 5: Check in a real browser** on the demo: apply a change, Undo it from Details, Redo… it, and open "See it on the map".
-- [ ] **Step 6: Commit** — `Changes: the timeline, Details and Redo…`.
+- [x] **Step 2: Run** them — expected: FAIL.
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Update `docs/design.md` and `ROADMAP.md`;** run all four checks — expected: PASS.
+- [x] **Step 5: Check in a real browser** on the demo: apply a change, Undo it from Details, Redo… it, and open "See it on the map".
+- [x] **Step 6: Commit** — `Changes: the timeline, Details and Redo…`.

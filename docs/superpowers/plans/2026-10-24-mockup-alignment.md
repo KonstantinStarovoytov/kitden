@@ -264,8 +264,18 @@ Reuses Part 5 backend Tasks 1, 2, 7 (local settings, plugin parts, `skill.rule`)
 
 Reuses Part 6 backend Task 5 (cards with `icon`, `name`, `clients`). **Files:** `static/js/overview.js`, `changes.js`, `review.js` (undo toast), `src/kitden/views/overview.py`. **Mockup:** `Overview`, `Changes`; motion-spec M8.
 
-- [ ] **Task 7.1 Overview.** "Your setup, connected." + counted lede + scope; cards with icon tile, name, one line, client tiles, one button (adds a tray preview, D22); hover a card focuses the mini-map; "Your setup" mini-map with foot "N projects · N have their own rules"; notes fold open as sentences. Fix the mockup's collapse jump: collapse the card and skip FLIP.
-- [ ] **Task 7.2 Changes.** Today / Yesterday groups with a rail and a dot per row; row = time, title, client tiles, lamp + word, Undo; undone row gets the strike line and muted title; first row selected with its panel open; Details card (Project, State, Backup, Takes effect, client tiles, history arrows, Technical details); "See it on the map"; Undo toast "Undid “…”. The backup is back in place." with "Redo…" as a fresh preview (D21).
+- [x] **Task 7.1 Overview.** "Your setup, connected." + counted lede + scope; cards with icon tile, name, one line, client tiles, one button (adds a tray preview, D22); hover a card focuses the mini-map; "Your setup" mini-map with foot "N projects · N have their own rules"; notes fold open as sentences. Fix the mockup's collapse jump: collapse the card and skip FLIP.
+- [x] **Task 7.2 Changes.** Today / Yesterday groups with a rail and a dot per row; row = time, title, client tiles, lamp + word, Undo; undone row gets the strike line and muted title; first row selected with its panel open; Details card (Project, State, Backup, Takes effect, client tiles, history arrows, Technical details); "See it on the map"; Undo toast "Undid “…”. The backup is back in place." with "Redo…" as a fresh preview (D21).
+
+**Notes from Phase 7** (plan `2026-10-27-align-phase7-overview-changes.md`, done 2026-10-27). Built: the Overview ("Your setup, connected.", attention and improve cards with one button each, the setup map, the card that leaves after Apply and comes back after Undo, the unreadable gateway settings card) and the Changes page (one entry per change with its history, the day timeline, Details, Undo with "Undid …" and Redo… as a fresh preview, "See it on the map"). A change of many rows is named by its rows, with the titles the tray shows at Apply (the Phase 3 carry is done). Also the owner's fix: open Details cover the hint line, and a single other action shows without More. Left for later:
+- One Update… body for every old entry, so the card cannot show In preview for an Agents-page row.
+- The gateway settings are read twice per Overview request; the Library map is read once per project with its own rules.
+- The notes are read again on every redraw while open.
+- The first Details open on every wide arrival at Changes (owner's call); on a narrow window they stay closed (ruling).
+- A Library item from "See it on the map" opens the Library List, because the Library map has no arrival yet; it opens in the project picked now.
+- Redo… stays hidden while a later verified change has the same request, even if a still later change reversed it.
+- Nothing logs a cancel, so no "Cancelled" entry; changes made before this phase keep "New change" row titles.
+- Old frontend tests that use `assert.equal(node, null)` print a whole fake element on failure.
 
 ## Phase 8: Check and finish
 
