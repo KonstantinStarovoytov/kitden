@@ -4,7 +4,7 @@
 // on each frame. A link the page acts on takes the pointer: a wide hit stroke, a hover look and a
 // small × on its middle. A selection dims what is off its path and lays an accent line over each
 // lit link. The page gives the hooks; the view knows nothing of servers, tools or clients.
-import { button, cutName, el, icon, plural, showWaits } from "./dom.js";
+import { button, byKeys, cutName, el, icon, plural, showWaits } from "./dom.js";
 import { blockLabel, crossPoint, drawPlan, enterDelays, foldable, foldsInto, LINK_MS, linkClass, linkDashed, linkKey, linkPath, unfoldDelays } from "./map.js";
 import { animateTo, CALM, D, IN3, OUT3, RETRACT, rollTo, unscaled } from "./motion.js";
 
@@ -731,7 +731,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHove
     if (item) item.path.classList.remove("hov");
     pointed = null;
     const focused = [...links.values()].find((other) => other.hit && other.hit === document.activeElement && other.hit.style.display !== "none");
-    if (focused) {
+    if (focused && byKeys()) {
       pointAt(focused);
       return;
     }
@@ -812,9 +812,12 @@ export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHove
     if (item.d) hit.setAttribute("d", item.d);
     hit.addEventListener("pointerover", () => pointAt(item));
     hit.addEventListener("pointerout", unpointSoon);
-    // Any focus points at it (`:focus`): Safari does not always match `:focus-visible` on an SVG
-    // path. A click that focuses it gets the same look, which does no harm.
-    hit.addEventListener("focus", () => pointAt(item));
+    // Only focus after a key points at it (`byKeys`: Safari does not always match `:focus-visible`
+    // on an SVG path). A mouse click focuses the hit too, and the panel gives that focus back when
+    // it closes, long after the pointer has gone; the click itself points at it (pressLink).
+    hit.addEventListener("focus", () => {
+      if (byKeys()) pointAt(item);
+    });
     hit.addEventListener("blur", unpointSoon);
     hit.addEventListener("click", () => pressLink(item));
     hit.addEventListener("keydown", (event) => keyOnHit(event, item));

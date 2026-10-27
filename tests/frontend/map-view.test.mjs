@@ -19,6 +19,12 @@ const tick = (ms) => {
   for (const fn of run) fn(now);
 };
 const settle = () => { while (frames.length) tick(10000); };
+// The page hears every key and pointer press first (dom.js byKeys): `key()` is a key press,
+// `press()` a pointer press, anywhere on the page.
+const heard = {};
+globalThis.window = { addEventListener: (type, fn) => { heard[type] = fn; } };
+const key = () => heard.keydown?.({});
+const press = () => heard.pointerdown?.({});
 // Every node under a root.
 const walk = (root) => root.children.flatMap((n) => [n, ...walk(n)]);
 const near = (a, b) => Math.abs(a - b) < 1e-6;
@@ -101,6 +107,7 @@ afterEach(() => settle());
 beforeEach(() => {
   now = 0;
   frames = [];
+  press();
   reduce(false);
   globalThis.document.hidden = false;
   globalThis.document.activeElement = null;
@@ -1050,22 +1057,33 @@ test('a hit follows its link while blocks move, and goes with it', async () => {
   assert.equal(xOf(v).hidden, true);
 });
 
-// Safari does not always match :focus-visible on an SVG path, so any focus gives the hover look:
-// Tab, and a click that focuses the hit (the same look, which does no harm).
+// Safari does not always match :focus-visible on an SVG path, so focus after a key gives the hover
+// look (dom.js byKeys); focus after a pointer press does not.
 test('the hit paths take the hover look on keyboard focus without focus-visible', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   reduce(true);
   const v = view({ links: LINKS });
   await v.draw(TREE, lay(), {});
   const [h, x, link] = [hitOf(v), xOf(v), v.node('c1>s1')];
+  const lit = () => [link.classList.contains('hov'), x.hidden];
+  const leave = () => { h.blur(); h.dispatch('blur'); t.mock.timers.tick(240); };
   h.matches = (selector) => selector !== ':focus-visible';
-  h.focus();
-  assert.ok(link.classList.contains('hov')); assert.equal(x.hidden, false);
-  h.blur(); h.dispatch('blur'); t.mock.timers.tick(240);
-  assert.ok(!link.classList.contains('hov')); assert.equal(x.hidden, true);
-  // A press still points at it.
-  h.dispatch('click');
-  assert.ok(link.classList.contains('hov')); assert.equal(x.hidden, false);
+  // Tab in Safari.
+  key(); h.focus();
+  assert.deepEqual(lit(), [true, false]);
+  leave();
+  assert.deepEqual(lit(), [false, true]);
+  // Escape closes the link's panel, and focus comes back to it.
+  key(); h.focus();
+  assert.deepEqual(lit(), [true, false]);
+  leave();
+  // Close by mouse: the panel gives focus back, and the link does not light.
+  press(); h.focus();
+  assert.deepEqual(lit(), [false, true]);
+  leave();
+  // A click still lights it.
+  press(); h.dispatch('click');
+  assert.deepEqual(lit(), [true, false]);
 });
 
 test('Delete with a modifier, or held down, removes nothing; a plain Delete removes once', async () => {
@@ -1090,11 +1108,15 @@ test('the link with keyboard focus keeps its look when the pointer passes over a
   await v.draw(TREE, lay(), {});
   const [a, b] = walk(v.area).filter((n) => n.classList?.contains('hit'));
   const [one, two, x] = [v.node('c1>s1'), v.node('c1>s2'), xOf(v)];
-  a.focus();
+  key(); a.focus();
   b.dispatch('pointerover'); b.dispatch('pointerout'); t.mock.timers.tick(240);
   // Its hover look is its only focus mark: it comes back, with the × on it.
   assert.deepEqual([one.classList.contains('hov'), two.classList.contains('hov')], [true, false]);
   assert.deepEqual([x.hidden, x.getAttribute('aria-label')], [false, 'Remove s1']);
+  // Focus that a mouse press left there (a panel gave it back) has no look to come back.
+  press();
+  b.dispatch('pointerover'); b.dispatch('pointerout'); t.mock.timers.tick(240);
+  assert.deepEqual([one.classList.contains('hov'), x.hidden], [false, true]);
 });
 
 test('a link that goes while it has keyboard focus does not come back as the focus look', async (t) => {
@@ -1102,8 +1124,7 @@ test('a link that goes while it has keyboard focus does not come back as the foc
   const v = view({ links: { ...LINKS, canHit: (l) => l.to === 's2' } });
   await v.draw(TREE, drawn(TREE), { motion: 'none' });
   const h = hitOf(v);
-  h.matches = () => true;
-  h.focus();
+  key(); h.focus();
   assert.ok(v.node('c1>s2').classList.contains('hov'));
   v.draw(NO_LINK, drawn(NO_LINK), {});
   assert.equal(xOf(v).hidden, true);

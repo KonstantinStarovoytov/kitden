@@ -624,9 +624,10 @@ div.map.beside .map-area::after { content: ""; position: absolute; top: 0; left:
 div.map .map-links { position: absolute; inset: 0; z-index: 0; overflow: visible; pointer-events: none; }
 /* The links the page acts on: a hit stroke 14 px wide over each (after the blocks in the page, under
    them in the picture, so a block wins where they meet) and the × on the middle of the one pointed
-   at. A hit shows no focus ring; any focus gives it the hover look (`:focus`: Safari does not
-   always match `:focus-visible` on SVG). Each hit has a layer of its own, in reading order for
-   Tab; a line that skips the gateway lies in the layer under the others (map-view.js). */
+   at. A hit shows no focus ring; keyboard focus gives it the hover look (focus after a key,
+   `byKeys` in dom.js: Safari does not always match `:focus-visible` on SVG). Each hit has a layer
+   of its own, in reading order for Tab; a line that skips the gateway lies in the layer under the
+   others (map-view.js). */
 div.map .map-hits { position: absolute; inset: 0; z-index: 0; overflow: visible; pointer-events: none; }
 div.map .map-hit { position: absolute; inset: 0; z-index: 1; overflow: visible; pointer-events: none; }
 div.map .map-hit.under { z-index: 0; }

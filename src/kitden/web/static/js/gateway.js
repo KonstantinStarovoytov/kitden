@@ -1,6 +1,6 @@
 // Gateway: the clients, the gateways and the MCP servers they reach, as a Map or a List. Each
 // row opens its Details beside the page (gateway-details.js).
-import { $, button, el, gridKey, icon, joinWords, pageWaits, plural, reportError, WAITS, withFocusKey } from "./dom.js";
+import { $, button, byKeys, el, gridKey, icon, joinWords, pageWaits, plural, reportError, WAITS, withFocusKey } from "./dom.js";
 import { setCancelFocus } from "./dock.js";
 import { addKind, addName, onOpenAdd, openAdd, pageRead, wasAdded } from "./gateway-add.js";
 import { addForm, connectAction, connectBody, followProject, heldServer, liveHeld, movesTo, NOT_REACHED, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool, TAKE_OUT } from "./gateway-details.js";
@@ -755,9 +755,9 @@ export function bringBeside(box, node) {
 
 // Keyboard focus never sits under floating Details (WCAG 2.4.11): focus that comes in (`target`)
 // brings its block or link beside them. A mouse press focuses it too, and then nothing moves under
-// the pointer.
+// the pointer (`byKeys`, which also works for a link in Safari).
 export function focusBeside(box, target) {
-  if (target.matches?.(":focus-visible") === false) return;
+  if (!byKeys()) return;
   bringBeside(box, target.closest("[data-focus]"));
 }
 

@@ -553,19 +553,23 @@ test('a map block under floating Details, selected or focused, scrolls beside th
   }
 });
 
-test('focus scrolls a block beside floating Details only when it comes from the keyboard', () => {
+test('focus scrolls a block or link beside floating Details only when it comes from the keyboard', () => {
   const drawer = { offsetLeft: 741, classList: { contains: (name) => ['open', 'floating'].includes(name) } };
   globalThis.document = { querySelector: (selector) => (selector === '#drawer' ? drawer : null) };
   const scrolled = [];
   const box = { classList: { add() {} }, scrollBy: (options) => scrolled.push(options) };
   const block = { getBoundingClientRect: () => ({ right: 1023 }) };
-  // The focus target (a block, or a part of it) and whether it shows keyboard focus.
-  const target = (visible) => ({ matches: (selector) => selector === ':focus-visible' && visible, closest: (selector) => (selector === '[data-focus]' ? block : null) });
+  // The focus target (a block, a part of it, or a link's hit). Safari does not match
+  // :focus-visible on a link's SVG path, so it never does here; the last input decides.
+  const target = { matches: () => false, closest: (selector) => (selector === '[data-focus]' ? block : null) };
   try {
     // A mouse press focuses the block too: the map does not move under the pointer.
-    focusBeside(box, target(false));
+    for (const fn of windowHeard.pointerdown || []) fn({});
+    focusBeside(box, target);
     assert.equal(scrolled.length, 0);
-    focusBeside(box, target(true));
+    // Tab: it comes beside them.
+    for (const fn of windowHeard.keydown || []) fn({});
+    focusBeside(box, target);
     assert.deepEqual(scrolled, [{ left: 298, behavior: 'smooth' }]);
   } finally {
     delete globalThis.document;

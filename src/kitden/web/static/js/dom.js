@@ -95,6 +95,14 @@ export function showWaits(node, waits, title = "") {
 // project it was drawn for.
 export const pageWaits = () => Boolean($("#main")?.classList.contains("pending"));
 
+// Whether the last input was a key (true) or a pointer press (false). Focus that comes after a key
+// is keyboard focus, also where `:focus-visible` fails (Safari on an SVG path); focus that the page
+// gives back after a mouse press is not.
+let keyed = false;
+globalThis.window?.addEventListener?.("keydown", () => (keyed = true), true);
+globalThis.window?.addEventListener?.("pointerdown", () => (keyed = false), true);
+export const byKeys = () => keyed;
+
 // A redraw replaces every node. What names a control across it: its data-focus key (a tab, a
 // filter button, a menu), or for a table row its own key. Null when it has neither.
 export function focusKey(node) {
