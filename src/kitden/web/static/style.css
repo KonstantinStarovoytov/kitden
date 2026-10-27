@@ -525,19 +525,19 @@ div.map .block.page .block-label { color: var(--ink-4); }
    move, Right unfolds and Left folds, Enter opens Details. Columns: Name, Used by (client tiles),
    Tools, and › or "Move in…", at the mockup's sizes (gateway-notes 7.2): 912 wide, columns 130, 150
    and 100, a 30 px header and group row, a 40 px row and a 34 px tool row. */
-.treegrid { --tg-cols: minmax(0, 1fr) 130px 150px 100px; max-width: 912px; margin: 0 0 12px; background: var(--panel); border: 1px solid var(--wire); border-radius: 8px; }
+/* As the mockup's list: no frame, a line under each row, on the page's own fill. */
+.treegrid { --tg-cols: minmax(0, 1fr) 130px 150px 100px; max-width: 912px; margin: 0 0 12px; border-bottom: 1px solid var(--wire); }
 .tg-head, .tg-row { display: grid; grid-template-columns: var(--tg-cols); align-items: center; }
 .tg-head { height: 30px; border-bottom: 1px solid var(--wire); color: var(--ink-3); font-size: 11px; font-weight: 500; }
 .tg-head > *, .tg-row > [role="gridcell"] { min-width: 0; padding: 0 12px; }
-.tg-row { min-height: 40px; border-top: 1px solid var(--wire-soft); cursor: pointer; transition: background-color 120ms ease; }
+.tg-row { min-height: 40px; border-top: 1px solid var(--wire); cursor: pointer; transition: background-color 180ms ease; }
 .tg-head + .tg-row { border-top: 0; }
-.tg-row:last-child { border-radius: 0 0 8px 8px; }
-.tg-row:hover { background: var(--inset); }
+.tg-row:hover { background: var(--dim); }
 .tg-row:active { background: var(--wire-soft); transition-duration: 60ms; }
 .tg-row[aria-selected="true"] { background: var(--route-soft); }
 .tg-row:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .tg-row.tool { min-height: 34px; }
-.tg-row.group { min-height: 30px; background: var(--inset); color: var(--ink-2); font-size: 11px; font-weight: 600; }
+.tg-row.group { min-height: 30px; color: var(--ink-2); font-size: 11px; font-weight: 600; }
 .tg-row.group .tg-name { gap: 7px; }
 .tg-row.group .ic { flex: none; width: 13px; height: 13px; }
 .tg-row.group > [role="gridcell"] { grid-column: 1 / -1; }
@@ -551,8 +551,8 @@ div.map .block.page .block-label { color: var(--ink-4); }
 .tg-name .caret.none { visibility: hidden; }
 .tg-row[aria-expanded="true"] .caret { transform: rotate(90deg); }
 .tg-name .words { min-width: 3ch; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tg-name .words.mono { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--ink); }
-.tg-row.tool .words.mono { font-weight: 400; }
+.tg-name .words.name { font-size: 12px; font-weight: 600; color: var(--ink); }
+.tg-row.tool .words.name { font-weight: 400; }
 /* A tool's "Read" or "Write": quiet words after the name. */
 .tg-name .hint { flex: none; color: var(--ink-3); font-size: 12px; font-weight: 400; }
 .tg-row.found .hint, .tg-row[aria-selected="true"] .hint { color: var(--ink-2); }
@@ -576,7 +576,7 @@ div.map .block.page .block-label { color: var(--ink-4); }
 .btn.hide-col { flex: none; width: 24px; padding: 0; justify-content: center; font-size: 16px; line-height: 1; color: var(--ink-3); }
 .btn.hide-col:hover:not(:disabled), .btn.hide-col:focus-visible { color: var(--ink); }
 /* The header sticks right under the top bar. */
-.library-list > .tg-head { position: sticky; top: 66px; z-index: 1; background: var(--panel); border-radius: 8px 8px 0 0; }
+.library-list > .tg-head { position: sticky; top: 66px; z-index: 1; background: var(--canvas); }
 .tg-head .col-head { display: flex; align-items: center; gap: 2px; }
 .tg-head .col-head .who { gap: 6px; }
 .tg-head .col-head .who > span:last-child { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

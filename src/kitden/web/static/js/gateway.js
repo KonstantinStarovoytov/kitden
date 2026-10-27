@@ -1516,7 +1516,7 @@ function listRow(row, block, { current, selected, view, press }) {
     dot.setAttribute("aria-hidden", "true");
     name.append(dot);
   }
-  const words = el("span", row.group ? "words" : "words mono", row.name);
+  const words = el("span", row.group ? "words" : "words name", row.name);
   words.title = row.name;
   name.append(words);
   if (row.said) name.append(el("span", "sr-only", row.said));

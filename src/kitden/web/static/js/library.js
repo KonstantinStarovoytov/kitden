@@ -707,7 +707,7 @@ function listRow(row, columns, { current, selected }) {
   caret.setAttribute("aria-hidden", "true");
   name.append(caret);
   if (row.icon) name.append(icon(row.icon, 13));
-  const words = el("span", row.kind === "group" ? "words" : "words mono", row.name);
+  const words = el("span", row.kind === "group" ? "words" : "words name", row.name);
   words.title = row.name;
   name.append(words);
   // One flag per wording: three clients with the same note make one flag, not three.
