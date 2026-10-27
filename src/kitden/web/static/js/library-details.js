@@ -5,7 +5,7 @@
 // off in some projects…" take. A press, a tick or a switch only
 // adds a row to the tray; nothing is written before Apply. Paths stay under Technical details.
 import { getJson, query } from "./api.js";
-import { button, el, icon, joinWords, plural } from "./dom.js";
+import { $, button, el, icon, joinWords, plural } from "./dom.js";
 import { focusAfterStep, headTile, iconTile, lamp, openCard, pressOnce, projectChecklist, stepHead, tickRow, tiles } from "./gateway-details.js";
 import { initLibraryAdd } from "./library-add.js";
 import { addBody, decidedHere, importsOf, lampOf, libraryThing, onLibrarySelect, readers } from "./library-map.js";
@@ -568,12 +568,16 @@ export function addNodes(item, back) {
 }
 
 // A step in the panel: its nodes come in as the next step (`dir`), or drawn again in place (null);
-// what it shows stays the selection's, with the step named.
+// what it shows stays the selection's, with the step named. A new step shows from its top, even
+// when the control that takes focus (Done) sits below the fold.
 function openStep(id, name, nodes, dir, focus) {
   panelState.current = { type: "library", id, step: name };
   keepFrom(() => STEPS[name](id, null), nodes, () => showLibrary(id));
   if (!dir) return swapContent(nodes);
-  return stepTo(nodes, dir).then(() => focusAfterStep(focus));
+  return stepTo(nodes, dir).then(() => {
+    focusAfterStep(focus);
+    $("#drawer").scrollTop = 0;
+  });
 }
 
 function addStep(id, dir = "fwd") {

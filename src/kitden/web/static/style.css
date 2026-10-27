@@ -254,8 +254,11 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .lede { color: var(--ink-3); font-size: 12px; margin: 4px 0 18px; max-width: 70ch; text-wrap: pretty; }
 .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 /* The hint line: 14 px above the bottom of what is seen. It takes no room and no clicks; the page's
-   bottom space keeps its end clear. */
-.hint-dock { position: sticky; bottom: 0; z-index: 22; flex: none; height: 0; margin: 0 22px; pointer-events: none; }
+   bottom space keeps its end clear. Its band (z-index 2) is over the page but under the scrim and
+   the drawer, so open Details cover it, as on the mockup; the dock band (z-index 22) stays over them. */
+.hint-band, .hint-dock { position: sticky; bottom: 0; flex: none; height: 0; margin: 0 22px; pointer-events: none; }
+.hint-band { z-index: 2; }
+.hint-dock { z-index: 22; }
 .hint-line { position: absolute; left: 0; right: 0; bottom: 14px; margin: 0; display: flex; align-items: center; gap: 6px; color: var(--ink-3); font-size: 11px; }
 .hint-line svg { flex: none; }
 .lede.fresh { animation: rise 320ms var(--ease-out) both; }

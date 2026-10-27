@@ -858,7 +858,7 @@ test("a project whose rule file Kitden does not write says so and offers no rule
   drawer.replaceChildren();
 });
 
-// Final fix wave (FR-029): "Commands…" under More on a plugin and on a marketplace's caption shows
+// Final fix wave (FR-029): "Commands…" with the other actions on a plugin and on a marketplace's caption shows
 // what the developer runs, each with a Copy button; the page never runs them.
 test('Commands… shows the commands to run yourself, each with Copy, and Done goes back', async () => {
   await reset();
@@ -868,10 +868,13 @@ test('Commands… shows the commands to run yourself, each with Copy, and Done g
     const box = await showMap();
     press(node(box, 'block:item:p2'));
     await flush();
-    press(node(drawer, 'more'));
-    await flush();
+    // Its only other action stands in the footer: no More to press first.
+    assert.equal(node(drawer, 'more'), null);
+    drawer.scrollTop = 120;
     press(node(drawer, 'action:Commands…'));
     await flush();
+    // The step shows from its top, though Done, which takes focus, is at its foot.
+    assert.equal(drawer.scrollTop, 0);
     assert.deepEqual(panelState.current, { type: 'library', id: 'item:p2', step: 'commands' });
     assert.deepEqual(commandsAsked.splice(0), ['/api/commands?item=cc-sp', '/api/commands?item=cu-sp']);
     for (const words of ['Plugin · superpowers', 'Commands', 'You run these yourself. This page never runs them.', 'Claude Code', 'Cursor', 'Update in Claude Code', 'claude plugin update superpowers@demo-market', 'Cursor loads Claude Code plugins.']) assert.ok(texts(drawer).includes(words), words);

@@ -189,7 +189,7 @@ def test_the_shell_draws_its_icons_and_the_hint_line_sets_its_words_at_once():
     assert re.search(r'import \{[^}]*\bsetHint\b[^}]*\} from "./parts.js"', app)
     # A page starts without its predecessor's hint.
     assert 'setHint("")' in app.split("function renderPlace")[1].split("\n}\n")[0]
-    assert "pointer-events: none" in rule(".hint-dock")
+    assert "pointer-events: none" in rule(".hint-band, .hint-dock")
 
 
 def test_markers_re_seat_when_a_font_finishes_loading():

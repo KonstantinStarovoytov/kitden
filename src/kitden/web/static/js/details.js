@@ -70,15 +70,17 @@ export function heldActions(server, clients, plain = false) {
 }
 
 // The other actions wait behind one button, so the primary one stands alone. They show the tray as
-// it is when they come out: it may have changed while they waited.
-function moreButton(buttons) {
+// it is when they come out: it may have changed while they waited. One other action stands as it
+// is: a More that hides one button only adds a press.
+function moreNodes(buttons) {
+  if (buttons.length === 1) return buttons;
   const more = button("More", () => {
     more.replaceWith(...buttons);
     buttons.forEach(showTrayLook);
     buttons[0].focus();
   }, "btn");
   more.dataset.focus = "more";
-  return more;
+  return [more];
 }
 
 // A button's words. A Remove names every client it reaches (def.affects.clients): "Remove from
@@ -150,7 +152,7 @@ export function detailsCard({ kind, title, id = null, tile = null, facts = [], w
   if (why) body.append(typeof why === "string" ? el("p", "why", why) : why);
   const footer = el("footer", "stack");
   footer.append(...actions.map(cardButton));
-  if (more.length) footer.append(moreButton(more.map(cardButton)));
+  if (more.length) footer.append(...moreNodes(more.map(cardButton)));
   if (after) footer.append(after);
   return [cardHead(kind, title, id, tile), body, ...(footer.children.length ? [footer] : []), ...(evidence ? [evidence] : [])];
 }

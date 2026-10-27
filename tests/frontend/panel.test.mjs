@@ -919,6 +919,9 @@ test('under 1024 px Details are the modal drawer, with the dock above it', () =>
   const css = readFileSync(new URL('../../src/kitden/web/static/style.css', import.meta.url), 'utf8');
   const rule = (selector) => css.match(new RegExp(`^${selector.replace(/[.#]/g, '\\$&')} \\{([^}]*)\\}`, 'm'))[1];
   assert.match(rule('.hint-dock'), /z-index: 22;/);
+  // The hint line is under them: open Details cover it, so its words never run over the panel.
+  assert.match(rule('.hint-band'), /z-index: 2;/);
+  assert.match(readFileSync(new URL('../../src/kitden/web/static/index.html', import.meta.url), 'utf8'), /<div class="hint-band"><p class="hint-line" id="hint" hidden><\/p><\/div>/);
   assert.match(rule('.scrim'), /z-index: 20;/);
   assert.match(rule('.drawer'), /z-index: 21;/);
   assert.match(rule('.drawer'), /bottom: max\(16px, calc\(var\(--dock-room, -9px\) \+ 25px\)\);/);
@@ -1394,7 +1397,7 @@ test('a Details card is the header, the facts and the sentence, the stacked acti
       facts: [{ label: 'State', value: 'On' }],
       why: 'Claude Code loads it from all projects.',
       actions: [{ label: 'Turn off for all projects…', run() {}, primary: true }, { label: 'Add to Codex…', run() {} }],
-      more: [{ label: 'Remove from Claude Code…', run() {} }],
+      more: [{ label: 'Remove from Claude Code…', run() {} }, { label: 'Commands…', run() {} }],
       after,
       technical: folded,
     }));
@@ -1412,6 +1415,16 @@ test('a Details card is the header, the facts and the sentence, the stacked acti
     assert.deepEqual(footer.children.slice(0, 2).map((node) => node.className), ['btn primary', 'btn']);
     assert.equal(footer.children[3], after);
     assert.equal(evidence, folded);
+  } finally {
+    delete globalThis.document;
+  }
+});
+
+test('one other action stands in the footer as it is, with no More', () => {
+  globalThis.document = { createElement: domNode };
+  try {
+    const nodes = detailsCard(card({ actions: [{ label: 'Open', run() {}, primary: true }], more: [{ label: 'Commands…', run() {} }] }));
+    assert.deepEqual(words(nodes[2].children), ['Open', 'Commands…']);
   } finally {
     delete globalThis.document;
   }
