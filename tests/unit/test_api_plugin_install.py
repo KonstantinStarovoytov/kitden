@@ -148,8 +148,14 @@ def _preview(client, plugin, clients):
 
 
 def _offer(client, plugin=LINTER):
-    """The plugin as Details of a Library row reads it."""
-    return client.get(f"/api/offer?kind=plugin&id={plugin}").json()
+    """The plugin as the Library's add panel reads it."""
+    rows = client.get("/api/library-offers").json()["offers"]
+    return next(r for r in rows if r["kind"] == "plugin" and r["id"] == plugin)
+
+
+def _inherits(client):
+    """Whether Cursor loads Claude Code's plugins and skills, as Details read it."""
+    return client.get(f"/api/explain?kind=plugin&name={LINTER}").json()["inherits"]
 
 
 def test_a_plugin_goes_to_two_clients_in_one_review_and_undo_takes_it_back(client):
@@ -210,18 +216,18 @@ def test_adding_to_claude_code_says_cursor_loads_it_too(cursor_client):
     }
     # The title names Cursor too, as Details' Affects does before the click.
     assert [s["reaches"] for s in change["steps"]] == [["claude_code", "cursor"]]
-    assert _offer(cursor_client)["inherits"] == {"plugin": True, "skill": True}
+    assert _inherits(cursor_client) == {"plugin": True, "skill": True}
 
 
 def test_with_cursor_import_off_the_review_does_not_name_cursor(strict_cursor_client):
     change = _preview(strict_cursor_client, LINTER, ["claude_code"])
     assert [e["client"] for e in change.json()["after"]] == ["claude_code"]
     assert [s["reaches"] for s in change.json()["steps"]] == [None]
-    assert _offer(strict_cursor_client)["inherits"] == {"plugin": False, "skill": True}
+    assert _inherits(strict_cursor_client) == {"plugin": False, "skill": True}
 
 
 def test_without_cursor_neither_kind_is_inherited(client):
-    assert _offer(client)["inherits"] == {"plugin": False, "skill": False}
+    assert _inherits(client) == {"plugin": False, "skill": False}
 
 
 def _marketplace(client, source, clients):

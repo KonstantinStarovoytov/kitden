@@ -347,28 +347,6 @@ test('a failed change says "put back" only when the engine restored everything',
   assert.equal(failedWord(null), 'Failed');
 });
 
-const { toolsWord } = await import('../../src/kitden/web/static/js/parts.js');
-
-test('a held server says how many tools when it knows', () => {
-  assert.equal(toolsWord({ name: 'github', tools: 12 }), '12 tools');
-  assert.equal(toolsWord({ name: 'github', tools: 1 }), '1 tool');
-  assert.equal(toolsWord({ name: 'github', tools: null }), null);
-  assert.equal(toolsWord({ name: 'github' }), null);
-});
-
-const { toolsNode } = await import('../../src/kitden/web/static/js/parts.js');
-
-test('the tool count is drawn when it is a number and left out when it is not', () => {
-  const row = toolsNode({ name: 'github', tools: 12 }, true);
-  assert.equal(row.textContent, '12 tools');
-  assert.equal(row.className, 'meta');
-  const details = toolsNode({ name: 'github', tools: 1 });
-  assert.equal(details.textContent, '1 tool');
-  assert.equal(details.className, 'why');
-  assert.equal(toolsNode({ name: 'github', tools: null }, true), null);
-  assert.equal(toolsNode({ name: 'github' }), null);
-});
-
 test('a demo shows a quiet Demo flag; a real page shows none', () => {
   const tag = demoTag({ version: '0.2.0', demo: true });
   assert.equal(tag.textContent, 'Demo');

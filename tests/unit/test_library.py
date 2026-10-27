@@ -609,7 +609,7 @@ def test_a_marketplace_dash_says_when_an_add_brings_it(home):
     assert _row(answer, "openai-bundled")["cells"]["claude_code"]["reason"] is None
 
 
-def test_api_library_and_offer(home):
+def test_api_library(home):
     app = create_app(lambda: build_inventory(home), token="tok", port=47800, home=home)
     with TestClient(app, base_url=ORIGIN, follow_redirects=False) as client:
         client.get("/?token=tok")
@@ -643,18 +643,8 @@ def test_api_library_and_offer(home):
         assert flagged["attention"] == client.get("/api/library?kind=plugin").json()["attention"]
         assert flagged["attention"] == 2
 
-        plugin = client.get(f"/api/offer?kind=plugin&id={PLUGIN}")
-        assert plugin.status_code == 200 and plugin.json()["id"] == PLUGIN
-        # Details and the Add form say what Cursor loads as well; the server reads its switches.
-        assert plugin.json()["inherits"] == {"plugin": True, "skill": True}
-        skill = client.get(f"/api/offer?kind=skill&id=tidy@{PLUGIN}")
-        assert skill.status_code == 200 and skill.json()["name"] == "tidy"
-        assert skill.json()["inherits"] == {"plugin": True, "skill": True}
-        missing = client.get("/api/offer?kind=plugin&id=nope@nowhere")
-        assert (missing.status_code, missing.json()) == (404, {"detail": "Not on this computer."})
 
-
-def test_library_and_offer_let_other_requests_run_meanwhile(home, monkeypatch):
+def test_library_and_its_offers_let_other_requests_run_meanwhile(home, monkeypatch):
     # The first read of every skill takes seconds; other requests must not wait for it.
     import kitden.web.app as page
 
@@ -669,11 +659,11 @@ def test_library_and_offer_let_other_requests_run_meanwhile(home, monkeypatch):
         return wait
 
     monkeypatch.setattr(page, "library", slow(page.library))
-    monkeypatch.setattr(page, "skill_catalog", slow(page.skill_catalog))
+    monkeypatch.setattr(page, "library_offers", slow(page.library_offers))
     app = create_app(lambda: build_inventory(home), token="tok", port=47800, home=home)
     with TestClient(app, base_url=ORIGIN, follow_redirects=False) as client:
         client.get("/?token=tok")
-        for path in ("/api/library?kind=plugin", f"/api/offer?kind=skill&id=tidy@{PLUGIN}"):
+        for path in ("/api/library?kind=plugin", "/api/library-offers"):
             started.clear()
             release.clear()
             with ThreadPoolExecutor(1) as pool:

@@ -96,9 +96,8 @@ def test_readme_says_what_details_and_a_review_start_with():
     readme = " ".join((ROOT / "README.md").read_text().split())
     words = (
         "Technical details",
-        "Compare across clients",
-        "Manage tools",
-        "One folder, read by Codex and Cursor.",
+        "Commands…",
+        "Claude Code loads it in every project. Cursor gets it through Claude Code.",
         "Remove from Codex and Cursor…",
         "Other projects are unchanged.",
         "Settings changed since this preview.",
@@ -111,11 +110,11 @@ def test_readme_says_what_details_and_a_review_start_with():
     )
     for text in words:
         assert text in readme, text
-    for text in ("Technical details", "Compare across clients", "Manage tools"):
+    for text in ("Technical details", "Commands…"):
         assert f'"{text}"' in page, text
     for text in ("Other projects are unchanged.", "Settings changed since this preview."):
         assert text in page, text
-    assert '"Preview again"' in page and "`One folder, read by ${joinWords(" in page
+    assert '"Preview again"' in page
 
 
 def test_the_check_before_a_release_turns_strict_mode_on_in_the_servers_details():

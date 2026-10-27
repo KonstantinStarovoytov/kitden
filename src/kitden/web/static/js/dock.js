@@ -531,7 +531,7 @@ async function land() {
   try {
     await reloadAll();
     showEffect();
-    await detailsAgain(tray.rows.map((row) => row.key));
+    await detailsAgain();
   } catch (error) {
     reportError(error);
   }

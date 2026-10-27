@@ -50,7 +50,6 @@ const { arrivalIn, openRow } = await import('../../src/kitden/web/static/js/libr
 const { targetSel } = await import('../../src/kitden/web/static/js/overview.js');
 const { arrivalServer } = await import('../../src/kitden/web/static/js/gateway.js');
 const { closePanel, isPanelOpen, openPanel } = await import('../../src/kitden/web/static/js/panel.js');
-const { contextLinks, followLink } = await import('../../src/kitden/web/static/js/details.js');
 
 const github = { kind: 'mcp_server', name: 'github' };
 const files = { kind: 'mcp_server', name: 'files' };
@@ -138,27 +137,4 @@ test('a selected tool opens its server, a client and a group are found in the li
   assert.deepEqual(await arrivalServer(model), { group: 'outside' });
   goTo('gateway', { kind: 'tool', name: 'tracker/list_issues' });
   assert.equal(await arrivalServer(model), null);
-});
-
-test('a link from open Details closes it first, so the other place opens the same item', async () => {
-  // A server's Details open on the Overview: "Manage tools" opens the held server on the Gateway.
-  state.q = '';
-  goTo('overview', files);
-  openPanel([]);
-  const [manage] = contextLinks({ kind: 'mcp_server', name: 'files' }, [{ via_gateway: 'kitden' }], state.view);
-  assert.equal(manage.label, 'Manage tools');
-  await followLink(manage);
-  assert.equal(isPanelOpen(), false);
-  assert.equal(entries[at], '#gateway?project=a&sel=mcp_server%3Afiles');
-  assert.equal((await arrivalServer(model)).held.name, 'files');
-  // Details open on the Gateway: a server has no link to the Library (the Gateway's List shows
-  // who uses it); a skill's "Compare across clients" opens its row in the Library's List.
-  openPanel([]);
-  assert.deepEqual(contextLinks(rows[0], [], state.view), []);
-  const [compare] = contextLinks({ kind: 'skill', name: 'tidy', lookup: 'tidy' }, [], state.view);
-  assert.equal(compare.label, 'Compare across clients');
-  await followLink(compare);
-  assert.equal(isPanelOpen(), false);
-  assert.equal(entries[at], '#library?kind=plugin&view=list&project=a&sel=skill%3Atidy');
-  assert.equal(arrivalIn(answer), 'item:k-tidy');
 });

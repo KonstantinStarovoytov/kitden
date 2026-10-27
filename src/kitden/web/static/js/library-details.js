@@ -4,6 +4,7 @@
 // detailsCard draws, so a test reads it without a page, and the steps "Add to <client>…" and "Turn
 // off in some projects…" take. A press, a tick or a switch only
 // adds a row to the tray; nothing is written before Apply. Paths stay under Technical details.
+import { getJson, query } from "./api.js";
 import { button, el, icon, joinWords, plural } from "./dom.js";
 import { focusAfterStep, headTile, iconTile, lamp, openCard, pressOnce, projectChecklist, stepHead, tickRow, tiles } from "./gateway-details.js";
 import { initLibraryAdd } from "./library-add.js";
@@ -55,6 +56,14 @@ const READS_IT = "Kitden only reads it.";
 const IMPORTS_NOTHING = "It imports nothing.";
 const MAY_ASK = "Claude Code may ask before it reads this.";
 const NOT_FOUND = "Kitden could not find this file.";
+// "Commands…" (FR-029): what the developer runs to install, update or move it, never this page.
+const COMMANDS = "Commands…";
+const RUN_YOURSELF = "You run these yourself. This page never runs them.";
+const NO_COMMANDS = "No commands for this item.";
+const NOT_LOADED = "Could not load the commands.";
+const COPY = "Copy";
+const COPIED = "Copied";
+const NOT_COPIED = "Could not copy";
 
 // The same rows a link's × adds (library-rules.js).
 export { offBodies, skillOffBodies, skillRuleWaits };
@@ -261,7 +270,7 @@ export const addLabel = (clients) => `Add to ${names(clients).join(" or ")}…`;
 // A plugin: State, Inside, Clients and Comes from; where it loads; "Add to <client>…" (a step to a
 // checklist, `addStep`), "Turn off for all projects…" and, in a project, "Turn off in this
 // project…"; its folder and its marketplace's source under Technical details.
-export function pluginCard(item, c, { addStep = () => {} } = {}) {
+export function pluginCard(item, c, { addStep = () => {}, commandsStep = () => {} } = {}) {
   const inside = insideWords(item.inside);
   const facts = [stateFact(item), { label: "Inside", value: inside || "Not known", quiet: !inside }, clientsFact(item), comesFrom(item, c)];
   const actions = [];
@@ -275,7 +284,8 @@ export function pluginCard(item, c, { addStep = () => {} } = {}) {
   if (back) actions.push({ label: USE_SHARED, node: rowsButton(USE_SHARED, [back]) });
   actions.push(...onActions(item));
   const tech = item.technical || {};
-  return { kind: KIND_WORDS.plugin, title: item.name, id: item.source, tile: kindTile("plugin"), facts, why: loadsSay(item, c), actions, more: removeActions(item), after: afterOf(projectLine(item, c), outsideLine(item, c)), technical: techOf([{ title: "Plugin folder", path: tech.path }, { title: "Marketplace", summary: tech.marketplace }]) };
+  const more = [...removeActions(item), ...commandsAction(pluginEntries(item), commandsStep)];
+  return { kind: KIND_WORDS.plugin, title: item.name, id: item.source, tile: kindTile("plugin"), facts, why: loadsSay(item, c), actions, more, after: afterOf(projectLine(item, c), outsideLine(item, c)), technical: techOf([{ title: "Plugin folder", path: tech.path }, { title: "Marketplace", summary: tech.marketplace }]) };
 }
 
 // A thing a plugin holds: Plugin, Kind, Source and Clients, and "Follows its plugin." It has no
@@ -436,11 +446,65 @@ export function connectionCard({ from, to }, c) {
   return { kind: "Connection", title, id: owner ? `Through ${ownerName}` : "Loaded by the client", facts, why };
 }
 
-// A marketplace's caption: its plugins on the map, and its source under Technical details.
-export function marketplaceCard(group) {
+// A marketplace's caption: its plugins on the map, "Commands…" under More, and its source under
+// Technical details.
+export function marketplaceCard(group, { commandsStep = () => {} } = {}) {
   const items = group.items || [];
   const source = items.map((item) => (item.technical || {}).marketplace).find(Boolean);
-  return { kind: "Marketplace", title: group.name, list: itemList("Plugins on the map", items.map((item) => ({ kind: "plugin", name: item.name, line: itemLine(item) }))), technical: techOf([{ title: "Source", summary: source }]) };
+  return { kind: "Marketplace", title: group.name, list: itemList("Plugins on the map", items.map((item) => ({ kind: "plugin", name: item.name, line: itemLine(item) }))), more: commandsAction(marketplaceEntries(group), commandsStep), technical: techOf([{ title: "Source", summary: source }]) };
+}
+
+// "Commands…" ---------------------------------------------------------------------------------
+
+// The client entries whose commands "Commands…" reads (/api/commands takes an item id): a
+// plugin's own entry in each client, a marketplace's in each client, in client order.
+export const pluginEntries = (item) => inOrder(Object.keys(item.items || {})).map((client) => ({ client, item: item.items[client][0] }));
+export const marketplaceEntries = (group) => inOrder(Object.keys(group.entries || {})).map((client) => ({ client, item: group.entries[client] }));
+const commandsAction = (entries, run) => (entries.length ? [{ label: COMMANDS, run }] : []);
+
+// One command: its label, the command in mono with a Copy button, or a note in its place.
+function commandRow(command) {
+  const row = el("li");
+  row.append(el("strong", null, command.label));
+  if (command.command) {
+    const copy = button(COPY, () => copyText(command.command, copy), "btn ghost small");
+    copy.setAttribute("aria-label", `${COPY} ${command.label}`);
+    row.append(el("pre", null, command.command), copy);
+  }
+  if (command.note) row.append(el("p", "muted", command.note));
+  return row;
+}
+
+// Copy a command to the clipboard; the button says whether it worked.
+export function copyText(text, node) {
+  const said = (words) => { node.textContent = words; };
+  const clipboard = globalThis.navigator && navigator.clipboard;
+  if (!clipboard) return Promise.resolve(said(NOT_COPIED));
+  return clipboard.writeText(text).then(() => said(COPIED), () => said(NOT_COPIED));
+}
+
+// The step: one section per client entry, its commands read from /api/commands, and Done back.
+export function commandsNodes(crumb, entries, back) {
+  const body = el("div", "body");
+  body.append(el("p", "why", RUN_YOURSELF));
+  for (const { client, item } of entries) {
+    const section = el("section");
+    const head = el("div", "who");
+    head.append(mark(client), el("h2", null, CLIENT_NAMES[client] || client));
+    const list = el("ul", "commands");
+    list.append(el("li", "muted", "Loading…"));
+    section.append(head, list);
+    body.append(section);
+    getJson(`/api/commands${query({ item })}`).then((answer) => {
+      const rows = (answer.commands || []).map(commandRow);
+      list.replaceChildren(...(rows.length ? rows : [el("li", "muted", NO_COMMANDS)]));
+    }, () => list.replaceChildren(el("li", null, NOT_LOADED)));
+  }
+  const done = el("footer", "stack");
+  const press = button("Done", back, "btn");
+  press.dataset.focus = "commands:done";
+  done.append(press);
+  return [stepHead(crumb, COMMANDS.replace("…", ""), back), body, done];
 }
 
 // The card of what the map shows for `id` (library-map.js libraryThing).
@@ -451,9 +515,9 @@ function cardOf(thing, c, id) {
   if (INSTRUCTION_CARDS[block.kind]) return INSTRUCTION_CARDS[block.kind](block, c);
   if (block.kind === "client") return clientCard(block.client, c);
   if (block.kind === "account") return accountCard(block);
-  if (block.kind === "group") return marketplaceCard(block.group);
+  if (block.kind === "group") return marketplaceCard(block.group, { commandsStep: () => commandsStep(id) });
   if (block.kind === "part") return partCard(block, c);
-  if (block.kind === "plugin") return pluginCard(block.item, c, { addStep: () => addStep(id) });
+  if (block.kind === "plugin") return pluginCard(block.item, c, { addStep: () => addStep(id), commandsStep: () => commandsStep(id) });
   if (block.kind === "skill") return skillCard(block.item, c, { someStep: () => someStep(id) });
   return hookCard(block.item, c);
 }
@@ -473,9 +537,10 @@ export function showLibrary(id, { step = null } = {}) {
   return Promise.resolve(nodes);
 }
 
-// Back from a step to its card, focus on the button that stepped there.
+// Back from a step to its card, focus on the button that stepped there (or More, which it waits
+// under again).
 function backFrom(id, label) {
-  return () => showLibrary(id, { step: "back" }).then(() => focusAfterStep(`action:${label}`));
+  return () => showLibrary(id, { step: "back" }).then(() => focusAfterStep(`action:${label}`, "more"));
 }
 
 // "Add <name> to the clients you pick": one row per client that can take it or has it already
@@ -502,7 +567,7 @@ export function addNodes(item, back) {
 // what it shows stays the selection's, with the step named.
 function openStep(id, name, nodes, dir, focus) {
   panelState.current = { type: "library", id, step: name };
-  keepFrom(() => (name === "add" ? addStep(id, null) : someStep(id, null)), nodes, () => showLibrary(id));
+  keepFrom(() => STEPS[name](id, null), nodes, () => showLibrary(id));
   if (!dir) return swapContent(nodes);
   return stepTo(nodes, dir).then(() => focusAfterStep(focus));
 }
@@ -540,6 +605,20 @@ function someStep(id, dir = "fwd") {
   const nodes = someNodes(thing.block.item, context(thing.answer), backFrom(id, OFF_SOME));
   return openStep(id, "some", nodes, dir, "find");
 }
+
+// "Commands…" of a plugin or a marketplace's caption, as a step; focus goes to its Done.
+function commandsStep(id, dir = "fwd") {
+  const thing = libraryThing(id);
+  if (!thing) return closePanel({ focus: false });
+  const { block } = thing;
+  const group = block.kind === "group";
+  const entries = group ? marketplaceEntries(block.group) : pluginEntries(block.item);
+  const crumb = group ? `Marketplace · ${block.group.name}` : `${KIND_WORDS.plugin} · ${block.item.name}`;
+  return openStep(id, "commands", commandsNodes(crumb, entries, backFrom(id, COMMANDS)), dir, "commands:done");
+}
+
+// The steps a Details card goes to, by name, to draw one again in place.
+const STEPS = { add: addStep, some: someStep, commands: commandsStep };
 
 // The map selected something (`id`), let go (null), or drew another project in place (`follow`).
 // Letting go closes these Details (not a row's review: that belongs to the tray).

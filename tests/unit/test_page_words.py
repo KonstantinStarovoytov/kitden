@@ -12,7 +12,6 @@ from kitden.views.words import (
     FOLLOWS_SHARED,
     KEEP_THEIR_RULES,
     KEEPS_ITS_RULE,
-    LOADS_PLUGINS,
     NEW_LOCAL_FILE,
     NO_CLAUDE_FOLDER,
     NO_GATEWAY_CLIENT,
@@ -20,11 +19,9 @@ from kitden.views.words import (
     OWN_SKILL_SETTINGS,
     PLUGIN_ALL_PROJECTS,
     PLUGIN_SKILL,
-    READS_FOLDER,
     REPO_RULE,
     REPO_RULE_OUT,
     ROUTE_WORDS,
-    STALE,
     STATE_WORDS,
     UNCHANGED,
 )
@@ -63,7 +60,7 @@ def test_the_side_panel_is_four_modules():
     for name in PANEL[1:]:
         assert (STATIC / "js" / name).exists() and f'from "./{name}"' in shell, name
     assert "function trapFocus" in shell and "function showReview" not in shell
-    assert "function showDetails" in script("details.js")
+    assert "export function detailsCard" in script("details.js")
     assert "function showReview" in script("review.js")
 
 
@@ -934,21 +931,11 @@ def test_reduced_motion_turns_every_animation_off():
     assert "reducedMotion.matches ? 0 : 260" in script("library.js")
 
 
-def test_a_plugin_the_page_cannot_change_shows_a_locked_switch():
-    text = panel()
-    assert "node.disabled = true" in text
-    assert "Not changed from here." in text
-
-
 def test_library_lede_names_the_project_folder_not_its_path():
     # The List has the Map's lede, and its scope bar names the project's folder.
     text = script("library.js")
     assert 'el("p", "lede", LEDE), tabs, scopeBar(folderName(projectPath()))' in text
     assert "shortPath" not in text
-
-
-def test_item_details_ask_for_the_full_name_so_a_plugin_shows_only_its_own_marketplace():
-    assert "name: row.lookup || row.name" in panel()
 
 
 def test_changes_rows_open_the_panel_and_keep_paths_off_the_page():
@@ -1029,7 +1016,7 @@ def test_diagram_nodes_open_the_client_apps_and_the_gateway():
 
 def test_library_adds_plugins_and_marketplaces_in_one_review():
     offer, library = script("offer.js"), script("library.js")
-    assert '"plugin.install"' in offer and '"marketplace.add"' in offer
+    assert '"marketplace.add"' in offer
     # Adding a marketplace lives in the add panel now; the List has no New or All.
     assert '"Add a marketplace…"' in script("library-add.js")
     assert '"Add a marketplace…"' not in library and '["new", "New"]' not in library
@@ -1059,7 +1046,6 @@ def test_library_rows_say_what_each_client_has_or_can_add_without_details():
 def test_library_tabs_share_one_grid_and_the_add_flow():
     text = script("library.js")
     assert '[["plugin", "Plugins and skills"], ["instructions", "Instructions"]]' in text
-    assert '"skill.install"' in script("offer.js") and '"Add skill"' in script("offer.js")
     # One row builder for every row, one grid.
     assert text.count("listRow(") == 2 and text.count('el("div", "treegrid library-list")') == 1
     assert 'show: s.show === "mine" ? "" : s.show' in script("store.js")
@@ -1068,16 +1054,6 @@ def test_library_tabs_share_one_grid_and_the_add_flow():
 def test_skill_rows_say_where_each_skill_comes_from_and_how_each_client_loads_it():
     # Same-name rows name their source in a Details title and a button's name.
     assert "row.same_name && row.source ? `${row.name} · ${row.source}`" in script("library.js")
-    text = script("offer.js")
-    assert '"Needs its plugin"' in text and '"Can add"' in text
-    # The refusal, in the owner's words, and a way to the plugin that holds the skill.
-    assert "This skill needs the rest of its plugin. Add the plugin instead." in text
-    assert '"Find the plugin"' in text
-    # Details list the files and mark the scripts the agent may run; paths stay in Details,
-    # folded under Technical details.
-    assert '"What it brings"' in text and '"script"' in text
-    assert 'technical([{ title: "Skill folder", path: skill.path }])' in text
-    assert '"Details"' not in text
 
 
 def test_a_skill_copy_names_every_client_it_reaches():
@@ -1085,14 +1061,6 @@ def test_a_skill_copy_names_every_client_it_reaches():
     assert "s.reaches || [s.client]" in code and "Add ${names} to ${clients}" in code
     assert "for (const note of notes) box.append(callout(note))" in code  # Cursor loads it twice
     assert '"skill.install": "Added skill"' in script("parts.js")
-
-
-def test_add_forms_name_the_source_and_every_client_the_change_reaches():
-    text = script("offer.js")
-    # The server says whether Cursor loads what Claude Code has; the page does not guess.
-    assert "offer.inherits" in text and "Source: " in text
-    assert "Cursor will also load this through Claude Code." in text
-    assert "Cursor will also load it from Claude Code's folder." in text
 
 
 def test_library_rows_keep_the_name_and_the_source_readable():
@@ -1110,14 +1078,7 @@ def test_library_rows_keep_the_name_and_the_source_readable():
 
 def test_offer_details_and_add_form_follow_what_the_server_says_about_cursor():
     text = script("offer.js")
-    # Details no longer claim a Cursor setting; the line shows only when Cursor would load it.
-    assert "Cursor: loads it through Claude Code." in text and "Cursor: has it." in text
-    assert "Cursor: gets it through Claude Code once you add it there." in text
-    assert "cursorLine(offer, inherits(offer))" in text
-    assert "Cursor: loads Claude Code plugins when" not in text
-    assert "Cursor will also load it from the shared skills folder." in text
-    # The note is a polite live region inside the form, before Preview.
-    assert 'also.setAttribute("aria-live", "polite")' in text
+    # A form's note sits inside the form, before Preview.
     assert "[checks, note, submit, message]" in text
 
 
@@ -1207,12 +1168,10 @@ def test_direct_servers_are_options_and_details_offers_move_first():
     assert '"Can improve"' in overview and "model.suggestions" in overview
     assert ".issue.suggestion" in CSS
     code = panel()
-    assert "Move into the gateway…" in code and 'action: "gateway.move"' in code
-    # Without a gateway that takes servers, the panel says the same as the Gateway page.
+    assert 'action: "gateway.move"' in code
+    # Without a gateway that takes servers, the Gateway page says so.
     assert "Add the server in the gateway first" in script("parts.js")
-    assert "GATEWAY_NOTE" in code and "GATEWAY_NOTE" in gw()
-    # A gateway that could not be read says so, instead of hiding Move.
-    assert "Could not read the gateway, so Move is not offered." in code
+    assert "GATEWAY_NOTE" in gw()
     # An option is quieter than a problem: a plain button, not the primary one.
     assert 'option ? "btn" : "btn primary"' in overview
 
@@ -1387,18 +1346,15 @@ def test_a_cell_add_reviews_one_client_and_the_review_shows_its_note():
     assert "review(previewFor(add, client), { note: noteFor(add, state.project) })" in text
     offer = script("offer.js")
     assert '"Adds for all projects."' in offer
-    # Every add in a project view says so, a marketplace too. The plugin form adds the
-    # warnings of the checked clients, as their cells do.
-    assert "noteOf: () => projectNote(state.project)," in offer
+    # Every add in a project view says so, a marketplace too.
     assert "{ note: projectNote(state.project), back }" in offer
-    assert "noteOf: (clients) => formNote(row, clients, state.project)," in offer
     code = panel()
     assert "export async function review(previewBody, { note = null, back = null } = {})" in code
     assert "if (note && !afterNotes.includes(note)) body.append(callout(note));" in code
     # The row keeps the note, and its review shows it.
     assert "addToTray(previewBody, { note })" in code
-    # Details of a row with a repeated name name its source.
-    assert "rowTitle(row)" in code
+    # An add's choice of a row with a repeated name names its source.
+    assert "rowTitle(row)" in text
 
 
 def test_typing_waits_before_the_library_asks_the_server():
@@ -1431,21 +1387,6 @@ def test_library_columns_hide_with_a_quiet_minus_kept_in_this_browser():
         ".btn.hide-col:hover:not(:disabled), .btn.hide-col:focus-visible { color: var(--ink); }"
         in css
     )
-
-
-def test_details_show_what_the_item_is_and_every_way_to_add_it():
-    code, offer = panel(), script("offer.js")
-    # The marketplace's entry is read beside the definitions; when it fails the rest still shows.
-    assert "row.offer ? getJson(`/api/offer${query({ kind: row.kind, id: row.offer })}`)" in code
-    assert ".catch(() => null)" in code
-    assert 'if (offer) blocks.set("about", about(offer));' in code
-    # A Details button opens the same review as the cell's own button.
-    assert "startAdd(option.add, option.client, row)" in offer
-    assert '"Add…"' in offer and 'button("Add…", () => addForm(offer), "btn primary")' not in offer
-    # With nothing to do, the line that says why waits with the next steps, after the Why and
-    # what each client loads; a row not on this computer still says it first.
-    assert 'if (why) next.push(el("p", "muted", why));' in code
-    assert 'if (why) body.prepend(el("p", "muted", why));' in offer
 
 
 def test_the_start_says_what_it_still_reads_and_fills_a_line_as_steps_end():
@@ -1507,7 +1448,7 @@ def test_the_kitden_gateway_card_comes_first_and_sets_up_missing_clients():
 
 
 def test_a_held_server_lists_its_tools_with_a_switch_each():
-    code = panel()
+    code = panel() + gw()
     for words in (
         '"Whole server"',
         "`Differs from ${row.follows} · `",
@@ -1525,8 +1466,7 @@ def test_a_held_server_lists_its_tools_with_a_switch_each():
 def test_a_tool_switch_flips_only_after_the_change_is_verified():
     code = panel()
     # Details are drawn again after Apply all, the switch in its new state; the thumb slides once.
-    assert "await detailsAgain(tray.rows.map((row) => row.key));" in code
-    assert "await tools.again({ focus: inside ? held || from.focus : null, flip });" in code
+    assert "await detailsAgain();" in code
     assert 'toggle.classList.add("flipped")' in code
     assert ".switch.flipped .thumb" in CSS and "@keyframes thumb-on" in CSS
     # A refused change stays as a callout in Details, and focus goes back to the switch.
@@ -1534,15 +1474,7 @@ def test_a_tool_switch_flips_only_after_the_change_is_verified():
     assert 'callout(error, "error")' in code
 
 
-def test_tool_list_reads_again_and_keeps_focus_after_a_refresh_or_an_undo():
-    code = panel()
-    # Without the event stream the refresh still ends with the list read again.
-    assert "if (await ended) reloadTools();" in code
-    # Undo with Details open puts focus back on the switch it changed, when focus was in them.
-    assert "focus: inside ? tools.flipped : null" in code
-    # Only an open tool list's Details skips the page's usual effect after an Undo; a closed
-    # drawer keeps its old content, so "connected" alone would reopen it.
-    assert "if (isPanelOpen() && tools && tools.section.isConnected) {" in code
+def test_a_tool_description_wraps_to_two_lines():
     # A tool's description wraps to two lines, so it can be read without a pointer.
     rule = CSS.split(".sw-tx small.about {")[1].split("}")[0]
     assert "-webkit-line-clamp: 2" in rule and "nowrap" not in rule
@@ -1678,9 +1610,7 @@ def test_add_missing_and_a_refused_list_go_back_to_details():
     redraw = "() => drawHeld(name, detail, { warning }), () => showHeld(name), step)"
     assert redraw in gw()
     assert "() => showTool(serverName, name), step)" in gw()
-    for key in ("`offer:", '"move"', "`add:", '"add:form"', "`held:", '"more"', '"commands"'):
-        assert key in panel() + script("offer.js"), key
-    assert "`switch:${def.id}`" in details
+    assert 'more.dataset.focus = "more";' in details
     # Add missing's own list is never applied, so the server forgets it at once.
     assert "if (id) postJson(`/api/changes/${encodeURIComponent(id)}/cancel`)" in review
 
@@ -1726,7 +1656,7 @@ def test_an_add_in_a_project_offers_two_choices():
         "only, or in all projects.`",
     ):
         assert words in library
-    assert "startAdd(" in script("offer.js")
+    assert "startAdd(cell.add, client, row)" in library
 
 
 def test_the_kitden_card_says_what_the_gateway_governs():
@@ -1990,19 +1920,11 @@ def test_move_out_says_where_the_server_goes():
 
 
 def test_the_tool_list_has_a_strict_switch():
-    code = panel()
-    assert "Strict: only tools that are on" in code
-    assert "Only tools that are on are offered; a new tool waits." in code
-    assert "Set for all projects" in code
-    assert 'action: "gateway.strict"' in code
-
-
-def test_all_projects_says_unknown_folders_follow_it():
-    assert "These switches also apply in folders Kitden does not know." in panel()
+    assert 'action: "gateway.strict"' in gw()
 
 
 def test_the_tool_list_says_reads_and_writes_and_has_a_batch_switch():
-    code = panel()
+    code = panel() + gw()
     assert "Turn off every writing tool…" in code
     assert "from the server" in code and "by its name" in code
     assert 'action: "gateway.rules"' in code
@@ -2018,7 +1940,6 @@ def test_a_held_server_can_be_removed_or_put_back():
 def test_a_held_server_can_move_its_secrets_to_the_keychain():
     assert '"Move secrets to the Keychain…"' in panel()
     assert "server.plain_secrets" in gw()
-    assert 'plainSecrets(currentModel("gateway"), row.name)' in panel()
 
 
 def test_a_server_can_be_added_to_another_client():
@@ -2094,78 +2015,18 @@ def test_details_shows_an_instruction_files_first_lines():
 
 def test_details_answer_in_order_and_fold_the_evidence():
     details = script("details.js")
-    assert "for (const id of detailsOrder(" in details
     assert '"Technical details"' in details and "fold(" in details
-    assert 'el("pre", "preview"' in details  # the first lines, now inside the fold
-    assert "details.tech" in CSS and ".why-lines" in CSS
-    # The Why names a folder several clients read; the route words are Part 2's.
-    assert "`One folder, read by ${joinWords(" in details
-    assert "ROUTE_WORDS.folder" in details and "ROUTE_WORDS.kitden" in details
-    # A layer shows no path, command or file lines of its own: they wait in the fold.
-    layer = details.split("function layer(def, said)")[1].split("\n}\n")[0]
-    assert "shortPath" not in layer and "def.summary" not in layer and "preview" not in layer
-
-
-def test_details_say_what_the_lead_changes_and_link_to_the_other_pages():
-    details = script("details.js")
-    for words in (
-        '"Compare across clients"',
-        '"Manage tools"',
-        '"In this project."',
-        '"You choose this project or all projects next."',
-        '"All projects."',
-        '"All projects except this one."',
-        '"Its tool switches change"',
-    ):
-        assert words in details, words
-    assert "affectsText(affectsFor(" in details
-    # A move into the Kitden gateway names the clients whose kitden entry is on, by the rule the
-    # Gateway card uses, without details.js reading gateway.js.
-    assert "kitdenClients(data.setupServer).linked" in details
-    assert 'from "./gateway.js"' not in details
-    assert ".affects" in CSS and ".links" in CSS
-    # A link closes the panel first, reads the Library's rows like the rail, then goes there.
-    follow = details.split("export async function followLink(link)")[1].split("\n}\n")[0]
-    assert follow.index("closePanel(") < follow.index("goTo(")
-    assert "raceSlow(loadLibraryFor(libraryChoice(" in follow
-    assert "dataset.focus = `link:${link.view}`" in details
-    # A server has no row in the Library's List: the Gateway's List shows who uses it.
-    assert 'view !== "library" && row.kind !== "mcp_server"' in details
-    assert "contextLinks(" not in gw()
-
-
-def test_the_page_and_the_server_say_why_an_add_reaches_cursor_alike():
-    # The words live with the other page words, in parts.js.
-    parts, offer = script("parts.js"), script("offer.js")
-    for owner in ("Codex", "Claude Code"):
-        assert f'"{READS_FOLDER.format(reader="Cursor", owner=owner)}"' in parts, owner
-    assert f'"{LOADS_PLUGINS}"' in parts
-    assert "REACH_NOTES" in offer and "const REACH_NOTES" not in offer
-    # One rule: the Add form's Cursor line asks addReach too.
-    also = offer.split("export function alsoLoads(")[1].split("\n}\n")[0]
-    assert "addReach(" in also
-
-
-def test_skill_and_plugin_details_fold_paths_commands_and_versions():
-    offer = script("offer.js")
-    show = offer.split("export function showSkill(")[1].split("\n}\n")[0]
-    assert "technical([" in show
-    assert 'el("li", "mono", shortPath(skill.path))' not in show
-    # A plugin's MCP commands, its source and its pinned version wait in the fold too; the
-    # list says only the servers' names.
-    plugin = offer.split("export function showOffer(")[1].split("\n}\n")[0]
-    assert "const rows = [...sourceRows(offer), ...mcpRows(offer)];" in plugin
-    assert "technical(rows)" in plugin
-    assert "Pinned to ${" not in plugin and '"mono", where' not in plugin
-    assert "${server.runs}" not in offer and 'add("MCP servers"' in offer
-    assert "...(offer ? mcpRows(offer) : [])" in script("details.js")
+    assert 'el("pre", "preview"' in details  # the first lines, inside the fold
+    assert "details.tech" in CSS
+    # The route words are Part 2's.
+    assert "ROUTE_WORDS.folder" in details
 
 
 def test_pages_import_the_side_panel_through_panel_js():
     for name in ("gateway.js", "gateway-details.js", "gateway-drag.js", "offer.js"):
         assert 'from "./details.js"' not in script(name), name
     shell = script("panel.js")
-    for word in ("contextLinks", "linksRow", "technical"):
+    for word in ("detailsCard", "technical"):
         assert re.search(rf"export \{{[^}}]*\b{word}\b[^}}]*\}} from \"./details.js\"", shell), word
 
 
@@ -2196,10 +2057,6 @@ def test_a_cell_kept_from_the_last_good_read_has_a_dashed_dot():
 def test_needs_review_is_an_amber_ring_with_a_small_dot():
     assert ".s-review { color: var(--lamp-warn); }" in CSS
     assert ".s-review .dot::after { transform: scale(0.5); border-radius: 50%; }" in CSS
-
-
-def test_details_says_when_a_kept_definition_was_read_in_the_server_words():
-    assert STALE.format("${") in panel()
 
 
 def test_overview_notes_say_same_name_another_source():
@@ -2898,8 +2755,6 @@ def test_the_library_add_panel_says_the_decided_words():
     assert "liftGhost" in script("gateway-drag.js") and "export function liftGhost(" in script(
         "map-drag.js"
     )
-    # A skill that needs its plugin says the same words as the copy refuses with.
-    assert "This skill needs the rest of its plugin. Add the plugin instead." in script("offer.js")
     # Why the panel offers a plugin to no client, beside it in views/skills.py.
     assert NO_CLIENT == "No client here can get {name}."
     assert NEEDS_PLUGIN == "This skill needs the rest of its plugin. Add the plugin instead."
@@ -3010,6 +2865,25 @@ def test_the_instructions_map_words():
     views = (STATIC.parents[1] / "views/instructions_map.py").read_text()
     assert 'COMMANDS = {"key": "commands", "name": "Commands and agents"}' in views
     assert 'const COMMAND_WORDS = { command: "Command", agent: "Agent" };' in script("library.js")
+
+
+def test_commands_in_library_details_say_the_page_never_runs_them():
+    # FR-029: "Commands…" under More on a plugin or a marketplace's caption, from /api/commands.
+    details = script("library-details.js")
+    for words in (
+        'const COMMANDS = "Commands…";',
+        'const RUN_YOURSELF = "You run these yourself. This page never runs them.";',
+        'const NO_COMMANDS = "No commands for this item.";',
+        'const NOT_LOADED = "Could not load the commands.";',
+        'const COPY = "Copy";',
+        'const COPIED = "Copied";',
+        'const NOT_COPIED = "Could not copy";',
+        "getJson(`/api/commands${query({ item })}`)",
+        'copy.setAttribute("aria-label", `${COPY} ${command.label}`);',
+    ):
+        assert words in details, words
+    # The old Details and their offer chain are gone; the page reads no /api/offer.
+    assert "/api/offer" not in "\n".join(script(f.name) for f in (STATIC / "js").glob("*.js"))
 
 
 # The Library List (Phase 6B Task 6, spec 5.4, frame L3) ------------------------------------------

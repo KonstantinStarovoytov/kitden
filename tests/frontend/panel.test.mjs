@@ -8,72 +8,25 @@ delete globalThis.navigator;
 // What watches the page: each observer's callback and the node it observes.
 const observers = [];
 globalThis.MutationObserver = class { constructor(fn) { this.fn = fn; observers.push(this); } observe(node, options) { this.node = node; this.options = options; } };
-const { FLOAT_MIN, addScope, afterParts, alignGroups, canShowReview, closeForProject, closePanel, holdPanel, countedDefinition, changeOutcome, chosenKeys, callsText, changeWords, floatRoom, floatTop, floatsAt, footerActions, heldActions, initPanel, isPanelOpen, loadPanel, offerLabel, openItem, layerState, leftOutText, kindWord, loadsLede, moveFor, moveTargets, openPanel, panelState, plainSecrets, projectLabel, review, reviewLede, scopeWords, stepTo, swapContent, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
+const { FLOAT_MIN, addScope, afterParts, alignGroups, canShowReview, closeForProject, closePanel, holdPanel, changeOutcome, chosenKeys, callsText, changeWords, floatRoom, floatTop, floatsAt, heldActions, initPanel, isPanelOpen, loadPanel, offerLabel, leftOutText, moveTargets, openPanel, panelState, projectLabel, review, reviewLede, stepTo, swapContent, toolRows, writingToolsOn } = await import('../../src/kitden/web/static/js/panel.js');
 const { CALM, reducedMotion } = await import('../../src/kitden/web/static/js/motion.js');
 const { readFileSync } = await import('node:fs');
-const { detailsCard, factsBlock } = await import('../../src/kitden/web/static/js/details.js');
-const { addOptions, whyNoAction } = await import('../../src/kitden/web/static/js/offer.js');
+const { detailsCard, factsBlock, scopeWords } = await import('../../src/kitden/web/static/js/details.js');
 const { data, state } = await import('../../src/kitden/web/static/js/store.js');
 const { addToTray, cancelTray, tray } = await import('../../src/kitden/web/static/js/tray.js');
 
-const github = { kind: 'mcp_server', name: 'github' };
 const direct = { name: 'github', items: ['entry-1', 'entry-2'] };
 const obot = { id: 'gw-1', movable: true };
 const other = { id: 'gw-2', movable: false };
 const kitden = { id: 'kitden', kind: 'kitden', name: 'Kitden gateway', movable: true };
 const model = (gateways, local = []) => ({ gateways, groups: { move: [direct], local, plugin: [] } });
-const remove = { def: { id: 'entry-1', client: 'codex' }, action: 'mcp.remove_direct' };
-const duplicate = { level: 'warning', client: 'codex', fix_action: 'mcp.remove_direct' };
-
-test('without a registered gateway Details has nothing to move into', () => {
-  assert.equal(moveFor(github, model([])), null);
-  // So it behaves as before: a lone Remove leads, and no gateway note is due.
-  assert.deepEqual(footerActions([remove], [], null), { lead: remove, rest: [] });
-});
-
-test('the gateways that take servers are the move targets', () => {
-  assert.deepEqual(moveFor(github, model([other, obot])), { items: direct.items, gateways: [obot] });
-  assert.deepEqual(moveFor(github, model([other])), { items: direct.items, gateways: [] });
-});
 
 test('the Kitden gateway is offered first, a registered gateway second, never in its place', () => {
   assert.deepEqual(moveTargets(model([kitden, other, obot]), 'move'), [kitden, obot]);
-  assert.deepEqual(moveFor(github, model([kitden, obot])), { items: direct.items, gateways: [kitden, obot] });
   // A local server starts a program on this Mac: only the Kitden gateway can hold it.
-  const local = { name: 'files', items: ['entry-3'] };
   assert.deepEqual(moveTargets(model([kitden, obot]), 'local'), [kitden]);
-  assert.deepEqual(moveFor({ kind: 'mcp_server', name: 'files' }, model([kitden, obot], [local])), { items: local.items, gateways: [kitden] });
-  // Without it a local server stays where it is, and says nothing about a gateway.
-  assert.equal(moveFor({ kind: 'mcp_server', name: 'files' }, model([obot], [local])), null);
   assert.deepEqual(moveTargets(model([kitden, obot]), 'plugin'), []);
   assert.deepEqual(moveTargets(null, 'move'), []);
-});
-
-test('only an MCP server with entries to take can move, matched by its exact name', () => {
-  assert.equal(moveFor({ kind: 'plugin', name: 'github' }, model([obot])), null);
-  assert.equal(moveFor({ kind: 'mcp_server', name: 'GitHub' }, model([obot])), null);
-  assert.equal(moveFor(github, { gateways: [obot], groups: { move: [{ name: 'github', items: [] }] } }), null);
-  assert.equal(moveFor(github, null), null);
-});
-
-test('Move leads when nothing is wrong, and Remove waits under More', () => {
-  const move = { items: direct.items, gateways: [obot] };
-  assert.deepEqual(footerActions([remove], [], move), { lead: 'move', rest: [remove] });
-});
-
-test('a problem comes before an option: the duplicate fix leads, Move waits', () => {
-  const move = { items: direct.items, gateways: [kitden, obot] };
-  assert.deepEqual(footerActions([remove], [duplicate], move), { lead: remove, rest: ['move'] });
-  // A warning no button fixes: nothing leads, Move is one plain choice.
-  const unfixable = { ...duplicate, fix_action: null };
-  assert.deepEqual(footerActions([remove], [unfixable], move), { lead: null, rest: ['move', remove] });
-});
-
-test('a duplicate plugin leads with Remove; turning it off waits under More', () => {
-  const off = { def: { id: 'p-1', client: 'claude_code' }, action: 'plugin.disable' };
-  const removePlugin = { def: { id: 'p-1', client: 'claude_code' }, action: 'plugin.remove' };
-  const twice = { level: 'warning', client: 'claude_code', fix_action: 'plugin.remove' };
-  assert.deepEqual(footerActions([off, removePlugin], [twice], null), { lead: removePlugin, rest: [off] });
 });
 
 test('a plugin removal names the plugin and the client', () => {
@@ -114,22 +67,6 @@ test('two Remove buttons of one client name their folder', () => {
   assert.equal(offerLabel(offers[0], offers.slice(0, 1)), 'Remove from Codex…');
   const project = { def: { id: 'p', client: 'codex', scope: 'project', project: '/w/api', source: '/w/api/.agents/skills/x/SKILL.md' }, action: 'skill.remove' };
   assert.equal(offerLabel(project, [offers[0], project]), 'Remove from Codex (project api)…');
-});
-
-test('a server to add in the gateway by hand first keeps a lone Remove plain', () => {
-  const move = { items: direct.items, gateways: [] };
-  assert.deepEqual(footerActions([remove], [], move), { lead: null, rest: [remove] });
-});
-
-test('a gateway that could not be read keeps a lone Remove plain', () => {
-  // Without the gateway model Move cannot be judged, so Remove must not lead in its place.
-  const unread = moveFor(github, null, true);
-  assert.deepEqual(unread, { items: [], gateways: [], unread: true });
-  assert.deepEqual(footerActions([remove], [], unread), { lead: null, rest: [remove] });
-  // Only an MCP server can move; for anything else the gateway does not matter.
-  assert.equal(moveFor({ kind: 'plugin', name: 'github' }, null, true), null);
-  // An earlier read for this project is still shown, so it still decides.
-  assert.deepEqual(moveFor(github, model([obot]), true), { items: direct.items, gateways: [obot] });
 });
 
 // The Kitden gateway: moves, tool rules and their review -----------------------------------
@@ -393,87 +330,6 @@ test('what Add skills leaves out is one plain line, or nothing', () => {
   );
 });
 
-// One Details for every row: every way to add it, or why not -------------------------------
-
-const cell = (fields) => ({ state: 'none', where: null, items: [], word: null, add: null, reason: null, ...fields });
-const plain = { action: 'plugin.install', label: '+ Add', plugin: 'figma@openai-curated', skill: null, marketplace: null, warn: null };
-const skills = { ...plain, action: 'plugin.skills', label: '+ Add skills', plugin: 'superpowers@cursor-public' };
-const labels = (options) => options.map((o) => o.label);
-const entry = { kind: 'plugin', id: 'figma@openai-curated' };
-
-test('Details offer each cell action as a button', () => {
-  // A Cursor plugin: Add skills to the other two, in column order whatever order the cells come in.
-  const twin = { kind: 'plugin', cells: { cursor: cell({ state: 'on' }), codex: cell({ add: skills }), claude_code: cell({ add: skills }) } };
-  const options = addOptions(twin, null);
-  assert.deepEqual(labels(options), ['Add skills to Claude Code…', 'Add skills to Codex…']);
-  assert.deepEqual(options.map((o) => [o.client, o.add]), [['claude_code', skills], ['codex', skills]]);
-  // "+ Add" in the Codex column is "Add to Codex…"; a skill's plugin add keeps its words.
-  const plugin = { kind: 'plugin', cells: { claude_code: cell({ state: 'on' }), codex: cell({ add: plain }), cursor: cell({ state: 'via' }) } };
-  assert.deepEqual(labels(addOptions(plugin, entry)), ['Add to Codex…']);
-  const needs = { kind: 'skill', cells: { claude_code: cell({ state: 'on' }), cursor: cell({ add: { ...plain, label: '+ Add the plugin' } }) } };
-  assert.deepEqual(labels(addOptions(needs, entry)), ['Add the plugin to Cursor…']);
-  // Two clients take it as a plain add: "Add…" too, to add to both in one review. It needs the
-  // marketplace's entry, so without one it is left out.
-  const two = { kind: 'plugin', cells: { claude_code: cell({ add: plain }), codex: cell({ add: plain }), cursor: cell({ reason: 'No.' }) } };
-  assert.deepEqual(labels(addOptions(two, entry)), ['Add to Claude Code…', 'Add to Codex…', 'Add…']);
-  assert.equal(addOptions(two, entry)[2].form, true);
-  assert.deepEqual(labels(addOptions(two, null)), ['Add to Claude Code…', 'Add to Codex…']);
-  // The real install comes first, then Add the plugin, then Add skills; each in column order.
-  // Add skills and Add the plugin are not plain adds of the item, so they never make "Add…".
-  const mixed = { kind: 'plugin', cells: { claude_code: cell({ add: skills }), codex: cell({ add: plain }), cursor: cell({ add: skills }) } };
-  const ordered = addOptions(mixed, entry);
-  assert.deepEqual(labels(ordered), ['Add to Codex…', 'Add skills to Claude Code…', 'Add skills to Cursor…']);
-  assert.equal(footerActions([], [], null, ordered).lead.label, 'Add to Codex…');
-  const copy = { ...plain, action: 'skill.install', plugin: null, skill: 'tidy@skills' };
-  const skill = { kind: 'skill', cells: { claude_code: cell({ add: copy }), codex: cell({ add: { ...plain, label: '+ Add the plugin' } }), cursor: cell({ add: copy }) } };
-  assert.deepEqual(labels(addOptions(skill, { kind: 'skill' })), ['Add to Claude Code…', 'Add to Cursor…', 'Add the plugin to Codex…', 'Add…']);
-
-  // With no lead yet, the first add is the primary button and the rest wait under More.
-  const [first, second] = options;
-  assert.deepEqual(footerActions([], [], null, [first, second]), { lead: first, rest: [second] });
-  // Today's lead stays first: a lone switch leads and the adds wait.
-  const off = { def: { id: 'p-1', client: 'claude_code' }, action: 'plugin.disable' };
-  assert.deepEqual(footerActions([off], [], null, [first]), { lead: off, rest: [first] });
-  // A warning no button fixes: nothing leads, so no add looks like the fix.
-  const twice = { level: 'warning', client: 'cursor', fix_action: null, via: 'claude_code' };
-  assert.deepEqual(footerActions([], [twice], null, [first, second]), { lead: null, rest: [first, second] });
-});
-
-test('Details with nothing to do say why first', () => {
-  const cant = (client) => `${client} can't install this plugin, and it has no skills to copy.`;
-  const row = { kind: 'plugin', cells: { cursor: cell({ reason: cant('Cursor') }), codex: cell({ state: 'unk' }), claude_code: cell({ reason: cant('Claude Code') }) } };
-  // No button at all: nothing leads and nothing waits.
-  assert.deepEqual(footerActions([], [], null, addOptions(row, null)), { lead: null, rest: [] });
-  // Clients with the same reason make one sentence, in column order.
-  assert.equal(whyNoAction(row, []), "Claude Code and Cursor can't install this plugin, and it has no skills to copy.");
-  const elsewhere = (client) => `${client} has it in another project.`;
-  const three = { cells: { claude_code: cell({ reason: elsewhere('Claude Code') }), codex: cell({ reason: elsewhere('Codex') }), cursor: cell({ reason: elsewhere('Cursor') }) } };
-  assert.equal(whyNoAction(three), 'Claude Code, Codex and Cursor have it in another project.');
-  const mixed = { cells: { claude_code: cell({ reason: cant('Claude Code') }), codex: cell({ reason: elsewhere('Codex') }), cursor: cell({ reason: cant('Cursor') }) } };
-  assert.equal(whyNoAction(mixed), `Claude Code and Cursor can't install this plugin, and it has no skills to copy. ${elsewhere('Codex')}`);
-  const needs = (client) => `${client} can't install the plugin this skill needs.`;
-  assert.equal(whyNoAction({ cells: { codex: cell({ reason: needs('Codex') }), cursor: cell({ reason: needs('Cursor') }) } }), "Codex and Cursor can't install the plugin this skill needs.");
-  const outside = "This skill uses files outside its folder, so it can't be copied.";
-  assert.equal(whyNoAction({ cells: { claude_code: cell({ reason: outside }), codex: cell({ reason: outside }) } }), outside);
-  // No reasons: where to change it, from the item's own settings.
-  const hint = 'On/off is stored in your ChatGPT account. Change it in Codex: Plugins.';
-  const remote = { cells: { codex: cell({ state: 'unk' }) } };
-  assert.equal(whyNoAction(remote, [{ change_hint: null }, { change_hint: hint }]), hint);
-  // Nothing known (an MCP server row from the scan has no reasons): no line.
-  assert.equal(whyNoAction({ cells: { codex: { state: 'on', where: null, items: [] } } }, []), '');
-});
-
-test('the Details lede says where it loads, and where it may', () => {
-  const columns = [{ id: 'claude_code', name: 'Claude Code' }, { id: 'codex', name: 'Codex' }, { id: 'cursor', name: 'Cursor' }];
-  const lede = (states) => loadsLede({ cells: Object.fromEntries(Object.entries(states).map(([c, state]) => [c, cell({ state })])) }, columns);
-  assert.equal(lede({ claude_code: 'on', codex: 'gw', cursor: 'none' }), 'On in Claude Code and Codex.');
-  // The page cannot tell whether it is on: it may load there.
-  assert.equal(lede({ codex: 'unk' }), 'Unknown in Codex.');
-  assert.equal(lede({ claude_code: 'on', codex: 'unk' }), 'On in Claude Code. Unknown in Codex.');
-  assert.equal(lede({ claude_code: 'off', cursor: 'via' }), 'Not on here.');
-  assert.equal(lede({ claude_code: 'on', codex: 'review' }), 'On in Claude Code. Needs review in Codex: same name, another source.');
-});
-
 test('Details names the scope with the same phrases as the cells', () => {
   assert.equal(scopeWords({ scope: 'user' }, ''), 'All projects');
   assert.equal(scopeWords({ scope: 'project', project: '/w/website' }, '/w/website'), 'This project');
@@ -529,11 +385,6 @@ test('a held server with plain secrets also offers to move them to the Keychain'
   const actions = heldActions('files', ['codex'], true);
   assert.deepEqual(actions.map((a) => a.label), ['Remove from the Kitden gateway…', 'Put back in Codex…', 'Move secrets to the Keychain…']);
   assert.deepEqual(actions[2].body, { action: 'gateway.keychain', targets: [], params: { server: 'files' } });
-  const model = { gateways: [{ kind: 'kitden', servers: [{ name: 'files', plain_secrets: true }, { name: 'docs', plain_secrets: false }] }] };
-  assert.equal(plainSecrets(model, 'files'), true);
-  assert.equal(plainSecrets(model, 'docs'), false);
-  assert.equal(plainSecrets(model, 'nope'), false);
-  assert.equal(plainSecrets(null, 'files'), false);
 });
 
 test('moving the secrets of a held server is named', () => {
@@ -567,37 +418,6 @@ test('the align review groups what each client lacks and keeps the choice', () =
   data.projects = [{ id: 'p1', path: '/Users/me/work/website' }];
   assert.deepEqual(changeWords({ action: 'project.align', steps: [{ client: 'codex', name: 'github' }], align }, { params: { project: 'p1' } }), { title: 'Add what website is missing', done: 'Added 1 item for website' });
   data.projects = null;
-});
-
-test('an instruction file never says Loads', () => {
-  const columns = [{ id: 'codex', name: 'Codex' }, { id: 'cursor', name: 'Cursor' }];
-  const row = { kind: 'instructions', category: 'instructions', cells: { codex: { state: 'on' }, cursor: { state: 'on' } } };
-  assert.equal(loadsLede(row, columns), 'On in Codex and Cursor.');
-  assert.equal(loadsLede({ ...row, cells: { codex: { state: 'on' }, cursor: { state: 'none' } } }, columns), 'On in Codex.');
-  assert.equal(kindWord(row), 'Instruction file');
-  assert.equal(kindWord({ kind: 'instructions', category: 'agent' }), 'Agent');
-  assert.equal(kindWord({ kind: 'skill' }), 'Skill');
-});
-
-test('an instruction file layer never says Loads or Not loaded', () => {
-  const def = { kind: 'instructions', enabled: 'on', why: 'Read when a session starts.' };
-  assert.equal(layerState({ ...def, loads: true }).badge, 'On');
-  assert.equal(layerState({ ...def, loads: false, project: '/h/work/site' }).badge, 'In a project');
-  assert.equal(layerState({ ...def, loads: false, project: null }).badge, '');
-  assert.equal(layerState({ kind: 'skill', enabled: 'on', loads: false, why: 'x' }).badge, 'Not loaded');
-  // The badge says On; the why never says Loads again under it, and the Why lines at
-  // the top say which definition overrides which.
-  const loaded = { kind: 'mcp_server', enabled: 'on', loads: true };
-  assert.equal(layerState({ ...loaded, why: 'Loads.' }).why, '');
-  assert.equal(layerState({ ...loaded, why: 'Loads. It overrides the user definition.' }).why, '');
-});
-
-test('Details shows the tool count once, from a definition in the Kitden gateway', () => {
-  const direct = { client: 'codex', via_gateway: null, tools: null };
-  const held = { client: 'cursor', via_gateway: 'kitden', tools: 3 };
-  assert.equal(countedDefinition([direct, held, { ...held, client: 'claude_code' }]), held);
-  assert.equal(countedDefinition([direct]), null);
-  assert.equal(countedDefinition([{ ...held, tools: null }]), null);
 });
 
 test('an Add missing list with nothing chosen shows as a review, not an error', () => {
@@ -883,13 +703,6 @@ test('a project at / is named /', () => {
   assert.equal(projectLabel('root'), '/');
   assert.equal(projectLabel('p1'), 'website');
   data.projects = null;
-});
-
-test('a definition kept from the last good read says when, on this Mac clock', () => {
-  const at = new Date(2026, 9, 22, 14, 2).toISOString();
-  const def = { kind: 'mcp_server', enabled: 'on', loads: true, why: '', stale_at: at };
-  assert.equal(layerState(def).stale, 'From the last good read at 14:02');
-  assert.equal(layerState({ ...def, stale_at: null }).stale, null);
 });
 
 // Details beside the page -----------------------------------------------------------------

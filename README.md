@@ -62,11 +62,10 @@ cannot see it, such as your Claude account. "Needs review" means another client 
 the same name from another source. That row offers no "+ Add", because an add would copy only one
 side.
 
-A row opens its **Details**. They say why each client loads the item, for example "One folder,
-read by Codex and Cursor.", and which clients and projects its main action changes, before you
-press it. Paths, commands and an instruction file's first lines wait under Technical details.
-"Compare across clients" opens the same item in the Library, and "Manage tools" opens a server of
-the Kitden gateway on the Gateway page.
+A row opens its **Details**. They say where each client loads the item, for example "Claude
+Code loads it in every project. Cursor gets it through Claude Code.", and what you can do there.
+Paths, commands and an instruction file's first lines wait under Technical details.
+"Commands…" on a plugin or a marketplace shows the commands you run yourself, each with Copy.
 
 The action sits in the client's cell. Where Kitden can add an item to that client, the cell says
 "+ Add". "+ Add skills" copies the skills of a plugin that work on their own into a client that

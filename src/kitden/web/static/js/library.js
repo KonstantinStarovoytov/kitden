@@ -49,12 +49,6 @@ export let previousCells = {};
 let morphNext = false;
 export function morphOnNextRender() { morphNext = true; }
 
-// The selection an item stands for, in a link from another page: its kind and full name (a
-// plugin's "figma@a"); one only in a marketplace goes by its entry there.
-export function rowSel(row) {
-  return { kind: row.kind, name: row.lookup || row.offer || row.name };
-}
-
 // A Details title: the source too when two rows share the name ("superpowers · cursor-public").
 export function rowTitle(row) {
   return row.same_name && row.source ? `${row.name} · ${row.source}` : row.name;
@@ -246,13 +240,6 @@ function load(asked = asking(), draw = true) {
   });
   pending = job;
   return job.promise;
-}
-
-// An item as the List read it last (`key`, its id), for Details drawn again after a change; null
-// off the Library or when it is gone.
-export function shownRow(key) {
-  if (state.view !== "library" || !cache.answer) return null;
-  return cache.answer.groups.flatMap((group) => group.items).find((item) => item.id === key) || null;
 }
 
 // Typing waits until it stops; any other choice asks at once.

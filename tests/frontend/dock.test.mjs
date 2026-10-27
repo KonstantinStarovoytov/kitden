@@ -138,7 +138,7 @@ const { appliedToast, barWords, drawTray, initDock, outcomeLine, rowWords, setCa
 const { changeWords, detailsAgain, undoChange } = await import('../../src/kitden/web/static/js/review.js');
 const { addToTray, cancelTray, endApplied, takeOut, tray, tryAgain } = await import('../../src/kitden/web/static/js/tray.js');
 const { busy, render, setBusy, setRenderer, state } = await import('../../src/kitden/web/static/js/store.js');
-const { closePanel, hideToast, isPanelOpen, keepFrom, openPanel, panelState, toast, toolsSection } = await import('../../src/kitden/web/static/js/panel.js');
+const { closePanel, hideToast, isPanelOpen, keepFrom, offNote, openPanel, panelState, toast } = await import('../../src/kitden/web/static/js/panel.js');
 initDock();
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -1194,30 +1194,9 @@ test('a tool list of a server off by the shared rule says how many projects deci
   await fresh();
   // All projects: files is off by the shared rule, two known projects turn it on.
   const projects = [{ id: 'a', server: 'on', tools: {} }, { id: 'b', server: 'on', tools: {} }, { id: 'c', server: 'off', tools: {} }];
-  queue('/api/gateway/tools?server=files', { status: 200, json: { server: 'files', state: 'off', shared: 'off', strict: false, tools: [{ name: 'read_file', state: 'on', effective: 'off', hint: 'reads' }], projects } });
-  const section = toolsSection('files', () => {});
-  pages['#drawer'].replaceChildren(section);
-  await settle();
-  assert.ok(section.textContent.includes('files is off by the shared rule, so none of its tools are offered. 2 projects decide otherwise.'), section.textContent);
-  assert.ok(!section.textContent.includes('off in all projects'), section.textContent);
-  pages['#drawer'].replaceChildren();
-});
-
-test('a tool list drawn again gives focus to Refresh tools when the control asked for is gone', async () => {
-  await fresh();
-  // The writing tools are off now: "Turn off every writing tool…" is not drawn.
-  queue('/api/gateway/tools?server=files', { status: 200, json: { server: 'files', state: 'on', strict: false, tools: [{ name: 'read_file', state: 'on', hint: 'reads' }] } });
-  const section = toolsSection('files', () => {}, { focus: 'writing' });
-  pages['#drawer'].replaceChildren(section);
-  await settle();
-  assert.equal(globalThis.document.activeElement.dataset.focus, 'tools:refresh');
-  // A control that is there keeps it.
-  queue('/api/gateway/tools?server=files', { status: 200, json: { server: 'files', state: 'on', strict: false, tools: [{ name: 'read_file', state: 'on', hint: 'reads' }] } });
-  const again = toolsSection('files', () => {}, { focus: 'tool:read_file' });
-  pages['#drawer'].replaceChildren(again);
-  await settle();
-  assert.equal(globalThis.document.activeElement.dataset.focus, 'tool:read_file');
-  pages['#drawer'].replaceChildren();
+  const note = offNote({ server: 'files', state: 'off', shared: 'off', strict: false, tools: [{ name: 'read_file', state: 'on', effective: 'off', hint: 'reads' }], projects }, null);
+  assert.equal(note.textContent, 'files is off by the shared rule, so none of its tools are offered. 2 projects decide otherwise.');
+  assert.ok(!note.textContent.includes('off in all projects'));
 });
 
 const WAITS = 'Another change is being written.';
@@ -1294,34 +1273,6 @@ test('Cancel from the dock gives focus to the place the page names for its rows'
   }
 });
 
-test('an Undo with a tool list open leaves focus where it was, unless it was in Details', async () => {
-  await fresh();
-  const answer = { status: 200, json: { server: 'files', state: 'on', strict: false, tools: [{ name: 'read_file', state: 'on', hint: 'reads' }] } };
-  queue('/api/gateway/tools?server=files', answer);
-  const asked = [];
-  const section = toolsSection('files', (next) => { asked.push(next); }, { flip: 'tool:read_file' });
-  openPanel([section]);
-  await settle();
-  const outside = fakeNode('button');
-  pages['#main'].replaceChildren(outside);
-  try {
-    outside.focus();
-    queue('/api/changes/c0/undo', { status: 200, json: { id: 'c0', state: 'undone', steps: [] } });
-    await quietly(() => undoChange({ id: 'c0' }));
-    assert.deepEqual(asked, [{ focus: null, flip: 'tool:read_file' }]);
-    assert.equal(globalThis.document.activeElement, outside);
-    // Focus in Details goes to the switch the Undo changed back.
-    pages['#drawer'].focus();
-    queue('/api/changes/c0/undo', { status: 200, json: { id: 'c0', state: 'undone', steps: [] } });
-    await quietly(() => undoChange({ id: 'c0' }));
-    assert.deepEqual(asked[1], { focus: 'tool:read_file', flip: 'tool:read_file' });
-  } finally {
-    hideToast();
-    closePanel({ focus: false });
-    pages['#main'].replaceChildren();
-  }
-});
-
 test("a row's review follows its row when it is added again under the same key", async () => {
   await fresh();
   queue(PREVIEW, previewed('c1'));
@@ -1344,7 +1295,7 @@ test('Details read again stay quiet only while the panel shows them; a read draw
   await fresh();
   queue(PREVIEW, previewed('c1'));
   await addToTray(add('github'));
-  // Details whose read waits, and that draw, as openItem does, only while they are what the panel
+  // Details whose read waits, and that draw, as a Gateway card does, only while they are what the panel
   // shows.
   let release;
   const held = new Promise((resolve) => { release = resolve; });

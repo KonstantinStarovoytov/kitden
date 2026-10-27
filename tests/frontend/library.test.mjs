@@ -393,7 +393,7 @@ test('a hide button saves the choice, asks again, then focuses the next column o
 });
 
 // Smooth changes: rows that stay slide from where they were, new rows rise in, a tab slides.
-const { raceSlow, rowMoves, rowSel, tabDirection } = await import('../../src/kitden/web/static/js/library.js');
+const { raceSlow, rowMoves, tabDirection } = await import('../../src/kitden/web/static/js/library.js');
 
 test('rows that stay move from their old place; new rows are the ones that rise in', () => {
   const before = new Map([['a', 100], ['b', 140], ['c', 180]]);
@@ -560,9 +560,4 @@ test('no hide is offered when hiding would leave no client Kitden could read', (
 test('a kept cell asks its socket for the dashed dot, so a morph keeps it', () => {
   const node = cellNode(row({ codex: cell({ state: 'on', stale_at: '2026-10-22T14:02:00+00:00', reason: 'x' }) }), 'codex');
   assert.equal(node.className, 'socket s-on stale');
-});
-
-test('a link from another page selects an item by its kind and full name', () => {
-  assert.deepEqual(rowSel({ key: 'k1', kind: 'plugin', name: 'figma', lookup: 'figma@a' }), { kind: 'plugin', name: 'figma@a' });
-  assert.deepEqual(rowSel({ key: 'k2', kind: 'skill', name: 'tidy', lookup: null, offer: 'tidy@x' }), { kind: 'skill', name: 'tidy@x' });
 });

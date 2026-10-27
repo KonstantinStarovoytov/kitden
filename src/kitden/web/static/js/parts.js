@@ -298,13 +298,6 @@ export const ROUTE_WORDS = {
   desktop: "from the Desktop app", kitden: "through the Kitden gateway", plugin: "from a plugin",
   folder: "through {}'s folder",
 };
-// Why a change reaches Cursor too, in the server's words (views/words.py READS_FOLDER and
-// LOADS_PLUGINS): a skill copy in Codex's or Claude Code's folder, or Claude Code's plugin.
-export const REACH_NOTES = {
-  codex: "Cursor reads Codex's folder",
-  claude_code: "Cursor reads Claude Code's folder",
-  plugin: "Cursor loads Claude Code's plugins",
-};
 // The first scan's line: what is still read, and how much of the work is done (0 to 1). Before
 // the page has its data it names the clients it reads; then the slow answers still checked.
 export function scanLine(view) {
@@ -666,17 +659,6 @@ export function skillRemoval(steps) {
   const lose = reached.filter((c) => !keeps.has(c));
   const clients = (lose.length ? lose : reached).sort((a, b) => CLIENT_ORDER.indexOf(a) - CLIENT_ORDER.indexOf(b));
   return { clients, oneCopy: !lose.length };
-}
-
-// How many tools a server in the Kitden gateway adds, when Kitden knows: "12 tools".
-export function toolsWord(server) {
-  return server.tools ? plural(server.tools, "tool", "tools") : null;
-}
-
-// The tool count as a quiet node: small text in a row, a line in Details. Null when unknown.
-export function toolsNode(server, inRow = false) {
-  const word = toolsWord(server);
-  return word ? el(inRow ? "small" : "div", inRow ? "meta" : "why", word) : null;
 }
 
 // The engine's error of a change that did not check out ends with this sentence only when

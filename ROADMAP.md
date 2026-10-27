@@ -67,11 +67,14 @@ What Kitden does today and what comes next. Ideas and bugs:
   projects, in this project or in some projects. "For all projects" only ever changes your own
   settings, never a project's file. Each waits in preview until Apply. A review says when Kitden
   makes a project's local settings file, since git may not ignore it. The Library's map is read
-  only while the Library shows, and a read that failed is made again when it opens. Where a project's local settings decide, "Use the shared rule…"
-  takes that rule out; Details say whether the project's local or shared settings decide. A Codex
-  skill only one project has turns off on its own, and a project that already turns a skill off
-  cannot be ticked again. For a project in a subfolder of a git repository, Kitden reads and
-  writes the local settings at the repository's root, as Claude Code does.
+  only while the Library shows, and a read that failed is made again when it opens. Where a
+  project's local settings decide, "Use the shared rule…" takes that rule out; Details say
+  whether the project's local or shared settings decide. A Codex skill only one project has
+  turns off on its own, and a project that already turns a skill off cannot be ticked again. For
+  a project in a subfolder of a git repository, Kitden reads and writes the local settings at the
+  repository's root, as Claude Code does. "Commands…" on a plugin or a marketplace shows the
+  commands you run yourself to update, remove or install it elsewhere, each with Copy. The old
+  Details of a Library row, which nothing opened any more, are gone.
 - **Details float beside the map:** on Gateway, Library and Changes, Details float over the right
   of the page as in the mockup; the page keeps its width and the map stays wide. Another block's
   Details swap in place through a quiet skeleton.

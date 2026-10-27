@@ -104,7 +104,7 @@ def test_explain_says_what_a_change_reaches(client):
     assert {d["client"]: d["key"] for d in entry}["cursor"] == "mcpServers.Neon"
 
 
-@pytest.mark.parametrize("path", [*ENDPOINTS, "/api/offer?kind=plugin&id=x", "/api/market-servers"])
+@pytest.mark.parametrize("path", [*ENDPOINTS, "/api/library-offers", "/api/market-servers"])
 def test_new_endpoints_need_the_session_cookie(home, path):
     with TestClient(_app(home), base_url=ORIGIN, follow_redirects=False) as anonymous:
         assert anonymous.get(path).status_code == 401

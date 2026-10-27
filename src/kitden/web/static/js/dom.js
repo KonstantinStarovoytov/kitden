@@ -159,16 +159,6 @@ export function gridKey(rows, at, key) {
   return null;
 }
 
-// Only http and https links are ever made clickable.
-export function webLink(url, text) {
-  if (!/^https?:\/\//i.test(String(url || ""))) return el("span", null, text);
-  const link = el("a", "btn", text);
-  link.href = url;
-  link.target = "_blank";
-  link.rel = "noopener noreferrer";
-  return link;
-}
-
 export function shortPath(path) {
   return path ? String(path).replace(/^\/Users\/[^/]+/, "~") : "";
 }

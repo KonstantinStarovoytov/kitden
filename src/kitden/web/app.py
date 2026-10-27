@@ -1490,17 +1490,6 @@ def create_app(
             "skill": bool(cursor and cursor.reads_other_clients()),
         }
 
-    async def offer_view(request: Request) -> JSONResponse:
-        """One plugin or skill from the catalogs, for Details of a row not on this computer, with
-        `inherits`, so Details and the Add form can name Cursor."""
-        params = request.query_params
-        read = skill_catalog if params.get("kind") == "skill" else catalog
-        offers = await asyncio.to_thread(read, state.inventory, adapters)
-        found = next((o for o in offers if o["id"] == params.get("id")), None)
-        if found is None:
-            return _error("Not on this computer.", 404)
-        return JSONResponse({**found, "inherits": _inherits()})
-
     async def market_server_list(request: Request) -> JSONResponse:
         """The MCP servers that marketplace plugins on this computer bring, for the Add panel,
         each with why the gateway cannot take it (if so). No address and no command."""
@@ -1577,7 +1566,6 @@ def create_app(
             Route("/api/library-list", _read_model(_library_list)),
             Route("/api/library-map", _read_model(_library_map)),
             Route("/api/instructions-map", _read_model(_instructions_map)),
-            Route("/api/offer", offer_view),
             Route("/api/market-servers", market_server_list),
             Route("/api/library-offers", library_offer_list),
             Route("/api/explain", _read_model(_explain)),

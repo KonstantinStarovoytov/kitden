@@ -615,3 +615,24 @@ def test_a_project_whose_rule_file_kitden_does_not_write_is_outside(tmp_path):
     rules = library_map(inventory, adapters, None)["skill_rules"]
     assert rules["projects"][ids[str(api)]] == "own"  # api's own local file holds skillOverrides
     assert rules["outside"] == {}
+
+
+def test_a_marketplace_group_names_each_clients_entry_for_its_commands(tmp_path):
+    # Final fix wave: "Commands…" on a marketplace's caption reads /api/commands for each entry.
+    home = build_demo_home(tmp_path, "medium")
+    inventory, adapters = _read(home)
+    answer = library_map(inventory, adapters, None)
+    market = next(g for g in answer["groups"] if g["key"] == f"marketplace:{MARKET}")
+    by_id = {i.id: i for i in inventory.items}
+    assert market["entries"]
+    for client, item_id in market["entries"].items():
+        item = by_id[item_id]
+        assert (item.client, item.kind.value, item.name) == (client, "marketplace", MARKET)
+    # Other groups have none.
+    assert all("entries" not in g for g in answer["groups"] if g["kind"] != "marketplace")
+    app = create_app(lambda: inventory, token="tok", port=47800, home=home)
+    with TestClient(app, base_url=ORIGIN) as page:
+        page.get("/?token=tok")
+        item_id = next(iter(market["entries"].values()))
+        labels = [c["label"] for c in page.get(f"/api/commands?item={item_id}").json()["commands"]]
+        assert labels and labels[0].startswith(("Remove from", "Change in"))

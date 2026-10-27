@@ -150,12 +150,9 @@ def test_apply_copies_then_undo_removes_and_a_changed_copy_stays(client):
     assert applied["state"] == "verified", applied.get("error")
     for folder in (home / ".claude/skills/tidy", home / ".agents/skills/tidy"):
         assert digest(folder) == digest(source)
-    tidy = client.get(f"/api/offer?kind=skill&id={TIDY}").json()
-    assert tidy["installed"] == {
-        "claude_code": "Installed",
-        "codex": "Installed",
-        "cursor": "Installed",
-    }
+    offers = client.get("/api/library-offers").json()["offers"]
+    tidy = next(r for r in offers if r["kind"] == "skill" and r["id"] == TIDY)
+    assert tidy["installed"] == ["claude_code", "codex", "cursor"]
     assert tidy["routes"] == {}
 
     undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST).json()

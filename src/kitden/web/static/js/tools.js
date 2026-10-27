@@ -1,10 +1,10 @@
 // Tools of a server in the Kitden gateway: a switch each, for the project picked at the top.
-import { getJson, postJson, query } from "./api.js";
+import { postJson } from "./api.js";
 import { previewButton, switchNode } from "./details.js";
-import { button, el, icon, plural, withFocusKey } from "./dom.js";
-import { ALL_PROJECTS, callout, flag, folderName, skeleton } from "./parts.js";
+import { el, icon, plural } from "./dom.js";
+import { ALL_PROJECTS, flag, folderName } from "./parts.js";
 import { review } from "./review.js";
-import { data, state } from "./store.js";
+import { data } from "./store.js";
 import { keyFor } from "./tray.js";
 
 // The project's folder name, as the picker at the top shows it.
@@ -60,7 +60,7 @@ export function offNote(answer, where) {
 
 // A server's switches as the mockup lists them (`rows` from toolRows): the whole server first,
 // then each tool. A press adds the row's rule for `project` (null: all projects) to the tray, and
-// a second press on a pending switch takes it out (switchNode). `back(key)` is the Library's way
+// a second press on a pending switch takes it out (switchNode). `back(key)` is the way
 // back to its Details after a refusal; `flip` names the switch that has just flipped.
 export function switchList(rows, { server, project, back = () => null, flip = null }) {
   const list = el("div", "sw-list");
@@ -132,113 +132,16 @@ export function writingToolsOn(tools) {
 
 const HINT_FROM = { server: "from the server", name: "by its name" };
 
-// The tool list in the open panel: a refresh reads it again, an Undo draws its Details again.
-export let tools = null;
-
-export function reloadTools() {
-  if (tools && tools.section.isConnected) tools.load();
-}
-
 // Asks every held server for its tools again. The server says when it is done; without the
-// event stream, stop waiting after a minute. The list reads the answer when the event comes.
-// Ends when the refresh does, with why it could not start (null when it ran), so a server's
-// Details on the Gateway can read its tools again.
+// event stream, stop waiting after a minute. Ends when the refresh does, with why it could not
+// start (null when it ran), so a server's Details on the Gateway can read its tools again.
 export async function refreshTools() {
-  // True when the minute ran out: the list is read again here, since no event will do it.
   const ended = new Promise((resolve) => {
-    document.addEventListener("kitden:tools", () => resolve(false), { once: true });
-    setTimeout(() => resolve(true), 60000);
+    document.addEventListener("kitden:tools", () => resolve(), { once: true });
+    setTimeout(resolve, 60000);
   });
   const result = await postJson("/api/gateway/tools/refresh");
-  if (!result.ok) {
-    const error = (result.data && result.data.detail) || `Could not refresh the tools (${result.status}).`;
-    if (tools) tools.load({ error });
-    return error;
-  }
-  if (await ended) reloadTools();
+  if (!result.ok) return (result.data && result.data.detail) || `Could not refresh the tools (${result.status}).`;
+  await ended;
   return null;
-}
-
-// A held server's tools, a switch each, for the project picked at the top. A switch adds its change
-// to the tray and rests pending there; after Apply all, `again(next)` draws this Details again
-// with the switch in its new state. `next` says which control gets focus (`focus`), why a change
-// was refused (`error`) and which switch has just flipped (`flip`). An error stays as a callout
-// until the next action.
-export function toolsSection(server, again, next = {}) {
-  const section = el("section", "tools");
-  const where = state.project ? projectLabel(state.project) : null;
-  const head = el("div", "tools-head");
-  const refresh = button("Refresh tools", () => refreshTools(), "btn small ghost");
-  refresh.dataset.focus = "tools:refresh";
-  head.append(el("h2", "sw-head", toolsHead(where)), refresh);
-  const list = el("div", "tool-list");
-  list.append(skeleton("line", 3));
-  section.append(head);
-  if (!state.project) section.append(el("p", "muted", "These switches also apply in folders Kitden does not know."));
-  section.append(list);
-
-  // After a press its change waits in the tray (`queued`), and the control's look follows the tray
-  // by itself (details.js syncTray). A refusal draws this Details again with the reason above the
-  // list, focus on the control pressed.
-  const backTo = (pressed) => ({ queued = false, error = null } = {}) => (queued || !section.isConnected ? null : again({ focus: pressed, error }));
-
-  // Strict mode is set for all projects: with a project picked the switch only shows it.
-  const strictRow = (answer, flip) => {
-    const row = el("div", "sw-row whole");
-    const text = el("div", "sw-tx");
-    text.append(el("b", null, "Strict"), el("small", null, "Only tools that are on are offered; a new tool waits."));
-    const body = { action: "gateway.strict", targets: [], params: { server, state: answer.strict ? "off" : "on" } };
-    const toggle = switchNode(Boolean(answer.strict), () => review(body, { back: backTo("strict") }), keyFor(body), "Strict: only tools that are on");
-    toggle.dataset.focus = "strict";
-    if (flip === "strict") toggle.classList.add("flipped");
-    if (state.project) {
-      toggle.disabled = true;
-      toggle.title = "Set for all projects";
-    }
-    row.append(text, toggle);
-    const box = el("div", "sw-list");
-    box.append(row);
-    return box;
-  };
-
-  const draw = (answer, { error = null, flip = null }) => {
-    const nodes = [];
-    if (error) nodes.push(callout(error, "error"));
-    if (answer.problem) nodes.push(callout(answer.problem));
-    const off = offNote(answer, where);
-    if (off) nodes.push(off);
-    nodes.push(strictRow(answer, flip));
-    const writing = writingToolsOn(answer.tools);
-    if (writing.length) {
-      const body = { action: "gateway.rules", targets: [], params: { server, tools: writing, state: "off", project: state.project || null } };
-      const all = previewButton("Turn off every writing tool…", body, { look: "btn small", back: backTo("writing") });
-      all.dataset.focus = "writing";
-      const line = el("div");
-      line.append(all);
-      nodes.push(line);
-    }
-    nodes.push(switchList(toolRows(answer, where), { server, project: state.project || null, back: backTo, flip }));
-    if (!answer.tools.length) nodes.push(el("p", "muted", NO_TOOLS));
-    return nodes;
-  };
-
-  const load = async (options = {}) => {
-    let answer = null;
-    try {
-      answer = await getJson(`/api/gateway/tools${query({ server, project: state.project })}`);
-    } catch {
-      answer = null;
-    }
-    if (!section.isConnected) return;
-    // A redraw keeps keyboard focus on the same control. A control asked for that is gone (the
-    // writing tools button once they are off) gives way to Refresh tools.
-    const kept = list.contains(document.activeElement) ? document.activeElement.dataset.focus : null;
-    list.replaceChildren(...(answer ? draw(answer, options) : [callout("Could not load the tools.", "error")]));
-    const target = withFocusKey(section, options.focus || kept) || (options.focus ? withFocusKey(section, "tools:refresh") : null);
-    if (target) target.focus();
-  };
-  // `flipped`: the switch the last verified change flipped; an Undo puts focus back on it.
-  tools = { section, load, again, flipped: next.flip || null };
-  load(next);
-  return section;
 }

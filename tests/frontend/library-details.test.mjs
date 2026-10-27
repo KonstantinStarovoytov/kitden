@@ -96,12 +96,21 @@ globalThis.document = {
   listeners: {}, addEventListener(type, fn) { (document.listeners[type] ||= []).push(fn); }, removeEventListener() {},
   documentElement: { classList: { add() {}, remove() {} }, style: { setProperty() {}, removeProperty() {} } },
 };
-// The tray's server: every preview of the tray's rows comes back as one change.
+// The tray's server: every preview of the tray's rows comes back as one change. /api/commands
+// answers what the developer runs for an entry (views/commands.py).
 const sent = [];
+const commandsAsked = [];
+const COMMANDS = {
+  'cc-sp': [{ label: 'Update in Claude Code', command: 'claude plugin update superpowers@demo-market', note: null }],
+  'cu-sp': [{ label: 'Use in Cursor', command: null, note: 'Cursor loads Claude Code plugins.' }],
+  'cc-dm': [{ label: 'Remove from Claude Code', command: 'claude plugin marketplace remove demo-market', note: null }],
+};
 globalThis.fetch = (url, init = {}) => {
   const body = init.body ? JSON.parse(init.body) : null;
   if (body) sent.push({ url, body });
-  const json = url === '/api/batch/preview'
+  if (url.startsWith('/api/commands')) commandsAsked.push(url);
+  const json = url.startsWith('/api/commands') ? { commands: COMMANDS[new URLSearchParams(url.split('?')[1]).get('item')] || [] }
+    : url === '/api/batch/preview'
     ? { id: `c${sent.length}`, action: 'batch', state: 'previewed', error: null, target: { scope: 'all' }, undo_note: null, steps: body.requests.map(() => ({ client: 'claude_code', name: 'x' })), rows: body.requests.map((request, index) => ({ id: request.id, kind: request.kind, title: request.title, detail: '', project: null, steps: [index], target: { scope: 'all' }, after: [], undo_note: null })) }
     : {};
   return Promise.resolve({ ok: true, status: 200, json: async () => json });
@@ -666,15 +675,15 @@ test('a plugin turns on again and a plugin or skill is removed, as the old Detai
   const card = details.pluginCard(off, c());
   const on = card.actions.find((a) => a.label === 'Turn on in Claude Code…');
   assert.deepEqual(on.body, { action: 'plugin.enable', targets: [{ item: 'cc-pr' }], params: {} });
-  // Under More: "Remove from Claude Code…", the same tray row as the link's ×.
-  assert.deepEqual(card.more.map((a) => a.label), ['Remove from Claude Code…']);
+  // Under More: "Remove from Claude Code…", the same tray row as the link's ×, then "Commands…".
+  assert.deepEqual(card.more.map((a) => a.label), ['Remove from Claude Code…', 'Commands…']);
   const remove = card.more[0].body;
   assert.deepEqual(remove, { action: 'plugin.remove', targets: [{ item: 'cc-pr' }], params: {} });
   const spX = linkRemoval({ ...SUPERPOWERS, can: { ...SUPERPOWERS.can, remove: ['claude_code'] } }, 'claude_code', MEDIUM);
   const spCard = details.pluginCard({ ...SUPERPOWERS, can: { ...SUPERPOWERS.can, remove: ['claude_code'] } }, c());
   assert.equal(keyFor(spCard.more[0].body), keyFor(spX.body));
-  // A plugin with nothing off and nothing to remove offers neither.
-  assert.deepEqual(details.pluginCard(SUPERPOWERS, c()).more, []);
+  // A plugin with nothing off and nothing to remove offers neither: only its commands.
+  assert.deepEqual(details.pluginCard(SUPERPOWERS, c()).more.map((a) => a.label), ['Commands…']);
   assert.ok(!details.pluginCard(SUPERPOWERS, c()).actions.some((a) => a.label.startsWith('Turn on')));
   // A skill: Remove from the client whose own folder holds it (Cursor's ui-polish).
   const skill = own('s2', 'ui-polish', 'skill', { by: { cursor: 'on' }, items: { cursor: ['cu-ui'] }, can: { add: [], off: [], remove: ['cursor'] } });
@@ -689,7 +698,7 @@ test("where a project's own settings decide, Details say so and offer no Turn on
   const card = details.pluginCard(decided, details.context(MEDIUM, 'w', 'website'));
   assert.equal(card.after.textContent, "Claude Code's setting for this comes from website's own settings.");
   assert.ok(!card.actions.some((a) => a.label.startsWith('Turn on')));
-  assert.deepEqual(card.more, []);
+  assert.deepEqual(card.more.map((a) => a.label), ['Commands…']);
   // A skill too; with All projects there is no such line.
   const skill = own('s9', 'api-style', 'skill', { by: { codex: 'on', cursor: 'on' }, items: { codex: ['cx'], cursor: ['cu'] }, can: { add: [], off: [], remove: [], project: ['codex', 'cursor'] } });
   assert.equal(details.skillCard(skill, details.context(MEDIUM, 'a', 'atlas')).after.textContent, "Codex's setting for this comes from atlas's own settings. Cursor's setting for this comes from atlas's own settings.");
@@ -839,4 +848,45 @@ test("a project whose rule file Kitden does not write says so and offers no rule
   assert.equal(row.disabled, true);
   assert.ok(texts(row).includes(words));
   drawer.replaceChildren();
+});
+
+// Final fix wave (FR-029): "Commands…" under More on a plugin and on a marketplace's caption shows
+// what the developer runs, each with a Copy button; the page never runs them.
+test('Commands… shows the commands to run yourself, each with Copy, and Done goes back', async () => {
+  await reset();
+  const copied = [];
+  Object.defineProperty(globalThis, 'navigator', { value: { clipboard: { writeText: async (text) => { copied.push(text); } } }, configurable: true, writable: true });
+  try {
+    const box = await showMap();
+    press(node(box, 'block:item:p2'));
+    await flush();
+    press(node(drawer, 'more'));
+    await flush();
+    press(node(drawer, 'action:Commands…'));
+    await flush();
+    assert.deepEqual(panelState.current, { type: 'library', id: 'item:p2', step: 'commands' });
+    assert.deepEqual(commandsAsked.splice(0), ['/api/commands?item=cc-sp', '/api/commands?item=cu-sp']);
+    for (const words of ['Plugin · superpowers', 'Commands', 'You run these yourself. This page never runs them.', 'Claude Code', 'Cursor', 'Update in Claude Code', 'claude plugin update superpowers@demo-market', 'Cursor loads Claude Code plugins.']) assert.ok(texts(drawer).includes(words), words);
+    const copy = walk(drawer).find((n) => n.tagName === 'BUTTON' && n.textContent === 'Copy');
+    assert.equal(copy.getAttribute('aria-label'), 'Copy Update in Claude Code');
+    press(copy);
+    await flush();
+    assert.deepEqual(copied, ['claude plugin update superpowers@demo-market']);
+    assert.equal(copy.textContent, 'Copied');
+    // Nothing went to the tray, and Done goes back to the card.
+    assert.equal(tray.rows.length, 0);
+    press(node(drawer, 'commands:done'));
+    await flush();
+    assert.deepEqual(panelState.current, { type: 'library', id: 'item:p2' });
+    // A marketplace's caption has it too, for each client's entry.
+    const market = { ...MEDIUM, groups: [{ ...MEDIUM.groups[0], entries: { claude_code: 'cc-dm' } }, ...MEDIUM.groups.slice(1)] };
+    const card = details.marketplaceCard(market.groups[0]);
+    assert.deepEqual(card.more.map((a) => a.label), ['Commands…']);
+    assert.deepEqual(details.marketplaceCard(MEDIUM.groups[0]).more, []);
+    // A skill has none: Kitden knows no command for it.
+    assert.equal(details.skillCard(MEDIUM.groups[1].items[0], c()).more.some((a) => a.label === 'Commands…'), false);
+  } finally {
+    delete globalThis.navigator;
+    await reset();
+  }
 });

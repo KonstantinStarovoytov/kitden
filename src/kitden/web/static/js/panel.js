@@ -3,15 +3,14 @@
 // toast.js. The names other pages imported from here before the split still come from here.
 // Every change waits in the tray (tray.js), so closing the panel or drawing something else in it
 // never touches a change. The one write the panel starts is Undo, in a change from the Changes page.
-import { openItem, syncTray } from "./details.js";
+import { syncTray } from "./details.js";
 import { $, $$, button, el, focusKey } from "./dom.js";
 import { animateTo, D, finishTransition, rise } from "./motion.js";
 import { arrival, projectGone, setState, state } from "./store.js";
-import { reloadTools } from "./tools.js";
 import { onTray, tray } from "./tray.js";
 
-export { backToDetails, contextLinks, countedDefinition, detailsCard, followTray, footerActions, footerButtons, heldActions, heldButtons, keepFrom, kindWord, layerState, linksRow, loadsLede, moveBody, moveFor, moveInto, moveTargets, offerLabel, openItem, plainSecrets, previewButton, scopeWords, showInPreview, techRows, technical } from "./details.js";
-export { callsText, NO_TOOLS, offNote, projectLabel, refreshTools, switchList, toolRows, toolsHead, toolsSection, writingToolsOn } from "./tools.js";
+export { backToDetails, detailsCard, followTray, heldActions, keepFrom, moveBody, moveInto, moveTargets, offerLabel, previewButton, showInPreview, techRows, technical } from "./details.js";
+export { callsText, NO_TOOLS, offNote, projectLabel, refreshTools, switchList, toolRows, toolsHead, writingToolsOn } from "./tools.js";
 export { ADDS, addScope, afterParts, alignGroups, canShowReview, changeOutcome, changeWords, chosenKeys, leftOutText, review, reviewLede, undoChange } from "./review.js";
 export { hideToast, toast } from "./toast.js";
 
@@ -503,7 +502,6 @@ export function initPanel() {
   addEventListener("resize", placeSoon);
   new MutationObserver(placeSoon).observe($("#main"), { childList: true });
   // A refresh of the gateway's tool lists ended: an open tool list reads them again.
-  document.addEventListener("kitden:tools", reloadTools);
   // The tray changed: switches and buttons in Details show whether their change waits there.
   onTray(syncTray);
   $("#scrim").addEventListener("click", () => closePanel());

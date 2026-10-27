@@ -2,13 +2,13 @@
 // list before its row is added), what the page does after Apply all, and Undo.
 import { postJson } from "./api.js";
 import { backToDetails, clientName, KIND_WORDS } from "./details.js";
-import { $, $$, button, el, joinWords, plural, reportError, shortPath, shortPaths, withFocusKey } from "./dom.js";
+import { $, $$, button, el, joinWords, plural, reportError, shortPath, shortPaths } from "./dom.js";
 import { loadLibrary, morphOnNextRender } from "./library.js";
 import { fold, transition } from "./motion.js";
 import { closePanel, drawQuietly, header, hideToast, isPanelOpen, openPanel, panelState, toast } from "./panel.js";
 import { allPutBack, baseNames, callout, checkBox, CLIENT_ORDER, diffCounts, kitdenMove, mark, movedNames, notesSection, PLACE_IN_TITLE, ruleText, rulesText, skillRemoval, socket, strictText, targetWords } from "./parts.js";
 import { busy, gatewayShows, reload, render, setBusy, state } from "./store.js";
-import { projectLabel, tools } from "./tools.js";
+import { projectLabel } from "./tools.js";
 import { addToTray, changeOutcome, checkTrayStale, onTray, takeOut, tray, undone } from "./tray.js";
 
 // changeOutcome lives in tray.js; panel.js still exports it from here.
@@ -291,12 +291,13 @@ async function chooseMissing(previewBody, note) {
   if (state.project !== asked) return;
   if (!canShowReview(result)) {
     const reason = baseNames((result.data && result.data.detail) || `Could not prepare this change (${result.status}).`);
-    if (from && panelState.from === from) {
+    // "Nothing is missing." is an answer, not a failure: it says so plainly, with only Close,
+    // also when it was asked from open Details.
+    const nothing = reason.startsWith(NOTHING_MISSING);
+    if (!nothing && from && panelState.from === from) {
       backToDetails({ error: reason });
       return;
     }
-    // "Nothing is missing." is an answer, not a failure: it says so plainly, with only Close.
-    const nothing = reason.startsWith(NOTHING_MISSING);
     panelState.current = { type: nothing ? "info" : "error" };
     const footer = el("footer");
     footer.append(button("Close", () => closePanel(), "btn"));
@@ -512,25 +513,18 @@ export function drawsInPlace(view = state.view, mode = gatewayShows.mode) {
   return view === "library" || (view === "gateway" && mode === "map");
 }
 
-// After Apply all or an Undo, the Details open now are drawn again from what the files say: a tool
-// list by its own redraw, other Details by reading again. Focus in the dock or on the page stays
-// there; focus in Details stays on its control, found again by its key (a control that is gone
-// gives way, as backToDetails and the tool list say). The switch pressed last springs into its new
-// state when its row is among the applied ones (`keys`). Anything else in the panel (a row's review,
-// Add missing's list) is left alone: a row's review closes with its row.
-export async function detailsAgain(keys) {
+// After Apply all or an Undo, the Details open now are drawn again from what the files say, by
+// reading again. Focus in the dock or on the page stays there; focus in Details stays on its
+// control, found again by its key (a control that is gone gives way, as backToDetails says).
+// Anything else in the panel (a row's review, Add missing's list) is left alone: a row's review
+// closes with its row.
+export async function detailsAgain() {
   const from = panelState.from;
   if (!isPanelOpen() || !from || !from.shown()) return;
   const active = document.activeElement;
   const inside = $("#drawer").contains(active);
   const held = inside && active.dataset ? active.dataset.focus || null : null;
   await drawQuietly(async () => {
-    if (tools && tools.section.isConnected) {
-      const pressed = withFocusKey(tools.section, from.focus);
-      const flip = pressed && keys.includes(pressed.dataset.tray) ? from.focus : null;
-      await tools.again({ focus: inside ? held || from.focus : null, flip });
-      return;
-    }
     if (held) from.focus = held;
     from.stale = true;
     await backToDetails({ refocus: inside });
@@ -544,8 +538,6 @@ export async function detailsAgain(keys) {
 // stale: the Undo may have changed its files.
 export async function undoChange(change) {
   if (busy.change) return;
-  // Focus in Details goes to the switch the Undo changes back; anywhere else it stays.
-  const inside = $("#drawer").contains(document.activeElement);
   hideToast();
   setBusy(true);
   try {
@@ -553,21 +545,12 @@ export async function undoChange(change) {
     await reloadAll();
     // The Gateway map plays the change's rows back, the last one first.
     if (after && after.state === "undone" && state.view === "gateway") undone.id = change.id;
-    // With a tool list's Details still open, the page behind just redraws and Details is drawn
-    // again from the files as they are now; focus that was in them goes to the switch the Undo
-    // changed back.
-    if (isPanelOpen() && tools && tools.section.isConnected) {
-      render();
-      const undone = after && after.state === "undone";
-      await tools.again({ focus: inside ? tools.flipped : null, flip: undone ? tools.flipped : null });
-    } else {
-      showEffect();
-      // Other Details open now show the files as they are after the Undo too.
-      try {
-        await detailsAgain([]);
-      } catch (error) {
-        reportError(error);
-      }
+    showEffect();
+    // Details open now show the files as they are after the Undo too.
+    try {
+      await detailsAgain();
+    } catch (error) {
+      reportError(error);
     }
     if (after && after.state === "undone") toast("Undone. The previous settings are back.", null, { ok: true });
     else if (after && after.state === "undo_blocked") toast("Undo stopped: " + (after.error ? shortPaths(after.error) : "the file changed after the change was applied."));

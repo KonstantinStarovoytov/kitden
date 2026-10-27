@@ -558,3 +558,26 @@ test('with nothing missing it says Nothing is missing. and adds nothing', async 
   assert.deepEqual(posted(), [LIST]);
   closePanel({ instant: true, focus: false });
 });
+
+// Final fix wave: with Library Details open (they are what a refusal goes back to), "Nothing is
+// missing." is still the calm answer, never a red error in those Details.
+test('with Details open, Nothing is missing. is still the calm answer', async () => {
+  await fresh();
+  const { keepFrom } = await import('../../src/kitden/web/static/js/panel.js');
+  let drawn = 0;
+  keepFrom(() => { drawn += 1; }, []);
+  queue(LIST, refusal('Nothing is missing.'));
+  await review(EVERYWHERE);
+  await settle();
+  const drawer = pages['#drawer'];
+  assert.equal(drawn, 0);
+  assert.equal(tagged(drawer, 'h1')[0].textContent, 'Nothing is missing.');
+  assert.equal(all(drawer).some((node) => node.classList.contains('error')), false);
+  // A real refusal still goes back to those Details, with its reason.
+  queue(LIST, refusal('Could not read config.toml.'));
+  keepFrom(() => { drawn += 1; }, []);
+  await review(EVERYWHERE);
+  await settle();
+  assert.equal(drawn, 1);
+  closePanel({ instant: true, focus: false });
+});

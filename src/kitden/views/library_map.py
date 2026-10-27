@@ -309,13 +309,23 @@ def _marketplace_sources(inventory) -> dict[str, str]:
     return out
 
 
+def _marketplace_entries(inventory) -> dict[str, dict[str, str]]:
+    """Marketplace name -> each client's marketplace item id, for its "Commands…"."""
+    out: dict[str, dict[str, str]] = {}
+    for item in inventory.items:
+        if item.client in COLUMNS and item.kind is ItemKind.MARKETPLACE:
+            out.setdefault(item.name, {}).setdefault(item.client, item.id)
+    return out
+
+
 def library_map(inventory, adapters, project: str | None) -> dict:
     """The clients and the source groups of the Library map, in the order the map draws them:
     marketplaces by name, then "Other plugins", "Your skills", "Your settings" and, with a project
     picked, "Only this project". `here` says, per client, the picked project's own settings
     decide the item there; a skill's `off_in` the projects that turn it off already; `can` what
     Details and a drag may offer for it; `skill` the skill catalog's id a skill of "Your skills"
-    is copied from; and `skill_rules` where a one-project skill rule can go."""
+    is copied from; and `skill_rules` where a one-project skill rule can go. A marketplace group's
+    `entries` are each client's marketplace item id, which `/api/commands` takes."""
     status = {c.id: c.status for c in inventory.clients}
     found = [c for c in COLUMNS if status.get(c) is ClientStatus.FOUND]
     cursor = adapters.get("cursor") if "cursor" in found else None
@@ -327,6 +337,7 @@ def library_map(inventory, adapters, project: str | None) -> dict:
     held = installed_inside(adapters)
     folders = _plugin_folders(adapters)
     sources = _marketplace_sources(inventory)
+    entries = _marketplace_entries(inventory)
     outside = _rule_outside(inventory, adapters, project)
 
     groups: dict[str, dict] = {}
@@ -379,6 +390,8 @@ def library_map(inventory, adapters, project: str | None) -> dict:
         elif own[0].source.path:
             technical["path"] = own[0].source.path
         entry["technical"] = technical
+        if group["kind"] == "marketplace" and group["key"] not in groups:
+            group = {**group, "entries": entries.get(row.source, {})}
         groups.setdefault(group["key"], {**group, "items": []})
         groups[group["key"]]["items"].append(entry)
 

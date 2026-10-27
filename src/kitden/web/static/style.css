@@ -343,8 +343,6 @@ h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; }
 .checks.list { flex-direction: column; align-items: flex-start; gap: 2px; margin-bottom: 10px; }
 /* A note on its own line between the clients and Preview. It stays in the page so a screen reader
    hears it change; empty, it is a zero-width item that takes back its gap. */
-.form .also { flex: 1 0 100%; margin: 0; }
-.form .also:empty { flex: none; width: 0; margin-left: -12px; }
 .form-message { color: var(--ink-3); font-size: 12px; }
 .form-message.error { color: var(--danger); }
 
@@ -927,7 +925,6 @@ div.map .block-count.leaving:focus-visible { filter: none; }
 .drawer .btn.primary[aria-disabled="true"], .drawer .btn.primary[aria-disabled="true"]:hover { background: var(--action); border-color: var(--action); }
 .drawer .btn[aria-disabled="true"]:active { transform: none; }
 .drawer footer .note { margin-right: auto; color: var(--ink-3); font-size: 12px; }
-.drawer footer .note.side { margin-right: 0; margin-left: auto; text-align: right; }
 /* Details beside the page (Gateway, Library and Changes, from 1024 px) float over the right of the
    content, as in the mockup: 22 px from its right and 46 px above its bottom, level with the dock's
    bar (the frame's content ends 17 px inside the window: the 16 px gutter and its line), from the
@@ -946,7 +943,7 @@ div.map .block-count.leaving:focus-visible { filter: none; }
 /* The floating panel stacks the footer's buttons, full width. A Details card does it in the drawer too. */
 #drawer.floating footer, .drawer footer.stack { flex-direction: column; align-items: stretch; flex-wrap: nowrap; }
 #drawer.floating footer .btn, .drawer footer.stack .btn { justify-content: center; }
-#drawer.floating footer .note, #drawer.floating footer .note.side { margin: 0; text-align: left; }
+#drawer.floating footer .note { margin: 0; text-align: left; }
 /* A panel that loads (panel.js skeleton): still bars where its title, facts, sentence and first
    button will be. Nothing loops. */
 .sk { display: block; height: 10px; border-radius: 5px; background: var(--wire-soft); }
@@ -997,15 +994,9 @@ div.stack { display: grid; border: 1px solid var(--wire); border-radius: 8px; ov
 .layer { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 10px; padding: 9px 12px; border-top: 1px solid var(--wire-soft); align-items: start; }
 .layer:first-child { border-top: 0; }
 .layer > .client-mark, .layer > .mono-mark { --tile: 20px; }
-.layer.wins { background: var(--wire-soft); }
 .layer .name { overflow-wrap: anywhere; }
 .layer .why { color: var(--ink-3); font-size: 12px; overflow-wrap: anywhere; }
-/* Details: the Why in one or two quiet lines; the evidence folded under "Technical details". */
-.why-lines { display: grid; gap: 2px; color: var(--ink-2); }
-.why-lines p { margin: 0; }
-/* What the lead action changes, one line before the footer; links to the item on other pages. */
-.affects { margin: 0; color: var(--ink-2); }
-.links { display: flex; flex-wrap: wrap; gap: 4px; margin-left: -8px; }
+/* Details: the evidence folded under "Technical details". */
 .tech-row { display: grid; gap: 2px; min-width: 0; }
 .tech-row .mono { color: var(--ink-3); overflow-wrap: anywhere; }
 .tech-row pre.preview { margin: 4px 0 0; padding: 8px 10px; background: var(--inset); border: 1px solid var(--wire-soft); border-radius: 6px; color: var(--ink-2); font: 12px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
