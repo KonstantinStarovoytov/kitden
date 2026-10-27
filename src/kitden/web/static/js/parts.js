@@ -1,6 +1,6 @@
 // Small parts shared by every place: sockets, client marks, flags, loading and error states.
 import { $, button, el, icon, joinWords, plural, shortPath } from "./dom.js";
-import { animateTo, D, reducedMotion, rollTo } from "./motion.js";
+import { animateTo, D, reducedMotion, rise, rollTo } from "./motion.js";
 
 // The shared baseline: the picker's first choice, and the scope of what is set for every project.
 export const ALL_PROJECTS = "All projects";
@@ -163,6 +163,8 @@ export function projectMenu(projects, picked, onPick, from = null) {
     trigger.setAttribute("aria-expanded", "true");
     document.addEventListener("pointerdown", outside);
     animateTo(menu, [{ opacity: 0, transform: "translateY(-8px) scale(.96)" }, { opacity: 1, transform: "none" }], { dur: 180 });
+    // Its items rise together as it grows (mockup M6).
+    rise([...list.children]);
     find.focus();
   }
   function close(back) {

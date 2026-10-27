@@ -773,6 +773,32 @@ test('the own-rules count is a part of its own, the sub line sits under the name
   assert.deepEqual(tx.children.map((c) => c.className), ['where-label', 'where-sub']);
 });
 
+test('the menu items rise 6 px over 260 ms as it opens, all at once (mockup M6)', () => {
+  const make = globalThis.document.createElement;
+  const rises = [];
+  globalThis.document.createElement = (tag) => {
+    const node = make(tag);
+    node.animate = (keyframes, timing) => {
+      rises.push({ node, keyframes, timing });
+      return { finished: Promise.resolve(), cancel() {} };
+    };
+    return node;
+  };
+  try {
+    const m = menuOn('m', { motion: true });
+    m.open();
+    const options = m.options();
+    const moved = rises.filter((r) => options.includes(r.node));
+    assert.equal(moved.length, options.length);
+    for (const { keyframes, timing } of moved) {
+      assert.deepEqual(keyframes, [{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }]);
+      assert.deepEqual([timing.duration, timing.delay, timing.easing], [260, 0, CALM]);
+    }
+  } finally {
+    globalThis.document.createElement = make;
+  }
+});
+
 test('the menu grows in over 180 ms and fades out over 140 ms, hidden by time and not by an event', () => {
   mock.timers.enable({ apis: ['setTimeout'] });
   try {
