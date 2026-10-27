@@ -245,14 +245,17 @@ export const fromLocal = (client, folder) => `${CLIENT_NAMES[client]}'s setting 
 export const fromShared = (client, folder) => `${CLIENT_NAMES[client]}'s setting for this comes from ${folder}'s shared settings.`;
 function projectLine(item, c) {
   const can = item.can || {};
-  const clients = can.project || [];
+  // In a project whose rule file Kitden does not write, the outside line says it for Claude Code.
+  const clients = (can.project || []).filter((client) => client !== "claude_code" || !outsideFolder(item, c));
   if (!clients.length || !c.folder) return null;
-  const line = (client) => ((can.local || []).includes(client) ? fromLocal : (can.shared || []).includes(client) ? fromShared : fromProject)(client, c.folder);
+  // A rule in the repository root's local file names the root's folder (`can.local_in`).
+  const line = (client) => ((can.local || []).includes(client) ? fromLocal(client, (can.local_in || {})[client] || c.folder) : ((can.shared || []).includes(client) ? fromShared : fromProject)(client, c.folder));
   return el("p", "muted", inOrder(clients).map(line).join(" "));
 }
 // In a project whose rule file Kitden does not write, for an item Claude Code has: one quiet line.
+const outsideFolder = (item, c) => (c.project && c.rules.projects[c.project] === "outside" && (item.items || {}).claude_code ? c.rules.outside[c.project] : null);
 function outsideLine(item, c) {
-  const folder = c.project && c.rules.projects[c.project] === "outside" && (item.items || {}).claude_code ? c.rules.outside[c.project] : null;
+  const folder = outsideFolder(item, c);
   return folder ? el("p", "muted", outsideWords(folder)) : null;
 }
 // The nodes under a card's actions, in one box when there are several.
@@ -420,8 +423,9 @@ export function readsCard({ from, to }) {
 }
 
 // Why a Cursor plugin's link has no ×: Cursor keeps its plugins in its own app. The words are
-// clients/cursor.py CURSOR_HINT (checked 2026-10-22, cursor.com/docs/plugins).
-const CURSOR_PLUGINS = "Cursor keeps its plugins in its own database. Remove it in Cursor: Customize → Plugins.";
+// the first two sentences of clients/cursor.py CURSOR_HINT (checked 2026-10-22,
+// cursor.com/docs/plugins).
+const CURSOR_REMOVES = "Cursor keeps its plugins in its own database. Remove it in Cursor: Customize → Plugins.";
 
 // Where a link's change would be written, in words, never a path.
 const WRITTEN = { plugin: (owner) => `${owner}'s settings`, skill: (owner) => `${owner}'s skills folder`, hook: (owner) => `${owner}'s settings` };
@@ -442,7 +446,7 @@ export function connectionCard({ from, to }, c) {
   const ownerName = owner ? CLIENT_NAMES[owner] : client;
   const facts = [{ label: "From", value: from.name }, { label: "To", value: to.name }, { label: "State", value: on, text: STATE_WORDS.on }, { label: "Written in", value: WRITTEN[item.kind](ownerName) }];
   const loads = owner ? `${client} loads ${item.name} through ${ownerName}'s folder.` : `${client} loads ${item.name} ${c.project ? `in ${c.folder}` : "in every project"}.`;
-  const why = item.kind === "plugin" && from.client === "cursor" && !owner ? `${loads} ${CURSOR_PLUGINS}` : loads;
+  const why = item.kind === "plugin" && from.client === "cursor" && !owner ? `${loads} ${CURSOR_REMOVES}` : loads;
   return { kind: "Connection", title, id: owner ? `Through ${ownerName}` : "Loaded by the client", facts, why };
 }
 

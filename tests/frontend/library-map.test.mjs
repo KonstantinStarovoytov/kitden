@@ -898,9 +898,12 @@ test("a client→plugin link's × adds plugin.remove for that client", async () 
     x.press('client:claude_code>item:p2');
     assert.deepEqual(bodies(), [{ action: 'plugin.remove', targets: [{ item: 'cc-sp' }], params: {} }]);
     assert.equal(tray.rows[0].icon, 'x');
-    // Nothing is written: the row waits in the tray, and its link is drawn leaving.
+    // Nothing is written: the row waits in the tray, and its link is drawn leaving. Cursor's faint
+    // line through Claude Code goes with it (final fix wave), and has no × of its own.
     await flush();
-    assert.equal(x.leaving(), 1);
+    assert.equal(x.leaving(), 2);
+    assert.ok(walk(x.box).some((n) => /^link /.test(n.className) && n.classList.contains('faint') && n.classList.contains('leaving')));
+    assert.equal(x.tip('client:cursor>item:p2'), null);
     assert.equal(x.tip('client:claude_code>item:p2'), 'Take it out of the preview');
     // The × again takes the row out, and the link is whole again.
     x.press('client:claude_code>item:p2');

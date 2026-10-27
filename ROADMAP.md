@@ -21,46 +21,47 @@ What Kitden does today and what comes next. Ideas and bugs:
   keyboard too), and a selected block dims everything off its path. Blocks look like the mockup:
   lamps, ports, the gateway's counts that roll, and on each tool how many projects have a rule of
   their own for it. Changes in the tray show on the map: a connect draws a dashed link, a
-  disconnect or a removed entry makes its line leave, and a server moved out waits outside,
-  "Moves to" its client; a click on one takes it out. Drag a server from outside onto the gateway:
-  the gateway lights and a slot opens; while the move waits the server shows only in the gateway,
-  and taking it out glides it back. Drag a server in the gateway onto a client to move it out:
-  the client lights and a wire follows the server, or the tip says why that client cannot take it.
+  disconnect or a removed entry makes its line leave, and a server moved out waits outside, "Moves
+  to" its client; a click on one takes it out. Drag a server from outside onto the gateway: the
+  gateway lights and a slot opens; while the move waits the server shows only in the gateway, and
+  taking it out glides it back. Drag a server in the gateway onto a client to move it out: the
+  client lights and a wire follows the server, or the tip says why that client cannot take it.
   Drag a client that is not connected onto the gateway to connect it: a wire runs to the pointer
   and snaps to the gateway, which lights; a client a plugin connects says why it cannot. A group
   of more than six shows five at a time: "N more" turns to the next five in place. Map | List
   swaps with a short fade, the List has the mockup's columns and rows, and a search dims what does
   not match with a soft blur. Its chip counts the matches lit on the page shown, on the Library
-  map too; a server the count folded during a search stays folded for that search. Picking another project changes the map in place: counts roll,
-  tools that turn on or off draw or take back their links, open servers stay open, the tray's rows
-  keep their looks, and an open tool or server panel steps to the new project. Tab reads the links
-  in reading order, and a link keeps its focus while a change is written. A hint line under the
-  map says how to use it. Reasons and counts use the same words as the panels. After Apply or
-  Undo the map lands its rows with no cross-fade, and a gateway Kitden cannot reach says "Not
-  connected" on the map, with the reason in its Details. The add-gateway form can be cancelled.
-  The round count on a server (and on a Library plugin card) is a button: it opens or folds the
-  block and nothing else, with no Details.
+  map too; a server the count folded during a search stays folded for that search. Picking another
+  project changes the map in place: counts roll, tools that turn on or off draw or take back their
+  links, open servers stay open, the tray's rows keep their looks, and an open tool or server
+  panel steps to the new project. Tab reads the links in reading order, and a link keeps its focus
+  while a change is written. A hint line under the map says how to use it. Reasons and counts use
+  the same words as the panels. After Apply or Undo the map lands its rows with no cross-fade, and
+  a gateway Kitden cannot reach says "Not connected" on the map, with the reason in its Details.
+  The add-gateway form can be cancelled. The round count on a server (and on a Library plugin
+  card) is a button: it opens or folds the block and nothing else, with no Details.
 - **Library map:** the Library opens on a map like the Gateway's: the clients, then the plugins
-  and skills they load, under where they come from (each marketplace, your skills, your
-  settings, and in a project what only that project has), and a click on a plugin shows what it
-  holds. A plugin says how many things Kitden read inside it. Cursor's plugins through Claude
-  Code show as a faint line. Big groups and big plugins show a page at a time. Map | List swaps to
-  the List, and old Library links land where their kind lives now. Kitden
-  now reads Claude Code's local project settings and its `skillOverrides`, so a skill or plugin
-  turned off in one project shows Off there. Drag a plugin or a skill onto a client to add it
-  there for all projects: the client lights, or the tip says why it cannot take it. The add waits
-  in preview as a dashed link, and a click on it takes it out. A link's × removes a plugin from a
-  client, turns a skill off in Claude Code or Codex, or removes Cursor's own copy of a skill; it
-  only adds a row to the preview, and the link shows it leaving. "+ Add" opens "Add a plugin or
-  skill", the same panel as the Gateway's "Add a server": the plugins and skills each marketplace
-  offers, a click adds one for all projects to every client that lacks it, and a row drags onto
-  one client. A plugin no client has shows on the map as a preview card while it waits. The
-  Instructions tab has its own map: the clients, the instruction files each one reads, and what
-  Claude Code's CLAUDE.md files pull in; a click opens a file's Details. Claude Code's commands
-  and agents are there too, in a group of their own. It only reads. The List has the same two
-  tabs, a row per source, plugin, skill, hook, file, command or agent and a column per client,
-  and Differences shows only what differs between the clients. "Add missing plugins and skills…"
-  works under All projects too, and the add forms say "In preview" while their change waits.
+  and skills they load, under where they come from (each marketplace, your skills, your settings,
+  and in a project what only that project has), and a click on a plugin shows what it holds. A
+  plugin says how many things Kitden read inside it. Cursor's plugins through Claude Code show as
+  a faint line. Big groups and big plugins show a page at a time. Map | List swaps to the List,
+  and old Library links land where their kind lives now. Kitden now reads Claude Code's local
+  project settings and its `skillOverrides`, so a skill or plugin turned off in one project shows
+  Off there. Drag a plugin or a skill onto a client to add it there for all projects: the client
+  lights, or the tip says why it cannot take it. The add waits in preview as a dashed link, and a
+  click on it takes it out. A link's × removes a plugin from a client, turns a skill off in Claude
+  Code or Codex, or removes Cursor's own copy of a skill; it only adds a row to the preview, and
+  the link shows it leaving (with Cursor's faint line, after a Claude Code plugin's removal). "+
+  Add" opens "Add a plugin or skill", the same panel as the Gateway's "Add a server": the plugins
+  and skills each marketplace offers, a click adds one for all projects to every client that lacks
+  it, and a row drags onto one client. A plugin no client has shows on the map as a preview card
+  while it waits. The Instructions tab has its own map: the clients, the instruction files each
+  one reads, and what Claude Code's CLAUDE.md files pull in; a click opens a file's Details.
+  Claude Code's commands and agents are there too, in a group of their own. It only reads. The
+  List has the same two tabs, a row per source, plugin, skill, hook, file, command or agent and a
+  column per client, and Differences shows only what differs between the clients. "Add missing
+  plugins and skills…" works under All projects too, and the add forms say "In preview" while
+  their change waits.
 - **Library Details:** a click on the Library map opens Details for a plugin, a thing inside it, a
   skill, a hook, a client, a link or a marketplace. From the Library a plugin can be turned off for
   all projects or in this project, and added to another client; a skill can be turned off for all
@@ -74,17 +75,19 @@ What Kitden does today and what comes next. Ideas and bugs:
   a project in a subfolder of a git repository, Kitden reads and writes the local settings at the
   repository's root, as Claude Code does. "Commands…" on a plugin or a marketplace shows the
   commands you run yourself to update, remove or install it elsewhere, each with Copy. The old
-  Details of a Library row, which nothing opened any more, are gone.
+  Details of a Library row, which nothing opened any more, are gone. Under All projects, "Add
+  missing plugins and skills…" leaves unticked a copy a client already has in one project, and
+  says so. Sibling projects in one repository each read its root's local settings as their own.
 - **Details float beside the map:** on Gateway, Library and Changes, Details float over the right
   of the page as in the mockup; the page keeps its width and the map stays wide. Another block's
   Details swap in place through a quiet skeleton.
 - **Server panel:** a server's Details on the Gateway list its tools with a switch each and a
   Whole server switch, as in the mockup. "Move out of the gateway…" picks the client that keeps
   the server; its other actions wait under More.
-- **Tool panel and several projects:** a tool's Details on the Gateway say its permission and
-  list the projects with a rule of their own, with "Show" to switch to one in place. "Turn on|off in some
-  projects…" ticks projects in a list (also for a whole server): each tick is its own row in the
-  tray, and the map's tool names the projects that wait.
+- **Tool panel and several projects:** a tool's Details on the Gateway say its permission and list
+  the projects with a rule of their own, with "Show" to switch to one in place. "Turn on|off in
+  some projects…" ticks projects in a list (also for a whole server): each tick is its own row in
+  the tray, and the map's tool names the projects that wait.
 - **Client, gateway, link and outside panels:** a client's Details on the Gateway say what it gets
   through Kitden and what it sets up on its own, with "Connect to the gateway…" or "Disconnect
   from the gateway…"; the gateway's Details list each client with its own button. A click on any

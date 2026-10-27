@@ -7,8 +7,6 @@ import { addForm, connectAction, connectBody, followProject, heldServer, liveHel
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { findIn, foldable, isNarrow, keepFolded, keepOpen, landOwners, landStage, layoutTree, linkKey, litFor, litFrom, litPath, pagesNow, pagesWith, pressCount, pressOpen, shownFound, toggleOpen, turnPage, turnWords, wideWidth } from "./map.js";
 import { drawChip, glidePill, modeSwitch, switchedNow } from "./map-page.js";
-
-export { drawChip };
 import { mapView } from "./map-view.js";
 import { afterOldPage, D, rise, riseHead } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, openInfo, panelState, projectLabel, review } from "./panel.js";
@@ -18,8 +16,9 @@ import { say } from "./toast.js";
 import { addToTray, inTray, keyFor, onTray, takeOut, tray, undone } from "./tray.js";
 
 // Overview sets a client up with the same note. A server the Kitden gateway holds, and its
-// links, are found where its Details are drawn.
+// links, are found where its Details are drawn. The find chip is drawn as every map page draws it.
 export { heldServer, SETUP_NOTE } from "./gateway-details.js";
+export { drawChip };
 export { litFor } from "./map.js";
 
 const WRITABLE = ["claude_code", "codex", "cursor"];

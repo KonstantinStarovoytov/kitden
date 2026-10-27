@@ -521,25 +521,35 @@ test("a row's review drawn again: the old Take it out stops following the tray",
   closePanel({ instant: true, focus: false });
 });
 
-// Add missing under All projects: what one client has for all projects and another lacks.
+// Add missing under All projects: what one client has for all projects and another lacks, only
+// plugins and skills (MCP servers stay with the Gateway).
 const EVERYWHERE = { action: 'project.align', targets: [], params: { project: null, chosen: null } };
+const everywhere = (chosen) => {
+  const one = (key, kind) => ({ key, name: key, kind, from: 'claude_code', to: 'codex', place: 'all', note: null, chosen: chosen.includes(key) });
+  return {
+    status: 200,
+    json: { ...(chosen.length ? { id: `e${chosen.length}`, state: 'previewed' } : {}), action: 'project.align', steps: stepsOf(chosen), after: [], target: null, align: { candidates: [one('brandkit', 'skill'), one('linter@official', 'plugin')], not_same: [], left_out: [] } },
+  };
+};
 
 test('Add missing under All projects lists what one client has and another lacks', async () => {
   await fresh();
-  queue(LIST, listing(['neon']));
+  queue(LIST, everywhere(['brandkit']));
   await review(EVERYWHERE);
   const drawer = pages['#drawer'];
   assert.equal(panelState.current.type, 'align');
   assert.equal(tagged(drawer, 'h1')[0].textContent, 'Add what your clients are missing');
   assert.deepEqual(tagged(drawer, 'legend').map((node) => node.textContent), ['Add to Codex']);
-  assert.match(drawer.textContent, /neon · MCP server · from Claude Code · all projects/);
+  assert.match(drawer.textContent, /brandkit · Skill · from Claude Code · all projects/);
+  assert.match(drawer.textContent, /linter@official · Plugin · from Claude Code · all projects/);
+  assert.doesNotMatch(drawer.textContent, /MCP server/);
   assert.deepEqual(calls.filter((call) => call.url === LIST).map((call) => [call.body.params.project, call.body.picked]), [[null, null]]);
   // "Add to preview" adds one row for all projects; its done words say so.
   queue(PREVIEW, previewed('c1'));
   await button(drawer, 'Add to preview').click();
   await settle();
-  assert.deepEqual(tray.rows.map((r) => [r.key, r.body.params]), [['align:', { project: null, chosen: ['neon'] }]]);
-  const change = { action: 'project.align', steps: stepsOf(['neon']), align: alignOf(['neon']) };
+  assert.deepEqual(tray.rows.map((r) => [r.key, r.body.params]), [['align:', { project: null, chosen: ['brandkit'] }]]);
+  const change = { action: 'project.align', steps: stepsOf(['brandkit']), align: everywhere(['brandkit']).json.align };
   assert.deepEqual(changeWords(change, EVERYWHERE), { title: 'Add what your clients are missing', done: 'Added 1 item for all projects' });
 });
 

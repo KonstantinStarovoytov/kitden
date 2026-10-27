@@ -552,6 +552,9 @@ test('a part the map does not draw opens its plugin, an account row opens its ow
   assert.deepEqual(selected, ['item:p9']);
   data.libraryMap = MAP;
   tick(5);
+  // Final fix wave: the List drawn again without the account row leaves no card for it.
+  await showList();
+  assert.equal(libraryThing('item:acc'), null);
 });
 
 // Final fix wave: commands and agents are rows under their own group, and an Overview link to one

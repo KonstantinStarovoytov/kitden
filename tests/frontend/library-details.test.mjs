@@ -721,6 +721,10 @@ test("Use the shared rule… takes the project's local key out, for a skill and 
   const card = details.pluginCard(plugin, atlas);
   assert.deepEqual(labels(card), [['Use the shared rule…', false]]);
   assert.equal(card.after.textContent, "Claude Code's setting for this comes from atlas's local settings.");
+  // Final fix wave: a rule in the repository root's file names the root's folder, not the project.
+  const web = details.context(MEDIUM, 'web', 'web');
+  const rooted = { ...plugin, can: { ...plugin.can, local_in: { claude_code: 'atlas' } } };
+  assert.equal(details.pluginCard(rooted, web).after.textContent, "Claude Code's setting for this comes from atlas's local settings.");
   assert.deepEqual(details.sharedBody(plugin, atlas), { action: 'skill.rule', targets: [{ client: 'claude_code', item: 'cc-sp' }], params: { scope: 'project', project: 'atlas', off: false } });
   // Drawn: its press adds the one row and it says "In preview"; "Turn off in this project…" for
   // the same key (on and off share it) is another row, so it does not.
@@ -837,8 +841,12 @@ test("a project whose rule file Kitden does not write says so and offers no rule
   const mine = own('s9', 'site-notes', 'skill', { source: 'Only this project', by: { claude_code: 'on' }, items: { claude_code: ['cc-sn'] }, can: { off: [], project: ['claude_code'], local: [], shared: [] } });
   const skill = details.skillCard(mine, atlas);
   assert.deepEqual(labels(skill), []);
-  assert.ok(texts(skill.after).includes(words));
-  assert.ok(!texts(skill.after).some((t) => t.includes('may not merge')));
+  // Final fix wave: the outside line only, not also "… comes from atlas's own settings.", and
+  // nothing about merging.
+  assert.equal(skill.after.textContent, words);
+  // Another client whose setting the project decides keeps its own line.
+  const both = { ...mine, by: { claude_code: 'on', codex: 'on' }, items: { claude_code: ['cc-sn'], codex: ['cx-sn'] }, can: { ...mine.can, project: ['claude_code', 'codex'] } };
+  assert.deepEqual(details.skillCard(both, atlas).after.children.map((n) => n.textContent), ["Codex's setting for this comes from atlas's own settings.", words]);
   // Not in another project.
   assert.equal(details.pluginCard(SUPERPOWERS, details.context(answer, 'web', 'web')).after, null);
   // The checklist row cannot be ticked and says why.

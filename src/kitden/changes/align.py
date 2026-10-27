@@ -44,8 +44,9 @@ def _is_source(item: Item, client: str) -> bool:
 
 
 def _skipped(kind: ItemKind, client: str, project: str | None) -> bool:
-    """Under All projects Cursor neither gives nor gets a plugin: it adds plugins only in its own
-    window (D26)."""
+    """Under All projects Cursor neither gets nor gives a plugin. It gets none because it adds
+    plugins only in its own window (D26). It gives none because its marketplaces live in the
+    Cursor account: Kitden knows no source another client could install its plugins from."""
     return project is None and kind is ItemKind.PLUGIN and client == "cursor"
 
 
@@ -129,7 +130,8 @@ def align_steps(
     the plugins and skills one client has for all projects and another lacks, each added for
     all projects. Names match exactly. A client that has an item turned off keeps it off: it is
     not offered. With `chosen` None, an add that makes a duplicate (a name in another case,
-    here or earlier in the list, or a skill a reader already has) is unchecked."""
+    here or earlier in the list, a skill a reader already has, or under All projects one the
+    client has in some project) is unchecked."""
     kinds = KINDS if project else ALL_KINDS
     clients = [c for c in CLIENTS if c in found and c in adapters]
     views = {
@@ -144,6 +146,13 @@ def align_steps(
         }
         for c in clients
     }
+    # Under All projects: what a client has only in some project, by the first such folder. An
+    # all-projects copy for it would load twice there, so it starts unchecked.
+    elsewhere: dict[str, dict[tuple, str]] = {c: {} for c in clients}
+    if project is None:
+        for item in sorted(inventory.items, key=lambda i: i.project or ""):
+            if item.client in elsewhere and item.project is not None and item.kind in kinds:
+                elsewhere[item.client].setdefault((item.kind, base_name(item)), item.project)
     # Skills a client loads from a plugin the scan does not list (Codex and Cursor plugins).
     for skill in skill_catalog(inventory, adapters):
         for client in skill["installed"]:
@@ -205,6 +214,10 @@ def align_steps(
                         notes.append(f"This list also adds {first}; this adds {key[1]} beside it.")
                     if twice:
                         notes.append(f"{_words(twice)} would load it twice.")
+                    if key[:2] in elsewhere[client]:
+                        folder = Path(elsewhere[client][key[:2]]).name
+                        who = CLIENT_WORDS[client]
+                        notes.append(f"{who} has it in {folder}; this adds a second copy there.")
                     # Such an add makes a duplicate: it starts unchecked.
                     default = not notes
                     candidates.append(

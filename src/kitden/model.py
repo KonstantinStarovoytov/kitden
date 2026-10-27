@@ -160,7 +160,17 @@ class Item:
 
     @property
     def id(self) -> str:
-        return _hash(self.client, self.kind, self.name, self.source.id)
+        # A repository root's local settings are read once for each project in a subfolder of
+        # it (claude_code.local_files): the project tells those items apart.
+        shared = (
+            self.scope is Scope.LOCAL
+            and self.project
+            and self.source.path
+            and not self.source.path.startswith(self.project.rstrip("/") + "/")
+        )
+        return _hash(
+            self.client, self.kind, self.name, self.source.id, *((self.project,) if shared else ())
+        )
 
 
 @dataclass(frozen=True)

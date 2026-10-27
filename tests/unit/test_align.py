@@ -369,3 +369,17 @@ def test_with_nothing_missing_under_all_projects_it_says_so_and_adds_nothing(tmp
         answer = _align(page, None)
         assert (answer.status_code, answer.json()["detail"]) == (422, "Nothing is missing.")
         assert page.get("/api/changes").json() == []
+
+
+def test_under_all_projects_a_client_with_it_in_one_project_starts_unchecked(home):
+    # Final fix wave: Codex has brandkit only in api. An all-projects copy would load a second
+    # one there, so it starts unchecked and says so.
+    shutil.copytree(home / ".claude/skills/brandkit", home / "work/api/.agents/skills/brandkit")
+    with page_for(home, run=runner(home)) as page:
+        listing = _align(page, None).json()["align"]
+    keys = {c["key"]: c for c in listing["candidates"]}
+    brandkit = keys["skill:brandkit:codex"]
+    assert brandkit["chosen"] is False
+    assert "Codex has it in api; this adds a second copy there." in brandkit["note"]
+    # Another add, which Codex has in no project, does not say it.
+    assert "has it in" not in (keys["skill:docker-expert:claude_code"]["note"] or "")

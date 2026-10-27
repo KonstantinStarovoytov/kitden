@@ -6,7 +6,7 @@
 // the map (library-details.js); a cell's "+ Add" only adds a row to the tray.
 import { getJson, query } from "./api.js";
 import { button, el, gridKey, icon, plural } from "./dom.js";
-import { filesGroup, INSTRUCTIONS_HINT, LEDE, leaveLibraryMap, letGoLibraryMap, libraryDetails, libraryMode, libraryThing, renderLibraryMap, showListOnly } from "./library-map.js";
+import { filesGroup, INSTRUCTIONS_HINT, LEDE, leaveLibraryMap, letGoLibraryMap, libraryDetails, libraryMode, libraryThing, renderLibraryMap, setListOnly } from "./library-map.js";
 import { glidePill, modeSwitch, switchedNow } from "./map-page.js";
 import { CALM, afterOldPage, animate, entrance, glide, land, reducedMotion, rise } from "./motion.js";
 import { projectNote } from "./offer.js";
@@ -644,6 +644,7 @@ function listGrid(rows, columns, kind) {
   grid.append(headRow(columns));
   onList.nodes = new Map();
   onList.rows = new Map(rows.map((row) => [row.id, row]));
+  setListOnly(rows.filter((row) => row.account).map(accountBlock));
   for (const row of rows) {
     const node = listRow(row, columns, { current: row.id === onList.current, selected: row.id === onList.selected });
     onList.nodes.set(row.id, node);
@@ -797,11 +798,13 @@ export function openRow(row) {
 function detailsId(row) {
   if (libraryThing(row.id)) return row.id;
   if (row.kind === "part") return row.parent;
-  if (row.account) {
-    const by = Object.fromEntries(Object.entries(row.cells || {}).filter(([, cell]) => cell.state !== "none").map(([client, cell]) => [client, BY_WORDS[cell.state] || cell.state]));
-    showListOnly({ id: row.id, kind: "account", name: row.name, reason: row.reason, item: { by } });
-  }
   return row.id;
+}
+
+// The account card of a row Claude Code keeps in the account, for its Details.
+function accountBlock(row) {
+  const by = Object.fromEntries(Object.entries(row.cells || {}).filter(([, cell]) => cell.state !== "none").map(([client, cell]) => [client, BY_WORDS[cell.state] || cell.state]));
+  return { id: row.id, kind: "account", name: row.name, reason: row.reason, item: { by } };
 }
 const BY_WORDS = { unk: "unknown" };
 

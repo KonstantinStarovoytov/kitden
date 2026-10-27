@@ -11,7 +11,7 @@ from pathlib import Path
 from kitden.changes.actions import CLIENT_WORDS, skill_rules_in
 from kitden.changes.engine import writable, writable_roots
 from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, PLUGIN_REMOVE, SKILL_REMOVE
-from kitden.clients.claude_code import rule_file
+from kitden.clients.claude_code import _holds, local_files, rule_file
 from kitden.model import ClientStatus, Enabled, Item, ItemKind, Scope
 from kitden.views.catalog import catalog, installed_inside
 from kitden.views.effective import in_project
@@ -148,8 +148,10 @@ def _can(
     clients that load their own copy and can turn it off for all projects (a plugin's switch, or a
     skill rule), `on`, the clients that have the plugin off and can turn it on, `remove`, the
     clients whose own entry (on or off) Kitden can remove: a plugin's file entry, or a skill's own
-    folder, and `project`, the clients whose state in the picked project comes from the project's
-    own entry or rule. A faint link has none.
+    folder (Details' "Remove from …"; a link's × uses it only for a plugin and for Cursor's own
+    skill: on a Claude Code or Codex skill the × turns the skill off with `off` instead), and
+    `project`, the clients whose state in the picked project comes from the project's own entry or
+    rule. A faint link has none.
     `off`, `on` and `remove` act on the user's own entry for all projects, the client's first
     item: a client in `project` is left out of all three (Details say where its setting comes
     from, and offer "Turn off in this project…" where they can). Of those, `local` are the
@@ -309,6 +311,20 @@ def _marketplace_sources(inventory) -> dict[str, str]:
     return out
 
 
+def _local_in(row: Row, project: str, home: Path) -> str | None:
+    """The folder whose local settings decide Claude Code's entry in `project`, when it is not
+    the project's own but its repository root's (claude_code.local_files: the winning file last),
+    so Details name the folder that holds the file."""
+    key = (
+        ("enabledPlugins", row.lookup)
+        if row.kind is ItemKind.PLUGIN
+        else ("skillOverrides", row.name)
+    )
+    holding = [f for f in local_files(Path(project), home) if _holds(f, key)]
+    folder = holding[-1].parent.parent if holding else None
+    return folder.name if folder and folder != Path(project) else None
+
+
 def _marketplace_entries(inventory) -> dict[str, dict[str, str]]:
     """Marketplace name -> each client's marketplace item id, for its "Commands…"."""
     out: dict[str, dict[str, str]] = {}
@@ -324,7 +340,9 @@ def library_map(inventory, adapters, project: str | None) -> dict:
     picked, "Only this project". `here` says, per client, the picked project's own settings
     decide the item there; a skill's `off_in` the projects that turn it off already; `can` what
     Details and a drag may offer for it; `skill` the skill catalog's id a skill of "Your skills"
-    is copied from; and `skill_rules` where a one-project skill rule can go. A marketplace group's
+    is copied from; and `skill_rules` where a one-project skill rule can go. `can.local_in` names
+    the folder whose local settings decide for Claude Code when it is the project's repository
+    root, not the project itself. A marketplace group's
     `entries` are each client's marketplace item id, which `/api/commands` takes."""
     status = {c.id: c.status for c in inventory.clients}
     found = [c for c in COLUMNS if status.get(c) is ClientStatus.FOUND]
@@ -373,6 +391,10 @@ def library_map(inventory, adapters, project: str | None) -> dict:
             "source": group["name"],
             "can": _can(row, by, through, ids, by_id, offer, found, project, outside),
         }
+        if project and "claude_code" in entry["can"].get("local", []) and "claude_code" in adapters:
+            folder = _local_in(row, project, adapters["claude_code"].home)
+            if folder:
+                entry["can"]["local_in"] = {"claude_code": folder}
         if skill:
             entry["skill"] = skill["id"]
         if row.kind is ItemKind.SKILL:

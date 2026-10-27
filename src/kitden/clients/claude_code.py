@@ -280,6 +280,9 @@ class ClaudeCodeAdapter(ClientAdapter):
         holding = [f for f in local_files(Path(project), self.home) if _holds(f, key)]
         if not off and holding:
             return holding
+        # A rule set goes to `rule_file`. So does a removal no local file holds (the key is
+        # already gone): its step then finds nothing to take out, and the engine says so
+        # (NothingToChangeError) instead of writing a file.
         target = rule_file(Path(project), self.home)
         if target is None:
             raise ValueError(NO_CLAUDE_FOLDER.format(folder=Path(project).name))

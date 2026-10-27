@@ -226,7 +226,9 @@ Linux and Windows are not supported yet.
   </picture>
 </p>
 
-1. Kitden reads your agents' settings files.
+1. Kitden reads your agents' settings files. For a project in a subfolder of a git repository it
+   also reads the repository root's `.claude/settings.local.json`, the same file Claude Code reads
+   there.
 2. It shows them on one page in your browser, at `127.0.0.1` only. With a large setup (about 500
    items, like the sample `kitden demo --size large` opens) the page has its data in under a
    second; a slow answer comes after.

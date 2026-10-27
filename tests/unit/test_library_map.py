@@ -10,6 +10,7 @@ from kitden.changes.engine import writable, writable_roots
 from kitden.demo import build_demo_home, demo_adapters, demo_build
 from kitden.model import Scope
 from kitden.views.inventory import build_inventory
+from kitden.views.library import library_list
 from kitden.views.library_map import library_map
 from kitden.web.app import create_app
 
@@ -636,3 +637,42 @@ def test_a_marketplace_group_names_each_clients_entry_for_its_commands(tmp_path)
         item_id = next(iter(market["entries"].values()))
         labels = [c["label"] for c in page.get(f"/api/commands?item={item_id}").json()["commands"]]
         assert labels and labels[0].startswith(("Remove from", "Change in"))
+
+
+def test_sibling_projects_in_one_repository_each_have_their_own_copy_of_a_root_rule(tmp_path):
+    # Final fix wave: atlas/web and atlas/api both read the root's .claude/settings.local.json.
+    # Each project's item from it has its own id, so each project's map and List stay right.
+    home = build_demo_home(tmp_path, "medium")
+    atlas = home / "work/atlas"
+    (atlas / ".git").mkdir()
+    (atlas / "api").mkdir()
+    _write(
+        atlas / ".claude/settings.local.json", {"enabledPlugins": {f"superpowers@{MARKET}": False}}
+    )
+    state = home / ".claude.json"
+    data = json.loads(state.read_text())
+    data["projects"][str(atlas / "api")] = {}
+    state.write_text(json.dumps(data))
+    inventory, adapters = _read(home)
+    root = str(atlas / ".claude/settings.local.json")
+    copies = [i for i in inventory.items if i.source.path == root]
+    # atlas reads it as its own file; web and api as their repository root's.
+    assert sorted(i.project for i in copies) == [str(atlas), str(atlas / "api"), str(atlas / "web")]
+    assert len({i.id for i in copies}) == 3
+    # Each project's own map says its rule turns superpowers off there, by its own item.
+    by_id = {i.id: i for i in inventory.items}
+    for project in ("web", "api"):
+        path = str(atlas / project)
+        item = _items(library_map(inventory, adapters, path))["superpowers"]
+        assert item["by"]["claude_code"] == "off", project
+        assert item["here"]["claude_code"] is True, project
+        assert by_id[item["items"]["claude_code"][0]].project == path, project
+        # Details name the folder that holds the file: the repository's, not the project's.
+        assert item["can"]["local_in"] == {"claude_code": "atlas"}, project
+        # The List shows it off there too.
+        listed = library_list(inventory, adapters, path, gateway_registered=False, tab="plugin")
+        row = next(i for g in listed["groups"] for i in g["items"] if i["name"] == "superpowers")
+        assert row["cells"]["claude_code"]["state"] == "off", project
+    # In atlas itself the file is its own: no other folder to name.
+    own = _items(library_map(inventory, adapters, str(atlas)))["superpowers"]
+    assert "local_in" not in own["can"]

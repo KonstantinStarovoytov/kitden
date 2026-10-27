@@ -2696,7 +2696,7 @@ def test_a_plugin_or_skill_drags_onto_a_client():
     text = script("library-map.js")
     for words in (
         "`Add to ${CLIENT_NAMES[client.client]}`",
-        'const CURSOR_PLUGINS = "Cursor gets plugins through Claude Code";',
+        'const CURSOR_GETS = "Cursor gets plugins through Claude Code";',
         "`Already in ${who}`",
         'const WAITS_ALREADY = "Already in preview";',
         "`${who} cannot get ${item.name}`",
@@ -2713,7 +2713,7 @@ def test_a_plugin_or_skill_drags_onto_a_client():
         assert words in text, words
     order = [
         text.index(w)
-        for w in ("CURSOR_PLUGINS;", "`Already in ${who}`", "WAITS_ALREADY;", "cannot get")
+        for w in ("CURSOR_GETS;", "`Already in ${who}`", "WAITS_ALREADY;", "cannot get")
     ]
     assert order == sorted(order)
     # It looks like the Gateway's preview block; its words are in the accent.
@@ -2796,11 +2796,12 @@ def test_a_library_link_x_removes_or_turns_off():
     # The Details of a Cursor plugin's link say where to remove it (words of CURSOR_HINT, checked
     # 2026-10-22).
     details = script("library-details.js")
-    assert (
-        '"Cursor keeps its plugins in its own database. Remove it in Cursor: '
-        'Customize → Plugins."' in details
+    words = (
+        "Cursor keeps its plugins in its own database. Remove it in Cursor: Customize → Plugins."
     )
-    assert "Customize → Plugins." in CURSOR_HINT
+    assert f'const CURSOR_REMOVES = "{words}";' in details
+    assert CURSOR_HINT.startswith(f"{words} ")
+    assert "CURSOR_PLUGINS" not in details + text
     # The rows Details' Turn off adds live with the x's, in one place.
     assert "export function offBodies(" in rules and "export function offBodies(" not in details
 

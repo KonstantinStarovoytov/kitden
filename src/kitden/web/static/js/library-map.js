@@ -71,7 +71,7 @@ const TAB_FROM = { x: 150, y: 200 };
 // What drags onto a client, and what a drop adds there for all projects.
 const INSTALLS = { plugin: "plugin.install", skill: "skill.install" };
 // Why a client cannot take a dragged item, before the drop (decisions, in this order).
-const CURSOR_PLUGINS = "Cursor gets plugins through Claude Code";
+const CURSOR_GETS = "Cursor gets plugins through Claude Code";
 const WAITS_ALREADY = "Already in preview";
 // A block whose add waits in the tray: a press takes it out. Its meta names the clients, or says
 // it adds for all projects when it adds to several clients at once ("+ Add"); a meta too long for
@@ -338,14 +338,24 @@ function fileMeta(file, group) {
 }
 
 // A link whose removal or turning off waits in the tray is drawn leaving, and names its row: a press
-// on it, or its ×, takes the row out. `answer` is the /api/library-map answer the model is from.
+// on it, or its ×, takes the row out. A plugin's removal from a client takes the faint lines through
+// that client with it (Cursor through Claude Code): they draw leaving too, with no × and no row of
+// their own. `answer` is the /api/library-map answer the model is from.
 export function withLeaving(model, rows, answer) {
   const byId = new Map(model.blocks.map((b) => [b.id, b]));
+  const removed = new Set(); // "<client>>block id" of a waiting plugin removal
   for (const link of model.links.filter((l) => l.kind === "on")) {
     const [from, to] = [byId.get(link.from), byId.get(link.to)];
     const change = from && from.client && to && to.item && linkRemoval(to.item, from.client, answer);
     const row = change && rows.find((r) => r.key === keyFor(change.body));
-    if (row) Object.assign(link, { leaving: true, row: row.key });
+    if (!row) continue;
+    Object.assign(link, { leaving: true, row: row.key });
+    if (change.body.action === "plugin.remove") removed.add(`${from.client}>${to.id}`);
+  }
+  for (const link of model.links.filter((l) => l.kind === "faint")) {
+    const [from, to] = [byId.get(link.from), byId.get(link.to)];
+    const owner = from && to && to.item && (to.item.through || {})[from.client];
+    if (owner && removed.has(`${owner}>${to.id}`)) link.leaving = true;
   }
   return model;
 }
@@ -404,11 +414,13 @@ export function libraryThing(id) {
   return link ? { link, from: byId.get(link.from), to: byId.get(link.to), answer } : null;
 }
 
-// What the List shows that the map does not draw (a plugin Claude Code keeps in the account), as a
-// block for its Details: `{ id, kind: "account", name, reason, item }`.
+// What the List draws that the map does not (a plugin Claude Code keeps in the account), as blocks
+// for their Details: `{ id, kind: "account", name, reason, item }`. Each draw of the List's rows
+// gives the whole set, so a row that is gone leaves no card behind.
 const listOnly = new Map();
-export function showListOnly(block) {
-  listOnly.set(block.id, block);
+export function setListOnly(blocks) {
+  listOnly.clear();
+  for (const block of blocks) listOnly.set(block.id, block);
 }
 
 // The map's tree while it shows; else the shown tab's, kept while its answer stays the same.
@@ -821,7 +833,7 @@ function tipItem(drag) {
 // says "Already in preview".
 function whyNot(item, client) {
   const who = CLIENT_NAMES[client];
-  if (item.kind === "plugin" && client === "cursor") return CURSOR_PLUGINS;
+  if (item.kind === "plugin" && client === "cursor") return CURSOR_GETS;
   const has = (item.by || {})[client];
   if (has && has !== "via") return `Already in ${who}`;
   if (addsOf(item, tray.rows).some((add) => add.clients.includes(client))) return WAITS_ALREADY;
