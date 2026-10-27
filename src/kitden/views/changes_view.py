@@ -113,7 +113,8 @@ def _map(change: Change | None, request: list[dict] | None, rows: int, inventory
     """Where "See it on the map" goes, when the change touched one Kitden gateway server or one
     item: {view, sel, gone}. `sel` is as the page's address writes it ("tool:files/read_file").
     `gone`: the item is no longer there; `sel` is then None when only its id was known. Of
-    several tray rows, a server counts only when every row is a gateway row about it."""
+    several tray rows, a server counts only when every row is a gateway row about it, and an
+    item only when every row names one."""
     servers = {name for s in change.steps if (name := kitden_server(s))} if change else set()
     several = rows > 1 and (not request or any(_about(body) not in servers for body in request))
     if len(servers) == 1 and several:
@@ -128,8 +129,9 @@ def _map(change: Change | None, request: list[dict] | None, rows: int, inventory
         return {"view": "gateway", "sel": sel, "gone": gone}
     if servers or not request:
         return None
-    ids = set().union(*(_item_ids(body) for body in request))
-    if not ids:
+    named = [_item_ids(body) for body in request]
+    ids = set().union(*named)
+    if not ids or (len(request) > 1 and not all(named)):
         return None
     by_id = {i.id: i for i in inventory.items}
     found = {(str(by_id[i].kind), by_id[i].name) for i in ids if i in by_id}

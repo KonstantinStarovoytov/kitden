@@ -489,6 +489,14 @@ export function morphSocket(node, next) {
   setTimeout(swap, 160);
 }
 
+// The Kitden house, the Kitden gateway's own mark (it keeps its colours). `look` is its class.
+export function kitdenHouse(look = null) {
+  const house = el("img", look);
+  house.src = "/static/brand/kitden.svg";
+  house.alt = "";
+  return house;
+}
+
 export function mark(clientId) {
   const node = el("span", "mono-mark", CLIENT_MARKS[clientId] || "?");
   node.title = CLIENT_NAMES[clientId] || clientId;

@@ -65,7 +65,8 @@ export function setBusy(value) {
 // When the last full reload started, so a skipped rescan can tell whether it was covered;
 // when the last reload with no failed read ended, and whether the latest one had a failure.
 export const freshness = { reloadStartedAt: 0, lastGoodRead: null, lastReadFailed: false };
-// scope: the project each read was for. readAt: when each read last worked.
+// scope: the project each read was for. readAt: when the last read that worked began (an answer
+// that began before a change was applied may not show it yet).
 // errorScope: the project each failed read was for.
 export const data = {
   clients: null, projects: null, overview: null, map: null, gateway: null, changes: null, setupServer: null, libraryMap: null, instructionsMap: null,
@@ -296,12 +297,13 @@ export function projectPath() {
 // if `outdated()` says a newer read has begun. It says whether its answer was taken.
 async function guarded(name, url, apply, scope, outdated = () => false) {
   const notShown = () => (scope !== undefined && scope !== state.project) || outdated();
+  const began = Date.now();
   try {
     const value = await getJson(url);
     if (notShown()) return false;
     apply(value);
     data.scope[name] = scope;
-    data.readAt[name] = Date.now();
+    data.readAt[name] = began;
     delete data.errors[name];
     delete data.errorScope[name];
     return true;

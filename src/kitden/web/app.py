@@ -67,7 +67,7 @@ from kitden.changes.actions import (
     update_steps,
 )
 from kitden.changes.align import align_steps
-from kitden.changes.backup import ChangeStore
+from kitden.changes.backup import ChangeStore, hidden
 from kitden.changes.batch import (
     BATCH,
     Part,
@@ -1411,7 +1411,8 @@ def create_app(
                 row["project"] = part.target["project"]
             rows.append(row)
             answers.append({**row, "target": part.target, **words})
-        change.rows = rows
+        # The record keeps the rows and the request with secrets hidden, as the log does.
+        change.rows = hidden(rows)
         change.request = kept_request(requests)
         known = [p.path for p in state.inventory.projects]
         items = [i for made in built for i in made.items]

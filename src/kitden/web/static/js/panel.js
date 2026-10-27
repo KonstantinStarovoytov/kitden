@@ -11,7 +11,7 @@ import { onTray, tray } from "./tray.js";
 
 export { backToDetails, detailsCard, followTray, heldActions, keepFrom, moveBody, moveInto, moveTargets, offerLabel, previewButton, showInPreview, techRows, technical } from "./details.js";
 export { callsText, NO_TOOLS, offNote, projectLabel, refreshTools, switchList, toolRows, toolsHead, writingToolsOn } from "./tools.js";
-export { ADDS, addScope, afterParts, alignGroups, canShowReview, changeOutcome, changeWords, chosenKeys, leftOutText, redoChange, review, reviewLede, undoChange } from "./review.js";
+export { ADDS, addScope, afterParts, alignGroups, canShowReview, changeOutcome, changeWords, chosenKeys, leftOutText, redoChange, redoStands, review, reviewLede, undoChange } from "./review.js";
 export { hideToast, toast } from "./toast.js";
 
 // What is open now (`current`): Details ("item", or a Gateway card), a row's review ("row-review"),

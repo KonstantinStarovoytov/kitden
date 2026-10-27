@@ -131,6 +131,7 @@ function at(ago, h, m) {
 }
 const clock = (when) => when.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const RULE = { action: 'gateway.rule', targets: [], params: { server: 'github', tool: 'push_files', state: 'on' }, picked: null };
+const RULE_B = { action: 'gateway.rule', targets: [], params: { server: 'github', tool: 'create_issue', state: 'on' }, picked: null };
 const RESTART = 'Restart Codex (the app and any open CLI sessions) for this to take effect.';
 // One change as /api/changes gives it (views/changes_view.py), with two tray rows.
 function change(id, when, over = {}) {
@@ -152,7 +153,7 @@ const YESTERDAY = at(1, 18, 20);
 const OLDER = at(6, 17, 5);
 const ENTRIES = [
   change('c1', TODAY),
-  change('c2', TODAY_EARLIER, { state: 'undone', backup: 'back', history: [{ time: TODAY_EARLIER.time, state: 'verified' }, { time: TODAY_EARLIER.time, state: 'undone' }] }),
+  change('c2', TODAY_EARLIER, { state: 'undone', backup: 'back', redo: [RULE_B], history: [{ time: TODAY_EARLIER.time, state: 'verified' }, { time: TODAY_EARLIER.time, state: 'undone' }] }),
   change('c3', YESTERDAY, { state: 'stale', backup: 'none', takes_effect: [], redo: null, map: null }),
   change('c4', OLDER, { state: 'restored', backup: 'back', takes_effect: [], technical: { paths: [], backups: [], commands: [], error: 'Codex did not start. The original settings were restored.' } }),
 ];
@@ -251,7 +252,9 @@ test('a row shows time, title, client tiles, state and Undo', async () => {
   assert.equal(text(cell('c1', 'time')), clock(TODAY));
   assert.equal(text(cell('c1', 't')), 'Allow Push files c1 and 1 more');
   assert.equal(text(cell('c1', 't')), changeTitle(ENTRIES[0].title_parts));
-  assert.deepEqual(cell('c1', 'who').children.map((n) => n.title), ['Claude Code', 'Codex']);
+  assert.deepEqual(byClass(cell('c1', 'who'), 'client-mark').map((n) => n.title), ['Claude Code', 'Codex']);
+  // The tiles are hidden from a screen reader; their names are said instead.
+  assert.deepEqual(byClass(node, 'sr-only').map(text), ['Claude Code and Codex', 'Open details']);
   const lamp = byClass(cell('c1', 'state'), 'lamp')[0];
   assert.ok(lamp.classList.contains('on'));
   assert.equal(text(cell('c1', 'sw')), 'Applied');
@@ -289,8 +292,12 @@ test('a change that touched only the Kitden gateway shows its mark, not 0 client
   await fresh();
   show([change('k1', TODAY, { clients: [] })]);
   const who = cell('k1', 'who');
-  assert.equal(who.children.length, 1);
-  assert.equal(who.children[0].title, 'Kitden gateway');
+  const [house] = byClass(who, 'client-mark');
+  assert.equal(byClass(who, 'client-mark').length, 1);
+  assert.equal(house.title, 'Kitden gateway');
+  assert.equal(house.children[0].src, '/static/brand/kitden.svg');
+  // A screen reader hears the gateway's name, as it hears a client's.
+  assert.equal(text(byClass(row('k1'), 'sr-only')[0]), 'Kitden gateway');
   const clients = facts().find(([label]) => label === 'Clients');
   assert.equal(clients[1], 'Kitden gateway');
 });
@@ -446,7 +453,7 @@ test('Redo… adds a fresh preview and writes nothing; an old change offers none
   }));
   await fire(buttonIn(drawer, 'Redo…'), 'click');
   await flush();
-  assert.deepEqual(tray.rows.map((r) => r.key), [keyFor(RULE)]);
+  assert.deepEqual(tray.rows.map((r) => r.key), [keyFor(RULE_B)]);
   assert.ok(asked.every((call) => call.method === 'GET' || call.url === '/api/batch/preview'), 'only a preview was asked');
   assert.ok(!asked.some((call) => call.url.includes('/apply') || call.url.includes('/undo')));
   // While it waits in the tray the button says so.
@@ -459,6 +466,43 @@ test('Redo… adds a fresh preview and writes nothing; an old change offers none
   show();
   assert.equal(buttonIn(drawer, 'Redo…'), null);
   assert.ok(buttonIn(drawer, 'Undo'));
+});
+
+test('an undone change offers no Redo… once a later applied change made the same request', async () => {
+  await fresh();
+  const older = change('r1', TODAY_EARLIER, { state: 'undone', backup: 'back' });
+  show([change('r2', TODAY), older]);
+  await fire(row('r1'), 'click');
+  assert.equal(Boolean(buttonIn(drawer, 'Redo…')), false, 'it is in place already');
+  // Once the later one is undone too, Redo… comes back on both.
+  show([change('r2', TODAY, { state: 'undone', backup: 'back' }), older]);
+  assert.ok(buttonIn(drawer, 'Redo…'));
+  await fire(row('r1'), 'click');
+  assert.ok(buttonIn(drawer, 'Redo…'));
+  // The toast after an Undo offers none either when a later applied change made the request.
+  await fresh();
+  const both = [change('r4', TODAY), change('r3', TODAY_EARLIER)];
+  show(both);
+  queue('/api/changes/r3/undo', { status: 200, json: { id: 'r3', state: 'undone', steps: [] } });
+  queue('/api/changes', { status: 200, json: [both[0], { ...both[1], state: 'undone', backup: 'back' }] });
+  await quietly(() => fire(buttonIn(cell('r3', 'act'), 'Undo'), 'click'));
+  await flush();
+  const toast = byClass(pages['#dock'], 'toast')[0];
+  assert.match(text(toast), /^Undid/);
+  assert.equal(Boolean(buttonIn(toast, 'Redo…')), false, 'no Redo… in the toast');
+});
+
+test('in a narrow window the first row is selected and no Details open', async () => {
+  await fresh();
+  globalThis.innerWidth = 800;
+  try {
+    show();
+    assert.equal(row('c1').getAttribute('aria-current'), 'true');
+    assert.ok(row('c1').classList.contains('selected'));
+    assert.equal(isPanelOpen(), false);
+  } finally {
+    globalThis.innerWidth = 1440;
+  }
 });
 
 test('Technical details hold the paths', async () => {

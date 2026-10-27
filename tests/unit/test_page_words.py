@@ -3067,6 +3067,17 @@ def test_the_changes_page_says_the_mockups_words():
     assert 'GONE = "This item is no longer there."' in text
     # A change that touched only Kitden's own settings shows the gateway, never "0 clients".
     assert '"Kitden gateway"' in text
+    # A change with no day, the history's points and the log-in note.
+    assert 'return "Earlier"' in text
+    assert 'previewed: ["Preview"]' in text and '["Applied", "Checked"]' in text
+    assert 'stale: ["Stopped: the file changed first"]' in text
+    assert "`Log in: ${t.login}`" in text
+    # The Kitden house is drawn in one place (parts.js) for the Gateway, its Details and Changes.
+    house = '"/static/brand/kitden.svg"'
+    names = sorted(p.name for p in (STATIC / "js").glob("*.js"))
+    assert [n for n in names if house in script(n)] == ["parts.js"]
+    for name in ("changes.js", "gateway.js", "gateway-details.js"):
+        assert "kitdenHouse(" in script(name), name
 
 
 def test_the_undo_toast_names_the_change_and_offers_redo():

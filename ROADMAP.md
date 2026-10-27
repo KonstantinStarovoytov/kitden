@@ -117,7 +117,8 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Changes timeline:** changes by day (Today, Yesterday, a date), each row with its time, title,
   clients, state and Undo. Details say the project, state, backup, what to do for it to take
   effect, the clients and the history; "See it on the map" opens the item, and "Redo…" on an
-  undone change previews it again in the tray. The Undo toast names the change.
+  undone change previews it again in the tray, unless a later change already made it again. The
+  Undo toast names the change.
 - **Categories:** filter plugins and skills by category. The category shows quietly in each row.
 - **Quick start:** the page has its data in about two seconds. Codex's slow plugin list comes in
   the background, and a line shows what is still read.

@@ -4,11 +4,11 @@
 // today's Undo (review.js); Redo… only adds a fresh preview to the tray. Paths, backups and
 // commands are only under Technical details.
 import { detailsCard, keepFrom, showInPreview, technical } from "./details.js";
-import { button, el, icon, plural } from "./dom.js";
+import { button, el, icon, joinWords, plural } from "./dom.js";
 import { loadLibraryFor } from "./library.js";
 import { animateTo, D, rise, riseHead, rollTo, STRIKE } from "./motion.js";
-import { floatsAt, loadPanel, openPanel, panelState, redoChange, undoChange } from "./panel.js";
-import { ALL_PROJECTS, backupNote, banner, changeTitle, failedWord, mark, setHint, skeleton } from "./parts.js";
+import { floatsAt, loadPanel, openPanel, panelState, redoChange, redoStands, undoChange } from "./panel.js";
+import { ALL_PROJECTS, backupNote, banner, changeTitle, CLIENT_NAMES, failedWord, kitdenHouse, mark, setHint, skeleton } from "./parts.js";
 import { data, goTo, libraryChoice, parseSel, retry } from "./store.js";
 import { keyFor } from "./tray.js";
 
@@ -182,7 +182,7 @@ function changeRow(entry) {
   state.append(lamp, words);
   const act = el("span", "act");
   if (entry.state === "verified") act.append(undoButton(entry));
-  node.append(dot, el("span", "time", clock(entry.time)), title, clientTiles(entry.clients, "who"), state, act, el("span", "sr-only", "Open details"));
+  node.append(dot, el("span", "time", clock(entry.time)), title, clientTiles(entry.clients, "who"), el("span", "sr-only", clientWords(entry.clients)), state, act, el("span", "sr-only", "Open details"));
   showSelected(node, entry.id === page.selected);
   node.addEventListener("click", (event) => {
     if (event.target && event.target.closest && event.target.closest("button")) return;
@@ -223,12 +223,13 @@ function kitdenMark() {
   const node = el("span", "client-mark kitden-mark");
   node.title = KITDEN;
   node.setAttribute("aria-hidden", "true");
-  const house = el("img");
-  house.src = "/static/brand/kitden.svg";
-  house.alt = "";
-  node.append(house);
+  node.append(kitdenHouse());
   return node;
 }
+
+// The tiles are hidden from a screen reader, so a row says their names: "Claude Code and Codex",
+// or the Kitden gateway.
+const clientWords = (clients) => (clients.length ? joinWords(clients.map((c) => CLIENT_NAMES[c] || c)) : KITDEN);
 
 function undoButton(entry) {
   const node = button(null, () => undoFromRow(entry, node));
@@ -388,12 +389,12 @@ function rowTitles(rows) {
 }
 
 // Undo on an applied change, See it on the map when the change touched one item, and Redo… on an
-// undone change that kept its request.
+// undone change that kept its request, while no later applied change made the same one.
 function changeActions(entry, status) {
   const actions = [];
   if (entry.state === "verified") actions.push({ label: "Undo", run: () => undoChange(entry) });
   if (entry.map) actions.push({ label: "See it on the map", run: () => seeOnMap(entry.map, status) });
-  if (entry.state === "undone" && entry.redo) actions.push({ label: "Redo…", node: redoButton(entry) });
+  if (entry.state === "undone" && redoStands(entry)) actions.push({ label: "Redo…", node: redoButton(entry) });
   return actions;
 }
 

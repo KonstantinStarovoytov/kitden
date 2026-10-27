@@ -90,14 +90,15 @@ Overview (`overview.js`, the mockup's Overview; checked 2026-10-27):
   - the map's gateway block says "Could not read its settings" with the unknown lamp, not a count;
   - no Move in… or Connect… card is offered.
 - **More servers.** Past three servers that skip the gateway, one card says "4 more servers skip the gateway". Its "Show…" opens the Gateway's List at the outside group.
+- **One name twice.** Two Move in… cards with one name (a remote and a local server) start their line with "Remote · " or "Local · ".
 - **Buttons.**
-  - "Keep one…" opens the item in the Library.
+  - "Keep one…" opens the item in the Library, or on the Gateway for an MCP server.
   - "Move in…", "Connect…" and "Update…" only add their row to the tray. Each says "In preview" while its row waits there.
-- **A card leaves** only after its change is applied and checked and the page has read the result:
+- **A card leaves** only after its change is applied and checked and a read that began after that has the result:
   - it goes out to the right (opacity, 28 px) in 180 ms ease-in;
   - then it folds to nothing (height, padding, border and the gap) in 160 ms `--calm`;
   - the cards under it move up with the fold, with no slide after it;
-  - the lede's count rolls.
+  - the lede's count rolls. To or from 0 the sentence's start rolls as one ("1 thing needs your attention. Everything else looks fine:" and "Everything looks fine:"), then is plain words again.
 - **A card that goes as a side effect** of another card's Apply (a move that also connects a client) just goes with the next draw, with no leave motion.
 - **Undo** brings a card back from 8 px above at .98 of its size (220 ms `--calm`).
 - **Map focus.** Pointing at a card, or keyboard focus in it, focuses the map on its clients and the block it is about (300 ms, as the maps do). Leaving lets go.
@@ -119,7 +120,7 @@ Changes (`changes.js`, the mockup's Changes; checked 2026-10-27):
 - **Hint line.** "Click a row · Undo · See it on the map".
 - **Days.** "Today", "Yesterday", then a short date in the browser's language ("Mon 19 Oct"; another year names it). Each day is a list named by its label.
 - **Rail and dots.** One 1 px rail per day, from the first row's middle to the last's, and a 9 px dot per row on it; the selected row's dot is the accent.
-- **A row** is 46 px on the panel fill (columns `52px 1fr auto auto auto`): the time, the title, 20 px client tiles, a lamp and the state word, and Undo on an applied change. A change of Kitden's own settings shows the Kitden gateway's mark, never "0 clients". The selected row has the accent tint and edge; hover tints the edge (180 ms).
+- **A row** is 46 px on the panel fill (columns `52px 1fr auto auto auto`): the time, the title, 20 px client tiles, a lamp and the state word, and Undo on an applied change. A change of Kitden's own settings shows the Kitden gateway's mark (`kitdenHouse` in parts.js), never "0 clients". A screen reader hears the clients' names, or "Kitden gateway", in place of the tiles. The selected row has the accent tint and edge; hover tints the edge (180 ms).
 - **State words.** "Applied" (green), "Undone" (grey), and in amber "Not applied: the file changed first", "Failed, put back" or "Failed", and "Can't undo: the file changed after this". Nothing logs a cancel, so there is no "Cancelled".
 - **Undone rows** have a quiet title with a strike line. Failed rows keep only their amber phrase.
 - **Keys.** Enter or Space opens a row; the arrows move to the row above or below.
@@ -132,7 +133,7 @@ Changes (`changes.js`, the mockup's Changes; checked 2026-10-27):
   - History: each point in order, joined by arrows ("14:02 Preview → 14:02 Applied → 14:02 Checked").
 
   A change of several tray rows lists every row's title. The paths, backups, commands and the engine's error are only under Technical details.
-- **Actions.** "Undo" on an applied change. "See it on the map" when the change touched one item: the Gateway's map, or the Library's List (its map cannot select an item yet), opens with it selected; an item that is gone says "This item is no longer there." in Details. "Redo…" on an undone change that kept its request adds a fresh preview of it to the tray and says "In preview" while it waits; it never writes.
+- **Actions.** "Undo" on an applied change. "See it on the map" when the change touched one item: the Gateway's map, or the Library's List (its map cannot select an item yet), opens with it selected, in the project picked now (not the change's); an item that is gone says "This item is no longer there." in Details. "Redo…" on an undone change that kept its request adds a fresh preview of it to the tray and says "In preview" while it waits; it never writes. A later applied change that made the same request takes Redo… away, in Details and in the Undo toast: it is in place already.
 - **Undo.** The page draws again in place: the strike draws in from the left (200 ms, `STRIKE` in motion.js), the lamp goes grey (400 ms), the word rolls to "Undone" and the Undo button goes out (opacity and scale .8, 180 ms). Only after the Undo is verified the toast says "Undid “<title>”. The backup is back in place." with "Redo…". Focus on the row's Undo goes to its row.
 - **Motion in.** The day labels and rows rise in order, 40 ms apart (260 ms). A new row (a later Apply) comes in at the top from 8 px above at .98 (220 ms `--calm`); the others stay still.
 - **Reduced motion.** Everything lands at once: no rise, no skeleton, no strike, roll or button motion.
@@ -245,7 +246,7 @@ Calm beats bouncy: a tool that edits files must feel steady.
    under the page draws a frame only while the pointer moves or the dots ease in or out, and none at
    rest, so it loops nothing.
 3. **Point, don't move.** To show where something is, light it (row glow, socket ping, lit
-   rows). Layout moves only when the thing itself moves (a tile flying to its column).
+   rows). Layout moves only when the thing itself moves (a map block gliding to its new place).
 4. **Errors stay.** An error is a callout that stays until the next action; focus goes back to
    the button that failed. No success animation can follow an error.
 5. **Interruptible.** Every animation can be cut short; the true state is always the resting
@@ -293,7 +294,7 @@ All helpers live in `src/kitden/web/static/js/motion.js`.
 | List settle | `snapshotRows()` before a redraw, `settleRows()` after: rows that stay slide from their old place (260 ms `--calm`), new rows rise 4 px (200 ms, 20 ms apart, first 12) | Library filters and search |
 | Tab slide | in `settleRows()`: another tab's list slides in 8 px from that tab's side (220 ms) | Library List tabs |
 | Smooth `<details>` | `fold(details)` | File change in a review, gateway forms |
-| Rolling number | `rollTo(holder, value)`: the old value leaves in 140 ms ease-in, the new one comes in over 200 ms `--calm` | Rail counts, the picked project's name, a map block's counts, the Overview's lede |
+| Rolling number | `rollTo(holder, value)`: the old value leaves in 140 ms ease-in, the new one comes in over 200 ms `--calm`; a bigger number goes up, words go down unless `{ up }` says otherwise | Rail counts, the picked project's name, a map block's counts, the Overview's lede |
 | Count up | `countUp(node, value, { dur, delay })`: from 0 in `dur` ms OUT3; at once under reduced motion or in a hidden tab | The Overview's lede, first visit |
 | Menu | `projectMenu` (parts.js): it grows in from -8 px and 0.96 (180 ms `--calm`) and fades out to -4 px and 0.98 (140 ms ease-in); it is hidden by time, so a quick second open or a hidden tab never waits | The project picker |
 | Socket morph | `morphSocket(node, state)` (parts.js) | Library after Apply, Undo or a scope change |

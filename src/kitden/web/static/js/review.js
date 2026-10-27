@@ -539,8 +539,17 @@ export async function redoChange(entry) {
   for (const body of entry.redo || []) await addToTray(body, { picked: body.picked });
 }
 
+// Whether Redo… can still run: the change kept its request, and no later change that made the
+// same request is applied (it is in place then, and a preview of it would be refused).
+export function redoStands(entry, entries = data.changes || []) {
+  if (!entry.redo) return false;
+  const same = JSON.stringify(entry.redo);
+  const later = entries.slice(0, Math.max(0, entries.findIndex((e) => e.id === entry.id)));
+  return !later.some((e) => e.state === "verified" && JSON.stringify(e.redo) === same);
+}
+
 // The toast after a verified Undo names the change, as the Changes page has it after the reload,
-// and offers Redo… when the change kept its request. A change the page does not know yet gets the
+// and offers Redo… while it can still run (redoStands). A change the page does not know yet gets the
 // plain words.
 function undidToast(id) {
   const entry = Array.isArray(data.changes) ? data.changes.find((e) => e.id === id) : null;
@@ -548,7 +557,7 @@ function undidToast(id) {
     toast("Undone. The previous settings are back.", null, { ok: true });
     return;
   }
-  const extra = entry.redo ? { label: "Redo…", run: () => redoChange(entry) } : null;
+  const extra = redoStands(entry) ? { label: "Redo…", run: () => redoChange(entry) } : null;
   toast(`Undid “${changeTitle(entry.title_parts)}”. The backup is back in place.`, null, { ok: true, extra });
 }
 

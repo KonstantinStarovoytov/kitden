@@ -25,7 +25,7 @@ const GROUPS = [
 // What the page drew last and what it waits for, across draws:
 // - `shown`: each card drawn, by id: { card, node, list, group, at } (`at`, its place in its list);
 // - `applied`: the cards whose tray row was applied, by id, with the time; the first read of the
-//   page after that time decides whether each one leaves;
+//   page that began after that time decides whether each one leaves;
 // - `leaving`: the cards on their way out, by id, as `shown` had them;
 // - `gone`: the cards that left, so the draw that brings one back (an Undo) shows it coming;
 // - `need`: the attention count the lede showed; `counted`: the lede counted up once;
@@ -109,14 +109,23 @@ export function ledeParts({ attention, clients, projects }) {
   return [{ num: "need", value: attention }, ` ${attention === 1 ? "thing needs" : "things need"} your attention. Everything else looks fine: `, ...rest];
 }
 
-export const ledeText = (counts) => ledeParts(counts).map((part) => (typeof part === "string" ? part : String(part.value))).join("");
+const textOf = (parts) => parts.map((part) => (typeof part === "string" ? part : String(part.value))).join("");
+export const ledeText = (counts) => textOf(ledeParts(counts));
 
 // The lede. Its numbers count up on the first visit (700 ms OUT3, 200 / 260 / 320 ms late); on a
-// later draw the attention count rolls from the one shown before (`from`), if it changed.
+// later draw the attention count rolls from the one shown before (`from`), if it changed. To or
+// from 0 the sentence's start changes, so the start rolls as one (`rollHead`).
 const COUNT_DELAYS = { need: 200, clients: 260, projects: 320 };
 function ledeNode(counts, { count, from }) {
   const lede = el("p", "lede ov-lede");
-  for (const part of ledeParts(counts)) {
+  let parts = ledeParts(counts);
+  if (!count && typeof from === "number" && !from !== !counts.attention) {
+    const cut = (all) => all.slice(0, all.findIndex((part) => part.num === "clients"));
+    const head = cut(parts);
+    lede.append(rollHead(textOf(cut(ledeParts({ ...counts, attention: from }))), textOf(head), counts.attention > from));
+    parts = parts.slice(head.length);
+  }
+  for (const part of parts) {
     if (typeof part === "string") {
       lede.append(el("span", null, part));
       continue;
@@ -132,6 +141,16 @@ function ledeNode(counts, { count, from }) {
     }
   }
   return lede;
+}
+
+// The sentence's start rolls from its old words (up when the count went up), and once it has
+// rolled (140 + 200 ms) it is plain words again, which may wrap.
+function rollHead(was, words, up) {
+  const holder = el("span", "roll");
+  holder.append(el("span", null, was));
+  rollTo(holder, words, { up });
+  setTimeout(() => holder.classList.remove("roll"), D(340));
+  return holder;
 }
 
 // A group: its caption, then its cards. A card that leaves keeps its place in it until it has
@@ -243,9 +262,9 @@ onTray((t) => {
   }
 });
 
-// The cards that leave now, by id: those whose change was applied and that the page's read after it
-// no longer has. A card it still has stays. A card that comes back while it still leaves stops
-// leaving at once.
+// The cards that leave now, by id: those whose change was applied and that a read begun after it
+// no longer has (`readAt` is when the read began). A card it still has stays. A card that comes
+// back while it still leaves stops leaving at once.
 function settleApplied(model) {
   const now = new Set(model.cards.map((c) => c.id));
   const read = data.readAt.overview || 0;

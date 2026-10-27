@@ -2,6 +2,7 @@
 
 import json
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -293,6 +294,43 @@ def test_more_than_three_servers_give_one_more_card(tmp_path):
     }
     assert more["focus"]["block"] == "gateway"
     assert set(more["clients"]) <= {"claude_code", "codex", "cursor"}
+
+
+def test_two_move_in_cards_of_one_name_say_remote_or_local():
+    from kitden.views.overview import SKIPS, _move_ins
+
+    def row(name, item):
+        return {"name": name, "items": [item], "stays": None, "columns": ["codex"]}
+
+    groups = {"move": [row("docs", "r1"), row("github", "g1")], "local": [row("docs", "l1")]}
+    lines = {(c["name"], c["icon"]): c["line"] for c in _move_ins(groups)}
+    assert lines == {
+        ("docs", "globe"): f"Remote · {SKIPS}",
+        ("docs", "hard-drive"): f"Local · {SKIPS}",
+        ("github", "globe"): SKIPS,
+    }
+
+
+def test_a_picked_project_gets_the_cards_of_its_own_servers(tmp_path):
+    with demo_page(tmp_path) as page:
+        ids = {Path(p["path"]).name: p["id"] for p in page.get("/api/projects").json()}
+        shared = page.get("/api/overview").json()["cards"]
+        here = page.get(f"/api/overview?project={ids['website']}").json()["cards"]
+        view = page.get(f"/api/gateway-view?project={ids['website']}").json()
+    rows = [
+        r for g in ("move", "local") for r in view["groups"][g] if r["items"] and not r["stays"]
+    ]
+    rows.sort(key=lambda r: r["name"].lower())
+    moves = [c for c in here if c["action"] and c["action"]["label"] == "Move in…"]
+    # The cards are the picked project's Gateway rows, each with that row's body.
+    assert [c["action"]["body"]["targets"] for c in moves] == [
+        [{"item": i} for i in r["items"]] for r in rows[:3]
+    ]
+    [more] = [c for c in here if c["action"] and c["action"]["label"] == "Show…"]
+    assert more["name"] == f"{len(rows) - 3} more servers skip the gateway"
+    # website has a server of its own that All projects does not count.
+    [shared_more] = [c for c in shared if c["action"] and c["action"]["label"] == "Show…"]
+    assert shared_more["name"] == f"{len(rows) - 4} more servers skip the gateway"
 
 
 def test_four_servers_give_three_cards_and_one_more_server(home):

@@ -119,7 +119,7 @@ const flush = async () => { for (let i = 0; i < 6; i += 1) await new Promise((do
 const { countUp } = await import('../../src/kitden/web/static/js/motion.js');
 const overviewJs = await import('../../src/kitden/web/static/js/overview.js');
 const { footWords, ledeText, noteGroups, noteItemRow, noteSentence, renderOverview, setupPath, setupTree, targetSel } = overviewJs;
-const { data, setRenderer, state } = await import('../../src/kitden/web/static/js/store.js');
+const { data, loadOverview, setRenderer, state } = await import('../../src/kitden/web/static/js/store.js');
 const { applyTray, cancelTray, endApplied, keyFor, tray } = await import('../../src/kitden/web/static/js/tray.js');
 
 // The Overview's answer (views/overview.py), cut short.
@@ -236,9 +236,11 @@ test('a card shows its icon, name, line, client tiles and one button', () => {
   assert.equal(can.children[0].dataset.icon, 'sparkles');
 });
 
-test('a group with no card hides its caption', () => {
+test('a group with no card hides its caption', async () => {
   show({ ...MODEL, cards: CARDS.filter((c) => c.group === 'improve'), counts: { ...MODEL.counts, attention: 0 } }, { again: true });
   assert.deepEqual(byClass(main, 'ov-group').filter((n) => !n.hidden).map((n) => text(n.children[0])), ['Can improve']);
+  // The lede's start rolls from 3 things to none; then it says so.
+  await new Promise((done) => setTimeout(done, 200));
   assert.equal(text(lede()), 'Everything looks fine: 3 clients, 4 projects.');
 });
 
@@ -332,6 +334,67 @@ test('a card the page still reads after Apply stays', async () => {
   assert.ok(card('old'));
   assert.deepEqual(card('old').animations, []);
   endApplied();
+});
+
+test('a read that started before Apply was checked does not decide whether a card leaves', async () => {
+  const realNow = Date.now;
+  let clock = realNow();
+  Date.now = () => clock;
+  try {
+    show(MODEL, { again: true });
+    queue(PREVIEW, batch('c9'));
+    fire(cardButton('old'), 'click');
+    await flush();
+    // A read starts, then Apply is checked, then the read answers: it still has the card.
+    let answer;
+    queue('/api/overview', () => new Promise((done) => { answer = done; }));
+    const reading = loadOverview();
+    clock += 1000;
+    queue('/api/changes/c9/apply', { status: 200, json: { id: 'c9', state: 'verified', action: 'batch', steps: [] } });
+    await applyTray();
+    assert.equal(tray.phase, 'applied');
+    clock += 1000;
+    answer({ status: 200, json: structuredClone(MODEL) });
+    await reading;
+    main.replaceChildren();
+    renderOverview(main, { again: true });
+    assert.deepEqual(card('old').animations, []);
+    // The read after Apply no longer has it: it still leaves, with its motion.
+    clock += 1000;
+    show(without('old', 2), { again: true });
+    assert.ok(card('old'), 'the card is still there, on its way out');
+    assert.deepEqual(card('old').animations[0].keyframes.at(-1), { opacity: 0, transform: 'translateX(28px)' });
+    await flush();
+    await flush();
+    assert.equal(card('old'), null);
+  } finally {
+    Date.now = realNow;
+    endApplied();
+    show(MODEL, { again: true });
+  }
+});
+
+test('the lede rolls at 1 → 0 and 0 → 1 too', async () => {
+  const at = (attention) => ({ ...MODEL, counts: { ...MODEL.counts, attention } });
+  const ONE = '1 thing needs your attention. Everything else looks fine: ';
+  const NONE = 'Everything looks fine: ';
+  show(at(1), { again: true });
+  // 1 → 0: the sentence's start rolls down, as a smaller number does.
+  show(at(0), { again: true });
+  const down = lede().children[0];
+  assert.ok(down.classList.contains('roll'));
+  assert.deepEqual(down.children.map((n) => n.textContent), [ONE, NONE]);
+  assert.deepEqual(down.children[0].animations[0].keyframes.at(-1), { transform: 'translateY(70%)', opacity: 0 });
+  // 0 → 1: it rolls up, as a bigger number does.
+  show(at(1), { again: true });
+  const up = lede().children[0];
+  assert.deepEqual(up.children.map((n) => n.textContent), [NONE, ONE]);
+  assert.deepEqual(up.children[0].animations[0].keyframes.at(-1), { transform: 'translateY(-70%)', opacity: 0 });
+  // Once it has rolled, the words are plain words again and may wrap.
+  await new Promise((done) => setTimeout(done, 400));
+  assert.ok(!up.classList.contains('roll'));
+  assert.deepEqual(up.children.map((n) => n.textContent), [ONE]);
+  show(MODEL, { again: true });
 });
 
 test('three server cards and one more card', async () => {

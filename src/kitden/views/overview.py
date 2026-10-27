@@ -32,6 +32,8 @@ KIND_WORDS = {"mcp_server": "MCP server", "plugin": "plugin", "skill": "skill"}
 # A card's icon: lucide names the page has (icons.js), or a client's mark.
 KIND_ICONS = {"mcp_server": "server", "plugin": "puzzle", "skill": "sparkles"}
 GROUP_ICONS = {"move": "globe", "local": "hard-drive"}
+# The group's word, as the Gateway says it, before the line of two cards with one name.
+GROUP_WORDS = {"move": "Remote", "local": "Local"}
 # Server cards before one card says how many more there are.
 SERVER_CARDS = 3
 SKIPS = "Skips the gateway, so Kitden's rules don't reach it."
@@ -159,7 +161,8 @@ def _move_ins(groups: dict) -> list[dict]:
     """A card per server outside the Kitden gateway that a move can take, as the Gateway's
     "Move into the gateway…" offers it (gateway-details.js `movesTo`): its row has entries
     Kitden can remove and nothing that makes the move refuse it. "Move in…" adds the same
-    change (details.js `moveBody`). Past SERVER_CARDS, one card says how many more and opens
+    change (details.js `moveBody`). Two cards with one name (a remote and a local server) start
+    their line with the group's word. Past SERVER_CARDS, one card says how many more and opens
     the Gateway's List at the outside group."""
     rows = [
         (group, row)
@@ -168,6 +171,7 @@ def _move_ins(groups: dict) -> list[dict]:
         if row["items"] and not row["stays"]
     ]
     rows.sort(key=lambda pair: pair[1]["name"].lower())
+    names = [row["name"] for _, row in rows[:SERVER_CARDS]]
     cards = []
     for group, row in rows[:SERVER_CARDS]:
         targets = [{"item": i} for i in row["items"]]
@@ -178,8 +182,9 @@ def _move_ins(groups: dict) -> list[dict]:
         }
         icon = GROUP_ICONS[group]
         card_id = _hash("move-in", group, row["name"])
+        line = f"{GROUP_WORDS[group]} · {SKIPS}" if names.count(row["name"]) > 1 else SKIPS
         cards.append(
-            _card(card_id, "improve", icon, row["name"], SKIPS, row["columns"], action, "gateway")
+            _card(card_id, "improve", icon, row["name"], line, row["columns"], action, "gateway")
         )
     rest = rows[SERVER_CARDS:]
     if rest:

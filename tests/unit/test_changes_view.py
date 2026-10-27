@@ -5,7 +5,8 @@ from datetime import datetime
 from types import SimpleNamespace
 
 from kitden.gateways import data_dir
-from kitden.views.changes_view import change_entries
+from kitden.model import ItemKind
+from kitden.views.changes_view import _map, change_entries
 from tests.unit.test_api_batch import (
     POST,
     _apply,
@@ -219,6 +220,31 @@ def test_map_target_of_several_rows(tmp_path):
     # Every row is about files: the server. A rule and a removal touch two things: none.
     assert maps[two["id"]] == {"view": "gateway", "sel": "mcp_server:files", "gone": False}
     assert maps[mixed["id"]] is None
+
+
+def test_several_rows_map_to_one_item_only_when_every_row_names_one():
+    n8n = SimpleNamespace(id="i1", kind=ItemKind.MCP_SERVER, name="n8n")
+    inventory = SimpleNamespace(items=[n8n])
+    remove = {"action": "mcp.remove_direct", "targets": [{"item": "i1"}], "params": {}}
+    connect = {"action": "setup_server.register", "targets": [{"client": "cursor"}], "params": {}}
+    assert _map(None, [remove, connect], 2, inventory) is None
+    # Two rows about the one item still map to it.
+    target = {"view": "gateway", "sel": "mcp_server:n8n", "gone": False}
+    assert _map(None, [remove, remove], 2, inventory) == target
+
+
+def test_a_preview_keeps_its_row_titles_and_details_with_secrets_hidden(tmp_path):
+    with _page(tmp_path) as page:
+        n8n = _ids(page, "cursor")["n8n"]
+        row = {**_remove("a", n8n, title="Remove n8n ghp_SENTINEL_SECRET_ROW1")}
+        row["detail"] = "From Cursor ghp_SENTINEL_SECRET_ROW2"
+        change = _preview(page, row).json()
+        # Applied with no titles from the tray: the record keeps the preview's own.
+        assert _apply(page, change["id"]).json()["state"] == "verified"
+        record = data_dir(page.home) / "changes" / change["id"] / "change.json"
+        [kept] = json.loads(record.read_text())["rows"]
+    assert (kept["title"], kept["detail"]) == ("Remove n8n [secret]", "From Cursor [secret]")
+    assert "SENTINEL" not in record.read_text()
 
 
 def test_a_kitden_gateway_server_that_left_is_gone(tmp_path):

@@ -136,8 +136,8 @@ export function transition(change, extraClass) {
 }
 
 // Numbers roll: the old value leaves, then the new one comes in from the other side.
-// A bigger number goes up, a smaller one down; text always goes down.
-export function rollTo(holder, value) {
+// A bigger number goes up, a smaller one down; text goes down unless `up` says otherwise.
+export function rollTo(holder, value, { up } = {}) {
   const text = value === null || value === undefined ? "" : String(value);
   const old = holder.lastElementChild;
   if (old && old.textContent === text) return;
@@ -145,7 +145,7 @@ export function rollTo(holder, value) {
   holder.append(next);
   if (!old) return;
   // The old value moves 70 % of its height away; the new one starts the same distance on the other side.
-  const out = Number(text) > Number(old.textContent) ? -70 : 70;
+  const out = (up ?? Number(text) > Number(old.textContent)) ? -70 : 70;
   animateTo(old, [{ transform: "translateY(0)", opacity: 1 }, { transform: `translateY(${out}%)`, opacity: 0 }], { dur: 140, ease: "ease-in", fill: "forwards" });
   animateTo(next, [{ transform: `translateY(${-out}%)`, opacity: 0 }, { transform: "translateY(0)", opacity: 1 }], { dur: 200, delay: 140 });
   // Remove by time, not by animation end: hidden tabs may never finish an animation.

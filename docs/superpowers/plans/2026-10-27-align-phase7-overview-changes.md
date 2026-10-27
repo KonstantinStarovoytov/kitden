@@ -261,7 +261,7 @@
 **Interfaces:**
 - **Consumes:** the log lines (`_log`: `id, time, action, state, error, target, rows, steps`), the record (`_record`), `ChangeState`, and today's `changeTitle`.
 - **Produces:**
-  - **`change_entries`:** one entry per change id, newest first, as `{id, time, day, title_parts, state, clients, project, backup: "kept" | "back" | "none", takes_effect: [{client, note}], history: [{time, state}], rows: [{title}], redo: request | null, map: {view, sel, gone: bool} | null, technical: {paths, backups, commands}}`.
+  - **`change_entries`:** one entry per change id, newest first, as `{id, time, day, title_parts, state, clients, project, backup: "kept" | "back" | "none", takes_effect: [{client, note, login}], history: [{time, state}], rows: [{title}], redo: request | null, map: {view, sel, gone: bool} | null, technical: {paths, backups, commands}}`.
     - `map.gone` is true when the item is no longer in the inventory.
     - Paths appear only under `technical`.
   - **A new change keeps its request** (`request`) in its record and its log line, with secrets kept out exactly as the rows' bodies are.

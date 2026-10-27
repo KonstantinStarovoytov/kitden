@@ -10,7 +10,7 @@ import { drawChip, glidePill, modeSwitch, switchedNow } from "./map-page.js";
 import { mapView } from "./map-view.js";
 import { afterOldPage, D, rise, riseHead } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, openInfo, panelState, projectLabel, review } from "./panel.js";
-import { banner, CLIENT_NAMES, folderName, gatewayName, kitdenClients, mark, opens, ORIGIN_WORDS, scopeBar, setHint, skeleton, STATE_WORDS, staleNote } from "./parts.js";
+import { banner, CLIENT_NAMES, folderName, gatewayName, kitdenClients, kitdenHouse, mark, opens, ORIGIN_WORDS, scopeBar, setHint, skeleton, STATE_WORDS, staleNote } from "./parts.js";
 import { arrival, busy, current, currentError, data, gatewayShows, go, onBusy, projectPath, render, retry, setState, state, takeArrival, toolSel, viewMode } from "./store.js";
 import { say } from "./toast.js";
 import { addToTray, inTray, keyFor, onTray, takeOut, tray, undone } from "./tray.js";
@@ -1416,11 +1416,7 @@ function focusGateway({ fromDock }) {
 function tile(block) {
   if (block.kind === "client") return mark(block.client);
   if (GATEWAY_KINDS.includes(block.kind) && block.gateway) {
-    if (block.gateway.kind !== "kitden") return mark("gateway");
-    const house = el("img", "block-house");
-    house.src = "/static/brand/kitden.svg";
-    house.alt = "";
-    return house;
+    return block.gateway.kind === "kitden" ? kitdenHouse("block-house") : mark("gateway");
   }
   if (!block.icon) return null;
   const holder = el("span", block.parent === "group:outside" ? "block-icon bare" : "block-icon");
