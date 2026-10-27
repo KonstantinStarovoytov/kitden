@@ -114,22 +114,15 @@ export function transition(change, extraClass) {
   finishTransition();
   if (!document.startViewTransition || reducedMotion.matches || document.hidden) {
     change();
-    flying = null;
     return null;
   }
   if (extraClass) document.documentElement.classList.add(extraClass);
-  let landed = null;
   const t = document.startViewTransition(() => {
-    inChange = true;
     changeClass = extraClass || null;
-    try { change(); } finally { inChange = false; changeClass = null; }
-    flying = null;
-    landed = landing;
-    landing = null;
+    try { change(); } finally { changeClass = null; }
   });
   activeTransition = t;
   activeClass = extraClass;
-  t.finished.catch(() => {}).finally(() => { if (landed) landed.style.viewTransitionName = ""; });
   t.ready.catch(() => {});
   t.finished.catch(() => {}).finally(() => {
     if (activeTransition !== t) return;
@@ -247,21 +240,4 @@ export function fold(details) {
     }
   });
   return details;
-}
-
-// Shared element: a tile that is on the next page too flies there instead of fading.
-// fly() names it before the place changes; land() names its twin while the new place draws.
-let flying = null;
-let landing = null;
-let inChange = false;
-export function fly(node, name) {
-  if (!node) return;
-  node.style.viewTransitionName = name;
-  flying = name;
-}
-// Only a twin drawn inside a transition keeps the name; the transition clears it when done.
-export function land(node, name) {
-  if (!node || flying !== name || !inChange) return;
-  node.style.viewTransitionName = name;
-  landing = node;
 }

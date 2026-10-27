@@ -116,6 +116,7 @@ def test_overview_says_your_setup_connected():
         '"Kitden gateway"',
         '"Library"',
         '"Not found"',
+        '"Could not read its settings"',
         '"All projects"',
         "`Project ${folder}`",
         '"has its own rules" : "have their own rules"',

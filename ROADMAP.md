@@ -109,7 +109,8 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Hide a column:** the "−" on a client's column head hides it on the page, and "Show" brings it
   back.
 - **Overview:** "Your setup, connected.": one-button cards that leave once their change is
-  applied and checked, and a small map of your setup that lights a card's path.
+  applied and checked, a small map of your setup that lights a card's path, and a card when
+  Kitden cannot read its gateway settings.
 - **Categories:** filter plugins and skills by category. The category shows quietly in each row.
 - **Quick start:** the page has its data in about two seconds. Codex's slow plugin list comes in
   the background, and a line shows what is still read.
@@ -119,7 +120,6 @@ What Kitden does today and what comes next. Ideas and bugs:
   tools on or off for it, in every client; its folders and worktrees follow it. Local servers
   move in too, and moving a server the gateway holds again updates it, for a new token. Each
   switch waits in the preview tray and has Undo; no deploy, no account.
-- **Overview:** knows the Kitden gateway and says whether it is set up.
 - **Add scope:** in a project, the Library says an Add puts the item in all your projects.
 - **Kitden's own entries:** no cross-client note for them.
 - **True words:** the start link, the agents server, where secrets go, and the sign-in check.

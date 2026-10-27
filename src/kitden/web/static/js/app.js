@@ -237,8 +237,8 @@ function drawScan() {
 
 function showScan(view) {
   const bar = $("#topbar");
-  // The Clients card may be drawn before the first progress came: it draws again to say
-  // "Checking the version…".
+  // The Overview's map may be drawn before the first progress came: its client blocks draw
+  // again to say "Checking the version…".
   const opened = versionsOpened(data.progress, view);
   data.progress = view;
   if (opened) document.dispatchEvent(new CustomEvent("kitden:versions"));

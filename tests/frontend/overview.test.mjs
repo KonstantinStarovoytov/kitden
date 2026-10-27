@@ -428,6 +428,9 @@ test('the setup map draws clients, Kitden gateway and Library with their counts 
   assert.equal(text(foot), '4 projects · 3 have their own rules');
   assert.equal(foot.children[0].dataset.icon, 'folder');
   assert.equal(footWords(1, 1), '1 project · 1 has its own rules');
+  // While Kitden cannot read the gateway settings, the gateway block claims no counts.
+  const unread = setupTree({ ...MAP, gateway: { servers: null, tools: null, unread: true } }, null).blocks.find((b) => b.id === 'gateway');
+  assert.deepEqual([unread.meta, unread.lamp], ['Could not read its settings', 'unk']);
   // A client not on this Mac is off and says so.
   const off = setupTree({ ...MAP, clients: [{ id: 'codex', name: 'Codex', version: null, tested: true, on: false }] }, null);
   assert.deepEqual([off.blocks[0].meta, off.blocks[0].lamp], ['Not found', 'off']);

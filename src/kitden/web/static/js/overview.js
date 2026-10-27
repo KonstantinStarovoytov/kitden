@@ -453,15 +453,19 @@ export function setupTree(map, progress) {
     lamp: c.on ? "on" : "off", state: c.on ? "on" : "off", stateInMeta: true, client: c.id, ports: { right: true },
   }));
   const { gateway, library } = map;
-  blocks.push(pageBlock("gateway", "Kitden gateway", "house", `${plural(gateway.servers, "server", "servers")} · ${plural(gateway.tools, "tool", "tools")}`, gateway.servers > 0));
+  // Settings Kitden cannot read say so: no count is known then.
+  const held = gateway.unread ? "Could not read its settings" : `${plural(gateway.servers, "server", "servers")} · ${plural(gateway.tools, "tool", "tools")}`;
+  blocks.push(pageBlock("gateway", "Kitden gateway", "house", held, gateway.unread ? "unk" : gateway.servers > 0));
   blocks.push(pageBlock("library", "Library", "library", `${plural(library.plugins, "plugin", "plugins")} · ${plural(library.skills, "skill", "skills")}`, library.plugins + library.skills > 0));
   const links = map.links.map((link) => ({ from: `client:${link.client}`, to: link.to, kind: "on" }));
   return { columns: SETUP_COLUMNS, blocks, links };
 }
 
-// A block that opens its page: its icon tile, its counts, and the arrow mark at its right.
-function pageBlock(id, name, mark, meta, on) {
-  return { id, column: "pages", kind: "page", name, meta, lamp: on ? "on" : "off", state: on ? "on" : "off", stateInMeta: true, icon: mark, label: { icon: "arrow-up-right", words: "" }, ports: { left: true } };
+// A block that opens its page: its icon tile, its counts, and the arrow mark at its right. `lamp`
+// is true (on), false (off) or "unk" (not known).
+function pageBlock(id, name, mark, meta, lamp) {
+  const look = lamp === "unk" ? "unk" : lamp ? "on" : "off";
+  return { id, column: "pages", kind: "page", name, meta, lamp: look, state: look, stateInMeta: true, icon: mark, label: { icon: "arrow-up-right", words: "" }, ports: { left: true } };
 }
 
 // What a card focuses on the map: its clients, its block, and the links between them that exist.

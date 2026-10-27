@@ -64,39 +64,6 @@ test('an interrupted transition cannot remove the new transition class', async (
   finishTransition();
 });
 
-const { fly, land } = await import('../../src/kitden/web/static/js/motion.js');
-
-test('a tile named before a place change lands on its twin, then the name is cleared', async () => {
-  const from = { style: {} };
-  const to = { style: {} };
-  fly(from, 'client-codex');
-  assert.equal(from.style.viewTransitionName, 'client-codex');
-  transition(() => land(to, 'client-codex'));
-  assert.equal(to.style.viewTransitionName, 'client-codex');
-  finishTransition();
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(to.style.viewTransitionName, '');
-});
-
-test('a flight is used once: the next place change does not name a twin', () => {
-  const from = { style: {} };
-  const late = { style: {} };
-  fly(from, 'client-cursor');
-  transition(() => {});
-  land(late, 'client-cursor');
-  assert.equal(late.style.viewTransitionName, undefined);
-  finishTransition();
-});
-
-test('land() ignores a tile with another name', () => {
-  const other = { style: {} };
-  fly({ style: {} }, 'client-codex');
-  land(other, 'client-cursor');
-  assert.equal(other.style.viewTransitionName, undefined);
-  transition(() => {});
-  finishTransition();
-});
-
 const { diffCounts } = await import('../../src/kitden/web/static/js/parts.js');
 
 test('the diff count skips the header lines', () => {

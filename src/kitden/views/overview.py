@@ -15,6 +15,7 @@ from kitden.changes.actions import (
 )
 from kitden.clients.base import SETUP_SERVER
 from kitden.clients.versions import MINIMUM_VERSIONS
+from kitden.local_gateway.settings import SETTINGS_FILE
 from kitden.model import Finding, FindingType, Gateway, ItemKind, Severity, UnknownReason, _hash
 from kitden.views.findings import base_name, find_bypasses, find_findings
 from kitden.views.gateway_view import gateway_view
@@ -72,6 +73,15 @@ def _unreadable(inventory) -> list[dict]:
         card_id = _hash("unreadable", where)
         cards.append(_card(card_id, "attention", "file-text", title, text, clients, None, None))
     return cards
+
+
+def _gateway_unreadable() -> dict:
+    """Kitden cannot read its own gateway settings: they read as empty, so the page says so
+    instead of showing an empty gateway (local_gateway/settings.py `load_settings`)."""
+    line = f"Kitden can't read {SETTINGS_FILE}, so the gateway's servers and rules are not known."
+    name = "Could not read the Kitden gateway settings"
+    card_id = _hash("unreadable", SETTINGS_FILE)
+    return _card(card_id, "attention", "file-text", name, line, [], None, "gateway")
 
 
 def _untested(inventory) -> list[dict]:
@@ -225,10 +235,11 @@ def _ruled_projects(inventory, adapters) -> set[str]:
     return {p for p in known if _library_rules(library_map(inventory, adapters, p))}
 
 
-def _setup_map(inventory, adapters, project, held, gateway_rules) -> dict:
+def _setup_map(inventory, adapters, project, held, gateway_rules, unread=False) -> dict:
     """The small "Your setup" map: the clients (`on`: found on this Mac), the Kitden gateway's
     servers and tools, the Library's plugins and skills, which client reaches which, and how
-    many projects have rules of their own (for the gateway, or for a plugin or skill)."""
+    many projects have rules of their own (for the gateway, or for a plugin or skill). While
+    the gateway settings cannot be read (`unread`) its counts are not known (None)."""
     clients = [c for c in inventory.clients if c.id in COLUMNS]
     found = [c for c in clients if str(c.status) == "found"]
     shown = library_map(inventory, adapters, project)
@@ -255,8 +266,9 @@ def _setup_map(inventory, adapters, project, held, gateway_rules) -> dict:
             for c in clients
         ],
         "gateway": {
-            "servers": len(held or []),
-            "tools": sum(s.get("tools") or 0 for s in held or []),
+            "servers": None if unread else len(held or []),
+            "tools": None if unread else sum(s.get("tools") or 0 for s in held or []),
+            "unread": unread,
         },
         "library": {
             "plugins": sum(i["kind"] == "plugin" for i in items),
@@ -280,29 +292,33 @@ def overview(
     held: list[dict] | None = None,
     adapters: dict | None = None,
     gateway_rules: set[str] | frozenset[str] = frozenset(),
+    problem: str | None = None,
 ) -> dict:
     """The Overview page's `cards`, `notes` (how many rows the folded notes draw), `map` (the
     "Your setup" map) and `counts` (for the lede). `held` are the servers the Kitden gateway
     holds (None: no Kitden gateway here), `adapters` the clients' adapters, for the Library's
-    counts, and `gateway_rules` the known projects with gateway rules of their own."""
+    counts, `gateway_rules` the known projects with gateway rules of their own, and `problem`
+    why the Kitden gateway settings could not be read (None: they could)."""
     findings = find_findings(inventory, project)
     cards = (
         _unreadable(inventory)
+        + ([_gateway_unreadable()] if problem else [])
         + _untested(inventory)
         + _old_entries(inventory)
         + _duplicates(inventory, findings)
     )
     # Servers outside the gateway and clients not connected are options, not problems. The rows
-    # are the Gateway page's, so a server in two clients is one card.
-    if held is not None:
+    # are the Gateway page's, so a server in two clients is one card. Nothing moves into a gateway
+    # whose settings Kitden cannot read.
+    if held is not None and not problem:
         groups = gateway_view(inventory, gateways, project, kitden=held)["groups"]
         cards += _move_ins(groups)
-    if held:
+    if held and not problem:
         cards += _connects(inventory)
 
     # The notes the page lists: the info findings of /api/findings, gateway bypasses too.
     info = [f for f in findings + find_bypasses(inventory, project) if f.severity is Severity.INFO]
-    setup = _setup_map(inventory, adapters or {}, project, held, gateway_rules)
+    setup = _setup_map(inventory, adapters or {}, project, held, gateway_rules, bool(problem))
     return {
         "cards": cards,
         "notes": note_count(info),

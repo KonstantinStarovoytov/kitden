@@ -181,9 +181,35 @@ def test_a_server_without_a_removable_entry_gets_no_card(home):
     assert "github" not in [c["name"] for c in data["cards"]]
 
 
-def test_duplicate_cards_are_in_name_order(home):
-    names = [c["name"] for c in _cards(overview(build_inventory(home), [], None), "attention")]
-    assert names == sorted(names)
+def test_duplicate_cards_are_in_name_order_then_client_order():
+    from types import SimpleNamespace
+
+    from kitden.model import ItemKind
+    from kitden.views.overview import _duplicates
+
+    def item(id, kind, name):
+        return SimpleNamespace(id=id, kind=kind, name=name)
+
+    items = [
+        item("z", ItemKind.SKILL, "zeta"),
+        item("a", ItemKind.PLUGIN, "alpha"),
+        item("ts", ItemKind.SKILL, "tidy"),
+        item("tp", ItemKind.PLUGIN, "tidy"),
+    ]
+
+    def twice(id, client):
+        return SimpleNamespace(type=FindingType.DUPLICATE_IN_CLIENT, items=(id, id), client=client)
+
+    # Found out of order: zeta, alpha, then "tidy" as a skill in Cursor and a plugin in Claude Code.
+    findings = [twice("z", "codex"), twice("a", "cursor"), twice("ts", "cursor")]
+    findings.append(twice("tp", "claude_code"))
+    cards = _duplicates(SimpleNamespace(items=items), findings)
+    assert [(c["name"], c["clients"]) for c in cards] == [
+        ("alpha", ["cursor"]),
+        ("tidy", ["claude_code"]),
+        ("tidy", ["cursor"]),
+        ("zeta", ["codex"]),
+    ]
 
 
 def test_notes_count_items_not_findings(tmp_path):
@@ -437,7 +463,7 @@ def test_the_map_counts_servers_tools_plugins_skills_and_own_rules(tmp_path):
             }
             for c in found
         ],
-        "gateway": {"servers": 3, "tools": 11},
+        "gateway": {"servers": 3, "tools": 11, "unread": False},
         "library": {
             "plugins": sum(i["kind"] == "plugin" for i in items),
             "skills": sum(i["kind"] == "skill" for i in items),
@@ -530,6 +556,7 @@ def test_the_page_answers_the_map_with_the_library_and_gateway_rules(tmp_path):
     assert data["map"]["gateway"] == {
         "servers": len(kitden["servers"]),
         "tools": sum(s["tools"] or 0 for s in kitden["servers"]),
+        "unread": False,
     }
 
 
@@ -541,3 +568,29 @@ def test_a_client_not_on_this_mac_is_on_the_map_but_off_and_unlinked(tmp_path):
     assert on.get("cursor") is not True
     assert all(x["client"] == "claude_code" for x in data["map"]["links"])
     assert data["counts"]["clients"] == sum(on.values())
+
+
+def test_unreadable_gateway_settings_need_attention_and_claim_nothing(home):
+    # A broken gateway.json reads as empty: the page says it could not read it, counts it, shows
+    # no "0 servers" and offers no move into that gateway.
+    from kitden.gateways import data_dir
+    from kitden.local_gateway.settings import SETTINGS_FILE
+    from tests.unit.test_local_gateway_views import page_for
+
+    path = data_dir(home) / SETTINGS_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("{ not json")
+    with page_for(home) as page:
+        data = page.get("/api/overview").json()
+    [card] = [c for c in data["cards"] if c["name"] == "Could not read the Kitden gateway settings"]
+    assert card["group"] == "attention" and card["action"] is None
+    assert card["icon"] == "file-text"
+    assert card["line"] == (
+        "Kitden can't read gateway.json, so the gateway's servers and rules are not known."
+    )
+    assert card["focus"] == {"clients": [], "block": "gateway"}
+    assert str(home) not in card["line"] and "/" not in card["line"]
+    assert data["counts"]["attention"] >= 1
+    assert data["map"]["gateway"] == {"servers": None, "tools": None, "unread": True}
+    assert not [c for c in data["cards"] if c["action"] and c["action"]["label"] == "Move in…"]
+    assert not [c for c in data["cards"] if c["action"] and c["action"]["label"] == "Connect…"]

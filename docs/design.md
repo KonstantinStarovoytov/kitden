@@ -71,7 +71,47 @@ A lamp (beside words) or a mark (beside a tool) is 6 px: grey is off, green work
 
 A switch is a 34 x 20 track with a 14 px knob inside a 24 px button: off, the knob is grey; on, it is white on the accent; while its change waits in the tray the track is dashed on the accent tint and the knob rests half-way. A check is a 16 px box, and a radio a 14 px circle, with a `--lamp-off` line; ticked, it turns accent and the check springs in. A client's checkbox keeps its real input (for the keys and screen readers); only its box is drawn.
 
-Overview (`overview.js`, the mockup's Overview; checked 2026-10-27). The title is "Your setup, connected." The lede counts: "3 things need your attention. Everything else looks fine: 3 clients, 4 projects." ("1 thing needs"), or "Everything looks fine: 3 clients, 4 projects." with nothing to fix; on the first visit its numbers count up from 0 (700 ms OUT3, 200, 260 and 320 ms late). The scope bar says "All projects" (layers) or, in the accent, "Project website" (folder). The hint line says "Hover a card to see it on the map · a button adds a preview · click Kitden gateway or Library to open it". Two columns (690 and 480 px, 40 apart; one under 900 px): on the left "Needs attention" (amber `triangle-alert`) and "Can improve" (`sparkles`), each caption 11 px / 600 over its cards, hidden with no card. A card is one row (12 x 14 padding, 8 px corners): a 28 px icon tile (the server's kind, the plugin's tile or the client's mark), the name (12 px / 600) with one quiet line (11 px), 20 px client tiles and one button, primary in Needs attention and plain in Can improve. A card with no button (a file Kitden could not read, an untested version) keeps its words in the wide column. Past three servers that skip the gateway, one card says "4 more servers skip the gateway" and "Show…" opens the Gateway's List at the outside group. "Keep one…" opens the item in the Library; "Move in…", "Connect…" and "Update…" only add their row to the tray, and say "In preview" while it waits there. A card leaves only after its change is applied and checked and the page has read the result: out to the right (opacity, 28 px) in 180 ms ease-in, then it folds to nothing (height, padding, border and the gap) in 160 ms `--calm`; the cards under it move up with the fold, with no slide after it, and the lede's count rolls. An Undo brings it back from 8 px above at .98 of its size (220 ms `--calm`). Pointing at a card, or keyboard focus in it, focuses the map on its clients and the block it is about (300 ms, as the maps do); leaving lets go. Under the cards "Show 3 notes (nothing to fix)" / "Hide 3 notes" folds the notes (hidden at 0): the chevron turns 90°, the box opens in 280 ms `--calm` and its notes rise 40 ms apart; it closes in 220 ms ease-in. A note is one plain sentence with an info icon ("docs has the same name as an entry from another source and is not connected to the gateway."); a press opens its item in the Library. On the right, "Your setup" is a small map (470 x 250) with no ×: each client (160 x 54, its version) at x 0, the Kitden gateway (`house`, "2 servers · 7 tools") and the Library (`library`, "4 plugins · 7 skills") at x 250 (220 x 60, with a faint `arrow-up-right`); a client links to the Kitden gateway while its kitden entry is on, and to the Library while it loads a plugin or skill. The gateway and Library blocks open their pages; a client block focuses its links; Enter and Space do the same. Its foot says "4 projects · 3 have their own rules" ("1 has its own rules"). Under reduced motion all of it lands at once. Overview opens no Details of its own.
+Overview (`overview.js`, the mockup's Overview; checked 2026-10-27):
+
+- **Head.** The title is "Your setup, connected."
+- **Lede.** "3 things need your attention. Everything else looks fine: 3 clients, 4 projects." ("1 thing needs"). With no attention card it says "Everything looks fine: 3 clients, 4 projects."
+- **Count-up.** On the first visit the lede's numbers count up from 0 (700 ms OUT3, 200, 260 and 320 ms late).
+- **Scope bar.** "All projects" (layers), or "Project website" (folder) in the accent.
+- **Hint line.** "Hover a card to see it on the map · a button adds a preview · click Kitden gateway or Library to open it".
+- **Layout.** Two columns, 40 px apart: the cards up to 690 px wide and "Your setup" up to 480 px, as in the mockup. They share the page's width (at most 1180 px), so on a narrower page both shrink and the map scrolls sideways in its column. Under 900 px it is one column.
+- **Groups.** "Needs attention" (amber `triangle-alert`) and "Can improve" (`sparkles`). A caption is 11 px / 600 over its cards. A group with no card hides.
+- **A card** is one row (12 x 14 padding, 8 px corners), with these parts:
+  - a 28 px icon tile: the server's kind, the plugin's tile or the client's mark;
+  - the name (12 px / 600) with one quiet line (11 px);
+  - 20 px client tiles;
+  - one button, primary in Needs attention and plain in Can improve.
+- **Cards with no button** (a file Kitden could not read, the Kitden gateway settings it could not read, an untested version) keep their words in the wide column.
+- **Gateway settings Kitden cannot read** are a Needs attention card ("Could not read the Kitden gateway settings", naming gateway.json only). While it stands:
+  - the map's gateway block says "Could not read its settings" with the unknown lamp, not a count;
+  - no Move in… or Connect… card is offered.
+- **More servers.** Past three servers that skip the gateway, one card says "4 more servers skip the gateway". Its "Show…" opens the Gateway's List at the outside group.
+- **Buttons.**
+  - "Keep one…" opens the item in the Library.
+  - "Move in…", "Connect…" and "Update…" only add their row to the tray. Each says "In preview" while its row waits there.
+- **A card leaves** only after its change is applied and checked and the page has read the result:
+  - it goes out to the right (opacity, 28 px) in 180 ms ease-in;
+  - then it folds to nothing (height, padding, border and the gap) in 160 ms `--calm`;
+  - the cards under it move up with the fold, with no slide after it;
+  - the lede's count rolls.
+- **A card that goes as a side effect** of another card's Apply (a move that also connects a client) just goes with the next draw, with no leave motion.
+- **Undo** brings a card back from 8 px above at .98 of its size (220 ms `--calm`).
+- **Map focus.** Pointing at a card, or keyboard focus in it, focuses the map on its clients and the block it is about (300 ms, as the maps do). Leaving lets go.
+- **Notes.** "Show 3 notes (nothing to fix)" / "Hide 3 notes" under the cards folds the notes. It is hidden at 0 notes.
+  - The chevron turns 90°. The box opens in 280 ms `--calm` and its notes rise 40 ms apart. It closes in 220 ms ease-in.
+  - A note is one plain sentence with an info icon ("docs has the same name as an entry from another source and is not connected to the gateway."). A press opens its item in the Library.
+- **"Your setup"** is a small map (470 x 250) with no ×:
+  - each client (160 x 54, with its version) at x 0;
+  - the Kitden gateway (`house`, "2 servers · 7 tools") and the Library (`library`, "4 plugins · 7 skills") at x 250 (220 x 60, with a faint `arrow-up-right`).
+- **Map links.** A client links to the Kitden gateway while its kitden entry is on, and to the Library while it loads a plugin or skill.
+- **Map presses.** The gateway and Library blocks open their pages. A client block focuses its links. Enter and Space do the same.
+- **Map foot.** "4 projects · 3 have their own rules" ("1 has its own rules").
+- **Reduced motion.** Everything lands at once.
+- **Details.** Overview opens no Details of its own.
 
 A row that opens Details ends with a quiet › and the hidden words "Open details" (`opens()` in `parts.js`). The chevron turns accent on hover and keyboard focus; it does not move. The search box names what it searches: "Search your setup and marketplaces…". On the Gateway the search finds on the page instead: matches light up and every other block dims to 30% with half its colour and a 1.2 px blur (300 ms), and every link to 20%; a caption stays as it is, and a block with keyboard focus keeps its full ring (in the List the other rows dim to 35%; a group caption such as "Remote" is never a match), a folded server opens to show a matching tool (a match behind "N more" turns its group to the page that holds it, and that page stays after the search), the same rows light in the List, and a chip in the search box says "N matches" ("1 match", "No matches"), also after the map draws its rows again in place. It counts what lights on the page shown, a lit card once; a match on another page is named by the caption's range ("Remote · 6–10 of 12"), not counted, and the chip counts again when a page turns. Escape in the box clears it and leaves Details alone; finding changes no client and starts no preview. "/" focuses the search while Details sit beside the page, not while the drawer is open. Overview and Changes still send a search to the Library. The project picker is a button with a folder icon that reads "Project", the picked project's name and a chevron (`projectButton` in `parts.js` draws it everywhere). It opens a 300 px menu: "Find a project…" at the top, then "All projects" (a layers icon) with "What applies in every project", then each project (a folder icon) by folder name with "1 own rule" or "N own rules" at the right in the accent color when it has any (a folder that is gone says "Folder missing"), and no paths. The picked option sits on the accent tint with a check at its end; the option the arrow keys are on has a thin ring. The menu grows in from its top-left corner (180 ms) and fades out (140 ms); it is hidden by time, never by an animation event, and the page draws the picker again only after the fade, so a pick shows the menu closing. After a pick the name in the button rolls: the old one out, the new one in (it just changes with reduced motion). It opens with the picked project in view. Focus goes into the find box; typing narrows the projects and "All projects" stays first; Down, Up, Home and End move through the options, Enter picks one, and Escape or a click outside closes the menu (Escape gives focus back to the button). A pick opens a new history entry. A picked project that leaves the list stays picked (the menu says "No longer on the list"), while Overview, Library and Gateway say "This project is no longer on the list." and read nothing for it. Under a page head the scope bar (`scopeBar` in `parts.js`, on the Gateway first) says "Shared setup · project overrides stay separate" with All projects picked, or, in the accent color, "Project website · 2 rules differ from the shared setup" ("Project website · no rules of its own" when it has none, and "Project website · rules not known" when Kitden could not read the gateway settings). It counts only the gateway's rules, so it never says a project follows the shared setup. A review names its scope in the title ("… for all projects", "… in website"; see Review below) and an add, with All projects picked, in the lede too. A gateway's entry and a server put back in a client are adds for all projects too. In `kitden demo` a quiet "Demo" flag (`.flag.info`) follows the wordmark; its hover text says the setup is a sample in a temporary folder. The page reads `/api/about` once to know.
 
@@ -206,7 +246,6 @@ Defined once in `style.css`. Scripts use `CALM` from `motion.js`; the spring is 
 | Fold | 280 ms `--ease-out` | A `<details>` opening or closing |
 | Glide | 300 ms `--calm` for the rail marker and the tabs, 280 ms `--calm` for pills | The mark sliding between choices |
 | Knob | 340 ms `--spring`; the track's colors change in 250 ms ease | A switch knob moving, and the tick of a check drawing (320 ms) |
-| Flight | 340 ms `--ease-drawer` | A shared tile between places |
 | Status | 320–380 ms `--ease-in-out` | Socket morph (dot fill, words fade) |
 | Success | check draws 320 ms, never delays the next action | Applied, Undone |
 | Stagger | 45 ms between blocks | First visit |
@@ -224,7 +263,6 @@ All helpers live in `src/kitden/web/static/js/motion.js`.
 | --- | --- | --- |
 | Place change | `transition(change, "place-change")`: only the page goes (120 ms) and the new one rises 6 px (260 ms); the rail and top bar stay still. The Gateway, and the Library unless its address says List, rise on their own (`transition(change, "map-entrance")`): the old page goes in 120 ms, then (`afterOldPage` in motion.js, which the page gives its map as `enterDelay`: all of it waits 120 ms) `riseHead` lifts the title, the lede 120 ms after and the scope line 180 ms after (each 6 px, 260 ms `--calm`), with the map or List rising as the head does | Rail links, Back; the Library's rows are read first (up to 300 ms) |
 | Map entrance | `draw(…, { motion: "enter" })` (map-view.js): each block and caption rises 6 px in 260 ms OUT3, 22 ms apart in layout order, and past 21 blocks closer, so the last one starts at 440 ms (`enterDelays` in map.js); a link shows as much as the fainter of its two blocks. On every visit, and when Back or Forward brings the Map back from the List; in a place change by view transition it starts 120 ms in, when the old page has gone (`afterOldPage`). Reduced motion and a hidden page show the end at once | Gateway map |
-| Shared tile | `fly(node, name)` before `go()`, `land(twin, name)` while the new place draws | Nothing now; kept for a tile that shows on both places |
 | Sliding mark | `glide(box, active, key, { duration })` (pills pass 280) | Rail, Library tabs, the show choice, Map / List |
 | Ready, then swap | `choose(params)` (library.js): read the rows first; over 300 ms the old list dims (`.table-scroll.waiting`), never a skeleton | Library List tabs, Installed / Differences, Needs attention |
 | List settle | `snapshotRows()` before a redraw, `settleRows()` after: rows that stay slide from their old place (260 ms `--calm`), new rows rise 4 px (200 ms, 20 ms apart, first 12) | Library filters and search |
@@ -309,15 +347,6 @@ All helpers live in `src/kitden/web/static/js/motion.js`.
 - No library, no bundler, nothing loaded at run time.
 
 ### Examples
-
-Open a place with a shared tile:
-
-```js
-fly(tile, `client-${clientId}`);   // on the old place, right before go()
-go("library", { kind });
-// on the new place, while it draws:
-land(columnTile, `client-${columnId}`);
-```
 
 A group with a sliding mark (the group needs `position: relative`):
 

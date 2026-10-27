@@ -303,8 +303,8 @@ export function loadLibrary() {
   return afterShared(() => read({}));
 }
 
-// Read the tab another place is about to open, so it is drawn inside the place change and a
-// client tile can fly to its column there (Overview counts and cards).
+// Read the tab another place is about to open, so it is drawn inside the place change (an
+// Overview card or note).
 export function loadLibraryFor(choice) {
   return afterShared(() => read(choice));
 }

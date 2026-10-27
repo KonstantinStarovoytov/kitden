@@ -895,7 +895,9 @@ def create_app(
         if home is not None and not problem:
             settings = load_settings(home)
             ruled = {p for p, chain in _chains().items() if own_rules(settings, chain)}
-        answer = overview(state.inventory, _registered(), path, held, adapters, gateway_rules=ruled)
+        answer = overview(
+            state.inventory, _registered(), path, held, adapters, ruled, problem=problem
+        )
         return JSONResponse(answer)
 
     def _kitden(path):
