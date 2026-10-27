@@ -243,10 +243,20 @@ Reuses Part 5 backend Tasks 1, 2, 7 (local settings, plugin parts, `skill.rule`)
 
 - [x] **Task 6.1 Two tabs and the map.** "Plugins and skills" | "Instructions" pill; Map | List; lede "Follow the source. Connect only what you need." + scope bar. Map: Clients → source captions → plugin cards (180×60) and slim skill rows → Inside column. A plugin nobody has shows only in the add panel (spec call #3 stays unless the owner says otherwise).
 - [x] **Task 6.2 Select, unfold, Details.** Click a plugin: select, open Inside, light the path, Plugin Details ("Add to <client>…" with a checklist, several clients → tray rows; "Turn off for all projects…"). Skill on its own: "Turn off for all projects…" / "in some projects…" via `skillOverrides` (Claude Code) and `[[skills.config]]` (Codex). Items inside a plugin: no switch (D25).
-- [ ] **Task 6.3 Drag a plugin onto a client.** Client lights + dashed wire; a blocked client (already has it, Cursor per D26) gives the reason and shakes.
-- [ ] **Task 6.4 Link ×.** client→plugin = remove from that client (`plugin.remove`; note that Claude Code's reinstall on Undo loses the plugin's saved options); client→skill = turn off; no × inside a plugin; instruction links read-only.
-- [ ] **Task 6.5 Instructions map.** Clients → files → imports; import links only where the client follows them (D27); file lines under Technical details.
-- [ ] **Task 6.6 List view.** Keep Differences and "Add missing" per the 2026-10-23 ruling, in the new look.
+**Notes from Phase 6B** (plan `2026-10-26-align-phase6b-library-actions.md`, done 2026-10-27). Built: one drag engine for both maps, a plugin or skill onto a client, link × (remove a plugin, turn off a skill), the shared add panel with "Add a plugin or skill", instruction imports and the Instructions map (with commands and agents), the new two-tab List with Installed | Differences, Turn on and Remove in Details, "Commands…" in Details, "Add missing plugins and skills…" in any scope, "In preview" on the add forms, the git root's local settings, and the last skill-rule notes. The old row Details are removed. Left for later:
+- The old `/api/library` and `library()` stay until their tests move to `/api/library-list` (ROADMAP Next).
+- Whether to draw the `@` imports Claude Code follows inside an AGENTS.md it reads (owner question, D27).
+- The project-in-id change for LOCAL items also reaches local MCP servers from `~/.claude.json`; narrow it to `.claude/settings.local.json`.
+- `switchList`'s `flip` option and `.switch.flipped` are dead since the old Details went; design.md still calls them live.
+- The Copy button's "Copied" is not announced to screen readers.
+- The "has it in <folder>" note in Add missing can be wrong for a plugin a project only turns off.
+- In a project, "Add missing plugins and skills…" still lists MCP servers; the Gateway's own "Add missing servers…" does not exist yet.
+- Smaller: a refusal can go stale mid-drag; `_skill_offers` picks by name; nested imports name only the top file; a fold outlives a retyped search in List mode; the chip can flash during a staged landing.
+
+- [x] **Task 6.3 Drag a plugin onto a client.** Client lights + dashed wire; a blocked client (already has it, Cursor per D26) gives the reason and shakes.
+- [x] **Task 6.4 Link ×.** client→plugin = remove from that client (`plugin.remove`; note that Claude Code's reinstall on Undo loses the plugin's saved options); client→skill = turn off; no × inside a plugin; instruction links read-only.
+- [x] **Task 6.5 Instructions map.** Clients → files → imports; import links only where the client follows them (D27); file lines under Technical details.
+- [x] **Task 6.6 List view.** Keep Differences and "Add missing" per the 2026-10-23 ruling, in the new look.
 
 ## Phase 7: Overview and Changes
 

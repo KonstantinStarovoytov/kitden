@@ -201,6 +201,7 @@ The parts, in order:
 ## Next
 
 - Copy any command with one click.
+- Move the tests that read the old `/api/library` to `/api/library-list`, then remove the old route.
 
 ## Later
 
