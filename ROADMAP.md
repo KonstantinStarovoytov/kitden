@@ -1,6 +1,6 @@
 # Kitden roadmap
 
-Last updated: 2026-10-26
+Last updated: 2026-10-27
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
@@ -30,7 +30,8 @@ What Kitden does today and what comes next. Ideas and bugs:
   and snaps to the gateway, which lights; a client a plugin connects says why it cannot. A group
   of more than six shows five at a time: "N more" turns to the next five in place. Map | List
   swaps with a short fade, the List has the mockup's columns and rows, and a search dims what does
-  not match with a soft blur. Picking another project changes the map in place: counts roll,
+  not match with a soft blur. Its chip counts the matches lit on the page shown, on the Library
+  map too; a server the count folded during a search stays folded for that search. Picking another project changes the map in place: counts roll,
   tools that turn on or off draw or take back their links, open servers stay open, the tray's rows
   keep their looks, and an open tool or server panel steps to the new project. Tab reads the links
   in reading order, and a link keeps its focus while a change is written. A hint line under the
@@ -65,7 +66,7 @@ What Kitden does today and what comes next. Ideas and bugs:
   projects, in this project or in some projects. "For all projects" only ever changes your own
   settings, never a project's file. Each waits in preview until Apply. A review says when Kitden
   makes a project's local settings file, since git may not ignore it. The Library's map is read
-  only while the Library shows. Where a project's local settings decide, "Use the shared rule…"
+  only while the Library shows, and a read that failed is made again when it opens. Where a project's local settings decide, "Use the shared rule…"
   takes that rule out; Details say whether the project's local or shared settings decide. A Codex
   skill only one project has turns off on its own, and a project that already turns a skill off
   cannot be ticked again. For a project in a subfolder of a git repository, Kitden reads and

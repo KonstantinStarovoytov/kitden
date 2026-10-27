@@ -1,6 +1,7 @@
 // What the map pages (Gateway, Library) share around their map: the Map | List switch and how the
 // view it leaves goes out.
-import { button, el } from "./dom.js";
+import { $, button, el } from "./dom.js";
+import { findChip } from "./map.js";
 import { animateTo, D, glide } from "./motion.js";
 import { go, state } from "./store.js";
 
@@ -74,4 +75,14 @@ export function leaveThen(node, land) {
   onSwitch.leaving = true;
   const keyframes = [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-4px)" }];
   animateTo(node, keyframes, { dur: 120, ease: "ease-in", fill: "forwards" }).then(done);
+}
+
+// The chip in the search box says how many blocks the search lights on the page shown (`found`, from
+// map.js shownFound; null for no search). It is a live region: its words are set only when they
+// change, so a redraw is quiet. The page draws it with each draw of the place, and the map when it
+// draws again in place, or turns a page.
+export function drawChip(found) {
+  const chip = $("#find-chip");
+  const words = findChip(found) || "";
+  if (chip.textContent !== words) chip.textContent = words;
 }

@@ -4,7 +4,7 @@ import { test } from 'node:test';
 // gateway.js (for its columns) needs only this from a browser to load.
 globalThis.matchMedia = () => ({ matches: false });
 delete globalThis.navigator;
-const { CAPTION_H, GAP, NARROW_GAP, blockOrder, drawPlan, enterDelays, findChip, findIn, foldable, isNarrow, layoutTree, linkClass, linkDashed, linkKey, linkPath, litFrom, litPath, midPoint, pagesNow, toggleOpen, turnPage, unfoldDelays, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
+const { CAPTION_H, GAP, NARROW_GAP, blockOrder, drawPlan, enterDelays, findChip, findIn, foldable, isNarrow, keepFolded, layoutTree, linkClass, linkDashed, linkKey, linkPath, litFrom, litPath, midPoint, pagesNow, pressCount, shownFound, toggleOpen, turnPage, unfoldDelays, wideWidth } = await import('../../src/kitden/web/static/js/map.js');
 const { cutName } = await import('../../src/kitden/web/static/js/dom.js');
 const { GATEWAY_COLUMNS } = await import('../../src/kitden/web/static/js/gateway.js');
 
@@ -522,4 +522,32 @@ test('a stage shows the rows that wait as before and the rest as after', () => {
   const none = landStage(BEFORE, AFTER, owners, new Set(['m', 'r']));
   assert.deepEqual(new Set(ids(none)), new Set(ids(BEFORE)));
   assert.deepEqual(new Set(keys(none)), new Set(keys(BEFORE)));
+});
+
+test('a count fold during a search stays folded after a redraw', () => {
+  const tree = model(3, 0, { tools: true });
+  const server = 'held:kitden:github';
+  const folded = new Set();
+  const found = findIn(tree, 'push');
+  assert.ok(found.open.has(server));
+  // The count folds the server the search opened, and a full redraw finds again.
+  const open = pressCount(tree, new Set(), found, server, folded);
+  const again = keepFolded(findIn(tree, 'push'), folded);
+  assert.deepEqual([again.open.has(server), again.matches.has('tool:github/push_files')], [false, true]);
+  // The group above it stays open. A second press on the count opens the server again.
+  assert.ok(again.open.has('group:kitden:remote'));
+  assert.ok(pressCount(tree, open, again, server, folded).has(server));
+  // Another search starts with no fold.
+  assert.ok(keepFolded(findIn(tree, 'push'), new Set()).open.has(server));
+});
+
+test('the find chip counts only the matches the shown page holds', () => {
+  const tree = model(3, 0, { tools: true });
+  const found = findIn(tree, 'push');
+  const all = layoutTree(tree, { open: found.open, narrow: false });
+  assert.equal(findChip(shownFound(found, all)), '1 match');
+  // The same search with the server folded: its tool is not on the page.
+  const folded = layoutTree(tree, { open: new Set(), narrow: false });
+  assert.equal(findChip(shownFound(found, folded)), 'No matches');
+  assert.equal(shownFound(null, all), null);
 });

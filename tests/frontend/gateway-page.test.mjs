@@ -679,6 +679,31 @@ test('the chip counts again after a tray redraw', async (t) => {
   assert.equal(chip.textContent, '');
 });
 
+test('the chip counts what lights on the shown page, and counts again when a page turns', async (t) => {
+  const servers = Array.from({ length: 8 }, (_, i) => ({ ...VIEW.gateways[0].servers[0], name: `srv-${i + 1}`, kind: 'remote' }));
+  data.gateway = { ...VIEW, gateways: [{ ...VIEW.gateways[0], servers }], connections: { kitden: { claude_code: [], codex: [], cursor: [] } } };
+  t.after(() => {
+    data.gateway = VIEW;
+    state.q = '';
+    state.mode = 'map';
+  });
+  // Eight servers match; the group shows five of them.
+  state.q = 'srv';
+  state.mode = 'map';
+  main.replaceChildren();
+  const found = renderGateway(main);
+  settle();
+  const box = map();
+  drawChip(found);
+  const lit = walk(box).filter((n) => /\bfound\b/.test(n.className) && String(n.dataset.focus).startsWith('block:held:'));
+  assert.equal(lit.length, 5);
+  assert.equal(pages['#find-chip'].textContent, '5 matches');
+  // The turn shows the other three, and the chip says so.
+  press(box, 'block:more:group:kitden:remote');
+  settle();
+  assert.equal(pages['#find-chip'].textContent, '3 matches');
+});
+
 // A project switch in place (gateway-notes 7.4): the map stays and changes what the project
 // changes. atlas turns read_file off with a rule of its own; web follows the shared rule.
 const { ruleBody } = await import('../../src/kitden/web/static/js/gateway-details.js');
@@ -1502,6 +1527,32 @@ test('during a search the count of a server the search opened folds it', async (
   settle();
   assert.equal(toolShown(box), true);
   state.q = '';
+});
+
+test('a count fold during a search stays folded after a full redraw, until the text changes', async (t) => {
+  t.after(() => {
+    state.q = '';
+    return countCleanUp();
+  });
+  // A draw with no search ends any fold of an earlier one; then the search begins.
+  state.q = '';
+  freshMap();
+  state.q = 'read_file';
+  const box = freshMap();
+  countOf(box).listeners.click[0]();
+  settle();
+  assert.equal(toolShown(box), false);
+  // The page draws again whole, as a reload does: the server stays folded.
+  main.replaceChildren();
+  renderGateway(main);
+  settle();
+  assert.equal(toolShown(map()), false);
+  // Another search text opens it again.
+  state.q = 'read_fil';
+  main.replaceChildren();
+  renderGateway(main);
+  settle();
+  assert.equal(toolShown(map()), true);
 });
 
 test('a press on the block itself still opens Details and unfolds, as before', async (t) => {

@@ -292,21 +292,24 @@ export function projectPath() {
   return found ? found.path : "";
 }
 
-// A read for a project (scope) is dropped if another project is shown by the time it answers.
-async function guarded(name, url, apply, scope) {
-  const notShown = () => scope !== undefined && scope !== state.project;
+// A read for a project (scope) is dropped if another project is shown by the time it answers, or
+// if `outdated()` says a newer read has begun. It says whether its answer was taken.
+async function guarded(name, url, apply, scope, outdated = () => false) {
+  const notShown = () => (scope !== undefined && scope !== state.project) || outdated();
   try {
     const value = await getJson(url);
-    if (notShown()) return;
+    if (notShown()) return false;
     apply(value);
     data.scope[name] = scope;
     data.readAt[name] = Date.now();
     delete data.errors[name];
     delete data.errorScope[name];
+    return true;
   } catch (error) {
-    if (notShown()) return;
+    if (notShown()) return false;
     data.errors[name] = error;
     data.errorScope[name] = scope;
+    return false;
   }
 }
 
@@ -358,23 +361,29 @@ function markGatewayData() {
 
 // The Library's maps (its tabs: plugins and skills, and instruction files) are read only while the
 // Library shows (reload) and when it opens. `fresh`: no reload ran without them since they were
-// last read, and both reads worked.
-const libraryMapRead = { fresh: false, running: null };
+// last read, and both reads worked. `turn` counts the reads and the reloads that skip them: an
+// answer to an older turn is dropped, so it never replaces or marks newer data.
+const libraryMapRead = { fresh: false, running: null, turn: 0 };
 const LIBRARY_READS = ["libraryMap", "instructionsMap"];
 
 export async function loadLibraryMap() {
   const { project } = state;
-  await Promise.all([
-    guarded("libraryMap", `/api/library-map${query({ project })}`, (v) => { data.libraryMap = v; }, project),
-    guarded("instructionsMap", `/api/instructions-map${query({ project })}`, (v) => { data.instructionsMap = v; }, project),
+  const turn = ++libraryMapRead.turn;
+  const outdated = () => turn !== libraryMapRead.turn;
+  const worked = await Promise.all([
+    guarded("libraryMap", `/api/library-map${query({ project })}`, (v) => { data.libraryMap = v; }, project, outdated),
+    guarded("instructionsMap", `/api/instructions-map${query({ project })}`, (v) => { data.instructionsMap = v; }, project, outdated),
   ]);
-  libraryMapRead.fresh = LIBRARY_READS.every((name) => current(name));
+  if (!outdated()) libraryMapRead.fresh = worked.every(Boolean);
 }
 
 // Read the Library's map when it may be out of date (one read at a time); null when it is not.
 export function readLibraryMap() {
   if (libraryMapRead.fresh && LIBRARY_READS.every((name) => current(name))) return null;
-  libraryMapRead.running ||= afterShared(loadLibraryMap).finally(() => { libraryMapRead.running = null; });
+  if (!libraryMapRead.running) {
+    const read = afterShared(loadLibraryMap).finally(() => { if (libraryMapRead.running === read) libraryMapRead.running = null; });
+    libraryMapRead.running = read;
+  }
   return libraryMapRead.running;
 }
 
@@ -400,7 +409,7 @@ export async function reload() {
   freshness.reloadStartedAt = performance.now();
   await loadShared();
   const library = state.view === "library";
-  if (!library) libraryMapRead.fresh = false;
+  if (!library) Object.assign(libraryMapRead, { fresh: false, turn: libraryMapRead.turn + 1, running: null });
   const reads = projectGone() ? [] : [loadOverview(), loadMap(), loadGateway(), ...(library ? [loadLibraryMap()] : [])];
   await Promise.all([...reads, loadSetupServer()]);
   // The Library's maps count only while the Library shows: they are not read elsewhere.

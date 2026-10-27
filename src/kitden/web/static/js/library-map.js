@@ -6,9 +6,9 @@
 // Instructions tab (library-notes §6) draws the instruction files the clients read and what they
 // pull in, from /api/instructions-map (views/instructions_map.py), in the same map; it only reads.
 import { $, cutName, el, icon, joinWords, pageWaits, plural, reportError, WAITS } from "./dom.js";
-import { findIn, layoutTree, linkKey, litFor, litFrom, pagesNow, pagesWith, turnPage, turnWords } from "./map.js";
+import { findIn, layoutTree, linkKey, litFor, litFrom, pagesNow, pagesWith, shownFound, turnPage, turnWords } from "./map.js";
 import { clientAt, covered, flyGhost, follow, liftGhost, mapArea, moveGhost, ON_CLIENT, pointOf, startDrag } from "./map-drag.js";
-import { glidePill } from "./map-page.js";
+import { drawChip, glidePill } from "./map-page.js";
 import { linkRemoval } from "./library-rules.js";
 import { mapView } from "./map-view.js";
 import { afterOldPage, CALM, rise, riseHead, shake } from "./motion.js";
@@ -505,12 +505,13 @@ function foundOnMap(found) {
   return { ...found, matches };
 }
 
-// What the chip counts (app.js): what lights, with a plugin card once however many of its parts
-// match, open or folded.
+// What the chip counts (app.js): what lights on the page shown, with a plugin card once however many
+// of its parts match, open or folded. A match on another page is not counted.
 function chipFound(found) {
   if (!found) return null;
   const parts = new Set(onMap.model.blocks.filter((block) => block.kind === "part").map((block) => block.id));
-  return { ...found, matches: new Set([...foundOnMap(found).matches].filter((id) => !parts.has(id))) };
+  const lit = { ...found, matches: new Set([...foundOnMap(found).matches].filter((id) => !parts.has(id))) };
+  return shownFound(lit, onMap.layout);
 }
 
 // "Plugins and skills" | "Instructions" (.seg.sm), `tab` pressed. The same node stays while the
@@ -650,6 +651,7 @@ function drawMap({ motion = "move", lightLater = false, swap = false } = {}) {
   onMap.layout = layout;
   const lit = litOf(model, selected);
   const later = lightLater && lit.size > 0;
+  drawChip(chipFound(onMap.found));
   const drawn = view.draw(model, layout, { selected: lit.size ? selected : null, lit: later ? new Set() : lit, found: foundOnMap(onMap.found), open: onMap.open, motion });
   if (later) drawn.then(() => onMap.view === view && onMap.selected === selected && drawMap());
   // A block dragged while the map draws again stays with the pointer.

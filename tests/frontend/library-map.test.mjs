@@ -422,6 +422,21 @@ test('the find chip counts what lights: a plugin card once, however many of its 
   state.q = '';
 });
 
+test('the chip counts what lights on the shown page, and says it again when a page turns', () => {
+  // Thirty plugins match "plugin-"; the page shows five of them.
+  const { found, box } = showMap(LARGE, { q: 'plugin-' });
+  settle();
+  const lit = walk(box).filter((n) => n.dataset.focus && /\bfound\b/.test(n.className) && n.dataset.focus.startsWith('block:item:'));
+  assert.equal(lit.length, 5);
+  assert.equal(findChip(found), '5 matches');
+  assert.equal(pages['#find-chip'].textContent, '5 matches');
+  // One plugin matches: its page comes, and it counts once.
+  const one = showMap(LARGE, { q: 'plugin-29' });
+  settle();
+  assert.equal(findChip(one.found), '1 match');
+  state.q = '';
+});
+
 test('a map with no clients, or one Kitden could not read, draws no links from it', () => {
   const none = libraryTree({ ...MEDIUM, clients: [] });
   assert.equal(none.links.filter((l) => l.from.startsWith('client:')).length, 0);

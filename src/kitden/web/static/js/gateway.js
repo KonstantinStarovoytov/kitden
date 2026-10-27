@@ -5,8 +5,10 @@ import { setCancelFocus } from "./dock.js";
 import { addKind, addName, onOpenAdd, openAdd, pageRead, wasAdded } from "./gateway-add.js";
 import { addForm, connectAction, connectBody, followProject, heldServer, liveHeld, movesTo, NOT_REACHED, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool, TAKE_OUT } from "./gateway-details.js";
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
-import { findChip, findIn, foldable, isNarrow, keepOpen, landOwners, landStage, layoutTree, linkKey, litFor, litFrom, litPath, pagesNow, pagesWith, pressCount, pressOpen, toggleOpen, turnPage, turnWords, wideWidth } from "./map.js";
-import { glidePill, modeSwitch, switchedNow } from "./map-page.js";
+import { findIn, foldable, isNarrow, keepFolded, keepOpen, landOwners, landStage, layoutTree, linkKey, litFor, litFrom, litPath, pagesNow, pagesWith, pressCount, pressOpen, shownFound, toggleOpen, turnPage, turnWords, wideWidth } from "./map.js";
+import { drawChip, glidePill, modeSwitch, switchedNow } from "./map-page.js";
+
+export { drawChip };
 import { mapView } from "./map-view.js";
 import { afterOldPage, D, rise, riseHead } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, openInfo, panelState, projectLabel, review } from "./panel.js";
@@ -144,7 +146,7 @@ export function renderGateway(main, { again = false } = {}) {
   // A performance mark for the map probe (Part 4.1): the first time the page draws with data.
   if (!performance.getEntriesByName("kitden:gateway-drawn").length) performance.mark("kitden:gateway-drawn");
   openArrival(view, model, mode).catch(reportError);
-  return found;
+  return mode === "map" ? shownFound(found, onMap.layout) : found;
 }
 
 // The project the page was drawn for last. A draw for another one on the same visit is a project
@@ -781,10 +783,11 @@ function keepBeside() {
 // tree it shows, what the search found, and the box's width as last measured. Kept across redraws,
 // and across projects. `pages`: the page each group that pages shows (map.js);
 // `searched`, the search text whose matches brought their pages; `back`, the block a row taken out
-// gives back, whose page the next draw brings.
+// gives back, whose page the next draw brings; `layout`, what the last draw laid out; `folds`, the
+// blocks the count folded during the search `foldsFor` (keepFolds).
 const onMap = {
   project: null, open: new Set(), selected: null, view: null, model: null, found: null, width: null, narrow: false, watch: null,
-  unfolds: false, pages: new Map(), searched: "", back: null,
+  unfolds: false, pages: new Map(), searched: "", back: null, layout: null, folds: new Set(), foldsFor: "",
 };
 
 // What pointing at a block lights while nothing is selected: a client's paths, or the lines from the
@@ -828,7 +831,7 @@ function gatewayMap(main, model, found, { switched = false } = {}) {
   // it to narrow in the middle of its entrance.
   if (fresh) onMap.width = contentWidth(onMap.view.box) ?? onMap.width;
   const was = onMap.model;
-  Object.assign(onMap, { model, found });
+  Object.assign(onMap, { model, found: keepFolds(found) });
   bringPages(model, { fresh, projectChanged });
   // An Undo the page has just read: the map plays its rows back (landRows).
   const undid = undone.id;
@@ -1076,10 +1079,18 @@ function openBlock(id) {
 // of a page does.
 function foldBlock(id) {
   const { model } = onMap;
-  onMap.open = pressCount(model, onMap.open, onMap.found, id);
+  onMap.open = pressCount(model, onMap.open, onMap.found, id, onMap.folds);
   onMap.unfolds = false;
   if (onMap.selected && !shownOnMap(model, onMap.selected)) letGoOnMap();
   else drawAgain();
+}
+
+// A search's `found` with the blocks its count folded still folded (map.js keepFolded); a new search
+// text starts with none, so the fold lasts for that search.
+function keepFolds(found) {
+  const text = state.q.trim();
+  if (onMap.foldsFor !== text) Object.assign(onMap, { folds: new Set(), foldsFor: text });
+  return keepFolded(found, onMap.folds);
 }
 
 // A new width of the box (the window) may change the layout: it is drawn again, at once in its new
@@ -1148,6 +1159,8 @@ function drawOnMap(model, { fresh = false, projectChanged = false, lightLater = 
   onMap.narrow = narrow;
   const open = openNow();
   const layout = layoutTree(model, { open, pages: onMap.pages, narrow });
+  onMap.layout = layout;
+  drawChip(shownFound(onMap.found, layout));
   // A selected block lights every client's path to it; a selected client lights what it reaches; a
   // selected link its two ends. A selection the model no longer has is none.
   const lit = litFor(model, onMap.selected);
@@ -1318,8 +1331,7 @@ function drawRows() {
   if (!view || !onMap.view || !onMap.view.box.isConnected) return Promise.resolve();
   const model = treeFor(view);
   const was = onMap.model;
-  Object.assign(onMap, { model, found: state.q.trim() ? findIn(model, state.q) : null });
-  drawChip(onMap.found);
+  Object.assign(onMap, { model, found: keepFolds(state.q.trim() ? findIn(model, state.q) : null) });
   bringPages(model);
   return landRows(was, model) || drawOnMap(model);
 }
@@ -1386,15 +1398,6 @@ function stopLanding() {
   landing.timers = [];
   if (landing.end) landing.end();
   landing.end = null;
-}
-
-// The chip in the search box says how many blocks the search found on a map page (`found`, else
-// null). It is a live region: its words are set only when they change, so a redraw is quiet. The
-// page draws it with each draw of the place, and the map when it draws its rows again in place.
-export function drawChip(found) {
-  const chip = $("#find-chip");
-  const words = findChip(found) || "";
-  if (chip.textContent !== words) chip.textContent = words;
 }
 
 // After an applied change, focus on nothing or on the page itself (a block or link that went) goes

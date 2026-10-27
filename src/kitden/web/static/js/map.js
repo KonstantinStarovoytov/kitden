@@ -635,10 +635,19 @@ export function pressOpen(model, open, found, id) {
 
 // What the person has open after a press on the count of `id`. The count opens and folds, also a
 // block a search holds open: it leaves `found.open` and folds for the rest of that search.
-export function pressCount(model, open, found, id) {
+// `folded` keeps those ids for the search (keepFolded).
+export function pressCount(model, open, found, id, folded = new Set()) {
   if (!found || !found.open.has(id)) return toggleOpen(model, open, id);
   found.open.delete(id);
+  folded.add(id);
   return open.has(id) ? toggleOpen(model, open, id) : open;
+}
+
+// A search's `found` again after a full redraw, with the blocks the count folded during that search
+// (`folded`) folded still. It changes `found` and returns it.
+export function keepFolded(found, folded) {
+  if (found) for (const id of folded) found.open.delete(id);
+  return found;
 }
 
 // What the person has open after they select `block`, so it stays on the map when the search that
@@ -736,6 +745,14 @@ export function findIn(model, text) {
 export function findChip(found) {
   if (!found) return null;
   return found.matches.size ? plural(found.matches.size, "match", "matches") : "No matches";
+}
+
+// `found` with only the matches the shown page (a `layout` of layoutTree) holds, which are the ones
+// that light. A match on another page is named by the group's caption ("Remote · 6–10 of 12").
+export function shownFound(found, layout) {
+  if (!found || !layout) return found;
+  const shown = new Set(layout.blocks.map((block) => block.id));
+  return { ...found, matches: new Set([...found.matches].filter((id) => shown.has(id))) };
 }
 
 // What a screen reader hears for a block: its whole name, its kind word ("Skill"), meta, what

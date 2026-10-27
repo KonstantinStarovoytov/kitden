@@ -10,6 +10,8 @@ Kitden looks, moves and behaves. It is a reference only: nothing here ships.
   sizes, words and times, and where the owner's decisions change the mockup.
 - `add-notes.md`: the Add a server panel and its drag, with sizes, words and times, and where
   the owner's decisions change the mockup.
+- `library-notes.md`: the Library page, with sizes, words and times, and where the owner's decisions
+  change the mockup.
 - The same design as frames: `design/kitden.pen` (the owner's file, not tracked).
 
 The plan that moves the product to it: [2026-10-24-mockup-alignment.md](../superpowers/plans/2026-10-24-mockup-alignment.md).

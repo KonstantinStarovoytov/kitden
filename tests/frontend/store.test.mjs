@@ -18,7 +18,7 @@ function fetchAnswers(map) { answers = map; failing = null; }
 function fetchFails(url) { failing = url; }
 const ALL_OK = {};
 
-const { current, currentError, data, followHash, freshness, go, goTo, hashFor, isOldAddress, loadMap, MAP_AT, parseHash, parseSel, projectGone, reload, retry, selFor, setRenderer, setSwitcher, state, switchProject, takeArrival, toolSel, viewMode } = await import('../../src/kitden/web/static/js/store.js');
+const { current, currentError, data, followHash, freshness, go, goTo, hashFor, isOldAddress, loadLibraryMap, loadMap, MAP_AT, parseHash, parseSel, projectGone, readLibraryMap, reload, retry, selFor, setRenderer, setSwitcher, state, switchProject, takeArrival, toolSel, viewMode } = await import('../../src/kitden/web/static/js/store.js');
 
 beforeEach(() => { state.project = ''; });
 
@@ -300,6 +300,61 @@ test("the Library's map is read only while the Library shows, and when it opens"
     assert.equal(freshness.lastReadFailed, false);
   } finally {
     setRenderer(() => {});
+    go('overview', { project: '', selected: null });
+  }
+});
+
+test('a failed map read is read again on the next open', async () => {
+  setRenderer(() => {});
+  try {
+    fetchAnswers({ '/api/library-map': { groups: ['g'] } });
+    go('library');
+    await new Promise((done) => setImmediate(done));
+    assert.equal(readLibraryMap(), null);
+    // The reload while the Library shows fails: the old answer stays on the page, but is not fresh.
+    fetchFails('/api/library-map');
+    await reload();
+    assert.deepEqual(current('libraryMap'), { groups: ['g'] });
+    go('gateway');
+    fetchAnswers({ '/api/library-map': { groups: ['h'] } });
+    asked.length = 0;
+    go('library');
+    await new Promise((done) => setImmediate(done));
+    assert.ok(asked.includes('/api/library-map'));
+    assert.deepEqual(current('libraryMap'), { groups: ['h'] });
+  } finally {
+    go('overview', { project: '', selected: null });
+  }
+});
+
+test('an older read never marks newer data fresh', async () => {
+  setRenderer(() => {});
+  const plain = globalThis.fetch;
+  let release = () => {};
+  const held = new Promise((done) => { release = done; });
+  let early = false;
+  // The first read of the map answers late.
+  globalThis.fetch = (url, options) => {
+    const answer = plain(url, options);
+    if (url !== '/api/library-map' || !early) return answer;
+    early = false;
+    return held.then(() => answer);
+  };
+  try {
+    fetchAnswers({ '/api/library-map': { groups: ['old'] } });
+    go('library');
+    await reload();
+    early = true;
+    const older = loadLibraryMap();
+    // A newer reload fails while the older read waits; then the older read answers.
+    fetchFails('/api/library-map');
+    await reload();
+    release();
+    await older;
+    assert.notEqual(readLibraryMap(), null);
+    await readLibraryMap();
+  } finally {
+    globalThis.fetch = plain;
     go('overview', { project: '', selected: null });
   }
 });
