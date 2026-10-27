@@ -243,6 +243,8 @@ a { color: var(--route); }
 .page.pending[data-place="gateway"] { opacity: 1; }
 .content:has(> .page.pending[data-place="gateway"]), .drawer.pending, .drawer.pending * { cursor: progress; }
 .page[data-place="gateway"] { max-width: none; }
+/* The Overview and the Library use the whole width too, as in the mockup. */
+.page[data-place="overview"], .page[data-place="library"] { max-width: none; }
 /* While Details float, a list or a table keeps room on its right for them (--float-room, panel.js),
    so no control sits under the panel. The room opens with the panel (240 ms) and closes with it
    (180 ms ease-in, .page). The Gateway map keeps its width: a block under the panel scrolls beside
