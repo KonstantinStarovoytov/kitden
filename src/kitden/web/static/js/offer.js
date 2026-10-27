@@ -3,9 +3,10 @@
 // opens these Details for rows not on this computer; the panel's Details use the parts.
 import { busyWhile, button, el, joinWords, plural, reportError, webLink } from "./dom.js";
 import { noteFor, rowTitle, startAdd } from "./library.js";
-import { closePanel, footerActions, footerButtons, openInfo, openPanel, review, technical } from "./panel.js";
+import { closePanel, footerActions, footerButtons, openInfo, openPanel, review, showInPreview, technical } from "./panel.js";
 import { CLIENT_NAMES, clientCheck, REACH_NOTES } from "./parts.js";
 import { data, go, state } from "./store.js";
+import { inTray, keyFor } from "./tray.js";
 
 // Clients whose own command line installs plugins. Cursor keeps its plugins in the account,
 // and it loads Claude Code's plugins by itself when "Include Third-Party Plugins" is on.
@@ -21,6 +22,7 @@ const ALSO_LOADS = {
   shared: "Cursor will also load it from the shared skills folder.",
 };
 const PROJECT_NOTE = "Adds for all projects.";
+const PREVIEW = "Preview";
 const SKILL_COPIES = ["skill.install", "plugin.skills"];
 
 // In a project view an add still goes to the user's settings; the review says so.
@@ -282,13 +284,22 @@ export function clientChecks(open, chosen, note, onChange) {
   return checks;
 }
 
-// The form: the clients, an optional note about them, then Preview and its message.
-export function addFormBody(checks, chosen, onSubmit, note = null) {
+// The form: the clients, an optional note about them, then Preview and its message. `bodyOf()`
+// is the change the form asks for now, and `onSubmit(body)` adds it to the tray. While that
+// change waits there, Preview says "In preview" and takes no press, as the Gateway's forms do; a
+// tick or a typed link is another change, so Preview follows that one.
+export function addFormBody(checks, chosen, bodyOf, onSubmit, note = null) {
   const form = el("form", "form");
   const message = el("span", "form-message");
   message.setAttribute("aria-live", "polite");
-  const submit = el("button", "btn primary", "Preview");
+  const submit = el("button", "btn primary");
+  const words = el("span", "cut", PREVIEW);
   submit.type = "submit";
+  submit.append(words);
+  const follow = () => showInPreview(submit, words, PREVIEW, keyFor(bodyOf()));
+  follow();
+  form.addEventListener("change", follow);
+  form.addEventListener("input", follow);
   form.append(...[checks, note, submit, message].filter(Boolean));
   form.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -297,14 +308,18 @@ export function addFormBody(checks, chosen, onSubmit, note = null) {
       message.textContent = "Choose at least one client.";
       return;
     }
-    busyWhile(submit, onSubmit()).catch(reportError);
+    message.textContent = "";
+    const body = bodyOf();
+    if (inTray(keyFor(body)) || submit.dataset.working) return;
+    busyWhile(submit, onSubmit(body)).catch(reportError);
   });
   return form;
 }
 
 // The Add form for both kinds: what it is, where it comes from, notes, the clients, Preview.
 // Between the clients and Preview, a line names Cursor while it would load the change too.
-function addPanel(kicker, offer, { source, notes, checkNote, preview }) {
+// `ask(clients)` is the change for the clients checked, and `noteOf(clients)` its review note.
+function addPanel(kicker, offer, { source, notes, checkNote, ask, noteOf }) {
   const open = openFor(offer);
   const chosen = startChosen(open);
   const body = el("div", "body");
@@ -315,7 +330,9 @@ function addPanel(kicker, offer, { source, notes, checkNote, preview }) {
   also.setAttribute("aria-live", "polite");
   const showAlso = () => { also.textContent = alsoLoads(offer.kind, inherits(offer), chosen, open, columns()); };
   showAlso();
-  body.append(addFormBody(clientChecks(open, chosen, checkNote, showAlso), chosen, () => preview([...chosen]), also));
+  const checks = clientChecks(open, chosen, checkNote, showAlso);
+  const add = (change) => review(change, { note: noteOf([...chosen]) });
+  body.append(addFormBody(checks, chosen, () => ask([...chosen]), add, also));
   openPanel([panelHead(kicker, offer.name), body, el("footer")]);
 }
 
@@ -334,10 +351,8 @@ export function addForm(offer, row) {
     source: offer.marketplace,
     notes,
     checkNote: (client) => (offer.routes[client] === "add_marketplace" ? `adds ${offer.marketplace} first` : null),
-    preview: (clients) => review(
-      { action: "plugin.install", targets: clients.map((client) => ({ client })), params: { plugin: offer.id } },
-      { note: formNote(row, clients, state.project) },
-    ),
+    ask: (clients) => ({ action: "plugin.install", targets: clients.map((client) => ({ client })), params: { plugin: offer.id } }),
+    noteOf: (clients) => formNote(row, clients, state.project),
   });
 }
 
@@ -351,10 +366,8 @@ export function addSkillForm(skill) {
   addPanel("Add skill", skill, {
     source: skill.from,
     notes,
-    preview: (clients) => review(
-      { action: "skill.install", targets: clients.map((client) => ({ client })), params: { skill: skill.id } },
-      { note: projectNote(state.project) },
-    ),
+    ask: (clients) => ({ action: "skill.install", targets: clients.map((client) => ({ client })), params: { skill: skill.id } }),
+    noteOf: () => projectNote(state.project),
   });
 }
 
@@ -370,10 +383,8 @@ export function marketplaceForm({ back = null } = {}) {
   input.spellcheck = false;
   field.append(el("span", null, "Marketplace link"), input);
   const chosen = new Set(INSTALLERS);
-  const form = addFormBody(clientChecks(INSTALLERS, chosen), chosen, () => review(
-    { action: "marketplace.add", targets: [...chosen].map((client) => ({ client })), params: { source: input.value.trim() } },
-    { note: projectNote(state.project), back },
-  ));
+  const ask = () => ({ action: "marketplace.add", targets: [...chosen].map((client) => ({ client })), params: { source: input.value.trim() } });
+  const form = addFormBody(clientChecks(INSTALLERS, chosen), chosen, ask, (change) => review(change, { note: projectNote(state.project), back }));
   form.prepend(field);
   body.append(el("p", "muted", "For a GitHub repository, Kitden reads its marketplace file once to name it. Cursor keeps its marketplaces in the Cursor account: add them in Cursor."), form);
   openPanel([panelHead("Add marketplace", "From a link"), body, el("footer")]);

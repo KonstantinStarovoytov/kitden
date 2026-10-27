@@ -1204,9 +1204,7 @@ def create_app(
             clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
             steps = add_server_steps(adapters, item, clients)
         elif action == PROJECT_ALIGN:
-            folder = _project_param(params)
-            if folder is None:
-                raise ValueError("Unknown project.")
+            folder = _project_param(params)  # None: All projects, plugins and skills only
             found = {c["id"] for c in state.data["clients"] if c["status"] == "found"}
             wanted = params.get("chosen")
             chosen = [str(k) for k in wanted] if isinstance(wanted, list) else None

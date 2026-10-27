@@ -98,7 +98,7 @@ export function keyFor(body) {
   if (action === "gateway.rule") return `rule:${params.server}/${params.tool}@${params.project || ""}`;
   if (action === "gateway.strict") return `strict:${params.server}`;
   if (action === "gateway.move_out") return `moveout:${params.server}`;
-  if (action === "project.align") return `align:${params.project}`;
+  if (action === "project.align") return `align:${params.project || ""}`;
   if (action === "gateway.add") return `add:${params.server}`;
   const one = targets[0] || {};
   if (action === "skill.rule") return `skill:${one.client}:${one.item}@${params.project || ""}`;

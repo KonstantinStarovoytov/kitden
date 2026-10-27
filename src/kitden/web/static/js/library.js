@@ -10,7 +10,7 @@ import { INSTRUCTIONS_HINT, LEDE, leaveLibraryMap, letGoLibraryMap, libraryDetai
 import { glidePill, modeSwitch, switchedNow } from "./map-page.js";
 import { CALM, afterOldPage, animate, entrance, glide, land, reducedMotion, rise } from "./motion.js";
 import { projectNote } from "./offer.js";
-import { isPanelOpen, openInfo, panelState, projectLabel, review } from "./panel.js";
+import { isPanelOpen, openInfo, panelState, previewButton, projectLabel, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, folderName, lookFor, mark, morphSocket, scopeBar, setHint, skeleton, socket, sourceLines, staleNote } from "./parts.js";
 import { afterShared, arrival, current, currentError, data, freshness, go, libraryKind, libraryShows, projectPath, render, retry, sameSel, setState, state, takeArrival } from "./store.js";
 
@@ -24,12 +24,14 @@ const PART_WORDS = { skill: "Skill", command: "Command", agent: "Agent", hook: "
 // A client's column is this wide; the name takes the rest.
 const CELL_W = 150;
 const NO_DIFFERENCES = "No differences between your clients";
+const ADD_MISSING = "Add missing plugins and skills…";
 // An empty tab: what is missing, and where it comes from.
 const NOTHING = {
   plugin: ["No plugins or skills in any client", "Plugins and skills you add in Claude Code, Codex or Cursor will show up here."],
   instructions: ["No instruction files in any client", "Instruction files you add for Claude Code, Codex or Cursor will show up here."],
 };
-// Tabs where Kitden adds nothing: no "Add missing…" and no line about where an add goes.
+// Tabs where Kitden adds nothing: no "Add missing plugins and skills…" and no line about where
+// an add goes.
 export const hasAdds = (kind) => libraryKind(kind) !== "instructions";
 // Typing waits this long after the last key before asking the server.
 const TYPING_MS = 200;
@@ -81,6 +83,14 @@ export function addChoices() {
   ];
 }
 
+// The two choices of an add that asks where it goes, as buttons. Each says "In preview" while
+// its row waits in the tray, and takes no press then.
+export function addChoiceButtons(add, client) {
+  return addChoices().map((choice) => previewButton(choice.label, previewFor(add, client, choice.scope), {
+    note: noteFor(add, state.project, choice.scope), look: choice.look,
+  }));
+}
+
 // An add: in a project, one that can go into the project asks where first; a project's own
 // skill goes into the project with no choice; any other goes to the tray at once.
 export function startAdd(add, client, row) {
@@ -94,10 +104,7 @@ export function startAdd(add, client, row) {
   const body = el("div", "body");
   body.append(el("p", "muted", `${CLIENT_NAMES[client] || client} can load it in ${folder} only, or in all projects.`));
   // The primary button sits last, as the move choice draws it.
-  const choices = addChoices().map((choice) => button(choice.label, () => review(
-    previewFor(add, client, choice.scope), { note: noteFor(add, state.project, choice.scope) },
-  ), choice.look));
-  openInfo("Add", rowTitle(row), body, choices.reverse());
+  openInfo("Add", rowTitle(row), body, addChoiceButtons(add, client).reverse());
   return null;
 }
 
@@ -435,7 +442,7 @@ function toTab(id, choice) {
 }
 
 // Plugins and skills: Installed | Differences, "Needs attention" when something does (Overview
-// links use it), and in a project "Add missing…". Instructions has none of these.
+// links use it), and "Add missing plugins and skills…". Instructions has none of these.
 function toolbar(kind, answer) {
   if (kind !== "plugin") return null;
   const bar = el("div", "toolbar");
@@ -455,12 +462,11 @@ function toolbar(kind, answer) {
     toggle.dataset.focus = "filter:attention";
     bar.append(toggle);
   }
-  // In a project: one review that adds what one client loads there and another lacks.
-  if (state.project) {
-    const missing = button("Add missing…", () => review({ action: "project.align", targets: [], params: { project: state.project, chosen: null } }), "btn small");
-    missing.dataset.focus = "add:missing";
-    bar.append(missing);
-  }
+  // One review that adds what one client loads in the project and another lacks; under All
+  // projects, what one client has for all projects and another lacks.
+  const missing = button(ADD_MISSING, () => review({ action: "project.align", targets: [], params: { project: state.project || null, chosen: null } }), "btn small");
+  missing.dataset.focus = "add:missing";
+  bar.append(missing);
   return bar;
 }
 

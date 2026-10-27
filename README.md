@@ -80,9 +80,10 @@ but not its saved options. "+ Add" on an MCP server copies its entry to another 
 `${VAR}` reference stays a reference where that client can read one, and the review says when a
 secret gets a second copy. With a project picked, "+ Add" on a skill or a Claude Code plugin asks
 "Add to this project…" or "Add for all projects…"; a skill only this project has adds into this
-project. "Add missing…" lists what one client loads in the project and another lacks, as one
-review with checkboxes; an item with the same name from another source is listed as not the same
-and left alone.
+project. "Add missing plugins and skills…" lists what one client loads in the project and
+another lacks (under All projects, what one client has for all projects), as one review with
+checkboxes; an item with the same name from another source is listed as not the same and left
+alone.
 
 <p align="center">
   <picture>

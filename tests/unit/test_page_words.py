@@ -1386,9 +1386,9 @@ def test_a_cell_add_reviews_one_client_and_the_review_shows_its_note():
     assert '"Adds for all projects."' in offer
     # Every add in a project view says so, a marketplace too. The plugin form adds the
     # warnings of the checked clients, as their cells do.
-    assert offer.count("{ note: projectNote(state.project) }") == 1
+    assert "noteOf: () => projectNote(state.project)," in offer
     assert "{ note: projectNote(state.project), back }" in offer
-    assert "{ note: formNote(row, clients, state.project) }" in offer
+    assert "noteOf: (clients) => formNote(row, clients, state.project)," in offer
     code = panel()
     assert "export async function review(previewBody, { note = null, back = null } = {})" in code
     assert "if (note && !afterNotes.includes(note)) body.append(callout(note));" in code
@@ -2026,9 +2026,35 @@ def test_a_server_can_be_added_to_another_client():
 
 def test_a_project_can_be_aligned_in_one_review():
     library = script("library.js")
-    assert "Add missing…" in library and '"add:missing"' in library
+    assert 'const ADD_MISSING = "Add missing plugins and skills…";' in library
+    assert '"add:missing"' in library
     code = panel()
     assert "Not the same; not touched" in code and '"project.align"' in code
+
+
+def test_add_missing_works_under_all_projects_too():
+    # The List offers it in any scope; with no project the review is for all projects.
+    library = script("library.js")
+    assert "params: { project: state.project || null, chosen: null }" in library
+    code = panel()
+    assert '"Add what your clients are missing"' in code
+    assert (
+        '`Added ${plural(chosen.length, "item", "items")} for ${folder || "all projects"}`' in code
+    )
+    # Nothing missing is an answer, said plainly with only Close.
+    assert 'const NOTHING_MISSING = "Nothing is missing";' in code
+    assert 'header("Add missing", reason, null, null)' in code
+    align = (STATIC.parents[1] / "changes/align.py").read_text()
+    assert 'raise ValueError(f"Nothing is missing{where}.")' in align
+
+
+def test_the_add_forms_and_the_add_choice_say_in_preview():
+    offer = script("offer.js")
+    assert 'const PREVIEW = "Preview";' in offer
+    assert "showInPreview(submit, words, PREVIEW, keyFor(bodyOf()))" in offer
+    assert 'form.addEventListener("change", follow);' in offer
+    library = script("library.js")
+    assert "previewButton(choice.label, previewFor(add, client, choice.scope)" in library
 
 
 def test_a_failed_change_does_not_claim_a_restore_on_the_page():

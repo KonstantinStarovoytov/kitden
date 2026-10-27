@@ -1,4 +1,5 @@
 """Add what one client loads in a project and another client lacks, in one review (spec 3.5).
+Under All projects: the plugins and skills one client has for all projects and another lacks.
 
 Each add is built by the same step builders as a single add from the Library.
 """
@@ -21,6 +22,8 @@ from kitden.views.skills import read_skill, skill_catalog
 
 CLIENTS = ("claude_code", "codex", "cursor")
 KINDS = (ItemKind.MCP_SERVER, ItemKind.PLUGIN, ItemKind.SKILL)
+# Under All projects MCP servers are left to the Gateway.
+ALL_KINDS = (ItemKind.PLUGIN, ItemKind.SKILL)
 NO_OFFER = "not in a marketplace on this computer"
 # Cursor loads Claude Code's user plugins (Include Third-Party Plugins and the import on), so it
 # has no plugin of its own to get; Add missing puts a Claude Code plugin into the project.
@@ -40,11 +43,17 @@ def _is_source(item: Item, client: str) -> bool:
     return own and item.source.link_path is None and item.source.path is not None
 
 
-def _place(item: Item, client: str, adapters: dict[str, ClientAdapter], project: str) -> str:
+def _skipped(kind: ItemKind, client: str, project: str | None) -> bool:
+    """Under All projects Cursor neither gives nor gets a plugin: it adds plugins only in its own
+    window (D26)."""
+    return project is None and kind is ItemKind.PLUGIN and client == "cursor"
+
+
+def _place(item: Item, client: str, adapters: dict[str, ClientAdapter], project: str | None) -> str:
     """Where the add goes: "project" when the client can load it from the project, else "all".
     An MCP entry and a Codex plugin are for all projects; Codex reads a project's skills only
-    when it trusts the project."""
-    if item.kind is ItemKind.MCP_SERVER:
+    when it trusts the project. Under All projects (`project` None) every add is for all."""
+    if project is None or item.kind is ItemKind.MCP_SERVER:
         return "all"
     if item.kind is ItemKind.PLUGIN:
         return "project" if client == "claude_code" else "all"
@@ -61,7 +70,7 @@ def _build(
     adapters: dict[str, ClientAdapter],
     offers: dict[str, dict],
     found: set[str],
-    project: str,
+    project: str | None,
     imports: bool,
 ) -> list[Step]:
     """The steps of one add, as the single add makes them. Raises ValueError with the reason
@@ -111,18 +120,20 @@ def _not_same(views: dict[str, list[Item]], copies: Copies) -> list[dict]:
 def align_steps(
     inventory,
     adapters: dict[str, ClientAdapter],
-    project: str,
+    project: str | None,
     found: set[str],
     chosen: list[str] | None,
 ) -> tuple[list[Step], dict]:
     """Every plugin, skill and MCP server one found client loads in `project` and another
-    lacks, as candidates; the steps add the chosen ones. Names match exactly. A client that
-    has an item turned off keeps it off: it is not offered. With `chosen` None, an add that
-    makes a duplicate (a name in another case, here or earlier in the list, or a skill a reader
-    already has) is unchecked."""
+    lacks, as candidates; the steps add the chosen ones. With `project` None (All projects):
+    the plugins and skills one client has for all projects and another lacks, each added for
+    all projects. Names match exactly. A client that has an item turned off keeps it off: it is
+    not offered. With `chosen` None, an add that makes a duplicate (a name in another case,
+    here or earlier in the list, or a skill a reader already has) is unchecked."""
+    kinds = KINDS if project else ALL_KINDS
     clients = [c for c in CLIENTS if c in found and c in adapters]
     views = {
-        c: [i for i in effective_view(inventory, c, project).items if i.kind in KINDS]
+        c: [i for i in effective_view(inventory, c, project).items if i.kind in kinds]
         for c in clients
     }
     has: dict[str, set] = {
@@ -148,7 +159,9 @@ def align_steps(
     seen: set[tuple] = set()
     firsts: dict[tuple, str] = {}  # (kind, client, name in lower case) -> the first name added
     for source in clients:
-        for kind in KINDS:
+        for kind in kinds:
+            if _skipped(kind, source, project):
+                continue
             items = sorted(
                 (i for i in views[source] if i.kind is kind and _is_source(i, source)),
                 key=lambda i: i.name,
@@ -157,6 +170,8 @@ def align_steps(
                 for client in clients:
                     key = (kind, base_name(item), client)
                     if client == source or key in seen or key[:2] in has[client]:
+                        continue
+                    if _skipped(kind, client, project):  # Cursor gets no plugin here
                         continue
                     seen.add(key)
                     place = _place(item, client, adapters, project)
@@ -229,7 +244,8 @@ def align_steps(
     not_same = _not_same(views, plugin_copies(inventory))
     listing = {"candidates": candidates, "not_same": not_same, "left_out": left_out}
     if not candidates:
-        raise ValueError(f"Nothing is missing in {Path(project).name}.")
+        where = f" in {Path(project).name}" if project else ""
+        raise ValueError(f"Nothing is missing{where}.")
     # The first review may check nothing (every add makes a duplicate); it still lists them.
     if not steps and chosen is not None:
         raise ValueError("Choose at least one item.")

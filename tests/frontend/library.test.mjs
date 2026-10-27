@@ -38,9 +38,10 @@ const requests = [];
 globalThis.fetch = (url) => new Promise((resolve) => {
   requests.push({ url, answer: (body) => resolve({ ok: true, status: 200, json: async () => body }) });
 });
-const { addChoices, addName, hasAdds, scopeLine, cellHint, cellNode, emptyState, hiddenClients, hiddenLine, hideButton, loadLibrary, loadLibraryFor, noClients, noteFor, showSources, previewFor, setHidden, startAdd } = await import('../../src/kitden/web/static/js/library.js');
+const { addChoiceButtons, addChoices, addName, hasAdds, scopeLine, cellHint, cellNode, emptyState, hiddenClients, hiddenLine, hideButton, loadLibrary, loadLibraryFor, noClients, noteFor, showSources, previewFor, setHidden, startAdd } = await import('../../src/kitden/web/static/js/library.js');
 const { data, freshness, hashFor, loadShared, parseHash, state } = await import('../../src/kitden/web/static/js/store.js');
-const { cancelTray, tray } = await import('../../src/kitden/web/static/js/tray.js');
+const { cancelTray, keyFor, onTray, takeOut, tray } = await import('../../src/kitden/web/static/js/tray.js');
+const { syncTray } = await import('../../src/kitden/web/static/js/details.js');
 const later = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const cell = (fields) => ({ state: 'none', where: null, items: [], word: null, add: null, reason: null, ...fields });
@@ -427,6 +428,51 @@ test('in a project an add with a project place asks where it goes', () => {
     { action: 'skill.install', targets: [{ client: 'codex' }], params: { skill: 'tidy@toolbox@x', project: 'p1' } });
   assert.deepEqual(previewFor(add({ action: 'skill.install', skill: 'tidy@toolbox@x', project_place: true }), 'codex', 'all').params, { skill: 'tidy@toolbox@x' });
   state.project = '';
+});
+test('the add choice says In preview while its row waits and goes back after', async () => {
+  // Details that hold the two buttons, and a stand-in server that answers a batch preview.
+  const controls = [];
+  const page = globalThis.document;
+  const node = (tag) => {
+    const made = element(tag);
+    made.removeAttribute = (name) => { delete made.attributes[name]; };
+    return made;
+  };
+  const drawer = { querySelectorAll: (selector) => (selector === '[data-tray]' ? controls.filter((c) => c.dataset.tray) : []) };
+  globalThis.document = { createElement: node, querySelector: (selector) => (selector === '#drawer' ? drawer : null), querySelectorAll: () => [] };
+  const asked = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    const { requests } = JSON.parse(options.body);
+    return { ok: true, status: 200, json: async () => ({
+      id: 'c1', action: 'batch', state: 'previewed', error: null, undo_note: null, steps: requests.map(() => ({ client: 'codex', name: 'x' })),
+      rows: requests.map((r, at) => ({ id: r.id, kind: r.kind, title: r.title, detail: '', project: null, steps: [at], after: [] })),
+    }) };
+  };
+  const stop = onTray(syncTray);
+  try {
+    state.project = 'p1';
+    data.projects = [{ id: 'p1', path: '/w/atlas' }];
+    const tidy = add({ action: 'skill.install', skill: 'tidy@toolbox', project_place: true });
+    const [here, everywhere] = addChoiceButtons(tidy, 'codex');
+    controls.push(here, everywhere);
+    const words = (b) => b.children.map((n) => n.textContent).join('');
+    assert.deepEqual([words(here), words(everywhere), here.className], ['Add to this project…', 'Add for all projects…', 'btn primary']);
+    here.listeners.click[0]({});
+    await later(5);
+    const body = previewFor(tidy, 'codex', 'project');
+    assert.deepEqual(tray.rows.map((r) => [r.key, r.note]), [[keyFor(body), 'Adds to atlas only.']]);
+    // Only the choice whose row waits says so, and it takes no press.
+    assert.deepEqual([words(here), here.attributes['aria-disabled'], words(everywhere)], ['In preview', 'true', 'Add for all projects…']);
+    await takeOut(keyFor(body));
+    assert.deepEqual([words(here), here.attributes['aria-disabled']], ['Add to this project…', undefined]);
+  } finally {
+    await cancelTray();
+    stop();
+    globalThis.document = page;
+    globalThis.fetch = asked;
+    state.project = '';
+    data.projects = null;
+  }
 });
 test('the review note says the project, or where a client has no project place', () => {
   data.projects = [{ id: 'p1', path: '/Users/me/work/website' }];

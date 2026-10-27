@@ -58,7 +58,7 @@ def test_readme_names_the_management_actions():
         "Remove from",  # a plugin or a skill, with Undo
         '"+ Add" on an MCP server copies its entry to another client',
         "Add to this project…",
-        "Add missing…",
+        "Add missing plugins and skills…",
         "Put back in",
         "Remove from the Kitden gateway…",
     ):

@@ -35,7 +35,7 @@ function element(tagName) {
   const attributes = new Map();
   const style = { setProperty(name, value) { style[name] = value; }, removeProperty(name) { delete style[name]; } };
   const node = {
-    tagName, style, dataset: {}, children: [], parentNode: null, textContent: '', listeners: {}, animations: [], hidden: false, offsetLeft: 0, offsetTop: 0, offsetWidth: 0, offsetHeight: 0,
+    tagName, style, dataset: {}, children: [], parentNode: null, textContent: '', value: '', listeners: {}, animations: [], hidden: false, offsetLeft: 0, offsetTop: 0, offsetWidth: 0, offsetHeight: 0,
     get className() { return names.join(' '); },
     set className(value) { names = String(value).split(' ').filter(Boolean); },
     classList: {

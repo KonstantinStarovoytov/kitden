@@ -520,3 +520,41 @@ test("a row's review drawn again: the old Take it out stops following the tray",
   await settle();
   closePanel({ instant: true, focus: false });
 });
+
+// Add missing under All projects: what one client has for all projects and another lacks.
+const EVERYWHERE = { action: 'project.align', targets: [], params: { project: null, chosen: null } };
+
+test('Add missing under All projects lists what one client has and another lacks', async () => {
+  await fresh();
+  queue(LIST, listing(['neon']));
+  await review(EVERYWHERE);
+  const drawer = pages['#drawer'];
+  assert.equal(panelState.current.type, 'align');
+  assert.equal(tagged(drawer, 'h1')[0].textContent, 'Add what your clients are missing');
+  assert.deepEqual(tagged(drawer, 'legend').map((node) => node.textContent), ['Add to Codex']);
+  assert.match(drawer.textContent, /neon · MCP server · from Claude Code · all projects/);
+  assert.deepEqual(calls.filter((call) => call.url === LIST).map((call) => [call.body.params.project, call.body.picked]), [[null, null]]);
+  // "Add to preview" adds one row for all projects; its done words say so.
+  queue(PREVIEW, previewed('c1'));
+  await button(drawer, 'Add to preview').click();
+  await settle();
+  assert.deepEqual(tray.rows.map((r) => [r.key, r.body.params]), [['align:', { project: null, chosen: ['neon'] }]]);
+  const change = { action: 'project.align', steps: stepsOf(['neon']), align: alignOf(['neon']) };
+  assert.deepEqual(changeWords(change, EVERYWHERE), { title: 'Add what your clients are missing', done: 'Added 1 item for all projects' });
+});
+
+test('with nothing missing it says Nothing is missing. and adds nothing', async () => {
+  await fresh();
+  queue(LIST, refusal('Nothing is missing.'));
+  await review(EVERYWHERE);
+  const drawer = pages['#drawer'];
+  // An answer, not a failure: the title says it, with no error and only Close.
+  assert.equal(isPanelOpen(), true);
+  assert.equal(tagged(drawer, 'h1')[0].textContent, 'Nothing is missing.');
+  assert.doesNotMatch(drawer.textContent, /Could not prepare/);
+  assert.equal(all(drawer).some((node) => node.classList.contains('error')), false);
+  assert.deepEqual(tagged(drawer, 'footer')[0].children.map((node) => node.textContent), ['Close']);
+  assert.equal(tray.rows.length, 0);
+  assert.deepEqual(posted(), [LIST]);
+  closePanel({ instant: true, focus: false });
+});

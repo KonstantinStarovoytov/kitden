@@ -154,10 +154,12 @@ export function changeWords(change, previewBody) {
   } else if (change.action === "plugin.skills") {
     what = `${verb} ${plural(steps.length, "skill", "skills")} to ${clients}`;
   } else if (change.action === "project.align") {
-    const folder = projectLabel(previewBody && previewBody.params && previewBody.params.project);
+    // In a project it names the folder; under All projects every add is for all projects.
+    const project = previewBody && previewBody.params && previewBody.params.project;
+    const folder = project ? projectLabel(project) : null;
     const chosen = ((change.align && change.align.candidates) || []).filter((c) => c.chosen);
-    title = `Add what ${folder} is missing`;
-    what = `Added ${plural(chosen.length, "item", "items")} for ${folder}`;
+    title = folder ? `Add what ${folder} is missing` : "Add what your clients are missing";
+    what = `Added ${plural(chosen.length, "item", "items")} for ${folder || "all projects"}`;
   }
   // The title says where the steps go: into one project, or for all projects. A title that
   // names its place keeps it once; a change from before the server said so names an add's.
@@ -272,6 +274,10 @@ export async function review(previewBody, { note = null, back = null } = {}) {
   else if (tray.refused && tray.refused !== before) await back({ error: baseNames(tray.refused.reason) });
 }
 
+// The server's words when no client lacks anything: "Nothing is missing." (All projects) or
+// "Nothing is missing in website." (changes/align.py).
+const NOTHING_MISSING = "Nothing is missing";
+
 // Add missing's list: the server says what each client lacks and ticks what would not make a
 // duplicate. The preview behind it is never applied (the tray is), so the server forgets it at once.
 // The list shows in Details; a refusal goes back to the Details it was asked from, if still there.
@@ -289,12 +295,14 @@ async function chooseMissing(previewBody, note) {
       backToDetails({ error: reason });
       return;
     }
-    panelState.current = { type: "error" };
+    // "Nothing is missing." is an answer, not a failure: it says so plainly, with only Close.
+    const nothing = reason.startsWith(NOTHING_MISSING);
+    panelState.current = { type: nothing ? "info" : "error" };
     const footer = el("footer");
     footer.append(button("Close", () => closePanel(), "btn"));
     const body = el("div", "body");
-    body.append(callout(reason, "error"));
-    openPanel([header("Review change", "Could not prepare this change", null, null), body, footer]);
+    if (!nothing) body.append(callout(reason, "error"));
+    openPanel([nothing ? header("Add missing", reason, null, null) : header("Review change", "Could not prepare this change", null, null), body, footer]);
     return;
   }
   showChooser(result.data, previewBody, note, from);

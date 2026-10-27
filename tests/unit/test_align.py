@@ -2,11 +2,13 @@
 
 import json
 import shutil
+import sqlite3
 import tomllib
 
 import pytest
 
-from tests.conftest import make_home, write_cursor_fixture_state
+from kitden.clients.cursor import REACTIVE_KEY
+from tests.conftest import CURSOR_DB, make_home, write_cursor_fixture_state
 from tests.unit.test_api_changes import FakeClaude
 from tests.unit.test_api_plugin_install import FakeCli
 from tests.unit.test_catalog import add_marketplaces
@@ -283,3 +285,87 @@ def test_two_adds_whose_names_differ_only_in_case_keep_the_first_checked(tmp_pat
         assert second["note"] == "This list also adds neon; this adds Neon beside it."
         added = [s["name"] for s in change["steps"] if s["client"] == "claude_code"]
         assert "neon" in added and "Neon" not in added
+
+
+def _user_plugin(home, name):
+    """Claude Code has `name` installed and on for all projects."""
+    settings = home / ".claude/settings.json"
+    data = json.loads(settings.read_text())
+    data["enabledPlugins"][name] = True
+    settings.write_text(json.dumps(data))
+    installed = home / ".claude/plugins/installed_plugins.json"
+    listed = json.loads(installed.read_text())
+    listed["plugins"][name] = [{"scope": "user", "installPath": str(home / "x"), "version": "1"}]
+    installed.write_text(json.dumps(listed))
+
+
+def test_add_missing_under_all_projects_lists_what_one_client_has_and_another_lacks(home):
+    _user_plugin(home, "linter@claude-plugins-official")
+    with page_for(home, run=runner(home)) as page:
+        listing = _align(page, None).json()["align"]
+    keys = {c["key"]: c for c in listing["candidates"]}
+    # Plugins and skills one client has for all projects; each add is for all projects too.
+    linter = keys["plugin:linter@claude-plugins-official:codex"]
+    assert (linter["from"], linter["place"]) == ("claude_code", "all")
+    assert keys["skill:brandkit:codex"]["from"] == "claude_code"
+    assert keys["skill:docker-expert:claude_code"]["from"] == "codex"
+    assert keys["skill:pixel-art:claude_code"]["from"] == "cursor"
+    assert {c["place"] for c in listing["candidates"]} == {"all"}
+    # MCP servers are the Gateway's; a project's own skill is not for all projects.
+    assert {c["kind"] for c in listing["candidates"]} == {"plugin", "skill"}
+    assert "skill:api-style:codex" not in keys
+
+
+def test_under_all_projects_cursor_never_gets_a_plugin(home):
+    # Cursor does not load Claude Code's plugins here, and it lacks linter. It adds plugins only
+    # in its own window (D26), so it is not offered, and not said as left out either.
+    _user_plugin(home, "linter@claude-plugins-official")
+    with sqlite3.connect(home / CURSOR_DB) as db:
+        row = db.execute("SELECT value FROM ItemTable WHERE key = ?", (REACTIVE_KEY,)).fetchone()
+        flags = {**(json.loads(row[0]) if row else {}), "importPluginsFromClaudeOnBoot": False}
+        db.execute("INSERT INTO ItemTable VALUES (?, ?)", (REACTIVE_KEY, json.dumps(flags)))
+    with page_for(home, run=runner(home)) as page:
+        listing = _align(page, None).json()["align"]
+    plugins = [c for c in listing["candidates"] if c["kind"] == "plugin"]
+    assert [(c["from"], c["to"]) for c in plugins] == [("claude_code", "codex")]
+    assert not any("Cursor" in e["why"] for e in listing["left_out"])
+
+
+def test_add_missing_under_all_projects_applies_and_undo_puts_every_file_back(home):
+    _user_plugin(home, "linter@claude-plugins-official")
+    files = [home / ".codex/config.toml", home / ".claude/settings.json", home / ".claude.json"]
+    before = {p: p.read_bytes() for p in files}
+    with page_for(home, run=runner(home)) as page:
+        chosen = ["plugin:linter@claude-plugins-official:codex", "skill:brandkit:codex"]
+        change = _align(page, None, chosen).json()
+        assert [(s["client"], s["name"], s["scope"]) for s in change["steps"]] == [
+            ("codex", "claude-plugins-official", "user"),
+            ("codex", "linter@claude-plugins-official", "user"),
+            ("codex", "brandkit", "user"),
+        ]
+        assert change["steps"][2]["path"] == f"{home}/.agents/skills/brandkit"
+        assert change["target"]["scope"] == "all"
+        applied = page.post(f"/api/changes/{change['id']}/apply", headers=POST).json()
+        assert applied["state"] == "verified"
+        assert (home / ".agents/skills/brandkit/SKILL.md").is_file()
+        config = tomllib.loads((home / ".codex/config.toml").read_text())
+        assert "linter@claude-plugins-official" in config["plugins"]
+        undone = page.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
+        assert undone["state"] == "undone"
+    assert {p: p.read_bytes() for p in files} == before
+    assert not (home / ".agents/skills/brandkit").exists()
+
+
+def test_with_nothing_missing_under_all_projects_it_says_so_and_adds_nothing(tmp_path):
+    # Claude Code has an MCP server Codex lacks: under All projects that is the Gateway's.
+    home = make_home(tmp_path, "claude_code/2.1.283", "codex/0.159.2")
+    claude = {"mcpServers": {"neon": {"url": "https://a.invalid/mcp"}}}
+    (home / ".claude.json").write_text(json.dumps(claude))
+    (home / ".claude/settings.json").write_text("{}")
+    (home / ".codex/config.toml").write_text("")
+    for folder in (".claude/skills", ".agents/skills", ".codex/skills", ".claude/plugins"):
+        shutil.rmtree(home / folder, ignore_errors=True)
+    with page_for(home, run=runner(home)) as page:
+        answer = _align(page, None)
+        assert (answer.status_code, answer.json()["detail"]) == (422, "Nothing is missing.")
+        assert page.get("/api/changes").json() == []

@@ -379,11 +379,31 @@ test('Needs attention still filters', async () => {
   assert.ok(texts(rowOf('item:p2')).includes('Loads twice'));
 });
 
-test('in a project, Add missing… keeps today\'s review', async () => {
-  await showList({ project: 'a' });
-  const missing = node(main, 'add:missing');
-  assert.equal(missing.textContent, 'Add missing…');
-  await showList();
+test('Add missing plugins and skills… is on the List in a project and in All projects', async () => {
+  const sent = [];
+  const before = globalThis.fetch;
+  const asks = async (project) => {
+    await showList({ project });
+    const missing = node(main, 'add:missing');
+    assert.equal(missing.textContent, 'Add missing plugins and skills…');
+    globalThis.fetch = (url, init = {}) => { sent.push([url, JSON.parse(init.body)]); return new Promise(() => {}); };
+    try {
+      missing.listeners.click[0]({});
+      await new Promise((done) => setImmediate(done));
+    } finally {
+      globalThis.fetch = before;
+    }
+  };
+  // In a project it asks for that project; under All projects for none: what one client has for
+  // all projects and another lacks.
+  await asks('a');
+  await asks('');
+  assert.deepEqual(sent.map(([url, body]) => [url, body.action, body.params]), [
+    ['/api/changes/preview', 'project.align', { project: 'a', chosen: null }],
+    ['/api/changes/preview', 'project.align', { project: null, chosen: null }],
+  ]);
+  // Instructions has none: Kitden adds nothing there.
+  await showList({ kind: 'instructions' });
   assert.equal(node(main, 'add:missing'), null);
 });
 

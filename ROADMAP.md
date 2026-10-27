@@ -57,7 +57,8 @@ What Kitden does today and what comes next. Ideas and bugs:
   Instructions tab has its own map: the clients, the instruction files each one reads, and what
   Claude Code's CLAUDE.md files pull in; a click opens a file's Details. It only reads. The List
   has the same two tabs, a row per source, plugin, skill, hook or file and a column per client,
-  and Differences shows only what differs between the clients.
+  and Differences shows only what differs between the clients. "Add missing plugins and skills…"
+  works under All projects too, and the add forms say "In preview" while their change waits.
 - **Library Details:** a click on the Library map opens Details for a plugin, a thing inside it, a
   skill, a hook, a client, a link or a marketplace. From the Library a plugin can be turned off for
   all projects or in this project, and added to another client; a skill can be turned off for all
