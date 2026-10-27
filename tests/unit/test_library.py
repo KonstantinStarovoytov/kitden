@@ -1286,16 +1286,25 @@ def test_the_instructions_list_has_one_row_per_file(tmp_path):
     home = build_demo_home(tmp_path, "medium")
     answer = _list(home, "instructions")
     assert [(g["key"], g["name"], g["icon"]) for g in answer["groups"]] == [
-        ("all", "All projects", "layers")
+        ("all", "All projects", "layers"),
+        ("commands", "Commands and agents", "square-terminal"),
     ]
     files = answer["groups"][0]["items"]
     assert [(f["kind"], f["name"]) for f in files] == [("file", "CLAUDE.md"), ("file", "AGENTS.md")]
     words = {f["name"]: {c: cell["word"] for c, cell in f["cells"].items()} for f in files}
     assert words["CLAUDE.md"] == {"claude_code": "Reads it", "codex": None, "cursor": None}
+    # The user's commands and agents are rows too, under their own group; an Overview link
+    # selects a row by its item's name.
+    commands = answer["groups"][1]["items"]
+    assert [(f["kind"], f["category"], f["name"], f["names"]) for f in commands] == [
+        ("file", "command", "review", ["review"]),
+        ("file", "agent", "reviewer", ["reviewer"]),
+    ]
+    assert commands[0]["cells"]["claude_code"]["word"] == "Reads it"
     # A project's own files come in their own group.
     project = str(home / "work/atlas")
     groups = _list(home, "instructions", project)["groups"]
-    assert [g["key"] for g in groups] == ["all", "project"]
+    assert [g["key"] for g in groups] == ["all", "project", "commands"]
     assert groups[1]["name"] == "Only this project · atlas"
 
 
@@ -1314,7 +1323,7 @@ def test_api_library_list_takes_a_tab_and_show_diff(tmp_path):
             i["name"] for g in answer["groups"] for i in g["items"]
         }
         files = client.get("/api/library-list?kind=instructions").json()
-        assert [i["kind"] for g in files["groups"] for i in g["items"]] == ["file", "file"]
+        assert [i["kind"] for g in files["groups"] for i in g["items"]] == ["file"] * 4
         hidden = client.get("/api/library-list?kind=plugin&hidden=codex,cursor").json()
         assert [c["id"] for c in hidden["columns"] if c["hidden"]] == ["codex", "cursor"]
 

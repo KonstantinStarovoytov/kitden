@@ -47,6 +47,8 @@ const KIND_WORDS = { plugin: "Plugin", skill: "Skill", hook: "Hook" };
 const LAMP_WORDS = { on: STATE_WORDS.on, off: STATE_WORDS.off, unk: STATE_WORDS.unk };
 // The Instructions tab (decisions "Instructions"): Kitden only reads these files.
 const FILE_KIND = "Instruction file";
+// A block of "Commands and agents" (`file.kind`): its kicker, and its word in a client's list.
+const COMMAND_KINDS = { command: "Command", agent: "Agent" };
 const IMPORT_KIND = "Imported file";
 const READS_FILE = "Kitden only reads this file.";
 const READS_IT = "Kitden only reads it.";
@@ -366,24 +368,26 @@ export function clientCard(id, c) {
 function clientRows(id, answer) {
   return answer.groups.flatMap((group) => [
     ...(group.items || []).filter((item) => (item.by || {})[id] === "on").map((item) => ({ kind: item.kind, name: item.name, line: itemLine(item) })),
-    ...(group.files || []).filter((file) => (file.by || {})[id]).map((file) => ({ kind: "file", name: file.name, line: "File" })),
+    ...(group.files || []).filter((file) => (file.by || {})[id]).map((file) => ({ kind: "file", name: file.name, line: COMMAND_KINDS[file.kind] || "File" })),
   ]);
 }
 
 // An instruction file: Read by, Through (Claude Code reads AGENTS.md in place of a CLAUDE.md) and
 // Size ("42 lines"; none for a file longer than Kitden reads, nor for a folder of rules); what it
-// brings in; its path and first lines (a folder: its rules) under Technical details.
+// brings in; its path and first lines (a folder: its rules) under Technical details. A command or an
+// agent says only that Kitden reads it: it brings nothing in.
 export function fileCard(block, c) {
   const { file } = block;
   const facts = [{ label: "Read by", value: readers(file).map((client) => CLIENT_NAMES[client]).join(", ") }];
   if (file.through) facts.push({ label: "Through", value: file.through });
   if (typeof file.size === "number") facts.push({ label: "Size", value: plural(file.size, "line", "lines") });
   const pulls = importsOf(file).length;
-  const why = `${READS_FILE} ${pulls ? `It brings in ${pulls} more.` : IMPORTS_NOTHING}`;
+  const command = COMMAND_KINDS[file.kind];
+  const why = command ? READS_FILE : `${READS_FILE} ${pulls ? `It brings in ${pulls} more.` : IMPORTS_NOTHING}`;
   const tech = file.technical || {};
   const title = typeof file.count === "number" ? "Rules folder" : "File";
   const rows = tech.path ? [{ title, path: tech.path, preview: tech.lines && tech.lines.length ? tech.lines : null }] : [];
-  return { kind: FILE_KIND, title: file.name, id: block.meta, tile: iconTile("file-text"), facts, why, technical: rows.length ? technical(rows) : null };
+  return { kind: command || FILE_KIND, title: file.name, id: block.meta, tile: iconTile("file-text"), facts, why, technical: rows.length ? technical(rows) : null };
 }
 
 // A file a CLAUDE.md pulls in: which files bring it in, and that Kitden only reads it; Claude Code

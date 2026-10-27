@@ -561,6 +561,10 @@ const INSTR = {
       { id: 'f5', name: '.cursor/rules', by: { cursor: true }, count: 2, imports: [], technical: { path: '/home/u/work/website/.cursor/rules', lines: ['backend:api', 'style'] } },
       { id: 'f6', name: 'CLAUDE.local.md', by: { claude_code: true }, imports: [], size: null, technical: { path: '/home/u/work/website/CLAUDE.local.md', lines: ['# Long'], cut: true } },
     ] },
+    { key: 'commands', name: 'Commands and agents', files: [
+      { id: 'c1', kind: 'command', name: 'review', names: ['review'], by: { claude_code: true }, imports: [], size: 3, technical: { path: '/home/u/.claude/commands/review.md', lines: ['# Review'] } },
+      { id: 'c2', kind: 'agent', name: 'reviewer', names: ['reviewer'], by: { claude_code: true }, imports: [], size: 5, technical: { path: '/home/u/.claude/agents/reviewer.md', lines: ['# Reviewer'] } },
+    ] },
   ],
   imports: [
     { id: 'i2', name: 'docs/design.md', by_files: ['f3'], outside: false, missing: false, technical: { path: '/home/u/work/website/docs/design.md' } },
@@ -627,6 +631,21 @@ test('file Details show Read by, Through, Size and the say line; the path and fi
   const rules = details.fileCard(blocks.get('file:f5'), ci());
   assert.deepEqual([rules.id, facts(rules)], ['Cursor · 2 rules', [['Read by', 'Cursor']]]);
   assert.ok(texts(rules.technical).includes('backend:api\nstyle'));
+});
+
+// Final fix wave: commands and agents are back, read only, with their own kicker.
+test('a command or an agent: its kicker, Read by and Size, Kitden only reads it, and its path under Technical details', () => {
+  const blocks = instr();
+  const command = details.fileCard(blocks.get('file:c1'), ci());
+  assert.deepEqual([command.kind, command.title, command.id, facts(command), command.why, command.actions], ['Command', 'review', 'Claude Code · command', [['Read by', 'Claude Code'], ['Size', '3 lines']], 'Kitden only reads this file.', undefined]);
+  const tech = texts(command.technical);
+  assert.ok(tech.some((t) => t.includes('.claude/commands/review.md')), tech.join(' | '));
+  assert.ok(tech.includes('# Review'));
+  assert.equal(details.fileCard(blocks.get('file:c2'), ci()).kind, 'Agent');
+  // A client lists it by its kind.
+  const client = details.clientCard('claude_code', ci());
+  assert.ok(texts(client.list).includes('Command'));
+  assert.ok(texts(client.list).includes('Agent'));
 });
 
 test('an outside import says Claude Code may ask before it reads this', () => {

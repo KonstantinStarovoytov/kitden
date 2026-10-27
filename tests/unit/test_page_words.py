@@ -2960,7 +2960,12 @@ def test_the_instructions_map_words():
         'const TAB_KINDS = { plugins: "plugin", instructions: "instructions" };',
         'caption: "Files", w: 190, h: 54, colGap: 100, top: 37, rowGap: 4',
         'caption: "Pulls in", w: 200, h: 40, colGap: 60, top: 60, rowGap: 16',
-        'const FILE_GROUPS = { all: "layers", project: "folder" };',
+        'const FILE_GROUPS = { all: "layers", project: "folder", commands: "square-terminal" };',
+        'const FILE_KINDS = { command: "command", agent: "agent" };',
+        'const NO_FILES = "No instruction files here.";',
+        "const filesGroup = (key) => `group:files:${key}`;",
+        "`${who} · ${FILE_KINDS[file.kind]}`",
+        "title: `${file.name} · ${meta}`",
         'const MISSING = { icon: "triangle-alert", words: "Missing" };',
         "const TAB_FROM = { x: 150, y: 200 };",
         '`${who} · ${plural(file.count, "rule", "rules")}`',
@@ -2985,7 +2990,9 @@ def test_the_instructions_map_words():
         "`It brings in ${pulls} more.`",
         '"Rules folder" : "File"',
         "`Brought in by ${joinWords(by)}`",
-        'line: "File"',
+        'line: COMMAND_KINDS[file.kind] || "File"',
+        'const COMMAND_KINDS = { command: "Command", agent: "Agent" };',
+        "kind: command || FILE_KIND",
         '"Read by the client"',
         "`${from.name} reads ${to.name}. ${READS_FILE}`",
         '"An import"',
@@ -2999,6 +3006,10 @@ def test_the_instructions_map_words():
     assert "start: start + D(turn * GROW_STEP)" in view
     assert "(tabPoint || (item.grows && item.folds) ? FOLD_BACK_MS : GO_MS)" in view
     assert "font-family: var(--mono); font-size: 11px;" in rule("div.map .block.import .block-name")
+    # Commands and agents, read only, in a group of their own (views/instructions_map.py).
+    views = (STATIC.parents[1] / "views/instructions_map.py").read_text()
+    assert 'COMMANDS = {"key": "commands", "name": "Commands and agents"}' in views
+    assert 'const COMMAND_WORDS = { command: "Command", agent: "Agent" };' in script("library.js")
 
 
 # The Library List (Phase 6B Task 6, spec 5.4, frame L3) ------------------------------------------

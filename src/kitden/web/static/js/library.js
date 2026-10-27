@@ -6,7 +6,7 @@
 // the map (library-details.js); a cell's "+ Add" only adds a row to the tray.
 import { getJson, query } from "./api.js";
 import { button, el, gridKey, icon, plural } from "./dom.js";
-import { INSTRUCTIONS_HINT, LEDE, leaveLibraryMap, letGoLibraryMap, libraryDetails, libraryMode, libraryThing, renderLibraryMap, showListOnly } from "./library-map.js";
+import { filesGroup, INSTRUCTIONS_HINT, LEDE, leaveLibraryMap, letGoLibraryMap, libraryDetails, libraryMode, libraryThing, renderLibraryMap, showListOnly } from "./library-map.js";
 import { glidePill, modeSwitch, switchedNow } from "./map-page.js";
 import { CALM, afterOldPage, animate, entrance, glide, land, reducedMotion, rise } from "./motion.js";
 import { projectNote } from "./offer.js";
@@ -20,6 +20,8 @@ const SHOW = [["mine", "Installed"], ["diff", "Differences"]];
 const LIST_HINT = "One row per item, one column per client. Right opens a plugin, Enter opens Details.";
 // The quiet word after a row's name, and after a part's: what kind of thing it is.
 const KIND_WORDS = { skill: "Skill", hook: "Hook" };
+// A row of "Commands and agents" (its `category`).
+const COMMAND_WORDS = { command: "Command", agent: "Agent" };
 const PART_WORDS = { skill: "Skill", command: "Command", agent: "Agent", hook: "Hook", mcp_server: "MCP server" };
 // A client's column is this wide; the name takes the rest.
 const CELL_W = 150;
@@ -364,6 +366,8 @@ function renderList(main) {
   const asked = answer ? cache.asked : asking();
   const fresh = cache.key === key && cache.at >= freshness.reloadStartedAt;
   const failed = cache.errorKey === key ? cache.error : null;
+  // Before any early return: an empty List after a project switch still moves its Details on.
+  followProject(kind);
   if (answer && !answer.columns.length) {
     main.append(noClients());
     return;
@@ -401,7 +405,6 @@ function renderList(main) {
   main.append(scroller);
   finish(rows);
   entrance("library", [grid]);
-  followProject(kind);
   if (arrived) showArrived(arrived);
 }
 
@@ -589,7 +592,7 @@ export function emptyState(asked) {
 export function listRows(answer, open = new Set(), folded = new Set()) {
   const rows = [];
   for (const group of answer.groups) {
-    const id = `group:${group.key}`;
+    const id = groupId(group);
     const details = group.kind === "marketplace";
     const expanded = !folded.has(id);
     rows.push({ id, key: id, parent: null, depth: 0, kind: "group", name: group.name, meta: null, flags: [], cells: null, sel: details ? { kind: "marketplace", name: group.name } : null, expanded, group: !details, icon: group.icon });
@@ -598,7 +601,7 @@ export function listRows(answer, open = new Set(), folded = new Set()) {
       const itemId = `${item.kind === "file" ? "file" : "item"}:${item.id}`;
       const parts = item.parts || [];
       const opened = parts.length ? open.has(itemId) : undefined;
-      const sel = item.lookup ? { kind: item.kind, name: item.lookup } : null;
+      const sel = item.lookup ? { kind: item.kind, name: item.lookup } : (item.names || []).length ? { kind: "instructions", name: item.names[0] } : null;
       rows.push({ id: itemId, key: itemId, parent: id, depth: 1, kind: item.kind, name: item.name, meta: itemWords(item), flags: item.flags || [], cells: item.cells, sel, expanded: opened, group: false, source: item.source, same_name: item.same_name, account: Boolean(item.account), reason: item.reason || null });
       if (!opened) continue;
       for (const part of parts) {
@@ -610,12 +613,16 @@ export function listRows(answer, open = new Set(), folded = new Set()) {
   return rows;
 }
 
-// "Plugin · 4 items" (what Kitden read inside it; "Plugin" when it read nothing), "Skill" or
-// "Hook"; a file has none.
+// "Plugin · 4 items" (what Kitden read inside it; "Plugin" when it read nothing), "Skill", "Hook",
+// "Command" or "Agent"; an instruction file has none.
 function itemWords(item) {
   if (item.kind === "plugin") return item.count ? `Plugin · ${plural(item.count, "item", "items")}` : "Plugin";
-  return KIND_WORDS[item.kind] || null;
+  return KIND_WORDS[item.kind] || COMMAND_WORDS[item.category] || null;
 }
+
+// A group row's id: the map's (a group of files is the Instructions tab's own: library-map.js
+// filesGroup), so folds stay per tab.
+const groupId = (group) => (group.kind === "files" ? filesGroup(group.key) : `group:${group.key}`);
 
 // The plugins open for this draw: the person's, and while searching, every plugin a part of which
 // the search found (it stays as the person left it once the search ends).
@@ -818,16 +825,18 @@ export function arrivalIn(answer) {
   const arrived = takeArrival();
   if (!arrived || isPanelOpen()) return null;
   const named = (kind, name) => Boolean(name) && sameSel({ kind, name }, arrived);
+  // A file, a command or an agent goes by the names of the items it stands for.
+  const isItem = (item) => named(item.kind, item.lookup) || (item.names || []).some((name) => named("instructions", name));
   for (const group of answer.groups) {
-    const groupId = `group:${group.key}`;
+    const fold = groupId(group);
     if (group.kind === "marketplace" && named("marketplace", group.name)) {
-      onList.folded.delete(groupId);
-      return groupId;
+      onList.folded.delete(fold);
+      return fold;
     }
     for (const item of group.items) {
       const part = (item.parts || []).find((p) => named(p.kind, p.lookup));
-      if (!named(item.kind, item.lookup) && !part) continue;
-      onList.folded.delete(groupId);
+      if (!isItem(item) && !part) continue;
+      onList.folded.delete(fold);
       if (!part) return `${item.kind === "file" ? "file" : "item"}:${item.id}`;
       onList.open.add(`item:${item.id}`);
       return `part:${item.id}:${part.key}:${part.name}`;

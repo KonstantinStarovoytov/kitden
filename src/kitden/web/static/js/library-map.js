@@ -58,7 +58,13 @@ export const INSTRUCTION_COLUMNS = [
   { id: "files", caption: "Files", w: 190, h: 54, colGap: 100, top: 37, rowGap: 4 },
   { id: "imports", caption: "Pulls in", w: 200, h: 40, colGap: 60, top: 60, rowGap: 16 },
 ];
-const FILE_GROUPS = { all: "layers", project: "folder" };
+const FILE_GROUPS = { all: "layers", project: "folder", commands: "square-terminal" };
+// The words for a block of "Commands and agents" (`file.kind`), and with none here at all.
+export const FILE_KINDS = { command: "command", agent: "agent" };
+export const NO_FILES = "No instruction files here.";
+// The Instructions tab's group ids carry this, so they never share an id with a group of Plugins
+// and skills (`group:project`).
+export const filesGroup = (key) => `group:files:${key}`;
 const MISSING = { icon: "triangle-alert", words: "Missing" };
 // Another tab's blocks grow from here and shrink back to its x (library-notes §6; map-view.js).
 const TAB_FROM = { x: 150, y: 200 };
@@ -285,15 +291,16 @@ function marketGroup(model, name) {
 }
 
 // The Instructions tab as one tree (decisions "Instructions"): the clients, each group of files
-// ("All projects", "Only this project · <folder>") with a link from each client that reads a file,
-// and what the files pull in. Only Claude Code follows imports (spec 6.1, D27): a file links to its
-// imports, nested ones too, only while Claude Code reads it.
+// ("All projects", "Only this project · <folder>", "Commands and agents") with a link from each
+// client that reads a file, and what the files pull in. Only Claude Code follows imports (spec 6.1,
+// D27): a file links to its imports, nested ones too, only while Claude Code reads it. A group with
+// no file is not drawn.
 export function instructionsTree(answer) {
   const blocks = answer.clients.map(clientBlock);
   const clients = new Set(answer.clients.map((client) => client.id));
   const links = [];
-  for (const group of answer.groups) {
-    const id = `group:${group.key}`;
+  for (const group of answer.groups.filter((one) => one.files.length)) {
+    const id = filesGroup(group.key);
     blocks.push({ id, column: "files", kind: "group", name: group.name, icon: FILE_GROUPS[group.key], before: GROUP_BEFORE, rowGap: INSTRUCTION_COLUMNS[1].rowGap });
     for (const file of group.files) {
       const block = fileBlock(file, group, id);
@@ -313,15 +320,18 @@ export const readers = (file) => CLIENT_ORDER.filter((client) => (file.by || {})
 export const importsOf = (file) => ((file.by || {}).claude_code ? file.imports || [] : []);
 
 // A file card: its name, a green lamp, and who reads it where: "Claude Code · this project",
-// "Codex · all projects", "Claude Code · 2 imports", "Cursor · 2 rules" (a folder of rules).
+// "Codex · all projects", "Claude Code · 2 imports", "Cursor · 2 rules" (a folder of rules),
+// "Claude Code · command". Its title says the meta whole, where the card cuts it.
 function fileBlock(file, group, parent) {
   const pulls = importsOf(file).length;
-  return { id: `file:${file.id}`, column: "files", parent, kind: "file", name: file.name, meta: fileMeta(file, group), lamp: "on", state: "on", stateInMeta: true, file, ports: { left: true, right: pulls > 0 } };
+  const meta = fileMeta(file, group);
+  return { id: `file:${file.id}`, column: "files", parent, kind: "file", name: file.name, meta, title: `${file.name} · ${meta}`, lamp: "on", state: "on", stateInMeta: true, file, ports: { left: true, right: pulls > 0 } };
 }
 
 function fileMeta(file, group) {
   const who = readers(file).map((client) => CLIENT_NAMES[client]).join(", ");
   const pulls = importsOf(file).length;
+  if (FILE_KINDS[file.kind]) return `${who} · ${FILE_KINDS[file.kind]}`;
   if (typeof file.count === "number") return `${who} · ${plural(file.count, "rule", "rules")}`;
   if (pulls) return `${who} · ${plural(pulls, "import", "imports")}`;
   return `${who} · ${group.key === "project" ? "this project" : ALL_PROJECTS}`;
@@ -353,11 +363,12 @@ function tile(block) {
 }
 
 // The map of this visit: its view, its tabs and the tab drawn, the answer it was drawn from and the
-// tree, the plugin open (one at a time), the block selected, the pages of the groups that page, what the search found and
+// tree, the plugin open (one at a time), the block selected, the pages of the groups that page (and
+// the other tab's, kept for the way back: `tabPages`), what the search found and
 // for which words, and the project it was drawn for.
 // It is the drag engine's map too (map-drag.js): the layout drawn last, the drag that runs, the
 // block held off its place, and how to draw again.
-const onMap = { view: null, tabs: null, tab: "plugins", answer: null, model: null, open: new Set(), selected: null, pages: new Map(), found: null, searched: "", project: null, unfolds: false, folded: false, layout: null, drag: null, home: null, redraw: () => drawMap() };
+const onMap = { view: null, tabs: null, tab: "plugins", answer: null, model: null, open: new Set(), selected: null, pages: new Map(), tabPages: {}, found: null, searched: "", project: null, unfolds: false, folded: false, layout: null, drag: null, home: null, redraw: () => drawMap() };
 
 // "+ Add" beside the Plugins and skills caption: `fn(button)` opens the add panel (library-add.js).
 let addHook = null;
@@ -445,14 +456,20 @@ export function renderLibraryMap(main, { head, again = false, switched = false }
   setHint(tab === "plugins" ? MAP_HINT : INSTRUCTIONS_HINT);
   const fresh = !onMap.view;
   // A new map opens with no plugin open and nothing selected: a real setup has no first plugin.
-  if (fresh) Object.assign(onMap, { view: newMap(), open: new Set(), selected: null, pages: new Map() });
+  if (fresh) Object.assign(onMap, { view: newMap(), open: new Set(), selected: null, pages: new Map(), tabPages: {} });
   const projectChanged = !fresh && onMap.project !== state.project;
   onMap.project = state.project;
   // Another tab is drawn in the same map: the clients stay, the rest swaps (library-notes §6).
   const swap = !fresh && onMap.tab !== tab;
+  // Each tab keeps the pages its groups were turned to, for the way back.
+  if (swap) {
+    onMap.tabPages[onMap.tab] = onMap.pages;
+    onMap.pages = onMap.tabPages[tab] || new Map();
+  }
   onMap.tab = tab;
   const had = onMap.selected;
   keepWhatShows(answer);
+  if (tab === "instructions" && !answer.groups.some((group) => group.files.length)) main.append(el("p", "muted", NO_FILES));
   main.append(onMap.view.box);
   const text = state.q.trim();
   onMap.found = text ? findIn(onMap.model, text) : null;

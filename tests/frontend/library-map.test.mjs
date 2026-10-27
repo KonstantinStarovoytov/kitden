@@ -434,6 +434,20 @@ test('the chip counts what lights on the shown page, and says it again when a pa
   const one = showMap(LARGE, { q: 'plugin-29' });
   settle();
   assert.equal(findChip(one.found), '1 match');
+  // "plugin-0" lights plugin-00 to plugin-04 on the first page; "N more" turns to plugin-05 to
+  // plugin-09, and the chip says it again for that page.
+  const first = showMap(LARGE, { q: 'plugin-0' });
+  settle();
+  assert.equal(pages['#find-chip'].textContent, '5 matches');
+  node(first.box, 'block:more:group:marketplace:bench-market').listeners.click[0]({ target: node(first.box, 'block:more:group:marketplace:bench-market') });
+  settle();
+  const shown = walk(first.box).filter((n) => n.dataset.focus && /\bfound\b/.test(n.className) && n.dataset.focus.startsWith('block:item:'));
+  assert.deepEqual(shown.map((n) => n.dataset.focus).sort(), ['b5', 'b6', 'b7', 'b8', 'b9'].map((id) => `block:item:${id}`));
+  assert.equal(pages['#find-chip'].textContent, '5 matches');
+  // The last page holds no match: the chip says so.
+  for (let turn = 0; turn < 4; turn++) node(first.box, 'block:more:group:marketplace:bench-market').listeners.click[0]({ target: node(first.box, 'block:more:group:marketplace:bench-market') });
+  settle();
+  assert.equal(pages['#find-chip'].textContent, 'No matches');
   state.q = '';
 });
 
@@ -1034,6 +1048,10 @@ const INSTR = {
       { id: 'f4', name: 'AGENTS.md', by: { claude_code: true, cursor: true }, through: 'CLAUDE.md for Claude Code', imports: [], size: 10, technical: { path: '/home/u/work/website/AGENTS.md', lines: ['# Agents'] } },
       { id: 'f5', name: '.cursor/rules', by: { cursor: true }, count: 2, imports: [], technical: { path: '/home/u/work/website/.cursor/rules', lines: ['backend:api', 'style'] } },
     ] },
+    { key: 'commands', name: 'Commands and agents', files: [
+      { id: 'c1', kind: 'command', name: 'review', names: ['review'], by: { claude_code: true }, imports: [], size: 3, technical: { path: '/home/u/.claude/commands/review.md', lines: ['# Review'] } },
+      { id: 'c2', kind: 'agent', name: 'reviewer', names: ['reviewer'], by: { claude_code: true }, imports: [], size: 5, technical: { path: '/home/u/.claude/agents/reviewer.md', lines: ['# Reviewer'] } },
+    ] },
   ],
   imports: [
     { id: 'i1', name: 'notes.md', by_files: ['f1'], outside: false, missing: false, technical: { path: '/home/u/.claude/notes.md' } },
@@ -1084,8 +1102,15 @@ test('a file block names its clients and its imports', () => {
   const meta = (id) => blocks.get(`file:${id}`).meta;
   assert.deepEqual(['f1', 'f2', 'f3', 'f4', 'f5'].map(meta), ['Claude Code · 1 import', 'Codex · all projects', 'Claude Code · 3 imports', 'Claude Code, Cursor · this project', 'Cursor · 2 rules']);
   const file = blocks.get('file:f3');
-  assert.deepEqual([file.kind, file.name, file.lamp, file.parent, file.h], ['file', 'CLAUDE.md', 'on', 'group:project', undefined]);
-  assert.deepEqual(['all', 'project'].map((key) => blocks.get(`group:${key}`).icon), ['layers', 'folder']);
+  assert.deepEqual([file.kind, file.name, file.lamp, file.parent, file.h], ['file', 'CLAUDE.md', 'on', 'group:files:project', undefined]);
+  assert.deepEqual(['all', 'project', 'commands'].map((key) => blocks.get(`group:files:${key}`).icon), ['layers', 'folder', 'square-terminal']);
+  // Its title says the meta whole, where the card cuts it.
+  assert.equal(file.title, 'CLAUDE.md · Claude Code · 3 imports');
+  // Commands and agents: one block each, read by Claude Code.
+  assert.deepEqual(['c1', 'c2'].map(meta), ['Claude Code · command', 'Claude Code · agent']);
+  assert.equal(blocks.get('file:c1').parent, 'group:files:commands');
+  // The Instructions tab's group ids are its own: none is a Plugins and skills group's.
+  assert.ok(!blocks.has('group:project'));
   const imported = blocks.get('import:i2');
   assert.deepEqual([imported.kind, imported.name, imported.column, imported.label], ['import', 'docs/design.md', 'imports', undefined]);
   assert.deepEqual(blocks.get('import:i4').label, { icon: 'triangle-alert', words: 'Missing' });
@@ -1183,6 +1208,59 @@ test('under reduced motion the tab switch lands at once', () => {
     assert.ok(walk(box).every((n) => n.style.opacity === undefined || n.style.opacity === ''));
   } finally {
     reducedMotion.matches = false;
+    done();
+  }
+});
+
+// Final fix wave: a cut file meta reads whole on hover; a tab with no file says so; each tab keeps
+// the pages its groups were turned to.
+test('a file card says its meta whole in its title', () => {
+  try {
+    const box = showTab('instructions');
+    settle();
+    assert.equal(node(box, 'block:file:f2').title, 'AGENTS.md · Codex · all projects');
+    assert.equal(node(box, 'block:file:c1').title, 'review · Claude Code · command');
+  } finally {
+    done();
+  }
+});
+
+test('with no instruction files the tab says No instruction files here.', () => {
+  const empty = { ...INSTR, groups: [{ key: 'all', name: 'All projects', files: [] }], imports: [] };
+  try {
+    Object.assign(data, { libraryMap: MEDIUM, instructionsMap: empty, projects: [] });
+    Object.assign(data.scope, { libraryMap: '', instructionsMap: '' });
+    Object.assign(state, { view: 'library', mode: 'map', kind: 'instructions', project: '', q: '', selected: null });
+    main.replaceChildren();
+    renderLibrary(main);
+    settle();
+    assert.ok(texts(main).includes('No instruction files here.'));
+    // No empty group caption is drawn.
+    assert.equal(node(map(), 'block:group:files:all'), null);
+    // With files, it is not said.
+    showTab('instructions');
+    settle();
+    assert.ok(!texts(main).includes('No instruction files here.'));
+  } finally {
+    done();
+  }
+});
+
+test('each tab keeps the pages its groups were turned to', async () => {
+  try {
+    const box = showTab('plugin', LARGE);
+    settle();
+    const more = () => node(box, 'block:more:group:marketplace:bench-market');
+    more().listeners.click[0]({ target: more() });
+    await flush();
+    const caption = () => walk(box).find((n) => n.dataset.focus === 'block:group:marketplace:bench-market' || (n.title || '').startsWith('bench-market ·'));
+    assert.equal(caption().title, 'bench-market · 6–10 of 30');
+    pressTab('instructions');
+    await flush();
+    pressTab('plugins');
+    await flush();
+    assert.equal(caption().title, 'bench-market · 6–10 of 30');
+  } finally {
     done();
   }
 });

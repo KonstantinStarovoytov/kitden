@@ -44,12 +44,15 @@ def _write(path: Path, text: str) -> Path:
 def test_files_are_grouped_for_all_projects_and_this_project(home):
     answer = _map(home)
     assert [c["id"] for c in answer["clients"]] == ["claude_code", "codex", "cursor"]
-    assert [(g["key"], g["name"]) for g in answer["groups"]] == [("all", "All projects")]
+    assert [(g["key"], g["name"]) for g in answer["groups"]] == [
+        ("all", "All projects"),
+        ("commands", "Commands and agents"),
+    ]
     files = _files(answer)
     assert files["all", "CLAUDE.md"]["by"] == {"claude_code": True}
     assert files["all", "AGENTS.md"]["by"] == {"codex": True}
-    # Commands and agents are not instruction files for this map.
-    assert not any(name in ("review.md", "reviewer.md") for _, name in files)
+    # Commands and agents are a group of their own, not instruction files.
+    assert not any(g == "all" and name in ("review", "reviewer") for g, name in files)
     claude = files["all", "CLAUDE.md"]
     assert claude["technical"]["path"] == str(home / ".claude/CLAUDE.md")
     assert claude["technical"]["lines"][0] == "# My rules"
@@ -60,6 +63,7 @@ def test_files_are_grouped_for_all_projects_and_this_project(home):
     assert [(g["key"], g["name"]) for g in website["groups"]] == [
         ("all", "All projects"),
         ("project", "Only this project · website"),
+        ("commands", "Commands and agents"),
     ]
     assert _files(website)["project", "CLAUDE.md"]["by"] == {"claude_code": True}
     # Another project's files are not shown.
@@ -182,11 +186,11 @@ def test_the_page_reads_the_map_behind_the_page_cookie(home):
         assert page.get("/api/instructions-map").status_code == 401
         page.get("/?token=tok")
         answer = page.get("/api/instructions-map").json()
-        assert [g["key"] for g in answer["groups"]] == ["all"]
+        assert [g["key"] for g in answer["groups"]] == ["all", "commands"]
         project = next(p for p in page.get("/api/projects").json() if p["path"].endswith("site"))
         picked = page.get(f"/api/instructions-map?project={project['id']}").json()
         assert picked["project"]["id"] == project["id"]
-        assert [g["key"] for g in picked["groups"]] == ["all", "project"]
+        assert [g["key"] for g in picked["groups"]] == ["all", "project", "commands"]
         assert page.get("/api/instructions-map?project=nope").status_code == 404
 
 
@@ -212,3 +216,21 @@ def test_a_file_longer_than_the_read_has_no_size(home):
     assert big["technical"]["cut"] is True
     assert big["technical"]["lines"][0] == "# Big"
     assert "cut" not in files["all", "CLAUDE.md"]["technical"]
+
+
+def test_commands_and_agents_are_a_group_of_their_own(home):
+    answer = _map(home, str(home / "work/website"))
+    commands = next(g for g in answer["groups"] if g["key"] == "commands")
+    blocks = {(f["kind"], f["name"]): f for f in commands["files"]}
+    assert set(blocks) == {("command", "review"), ("agent", "reviewer"), ("command", "deploy")}
+    review = blocks["command", "review"]
+    assert review["by"] == {"claude_code": True}
+    assert review["names"] == ["review"]
+    assert review["imports"] == []
+    assert review["technical"]["path"] == str(home / ".claude/commands/review.md")
+    assert review["technical"]["lines"]
+    assert isinstance(review["size"], int)
+    # Another project's commands are not shown, and files keep no kind.
+    assert "deploy" not in {f["name"] for f in _map(home)["groups"][-1]["files"]}
+    assert all("kind" not in f for g in answer["groups"][:2] for f in g["files"])
+    assert _files(answer)["all", "CLAUDE.md"]["names"] == ["CLAUDE.md"]

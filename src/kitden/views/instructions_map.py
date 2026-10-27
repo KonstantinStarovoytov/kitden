@@ -3,9 +3,9 @@
 
 Files are grouped "All projects" and, with a project picked, "Only this project · <folder>": one
 block per file, with the clients that read it. A Cursor rules folder is one block. Only Claude
-Code's CLAUDE.md files have imports. Commands and agents are not instruction files here. Kitden
-only reads these files; paths are only under `technical`, and imports reach the page only, never
-the MCP server.
+Code's CLAUDE.md files have imports. Commands and agents (Claude Code's, the user's and the picked
+project's) are a third group, "Commands and agents", one block each. Kitden only reads these
+files; paths are only under `technical`, and imports reach the page only, never the MCP server.
 """
 
 import os
@@ -21,6 +21,9 @@ from kitden.views.load_map import COLUMNS, category
 
 ALL = {"key": "all", "name": "All projects"}
 PROJECT = "Only this project · {}"
+COMMANDS = {"key": "commands", "name": "Commands and agents"}
+# The categories of instruction items this map shows: files, and commands and agents (their kind).
+KINDS = {"command": "command", "agent": "agent"}
 CURSOR_RULES = ".cursor/rules"
 # Claude Code's files whose imports are read: CLAUDE.md, CLAUDE.local.md and .claude/CLAUDE.md.
 CLAUDE_FILES = ("CLAUDE.md", "CLAUDE.local.md")
@@ -80,24 +83,31 @@ def _blocks(inventory, project: str | None) -> dict[str, dict]:
     for item in inventory.items:
         if item.client not in COLUMNS or item.kind is not ItemKind.INSTRUCTIONS:
             continue
-        if category(item) != "instructions" or not item.source.path:
+        kind = KINDS.get(category(item) or "")
+        if (category(item) != "instructions" and not kind) or not item.source.path:
             continue
         if item.project is not None and item.project != project:
             continue
         path = Path(item.source.path)
         folder = _rules_folder(path) if item.client == "cursor" and path.suffix == ".mdc" else None
         key = str(folder or path)
+        group = COMMANDS["key"] if kind else ALL["key"] if item.project is None else "project"
+        name = CURSOR_RULES if folder else _name(path, item.project is not None)
         block = blocks.setdefault(
             key,
             {
-                "group": ALL["key"] if item.project is None else "project",
-                "name": CURSOR_RULES if folder else _name(path, item.project is not None),
+                "group": group,
+                "name": item.name if kind else name,
+                "kind": kind,
                 "by": {},
                 "rules": [] if folder else None,
                 "claude_md": False,
+                "names": [],
             },
         )
         block["by"][item.client] = True
+        if item.name not in block["names"]:
+            block["names"].append(item.name)
         if folder:
             block["rules"].append(item.name)
         elif item.client == "claude_code" and item.name in CLAUDE_FILES:
@@ -107,11 +117,13 @@ def _blocks(inventory, project: str | None) -> dict[str, dict]:
 
 def instructions_map(inventory, adapters, project: str | None) -> dict:
     """The clients, the file groups and the imported files of the Instructions map. A file is
-    `{id, name, by, through?, count?, size?, imports, technical: {path, lines, cut?}}`: `through`
-    says Claude Code reads an AGENTS.md as its CLAUDE.md, `count` is a Cursor rules folder's
-    number of rules (its `lines` are their names), `size` a file's number of lines (None, with
-    `cut`, when the file is longer than Kitden reads), `lines` its first lines with secrets
-    hidden, and `imports` the ids of every file it brings in, nested ones too. An imported file is
+    `{id, name, kind?, names, by, through?, count?, size?, imports, technical: {path, lines,
+    cut?}}`: `kind` is "command" or "agent" in "Commands and agents", `names` the names of the
+    items it stands for (what an Overview link selects), `through` says Claude Code reads an
+    AGENTS.md as its CLAUDE.md, `count` is a Cursor rules folder's number of rules (its `lines`
+    are their names), `size` a file's number of lines (None, with `cut`, when the file is longer
+    than Kitden reads), `lines` its first lines with secrets hidden, and `imports` the ids of
+    every file it brings in, nested ones too. An imported file is
     `{id, name, by_files, outside, missing, technical: {path?}}`; a missing one has no path."""
     home = next((a.home for a in adapters.values()), None)
     status = {c.id: c.status for c in inventory.clients}
@@ -129,24 +141,29 @@ def instructions_map(inventory, adapters, project: str | None) -> dict:
                     "group": "project",
                     "name": agents.name,
                     "by": {},
+                    "kind": None,
                     "rules": None,
                     "claude_md": False,
+                    "names": [agents.name],
                 },
             )
             block["by"]["claude_code"] = True
             through.add(str(agents))
 
     imported: dict[str, dict] = {}
-    groups = {ALL["key"]: [], "project": []}
+    groups = {ALL["key"]: [], "project": [], COMMANDS["key"]: []}
     for path, block in blocks.items():
         file_id = _hash("instruction-file", path)
         entry = {
             "id": file_id,
             "name": block["name"],
             "by": {c: True for c in COLUMNS if c in block["by"]},
+            "names": block["names"],
             "imports": [],
             "technical": {"path": path},
         }
+        if block["kind"]:
+            entry["kind"] = block["kind"]
         if path in through:
             entry["through"] = THROUGH_AGENTS
         # The first lines are file text and may name paths: they stay under `technical`.
@@ -197,6 +214,8 @@ def instructions_map(inventory, adapters, project: str | None) -> dict:
     if project is not None and groups["project"]:
         name = PROJECT.format(os.path.basename(project.rstrip("/")))
         out.append({"key": "project", "name": name, "files": sorted(groups["project"], key=key)})
+    if groups[COMMANDS["key"]]:
+        out.append({**COMMANDS, "files": sorted(groups[COMMANDS["key"]], key=key)})
     return {
         "clients": _clients(inventory, cursor_imports),
         "groups": out,

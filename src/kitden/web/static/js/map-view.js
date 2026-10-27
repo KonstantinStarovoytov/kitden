@@ -528,7 +528,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHove
       node.dataset.focus = `block:${place.id}`;
       if (block.state) node.dataset.state = block.state;
       else delete node.dataset.state;
-      node.title = block.takeOut || name;
+      node.title = block.takeOut || block.title || name;
       node.setAttribute("aria-label", blockLabel(block));
       const words = group ? JSON.stringify([name, block.icon]) : wordsKey(block);
       if (words !== item.words) {

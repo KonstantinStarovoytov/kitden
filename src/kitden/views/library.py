@@ -962,7 +962,7 @@ PART_KINDS = {
     "mcp_servers": "mcp_server",
 }
 READS_IT = "Reads it"
-FILE_ICONS = {"all": "layers", "project": "folder"}
+FILE_ICONS = {"all": "layers", "project": "folder", "commands": "square-terminal"}
 # A map client's link, as a cell when the tables have no row for the item.
 BY_STATES = {"on": "on", "off": "off", "unknown": "unk", "via": "via"}
 
@@ -1118,8 +1118,10 @@ def _file_cell(file: dict, client: str, found: list[str]) -> dict:
 
 
 def _file_groups(answer: dict, t: _Tables) -> list[dict]:
-    """The instruction files by where they apply, one cell per client: "Reads it", nothing, or
-    Unknown for a client Kitden could not read."""
+    """The instruction files by where they apply, then the commands and agents, one cell per
+    client: "Reads it", nothing, or Unknown for a client Kitden could not read. `category` is a
+    command's or an agent's ("command", "agent"); `names` the items an Overview link selects it
+    by."""
     out = []
     for group in answer["groups"]:
         items = []
@@ -1131,7 +1133,9 @@ def _file_groups(answer: dict, t: _Tables) -> list[dict]:
                 {
                     "id": file["id"],
                     "kind": "file",
+                    "category": file.get("kind"),
                     "name": file["name"],
+                    "names": file["names"],
                     "flags": [],
                     "cells": cells,
                 }

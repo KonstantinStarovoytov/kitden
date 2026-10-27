@@ -56,8 +56,9 @@ What Kitden does today and what comes next. Ideas and bugs:
   offers, a click adds one for all projects to every client that lacks it, and a row drags onto
   one client. A plugin no client has shows on the map as a preview card while it waits. The
   Instructions tab has its own map: the clients, the instruction files each one reads, and what
-  Claude Code's CLAUDE.md files pull in; a click opens a file's Details. It only reads. The List
-  has the same two tabs, a row per source, plugin, skill, hook or file and a column per client,
+  Claude Code's CLAUDE.md files pull in; a click opens a file's Details. Claude Code's commands
+  and agents are there too, in a group of their own. It only reads. The List has the same two
+  tabs, a row per source, plugin, skill, hook, file, command or agent and a column per client,
   and Differences shows only what differs between the clients. "Add missing plugins and skills…"
   works under All projects too, and the add forms say "In preview" while their change waits.
 - **Library Details:** a click on the Library map opens Details for a plugin, a thing inside it, a

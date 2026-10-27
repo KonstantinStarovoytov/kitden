@@ -144,6 +144,8 @@ const FILES = {
   groups: [{ key: 'all', name: 'All projects', icon: 'layers', kind: 'files', items: [
     { id: 'f1', kind: 'file', name: 'CLAUDE.md', flags: [], cells: { claude_code: cell('on', { word: 'Reads it' }), codex: cell('none'), cursor: cell('none') } },
     { id: 'f2', kind: 'file', name: 'AGENTS.md', flags: [], cells: { claude_code: cell('none'), codex: cell('on', { word: 'Reads it' }), cursor: cell('none') } },
+  ] }, { key: 'commands', name: 'Commands and agents', icon: 'square-terminal', kind: 'files', items: [
+    { id: 'c1', kind: 'file', category: 'command', name: 'review', names: ['review'], flags: [], cells: { claude_code: cell('on', { word: 'Reads it' }), codex: cell('none'), cursor: cell('none') } },
   ] }],
 };
 const none = { skills: [], commands: [], agents: [], hooks: [], mcp_servers: [] };
@@ -162,7 +164,10 @@ const MAP = {
     ] },
   ],
 };
-const INSTRUCTIONS = { clients: MAP.clients, groups: [{ key: 'all', name: 'All projects', files: [{ id: 'f1', name: 'CLAUDE.md', by: { claude_code: true }, imports: [], size: 4, technical: { path: '/home/CLAUDE.md', lines: [] } }] }], imports: [] };
+const INSTRUCTIONS = { clients: MAP.clients, groups: [
+  { key: 'all', name: 'All projects', files: [{ id: 'f1', name: 'CLAUDE.md', by: { claude_code: true }, imports: [], size: 4, technical: { path: '/home/CLAUDE.md', lines: [] } }] },
+  { key: 'commands', name: 'Commands and agents', files: [{ id: 'c1', kind: 'command', name: 'review', names: ['review'], by: { claude_code: true }, imports: [], size: 3, technical: { path: '/home/.claude/commands/review.md', lines: ['# Review'] } }] },
+], imports: [] };
 
 const main = pages['#main'];
 const node = (box, key) => walk(box).find((n) => n.dataset.focus === key) || null;
@@ -267,7 +272,7 @@ test('the Instructions List has one row per file', async () => {
   await showList({ kind: 'instructions' });
   const tabs = main.children[2];
   assert.deepEqual(tabs.children.filter((n) => n.tagName === 'BUTTON').map((n) => n.getAttribute('aria-pressed')), ['false', 'true']);
-  assert.deepEqual(rowIds(), ['group:all', 'file:f1', 'file:f2']);
+  assert.deepEqual(rowIds(), ['group:files:all', 'file:f1', 'file:f2', 'group:files:commands', 'file:c1']);
   assert.deepEqual(rowOf('file:f1').children.slice(1).map((c) => texts(c).join(' ')), ['Reads it', '', '']);
   // Nothing to filter or add here, and its hint is the map tab's.
   assert.equal(walk(main).find((n) => n.classList.contains('toolbar')), undefined);
@@ -547,4 +552,60 @@ test('a part the map does not draw opens its plugin, an account row opens its ow
   assert.deepEqual(selected, ['item:p9']);
   data.libraryMap = MAP;
   tick(5);
+});
+
+// Final fix wave: commands and agents are rows under their own group, and an Overview link to one
+// lands on its row and opens its Details.
+test('a command is a row under Commands and agents, and an arrival lands on it', async () => {
+  await showList({ kind: 'instructions' });
+  assert.ok(texts(rowOf('group:files:commands')).includes('Commands and agents'));
+  assert.ok(texts(rowOf('file:c1')).includes('Command'));
+  assert.deepEqual(rowOf('file:c1').children.slice(1).map((c) => texts(c).join(' ')), ['Reads it', '', '']);
+  const { arrival } = await import('../../src/kitden/web/static/js/store.js');
+  selected.length = 0;
+  state.selected = { kind: 'instructions', name: 'review' };
+  arrival.pending = true;
+  main.replaceChildren();
+  renderLibrary(main);
+  assert.deepEqual(selected, ['file:c1']);
+  assert.ok(rowOf('file:c1').classList.contains('arrive'));
+  assert.equal(libraryThing('file:c1').block.file.kind, 'command');
+});
+
+// Final fix wave: the two tabs never share a group id, so a group folded on one tab stays as it
+// is on the other.
+test('a fold on the Instructions List is its own, not the Plugins and skills group of that key', () => {
+  const rows = listRows(FILES, new Set(), new Set(['group:all']));
+  assert.ok(rows.some((r) => r.id === 'file:f1'));
+  const folded = listRows(FILES, new Set(), new Set(['group:files:all']));
+  assert.ok(!folded.some((r) => r.id === 'file:f1'));
+  assert.ok(folded.some((r) => r.id === 'file:c1'));
+});
+
+// Final fix wave: a project switch to an empty List (Differences shows nothing there) still moves
+// the Details a row opened on: they let go when the new project's map has no such item.
+test('Details follow a project switch when the new List is empty', async () => {
+  await showList({ show: 'diff' });
+  selected.length = 0;
+  hows.length = 0;
+  rowOf('item:p2').listeners.click[0]({ target: rowOf('item:p2') });
+  const { panelState } = await import('../../src/kitden/web/static/js/panel.js');
+  pages['#drawer'].classList.add('open');
+  panelState.current = { type: 'library', id: 'item:p2' };
+  data.projects = [{ id: 'a', path: '/home/work/atlas' }, { id: 'b', path: '/home/work/bare' }];
+  Object.assign(state, { project: 'b' });
+  answers['/api/library-list'] = { ...LIST, groups: [] };
+  data.libraryMap = { ...MAP, groups: MAP.groups.slice(1) };
+  data.scope.libraryMap = 'b';
+  await loadLibrary();
+  main.replaceChildren();
+  renderLibrary(main);
+  assert.ok(texts(main).includes('No differences between your clients'));
+  assert.deepEqual([selected.at(-1), hows.at(-1)], [null, { follow: true }]);
+  Object.assign(state, { project: '', show: 'mine' });
+  answers['/api/library-list'] = LIST;
+  data.libraryMap = MAP;
+  data.scope.libraryMap = '';
+  pages['#drawer'].classList.remove('open');
+  panelState.current = null;
 });

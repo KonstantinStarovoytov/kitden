@@ -8,7 +8,7 @@
 //   "+ Add" beside the caption. Wide only: `colGap` is the space before the column (GAP unless
 //   set), `top` the y of its first block (CAPTION_ROW) and `rowGap` the space between its blocks.
 // - blocks: [{ id, column, parent, kind, name, meta, state, tag, count, grip, action, details, h,
-//   icon, before, rowGap, lamp, wait, stats, projects, ports, takeOut, leaving, pageName }]. The
+//   icon, before, rowGap, lamp, wait, stats, projects, ports, takeOut, title, leaving, pageName }]. The
 //   children of a block are the blocks whose `parent` it is. A block with an `h` is that high,
 //   whatever its column says. A group block is a caption at the top of its stack (a button when it
 //   has `details`), CAPTION_H high unless `h` says otherwise; its words after a " · " are quiet;
@@ -25,7 +25,8 @@
 //   of its meta line, or as a tool's mark; `wait`, words after the meta, in the accent, while a
 //   change for it waits in the tray; `stats`, a gateway's counts, [{ icon, words }]; `projects`,
 //   a tool's { words, said, own }; `ports`, { left, right }, each true or a look ("out"); `takeOut`, the
-//   words of a block in preview, which a press takes out (it shows an ×); `leaving`, a change in the
+//   words of a block in preview, which a press takes out (it shows an ×); `title`, its hover words
+//   when they are more than its name (a meta the card may cut); `leaving`, a change in the
 //   tray takes it out; `pinned`, a group never pages it away (a card the tray adds).
 // - links: [{ from, to, kind, unk, leaving, preview }], kind "on", "faint", "direct" or "preview".
 //   The link is the state: something on has a link, something off has none. `unk`: Kitden does not
