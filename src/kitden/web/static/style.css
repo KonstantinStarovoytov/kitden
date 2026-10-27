@@ -929,9 +929,9 @@ div.map .block-count.leaving:focus-visible { filter: none; }
 /* The quiet line under a floating panel's title sits right under it, as in the mockup. */
 #drawer.floating header > p { margin: 0; }
 #drawer.floating > details.tech { margin-top: auto; max-height: none; overflow: visible; padding: 10px 0 0; }
-/* The floating panel stacks the footer's buttons, full width. A Details card does it in the drawer too. */
-#drawer.floating footer, .drawer footer.stack { flex-direction: column; align-items: stretch; flex-wrap: nowrap; }
-#drawer.floating footer .btn, .drawer footer.stack .btn { justify-content: center; }
+/* The floating panel stacks the footer's buttons, each as wide as its words, as in the mockup. A
+   Details card does it in the drawer too. */
+#drawer.floating footer, .drawer footer.stack { flex-direction: column; align-items: flex-start; flex-wrap: nowrap; }
 #drawer.floating footer .note { margin: 0; text-align: left; }
 /* A panel that loads (panel.js skeleton): still bars where its title, facts, sentence and first
    button will be. Nothing loops. */
