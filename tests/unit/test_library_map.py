@@ -316,12 +316,19 @@ def test_each_item_says_what_details_can_offer(tmp_path):
     assert items["superpowers"]["can"] == {
         "add": ["codex"],
         "off": ["claude_code"],
+        "on": [],
         "remove": ["claude_code"],
     }
-    # Off already, and a bundled plugin no marketplace offers: nothing to add, only Codex's switch.
-    assert items["pr-review"]["can"] == {"add": ["codex"], "off": [], "remove": []}
-    assert items["browser"]["can"] == {"add": [], "off": ["codex"], "remove": ["codex"]}
-    assert items["ui-kit"]["can"] == {"add": [], "off": [], "remove": []}
+    # Off already: Claude Code can turn it on again, or remove it. A bundled plugin no marketplace
+    # offers: nothing to add, only Codex's switch.
+    assert items["pr-review"]["can"] == {
+        "add": ["codex"],
+        "off": [],
+        "on": ["claude_code"],
+        "remove": ["claude_code"],
+    }
+    assert items["browser"]["can"] == {"add": [], "off": ["codex"], "on": [], "remove": ["codex"]}
+    assert items["ui-kit"]["can"] == {"add": [], "off": [], "on": [], "remove": []}
     # A skill: each client that loads its own copy has a rule; Cursor has none.
     assert items["brandkit"]["can"] == {
         "add": ["codex"],
@@ -351,7 +358,7 @@ def test_each_item_says_which_clients_can_remove_their_own_entry(tmp_path):
     assert items["superpowers"]["can"]["remove"] == ["claude_code"]
     assert items["browser"]["can"]["remove"] == ["codex"]
     assert items["ui-kit"]["can"]["remove"] == []
-    assert items["pr-review"]["can"]["remove"] == []
+    assert items["pr-review"]["can"]["remove"] == ["claude_code"]  # off, but its own entry
     assert items["ui-polish"]["can"]["remove"] == ["cursor"]
     assert items["shared-style"]["can"]["remove"] == []
     assert "remove" not in items["PreToolUse: Bash"]["can"]

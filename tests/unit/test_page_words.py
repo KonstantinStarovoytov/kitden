@@ -2888,14 +2888,15 @@ def test_a_library_link_x_removes_or_turns_off():
     for words in (
         "`Remove ${name} from ${who}`",
         "`Turn off ${name} in ${who}`",
-        'action: "plugin.remove", targets: [{ item: target }], params: {}',
-        'action: "skill.remove", targets: [{ item: target }], params: {}',
+        # One remove row for the × and Details' "Remove from …" (removeBody).
+        'item.kind === "plugin" ? "plugin.remove" : "skill.remove", targets: [{ item: target }]',
+        "const body = removeBody(item, client);",
         "skillOffBodies(item, answer).find(",
         'action: "skill.rule", targets: [{ client, item: target }], params: { scope: "all", ',
     ):
         assert words in rules, words
     # Cursor's plugin has no x (D26); a Cursor skill is removed, not turned off.
-    assert 'item.kind === "plugin" && (can.remove || []).includes(client)' in rules
+    assert "!((item.can && item.can.remove) || []).includes(client)) return null;" in rules
     assert 'if (client === "cursor") {' in rules
     text = script("library-map.js")
     for words in (
@@ -2987,7 +2988,7 @@ def test_the_library_list_words_and_looks():
     )
     assert 'setHint(kind === "plugin" ? LIST_HINT : INSTRUCTIONS_HINT);' in text
     # A plugin row says what Kitden read inside it; a part says what kind it is.
-    assert '`Plugin · ${plural(item.count, "item", "items")}`' in text
+    assert 'item.count ? `Plugin · ${plural(item.count, "item", "items")}` : "Plugin"' in text
     assert 'const KIND_WORDS = { skill: "Skill", hook: "Hook" };' in text
     assert (
         'const PART_WORDS = { skill: "Skill", command: "Command", agent: "Agent", hook: "Hook", '
@@ -3004,9 +3005,17 @@ def test_the_library_list_words_and_looks():
         assert words in text, words
     # A row opens the map's Details; the keys are the tree grid's.
     assert "libraryDetails(row.id);" in text and "gridKey(rows," in text
-    assert "export function libraryDetails(id)" in script("library-map.js")
+    assert "export function libraryDetails(id, how)" in script("library-map.js")
     # The look: the Gateway List's grid, a sticky 30 px head, a 34 px part row.
     assert ".tg-row.part { min-height: 34px; }" in CSS
+    # A narrow window hides the Gateway List's tiles, never the Library List's first client.
+    assert ".tg-used, .treegrid:not(.library-list) > .tg-head > :nth-child(2)" in CSS
+    assert "min-width: 0; overflow: hidden; padding-left: calc(8px" in rule(".tg-row > .tg-name")
+    # Library Details turn a plugin on again and remove an entry, as the old Details did.
+    details = script("library-details.js")
+    assert "`Turn on in ${CLIENT_NAMES[client]}…`" in details
+    assert "`Remove from ${CLIENT_NAMES[client]}…`" in details
+    assert "more: removeActions(item)" in details
     assert ".tg-row.arrive { animation: arrive 1200ms var(--ease-out) both; }" in CSS
     # The server's words for Differences and the tabs (views/library.py).
     server = (STATIC.parents[1] / "views/library.py").read_text()

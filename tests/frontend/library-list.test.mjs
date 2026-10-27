@@ -126,7 +126,7 @@ const LIST = {
         lookup: 'superpowers@demo-market', count: 3, flags: [{ text: 'Loads twice', level: 'warning' }],
         parts: [
           { key: 'skills', kind: 'skill', name: 'brainstorm', source: 'superpowers@demo-market', same_name: false, cells: { claude_code: cell('on'), codex: cell('none', { add: add({ action: 'skill.install', skill: 'brainstorm@superpowers@demo-market' }) }), cursor: cell('on') } },
-          { key: 'skills', kind: 'skill', name: 'plan', source: 'superpowers@demo-market', same_name: false, cells: { claude_code: cell('on'), codex: cell('none'), cursor: cell('on') } },
+          { key: 'skills', kind: 'skill', name: 'plan', source: 'superpowers@demo-market', same_name: false, lookup: 'plan', flags: [{ text: 'Same name, another source.', level: 'warning' }], cells: { claude_code: cell('on'), codex: cell('none'), cursor: cell('on') } },
           { key: 'commands', kind: 'command', name: 'ship', source: 'demo-market', same_name: false, cells: { claude_code: cell('on'), codex: cell('none'), cursor: cell('on') } },
         ] }),
       item('p1', 'plugin', 'pr-review', { claude_code: cell('off'), codex: cell('none'), cursor: cell('via', { word: 'Via Claude Code' }) }, { lookup: 'pr-review@demo-market', count: 0, parts: [] }),
@@ -173,7 +173,8 @@ const rowNodes = () => grid().children.filter((n) => n.dataset.row);
 const rowIds = () => rowNodes().map((n) => n.dataset.row);
 const rowOf = (id) => rowNodes().find((n) => n.dataset.row === id);
 const selected = [];
-onLibrarySelect((id) => selected.push(id));
+const hows = [];
+onLibrarySelect((id, how) => { selected.push(id); hows.push(how); });
 
 // Draw the List of `tab` once its rows are read.
 async function showList({ kind = 'plugin', show = 'mine', attention = false, q = '', project = '', list = kind === 'instructions' ? FILES : LIST } = {}) {
@@ -226,9 +227,10 @@ test('a plugin row says Plugin · n items and folds its parts', async () => {
   assert.ok(texts(plugin).includes('superpowers'));
   assert.ok(texts(plugin).includes('Plugin · 3 items'));
   assert.equal(plugin.getAttribute('aria-expanded'), 'false');
-  // A plugin Kitden read nothing in has no fold.
+  // A plugin Kitden read nothing in has no fold, and says only "Plugin".
   assert.equal(rowOf('item:p1').getAttribute('aria-expanded'), null);
-  assert.ok(texts(rowOf('item:p1')).includes('Plugin · 0 items'));
+  assert.ok(texts(rowOf('item:p1')).includes('Plugin'));
+  assert.ok(!texts(rowOf('item:p1')).some((t) => t.startsWith('Plugin · ')));
   assert.ok(texts(rowOf('item:s1')).includes('Skill'));
   assert.ok(texts(rowOf('item:h1')).includes('Hook'));
   // A press on its fold mark opens it: its parts come in under it with their kind word.
@@ -436,4 +438,56 @@ test('listRows is the grid in order, with depth, folds and Details', () => {
   // A marketplace's row opens Details on Enter; another group folds.
   assert.equal(rows[0].group, false);
   assert.equal(rows.find((r) => r.id === 'group:skills').group, true);
+});
+
+test('Details a row opened follow another project, and close when it is gone there', async () => {
+  await showList();
+  selected.length = 0;
+  hows.length = 0;
+  rowOf('item:p2').listeners.click[0]({ target: rowOf('item:p2') });
+  assert.deepEqual(selected, ['item:p2']);
+  // Its Details show (library-details.js draws them).
+  const { panelState } = await import('../../src/kitden/web/static/js/panel.js');
+  pages['#drawer'].classList.add('open');
+  panelState.current = { type: 'library', id: 'item:p2' };
+  // Another project with the same plugin: the same Details, drawn for it.
+  data.projects = [{ id: 'a', path: '/home/work/atlas' }, { id: 'b', path: '/home/work/bare' }];
+  Object.assign(state, { project: 'a' });
+  data.scope.libraryMap = 'a';
+  await loadLibrary();
+  main.replaceChildren();
+  renderLibrary(main);
+  assert.deepEqual([selected.at(-1), hows.at(-1)], ['item:p2', { follow: true }]);
+  // Drawn again for the same project: nothing more.
+  main.replaceChildren();
+  renderLibrary(main);
+  assert.equal(selected.length, 2);
+  // A project whose map has no superpowers: Details let go.
+  Object.assign(state, { project: 'b' });
+  data.libraryMap = { ...MAP, groups: MAP.groups.slice(1) };
+  data.scope.libraryMap = 'b';
+  await loadLibrary();
+  main.replaceChildren();
+  renderLibrary(main);
+  assert.deepEqual([selected.at(-1), hows.at(-1)], [null, { follow: true }]);
+  Object.assign(state, { project: '' });
+  data.libraryMap = MAP;
+  pages['#drawer'].classList.remove('open');
+  panelState.current = null;
+});
+
+test('an arrival for a skill inside a plugin opens the plugin at its row, which shows its flag', async () => {
+  const { arrival } = await import('../../src/kitden/web/static/js/store.js');
+  selected.length = 0;
+  answers['/api/library-list'] = LIST;
+  Object.assign(state, { view: 'library', mode: 'list', kind: 'plugin', show: 'mine', attention: false, q: '', project: '' });
+  await loadLibrary();
+  state.selected = { kind: 'skill', name: 'plan' };
+  arrival.pending = true;
+  main.replaceChildren();
+  renderLibrary(main);
+  assert.deepEqual(selected, ['part:p2:skills:plan']);
+  assert.equal(rowOf('item:p2').getAttribute('aria-expanded'), 'true');
+  assert.ok(rowOf('part:p2:skills:plan').classList.contains('arrive'));
+  assert.ok(texts(rowOf('part:p2:skills:plan')).includes('Same name, another source.'));
 });

@@ -639,3 +639,27 @@ test('an outside import says Claude Code may ask before it reads this', () => {
   const gone = details.importCard(blocks.get('import:i4'), ci());
   assert.deepEqual([gone.why, gone.technical], ['Kitden could not find this file.', null]);
 });
+
+test('a plugin turns on again and a plugin or skill is removed, as the old Details and the × did', async () => {
+  const { linkRemoval } = await import('../../src/kitden/web/static/js/library-rules.js');
+  // pr-review is off in Claude Code: "Turn on in Claude Code…" is one plugin.enable row.
+  const off = { ...MEDIUM.groups[0].items[0], can: { add: ['codex'], off: [], on: ['claude_code'], remove: ['claude_code'] } };
+  const card = details.pluginCard(off, c());
+  const on = card.actions.find((a) => a.label === 'Turn on in Claude Code…');
+  assert.deepEqual(on.body, { action: 'plugin.enable', targets: [{ item: 'cc-pr' }], params: {} });
+  // Under More: "Remove from Claude Code…", the same tray row as the link's ×.
+  assert.deepEqual(card.more.map((a) => a.label), ['Remove from Claude Code…']);
+  const remove = card.more[0].body;
+  assert.deepEqual(remove, { action: 'plugin.remove', targets: [{ item: 'cc-pr' }], params: {} });
+  const spX = linkRemoval({ ...SUPERPOWERS, can: { ...SUPERPOWERS.can, remove: ['claude_code'] } }, 'claude_code', MEDIUM);
+  const spCard = details.pluginCard({ ...SUPERPOWERS, can: { ...SUPERPOWERS.can, remove: ['claude_code'] } }, c());
+  assert.equal(keyFor(spCard.more[0].body), keyFor(spX.body));
+  // A plugin with nothing off and nothing to remove offers neither.
+  assert.deepEqual(details.pluginCard(SUPERPOWERS, c()).more, []);
+  assert.ok(!details.pluginCard(SUPERPOWERS, c()).actions.some((a) => a.label.startsWith('Turn on')));
+  // A skill: Remove from the client whose own folder holds it (Cursor's ui-polish).
+  const skill = own('s2', 'ui-polish', 'skill', { by: { cursor: 'on' }, items: { cursor: ['cu-ui'] }, can: { add: [], off: [], remove: ['cursor'] } });
+  const skillCard = details.skillCard(skill, c());
+  assert.deepEqual(skillCard.more.map((a) => [a.label, a.body.action]), [['Remove from Cursor…', 'skill.remove']]);
+  assert.equal(keyFor(skillCard.more[0].body), keyFor(linkRemoval(skill, 'cursor', MEDIUM).body));
+});

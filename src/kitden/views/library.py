@@ -24,7 +24,7 @@ from kitden.model import ClientStatus, Item, ItemKind, Scope, _hash
 from kitden.views.catalog import catalog, search
 from kitden.views.gateway_view import group_of
 from kitden.views.instructions_map import instructions_map
-from kitden.views.library_map import library_map
+from kitden.views.library_map import OTHER, library_map
 from kitden.views.load_map import COLUMNS, MARKS, NAMES, Row, load_map
 from kitden.views.match import Copies, catalog_keys, plugin_copies, plugin_keys, source_keys
 from kitden.views.skills import project_skills, skill_catalog
@@ -1003,24 +1003,65 @@ def _following(cells: dict[str, dict]) -> dict[str, dict]:
 
 def _parts(item: dict, cells: dict[str, dict], skills: dict[tuple, dict]) -> list[dict]:
     """A plugin's parts, in the map's order: a skill with a row of its own (the skill table's
-    row with its name from this plugin) has that row's cells; any other part follows the
-    plugin."""
+    row with its name from this plugin) has that row's cells and flags; any other part follows
+    the plugin. When Kitden read nothing inside the plugin, its parts are the skill rows from
+    it."""
+    inside = item.get("inside")
+    if inside is None:
+        mine = [r["name"] for (source, _), r in skills.items() if source == item.get("plugin")]
+        inside = {"skills": mine}
     out = []
     for key, kind in PART_KINDS.items():
-        for name in (item.get("inside") or {}).get(key, []):
+        for name in inside.get(key, []):
             own = skills.get((item.get("plugin"), name)) if kind == "skill" else None
-            part = {"key": key, "kind": kind, "name": name}
+            part = {"key": key, "kind": kind, "name": name, "flags": own["flags"] if own else []}
             if own:
-                part.update(source=own["source"], same_name=own["same_name"], cells=own["cells"])
+                part.update(
+                    source=own["source"],
+                    same_name=own["same_name"],
+                    lookup=own["lookup"],
+                    cells=own["cells"],
+                )
             else:
                 part.update(source=item["source"], same_name=False, cells=_following(cells))
             out.append(part)
     return out
 
 
-def _item_groups(answer: dict, tables: dict[str, list[dict]], t: _Tables) -> list[dict]:
+def _account_rows(tables: dict[str, list[dict]], shown: set[str], t: _Tables, items) -> list:
+    """Plugin rows the map leaves out because Claude Code keeps them in the account (the
+    "Claude account plugins and connectors" row, Unknown): every item of the row is an
+    account's. They go under "Other plugins"."""
+    scopes = {i.id: i.scope for i in items}
+    out = []
+    for row in tables["plugin"]:
+        known = t.by_key.get(row["key"])
+        ids = [i for cell in (known.cells.values() if known else []) for i in cell.items]
+        if row["key"] in shown or not ids or any(scopes.get(i) is not Scope.ACCOUNT for i in ids):
+            continue
+        out.append(
+            {
+                "id": row["key"],
+                "kind": "plugin",
+                "name": row["name"],
+                "source": row["source"],
+                "same_name": row["same_name"],
+                "lookup": row["lookup"] or row["name"],
+                "flags": row["flags"],
+                "count": None,
+                "cells": row["cells"],
+                "parts": [],
+            }
+        )
+    return out
+
+
+def _item_groups(
+    answer: dict, tables: dict[str, list[dict]], t: _Tables, found_items
+) -> list[dict]:
     """The Library map's groups and items, each item with the cells of its row in the plugin,
-    skill or hook table, and a plugin's parts. An item only hidden clients have is left out."""
+    skill or hook table, and a plugin's parts; the plugins Claude Code keeps in the account join
+    "Other plugins" (`_account_rows`). An item only hidden clients have is left out."""
     rows = {r["key"]: r for kind in ("plugin", "skill", "hook") for r in tables[kind]}
     skills = {(r["source"], r["name"]): r for r in tables["skill"]}
     out = []
@@ -1048,20 +1089,36 @@ def _item_groups(answer: dict, tables: dict[str, list[dict]], t: _Tables) -> lis
             items.append(entry)
         keys = ("key", "name", "icon", "kind")
         out.append({**{k: group[k] for k in keys}, "items": items})
+    shown = {i["id"] for g in answer["groups"] for i in g["items"]}
+    account = _account_rows(tables, shown, t, found_items)
+    if account:
+        other = next((g for g in out if g["key"] == OTHER["key"]), None)
+        if other is None:
+            other = {**OTHER, "items": []}
+            at = sum(1 for g in out if g["kind"] == "marketplace")
+            out.insert(at, other)
+        other["items"].extend(account)
     return out
 
 
+def _file_cell(file: dict, client: str, found: list[str]) -> dict:
+    if file["by"].get(client):
+        return _cell("on", word=READS_IT)
+    if client not in found:
+        return _cell("unk", reason=CLIENT_UNREAD.format(NAMES[client]))
+    return _cell()
+
+
 def _file_groups(answer: dict, t: _Tables) -> list[dict]:
-    """The instruction files by where they apply, one cell per client: "Reads it" or nothing."""
+    """The instruction files by where they apply, one cell per client: "Reads it", nothing, or
+    Unknown for a client Kitden could not read."""
     out = []
     for group in answer["groups"]:
         items = []
         for file in group["files"]:
             if not set(file["by"]).intersection(t.visible) and set(file["by"]) & t.hidden:
                 continue
-            cells = {
-                c: _cell("on", word=READS_IT) if file["by"].get(c) else _cell() for c in t.columns
-            }
+            cells = {c: _file_cell(file, c, t.found) for c in t.columns}
             items.append(
                 {
                     "id": file["id"],
@@ -1089,6 +1146,11 @@ def _named(item: dict, q: str) -> bool:
     text = q.strip().lower()
     names = [item["name"], *(p["name"] for p in item.get("parts", []))]
     return any(text in name.lower() for name in names)
+
+
+def _warns(item: dict) -> bool:
+    """An item needs attention when it, or one of its parts, has a warning."""
+    return _needs_attention(item) or any(_needs_attention(p) for p in item.get("parts", []))
 
 
 def _item_differs(item: dict, visible: list[str]) -> bool:
@@ -1127,16 +1189,17 @@ def library_list(
         tables = {
             k: _finish(t, k, inventory, adapters, project) for k in ("plugin", "skill", "hook")
         }
-        groups = _item_groups(library_map(inventory, adapters, project), tables, t)
+        answer = library_map(inventory, adapters, project)
+        groups = _item_groups(answer, tables, t, inventory.items)
     matched = []
     for group in groups:
         kept = [i for i in group["items"] if not q.strip() or _named(i, q)]
         if show == "diff":
             kept = [i for i in kept if _item_differs(i, t.visible)]
         matched.append({**group, "items": kept})
-    warned = sum(_needs_attention(i) for g in matched for i in g["items"])
+    warned = sum(_warns(i) for g in matched for i in g["items"])
     if attention:
-        matched = [{**g, "items": [i for i in g["items"] if _needs_attention(i)]} for g in matched]
+        matched = [{**g, "items": [i for i in g["items"] if _warns(i)]} for g in matched]
     shown = [g for g in matched if g["items"]]
     cells = [r for g in shown for i in g["items"] for r in (i, *i.get("parts", []))]
     return {

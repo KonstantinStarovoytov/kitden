@@ -370,9 +370,9 @@ export function onLibrarySelect(fn) {
 }
 
 // The List opens the same Details as the map: `id` is a block id of the tab's tree (a row's), or
-// null to let them go.
-export function libraryDetails(id) {
-  if (selectHook) selectHook(id);
+// null to let them go; `how` ({ follow: true }) when another project is drawn in place.
+export function libraryDetails(id, how) {
+  if (selectHook) selectHook(id, how);
 }
 
 // What the map shows now for a selection: `{ block }`, or `{ link, from, to }` for a link's key; null

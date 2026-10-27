@@ -16,6 +16,24 @@ export function offBodies(item) {
   });
 }
 
+// Turn a plugin on again: one `plugin.enable` row per client that has it off and a switch for it
+// (`can.on`), on its deciding entry.
+export function onBodies(item) {
+  return ((item.can && item.can.on) || []).map((client) => ({ client, body: { action: "plugin.enable", targets: [{ item: item.items[client][0] }], params: {} } }));
+}
+
+// Remove a plugin's file entry or a skill's own folder from one client (`can.remove`): the same row
+// as the × of its link, so the two are one tray row. Null where the client has none.
+export function removeBody(item, client) {
+  const target = ((item.items || {})[client] || [])[0];
+  if (!target || !((item.can && item.can.remove) || []).includes(client)) return null;
+  return { action: item.kind === "plugin" ? "plugin.remove" : "skill.remove", targets: [{ item: target }], params: {} };
+}
+
+// Every Remove an item offers, one per client, in client order.
+export function removeBodies(item) {
+  return ((item.can && item.can.remove) || []).map((client) => ({ client, body: removeBody(item, client) })).filter((one) => one.body);
+}
 
 // Whether the tray holds a Claude Code skill rule of `scope` ("all" or "project"). Claude Code may
 // not merge skillOverrides across files, so the server never takes one in the user file and one in
@@ -45,16 +63,16 @@ export function skillOffBodies(item, answer) {
 export function linkRemoval(item, client, answer) {
   const name = item.name;
   const who = CLIENT_NAMES[client];
-  const can = item.can || {};
   const target = ((item.items || {})[client] || [])[0];
   if (!target) return null;
-  if (item.kind === "plugin" && (can.remove || []).includes(client)) {
-    return { body: { action: "plugin.remove", targets: [{ item: target }], params: {} }, tip: `Remove ${name} from ${who}` };
+  if (item.kind === "plugin") {
+    const body = removeBody(item, client);
+    return body ? { body, tip: `Remove ${name} from ${who}` } : null;
   }
   if (item.kind !== "skill") return null;
   if (client === "cursor") {
-    if (!(can.remove || []).includes(client)) return null;
-    return { body: { action: "skill.remove", targets: [{ item: target }], params: {} }, tip: `Remove ${name} from ${who}` };
+    const body = removeBody(item, client);
+    return body ? { body, tip: `Remove ${name} from ${who}` } : null;
   }
   const body = skillOffBodies(item, answer).find((one) => one.targets[0].client === client);
   return body ? { body, tip: `Turn off ${name} in ${who}` } : null;

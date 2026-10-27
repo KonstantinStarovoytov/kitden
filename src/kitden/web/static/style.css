@@ -562,7 +562,7 @@ input:focus-visible + .chk { outline: 2px solid var(--focus); outline-offset: 2p
 .tg-row.found { background: var(--route-soft); }
 .tg-row.found .meta, .tg-row.found .tg-tools { color: var(--ink-2); }
 .treegrid.finding .tg-row:not(.found) { opacity: 0.35; }
-.tg-row > .tg-name { display: flex; align-items: center; gap: 6px; padding-left: calc(8px + var(--depth, 0) * 18px); }
+.tg-row > .tg-name { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; padding-left: calc(8px + var(--depth, 0) * 18px); }
 .tg-name .caret { flex: none; width: 14px; color: var(--ink-3); font-size: 11px; text-align: center; transition: transform 160ms var(--ease-out); }
 .tg-name .caret.none { visibility: hidden; }
 .tg-row[aria-expanded="true"] .caret { transform: rotate(90deg); }
@@ -608,10 +608,11 @@ input:focus-visible + .chk { outline: 2px solid var(--focus); outline-offset: 2p
 .tg-row.arrive { animation: arrive 1200ms var(--ease-out) both; }
 @keyframes arrive { 0%, 30% { background: color-mix(in srgb, var(--brand) 22%, var(--route-soft)); } }
 .tg-row:hover .opens, .tg-row:focus-visible .opens { color: var(--route); }
-/* A narrow window keeps the name, the tools and the action; the tiles go. */
+/* A narrow window keeps the Gateway List's name, tools and action; the tiles go. The Library
+   List keeps every client's column and scrolls sideways. */
 @media (max-width: 640px) {
-  .treegrid { --tg-cols: minmax(0, 1fr) 0 84px 84px; }
-  .tg-used, .tg-head > :nth-child(2) { visibility: hidden; }
+  .treegrid:not(.library-list) { --tg-cols: minmax(0, 1fr) 0 84px 84px; }
+  .tg-used, .treegrid:not(.library-list) > .tg-head > :nth-child(2) { visibility: hidden; }
 }
 .fact-tiles { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; }
 .fact-tiles .client-mark, .fact-tiles .mono-mark { --tile: 18px; border-radius: 5px; }

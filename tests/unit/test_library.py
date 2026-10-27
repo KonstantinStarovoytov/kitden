@@ -1156,12 +1156,13 @@ def test_the_list_has_the_two_tabs_and_one_column_per_client(tmp_path):
     home = build_demo_home(tmp_path, "medium")
     answer = _list(home)
     assert [c["id"] for c in answer["columns"]] == ["claude_code", "codex", "cursor"]
-    # One group row per source, as the map draws them: marketplaces, then Your skills and Your
-    # settings. Every item has one cell per client.
+    # One group row per source, as the map draws them: marketplaces, Other plugins (here only the
+    # account's), then Your skills and Your settings. Every item has one cell per client.
     assert [(g["key"], g["kind"]) for g in answer["groups"]] == [
         ("marketplace:cursor-public", "marketplace"),
         ("marketplace:demo-market", "marketplace"),
         ("marketplace:openai-bundled", "marketplace"),
+        ("other", "other"),  # Claude account plugins and connectors
         ("skills", "skills"),
         ("settings", "settings"),
     ]
@@ -1316,3 +1317,51 @@ def test_api_library_list_takes_a_tab_and_show_diff(tmp_path):
         assert [i["kind"] for g in files["groups"] for i in g["items"]] == ["file", "file"]
         hidden = client.get("/api/library-list?kind=plugin&hidden=codex,cursor").json()
         assert [c["id"] for c in hidden["columns"] if c["hidden"]] == ["codex", "cursor"]
+
+
+def test_a_plugin_kitden_read_nothing_inside_keeps_its_skills_and_account_plugins_show(home):
+    # Codex's documents: the map has no `inside` for it, so its parts are the skill rows from it,
+    # with their own cells: Claude Code and Cursor can take a copy.
+    items = _items(_list(home))
+    documents = items["documents"]
+    assert documents["count"] is None
+    assert [(p["kind"], p["name"]) for p in documents["parts"]] == [
+        ("skill", "docx"),
+        ("skill", "pptx"),
+        ("skill", "xlsx"),
+    ]
+    docx = documents["parts"][0]
+    assert docx["cells"]["claude_code"]["add"]["action"] == "skill.install"
+    assert docx["flags"] == []
+    # Search and Differences see them too.
+    assert "documents" in _items(_list(home, q="pptx"))
+    assert "documents" in _items(_list(home, show="diff"))
+    # Claude Code keeps some plugins in the account: Unknown, under "Other plugins".
+    other = next(g for g in _list(home)["groups"] if g["key"] == "other")
+    account = next(
+        i for i in other["items"] if i["name"] == "Claude account plugins and connectors"
+    )
+    assert account["cells"]["claude_code"]["state"] == "unk"
+
+
+def test_a_plugin_whose_part_has_a_warning_needs_attention():
+    from kitden.views.library import _warns
+
+    warning = [{"text": "Loads twice", "level": "warning"}]
+    assert _warns({"flags": [], "parts": [{"flags": warning}]})
+    assert _warns({"flags": warning})
+    assert not _warns({"flags": [], "parts": [{"flags": []}]})
+
+
+def test_an_instruction_file_cell_is_unknown_for_a_client_kitden_could_not_read(home):
+    inventory = build_inventory(
+        home, adapters=[ClaudeCodeAdapter(home), _BrokenCodex(home), CursorAdapter(home)]
+    )
+    adapters = {a.id: a for a in default_adapters(home)}
+    answer = library_list(inventory, adapters, None, gateway_registered=False, tab="instructions")
+    files = [f for g in answer["groups"] for f in g["items"]]
+    assert files and {f["cells"]["codex"]["state"] for f in files} == {"unk"}
+    assert {f["cells"]["codex"]["reason"] for f in files} == {"Could not read Codex."}
+    # A client Kitden read and that does not read the file: nothing.
+    claude = next(f for f in files if f["name"] == "CLAUDE.md")
+    assert claude["cells"]["cursor"]["state"] == "none"

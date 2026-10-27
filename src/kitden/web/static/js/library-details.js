@@ -8,7 +8,7 @@ import { button, el, icon, joinWords, plural } from "./dom.js";
 import { focusAfterStep, headTile, iconTile, lamp, openCard, pressOnce, projectChecklist, stepHead, tickRow, tiles } from "./gateway-details.js";
 import { initLibraryAdd } from "./library-add.js";
 import { addBody, importsOf, lampOf, libraryThing, onLibrarySelect, readers } from "./library-map.js";
-import { offBodies, skillOffBodies, skillRuleWaits } from "./library-rules.js";
+import { offBodies, onBodies, removeBodies, skillOffBodies, skillRuleWaits } from "./library-rules.js";
 import { closePanel, drawQuietly, followTray, isPanelOpen, keepFrom, panelState, previewButton, review, stepTo, swapContent, technical } from "./panel.js";
 import { ALL_PROJECTS, CLIENT_NAMES, CLIENT_ORDER, folderName, mark, menuItems, ORIGIN_WORDS, STATE_WORDS } from "./parts.js";
 import { data, projectPath, state } from "./store.js";
@@ -185,6 +185,14 @@ function trayNote(words, when) {
 
 // The cards ---------------------------------------------------------------------------------------
 
+// "Turn on in Claude Code…" for each client that has a plugin off, and "Remove from Codex…" for each
+// client whose own entry Kitden can remove, under More: the same rows as the old Details' buttons
+// and a link's ×.
+const onLabel = (client) => `Turn on in ${CLIENT_NAMES[client]}…`;
+const removeLabel = (client) => `Remove from ${CLIENT_NAMES[client]}…`;
+const onActions = (item) => onBodies(item).map(({ client, body }) => ({ label: onLabel(client), body }));
+const removeActions = (item) => removeBodies(item).map(({ client, body }) => ({ label: removeLabel(client), body }));
+
 // "Add to Codex…", or "Add to Claude Code or Codex…" when both can take it.
 export const addLabel = (clients) => `Add to ${names(clients).join(" or ")}…`;
 
@@ -201,8 +209,9 @@ export function pluginCard(item, c, { addStep = () => {} } = {}) {
   if (off.length) actions.push({ label: OFF_ALL, node: rowsButton(OFF_ALL, off) });
   const here = hereBody(item, c);
   if (here) actions.push({ label: OFF_HERE, body: here });
+  actions.push(...onActions(item));
   const tech = item.technical || {};
-  return { kind: KIND_WORDS.plugin, title: item.name, id: item.source, tile: kindTile("plugin"), facts, why: loadsSay(item, c), actions, technical: techOf([{ title: "Plugin folder", path: tech.path }, { title: "Marketplace", summary: tech.marketplace }]) };
+  return { kind: KIND_WORDS.plugin, title: item.name, id: item.source, tile: kindTile("plugin"), facts, why: loadsSay(item, c), actions, more: removeActions(item), technical: techOf([{ title: "Plugin folder", path: tech.path }, { title: "Marketplace", summary: tech.marketplace }]) };
 }
 
 // A thing a plugin holds: Plugin, Kind, Source and Clients, and "Follows its plugin." It has no
@@ -241,7 +250,7 @@ export function skillCard(item, c, { someStep = () => {} } = {}) {
   const why = [loadsSay(item, { folder: c.project ? c.folder : "", noun: "this skill" }), ...notes].join(" ");
   const claude = ((item.can && item.can.off) || []).includes("claude_code");
   const after = claude ? trayNote(SOME_FIRST, () => skillRuleWaits("project", c.answer)) : null;
-  return { kind: KIND_WORDS.skill, title: item.name, id: item.source, tile: kindTile("skill"), facts, why, actions, after, technical: techOf([{ title: "Skill file", path: (item.technical || {}).path }]) };
+  return { kind: KIND_WORDS.skill, title: item.name, id: item.source, tile: kindTile("skill"), facts, why, actions, more: removeActions(item), after, technical: techOf([{ title: "Skill file", path: (item.technical || {}).path }]) };
 }
 
 // A hook: its facts and Technical details only; hooks have no switch yet.

@@ -6,13 +6,13 @@
 // the map (library-details.js); a cell's "+ Add" only adds a row to the tray.
 import { getJson, query } from "./api.js";
 import { button, el, gridKey, icon, plural } from "./dom.js";
-import { INSTRUCTIONS_HINT, LEDE, leaveLibraryMap, letGoLibraryMap, libraryDetails, libraryMode, renderLibraryMap } from "./library-map.js";
+import { INSTRUCTIONS_HINT, LEDE, leaveLibraryMap, letGoLibraryMap, libraryDetails, libraryMode, libraryThing, renderLibraryMap } from "./library-map.js";
 import { glidePill, modeSwitch, switchedNow } from "./map-page.js";
 import { CALM, afterOldPage, animate, entrance, glide, land, reducedMotion, rise } from "./motion.js";
 import { projectNote } from "./offer.js";
 import { isPanelOpen, openInfo, panelState, projectLabel, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, folderName, lookFor, mark, morphSocket, scopeBar, setHint, skeleton, socket, sourceLines, staleNote } from "./parts.js";
-import { afterShared, arrival, data, freshness, go, libraryKind, libraryShows, projectPath, render, retry, sameSel, setState, state, takeArrival } from "./store.js";
+import { afterShared, arrival, current, data, freshness, go, libraryKind, libraryShows, projectPath, render, retry, sameSel, setState, state, takeArrival } from "./store.js";
 
 // The List's tabs, as on the Map, and what it shows of Plugins and skills.
 const TABS = [["plugin", "Plugins and skills"], ["instructions", "Instructions"]];
@@ -394,7 +394,21 @@ function renderList(main) {
   main.append(scroller);
   finish(rows);
   entrance("library", [grid]);
+  followProject(kind);
   if (arrived) showArrived(arrived);
+}
+
+// Another project drawn in place: Details a row opened follow the same item, drawn for that
+// project, or close when it is gone (library-details.js). It waits for the tab's map read of that
+// project, which the Details are drawn from.
+function followProject(kind) {
+  if (onList.project === state.project || !current(kind === "plugin" ? "libraryMap" : "instructionsMap")) return;
+  const had = onList.project !== null && onList.selected;
+  onList.project = state.project;
+  if (!had) return;
+  const id = libraryThing(onList.selected) ? onList.selected : null;
+  if (!id) onList.selected = null;
+  libraryDetails(id, { follow: true });
 }
 
 // "Plugins and skills" | "Instructions", as on the Map: a press lets go of the row whose Details
@@ -580,16 +594,17 @@ export function listRows(answer, open = new Set(), folded = new Set()) {
       if (!opened) continue;
       for (const part of parts) {
         const partId = `part:${item.id}:${part.key}:${part.name}`;
-        rows.push({ id: partId, key: partId, parent: itemId, depth: 2, kind: "part", name: part.name, meta: PART_WORDS[part.kind], flags: [], cells: part.cells, sel: null, group: false, source: part.source, same_name: part.same_name });
+        rows.push({ id: partId, key: partId, parent: itemId, depth: 2, kind: "part", name: part.name, meta: PART_WORDS[part.kind], flags: part.flags || [], cells: part.cells, sel: null, group: false, source: part.source, same_name: part.same_name });
       }
     }
   }
   return rows;
 }
 
-// "Plugin · 4 items" (what Kitden read inside it), "Skill" or "Hook"; a file has none.
+// "Plugin · 4 items" (what Kitden read inside it; "Plugin" when it read nothing), "Skill" or
+// "Hook"; a file has none.
 function itemWords(item) {
-  if (item.kind === "plugin") return typeof item.count === "number" ? `Plugin · ${plural(item.count, "item", "items")}` : "Plugin";
+  if (item.kind === "plugin") return item.count ? `Plugin · ${plural(item.count, "item", "items")}` : "Plugin";
   return KIND_WORDS[item.kind] || null;
 }
 
@@ -604,7 +619,7 @@ function searchOpen(answer, q) {
 
 // The List as the person left it: the open plugins, the folded groups, the row that takes the
 // Tab key and the one whose Details show, kept across draws; and the rows drawn now, by id.
-const onList = { open: new Set(), folded: new Set(), current: null, selected: null, nodes: new Map() };
+const onList = { open: new Set(), folded: new Set(), current: null, selected: null, project: null, nodes: new Map() };
 
 // The Details of the row the List opened let go (Map | List).
 function letGoList() {
@@ -772,17 +787,26 @@ export function openRow(row) {
 }
 
 // The row an arrival names, or null (none, a panel is open, or the List has no such row): an item
-// by its kind and full name, a marketplace by its name. Its group unfolds for it.
+// by its kind and full name, a skill inside a plugin by its own (its plugin opens for it), a
+// marketplace by its name. Its group unfolds for it.
 export function arrivalIn(answer) {
   const arrived = takeArrival();
   if (!arrived || isPanelOpen()) return null;
+  const named = (kind, name) => Boolean(name) && sameSel({ kind, name }, arrived);
   for (const group of answer.groups) {
     const groupId = `group:${group.key}`;
-    const market = group.kind === "marketplace" && sameSel({ kind: "marketplace", name: group.name }, arrived);
-    const item = market ? null : group.items.find((i) => i.lookup && sameSel({ kind: i.kind, name: i.lookup }, arrived));
-    if (!market && !item) continue;
-    onList.folded.delete(groupId);
-    return market ? groupId : `${item.kind === "file" ? "file" : "item"}:${item.id}`;
+    if (group.kind === "marketplace" && named("marketplace", group.name)) {
+      onList.folded.delete(groupId);
+      return groupId;
+    }
+    for (const item of group.items) {
+      const part = (item.parts || []).find((p) => named(p.kind, p.lookup));
+      if (!named(item.kind, item.lookup) && !part) continue;
+      onList.folded.delete(groupId);
+      if (!part) return `${item.kind === "file" ? "file" : "item"}:${item.id}`;
+      onList.open.add(`item:${item.id}`);
+      return `part:${item.id}:${part.key}:${part.name}`;
+    }
   }
   return null;
 }
