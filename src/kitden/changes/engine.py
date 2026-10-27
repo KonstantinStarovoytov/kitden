@@ -86,6 +86,9 @@ class _ApplyError(Exception):
     pass
 
 
+# How the error of a failed Apply ends when every file was put back as it was.
+PUT_BACK = "The original settings were restored."
+
 OUTSIDE = "Kitden writes only in your home folder and your known projects."
 
 
@@ -361,6 +364,7 @@ def _record(change: Change) -> dict:
         "holds_secret": change.holds_secret,
         "target": change.target,
         "rows": change.rows,
+        "request": change.request,
         "steps": steps,
     }
 
@@ -418,6 +422,7 @@ def _from_record(record: dict) -> Change:
         holds_secret=record.get("holds_secret", False),
         target=record.get("target"),
         rows=record.get("rows"),
+        request=record.get("request"),
     )
 
 
@@ -813,7 +818,7 @@ class Engine:
             if lost:
                 change.error = f"{error} {' '.join(lost)}"
             else:
-                change.error = f"{error} The original settings were restored."
+                change.error = f"{error} {PUT_BACK}"
             self._finish(change)
             return change
 
@@ -1116,6 +1121,7 @@ class Engine:
                 "holds_secret": change.holds_secret,
                 "target": change.target,
                 "rows": change.rows,
+                "request": change.request,
                 "steps": [
                     {
                         "client": s.client,

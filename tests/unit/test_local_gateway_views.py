@@ -482,7 +482,7 @@ def test_a_rule_change_previews_applies_and_undoes(home):
         assert applied["state"] == "verified", applied
         # The Changes page names the rule's parts; the log keeps no values.
         logged = [e for e in page.get("/api/changes").json() if e["id"] == change["id"]]
-        assert logged[0]["rule"] == {
+        assert logged[0]["title_parts"]["rule"] == {
             "project": "website",
             "server": "echo",
             "tool": "slow",
@@ -559,7 +559,7 @@ def test_a_rule_line_with_a_broken_record_stays_as_it_is(home):
             answer = page.get("/api/changes")
             assert answer.status_code == 200
             line = next(e for e in answer.json() if e["id"] == change["id"])
-            assert "rule" not in line
+            assert line["title_parts"]["rule"] is None
 
 
 def test_a_rule_for_a_tool_the_server_lost_can_follow_all_projects(home):

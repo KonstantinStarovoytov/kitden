@@ -66,8 +66,8 @@ def test_removing_a_skill_backs_it_up_and_undo_copies_it_back(client):
     undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
     assert undone["state"] == "undone", undone.get("error")
     assert digest(folder) == before
-    entry = client.get("/api/changes").json()[0]
-    assert (entry["action"], entry["steps"][0]["reaches"]) == (
+    parts = client.get("/api/changes").json()[0]["title_parts"]
+    assert (parts["action"], parts["steps"][0]["reaches"]) == (
         "skill.remove",
         ["claude_code", "cursor"],
     )
@@ -158,7 +158,8 @@ def test_a_duplicate_skill_keeps_one(client):
         },
     ]
     client.post(f"/api/changes/{change['id']}/apply", headers=POST)
-    assert client.get("/api/changes").json()[0]["steps"][0]["keeps"] == ["codex", "cursor"]
+    parts = client.get("/api/changes").json()[0]["title_parts"]
+    assert parts["steps"][0]["keeps"] == ["codex", "cursor"]
     assert not [f for f in _row(client, "docker-expert")["flags"] if f["level"] == "warning"]
 
 

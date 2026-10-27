@@ -687,6 +687,8 @@ function moveOutTitle(entry) {
 }
 
 export function changeTitle(entry) {
+  // A change of several tray rows: the first row's title and how many more (Details list each).
+  if (entry.rows && entry.rows.length > 1) return `${entry.rows[0].title} and ${entry.rows.length - 1} more`;
   // A tool rule names its tool, server, project and new state (the server adds them).
   if (entry.action === "gateway.rule" && entry.rule) return ruleText(entry.rule, entry.rule.project).done;
   // The strict switch: its first step is the server's mode; the others are its tools.
@@ -748,13 +750,6 @@ export function notesSection(heading, steps) {
   for (const note of notes) list.append(el("li", null, note));
   section.append(el("h2", null, heading), list);
   return section;
-}
-
-// The latest log line per change, newest first.
-export function latestChanges(entries) {
-  const seen = new Map();
-  for (const entry of entries) if (!seen.has(entry.id)) seen.set(entry.id, entry);
-  return [...seen.values()];
 }
 
 export { plural };

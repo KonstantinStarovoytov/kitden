@@ -178,9 +178,9 @@ def test_a_copied_skill_is_a_change_on_the_changes_page(client):
     change = _preview(client, TIDY, ["cursor"]).json()
     client.post(f"/api/changes/{change['id']}/apply", headers=POST)
     entry = client.get("/api/changes").json()[0]
-    assert (entry["action"], entry["state"]) == ("skill.install", "verified")
-    assert entry["steps"][0]["reaches"] == ["cursor"]
-    assert entry["steps"][0]["path"].endswith(".cursor/skills/tidy")
+    assert (entry["title_parts"]["action"], entry["state"]) == ("skill.install", "verified")
+    assert entry["title_parts"]["steps"][0]["reaches"] == ["cursor"]
+    assert entry["technical"]["paths"][0].endswith(".cursor/skills/tidy")
 
 
 # Add skills: a plugin's self-contained skills, copied into one client in one change -------
@@ -240,7 +240,7 @@ def test_add_skills_is_one_change_that_undo_removes_whole(client):
     assert not (home / ".agents/skills/tidy").exists()
     assert not (home / ".agents/skills/brainstorming").exists()
     entry = client.get("/api/changes").json()[0]
-    assert (entry["action"], entry["state"]) == ("plugin.skills", "undone")
+    assert (entry["title_parts"]["action"], entry["state"]) == ("plugin.skills", "undone")
 
 
 def test_add_skills_skips_what_the_client_has_and_undo_leaves_that_alone(client):

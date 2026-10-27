@@ -2,7 +2,7 @@
 import { button, el, shortPath, shortPaths } from "./dom.js";
 import { entrance } from "./motion.js";
 import { closePanel, openChange, undoChange } from "./panel.js";
-import { backupNote, banner, changeTitle, failedWord, latestChanges, mark, notesSection, opens, skeleton } from "./parts.js";
+import { backupNote, banner, changeTitle, failedWord, mark, notesSection, opens, skeleton } from "./parts.js";
 import { data, retry } from "./store.js";
 
 // The state in words. Rows that no longer change anything are plain grey text, not badges.
@@ -35,7 +35,8 @@ export function renderChanges(main) {
     else main.append(skeleton("card", 2));
     return;
   }
-  const latest = latestChanges(data.changes);
+  // One entry per change, newest first (views/changes_view.py).
+  const latest = data.changes;
   if (!latest.length) {
     const box = el("div", "empty");
     box.append(el("strong", null, "No changes yet"), el("p", null, "Changes you make on this page show up here, each with Undo."));
@@ -53,10 +54,10 @@ export function renderChanges(main) {
 function changeRow(entry) {
   const li = el("li", OVER.includes(entry.state) ? "over" : null);
   let [word, look] = STATE_BADGES[entry.state] || [entry.state, "badge"];
-  if (entry.state === "restored") word = failedWord(entry.error);
+  if (entry.state === "restored") word = failedWord(entry.technical.error);
   const actions = el("span", "row-actions");
   if (entry.state === "verified") actions.append(button("Undo", () => undoChange(entry)));
-  li.append(el("span", "muted", when(entry.time)), el("span", null, changeTitle(entry)), el("span", look, word), actions, opens());
+  li.append(el("span", "muted", when(entry.time)), el("span", null, changeTitle(entry.title_parts)), el("span", look, word), actions, opens());
   // The whole row opens the panel with the files it touched; the Undo button keeps to itself.
   li.tabIndex = 0;
   li.addEventListener("click", (event) => { if (!event.target.closest("button")) show(entry); });
@@ -69,30 +70,28 @@ function changeRow(entry) {
   return li;
 }
 
-// Files, paths and the error text live here, not on the page.
+// Files and paths live here, not on the page.
 function show(entry) {
   const body = el("div", "body");
   const steps = el("div", "stack");
-  for (const step of entry.steps) {
+  for (const step of entry.title_parts.steps) {
     const row = el("div", "layer");
-    const middle = el("div");
-    middle.append(el("div", "name", `${step.name} · ${SCOPE_WORDS[step.scope] || step.scope}`));
-    const path = el("div", "why mono", shortPath(step.path));
-    path.title = step.path || "";
-    middle.append(path);
-    row.append(mark(step.client), middle);
+    row.append(mark(step.client), el("div", "name", `${step.name} · ${SCOPE_WORDS[step.scope] || step.scope}`));
     steps.append(row);
   }
   body.append(steps);
-  // Only a change that happened needs a restart. Older log entries have no notes: no section.
-  const notes = ["verified", "undone", "undo_blocked"].includes(entry.state) && notesSection("To take effect", entry.steps);
+  for (const path of entry.technical.paths) {
+    const line = el("p", "why mono", shortPath(path));
+    line.title = path;
+    body.append(line);
+  }
+  const notes = notesSection("To take effect", entry.takes_effect.map((t) => ({ restart_note: t.note })));
   if (notes) body.append(notes);
-  const history = data.changes.filter((e) => e.id === entry.id).reverse();
-  body.append(el("p", "muted", history.map((e) => `${when(e.time)} ${(STATE_BADGES[e.state] || [e.state])[0]}`).join(" → ")));
-  if (entry.error) body.append(el("p", "muted", shortPaths(entry.error)));
+  body.append(el("p", "muted", entry.history.map((e) => `${when(e.time)} ${(STATE_BADGES[e.state] || [e.state])[0]}`).join(" → ")));
+  if (entry.technical.error) body.append(el("p", "muted", shortPaths(entry.technical.error)));
   const secret = backupNote(entry);
   if (secret) body.append(el("p", "muted", secret));
   // Undo from the panel closes it; the page then shows the undone row.
   const undo = () => { closePanel({ focus: false }); return undoChange(entry); };
-  openChange(changeTitle(entry), body, entry.state === "verified" ? undo : null);
+  openChange(changeTitle(entry.title_parts), body, entry.state === "verified" ? undo : null);
 }

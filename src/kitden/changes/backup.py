@@ -47,6 +47,11 @@ def _hide_text(value: Any) -> Any:
     return value
 
 
+def hidden(value: Any) -> Any:
+    """`value` as the log keeps it: what `redact` hides, and token shapes in free text."""
+    return _hide_text(redact(value)[0])
+
+
 def _without_references(value: Any) -> Any:
     """The value without its Keychain references: a reference is not a secret."""
     if isinstance(value, dict):
@@ -165,7 +170,7 @@ class ChangeStore:
 
     def log(self, entry: dict) -> None:
         _private_folder(self.root)
-        line = json.dumps(_hide_text(redact(entry)[0]), ensure_ascii=False)
+        line = json.dumps(hidden(entry), ensure_ascii=False)
         _write_private(self.log_path, (line + "\n").encode(), append=True)
 
     def entries(self) -> list[dict]:

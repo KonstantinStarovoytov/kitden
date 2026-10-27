@@ -339,6 +339,15 @@ test('Add missing on the Changes page names every client it reached', () => {
   assert.equal(changeTitle({ action: 'project.align', steps }), 'Added missing items · Codex, Cursor');
 });
 
+test('a change of several tray rows is titled by its rows', () => {
+  const steps = [{ client: 'kitden', name: 'slow' }, { client: 'cursor', name: 'n8n' }, { client: 'kitden', name: 'fast' }];
+  const rows = [{ title: 'Turn off slow of echo in website' }, { title: 'Remove n8n from Cursor' }, { title: 'Turn off fast' }];
+  assert.equal(changeTitle({ action: 'batch', steps, rows }), 'Turn off slow of echo in website and 2 more');
+  assert.equal(changeTitle({ action: 'batch', steps, rows: rows.slice(0, 2) }), 'Turn off slow of echo in website and 1 more');
+  // One row keeps its own kind and today's words.
+  assert.equal(changeTitle({ action: 'mcp.add', steps: [{ client: 'codex', name: 'github' }], rows: rows.slice(0, 1) }), 'Added github · Codex');
+});
+
 const { failedWord } = await import('../../src/kitden/web/static/js/parts.js');
 
 test('a failed change says "put back" only when the engine restored everything', () => {

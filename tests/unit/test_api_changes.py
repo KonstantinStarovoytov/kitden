@@ -165,7 +165,8 @@ def test_connect_previews_then_applies_then_undoes_exactly(client):
         if f["type"] == "bypasses_gateway"
     }
     assert ("gateway",) not in bypassing and ("github",) in bypassing
-    assert client.get("/api/changes").json()[0]["state"] == "verified"
+    entry = client.get("/api/changes").json()[0]
+    assert (entry["id"], entry["state"]) == (change["id"], "verified")
 
     undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST)
     assert undone.json()["state"] == "undone"
@@ -344,9 +345,13 @@ def test_the_changes_log_keeps_each_steps_restart_note(client):
     from kitden.clients.codex import RESTART
 
     _apply_remove_direct(client)
-    step = client.get("/api/changes").json()[0]["steps"][0]
+    log = (data_dir(client.home) / "changes.log").read_text().splitlines()
+    step = json.loads(log[-1])["steps"][0]
     assert step["restart_note"] == RESTART
     assert step["login_note"] is None
+    # The Changes page says it per client.
+    entry = client.get("/api/changes").json()[0]
+    assert entry["takes_effect"] == [{"client": "codex", "note": RESTART}]
 
 
 def test_reading_an_unknown_change_is_404(client):
@@ -590,8 +595,8 @@ def test_move_one_server_then_undo(client, fake):
     assert applied.status_code == 200 and applied.json()["state"] == "verified"
     assert fake.held_names() == ["neon", "Neon"]
     assert all(r["name"].lower() != "neon" for r in _move_rows(client))
-    entry = client.get("/api/changes").json()[0]
-    assert entry["action"] == "gateway.move" and entry["steps"][0]["client"] == "gateway"
+    parts = client.get("/api/changes").json()[0]["title_parts"]
+    assert parts["action"] == "gateway.move" and parts["steps"][0]["client"] == "gateway"
 
     undone = client.post(f"/api/changes/{change['id']}/undo", headers=POST)
     assert undone.status_code == 200 and undone.json()["state"] == "undone"

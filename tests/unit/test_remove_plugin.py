@@ -158,8 +158,9 @@ def test_the_changes_page_keeps_the_clients_and_the_place_after_a_restart(client
     client.post(f"/api/changes/{change['id']}/apply", headers=POST)
     everywhere = {"scope": "all", "project": None, "others_unchanged": False}
     entry = client.get("/api/changes").json()[0]
-    assert (entry["id"], entry["steps"][0]["reaches"]) == (change["id"], ["claude_code", "cursor"])
-    assert entry["target"] == everywhere
+    parts = entry["title_parts"]
+    assert (entry["id"], parts["steps"][0]["reaches"]) == (change["id"], ["claude_code", "cursor"])
+    assert parts["target"] == everywhere
     home = client.home
     app = create_app(
         lambda: build_inventory(home), token="tok", port=47800, home=home, run=client.run

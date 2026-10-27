@@ -111,6 +111,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Overview:** "Your setup, connected.": one-button cards that leave once their change is
   applied and checked, a small map of your setup that lights a card's path, and a card when
   Kitden cannot read its gateway settings.
+- **Changes keep what was asked:** each new change keeps its request (secrets hidden), so it can
+  be previewed again later; the Changes page reads one entry per change with its history, and a
+  change of several tray rows is named by its first row "and 2 more".
 - **Categories:** filter plugins and skills by category. The category shows quietly in each row.
 - **Quick start:** the page has its data in about two seconds. Codex's slow plugin list comes in
   the background, and a line shows what is still read.

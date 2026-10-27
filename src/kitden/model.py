@@ -351,6 +351,10 @@ class Change:
     # {id, kind, title, detail, project, steps}, `steps` being indices into `steps`. Kept in the
     # record and the log.
     rows: list[dict] | None = None
+    # What the page asked for, so Redo… can preview it again: the tray rows' bodies, each
+    # {action, targets, params, picked}, with secrets hidden as the log hides them
+    # (changes/batch.py kept_request). Kept in the record and the log; None before Phase 7.
+    request: list[dict] | None = None
 
     def move_to(self, new: ChangeState) -> None:
         if new not in _TRANSITIONS.get(self.state, set()):

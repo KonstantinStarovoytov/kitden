@@ -8,6 +8,7 @@ rows make the same way (the `kitden` entry two moves both add) is kept once and 
 import os
 from dataclasses import dataclass
 
+from kitden.changes.backup import hidden
 from kitden.changes.json_splice import ABSENT
 from kitden.local_gateway.settings import CLIENT as KITDEN
 from kitden.model import Change, Scope, Step
@@ -89,7 +90,23 @@ def same_write(a: Step, b: Step) -> bool:
     )
 
 
-def _server(step: Step) -> str | None:
+def kept_request(requests: list[dict]) -> list[dict]:
+    """What a change keeps of its requests (as `requests_in` reads them), so Redo… can preview
+    it again: each row's body as the tray sends it, {action, targets, params, picked}. Secrets
+    are hidden as the log hides them, also in the record."""
+    bodies = [
+        {
+            "action": r["kind"],
+            "targets": r["targets"],
+            "params": r["params"],
+            "picked": r["picked"] or None,
+        }
+        for r in requests
+    ]
+    return hidden(bodies)
+
+
+def kitden_server(step: Step) -> str | None:
     """The Kitden gateway server a settings step is about: its entry, its rules or its mode."""
     key = tuple(step.edit.key) if step.client == KITDEN and step.edit is not None else ()
     if len(key) > 1 and key[0] == "servers":
@@ -105,7 +122,7 @@ def _removed(step: Step) -> str | None:
     """The Kitden gateway server whose entry the step removes."""
     key = tuple(step.edit.key) if step.edit is not None else ()
     if len(key) == 2 and key[0] == "servers" and step.edit.after is ABSENT:
-        return _server(step)
+        return kitden_server(step)
     return None
 
 
@@ -138,9 +155,9 @@ def _between(old: Part, new: Part) -> str | None:
                 return SAME.format(other=other, what="server")
     # A server that leaves the Kitden gateway takes its rules with it, also ones not set yet.
     for a, b in pairs:
-        if (server := _removed(b)) and _server(a) == server:
+        if (server := _removed(b)) and kitden_server(a) == server:
             return REMOVES.format(other=other, server=server)
-        if (server := _removed(a)) and _server(b) == server:
+        if (server := _removed(a)) and kitden_server(b) == server:
             return LEAVES.format(other=other, server=server)
     if leaving := sorted(new.needs & {_removed(a) for a in old.steps}):
         return LEAVES.format(other=other, server=leaving[0])

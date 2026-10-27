@@ -12,7 +12,7 @@ import { loadLibrary, loadLibraryFor, morphOnNextRender, raceSlow, renderLibrary
 import { startLogo } from "./logo.js";
 import { renderOverview } from "./overview.js";
 import { closeForProject, closePanel, holdPanel, initPanel, isPanelOpen } from "./panel.js";
-import { callout, demoTag, GONE_PROJECT, latestChanges, projectButton, projectMenu, scanLine, setHint, versionsOpened } from "./parts.js";
+import { callout, demoTag, GONE_PROJECT, projectButton, projectMenu, scanLine, setHint, versionsOpened } from "./parts.js";
 import {
   arrival, busy, current, data, followHash, freshness, go, isOldAddress, loadShared, onIdle, parseHash, projectGone, readLibraryMap, reload, setRenderer, setState, setSwitcher, state,
   switchProject,
@@ -80,7 +80,7 @@ function renderShell() {
   const overview = current("overview");
   rollTo($("#nav-attention"), overview && overview.counts.attention ? overview.counts.attention : "");
   // Changes still in effect, the ones Undo can take back.
-  const changes = latestChanges(data.changes || []).filter((e) => e.state === "verified").length;
+  const changes = (data.changes || []).filter((e) => e.state === "verified").length;
   rollTo($("#nav-changes"), changes || "");
   // The time of the last reload where every read worked, and a note when the latest one failed.
   const { lastGoodRead, lastReadFailed } = freshness;

@@ -136,7 +136,24 @@ def _page_outputs(home) -> list[str]:
                 "params": {"item": item["id"]},
             }
             changes.append(post("/api/changes/preview", body))
-        assert len(changes) >= 8
+        # A tray change keeps its rows' bodies for Redo…: secrets in them stay hidden there too.
+        tray_row = {
+            "id": "r1",
+            "kind": "gateway.connect",
+            "title": "Add gateway",
+            "targets": targets,
+            "params": {
+                "gateway": gateway["id"],
+                "name": "gw2",
+                "note": "ghp_SENTINEL_SECRET_IN_A_REQUEST",
+                "url": "https://me:SENTINEL_SECRET_PW@x.test/mcp",
+                "env": {"TOKEN": "SENTINEL_SECRET_ENV_IN_A_REQUEST"},
+            },
+        }
+        tray = page.post("/api/batch/preview", json={"requests": [tray_row]}, headers=POST)
+        outputs.append(tray.text)
+        changes.append(tray.json())
+        assert len(changes) >= 9
         for change in changes:
             post(f"/api/changes/{change['id']}/apply")
             post(f"/api/changes/{change['id']}/undo")
@@ -217,10 +234,15 @@ async def test_no_secret_in_any_output_and_no_network(home, network_attempts, ca
     store = data_dir(home)
     outputs.append((store / "changes.log").read_text())
     outputs += [p.read_text() for p in store.glob("changes/*/manifest.json")]
-    # A change record keeps the entry for Undo, but its commands only masked.
+    # A change record keeps the entry for Undo, but its commands only masked, and its request
+    # with secrets hidden.
+    requests = []
     for record in store.glob("changes/*/change.json"):
-        steps = json.loads(record.read_text())["steps"]
-        outputs.append(json.dumps([s["command"] for s in steps]))
+        kept = json.loads(record.read_text())
+        outputs.append(json.dumps([s["command"] for s in kept["steps"]]))
+        requests.append(kept.get("request"))
+    assert any(r and r[0]["params"].get("note") == "[secret]" for r in requests)
+    outputs.append(json.dumps(requests))
 
     cli.main(["scan", "--json", "--home", str(home)])
     outputs.append(capsys.readouterr().out)

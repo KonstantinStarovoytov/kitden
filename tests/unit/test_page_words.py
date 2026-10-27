@@ -1119,7 +1119,8 @@ def test_changes_and_the_library_say_saved_settings_and_scope():
 
 def test_changes_show_restart_notes_only_for_changes_that_happened():
     changes = script("changes.js")
-    assert '["verified", "undone", "undo_blocked"].includes(entry.state)' in changes
+    # The server leaves the notes out of a change that wrote nothing (views/changes_view.py).
+    assert "entry.takes_effect" in changes
     assert 'project: "this project"' in changes
 
 

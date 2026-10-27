@@ -73,6 +73,7 @@ from kitden.changes.batch import (
     Part,
     combine,
     first_clash,
+    kept_request,
     part_of,
     requests_in,
     step_rows,
@@ -116,7 +117,6 @@ from kitden.local_gateway.views import (
     load_proxy,
     own_rules,
     refresh_tools,
-    rule_of,
     rule_steps,
     rules_steps,
     strict_steps,
@@ -127,6 +127,7 @@ from kitden.model import Change, ChangeState, Gateway, GatewayAuth, GatewayEdit,
 from kitden.redact import masked_command, redact_text
 from kitden.views.after import after_words
 from kitden.views.catalog import catalog, market_servers
+from kitden.views.changes_view import change_entries
 from kitden.views.commands import commands_for
 from kitden.views.effective import project_views
 from kitden.views.explain import explain, with_page_fields
@@ -1309,6 +1310,10 @@ def create_app(
             change = await asyncio.to_thread(engine.preview, str(action), built.steps)
         except ValueError as error:  # includes ChangeRefusedError
             return _error(refusal_words(error), 422)
+        # Kept for Redo…, as a tray row would send it (`picked`: the project it was asked in).
+        picked = body.get("picked") if isinstance(body.get("picked"), str) else None
+        asked = {"kind": str(action), "targets": targets, "params": params, "picked": picked}
+        change.request = kept_request([asked])
         events.publish("change_state")
         words = _review(change, built, _picked(body))
         return JSONResponse({**change_dict(change), **words})
@@ -1406,6 +1411,7 @@ def create_app(
             rows.append(row)
             answers.append({**row, "target": part.target, **words})
         change.rows = rows
+        change.request = kept_request(requests)
         known = [p.path for p in state.inventory.projects]
         items = [i for made in built for i in made.items]
         change.target = change_target(change, known, state.inventory, picked, items)
@@ -1478,17 +1484,12 @@ def create_app(
             return _error("Unknown change.", 404)
         return JSONResponse(logged)
 
-    def _with_rule(entry: dict) -> dict:
-        """A tool rule's log line, with the parts the Changes page names (see `rule_of`), read
-        from the change Kitden keeps for Undo. A line without them stays as it is."""
-        assert engine is not None
-        if entry.get("action") != GATEWAY_RULE:
-            return entry
-        rule = rule_of(engine.changes.get(entry.get("id", "")))
-        return {**entry, "rule": rule} if rule else entry
-
     async def changes(request: Request) -> JSONResponse:
-        return JSONResponse([_with_rule(e) for e in engine.store.entries()] if engine else [])
+        """The Changes page: one entry per change, newest first (views/changes_view.py). A log
+        line from before Kitden kept requests reads as before, with no Redo…."""
+        if engine is None:
+            return JSONResponse([])
+        return JSONResponse(change_entries(engine.store.entries(), engine, state.inventory))
 
     def _inherits() -> dict:
         """Whether Cursor loads Claude Code's plugins and the skills in its folder."""
