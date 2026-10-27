@@ -890,7 +890,15 @@ def create_app(
 
     def _overview(request, project, path):
         held, problem = _kitden(path)
-        return JSONResponse(overview(state.inventory, _registered(), path, held, problem))
+        # The known projects with gateway rules of their own, for the "Your setup" map's foot.
+        ruled = set()
+        if home is not None and not problem:
+            settings = load_settings(home)
+            ruled = {p for p, chain in _chains().items() if own_rules(settings, chain)}
+        answer = overview(
+            state.inventory, _registered(), path, held, problem, adapters, gateway_rules=ruled
+        )
+        return JSONResponse(answer)
 
     def _kitden(path):
         """The servers the Kitden gateway holds, and why its settings could not be read."""
