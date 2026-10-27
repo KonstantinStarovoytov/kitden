@@ -1,6 +1,9 @@
-<img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/logo.svg" width="100%" alt="Kitden">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/hero-dark.svg">
+  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/hero.svg" width="100%" alt="Kitden: Your AI coding tools, under one roof.">
+</picture>
 
-<h1 align="center">Kitden</h1>
+<h3 align="center">Your AI coding tools, under one roof.</h3>
 
 <p align="center"><b>See and safely change what your AI coding agents load.</b><br>
 Claude Code, Codex and Cursor: every MCP server, skill, plugin, hook and marketplace on one local page.<br>

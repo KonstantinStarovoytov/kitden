@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 260" width="880" height="260" role="img" aria-label="Kitden: Your AI coding tools, under one roof.">
+  <title>Kitden</title>
+  <style>
+.light { opacity: 0; animation: light 10510ms 400ms infinite; }
+.puff { opacity: 0; transform-origin: 0 0; animation: puff 10510ms linear infinite; }
+@keyframes light {
+  0% { opacity: 0; animation-timing-function: cubic-bezier(.45, 0, .25, 1); }
+  11.418% { opacity: 1; animation-timing-function: linear; }
+  36.251% { opacity: 1; animation-timing-function: ease-in-out; }
+  42.912%, 100% { opacity: 0; }
+}
+@keyframes puff {
+  0% { opacity: 0; transform: translate(0px, 6.05px) scale(0.7); filter: blur(1.5px); }
+  4.948% { opacity: 0.31; transform: translate(17.1px, -20.16px) scale(0.84); filter: blur(1.7px); }
+  14.843% { opacity: 0.22; transform: translate(68.4px, -39.31px) scale(1.12); filter: blur(2.1px); }
+  24.738%, 100% { opacity: 0; transform: translate(114px, -46.37px) scale(1.4); filter: blur(2.5px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .light, .puff { animation: none; }
+}
+  </style>
+  <defs>
+    <radialGradient id="door-light" cx=".5" cy="1" r=".8" gradientTransform="translate(.5 1) scale(1 .875) translate(-.5 -1)">
+      <stop offset="0" stop-color="#FFF3DC"/>
+      <stop offset=".75" stop-color="#F3CC8F"/>
+    </radialGradient>
+    <radialGradient id="glow-light">
+      <stop offset="0" stop-color="#F3CC8F"/>
+      <stop offset="1" stop-color="#F3CC8F" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow-blur" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="7.5"/>
+    </filter>
+    <filter id="glow-blur" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="3.75"/>
+    </filter>
+    <symbol id="puff" viewBox="0 -5 28 20" overflow="visible">
+      <rect width="22" height="14.4" rx="7"/>
+      <ellipse cx="8" cy="1.8" rx="7.5" ry="6.75"/>
+      <ellipse cx="19.5" cy="4" rx="8.5" ry="6.3"/>
+    </symbol>
+  </defs>
+  <g class="light">
+    <ellipse cx="226.72" cy="211.93" rx="42" ry="31.5" fill="url(#glow-light)" opacity=".42" filter="url(#glow-blur)"/>
+    <g opacity=".92">
+      <path id="door-shadow" d="M207.97 211.93V179.12A18.75 18.75 0 0 1 245.47 179.12V211.93Z" fill="#F3CC8F" stroke="#F3CC8F" stroke-width="5" stroke-linejoin="round" transform="translate(0 5)" filter="url(#shadow-blur)"/>
+      <path d="M207.97 211.93V179.12A18.75 18.75 0 0 1 245.47 179.12V211.93Z" fill="url(#door-light)"/>
+    </g>
+  </g>
+  <path id="house" fill="#C85835" transform="translate(179.85 76) scale(2.34375)" d="M6 58C3.8 58 2 56.2 2 54V32.5C2 30.5 2.9 28.8 4.5 27.6L15.5 19.6C16.6 18.8 17.3 17.7 17.6 16.4L19.3 9.2C20.1 5.8 23.6 4.5 26.6 6.2L59 25.4C61 26.6 62 28.5 62 30.8V54C62 56.2 60.2 58 58 58H28V44C28 39.6 24.4 36 20 36S12 39.6 12 44V58Z"/>
+  <path id="word" fill="#F2F3F5" transform="translate(362.35 194.65)" d="M20.13 -21.48V-36.31Q22.9 -40.91 25.62 -44.91Q28.34 -48.9 31.43 -52.83Q34.53 -56.77 38.29 -61.19L61.22 -87.3H80.66L43.67 -45.55L42.5 -45.93ZM8.78 0V-87.3H24.42V-61.43L24.14 -40.34L24.42 -32.7V0ZM62.81 0 35.03 -41.06 44.85 -52.85 81.29 0ZM87.02 0V-65.51H102.25V0ZM94.65 -74.78Q91.01 -74.78 88.4 -77.23Q85.79 -79.68 85.79 -83.11Q85.79 -86.62 88.4 -89.04Q91.01 -91.46 94.65 -91.46Q98.33 -91.46 100.94 -89.04Q103.56 -86.62 103.56 -83.12Q103.56 -79.68 100.94 -77.23Q98.33 -74.78 94.65 -74.78ZM142.12 -65.51V-53.57H104.93V-65.51ZM114.22 -81.09H129.45V-18.45Q129.45 -14.9 130.97 -13.23Q132.5 -11.57 136 -11.57Q137.02 -11.57 138.74 -11.82Q140.46 -12.06 141.52 -12.3L143.92 -0.54Q141.41 0.23 138.8 0.56Q136.18 0.88 133.73 0.88Q124.32 0.88 119.27 -3.8Q114.22 -8.48 114.22 -17.14ZM170.57 1.2Q162.85 1.2 156.72 -2.79Q150.58 -6.77 147.07 -14.32Q143.55 -21.87 143.55 -32.62Q143.55 -43.54 147.15 -51.06Q150.75 -58.59 156.87 -62.46Q162.99 -66.33 170.52 -66.33Q176.36 -66.33 180.08 -64.38Q183.8 -62.43 185.99 -59.71Q188.18 -56.99 189.3 -54.66H189.95V-87.3H205.18V0H190.26V-10.37H189.3Q188.14 -8 185.9 -5.32Q183.66 -2.64 179.96 -0.72Q176.25 1.2 170.57 1.2ZM174.71 -11.34Q179.69 -11.34 183.16 -14.03Q186.63 -16.72 188.43 -21.53Q190.24 -26.34 190.24 -32.7Q190.24 -39.1 188.45 -43.82Q186.67 -48.54 183.2 -51.17Q179.73 -53.79 174.71 -53.79Q169.57 -53.79 166.1 -51.06Q162.64 -48.32 160.89 -43.56Q159.15 -38.8 159.15 -32.7Q159.15 -26.58 160.91 -21.74Q162.67 -16.91 166.16 -14.12Q169.65 -11.34 174.71 -11.34ZM243.64 1.32Q233.78 1.32 226.65 -2.82Q219.51 -6.97 215.67 -14.53Q211.84 -22.09 211.84 -32.35Q211.84 -42.45 215.63 -50.1Q219.42 -57.74 226.35 -62.03Q233.29 -66.33 242.64 -66.33Q248.65 -66.33 254.06 -64.39Q259.46 -62.45 263.65 -58.42Q267.83 -54.39 270.23 -48.15Q272.63 -41.9 272.63 -33.26V-28.5H219.03V-38.85H265.02L257.91 -35.77Q257.91 -41.33 256.19 -45.52Q254.48 -49.71 251.1 -52.04Q247.73 -54.38 242.72 -54.38Q237.71 -54.38 234.19 -52.01Q230.66 -49.63 228.82 -45.67Q226.97 -41.71 226.97 -36.86V-29.7Q226.97 -23.49 229.08 -19.22Q231.19 -14.96 235 -12.79Q238.81 -10.63 243.84 -10.63Q247.18 -10.63 249.91 -11.58Q252.64 -12.54 254.61 -14.43Q256.58 -16.33 257.62 -19.12L271.61 -16.23Q270.05 -10.97 266.23 -7.02Q262.4 -3.07 256.68 -0.87Q250.96 1.32 243.64 1.32ZM294.29 -38.37V0H279.06V-65.51H293.5L293.71 -49.31H292.52Q295.23 -57.8 300.58 -62.07Q305.92 -66.33 313.94 -66.33Q320.68 -66.33 325.72 -63.45Q330.75 -60.56 333.54 -55.05Q336.34 -49.54 336.34 -41.64V0H321.11V-39.31Q321.11 -45.9 317.69 -49.64Q314.27 -53.38 308.28 -53.38Q304.25 -53.38 301.08 -51.61Q297.91 -49.84 296.1 -46.5Q294.29 -43.15 294.29 -38.37Z"/>
+  <g id="smoke" fill="#A5ADBA">
+    <g transform="translate(558.8 113.22)"><g class="puff" style="animation-delay: 900ms"><use href="#puff" x="-10.8" y="-21.86" width="36" height="25.71"/></g></g>
+    <g transform="translate(559.52 112.97)"><g class="puff" style="animation-delay: 1010ms"><use href="#puff" x="-11.52" y="-23.31" width="38.4" height="27.43"/></g></g>
+    <g transform="translate(560.24 112.71)"><g class="puff" style="animation-delay: 1120ms"><use href="#puff" x="-12.24" y="-24.77" width="40.8" height="29.14"/></g></g>
+    <g transform="translate(560.96 112.45)"><g class="puff" style="animation-delay: 1230ms"><use href="#puff" x="-12.96" y="-26.23" width="43.2" height="30.86"/></g></g>
+    <g transform="translate(561.68 112.19)"><g class="puff" style="animation-delay: 1340ms"><use href="#puff" x="-13.68" y="-27.69" width="45.6" height="32.57"/></g></g>
+    <g transform="translate(558.8 113.22)"><g class="puff" style="animation-delay: 1450ms"><use href="#puff" x="-10.8" y="-21.86" width="36" height="25.71"/></g></g>
+    <g transform="translate(559.52 112.97)"><g class="puff" style="animation-delay: 1560ms"><use href="#puff" x="-11.52" y="-23.31" width="38.4" height="27.43"/></g></g>
+    <g transform="translate(560.24 112.71)"><g class="puff" style="animation-delay: 1670ms"><use href="#puff" x="-12.24" y="-24.77" width="40.8" height="29.14"/></g></g>
+    <g transform="translate(560.96 112.45)"><g class="puff" style="animation-delay: 1780ms"><use href="#puff" x="-12.96" y="-26.23" width="43.2" height="30.86"/></g></g>
+    <g transform="translate(561.68 112.19)"><g class="puff" style="animation-delay: 1890ms"><use href="#puff" x="-13.68" y="-27.69" width="45.6" height="32.57"/></g></g>
+    <g transform="translate(558.8 113.22)"><g class="puff" style="animation-delay: 2000ms"><use href="#puff" x="-10.8" y="-21.86" width="36" height="25.71"/></g></g>
+    <g transform="translate(559.52 112.97)"><g class="puff" style="animation-delay: 2110ms"><use href="#puff" x="-11.52" y="-23.31" width="38.4" height="27.43"/></g></g>
+  </g>
+</svg>

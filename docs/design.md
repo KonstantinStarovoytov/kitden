@@ -18,6 +18,8 @@ Canonical asset: `src/kitden/web/static/brand/kitden.svg`. The rail and favicon 
 
 When the page opens, the logo on the rail plays one short gesture, as if the stove is lit: the door glows warm like a hearth (`--hearth`, #E6B46D light / #F3CC8F dark, behind the house, with a soft light on the ground under it) and a soft stream of twelve faint grey puffs (`--ink-3`) leaves the top of the d, rises a little and drifts right over "en", where it thins out. About four seconds, then it rests; it plays again when the pointer or keyboard focus has stayed on the logo for 200 ms (one that only passes starts nothing), never twice at once; nothing under reduced motion. The logo is a link to the Overview, with the rail's press and the focus ring, and the gesture is its hover look. `startLogo` in `logo.js` builds and plays it; the shape, path and times are in [design/logo-motion.md](../design/logo-motion.md), with the mockup beside it. It is the one piece of motion that explains nothing (see Motion).
 
+The README hero (`docs/images/hero.svg`, `hero-dark.svg`) is the same gesture at 120 units with the slogan "Your AI coding tools, under one roof.". `scripts/make_hero.py` writes both files from the logo, the Inter font and logo-motion.md. It loops only there: the gesture, then 6 s of rest; still under reduced motion. GitHub shows it through `<img>` in `<picture>` (`raw.githubusercontent.com` serves it as `image/svg+xml`, its CSS keyframes play, scripts never run); PyPI drops `<source>`, so it shows the light file (checked 2026-10-27: GitHub changelog 2022-08-15 "Specify theme context for images in Markdown", pypa/readme_renderer `clean.py`).
+
 ## Color roles
 
 | Role | Light | Dark |
