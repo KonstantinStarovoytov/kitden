@@ -17,8 +17,8 @@ What Kitden does today and what comes next. Ideas and bugs:
   of the house on the rail glows warm and a soft stream of smoke leaves the d and drifts right,
   about four seconds; nothing under reduced motion. The logo is a link to the Overview. The
   shape and times are in `design/logo-motion.md`.
-- **Gateway map:** blocks glide and unfold in place, links take the pointer (× to remove, by
-  keyboard too), and a selected block dims everything off its path. Blocks look like the mockup:
+- **Gateway map:** blocks glide and unfold in place (and land when the browser holds frames
+  back), links take the pointer (× to remove, by keyboard too, also in Safari), and a selected block dims everything off its path. Blocks look like the mockup:
   lamps, ports, the gateway's counts that roll, and on each tool how many projects have a rule of
   their own for it. Changes in the tray show on the map: a connect draws a dashed link, a
   disconnect or a removed entry makes its line leave, and a server moved out waits outside, "Moves

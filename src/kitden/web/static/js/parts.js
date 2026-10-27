@@ -150,11 +150,13 @@ export function projectMenu(projects, picked, onPick, from = null) {
     list.replaceChildren(...shown.map(row));
     mark(find.value.trim() ? (shown.length > 1 ? 1 : -1) : shown.findIndex((item) => item.picked));
   }
-  // The menu shows first: a hidden list cannot scroll the picked project into view.
-  function open() {
+  // The menu shows first: a hidden list cannot scroll the picked project into view. The active
+  // option has a ring only for a keyboard (`.keys`): opened by a key, or after an arrow.
+  function open(byKeys) {
     find.value = "";
     isOpen = true;
     menu.hidden = false;
+    menu.classList.toggle("keys", byKeys);
     // A fade-out that is still running ends here.
     for (const move of menu.getAnimations()) move.cancel();
     draw();
@@ -199,11 +201,12 @@ export function projectMenu(projects, picked, onPick, from = null) {
     onPick(item.id);
   }
 
-  trigger.addEventListener("click", () => (isOpen ? close(true) : open()));
+  // Enter or Space on the button is a click with no pointer (`detail` 0).
+  trigger.addEventListener("click", (event) => (isOpen ? close(true) : open(event?.detail === 0)));
   trigger.addEventListener("keydown", (event) => {
     if (event.key !== "ArrowDown") return;
     event.preventDefault();
-    if (!isOpen) open();
+    if (!isOpen) open(true);
   });
   find.addEventListener("input", draw);
   find.addEventListener("keydown", (event) => {
@@ -222,6 +225,7 @@ export function projectMenu(projects, picked, onPick, from = null) {
       const to = optionAfter(event.key, active, shown.length);
       if (to === null) return;
       event.preventDefault();
+      menu.classList.add("keys");
       mark(to);
     }
   });

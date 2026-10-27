@@ -274,6 +274,20 @@ function addButton(column, onAdd) {
   return add;
 }
 
+// Runs `run` once on the next frame, or after `wait` ms when no frame comes (a browser may hold
+// frames back), so a draw always lands. Whichever comes first clears the other.
+export function drawSoon(run, { frame = requestAnimationFrame, wait = 120 } = {}) {
+  let done = false;
+  const once = () => {
+    if (done) return;
+    done = true;
+    clearTimeout(timer);
+    run();
+  };
+  const timer = setTimeout(once, wait);
+  frame(once);
+}
+
 // One map. `view.box` (div.map) goes where the page wants it and keeps every node when it is taken
 // out and put back; `view.area` holds the links' SVG, the blocks in reading order, then the hits of
 // the links and the ×.
@@ -717,7 +731,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHove
     if (item) item.path.classList.remove("hov");
     pointed = null;
     const focused = [...links.values()].find((other) => other.hit && other.hit === document.activeElement && other.hit.style.display !== "none");
-    if (focused && keyboardFocus(focused.hit)) {
+    if (focused) {
       pointAt(focused);
       return;
     }
@@ -752,9 +766,6 @@ export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHove
 
   // Where the blocks that show are now, as boxes.
   const blockBoxes = () => [...blocks.values()].filter((item) => item.o > 0).map(boxOf);
-
-  // Focus from a keyboard, not from a click (a mouse click focuses the hit too).
-  const keyboardFocus = (hit) => hit.matches?.(":focus-visible") !== false;
 
   function pointAt(item) {
     clearTimeout(wait);
@@ -801,11 +812,9 @@ export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHove
     if (item.d) hit.setAttribute("d", item.d);
     hit.addEventListener("pointerover", () => pointAt(item));
     hit.addEventListener("pointerout", unpointSoon);
-    // Only focus for a keyboard points at it: a mouse click focuses the hit too, and the panel gives
-    // that focus back when it closes, long after the pointer has gone.
-    hit.addEventListener("focus", () => {
-      if (keyboardFocus(hit)) pointAt(item);
-    });
+    // Any focus points at it (`:focus`): Safari does not always match `:focus-visible` on an SVG
+    // path. A click that focuses it gets the same look, which does no harm.
+    hit.addEventListener("focus", () => pointAt(item));
     hit.addEventListener("blur", unpointSoon);
     hit.addEventListener("click", () => pressLink(item));
     hit.addEventListener("keydown", (event) => keyOnHit(event, item));
@@ -1034,7 +1043,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHove
   function kick() {
     if (queued || !moving.size) return;
     queued = true;
-    requestAnimationFrame(() => {
+    drawSoon(() => {
       queued = false;
       step(performance.now());
       kick();

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { beforeEach, test } from 'node:test';
+import { afterEach, beforeEach, test } from 'node:test';
 
 // A small browser for the map view: elements, a frame queue and a clock that only the tests move.
 // A motion starts at the clock's `now` when it is called. `tick(ms)` moves the clock and runs the
@@ -94,6 +94,10 @@ globalThis.getComputedStyle = (node) => {
 };
 globalThis.document = { hidden: false, activeElement: null, createElement: (tag) => element(tag.toUpperCase()), createElementNS: (namespace, tag) => element(tag) };
 
+// A motion a test leaves running ends here: the clock stands still between ticks, so the draw
+// backstop (120 ms with no frame) would step it again and again.
+afterEach(() => settle());
+
 beforeEach(() => {
   now = 0;
   frames = [];
@@ -104,7 +108,7 @@ beforeEach(() => {
 
 const { blockOrder, layoutTree, linkKey, linkPath, midPoint } = await import('../../src/kitden/web/static/js/map.js');
 const { CALM, RETRACT, finishTransition, transition } = await import('../../src/kitden/web/static/js/motion.js');
-const { mapView } = await import('../../src/kitden/web/static/js/map-view.js');
+const { drawSoon, mapView } = await import('../../src/kitden/web/static/js/map-view.js');
 
 const TREE = {
   columns: [{ id: 'a', caption: 'A', w: 150, h: 54 }, { id: 'b', caption: 'B', w: 170, h: 60 }, { id: 'c', caption: 'C', w: 200, h: 34 }],
@@ -1046,24 +1050,21 @@ test('a hit follows its link while blocks move, and goes with it', async () => {
   assert.equal(xOf(v).hidden, true);
 });
 
-test('focus that is not for a keyboard does not give the link its hover look; a press still does', async (t) => {
+// Safari does not always match :focus-visible on an SVG path, so any focus gives the hover look:
+// Tab, and a click that focuses the hit (the same look, which does no harm).
+test('the hit paths take the hover look on keyboard focus without focus-visible', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   reduce(true);
   const v = view({ links: LINKS });
   await v.draw(TREE, lay(), {});
   const [h, x, link] = [hitOf(v), xOf(v), v.node('c1>s1')];
-  // A mouse click focused it, the panel took the focus, and closing the panel gives it back.
-  h.matches = () => false;
+  h.matches = (selector) => selector !== ':focus-visible';
   h.focus();
-  assert.ok(!link.classList.contains('hov')); assert.equal(x.hidden, true);
-  // A press (the click itself) still points at it.
-  h.dispatch('click');
   assert.ok(link.classList.contains('hov')); assert.equal(x.hidden, false);
-  h.dispatch('blur'); t.mock.timers.tick(240);
+  h.blur(); h.dispatch('blur'); t.mock.timers.tick(240);
   assert.ok(!link.classList.contains('hov')); assert.equal(x.hidden, true);
-  // Focus from the keyboard points at it.
-  h.matches = () => true;
-  h.focus();
+  // A press still points at it.
+  h.dispatch('click');
   assert.ok(link.classList.contains('hov')); assert.equal(x.hidden, false);
 });
 
@@ -1089,16 +1090,11 @@ test('the link with keyboard focus keeps its look when the pointer passes over a
   await v.draw(TREE, lay(), {});
   const [a, b] = walk(v.area).filter((n) => n.classList?.contains('hit'));
   const [one, two, x] = [v.node('c1>s1'), v.node('c1>s2'), xOf(v)];
-  a.matches = () => true;
   a.focus();
   b.dispatch('pointerover'); b.dispatch('pointerout'); t.mock.timers.tick(240);
   // Its hover look is its only focus mark: it comes back, with the × on it.
   assert.deepEqual([one.classList.contains('hov'), two.classList.contains('hov')], [true, false]);
   assert.deepEqual([x.hidden, x.getAttribute('aria-label')], [false, 'Remove s1']);
-  // Focus that is no keyboard focus (a mouse click) has no look to come back.
-  a.matches = () => false;
-  b.dispatch('pointerover'); b.dispatch('pointerout'); t.mock.timers.tick(240);
-  assert.deepEqual([one.classList.contains('hov'), x.hidden], [false, true]);
 });
 
 test('a link that goes while it has keyboard focus does not come back as the focus look', async (t) => {
@@ -1949,4 +1945,47 @@ test('a block that gains or loses its count gets or loses the control', async ()
   assert.ok(!v.area.children.some((n) => n.dataset.focus === 'count:s1'));
   await v.draw(TREE, lay(), {});
   assert.equal(v.node('count:s1').textContent, '2');
+});
+
+test('drawSoon draws once on the next frame and clears its timer', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const waiting = [];
+  let draws = 0;
+  drawSoon(() => draws++, { frame: (fn) => waiting.push(fn) });
+  assert.equal(draws, 0);
+  waiting[0](0);
+  assert.equal(draws, 1);
+  t.mock.timers.tick(1000);
+  assert.equal(draws, 1);
+});
+
+test('drawSoon draws once after 120 ms when no frame comes', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const waiting = [];
+  let draws = 0;
+  drawSoon(() => draws++, { frame: (fn) => waiting.push(fn) });
+  t.mock.timers.tick(119);
+  assert.equal(draws, 0);
+  t.mock.timers.tick(1);
+  assert.equal(draws, 1);
+  // A frame that comes late draws nothing more.
+  waiting[0](0);
+  t.mock.timers.tick(1000);
+  assert.equal(draws, 1);
+});
+
+test('with no frames the clock still steps a motion to its end, and its promise ends', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const v = view();
+  await v.draw(TREE, lay(), { motion: 'none' });
+  v.hold('s2', { x: 500, y: 300 });
+  let done = false;
+  v.homeIn('s2').then(() => { done = true; });
+  frames = []; // the frames never come
+  now += 220;
+  t.mock.timers.tick(120);
+  const home = place(lay(), 's2');
+  assert.deepEqual(pos(v.node('s2')), { x: home.x, y: home.y, s: 1 });
+  await Promise.resolve();
+  assert.ok(done);
 });

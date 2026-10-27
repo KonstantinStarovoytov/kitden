@@ -617,6 +617,28 @@ test('opening the menu moves focus into the find box, with the picked option act
   assert.deepEqual(words(m.options()[1]), ['api', 'Folder missing']);
 });
 
+// The mockup has no ring when the menu opens by mouse: the ring marks the option for a keyboard.
+test('the project menu opened by mouse shows no active ring; an arrow key shows it', () => {
+  const m = menuOn('m');
+  const ring = () => m.menu.classList.contains('keys');
+  m.trigger.listeners.click({ detail: 1 });
+  assert.equal(m.active(), 2);
+  assert.equal(ring(), false);
+  m.press('ArrowDown');
+  assert.equal(ring(), true);
+  m.press('Escape');
+  // Opened again by mouse, it starts with no ring.
+  m.trigger.listeners.click({ detail: 1 });
+  assert.equal(ring(), false);
+  m.press('Escape');
+  // Enter or Space on the button (a click with no pointer) and Down open it with the ring.
+  m.trigger.listeners.click({ detail: 0 });
+  assert.equal(ring(), true);
+  m.press('Escape');
+  m.trigger.listeners.keydown({ key: 'ArrowDown', preventDefault() {} });
+  assert.equal(ring(), true);
+});
+
 test('Down, Up, Home and End move the active option, and Enter picks it', () => {
   const m = menuOn('m');
   m.open();

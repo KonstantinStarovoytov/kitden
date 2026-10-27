@@ -44,7 +44,7 @@
   <g font-size="12" fill="#C1C6CF">
     <circle cx="684" cy="116" r="4" fill="#47C27A"/>
     <text x="696" y="120">what loads where</text>
-    <circle cx="684" cy="142" r="4" fill="#E0A347"/>
+    <circle cx="684" cy="142" r="4" fill="#EAC27C"/>
     <text x="696" y="146">what loads twice</text>
     <circle cx="684" cy="168" r="4" fill="#C85835"/>
     <text x="696" y="172">what to switch off</text>

@@ -494,8 +494,8 @@ def test_the_project_menu_looks_like_the_mockups():
     for part in ("padding: 8px 10px", "border-radius: 7px", "gap: 10px", "color: var(--ink-2)"):
         assert part in option, part
     assert "background: var(--dim)" in rule(".where-option:hover, .where-option.active")
-    # The dim fill is faint, so the option the arrows are on also gets a ring that keeps 3:1.
-    assert "inset 0 0 0 1px var(--lamp-off)" in rule(".where-option.active")
+    # The dim fill is faint, so for a keyboard the active option also gets a ring that keeps 3:1.
+    assert "inset 0 0 0 1px var(--lamp-off)" in rule(".where-menu.keys .where-option.active")
     picked = rule('.where-option[aria-selected="true"]')
     assert "background: var(--route-soft)" in picked and "color: var(--ink)" in picked
     # The count is accent at 11 px, the sub line quiet at 11 px, the check accent.
@@ -3090,3 +3090,21 @@ def test_the_undo_toast_names_the_change_and_offers_redo():
     assert 'view === "changes"' in review
     # Its strike has the mockup's curve, from motion.js.
     assert 'export const STRIKE = "cubic-bezier(.6,0,.2,1)";' in script("motion.js")
+
+
+def test_the_project_menu_ring_is_only_for_a_keyboard():
+    css = (STATIC / "style.css").read_text()
+    ring = "box-shadow: inset 0 0 0 1px var(--lamp-off);"
+    assert f".where-menu.keys .where-option.active {{ {ring} }}" in css
+    assert not re.search(r"^\.where-option\.active \{ box-shadow", css, re.M)
+
+
+def test_how_it_works_dark_svg_uses_no_old_amber():
+    css = (STATIC / "style.css").read_text()
+    images = STATIC.parents[3] / "docs/images"
+    light = re.search(r"--lamp-warn: (#[0-9a-f]{6});", css).group(1)
+    dark = re.search(r"--lamp-on: #47c27a; --lamp-warn: (#[0-9a-f]{6});", css).group(1)
+    for name, warn in (("how-it-works.svg", light), ("how-it-works-dark.svg", dark)):
+        svg = (images / name).read_text().lower()
+        assert "#e0a347" not in svg, name
+        assert f'<circle cx="684" cy="142" r="4" fill="{warn}"/>' in svg, name
