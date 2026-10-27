@@ -318,6 +318,7 @@ def test_each_item_says_what_details_can_offer(tmp_path):
         "off": ["claude_code"],
         "on": [],
         "remove": ["claude_code"],
+        "project": [],
     }
     # Off already: Claude Code can turn it on again, or remove it. A bundled plugin no marketplace
     # offers: nothing to add, only Codex's switch.
@@ -326,24 +327,34 @@ def test_each_item_says_what_details_can_offer(tmp_path):
         "off": [],
         "on": ["claude_code"],
         "remove": ["claude_code"],
+        "project": [],
     }
-    assert items["browser"]["can"] == {"add": [], "off": ["codex"], "on": [], "remove": ["codex"]}
-    assert items["ui-kit"]["can"] == {"add": [], "off": [], "on": [], "remove": []}
+    assert items["browser"]["can"] == {
+        "add": [],
+        "off": ["codex"],
+        "on": [],
+        "remove": ["codex"],
+        "project": [],
+    }
+    assert items["ui-kit"]["can"] == {"add": [], "off": [], "on": [], "remove": [], "project": []}
     # A skill: each client that loads its own copy has a rule; Cursor has none.
     assert items["brandkit"]["can"] == {
         "add": ["codex"],
         "off": ["claude_code"],
         "remove": ["claude_code"],
+        "project": [],
     }
     assert items["code-review"]["can"] == {
         "add": ["claude_code"],
         "off": ["codex"],
         "remove": ["codex"],
+        "project": [],
     }
     assert items["ui-polish"]["can"] == {
         "add": ["claude_code", "codex"],
         "off": [],
         "remove": ["cursor"],
+        "project": [],
     }
     # A hook has no switch.
     assert items["PreToolUse: Bash"]["can"] == {}
@@ -374,11 +385,13 @@ def test_a_skill_says_which_clients_can_take_a_copy_cursor_too(tmp_path):
         "add": ["codex"],
         "off": ["claude_code"],
         "remove": ["claude_code"],
+        "project": [],
     }
     assert items["ui-polish"]["can"] == {
         "add": ["claude_code", "codex"],
         "off": [],
         "remove": ["cursor"],
+        "project": [],
     }
     # A plugin's can stays as it was: never Cursor.
     assert items["superpowers"]["can"]["add"] == ["codex"]
@@ -459,3 +472,26 @@ def test_a_project_only_skill_gets_no_rule_for_all_projects(tmp_path):
     assert items["site-notes"]["by"]["claude_code"] == "on"
     # Not the user's settings file: Details offers a rule in this project instead.
     assert items["site-notes"]["can"]["off"] == []
+
+
+def test_turn_on_and_remove_never_act_on_a_projects_own_entry(tmp_path):
+    # website's shared settings turn superpowers off. Turn on and Remove would write that
+    # committed file (and Remove would bring it back on there), so Claude Code is left out; Details
+    # say where its setting comes from instead.
+    home = build_demo_home(tmp_path, "medium")
+    website = str(home / "work/website")
+    off = _items(_map(home, website))["superpowers"]
+    assert off["by"]["claude_code"] == "off"
+    assert (off["can"]["on"], off["can"]["remove"], off["can"]["off"]) == ([], [], [])
+    assert off["can"]["project"] == ["claude_code"]
+    # A project that turns on a plugin that is off for all projects: no Turn off, no Remove, no
+    # x for that client either (they would act on the project's entry).
+    atlas = home / "work/atlas"
+    _write(atlas / ".claude/settings.json", {"enabledPlugins": {"pr-review@demo-market": True}})
+    on = _items(_map(home, str(atlas)))["pr-review"]
+    assert on["by"]["claude_code"] == "on"
+    assert (on["can"]["on"], on["can"]["remove"], on["can"]["off"]) == ([], [], [])
+    assert on["can"]["project"] == ["claude_code"]
+    # For all projects the same plugin keeps its own Turn on and Remove.
+    everywhere = _items(_map(home))["pr-review"]
+    assert everywhere["can"]["on"] == ["claude_code"] and everywhere["can"]["project"] == []

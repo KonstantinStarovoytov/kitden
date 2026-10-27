@@ -1031,13 +1031,19 @@ def _parts(item: dict, cells: dict[str, dict], skills: dict[tuple, dict]) -> lis
 def _account_rows(tables: dict[str, list[dict]], shown: set[str], t: _Tables, items) -> list:
     """Plugin rows the map leaves out because Claude Code keeps them in the account (the
     "Claude account plugins and connectors" row, Unknown): every item of the row is an
-    account's. They go under "Other plugins"."""
-    scopes = {i.id: i.scope for i in items}
+    account's. They go under "Other plugins", with the reason Kitden gives for them; one that
+    only hidden clients have is left out."""
+    by_id = {i.id: i for i in items}
     out = []
     for row in tables["plugin"]:
         known = t.by_key.get(row["key"])
-        ids = [i for cell in (known.cells.values() if known else []) for i in cell.items]
-        if row["key"] in shown or not ids or any(scopes.get(i) is not Scope.ACCOUNT for i in ids):
+        cells = known.cells if known else {}
+        ids = [i for cell in cells.values() for i in cell.items]
+        if row["key"] in shown or not ids:
+            continue
+        if any(i not in by_id or by_id[i].scope is not Scope.ACCOUNT for i in ids):
+            continue
+        if not {c for c in cells if cells[c].items}.intersection(t.visible):
             continue
         out.append(
             {
@@ -1051,6 +1057,8 @@ def _account_rows(tables: dict[str, list[dict]], shown: set[str], t: _Tables, it
                 "count": None,
                 "cells": row["cells"],
                 "parts": [],
+                "account": True,
+                "reason": by_id[ids[0]].change_hint,
             }
         )
     return out

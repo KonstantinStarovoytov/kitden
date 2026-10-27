@@ -136,21 +136,28 @@ def _can(row: Row, by: dict, through: dict, ids: dict, by_id, offer, found, proj
     the plugin and lack it (never Cursor: it gets plugins through Claude Code), or that can take a
     copy of the skill (Cursor too, when the skill catalog gives it a route), and `off`, the
     clients that load their own copy and can turn it off for all projects (a plugin's switch, or a
-    skill rule), `on`, the clients that have the plugin off and can turn it on, and `remove`, the
-    clients whose own entry (the deciding one, also a project's, on or off) Kitden can remove: a
-    plugin's file entry, or a skill's own folder. A faint link has none.
-    `off` acts on the user's own entry, the client's first item: a client where the project's own
-    entry or rule decides is left out (Details offers "Turn off in this project…" there). A hook
-    has no switch."""
-    own = [
+    skill rule), `on`, the clients that have the plugin off and can turn it on, `remove`, the
+    clients whose own entry (on or off) Kitden can remove: a plugin's file entry, or a skill's own
+    folder, and `project`, the clients whose state in the picked project comes from the project's
+    own entry or rule. A faint link has none.
+    `off`, `on` and `remove` act on the user's own entry for all projects, the client's first
+    item: a client in `project` is left out of all three (Details say where its setting comes
+    from, and offer "Turn off in this project…" where they can). A hook has no switch."""
+    project_decides = [
         c
         for c, state in by.items()
-        if state == "on"
-        and c not in through
-        and not any(project and _decides_here(by_id[i], project) for i in ids[c])
+        if state in ("on", "off", "unknown")
+        and c in ids
+        and any(project and _decides_here(by_id[i], project) for i in ids[c])
     ]
-    held = [c for c, state in by.items() if state in ("on", "off") and c not in through]
-    off = [c for c, state in by.items() if state == "off"]
+    own = [c for c, state in by.items() if state == "on" and c not in through]
+    own = [c for c in own if c not in project_decides]
+    held = [
+        c
+        for c, state in by.items()
+        if state in ("on", "off") and c not in through and c not in project_decides
+    ]
+    off = [c for c, state in by.items() if state == "off" and c not in project_decides]
 
     def removable(action: str) -> list[str]:
         return [c for c in held if action in by_id[ids[c][0]].actions]
@@ -163,6 +170,7 @@ def _can(row: Row, by: dict, through: dict, ids: dict, by_id, offer, found, proj
             "off": [c for c in own if PLUGIN_DISABLE in by_id[ids[c][0]].actions],
             "on": [c for c in off if PLUGIN_ENABLE in by_id[ids[c][0]].actions],
             "remove": removable(PLUGIN_REMOVE),
+            "project": project_decides,
         }
     if row.kind is ItemKind.SKILL:
         routes = offer["routes"] if offer else {}
@@ -171,6 +179,7 @@ def _can(row: Row, by: dict, through: dict, ids: dict, by_id, offer, found, proj
             "add": add,
             "off": [c for c in RULES if c in own],
             "remove": removable(SKILL_REMOVE),
+            "project": project_decides,
         }
     return {}
 

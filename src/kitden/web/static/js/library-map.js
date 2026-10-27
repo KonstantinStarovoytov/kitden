@@ -380,11 +380,20 @@ export function libraryDetails(id, how) {
 // While the List shows, the tab's tree is drawn from its answer for Details only.
 export function libraryThing(id) {
   const { model, answer } = shownTree();
-  if (!model || !id) return null;
+  if (!id) return null;
+  if (listOnly.has(id) && !(model && model.blocks.some((b) => b.id === id))) return { block: listOnly.get(id), answer };
+  if (!model) return null;
   const byId = new Map(model.blocks.map((b) => [b.id, b]));
   if (byId.has(id)) return { block: byId.get(id), answer };
   const link = model.links.find((l) => linkKey(l) === id);
   return link ? { link, from: byId.get(link.from), to: byId.get(link.to), answer } : null;
+}
+
+// What the List shows that the map does not draw (a plugin Claude Code keeps in the account), as a
+// block for its Details: `{ id, kind: "account", name, reason, item }`.
+const listOnly = new Map();
+export function showListOnly(block) {
+  listOnly.set(block.id, block);
 }
 
 // The map's tree while it shows; else the shown tab's, kept while its answer stays the same.
@@ -392,7 +401,9 @@ const listed = { answer: null, model: null };
 function shownTree() {
   if (onMap.view) return onMap;
   const tab = mapTab();
-  const answer = current(TAB_READS[tab]);
+  // An answer with no clients is not a tree (a read that went wrong): nothing to draw from.
+  const read = current(TAB_READS[tab]);
+  const answer = read && read.clients ? read : null;
   if (answer && listed.answer !== answer) Object.assign(listed, { answer, model: tab === "instructions" ? instructionsTree(answer) : libraryTree(answer) });
   return answer ? listed : { model: null, answer: null };
 }

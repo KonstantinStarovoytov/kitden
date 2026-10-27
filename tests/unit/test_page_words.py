@@ -3004,7 +3004,7 @@ def test_the_library_list_words_and_looks():
     ):
         assert words in text, words
     # A row opens the map's Details; the keys are the tree grid's.
-    assert "libraryDetails(row.id);" in text and "gridKey(rows," in text
+    assert "libraryDetails(id);" in text and "gridKey(rows," in text
     assert "export function libraryDetails(id, how)" in script("library-map.js")
     # The look: the Gateway List's grid, a sticky 30 px head, a 34 px part row.
     assert ".tg-row.part { min-height: 34px; }" in CSS
@@ -3016,6 +3016,16 @@ def test_the_library_list_words_and_looks():
     assert "`Turn on in ${CLIENT_NAMES[client]}…`" in details
     assert "`Remove from ${CLIENT_NAMES[client]}…`" in details
     assert "more: removeActions(item)" in details
+    # They act only on a client's own entry for all projects; where the project decides, one quiet
+    # line says so (`can.project`, views/library_map.py).
+    assert (
+        "`${CLIENT_NAMES[client]}'s setting for this comes from ${folder}'s own settings.`"
+        in details
+    )
+    assert '"project": project_decides,' in (STATIC.parents[1] / "views/library_map.py").read_text()
+    # A part the map does not draw opens its plugin; the account row opens its own small card.
+    assert 'if (row.kind === "part") return row.parent;' in text
+    assert 'if (block.kind === "account") return accountCard(block);' in details
     assert ".tg-row.arrive { animation: arrive 1200ms var(--ease-out) both; }" in CSS
     # The server's words for Differences and the tabs (views/library.py).
     server = (STATIC.parents[1] / "views/library.py").read_text()

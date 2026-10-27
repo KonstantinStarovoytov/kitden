@@ -1365,3 +1365,16 @@ def test_an_instruction_file_cell_is_unknown_for_a_client_kitden_could_not_read(
     # A client Kitden read and that does not read the file: nothing.
     claude = next(f for f in files if f["name"] == "CLAUDE.md")
     assert claude["cells"]["cursor"]["state"] == "none"
+
+
+def test_the_account_row_says_why_and_goes_with_its_hidden_column(tmp_path):
+    home = build_demo_home(tmp_path, "medium")
+    other = next(g for g in _list(home)["groups"] if g["key"] == "other")
+    account = other["items"][0]
+    assert (account["name"], account["account"]) == ("Claude account plugins and connectors", True)
+    assert account["reason"] == (
+        "Stored in your Claude account. Change it in the Claude app or on claude.ai."
+    )
+    # Only Claude Code has it: with Claude Code hidden it is left out, and so is its group.
+    hidden = _list(home, hidden=frozenset({"claude_code"}))
+    assert "other" not in [g["key"] for g in hidden["groups"]]

@@ -192,6 +192,22 @@ const onLabel = (client) => `Turn on in ${CLIENT_NAMES[client]}…`;
 const removeLabel = (client) => `Remove from ${CLIENT_NAMES[client]}…`;
 const onActions = (item) => onBodies(item).map(({ client, body }) => ({ label: onLabel(client), body }));
 const removeActions = (item) => removeBodies(item).map(({ client, body }) => ({ label: removeLabel(client), body }));
+// They act only on a client's own entry for all projects. Where the picked project's own settings
+// decide (`can.project`), one quiet line says so instead.
+export const fromProject = (client, folder) => `${CLIENT_NAMES[client]}'s setting for this comes from ${folder}'s own settings.`;
+function projectLine(item, c) {
+  const clients = (item.can && item.can.project) || [];
+  if (!clients.length || !c.folder) return null;
+  return el("p", "muted", inOrder(clients).map((client) => fromProject(client, c.folder)).join(" "));
+}
+// The nodes under a card's actions, in one box when there are several.
+function afterOf(...nodes) {
+  const shown = nodes.filter(Boolean);
+  if (shown.length < 2) return shown[0] || null;
+  const box = el("div");
+  box.append(...shown);
+  return box;
+}
 
 // "Add to Codex…", or "Add to Claude Code or Codex…" when both can take it.
 export const addLabel = (clients) => `Add to ${names(clients).join(" or ")}…`;
@@ -211,7 +227,7 @@ export function pluginCard(item, c, { addStep = () => {} } = {}) {
   if (here) actions.push({ label: OFF_HERE, body: here });
   actions.push(...onActions(item));
   const tech = item.technical || {};
-  return { kind: KIND_WORDS.plugin, title: item.name, id: item.source, tile: kindTile("plugin"), facts, why: loadsSay(item, c), actions, more: removeActions(item), technical: techOf([{ title: "Plugin folder", path: tech.path }, { title: "Marketplace", summary: tech.marketplace }]) };
+  return { kind: KIND_WORDS.plugin, title: item.name, id: item.source, tile: kindTile("plugin"), facts, why: loadsSay(item, c), actions, more: removeActions(item), after: projectLine(item, c), technical: techOf([{ title: "Plugin folder", path: tech.path }, { title: "Marketplace", summary: tech.marketplace }]) };
 }
 
 // A thing a plugin holds: Plugin, Kind, Source and Clients, and "Follows its plugin." It has no
@@ -249,8 +265,14 @@ export function skillCard(item, c, { someStep = () => {} } = {}) {
   if ((item.by || {}).cursor === "on") notes.push(NO_CURSOR_SWITCH);
   const why = [loadsSay(item, { folder: c.project ? c.folder : "", noun: "this skill" }), ...notes].join(" ");
   const claude = ((item.can && item.can.off) || []).includes("claude_code");
-  const after = claude ? trayNote(SOME_FIRST, () => skillRuleWaits("project", c.answer)) : null;
+  const after = afterOf(projectLine(item, c), claude ? trayNote(SOME_FIRST, () => skillRuleWaits("project", c.answer)) : null);
   return { kind: KIND_WORDS.skill, title: item.name, id: item.source, tile: kindTile("skill"), facts, why, actions, more: removeActions(item), after, technical: techOf([{ title: "Skill file", path: (item.technical || {}).path }]) };
+}
+
+// What Claude Code keeps in the account (the List's "Claude account plugins and connectors"): its
+// name, Unknown, and the reason Kitden gives for it. Kitden cannot change it.
+export function accountCard(block) {
+  return { kind: KIND_WORDS.plugin, title: block.name, tile: kindTile("plugin"), facts: [stateFact(block.item)], why: block.reason || null };
 }
 
 // A hook: its facts and Technical details only; hooks have no switch yet.
@@ -378,6 +400,7 @@ function cardOf(thing, c, id) {
   const { block } = thing;
   if (INSTRUCTION_CARDS[block.kind]) return INSTRUCTION_CARDS[block.kind](block, c);
   if (block.kind === "client") return clientCard(block.client, c);
+  if (block.kind === "account") return accountCard(block);
   if (block.kind === "group") return marketplaceCard(block.group);
   if (block.kind === "part") return partCard(block, c);
   if (block.kind === "plugin") return pluginCard(block.item, c, { addStep: () => addStep(id) });

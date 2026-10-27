@@ -663,3 +663,24 @@ test('a plugin turns on again and a plugin or skill is removed, as the old Detai
   assert.deepEqual(skillCard.more.map((a) => [a.label, a.body.action]), [['Remove from Cursor…', 'skill.remove']]);
   assert.equal(keyFor(skillCard.more[0].body), keyFor(linkRemoval(skill, 'cursor', MEDIUM).body));
 });
+
+test("where a project's own settings decide, Details say so and offer no Turn on or Remove", () => {
+  // website's settings turn superpowers off for Claude Code (can.project, views/library_map.py).
+  const decided = { ...SUPERPOWERS, by: { claude_code: 'off', cursor: 'off' }, can: { add: ['codex'], off: [], on: [], remove: [], project: ['claude_code'] } };
+  const card = details.pluginCard(decided, details.context(MEDIUM, 'w', 'website'));
+  assert.equal(card.after.textContent, "Claude Code's setting for this comes from website's own settings.");
+  assert.ok(!card.actions.some((a) => a.label.startsWith('Turn on')));
+  assert.deepEqual(card.more, []);
+  // A skill too; with All projects there is no such line.
+  const skill = own('s9', 'api-style', 'skill', { by: { codex: 'on', cursor: 'on' }, items: { codex: ['cx'], cursor: ['cu'] }, can: { add: [], off: [], remove: [], project: ['codex', 'cursor'] } });
+  assert.equal(details.skillCard(skill, details.context(MEDIUM, 'a', 'atlas')).after.textContent, "Codex's setting for this comes from atlas's own settings. Cursor's setting for this comes from atlas's own settings.");
+  assert.equal(details.pluginCard({ ...decided, can: { ...decided.can, project: [] } }, c()).after, null);
+});
+
+test('the account card says what Claude Code keeps in the account, and that it is not known', () => {
+  const card = details.accountCard({ id: 'item:acc', kind: 'account', name: 'Claude account plugins and connectors', reason: 'Stored in your Claude account. Change it in the Claude app or on claude.ai.', item: { by: { claude_code: 'unknown' } } });
+  assert.equal(card.title, 'Claude account plugins and connectors');
+  assert.deepEqual(facts(card), [['State', 'Unknown']]);
+  assert.equal(card.why, 'Stored in your Claude account. Change it in the Claude app or on claude.ai.');
+  assert.equal(card.actions, undefined);
+});

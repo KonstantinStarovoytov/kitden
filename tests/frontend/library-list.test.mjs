@@ -472,6 +472,7 @@ test('Details a row opened follow another project, and close when it is gone the
   assert.deepEqual([selected.at(-1), hows.at(-1)], [null, { follow: true }]);
   Object.assign(state, { project: '' });
   data.libraryMap = MAP;
+  data.scope.libraryMap = '';
   pages['#drawer'].classList.remove('open');
   panelState.current = null;
 });
@@ -490,4 +491,40 @@ test('an arrival for a skill inside a plugin opens the plugin at its row, which 
   assert.equal(rowOf('item:p2').getAttribute('aria-expanded'), 'true');
   assert.ok(rowOf('part:p2:skills:plan').classList.contains('arrive'));
   assert.ok(texts(rowOf('part:p2:skills:plan')).includes('Same name, another source.'));
+});
+
+test('a part the map does not draw opens its plugin, an account row opens its own card', async () => {
+  // documents: Kitden read nothing inside it, so the map has no part blocks; the List has its
+  // skills from the skill rows. "Claude account plugins and connectors" is not on the map at all.
+  const documents = item('p9', 'plugin', 'documents', { claude_code: cell('none'), codex: cell('on'), cursor: cell('none') }, {
+    lookup: 'documents@openai-curated', count: null,
+    parts: [{ key: 'skills', kind: 'skill', name: 'docx', source: 'documents@openai-curated', same_name: false, lookup: 'docx', flags: [], cells: { claude_code: cell('none'), codex: cell('on'), cursor: cell('none') } }],
+  });
+  const account = { ...item('acc', 'plugin', 'Claude account plugins and connectors', { claude_code: cell('unk'), codex: cell('none'), cursor: cell('none') }), parts: [], account: true, reason: 'Stored in your Claude account. Change it in the Claude app or on claude.ai.' };
+  const list = { ...LIST, groups: [...LIST.groups, { key: 'other', name: 'Other plugins', icon: 'puzzle', kind: 'other', items: [documents, account] }] };
+  const mapAnswer = { ...MAP, groups: [...MAP.groups, { key: 'other', name: 'Other plugins', icon: 'puzzle', kind: 'other', items: [{ id: 'p9', name: 'documents', kind: 'plugin', plugin: 'documents@openai-curated', by: { codex: 'on' }, through: {}, items: { codex: ['cx-doc'] }, here: false, source: 'Other plugins', technical: {}, can: { add: [], off: [], on: [], remove: [], project: [] } }] }] };
+  tick(5); // a new read: the List's answer changed
+  await showList({ list });
+  data.libraryMap = mapAnswer;
+  selected.length = 0;
+  rowOf('item:p9').listeners.click[0]({ target: walk(rowOf('item:p9')).find((n) => n.classList.contains('caret')) });
+  main.replaceChildren();
+  renderLibrary(main);
+  rowOf('part:p9:skills:docx').listeners.click[0]({ target: rowOf('part:p9:skills:docx') });
+  assert.deepEqual(selected, ['item:p9']);
+  rowOf('item:acc').listeners.click[0]({ target: rowOf('item:acc') });
+  assert.equal(selected.at(-1), 'item:acc');
+  const thing = libraryThing('item:acc');
+  assert.deepEqual([thing.block.kind, thing.block.name, thing.block.item.by], ['account', 'Claude account plugins and connectors', { claude_code: 'unknown' }]);
+  assert.equal(thing.block.reason, 'Stored in your Claude account. Change it in the Claude app or on claude.ai.');
+  // An Overview arrival for docx opens documents' Details too.
+  const { arrival } = await import('../../src/kitden/web/static/js/store.js');
+  selected.length = 0;
+  state.selected = { kind: 'skill', name: 'docx' };
+  arrival.pending = true;
+  main.replaceChildren();
+  renderLibrary(main);
+  assert.deepEqual(selected, ['item:p9']);
+  data.libraryMap = MAP;
+  tick(5);
 });

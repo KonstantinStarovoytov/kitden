@@ -6,13 +6,13 @@
 // the map (library-details.js); a cell's "+ Add" only adds a row to the tray.
 import { getJson, query } from "./api.js";
 import { button, el, gridKey, icon, plural } from "./dom.js";
-import { INSTRUCTIONS_HINT, LEDE, leaveLibraryMap, letGoLibraryMap, libraryDetails, libraryMode, libraryThing, renderLibraryMap } from "./library-map.js";
+import { INSTRUCTIONS_HINT, LEDE, leaveLibraryMap, letGoLibraryMap, libraryDetails, libraryMode, libraryThing, renderLibraryMap, showListOnly } from "./library-map.js";
 import { glidePill, modeSwitch, switchedNow } from "./map-page.js";
 import { CALM, afterOldPage, animate, entrance, glide, land, reducedMotion, rise } from "./motion.js";
 import { projectNote } from "./offer.js";
 import { isPanelOpen, openInfo, panelState, projectLabel, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, folderName, lookFor, mark, morphSocket, scopeBar, setHint, skeleton, socket, sourceLines, staleNote } from "./parts.js";
-import { afterShared, arrival, current, data, freshness, go, libraryKind, libraryShows, projectPath, render, retry, sameSel, setState, state, takeArrival } from "./store.js";
+import { afterShared, arrival, current, currentError, data, freshness, go, libraryKind, libraryShows, projectPath, render, retry, sameSel, setState, state, takeArrival } from "./store.js";
 
 // The List's tabs, as on the Map, and what it shows of Plugins and skills.
 const TABS = [["plugin", "Plugins and skills"], ["instructions", "Instructions"]];
@@ -400,13 +400,16 @@ function renderList(main) {
 
 // Another project drawn in place: Details a row opened follow the same item, drawn for that
 // project, or close when it is gone (library-details.js). It waits for the tab's map read of that
-// project, which the Details are drawn from.
+// project, which the Details are drawn from (app.js reads it beside the List's rows).
 function followProject(kind) {
-  if (onList.project === state.project || !current(kind === "plugin" ? "libraryMap" : "instructionsMap")) return;
+  const read = kind === "plugin" ? "libraryMap" : "instructionsMap";
+  const failed = Boolean(currentError(read));
+  if (onList.project === state.project || (!current(read) && !failed)) return;
   const had = onList.project !== null && onList.selected;
   onList.project = state.project;
   if (!had) return;
-  const id = libraryThing(onList.selected) ? onList.selected : null;
+  // A map read that failed for this project gives nothing to draw them from: they let go.
+  const id = !failed && libraryThing(onList.selected) ? onList.selected : null;
   if (!id) onList.selected = null;
   libraryDetails(id, { follow: true });
 }
@@ -590,7 +593,7 @@ export function listRows(answer, open = new Set(), folded = new Set()) {
       const parts = item.parts || [];
       const opened = parts.length ? open.has(itemId) : undefined;
       const sel = item.lookup ? { kind: item.kind, name: item.lookup } : null;
-      rows.push({ id: itemId, key: itemId, parent: id, depth: 1, kind: item.kind, name: item.name, meta: itemWords(item), flags: item.flags || [], cells: item.cells, sel, expanded: opened, group: false, source: item.source, same_name: item.same_name });
+      rows.push({ id: itemId, key: itemId, parent: id, depth: 1, kind: item.kind, name: item.name, meta: itemWords(item), flags: item.flags || [], cells: item.cells, sel, expanded: opened, group: false, source: item.source, same_name: item.same_name, account: Boolean(item.account), reason: item.reason || null });
       if (!opened) continue;
       for (const part of parts) {
         const partId = `part:${item.id}:${part.key}:${part.name}`;
@@ -619,7 +622,7 @@ function searchOpen(answer, q) {
 
 // The List as the person left it: the open plugins, the folded groups, the row that takes the
 // Tab key and the one whose Details show, kept across draws; and the rows drawn now, by id.
-const onList = { open: new Set(), folded: new Set(), current: null, selected: null, project: null, nodes: new Map() };
+const onList = { open: new Set(), folded: new Set(), current: null, selected: null, project: null, nodes: new Map(), rows: new Map() };
 
 // The Details of the row the List opened let go (Map | List).
 function letGoList() {
@@ -640,6 +643,7 @@ function listGrid(rows, columns, kind) {
   grid.style.setProperty("--tg-cols", `minmax(0, 1fr) repeat(${columns.length}, ${CELL_W}px)`);
   grid.append(headRow(columns));
   onList.nodes = new Map();
+  onList.rows = new Map(rows.map((row) => [row.id, row]));
   for (const row of rows) {
     const node = listRow(row, columns, { current: row.id === onList.current, selected: row.id === onList.selected });
     onList.nodes.set(row.id, node);
@@ -779,12 +783,27 @@ function toggleRow(row) {
 // wins: an arrival whose rows come later opens nothing.
 export function openRow(row) {
   arrival.pending = false;
+  const id = detailsId(onList.rows.get(row.id) || row);
   onList.current = row.id;
-  onList.selected = row.id;
-  for (const [id, node] of onList.nodes) node.setAttribute("aria-selected", String(id === row.id));
+  onList.selected = id;
+  for (const [rowId, node] of onList.nodes) node.setAttribute("aria-selected", String(rowId === row.id));
   setState({ selected: row.sel });
-  libraryDetails(row.id);
+  libraryDetails(id);
 }
+
+// The block whose Details a row opens: its own; a part the map does not draw (Kitden read nothing
+// inside its plugin) opens its plugin's; a plugin Claude Code keeps in the account opens a small
+// card of its own (accountCard).
+function detailsId(row) {
+  if (libraryThing(row.id)) return row.id;
+  if (row.kind === "part") return row.parent;
+  if (row.account) {
+    const by = Object.fromEntries(Object.entries(row.cells || {}).filter(([, cell]) => cell.state !== "none").map(([client, cell]) => [client, BY_WORDS[cell.state] || cell.state]));
+    showListOnly({ id: row.id, kind: "account", name: row.name, reason: row.reason, item: { by } });
+  }
+  return row.id;
+}
+const BY_WORDS = { unk: "unknown" };
 
 // The row an arrival names, or null (none, a panel is open, or the List has no such row): an item
 // by its kind and full name, a skill inside a plugin by its own (its plugin opens for it), a
