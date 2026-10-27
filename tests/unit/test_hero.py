@@ -100,8 +100,11 @@ def test_the_hero_has_twelve_puffs_with_the_logo_times():
         assert [round(at, 3) for at in stops] == [round(at, 3) for at in expected]
         assert [float(props["opacity"]) for _, props in puff] == [0, 0.31, 0.22, 0, 0]
         assert puff[0][1]["filter"] == "blur(1.5px)" and puff[3][1]["filter"] == "blur(2.5px)"
-        assert "scale(0.7)" in puff[0][1]["transform"]
-        assert "scale(1.4)" in puff[3][1]["transform"]
+        # The path, as a share of right .95 em and up .42 em at 120 units.
+        moves = [(0, 6.05), (17.1, -20.16), (68.4, -39.31), (114, -46.37), (114, -46.37)]
+        sizes = [0.7, 0.84, 1.12, 1.4, 1.4]
+        for (_, props), (x, y), size in zip(puff, moves, sizes, strict=True):
+            assert props["transform"] == f"translate({x:g}px, {y:g}px) scale({size:g})"
 
         light = keyframes(text, "light")
         stops = [round(at, 3) for at, _ in light]
@@ -114,18 +117,25 @@ def test_the_hero_has_twelve_puffs_with_the_logo_times():
 
 
 def test_between_plays_the_hero_is_the_plain_logo():
-    # The last puff starts 500 + 110 * 11 ms in and fades by 4310 ms; the light is out at 4510 ms.
     for theme in FILES:
         text = css(theme)
         puff, light = keyframes(text, "puff"), keyframes(text, "light")
         assert float(puff[0][1]["opacity"]) == 0 and float(light[0][1]["opacity"]) == 0
+        flight = next(at for at, props in puff if at > 0 and float(props["opacity"]) == 0)
         for at, props in puff:
-            if at >= percent(2600) - 0.001:
+            if at >= flight:
                 assert float(props["opacity"]) == 0, at
+        out = next(at for at, props in light if at > 0 and float(props["opacity"]) == 0)
         for at, props in light:
-            if at >= percent(GESTURE) - 0.001:
+            if at >= out:
                 assert float(props["opacity"]) == 0, at
-        assert 500 + 110 * 11 + 2600 == 4310 < GESTURE
+        # The last puff is gone before the light goes out, so the rest starts clean.
+        delays = [
+            int(node.get("style").removeprefix("animation-delay: ").removesuffix("ms"))
+            for node in root(theme).iter()
+            if node.get("class") == "puff"
+        ]
+        assert max(delays) + flight / 100 * CYCLE <= START + out / 100 * CYCLE
 
 
 def test_reduced_motion_stills_the_hero():
@@ -155,6 +165,9 @@ def test_the_hero_colours_follow_the_theme():
         glow = {stop.get("stop-color") for stop in by_id(svg, "glow-light").iter(f"{NS}stop")}
         assert glow == {want["warm"]}
         assert by_id(svg, "door-shadow").get("fill") == want["warm"]
+        # The light's peaks, as the app's lightFrames(0.92) and lightFrames(0.42).
+        assert by_id(svg, "door").get("opacity") == ".92"
+        assert by_id(svg, "glow").get("opacity") == ".42"
         assert contrast(want["word"], want["page"]) >= 3
     text = {theme: path.read_text() for theme, path in FILES.items()}
     assert "#C85835" in text["dark"] and "#161A21" not in text["dark"]
@@ -174,3 +187,18 @@ def test_the_readme_shows_the_hero_and_the_slogan():
     assert f'<h3 align="center">{slogan}</h3>' in top
     assert "<h1" not in top and "logo.svg" not in top
     assert (ROOT / "docs/images/logo.svg").exists()
+
+
+def test_the_smoke_leaves_the_d_where_the_mockup_has_it():
+    # The mockup and the app put the anchor 89 % up the d's 1-em line box: 0.754 em, 90.45 units
+    # above the baseline at 120. A puff's bottom sits on the anchor; it grows around 85 % down.
+    for theme in FILES:
+        svg = root(theme)
+        baseline = float(
+            re.search(r"translate\(\S+ (\S+)\)", by_id(svg, "word").get("transform"))[1]
+        )
+        first = next(node for node in svg.iter() if node.get("class") == "puff")
+        holder = next(node for node in svg.iter() if first in list(node))
+        puff_y = float(re.search(r"translate\(\S+ (\S+)\)", holder.get("transform"))[1])
+        height = 0.30 * 120 * 20 / 28
+        assert abs(baseline - (puff_y + 0.15 * height) - 90.45) <= 0.5

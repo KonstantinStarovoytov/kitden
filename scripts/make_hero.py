@@ -43,7 +43,8 @@ BLUR = (1.5, 2.5)  # px; .6 to 1 px at 48 px
 START = 400
 LEAD, STEP, FLIGHT = 500, 110, 2600
 LIGHT_IN, LIGHT_OUT = 1200, 700
-GESTURE = LEAD + (PUFFS - 1) * STEP + FLIGHT + 200  # 4510
+AFTER = 200  # the light goes out this long after the last puff
+GESTURE = LEAD + (PUFFS - 1) * STEP + FLIGHT + AFTER  # 4510
 CYCLE = GESTURE + 6000  # 10 510
 EASE_IN = "cubic-bezier(.45, 0, .25, 1)"
 
@@ -95,8 +96,7 @@ def kerning(font, left: str, right: str) -> int:
 
 @cache
 def wordmark() -> dict:
-    """The word's outline at x 0 and its baseline at 0, its width, and the d's box (y up)."""
-    from fontTools.pens.boundsPen import BoundsPen
+    """The word's outline at x 0 and its baseline at 0, its width, and the d's span across."""
     from fontTools.pens.svgPathPen import SVGPathPen
     from fontTools.pens.transformPen import TransformPen
     from fontTools.ttLib import TTFont
@@ -111,17 +111,14 @@ def wordmark() -> dict:
     for i, name in enumerate(names):
         glyph = glyphs[name]
         if WORD[i] == "d":
-            bounds = BoundsPen(glyphs)
-            glyph.draw(bounds)
-            x_min, y_min, x_max, y_max = bounds.bounds
-            d_box = (x + x_min * scale, y_min * scale, x + x_max * scale, y_max * scale)
+            d_span = (x, x + glyph.width * scale + TRACKING)  # the d's box in a browser
         glyph.draw(TransformPen(pen, (scale, 0, 0, -scale, x, 0)))
         kern = kerning(font, name, names[i + 1]) if i + 1 < len(names) else 0
         x += (glyph.width + kern) * scale + TRACKING  # a browser adds the tracking after each one
     hhea = font["hhea"]
     # With line-height 1 the line box is one em tall and the font's height is centred in it.
     baseline = (EM - (hhea.ascent - hhea.descent) * scale) / 2 + hhea.ascent * scale
-    return {"path": pen.getCommands(), "width": x, "baseline": baseline, "d": d_box}
+    return {"path": pen.getCommands(), "width": x, "baseline": baseline, "d": d_span}
 
 
 def house_path() -> str:
@@ -166,10 +163,11 @@ def make_hero(theme: str) -> str:
     left = (WIDTH - lockup) / 2
     word_x = left + HOUSE + GAP
 
-    # The smoke's anchor, from the d's outline, above the baseline: 80 % across, 89 % up.
-    d_left, d_bottom, d_right, d_top = word["d"]
+    # The smoke's anchor, as the mockup and the app put it: 80 % across and 89 % up the d's box,
+    # one em tall like the line (0.754 em above the baseline).
+    d_left, d_right = word["d"]
     anchor_x = word_x + d_left + 0.8 * (d_right - d_left)
-    anchor_up = d_bottom + 0.89 * (d_top - d_bottom)
+    anchor_up = 0.89 * EM - (EM - word["baseline"])
 
     # Room above for the highest puff at its end (widest, grown, blurred) and below for the glow.
     widest = max(WIDTHS) * EM * 20 / 28
@@ -225,7 +223,7 @@ def make_hero(theme: str) -> str:
     )
     # The ground glow: its middle on the house's bottom edge, under the door.
     glow = (
-        f'<ellipse cx="{num(house_x + 20 * k)}" cy="{num(foot_y)}" '
+        f'<ellipse id="glow" cx="{num(house_x + 20 * k)}" cy="{num(foot_y)}" '
         f'rx="{num(0.28 * HOUSE)}" ry="{num(0.21 * HOUSE)}" '
         'fill="url(#glow-light)" opacity=".42" filter="url(#glow-blur)"/>'
     )
@@ -270,7 +268,7 @@ def make_hero(theme: str) -> str:
   </defs>
   <g class="light">
     {glow}
-    <g opacity=".92">
+    <g id="door" opacity=".92">
       {shadow}
       <path d="{door}" fill="url(#door-light)"/>
     </g>
