@@ -37,8 +37,12 @@ function element(tag) {
   };
   return node;
 }
-// Each test starts with motion on; a test that needs reduced motion sets it itself.
-beforeEach(() => { media.matches = false; });
+// dom.js hears the page's last key or pointer press here (`byKeys`).
+const heard = {};
+globalThis.window = { addEventListener: (type, fn) => { heard[type] = fn; } };
+// Each test starts with motion on and the last press a pointer's; a test that needs reduced motion
+// or a key sets it itself.
+beforeEach(() => { media.matches = false; heard.pointerdown?.({}); });
 globalThis.document = { createElement: element, createElementNS: (namespace, tag) => element(tag) };
 const { backupNote, banner, baseNames, changeTitle, checkBox, clientCheck, demoTag, folderName, gatewayName, menuItems, morphSocket, opens, optionAfter, originText, PLACE_IN_TITLE, projectButton, projectMenu, scopeBar, scopeText, setHint, socket, strictText, TOOL_ORIGIN_WORDS } = await import('../../src/kitden/web/static/js/parts.js');
 const { CALM } = await import('../../src/kitden/web/static/js/motion.js');
@@ -621,6 +625,7 @@ test('opening the menu moves focus into the find box, with the picked option act
 test('the project menu opened by mouse shows no active ring; an arrow key shows it', () => {
   const m = menuOn('m');
   const ring = () => m.menu.classList.contains('keys');
+  heard.pointerdown({});
   m.trigger.listeners.click({ detail: 1 });
   assert.equal(m.active(), 2);
   assert.equal(ring(), false);
@@ -628,13 +633,32 @@ test('the project menu opened by mouse shows no active ring; an arrow key shows 
   assert.equal(ring(), true);
   m.press('Escape');
   // Opened again by mouse, it starts with no ring.
+  heard.pointerdown({});
   m.trigger.listeners.click({ detail: 1 });
   assert.equal(ring(), false);
   m.press('Escape');
-  // Enter or Space on the button (a click with no pointer) and Down open it with the ring.
+  // Enter or Space on the button (a click after a key) and Down open it with the ring.
+  heard.keydown({});
   m.trigger.listeners.click({ detail: 0 });
   assert.equal(ring(), true);
   m.press('Escape');
+  m.trigger.listeners.keydown({ key: 'ArrowDown', preventDefault() {} });
+  assert.equal(ring(), true);
+});
+
+// The page's own answer to "was that a key?" (`byKeys` in dom.js), not the click's `detail`.
+test('the project menu asks byKeys whether a key opened it', () => {
+  const m = menuOn('m');
+  const ring = () => m.menu.classList.contains('keys');
+  heard.keydown({});
+  m.trigger.listeners.click({ detail: 1 });
+  assert.equal(ring(), true);
+  m.press('Escape');
+  heard.pointerdown({});
+  m.trigger.listeners.click({ detail: 0 });
+  assert.equal(ring(), false);
+  m.press('Escape');
+  // Down on the button opens it with the ring, whatever came before.
   m.trigger.listeners.keydown({ key: 'ArrowDown', preventDefault() {} });
   assert.equal(ring(), true);
 });

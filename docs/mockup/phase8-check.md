@@ -39,7 +39,8 @@ ROADMAP.md "Next".
   Local (decided: Phase 5 notes).
 - Library map: matches (columns, caption, plugin cards, Inside column).
 - Library map, Map | List at the right edge: fixed in 404aafa.
-- Library List: fixed in 5e0d967 (the same tree grid as the Gateway's). No List in the mockup.
+- Library List: fixed in 5e0d967 and the final fix wave (the same tree grid as the Gateway's;
+  a part's name at 400 as a Gateway tool's, a file's name in mono). No List in the mockup.
 - Instructions map: matches (decided groups "All projects", "Commands and agents": Phase 6B notes).
 - Changes, rows, timeline, selected row: matches.
 - Changes, lede: fixed in eb815c1 (it wrapped at 70 ch; the mockup's takes one line).

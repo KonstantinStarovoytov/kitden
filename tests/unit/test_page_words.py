@@ -2954,6 +2954,10 @@ def test_the_library_list_words_and_looks():
     assert "export function libraryDetails(id, how)" in script("library-map.js")
     # The look: the Gateway List's grid, a sticky 30 px head, a 34 px part row.
     assert ".tg-row.part { min-height: 34px; }" in CSS
+    # A part's name is quiet (400), as a Gateway tool's, under its plugin's 600; a file's is mono.
+    assert "font-weight: 400" in rule(".tg-row.tool .words.name, .tg-row.part .words.name")
+    assert '`tg-row ${row.kind === "part" ? "part" : "item"}`' in text
+    assert ".words.mono" not in CSS
     # A narrow window hides the Gateway List's tiles, never the Library List's first client.
     assert ".tg-used, .treegrid:not(.library-list) > .tg-head > :nth-child(2)" in CSS
     assert "min-width: 0; overflow: hidden; padding-left: calc(8px" in rule(".tg-row > .tg-name")

@@ -554,7 +554,8 @@ div.map .block.page .block-label { color: var(--ink-4); }
 .tg-row[aria-expanded="true"] .caret { transform: rotate(90deg); }
 .tg-name .words { min-width: 3ch; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tg-name .words.name { font-size: 12px; font-weight: 600; color: var(--ink); }
-.tg-row.tool .words.name { font-weight: 400; }
+/* A Gateway tool and a part inside a plugin: quiet under the 600 row above them. */
+.tg-row.tool .words.name, .tg-row.part .words.name { font-weight: 400; }
 /* A tool's "Read" or "Write": quiet words after the name. */
 .tg-name .hint { flex: none; color: var(--ink-3); font-size: 12px; font-weight: 400; }
 .tg-row.found .hint, .tg-row[aria-selected="true"] .hint { color: var(--ink-2); }
@@ -586,7 +587,6 @@ div.map .block.page .block-label { color: var(--ink-4); }
 .tg-head .client-mark, .tg-head .mono-mark { --tile: 18px; border-radius: 5px; }
 .tg-head .client-mark[data-icon="claude"] img { padding: 3px; }
 .tg-row.part { min-height: 34px; }
-.tg-row.part .words.mono { font-weight: 400; }
 .tg-cell { display: flex; align-items: center; }
 /* A quiet flag's soft fill lies on the accent tint of a selected row, so its words go one step
    darker for 4.5:1. */

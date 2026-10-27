@@ -707,7 +707,8 @@ function listRow(row, columns, { current, selected }) {
   caret.setAttribute("aria-hidden", "true");
   name.append(caret);
   if (row.icon) name.append(icon(row.icon, 13));
-  const words = el("span", row.kind === "group" ? "words" : "words name", row.name);
+  // A file's name is in mono, as on the Instructions map.
+  const words = el("span", row.kind === "group" ? "words" : row.kind === "file" ? "words name mono" : "words name", row.name);
   words.title = row.name;
   name.append(words);
   // One flag per wording: three clients with the same note make one flag, not three.

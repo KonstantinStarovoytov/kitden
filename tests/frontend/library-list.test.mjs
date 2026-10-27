@@ -575,6 +575,17 @@ test('a command is a row under Commands and agents, and an arrival lands on it',
   assert.equal(libraryThing('file:c1').block.file.kind, 'command');
 });
 
+// A file's name is in mono, as on the Instructions map; a plugin's, a skill's and a part's stay
+// in Inter.
+test('file names on the Instructions List are in mono; plugin and skill names are not', async () => {
+  const nameOf = (id) => walk(rowOf(id)).find((n) => n.classList.contains('words'));
+  await showList({ kind: 'instructions' });
+  for (const id of ['file:f1', 'file:f2', 'file:c1']) assert.equal(nameOf(id).className, 'words name mono', id);
+  assert.equal(nameOf('group:files:all').className, 'words');
+  await showList();
+  for (const id of ['item:p2', 'item:s1', 'item:h1']) assert.equal(nameOf(id).className, 'words name', id);
+});
+
 // Final fix wave: the two tabs never share a group id, so a group folded on one tab stays as it
 // is on the other.
 test('a fold on the Instructions List is its own, not the Plugins and skills group of that key', () => {

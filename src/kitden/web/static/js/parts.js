@@ -1,5 +1,5 @@
 // Small parts shared by every place: sockets, client marks, flags, loading and error states.
-import { $, button, el, icon, joinWords, plural, shortPath } from "./dom.js";
+import { $, button, byKeys, el, icon, joinWords, plural, shortPath } from "./dom.js";
 import { animateTo, D, reducedMotion, rise, rollTo } from "./motion.js";
 
 // The shared baseline: the picker's first choice, and the scope of what is set for every project.
@@ -152,11 +152,11 @@ export function projectMenu(projects, picked, onPick, from = null) {
   }
   // The menu shows first: a hidden list cannot scroll the picked project into view. The active
   // option has a ring only for a keyboard (`.keys`): opened by a key, or after an arrow.
-  function open(byKeys) {
+  function open(keyed) {
     find.value = "";
     isOpen = true;
     menu.hidden = false;
-    menu.classList.toggle("keys", byKeys);
+    menu.classList.toggle("keys", keyed);
     // A fade-out that is still running ends here.
     for (const move of menu.getAnimations()) move.cancel();
     draw();
@@ -203,8 +203,8 @@ export function projectMenu(projects, picked, onPick, from = null) {
     onPick(item.id);
   }
 
-  // Enter or Space on the button is a click with no pointer (`detail` 0).
-  trigger.addEventListener("click", (event) => (isOpen ? close(true) : open(event?.detail === 0)));
+  // Enter or Space on the button is a click after a key (`byKeys`).
+  trigger.addEventListener("click", () => (isOpen ? close(true) : open(byKeys())));
   trigger.addEventListener("keydown", (event) => {
     if (event.key !== "ArrowDown") return;
     event.preventDefault();
