@@ -112,6 +112,9 @@ NEW_LOCAL_FILE = (
 REPO_RULE = (
     "Claude Code keeps this rule in {folder}'s local settings, so it holds in all of {folder}."
 )
+REPO_RULE_OUT = (
+    "Claude Code takes this rule out of {folder}'s local settings, so it changes all of {folder}."
+)
 # A project whose own skill rule keeps the skill on, named by an all-projects change.
 KEEPS_ITS_RULE = "It stays on in {folders}, which has its own rule."
 KEEP_THEIR_RULES = "It stays on in {folders}, which have their own rules."

@@ -766,8 +766,33 @@ test('a project-only Claude Code skill shows the reason while the user file has 
   const blocked = details.context({ ...MEDIUM, skill_rules: { some: false, projects: { atlas: 'ok' } } }, 'atlas', 'atlas');
   const card = details.skillCard(mine, blocked);
   assert.deepEqual(labels(card), []);
-  assert.ok(texts(card.after).includes('Claude Code may not merge skill settings across files; turn it off for all projects instead.'));
+  assert.ok(texts(card.after).includes('Claude Code may not merge skill settings across files, so Kitden cannot turn it off in this project.'));
   // Where the rule can go, no reason.
   const open = details.skillCard(mine, details.context(MEDIUM, 'atlas', 'atlas'));
-  assert.ok(!texts(open.after).includes('Claude Code may not merge skill settings across files; turn it off for all projects instead.'));
+  assert.ok(!texts(open.after).includes('Claude Code may not merge skill settings across files, so Kitden cannot turn it off in this project.'));
+});
+
+test("the part card's button and the checklist's tick tell a rule's on and off apart", async () => {
+  await reset();
+  const atlas = details.context(MEDIUM, 'atlas', 'atlas');
+  // "Use the shared rule…" for superpowers waits: the same key, but off is false.
+  await addToTray({ ...details.projectBody(SUPERPOWERS, 'atlas'), params: { scope: 'project', project: 'atlas', off: false } });
+  const part = libraryTree(MEDIUM).blocks.find((b) => b.id === 'part:p2:skills:brainstorm');
+  const button = details.partCard(part, atlas).after;
+  drawer.replaceChildren(button);
+  await flush();
+  assert.ok(!texts(button).includes('In preview'));
+  press(button);
+  await flush();
+  assert.deepEqual(tray.rows.map((r) => r.body.params.off), [true]);
+  assert.ok(texts(button).includes('In preview'));
+  await cancelTray();
+  // A project row is ticked only by its own off rule.
+  const skill = MEDIUM.groups[1].items[0];
+  await addToTray({ ...details.projectBody(skill, 'atlas'), params: { scope: 'project', project: 'atlas', off: false } });
+  drawer.replaceChildren(...details.someNodes(skill, c(), () => {}));
+  await flush();
+  assert.equal(node(drawer, 'tick:atlas').getAttribute('aria-checked'), 'false');
+  drawer.replaceChildren();
+  await reset();
 });

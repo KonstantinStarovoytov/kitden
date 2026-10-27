@@ -9,7 +9,7 @@ import { focusAfterStep, headTile, iconTile, lamp, openCard, pressOnce, projectC
 import { initLibraryAdd } from "./library-add.js";
 import { addBody, decidedHere, importsOf, lampOf, libraryThing, onLibrarySelect, readers } from "./library-map.js";
 import { copyBodies, offBodies, onBodies, removeBodies, skillOffBodies, skillRuleWaits } from "./library-rules.js";
-import { closePanel, drawQuietly, followTray, isPanelOpen, keepFrom, panelState, previewButton, review, stepTo, swapContent, technical } from "./panel.js";
+import { closePanel, drawQuietly, followTray, isPanelOpen, keepFrom, panelState, review, stepTo, swapContent, technical } from "./panel.js";
 import { ALL_PROJECTS, CLIENT_NAMES, CLIENT_ORDER, folderName, mark, menuItems, ORIGIN_WORDS, STATE_WORDS } from "./parts.js";
 import { data, projectPath, state } from "./store.js";
 import { inTray, keyFor, tray } from "./tray.js";
@@ -24,9 +24,9 @@ const USE_SHARED = "Use the shared rule…";
 const OFF_COPY = "Turn off this copy in Codex…";
 // A project row of the checklist whose own settings turn the skill off already.
 const ALREADY_OFF = "Already off there";
-// Why a project's own Claude Code skill has no "Turn off in this project…" (views/words.py
-// NO_SKILL_MERGE, the guard's words).
-const NO_MERGE = "Claude Code may not merge skill settings across files; turn it off for all projects instead.";
+// Why a project's own Claude Code skill has no "Turn off in this project…": the guard of
+// changes/actions.py (NO_SKILL_MERGE), in words that offer nothing Kitden refuses.
+const NO_MERGE = "Claude Code may not merge skill settings across files, so Kitden cannot turn it off in this project.";
 const FOLLOWS = "Follows its plugin.";
 const NO_PLUGIN = "None, a skill on its own";
 const NO_PROJECT_SWITCH = "Codex has no switch for one project.";
@@ -277,11 +277,7 @@ export function partCard(block, c) {
   const facts = [{ label: "Plugin", value: tile, text: plugin.name }, { label: "Kind", value: block.label.words }, { label: "Source", value: plugin.source }, clientsFact(plugin, { count: true })];
   const here = block.label.words === "Skill" ? hereBody(plugin, c) : null;
   let after = null;
-  if (here) {
-    const label = `Turn off ${plugin.name} in this project…`;
-    after = previewButton(label, here, { look: "btn ghost small" });
-    after.dataset.focus = `action:${label}`;
-  }
+  if (here) after = rowsButton(`Turn off ${plugin.name} in this project…`, [here], "btn ghost small");
   return { kind: block.label.words, title: block.name, id: plugin.name, tile: iconTile(block.label.icon), facts, why: FOLLOWS, after };
 }
 
@@ -516,7 +512,7 @@ export function someNodes(item, c, back) {
   const rows = menuItems(known, "").filter((p) => p.id).map((p) => {
     const can = c.rules.projects[p.id];
     const body = projectBody(item, p.id);
-    const ticked = () => inTray(keyFor(body));
+    const ticked = () => queued(body);
     const waits = () => !ticked() && skillRuleWaits("all", c.answer);
     const already = (item.off_in || []).includes(p.id);
     const line = () => (already ? ALREADY_OFF : PROJECT_LINES[can] || (waits() ? ALL_FIRST : ""));

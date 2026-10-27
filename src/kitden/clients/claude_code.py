@@ -155,13 +155,17 @@ def _project_rules(
 # reads and writes `.claude/settings.local.json` at the repository root. It still reads a file an
 # earlier version left in the starting folder; where both set a key, the root's value applies.
 # The file stays in the starting folder outside a repository, when the root is the home folder,
-# or when the root, its `.git` or its `.claude` is not the user's own. (A worktree uses its main
-# checkout's root; Kitden does not follow a worktree's `.git` file.)
+# or when the root, its `.git` or its `.claude` is not the user's own.
+# Known gaps: a worktree uses its main checkout's root (Kitden does not follow a worktree's
+# `.git` file); the docs keep the file in the starting folder on Windows (not checked here); a
+# home folder reached through a link is compared as written; and Kitden's permission checks
+# (changes/actions.py) still read only the project's own local file.
 def git_root(folder: Path, home: Path) -> Path | None:
     """The repository root above `folder` whose local settings Claude Code uses there, or None:
-    the nearest folder with a `.git` folder, inside the home folder but not the home folder."""
+    the nearest folder with a `.git` folder, never the home folder or above it (the walk stops
+    there; a folder outside home walks up to `/`)."""
     for place in (folder, *folder.parents):
-        if place == home or not place.is_relative_to(home):
+        if place == home:
             return None
         git = place / ".git"
         if git.exists():
@@ -183,6 +187,13 @@ def local_files(project: Path, home: Path) -> list[Path]:
     own = project / ".claude/settings.local.json"
     root = git_root(project, home)
     return [own, root / ".claude/settings.local.json"] if root else [own]
+
+
+def rule_file(project: Path, home: Path) -> Path | None:
+    """The local file a one-project rule goes to: the root's, which Claude Code reads first, when
+    its `.claude` folder is there, else the project's own when its folder is there; None when
+    neither is (Kitden makes no folder)."""
+    return next((f for f in reversed(local_files(project, home)) if f.parent.is_dir()), None)
 
 
 def _holds(path: Path, key: tuple[str, str]) -> bool:
@@ -262,18 +273,17 @@ class ClaudeCodeAdapter(ClientAdapter):
         )
 
     def _rule_files(self, project: str | None, key: tuple[str, str], off: bool) -> list[Path]:
-        """Where a rule goes: the user settings, or the local settings Claude Code reads first in
-        one project (its `.claude` folder must exist: Kitden writes one file and makes no
-        folder). A project's rule taken out goes from each local file that holds it."""
+        """Where a rule goes: the user settings, or one project's `rule_file`. A project's rule
+        taken out goes from each local file that holds it."""
         if project is None:
             return [self.home / ".claude/settings.json"]
-        files = local_files(Path(project), self.home)
-        holding = [f for f in files if _holds(f, key)]
+        holding = [f for f in local_files(Path(project), self.home) if _holds(f, key)]
         if not off and holding:
             return holding
-        if not files[-1].parent.is_dir():
-            raise ValueError(NO_CLAUDE_FOLDER.format(folder=files[-1].parent.parent.name))
-        return files[-1:]
+        target = rule_file(Path(project), self.home)
+        if target is None:
+            raise ValueError(NO_CLAUDE_FOLDER.format(folder=Path(project).name))
+        return [target]
 
     def _rule_steps(
         self, key: tuple[str, str], project: str | None, after: Any, note: str

@@ -24,6 +24,7 @@ from kitden.clients.base import (
     SKILL_REMOVE,
     ClientAdapter,
 )
+from kitden.clients.claude_code import rule_file
 from kitden.clients.entries import IN_PROJECT_FILES, entry_refusal, gateway_entry
 from kitden.gateway_api import gateway_name
 from kitden.local_gateway.keychain import KeychainError, Runner, resolve_entry, run_security
@@ -1068,8 +1069,13 @@ def _claude_rule_steps(
         # The docs do not confirm that `skillOverrides` merges key by key (claude_code.py). If a
         # higher file replaces the whole object, a new key in the local file would drop the
         # rules of the user's file, and of the project's shared file, in that project.
-        shared = Path(project) / ".claude/settings.json"
-        if skill_rules_in(home / ".claude/settings.json") or skill_rules_in(shared):
+        folder = Path(project) / ".claude"
+        files = [home / ".claude/settings.json", folder / "settings.json"]
+        # A rule in the repository root's local file: the starting folder's own local file (an
+        # earlier Claude Code wrote there) is read beside it (clients/claude_code.py git_root).
+        if rule_file(Path(project), home) != folder / "settings.local.json":
+            files.append(folder / "settings.local.json")
+        if any(skill_rules_in(f) for f in files):
             raise ValueError(NO_SKILL_MERGE)
     return adapter.skill_rule_steps(item.name, project, off)
 

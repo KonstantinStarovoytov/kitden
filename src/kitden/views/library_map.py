@@ -10,7 +10,7 @@ from pathlib import Path
 
 from kitden.changes.actions import CLIENT_WORDS, skill_rules_in
 from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, PLUGIN_REMOVE, SKILL_REMOVE
-from kitden.clients.claude_code import local_files
+from kitden.clients.claude_code import rule_file
 from kitden.model import ClientStatus, Enabled, Item, ItemKind, Scope
 from kitden.views.catalog import catalog, installed_inside
 from kitden.views.effective import in_project
@@ -233,9 +233,9 @@ def _skill_offers(inventory, adapters) -> dict[str, dict]:
 def _skill_rules(inventory, adapters, found) -> dict:
     """Where a one-project skill rule can go (Claude Code only): `some` while the user settings
     hold no `skillOverrides` (Claude Code may not merge them across files), and per project whose
-    folder is there "ok", "own" (its shared settings hold `skillOverrides`) or "new" (no Claude
-    Code settings yet where its rule would go, its own or its repository's: Kitden makes no
-    folder). The same rules as changes/actions.py."""
+    folder is there "ok", "own" (its shared settings hold `skillOverrides`, or its own local file
+    does while the rule would go in its repository root's) or "new" (no `.claude` folder where
+    its rule could go: Kitden makes no folder). The same rules as changes/actions.py."""
     if "claude_code" not in found or "claude_code" not in adapters:
         return {"some": False, "projects": {}}
 
@@ -251,10 +251,14 @@ def _skill_rules(inventory, adapters, found) -> dict:
         folder = Path(project.path)
         if not folder.is_dir():
             continue
-        if not local_files(folder, home)[-1].parent.is_dir():
+        target = rule_file(folder, home)
+        own = folder / ".claude/settings.local.json"
+        # A rule in the repository root's file is read beside the project's own local file.
+        files = [folder / ".claude/settings.json", *([own] if target != own else [])]
+        if target is None:
             projects[project.id] = "new"
         else:
-            projects[project.id] = "own" if holds(folder / ".claude/settings.json") else "ok"
+            projects[project.id] = "own" if any(holds(f) for f in files) else "ok"
     return {"some": not holds(home / ".claude/settings.json"), "projects": projects}
 
 

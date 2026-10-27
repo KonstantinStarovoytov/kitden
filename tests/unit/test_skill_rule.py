@@ -21,6 +21,7 @@ from kitden.views.words import (
     NO_SKILL_MERGE,
     PROJECT_SKILL_ALL,
     REPO_RULE,
+    REPO_RULE_OUT,
 )
 from kitden.web.app import create_app
 
@@ -459,9 +460,13 @@ def test_use_the_shared_rule_takes_the_key_from_both_local_files_and_undo_puts_t
                 "client": "claude_code",
                 "state": "on",
                 "word": "Follows all projects",
-                "note": REPO_RULE.format(folder="repo"),
+                "note": REPO_RULE_OUT.format(folder="repo"),
             }
         ]
+        assert REPO_RULE_OUT == (
+            "Claude Code takes this rule out of {folder}'s local settings, so it changes all of "
+            "{folder}."
+        )
         assert json.loads(root.read_text())["skillOverrides"] == {}
         assert json.loads(own.read_text())["skillOverrides"] == {"tidy": "off"}
         assert undo()["state"] == "undone"
@@ -486,3 +491,37 @@ def test_turn_off_this_copy_in_codex_for_a_skill_in_one_project(tmp_path):
         assert str(read.enabled) == "off"
         assert undo()["state"] == "undone"
     assert config.read_text() == before
+
+
+def test_a_rule_at_the_root_waits_while_the_projects_own_local_file_has_skill_overrides(tmp_path):
+    # Before v2.1.211 the /skills menu wrote the starting folder's local file; Claude Code still
+    # reads it beside the root's, and may not merge the two (docs checked 2026-10-27).
+    home, _, _ = _home(tmp_path)
+    repo, web = _in_repository(home)
+    _write(web / ".claude/settings.local.json", {"skillOverrides": {"tidy": "off"}})
+    with _page(home) as page:
+        item = _item(page, "claude_code", "deploy")
+        answer = _preview(page, _rule("claude_code", item, "project", _project(page, web)))
+        assert answer.json() == {"detail": NO_SKILL_MERGE, "row": "r1"}
+        # Taking a rule out is not refused by it.
+        _write(web / ".claude/settings.local.json", {"skillOverrides": {"deploy": "off"}})
+        rule = _rule("claude_code", item, "project", _project(page, web), off=False)
+        assert _preview(page, rule).status_code == 200
+    assert not (repo / ".claude/settings.local.json").exists()
+
+
+def test_a_root_with_no_claude_folder_takes_the_rule_in_the_projects_own_file(tmp_path):
+    home, _, _ = _home(tmp_path)
+    repo, web = _in_repository(home)
+    (repo / ".claude").rmdir()
+    own = web / ".claude/settings.local.json"
+    with _page(home) as page:
+        item = _item(page, "claude_code", "deploy")
+        change, _, undo = _round_trip(
+            page, _rule("claude_code", item, "project", _project(page, web))
+        )
+        (after,) = change["rows"][0]["after"]
+        assert after["note"] == NEW_LOCAL_FILE.format(folder="web")
+        assert json.loads(own.read_text()) == {"skillOverrides": {"deploy": "off"}}
+        assert undo()["state"] == "undone"
+    assert not own.exists() and not (repo / ".claude").exists()

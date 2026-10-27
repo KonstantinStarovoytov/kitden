@@ -51,6 +51,7 @@ from kitden.views.words import (
     NO_GATEWAY_CLIENT,
     OWN_SKILL_SETTINGS,
     REPO_RULE,
+    REPO_RULE_OUT,
     STATE_WORDS,
 )
 
@@ -790,8 +791,8 @@ def _skill_rule_words(change: Change, inventory, home: Path) -> list[dict]:
     note names each project whose own settings may keep it on. A project's own rule taken out:
     the state the shared settings give it (the user's file, then the project's shared file). A
     rule that makes a project's local settings file names it once (git may not ignore it), and a
-    rule in a repository root's file says it holds in all of that folder. A rule taken out of
-    two local files is one entry."""
+    rule written to, or taken out of, a repository root's file says it reaches all of that
+    folder. A rule taken out of two local files is one entry."""
     out = []
     made: set[str] = set()
     steps: dict[tuple[str, str], list] = {}
@@ -820,7 +821,8 @@ def _skill_rule_words(change: Change, inventory, home: Path) -> list[dict]:
                 notes.append(note)
         repo = next((f for f in map(_repo_folder, group) if f is not None), None)
         if repo is not None:
-            notes.append(REPO_RULE.format(folder=repo.name))
+            words = REPO_RULE_OUT if edit.after is ABSENT else REPO_RULE
+            notes.append(words.format(folder=repo.name))
         if notes:
             entry["note"] = " ".join(notes)
         out.append(entry)

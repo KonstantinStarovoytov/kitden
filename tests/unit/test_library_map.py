@@ -563,3 +563,19 @@ def test_turn_on_and_remove_never_act_on_a_projects_own_entry(tmp_path):
     # For all projects the same plugin keeps its own Turn on and Remove.
     everywhere = _items(_map(home))["pr-review"]
     assert everywhere["can"]["on"] == ["claude_code"] and everywhere["can"]["project"] == []
+
+
+def test_skill_rules_for_a_project_in_a_repository_subfolder(tmp_path):
+    # atlas is a git repository; atlas/web is a known project in it.
+    home = build_demo_home(tmp_path, "medium")
+    inventory, adapters = _read(home)
+    web = next(p.id for p in inventory.projects if p.path.endswith("atlas/web"))
+    atlas = home / "work/atlas"
+    (atlas / ".git").mkdir()
+    (atlas / "web/.claude").mkdir()
+    # The root has no .claude folder: the rule goes in web's own file, so web is not "new".
+    assert _map(home)["skill_rules"]["projects"][web] == "ok"
+    # The rule would go in the root's file while web's own local file holds skillOverrides.
+    (atlas / ".claude").mkdir()
+    _write(atlas / "web/.claude/settings.local.json", {"skillOverrides": {"x": "off"}})
+    assert _map(home)["skill_rules"]["projects"][web] == "own"

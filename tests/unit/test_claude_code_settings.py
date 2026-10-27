@@ -2,7 +2,8 @@
 
 import json
 
-from kitden.clients.claude_code import ClaudeCodeAdapter
+import kitden.clients.claude_code as claude_code
+from kitden.clients.claude_code import ClaudeCodeAdapter, git_root
 from kitden.model import Enabled, ItemKind, Scope
 from kitden.views.effective import effective_view
 from kitden.views.inventory import build_inventory
@@ -281,3 +282,31 @@ def test_the_roots_local_file_counts_only_for_a_repository_inside_home(tmp_path,
     # No repository at all: only the project's own file.
     (home / ".git").rmdir()
     assert _state_in(home, str(web), "deploy")[0] is Enabled.ON
+
+
+def test_git_root_follows_only_a_repository_folder_the_user_owns(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    repo, web = home / "work/repo", home / "work/repo/web"
+    web.mkdir(parents=True)
+    (repo / ".git").mkdir()
+    assert git_root(web, home) == repo
+    # The project is the root itself: its own file is the root's.
+    assert git_root(repo, home) is None
+    # A `.git` file (a worktree or a submodule): Kitden does not follow it.
+    (repo / ".git").rmdir()
+    (repo / ".git").write_text("gitdir: /elsewhere/.git/worktrees/repo\n")
+    assert git_root(web, home) is None
+    (repo / ".git").unlink()
+    (repo / ".git").mkdir()
+    # Not the user's own: the file stays with the project (docs checked 2026-10-27).
+    monkeypatch.setattr(claude_code.os, "getuid", lambda: -1)
+    assert git_root(web, home) is None
+    monkeypatch.undo()
+    # Outside home, the walk goes up to the repository; it never passes the home folder.
+    outside = tmp_path / "srv/repo"
+    (outside / ".git").mkdir(parents=True)
+    (outside / "api").mkdir()
+    assert git_root(outside / "api", home) == outside
+    (tmp_path / ".git").mkdir()
+    (repo / ".git").rmdir()
+    assert git_root(web, home) is None

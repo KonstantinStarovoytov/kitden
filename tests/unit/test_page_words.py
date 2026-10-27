@@ -22,6 +22,7 @@ from kitden.views.words import (
     PLUGIN_SKILL,
     READS_FOLDER,
     REPO_RULE,
+    REPO_RULE_OUT,
     ROUTE_WORDS,
     STALE,
     STATE_WORDS,
@@ -3067,8 +3068,13 @@ def test_the_last_skill_rule_notes_say_what_they_do():
     assert 'const USE_SHARED = "Use the shared rule…";' in details
     assert 'const OFF_COPY = "Turn off this copy in Codex…";' in details
     assert 'const ALREADY_OFF = "Already off there";' in details
-    # The project-only skill's reason is the server guard's words.
-    assert f'const NO_MERGE = "{NO_SKILL_MERGE}";' in details
+    # The project-only skill's reason: the server guard, in words that offer nothing refused.
+    reason = (
+        "Claude Code may not merge skill settings across files, so Kitden cannot turn it off in "
+        "this project."
+    )
+    assert f'const NO_MERGE = "{reason}";' in details
+    assert "turn it off for all projects instead" in NO_SKILL_MERGE
     # The quiet line tells the project's local file from its shared, committed one.
     assert (
         "`${CLIENT_NAMES[client]}'s setting for this comes from ${folder}'s local settings.`"
@@ -3089,4 +3095,8 @@ def test_the_last_skill_rule_notes_say_what_they_do():
     )
     assert REPO_RULE == (
         "Claude Code keeps this rule in {folder}'s local settings, so it holds in all of {folder}."
+    )
+    assert REPO_RULE_OUT == (
+        "Claude Code takes this rule out of {folder}'s local settings, so it changes all of "
+        "{folder}."
     )
