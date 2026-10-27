@@ -9,6 +9,7 @@ and follow the plugin, so the map never says "N of M on". Paths are only under `
 from pathlib import Path
 
 from kitden.changes.actions import CLIENT_WORDS, skill_rules_in
+from kitden.changes.engine import writable, writable_roots
 from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, PLUGIN_REMOVE, SKILL_REMOVE
 from kitden.clients.claude_code import rule_file
 from kitden.model import ClientStatus, Enabled, Item, ItemKind, Scope
@@ -138,7 +139,9 @@ ADDS = ("claude_code", "codex")
 RULES = ("claude_code", "codex")
 
 
-def _can(row: Row, by: dict, through: dict, ids: dict, by_id, offer, found, project) -> dict:
+def _can(
+    row: Row, by: dict, through: dict, ids: dict, by_id, offer, found, project, outside=False
+) -> dict:
     """What Details and a drag may offer for an item, by client: `add`, the clients that can add
     the plugin and lack it (never Cursor: it gets plugins through Claude Code), or that can take a
     copy of the skill (Cursor too, when the skill catalog gives it a route), and `off`, the
@@ -162,7 +165,8 @@ def _can(row: Row, by: dict, through: dict, ids: dict, by_id, offer, found, proj
         and any(project and _decides_here(by_id[i], project) for i in ids[c])
     ]
     files = {c: _rule_file(by_id[ids[c][0]], project) for c in project_decides}
-    local = [c for c in project_decides if files[c] is Scope.LOCAL]
+    # Where Kitden does not write the project's rule file, nothing takes its key out either.
+    local = [c for c in project_decides if files[c] is Scope.LOCAL and not outside]
     shared = [c for c in project_decides if files[c] is Scope.PROJECT]
     own = [c for c, state in by.items() if state == "on" and c not in through]
     own = [c for c in own if c not in project_decides]
@@ -234,10 +238,12 @@ def _skill_rules(inventory, adapters, found) -> dict:
     """Where a one-project skill rule can go (Claude Code only): `some` while the user settings
     hold no `skillOverrides` (Claude Code may not merge them across files), and per project whose
     folder is there "ok", "own" (its shared settings hold `skillOverrides`, or its own local file
-    does while the rule would go in its repository root's) or "new" (no `.claude` folder where
-    its rule could go: Kitden makes no folder). The same rules as changes/actions.py."""
+    does while the rule would go in its repository root's), "new" (no `.claude` folder where its
+    rule could go: Kitden makes no folder) or "outside" (its rule file is where Kitden does not
+    write, the engine's own test; `outside` names that folder). The same rules as
+    changes/actions.py."""
     if "claude_code" not in found or "claude_code" not in adapters:
-        return {"some": False, "projects": {}}
+        return {"some": False, "projects": {}, "outside": {}}
 
     def holds(path: Path) -> bool:
         try:
@@ -247,6 +253,7 @@ def _skill_rules(inventory, adapters, found) -> dict:
 
     home = adapters["claude_code"].home
     projects: dict[str, str] = {}
+    outside: dict[str, str] = {}
     for project in inventory.projects:
         folder = Path(project.path)
         if not folder.is_dir():
@@ -257,9 +264,26 @@ def _skill_rules(inventory, adapters, found) -> dict:
         files = [folder / ".claude/settings.json", *([own] if target != own else [])]
         if target is None:
             projects[project.id] = "new"
+        elif not _writable(target, home, inventory):
+            projects[project.id] = "outside"
+            outside[project.id] = target.parent.parent.name
         else:
             projects[project.id] = "own" if any(holds(f) for f in files) else "ok"
-    return {"some": not holds(home / ".claude/settings.json"), "projects": projects}
+    some = not holds(home / ".claude/settings.json")
+    return {"some": some, "projects": projects, "outside": outside}
+
+
+def _writable(path: Path, home: Path, inventory) -> bool:
+    return writable(path, home, writable_roots(home, inventory))
+
+
+def _rule_outside(inventory, adapters, project: str | None) -> bool:
+    """The picked project's rule file is where Kitden does not write (`_skill_rules`)."""
+    adapter = adapters.get("claude_code")
+    if project is None or adapter is None or not Path(project).is_dir():
+        return False
+    target = rule_file(Path(project), adapter.home)
+    return target is not None and not _writable(target, adapter.home, inventory)
 
 
 def _plugin_folders(adapters) -> dict[str, str]:
@@ -303,6 +327,7 @@ def library_map(inventory, adapters, project: str | None) -> dict:
     held = installed_inside(adapters)
     folders = _plugin_folders(adapters)
     sources = _marketplace_sources(inventory)
+    outside = _rule_outside(inventory, adapters, project)
 
     groups: dict[str, dict] = {}
     for row in load_map(inventory, project):
@@ -335,7 +360,7 @@ def library_map(inventory, adapters, project: str | None) -> dict:
             "items": ids,
             "here": here,
             "source": group["name"],
-            "can": _can(row, by, through, ids, by_id, offer, found, project),
+            "can": _can(row, by, through, ids, by_id, offer, found, project, outside),
         }
         if skill:
             entry["skill"] = skill["id"]

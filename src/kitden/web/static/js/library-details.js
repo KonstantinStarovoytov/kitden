@@ -34,6 +34,9 @@ const NO_CURSOR_SWITCH = "Cursor has no switch to turn off one skill.";
 const SOME_WHY = "This turns it off in Claude Code. Codex and Cursor have no switch for one project.";
 // Why a project cannot take a one-project skill rule (library_map.py `skill_rules`).
 const PROJECT_LINES = { own: "Has its own skill settings", new: "No Claude Code settings yet" };
+// A project whose rule file sits where Kitden does not write (`skill_rules.outside`: the folder,
+// the engine's own test): no rule there, and one quiet line says why.
+export const outsideWords = (folder) => `Claude Code keeps this project's local settings in ${folder}, where Kitden does not write.`;
 // Why a tray cannot take both a skill rule for all projects and one for a project in Claude Code.
 const ALL_FIRST = "Apply the rule for all projects first";
 const SOME_FIRST = "Apply the project rules in preview first; then Claude Code can turn it off for all projects.";
@@ -62,7 +65,7 @@ const verb = (clients, one, more) => (clients.length > 1 ? more : one);
 // What a card is drawn for: the answer, the picked project (its id and folder) and the rules of
 // where a one-project skill rule can go.
 export function context(answer, project = state.project, folder = folderName(projectPath())) {
-  return { answer, project, folder, rules: (answer && answer.skill_rules) || { some: false, projects: {} } };
+  return { answer, project, folder, rules: { outside: {}, ...((answer && answer.skill_rules) || { some: false, projects: {} }) } };
 }
 
 // "3 skills · 1 command", from what Kitden read inside a plugin; null when it read nothing.
@@ -162,7 +165,7 @@ export function sharedBody(item, c) {
 // settings blocks the rule (as changes/actions.py refuses it); else null.
 function mergeLine(item, c) {
   const can = c.rules.projects[c.project];
-  const blocked = !c.rules.some || can === "own";
+  const blocked = (!c.rules.some || can === "own") && can !== "outside";
   return c.project && !shared(item) && (item.by || {}).claude_code === "on" && blocked ? el("p", "muted", NO_MERGE) : null;
 }
 
@@ -236,6 +239,11 @@ function projectLine(item, c) {
   const line = (client) => ((can.local || []).includes(client) ? fromLocal : (can.shared || []).includes(client) ? fromShared : fromProject)(client, c.folder);
   return el("p", "muted", inOrder(clients).map(line).join(" "));
 }
+// In a project whose rule file Kitden does not write, for an item Claude Code has: one quiet line.
+function outsideLine(item, c) {
+  const folder = c.project && c.rules.projects[c.project] === "outside" && (item.items || {}).claude_code ? c.rules.outside[c.project] : null;
+  return folder ? el("p", "muted", outsideWords(folder)) : null;
+}
 // The nodes under a card's actions, in one box when there are several.
 function afterOf(...nodes) {
   const shown = nodes.filter(Boolean);
@@ -265,7 +273,7 @@ export function pluginCard(item, c, { addStep = () => {} } = {}) {
   if (back) actions.push({ label: USE_SHARED, node: rowsButton(USE_SHARED, [back]) });
   actions.push(...onActions(item));
   const tech = item.technical || {};
-  return { kind: KIND_WORDS.plugin, title: item.name, id: item.source, tile: kindTile("plugin"), facts, why: loadsSay(item, c), actions, more: removeActions(item), after: projectLine(item, c), technical: techOf([{ title: "Plugin folder", path: tech.path }, { title: "Marketplace", summary: tech.marketplace }]) };
+  return { kind: KIND_WORDS.plugin, title: item.name, id: item.source, tile: kindTile("plugin"), facts, why: loadsSay(item, c), actions, more: removeActions(item), after: afterOf(projectLine(item, c), outsideLine(item, c)), technical: techOf([{ title: "Plugin folder", path: tech.path }, { title: "Marketplace", summary: tech.marketplace }]) };
 }
 
 // A thing a plugin holds: Plugin, Kind, Source and Clients, and "Follows its plugin." It has no
@@ -303,7 +311,7 @@ export function skillCard(item, c, { someStep = () => {} } = {}) {
   if ((item.by || {}).cursor === "on") notes.push(NO_CURSOR_SWITCH);
   const why = [loadsSay(item, { folder: c.project ? c.folder : "", noun: "this skill" }), ...notes].join(" ");
   const claude = ((item.can && item.can.off) || []).includes("claude_code");
-  const after = afterOf(projectLine(item, c), mergeLine(item, c), claude ? trayNote(SOME_FIRST, () => skillRuleWaits("project", c.answer)) : null);
+  const after = afterOf(projectLine(item, c), outsideLine(item, c), mergeLine(item, c), claude ? trayNote(SOME_FIRST, () => skillRuleWaits("project", c.answer)) : null);
   return { kind: KIND_WORDS.skill, title: item.name, id: item.source, tile: kindTile("skill"), facts, why, actions, more: removeActions(item), after, technical: techOf([{ title: "Skill file", path: (item.technical || {}).path }]) };
 }
 
@@ -515,7 +523,8 @@ export function someNodes(item, c, back) {
     const ticked = () => queued(body);
     const waits = () => !ticked() && skillRuleWaits("all", c.answer);
     const already = (item.off_in || []).includes(p.id);
-    const line = () => (already ? ALREADY_OFF : PROJECT_LINES[can] || (waits() ? ALL_FIRST : ""));
+    const away = can === "outside" ? outsideWords(c.rules.outside[p.id]) : null;
+    const line = () => (already ? ALREADY_OFF : away || PROJECT_LINES[can] || (waits() ? ALL_FIRST : ""));
     return { id: p.id, name: p.name, line, off: () => already || can !== "ok" || waits(), body, ticked };
   });
   return projectChecklist({ crumb: `Skill · ${item.name}`, title: `Turn off ${item.name} in the projects you pick`, why: SOME_WHY, rows, back });

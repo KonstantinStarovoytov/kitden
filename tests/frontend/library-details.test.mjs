@@ -796,3 +796,28 @@ test("the part card's button and the checklist's tick tell a rule's on and off a
   drawer.replaceChildren();
   await reset();
 });
+
+test("a project whose rule file Kitden does not write says so and offers no rule there", async () => {
+  await reset();
+  const answer = { ...MEDIUM, skill_rules: { some: true, projects: { atlas: 'outside', web: 'ok' }, outside: { atlas: 'repo' } } };
+  const words = "Claude Code keeps this project's local settings in repo, where Kitden does not write.";
+  const atlas = details.context(answer, 'atlas', 'atlas');
+  // A plugin and a skill: the quiet line, and no "Turn off in this project…".
+  const plugin = details.pluginCard(SUPERPOWERS, atlas);
+  assert.equal(plugin.after.textContent, words);
+  assert.ok(!labels(plugin).some(([label]) => label === 'Turn off in this project…'));
+  const mine = own('s9', 'site-notes', 'skill', { source: 'Only this project', by: { claude_code: 'on' }, items: { claude_code: ['cc-sn'] }, can: { off: [], project: ['claude_code'], local: [], shared: [] } });
+  const skill = details.skillCard(mine, atlas);
+  assert.deepEqual(labels(skill), []);
+  assert.ok(texts(skill.after).includes(words));
+  assert.ok(!texts(skill.after).some((t) => t.includes('may not merge')));
+  // Not in another project.
+  assert.equal(details.pluginCard(SUPERPOWERS, details.context(answer, 'web', 'web')).after, null);
+  // The checklist row cannot be ticked and says why.
+  drawer.replaceChildren(...details.someNodes(MEDIUM.groups[1].items[0], details.context(answer, '', ''), () => {}));
+  await flush();
+  const row = node(drawer, 'tick:atlas');
+  assert.equal(row.disabled, true);
+  assert.ok(texts(row).includes(words));
+  drawer.replaceChildren();
+});

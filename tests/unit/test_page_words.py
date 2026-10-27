@@ -3068,6 +3068,15 @@ def test_the_last_skill_rule_notes_say_what_they_do():
     assert 'const USE_SHARED = "Use the shared rule…";' in details
     assert 'const OFF_COPY = "Turn off this copy in Codex…";' in details
     assert 'const ALREADY_OFF = "Already off there";' in details
+    assert (
+        "`Claude Code keeps this project's local settings in ${folder}, where Kitden does not "
+        "write.`" in details
+    )
+    # The page asks the engine's own test of where a change may write.
+    assert (
+        "writable(path, home, writable_roots(home, inventory))"
+        in (STATIC.parents[1] / "views/library_map.py").read_text()
+    )
     # The project-only skill's reason: the server guard, in words that offer nothing refused.
     reason = (
         "Claude Code may not merge skill settings across files, so Kitden cannot turn it off in "

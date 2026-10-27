@@ -150,6 +150,12 @@ def _allowed(path: Path, roots: list[Path], stops: set[Path], folder: bool) -> b
     return False
 
 
+def writable(path: str | Path, home: Path, roots: list[Path]) -> bool:
+    """A change may write `path`: the test `_check_places` makes for each file, so a page that
+    asks first never offers what the engine refuses. `roots` are `writable_roots`."""
+    return _allowed(_real(path), roots, _stops(home, roots), folder=False)
+
+
 def _places(step: Step) -> list[str]:
     """The files and folders a step writes. A gateway address and a Keychain item are not
     paths; the folder a command runs in is checked on its own."""
@@ -510,7 +516,7 @@ class Engine:
         """Refuse the change when a step writes, or runs a command, outside the roots."""
         stops = _stops(home, roots)
         for step in steps:
-            written = [_allowed(_real(p), roots, stops, folder=False) for p in _places(step)]
+            written = [writable(p, home, roots) for p in _places(step)]
             ran = not step.cwd or _allowed(Path(step.cwd), roots, stops, folder=True)
             if not all(written) or not ran:
                 raise ChangeRefusedError(OUTSIDE)

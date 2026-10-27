@@ -525,3 +525,26 @@ def test_a_root_with_no_claude_folder_takes_the_rule_in_the_projects_own_file(tm
         assert json.loads(own.read_text()) == {"skillOverrides": {"deploy": "off"}}
         assert undo()["state"] == "undone"
     assert not own.exists() and not (repo / ".claude").exists()
+
+
+def test_the_engine_refuses_a_rule_file_outside_its_writable_roots(tmp_path):
+    # The same project the Library map calls "outside": the root's file is refused at preview.
+    home, _, _ = _home(tmp_path)
+    repo = tmp_path / "srv/repo"
+    api = repo / "api"
+    (repo / ".git").mkdir(parents=True)
+    (repo / ".claude").mkdir()
+    (api / ".claude").mkdir(parents=True)
+    _write(home / ".claude.json", {"projects": {str(api): {}}})
+    with _page(home) as page:
+        item = _item(page, "claude_code", "deploy")
+        answer = _preview(page, _rule("claude_code", item, "project", _project(page, api)))
+        assert answer.status_code == 422
+        assert (
+            answer.json()["detail"]
+            == "Kitden writes only in your home folder and your known projects."
+        )
+        assert page.get("/api/library-map").json()["skill_rules"]["outside"] == {
+            _project(page, api): "repo"
+        }
+    assert not (repo / ".claude/settings.local.json").exists()

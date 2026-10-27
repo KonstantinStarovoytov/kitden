@@ -6,6 +6,7 @@ from pathlib import Path
 
 from starlette.testclient import TestClient
 
+from kitden.changes.engine import writable, writable_roots
 from kitden.demo import build_demo_home, demo_adapters, demo_build
 from kitden.model import Scope
 from kitden.views.inventory import build_inventory
@@ -579,3 +580,38 @@ def test_skill_rules_for_a_project_in_a_repository_subfolder(tmp_path):
     (atlas / ".claude").mkdir()
     _write(atlas / "web/.claude/settings.local.json", {"skillOverrides": {"x": "off"}})
     assert _map(home)["skill_rules"]["projects"][web] == "own"
+
+
+def test_a_project_whose_rule_file_kitden_does_not_write_is_outside(tmp_path):
+    # api is a known project outside home in the repository /srv/repo, which is not a project:
+    # Claude Code keeps api's local settings at that root, where the engine does not write.
+    home = build_demo_home(tmp_path, "medium")
+    repo = tmp_path / "srv/repo"
+    api = repo / "api"
+    (repo / ".git").mkdir(parents=True)
+    (repo / ".claude").mkdir()
+    _write(api / ".claude/settings.local.json", {"skillOverrides": {"brandkit": "off"}})
+    state = home / ".claude.json"
+    data = json.loads(state.read_text())
+    data["projects"][str(api)] = {}
+    state.write_text(json.dumps(data))
+    inventory, adapters = _read(home)
+    ids = {p.path: p.id for p in inventory.projects}
+    rules = library_map(inventory, adapters, None)["skill_rules"]
+    assert rules["projects"][ids[str(api)]] == "outside"
+    assert rules["outside"] == {ids[str(api)]: "repo"}
+    # api's local file decides brandkit, but nothing offers to take its key out.
+    brandkit = _items(library_map(inventory, adapters, str(api)))["brandkit"]
+    assert brandkit["can"]["project"] == ["claude_code"]
+    assert brandkit["can"]["local"] == []
+    # The page asks the engine's own test.
+    roots = writable_roots(home, inventory)
+    assert not writable(repo / ".claude/settings.local.json", home, roots)
+    assert writable(api / ".claude/settings.local.json", home, roots)
+    # The root as a known project too: Kitden writes there.
+    data["projects"][str(repo)] = {}
+    state.write_text(json.dumps(data))
+    inventory, adapters = _read(home)
+    rules = library_map(inventory, adapters, None)["skill_rules"]
+    assert rules["projects"][ids[str(api)]] == "own"  # api's own local file holds skillOverrides
+    assert rules["outside"] == {}
