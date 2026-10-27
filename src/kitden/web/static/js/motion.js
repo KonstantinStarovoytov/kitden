@@ -157,6 +157,22 @@ export function rollTo(holder, value) {
   setTimeout(() => old.remove(), D(140));
 }
 
+// A number counts up from 0 to `value` in `dur` ms (OUT3), `delay` ms late. Under reduced motion,
+// in a hidden tab or at 0 it shows the number at once.
+export function countUp(node, value, { dur = 700, delay = 0 } = {}) {
+  const total = D(dur);
+  node.textContent = String(value);
+  if (!total || !value || document.hidden) return;
+  const start = performance.now() + D(delay);
+  node.textContent = "0";
+  const step = (now) => {
+    const t = Math.min(1, Math.max(0, (now - start) / total));
+    node.textContent = String(Math.round(value * OUT3(t)));
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
 // First visit to a place: its blocks rise in 45 ms apart. Later visits are instant.
 const seen = new Set();
 export function entrance(place, nodes) {

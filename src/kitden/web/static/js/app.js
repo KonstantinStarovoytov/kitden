@@ -78,7 +78,7 @@ function renderPlace() {
 // Rail counters and the Where list follow the data.
 function renderShell() {
   const overview = current("overview");
-  rollTo($("#nav-attention"), overview && overview.attention.length ? overview.attention.length : "");
+  rollTo($("#nav-attention"), overview && overview.counts.attention ? overview.counts.attention : "");
   // Changes still in effect, the ones Undo can take back.
   const changes = latestChanges(data.changes || []).filter((e) => e.state === "verified").length;
   rollTo($("#nav-changes"), changes || "");

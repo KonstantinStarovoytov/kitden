@@ -6,7 +6,6 @@ in the side panel.
 """
 
 from pathlib import Path
-from urllib.parse import urlsplit
 
 from kitden.changes.actions import (
     GATEWAY_MOVE,
@@ -38,10 +37,6 @@ SKIPS = "Skips the gateway, so Kitden's rules don't reach it."
 NOT_CONNECTED = "Not connected to the gateway yet."
 
 
-def _count(n: int, one: str, many: str) -> str:
-    return f"{n} {one if n == 1 else many}"
-
-
 def _join(words: list[str]) -> str:
     return " and ".join([", ".join(words[:-1]), words[-1]] if len(words) > 1 else words)
 
@@ -50,10 +45,10 @@ def _client_order(client: str) -> int:
     return COLUMNS.index(client) if client in COLUMNS else len(COLUMNS)
 
 
-def _card(id, group, icon, name, line, clients, action, block, today=None) -> dict:
-    """One card. `today` is the same card as today's page reads it ({title, text, action,
-    target}); `_split` takes it out."""
-    card = {
+def _card(id, group, icon, name, line, clients, action, block) -> dict:
+    """One card: its group ("attention" or "improve"), icon, name, one line, the clients it is
+    about, its one action (or None) and what the "Your setup" map focuses for it."""
+    return {
         "id": id,
         "group": group,
         "icon": icon,
@@ -63,13 +58,6 @@ def _card(id, group, icon, name, line, clients, action, block, today=None) -> di
         "action": action,
         "focus": {"clients": clients, "block": block},
     }
-    return {**card, "today": today} if today else card
-
-
-def _split(cards: list[dict]) -> tuple[list[dict], list[dict]]:
-    """The new cards, and today's cards for the page that still reads them."""
-    today = [{"id": c["id"], **c.pop("today")} for c in cards if "today" in c]
-    return cards, today
 
 
 def _unreadable(inventory) -> list[dict]:
@@ -81,11 +69,8 @@ def _unreadable(inventory) -> list[dict]:
         title = f"Could not read {Path(where).name}"
         text = f"{why}, so items from {client} may be missing or wrong."
         clients = [problem.owner_client] if problem.owner_client in COLUMNS else []
-        today = {"title": title, "text": text, "action": None, "target": None}
         card_id = _hash("unreadable", where)
-        cards.append(
-            _card(card_id, "attention", "file-text", title, text, clients, None, None, today)
-        )
+        cards.append(_card(card_id, "attention", "file-text", title, text, clients, None, None))
     return cards
 
 
@@ -96,10 +81,9 @@ def _untested(inventory) -> list[dict]:
             tested = MINIMUM_VERSIONS.get(client.id, "a newer version")
             title = f"{client.display_name} {client.version} is not tested"
             text = f"Tested from {tested}, so some items may be missing or wrong."
-            today = {"title": title, "text": text, "action": None, "target": None}
             icon = {"client": client.id}
             card_id = _hash("version", client.id)
-            card = _card(card_id, "attention", icon, title, text, [client.id], None, None, today)
+            card = _card(card_id, "attention", icon, title, text, [client.id], None, None)
             cards.append(card)
     return cards
 
@@ -125,25 +109,18 @@ def _duplicates(inventory, findings) -> list[dict]:
     for (kind, name), group in groups.items():
         clients = sorted(group["clients"], key=_client_order)
         copies = group["copies"]
-        times = "twice" if copies == 2 else f"{copies} times"
         text = (
             f"{'Two' if copies == 2 else copies} copies of one "
             f"{KIND_WORDS.get(kind, kind)} load; keep one."
         )
-        today = {
-            "title": f"{name} loads {times} in {_join([NAMES.get(c, c) for c in clients])}",
-            "text": text,
-            "action": "Keep one…",
-            "target": {"view": "map", "kind": kind, "name": group["name"]},
-        }
         server = kind == str(ItemKind.MCP_SERVER)
         go = {"view": "gateway" if server else "library", "sel": f"{kind}:{group['name']}"}
         action = {"label": "Keep one…", "go": go}
         block = "gateway" if server else "library"
         icon = KIND_ICONS.get(kind, "puzzle")
         card_id = _hash("duplicate", kind, name)
-        cards.append(_card(card_id, "attention", icon, name, text, clients, action, block, today))
-    return sorted(cards, key=lambda c: c["today"]["title"])
+        cards.append(_card(card_id, "attention", icon, name, text, clients, action, block))
+    return sorted(cards, key=lambda c: (c["name"], [_client_order(x) for x in c["clients"]]))
 
 
 def _old_entries(inventory) -> list[dict]:
@@ -161,12 +138,11 @@ def _old_entries(inventory) -> list[dict]:
         f"The working version, agentsetup, made {it}; update {it} so {where} "
         f"{'starts' if one else 'start'} kitden."
     )
-    today = {"title": title, "text": text, "action": "Update", "target": {"view": "agents"}}
     targets = [{"item": s["item"]} for s in old]
     body = {"action": SETUP_SERVER_UPDATE, "targets": targets, "params": {}}
     action = {"label": "Update…", "body": body}
     card_id = _hash("old-entries", where)
-    return [_card(card_id, "attention", "house", title, text, ids, action, "gateway", today)]
+    return [_card(card_id, "attention", "house", title, text, ids, action, "gateway")]
 
 
 def _move_ins(groups: dict) -> list[dict]:
@@ -292,23 +268,6 @@ def _setup_map(inventory, adapters, project, held, gateway_rules) -> dict:
     }
 
 
-def _kitden_card(inventory, held: list[dict], problem: str | None) -> dict | None:
-    """The Kitden gateway: how many servers it holds and which clients reach it. A client with
-    an old entry is neither connected nor offered a new one: the old entry is updated instead."""
-    states = setup_server_state(inventory)
-    clients = [s["client"] for s in states if kitden_on(s)]
-    if not (held or clients or problem):
-        return None
-    return {
-        "kind": "kitden",
-        "name": "Kitden gateway",
-        "servers": len(held),
-        "clients": clients,
-        "lacking": [s["client"] for s in states if s["state"] == "missing"],
-        "problem": problem,
-    }
-
-
 def note_count(findings: list[Finding]) -> int:
     """The notes the page shows: one row per name, however many notes it has."""
     return len({name for f in findings for name in f.names})
@@ -319,74 +278,34 @@ def overview(
     gateways: list[Gateway],
     project: str | None,
     held: list[dict] | None = None,
-    problem: str | None = None,
     adapters: dict | None = None,
     gateway_rules: set[str] | frozenset[str] = frozenset(),
 ) -> dict:
-    """`held` are the servers the Kitden gateway holds (None: no Kitden gateway here),
-    `adapters` the clients' adapters, for the Library's counts, and `gateway_rules` the known
-    projects with gateway rules of their own.
-
-    `cards`, `map` and `counts` are for the Overview page. `headline`, `attention`,
-    `suggestions`, `clients` and `gateway` are what today's page reads, until it is rebuilt."""
+    """The Overview page's `cards`, `notes` (how many rows the folded notes draw), `map` (the
+    "Your setup" map) and `counts` (for the lede). `held` are the servers the Kitden gateway
+    holds (None: no Kitden gateway here), `adapters` the clients' adapters, for the Library's
+    counts, and `gateway_rules` the known projects with gateway rules of their own."""
     findings = find_findings(inventory, project)
-    cards, attention = _split(
+    cards = (
         _unreadable(inventory)
         + _untested(inventory)
         + _old_entries(inventory)
         + _duplicates(inventory, findings)
     )
-
-    # Direct servers are an option, not a problem. The count is the Gateway page's rows, so a
-    # server in two clients counts once; with the Kitden gateway, local servers can move too.
-    # Only rows with an entry Kitden can remove count: the Gateway page offers the move on those.
-    gateway = None
-    suggestions = []
-    kitden = None if held is None else _kitden_card(inventory, held, problem)
-    # The groups do not change with `kitden`; only whether a row can move does.
-    groups = gateway_view(inventory, gateways, project, kitden=held)["groups"]
+    # Servers outside the gateway and clients not connected are options, not problems. The rows
+    # are the Gateway page's, so a server in two clients is one card.
     if held is not None:
+        groups = gateway_view(inventory, gateways, project, kitden=held)["groups"]
         cards += _move_ins(groups)
     if held:
         cards += _connects(inventory)
-    if kitden or gateways:
-        rows = groups["move"] + (groups["local"] if kitden else [])
-        moves = len({row["name"] for row in rows if row["items"]})
-        gateway = kitden or {"name": urlsplit(gateways[0].url).netloc or "Gateway"}
-        if moves:
-            into = "the Kitden gateway" if kitden else "the gateway"
-            suggestions.append(
-                {
-                    "title": f"{_count(moves, 'MCP server', 'MCP servers')} can move into {into}",
-                    "text": f"{'It connects' if moves == 1 else 'They connect'} to each client "
-                    "directly now.",
-                    "action": "Review",
-                    "target": {"view": "gateway"},
-                }
-            )
 
     # The notes the page lists: the info findings of /api/findings, gateway bypasses too.
     info = [f for f in findings + find_bypasses(inventory, project) if f.severity is Severity.INFO]
     setup = _setup_map(inventory, adapters or {}, project, held, gateway_rules)
-    n = len(attention)
-    headline = "All clear" if not n else f"{_count(n, 'thing needs', 'things need')} attention"
     return {
-        "headline": headline,
-        "attention": attention,
-        "suggestions": suggestions,
-        "notes": note_count(info),
-        "clients": [
-            {
-                "id": c.id,
-                "name": c.display_name,
-                "version": c.version,
-                "tested": c.version_supported,
-                "status": str(c.status),
-            }
-            for c in inventory.clients
-        ],
-        "gateway": gateway,
         "cards": cards,
+        "notes": note_count(info),
         "map": setup,
         "counts": {
             "attention": sum(c["group"] == "attention" for c in cards),

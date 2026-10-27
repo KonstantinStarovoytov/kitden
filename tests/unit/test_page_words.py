@@ -102,6 +102,32 @@ def test_overview_has_no_pills_bar_or_recent_changes():
     assert '"bar"' not in overview
 
 
+def test_overview_says_your_setup_connected():
+    overview = script("overview.js")
+    for words in (
+        '"Your setup, connected."',
+        "Hover a card to see it on the map · a button adds a preview · click Kitden gateway or "
+        "Library to open it",
+        '"Everything looks fine: "',
+        '"thing needs" : "things need"} your attention. Everything else looks fine: `',
+        '"Needs attention"',
+        '"Can improve"',
+        '"Your setup"',
+        '"Kitden gateway"',
+        '"Library"',
+        '"Not found"',
+        '"All projects"',
+        "`Project ${folder}`",
+        '"has its own rules" : "have their own rules"',
+    ):
+        assert words in overview, words
+    # The setup map's places, as decided (Phase 7).
+    assert '{ id: "clients", w: 160, h: 54, top: 22, rowGap: 18 }' in overview
+    assert '{ id: "pages", w: 220, h: 60, colGap: 90, top: 40, rowGap: 48 }' in overview
+    # No path on the page, and no floating Details.
+    assert "shortPath" not in overview and "openInfo" not in overview
+
+
 def test_library_has_no_legend_or_counts():
     text = script("library.js")
     assert "legend" not in text.lower()
@@ -858,13 +884,9 @@ def test_controls_press_and_the_switch_waits_in_the_tray():
     assert 'node.classList.toggle("pending", waiting);' in text and "onTray(syncTray);" in text
 
 
-def test_client_tile_flies_to_its_library_column():
+def test_an_overview_item_opens_after_its_library_tab_is_read():
+    # The tab is read before the place changes, so the Library draws its rows inside the change.
     overview = script("overview.js")
-    assert "fly(tile, `client-${clientId}`)" in overview
-    assert "land(tile, `client-${column.id}`)" in script("library.js")
-    # The tab is read before the place changes, so its table is drawn where the tile can land.
-    count = overview.split("function loadsLine")[1].split("\n}\n")[0]
-    assert count.index("await loadLibraryFor(choice);") < count.index("fly(tile")
     card = overview.split("async function follow")[1].split("\n}\n")[0]
     assert card.index("await loadLibraryFor(libraryChoice(sel));") < card.index('goTo("library"')
 
@@ -944,16 +966,13 @@ def test_changes_rows_open_the_panel_and_keep_paths_off_the_page():
     assert "change-detail" not in text and "aria-expanded" not in text
 
 
-def test_overview_notes_are_rows_with_a_details_button():
+def test_overview_notes_are_sentences_with_an_info_icon():
     text = script("overview.js")
-    assert '"Details"' in text
-    assert "shortPaths" not in text
-
-
-def test_note_flags_wrap_under_the_name_and_not_under_details():
-    # An item with several notes puts the flags that do not fit on a second line.
-    rule = next(line for line in CSS.splitlines() if line.startswith(".list-row .what {"))
-    assert "flex-wrap: wrap;" in rule
+    assert 'node.append(icon("info", 13), el("span", null, noteSentence(group)));' in text
+    assert "`${group.name} ${joinWords(group.notes)}.`" in text
+    assert "(nothing to fix)" in text and "`Hide ${plural(count" in text
+    assert "shortPaths" not in text and "flag(" not in text
+    assert '.ov-fold[aria-expanded="true"] svg { rotate: 90deg; }' in CSS
 
 
 # Feature 006: the gateway is managed from here --------------------------------------------
@@ -1095,8 +1114,6 @@ def test_changes_and_the_library_say_saved_settings_and_scope():
     assert "global settings" not in changes
     assert '"everywhere"' not in changes
     assert "Tools · ${where || ALL_PROJECTS}" in panel()
-    assert '"Nothing on here."' in script("overview.js")
-    assert "Loads nothing" not in script("overview.js")
 
 
 def test_changes_show_restart_notes_only_for_changes_that_happened():
@@ -1165,15 +1182,15 @@ def test_gateway_connect_form_serves_its_own_card_only():
 
 def test_direct_servers_are_options_and_details_offers_move_first():
     overview = script("overview.js")
-    assert '"Can improve"' in overview and "model.suggestions" in overview
-    assert ".issue.suggestion" in CSS
+    assert '{ id: "improve", words: "Can improve", icon: "sparkles", look: "btn" }' in overview
     code = panel()
     assert 'action: "gateway.move"' in code
     # Without a gateway that takes servers, the Gateway page says so.
     assert "Add the server in the gateway first" in script("parts.js")
     assert "GATEWAY_NOTE" in gw()
     # An option is quieter than a problem: a plain button, not the primary one.
-    assert 'option ? "btn" : "btn primary"' in overview
+    attention = 'words: "Needs attention", icon: "triangle-alert", look: "btn primary" }'
+    assert attention in overview
 
 
 def test_rows_say_they_open_details_and_search_names_its_scope():
@@ -1560,10 +1577,17 @@ def test_the_add_a_server_panel_says_what_the_mockup_says():
         assert word not in add.split("export const ADD_TITLE")[1], word
 
 
-def test_overview_offers_set_up_only_without_a_gateway():
+def test_overview_cards_add_a_preview_or_open_a_page():
     overview = script("overview.js")
-    assert overview.count('"No gateway yet."') == 1
-    assert "gatewayCardWords" in overview
+    # A change goes to the tray through the shared preview button, which says "In preview".
+    assert "previewButton(action.label, action.body" in overview
+    assert "button(action.label, () => openPlace(action.go), look)" in overview
+    assert "No gateway yet." not in overview and "gatewayCardWords" not in overview
+    # The card leaves only once the page has read the result of the applied change.
+    assert 'if (t.phase !== "applied") return;' in overview
+    assert "if (read < at) continue;" in overview
+    # After Apply or Undo the Overview draws in place, so its card's motion is the one motion.
+    assert 'view === "library" || view === "overview" ||' in script("review.js")
 
 
 def test_library_says_the_add_scope_in_a_project():
@@ -2039,11 +2063,9 @@ def test_a_demo_says_so_quietly_in_the_rail():
     assert "Demo" not in INDEX  # only a demo's answer adds it
 
 
-def test_an_issue_card_without_a_button_keeps_its_words_in_the_wide_column():
-    # An unreadable file has no action; left to the grid, its title fell into a 0 px column.
-    for selector in (".issue h3", ".issue p"):
-        rule = re.search(rf"^{re.escape(selector)} \{{([^}}]*)\}}", CSS, re.MULTILINE)
-        assert rule and "grid-column: 1;" in rule.group(1), selector
+def test_a_card_without_a_button_keeps_its_words_in_the_wide_column():
+    # An unreadable file has no action; its words take the room the button would.
+    assert ".ov-card .tx { flex: 1; min-width: 0;" in CSS
 
 
 def test_a_client_kitden_could_not_read_says_so_under_its_name():
@@ -2060,7 +2082,8 @@ def test_needs_review_is_an_amber_ring_with_a_small_dot():
 
 
 def test_overview_notes_say_same_name_another_source():
-    assert 'same_name_other_source: "Same name, another source"' in script("overview.js")
+    text = script("overview.js")
+    assert 'same_name_other_source: "has the same name as an entry from another source"' in text
 
 
 def test_the_gateway_opens_and_keeps_the_selected_server():

@@ -67,7 +67,7 @@ def test_library_everywhere_and_for_a_project(client):
 
 
 def test_overview_and_gateway_view(client):
-    assert client.get("/api/overview").json()["headline"] == "2 things need attention"
+    assert client.get("/api/overview").json()["counts"]["attention"] == 2
     view = client.get("/api/gateway-view").json()
     assert any(e["name"] == "Neon" for e in view["groups"]["move"])
     assert view["own_rules"] == 0  # All projects

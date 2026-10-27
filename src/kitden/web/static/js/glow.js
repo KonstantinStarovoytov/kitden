@@ -8,7 +8,7 @@ const REACH = 130; // dots show this far from the pointer
 const GRID = 22; // the dots' pitch
 const EASE = 0.16; // the share of the way to the goal that a frame takes
 // Map blocks and Overview cards only. The glow itself is drawn by style.css from --mx and --my.
-const SPOTLIGHT = 'div.map .block, #main[data-place="overview"] :is(.card, .issue)';
+const SPOTLIGHT = 'div.map .block, #main[data-place="overview"] .ov-card';
 
 // The dots near (x, y): the nearer one is bigger, stronger, and pushed a little away from the pointer.
 function drawDots(ctx, { x, y, level, colour }) {

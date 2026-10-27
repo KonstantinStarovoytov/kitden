@@ -8,7 +8,7 @@ import { getJson, query } from "./api.js";
 import { button, el, gridKey, icon, plural } from "./dom.js";
 import { filesGroup, INSTRUCTIONS_HINT, LEDE, leaveLibraryMap, letGoLibraryMap, libraryDetails, libraryMode, libraryThing, renderLibraryMap, setListOnly } from "./library-map.js";
 import { glidePill, modeSwitch, switchedNow } from "./map-page.js";
-import { CALM, afterOldPage, animate, entrance, glide, land, reducedMotion, rise } from "./motion.js";
+import { CALM, afterOldPage, animate, entrance, glide, reducedMotion, rise } from "./motion.js";
 import { projectNote } from "./offer.js";
 import { isPanelOpen, openInfo, panelState, previewButton, projectLabel, review } from "./panel.js";
 import { banner, CLIENT_NAMES, flag, folderName, lookFor, mark, morphSocket, scopeBar, setHint, skeleton, socket, sourceLines, staleNote } from "./parts.js";
@@ -664,8 +664,8 @@ function listGrid(rows, columns, kind) {
   return grid;
 }
 
-// Name, then each client: its tile (coming from the Overview, it flies here from its row), its
-// name and its "−"; a client Kitden could not read says so under its name.
+// Name, then each client: its tile, its name and its "−"; a client Kitden could not read says so
+// under its name.
 function headRow(columns) {
   const head = el("div", "tg-head");
   head.setAttribute("role", "row");
@@ -673,9 +673,7 @@ function headRow(columns) {
   for (const column of columns) {
     const th = gridCell("columnheader", "col-head");
     const who = el("span", "who");
-    const tile = mark(column.id);
-    land(tile, `client-${column.id}`);
-    who.append(tile, el("span", null, column.name));
+    who.append(mark(column.id), el("span", null, column.name));
     th.append(who);
     const hide = hideButton(column, columns);
     if (hide) th.append(hide);

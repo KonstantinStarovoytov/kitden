@@ -108,6 +108,8 @@ What Kitden does today and what comes next. Ideas and bugs:
   A skill the client already loads, from its folders or another plugin, is left out.
 - **Hide a column:** the "−" on a client's column head hides it on the page, and "Show" brings it
   back.
+- **Overview:** "Your setup, connected.": one-button cards that leave once their change is
+  applied and checked, and a small map of your setup that lights a card's path.
 - **Categories:** filter plugins and skills by category. The category shows quietly in each row.
 - **Quick start:** the page has its data in about two seconds. Codex's slow plugin list comes in
   the background, and a line shows what is still read.

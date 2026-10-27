@@ -279,7 +279,12 @@ function showTrayLook(node) {
 // The tray changed (panel.js listens): every switch and button in Details shows whether its change
 // waits there. Only those controls change; nothing is drawn again.
 export function syncTray() {
-  for (const node of $$("[data-tray]", $("#drawer"))) showTrayLook(node);
+  syncTrayIn($("#drawer"));
+}
+
+// The same for the controls under `root` (the Overview's card buttons).
+export function syncTrayIn(root) {
+  for (const node of $$("[data-tray]", root)) showTrayLook(node);
 }
 
 // A switch that shows a real state; it flips only when the change is written and checked, never

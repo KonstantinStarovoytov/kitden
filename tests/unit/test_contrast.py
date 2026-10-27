@@ -317,3 +317,17 @@ def test_the_unknown_lamp_keeps_3_to_1_on_every_block_fill_in_both_themes():
         fills.append(blend(theme["--preview-fill"], theme["--canvas"]))
         for fill in fills:
             assert contrast(theme["--lamp-warn"], fill) >= 3.0, fill
+
+
+def test_the_overview_cards_and_captions_are_readable_in_both_themes():
+    # A card's name is --ink and its line --ink-3 on the panel; the client tiles' and the icon
+    # tile's edges are --wire. The "Needs attention" caption's icon is amber on the canvas, and
+    # the notes and the foot are --ink-3 on the canvas.
+    assert ".ov-card .ln { color: var(--ink-3);" in CSS
+    assert '.ov-group[data-group="attention"] .ov-cap svg { color: var(--lamp-warn); }' in CSS
+    assert "margin: 0 0 8px; color: var(--ink-2);" in block(".ov-cap {")
+    for theme in (LIGHT, DARK, {**LIGHT, **DARK_AUTO}):
+        for ink in ("--ink", "--ink-2", "--ink-3"):
+            assert contrast(theme[ink], theme["--panel"]) >= 4.5, ink
+            assert contrast(theme[ink], theme["--canvas"]) >= 4.5, ink
+        assert contrast(theme["--lamp-warn"], theme["--canvas"]) >= 3.0

@@ -507,10 +507,11 @@ export function showEffect() {
   else transition(render);
 }
 
-// The Library morphs its cells and the Gateway map lands its rows (gateway.js landRows): each is the
-// one motion of the change, so neither cross-fades the page too. Other places cross-fade.
+// The Library morphs its cells, the Gateway map lands its rows (gateway.js landRows) and the
+// Overview's card leaves or comes back: each is the one motion of the change, so none cross-fades
+// the page too. Other places cross-fade.
 export function drawsInPlace(view = state.view, mode = gatewayShows.mode) {
-  return view === "library" || (view === "gateway" && mode === "map");
+  return view === "library" || view === "overview" || (view === "gateway" && mode === "map");
 }
 
 // After Apply all or an Undo, the Details open now are drawn again from what the files say, by
