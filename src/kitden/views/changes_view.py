@@ -74,12 +74,17 @@ def _backup(state: str, error: str | None) -> str:
 
 
 def _takes_effect(state: str, steps: list[dict]) -> list[dict]:
-    """Each client's restart note, once; nothing for a change that wrote nothing."""
+    """Each client's restart note and log-in note (None when it has none), once; nothing for a
+    change that wrote nothing."""
     if state not in HAPPENED:
         return []
-    notes = {(s["client"], s["restart_note"]): None for s in steps if s.get("restart_note")}
-    pairs = sorted(notes, key=lambda pair: _order(pair[0]))
-    return [{"client": client, "note": note} for client, note in pairs]
+    notes = {
+        (s["client"], s.get("restart_note"), s.get("login_note")): None
+        for s in steps
+        if s.get("restart_note") or s.get("login_note")
+    }
+    found = sorted(notes, key=lambda found: _order(found[0]))
+    return [{"client": client, "note": note, "login": login} for client, note, login in found]
 
 
 def _history(change_id: str, lines: list[dict]) -> list[dict]:
@@ -95,11 +100,24 @@ def _item_ids(body: dict) -> set[str]:
     return {i for i in ids if isinstance(i, str) and i}
 
 
-def _map(change: Change | None, request: list[dict] | None, inventory) -> dict | None:
+def _about(body: dict) -> str | None:
+    """The Kitden gateway server a gateway row names (`params.server`); an add names it as
+    "<plugin>/<name>"."""
+    server = (body.get("params") or {}).get("server")
+    if not str(body.get("action", "")).startswith("gateway.") or not isinstance(server, str):
+        return None
+    return server.partition("/")[2] if body["action"] == "gateway.add" else server
+
+
+def _map(change: Change | None, request: list[dict] | None, rows: int, inventory) -> dict | None:
     """Where "See it on the map" goes, when the change touched one Kitden gateway server or one
     item: {view, sel, gone}. `sel` is as the page's address writes it ("tool:files/read_file").
-    `gone`: the item is no longer there; `sel` is then None when only its id was known."""
+    `gone`: the item is no longer there; `sel` is then None when only its id was known. Of
+    several tray rows, a server counts only when every row is a gateway row about it."""
     servers = {name for s in change.steps if (name := kitden_server(s))} if change else set()
+    several = rows > 1 and (not request or any(_about(body) not in servers for body in request))
+    if len(servers) == 1 and several:
+        return None
     if len(servers) == 1:
         [server] = servers
         rule = rule_of(change)
@@ -108,14 +126,15 @@ def _map(change: Change | None, request: list[dict] | None, inventory) -> dict |
         mcp = ItemKind.MCP_SERVER
         gone = not any(i.kind is mcp and i.name == server for i in inventory.items)
         return {"view": "gateway", "sel": sel, "gone": gone}
-    if servers or not request or len(request) != 1:
+    if servers or not request:
         return None
-    ids = _item_ids(request[0])
+    ids = set().union(*(_item_ids(body) for body in request))
     if not ids:
         return None
     by_id = {i.id: i for i in inventory.items}
     found = {(str(by_id[i].kind), by_id[i].name) for i in ids if i in by_id}
-    if len(found) > 1:
+    # Several rows name one item only when every id is still there and is that item.
+    if len(found) > 1 or (len(request) > 1 and (ids - by_id.keys() or not found)):
         return None
     if found:
         [(kind, name)] = found
@@ -168,15 +187,18 @@ def _entry(change_id: str, lines: list[dict], change: Change | None, inventory) 
         "takes_effect": _takes_effect(state, steps),
         "history": _history(change_id, lines),
         "rows": rows,
+        # Never drawn on the page: Redo… only puts these bodies back into the tray, so a typed
+        # source here may name a folder.
         "redo": request or None,
-        "map": _map(change, request, inventory),
+        "map": _map(change, request, len(rows), inventory),
         "technical": _technical(steps, change, last.get("error")),
     }
 
 
 def change_entries(log: list[dict], engine, inventory) -> list[dict]:
-    """One entry per change id, newest first by when it was made. `log` is the change log,
-    newest line first; `engine` holds the records (`engine.changes`)."""
+    """One entry per change id, newest first by the time of its first log line (when it was
+    applied, or stopped). `log` is the change log, newest line first; `engine` holds the
+    records (`engine.changes`)."""
     lines: dict[str, list[dict]] = {}
     for line in reversed(log):
         if line.get("id"):

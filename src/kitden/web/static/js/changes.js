@@ -85,7 +85,7 @@ function show(entry) {
     line.title = path;
     body.append(line);
   }
-  const notes = notesSection("To take effect", entry.takes_effect.map((t) => ({ restart_note: t.note })));
+  const notes = notesSection("To take effect", entry.takes_effect.map((t) => ({ restart_note: t.note, login_note: t.login })));
   if (notes) body.append(notes);
   body.append(el("p", "muted", entry.history.map((e) => `${when(e.time)} ${(STATE_BADGES[e.state] || [e.state])[0]}`).join(" → ")));
   if (entry.technical.error) body.append(el("p", "muted", shortPaths(entry.technical.error)));

@@ -472,6 +472,17 @@ test('applying runs only from a ready tray', async () => {
   assert.equal(asked('/api/changes/c1/apply').length, 1);
 });
 
+test('Apply all sends the titles the rows show now', async () => {
+  await fresh();
+  await twoRows();
+  // The preview it applies was asked while the last row was still "New change".
+  assert.deepEqual(asked(PREVIEW).at(-1).body.requests.map((r) => r.title), ['Add github', 'New change']);
+  queue('/api/changes/c2/apply', verified('c2'));
+  await applyTray();
+  assert.deepEqual(asked('/api/changes/c2/apply')[0].body, { titles: ['Add github', 'Add neon'] });
+  endApplied();
+});
+
 test('a stale apply keeps the rows', async () => {
   await fresh();
   await twoRows();

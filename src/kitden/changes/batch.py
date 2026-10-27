@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from kitden.changes.backup import hidden
 from kitden.changes.json_splice import ABSENT
 from kitden.local_gateway.settings import CLIENT as KITDEN
-from kitden.model import Change, Scope, Step
+from kitden.model import Change, ChangeState, Scope, Step
 from kitden.views.words import NO_SKILL_MERGE
 
 BATCH = "batch"  # the action of a change made of two or more tray rows
@@ -104,6 +104,20 @@ def kept_request(requests: list[dict]) -> list[dict]:
         for r in requests
     ]
     return hidden(bodies)
+
+
+def retitle(change: Change, titles: object) -> None:
+    """Give a previewed change's rows the titles the tray shows at Apply. The tray works a row's
+    title out from the answer, after the preview it applies was asked, so the rows hold an older
+    one. A list of another length, or a title that is not text, changes nothing. Secrets are
+    hidden as the log hides them."""
+    rows = change.rows or []
+    if change.state is not ChangeState.PREVIEWED or not isinstance(titles, list):
+        return
+    if len(titles) != len(rows) or not all(_text(t) for t in titles):
+        return
+    for row, title in zip(rows, hidden(titles), strict=True):
+        row["title"] = title
 
 
 def kitden_server(step: Step) -> str | None:

@@ -6,7 +6,17 @@ from types import SimpleNamespace
 
 from kitden.gateways import data_dir
 from kitden.views.changes_view import change_entries
-from tests.unit.test_api_batch import POST, _apply, _ids, _page, _preview, _projects, _remove, _rule
+from tests.unit.test_api_batch import (
+    POST,
+    _apply,
+    _hold,
+    _ids,
+    _page,
+    _preview,
+    _projects,
+    _remove,
+    _rule,
+)
 
 RESTORED = "The original settings were restored."
 NO_ENGINE = SimpleNamespace(changes={})
@@ -108,10 +118,17 @@ def test_takes_effect_is_per_client_from_restart_notes():
     line = _line("20261027T140200Z-eeeeee", "2026-10-27T14:02:10+00:00", "verified", steps=steps)
     [entry] = _entries(line)
     assert entry["takes_effect"] == [
-        {"client": "claude_code", "note": "New session."},
-        {"client": "codex", "note": "Restart Codex."},
+        {"client": "claude_code", "note": "New session.", "login": None},
+        {"client": "codex", "note": "Restart Codex.", "login": None},
     ]
     assert entry["clients"] == ["claude_code", "codex"]
+    # A log-in note goes with its client, beside the restart note.
+    login = {"client": "cursor", "name": "gw", "scope": "user", "restart_note": "Restart Cursor."}
+    login["login_note"] = "Open the gateway and sign in."
+    line = _line("20261027T140230Z-efefef", "2026-10-27T14:02:40+00:00", "verified", steps=[login])
+    assert _entries(line)[0]["takes_effect"] == [
+        {"client": "cursor", "note": "Restart Cursor.", "login": "Open the gateway and sign in."}
+    ]
     # A change that wrote nothing needs nothing done.
     stale = _line("20261027T140300Z-ffffff", "2026-10-27T14:03:10+00:00", "stale", steps=steps)
     assert _entries(stale)[0]["takes_effect"] == []
@@ -189,6 +206,53 @@ def test_map_target_and_gone_for_a_removed_item(tmp_path):
         assert map_of(removal["id"]) == {"view": "gateway", "sel": None, "gone": True}
         _apply(page, removal["id"], "undo")
         assert map_of(removal["id"]) == {"view": "gateway", "sel": "mcp_server:n8n", "gone": False}
+
+
+def test_map_target_of_several_rows(tmp_path):
+    with _page(tmp_path) as page:
+        two = _preview(page, _rule("a", "read_file"), _rule("b", "write_file")).json()
+        _apply(page, two["id"])
+        n8n = _ids(page, "cursor")["n8n"]
+        mixed = _preview(page, _rule("c", "search_files"), _remove("d", n8n)).json()
+        _apply(page, mixed["id"])
+        maps = {e["id"]: e["map"] for e in page.get("/api/changes").json()}
+    # Every row is about files: the server. A rule and a removal touch two things: none.
+    assert maps[two["id"]] == {"view": "gateway", "sel": "mcp_server:files", "gone": False}
+    assert maps[mixed["id"]] is None
+
+
+def test_a_kitden_gateway_server_that_left_is_gone(tmp_path):
+    with _page(tmp_path) as page:
+        _hold(page.home, "extra", ["ping"])
+        row = {"id": "a", "kind": "gateway.remove", "title": "Remove extra"}
+        removal = _preview(page, {**row, "params": {"server": "extra"}})
+        assert removal.status_code == 200, removal.text
+        assert _apply(page, removal.json()["id"]).json()["state"] == "verified"
+        entry = page.get("/api/changes").json()[0]
+    assert entry["map"] == {"view": "gateway", "sel": "mcp_server:extra", "gone": True}
+
+
+def test_a_tray_change_keeps_the_titles_shown_at_apply(tmp_path):
+    with _page(tmp_path) as page:
+        n8n = _ids(page, "cursor")["n8n"]
+        rows = [_rule("a", "read_file"), _remove("b", n8n, title="New change")]
+        change = _preview(page, *rows).json()
+        titles = ["Turn off read_file of files", "Remove n8n from Cursor ghp_SENTINEL_SECRET_ROW1"]
+        applied = page.post(
+            f"/api/changes/{change['id']}/apply", json={"titles": titles}, headers=POST
+        )
+        assert applied.json()["state"] == "verified"
+        record = data_dir(page.home) / "changes" / change["id"] / "change.json"
+        kept = [r["title"] for r in json.loads(record.read_text())["rows"]]
+        assert kept == ["Turn off read_file of files", "Remove n8n from Cursor [secret]"]
+        assert [r["title"] for r in _log(page.home)[-1]["rows"]] == kept
+        assert page.get("/api/changes").json()[0]["rows"] == [{"title": t} for t in kept]
+        # A list that does not fit the rows changes nothing.
+        other = _preview(page, _rule("c", "write_file"), _rule("d", "search_files")).json()
+        page.post(f"/api/changes/{other['id']}/apply", json={"titles": ["One"]}, headers=POST)
+        record = data_dir(page.home) / "changes" / other["id"] / "change.json"
+        kept = [r["title"] for r in json.loads(record.read_text())["rows"]]
+        assert kept == ["Turn off write_file", "Turn off search_files"]
 
 
 def _without(entry, key):

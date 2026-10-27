@@ -29,12 +29,12 @@ async function readOutcome(id, verb) {
 }
 
 // How an Apply or an Undo ("apply", "undo") ended: the change as the server holds it, or why
-// it failed.
-export async function changeOutcome(id, verb) {
+// it failed. `body` goes with the request (Apply all sends the rows' titles).
+export async function changeOutcome(id, verb, body) {
   const name = verb === "undo" ? "Undo" : "Apply";
   let result;
   try {
-    result = await postJson(`/api/changes/${encodeURIComponent(id)}/${verb}`);
+    result = await postJson(`/api/changes/${encodeURIComponent(id)}/${verb}`, body);
     if (!result.data) throw new Error(`The ${name} answer had no body (${result.status}).`);
   } catch (error) {
     // No answer, or one with no body, yet the change may have run: ask the server how it ended.
@@ -302,7 +302,9 @@ export async function applyTray() {
   };
   document.addEventListener("kitden:progress", onProgress);
   try {
-    const { after } = await changeOutcome(change.id, "apply");
+    // The titles shown now, which came after the preview was asked: Changes keeps these.
+    const titles = tray.rows.map((row) => row.title || PENDING_TITLE);
+    const { after } = await changeOutcome(change.id, "apply", { titles });
     if (after && after.state === "verified") {
       for (const row of tray.rows) row.status = "done";
       Object.assign(tray, { change: after, phase: "applied" });

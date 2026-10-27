@@ -351,7 +351,7 @@ def test_the_changes_log_keeps_each_steps_restart_note(client):
     assert step["login_note"] is None
     # The Changes page says it per client.
     entry = client.get("/api/changes").json()[0]
-    assert entry["takes_effect"] == [{"client": "codex", "note": RESTART}]
+    assert entry["takes_effect"] == [{"client": "codex", "note": RESTART, "login": None}]
 
 
 def test_reading_an_unknown_change_is_404(client):

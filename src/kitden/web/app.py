@@ -76,6 +76,7 @@ from kitden.changes.batch import (
     kept_request,
     part_of,
     requests_in,
+    retitle,
     step_rows,
 )
 from kitden.changes.client_cli import CommandRunner
@@ -1430,6 +1431,9 @@ def create_app(
         method = {"apply": engine.apply, "cancel": engine.cancel, "undo": engine.undo}.get(verb)
         if method is None:
             return _error("Unknown action.", 404)
+        if verb == "apply":
+            # The tray sends the titles it shows now; the rows keep them (changes/batch.py).
+            retitle(engine.changes[change_id], (await _body(request)).get("titles"))
         loop = asyncio.get_running_loop()
         # A tray change names the row of each step (`row`); a row is done only once the whole
         # change is verified.
