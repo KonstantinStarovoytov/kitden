@@ -451,7 +451,7 @@ def test_checks_and_radios_follow_the_mockup():
 def test_changes_say_why_a_change_stopped():
     text = script("changes.js")
     assert "Can't undo: the file changed after this" in text
-    assert "Not applied: the file changed before Apply" in text
+    assert "Not applied: the file changed first" in text
     assert "Stopped: file changed" not in text and "Undo stopped" not in text
 
 
@@ -963,7 +963,12 @@ def test_library_lede_names_the_project_folder_not_its_path():
 
 def test_changes_rows_open_the_panel_and_keep_paths_off_the_page():
     text = script("changes.js")
-    assert "openChange" in text
+    # A change's Details are a Details card; the old Changes frame is gone (panel.js).
+    assert "detailsCard({" in text and "openChange" not in text
+    assert "openChange" not in panel()
+    # Paths, backups, commands and the engine's error are only under Technical details.
+    assert "const tech = techRowsOf(entry.technical);" in text and "technical(tech)" in text
+    assert "shortPath" not in text
     assert "change-detail" not in text and "aria-expanded" not in text
 
 
@@ -1111,7 +1116,7 @@ def test_a_lost_apply_answer_is_checked_not_guessed():
 
 def test_changes_and_the_library_say_saved_settings_and_scope():
     changes = script("changes.js")
-    assert "To take effect" in changes and 'user: "all projects"' in changes
+    assert '"Takes effect"' in changes and "ALL_PROJECTS" in changes
     assert "global settings" not in changes
     assert '"everywhere"' not in changes
     assert "Tools · ${where || ALL_PROJECTS}" in panel()
@@ -1121,7 +1126,7 @@ def test_changes_show_restart_notes_only_for_changes_that_happened():
     changes = script("changes.js")
     # The server leaves the notes out of a change that wrote nothing (views/changes_view.py).
     assert "entry.takes_effect" in changes
-    assert 'project: "this project"' in changes
+    assert 'NOTHING_TO_DO = "Nothing to do"' in changes
 
 
 def test_a_failed_refresh_says_when_the_shown_data_was_read():
@@ -1196,12 +1201,13 @@ def test_direct_servers_are_options_and_details_offers_move_first():
 
 
 def test_rows_say_they_open_details_and_search_names_its_scope():
-    assert "opens()" in script("changes.js")
+    # A Changes row has the mockup's five parts and no chevron; its hidden words still say it opens.
+    assert 'el("span", "sr-only", "Open details")' in script("changes.js")
     assert ".sr-only" in CSS
     # The chevron is quiet, and takes the accent when the row is hovered or focused.
     assert re.search(r"\n\.opens \{[^}]*color: var\(--ink-3\)", CSS)
     assert re.search(r"\.tg-row:hover \.opens[^{]*\{ color: var\(--route\)", CSS)
-    assert "li:hover .opens" in CSS and ".tg-row:focus-visible .opens" in CSS
+    assert ".tg-row:focus-visible .opens" in CSS
     # One search for every place: the Library searches the setup and the marketplaces.
     # The placeholder trails off; the accessible name does not repeat the dots.
     assert 'placeholder="Search your setup and marketplaces…"' in INDEX
@@ -3020,3 +3026,56 @@ def test_the_last_skill_rule_notes_say_what_they_do():
         "Claude Code takes this rule out of {folder}'s local settings, so it changes all of "
         "{folder}."
     )
+
+
+def test_the_changes_page_says_the_mockups_words():
+    text = script("changes.js")
+    # The head, the scope and the hint (decisions: Changes timeline).
+    lede = (
+        "Every change made from this page. Each one has a backup; Undo puts the previous file back."
+    )
+    assert f'"{lede}"' in text
+    assert 'plural(weekCount(entries), "change", "changes")} this week`' in text
+    assert 'HINT = "Click a row · Undo · See it on the map"' in text
+    # Day groups: Today, Yesterday, then a short date in the person's language.
+    assert '"Today"' in text and '"Yesterday"' in text
+    assert '{ weekday: "short", day: "numeric", month: "short" }' in text
+    # The state words on a row and in Details.
+    for words in (
+        '"Applied"',
+        '"Undone"',
+        '"Applied and checked"',
+        '"Not applied: the file changed first"',
+        '"Can\'t undo: the file changed after this"',
+    ):
+        assert words in text, words
+    # No cancelled state: nothing logs a cancel (views/changes_view.py).
+    assert '"Cancelled"' not in text and "cancelled:" not in text
+    # The backup in words that are true for the state.
+    for words in (
+        '"Kept · Undo puts it back"',
+        '"Back in place"',
+        '"None, nothing was written"',
+        '"Kept · Undo can\'t put it back: the file changed after this"',
+        '"Kept · not everything was put back"',
+    ):
+        assert words in text, words
+    # Details' facts and actions.
+    facts = ('"Project"', '"State"', '"Backup"', '"Clients"', '"History"')
+    for words in (*facts, '"See it on the map"', '"Redo…"'):
+        assert words in text, words
+    assert 'GONE = "This item is no longer there."' in text
+    # A change that touched only Kitden's own settings shows the gateway, never "0 clients".
+    assert '"Kitden gateway"' in text
+
+
+def test_the_undo_toast_names_the_change_and_offers_redo():
+    review = script("review.js")
+    assert "`Undid “${changeTitle(entry.title_parts)}”. The backup is back in place.`" in review
+    assert '{ label: "Redo…", run: () => redoChange(entry) }' in review
+    # Redo… only adds tray rows: a fresh preview, never a write.
+    assert "await addToTray(body, { picked: body.picked });" in review
+    # The Changes page draws the Undo in place, so the page does not cross-fade.
+    assert 'view === "changes"' in review
+    # Its strike has the mockup's curve, from motion.js.
+    assert 'export const STRIKE = "cubic-bezier(.6,0,.2,1)";' in script("motion.js")

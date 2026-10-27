@@ -452,9 +452,10 @@ test("an Add missing row's review shows its ticks, and a changed tick adds the r
   assert.equal(tray.rows.length, 1);
 });
 
-// Final wave: one motion per change. After Apply or Undo the Library morphs its cells and the
-// Gateway map lands its rows, so neither cross-fades the page; the List and other places do.
-test('the effect of a change draws the Gateway map and the Library with no cross-fade', async () => {
+// Final wave: one motion per change. After Apply or Undo the Library morphs its cells, the
+// Gateway map lands its rows and Changes draws the Undo on its row, so none cross-fades the page;
+// the Gateway List and other places do.
+test('the effect of a change draws the Gateway map, the Library and Changes with no cross-fade', async () => {
   const { showEffect } = await import('../../src/kitden/web/static/js/review.js');
   const { reducedMotion } = await import('../../src/kitden/web/static/js/motion.js');
   const { gatewayShows, setRenderer } = await import('../../src/kitden/web/static/js/store.js');
@@ -469,7 +470,7 @@ test('the effect of a change draws the Gateway map and the Library with no cross
   reducedMotion.matches = false;
   const was = state.view;
   try {
-    for (const [view, mode, fade] of [['gateway', 'map', false], ['gateway', 'list', true], ['library', '', false], ['changes', '', true]]) {
+    for (const [view, mode, fade] of [['gateway', 'map', false], ['gateway', 'list', true], ['library', '', false], ['changes', '', false], ['agents', '', true]]) {
       fades.length = 0;
       renders = 0;
       state.view = view;

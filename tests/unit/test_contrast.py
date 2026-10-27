@@ -331,3 +331,27 @@ def test_the_overview_cards_and_captions_are_readable_in_both_themes():
             assert contrast(theme[ink], theme["--panel"]) >= 4.5, ink
             assert contrast(theme[ink], theme["--canvas"]) >= 4.5, ink
         assert contrast(theme["--lamp-warn"], theme["--canvas"]) >= 3.0
+
+
+def test_the_changes_timeline_is_readable_in_both_themes():
+    # A row is on the panel, a selected one on the accent tint with the accent edge. Its time and
+    # state word are --ink-3, a failed row's phrase amber, an undone title --ink-3. The day label
+    # sits on the canvas.
+    row = block(".tl .row {")
+    assert "background: var(--panel); border: 1px solid var(--wire);" in row
+    assert ".tl .row.selected { background: var(--route-soft); border-color: var(--route); }" in CSS
+    assert "color: var(--ink-3);" in block(".tl .row .time {")
+    assert "color: var(--ink-3);" in block(".tl .row .state {")
+    assert ".tl .row .state.warn { color: var(--lamp-warn); }" in CSS
+    assert ".tl .row.undone .t { color: var(--ink-3); }" in CSS
+    assert "color: var(--ink-3);" in block(".tl .day {")
+    assert ".tl .row.selected .dot { background: var(--route); border-color: var(--route); }" in CSS
+    for theme in (LIGHT, DARK, {**LIGHT, **DARK_AUTO}):
+        for fill in ("--panel", "--route-soft"):
+            for ink in ("--ink", "--ink-3", "--lamp-warn"):
+                assert contrast(theme[ink], theme[fill]) >= 4.5, (ink, fill)
+            for lamp in ("--lamp-on", "--lamp-off", "--lamp-warn"):
+                assert contrast(theme[lamp], theme[fill]) >= 3.0, (lamp, fill)
+        assert contrast(theme["--ink-3"], theme["--canvas"]) >= 4.5
+        # The selected row's edge and dot keep 3:1 on the canvas.
+        assert contrast(theme["--route"], theme["--canvas"]) >= 3.0

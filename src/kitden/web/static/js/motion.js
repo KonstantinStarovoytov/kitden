@@ -10,6 +10,8 @@ export const EASE_IN_OUT = "cubic-bezier(0.77, 0, 0.175, 1)";
 export const CALM = "cubic-bezier(.2,.8,.2,1)";
 export const DRAW = "cubic-bezier(.3,.7,.2,1)";
 export const RETRACT = "cubic-bezier(.4,0,.2,1)";
+// The strike line over an undone change's title draws in on this curve (Changes).
+export const STRIKE = "cubic-bezier(.6,0,.2,1)";
 export const OUT3 = (t) => 1 - (1 - t) ** 3;
 export const IN3 = (t) => t ** 3;
 

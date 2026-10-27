@@ -386,3 +386,15 @@ test("a hidden toast's Undo stops following the busy state", async (t) => {
   setBusy(false);
   t.mock.timers.tick(200);
 });
+
+test('the Undid toast has a check, its words and Redo…, and no Undo; Redo… ends it', () => {
+  fresh();
+  const pressed = [];
+  toast('Undid “Allow Push files in website”. The backup is back in place.', null, { ok: true, extra: { label: 'Redo…', run: () => pressed.push('redo') } });
+  assert.deepEqual(shape(toastNode()), ['span.tk', 'span', 'button.btn small', 'i.life']);
+  assert.equal(toastNode().children[1].textContent, 'Undid “Allow Push files in website”. The backup is back in place.');
+  assert.equal(buttonOf('Undo'), undefined);
+  buttonOf('Redo…').listeners.click[0]();
+  assert.deepEqual(pressed, ['redo']);
+  assert.equal(toastNode(), null);
+});

@@ -11,7 +11,7 @@ import { onTray, tray } from "./tray.js";
 
 export { backToDetails, detailsCard, followTray, heldActions, keepFrom, moveBody, moveInto, moveTargets, offerLabel, previewButton, showInPreview, techRows, technical } from "./details.js";
 export { callsText, NO_TOOLS, offNote, projectLabel, refreshTools, switchList, toolRows, toolsHead, writingToolsOn } from "./tools.js";
-export { ADDS, addScope, afterParts, alignGroups, canShowReview, changeOutcome, changeWords, chosenKeys, leftOutText, review, reviewLede, undoChange } from "./review.js";
+export { ADDS, addScope, afterParts, alignGroups, canShowReview, changeOutcome, changeWords, chosenKeys, leftOutText, redoChange, review, reviewLede, undoChange } from "./review.js";
 export { hideToast, toast } from "./toast.js";
 
 // What is open now (`current`): Details ("item", or a Gateway card), a row's review ("row-review"),
@@ -441,15 +441,6 @@ export function openInfo(kicker, title, body, actions = [], { mono = true } = {}
   const footer = el("footer");
   footer.append(...actions);
   openPanel([header(kicker, title, null, "Close", mono), body, footer]);
-}
-
-// A change from the Changes page: the Changes page builds the body (steps with their files,
-// history, error); the panel frames it. Undo stays with the row that opened it.
-export function openChange(title, body, onUndo) {
-  panelState.current = { type: "change" };
-  const footer = el("footer");
-  if (onUndo) footer.append(button("Undo", onUndo, "btn primary"));
-  openPanel([header("Change", title, null), body, footer]);
 }
 
 // Wiring ---------------------------------------------------------------------------------

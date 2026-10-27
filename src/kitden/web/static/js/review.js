@@ -6,8 +6,8 @@ import { $, $$, button, el, joinWords, plural, reportError, shortPath, shortPath
 import { loadLibrary, morphOnNextRender } from "./library.js";
 import { fold, transition } from "./motion.js";
 import { closePanel, drawQuietly, header, hideToast, isPanelOpen, openPanel, panelState, toast } from "./panel.js";
-import { allPutBack, baseNames, callout, checkBox, CLIENT_ORDER, diffCounts, kitdenMove, mark, movedNames, notesSection, PLACE_IN_TITLE, ruleText, rulesText, skillRemoval, socket, strictText, targetWords } from "./parts.js";
-import { busy, gatewayShows, reload, render, setBusy, state } from "./store.js";
+import { allPutBack, baseNames, callout, changeTitle, checkBox, CLIENT_ORDER, diffCounts, kitdenMove, mark, movedNames, notesSection, PLACE_IN_TITLE, ruleText, rulesText, skillRemoval, socket, strictText, targetWords } from "./parts.js";
+import { busy, data, gatewayShows, reload, render, setBusy, state } from "./store.js";
 import { projectLabel } from "./tools.js";
 import { addToTray, changeOutcome, checkTrayStale, onTray, takeOut, tray, undone } from "./tray.js";
 
@@ -507,11 +507,11 @@ export function showEffect() {
   else transition(render);
 }
 
-// The Library morphs its cells, the Gateway map lands its rows (gateway.js landRows) and the
-// Overview's card leaves or comes back: each is the one motion of the change, so none cross-fades
-// the page too. Other places cross-fade.
+// The Library morphs its cells, the Gateway map lands its rows (gateway.js landRows), the
+// Overview's card leaves or comes back and a Changes row draws its Undo (changes.js): each is the
+// one motion of the change, so none cross-fades the page too. Other places cross-fade.
 export function drawsInPlace(view = state.view, mode = gatewayShows.mode) {
-  return view === "library" || view === "overview" || (view === "gateway" && mode === "map");
+  return view === "library" || view === "overview" || view === "changes" || (view === "gateway" && mode === "map");
 }
 
 // After Apply all or an Undo, the Details open now are drawn again from what the files say, by
@@ -530,6 +530,26 @@ export async function detailsAgain() {
     from.stale = true;
     await backToDetails({ refocus: inside });
   });
+}
+
+// Redo… (Changes, and the toast after an Undo): the change's request goes back into the tray as
+// a fresh preview, one row per body, each in the project it was asked in. It writes nothing; the
+// tray's Apply does.
+export async function redoChange(entry) {
+  for (const body of entry.redo || []) await addToTray(body, { picked: body.picked });
+}
+
+// The toast after a verified Undo names the change, as the Changes page has it after the reload,
+// and offers Redo… when the change kept its request. A change the page does not know yet gets the
+// plain words.
+function undidToast(id) {
+  const entry = Array.isArray(data.changes) ? data.changes.find((e) => e.id === id) : null;
+  if (!entry) {
+    toast("Undone. The previous settings are back.", null, { ok: true });
+    return;
+  }
+  const extra = entry.redo ? { label: "Redo…", run: () => redoChange(entry) } : null;
+  toast(`Undid “${changeTitle(entry.title_parts)}”. The backup is back in place.`, null, { ok: true, extra });
 }
 
 // Undo, from the toast or the Changes page. Whatever the answer, the page reloads first: the
@@ -553,7 +573,7 @@ export async function undoChange(change) {
     } catch (error) {
       reportError(error);
     }
-    if (after && after.state === "undone") toast("Undone. The previous settings are back.", null, { ok: true });
+    if (after && after.state === "undone") undidToast(change.id);
     else if (after && after.state === "undo_blocked") toast("Undo stopped: " + (after.error ? shortPaths(after.error) : "the file changed after the change was applied."));
     else toast(failure);
   } finally {
