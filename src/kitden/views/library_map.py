@@ -10,7 +10,8 @@ from pathlib import Path
 
 from kitden.changes.actions import CLIENT_WORDS, skill_rules_in
 from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, PLUGIN_REMOVE, SKILL_REMOVE
-from kitden.model import ClientStatus, Item, ItemKind, Scope
+from kitden.clients.claude_code import local_files
+from kitden.model import ClientStatus, Enabled, Item, ItemKind, Scope
 from kitden.views.catalog import catalog, installed_inside
 from kitden.views.effective import in_project
 from kitden.views.load_map import COLUMNS, Row, load_map, row_key
@@ -84,19 +85,25 @@ def _group(row: Row, own: list[Item], project: str | None) -> dict:
 def _decides_here(item: Item, project: str) -> bool:
     """The project's own settings decide the item there: it is the project's own entry, or the
     project's rule sets a user skill (see `Item.project_rules`)."""
-    return item.project is not None or in_project(item, project).state_scope in (
-        Scope.PROJECT,
-        Scope.LOCAL,
-    )
+    return item.project is not None or _rule_file(item, project) is not None
+
+
+def _rule_file(item: Item, project: str | None) -> Scope | None:
+    """Which of the project's settings files sets the item there: LOCAL (its local settings),
+    PROJECT (the shared, committed file) or None."""
+    if project is None:
+        return None
+    scope = in_project(item, project).state_scope
+    return scope if scope in (Scope.PROJECT, Scope.LOCAL) else None
 
 
 def _links(row: Row, own: set[str], by_id: dict[str, Item], via: bool):
     """Per client: on, off, unknown (it has the item, but Kitden does not know its state) or via
     (not loaded yet; Cursor gets it once Claude Code has it); the client whose folder it loads
     from when that is another client (a faint link); the client's item ids, the deciding one
-    first; and the items that decide. A client without the item, or one Kitden could not read
-    that has no item kept, has no entry."""
-    by, through, ids, deciding = {}, {}, {}, []
+    first; and the items that decide, by client. A client without the item, or one Kitden could
+    not read that has no item kept, has no entry."""
+    by, through, ids, deciding = {}, {}, {}, {}
     for client in COLUMNS:
         cell = row.cells[client]
         items = [by_id[i] for i in cell.items if i in own]
@@ -109,7 +116,7 @@ def _links(row: Row, own: set[str], by_id: dict[str, Item], via: bool):
         owner = items[0].source.owner_client
         if by[client] == "on" and owner in COLUMNS and owner != client:
             through[client] = owner
-        deciding += items[:1] if cell.state == "off" else items
+        deciding[client] = items[:1] if cell.state == "off" else items
     return by, through, ids, deciding
 
 
@@ -142,7 +149,11 @@ def _can(row: Row, by: dict, through: dict, ids: dict, by_id, offer, found, proj
     own entry or rule. A faint link has none.
     `off`, `on` and `remove` act on the user's own entry for all projects, the client's first
     item: a client in `project` is left out of all three (Details say where its setting comes
-    from, and offer "Turn off in this project…" where they can). A hook has no switch."""
+    from, and offer "Turn off in this project…" where they can). Of those, `local` are the
+    clients whose deciding item comes from the project's local settings ("Use the shared rule…"
+    takes that key out) and `shared` those set by its committed settings, which Kitden leaves.
+    A skill's `copy`: Codex, when it loads a project's own copy (a rule for all projects turns
+    off that copy only). A hook has no switch."""
     project_decides = [
         c
         for c, state in by.items()
@@ -150,6 +161,9 @@ def _can(row: Row, by: dict, through: dict, ids: dict, by_id, offer, found, proj
         and c in ids
         and any(project and _decides_here(by_id[i], project) for i in ids[c])
     ]
+    files = {c: _rule_file(by_id[ids[c][0]], project) for c in project_decides}
+    local = [c for c in project_decides if files[c] is Scope.LOCAL]
+    shared = [c for c in project_decides if files[c] is Scope.PROJECT]
     own = [c for c, state in by.items() if state == "on" and c not in through]
     own = [c for c in own if c not in project_decides]
     held = [
@@ -171,17 +185,39 @@ def _can(row: Row, by: dict, through: dict, ids: dict, by_id, offer, found, proj
             "on": [c for c in off if PLUGIN_ENABLE in by_id[ids[c][0]].actions],
             "remove": removable(PLUGIN_REMOVE),
             "project": project_decides,
+            "local": local,
+            "shared": shared,
         }
     if row.kind is ItemKind.SKILL:
         routes = offer["routes"] if offer else {}
         add = [c for c in COLUMNS if c in found and c in routes]
+        copy = [
+            c
+            for c in ("codex",)
+            if by.get(c) == "on" and c not in through and by_id[ids[c][0]].project is not None
+        ]
         return {
             "add": add,
             "off": [c for c in RULES if c in own],
             "remove": removable(SKILL_REMOVE),
             "project": project_decides,
+            "local": local,
+            "shared": shared,
+            "copy": copy,
         }
     return {}
+
+
+def _off_in(inventory, own: list[Item]) -> list[str]:
+    """The projects (by id) whose own settings already turn Claude Code's user skill off."""
+    paths = {
+        path
+        for item in own
+        if item.client == "claude_code"
+        for path, enabled, _ in item.project_rules
+        if enabled is Enabled.OFF
+    }
+    return [p.id for p in inventory.projects if p.path in paths]
 
 
 def _skill_offers(inventory, adapters) -> dict[str, dict]:
@@ -198,7 +234,8 @@ def _skill_rules(inventory, adapters, found) -> dict:
     """Where a one-project skill rule can go (Claude Code only): `some` while the user settings
     hold no `skillOverrides` (Claude Code may not merge them across files), and per project whose
     folder is there "ok", "own" (its shared settings hold `skillOverrides`) or "new" (no Claude
-    Code settings yet: Kitden makes no folder). The same rules as changes/actions.py."""
+    Code settings yet where its rule would go, its own or its repository's: Kitden makes no
+    folder). The same rules as changes/actions.py."""
     if "claude_code" not in found or "claude_code" not in adapters:
         return {"some": False, "projects": {}}
 
@@ -214,7 +251,7 @@ def _skill_rules(inventory, adapters, found) -> dict:
         folder = Path(project.path)
         if not folder.is_dir():
             continue
-        if not (folder / ".claude").is_dir():
+        if not local_files(folder, home)[-1].parent.is_dir():
             projects[project.id] = "new"
         else:
             projects[project.id] = "own" if holds(folder / ".claude/settings.json") else "ok"
@@ -247,9 +284,10 @@ def _marketplace_sources(inventory) -> dict[str, str]:
 def library_map(inventory, adapters, project: str | None) -> dict:
     """The clients and the source groups of the Library map, in the order the map draws them:
     marketplaces by name, then "Other plugins", "Your skills", "Your settings" and, with a project
-    picked, "Only this project". `here` says the picked project's own settings decide the item
-    there; `can` what Details and a drag may offer for it; `skill` the skill catalog's id a skill
-    of "Your skills" is copied from; and `skill_rules` where a one-project skill rule can go."""
+    picked, "Only this project". `here` says, per client, the picked project's own settings
+    decide the item there; a skill's `off_in` the projects that turn it off already; `can` what
+    Details and a drag may offer for it; `skill` the skill catalog's id a skill of "Your skills"
+    is copied from; and `skill_rules` where a one-project skill rule can go."""
     status = {c.id: c.status for c in inventory.clients}
     found = [c for c in COLUMNS if status.get(c) is ClientStatus.FOUND]
     cursor = adapters.get("cursor") if "cursor" in found else None
@@ -274,11 +312,13 @@ def library_map(inventory, adapters, project: str | None) -> dict:
         if not by:
             continue
         group = _group(row, own, project)
-        here = (
-            project is not None
+        # Per client, so another client's project copy does not mark Claude Code's.
+        here = {
+            c: project is not None
             and group["key"] != PROJECT["key"]
-            and any(_decides_here(i, project) for i in deciding)
-        )
+            and any(_decides_here(i, project) for i in deciding.get(c, []))
+            for c in by
+        }
         # Only a skill of "Your skills" adds from the skill catalog; a project's own one does not.
         skill = skill_offers.get(row.name) if group["key"] == SKILLS["key"] else None
         offer = skill if row.kind is ItemKind.SKILL else offers.get(row.lookup)
@@ -295,6 +335,8 @@ def library_map(inventory, adapters, project: str | None) -> dict:
         }
         if skill:
             entry["skill"] = skill["id"]
+        if row.kind is ItemKind.SKILL:
+            entry["off_in"] = _off_in(inventory, own)
         technical: dict[str, str] = {}
         if row.kind is ItemKind.PLUGIN:
             entry["plugin"] = row.lookup

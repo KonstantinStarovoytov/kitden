@@ -155,10 +155,10 @@ const MAP = {
   ],
   groups: [
     { key: 'marketplace:demo-market', name: 'demo-market', icon: 'store', kind: 'marketplace', items: [
-      { id: 'p2', name: 'superpowers', kind: 'plugin', plugin: 'superpowers@demo-market', by: { claude_code: 'on', cursor: 'on' }, through: { cursor: 'claude_code' }, items: {}, here: false, source: 'demo-market', technical: {}, can: { add: ['codex'], off: [], remove: [] }, inside: { ...none, skills: ['brainstorm', 'plan'], commands: ['ship'] }, count: 3 },
+      { id: 'p2', name: 'superpowers', kind: 'plugin', plugin: 'superpowers@demo-market', by: { claude_code: 'on', cursor: 'on' }, through: { cursor: 'claude_code' }, items: {}, here: {}, source: 'demo-market', technical: {}, can: { add: ['codex'], off: [], remove: [] }, inside: { ...none, skills: ['brainstorm', 'plan'], commands: ['ship'] }, count: 3 },
     ] },
     { key: 'settings', name: 'Your settings', icon: 'settings', kind: 'settings', items: [
-      { id: 'h1', name: 'PreToolUse: Bash', kind: 'hook', by: { claude_code: 'on' }, through: {}, items: {}, here: false, source: 'Your settings', technical: {} },
+      { id: 'h1', name: 'PreToolUse: Bash', kind: 'hook', by: { claude_code: 'on' }, through: {}, items: {}, here: {}, source: 'Your settings', technical: {} },
     ] },
   ],
 };
@@ -522,7 +522,7 @@ test('a part the map does not draw opens its plugin, an account row opens its ow
   });
   const account = { ...item('acc', 'plugin', 'Claude account plugins and connectors', { claude_code: cell('unk'), codex: cell('none'), cursor: cell('none') }), parts: [], account: true, reason: 'Stored in your Claude account. Change it in the Claude app or on claude.ai.' };
   const list = { ...LIST, groups: [...LIST.groups, { key: 'other', name: 'Other plugins', icon: 'puzzle', kind: 'other', items: [documents, account] }] };
-  const mapAnswer = { ...MAP, groups: [...MAP.groups, { key: 'other', name: 'Other plugins', icon: 'puzzle', kind: 'other', items: [{ id: 'p9', name: 'documents', kind: 'plugin', plugin: 'documents@openai-curated', by: { codex: 'on' }, through: {}, items: { codex: ['cx-doc'] }, here: false, source: 'Other plugins', technical: {}, can: { add: [], off: [], on: [], remove: [], project: [] } }] }] };
+  const mapAnswer = { ...MAP, groups: [...MAP.groups, { key: 'other', name: 'Other plugins', icon: 'puzzle', kind: 'other', items: [{ id: 'p9', name: 'documents', kind: 'plugin', plugin: 'documents@openai-curated', by: { codex: 'on' }, through: {}, items: { codex: ['cx-doc'] }, here: {}, source: 'Other plugins', technical: {}, can: { add: [], off: [], on: [], remove: [], project: [] } }] }] };
   tick(5); // a new read: the List's answer changed
   await showList({ list });
   data.libraryMap = mapAnswer;

@@ -23,6 +23,7 @@ from kitden.changes.actions import (
 )
 from kitden.changes.json_splice import ABSENT
 from kitden.clients.base import SETUP_NAME, is_home
+from kitden.clients.claude_code import local_files
 from kitden.local_gateway.keychain import references_in
 from kitden.local_gateway.project import project_chain
 from kitden.local_gateway.settings import CLIENT as KITDEN
@@ -49,6 +50,7 @@ from kitden.views.words import (
     NEW_LOCAL_FILE,
     NO_GATEWAY_CLIENT,
     OWN_SKILL_SETTINGS,
+    REPO_RULE,
     STATE_WORDS,
 )
 
@@ -759,10 +761,9 @@ def _skill_keepers(inventory, home: Path, name: str) -> str | None:
         root = Path(path)
         if is_home(root, home):
             continue  # its .claude/settings.json is the user's own file
-        rules = {
-            **_rules(root / ".claude/settings.json", "skillOverrides"),
-            **_rules(root / ".claude/settings.local.json", "skillOverrides"),
-        }
+        rules = _rules(root / ".claude/settings.json", "skillOverrides")
+        for local in local_files(root, home):
+            rules.update(_rules(local, "skillOverrides"))
         if name in rules and rules[name] != "off":
             keeps.append(root.name)
         elif rules and name not in rules:
@@ -775,31 +776,53 @@ def _skill_keepers(inventory, home: Path, name: str) -> str | None:
     return " ".join(notes) or None
 
 
+def _repo_folder(step) -> Path | None:
+    """The repository root whose local file holds a project's rule, when it is not the project's
+    own folder (claude_code.py `git_root`; `cwd` names the project)."""
+    folder = Path(step.edit.path).parent.parent
+    if step.scope is not Scope.LOCAL or not step.cwd:
+        return None
+    return None if os.path.realpath(step.cwd) == os.path.realpath(folder) else folder
+
+
 def _skill_rule_words(change: Change, inventory, home: Path) -> list[dict]:
     """A skill or a plugin turned off: Off in its client. For all projects in Claude Code, the
     note names each project whose own settings may keep it on. A project's own rule taken out:
     the state the shared settings give it (the user's file, then the project's shared file). A
-    rule that makes a project's local settings file names it once (git may not ignore it)."""
+    rule that makes a project's local settings file names it once (git may not ignore it), and a
+    rule in a repository root's file says it holds in all of that folder. A rule taken out of
+    two local files is one entry."""
     out = []
     made: set[str] = set()
+    steps: dict[tuple[str, str], list] = {}
     for step in change.steps:
+        steps.setdefault((step.client, step.name), []).append(step)
+    for (client, name), group in steps.items():
+        step = group[0]
         edit = step.edit
         assert edit is not None
-        entry = {"client": step.client, "state": "off", "word": STATE_WORDS["off"]}
+        entry = {"client": client, "state": "off", "word": STATE_WORDS["off"]}
+        notes = []
         new_file = step.scope is Scope.LOCAL and not Path(edit.path).exists()
         if new_file and edit.after is not ABSENT and edit.path not in made:
             made.add(edit.path)
-            entry["note"] = NEW_LOCAL_FILE.format(folder=Path(edit.path).parent.parent.name)
+            notes.append(NEW_LOCAL_FILE.format(folder=Path(edit.path).parent.parent.name))
         if edit.after is ABSENT:
-            key, name = edit.key
-            shared = [home / ".claude/settings.json", Path(edit.path).parent / "settings.json"]
+            key = edit.key[0]
+            project = Path(step.cwd) if step.cwd else Path(edit.path).parent.parent
+            shared = [home / ".claude/settings.json", project / ".claude/settings.json"]
             values = [_rules(f, key)[name] for f in shared if name in _rules(f, key)]
             off = bool(values) and values[-1] in ("off", False)
-            entry = {"client": step.client, "state": "off" if off else "on", "word": FOLLOWS_SHARED}
-        elif step.client == "claude_code" and step.scope is Scope.USER:
-            note = _skill_keepers(inventory, home, step.name)
+            entry = {"client": client, "state": "off" if off else "on", "word": FOLLOWS_SHARED}
+        elif client == "claude_code" and step.scope is Scope.USER:
+            note = _skill_keepers(inventory, home, name)
             if note:
-                entry["note"] = note
+                notes.append(note)
+        repo = next((f for f in map(_repo_folder, group) if f is not None), None)
+        if repo is not None:
+            notes.append(REPO_RULE.format(folder=repo.name))
+        if notes:
+            entry["note"] = " ".join(notes)
         out.append(entry)
     return out
 

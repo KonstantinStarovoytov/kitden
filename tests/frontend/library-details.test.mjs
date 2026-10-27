@@ -121,8 +121,8 @@ details.initLibraryDetails();
 
 // The medium sample's answer, cut short (views/library_map.py), with what Details may offer.
 const none = { skills: [], commands: [], agents: [], hooks: [], mcp_servers: [] };
-const plugin = (id, name, fields) => ({ id, name, kind: 'plugin', plugin: `${name}@demo-market`, by: {}, through: {}, items: {}, here: false, source: 'demo-market', can: { add: [], off: [] }, technical: {}, ...fields });
-const own = (id, name, kind, fields) => ({ id, name, kind, by: {}, through: {}, items: {}, here: false, source: 'Your skills', can: { off: [] }, technical: {}, ...fields });
+const plugin = (id, name, fields) => ({ id, name, kind: 'plugin', plugin: `${name}@demo-market`, by: {}, through: {}, items: {}, here: {}, source: 'demo-market', can: { add: [], off: [] }, technical: {}, ...fields });
+const own = (id, name, kind, fields) => ({ id, name, kind, by: {}, through: {}, items: {}, here: {}, source: 'Your skills', can: { off: [] }, technical: {}, ...fields });
 const SUPERPOWERS = plugin('p2', 'superpowers', {
   by: { claude_code: 'on', cursor: 'on' }, through: { cursor: 'claude_code' }, items: { claude_code: ['cc-sp'], cursor: ['cu-sp'] },
   inside: { ...none, skills: ['brainstorm', 'plan', 'review'], commands: ['ship'] }, count: 4, can: { add: ['codex'], off: ['claude_code'] },
@@ -401,7 +401,7 @@ test('a project switch keeps an open plugin and its Details, or lets go when it 
   state.project = 'atlas';
   closeForProject();
   assert.equal(isPanelOpen(), true);
-  const atlas = { ...MEDIUM, groups: MEDIUM.groups.map((g) => ({ ...g, items: g.items.map((i) => (i.id === 'p2' ? { ...i, by: { claude_code: 'off', cursor: 'off' }, here: true } : i)) })) };
+  const atlas = { ...MEDIUM, groups: MEDIUM.groups.map((g) => ({ ...g, items: g.items.map((i) => (i.id === 'p2' ? { ...i, by: { claude_code: 'off', cursor: 'off' }, here: { claude_code: true, cursor: false } } : i)) })) };
   Object.assign(data, { libraryMap: atlas });
   data.scope.libraryMap = 'atlas';
   main.replaceChildren();
@@ -522,7 +522,7 @@ test('where the project decides, only Turn off in this project… is offered', a
   await reset();
   const atlas = details.context(MEDIUM, 'atlas', 'atlas');
   // A plugin the project's shared settings turn on: no switch for all projects (library_map.py).
-  const decided = { ...SUPERPOWERS, here: true, can: { add: [], off: [] } };
+  const decided = { ...SUPERPOWERS, here: { claude_code: true }, can: { add: [], off: [] } };
   assert.deepEqual(labels(details.pluginCard(decided, atlas)), [['Turn off in this project…', false]]);
   // A project's own skill: a rule in this project, never the user's file.
   const mine = own('s9', 'site-notes', 'skill', { source: 'Only this project', by: { claude_code: 'on' }, items: { claude_code: ['cc-sn'] } });
@@ -683,4 +683,91 @@ test('the account card says what Claude Code keeps in the account, and that it i
   assert.deepEqual(facts(card), [['State', 'Unknown']]);
   assert.equal(card.why, 'Stored in your Claude account. Change it in the Claude app or on claude.ai.');
   assert.equal(card.actions, undefined);
+});
+
+test("Use the shared rule… takes the project's local key out, for a skill and a plugin", async () => {
+  await reset();
+  const atlas = details.context(MEDIUM, 'atlas', 'atlas');
+  // The project's local settings turn superpowers off for Claude Code (can.local, library_map.py).
+  const plugin = { ...SUPERPOWERS, by: { claude_code: 'off', cursor: 'off' }, here: { claude_code: true }, can: { add: [], off: [], on: [], remove: [], project: ['claude_code'], local: ['claude_code'], shared: [] } };
+  const card = details.pluginCard(plugin, atlas);
+  assert.deepEqual(labels(card), [['Use the shared rule…', false]]);
+  assert.equal(card.after.textContent, "Claude Code's setting for this comes from atlas's local settings.");
+  assert.deepEqual(details.sharedBody(plugin, atlas), { action: 'skill.rule', targets: [{ client: 'claude_code', item: 'cc-sp' }], params: { scope: 'project', project: 'atlas', off: false } });
+  // Drawn: its press adds the one row and it says "In preview"; "Turn off in this project…" for
+  // the same key (on and off share it) is another row, so it does not.
+  const sample = { ...MEDIUM, groups: MEDIUM.groups.map((g) => ({ ...g, items: g.items.map((i) => (i.id === 'p2' ? plugin : i)) })) };
+  const box = await showMap(sample, { project: 'atlas' });
+  press(node(box, 'block:item:p2'));
+  await flush();
+  await addToTray(details.projectBody(plugin, 'atlas'));
+  await flush();
+  const back = node(drawer, 'action:Use the shared rule…');
+  assert.ok(!texts(back).includes('In preview'));
+  press(back);
+  await flush();
+  assert.deepEqual(tray.rows.map((r) => [r.key, r.body.params.off]), [['skill:claude_code:cc-sp@atlas', false]]);
+  assert.ok(texts(back).includes('In preview'));
+  await reset();
+  // A skill too; it never blocks a rule for all projects (it adds no skillOverrides).
+  const skill = { ...MEDIUM.groups[1].items[0], by: { claude_code: 'off', codex: 'on', cursor: 'off' }, here: { claude_code: true }, can: { off: ['codex'], project: ['claude_code'], local: ['claude_code'], shared: [] } };
+  assert.ok(labels(details.skillCard(skill, atlas)).some(([label]) => label === 'Use the shared rule…'));
+  await addToTray(details.sharedBody(skill, atlas));
+  assert.equal(details.skillRuleWaits('project', MEDIUM), false);
+  await cancelTray();
+  // The project's shared, committed settings: the line says so, and nothing changes that file.
+  const committed = { ...plugin, can: { ...plugin.can, local: [], shared: ['claude_code'] } };
+  const shared = details.pluginCard(committed, details.context(MEDIUM, 'w', 'website'));
+  assert.equal(shared.after.textContent, "Claude Code's setting for this comes from website's shared settings.");
+  assert.deepEqual(labels(shared), []);
+  // With All projects there is none.
+  assert.equal(details.sharedBody(plugin, c()), null);
+});
+
+test('a project that already turns the skill off is Already off there and cannot be ticked', async () => {
+  await reset();
+  const skill = { ...MEDIUM.groups[1].items[0], off_in: ['atlas'] };
+  const nodes = details.someNodes(skill, details.context(MEDIUM, '', ''), () => {});
+  drawer.replaceChildren(...nodes);
+  const atlas = node(drawer, 'tick:atlas');
+  assert.equal(atlas.disabled, true);
+  assert.ok(texts(atlas).includes('Already off there'));
+  drawer.replaceChildren();
+});
+
+test('a Codex skill in one project gets Turn off this copy in Codex…', async () => {
+  await reset();
+  const atlas = details.context(MEDIUM, 'atlas', 'atlas');
+  const mine = own('s7', 'api-style', 'skill', { source: 'Only this project', by: { codex: 'on' }, items: { codex: ['cx-api'] }, can: { off: [], project: ['codex'], local: [], shared: [], copy: ['codex'] } });
+  const card = details.skillCard(mine, atlas);
+  assert.deepEqual(labels(card), [['Turn off this copy in Codex…', false]]);
+  assert.doesNotMatch(card.why, /no switch for one project/);
+  press(card.actions[0].node);
+  await flush();
+  assert.deepEqual(tray.rows.map((r) => r.body), [{ action: 'skill.rule', targets: [{ client: 'codex', item: 'cx-api' }], params: { scope: 'all', off: true } }]);
+  await cancelTray();
+});
+
+test("another client's project copy does not offer Turn off in this project… for Claude Code", () => {
+  const atlas = details.context(MEDIUM, 'atlas', 'atlas');
+  // atlas has its own Codex copy; Claude Code loads the user's copy there (here is per client).
+  const skill = { ...MEDIUM.groups[1].items[0], here: { claude_code: false, codex: true, cursor: false } };
+  assert.equal(details.skillHereBody(skill, atlas), null);
+  assert.ok(!labels(details.skillCard(skill, atlas)).some(([label]) => label === 'Turn off in this project…'));
+  // Still "This project" under Comes from: a client's state there comes from the project.
+  assert.deepEqual(facts(details.skillCard(skill, atlas))[2], ['Comes from', 'This project · atlas']);
+  // Claude Code decided there: offered.
+  const decided = { ...skill, here: { claude_code: true } };
+  assert.ok(details.skillHereBody(decided, atlas));
+});
+
+test('a project-only Claude Code skill shows the reason while the user file has skillOverrides', () => {
+  const mine = own('s9', 'site-notes', 'skill', { source: 'Only this project', by: { claude_code: 'on' }, items: { claude_code: ['cc-sn'] }, can: { off: [], project: ['claude_code'], local: [], shared: [] } });
+  const blocked = details.context({ ...MEDIUM, skill_rules: { some: false, projects: { atlas: 'ok' } } }, 'atlas', 'atlas');
+  const card = details.skillCard(mine, blocked);
+  assert.deepEqual(labels(card), []);
+  assert.ok(texts(card.after).includes('Claude Code may not merge skill settings across files; turn it off for all projects instead.'));
+  // Where the rule can go, no reason.
+  const open = details.skillCard(mine, details.context(MEDIUM, 'atlas', 'atlas'));
+  assert.ok(!texts(open.after).includes('Claude Code may not merge skill settings across files; turn it off for all projects instead.'));
 });

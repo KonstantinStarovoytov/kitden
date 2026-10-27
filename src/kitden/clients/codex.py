@@ -474,7 +474,7 @@ class CodexAdapter(ClientAdapter):
         for path, settings in _dict(config.get("projects")).items():
             scan.projects.append(project(path, CLIENT))
             trusted = _dict(settings).get("trust_level") == "trusted"
-            scan.items += self._project(read, Path(path), trusted)
+            scan.items += self._project(read, Path(path), trusted, disabled_skills)
             # The user's file lives in codex_home, so a home-folder project's files are its own.
             files = _agents_md(Path(path))
             scan.items += instruction_items(CLIENT, files, Scope.PROJECT, CLIENT, project=path)
@@ -482,7 +482,7 @@ class CodexAdapter(ClientAdapter):
         scan.problems = read.problems
         return scan
 
-    def _project(self, read: Reader, root: Path, trusted: bool) -> list[Item]:
+    def _project(self, read: Reader, root: Path, trusted: bool, off: set[str]) -> list[Item]:
         items = []
         layer_path = root / ".codex/config.toml"
         layer = _dict(read.toml(layer_path))
@@ -503,10 +503,15 @@ class CodexAdapter(ClientAdapter):
         # from the folder it starts in up to the repository root. The docs do not say whether an
         # untrusted project's skills load; Kitden counts them only in a trusted project, as it
         # does the project's config.toml.
+        # A `[[skills.config]]` entry names a skill by its path, so it turns off a project's copy
+        # too (`skill_rule_step`).
         if trusted:
-            items += skill_items(
+            for item in skill_items(
                 CLIENT, root / ".agents/skills", Scope.PROJECT, CLIENT, project=str(root)
-            )
+            ):
+                items.append(
+                    replace(item, enabled=Enabled.OFF) if item.source.path in off else item
+                )
         return items
 
     def _plugin_folder(self, plugin_id: str) -> Path:

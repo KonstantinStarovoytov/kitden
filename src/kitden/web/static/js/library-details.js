@@ -7,17 +7,26 @@
 import { button, el, icon, joinWords, plural } from "./dom.js";
 import { focusAfterStep, headTile, iconTile, lamp, openCard, pressOnce, projectChecklist, stepHead, tickRow, tiles } from "./gateway-details.js";
 import { initLibraryAdd } from "./library-add.js";
-import { addBody, importsOf, lampOf, libraryThing, onLibrarySelect, readers } from "./library-map.js";
-import { offBodies, onBodies, removeBodies, skillOffBodies, skillRuleWaits } from "./library-rules.js";
+import { addBody, decidedHere, importsOf, lampOf, libraryThing, onLibrarySelect, readers } from "./library-map.js";
+import { copyBodies, offBodies, onBodies, removeBodies, skillOffBodies, skillRuleWaits } from "./library-rules.js";
 import { closePanel, drawQuietly, followTray, isPanelOpen, keepFrom, panelState, previewButton, review, stepTo, swapContent, technical } from "./panel.js";
 import { ALL_PROJECTS, CLIENT_NAMES, CLIENT_ORDER, folderName, mark, menuItems, ORIGIN_WORDS, STATE_WORDS } from "./parts.js";
 import { data, projectPath, state } from "./store.js";
-import { inTray, keyFor } from "./tray.js";
+import { inTray, keyFor, tray } from "./tray.js";
 
 const IN_PREVIEW = "In preview";
 const OFF_ALL = "Turn off for all projects…";
 const OFF_SOME = "Turn off in some projects…";
 const OFF_HERE = "Turn off in this project…";
+// Takes the project's own key out of its local settings, so the shared rule applies there.
+const USE_SHARED = "Use the shared rule…";
+// A Codex skill only one project has: a rule for all projects that names this copy's path.
+const OFF_COPY = "Turn off this copy in Codex…";
+// A project row of the checklist whose own settings turn the skill off already.
+const ALREADY_OFF = "Already off there";
+// Why a project's own Claude Code skill has no "Turn off in this project…" (views/words.py
+// NO_SKILL_MERGE, the guard's words).
+const NO_MERGE = "Claude Code may not merge skill settings across files; turn it off for all projects instead.";
 const FOLLOWS = "Follows its plugin.";
 const NO_PLUGIN = "None, a skill on its own";
 const NO_PROJECT_SWITCH = "Codex has no switch for one project.";
@@ -100,7 +109,7 @@ function clientsFact(item, { count = false } = {}) {
 
 // "All projects", or the project's folder when its own settings decide there.
 function comesFrom(item, c) {
-  const here = c.project && (item.here || item.source === ORIGIN_WORDS.project);
+  const here = c.project && (decidedHere(item) || item.source === ORIGIN_WORDS.project);
   return here ? { label: "Comes from", value: `${ORIGIN_WORDS.override} · ${c.folder}`, accent: true } : { label: "Comes from", value: ALL_PROJECTS };
 }
 
@@ -137,8 +146,24 @@ const shared = (item) => item.source !== ORIGIN_WORDS.project;
 // rule for all projects would write the user's file instead (library_map.py `_can`).
 export function skillHereBody(item, c) {
   const on = (item.by || {}).claude_code === "on" && (item.items || {}).claude_code;
-  const decides = !shared(item) || item.here;
+  const decides = !shared(item) || decidedHere(item, "claude_code");
   return c.project && on && decides && c.rules.some && c.rules.projects[c.project] === "ok" ? projectBody(item, c.project) : null;
+}
+
+// "Use the shared rule…": in a project whose local settings decide for Claude Code (`can.local`),
+// one skill.rule row that takes that key out; else null. The committed file is never changed here.
+export function sharedBody(item, c) {
+  const target = ((item.items || {}).claude_code || [])[0];
+  const local = ((item.can && item.can.local) || []).includes("claude_code");
+  return c.project && local && target ? { action: "skill.rule", targets: [{ client: "claude_code", item: target }], params: { scope: "project", project: c.project, off: false } } : null;
+}
+
+// Why a project's own Claude Code skill gets no "Turn off in this project…": a file with skill
+// settings blocks the rule (as changes/actions.py refuses it); else null.
+function mergeLine(item, c) {
+  const can = c.rules.projects[c.project];
+  const blocked = !c.rules.some || can === "own";
+  return c.project && !shared(item) && (item.by || {}).claude_code === "on" && blocked ? el("p", "muted", NO_MERGE) : null;
 }
 
 // "Turn off in some projects…" for a skill of all projects that Claude Code has, while the user
@@ -158,10 +183,10 @@ function rowsButton(label, bodies, look = "btn") {
   node.title = label;
   node.dataset.focus = `action:${label}`;
   node.append(words);
-  const waiting = () => list().every((body) => inTray(keyFor(body)));
+  const waiting = () => list().every(queued);
   pressOnce(node, async () => {
     if (waiting()) return;
-    for (const body of list()) if (!inTray(keyFor(body))) await review(body);
+    for (const body of list()) if (!queued(body)) await review(body);
   });
   followTray(node, keyFor(list()[0] || {}), () => {
     node.hidden = !list().length;
@@ -171,6 +196,12 @@ function rowsButton(label, bodies, look = "btn") {
     else node.removeAttribute("aria-disabled");
   });
   return node;
+}
+
+// The tray holds this very row: its key, and the same `off` (a skill rule's on and off share a key).
+function queued(body) {
+  const off = (body.params || {}).off;
+  return tray.rows.some((row) => row.key === keyFor(body) && (row.body.params || {}).off === off);
 }
 
 // Words in a quiet line that show while `when()` holds, after every change of the tray.
@@ -193,12 +224,17 @@ const removeLabel = (client) => `Remove from ${CLIENT_NAMES[client]}…`;
 const onActions = (item) => onBodies(item).map(({ client, body }) => ({ label: onLabel(client), body }));
 const removeActions = (item) => removeBodies(item).map(({ client, body }) => ({ label: removeLabel(client), body }));
 // They act only on a client's own entry for all projects. Where the picked project's own settings
-// decide (`can.project`), one quiet line says so instead.
+// decide (`can.project`), one quiet line says so instead: its local settings (`can.local`), its
+// shared, committed settings (`can.shared`), or its own copy.
 export const fromProject = (client, folder) => `${CLIENT_NAMES[client]}'s setting for this comes from ${folder}'s own settings.`;
+export const fromLocal = (client, folder) => `${CLIENT_NAMES[client]}'s setting for this comes from ${folder}'s local settings.`;
+export const fromShared = (client, folder) => `${CLIENT_NAMES[client]}'s setting for this comes from ${folder}'s shared settings.`;
 function projectLine(item, c) {
-  const clients = (item.can && item.can.project) || [];
+  const can = item.can || {};
+  const clients = can.project || [];
   if (!clients.length || !c.folder) return null;
-  return el("p", "muted", inOrder(clients).map((client) => fromProject(client, c.folder)).join(" "));
+  const line = (client) => ((can.local || []).includes(client) ? fromLocal : (can.shared || []).includes(client) ? fromShared : fromProject)(client, c.folder);
+  return el("p", "muted", inOrder(clients).map(line).join(" "));
 }
 // The nodes under a card's actions, in one box when there are several.
 function afterOf(...nodes) {
@@ -224,7 +260,9 @@ export function pluginCard(item, c, { addStep = () => {} } = {}) {
   const off = offBodies(item);
   if (off.length) actions.push({ label: OFF_ALL, node: rowsButton(OFF_ALL, off) });
   const here = hereBody(item, c);
-  if (here) actions.push({ label: OFF_HERE, body: here });
+  if (here) actions.push({ label: OFF_HERE, node: rowsButton(OFF_HERE, [here]) });
+  const back = sharedBody(item, c);
+  if (back) actions.push({ label: USE_SHARED, node: rowsButton(USE_SHARED, [back]) });
   actions.push(...onActions(item));
   const tech = item.technical || {};
   return { kind: KIND_WORDS.plugin, title: item.name, id: item.source, tile: kindTile("plugin"), facts, why: loadsSay(item, c), actions, more: removeActions(item), after: projectLine(item, c), technical: techOf([{ title: "Plugin folder", path: tech.path }, { title: "Marketplace", summary: tech.marketplace }]) };
@@ -259,13 +297,17 @@ export function skillCard(item, c, { someStep = () => {} } = {}) {
   if (offBodies(item).length) actions.push({ label: OFF_ALL, node: rowsButton(OFF_ALL, () => skillOffBodies(item, c.answer)) });
   const here = skillHereBody(item, c);
   if (here) actions.push({ label: OFF_HERE, node: rowsButton(OFF_HERE, () => (skillRuleWaits("all", c.answer) ? [] : [here])) });
+  const back = sharedBody(item, c);
+  if (back) actions.push({ label: USE_SHARED, node: rowsButton(USE_SHARED, [back]) });
+  const copy = copyBodies(item);
+  if (copy.length) actions.push({ label: OFF_COPY, node: rowsButton(OFF_COPY, copy) });
   if (offersSome(item, c)) actions.push({ label: OFF_SOME, run: someStep });
   const notes = [];
   if (shared(item) && (item.by || {}).codex === "on") notes.push(NO_PROJECT_SWITCH);
   if ((item.by || {}).cursor === "on") notes.push(NO_CURSOR_SWITCH);
   const why = [loadsSay(item, { folder: c.project ? c.folder : "", noun: "this skill" }), ...notes].join(" ");
   const claude = ((item.can && item.can.off) || []).includes("claude_code");
-  const after = afterOf(projectLine(item, c), claude ? trayNote(SOME_FIRST, () => skillRuleWaits("project", c.answer)) : null);
+  const after = afterOf(projectLine(item, c), mergeLine(item, c), claude ? trayNote(SOME_FIRST, () => skillRuleWaits("project", c.answer)) : null);
   return { kind: KIND_WORDS.skill, title: item.name, id: item.source, tile: kindTile("skill"), facts, why, actions, more: removeActions(item), after, technical: techOf([{ title: "Skill file", path: (item.technical || {}).path }]) };
 }
 
@@ -466,9 +508,9 @@ function addStep(id, dir = "fwd") {
 }
 
 // "Turn off <name> in the projects you pick": the Gateway's project checklist (D13), one row per
-// project whose folder is there; a project with skill settings of its own, or none yet, cannot be
-// ticked, nor can any while a Claude Code skill rule for all projects waits in the tray. Each tick
-// is one skill.rule row for Claude Code.
+// project whose folder is there; a project that turns it off already ("Already off there", `off_in`),
+// one with skill settings of its own, or none yet, cannot be ticked, nor can any while a Claude Code
+// skill rule for all projects waits in the tray. Each tick is one skill.rule row for Claude Code.
 export function someNodes(item, c, back) {
   const known = (data.projects || []).filter((p) => c.rules.projects[p.id]);
   const rows = menuItems(known, "").filter((p) => p.id).map((p) => {
@@ -476,8 +518,9 @@ export function someNodes(item, c, back) {
     const body = projectBody(item, p.id);
     const ticked = () => inTray(keyFor(body));
     const waits = () => !ticked() && skillRuleWaits("all", c.answer);
-    const line = () => PROJECT_LINES[can] || (waits() ? ALL_FIRST : "");
-    return { id: p.id, name: p.name, line, off: () => can !== "ok" || waits(), body, ticked };
+    const already = (item.off_in || []).includes(p.id);
+    const line = () => (already ? ALREADY_OFF : PROJECT_LINES[can] || (waits() ? ALL_FIRST : ""));
+    return { id: p.id, name: p.name, line, off: () => already || can !== "ok" || waits(), body, ticked };
   });
   return projectChecklist({ crumb: `Skill · ${item.name}`, title: `Turn off ${item.name} in the projects you pick`, why: SOME_WHY, rows, back });
 }

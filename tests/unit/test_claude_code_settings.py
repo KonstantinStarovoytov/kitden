@@ -219,3 +219,65 @@ def test_unreadable_settings_leave_skill_states_unknown(tmp_path, no_version):
     items = _scan(home, no_version)
     assert _skill_state(items, "review", Scope.PROJECT) == (Enabled.UNKNOWN, None)
     assert _skill_state(items, "deploy", Scope.USER) == (Enabled.ON, None)
+
+
+def _repository(tmp_path, root_local=None, own_local=None):
+    """A sandbox home with a repository `repo` (its `.git` folder) and a known project in its
+    subfolder `repo/web`, which has its own skill `review`."""
+    home = tmp_path / "home"
+    repo, web = home / "work/repo", home / "work/repo/web"
+    _write(home / ".claude.json", {"projects": {str(web): {}}})
+    _write(home / ".claude/settings.json", {})
+    _write(
+        home / ".claude/plugins/installed_plugins.json",
+        {"plugins": {PLUGIN: [{"installPath": str(home / "nowhere")}]}},
+    )
+    (repo / ".git").mkdir(parents=True)
+    (repo / ".claude").mkdir()
+    (web / ".claude").mkdir(parents=True)
+    if root_local is not None:
+        _write(repo / ".claude/settings.local.json", root_local)
+    if own_local is not None:
+        _write(web / ".claude/settings.local.json", own_local)
+    _skill(home / ".claude/skills", "deploy")
+    _skill(web / ".claude/skills", "review")
+    return home, repo, web
+
+
+def test_a_project_in_a_subfolder_of_a_repository_reads_the_roots_local_file(tmp_path, no_version):
+    # checked 2026-10-27 (code.claude.com/docs/en/settings): started in a subfolder of a git
+    # repository, Claude Code reads .claude/settings.local.json at the repository root; a file an
+    # earlier version left in the starting folder is still read, and the root's value wins.
+    home, repo, web = _repository(
+        tmp_path,
+        root_local={"skillOverrides": {"deploy": "off"}, "enabledPlugins": {PLUGIN: False}},
+        own_local={
+            "skillOverrides": {"deploy": "on", "review": "off"},
+            "enabledPlugins": {PLUGIN: True},
+        },
+    )
+    inventory = build_inventory(home)
+    state, item = _state_in(home, str(web), "deploy")
+    assert (state, item.project_rules) == (Enabled.OFF, ((str(web), Enabled.OFF, Scope.LOCAL),))
+    # The key only the starting folder's file has still counts.
+    assert _skill_state(inventory.items, "review", Scope.PROJECT) == (Enabled.OFF, Scope.LOCAL)
+    # The plugin: one local entry, the root's, off.
+    local = [i for i in inventory.items if i.name == PLUGIN and i.scope is Scope.LOCAL]
+    assert [(i.enabled, i.source.path) for i in local] == [
+        (Enabled.OFF, str(repo / ".claude/settings.local.json"))
+    ]
+    assert not [
+        i for i in effective_view(inventory, "claude_code", str(web)).items if i.name == PLUGIN
+    ]
+
+
+def test_the_roots_local_file_counts_only_for_a_repository_inside_home(tmp_path, no_version):
+    # The repository root is the home folder: the file stays with the project (docs, same day).
+    home, repo, web = _repository(tmp_path, root_local={"skillOverrides": {"deploy": "off"}})
+    (repo / ".git").rmdir()
+    (home / ".git").mkdir()
+    state, _ = _state_in(home, str(web), "deploy")
+    assert state is Enabled.ON
+    # No repository at all: only the project's own file.
+    (home / ".git").rmdir()
+    assert _state_in(home, str(web), "deploy")[0] is Enabled.ON

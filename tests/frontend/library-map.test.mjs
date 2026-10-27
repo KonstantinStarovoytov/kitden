@@ -97,8 +97,8 @@ const { reducedMotion } = await import('../../src/kitden/web/static/js/motion.js
 
 // The medium sample's answer, cut short (views/library_map.py).
 const none = { skills: [], commands: [], agents: [], hooks: [], mcp_servers: [] };
-const plugin = (id, name, fields) => ({ id, name, kind: 'plugin', plugin: `${name}@demo-market`, by: {}, through: {}, items: {}, here: false, source: 'demo-market', technical: {}, ...fields });
-const own = (id, name, kind, fields) => ({ id, name, kind, by: {}, through: {}, items: {}, here: false, source: '', technical: {}, ...fields });
+const plugin = (id, name, fields) => ({ id, name, kind: 'plugin', plugin: `${name}@demo-market`, by: {}, through: {}, items: {}, here: {}, source: 'demo-market', technical: {}, ...fields });
+const own = (id, name, kind, fields) => ({ id, name, kind, by: {}, through: {}, items: {}, here: {}, source: '', technical: {}, ...fields });
 const MEDIUM = {
   clients: [
     { id: 'claude_code', name: 'Claude Code', state: 'on', words: 'Connected' },
@@ -113,7 +113,7 @@ const MEDIUM = {
     ] },
     { key: 'other', name: 'Other plugins', icon: 'puzzle', kind: 'other', items: [plugin('p4', 'calendar', { by: { codex: 'unknown' } })] },
     { key: 'skills', name: 'Your skills', icon: 'user-round', kind: 'skills', items: [
-      own('s1', 'release-notes', 'skill', { by: { claude_code: 'on', cursor: 'on' }, through: { cursor: 'claude_code' }, here: true }),
+      own('s1', 'release-notes', 'skill', { by: { claude_code: 'on', cursor: 'on' }, through: { cursor: 'claude_code' }, here: { claude_code: true, cursor: false } }),
       own('s2', 'ui-polish', 'skill', { by: { cursor: 'on' } }),
     ] },
     { key: 'settings', name: 'Your settings', icon: 'settings', kind: 'settings', items: [own('h1', 'PreToolUse: Bash', 'hook', { by: { claude_code: 'on' } })] },

@@ -20,6 +20,7 @@ from kitden.views.words import (
     NO_CLAUDE_FOLDER,
     NO_SKILL_MERGE,
     PROJECT_SKILL_ALL,
+    REPO_RULE,
 )
 from kitden.web.app import create_app
 
@@ -376,10 +377,112 @@ def test_a_rule_that_makes_the_local_settings_file_says_so_once(tmp_path):
         (after,) = answer.json()["rows"][0]["after"]
         assert after["note"] == NEW_LOCAL_FILE.format(folder="app")
         assert NEW_LOCAL_FILE == (
-            "Kitden creates .claude/settings.local.json in {folder}. Claude Code keeps this file "
-            "out of git only when it makes it, so add it to .gitignore if git lists it."
+            "Kitden creates .claude/settings.local.json in {folder}. If git lists it, add it to "
+            ".gitignore."
         )
         # The file is there already: nothing to say.
         _write(app / ".claude/settings.local.json", {})
         (after,) = _preview(page, skill).json()["rows"][0]["after"]
         assert "note" not in after
+
+
+def test_use_the_shared_rule_removes_a_plugins_project_key_and_undo_puts_it_back(tmp_path):
+    local = '{\n  "enabledPlugins": {\n    "lint@tools": false\n  },\n  "theme": "light"\n}\n'
+    home, app, _ = _home(tmp_path, local=local)
+    path = app / ".claude/settings.local.json"
+    with _page(home) as page:
+        plugin = _item(page, "claude_code", PLUGIN, kind="plugin")
+        rule = _rule("claude_code", plugin, "project", _project(page, app), off=False)
+        change, _, undo = _round_trip(page, rule)
+        (row,) = change["rows"]
+        assert row["after"] == [
+            {"client": "claude_code", "state": "on", "word": "Follows all projects"}
+        ]
+        assert json.loads(path.read_text()) == {"enabledPlugins": {}, "theme": "light"}
+        assert undo()["state"] == "undone"
+    assert path.read_text() == local
+
+
+def _in_repository(home):
+    """`work/repo` is a git repository, and the known project `site` moves into it as `web`."""
+    repo, web = home / "work/repo", home / "work/repo/web"
+    (repo / ".git").mkdir(parents=True)
+    (repo / ".claude").mkdir()
+    (web / ".claude").mkdir(parents=True)
+    _write(home / ".claude.json", {"projects": {str(web): {}}})
+    return repo, web
+
+
+def test_a_rule_for_a_project_in_a_repository_subfolder_goes_to_the_roots_local_file(tmp_path):
+    # checked 2026-10-27 (code.claude.com/docs/en/settings): Claude Code reads the root's
+    # .claude/settings.local.json first when started in a subfolder of a git repository.
+    home, _, _ = _home(tmp_path)
+    repo, web = _in_repository(home)
+    root = repo / ".claude/settings.local.json"
+    with _page(home) as page:
+        item = _item(page, "claude_code", "deploy")
+        rule = _rule("claude_code", item, "project", _project(page, web))
+        change, _, undo = _round_trip(page, rule)
+        (after,) = change["rows"][0]["after"]
+        assert after["note"] == (
+            f"{NEW_LOCAL_FILE.format(folder='repo')} {REPO_RULE.format(folder='repo')}"
+        )
+        assert REPO_RULE == (
+            "Claude Code keeps this rule in {folder}'s local settings, so it holds in all of "
+            "{folder}."
+        )
+        assert json.loads(root.read_text()) == {"skillOverrides": {"deploy": "off"}}
+        assert not (web / ".claude/settings.local.json").exists()
+        assert undo()["state"] == "undone"
+    assert not root.exists()
+
+
+def test_use_the_shared_rule_takes_the_key_from_both_local_files_and_undo_puts_them_back(
+    tmp_path,
+):
+    # A file an earlier Claude Code left in the starting folder is still read (docs, same day).
+    home, _, _ = _home(tmp_path)
+    repo, web = _in_repository(home)
+    root, own = repo / ".claude/settings.local.json", web / ".claude/settings.local.json"
+    root_text = '{\n    "skillOverrides": {\n        "deploy": "off"\n    }\n}\n'
+    own_text = '{"skillOverrides": {"deploy": "on", "tidy": "off"}}\n'
+    root.write_text(root_text)
+    own.write_text(own_text)
+    with _page(home) as page:
+        item = _item(page, "claude_code", "deploy")
+        rule = _rule("claude_code", item, "project", _project(page, web), off=False)
+        change, _, undo = _round_trip(page, rule)
+        assert [s["path"] for s in change["steps"]] == [str(own), str(root)]
+        # One client, one word.
+        assert change["rows"][0]["after"] == [
+            {
+                "client": "claude_code",
+                "state": "on",
+                "word": "Follows all projects",
+                "note": REPO_RULE.format(folder="repo"),
+            }
+        ]
+        assert json.loads(root.read_text())["skillOverrides"] == {}
+        assert json.loads(own.read_text())["skillOverrides"] == {"tidy": "off"}
+        assert undo()["state"] == "undone"
+    assert (root.read_text(), own.read_text()) == (root_text, own_text)
+
+
+def test_turn_off_this_copy_in_codex_for_a_skill_in_one_project(tmp_path):
+    home, app, _ = _home(tmp_path)
+    config = home / ".codex/config.toml"
+    config.write_text(f'{CODEX}\n[projects."{app}"]\ntrust_level = "trusted"\n')
+    before = config.read_text()
+    _skill(app / ".agents/skills", "app-style")
+    with _page(home) as page:
+        item = _item(page, "codex", "app-style")
+        change, _, undo = _round_trip(page, _rule("codex", item))
+        skill = os.path.realpath(app / ".agents/skills/app-style/SKILL.md")
+        assert tomllib.loads(config.read_text())["skills"]["config"] == [
+            {"path": skill, "enabled": False}
+        ]
+        # The scan reads that copy back as off.
+        (read,) = [i for i in _skills(home, "codex") if i.name == "app-style"]
+        assert str(read.enabled) == "off"
+        assert undo()["state"] == "undone"
+    assert config.read_text() == before

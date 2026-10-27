@@ -101,12 +101,16 @@ NO_SKILL_MERGE = (
     "Claude Code may not merge skill settings across files; turn it off for all projects instead."
 )
 OWN_SKILL_SETTINGS = "{folder} has its own skill settings; it may keep this skill on."
-# checked 2026-10-26 (code.claude.com/docs/en/settings): Claude Code adds
+# checked 2026-10-27 (code.claude.com/docs/en/settings): Claude Code adds
 # `**/.claude/settings.local.json` to the global git excludes the first time it writes the file;
 # a file made another way must be added to .gitignore by hand.
 NEW_LOCAL_FILE = (
-    "Kitden creates .claude/settings.local.json in {folder}. Claude Code keeps this file out of "
-    "git only when it makes it, so add it to .gitignore if git lists it."
+    "Kitden creates .claude/settings.local.json in {folder}. If git lists it, add it to .gitignore."
+)
+# A project in a subfolder of a repository: its rule goes in the root's local file, which Claude
+# Code reads in every folder of that repository (checked 2026-10-27, same page).
+REPO_RULE = (
+    "Claude Code keeps this rule in {folder}'s local settings, so it holds in all of {folder}."
 )
 # A project whose own skill rule keeps the skill on, named by an all-projects change.
 KEEPS_ITS_RULE = "It stays on in {folders}, which has its own rule."

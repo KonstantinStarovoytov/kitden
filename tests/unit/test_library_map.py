@@ -164,23 +164,62 @@ def test_a_project_rule_marks_here(tmp_path):
     shared = _items(_map(home))
     assert shared["superpowers"]["by"]["claude_code"] == "on"
     assert shared["brandkit"]["by"]["claude_code"] == "on"
-    assert not any(i["here"] for i in shared.values())
+    assert not any(any(i["here"].values()) for i in shared.values())
 
     here = _items(_map(home, str(atlas)))
     assert here["superpowers"]["by"]["claude_code"] == "off"
-    assert here["superpowers"]["here"] is True
+    # Per client: Cursor gets superpowers through Claude Code; only Claude Code is decided here.
+    assert here["superpowers"]["here"] == {"claude_code": True, "cursor": False}
     assert here["brandkit"]["by"]["claude_code"] == "off"
-    assert here["brandkit"]["here"] is True
+    assert here["brandkit"]["here"] == {"claude_code": True, "cursor": False}
     # What follows the shared setup carries no tag.
-    assert here["release-notes"]["here"] is False
-    assert here["pr-review"]["here"] is False
+    assert not any(here["release-notes"]["here"].values())
+    assert not any(here["pr-review"]["here"].values())
     # The project's own items have their group, not the tag.
-    assert here["api-style"]["here"] is False
+    assert not any(here["api-style"]["here"].values())
+    # Local settings decide: "Use the shared rule…" can take the key out there.
+    assert here["superpowers"]["can"]["local"] == ["claude_code"]
+    assert here["brandkit"]["can"]["local"] == ["claude_code"]
+    assert here["superpowers"]["can"]["shared"] == []
 
     # A project's shared settings decide too: website turns superpowers off.
     website = _items(_map(home, str(home / "work/website")))
     assert website["superpowers"]["by"]["claude_code"] == "off"
-    assert website["superpowers"]["here"] is True
+    assert website["superpowers"]["here"]["claude_code"] is True
+    assert website["superpowers"]["can"]["shared"] == ["claude_code"]
+    assert website["superpowers"]["can"]["local"] == []
+
+
+def test_another_clients_project_copy_does_not_mark_claude_code(tmp_path):
+    # atlas has its own Codex copy of brandkit; Claude Code still loads the user's copy there.
+    home = build_demo_home(tmp_path, "medium")
+    atlas = home / "work/atlas"
+    copy = atlas / ".agents/skills/brandkit/SKILL.md"
+    copy.parent.mkdir(parents=True)
+    copy.write_text("---\nname: brandkit\ndescription: Brand kit.\n---\nUse it.\n")
+    brandkit = _items(_map(home, str(atlas)))["brandkit"]
+    assert brandkit["here"]["codex"] is True
+    assert brandkit["here"]["claude_code"] is False
+    assert brandkit["can"]["local"] == []
+
+
+def test_a_skill_says_which_projects_turn_it_off_already(tmp_path):
+    home = build_demo_home(tmp_path, "medium")
+    inventory, _ = _read(home)
+    ids = {Path(p.path).name: p.id for p in inventory.projects}
+    _write(home / "work/atlas/.claude/settings.local.json", {"skillOverrides": {"brandkit": "off"}})
+    _write(home / "work/website/.claude/settings.json", {"skillOverrides": {"brandkit": "on"}})
+    items = _items(_map(home))
+    assert items["brandkit"]["off_in"] == [ids["atlas"]]
+    assert items["release-notes"]["off_in"] == []
+
+
+def test_a_codex_skill_in_one_project_can_turn_off_that_copy(tmp_path):
+    home = build_demo_home(tmp_path, "medium")
+    items = _items(_map(home, str(home / "work/atlas")))
+    assert items["api-style"]["can"]["copy"] == ["codex"]
+    # A skill of all projects has no such copy.
+    assert items["code-review"]["can"]["copy"] == []
 
 
 def test_hooks_sit_under_your_settings(tmp_path):
@@ -319,6 +358,8 @@ def test_each_item_says_what_details_can_offer(tmp_path):
         "on": [],
         "remove": ["claude_code"],
         "project": [],
+        "local": [],
+        "shared": [],
     }
     # Off already: Claude Code can turn it on again, or remove it. A bundled plugin no marketplace
     # offers: nothing to add, only Codex's switch.
@@ -328,6 +369,8 @@ def test_each_item_says_what_details_can_offer(tmp_path):
         "on": ["claude_code"],
         "remove": ["claude_code"],
         "project": [],
+        "local": [],
+        "shared": [],
     }
     assert items["browser"]["can"] == {
         "add": [],
@@ -335,26 +378,45 @@ def test_each_item_says_what_details_can_offer(tmp_path):
         "on": [],
         "remove": ["codex"],
         "project": [],
+        "local": [],
+        "shared": [],
     }
-    assert items["ui-kit"]["can"] == {"add": [], "off": [], "on": [], "remove": [], "project": []}
+    assert items["ui-kit"]["can"] == {
+        "add": [],
+        "off": [],
+        "on": [],
+        "remove": [],
+        "project": [],
+        "local": [],
+        "shared": [],
+    }
     # A skill: each client that loads its own copy has a rule; Cursor has none.
     assert items["brandkit"]["can"] == {
         "add": ["codex"],
         "off": ["claude_code"],
         "remove": ["claude_code"],
         "project": [],
+        "local": [],
+        "shared": [],
+        "copy": [],
     }
     assert items["code-review"]["can"] == {
         "add": ["claude_code"],
         "off": ["codex"],
         "remove": ["codex"],
         "project": [],
+        "local": [],
+        "shared": [],
+        "copy": [],
     }
     assert items["ui-polish"]["can"] == {
         "add": ["claude_code", "codex"],
         "off": [],
         "remove": ["cursor"],
         "project": [],
+        "local": [],
+        "shared": [],
+        "copy": [],
     }
     # A hook has no switch.
     assert items["PreToolUse: Bash"]["can"] == {}
@@ -386,12 +448,18 @@ def test_a_skill_says_which_clients_can_take_a_copy_cursor_too(tmp_path):
         "off": ["claude_code"],
         "remove": ["claude_code"],
         "project": [],
+        "local": [],
+        "shared": [],
+        "copy": [],
     }
     assert items["ui-polish"]["can"] == {
         "add": ["claude_code", "codex"],
         "off": [],
         "remove": ["cursor"],
         "project": [],
+        "local": [],
+        "shared": [],
+        "copy": [],
     }
     # A plugin's can stays as it was: never Cursor.
     assert items["superpowers"]["can"]["add"] == ["codex"]

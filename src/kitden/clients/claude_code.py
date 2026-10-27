@@ -8,6 +8,7 @@ entry.
 """
 
 import json
+import os
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -149,6 +150,52 @@ def _project_rules(
     return ruled
 
 
+# checked 2026-10-27 (code.claude.com/docs/en/settings, "Where Claude Code keeps the local file
+# in a git repository"): since v2.1.211, Claude Code started in a subfolder of a git repository
+# reads and writes `.claude/settings.local.json` at the repository root. It still reads a file an
+# earlier version left in the starting folder; where both set a key, the root's value applies.
+# The file stays in the starting folder outside a repository, when the root is the home folder,
+# or when the root, its `.git` or its `.claude` is not the user's own. (A worktree uses its main
+# checkout's root; Kitden does not follow a worktree's `.git` file.)
+def git_root(folder: Path, home: Path) -> Path | None:
+    """The repository root above `folder` whose local settings Claude Code uses there, or None:
+    the nearest folder with a `.git` folder, inside the home folder but not the home folder."""
+    for place in (folder, *folder.parents):
+        if place == home or not place.is_relative_to(home):
+            return None
+        git = place / ".git"
+        if git.exists():
+            mine = [place, git] + ([place / ".claude"] if (place / ".claude").exists() else [])
+            owned = git.is_dir() and all(_owned(p) for p in mine)
+            return place if owned and place != folder else None
+    return None
+
+
+def _owned(path: Path) -> bool:
+    try:
+        return path.stat().st_uid == os.getuid()
+    except OSError:
+        return False
+
+
+def local_files(project: Path, home: Path) -> list[Path]:
+    """The local settings files Claude Code reads in `project`, the winning one last."""
+    own = project / ".claude/settings.local.json"
+    root = git_root(project, home)
+    return [own, root / ".claude/settings.local.json"] if root else [own]
+
+
+def _holds(path: Path, key: tuple[str, str]) -> bool:
+    """The settings file has `key`; a file Kitden cannot read may have it."""
+    try:
+        data = json.loads(path.read_text())
+    except FileNotFoundError:
+        return False
+    except (OSError, ValueError):
+        return True
+    return isinstance(data, dict) and key[1] in _dict(data.get(key[0]))
+
+
 class ClaudeCodeAdapter(ClientAdapter):
     id = CLIENT
     display_name = "Claude Code"
@@ -214,45 +261,57 @@ class ClaudeCodeAdapter(ClientAdapter):
             shared_file=item.scope is Scope.PROJECT,
         )
 
-    def _rule_file(self, project: str | None) -> Path:
-        """The user settings, or one project's local settings (its `.claude` folder must exist:
-        Kitden writes one file and makes no folder)."""
+    def _rule_files(self, project: str | None, key: tuple[str, str], off: bool) -> list[Path]:
+        """Where a rule goes: the user settings, or the local settings Claude Code reads first in
+        one project (its `.claude` folder must exist: Kitden writes one file and makes no
+        folder). A project's rule taken out goes from each local file that holds it."""
         if project is None:
-            return self.home / ".claude/settings.json"
-        if not (Path(project) / ".claude").is_dir():
-            raise ValueError(NO_CLAUDE_FOLDER.format(folder=Path(project).name))
-        return Path(project) / ".claude/settings.local.json"
+            return [self.home / ".claude/settings.json"]
+        files = local_files(Path(project), self.home)
+        holding = [f for f in files if _holds(f, key)]
+        if not off and holding:
+            return holding
+        if not files[-1].parent.is_dir():
+            raise ValueError(NO_CLAUDE_FOLDER.format(folder=files[-1].parent.parent.name))
+        return files[-1:]
+
+    def _rule_steps(
+        self, key: tuple[str, str], project: str | None, after: Any, note: str
+    ) -> list[Step]:
+        """One step per file. `cwd` names the project the rule is for (the file may be its
+        repository's); no command runs."""
+        scope = Scope.USER if project is None else Scope.LOCAL
+        return [
+            Step(
+                client=CLIENT,
+                scope=scope,
+                name=key[1],
+                edit=FileEdit(path=str(path), fmt="json", key=key, after=after),
+                cwd=project,
+                restart_note=note,
+            )
+            for path in self._rule_files(project, key, after is not ABSENT)
+        ]
 
     # checked 2026-10-26 (code.claude.com/docs/en/settings-reference, `skillOverrides`): any
     # settings file may hold it, and "off" hides the skill from Claude and from `/`. The
     # `/skills` menu saves it to `.claude/settings.local.json`. The docs still do not say whether
     # the object merges key by key across files (also /en/settings and /en/skills, same day).
-    def skill_rule_step(self, name: str, project: str | None, off: bool) -> Step:
+    def skill_rule_steps(self, name: str, project: str | None, off: bool) -> list[Step]:
         """`skillOverrides.<name>` set to "off", in the user settings or in one project's local
         settings. With `off` False the project's key goes, so the shared rule applies there."""
-        edit = FileEdit(
-            path=str(self._rule_file(project)),
-            fmt="json",
-            key=("skillOverrides", name),
-            after="off" if off else ABSENT,
+        return self._rule_steps(
+            ("skillOverrides", name), project, "off" if off else ABSENT, NEW_SESSION
         )
-        scope = Scope.USER if project is None else Scope.LOCAL
-        return Step(client=CLIENT, scope=scope, name=name, edit=edit, restart_note=NEW_SESSION)
 
     # checked 2026-10-26 (code.claude.com/docs/en/settings-reference, `enabledPlugins`): "To opt
     # out of a project-enabled plugin on your machine, set it to false in
     # .claude/settings.local.json"; plugins/loading says the files merge key by key, local first.
-    def plugin_rule_step(self, plugin_id: str, project: str, off: bool) -> Step:
+    def plugin_rule_steps(self, plugin_id: str, project: str, off: bool) -> list[Step]:
         """`enabledPlugins.<id>` set to false in one project's local settings; with `off` False
         the key goes, so the project follows its shared settings again."""
-        edit = FileEdit(
-            path=str(self._rule_file(project)),
-            fmt="json",
-            key=("enabledPlugins", plugin_id),
-            after=False if off else ABSENT,
-        )
-        return Step(
-            client=CLIENT, scope=Scope.LOCAL, name=plugin_id, edit=edit, restart_note=RELOAD
+        return self._rule_steps(
+            ("enabledPlugins", plugin_id), project, False if off else ABSENT, RELOAD
         )
 
     def marketplace_sources(self) -> dict[str, str | None]:
@@ -636,35 +695,44 @@ class ClaudeCodeAdapter(ClientAdapter):
             )
         settings_path = root / ".claude/settings.json"
         settings = _dict(read.json(settings_path))
-        local_path = root / ".claude/settings.local.json"
-        local = _dict(read.json(local_path))
+        # The local files, the winning one last; each plugin key comes from the last that has it.
+        locals_ = [(path, _dict(read.json(path))) for path in local_files(root, self.home)]
         # checked 2026-10-26 (code.claude.com/docs/en/plugins/loading, "Find where a plugin is
         # enabled"): `enabledPlugins` is read from user, project (`.claude/settings.json`) and
         # local (`.claude/settings.local.json`) files; the highest source that names a plugin
         # wins, local over project over user. Each file gives its own item here, and the
         # effective view picks the winner by scope rank.
-        for file_path, file_settings, scope in (
-            (settings_path, settings, Scope.PROJECT),
-            (local_path, local, Scope.LOCAL),
-        ):
-            for plugin_id, value in _dict(file_settings.get("enabledPlugins")).items():
-                items.append(
-                    Item(
-                        client=CLIENT,
-                        kind=ItemKind.PLUGIN,
-                        name=plugin_id,
-                        source=file_source(file_path, CLIENT, f"enabledPlugins.{plugin_id}"),
-                        scope=scope,
-                        project=path,
-                        enabled=_on(value),
-                        state_scope=scope,
-                    )
+        plugins = {
+            (scope, plugin_id): (file_path, value)
+            for file_path, file_settings, scope in (
+                (settings_path, settings, Scope.PROJECT),
+                *((p, data, Scope.LOCAL) for p, data in locals_),
+            )
+            for plugin_id, value in _dict(file_settings.get("enabledPlugins")).items()
+        }
+        for (scope, plugin_id), (file_path, value) in plugins.items():
+            items.append(
+                Item(
+                    client=CLIENT,
+                    kind=ItemKind.PLUGIN,
+                    name=plugin_id,
+                    source=file_source(file_path, CLIENT, f"enabledPlugins.{plugin_id}"),
+                    scope=scope,
+                    project=path,
+                    enabled=_on(value),
+                    state_scope=scope,
                 )
+            )
         items += self._hooks(settings, settings_path, Scope.PROJECT, project=path)
         rules = _skill_rules(
-            [(Scope.USER, user_settings), (Scope.PROJECT, settings), (Scope.LOCAL, local)]
+            [
+                (Scope.USER, user_settings),
+                (Scope.PROJECT, settings),
+                *((Scope.LOCAL, data) for _, data in locals_),
+            ]
         )
-        known = user_known and not (read.failed(settings_path) or read.failed(local_path))
+        read_files = [settings_path, *(p for p, _ in locals_)]
+        known = user_known and not any(read.failed(p) for p in read_files)
         items += _apply_rules(
             skill_items(CLIENT, root / ".claude/skills", Scope.PROJECT, CLIENT, project=path),
             rules,

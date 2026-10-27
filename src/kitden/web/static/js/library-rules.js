@@ -16,6 +16,12 @@ export function offBodies(item) {
   });
 }
 
+// "Turn off this copy in Codex…": a Codex skill only one project has (`can.copy`) turns off with a
+// rule for all projects that names that copy's path, so other copies stay on.
+export function copyBodies(item) {
+  return ((item.can && item.can.copy) || []).map((client) => ({ action: "skill.rule", targets: [{ client, item: item.items[client][0] }], params: { scope: "all", off: true } }));
+}
+
 // Turn a plugin on again: one `plugin.enable` row per client that has it off and a switch for it
 // (`can.on`), on its deciding entry.
 export function onBodies(item) {
@@ -38,12 +44,14 @@ export function removeBodies(item) {
 // Whether the tray holds a Claude Code skill rule of `scope` ("all" or "project"). Claude Code may
 // not merge skillOverrides across files, so the server never takes one in the user file and one in
 // a project's in one tray (changes/batch.py); the page offers neither while the other waits. A
-// plugin's rule in one project is enabledPlugins, not skillOverrides: it does not count.
+// plugin's rule in one project is enabledPlugins, not skillOverrides, and a rule taken out ("Use
+// the shared rule…") adds none: neither counts.
 export function skillRuleWaits(scope, answer) {
   const plugins = new Set(answer.groups.flatMap((group) => group.items).filter((item) => item.kind === "plugin").flatMap((item) => (item.items || {}).claude_code || []));
   return tray.rows.some(({ body }) => {
     const target = (body.targets || [])[0] || {};
-    return body.action === "skill.rule" && (body.params || {}).scope === scope && target.client === "claude_code" && !plugins.has(target.item);
+    const params = body.params || {};
+    return body.action === "skill.rule" && params.scope === scope && params.off !== false && target.client === "claude_code" && !plugins.has(target.item);
   });
 }
 

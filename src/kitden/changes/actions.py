@@ -1044,16 +1044,17 @@ def skill_rules_in(path: Path) -> bool:
     return bool(rules)
 
 
-def _claude_rule_step(
+def _claude_rule_steps(
     adapter: ClientAdapter, home: Path, item: Item, project: str | None, off: bool
-) -> Step:
-    """Claude Code: a skill's `skillOverrides` key, or a plugin's key in one project."""
+) -> list[Step]:
+    """Claude Code: a skill's `skillOverrides` key, or a plugin's key in one project (taken out
+    of each local file that holds it)."""
     if item.kind is ItemKind.PLUGIN:
         if item.scope is Scope.ACCOUNT:
             raise ValueError(item.change_hint or f"{item.name} has no switch here.")
         if project is None:
             raise ValueError(PLUGIN_ALL_PROJECTS)
-        return adapter.plugin_rule_step(item.name, project, off)
+        return adapter.plugin_rule_steps(item.name, project, off)
     if item.kind is not ItemKind.SKILL:
         raise ValueError("Choose a skill or a plugin.")
     if item.scope is Scope.PLUGIN:
@@ -1070,7 +1071,7 @@ def _claude_rule_step(
         shared = Path(project) / ".claude/settings.json"
         if skill_rules_in(home / ".claude/settings.json") or skill_rules_in(shared):
             raise ValueError(NO_SKILL_MERGE)
-    return adapter.skill_rule_step(item.name, project, off)
+    return adapter.skill_rule_steps(item.name, project, off)
 
 
 def skill_rule_steps(
@@ -1110,7 +1111,7 @@ def skill_rule_steps(
         if adapter is None or item.client not in ("claude_code", "codex"):
             raise ValueError(f"{item.name} has no switch here.")
         if item.client == "claude_code":
-            steps.append(_claude_rule_step(adapter, home, item, project, off))
+            steps += _claude_rule_steps(adapter, home, item, project, off)
             continue
         if item.kind is not ItemKind.SKILL or item.scope is Scope.PLUGIN:
             raise ValueError(f"{item.name} has no switch here.")

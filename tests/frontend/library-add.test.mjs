@@ -143,7 +143,7 @@ initLibraryDetails();
 
 // The map's answer: superpowers is on in Claude Code and can go to Codex; pr-review is in both.
 const none = { skills: [], commands: [], agents: [], hooks: [], mcp_servers: [] };
-const plugin = (id, name, fields) => ({ id, name, kind: 'plugin', plugin: `${name}@demo-market`, by: {}, through: {}, items: {}, here: false, source: 'demo-market', technical: {}, can: { add: [], off: [] }, ...fields });
+const plugin = (id, name, fields) => ({ id, name, kind: 'plugin', plugin: `${name}@demo-market`, by: {}, through: {}, items: {}, here: {}, source: 'demo-market', technical: {}, can: { add: [], off: [] }, ...fields });
 const MAP = {
   clients: [
     { id: 'claude_code', name: 'Claude Code', state: 'on', words: 'Connected' },
@@ -156,7 +156,7 @@ const MAP = {
       plugin('p2', 'superpowers', { by: { claude_code: 'on' }, inside: { ...none, skills: ['planning', 'brainstorming'] }, count: 2, can: { add: ['codex'], off: [] } }),
     ] },
     { key: 'skills', name: 'Your skills', icon: 'user-round', kind: 'skills', items: [
-      { id: 's1', name: 'release-notes', kind: 'skill', by: { claude_code: 'on' }, through: {}, items: {}, here: false, source: '', technical: {}, skill: 'release-notes@skills', can: { add: ['codex'], off: [] } },
+      { id: 's1', name: 'release-notes', kind: 'skill', by: { claude_code: 'on' }, through: {}, items: {}, here: {}, source: '', technical: {}, skill: 'release-notes@skills', can: { add: ['codex'], off: [] } },
     ] },
   ],
 };

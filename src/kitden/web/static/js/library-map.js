@@ -86,6 +86,10 @@ export function libraryMode() {
   return answer ? viewMode(state, itemCount(answer)) : state.mode || "map";
 }
 
+// Whether the picked project's own settings decide the item there: for `client`, or for any client
+// (`here` is per client, views/library_map.py).
+export const decidedHere = (item, client = null) => (client ? Boolean((item.here || {})[client]) : Object.values(item.here || {}).some(Boolean));
+
 // An item's lamp: green while any client has it on, an amber dashed ring while Kitden knows of no
 // client that has it on but does not know of one, grey while it is off in all of them.
 export function lampOf(item) {
@@ -105,7 +109,7 @@ function clientBlock(client) {
 function itemBlock(item, group) {
   const lamp = lampOf(item);
   const block = { id: `item:${item.id}`, column: "plugins", parent: group, kind: item.kind, name: item.name, lamp, state: lamp, item, ports: { left: true }, drags: item.kind in INSTALLS };
-  if (item.here) block.tag = ORIGIN_WORDS.override;
+  if (decidedHere(item)) block.tag = ORIGIN_WORDS.override;
   if (item.kind !== "plugin") return { ...block, h: ROW_H, label: ROW_LABELS[item.kind] };
   const counted = typeof item.count === "number";
   Object.assign(block, { meta: counted ? plural(item.count, "item", "items") : STATE_WORDS[lamp], stateInMeta: !counted });

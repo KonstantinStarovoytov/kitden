@@ -13,6 +13,7 @@ from kitden.views.words import (
     KEEP_THEIR_RULES,
     KEEPS_ITS_RULE,
     LOADS_PLUGINS,
+    NEW_LOCAL_FILE,
     NO_CLAUDE_FOLDER,
     NO_GATEWAY_CLIENT,
     NO_SKILL_MERGE,
@@ -20,6 +21,7 @@ from kitden.views.words import (
     PLUGIN_ALL_PROJECTS,
     PLUGIN_SKILL,
     READS_FOLDER,
+    REPO_RULE,
     ROUTE_WORDS,
     STALE,
     STATE_WORDS,
@@ -3058,3 +3060,33 @@ def test_the_library_list_words_and_looks():
     assert 'LIST_TABS = ("plugin", "instructions")' in server
     assert 'LIST_SHOWS = ("mine", "diff")' in server
     assert '"/api/library-list"' in (STATIC.parents[1] / "web/app.py").read_text()
+
+
+def test_the_last_skill_rule_notes_say_what_they_do():
+    details, rules = script("library-details.js"), script("library-rules.js")
+    assert 'const USE_SHARED = "Use the shared rule…";' in details
+    assert 'const OFF_COPY = "Turn off this copy in Codex…";' in details
+    assert 'const ALREADY_OFF = "Already off there";' in details
+    # The project-only skill's reason is the server guard's words.
+    assert f'const NO_MERGE = "{NO_SKILL_MERGE}";' in details
+    # The quiet line tells the project's local file from its shared, committed one.
+    assert (
+        "`${CLIENT_NAMES[client]}'s setting for this comes from ${folder}'s local settings.`"
+        in details
+    )
+    assert (
+        "`${CLIENT_NAMES[client]}'s setting for this comes from ${folder}'s shared settings.`"
+        in details
+    )
+    assert 'params: { scope: "project", project: c.project, off: false }' in details
+    assert 'params: { scope: "all", off: true } }));' in rules
+    # `here` is per client (views/library_map.py).
+    assert "export const decidedHere = (item, client = null)" in script("library-map.js")
+    assert "if (decidedHere(item)) block.tag = ORIGIN_WORDS.override;" in script("library-map.js")
+    assert NEW_LOCAL_FILE == (
+        "Kitden creates .claude/settings.local.json in {folder}. If git lists it, add it to "
+        ".gitignore."
+    )
+    assert REPO_RULE == (
+        "Claude Code keeps this rule in {folder}'s local settings, so it holds in all of {folder}."
+    )
