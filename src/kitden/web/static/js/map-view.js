@@ -266,9 +266,10 @@ function boxOf({ x, y, w, h, s }) {
   return s === 1 ? { x, y, w, h } : { x: x + (w * (1 - s)) / 2, y: y + (h * (1 - s)) / 2, w: w * s, h: h * s };
 }
 
-// "+ Add" beside a column's caption. It opens a panel, so it says so from the start.
+// "+ Add" beside a column's caption, a plain small button. It opens a panel, so it says so from
+// the start.
 function addButton(column, onAdd) {
-  const add = button("+ Add", () => onAdd && onAdd(column, add), "btn small ghost");
+  const add = button("+ Add", () => onAdd && onAdd(column, add), "btn small");
   add.dataset.focus = `add:${column}`;
   add.setAttribute("aria-expanded", "false");
   return add;

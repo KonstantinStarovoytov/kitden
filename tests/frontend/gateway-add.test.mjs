@@ -138,7 +138,7 @@ const pointer = (type, x, y) => { for (const fn of [...(docHeard[type] || [])]) 
 // "+ Add" beside the map's Servers caption, as map-view.js draws it.
 function addButton() {
   const node = element('BUTTON');
-  node.className = 'btn small ghost';
+  node.className = 'btn small';
   node.dataset.focus = 'add:servers';
   pages['#main'].replaceChildren(node);
   return node;
@@ -206,18 +206,18 @@ test('Close and Escape close it, focus goes back to + Add, and + Add looks plain
     await press(drawer.children[0].children[0].children[1]);
     assert.equal(isPanelOpen(), false);
     assert.equal(document.activeElement, from);
-    assert.deepEqual([from.className, from.getAttribute('aria-expanded')], ['btn small ghost', 'false']);
+    assert.deepEqual([from.className, from.getAttribute('aria-expanded')], ['btn small', 'false']);
     from = await open();
     pressKey('Escape');
     assert.equal(isPanelOpen(), false);
     assert.equal(document.activeElement, from);
-    assert.equal(from.className, 'btn small ghost');
+    assert.equal(from.className, 'btn small');
     // Another selection takes the panel's place: + Add lets go too.
     from = await open();
     panelState.current = { type: 'held', name: 'files' };
     openPanel([element('HEADER')]);
     assert.equal(isPanelOpen(), true);
-    assert.equal(from.className, 'btn small ghost');
+    assert.equal(from.className, 'btn small');
     // So does a selection made while the list is still being read.
     from = addButton();
     servers = SERVERS;
@@ -226,7 +226,7 @@ test('Close and Escape close it, focus goes back to + Add, and + Add looks plain
     openPanel([element('HEADER')]);
     await opening;
     await wait(200);
-    assert.equal(from.className, 'btn small ghost');
+    assert.equal(from.className, 'btn small');
     assert.equal(search(), undefined);
   } finally {
     await done();
@@ -474,7 +474,7 @@ test("the Kitden gateway's More list opens the same panel", async () => {
     assert.equal(from.className, 'btn small primary');
     pressKey('Escape');
     assert.equal(document.activeElement, from);
-    assert.equal(from.className, 'btn small ghost');
+    assert.equal(from.className, 'btn small');
   } finally {
     await done();
   }

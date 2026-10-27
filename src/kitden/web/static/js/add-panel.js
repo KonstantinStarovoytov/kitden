@@ -37,7 +37,6 @@ function mapAddButton(key) {
 function showPressed(node, on) {
   if (!node) return;
   node.classList.toggle("primary", on);
-  node.classList.toggle("ghost", !on);
   node.setAttribute("aria-expanded", String(on));
 }
 
