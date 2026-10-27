@@ -213,6 +213,12 @@ The parts, in order:
 
 - Copy any command with one click.
 - Move the tests that read the old `/api/library` to `/api/library-list`, then remove the old route.
+- Details and the add panel: the kind in sentence case and a 24 px × in place of the kind in
+  capitals and "Close", as in the mockup.
+- Changes Details: the history as one line under the facts, as in the mockup.
+- Overview: the setup map's numbers count up (900 ms, at 500 and 560 ms), as in the mockup.
+- Client tiles in the light theme: the mockup's are dark, Kitden's follow the theme (owner to
+  judge).
 
 ## Later
 
