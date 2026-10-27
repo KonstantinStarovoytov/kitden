@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).parents[2]
@@ -147,14 +148,18 @@ IMAGES = "https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/do
 
 
 def test_every_readme_image_is_a_full_address_to_a_file_we_have():
-    import re
-
     readme = (ROOT / "README.md").read_text()
     images = re.findall(r'(?:src|srcset)="([^"]+)"', readme)
     assert images
     for image in images:
         assert image.startswith(IMAGES), image
-        assert (ROOT / "docs/images" / image.removeprefix(IMAGES)).is_file(), image
+    # A Markdown image may be another site's badge (Add to Cursor); ours must exist too.
+    marked = re.findall(r"!\[[^\]]*\]\(([^)\s]+)\)", readme)
+    assert marked
+    for image in images + marked:
+        assert image.startswith("https://"), image
+        if image.startswith(IMAGES):
+            assert (ROOT / "docs/images" / image.removeprefix(IMAGES)).is_file(), image
     # The four pages, light and dark, and no screenshot that nothing shows.
     shots = {image.removeprefix(IMAGES) for image in images if image.endswith(".jpg")}
     pages = ("overview", "gateway", "library", "changes")

@@ -12,7 +12,7 @@ Look at each change first. Apply keeps a backup for Undo.</p>
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/overview-dark.jpg">
-    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/overview.jpg" alt="Kitden Overview: one thing needs attention, servers that skip the gateway can improve, and a small map of your setup" width="860">
+    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/overview.jpg" alt="Kitden Overview: a file Kitden could not read, servers to move into the gateway, Cursor to connect, and a small map of your setup" width="860">
   </picture>
 </p>
 
@@ -40,8 +40,8 @@ that server into.
 ### See what needs you
 
 **Overview** lists what needs your attention, such as an item that loads twice or a file Kitden
-could not read, and what can improve, such as servers that skip your gateway. Each card has one
-button. Beside the cards a small map shows your clients, the Kitden gateway and the Library;
+could not read, and what can improve, such as servers that skip your gateway. Most cards have
+one button. Beside the cards a small map shows your clients, the Kitden gateway and the Library;
 point at a card to see what it is about.
 
 ### Use one gateway for every client
@@ -53,6 +53,9 @@ holds and their tools. A link means on; no link means off.
   where it lands. Without a mouse, use "Move in…" in the List.
 - Point at a link and press × to take it away: disconnect a client, take a server out, or turn a
   tool off.
+- Connect a client with its "Connect…" card on Overview, by dragging it onto the gateway, or with
+  "Connect to the gateway…" in its Details. Drag a server onto a client to move it out of the
+  gateway, or use "Put back in Codex…".
 - Pick a project at the top to turn a tool on or off there only. "Turn off in some projects…"
   ticks several at once, and "Use the shared rule…" drops a project's own rule.
 - "+ Add" lists the MCP servers your marketplaces offer.
@@ -61,13 +64,14 @@ holds and their tools. A link means on; no link means off.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/gateway-dark.jpg">
-    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/gateway.jpg" alt="The Gateway map: Claude Code and Codex linked to the Kitden gateway and the servers it holds; Cursor not connected yet" width="860">
+    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/gateway.jpg" alt="The Gateway map: Claude Code and Codex linked to the Kitden gateway and its two servers; below, the servers outside the gateway, each joined to its client by a dotted line" width="860">
   </picture>
 </p>
 
 The Kitden gateway runs on your Mac, with no deploy and no account. It is the `kitden` entry that
-already lets agents read your setup. [Obot](https://obot.ai) and MetaMCP stay for teams that want
-a shared service.
+already lets agents read your setup. Kitden also works with an [Obot](https://obot.ai) or MetaMCP
+gateway, for teams that want a shared service: "Add another gateway…" adds one, servers move into
+it, and "Use this gateway…" switches every client to it.
 
 - A tool you turn off is refused at once, even in a session that is already open; other changes
   apply to new sessions, and a call already running is not stopped.
@@ -109,7 +113,7 @@ such as `${TOKEN}`, entries that start in their own folder, and SSE or WebSocket
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/library-dark.jpg">
-    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/library.jpg" alt="The Library map: Claude Code, Codex and Cursor linked to the plugins they load, grouped by marketplace" width="860">
+    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/library.jpg" alt="The Library map: Claude Code, Codex and Cursor linked to the plugins and skills they load, grouped by where they come from" width="860">
   </picture>
 </p>
 
@@ -143,7 +147,7 @@ change again, and "See it on the map" opens the item it changed.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/changes-dark.jpg">
-    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/changes.jpg" alt="The Changes page: today's change, Applied, with Undo; its Details show the project, the backup and the history" width="860">
+    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/changes.jpg" alt="The Changes page: three changes today, one of them undone; the Details of the newest show the project, the backup, what to restart and the history" width="860">
   </picture>
 </p>
 

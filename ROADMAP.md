@@ -107,9 +107,7 @@ What Kitden does today and what comes next. Ideas and bugs:
   back. "Show changes" opens one row's full review. On the map each change lands in its turn after
   Apply all, and Undo all takes them back the last one first.
 - **Library:** one page in place of Load map and Discover. Only the clients on this computer get
-  a column, and the action sits in the client's cell: "+ Add", or why there is none. A server
-  another client has points to the gateway; a marketplace says it comes with its first plugin.
-  "Add…" for several clients warns, like "+ Add", when a client would load two of the same name.
+  a column, and the action sits in the client's cell: "+ Add", or why there is none.
 - **Add skills:** a client that cannot install a plugin takes its skills instead, in one change
   with Undo. It reads plugins from Codex's marketplaces and the ones Cursor installed itself.
   A skill the client already loads, from its folders or another plugin, is left out.
@@ -126,8 +124,7 @@ What Kitden does today and what comes next. Ideas and bugs:
   effect, the clients and the history; "See it on the map" opens the item, and "Redo…" on an
   undone change previews it again in the tray, unless a later change already made it again. The
   Undo toast names the change.
-- **Categories:** filter plugins and skills by category. The category shows quietly in each row.
-- **Quick start:** the page has its data in about two seconds. Codex's slow plugin list comes in
+- **Quick start:** the page has its data in under a second. Codex's slow plugin list comes in
   the background, and a line shows what is still read.
 - **Rescan:** also checks the client versions, so a client updated while the page runs shows
   its new version.
@@ -138,15 +135,15 @@ What Kitden does today and what comes next. Ideas and bugs:
 - **Add scope:** in a project, the Library says an Add puts the item in all your projects.
 - **Kitden's own entries:** no cross-client note for them.
 - **True words:** the start link, the agents server, where secrets go, and the sign-in check.
-- **Gateway page:** says the gateway controls only the servers in it, and folds a group after
-  six rows.
+- **Gateway page:** says the gateway controls only the servers in it, and a group of more than
+  six shows five at a time.
 - **Strict mode:** a server can offer only the tools you turned on, for all projects. New tools
-  wait as "New · off". Codex's allowed-tools list moves in as strict.
+  wait as "New · waits". Codex's allowed-tools list moves in as strict.
 - **Turned off means refused:** a tool you turn off is refused at once, in open sessions too.
   Folders Kitden does not know follow the All projects switches, and the page says so.
 - **Reads and writes:** each tool shows a quiet word, from the server or its name.
   "Turn off every writing tool…" is one change, with the token advice.
-- **Calls counted:** hover a tool to see how often it was called and when last.
+- **Calls counted:** a tool's Details say how often it was called and when last ("Calls").
 - **Remove a plugin:** "Remove from <client>…" in its Details. Undo installs it again, but not
   its saved options.
 - **Remove a skill:** its folder goes to the backup, and Undo puts it back.
@@ -173,8 +170,8 @@ What Kitden does today and what comes next. Ideas and bugs:
   runs no client, uses no Keychain and stays offline.
 - **Secrets in the Keychain:** a server moved into the Kitden gateway keeps its secrets in your
   macOS Keychain, and a backup or a change record says when it holds a secret.
-- **Instructions:** CLAUDE.md, AGENTS.md, Cursor rules, Claude Code's commands and agents, and a
-  tool count for each server in the gateway.
+- **Instructions:** CLAUDE.md, AGENTS.md, Cursor rules, and Claude Code's commands and agents.
+- **Tool counts:** a server in the gateway shows how many tools it has.
 
 ### 0.2.0
 
@@ -255,7 +252,8 @@ Left for later in the alignment plan's phase notes:
 - Screen readers: announce "Copied" after Copy.
 - Overview: one Update… for every old entry, so its card says In preview for an Agents-page row
   too; read the gateway settings and the notes fewer times.
-- Changes: Redo… stays hidden after a later change that reversed the same request.
+- Changes: Redo… stays hidden while a later verified change has the same request, even if a still
+  later change reversed it.
 - Code tidy-ups: the narrower project id for local items, the dead `flip` switch option, the
   imports between the Add panel and Details, smaller Library helpers, and old frontend tests
   that print a whole element when they fail.
