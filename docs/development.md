@@ -188,7 +188,9 @@ Not run yet for step 24: Part 4 was tested with sandbox files only.
 
 The workflow runs the checks and stops if the notes file is missing. Then it publishes to PyPI
 with trusted publishing and creates the GitHub release with the notes file as its text.
-`README.md` is also the PyPI page, so its images and links use full `https://` addresses.
+`README.md` is also the PyPI page. Fallback images and links use full `https://` addresses;
+`picture` sources use local paths so GitHub previews follow the branch. See
+[README media](readme-media.md) for capture and release steps.
 
 ## Gateways
 

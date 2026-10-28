@@ -177,12 +177,12 @@ def test_the_hero_colours_follow_the_theme():
 def test_the_readme_shows_the_hero_and_the_slogan():
     readme = (ROOT / "README.md").read_text()
     base = "https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/"
-    top = readme[: readme.index("See and safely change what your AI coding agents load.")]
+    top = readme[: readme.index("See and change what")]
     picture = re.search(r"<picture>.*?</picture>", top, re.S)
     assert picture, "the hero comes first"
     slogan = "Your AI coding tools, under one roof."
-    dark = f'<source media="(prefers-color-scheme: dark)" srcset="{base}hero-dark.svg">'
-    light = f'<img src="{base}hero.svg" width="100%" alt="Kitden: {slogan}">'
+    dark = '<source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-dark.svg">'
+    light = f'<img src="{base}hero.svg" width="640" alt="Kitden: {slogan}">'
     assert dark in picture.group(0) and light in picture.group(0)
     assert f'<h3 align="center">{slogan}</h3>' in top
     assert "<h1" not in top and "logo.svg" not in top

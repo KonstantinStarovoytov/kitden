@@ -46,7 +46,8 @@ def test_the_check_before_a_release_names_the_management_actions():
 
 def test_docs_name_the_demo_and_the_write_boundary():
     readme = " ".join((ROOT / "README.md").read_text().split())
-    assert "uvx kitden demo" in readme
+    assert "kitden demo" in readme
+    assert "preview of the next release, run from source" in readme
     assert "Kitden writes only in your home folder and your known projects." in readme
     development = (ROOT / "docs/development.md").read_text()
     assert "kitden demo" in development and "build_demo_home" in development
@@ -83,24 +84,18 @@ def test_walkthrough_script_one_has_the_seven_tasks_and_a_results_table():
 IMAGES = "https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/"
 
 
-def test_every_readme_image_is_a_full_address_to_a_file_we_have():
+def test_every_readme_image_has_a_local_source_and_a_pypi_fallback():
     readme = (ROOT / "README.md").read_text()
     images = re.findall(r'(?:src|srcset)="([^"]+)"', readme)
     assert images
-    for image in images:
-        assert image.startswith(IMAGES), image
-    # A Markdown image may be another site's badge (Add to Cursor); ours must exist too.
     marked = re.findall(r"!\[[^\]]*\]\(([^)\s]+)\)", readme)
-    assert marked
     for image in images + marked:
-        assert image.startswith("https://"), image
         if image.startswith(IMAGES):
             assert (ROOT / "docs/images" / image.removeprefix(IMAGES)).is_file(), image
-    # The four pages, light and dark, and no screenshot that nothing shows.
-    shots = {image.removeprefix(IMAGES) for image in images if image.endswith(".jpg")}
-    pages = ("overview", "gateway", "library", "changes")
-    assert shots == {f"{page}{theme}.jpg" for page in pages for theme in ("", "-dark")}
-    assert {p.name for p in (ROOT / "docs/images").glob("*.jpg")} == shots
+        elif image.startswith("docs/images/"):
+            assert (ROOT / image).is_file(), image
+        else:
+            assert image.startswith("https://"), image
 
 
 def test_the_readme_names_no_old_review():

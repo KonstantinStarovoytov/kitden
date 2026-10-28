@@ -21,6 +21,12 @@ When the page opens, the logo on the rail plays one short gesture, as if the sto
 
 The README hero (`docs/images/hero.svg`, `hero-dark.svg`) is the same gesture at 120 units with the slogan "Your AI coding tools, under one roof.". `scripts/make_hero.py` writes both files from the logo, the Inter font and logo-motion.md. It loops only there: the gesture, then 6 s of rest; still under reduced motion. GitHub shows it through `<img>` in `<picture>` (`raw.githubusercontent.com` serves it as `image/svg+xml`, its CSS keyframes play, scripts never run); PyPI drops `<source>`, so it shows the light file (checked 2026-10-27: GitHub changelog 2022-08-15 "Specify theme context for images in Markdown", pypa/readme_renderer `clean.py`).
 
+**README presentation (2026-10-28).** The hero is displayed at 640 px, above one short promise.
+A 20-second tour uses four real demo captures: move, preview, review, applied. It holds the
+result for about eight seconds; reduced motion shows only that result. The Library comparison
+and before/after Undo are still crops. The pictures have their own light or dark canvas, with
+no invented UI states or traffic. [README media](readme-media.md) records how to rebuild them.
+
 ## Color roles
 
 | Role | Light | Dark |

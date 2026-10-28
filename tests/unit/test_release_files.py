@@ -50,15 +50,15 @@ def test_the_version_has_release_notes():
 
 
 def test_the_readme_works_on_pypi():
-    """README.md is the PyPI page: every image and link is a full https address."""
+    """PyPI keeps absolute fallback images; GitHub sources follow the current branch."""
     import re
 
     readme = (ROOT / "README.md").read_text()
-    targets = re.findall(r'(?:src|srcset|href)="([^"]+)"', readme)
+    targets = re.findall(r'(?:src|href)="([^"]+)"', readme)
     targets += re.findall(r"\]\(([^)\s]+)\)", readme)
     assert targets
     for target in targets:
         assert target.startswith("https://"), target
     for picture in re.findall(r"<picture>.*?</picture>", readme, re.S):
-        assert "<img " in picture, "PyPI drops <picture>; keep a plain <img> inside"
+        assert "<img " in picture, "PyPI drops source; keep a plain img inside"
     assert "https://github.com/KonstantinStarovoytov/kitden/blob/main/ROADMAP.md" in readme

@@ -1,6 +1,6 @@
 # Kitden roadmap
 
-Last updated: 2026-10-27
+Last updated: 2026-10-28
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
@@ -8,6 +8,13 @@ What Kitden does today and what comes next. Ideas and bugs:
 ## Done
 
 ### Not released yet
+
+- **README story:** a smaller animated logo, a four-step tour of a real demo move, a compact
+  client comparison and an actual before/after Undo. Images come in both themes; the tour rests
+  on the result and shows a still result under reduced motion. The sample command runs the
+  current source while these features wait for a release. Installation choices and technical
+  details are folded away. `scripts/readme_demo.py` starts the isolated capture sample;
+  [readme-media.md](docs/readme-media.md) explains the images.
 
 - **The mockup's look:** Inter and JetBrains Mono come with Kitden, line icons in every place,
   the mockup's colours in both themes, a new side rail and top bar, and calm motion with one

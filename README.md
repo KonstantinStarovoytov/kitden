@@ -1,113 +1,105 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/hero-dark.svg">
-  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/hero.svg" width="100%" alt="Kitden: Your AI coding tools, under one roof.">
-</picture>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-dark.svg">
+    <source srcset="docs/images/hero.svg">
+    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/hero.svg" width="640" alt="Kitden: Your AI coding tools, under one roof.">
+  </picture>
+</p>
 
 <h3 align="center">Your AI coding tools, under one roof.</h3>
 
-<p align="center"><b>See and safely change what your AI coding agents load.</b><br>
-Claude Code, Codex and Cursor: every MCP server, skill, plugin, hook and marketplace on one local page.<br>
-Look at each change first. Apply keeps a backup for Undo.</p>
+<p align="center">See and change what <b>Claude Code, Codex and Cursor</b> load.<br>
+MCP servers, plugins and skills, with preview and Undo.</p>
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/overview-dark.jpg">
-    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/overview.jpg" alt="Kitden Overview: a file Kitden could not read, servers to move into the gateway, Cursor to connect, and a small map of your setup" width="860">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/walkthrough-dark.svg">
+    <source srcset="docs/images/walkthrough.svg">
+    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/walkthrough.svg" width="880" alt="Move docs from Claude Code into Kitden: preview the connection, review which clients get access, then Apply. The server is now shared by Claude Code, Codex and Cursor.">
   </picture>
 </p>
 
+<p align="center">One shared gateway for your agents. Look at each change first. Apply keeps a backup for Undo.</p>
+
+## Try it on a sample
+
+Explore a sample setup without reading or changing your own settings.
+
+<!-- Checked 2026-10-28: https://docs.astral.sh/uv/guides/tools/#requesting-different-sources -->
 ```bash
-uvx kitden
+uvx --from git+https://github.com/KonstantinStarovoytov/kitden kitden demo
 ```
 
-## Why
+macOS · Requires [uv](https://docs.astral.sh/uv/) and Git · No account · No telemetry
 
-You use two or three AI coding tools. A few weeks in, a plugin loads twice, a server you removed
-still runs in another tool, and an agent changed its own settings. Kitden reads all their settings
-files, shows them on one page, and changes a file only after you have seen the exact edit.
+This is a preview of the next release, run from source. Already in this checkout? Run `uv run kitden demo`.
 
-It runs on your Mac at `127.0.0.1`, with no account and no telemetry. Secrets stay on this Mac.
-They go only to the server they belong to, or to a gateway you move that server into.
+## See what each agent loads
 
-## What you can do
+Compare plugins and skills across clients. See what is on, what is off, and what is missing.
+Kitden also finds hooks, marketplaces and instruction files, and shows where they come from.
 
-- **Overview:** what needs your attention and what can improve, each with one button.
-- **Gateway:** one Kitden gateway for every client. Drag a server into it, press × on a link to
-  take it away, and turn a tool on or off for all projects or for one.
-- **Library:** plugins, skills and instruction files for each client, as a map or a list. Drag a
-  plugin onto a client to add it there; "Add missing plugins and skills…" fills the gaps.
-- **Preview, then Apply:** every change waits in one tray, and "Show changes" shows the exact edit.
-  Apply all writes it as one change with a backup; Undo all takes it back.
-- **Changes:** the history, with Undo, "Redo…" and "See it on the map".
-- **Ask your agent:** "show my setup" from Claude Code, Codex or Cursor. Kitden's own tools only
-  read. Servers moved into the gateway add their tools, which do what those servers do.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/compare-dark.svg">
+  <source srcset="docs/images/compare.svg">
+  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/compare.svg" width="880" alt="Library filtered to review: pr-review is off in Claude Code and Cursor. The code-review skill is on in Codex and Cursor, with an Add button for Claude Code.">
+</picture>
 
-Kitden writes only in your home folder and your known projects.
+## Change your mind? Undo.
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/gateway-dark.jpg">
-    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/gateway.jpg" alt="The Gateway map: Claude Code and Codex linked to the Kitden gateway and its two servers; below, the servers outside the gateway, each joined to its client by a dotted line" width="860">
-  </picture>
-</p>
+Every applied change has a history and a backup. Undo restores the previous files.
+If a file has changed since Apply, Kitden stops rather than overwriting your newer work.
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/library-dark.jpg">
-    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/library.jpg" alt="The Library map: Claude Code, Codex and Cursor linked to the plugins and skills they load, grouped by where they come from" width="860">
-  </picture>
-</p>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/undo-dark.svg">
+  <source srcset="docs/images/undo.svg">
+  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/undo.svg" width="880" alt="The same change before and after Undo: first Applied with an Undo button, then crossed out and marked Undone.">
+</picture>
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/changes-dark.jpg">
-    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/changes.jpg" alt="The Changes page: three changes today, one of them undone; the Details of the newest show the project, the backup, what to restart and the history" width="860">
-  </picture>
-</p>
+## Use your own setup
 
-## Install
-
-macOS. With [uv](https://docs.astral.sh/uv/):
+Run the current source on your Mac:
 
 ```bash
-uvx kitden
+uvx --from git+https://github.com/KonstantinStarovoytov/kitden kitden
 ```
 
-To try it on a sample setup first, with nothing on your computer read or changed: `uvx kitden demo`.
+Kitden opens in your browser at `127.0.0.1`. It reads your setup; changes wait for you to press Apply.
+Linux and Windows are not supported yet.
 
-Without uv, one line installs uv and Kitden, then opens the page:
+<details>
+<summary>Other ways to install</summary>
+
+The published version is earlier than the preview above: `uvx kitden`.
+Without uv, this installs uv and the earlier release, then opens the page:
 
 ```bash
 curl -LsSf https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/install.sh | sh
 ```
 
-From inside your agent:
+</details>
 
-| | |
-| --- | --- |
-| **Claude Code** | `/plugin install kitden --marketplace KonstantinStarovoytov/kitden` |
-| **Codex** | `codex plugin marketplace add KonstantinStarovoytov/kitden`, then `codex plugin add kitden@kitden` |
-| **Cursor** | [![Add to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=kitden&config=eyJjb21tYW5kIjoia2l0ZGVuIiwiYXJncyI6WyJtY3AiXX0=) |
+<details>
+<summary>Let your agent read your setup</summary>
 
-Then ask your agent **"show my setup"**. Cursor also takes the plain link
-`cursor://anysphere.cursor-deeplink/mcp/install?name=kitden&config=eyJjb21tYW5kIjoia2l0ZGVuIiwiYXJncyI6WyJtY3AiXX0=`.
+In Kitden, choose **Let agents read this setup**. Then ask your agent **"show my setup"**.
+Kitden's own tools only read. Servers moved into the gateway add their tools, which do what those servers do.
 
-Linux and Windows are not supported yet.
+Already have the `kitden` command? [Add to Cursor](https://cursor.com/en/install-mcp?name=kitden&config=eyJjb21tYW5kIjoia2l0ZGVuIiwiYXJncyI6WyJtY3AiXX0=).
+The plain link is `cursor://anysphere.cursor-deeplink/mcp/install?name=kitden&config=eyJjb21tYW5kIjoia2l0ZGVuIiwiYXJncyI6WyJtY3AiXX0=`.
 
-## How it works
+</details>
 
-1. Kitden reads your agents' settings files and shows them in your browser, at `127.0.0.1` only.
-2. You press Apply all. Kitden backs the files up, writes the change and checks it.
-3. Undo brings the old files back. Backups stay for 30 days, and the newest 100 changes always keep
-   theirs.
+<details>
+<summary>How changes, backups and secrets work</summary>
 
-Secrets are never shown or logged. Kitden goes online only to reach the remote servers you add,
-and to read a marketplace file from GitHub when you add a marketplace by its link.
+- Changes wait in one tray. **Show changes** shows the exact edit; Apply backs it up, writes it and checks it.
+- Backups stay for 30 days, and the newest 100 changes always keep theirs. Changes also offers **Redo…** and **See it on the map**.
+- Use **Add missing plugins and skills…** in Library to fill gaps. Project settings stay separate from the shared setup.
+- Kitden writes only in your home folder and your known projects.
+- Secrets stay on this Mac. They go only to the server they belong to, or to a gateway you move that server into.
+- Secret values are never shown or logged. Kitden goes online to reach remote servers you add and to read a GitHub marketplace when you add its link.
 
-## More
+</details>
 
-- [Roadmap](https://github.com/KonstantinStarovoytov/kitden/blob/main/ROADMAP.md) and [issues](https://github.com/KonstantinStarovoytov/kitden/issues)
-- [Release notes](https://github.com/KonstantinStarovoytov/kitden/releases)
-- [Develop and release](https://github.com/KonstantinStarovoytov/kitden/blob/main/docs/development.md)
-- [Visual and motion rules](https://github.com/KonstantinStarovoytov/kitden/blob/main/docs/design.md)
-- License: [Apache-2.0](https://github.com/KonstantinStarovoytov/kitden/blob/main/LICENSE)
+[Roadmap](https://github.com/KonstantinStarovoytov/kitden/blob/main/ROADMAP.md) · [Issues](https://github.com/KonstantinStarovoytov/kitden/issues) · [Releases](https://github.com/KonstantinStarovoytov/kitden/releases) · [Development](https://github.com/KonstantinStarovoytov/kitden/blob/main/docs/development.md) · [Apache-2.0](https://github.com/KonstantinStarovoytov/kitden/blob/main/LICENSE)
