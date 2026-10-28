@@ -11,9 +11,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 - **README story:** a smaller animated logo, a four-step tour of a real demo move, a compact
   client comparison and an actual before/after Undo. Images come in both themes; the tour rests
-  on the result and shows a still result under reduced motion. Requirements, an isolated demo,
-  installation and safety limits are visible. The source preview installs from a ZIP without
-  Git. Library comes before Gateway, with actions and read-only limits for each item kind.
+  on the result and shows a still result under reduced motion. Library, Gateway and Undo show
+  the value before the safe sample and installation. Requirements sit beside the commands;
+  setup details fold below the story. Library names actions and read-only limits for each kind.
   `scripts/readme_demo.py` starts the isolated capture sample;
   [readme-media.md](docs/readme-media.md) explains the images.
 

@@ -26,8 +26,9 @@ A 20-second tour uses four real demo captures: move, preview, review, applied. I
 result for about eight seconds; reduced motion shows only that result. The Library comparison
 and before/after Undo are still crops. The pictures have their own light or dark canvas, with
 no invented UI states or traffic. [README media](readme-media.md) records how to rebuild them.
-Requirements, a safe sample and installation stay visible. Library actions and read-only
-limits come before the optional Gateway; safety explains both backups and their limits.
+The reading order is Library, Gateway, review and Undo, a safe sample, then installation.
+Requirements sit beside the first command. Name only what is needed; keep setup details
+out of the introduction. Privacy, backup limits and agent setup fold below the main story.
 
 ## Color roles
 

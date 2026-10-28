@@ -1,7 +1,7 @@
 # README media
 
-The README explains requirements, a safe sample, installation and the actions in Library,
-then shows how to share a server and undo a change.
+The README shows Library, a shared server and Undo, then offers a safe sample and installation.
+Requirements sit beside the first command; details follow the main story.
 The house stays the brand gesture. Product motion shows real states from the app.
 
 ## Capture
@@ -51,7 +51,7 @@ Publish the release only after its images are on main.
 
 The trial and install commands use uv's
 [URL source](https://docs.astral.sh/uv/concepts/projects/dependencies/#url), a ZIP archive from
-this repository. Git is not needed. The commands request Python 3.13; uv
+this repository. The commands request Python 3.13; uv
 [downloads it if needed](https://docs.astral.sh/uv/guides/install-python/#automatic-python-downloads).
 Checked 2026-10-28: both `uvx --from URL kitden --help` and `uv tool install URL` succeeded in
 temporary tool and cache folders. Installation needs a network connection; the demo then uses
