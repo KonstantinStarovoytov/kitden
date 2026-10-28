@@ -27,60 +27,21 @@ def test_readme_promises_no_undo_it_cannot_keep():
     assert "any time" not in readme
 
 
-def test_readme_says_what_an_unknown_folder_gets():
-    readme = " ".join((ROOT / "README.md").read_text().split())
-    words = "In a folder Kitden does not know as a project, the All projects switches apply."
-    assert words in readme
-
-
-def test_readme_says_unknown_is_not_missing():
-    readme = " ".join((ROOT / "README.md").read_text().split())
-    assert (
-        '"Unknown" means Kitden could not read it, so it may or may not be available; '
-        "it never means missing"
-    ) in readme
-    # Both meanings: a file that could not be read, and an on/off state out of Kitden's sight.
-    assert "Either a file could not be read, or the client keeps the on/off state" in readme
-
-
-def test_readme_says_what_a_project_view_adds():
-    readme = " ".join((ROOT / "README.md").read_text().split())
-    assert '"This project" marks a cell the project\'s own settings decide' in readme
-    assert '"Only this project" an item only that project has' in readme
-    assert 'A cell says "On" when the client has the item' in readme
-    assert '"Needs review" means another client has an item with the same name' in readme
-    assert 'asks "Add to this project…" or "Add for all projects…"' in readme
-
-
-def test_readme_names_the_management_actions():
-    readme = " ".join((ROOT / "README.md").read_text().split())
-    for words in (
-        "Remove from",  # a plugin or a skill, with Undo
-        "Add to this project…",
-        "Add missing plugins and skills…",
-        "Put back in",
-        "Remove from the Kitden gateway…",
-    ):
+def test_readme_is_short_and_names_the_page_words():
+    text = (ROOT / "README.md").read_text()
+    readme = " ".join(text.split())
+    # The owner wants it short (2026-10-28): what Kitden does, then Install.
+    assert len(text.splitlines()) <= 120
+    for words in ("Add missing plugins and skills…", "Show changes", "Redo…", "See it on the map"):
         assert words in readme, words
+    # Obot and MetaMCP cannot be added from the page now.
+    assert "Obot" not in readme and "MetaMCP" not in readme
+
+
+def test_the_check_before_a_release_names_the_management_actions():
     check = (ROOT / "docs/development.md").read_text()
     for words in ("Remove", "Put back", "Add missing", "Add to this project"):
         assert words in check, words
-
-
-def test_readme_shows_the_gateway_as_a_tree_with_a_list():
-    readme = " ".join((ROOT / "README.md").read_text().split())
-    for words in (
-        "Map | List",
-        '"Use the shared rule…"',
-        '"Turn off in some projects…"',
-        "a call already running is not stopped",
-        "Outside the gateway",
-        "Drop to add",
-        "Show changes",
-    ):
-        assert words in readme, words
-    for gone in ("route diagram", "Click a client in the diagram", "tools you turned on"):
-        assert gone not in readme, gone
 
 
 def test_docs_name_the_demo_and_the_write_boundary():
@@ -89,31 +50,6 @@ def test_docs_name_the_demo_and_the_write_boundary():
     assert "Kitden writes only in your home folder and your known projects." in readme
     development = (ROOT / "docs/development.md").read_text()
     assert "kitden demo" in development and "build_demo_home" in development
-
-
-def test_readme_says_what_details_and_a_review_start_with():
-    readme = " ".join((ROOT / "README.md").read_text().split())
-    words = (
-        "Technical details",
-        "Commands…",
-        "Claude Code loads it in every project. Cursor gets it through Claude Code.",
-        "Remove from Codex and Cursor…",
-        "Other projects are unchanged.",
-        "Settings changed since this preview.",
-        "Preview again",
-    )
-    # The page says each of them too, so the README cannot drift from it.
-    page = " ".join(
-        [(ROOT / "src/kitden/views/words.py").read_text()]
-        + [p.read_text() for p in (ROOT / "src/kitden/web/static/js").glob("*.js")]
-    )
-    for text in words:
-        assert text in readme, text
-    for text in ("Technical details", "Commands…"):
-        assert f'"{text}"' in page, text
-    for text in ("Other projects are unchanged.", "Settings changed since this preview."):
-        assert text in page, text
-    assert '"Preview again"' in page
 
 
 def test_the_check_before_a_release_turns_strict_mode_on_in_the_servers_details():
