@@ -1,6 +1,7 @@
 # README media
 
-The README tells one short story: see what loads, share a server, and undo a change.
+The README explains requirements, a safe sample, installation and the actions in Library,
+then shows how to share a server and undo a change.
 The house stays the brand gesture. Product motion shows real states from the app.
 
 ## Capture
@@ -48,8 +49,17 @@ Its fallback `img` URLs point to main. PyPI's
 keeps `img` and removes `source`, so the package page uses the light fallback after merge.
 Publish the release only after its images are on main.
 
-The trial command uses uv's
-[`--from` Git source](https://docs.astral.sh/uv/guides/tools/#requesting-different-sources)
-(checked 2026-10-28). The illustrated interface is not in the published 0.2.0 release.
-After releasing it, change the main commands to `uvx kitden demo` and `uvx kitden`, and
-remove the source-preview note. Do not change the commands before the release is available.
+The trial and install commands use uv's
+[URL source](https://docs.astral.sh/uv/concepts/projects/dependencies/#url), a ZIP archive from
+this repository. Git is not needed. The commands request Python 3.13; uv
+[downloads it if needed](https://docs.astral.sh/uv/guides/install-python/#automatic-python-downloads).
+Checked 2026-10-28: both `uvx --from URL kitden --help` and `uv tool install URL` succeeded in
+temporary tool and cache folders. Installation needs a network connection; the demo then uses
+only its sample files and offline stand-ins. Its sample is deleted on exit, while uv keeps its cache.
+The README's Python 3.13 trial also downloaded Python, opened the sample, and passed a Library
+skill add through preview, Apply, verification and Undo on 2026-10-28.
+
+The illustrated interface is ahead of the v0.2.0 release tag. After publishing a release to PyPI,
+change the commands to `uvx --python 3.13 kitden demo` and
+`uv tool install --python 3.13 kitden`, and remove the source-preview note. Check that the package
+is available first; do not assume that a GitHub release also exists on PyPI.

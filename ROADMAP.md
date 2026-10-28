@@ -11,9 +11,10 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 - **README story:** a smaller animated logo, a four-step tour of a real demo move, a compact
   client comparison and an actual before/after Undo. Images come in both themes; the tour rests
-  on the result and shows a still result under reduced motion. The sample command runs the
-  current source while these features wait for a release. Installation choices and technical
-  details are folded away. `scripts/readme_demo.py` starts the isolated capture sample;
+  on the result and shows a still result under reduced motion. Requirements, an isolated demo,
+  installation and safety limits are visible. The source preview installs from a ZIP without
+  Git. Library comes before Gateway, with actions and read-only limits for each item kind.
+  `scripts/readme_demo.py` starts the isolated capture sample;
   [readme-media.md](docs/readme-media.md) explains the images.
 
 - **The mockup's look:** Inter and JetBrains Mono come with Kitden, line icons in every place,

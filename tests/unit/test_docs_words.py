@@ -30,8 +30,8 @@ def test_readme_promises_no_undo_it_cannot_keep():
 def test_readme_is_short_and_names_the_page_words():
     text = (ROOT / "README.md").read_text()
     readme = " ".join(text.split())
-    # The owner wants it short (2026-10-28): what Kitden does, then Install.
-    assert len(text.splitlines()) <= 120
+    # Keep it easy to scan, with requirements, a safe trial and Library actions (2026-10-28).
+    assert len(text.splitlines()) <= 140
     for words in ("Add missing plugins and skills…", "Show changes", "Redo…", "See it on the map"):
         assert words in readme, words
     # Obot and MetaMCP cannot be added from the page now.
