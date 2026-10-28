@@ -101,9 +101,9 @@ globalThis.fetch = (url) => {
   return Promise.resolve({ ok: true, status: 200, json: async () => answers[path] });
 };
 
-const { listRows, loadLibrary, renderLibrary } = await import('../../src/kitden/web/static/js/library.js');
+const { listRows, loadLibrary, loadLibraryFor, renderLibrary } = await import('../../src/kitden/web/static/js/library.js');
 const { libraryThing, onLibrarySelect } = await import('../../src/kitden/web/static/js/library-map.js');
-const { data, freshness, go, hashFor, parseHash, state } = await import('../../src/kitden/web/static/js/store.js');
+const { data, freshness, go, hashFor, parseHash, setRenderer, state } = await import('../../src/kitden/web/static/js/store.js');
 const { setHint } = await import('../../src/kitden/web/static/js/parts.js');
 
 // The medium sample, cut short: the List's answer (views/library.py library_list) and the map's
@@ -622,4 +622,38 @@ test('Details follow a project switch when the new List is empty', async () => {
   data.scope.libraryMap = '';
   pages['#drawer'].classList.remove('open');
   panelState.current = null;
+});
+
+// A place change waits 300 ms for the List's rows (app.js goTo), then draws without them. Rows that
+// come in later are still drawn: the List waits on that read, it does not ask again.
+test('rows read before the List shows are drawn when they come in late', async () => {
+  const before = globalThis.fetch;
+  let answer = null;
+  globalThis.fetch = (url) => {
+    if (!String(url).startsWith('/api/library-list')) return before(url);
+    return new Promise((done) => { answer = () => done({ ok: true, status: 200, json: async () => LIST }); });
+  };
+  setRenderer(() => { main.replaceChildren(); renderLibrary(main); });
+  try {
+    Object.assign(data, { libraryMap: MAP, instructionsMap: INSTRUCTIONS, projects: [{ id: 'a', path: '/home/work/atlas' }] });
+    data.scope.libraryMap = '';
+    Object.assign(state, { view: 'overview', mode: 'list', kind: 'plugin', show: 'mine', attention: false, q: 'superpowers', project: '', selected: null, category: '' });
+    // A reload has started, as after the page's first scan (the test clock may still be at 0).
+    tick(1);
+    freshness.reloadStartedAt = performance.now();
+    const read = loadLibraryFor({});
+    // The 300 ms are over: the Library is drawn while its rows are still on the way.
+    state.view = 'library';
+    main.replaceChildren();
+    renderLibrary(main);
+    assert.equal(grid(), null);
+    answer();
+    await read;
+    await flush();
+    assert.ok(grid(), 'the rows are drawn once they come in');
+  } finally {
+    globalThis.fetch = before;
+    setRenderer(() => {});
+    state.q = '';
+  }
 });

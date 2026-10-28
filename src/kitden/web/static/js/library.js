@@ -244,6 +244,9 @@ function load(asked = asking(), draw = true) {
 
 // Typing waits until it stops; any other choice asks at once.
 function schedule(key) {
+  // The List waits on a read already on the way (one a place change gave up on after 300 ms, say):
+  // that read draws it when its rows come in.
+  if (pending && pending.key === key && pending.at >= freshness.reloadStartedAt) pending.draw = true;
   if (!needsLoad(key)) return;
   clearTimeout(timer);
   if (lastQ === null || lastQ === state.q) {
