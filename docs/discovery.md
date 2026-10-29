@@ -19,7 +19,11 @@ backups and checks as a local add.
   `server.json` and `.mcp.json` files in the source.
 
 Opening the catalog loads an initial selection. Switching sources or filters reloads it.
-Search results stay visible while an item opens in the adjacent details panel.
+Search results stay visible while an item opens in the adjacent details panel. Search starts
+after a short typing pause (three characters), or with Search. Exact names rank first.
+Skills show install counts reported by skills.sh; MCP Registry does not supply a comparable
+install count or rating. Checked 2026-10-29. On a map, drag an online item onto a supported
+client or the gateway to preview it. Dragging never applies the change.
 Use Sources beside Search to add, edit or remove custom GitHub sources. Removing a source
 keeps installed items; Undo removal restores the source. Built-in catalogs stay available.
 

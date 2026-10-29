@@ -1267,3 +1267,11 @@ test('each tab keeps the pages its groups were turned to', async () => {
     done();
   }
 });
+
+test('an online drag keeps the discovery identity and chooses only the drop client', () => {
+  const item = { kind: 'skill', name: 'frontend-design', skill: 'frontend-design', discovery: 'catalog-id' };
+  assert.deepEqual(addBody(item, 'codex'), {
+    action: 'skill.install', targets: [{ client: 'codex' }],
+    params: { skill: 'frontend-design', discovery: 'catalog-id' },
+  });
+});

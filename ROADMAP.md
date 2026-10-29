@@ -21,6 +21,11 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not released yet
 
+- **Compact catalog:** a narrower adaptive panel leaves map targets visible. Online items
+  use existing drag previews for clients or the gateway. Search waits for a short typing
+  pause and ranks exact names first; skills show source-reported install counts. Details
+  use an indeterminate progress bar with reduced-motion support. MCP ratings are not invented.
+
 - **Simpler catalog:** + Add loads initial results and opens item details beside the list.
   Sources beside Search supports custom GitHub source editing, removal and immediate Undo.
   Client selection stays explicit; all client writes use Preview, Apply, backup and verify.

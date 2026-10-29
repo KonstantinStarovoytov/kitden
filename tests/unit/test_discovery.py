@@ -84,6 +84,7 @@ def test_skill_metadata_survives_restart_and_download_is_pinned(tmp_path, monkey
     skill_source(monkeypatch)
     source = Discovery(tmp_path)
     row = source.search("skills.sh", "tidy", "skill")[0]
+    assert row["installs"] == 42
     source = Discovery(tmp_path)
     info = source.skill(source.get(row["id"]), {"codex"})
     assert info["name"] == "tidy" and info["self_contained"]

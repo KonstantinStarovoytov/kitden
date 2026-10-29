@@ -22,6 +22,12 @@ function fail(body, message) {
 }
 
 const sessions = new Map();
+function progress(label) {
+  const node = el("div", "catalog-progress");
+  node.setAttribute("role", "progressbar"); node.setAttribute("aria-label", label);
+  node.append(el("span", "catalog-progress-line"), el("span", "muted", label));
+  return node;
+}
 
 // Visible mode buttons are shared by the online and local Add panels.
 export function addModes(active, online, local) {
@@ -40,7 +46,7 @@ export async function openDiscovery(kind = "all", options = {}) {
   const body = el("div", "body discovery");
   const modes = options.local ? addModes("online", () => {}, options.local) : null;
   if (modes) body.append(modes);
-  const loading = el("p", "muted", "Reading catalogs…"); body.append(loading);
+  const loading = progress("Loading catalogs"); body.append(loading);
   panelState.current = { type: "discovery" };
   openPanel([head, body]);
   let data;
@@ -82,7 +88,9 @@ export async function openDiscovery(kind = "all", options = {}) {
   const draw = (answer) => {
     results.replaceChildren();
     status.textContent = answer.results.length ? `${answer.results.length} results` : "No matches. Try another search or catalog.";
-    for (const row of answer.results) {
+    const query = input.value.trim().toLowerCase().replace(/[-_]/g, " ");
+    const score = (r) => { const name = r.name.toLowerCase().replace(/[-_]/g, " "); return name === query ? 3 : name.startsWith(query) ? 2 : 1; };
+    for (const row of [...answer.results].sort((a, b) => score(b) - score(a) || (b.installs || 0) - (a.installs || 0))) {
       const line = button("", () => {
         for (const sibling of results.children) sibling.setAttribute("aria-pressed", "false");
         line.setAttribute("aria-pressed", "true");
@@ -93,6 +101,12 @@ export async function openDiscovery(kind = "all", options = {}) {
       const text = el("span", "tx");
       text.append(el("b", null, row.name), el("small", null, `${LABELS[row.kind]} · ${row.repo || row.source}`));
       line.append(tile, text, el("span", "st", row.held ? "In gateway" : row.installed.length ? "Installed" : "Review"));
+      if (Number.isFinite(row.installs)) text.append(el("small", "catalog-popularity", `${new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(row.installs)} installs`));
+      if (!row.held && !row.installed.length && options.drag) {
+        line.classList.add("drags");
+        line.addEventListener("pointerdown", (event) => options.drag(event, row, answer.clients, line));
+        line.title = row.kind === "mcp" ? "Drag to the gateway to preview" : "Drag onto a client to preview";
+      }
       results.append(line);
     }
   };
@@ -114,10 +128,14 @@ export async function openDiscovery(kind = "all", options = {}) {
     }
   };
   paintSources(); paintFilters();
-  input.addEventListener("input", invalidate);
+  let searchTimer;
+  input.addEventListener("input", () => {
+    invalidate(); clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => { if (body.isConnected && (!input.value.trim() || input.value.trim().length >= 3)) runSearch(); }, 350);
+  });
   const runSearch = async () => {
-    const turn = ++sequence;
-    search.disabled = true; status.textContent = "Searching…"; results.replaceChildren();
+    clearTimeout(searchTimer); const turn = ++sequence;
+    search.disabled = true; status.replaceChildren(progress("Searching catalogs"));
     try {
       const answer = await postJson("/api/discovery/search", { source: model.source, query: input.value, kind: model.kind });
       if (turn !== sequence || !body.isConnected) return;
@@ -183,7 +201,7 @@ export async function openDiscovery(kind = "all", options = {}) {
 
 async function itemDetails(row, clients, kind, options, inspector = null) {
   const installed = row.installed;
-  const loading = el("div", "body", "Reading source…");
+  const loading = progress("Loading details");
   if (inspector) inspector.replaceChildren(loading);
   else openPanel([header("Online source", row.name, null), loading]);
   const answer = await postJson("/api/discovery/details", { id: row.id });

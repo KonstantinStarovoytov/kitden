@@ -3,7 +3,7 @@
 // All · Remote · Local pill. A click on a row, or a drag of it onto the map (gateway-drag.js), only
 // adds its change to the tray (tray.js); nothing is written before the tray's Apply. The panel
 // shows no path, address or command.
-import { addModes, openDiscovery } from "./discovery.js";
+import { addModes, installBody, openDiscovery } from "./discovery.js";
 import { button } from "./dom.js";
 import { matchRows, openAddPanel, shownList } from "./add-panel.js";
 import { getJson } from "./api.js";
@@ -112,7 +112,7 @@ const GATEWAY = {
 export function openAdd(options = {}) {
   letGo();
   if (options.from) options.from.focus({ preventScroll: true });
-  return openDiscovery("mcp", { local: () => openLocalAdd(options) });
+  return openDiscovery("mcp", { local: () => openLocalAdd(options), drag: (event, row, clients, node) => pressRow(event, { name: row.name, kind: row.kind, body: installBody(row, []), node }) });
 }
 
 export function openLocalAdd(options = {}) {

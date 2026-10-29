@@ -314,6 +314,9 @@ class Discovery:
                         "kind": "skill",
                         "repo": r.get("source"),
                         "source": "skills.sh",
+                        "installs": r.get("installs")
+                        if isinstance(r.get("installs"), (int, float))
+                        else None,
                         "description": f"{r.get('source', '')} · {r.get('installs', 0)} installs",
                     }
                     for r in data.get("skills", [])

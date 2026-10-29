@@ -118,7 +118,11 @@ const LIBRARY = {
 export function openLibraryAdd(options = {}) {
   letGoLibraryMap();
   if (options.from) options.from.focus({ preventScroll: true });
-  return openDiscovery("all", { local: () => openLocalLibraryAdd(options) });
+  return openDiscovery("all", { local: () => openLocalLibraryAdd(options), drag: (event, row, clients, node) => {
+    const can = clients.filter((c) => row.kind !== "plugin" || ["claude_code", "codex"].includes(c));
+    const item = { kind: row.kind, name: row.name, [row.kind]: row.name, discovery: row.id, by: {}, can: { add: can } };
+    pressRow(event, { item, node });
+  } });
 }
 
 export function openLocalLibraryAdd(options = {}) {

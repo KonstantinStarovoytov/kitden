@@ -179,6 +179,7 @@ export function libraryTree(answer) {
 // previewFor).
 export function addBody(item, client) {
   const params = item.kind === "skill" ? { skill: item.skill } : { plugin: item.plugin };
+  if (item.discovery) params.discovery = item.discovery;
   return { action: INSTALLS[item.kind], targets: [{ client }], params };
 }
 
