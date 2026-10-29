@@ -1221,3 +1221,10 @@ html.map-entrance::view-transition-new(page) { animation: none; }
   .table-scroll { overflow-x: auto; }
   .library-list > .tg-head { position: static; }
 }
+
+/* Online source forms reuse the Add panel's fields and result rows. */
+.discovery .form > .field { flex: 1 1 100%; }
+.discovery .form > .field.grow { flex-basis: 170px; }
+.discovery .res { width: 100%; text-align: left; }
+.discovery details { margin: 14px 0; }
+.discovery pre { max-height: 320px; overflow: auto; }

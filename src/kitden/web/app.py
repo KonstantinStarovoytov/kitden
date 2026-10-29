@@ -99,6 +99,7 @@ from kitden.clients.base import (
     SKILL_REMOVE,
 )
 from kitden.command import installed_command
+from kitden.discovery import Discovery
 from kitden.gateway_api import GatewayError, MetaMcpClient, ObotClient
 from kitden.gateways import add_gateway, data_dir, load_gateways
 from kitden.local_gateway.project import project_chain, project_chains
@@ -621,6 +622,7 @@ def create_app(
         warm=warm if home is not None else None,
         versions=version_refresh,
     )
+    discovery = Discovery(home) if home is not None else None
     engine = None
     if home is not None:
 
@@ -1052,30 +1054,68 @@ def create_app(
             clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
             steps = connect_steps(adapters, clients, gateway, str(params.get("name", "")))
         elif action == PLUGIN_INSTALL:
-            offer = next(
-                (o for o in catalog(state.inventory, adapters) if o["id"] == params.get("plugin")),
-                None,
-            )
-            if offer is None:
-                raise ValueError("This plugin is not in a marketplace on this computer.")
             clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
-            steps = install_steps(adapters, offer, clients, _project_param(params))
+            if params.get("discovery"):
+                if stand_ins:
+                    raise ValueError(stand_ins.NOT_IN_DEMO)
+                row = discovery.get(str(params["discovery"]))
+                if row["kind"] != "plugin":
+                    raise ValueError("Choose a plugin.")
+                source = await asyncio.to_thread(discovery.plugin, row)
+                for client in clients:
+                    adapter = adapters.get(client)
+                    if adapter is None or client not in ("claude_code", "codex"):
+                        raise ValueError("Choose Claude Code or Codex for a plugin.")
+                    existing = adapter.marketplace_sources().get(source["name"])
+                    if existing is not None and existing != source["source"]:
+                        raise ValueError("A marketplace with this name uses another source.")
+                    if existing is None:
+                        steps += marketplace_steps(adapters, source, [client])
+                    steps.append(
+                        adapter.plugin_install_step(source["plugin"], _project_param(params))
+                    )
+            else:
+                offer = next(
+                    (
+                        o
+                        for o in catalog(state.inventory, adapters)
+                        if o["id"] == params.get("plugin")
+                    ),
+                    None,
+                )
+                if offer is None:
+                    raise ValueError("This plugin is not in a marketplace on this computer.")
+                steps = install_steps(adapters, offer, clients, _project_param(params))
         elif action == SKILL_INSTALL:
-            # A project's own skill ("project/<name>") is read from that project only.
             wanted = str(params.get("skill", ""))
             project = _project_param(params)
-            if wanted.startswith("project/") and project is None:
-                raise ValueError(ONLY_IN_PROJECT)
-            listed = (
-                project_skills(state.inventory, adapters, project)
-                if wanted.startswith("project/")
-                else skill_catalog(state.inventory, adapters)
-            )
-            skill = next((s for s in listed if s["id"] == wanted), None)
-            if skill is None:
-                raise ValueError("This skill is not on this computer.")
-            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
             found = {c["id"] for c in state.data["clients"] if c["status"] == "found"}
+            if params.get("discovery"):
+                if stand_ins:
+                    raise ValueError(stand_ins.NOT_IN_DEMO)
+                row = discovery.get(str(params["discovery"]))
+                if row["kind"] != "skill":
+                    raise ValueError("Choose a skill.")
+                skill = await asyncio.to_thread(discovery.skill, row, found)
+                skill["installed"] = {
+                    i.client: "Installed"
+                    for i in state.inventory.items
+                    if str(i.kind) == "skill"
+                    and i.name == skill["name"]
+                    and (project is None and str(i.scope) == "user")
+                }
+            else:
+                if wanted.startswith("project/") and project is None:
+                    raise ValueError(ONLY_IN_PROJECT)
+                listed = (
+                    project_skills(state.inventory, adapters, project)
+                    if wanted.startswith("project/")
+                    else skill_catalog(state.inventory, adapters)
+                )
+                skill = next((s for s in listed if s["id"] == wanted), None)
+                if skill is None:
+                    raise ValueError("This skill is not on this computer.")
+            clients = [str(t.get("client")) for t in targets if isinstance(t, dict)]
             steps = skill_steps(adapters, skill, clients, found, project)
             copied = [skill]
         elif action == PLUGIN_SKILLS:
@@ -1170,12 +1210,21 @@ def create_app(
             )
         elif action == GATEWAY_ADD:
             # It may ask a remote server whether it signs in, so not on the event loop.
+            discovered = None
+            if params.get("discovery"):
+                if stand_ins:
+                    raise ValueError(stand_ins.NOT_IN_DEMO)
+                row = discovery.get(str(params["discovery"]))
+                if row["kind"] != "mcp" or not row.get("entry"):
+                    raise ValueError("This server needs configuration before it can be added.")
+                discovered = (row["name"].rsplit("/", 1)[-1], row["entry"])
             steps = await asyncio.to_thread(
                 gateway_add_steps,
                 adapters,
                 state.inventory,
                 home,
                 str(params.get("server", "")),
+                discovered=discovered,
                 sign_in=sign_in,
                 keychain_run=keychain_run,
             )
@@ -1517,6 +1566,67 @@ def create_app(
         rows = await asyncio.to_thread(library_offers, state.inventory, adapters)
         return JSONResponse({"offers": rows})
 
+    async def discovery_sources(request: Request) -> JSONResponse:
+        if discovery is None:
+            return _error("Open Kitden on a setup first.", 400)
+        if request.method == "GET":
+            return JSONResponse({"sources": discovery.sources(), "offline": bool(stand_ins)})
+        try:
+            body = await request.json()
+            sources = discovery.add_source(str(body.get("source", "")))
+            return JSONResponse({"sources": sources})
+        except (ValueError, TypeError) as error:
+            return _error(str(error), 400)
+
+    async def discovery_details(request: Request) -> JSONResponse:
+        if discovery is None or stand_ins:
+            return _error("Online sources are unavailable in the offline demo.", 400)
+        try:
+            body = await request.json()
+            found = {c["id"] for c in state.data["clients"] if c["status"] == "found"}
+            row = await asyncio.to_thread(discovery.details, str(body.get("id", "")), found)
+            return JSONResponse(row)
+        except (ValueError, OSError, KeyError, TypeError) as error:
+            return _error(
+                str(error)
+                if isinstance(error, ValueError)
+                else "Could not read this item. Search again.",
+                400,
+            )
+
+    async def discovery_search(request: Request) -> JSONResponse:
+        if discovery is None or stand_ins:
+            return _error("Online sources are unavailable in the offline demo.", 400)
+        try:
+            body = await request.json()
+            kind = str(body.get("kind", "all"))
+            if kind not in ("all", "skill", "plugin", "mcp"):
+                raise ValueError("Choose skills, plugins or MCP servers.")
+            rows = await asyncio.to_thread(
+                discovery.search, str(body.get("source", "")), str(body.get("query", "")), kind
+            )
+            for row in rows:
+                item_kind = "mcp_server" if row["kind"] == "mcp" else row["kind"]
+                row["held"] = (
+                    row["kind"] == "mcp"
+                    and row["name"].rsplit("/", 1)[-1] in load_settings(home)["servers"]
+                )
+                row["installed"] = sorted(
+                    {
+                        i.client
+                        for i in state.inventory.items
+                        if str(i.kind) == item_kind and i.name == row["name"]
+                    }
+                )
+            clients = [c["id"] for c in state.data["clients"] if c["status"] == "found"]
+            return JSONResponse({"results": rows, "clients": clients})
+        except ValueError as error:
+            return _error(str(error), 400)
+        except (OSError, KeyError, TypeError):
+            return _error(
+                "Could not read this source. Try again; GitHub may have reached its limit.", 400
+            )
+
     async def commands(request: Request) -> JSONResponse:
         """Steps the developer runs themselves (FR-029, FR-035). Never run by the tool."""
         item = _item(request.query_params.get("item", ""))
@@ -1582,6 +1692,9 @@ def create_app(
             Route("/api/instructions-map", _read_model(_instructions_map)),
             Route("/api/market-servers", market_server_list),
             Route("/api/library-offers", library_offer_list),
+            Route("/api/discovery/sources", discovery_sources, methods=["GET", "POST"]),
+            Route("/api/discovery/search", discovery_search, methods=["POST"]),
+            Route("/api/discovery/details", discovery_details, methods=["POST"]),
             Route("/api/explain", _read_model(_explain)),
             Route("/api/overview", _read_model(_overview)),
             Route("/api/gateway-view", _read_model(_gateway_view)),

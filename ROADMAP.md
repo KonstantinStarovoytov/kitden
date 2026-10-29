@@ -7,6 +7,14 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
+### Not released yet
+
+- **Online sources:** Library and Gateway offer Find online. Search skills.sh, the official
+  MCP Registry and selected GitHub sources. Review source details, then use the existing
+  preview, Apply, verification and Undo for skills, plugins and supported MCP transports.
+  Add public GitHub sources without changing client settings. The offline demo stays offline.
+  See [online sources](docs/discovery.md) for supported formats and current limits.
+
 ### 0.3.0
 
 - **README story:** a smaller animated logo, a four-step Gateway tour, a three-step Library map

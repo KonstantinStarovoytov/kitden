@@ -921,6 +921,7 @@ def gateway_add_steps(
     home: Path,
     server_id: str,
     *,
+    discovered: tuple[str, dict] | None = None,
     sign_in: Callable[[str, dict], bool] | None = None,
     keychain_run: Runner | None = None,
 ) -> list[Step]:
@@ -934,7 +935,10 @@ def gateway_add_steps(
     and `keychain_run` are as in local_move_steps.
     """
     name = server_id.partition("/")[2]
-    _, entry = market_entry(adapters, server_id)
+    if discovered is None:
+        _, entry = market_entry(adapters, server_id)
+    else:
+        name, entry = discovered
     settings = load_settings(home)
     refusal = known_refusal(name, entry, inventory, set(settings["servers"]))
     if refusal is not None:

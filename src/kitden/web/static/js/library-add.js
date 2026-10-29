@@ -3,6 +3,7 @@
 // (/api/library-offers) and an All · Plugins · Skills pill. A click adds a row for all projects to
 // every client that can take it and lacks it; a second click takes it out. A drag onto a client
 // adds it there only (library-map.js). Nothing is written before the tray's Apply.
+import { openDiscovery } from "./discovery.js";
 import { openAddPanel, shownList } from "./add-panel.js";
 import { getJson } from "./api.js";
 import { button, plural, reportError } from "./dom.js";
@@ -108,7 +109,7 @@ const LIBRARY = {
     return keys.length ? takeOut(keys) : addToTray(allBody(row));
   },
   drag: (event, row, node) => pressRow(event, { item: itemOf(row), node }),
-  after: () => [button(ADD_MARKETPLACE, () => marketplaceForm({ back: ({ queued }) => queued && openLibraryAdd() }), "btn ghost small add-more")],
+  after: () => [button("Find online…", () => openDiscovery(), "btn ghost small add-more"), button(ADD_MARKETPLACE, () => marketplaceForm({ back: ({ queued }) => queued && openLibraryAdd() }), "btn ghost small add-more")],
 };
 
 // Open the panel beside the map. `from` is the button that gets focus back when it closes, the
