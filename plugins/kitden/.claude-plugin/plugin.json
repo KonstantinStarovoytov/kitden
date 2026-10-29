@@ -1,7 +1,7 @@
 {
   "name": "kitden",
   "displayName": "Kitden",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Ask what your coding agents load; open the Kitden page",
   "author": { "name": "Konstantin Starovoytov" },
   "homepage": "https://github.com/KonstantinStarovoytov/kitden",

@@ -184,8 +184,8 @@ def test_the_readme_shows_the_hero_and_the_slogan():
     dark = '<source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-dark.svg">'
     light = f'<img src="{base}hero.svg" width="640" alt="Kitden: {slogan}">'
     assert dark in picture.group(0) and light in picture.group(0)
-    assert f'<h3 align="center">{slogan}</h3>' in top
-    assert "<h1" not in top and "logo.svg" not in top
+    assert f'<p align="center"><strong>{slogan}</strong></p>' in top
+    assert top.count("<h1") == 1 and "logo.svg" not in top
     assert (ROOT / "docs/images/logo.svg").exists()
 
 

@@ -12,7 +12,7 @@ def test_the_start_link_is_not_called_one_time():
 def test_readme_says_where_secrets_go_and_what_the_agents_server_does():
     readme = " ".join((ROOT / "README.md").read_text().split())
     assert (
-        "Secrets stay on this Mac. They go only to the server they belong to, or to a gateway "
+        "Credentials go to the server they belong to, or to a gateway "
         "you move that server into."
     ) in readme
     assert (
@@ -31,7 +31,7 @@ def test_readme_is_short_and_names_the_page_words():
     text = (ROOT / "README.md").read_text()
     readme = " ".join(text.split())
     # Keep it easy to scan, with requirements, a safe trial and Library actions (2026-10-28).
-    assert len(text.splitlines()) <= 140
+    assert len(text.splitlines()) <= 180
     for words in ("Add missing plugins and skills…", "Show changes", "Redo…", "See it on the map"):
         assert words in readme, words
     # Obot and MetaMCP cannot be added from the page now.
@@ -47,8 +47,12 @@ def test_the_check_before_a_release_names_the_management_actions():
 def test_docs_name_the_demo_and_the_write_boundary():
     readme = " ".join((ROOT / "README.md").read_text().split())
     assert "kitden demo" in readme
-    assert "preview of the next release, run from source" in readme
-    assert "Kitden writes only in your home folder and your known projects." in readme
+    assert "uvx --python 3.13 kitden demo" in readme
+    assert "uv tool install --python 3.13 kitden" in readme
+    assert (
+        "Kitden writes to your home folder, its own data folder, known projects "
+        "and detected client settings folders."
+    ) in readme
     development = (ROOT / "docs/development.md").read_text()
     assert "kitden demo" in development and "build_demo_home" in development
 

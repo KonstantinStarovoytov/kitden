@@ -1,19 +1,23 @@
 # Kitden roadmap
 
-Last updated: 2026-10-28
+Last updated: 2026-10-29
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
 
 ## Done
 
-### Not released yet
+### 0.3.0
 
-- **README story:** a smaller animated logo, a four-step tour of a real demo move, a compact
-  client comparison and an actual before/after Undo. Images come in both themes; the tour rests
+- **README story:** a smaller animated logo, a four-step Gateway tour, a three-step Library map
+  tour and an actual before/after Undo. Images come in both themes; the tour rests
   on the result and shows a still result under reduced motion. Library, Gateway and Undo show
   the value before the safe sample and installation. Requirements sit beside the commands;
   setup details fold below the story. Library names actions and read-only limits for each kind.
+  Linked checks, release and license badges and a contributing guide support public sharing.
+  Release-ready install and demo commands use PyPI. Examples show Superpowers, frontend-design
+  and Context7, with names checked against their official sources on 2026-10-29.
+  Demo steps name their result; privacy and Undo describe their actual limits.
   `scripts/readme_demo.py` starts the isolated capture sample;
   [readme-media.md](docs/readme-media.md) explains the images.
 

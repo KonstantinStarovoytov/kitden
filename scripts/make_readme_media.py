@@ -19,11 +19,13 @@ COLOURS = {
 CROPS = {
     "start": (178, 278, 788, 663),
     "preview": (178, 278, 788, 663),
-    "review": (920, 215, 1245, 610),
+    "review": (920, 215, 1245, 595),
     "applied": (178, 278, 788, 663),
-    "library": (180, 295, 1110, 480),
-    "history": (185, 225, 910, 290),
-    "undone": (185, 225, 910, 290),
+    "library-start": (178, 295, 635, 660),
+    "library-preview": (178, 295, 635, 660),
+    "library-applied": (178, 295, 635, 660),
+    "history": (185, 225, 910, 285),
+    "undone": (185, 225, 910, 285),
 }
 
 
@@ -68,7 +70,11 @@ def svg(body: str, height: int, title: str, description: str) -> str:
 def walkthrough(theme: str) -> str:
     bg, ink, muted, accent, line = COLOURS[theme]
     scenes = (
-        ("start", "Bring a server into Kitden.", "Start with docs, connected only to Claude Code."),
+        (
+            "start",
+            "Bring a server into Kitden.",
+            "Start with Context7, connected only to Claude Code.",
+        ),
         (
             "preview",
             "See the change before it happens.",
@@ -104,7 +110,7 @@ def walkthrough(theme: str) -> str:
         body += words(subtitle, 30, 66, 15, muted)
         body += words(f"{i + 1} / 4", 809, 39, 14, accent, 500)
         if name == "review":
-            body += picture(name, theme, 478, 88, 340, 413)
+            body += picture(name, theme, 478, 88, 340, 398)
             body += words("Your call, every time.", 42, 217, 25, ink, 600)
             for j, text in enumerate(
                 (
@@ -125,21 +131,63 @@ def walkthrough(theme: str) -> str:
         body,
         560,
         "Move, preview, review, apply",
-        "Real demo states: docs starts in Claude Code, waits in preview, is reviewed, then joins "
+        "Real demo states: Context7 starts in Claude Code, waits in preview, "
+        "is reviewed, then joins "
         "the gateway for Claude Code, Codex and Cursor. Apply keeps a backup for Undo.",
     )
 
 
 def library(theme: str) -> str:
-    bg = COLOURS[theme][0]
-    body = f'<rect width="880" height="215" rx="12" fill="{bg}"/>'
-    body += picture("library", theme, 16, 20, 848, 169)
+    bg, ink, muted, accent, line = COLOURS[theme]
+    scenes = (
+        (
+            "start",
+            "Bring your skills to another client.",
+            "Superpowers is in Claude Code. Add it to Codex.",
+        ),
+        (
+            "preview",
+            "Review before you connect.",
+            "The dashed connection is a preview. Nothing is written yet.",
+        ),
+        (
+            "applied",
+            "The same skills, ready in Codex.",
+            "Apply adds Superpowers and checks the result.",
+        ),
+    )
+    css = """
+    .scene { opacity:0; }
+    .s2 { opacity:1; }
+    .s0 { animation:first 16s linear infinite; }
+    .s1 { animation:second 16s linear infinite; }
+    .s2 { animation:third 16s linear infinite; }
+    @keyframes first { 0%,24%,100% { opacity:1 } 25%,99% { opacity:0 } }
+    @keyframes second { 0%,24%,50%,100% { opacity:0 } 25%,49% { opacity:1 } }
+    @keyframes third { 0%,49%,100% { opacity:0 } 50%,99% { opacity:1 } }
+    @media (prefers-reduced-motion: reduce) {
+      .scene { animation:none; opacity:0; }
+      .s2 { opacity:1; }
+    }
+    """
+    body = f"<style>{css}</style>"
+    for i, (name, title, subtitle) in enumerate(scenes):
+        body += f'<g class="scene s{i}"><rect width="880" height="560" rx="12" fill="{bg}"/>'
+        body += words(title, 30, 39, 24, ink, 600)
+        body += words(subtitle, 30, 66, 15, muted)
+        body += words(f"{i + 1} / 3", 809, 39, 14, accent, 500)
+        body += picture(f"library-{name}", theme, 175, 86, 530, 423)
+        body += f'<path d="M30 520H850" stroke="{line}"/>'
+        body += words(
+            "Sample setup · Changes take effect in new client sessions.", 30, 544, 13, muted
+        )
+        body += "</g>"
     return svg(
         body,
-        215,
-        "See what each client loads",
-        "The Library filtered to review: pr-review "
-        "is off in Claude Code and Cursor; code-review is on in Codex and Cursor.",
+        560,
+        "Add Superpowers to Codex",
+        "Real demo states: Superpowers in Claude Code, a pending connection to Codex, "
+        "and the verified result after Apply. frontend-design stays in Codex and Cursor.",
     )
 
 

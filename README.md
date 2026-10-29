@@ -1,15 +1,27 @@
-<p align="center">
+<h1 align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-dark.svg">
     <source srcset="docs/images/hero.svg">
     <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/hero.svg" width="640" alt="Kitden: Your AI coding tools, under one roof.">
   </picture>
-</p>
+</h1>
 
-<h3 align="center">Your AI coding tools, under one roof.</h3>
+<p align="center"><strong>Your AI coding tools, under one roof.</strong></p>
 
 <p align="center">See and change what <b>Claude Code, Codex and Cursor</b> load.<br>
 MCP servers, plugins and skills, with preview and Undo.</p>
+
+<p align="center">
+  <a href="https://github.com/KonstantinStarovoytov/kitden/actions/workflows/release.yml"><img src="https://github.com/KonstantinStarovoytov/kitden/actions/workflows/release.yml/badge.svg?branch=main" alt="Checks on main"></a>
+  <a href="https://github.com/KonstantinStarovoytov/kitden/releases/latest"><img src="https://img.shields.io/github/v/release/KonstantinStarovoytov/kitden?label=latest%20release" alt="Latest release"></a>
+  <a href="https://github.com/KonstantinStarovoytov/kitden/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/KonstantinStarovoytov/kitden#try-safely-on-a-sample">Try the sample</a> ·
+  <a href="https://github.com/KonstantinStarovoytov/kitden#install-for-your-own-setup">Install</a> ·
+  <a href="https://github.com/KonstantinStarovoytov/kitden#contributing">Contribute</a>
+</p>
 
 ## See what each agent loads
 
@@ -19,7 +31,7 @@ choose what a project loads, and trace each item to its source.
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/compare-dark.svg">
   <source srcset="docs/images/compare.svg">
-  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/compare.svg" width="880" alt="Library filtered to review: pr-review is off in Claude Code and Cursor. The code-review skill is on in Codex and Cursor, with an Add button for Claude Code.">
+  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/compare.svg" width="880" alt="Add Superpowers to Codex: drag the plugin onto Codex, review the preview, then Apply. The map shows its new connection.">
 </picture>
 
 Open **Library** and choose **All projects** or one project. **List → Differences** shows
@@ -43,7 +55,7 @@ Its rules cover the servers you move into it. You can use Library on its own.
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/walkthrough-dark.svg">
     <source srcset="docs/images/walkthrough.svg">
-    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/walkthrough.svg" width="880" alt="Move docs from Claude Code into Kitden: preview the connection, review which clients get access, then Apply. The server is now shared by Claude Code, Codex and Cursor.">
+    <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/walkthrough.svg" width="880" alt="Share Context7: move it from Claude Code into Kitden, review the change, then Apply. Its two tools are available through the gateway.">
   </picture>
 </p>
 
@@ -51,7 +63,7 @@ Its rules cover the servers you move into it. You can use Library on its own.
 
 Look at each change first. Apply keeps a backup for Undo. **Show changes** shows the exact
 edit; Apply writes it and checks the result. Open **Changes → Undo** to restore it.
-If a file has newer edits, Kitden stops rather than overwriting them.
+If Undo would overwrite newer edits, Kitden stops.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/undo-dark.svg">
@@ -65,20 +77,23 @@ they can run code with your permissions. Undo does not reverse actions a tool al
 ## Try safely on a sample
 
 Explore the full page on temporary sample files. **Your settings and secrets are not read
-or changed**, even when you press Apply. The demo stays offline and starts no real clients
-or MCP servers.
+or changed**, even when you press Apply. The demo starts no real clients or MCP servers.
 
 Requires **macOS** and **[uv](https://docs.astral.sh/uv/)**. uv gets Python 3.13 if needed.
-This is a preview of the next release, run from source.
+The first run downloads Kitden; the demo itself stays offline.
 
-<!-- Checked 2026-10-28: https://docs.astral.sh/uv/concepts/projects/dependencies/#url -->
+<!-- Release checklist: docs/readme-media.md -->
 ```bash
-uvx --python 3.13 --from \
-  https://github.com/KonstantinStarovoytov/kitden/archive/refs/heads/main.zip kitden demo
+uvx --python 3.13 kitden demo
 ```
 
-In **Library → List**, find **pr-review** and press **+ Add** under **Codex**. Review,
-Apply, then try Undo in Changes. Press **Ctrl+C** in Terminal to stop and delete the sample.
+Kitden opens in your browser. If it does not, open the link printed in Terminal.
+
+1. In **Library → List**, find **superpowers** and press **+ Add** under **Codex**.
+2. Review and **Apply**. Codex now has a copy in the sample setup.
+3. Open **Changes → Undo** to remove that copy again.
+
+Press **Ctrl+C** in Terminal to stop and delete the sample.
 
 <details>
 <summary>Install uv</summary>
@@ -94,25 +109,30 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ## Install for your own setup
 
-Have Claude Code, Codex or Cursor installed, then run:
+Requires **macOS**, **[uv](https://docs.astral.sh/uv/)** and at least one of **Claude Code,
+Codex or Cursor**. Run once to install:
 
 ```bash
-uv tool install --python 3.13 \
-  https://github.com/KonstantinStarovoytov/kitden/archive/refs/heads/main.zip
+uv tool install --python 3.13 kitden
+```
+
+Then open Kitden whenever you need it:
+
+```bash
 kitden
 ```
 
-Opening Kitden reads your setup; edits wait for Apply. Run `kitden` to open it again.
+Your setup opens in the browser. Changes to client settings wait for Apply.
 If the command is not found, run `uv tool update-shell` and open a new Terminal window.
 
 <details>
 <summary>Privacy and backup limits</summary>
 
 - The page runs locally at `127.0.0.1`, with a private access link. No account or telemetry.
-- Secrets stay on this Mac. They go only to the server they belong to, or to a gateway you move that server into. Secret values are never shown or logged. Kitden goes online to reach remote servers you add and to read a GitHub marketplace when you add its link.
+- Credentials go to the server they belong to, or to a gateway you move that server into. Kitden masks secret fields and known token formats in its page and logs. It goes online to reach remote servers and read GitHub marketplaces you add.
 - Backups stay for 30 days, and the newest 100 changes always keep theirs. Changes also offers **Redo…** and **See it on the map**.
 - Undo of plugin removal installs the plugin again, but does not restore its saved options.
-- Kitden writes only in your home folder and your known projects. Project settings stay separate from the shared setup.
+- Kitden writes to your home folder, its own data folder, known projects and detected client settings folders. The preview shows which files will change. Project settings stay separate from the shared setup.
 
 </details>
 
@@ -127,4 +147,17 @@ The plain link is `cursor://anysphere.cursor-deeplink/mcp/install?name=kitden&co
 
 </details>
 
-[Roadmap](https://github.com/KonstantinStarovoytov/kitden/blob/main/ROADMAP.md) · [Issues](https://github.com/KonstantinStarovoytov/kitden/issues) · [Releases](https://github.com/KonstantinStarovoytov/kitden/releases) · [Development](https://github.com/KonstantinStarovoytov/kitden/blob/main/docs/development.md) · [Apache-2.0](https://github.com/KonstantinStarovoytov/kitden/blob/main/LICENSE)
+## Contributing
+
+Bug reports, documentation fixes and small improvements are welcome. For a larger change,
+open an issue first so we can agree on the scope.
+
+See [Contributing](https://github.com/KonstantinStarovoytov/kitden/blob/main/CONTRIBUTING.md) for setup, checks and what to include in a pull request.
+To report a bug, include your Kitden and client versions, steps to reproduce it, and what
+you expected. Remove secrets and private paths from screenshots and logs.
+
+## License
+
+Kitden is licensed under [Apache-2.0](https://github.com/KonstantinStarovoytov/kitden/blob/main/LICENSE).
+
+[Roadmap](https://github.com/KonstantinStarovoytov/kitden/blob/main/ROADMAP.md) · [Issues](https://github.com/KonstantinStarovoytov/kitden/issues) · [Releases](https://github.com/KonstantinStarovoytov/kitden/releases) · [Development](https://github.com/KonstantinStarovoytov/kitden/blob/main/docs/development.md)
