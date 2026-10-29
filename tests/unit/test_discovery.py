@@ -287,3 +287,17 @@ def test_single_plugins_are_not_preset_catalogs_and_legacy_default_is_removed(tm
     # An owner can still explicitly choose a plugin repository as a personal source.
     source.add_source("obra/superpowers")
     assert "obra/superpowers" in {s["id"] for s in Discovery(tmp_path).sources()}
+
+
+def test_custom_source_edit_remove_and_restore(tmp_path):
+    source = Discovery(tmp_path)
+    source.add_source("acme/skills")
+    source.change_source("edit", "https://github.com/acme/plugins", "acme/skills")
+    ids = {s["id"] for s in Discovery(tmp_path).sources()}
+    assert "acme/plugins" in ids and "acme/skills" not in ids
+    source.change_source("remove", "", "acme/plugins")
+    assert "acme/plugins" not in {s["id"] for s in source.sources()}
+    source.change_source("add", "acme/plugins", "")
+    assert "acme/plugins" in {s["id"] for s in source.sources()}
+    with pytest.raises(ValueError):
+        source.change_source("remove", "", "skills.sh")

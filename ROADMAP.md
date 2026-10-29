@@ -7,7 +7,23 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ## Done
 
+### Design proposal — not implemented
+
+- **Simpler add flow:** `Simple` frames in Pen Dev keep results and item details together.
+  Library owns skills and plugins; Gateway owns MCP servers. Sources are reached from
+  the catalog, with a single link field, automatic type detection and inline editing.
+  Removing a source keeps installed items and offers Undo. This is a design proposal.
+
+- **Catalog browsing:** Pen Dev screens in `design/kitden.pen` under `Discovery` explore
+  visible skill, plugin and MCP catalogs, item details, source add/edit/remove, preview and
+  recovery states. Show saved results immediately and refresh sources independently.
+  Source removal keeps installed items. These screens are a proposal, not shipped behavior.
+
 ### Not released yet
+
+- **Simpler catalog:** + Add loads initial results and opens item details beside the list.
+  Sources beside Search supports custom GitHub source editing, removal and immediate Undo.
+  Client selection stays explicit; all client writes use Preview, Apply, backup and verify.
 
 - **Online sources:** + Add opens Catalogs first, with a visible On this Mac alternative.
   Sources and kind filters use buttons. Individual plugins are not preset catalogs; searches

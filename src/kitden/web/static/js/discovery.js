@@ -68,10 +68,14 @@ export async function openDiscovery(kind = "all", options = {}) {
   const filters = el("div", "discovery-choices discovery-filters");
   filters.setAttribute("role", "group"); filters.setAttribute("aria-label", "Show");
   const status = el("p", "muted discovery-status"); status.setAttribute("role", "status");
-  const results = el("div", "add-list");
+  const results = el("div", "add-list discovery-results");
+  const inspector = el("section", "discovery-inspector");
+  inspector.setAttribute("aria-label", "Item details");
+  inspector.append(el("p", "muted", "Choose an item to see what it does and where to add it."));
+  const workspace = el("div", "discovery-workspace"); workspace.append(results, inspector);
   let sequence = 0;
   const invalidate = () => {
-    sequence++; search.disabled = false; status.textContent = ""; results.replaceChildren();
+    inspector.replaceChildren(el("p", "muted", "Choose an item to see its details.")); sequence++; search.disabled = false; status.textContent = ""; results.replaceChildren();
     sessions.delete(kind);
   };
   const remember = (answer) => sessions.set(kind, { ...model, query: input.value, answer });
@@ -79,7 +83,11 @@ export async function openDiscovery(kind = "all", options = {}) {
     results.replaceChildren();
     status.textContent = answer.results.length ? `${answer.results.length} results` : "No matches. Try another search or catalog.";
     for (const row of answer.results) {
-      const line = button("", () => itemDetails(row, answer.clients, kind, options), "res");
+      const line = button("", () => {
+        for (const sibling of results.children) sibling.setAttribute("aria-pressed", "false");
+        line.setAttribute("aria-pressed", "true");
+        itemDetails(row, answer.clients, kind, options, inspector).catch(() => { if (inspector.isConnected) fail(inspector, "Could not read this item. Select it to try again."); });
+      }, "res");
       const tile = el("span", "itile");
       tile.append(icon(row.kind === "skill" ? "sparkles" : row.kind === "plugin" ? "puzzle" : "server", 14));
       const text = el("span", "tx");
@@ -93,7 +101,7 @@ export async function openDiscovery(kind = "all", options = {}) {
     if (!available.some((source) => source.id === model.source)) model.source = available[0]?.id;
     sourceButtons.replaceChildren();
     for (const source of available) {
-      const choice = button(source.name, () => { model.source = source.id; invalidate(); paintSources(); }, "btn small");
+      const choice = button(source.name, () => { model.source = source.id; invalidate(); paintSources(); runSearch(); }, "btn small");
       choice.setAttribute("aria-pressed", String(source.id === model.source)); sourceButtons.append(choice);
     }
   };
@@ -101,14 +109,14 @@ export async function openDiscovery(kind = "all", options = {}) {
     filters.replaceChildren();
     if (kind === "mcp") return;
     for (const [id, label] of [["all", "All"], ["plugin", "Plugins"], ["skill", "Skills"]]) {
-      const choice = button(label, () => { model.kind = id; invalidate(); paintFilters(); paintSources(); }, "btn small");
+      const choice = button(label, () => { model.kind = id; invalidate(); paintFilters(); paintSources(); runSearch(); }, "btn small");
       choice.setAttribute("aria-pressed", String(model.kind === id)); filters.append(choice);
     }
   };
   paintSources(); paintFilters();
   input.addEventListener("input", invalidate);
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault(); const turn = ++sequence;
+  const runSearch = async () => {
+    const turn = ++sequence;
     search.disabled = true; status.textContent = "Searching…"; results.replaceChildren();
     try {
       const answer = await postJson("/api/discovery/search", { source: model.source, query: input.value, kind: model.kind });
@@ -117,7 +125,8 @@ export async function openDiscovery(kind = "all", options = {}) {
       remember(answer.data); draw(answer.data);
     } catch (error) { if (turn === sequence && body.isConnected) status.textContent = error.message; }
     finally { if (turn === sequence) search.disabled = false; }
-  });
+  };
+  form.addEventListener("submit", (event) => { event.preventDefault(); runSearch(); });
   const add = el("input"); add.placeholder = "owner/repo or a GitHub link";
   add.setAttribute("aria-label", "GitHub source");
   const sourceField = el("label", "field grow"); sourceField.append(el("span", null, "Repository"), add);
@@ -132,28 +141,64 @@ export async function openDiscovery(kind = "all", options = {}) {
       sources = answer.data.sources.filter((source) => kind === "mcp" ? ["mcp", "github"].includes(source.kind) : source.kind !== "mcp");
       const repo = add.value.trim().replace(/^https:\/\/github.com\//, "").replace(/\.git$/, "").replace(/\/$/, "");
       model.source = repo; invalidate(); paintSources();
-      status.textContent = "Source added. Search above, or leave the search empty to browse."; add.value = "";
+      status.textContent = "Source added."; add.value = ""; showSources(); more.open = false; runSearch();
     } catch (error) { if (body.isConnected) status.textContent = error.message; }
     finally { save.disabled = false; }
   });
   const more = el("details", "discovery-source-add");
   more.append(el("summary", null, "Add a GitHub source"), el("p", "muted", "Add a repository you want to browse. Client settings change only after Apply."), addForm);
-  body.append(form, filters, sourceLabel, sourceButtons, more, status, results);
+  const manage = button("Sources", () => { more.open = !more.open; }, "btn");
+  form.append(manage);
+  const sourceList = el("div", "discovery-source-list");
+  const showSources = () => {
+    sourceList.replaceChildren();
+    for (const source of sources.filter((s) => !["skills.sh", "mcp-registry", "anthropics/claude-plugins-official"].includes(s.id))) {
+      const line = el("div", "discovery-source-row");
+      line.append(el("span", null, source.name));
+      const change = async (operation, value = source.id) => {
+        const answer = await postJson("/api/discovery/sources", { operation, previous: source.id, source: value });
+        if (!body.isConnected) return;
+        if (!answer.ok) { status.textContent = answer.data?.detail || "Could not update source."; return false; }
+        sources = answer.data.sources.filter((s) => kind === "mcp" ? ["mcp", "github"].includes(s.kind) : s.kind !== "mcp");
+        invalidate(); paintSources(); showSources(); runSearch(); return true;
+      };
+      line.append(button("Edit", () => {
+        const edit = el("input"); edit.value = source.id; edit.setAttribute("aria-label", "Repository");
+        line.replaceChildren(edit, button("Save", () => change("edit", edit.value), "btn"), button("Cancel", showSources, "btn ghost"));
+      }, "btn ghost small"), button("Remove", async () => {
+        if (!await change("remove") || !body.isConnected) return;
+        const undo = button("Undo removal", async () => { await change("add"); undo.remove(); }, "btn");
+        sourceList.append(undo);
+      }, "btn ghost small"));
+      sourceList.append(line);
+    }
+  };
+  more.prepend(el("p", "muted", "Built-in catalogs are available above. Add public GitHub repositories here. Removing a source keeps installed items."), sourceList);
+  showSources();
+  body.append(form, filters, sourceLabel, sourceButtons, more, status, workspace);
   if (saved?.answer) draw(saved.answer);
+  else runSearch();
   input.focus();
 }
 
-async function itemDetails(row, clients, kind, options) {
+async function itemDetails(row, clients, kind, options, inspector = null) {
   const installed = row.installed;
   const loading = el("div", "body", "Reading source…");
-  openPanel([header("Online source", row.name, null), loading]);
+  if (inspector) inspector.replaceChildren(loading);
+  else openPanel([header("Online source", row.name, null), loading]);
   const answer = await postJson("/api/discovery/details", { id: row.id });
   if (!loading.isConnected) return;
   if (!answer.ok) { fail(loading, answer.data?.detail || "Could not read this item."); return; }
   row = { ...row, ...answer.data, installed };
+  if (row.kind === "skill" && row.content?.startsWith("---")) {
+    const front = row.content.split("---")[1] || "";
+    const match = front.match(/^description:\s*(.+)$/m);
+    if (match && ![">", "|", ">-", "|-"].includes(match[1].trim())) row.description = match[1].trim().replace(/^["']|["']$/g, "");
+  }
   const head = header("Online source", row.name, row.description || LABELS[row.kind]);
   const body = el("div", "body discovery");
-  body.append(button("Back to search", () => openDiscovery(kind, options), "btn ghost small"));
+  if (!inspector) body.append(button("Back to search", () => openDiscovery(kind, options), "btn ghost small"));
+  else body.append(el("h2", null, row.name), el("p", "muted", row.description || LABELS[row.kind]));
   const details = el("details");
   details.append(el("summary", null, "Source details"));
   details.append(el("p", "muted", `Source: ${row.repo || row.source}`));
@@ -192,5 +237,6 @@ async function itemDetails(row, clients, kind, options) {
     }
     else body.append(el("p", "muted", "Already installed, or no supported client is available."));
   }
-  openPanel([head, body]);
+  if (inspector) inspector.replaceChildren(body);
+  else openPanel([head, body]);
 }

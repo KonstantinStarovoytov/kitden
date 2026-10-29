@@ -1573,7 +1573,11 @@ def create_app(
             return JSONResponse({"sources": discovery.sources(), "offline": bool(stand_ins)})
         try:
             body = await request.json()
-            sources = discovery.add_source(str(body.get("source", "")))
+            sources = discovery.change_source(
+                str(body.get("operation", "add")),
+                str(body.get("source", "")),
+                str(body.get("previous", "")),
+            )
             return JSONResponse({"sources": sources})
         except (ValueError, TypeError) as error:
             return _error(str(error), 400)

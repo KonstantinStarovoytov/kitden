@@ -1245,3 +1245,30 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 .discovery details.discovery-source-add { margin: 14px 0 20px; }
 .discovery-status { margin: 0 0 10px; font-size: 12px; }
 .add-body > .discovery-modes { margin-bottom: 14px; }
+
+/* Catalog and details stay together; narrow windows keep a single reading column. */
+#drawer:has(.discovery-workspace) { width: min(850px, calc(100vw - 48px)); }
+.discovery-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 1fr); gap: 20px; align-items: start; }
+.discovery-results { min-width: 0; max-height: 55vh; overflow: auto; }
+.discovery-inspector { min-width: 0; padding: 20px; border: 1px solid var(--wire); border-radius: 10px; background: var(--inset); }
+.discovery-inspector .body { padding: 0; }
+.discovery-inspector h2 { font-size: 20px; overflow-wrap: anywhere; }
+.discovery-inspector .checks label { min-height: 44px; display: flex; align-items: center; }
+.discovery-source-row { display: flex; align-items: center; gap: 8px; padding-block: 8px; }
+.discovery-source-row > span { flex: 1; overflow-wrap: anywhere; }
+.discovery-source-row input { min-width: 0; flex: 1; }
+.discovery .res { min-height: 56px; }
+.discovery-inspector pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 700px) {
+  .discovery-workspace { grid-template-columns: minmax(0, 1fr); }
+  .discovery-search-form { flex-wrap: wrap; }
+  .discovery-search { flex-basis: 100%; }
+}
+.discovery:has(.discovery-workspace) { gap: 12px; }
+.discovery:has(.discovery-workspace) > p { margin-block: 0; }
+.discovery:has(.discovery-workspace) .discovery-modes { margin-bottom: 4px; }
+.discovery:has(.discovery-workspace) .discovery-filters { margin-bottom: 0; }
+.discovery:has(.discovery-workspace) .discovery-source-add { margin: 0; }
+.discovery-source-add > summary { display: none; }
+.discovery-source-add[open] { padding: 16px; border: 1px solid var(--wire); border-radius: 8px; }
+.discovery-results .res[aria-pressed="true"] { border-color: var(--focus); background: var(--route-soft); }

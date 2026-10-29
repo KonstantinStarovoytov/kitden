@@ -18,7 +18,12 @@ backups and checks as a local add.
   `SKILL.md` files, marketplace entries and standalone Claude plugins. For MCP, it reads
   `server.json` and `.mcp.json` files in the source.
 
-Search runs only when requested. Adding a source saves a Kitden preference, not a client
+Opening the catalog loads an initial selection. Switching sources or filters reloads it.
+Search results stay visible while an item opens in the adjacent details panel.
+Use Sources beside Search to add, edit or remove custom GitHub sources. Removing a source
+keeps installed items; Undo removal restores the source. Built-in catalogs stay available.
+
+Search runs on catalog open or when requested. Adding a source saves a Kitden preference, not a client
 marketplace. Installing its plugin adds the needed marketplace in the same preview.
 Private repositories, arbitrary website catalogs and API-key-protected catalogs are not
 supported in this first version. Smithery and Glama are not separate providers yet.

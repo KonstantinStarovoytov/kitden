@@ -408,3 +408,9 @@ Sources and kind filters use theme-aware buttons, not native selects. Explicit S
 network reads intentional. Results show a name, source and install status; opening one shows Details
 and the normal Preview form. Raw skill text and commands stay under Source details. Loading,
 empty and failed reads keep their own text, and late answers never replace another panel.
+
+Catalog results and the selected item's details share one Add panel. Keep the list and search
+in place while details load. Sources beside Search opens inline management for custom GitHub
+repositories; removing a source keeps installed items and offers Undo. Initial catalog reads
+start on open. Reopening the panel reuses its search results for this session. On narrow
+screens, details follow the results in one column. Client selection uses full-height labels.

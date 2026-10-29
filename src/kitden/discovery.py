@@ -149,6 +149,28 @@ class Discovery:
         (self.root / "sources.json").write_text(json.dumps({"repositories": repos}))
         return self.sources()
 
+    def change_source(self, operation: str, value: str, previous: str) -> list[dict]:
+        if operation == "add":
+            return self.add_source(value)
+        defaults = {s["id"] for s in DEFAULTS}
+        repos = [s["id"] for s in self.sources() if s["id"] not in defaults]
+        if previous not in repos:
+            raise ValueError("Choose a custom GitHub source.")
+        if operation == "edit":
+            repo = _repo(value)
+            if repo is None:
+                raise ValueError("Use a public GitHub repository: owner/repo.")
+            repos[repos.index(previous)] = repo
+        elif operation == "remove":
+            repos.remove(previous)
+        else:
+            raise ValueError("Choose add, edit or remove.")
+        self.root.mkdir(parents=True, exist_ok=True)
+        (self.root / "sources.json").write_text(
+            json.dumps({"repositories": list(dict.fromkeys(repos))})
+        )
+        return self.sources()
+
     def tree(self, repo: str) -> tuple[str, list[str]]:
         if _repo(repo) != repo:
             raise ValueError("This result has no supported GitHub source.")
@@ -279,10 +301,12 @@ class Discovery:
         if known is None:
             raise ValueError("Choose a known source.")
         query = query.strip()[:100]
-        if known["kind"] != "github" and len(query) < 3:
+        if query and known["kind"] != "github" and len(query) < 3:
             raise ValueError("Enter at least three characters to search online.")
         if source == "skills.sh":
-            data = read_json("https://skills.sh/api/search?" + urlencode({"q": query, "limit": 30}))
+            data = read_json(
+                "https://skills.sh/api/search?" + urlencode({"q": query or "skill", "limit": 30})
+            )
             rows = (
                 [
                     {
