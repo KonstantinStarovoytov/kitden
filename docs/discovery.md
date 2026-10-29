@@ -1,9 +1,10 @@
 # Online sources
 
-In Library, open **+ Add → Find online…** for plugins and skills. In Gateway, open
-**+ Add → Find online…** for MCP servers. Pick a source, search, then open a result.
+In Library, open **+ Add** for plugins and skills. In Gateway, open **+ Add** for MCP servers.
+**Catalogs** opens first; **On this Mac** browses local sources. Pick a visible source button,
+search, then open a result. Filters and sources use buttons, not drop-down menus.
 **Source details** shows the source, available version and the skill text or MCP configuration.
-Choose a client and Preview. Nothing changes in a client until Apply. Undo uses the same
+Choose clients explicitly and Preview. Back to search keeps the query and results. Nothing changes in a client until Apply. Undo uses the same
 backups and checks as a local add.
 
 ## Sources
@@ -11,7 +12,8 @@ backups and checks as a local add.
 - **skills.sh:** public skill search, including source repositories and install counts.
 - **Official MCP Registry:** active, latest server versions. Results include the full publisher
   name; being listed is not a safety guarantee. Search returns up to 100 entries.
-- **Claude plugins** and **Superpowers:** GitHub marketplaces, available out of the box.
+- **Claude plugins:** the official GitHub marketplace. Individual plugins such as Superpowers
+  are not preset catalogs. You can explicitly add their repositories as your own sources.
 - **Your GitHub sources:** add `owner/repo` or a public GitHub repository URL. Kitden finds
   `SKILL.md` files, marketplace entries and standalone Claude plugins. For MCP, it reads
   `server.json` and `.mcp.json` files in the source.

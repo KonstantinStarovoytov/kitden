@@ -3,7 +3,7 @@
 // All · Remote · Local pill. A click on a row, or a drag of it onto the map (gateway-drag.js), only
 // adds its change to the tray (tray.js); nothing is written before the tray's Apply. The panel
 // shows no path, address or command.
-import { openDiscovery } from "./discovery.js";
+import { addModes, openDiscovery } from "./discovery.js";
 import { button } from "./dom.js";
 import { matchRows, openAddPanel, shownList } from "./add-panel.js";
 import { getJson } from "./api.js";
@@ -103,13 +103,19 @@ const GATEWAY = {
     const key = keyFor(addBody(row));
     return inTray(key) ? takeOut(key) : addToTray(addBody(row));
   },
-  after: () => [button("Find online…", () => openDiscovery("mcp"), "btn ghost small add-more")],
+  before: () => [addModes("local", () => openAdd(), () => openLocalAdd())],
   drag: (event, row, node) => pressRow(event, { name: addName(row.id), kind: row.kind, body: addBody(row), node }),
 };
 
 // Open the panel beside the map (add-panel.js openAddPanel). `from` is the button that gets focus
 // back when it closes, the map's "+ Add" unless said.
 export function openAdd(options = {}) {
+  letGo();
+  if (options.from) options.from.focus({ preventScroll: true });
+  return openDiscovery("mcp", { local: () => openLocalAdd(options) });
+}
+
+export function openLocalAdd(options = {}) {
   return openAddPanel(GATEWAY, options);
 }
 

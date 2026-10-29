@@ -1210,7 +1210,7 @@ test('the List keeps its open servers when another project is picked', (t) => {
 
 // Phase 5 Task 4: a server the Add panel adds waits in preview on the map, at the end of its group
 // of the Kitden gateway, and lands there after Apply; an Undo plays it back.
-const { ADD_SERVER, openAdd, wasAdded } = await import('../../src/kitden/web/static/js/gateway-add.js');
+const { ADD_SERVER, openLocalAdd: openAdd, wasAdded } = await import('../../src/kitden/web/static/js/gateway-add.js');
 const { gatewayCard } = await import('../../src/kitden/web/static/js/gateway-details.js');
 const MARKET = [
   { id: 'test-helper@demo/test-status', name: 'test-status', plugin: 'test-helper', marketplace: 'demo', kind: 'remote', held: false, refusal: null },
@@ -1449,8 +1449,12 @@ test('the More door lets go of the selection, as + Add does, and an empty click 
     settle();
     assert.equal(selected(), 1, door);
     queue('/api/market-servers', { status: 200, json: { servers: MARKET } });
+    queue('/api/discovery/sources', { status: 200, json: { sources: [], offline: true } });
     if (door === 'more') await more.run();
     else press(box, 'add:servers');
+    await done();
+    const local = walk(pages['#drawer']).find((n) => n.tagName === 'BUTTON' && n.textContent === 'On this Mac');
+    local.listeners.click[0]();
     await done();
     settle();
     assert.deepEqual([selected(), panelState.current && panelState.current.type], [0, 'add'], door);

@@ -88,7 +88,7 @@ function addParts(config, rows, retry) {
   foot.append(icon("info", 13), el("span", null, config.foot));
   if (!rows) {
     const again = button("Try again", retry, "btn ghost small");
-    body.append(el("p", "muted", FAILED), again);
+    body.append(...(config.before ? config.before() : []), el("p", "muted", FAILED), again);
     return { nodes: [head, body, foot], focus: again, landed: () => again.focus(), list: null };
   }
   const list = rowList(rows, config);
@@ -100,7 +100,7 @@ function addParts(config, rows, retry) {
   search.append(icon("search", 14), input);
   const pill = kindPill(config.pill, (kind) => list.filter(input.value, kind));
   input.addEventListener("input", () => list.filter(input.value, pill.kind()));
-  body.append(search, pill.node, list.node, ...(config.after ? config.after() : []));
+  body.append(...(config.before ? config.before() : []), search, pill.node, list.node, ...(config.after ? config.after() : []));
   return { nodes: [head, body, foot], focus: input, landed: () => { input.focus(); pill.place(); }, list };
 }
 

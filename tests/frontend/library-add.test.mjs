@@ -114,6 +114,7 @@ let offers = null;
 globalThis.fetch = async (url, init = {}) => {
   const body = init.body ? JSON.parse(init.body) : null;
   sent.push({ url, body });
+  if (url === '/api/discovery/sources') return { ok: true, json: async () => ({ sources: [{ id: 'skills.sh', name: 'skills.sh', kind: 'skills' }, { id: 'anthropics/claude-plugins-official', name: 'Claude plugins', kind: 'github' }] }) };
   if (url === '/api/library-offers') {
     if (!offers) return { ok: false, status: 500, json: async () => ({}) };
     return { ok: true, status: 200, json: async () => ({ offers }) };
@@ -127,7 +128,7 @@ globalThis.fetch = async (url, init = {}) => {
   return { ok: true, status: 200, json: async () => ({}) };
 };
 
-const { allBody, libraryRowWords, openLibraryAdd } = await import('../../src/kitden/web/static/js/library-add.js');
+const { allBody, libraryRowWords, openLocalLibraryAdd: openLibraryAdd } = await import('../../src/kitden/web/static/js/library-add.js');
 const { initLibraryDetails } = await import('../../src/kitden/web/static/js/library-details.js');
 const { libraryTree, withWaiting } = await import('../../src/kitden/web/static/js/library-map.js');
 const { renderLibrary } = await import('../../src/kitden/web/static/js/library.js');
@@ -207,6 +208,10 @@ async function open(sample = MAP, rows = OFFERS) {
   const box = showMap(sample);
   const add = node(box, 'add:plugins');
   await press(add);
+  await wait(10);
+  assert.equal(panelState.current.type, 'discovery', '+ Add opens catalogs first');
+  assert.equal(find((n) => n.tagName === 'SELECT').length, 0, 'catalog choices use buttons');
+  await press(find((n) => n.tagName === 'BUTTON' && text(n) === 'On this Mac')[0]);
   await wait(10);
   return { box, add };
 }

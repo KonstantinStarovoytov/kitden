@@ -275,3 +275,15 @@ def test_online_plugin_adds_marketplace_in_same_preview_and_undo(tmp_path, monke
         undone = page.post(f"/api/changes/{change['id']}/undo", headers=POST).json()
         assert undone["state"] == "undone", undone
         assert (home / ".claude/settings.json").read_bytes() == before
+
+
+def test_single_plugins_are_not_preset_catalogs_and_legacy_default_is_removed(tmp_path):
+    source = Discovery(tmp_path)
+    assert "obra/superpowers" not in {s["id"] for s in source.sources()}
+    source.root.mkdir(parents=True)
+    (source.root / "sources.json").write_text(json.dumps(["obra/superpowers", "acme/skills"]))
+    assert "obra/superpowers" not in {s["id"] for s in source.sources()}
+    assert "acme/skills" in {s["id"] for s in source.sources()}
+    # An owner can still explicitly choose a plugin repository as a personal source.
+    source.add_source("obra/superpowers")
+    assert "obra/superpowers" in {s["id"] for s in Discovery(tmp_path).sources()}

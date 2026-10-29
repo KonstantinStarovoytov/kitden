@@ -90,6 +90,7 @@ let servers = null;
 globalThis.fetch = async (url, init = {}) => {
   const body = init.body ? JSON.parse(init.body) : null;
   sent.push({ url, body });
+  if (url === '/api/discovery/sources') return { ok: true, json: async () => ({ sources: [], offline: true }) };
   if (url === '/api/market-servers') {
     if (!servers) return { ok: false, status: 500, json: async () => ({}) };
     return { ok: true, status: 200, json: async () => ({ servers }) };
@@ -102,7 +103,7 @@ globalThis.fetch = async (url, init = {}) => {
   return { ok: true, status: 200, json: async () => ({}) };
 };
 
-const { ADD_SERVER, addRowWords, matchRows, openAdd } = await import('../../src/kitden/web/static/js/gateway-add.js');
+const { ADD_SERVER, addRowWords, matchRows, openLocalAdd: openAdd } = await import('../../src/kitden/web/static/js/gateway-add.js');
 const { gatewayCard } = await import('../../src/kitden/web/static/js/gateway-details.js');
 const { closePanel, initPanel, isPanelOpen, openPanel, panelState } = await import('../../src/kitden/web/static/js/panel.js');
 const { reducedMotion } = await import('../../src/kitden/web/static/js/motion.js');
@@ -297,11 +298,11 @@ test('a list with no server says so, and a failed read offers Try again', async 
     await openAdd({ from: addButton() });
     await wait(200);
     const body = drawer.children[1];
-    assert.deepEqual(body.children.map((n) => n.textContent), ['Could not read the marketplaces.', 'Try again']);
-    assert.equal(body.children[1].className, 'btn ghost small');
-    assert.equal(document.activeElement, body.children[1]);
+    assert.deepEqual(body.children.slice(1).map((n) => n.textContent), ['Could not read the marketplaces.', 'Try again']);
+    assert.equal(body.children[2].className, 'btn ghost small');
+    assert.equal(document.activeElement, body.children[2]);
     servers = SERVERS;
-    await press(body.children[1]);
+    await press(body.children[2]);
     await wait(200);
     assert.equal(rows().length, 4);
   } finally {
@@ -467,6 +468,10 @@ test("the Kitden gateway's More list opens the same panel", async () => {
   assert.equal(ADD_SERVER, 'Add a server…');
   try {
     await more.run();
+    await wait(10);
+    assert.equal(panelState.current.type, 'discovery');
+    const local = walk(drawer).find((n) => n.tagName === 'BUTTON' && text(n) === 'On this Mac');
+    fire(local, 'click');
     await wait(200);
     assert.equal(rows().length, 4);
     assert.equal(document.activeElement, search());

@@ -403,7 +403,8 @@ main.append(fold(details));
 
 ## Online discovery
 
-Find online extends the existing Add panels. A source selector and explicit Search keep network
-reads intentional. Results show a name, source and install status; opening one shows Details
++ Add opens Catalogs first. Catalogs and On this Mac are visible mode buttons in both panels.
+Sources and kind filters use theme-aware buttons, not native selects. Explicit Search keeps
+network reads intentional. Results show a name, source and install status; opening one shows Details
 and the normal Preview form. Raw skill text and commands stay under Source details. Loading,
 empty and failed reads keep their own text, and late answers never replace another panel.

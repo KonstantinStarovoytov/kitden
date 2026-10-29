@@ -36,7 +36,6 @@ DEFAULTS = [
     {"id": "skills.sh", "name": "skills.sh", "kind": "skills"},
     {"id": "mcp-registry", "name": "Official MCP Registry", "kind": "mcp"},
     {"id": "anthropics/claude-plugins-official", "name": "Claude plugins", "kind": "github"},
-    {"id": "obra/superpowers", "name": "Superpowers", "kind": "github"},
 ]
 
 
@@ -124,7 +123,13 @@ class Discovery:
             custom = json.loads((self.root / "sources.json").read_text())
         except (OSError, ValueError):
             custom = []
-        repos = [r for r in custom if isinstance(r, str) and _repo(r) == r]
+        legacy = isinstance(custom, list)
+        values = custom if legacy else custom.get("repositories", [])
+        repos = [
+            r
+            for r in values
+            if isinstance(r, str) and _repo(r) == r and not (legacy and r == "obra/superpowers")
+        ]
         return DEFAULTS + [
             {"id": r, "name": r, "kind": "github"}
             for r in repos
@@ -141,7 +146,7 @@ class Discovery:
         if len(repos) > 25:
             raise ValueError("Keep at most 25 GitHub sources.")
         self.root.mkdir(parents=True, exist_ok=True)
-        (self.root / "sources.json").write_text(json.dumps(repos))
+        (self.root / "sources.json").write_text(json.dumps({"repositories": repos}))
         return self.sources()
 
     def tree(self, repo: str) -> tuple[str, list[str]]:

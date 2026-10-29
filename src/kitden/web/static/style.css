@@ -1228,3 +1228,20 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 .discovery .res { width: 100%; text-align: left; }
 .discovery details { margin: 14px 0; }
 .discovery pre { max-height: 320px; overflow: auto; }
+
+/* Add starts with visible catalog/local modes, then one search and source buttons. */
+.discovery-modes { display: flex; gap: 4px; padding: 4px; margin-bottom: 18px; border: 1px solid var(--wire); border-radius: 8px; background: var(--inset); }
+.discovery-modes .btn { flex: 1; border-color: transparent; background: transparent; color: var(--ink-3); }
+.discovery-modes .btn[aria-pressed="true"] { border-color: var(--wire); background: var(--panel); color: var(--ink); }
+.discovery-search-form { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.discovery-search { display: flex; align-items: center; flex: 1; min-width: 0; gap: 8px; padding: 0 10px; border: 1px solid var(--wire-strong); border-radius: 6px; background: var(--inset); color: var(--ink-3); }
+.discovery-search:focus-within { border-color: var(--focus); background: var(--panel); }
+.discovery-search input { min-width: 0; width: 100%; height: 34px; padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; outline: none; }
+.discovery-search-form .btn { min-height: 36px; }
+.discovery-choices { display: flex; flex-wrap: wrap; gap: 6px; }
+.discovery-choices .btn[aria-pressed="true"] { border-color: var(--focus); background: var(--route-soft); color: var(--ink); }
+.discovery-filters { margin-bottom: 18px; }
+.discovery-label { margin: 0 0 8px; color: var(--ink-3); font-size: 12px; }
+.discovery details.discovery-source-add { margin: 14px 0 20px; }
+.discovery-status { margin: 0 0 10px; font-size: 12px; }
+.add-body > .discovery-modes { margin-bottom: 14px; }

@@ -3,7 +3,7 @@
 // (/api/library-offers) and an All · Plugins · Skills pill. A click adds a row for all projects to
 // every client that can take it and lacks it; a second click takes it out. A drag onto a client
 // adds it there only (library-map.js). Nothing is written before the tray's Apply.
-import { openDiscovery } from "./discovery.js";
+import { addModes, openDiscovery } from "./discovery.js";
 import { openAddPanel, shownList } from "./add-panel.js";
 import { getJson } from "./api.js";
 import { button, plural, reportError } from "./dom.js";
@@ -109,12 +109,19 @@ const LIBRARY = {
     return keys.length ? takeOut(keys) : addToTray(allBody(row));
   },
   drag: (event, row, node) => pressRow(event, { item: itemOf(row), node }),
-  after: () => [button("Find online…", () => openDiscovery(), "btn ghost small add-more"), button(ADD_MARKETPLACE, () => marketplaceForm({ back: ({ queued }) => queued && openLibraryAdd() }), "btn ghost small add-more")],
+  before: () => [addModes("local", () => openLibraryAdd(), () => openLocalLibraryAdd())],
+  after: () => [button(ADD_MARKETPLACE, () => marketplaceForm({ back: ({ queued }) => queued && openLibraryAdd() }), "btn ghost small add-more")],
 };
 
 // Open the panel beside the map. `from` is the button that gets focus back when it closes, the
 // map's "+ Add" unless said.
 export function openLibraryAdd(options = {}) {
+  letGoLibraryMap();
+  if (options.from) options.from.focus({ preventScroll: true });
+  return openDiscovery("all", { local: () => openLocalLibraryAdd(options) });
+}
+
+export function openLocalLibraryAdd(options = {}) {
   return openAddPanel(LIBRARY, options);
 }
 

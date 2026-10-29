@@ -9,7 +9,9 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not released yet
 
-- **Online sources:** Library and Gateway offer Find online. Search skills.sh, the official
+- **Online sources:** + Add opens Catalogs first, with a visible On this Mac alternative.
+  Sources and kind filters use buttons. Individual plugins are not preset catalogs; searches
+  survive a trip to Details and installation asks for clients explicitly. Search skills.sh, the official
   MCP Registry and selected GitHub sources. Review source details, then use the existing
   preview, Apply, verification and Undo for skills, plugins and supported MCP transports.
   Add public GitHub sources without changing client settings. The offline demo stays offline.
