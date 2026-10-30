@@ -16,6 +16,8 @@ export function installBody(row, clients, project = null) {
 }
 
 function fail(body, message) {
+  body.classList.remove("catalog-progress", "catalog-loading");
+  body.removeAttribute("role"); body.removeAttribute("aria-label"); body.removeAttribute("aria-busy");
   const note = el("p", "muted", message);
   note.setAttribute("role", "alert");
   body.replaceChildren(note);
@@ -51,7 +53,7 @@ export async function openDiscovery(kind = "all", options = {}) {
   openPanel([head, body]);
   let data;
   try { data = await getJson("/api/discovery/sources"); }
-  catch { loading.textContent = "Could not read catalogs. Close and try again."; return; }
+  catch { fail(loading, "Could not read catalogs. Close and try again."); return; }
   if (!body.isConnected) return;
   loading.remove();
   if (data.offline) {
@@ -207,10 +209,32 @@ async function itemDetails(row, clients, kind, options, inspector = null) {
   const loading = progress("Loading details");
   if (inspector) inspector.replaceChildren(loading);
   else openPanel([header("Online source", row.name, null), loading]);
-  const answer = await postJson("/api/discovery/details", { id: row.id });
+  let answer;
+  try { answer = await postJson("/api/discovery/details", { id: row.id }); }
+  catch {
+    if (loading.isConnected) fail(loading, "Could not read this item. Select it to try again.");
+    return;
+  }
   if (!loading.isConnected) return;
   if (!answer.ok) { fail(loading, answer.data?.detail || "Could not read this item."); return; }
   row = { ...row, ...answer.data, installed };
+  if (row.choices) {
+    const choices = el("div", "body discovery");
+    choices.append(el("h2", null, "Choose a skill"), el("p", "muted", "Choose the folder to review from this repository."));
+    for (const candidate of row.choices) {
+      const choice = button(candidate.name, () => {
+        const target = inspector || choices;
+        itemDetails({ ...candidate, installed: installed || [] }, clients, kind, options, target)
+          .catch(() => { if (target.isConnected) fail(target, "Could not read this skill. Select the result to try again."); });
+      }, "btn");
+      const details = el("details");
+      details.append(el("summary", null, "Folder"), el("p", "muted", candidate.path));
+      choices.append(choice, details);
+    }
+    if (inspector) inspector.replaceChildren(choices);
+    else loading.replaceWith(choices);
+    return;
+  }
   if (row.kind === "skill" && row.content?.startsWith("---")) {
     const front = row.content.split("---")[1] || "";
     const match = front.match(/^description:\s*(.+)$/m);

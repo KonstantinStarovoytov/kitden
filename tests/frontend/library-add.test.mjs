@@ -115,6 +115,7 @@ globalThis.fetch = async (url, init = {}) => {
   const body = init.body ? JSON.parse(init.body) : null;
   sent.push({ url, body });
   if (url === '/api/discovery/sources') return { ok: true, json: async () => ({ sources: [{ id: 'skills.sh', name: 'skills.sh', kind: 'skills' }, { id: 'anthropics/claude-plugins-official', name: 'Claude plugins', kind: 'github' }] }) };
+  if (url === '/api/discovery/search') return { ok: true, json: async () => ({ results: [], clients: [] }) };
   if (url === '/api/library-offers') {
     if (!offers) return { ok: false, status: 500, json: async () => ({}) };
     return { ok: true, status: 200, json: async () => ({ offers }) };
@@ -581,5 +582,40 @@ test('the panels show no path, address or command, and use no inline style or ma
     const code = readFileSync(new URL(`../../src/kitden/web/static/js/${name}`, import.meta.url), 'utf8');
     assert.doesNotMatch(code, /innerHTML|cssText|style\s*=|\.style\./, name);
     for (const field of ['url', 'command', 'args', 'path']) assert.doesNotMatch(code, new RegExp(`row\\.${field}\\b`), name);
+  }
+});
+
+test('catalog folder choices stay inline and a failed read stops progress', async () => {
+  const original = globalThis.fetch;
+  const { openDiscovery } = await import('../../src/kitden/web/static/js/discovery.js');
+  const calls = [];
+  globalThis.fetch = async (url, init = {}) => {
+    const request = init.body ? JSON.parse(init.body) : {};
+    if (url === '/api/discovery/search') return { ok: true, json: async () => ({ clients: ['codex'], results: [{ id: 'ambiguous', name: 'tidy', kind: 'skill', repo: 'acme/skills', installed: [] }] }) };
+    if (url === '/api/discovery/details') {
+      calls.push(request.id);
+      return request.id === 'ambiguous'
+        ? { ok: true, json: async () => ({ choices: [{ id: 'exact', name: 'tidy', kind: 'skill', path: 'one/tidy' }] }) }
+        : { ok: false, status: 400, json: async () => ({ detail: 'Source unavailable.' }) };
+    }
+    return original(url, init);
+  };
+  try {
+    await openDiscovery("mcp");
+    await flush();
+    const result = find((n) => n.classList.contains('res') && text(n).includes('tidy'))[0];
+    assert.ok(result);
+    await press(result);
+    await flush();
+    assert.ok(find((n) => n.tagName === 'H2' && text(n) === 'Choose a skill').length);
+    await press(find((n) => n.tagName === 'BUTTON' && text(n) === 'tidy')[0]);
+    await flush();
+    assert.deepEqual(calls, ['ambiguous', 'exact']);
+    assert.ok(find((n) => n.getAttribute('role') === 'alert' && text(n) === 'Source unavailable.').length);
+    assert.equal(find((n) => n.getAttribute('role') === 'progressbar').length, 0);
+    assert.equal(find((n) => n.classList.contains('catalog-loading') || n.classList.contains('catalog-progress')).length, 0);
+  } finally {
+    globalThis.fetch = original;
+    await done();
   }
 });

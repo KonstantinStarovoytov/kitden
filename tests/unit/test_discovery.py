@@ -318,3 +318,42 @@ def test_popular_skills_uses_leaderboard_counts(tmp_path, monkeypatch):
     rows = Discovery(tmp_path).search("skills.sh", "", "skill")
     assert [r["name"] for r in rows] == ["high", "low"]
     assert [r["installs"] for r in rows] == [100, 2]
+
+
+@pytest.mark.parametrize("name", ["tidy", "old-name"])
+def test_ambiguous_or_renamed_skill_offers_pinned_choices(tmp_path, monkeypatch, name):
+    skill_source(monkeypatch)
+    source = Discovery(tmp_path)
+    row = source.search("skills.sh", "tidy", "skill")[0]
+    source.results[row["id"]]["name"] = name
+    source.trees["acme/skills"] = (SHA, ["one/tidy/SKILL.md", "two/tidy/SKILL.md"])
+    choices = source.details(row["id"], {"codex"})["choices"]
+    assert [c["path"] for c in choices] == ["one/tidy", "two/tidy"]
+    assert all(c["commit"] == SHA for c in choices)
+    reopened = Discovery(tmp_path)
+    assert reopened.get(choices[1]["id"])["path"] == "two/tidy"
+    with pytest.raises(ValueError, match="choose a folder"):
+        source.skill(source.get(row["id"]), {"codex"})
+    assert not (tmp_path / ".agents").exists()
+
+
+def test_missing_skill_does_not_claim_multiple_matches(tmp_path, monkeypatch):
+    skill_source(monkeypatch)
+    source = Discovery(tmp_path)
+    row = source.search("skills.sh", "tidy", "skill")[0]
+    source.trees["acme/skills"] = (SHA, ["README.md"])
+    with pytest.raises(ValueError, match="no longer contains"):
+        source.details(row["id"], {"codex"})
+
+
+def test_details_pin_exact_folder_and_can_read_after_restart(tmp_path, monkeypatch):
+    skill_source(monkeypatch)
+    source = Discovery(tmp_path)
+    row = source.search("skills.sh", "tidy", "skill")[0]
+    detail = source.details(row["id"], {"codex"})
+    assert detail["path"] == "skills/tidy"
+    assert detail["commit"] == SHA
+    assert detail["description"] == "Tidy files."
+    reopened = Discovery(tmp_path)
+    monkeypatch.setattr(reopened, "tree", lambda _: pytest.fail("must use pinned choice"))
+    assert reopened.details(detail["id"], {"codex"})["content"] == detail["content"]

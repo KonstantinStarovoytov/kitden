@@ -1,6 +1,6 @@
 # Kitden roadmap
 
-Last updated: 2026-10-29
+Last updated: 2026-10-30
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
@@ -20,6 +20,9 @@ What Kitden does today and what comes next. Ideas and bugs:
   Source removal keeps installed items. These screens are a proposal, not shipped behavior.
 
 ### Not released yet
+
+- **Skill selection:** unmatched or duplicate catalog names offer repository folders inline.
+  Each choice pins its source version for preview. Failed reads stop the loading animation.
 
 - **Catalog fixes:** initial skills come from the public all-time leaderboard, ordered by
   reported installs. Loading animates the blocks themselves. Result rows grow for wrapped

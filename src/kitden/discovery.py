@@ -411,11 +411,46 @@ class Discovery:
                 raise ValueError("Search this source again before adding the item.") from None
         return self.results[key]
 
+    def skill_choices(self, row: dict) -> list[dict]:
+        """Pin folder choices for the normal preview flow."""
+        commit, paths = self.tree(row["repo"])
+        paths = [p for p in paths if PurePosixPath(p).name == "SKILL.md"]
+        matches = [p for p in paths if PurePosixPath(p).parent.name == row["name"]]
+        choices = []
+        for path in sorted(matches or paths):
+            candidate = {
+                k: v for k, v in row.items()
+                if k not in ("id", "installs", "description")
+            }
+            candidate.update(
+                path=str(PurePosixPath(path).parent), commit=commit,
+                name=PurePosixPath(path).parent.name or row["repo"].split("/")[-1],
+                description="Skill from this GitHub source.",
+            )
+            candidate["id"] = row_key(candidate)
+            self.results[candidate["id"]] = candidate
+            cache = self.root / "results"
+            cache.mkdir(parents=True, exist_ok=True)
+            (cache / f"{candidate['id']}.json").write_text(json.dumps(candidate))
+            choices.append(self.public(candidate))
+        return choices
+
     def details(self, key: str, found: set[str]) -> dict:
         row = self.get(key)
+        if row["kind"] == "skill" and row.get("path") is None:
+            choices = self.skill_choices(row)
+            exact = [c for c in choices if c["name"] == row["name"]]
+            if len(exact) == 1:
+                row = self.get(exact[0]["id"])
+            elif choices:
+                return {**self.public(row), "choices": choices}
+            else:
+                raise ValueError("This repository no longer contains any skills.")
         out = self.public(row)
         if row["kind"] == "skill":
             skill = self.skill(row, found)
+            out["name"] = skill["name"]
+            out["description"] = skill["description"]
             out["content"] = (Path(skill["path"]) / "SKILL.md").read_text()[:20000]
             out["commit"] = skill["commit"]
             if not skill["self_contained"]:
@@ -500,20 +535,15 @@ class Discovery:
         return folder
 
     def skill(self, row: dict, found: set[str]) -> dict:
+        if row.get("path") is None:
+            choices = self.skill_choices(row)
+            exact = [c for c in choices if c["name"] == row["name"]]
+            if len(exact) != 1:
+                raise ValueError("Open this skill and choose a folder before previewing.")
+            row = self.get(exact[0]["id"])
         repo = row["repo"]
-        commit, paths = self.tree(repo)
-        path = row.get("path")
-        if path is None:
-            matches = [
-                p
-                for p in paths
-                if p.endswith("/SKILL.md") and PurePosixPath(p).parent.name == row["name"]
-            ]
-            if len(matches) != 1:
-                raise ValueError(
-                    "Several folders match. Add the GitHub source and choose the exact skill."
-                )
-            path = str(PurePosixPath(matches[0]).parent)
+        commit = row["commit"]
+        path = row["path"]
         folder = self.checkout(repo, row.get("commit", commit), path) / safe_path(path)
         if not (folder / "SKILL.md").is_file():
             raise ValueError("The selected skill no longer has a SKILL.md file.")
