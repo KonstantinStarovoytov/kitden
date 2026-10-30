@@ -414,3 +414,10 @@ in place while details load. Sources beside Search opens inline management for c
 repositories; removing a source keeps installed items and offers Undo. Initial catalog reads
 start on open. Reopening the panel reuses its search results for this session. On narrow
 screens, details follow the results in one column. Client selection uses full-height labels.
+
+
+Catalog loading gently changes the existing surface opacity. Do not add loading words
+inside each block or use a sweeping highlight. Accessible progress labels remain available;
+reduced motion keeps the fill still. A single skill folder opens directly. Multiple choices
+stay in the inspector, and dragging the result uses the chosen folder. Long descriptions
+show a short excerpt with Read more so the client controls remain easy to reach.

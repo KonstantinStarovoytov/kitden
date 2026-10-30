@@ -21,6 +21,11 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not released yet
 
+- **Direct skill adding:** a single folder opens automatically, including root skills.
+  Dragging uses the reviewed folder. Details read only SKILL.md; Preview validates all files.
+  Root skills download in one archive request.
+  Loading uses a quiet surface pulse; long descriptions fold behind Read more.
+
 - **Skill selection:** unmatched or duplicate catalog names offer repository folders inline.
   Each choice pins its source version for preview. Failed reads stop the loading animation.
 

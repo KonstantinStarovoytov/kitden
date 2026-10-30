@@ -27,7 +27,6 @@ const sessions = new Map();
 function progress(label) {
   const node = el("div", "catalog-progress");
   node.setAttribute("role", "progressbar"); node.setAttribute("aria-label", label);
-  node.append(el("span", "muted", label));
   return node;
 }
 
@@ -97,7 +96,7 @@ export async function openDiscovery(kind = "all", options = {}) {
         for (const sibling of results.children) sibling.setAttribute("aria-pressed", "false");
         line.setAttribute("aria-pressed", "true");
         line.classList.add("catalog-loading"); line.setAttribute("aria-busy", "true");
-        itemDetails(row, answer.clients, kind, options, inspector).finally(() => { line.classList.remove("catalog-loading"); line.removeAttribute("aria-busy"); }).catch(() => { if (inspector.isConnected) fail(inspector, "Could not read this item. Select it to try again."); });
+        itemDetails(row, answer.clients, kind, options, inspector, (resolved) => Object.assign(row, resolved)).finally(() => { line.classList.remove("catalog-loading"); line.removeAttribute("aria-busy"); }).catch(() => { if (inspector.isConnected) fail(inspector, "Could not read this item. Select it to try again."); });
       }, "res");
       const tile = el("span", "itile");
       tile.append(icon(row.kind === "skill" ? "sparkles" : row.kind === "plugin" ? "puzzle" : "server", 14));
@@ -204,7 +203,7 @@ export async function openDiscovery(kind = "all", options = {}) {
   input.focus();
 }
 
-async function itemDetails(row, clients, kind, options, inspector = null) {
+async function itemDetails(row, clients, kind, options, inspector = null, onResolved = () => {}) {
   const installed = row.installed;
   const loading = progress("Loading details");
   if (inspector) inspector.replaceChildren(loading);
@@ -224,7 +223,7 @@ async function itemDetails(row, clients, kind, options, inspector = null) {
     for (const candidate of row.choices) {
       const choice = button(candidate.name, () => {
         const target = inspector || choices;
-        itemDetails({ ...candidate, installed: installed || [] }, clients, kind, options, target)
+        itemDetails({ ...candidate, installed: installed || [] }, clients, kind, options, target, onResolved)
           .catch(() => { if (target.isConnected) fail(target, "Could not read this skill. Select the result to try again."); });
       }, "btn");
       const details = el("details");
@@ -235,6 +234,7 @@ async function itemDetails(row, clients, kind, options, inspector = null) {
     else loading.replaceWith(choices);
     return;
   }
+  onResolved(row);
   if (row.kind === "skill" && row.content?.startsWith("---")) {
     const front = row.content.split("---")[1] || "";
     const match = front.match(/^description:\s*(.+)$/m);
@@ -243,7 +243,14 @@ async function itemDetails(row, clients, kind, options, inspector = null) {
   const head = header("Online source", row.name, row.description || LABELS[row.kind]);
   const body = el("div", "body discovery");
   if (!inspector) body.append(button("Back to search", () => openDiscovery(kind, options), "btn ghost small"));
-  else body.append(el("h2", null, row.name), el("p", "muted", row.description || LABELS[row.kind]));
+  else body.append(el("h2", null, row.name));
+  const description = row.description || LABELS[row.kind];
+  body.append(el("p", "muted", description.length > 240 ? description.slice(0, 237).trimEnd() + "…" : description));
+  if (description.length > 240) {
+    const more = el("details");
+    more.append(el("summary", null, "Read more"), el("p", "muted", description));
+    body.append(more);
+  }
   const details = el("details");
   details.append(el("summary", null, "Source details"));
   details.append(el("p", "muted", `Source: ${row.repo || row.source}`));

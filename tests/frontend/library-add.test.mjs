@@ -589,6 +589,8 @@ test('catalog folder choices stay inline and a failed read stops progress', asyn
   const original = globalThis.fetch;
   const { openDiscovery } = await import('../../src/kitden/web/static/js/discovery.js');
   const calls = [];
+  let success = false;
+  let dragged;
   globalThis.fetch = async (url, init = {}) => {
     const request = init.body ? JSON.parse(init.body) : {};
     if (url === '/api/discovery/search') return { ok: true, json: async () => ({ clients: ['codex'], results: [{ id: 'ambiguous', name: 'tidy', kind: 'skill', repo: 'acme/skills', installed: [] }] }) };
@@ -596,12 +598,14 @@ test('catalog folder choices stay inline and a failed read stops progress', asyn
       calls.push(request.id);
       return request.id === 'ambiguous'
         ? { ok: true, json: async () => ({ choices: [{ id: 'exact', name: 'tidy', kind: 'skill', path: 'one/tidy' }] }) }
-        : { ok: false, status: 400, json: async () => ({ detail: 'Source unavailable.' }) };
+        : success
+          ? { ok: true, json: async () => ({ id: 'exact', name: 'tidy', kind: 'skill', path: 'one/tidy', refusal: 'Read only fixture.' }) }
+          : { ok: false, status: 400, json: async () => ({ detail: 'Source unavailable.' }) };
     }
     return original(url, init);
   };
   try {
-    await openDiscovery("mcp");
+    await openDiscovery("mcp", { drag: (_event, row) => { dragged = { ...row }; } });
     await flush();
     const result = find((n) => n.classList.contains('res') && text(n).includes('tidy'))[0];
     assert.ok(result);
@@ -614,6 +618,15 @@ test('catalog folder choices stay inline and a failed read stops progress', asyn
     assert.ok(find((n) => n.getAttribute('role') === 'alert' && text(n) === 'Source unavailable.').length);
     assert.equal(find((n) => n.getAttribute('role') === 'progressbar').length, 0);
     assert.equal(find((n) => n.classList.contains('catalog-loading') || n.classList.contains('catalog-progress')).length, 0);
+    success = true;
+    await press(result);
+    await flush();
+    await press(find((n) => n.tagName === 'BUTTON' && text(n) === 'tidy')[0]);
+    await flush();
+    for (const listener of result.listeners.pointerdown) listener({});
+    assert.equal(dragged.id, 'exact', 'drag uses the folder selected in details');
+    assert.equal(dragged.path, 'one/tidy');
+
   } finally {
     globalThis.fetch = original;
     await done();

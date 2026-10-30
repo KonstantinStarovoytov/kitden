@@ -21,7 +21,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 from kitden.gateways import data_dir
 from kitden.marketplace_link import _repo
 from kitden.redact import redact
-from kitden.views.skills import _read_skill
+from kitden.views.skills import _read_skill, front_matter
 
 MAX_BYTES = 20_000_000
 HOSTS = {
@@ -440,23 +440,28 @@ class Discovery:
         if row["kind"] == "skill" and row.get("path") is None:
             choices = self.skill_choices(row)
             exact = [c for c in choices if c["name"] == row["name"]]
-            if len(exact) == 1:
-                row = self.get(exact[0]["id"])
+            if len(choices) == 1 or len(exact) == 1:
+                row = self.get((exact or choices)[0]["id"])
             elif choices:
                 return {**self.public(row), "choices": choices}
             else:
                 raise ValueError("This repository no longer contains any skills.")
         out = self.public(row)
         if row["kind"] == "skill":
-            skill = self.skill(row, found)
-            out["name"] = skill["name"]
-            out["description"] = skill["description"]
-            out["content"] = (Path(skill["path"]) / "SKILL.md").read_text()[:20000]
-            out["commit"] = skill["commit"]
-            if not skill["self_contained"]:
-                out["refusal"] = (
-                    "This skill needs files outside its folder. Add its plugin instead."
+            # Read only the description here. Preview validates the complete folder.
+            metadata = self.root / "metadata" / row["id"]
+            skill_md = metadata / "SKILL.md"
+            if not skill_md.is_file():
+                path = (PurePosixPath(row["path"]) / "SKILL.md").as_posix()
+                content = download(
+                    f"https://raw.githubusercontent.com/{row['repo']}/{row['commit']}/{quote(path)}"
                 )
+                metadata.mkdir(parents=True, exist_ok=True)
+                skill_md.write_bytes(content)
+            meta = front_matter(skill_md)
+            out["name"] = meta.get("name") or row["name"]
+            out["description"] = meta.get("description", "")
+            out["content"] = skill_md.read_text()[:20000]
         elif row["kind"] == "mcp":
             out["content"] = json.dumps(redact(row.get("entry") or {})[0], indent=2)
         else:
@@ -464,6 +469,9 @@ class Discovery:
         return out
 
     def checkout(self, repo: str, commit: str, subfolder: str = "") -> Path:
+        # A root skill is one archive read, not one request for every repository file.
+        if subfolder == ".":
+            subfolder = ""
         folder = (
             self.root
             / "cache"
@@ -538,9 +546,9 @@ class Discovery:
         if row.get("path") is None:
             choices = self.skill_choices(row)
             exact = [c for c in choices if c["name"] == row["name"]]
-            if len(exact) != 1:
+            if len(choices) != 1 and len(exact) != 1:
                 raise ValueError("Open this skill and choose a folder before previewing.")
-            row = self.get(exact[0]["id"])
+            row = self.get((exact or choices)[0]["id"])
         repo = row["repo"]
         commit = row["commit"]
         path = row["path"]

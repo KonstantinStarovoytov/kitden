@@ -357,3 +357,34 @@ def test_details_pin_exact_folder_and_can_read_after_restart(tmp_path, monkeypat
     reopened = Discovery(tmp_path)
     monkeypatch.setattr(reopened, "tree", lambda _: pytest.fail("must use pinned choice"))
     assert reopened.details(detail["id"], {"codex"})["content"] == detail["content"]
+
+
+def test_root_skill_opens_and_previews_without_folder_choice(tmp_path, monkeypatch):
+    skill_source(monkeypatch)
+    source = Discovery(tmp_path)
+    row = source.search("skills.sh", "tidy", "skill")[0]
+    source.trees["acme/skills"] = (SHA, ["SKILL.md", "reference.md"])
+    downloads = []
+    content = archive({
+        "repo/SKILL.md": "---\nname: tidy\ndescription: Tidy files.\n---\nRead before editing.",
+        "repo/reference.md": "Reference",
+    })
+
+    def fetch(url):
+        downloads.append(url)
+        if "raw.githubusercontent" in url:
+            return b"---\nname: tidy\ndescription: Tidy files.\n---\nRead before editing."
+        return content
+
+    monkeypatch.setattr(discovery, "download", fetch)
+    detail = source.details(row["id"], {"codex"})
+    assert "choices" not in detail
+    assert detail["path"] == "."
+    # A direct drag of the original search result resolves the same single folder.
+    skill = source.skill(source.get(row["id"]), {"codex"})
+    assert skill["name"] == "tidy"
+    assert downloads == [
+        f"https://raw.githubusercontent.com/acme/skills/{SHA}/SKILL.md",
+        f"https://codeload.github.com/acme/skills/zip/{SHA}",
+    ]
+    assert (source.checkout("acme/skills", SHA, ".") / "reference.md").read_text() == "Reference"
