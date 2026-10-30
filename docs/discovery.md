@@ -18,7 +18,9 @@ backups and checks as a local add.
   `SKILL.md` files, marketplace entries and standalone Claude plugins. For MCP, it reads
   `server.json` and `.mcp.json` files in the source.
 
-Opening the catalog loads an initial selection. Switching sources or filters reloads it.
+Opening skills.sh loads its public all-time leaderboard, ordered by reported installs
+(checked 2026-10-29). If the leaderboard format changes, enter a search to continue.
+Opening other catalogs loads an initial selection. Switching sources or filters reloads it.
 Search results stay visible while an item opens in the adjacent details panel. Search starts
 after a short typing pause (three characters), or with Search. Exact names rank first.
 Skills show install counts reported by skills.sh; MCP Registry does not supply a comparable

@@ -302,3 +302,19 @@ def test_custom_source_edit_remove_and_restore(tmp_path):
     assert "acme/plugins" in {s["id"] for s in source.sources()}
     with pytest.raises(ValueError):
         source.change_source("remove", "", "skills.sh")
+
+
+def test_popular_skills_uses_leaderboard_counts(tmp_path, monkeypatch):
+    payload = "1:" + json.dumps(
+        {
+            "initialSkills": [
+                {"name": "low", "source": "acme/skills", "installs": 2},
+                {"name": "high", "source": "acme/skills", "installs": 100},
+            ]
+        }
+    )
+    page = "<script>self.__next_f.push(" + json.dumps([1, payload]) + ")</script>"
+    monkeypatch.setattr(discovery, "download", lambda url: page.encode())
+    rows = Discovery(tmp_path).search("skills.sh", "", "skill")
+    assert [r["name"] for r in rows] == ["high", "low"]
+    assert [r["installs"] for r in rows] == [100, 2]

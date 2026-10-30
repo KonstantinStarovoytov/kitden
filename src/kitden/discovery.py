@@ -70,6 +70,35 @@ def read_json(url: str) -> dict:
     return value
 
 
+def popular_skills() -> list[dict]:
+    """Read the public all-time leaderboard (checked 2026-10-29)."""
+    page = download("https://skills.sh/").decode("utf-8")
+    for script in re.findall(r"<script[^>]*>(.*?)</script>", page, re.S):
+        prefix = "self.__next_f.push("
+        if not script.startswith(prefix):
+            continue
+        try:
+            payload = json.loads(script[len(prefix) :].rstrip(";)").strip())
+            text = payload[1]
+            marker = '"initialSkills":'
+            if not isinstance(text, str) or marker not in text:
+                continue
+            rows, _ = json.JSONDecoder().raw_decode(text.split(marker, 1)[1].lstrip())
+            if isinstance(rows, list):
+                return sorted(
+                    [
+                        r
+                        for r in rows
+                        if isinstance(r, dict) and isinstance(r.get("installs"), (int, float))
+                    ],
+                    key=lambda r: r["installs"],
+                    reverse=True,
+                )[:30]
+        except (ValueError, IndexError, TypeError):
+            continue
+    raise ValueError("Could not read popular skills. Enter a search to continue.")
+
+
 def safe_path(path: str) -> str:
     value = PurePosixPath(path)
     if value.is_absolute() or ".." in value.parts or "\\" in path:
@@ -304,8 +333,10 @@ class Discovery:
         if query and known["kind"] != "github" and len(query) < 3:
             raise ValueError("Enter at least three characters to search online.")
         if source == "skills.sh":
-            data = read_json(
-                "https://skills.sh/api/search?" + urlencode({"q": query or "skill", "limit": 30})
+            data = (
+                read_json("https://skills.sh/api/search?" + urlencode({"q": query, "limit": 30}))
+                if query
+                else {"skills": popular_skills()}
             )
             rows = (
                 [

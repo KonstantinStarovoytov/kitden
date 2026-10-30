@@ -1298,3 +1298,15 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 #drawer:has(.discovery-workspace) > .body { flex: none; }
 .discovery-inspector:has(> .muted:only-child) { display: none; }
 @media (max-width: 1100px) { .discovery-inspector:not(:empty) { scroll-margin-top: 20px; } }
+
+/* Catalog rows size to their text instead of inheriting compact local-offer heights. */
+.discovery-results .res { height: auto; flex: none; min-height: 62px; align-items: flex-start; }
+.discovery-results .res .tx b, .discovery-results .res .tx small { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; line-height: 1.4; }
+.discovery-results .res .st { align-self: center; }
+.discovery-search-form { min-width: 0; flex-wrap: wrap; }
+.discovery-search-form .discovery-search { flex: 1 1 220px; }
+.catalog-progress, .catalog-loading { position: relative; isolation: isolate; overflow: hidden; }
+.catalog-progress { min-height: 64px; justify-content: center; padding: 12px; box-sizing: border-box; border-radius: 8px; background: var(--inset); }
+.catalog-progress::before, .catalog-loading::before { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, transparent, var(--route-soft), transparent); background-size: 220% 100%; animation: catalog-surface 1.3s ease-in-out infinite; pointer-events: none; }
+@keyframes catalog-surface { from { background-position: 180% 0; } to { background-position: -80% 0; } }
+@media (prefers-reduced-motion: reduce) { .catalog-progress::before, .catalog-loading::before { animation: none; background: var(--route-soft); } }

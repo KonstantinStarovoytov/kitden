@@ -25,7 +25,7 @@ const sessions = new Map();
 function progress(label) {
   const node = el("div", "catalog-progress");
   node.setAttribute("role", "progressbar"); node.setAttribute("aria-label", label);
-  node.append(el("span", "catalog-progress-line"), el("span", "muted", label));
+  node.append(el("span", "muted", label));
   return node;
 }
 
@@ -94,7 +94,8 @@ export async function openDiscovery(kind = "all", options = {}) {
       const line = button("", () => {
         for (const sibling of results.children) sibling.setAttribute("aria-pressed", "false");
         line.setAttribute("aria-pressed", "true");
-        itemDetails(row, answer.clients, kind, options, inspector).catch(() => { if (inspector.isConnected) fail(inspector, "Could not read this item. Select it to try again."); });
+        line.classList.add("catalog-loading"); line.setAttribute("aria-busy", "true");
+        itemDetails(row, answer.clients, kind, options, inspector).finally(() => { line.classList.remove("catalog-loading"); line.removeAttribute("aria-busy"); }).catch(() => { if (inspector.isConnected) fail(inspector, "Could not read this item. Select it to try again."); });
       }, "res");
       const tile = el("span", "itile");
       tile.append(icon(row.kind === "skill" ? "sparkles" : row.kind === "plugin" ? "puzzle" : "server", 14));
@@ -135,14 +136,16 @@ export async function openDiscovery(kind = "all", options = {}) {
   });
   const runSearch = async () => {
     clearTimeout(searchTimer); const turn = ++sequence;
-    search.disabled = true; status.replaceChildren(progress("Searching catalogs"));
+    search.disabled = true; status.textContent = "Searching…";
+    if (!results.children.length) for (let i = 0; i < 3; i++) results.append(progress("Loading results"));
+    for (const block of results.children) block.classList.add("catalog-loading");
     try {
       const answer = await postJson("/api/discovery/search", { source: model.source, query: input.value, kind: model.kind });
       if (turn !== sequence || !body.isConnected) return;
       if (!answer.ok) throw new Error(answer.data?.detail || "Could not search this catalog. Try again.");
       remember(answer.data); draw(answer.data);
-    } catch (error) { if (turn === sequence && body.isConnected) status.textContent = error.message; }
-    finally { if (turn === sequence) search.disabled = false; }
+    } catch (error) { if (turn === sequence && body.isConnected) { status.textContent = error.message; for (const block of [...results.children]) if (block.classList.contains("catalog-progress")) block.remove(); } }
+    finally { if (turn === sequence) { search.disabled = false; for (const block of results.children) block.classList.remove("catalog-loading"); } }
   };
   form.addEventListener("submit", (event) => { event.preventDefault(); runSearch(); });
   const add = el("input"); add.placeholder = "owner/repo or a GitHub link";

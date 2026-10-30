@@ -21,6 +21,10 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not released yet
 
+- **Catalog fixes:** initial skills come from the public all-time leaderboard, ordered by
+  reported installs. Loading animates the blocks themselves. Result rows grow for wrapped
+  names and source labels; search controls wrap in narrow panels.
+
 - **Compact catalog:** a narrower adaptive panel leaves map targets visible. Online items
   use existing drag previews for clients or the gateway. Search waits for a short typing
   pause and ranks exact names first; skills show source-reported install counts. Details
