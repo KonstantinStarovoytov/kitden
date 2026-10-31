@@ -25,7 +25,8 @@ What Kitden does today and what comes next. Ideas and bugs:
   stay in collapsible groups. MCP search tries separator variants; local search matches words.
   Declared required headers and environment values can be entered before Preview and
   saved to Keychain by Apply. Remote access is checked with supplied headers; browser OAuth
-  remains unsupported and is explained in the form.
+  remains unsupported and is explained in the form. A catalog server in preview shows on the
+  map in its group, and the catalog panel closes so it can be seen.
 
 - **Catalog separation:** the MCP picker excludes the built-in plugin catalog.
   Personal GitHub sources still offer MCP servers there. Known unsupported entries

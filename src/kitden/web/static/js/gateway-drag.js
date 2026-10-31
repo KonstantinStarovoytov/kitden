@@ -407,6 +407,7 @@ function dropAdd(drag, at) {
     if (inTray(key)) {
       const slot = onMap.layout.blocks.find((b) => b.id === `slot:${name}`);
       flyGhost(drag, slot && pageBox(onMap, slot), ONTO_SLOT);
+      if (drag.block.onDrop) drag.block.onDrop();
       return true;
     }
     onMap.adding = null;

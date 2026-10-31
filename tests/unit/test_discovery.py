@@ -488,6 +488,7 @@ def test_token_preview_apply_and_undo_use_keychain(tmp_path, monkeypatch, fake_k
             },
             headers=POST,
         ).json()["results"][0]
+        assert row["remote"] is True and "entry" not in row
         request = {
             "action": "gateway.add",
             "targets": [],

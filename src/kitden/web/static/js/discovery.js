@@ -13,10 +13,16 @@ export function sourceFitsPage(source, kind) {
 }
 
 
+// The kind ("remote" or "local") of each online server a body was made for, by its server param:
+// the Gateway map puts its preview in that group.
+const serverKinds = new Map();
+export const onlineKind = (server) => serverKinds.get(server) || null;
+
 export function installBody(row, clients, project = null) {
   const params = { discovery: row.id };
   const action = row.kind === "mcp" ? "gateway.add" : `${row.kind}.install`;
   params[row.kind === "mcp" ? "server" : row.kind] = row.kind === "mcp" ? `online@registry/${row.name.split("/").pop()}` : row.name;
+  if (row.kind === "mcp") serverKinds.set(params.server, row.remote ? "remote" : "local");
   if (project && row.kind !== "mcp") params.project = project;
   return { action, targets: [...clients].map((client) => ({ client })), params };
 }
@@ -102,7 +108,7 @@ export async function openDiscovery(kind = "all", options = {}) {
         for (const sibling of results.children) sibling.setAttribute("aria-pressed", "false");
         line.setAttribute("aria-pressed", "true");
         line.classList.add("catalog-loading"); line.setAttribute("aria-busy", "true");
-        itemDetails(row, answer.clients, kind, options, inspector, (resolved) => Object.assign(row, resolved)).finally(() => { line.classList.remove("catalog-loading"); line.removeAttribute("aria-busy"); }).catch(() => { if (inspector.isConnected) fail(inspector, "Could not read this item. Select it to try again."); });
+        itemDetails(row, answer.clients, kind, options, inspector, (resolved) => { Object.assign(row, resolved); if (row.access_required) needsToken(line); }).finally(() => { line.classList.remove("catalog-loading"); line.removeAttribute("aria-busy"); }).catch(() => { if (inspector.isConnected) fail(inspector, "Could not read this item. Select it to try again."); });
       }, "res");
       const tile = el("span", "itile");
       tile.append(icon(row.kind === "skill" ? "sparkles" : row.kind === "plugin" ? "puzzle" : "server", 14));
@@ -110,21 +116,28 @@ export async function openDiscovery(kind = "all", options = {}) {
       const displayName = row.kind === "mcp" ? row.name.split("/").pop() : row.name;
       const publisher = row.kind === "mcp" ? row.name.split("/").slice(0, -1).join("/").replace(/^io\.github\./, "") : row.repo || row.source;
       text.append(el("b", null, displayName), el("small", null, publisher || row.source));
-      line.append(tile, text, el("span", "st", row.held ? "In gateway" : row.refusal ? "Unavailable" : row.setup?.length ? "Set up" : row.installed.length ? "Installed" : "Review"));
+      line.append(tile, text, el("span", "st", row.held ? "In gateway" : row.refusal ? "Unavailable" : row.setup?.length ? "Set up" : row.installed.length ? "Installed" : ""));
       if (Number.isFinite(row.installs)) text.append(el("small", "catalog-popularity", `${new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(row.installs)} installs`));
       if (!row.held && !row.refusal && !row.setup?.length && !row.installed.length && options.drag) {
         line.classList.add("drags");
-        const grip = icon("grip-vertical", 14); grip.classList.add("drag-handle"); line.prepend(grip);
+        line.prepend(icon("grip-vertical", 12, "ic grip"));
         line.addEventListener("pointerdown", (event) => { if (!row.access_required) options.drag(event, row, answer.clients, line); });
         line.title = row.kind === "mcp" ? "Drag to the gateway to preview" : "Drag onto a client to preview";
       }
       results.append(line);
     }
   };
+  // A server that turned out to need a token cannot be dropped: its row says so and loses its grip.
+  const needsToken = (line) => {
+    line.classList.remove("drags"); line.querySelector(".grip")?.remove();
+    line.querySelector(".st").textContent = "Needs token"; line.title = "Needs a token. Click to review.";
+  };
   const paintSources = () => {
     const available = sources.filter((source) => model.kind !== "plugin" || source.kind === "github");
     if (!available.some((source) => source.id === model.source)) model.source = available[0]?.id;
     sourceButtons.replaceChildren();
+    // One catalog is no choice: its label and chip stay hidden.
+    sourceLabel.hidden = sourceButtons.hidden = available.length < 2;
     for (const source of available) {
       const choice = button(source.name, () => { model.source = source.id; invalidate(); paintSources(); runSearch(); }, "btn small");
       choice.setAttribute("aria-pressed", String(source.id === model.source)); sourceButtons.append(choice);
@@ -207,7 +220,7 @@ export async function openDiscovery(kind = "all", options = {}) {
   more.prepend(el("p", "muted", "Built-in catalogs are available above. Add public GitHub repositories here. Removing a source keeps installed items."), sourceList);
   showSources();
   const hint = el("p", "muted discovery-hint", kind === "mcp"
-    ? "Click to review · drag a server onto the gateway to preview."
+    ? "Click to review · drag onto the gateway to preview."
     : "Click to review · drag onto a client to preview.");
   body.append(form, filters, sourceLabel, sourceButtons, more, hint, status, workspace);
   if (saved?.answer) draw(saved.answer);
@@ -276,13 +289,13 @@ async function itemDetails(row, clients, kind, options, inspector = null, onReso
   if (row.path) details.append(el("p", "muted", `Skill folder: ${row.path}`));
   if (row.content) details.append(el("pre", "diff", row.content));
   body.append(details);
-  body.append(el("p", "muted", "Review the source before installing. Plugins, skills and servers can run code through your coding client."));
+  if (row.kind !== "mcp") body.append(el("p", "muted", "Review the source before installing. Plugins and skills can run code through your coding client."));
   if (row.held) body.append(el("p", "muted", "Already in the Kitden gateway."));
   else if (row.refusal) body.append(el("p", "muted", row.refusal));
   else if (row.kind === "mcp") {
     const chosen = new Set(["gateway"]);
-    body.append(el("p", "muted", "Adds to the gateway for all projects. Preview checks access; adding alone does not confirm that tools work."));
-    if (row.access_required) body.append(el("p", "why", "This server requires access. Enter a supported token to continue. If it only supports browser sign-in, Kitden cannot connect it yet."));
+    body.append(el("p", "muted", "Adds to the gateway for all projects."));
+    if (row.access_required) body.append(el("p", "why", "Needs an access token. Browser sign-in is not supported yet."));
     if (row.access_note) body.append(el("p", "muted", row.access_note));
     const fields = el("div", "access-fields");
     const inputs = [];
@@ -297,18 +310,12 @@ async function itemDetails(row, clients, kind, options, inspector = null, onReso
     for (const definition of definitions) {
       const label = el("label", "field");
       const input = el("input"); input.type = "password"; input.autocomplete = "off";
-      input.required = !definition.optional;
       input.placeholder = definition.prefix ? "Paste token" : "Enter value";
       label.append(el("span", null, definition.label), input);
       box.append(label);
       inputs.push({ definition, input });
     }
-    if (definitions.length) {
-      box.append(el("p", "muted", row.access_host
-        ? `Preview checks it with ${row.access_host}. Apply saves it in macOS Keychain.`
-        : "Apply saves it in macOS Keychain."));
-      if (row.remote) box.append(el("p", "muted", "Browser sign-in (OAuth) is not supported yet."));
-    }
+    if (definitions.length) box.append(el("p", "muted", "Saved in macOS Keychain on Apply."));
     const requestBody = () => {
       const request = installBody(row, []);
       for (const { definition: f, input } of inputs) {
@@ -318,7 +325,12 @@ async function itemDetails(row, clients, kind, options, inspector = null, onReso
       }
       return request;
     };
-    body.append(addFormBody(fields, chosen, requestBody, (request) => review(request)));
+    // Preview waits for every required value; the page's own words say what is missing.
+    const form = addFormBody(fields, chosen, requestBody, (request) => review(request).then(() => options.added?.(request)));
+    const submit = form.querySelector('button[type="submit"]');
+    const ready = () => { submit.disabled = inputs.some(({ definition, input }) => !definition.optional && !input.value.trim()); };
+    form.addEventListener("input", ready); ready();
+    body.append(form);
   } else {
     const available = clients.filter((c) => (row.kind !== "plugin" || ["claude_code", "codex"].includes(c)) && !row.installed.includes(c));
     const chosen = new Set();

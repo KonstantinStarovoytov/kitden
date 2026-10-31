@@ -487,7 +487,11 @@ class Discovery:
         return [self.public(row) for row in rows]
 
     def public(self, row: dict) -> dict:
-        return {k: v for k, v in row.items() if k not in ("entry", "formats")}
+        out = {k: v for k, v in row.items() if k not in ("entry", "formats")}
+        if row["kind"] == "mcp":
+            # The map shows a dropped server in its group; the entry itself stays private.
+            out["remote"] = bool((row.get("entry") or {}).get("url"))
+        return out
 
     def get(self, key: str) -> dict:
         if key not in self.results:
@@ -554,18 +558,13 @@ class Discovery:
             out["content"] = skill_md.read_text()[:20000]
         elif row["kind"] == "mcp":
             out["content"] = json.dumps(redact(row.get("entry") or {})[0], indent=2)
-            out["remote"] = bool((row.get("entry") or {}).get("url"))
-            if out["remote"]:
-                out["access_host"] = urlsplit(row["entry"]["url"]).hostname
-                if not row.get("setup"):
-                    from kitden.changes.actions import needs_sign_in
+            if out["remote"] and not row.get("setup"):
+                from kitden.changes.actions import needs_sign_in
 
-                    try:
-                        out["access_required"] = needs_sign_in(row["entry"]["url"], {})
-                    except OSError:
-                        out["access_note"] = (
-                            "Could not reach this server. Preview will check again."
-                        )
+                try:
+                    out["access_required"] = needs_sign_in(row["entry"]["url"], {})
+                except OSError:
+                    out["access_note"] = "Could not reach this server. Preview will check again."
         else:
             out["content"] = "Installs through the client's plugin command from " + row["repo"]
         return out

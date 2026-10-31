@@ -3,10 +3,11 @@
 // All · Remote · Local pill. A click on a row, or a drag of it onto the map (gateway-drag.js), only
 // adds its change to the tray (tray.js); nothing is written before the tray's Apply. The panel
 // shows no path, address or command.
-import { addModes, installBody, openDiscovery } from "./discovery.js";
+import { addModes, installBody, onlineKind, openDiscovery } from "./discovery.js";
 import { button } from "./dom.js";
 import { matchRows, openAddPanel, shownList } from "./add-panel.js";
 import { getJson } from "./api.js";
+import { closePanel } from "./panel.js";
 import { KIND, SERVER_ICONS } from "./gateway-details.js";
 import { pressRow } from "./gateway-drag.js";
 import { addToTray, inTray, keyFor, onTray, takeOut } from "./tray.js";
@@ -36,7 +37,7 @@ onTray((t) => {
 });
 // The kind of each row read so far, by row id: the map puts a row of the tray in its group by it.
 const kinds = new Map();
-export const addKind = (id) => kinds.get(id) || null;
+export const addKind = (id) => kinds.get(id) || onlineKind(id);
 // The name of the server a row adds: its id is "<plugin>@<marketplace>/<name>".
 export const addName = (id) => id.slice(id.indexOf("/") + 1);
 // Whether an Apply since the page loaded added a server of this name, and the gateway holds it.
@@ -112,7 +113,13 @@ const GATEWAY = {
 export function openAdd(options = {}) {
   letGo();
   if (options.from) options.from.focus({ preventScroll: true });
-  return openDiscovery("mcp", { local: () => openLocalAdd(options), drag: (event, row, clients, node) => pressRow(event, { name: row.name, kind: row.kind, body: installBody(row, []), node }) });
+  // The catalog panel covers the map's servers: once a server is in preview it closes, so its
+  // block can be seen growing out of the gateway.
+  const added = (body) => { if (inTray(keyFor(body))) closePanel(); };
+  return openDiscovery("mcp", { local: () => openLocalAdd(options), added, drag: (event, row, clients, node) => {
+    const body = installBody(row, []);
+    pressRow(event, { name: addName(body.params.server), kind: addKind(body.params.server), body, node, onDrop: () => added(body) });
+  } });
 }
 
 export function openLocalAdd(options = {}) {

@@ -103,7 +103,8 @@ globalThis.fetch = async (url, init = {}) => {
   return { ok: true, status: 200, json: async () => ({}) };
 };
 
-const { ADD_SERVER, addRowWords, matchRows, openLocalAdd: openAdd } = await import('../../src/kitden/web/static/js/gateway-add.js');
+const { ADD_SERVER, addKind, addRowWords, matchRows, openLocalAdd: openAdd } = await import('../../src/kitden/web/static/js/gateway-add.js');
+const { installBody } = await import('../../src/kitden/web/static/js/discovery.js');
 const { gatewayCard } = await import('../../src/kitden/web/static/js/gateway-details.js');
 const { closePanel, initPanel, isPanelOpen, openPanel, panelState } = await import('../../src/kitden/web/static/js/panel.js');
 const { reducedMotion } = await import('../../src/kitden/web/static/js/motion.js');
@@ -576,4 +577,12 @@ test('the panel shows no path, address or command, and uses no inline style or m
   const code = readFileSync(new URL('../../src/kitden/web/static/js/gateway-add.js', import.meta.url), 'utf8');
   assert.doesNotMatch(code, /innerHTML|cssText|style\s*=|\.style\./);
   for (const field of ['url', 'command', 'args', 'path']) assert.doesNotMatch(code, new RegExp(`row\\.${field}\\b`));
+});
+
+test('an online server gets its kind, so the map shows its preview in that group', () => {
+  const remote = installBody({ id: 'a', kind: 'mcp', name: 'com.example/agent-docs', remote: true }, []);
+  const local = installBody({ id: 'b', kind: 'mcp', name: 'io.github.x/files', remote: false }, []);
+  assert.equal(addKind(remote.params.server), 'remote');
+  assert.equal(addKind(local.params.server), 'local');
+  assert.equal(addKind('online@registry/unknown'), null);
 });

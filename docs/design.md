@@ -424,7 +424,9 @@ show a short excerpt with Read more so the client controls remain easy to reach.
 
 Secondary actions remain collapsible: More toggles them open and closed; longer lists
 split into project rules, move/remove and maintenance. Avoid exposing every operation as
-a permanent button. Catalog rows use one drag grip and a short hint shared by Library and
-Gateway. Required access fields show before Preview. Credentials are password inputs and
-never appear in source details. Say that Preview checks access and that tools may still need
-verification; do not describe a saved server as ready solely because it was added.
+a permanent button. Catalog rows use the same grip as the local Add rows and a short hint.
+A free row shows no status word; a server that needs a token says "Needs token" and has no
+grip. Its details say so in one line, and Preview stays off until every required value is
+entered. Credentials are password inputs and never appear in source details. On the Gateway,
+the catalog panel closes once a server is in preview, so its block is seen growing out of the
+gateway.
