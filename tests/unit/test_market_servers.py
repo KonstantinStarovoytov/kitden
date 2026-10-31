@@ -375,8 +375,8 @@ def test_an_oauth_server_is_refused_at_preview_and_nothing_is_written(home, monk
     _refused(
         home,
         TEST_STATUS,
-        "test-status requires valid access. Enter a token in its catalog details. "
-        "Browser OAuth sign-in is not supported yet.",
+        "test-status needs access. If it gives a token, enter it in its catalog details. "
+        "Browser sign-in is not supported yet.",
     )
 
 

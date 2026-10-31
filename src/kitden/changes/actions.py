@@ -949,10 +949,15 @@ def gateway_add_steps(
             oauth = (sign_in or needs_sign_in)(server["url"], server.get("headers") or {})
         except OSError:
             raise ValueError(f"Kitden could not reach {name}.") from None
+        if oauth and server.get("headers"):
+            raise ValueError(
+                f"{name} did not accept this access. Check the token. Some servers accept "
+                "only browser sign-in, which Kitden does not support yet."
+            )
         if oauth:
             raise ValueError(
-                f"{name} requires valid access. Enter a token in its catalog details. "
-                "Browser OAuth sign-in is not supported yet."
+                f"{name} needs access. If it gives a token, enter it in its catalog details. "
+                "Browser sign-in is not supported yet."
             )
     step = _server_step(home, name, server, None, keychain_run)
     assert step is not None  # a new server always has its step

@@ -321,7 +321,9 @@ async function itemDetails(row, clients, kind, options, inspector = null, onReso
       for (const { definition: f, input } of inputs) {
         if (!input.value.trim()) continue;
         request.params[f.field] ||= {};
-        request.params[f.field][f.name] = (f.prefix || "") + input.value.trim();
+        // A pasted "Bearer …" keeps one prefix.
+        const value = f.prefix ? input.value.trim().replace(/^bearer\s+/i, "") : input.value.trim();
+        request.params[f.field][f.name] = (f.prefix || "") + value;
       }
       return request;
     };

@@ -512,3 +512,9 @@ def test_token_preview_apply_and_undo_use_keychain(tmp_path, monkeypatch, fake_k
         undone = page.post(f"/api/changes/{change['id']}/undo", headers=POST)
         assert undone.json()["state"] == "undone", undone.text
         assert "SENTINEL_TEST_TOKEN" not in fake_keychain.read_text()
+        # A token the server turns down says so, and is not echoed back.
+        monkeypatch.setattr(actions, "needs_sign_in", lambda url, headers: True)
+        refused = page.post("/api/changes/preview", json=request, headers=POST)
+        assert refused.status_code >= 400
+        assert "did not accept this access" in refused.text
+        assert "SENTINEL_TEST_TOKEN" not in refused.text
