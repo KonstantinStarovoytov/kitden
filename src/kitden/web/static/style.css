@@ -1307,3 +1307,17 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 .catalog-progress::before, .catalog-loading::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--wire); opacity: .12; animation: catalog-breathe 1.6s ease-in-out infinite alternate; pointer-events: none; }
 @keyframes catalog-breathe { to { opacity: .3; } }
 @media (prefers-reduced-motion: reduce) { .catalog-progress::before, .catalog-loading::before { animation: none; } }
+
+/* Shared, reversible disclosure for secondary actions. */
+.detail-actions { display: flex; flex-direction: column; gap: 10px; }
+.detail-actions[hidden] { display: none; }
+.detail-actions details > .stack { margin-top: 8px; }
+.detail-actions summary { cursor: pointer; color: var(--ink-2); font-size: 12px; padding: 6px 0; }
+.discovery-hint { font-size: 11px; margin: 0; }
+.discovery-results .drag-handle { flex: none; align-self: center; color: var(--ink-3); }
+.access-fields { display: flex; flex-direction: column; gap: 10px; min-width: 0; flex: 1 1 100%; }
+.access-fields .field { min-width: 0; }
+.access-fields p { margin: 0; }
+.access-fields details[open] { display: grid; gap: 8px; }
+.access-fields summary { cursor: pointer; color: var(--ink-2); font-size: 12px; }
+.access-fields input { width: 100%; box-sizing: border-box; }

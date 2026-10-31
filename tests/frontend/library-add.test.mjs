@@ -632,3 +632,13 @@ test('catalog folder choices stay inline and a failed read stops progress', asyn
     await done();
   }
 });
+
+test('MCP sources exclude the built-in plugin catalog but keep personal GitHub sources', async () => {
+  const { sourceFitsPage } = await import('../../src/kitden/web/static/js/discovery.js');
+  const plugins = { id: 'anthropics/claude-plugins-official', kind: 'github' };
+  assert.equal(sourceFitsPage(plugins, 'mcp'), false);
+  assert.equal(sourceFitsPage(plugins, 'all'), true);
+  assert.equal(sourceFitsPage({ id: 'mcp-registry', kind: 'mcp' }, 'mcp'), true);
+  assert.equal(sourceFitsPage({ id: 'skills.sh', kind: 'skills' }, 'mcp'), false);
+  assert.equal(sourceFitsPage({ id: 'owner/servers', kind: 'github' }, 'mcp'), true);
+});

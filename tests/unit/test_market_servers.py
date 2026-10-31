@@ -230,8 +230,12 @@ def test_add_steps_put_secrets_in_the_keychain_and_map_streamable_http(home):
         "headers": {"Authorization": "Bearer DEMO_SECRET_X"},
     }
     _offer(home, "odd", entry)
-    # A remote server with headers of its own gets no sign-in check.
-    [step] = _steps(home, f"extra@{MARKET}/odd", _never)
+    # Supplied credentials are checked before the server enters preview.
+    checked = []
+    [step] = _steps(
+        home, f"extra@{MARKET}/odd", lambda url, headers: checked.append(headers) or False
+    )
+    assert checked == [{"Authorization": "Bearer DEMO_SECRET_X"}]
     reference = {"keychain": "odd/Authorization"}
     assert step.edit.after == {
         "url": "https://x.example.test/mcp",
@@ -368,7 +372,12 @@ def test_a_wrong_shape_or_a_folder_is_a_422_at_preview(home, entry, why):
 
 def test_an_oauth_server_is_refused_at_preview_and_nothing_is_written(home, monkeypatch):
     monkeypatch.setattr(kitden.demo, "no_sign_in", lambda url, headers: True)
-    _refused(home, TEST_STATUS, "test-status signs in with OAuth; Kitden can't add it yet.")
+    _refused(
+        home,
+        TEST_STATUS,
+        "test-status requires valid access. Enter a token in its catalog details. "
+        "Browser OAuth sign-in is not supported yet.",
+    )
 
 
 def test_an_unreachable_server_is_refused(home, monkeypatch):

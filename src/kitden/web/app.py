@@ -1217,7 +1217,9 @@ def create_app(
                 row = discovery.get(str(params["discovery"]))
                 if row["kind"] != "mcp" or not row.get("entry"):
                     raise ValueError("This server needs configuration before it can be added.")
-                discovered = (row["name"].rsplit("/", 1)[-1], row["entry"])
+                from kitden.discovery import configured_entry
+
+                discovered = (row["name"].rsplit("/", 1)[-1], configured_entry(row, params))
             steps = await asyncio.to_thread(
                 gateway_add_steps,
                 adapters,

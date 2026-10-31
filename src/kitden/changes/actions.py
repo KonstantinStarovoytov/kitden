@@ -944,13 +944,16 @@ def gateway_add_steps(
     if refusal is not None:
         raise ValueError(refusal)
     server = gateway_entry(entry)
-    if "url" in server and not server.get("headers"):
+    if "url" in server:
         try:
-            oauth = (sign_in or needs_sign_in)(server["url"], {})
+            oauth = (sign_in or needs_sign_in)(server["url"], server.get("headers") or {})
         except OSError:
             raise ValueError(f"Kitden could not reach {name}.") from None
         if oauth:
-            raise ValueError(f"{name} signs in with OAuth; Kitden can't add it yet.")
+            raise ValueError(
+                f"{name} requires valid access. Enter a token in its catalog details. "
+                "Browser OAuth sign-in is not supported yet."
+            )
     step = _server_step(home, name, server, None, keychain_run)
     assert step is not None  # a new server always has its step
     steps = [step]

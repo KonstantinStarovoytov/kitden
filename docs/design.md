@@ -421,3 +421,10 @@ inside each block or use a sweeping highlight. Accessible progress labels remain
 reduced motion keeps the fill still. A single skill folder opens directly. Multiple choices
 stay in the inspector, and dragging the result uses the chosen folder. Long descriptions
 show a short excerpt with Read more so the client controls remain easy to reach.
+
+Secondary actions remain collapsible: More toggles them open and closed; longer lists
+split into project rules, move/remove and maintenance. Avoid exposing every operation as
+a permanent button. Catalog rows use one drag grip and a short hint shared by Library and
+Gateway. Required access fields show before Preview. Credentials are password inputs and
+never appear in source details. Say that Preview checks access and that tools may still need
+verification; do not describe a saved server as ready solely because it was added.

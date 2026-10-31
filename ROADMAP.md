@@ -1,6 +1,6 @@
 # Kitden roadmap
 
-Last updated: 2026-10-30
+Last updated: 2026-10-31
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
@@ -20,6 +20,16 @@ What Kitden does today and what comes next. Ideas and bugs:
   Source removal keeps installed items. These screens are a proposal, not shipped behavior.
 
 ### Not released yet
+
+- **Guided adding:** catalog rows show drag handles and a shared hint. Secondary actions
+  stay in collapsible groups. MCP search tries separator variants; local search matches words.
+  Declared required headers and environment values can be entered before Preview and
+  saved to Keychain by Apply. Remote access is checked with supplied headers; browser OAuth
+  remains unsupported and is explained in the form.
+
+- **Catalog separation:** the MCP picker excludes the built-in plugin catalog.
+  Personal GitHub sources still offer MCP servers there. Known unsupported entries
+  show Unavailable and cannot be dragged.
 
 - **Direct skill adding:** a single folder opens automatically, including root skills.
   Dragging uses the reviewed folder. Details read only SKILL.md; Preview validates all files.

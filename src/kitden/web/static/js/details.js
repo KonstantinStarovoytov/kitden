@@ -74,13 +74,37 @@ export function heldActions(server, clients, plain = false) {
 // is: a More that hides one button only adds a press.
 function moreNodes(buttons) {
   if (buttons.length === 1) return buttons;
+  const group = el("div", "detail-actions");
+  group.hidden = true;
+  if (buttons.length > 4) {
+    const categories = [
+      ["Project rules", (label) => /project|shared rule|strict|writing tool/i.test(label)],
+      ["Move or remove", (label) => /remove|put back|move/i.test(label)],
+      ["Maintenance", () => true],
+    ];
+    let remaining = [...buttons];
+    for (const [name, matches] of categories) {
+      const selected = remaining.filter((node) => matches(node.title || node.textContent));
+      remaining = remaining.filter((node) => !selected.includes(node));
+      if (!selected.length) continue;
+      const section = el("details");
+      const list = el("div", "stack");
+      list.append(...selected);
+      section.append(el("summary", null, name), list);
+      group.append(section);
+    }
+  } else group.append(...buttons);
+  const contents = [...group.children];
+  group.replaceChildren();
   const more = button("More", () => {
-    more.replaceWith(...buttons);
+    group.hidden = !group.hidden;
+    group.replaceChildren(...(group.hidden ? [] : contents));
+    more.setAttribute("aria-expanded", String(!group.hidden));
     buttons.forEach(showTrayLook);
-    buttons[0].focus();
   }, "btn");
+  more.setAttribute("aria-expanded", "false");
   more.dataset.focus = "more";
-  return [more];
+  return [more, group];
 }
 
 // A button's words. A Remove names every client it reaches (def.affects.clients): "Remove from

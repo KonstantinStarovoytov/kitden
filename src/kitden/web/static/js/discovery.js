@@ -7,6 +7,12 @@ import { state } from "./store.js";
 
 const LABELS = { skill: "Skill", plugin: "Plugin", mcp: "MCP server" };
 
+export function sourceFitsPage(source, kind) {
+  if (kind !== "mcp") return source.kind !== "mcp";
+  return source.kind === "mcp" || (source.kind === "github" && source.id !== "anthropics/claude-plugins-official");
+}
+
+
 export function installBody(row, clients, project = null) {
   const params = { discovery: row.id };
   const action = row.kind === "mcp" ? "gateway.add" : `${row.kind}.install`;
@@ -61,7 +67,7 @@ export async function openDiscovery(kind = "all", options = {}) {
   }
   const saved = sessions.get(kind);
   const model = { source: saved?.source || (kind === "mcp" ? "mcp-registry" : "skills.sh"), kind: saved?.kind || kind };
-  let sources = data.sources.filter((source) => kind === "mcp" ? ["mcp", "github"].includes(source.kind) : source.kind !== "mcp");
+  let sources = data.sources.filter((source) => sourceFitsPage(source, kind));
   const sourceButtons = el("div", "discovery-choices");
   sourceButtons.setAttribute("role", "group"); sourceButtons.setAttribute("aria-label", "Source");
   const sourceLabel = el("p", "discovery-label", "Search in");
@@ -101,12 +107,15 @@ export async function openDiscovery(kind = "all", options = {}) {
       const tile = el("span", "itile");
       tile.append(icon(row.kind === "skill" ? "sparkles" : row.kind === "plugin" ? "puzzle" : "server", 14));
       const text = el("span", "tx");
-      text.append(el("b", null, row.name), el("small", null, `${LABELS[row.kind]} · ${row.repo || row.source}`));
-      line.append(tile, text, el("span", "st", row.held ? "In gateway" : row.installed.length ? "Installed" : "Review"));
+      const displayName = row.kind === "mcp" ? row.name.split("/").pop() : row.name;
+      const publisher = row.kind === "mcp" ? row.name.split("/").slice(0, -1).join("/").replace(/^io\.github\./, "") : row.repo || row.source;
+      text.append(el("b", null, displayName), el("small", null, publisher || row.source));
+      line.append(tile, text, el("span", "st", row.held ? "In gateway" : row.refusal ? "Unavailable" : row.setup?.length ? "Set up" : row.installed.length ? "Installed" : "Review"));
       if (Number.isFinite(row.installs)) text.append(el("small", "catalog-popularity", `${new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(row.installs)} installs`));
-      if (!row.held && !row.installed.length && options.drag) {
+      if (!row.held && !row.refusal && !row.setup?.length && !row.installed.length && options.drag) {
         line.classList.add("drags");
-        line.addEventListener("pointerdown", (event) => options.drag(event, row, answer.clients, line));
+        const grip = icon("grip-vertical", 14); grip.classList.add("drag-handle"); line.prepend(grip);
+        line.addEventListener("pointerdown", (event) => { if (!row.access_required) options.drag(event, row, answer.clients, line); });
         line.title = row.kind === "mcp" ? "Drag to the gateway to preview" : "Drag onto a client to preview";
       }
       results.append(line);
@@ -160,7 +169,7 @@ export async function openDiscovery(kind = "all", options = {}) {
       const answer = await postJson("/api/discovery/sources", { source: add.value });
       if (!body.isConnected) return;
       if (!answer.ok) throw new Error(answer.data?.detail || "Could not add this source.");
-      sources = answer.data.sources.filter((source) => kind === "mcp" ? ["mcp", "github"].includes(source.kind) : source.kind !== "mcp");
+      sources = answer.data.sources.filter((source) => sourceFitsPage(source, kind));
       const repo = add.value.trim().replace(/^https:\/\/github.com\//, "").replace(/\.git$/, "").replace(/\/$/, "");
       model.source = repo; invalidate(); paintSources();
       status.textContent = "Source added."; add.value = ""; showSources(); more.open = false; runSearch();
@@ -181,7 +190,7 @@ export async function openDiscovery(kind = "all", options = {}) {
         const answer = await postJson("/api/discovery/sources", { operation, previous: source.id, source: value });
         if (!body.isConnected) return;
         if (!answer.ok) { status.textContent = answer.data?.detail || "Could not update source."; return false; }
-        sources = answer.data.sources.filter((s) => kind === "mcp" ? ["mcp", "github"].includes(s.kind) : s.kind !== "mcp");
+        sources = answer.data.sources.filter((s) => sourceFitsPage(s, kind));
         invalidate(); paintSources(); showSources(); runSearch(); return true;
       };
       line.append(button("Edit", () => {
@@ -197,7 +206,10 @@ export async function openDiscovery(kind = "all", options = {}) {
   };
   more.prepend(el("p", "muted", "Built-in catalogs are available above. Add public GitHub repositories here. Removing a source keeps installed items."), sourceList);
   showSources();
-  body.append(form, filters, sourceLabel, sourceButtons, more, status, workspace);
+  const hint = el("p", "muted discovery-hint", kind === "mcp"
+    ? "Click to review · drag a server onto the gateway to preview."
+    : "Click to review · drag onto a client to preview.");
+  body.append(form, filters, sourceLabel, sourceButtons, more, hint, status, workspace);
   if (saved?.answer) draw(saved.answer);
   else runSearch();
   input.focus();
@@ -243,7 +255,7 @@ async function itemDetails(row, clients, kind, options, inspector = null, onReso
   const head = header("Online source", row.name, row.description || LABELS[row.kind]);
   const body = el("div", "body discovery");
   if (!inspector) body.append(button("Back to search", () => openDiscovery(kind, options), "btn ghost small"));
-  else body.append(el("h2", null, row.name));
+  else body.append(el("h2", null, row.kind === "mcp" ? row.name.split("/").pop() : row.name));
   const description = row.description || LABELS[row.kind];
   body.append(el("p", "muted", description.length > 240 ? description.slice(0, 237).trimEnd() + "…" : description));
   if (description.length > 240) {
@@ -254,6 +266,7 @@ async function itemDetails(row, clients, kind, options, inspector = null, onReso
   const details = el("details");
   details.append(el("summary", null, "Source details"));
   details.append(el("p", "muted", `Source: ${row.repo || row.source}`));
+  if (row.kind === "mcp") details.append(el("p", "muted", `Identifier: ${row.name}`));
   if (row.commit || row.version) details.append(el("p", "muted", `Version: ${row.commit || row.version}`));
   if (row.repo) {
     const link = el("a", null, "Open on GitHub");
@@ -268,8 +281,44 @@ async function itemDetails(row, clients, kind, options, inspector = null, onReso
   else if (row.refusal) body.append(el("p", "muted", row.refusal));
   else if (row.kind === "mcp") {
     const chosen = new Set(["gateway"]);
-    body.append(el("p", "muted", "Adds to the Kitden gateway for all projects. Connect clients to the gateway to use it."));
-    body.append(addFormBody(el("div"), chosen, () => installBody(row, []), (request) => review(request)));
+    body.append(el("p", "muted", "Adds to the gateway for all projects. Preview checks access; adding alone does not confirm that tools work."));
+    if (row.access_required) body.append(el("p", "why", "This server requires access. Enter a supported token to continue. If it only supports browser sign-in, Kitden cannot connect it yet."));
+    if (row.access_note) body.append(el("p", "muted", row.access_note));
+    const fields = el("div", "access-fields");
+    const inputs = [];
+    const definitions = [...(row.setup || [])];
+    if (row.remote && !definitions.some((f) => f.field === "headers" && f.name === "Authorization")) {
+      definitions.push({ field: "headers", name: "Authorization", label: "Access token", prefix: "Bearer ", optional: !row.access_required });
+    }
+    // An optional token and its notes fold under one line; required fields stay open.
+    const optional = definitions.length > 0 && definitions.every((f) => f.optional);
+    const box = optional ? el("details") : fields;
+    if (optional) { box.append(el("summary", null, "Add an access token")); fields.append(box); }
+    for (const definition of definitions) {
+      const label = el("label", "field");
+      const input = el("input"); input.type = "password"; input.autocomplete = "off";
+      input.required = !definition.optional;
+      input.placeholder = definition.prefix ? "Paste token" : "Enter value";
+      label.append(el("span", null, definition.label), input);
+      box.append(label);
+      inputs.push({ definition, input });
+    }
+    if (definitions.length) {
+      box.append(el("p", "muted", row.access_host
+        ? `Preview checks it with ${row.access_host}. Apply saves it in macOS Keychain.`
+        : "Apply saves it in macOS Keychain."));
+      if (row.remote) box.append(el("p", "muted", "Browser sign-in (OAuth) is not supported yet."));
+    }
+    const requestBody = () => {
+      const request = installBody(row, []);
+      for (const { definition: f, input } of inputs) {
+        if (!input.value.trim()) continue;
+        request.params[f.field] ||= {};
+        request.params[f.field][f.name] = (f.prefix || "") + input.value.trim();
+      }
+      return request;
+    };
+    body.append(addFormBody(fields, chosen, requestBody, (request) => review(request)));
   } else {
     const available = clients.filter((c) => (row.kind !== "plugin" || ["claude_code", "codex"].includes(c)) && !row.installed.includes(c));
     const chosen = new Set();

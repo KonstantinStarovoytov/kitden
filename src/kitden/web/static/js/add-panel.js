@@ -23,8 +23,9 @@ const FAILED = "Could not read the marketplaces.";
 
 // The rows the search (part of the name, any case) and the pill ("all", or a kind) keep.
 export function matchRows(rows, query = "", kind = "all") {
-  const q = String(query).trim().toLowerCase();
-  return rows.filter((row) => (kind === "all" || row.kind === kind) && row.name.toLowerCase().includes(q));
+  const normalize = (value) => String(value).toLowerCase().replace(/[-_\s]+/g, " ").trim();
+  const terms = normalize(query).split(" ").filter(Boolean);
+  return rows.filter((row) => (kind === "all" || row.kind === kind) && terms.every((term) => normalize(row.name).includes(term)));
 }
 
 // The map's "+ Add", if the map shows it.

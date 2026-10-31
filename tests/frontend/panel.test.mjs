@@ -1350,6 +1350,7 @@ test('a redraw of the floating panel does not take focus from the page', () => {
 function domNode(tag) {
   const node = {
     tag, className: '', textContent: '', children: [], attributes: {}, dataset: {}, parent: null, focused: false,
+    replaceChildren(...nodes) { for (const child of node.children) child.parent = null; node.children = []; node.append(...nodes); },
     append(...nodes) { for (const child of nodes) { child.parent = node; node.children.push(child); } },
     prepend(...nodes) { for (const child of nodes) child.parent = node; node.children.unshift(...nodes); },
     setAttribute(name, value) { node.attributes[name] = value; },
@@ -1413,7 +1414,7 @@ test('a Details card is the header, the facts and the sentence, the stacked acti
     assert.equal(footer.className, 'stack');
     assert.deepEqual(words(footer.children.slice(0, 3)), ['Turn off for all projects…', 'Add to Codex…', 'More']);
     assert.deepEqual(footer.children.slice(0, 2).map((node) => node.className), ['btn primary', 'btn']);
-    assert.equal(footer.children[3], after);
+    assert.equal(footer.children.at(-1), after);
     assert.equal(evidence, folded);
   } finally {
     delete globalThis.document;
@@ -1445,19 +1446,21 @@ test('a Details card with nothing to add leaves the rest out', () => {
   }
 });
 
-test('More shows the other actions where it stood, before the quiet node', () => {
+test('More opens and closes the secondary actions without losing its control', async () => {
   globalThis.document = { createElement: domNode };
   try {
     const after = domNode('div');
     const [, , footer] = detailsCard(card({ actions: [{ label: 'One', run() {} }], more: [{ label: 'Two', run() {} }, { label: 'Three', run() {} }], after }));
     const more = footer.children[1];
-    assert.equal(more.textContent, 'More');
     more.onclick({});
-    return Promise.resolve().then(() => {
-      assert.deepEqual(words(footer.children), ['One', 'Two', 'Three', '']);
-      assert.equal(footer.children[3], after);
-      assert.equal(footer.children[1].focused, true);
-    });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(words(footer.children[2].children), ['Two', 'Three']);
+    assert.equal(more.attributes['aria-expanded'], 'true');
+    assert.equal(footer.children.at(-1), after);
+    more.onclick({});
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(more.attributes['aria-expanded'], 'false');
+    assert.equal(footer.children[2].children.length, 0);
   } finally {
     delete globalThis.document;
   }

@@ -5,6 +5,7 @@ MCP Registry: modelcontextprotocol/registry/docs/reference/api/official-registry
 GitHub: docs.github.com/en/rest/git/trees. No downloaded code is executed here.
 """
 
+import copy
 import hashlib
 import io
 import json
@@ -106,6 +107,13 @@ def safe_path(path: str) -> str:
     return value.as_posix()
 
 
+def words_match(query: str, value: str) -> bool:
+    def normalize(text):
+        return re.sub(r"[-_\s]+", " ", text.casefold()).strip()
+
+    return all(word in normalize(value) for word in normalize(query).split())
+
+
 def row_key(row: dict) -> str:
     return hashlib.sha256(json.dumps(row, sort_keys=True).encode()).hexdigest()[:24]
 
@@ -139,6 +147,83 @@ def server_entry(server: dict) -> tuple[dict | None, str | None]:
         ):
             return {"command": "npx", "args": ["-y", f"{name}@{version}"]}, None
     return None, "This server needs sign-in, configuration or a transport Kitden cannot add yet."
+
+
+def server_setup(server: dict) -> tuple[dict | None, str | None, list[dict]]:
+    """Required headers and environment values, per registry schema checked 2026-10-31."""
+    simple, refusal = server_entry(server)
+    if simple:
+        return simple, None, []
+    for group, field in (("remotes", "headers"), ("packages", "env")):
+        for record in server.get(group, []):
+            definitions = record.get(
+                "headers" if field == "headers" else "environmentVariables", []
+            )
+            needed = [d for d in definitions if d.get("isRequired")]
+            if not needed:
+                continue
+            if any(
+                not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*", str(d.get("name", ""))) for d in needed
+            ):
+                continue
+            clean = copy.deepcopy(record)
+            clean["headers" if field == "headers" else "environmentVariables"] = []
+            entry, error = server_entry({group: [clean]})
+            if entry is None:
+                continue
+            fields = []
+            for definition in needed:
+                template = definition.get("value", "")
+                # A single token slot may carry a Bearer prefix; other templates need manual setup.
+                if template and not re.fullmatch(
+                    r"(?:Bearer )?\{[A-Za-z_][A-Za-z0-9_]*\}", template
+                ):
+                    error = "This server needs a configuration Kitden cannot build yet."
+                    break
+                fields.append(
+                    {
+                        "field": field,
+                        "name": definition["name"],
+                        "label": str(definition.get("description") or definition["name"])[:200],
+                        "prefix": "Bearer " if template.startswith("Bearer ") else "",
+                    }
+                )
+            if error:
+                continue
+            return entry, None, fields
+    return None, refusal, []
+
+
+def configured_entry(row: dict, params: dict) -> dict:
+    """Accept only declared values; secrets remain in preview memory until Apply."""
+    entry = copy.deepcopy(row.get("entry"))
+    if not entry:
+        raise ValueError("This server needs a setup Kitden cannot add yet.")
+    fields = row.get("setup", [])
+    for field in ("headers", "env"):
+        supplied = params.get(field, {})
+        if not isinstance(supplied, dict):
+            raise ValueError("Enter the required access details.")
+        allowed = {f["name"] for f in fields if f["field"] == field}
+        if field == "headers" and "url" in entry:
+            allowed.add("Authorization")
+        if set(supplied) - allowed:
+            raise ValueError("Only the server's declared access fields can be set.")
+        for key, value in supplied.items():
+            if (
+                not isinstance(value, str)
+                or not value.strip()
+                or value == "[secret]"
+                or "\r" in value
+                or "\n" in value
+                or len(value) > 8192
+            ):
+                raise ValueError("Enter a valid access value again.")
+            entry.setdefault(field, {})[key] = value.strip()
+    for required in fields:
+        if not entry.get(required["field"], {}).get(required["name"]):
+            raise ValueError(f"Enter {required['name']} before previewing.")
+    return entry
 
 
 class Discovery:
@@ -226,7 +311,7 @@ class Discovery:
                 if PurePosixPath(path).name != "SKILL.md":
                     continue
                 name = PurePosixPath(path).parent.name or repo.split("/")[-1]
-                if query.lower() in name.lower():
+                if words_match(query, name):
                     rows.append(
                         {
                             "name": name,
@@ -244,13 +329,14 @@ class Discovery:
                     continue
                 data = read_json(f"https://raw.githubusercontent.com/{repo}/{commit}/{quote(path)}")
                 if "name" in data and ("packages" in data or "remotes" in data):
-                    entry, refusal = server_entry(data)
+                    entry, refusal, setup = server_setup(data)
                     rows.append(
                         {
                             "name": data["name"],
                             "kind": "mcp",
                             "entry": entry,
                             "refusal": refusal,
+                            "setup": setup,
                             "source": repo,
                             "commit": commit,
                             "description": str(data.get("description", ""))[:600],
@@ -272,7 +358,7 @@ class Discovery:
                         )
                 if len(rows) >= 60:
                     break
-            rows = [r for r in rows if query.lower() in r["name"].lower()]
+            rows = [r for r in rows if words_match(query, r["name"])]
         if kind in ("all", "plugin"):
             manifest_path = next(
                 (
@@ -288,9 +374,8 @@ class Discovery:
                 )
                 for entry in manifest.get("plugins", []):
                     name = entry.get("name", "")
-                    if (
-                        isinstance(name, str)
-                        and query.lower() in f"{name} {entry.get('description', '')}".lower()
+                    if isinstance(name, str) and words_match(
+                        query, f"{name} {entry.get('description', '')}"
                     ):
                         rows.append(
                             {
@@ -311,7 +396,7 @@ class Discovery:
                     f"https://raw.githubusercontent.com/{repo}/{commit}/.claude-plugin/plugin.json"
                 )
                 name = manifest.get("name", repo.split("/")[-1])
-                if query.lower() in str(name).lower():
+                if words_match(query, str(name)):
                     rows.append(
                         {
                             "name": name,
@@ -357,10 +442,16 @@ class Discovery:
                 else []
             )
         elif source == "mcp-registry":
-            data = read_json(
-                "https://registry.modelcontextprotocol.io/v0.1/servers?"
-                + urlencode({"search": query, "version": "latest", "limit": 100})
-            )
+            variants = list(dict.fromkeys([re.sub(r"[\s_]+", "-", query), query]))
+            records = {}
+            for term in variants:
+                data = read_json(
+                    "https://registry.modelcontextprotocol.io/v0.1/servers?"
+                    + urlencode({"search": term, "version": "latest", "limit": 100})
+                )
+                for record in data.get("servers", []):
+                    records[record["server"]["name"]] = record
+            data = {"servers": list(records.values())}
             rows = []
             for record in data.get("servers", []):
                 if (
@@ -371,7 +462,7 @@ class Discovery:
                 ):
                     continue
                 server = record["server"]
-                entry, refusal = server_entry(server)
+                entry, refusal, setup = server_setup(server)
                 rows.append(
                     {
                         "name": server["name"],
@@ -381,6 +472,7 @@ class Discovery:
                         "description": str(server.get("description", ""))[:600],
                         "entry": entry,
                         "refusal": refusal,
+                        "setup": setup,
                         "repository": server.get("repository", {}).get("url"),
                     }
                 )
@@ -418,12 +510,10 @@ class Discovery:
         matches = [p for p in paths if PurePosixPath(p).parent.name == row["name"]]
         choices = []
         for path in sorted(matches or paths):
-            candidate = {
-                k: v for k, v in row.items()
-                if k not in ("id", "installs", "description")
-            }
+            candidate = {k: v for k, v in row.items() if k not in ("id", "installs", "description")}
             candidate.update(
-                path=str(PurePosixPath(path).parent), commit=commit,
+                path=str(PurePosixPath(path).parent),
+                commit=commit,
                 name=PurePosixPath(path).parent.name or row["repo"].split("/")[-1],
                 description="Skill from this GitHub source.",
             )
@@ -464,6 +554,18 @@ class Discovery:
             out["content"] = skill_md.read_text()[:20000]
         elif row["kind"] == "mcp":
             out["content"] = json.dumps(redact(row.get("entry") or {})[0], indent=2)
+            out["remote"] = bool((row.get("entry") or {}).get("url"))
+            if out["remote"]:
+                out["access_host"] = urlsplit(row["entry"]["url"]).hostname
+                if not row.get("setup"):
+                    from kitden.changes.actions import needs_sign_in
+
+                    try:
+                        out["access_required"] = needs_sign_in(row["entry"]["url"], {})
+                    except OSError:
+                        out["access_note"] = (
+                            "Could not reach this server. Preview will check again."
+                        )
         else:
             out["content"] = "Installs through the client's plugin command from " + row["repo"]
         return out

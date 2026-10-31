@@ -365,10 +365,12 @@ def test_root_skill_opens_and_previews_without_folder_choice(tmp_path, monkeypat
     row = source.search("skills.sh", "tidy", "skill")[0]
     source.trees["acme/skills"] = (SHA, ["SKILL.md", "reference.md"])
     downloads = []
-    content = archive({
-        "repo/SKILL.md": "---\nname: tidy\ndescription: Tidy files.\n---\nRead before editing.",
-        "repo/reference.md": "Reference",
-    })
+    content = archive(
+        {
+            "repo/SKILL.md": "---\nname: tidy\ndescription: Tidy files.\n---\nRead before editing.",
+            "repo/reference.md": "Reference",
+        }
+    )
 
     def fetch(url):
         downloads.append(url)
@@ -388,3 +390,124 @@ def test_root_skill_opens_and_previews_without_folder_choice(tmp_path, monkeypat
         f"https://codeload.github.com/acme/skills/zip/{SHA}",
     ]
     assert (source.checkout("acme/skills", SHA, ".") / "reference.md").read_text() == "Reference"
+
+
+def test_setup_fields_accept_declared_tokens_and_hide_them():
+    from kitden.changes.batch import kept_request
+    from kitden.discovery import configured_entry, server_setup
+
+    entry, refusal, fields = server_setup(
+        {
+            "remotes": [
+                {
+                    "type": "streamable-http",
+                    "url": "https://example.test/mcp",
+                    "headers": [
+                        {"name": "Authorization", "isRequired": True, "value": "Bearer {token}"}
+                    ],
+                }
+            ]
+        }
+    )
+    row = {"entry": entry, "setup": fields}
+    assert refusal is None and fields[0]["prefix"] == "Bearer "
+    with pytest.raises(ValueError, match="Enter Authorization"):
+        configured_entry(row, {})
+    params = {"headers": {"Authorization": "Bearer example-test-token"}}
+    assert configured_entry(row, params)["headers"] == params["headers"]
+    assert "headers" not in entry  # The cached public source never holds credentials.
+    kept = kept_request([{"kind": "gateway.add", "targets": [], "params": params, "picked": None}])
+    assert "example-test-token" not in json.dumps(kept)
+    with pytest.raises(ValueError):
+        configured_entry(row, {"headers": {"Host": "other.test"}})
+    with pytest.raises(ValueError):
+        configured_entry(row, {"headers": {"Authorization": "bad\r\nheader"}})
+
+
+def test_registry_search_treats_spaces_as_hyphens(tmp_path, monkeypatch):
+    queries = []
+
+    def read(url):
+        from urllib.parse import parse_qs, urlsplit
+
+        term = parse_qs(urlsplit(url).query)["search"][0]
+        queries.append(term)
+        return {"servers": []}
+
+    monkeypatch.setattr(discovery, "read_json", read)
+    Discovery(tmp_path).search("mcp-registry", "agent docs", "mcp")
+    assert queries == ["agent-docs", "agent docs"]
+    assert discovery.words_match("agent docs", "io.github.example/agent-docs")
+    assert discovery.words_match("Agent_Docs", "agent docs")
+
+
+def test_token_preview_apply_and_undo_use_keychain(tmp_path, monkeypatch, fake_keychain):
+    from kitden.changes import actions
+
+    home = make_home(tmp_path, "codex/0.159.2")
+    checked = []
+    monkeypatch.setattr(
+        actions, "needs_sign_in", lambda url, headers: checked.append(headers) or False
+    )
+    monkeypatch.setattr(
+        discovery,
+        "read_json",
+        lambda _: {
+            "servers": [
+                {
+                    "_meta": {"io.modelcontextprotocol.registry/official": {"status": "active"}},
+                    "server": {
+                        "name": "test/token-server",
+                        "remotes": [
+                            {
+                                "type": "streamable-http",
+                                "url": "https://example.test/mcp",
+                                "headers": [
+                                    {
+                                        "name": "Authorization",
+                                        "isRequired": True,
+                                        "value": "Bearer {token}",
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                }
+            ]
+        },
+    )
+    app = create_app(lambda: build_inventory(home), token="tok", port=47800, home=home)
+    with TestClient(app, base_url=ORIGIN) as page:
+        page.get("/?token=tok")
+        row = page.post(
+            "/api/discovery/search",
+            json={
+                "source": "mcp-registry",
+                "query": "token",
+                "kind": "mcp",
+            },
+            headers=POST,
+        ).json()["results"][0]
+        request = {
+            "action": "gateway.add",
+            "targets": [],
+            "params": {
+                "server": "online@registry/token-server",
+                "discovery": row["id"],
+                "headers": {"Authorization": "Bearer SENTINEL_TEST_TOKEN"},
+            },
+        }
+        preview = page.post("/api/changes/preview", json=request, headers=POST)
+        assert preview.status_code == 200, preview.text
+        assert "SENTINEL_TEST_TOKEN" not in preview.text
+        change = preview.json()
+        assert checked == [{"Authorization": "Bearer SENTINEL_TEST_TOKEN"}]
+        applied = page.post(f"/api/changes/{change['id']}/apply", headers=POST)
+        assert applied.json()["state"] == "verified", applied.text
+        assert "SENTINEL_TEST_TOKEN" not in applied.text
+        assert "SENTINEL_TEST_TOKEN" in fake_keychain.read_text()
+        for record in (home / "Library/Application Support/kitden/changes").rglob("*.json"):
+            assert "SENTINEL_TEST_TOKEN" not in record.read_text()
+        undone = page.post(f"/api/changes/{change['id']}/undo", headers=POST)
+        assert undone.json()["state"] == "undone", undone.text
+        assert "SENTINEL_TEST_TOKEN" not in fake_keychain.read_text()
