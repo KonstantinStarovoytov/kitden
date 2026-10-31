@@ -1085,7 +1085,7 @@ h2.sw-head { margin: 0; font-size: 11px; font-weight: 600; color: var(--ink-2); 
    ghost, follows the pointer over the page. Over the gateway the ghost takes the drop look (180 ms). */
 .res:not(.off) { user-select: none; }
 .res.dragging { opacity: 0.4; }
-.res.ghost { position: fixed; z-index: 60; margin: 0; overflow: hidden; pointer-events: none; box-shadow: var(--shadow); cursor: grabbing; }
+.res.ghost { position: fixed; z-index: 60; margin: 0; overflow: hidden; pointer-events: none; box-shadow: var(--shadow); cursor: grabbing; transform-origin: 0 0; }
 .res.ghost.over { border-color: var(--route); background: var(--route-soft); }
 .drawer .who h2 { margin: 0; }
 .drawer .skeleton.card { height: 120px; }
@@ -1313,6 +1313,12 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 .detail-actions[hidden] { display: none; }
 .detail-actions details > .stack { margin-top: 8px; }
 .detail-actions summary { cursor: pointer; color: var(--ink-2); font-size: 12px; padding: 6px 0; }
+/* More reads as a quiet toggle, its chevron turned when open; what it shows stays lighter than the primary action. */
+.btn.more::after { content: ""; width: 5px; height: 5px; margin: -3px 2px 0 4px; border: solid currentColor; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); transition: transform var(--t-fast) ease; }
+.btn.more[aria-expanded="true"]::after { margin-top: 3px; transform: rotate(-135deg); }
+.detail-actions { gap: 4px; }
+.detail-actions .btn { border-color: transparent; background: transparent; color: var(--ink-2); justify-content: flex-start; }
+.detail-actions .btn:hover:not(:disabled) { background: var(--wire-soft); color: var(--ink); }
 .discovery-hint { font-size: 11px; margin: 0; }
 .res.drags { cursor: grab; touch-action: none; }
 .access-fields details { margin: 0; }

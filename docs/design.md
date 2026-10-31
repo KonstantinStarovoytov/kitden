@@ -429,4 +429,6 @@ A free row shows no status word; a server that needs a token says "Needs token" 
 grip. Its details say so in one line, and Preview stays off until every required value is
 entered. Credentials are password inputs and never appear in source details. On the Gateway,
 the catalog panel closes once a server is in preview, so its block is seen growing out of the
-gateway.
+gateway. A catalog drag lights the gateway as a server dragged in from outside does; its ghost
+flies onto the slot with transform and opacity only, and the slot shows a late spinner while
+the row is asked. More is a quiet button with a chevron; the actions it shows are quiet too.

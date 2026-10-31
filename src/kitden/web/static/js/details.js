@@ -101,7 +101,7 @@ function moreNodes(buttons) {
     group.replaceChildren(...(group.hidden ? [] : contents));
     more.setAttribute("aria-expanded", String(!group.hidden));
     buttons.forEach(showTrayLook);
-  }, "btn");
+  }, "btn ghost more");
   more.setAttribute("aria-expanded", "false");
   more.dataset.focus = "more";
   return [more, group];

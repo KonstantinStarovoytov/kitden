@@ -1729,10 +1729,10 @@ test('a drop in the zone adds one row and the block stands in the slot', async (
     map.up(...middle(map, 'gateway:kitden'));
     // One row, the same as a click on the row.
     assert.deepEqual(tray.rows.map((r) => [r.key, r.body]), [['add:db-tools@demo/db-query', row.body]]);
-    // The ghost flies from where it is onto the slot and takes its size, 200 ms CALM.
+    // The ghost flies from where it is onto the slot, shrinks to its width and fades, 200 ms CALM.
     const [flight] = ghost.motions;
-    const from = { transform: ghost.style.transform, width: '300px', height: '52px' };
-    assert.deepEqual(flight.keyframes, [from, { transform: `translate(${slot.x - 1000}px, ${slot.y - 200}px)`, width: `${slot.w}px`, height: `${slot.h}px` }]);
+    const from = { transform: ghost.style.transform, opacity: 1 };
+    assert.deepEqual(flight.keyframes, [from, { transform: `translate(${slot.x - 1000}px, ${slot.y - 200}px) scale(${slot.w / 300})`, opacity: 0 }]);
     assert.deepEqual([flight.options.duration, flight.options.easing, flight.options.fill], [200, CALM, 'forwards']);
     // While the row is asked, the slot stays where the ghost landed; the gateway lets go.
     map.redraw();
@@ -1794,7 +1794,7 @@ test('a drop over the panel, over the dock or on nothing leaves the tray and the
       assert.deepEqual(map.tree, before, name);
       // The ghost flies back onto its row, 180 ms CALM, and goes; the row is at full strength.
       const [flight] = ghost.motions;
-      assert.deepEqual(flight.keyframes.at(-1), { transform: 'none', width: '300px', height: '52px' }, name);
+      assert.deepEqual(flight.keyframes.at(-1), { transform: 'none', opacity: 1 }, name);
       assert.deepEqual([flight.options.duration, flight.options.easing], [180, CALM], name);
       assert.deepEqual([ghost.parentNode, row.node.names.has('dragging')], [null, false], name);
     }

@@ -359,14 +359,16 @@ function dropClient(drag, at) {
   return true;
 }
 
-// A row of the Add panel lifts (map-drag.js liftGhost): its ghost follows the pointer on the page.
-// The Outside caption's top is where the gateway's room ends.
+// A row of the Add panel lifts (map-drag.js liftGhost): its ghost follows the pointer on the page,
+// and the gateway lights as a glance does, as for a server dragged in from outside. The Outside
+// caption's top is where the gateway's room ends.
 function beginAdd(drag) {
   const { node, kind } = drag.block;
   const { ghost, box } = liftGhost(node);
   const caption = onMap.layout.blocks.find((b) => b.id === "group:outside");
   const kitden = kitdenGateway();
   Object.assign(drag, { ghost, box, line: caption ? caption.y : Infinity, group: kind === "local" ? "local" : "remote", gateway: kitden ? kitden.id : null });
+  if (kitden) onMap.view.glance(new Set([kitden.id]));
 }
 
 // The ghost keeps the spot of the press under the pointer. With the pointer in the zone (inAddZone)
@@ -407,6 +409,12 @@ function dropAdd(drag, at) {
     if (inTray(key)) {
       const slot = onMap.layout.blocks.find((b) => b.id === `slot:${name}`);
       flyGhost(drag, slot && pageBox(onMap, slot), ONTO_SLOT);
+      // While the row is asked the slot waits with a late spinner, as a parked server does.
+      const waits = onMap.view.node(`slot:${name}`);
+      if (waits && !waits.querySelector(".spinner")) {
+        waits.setAttribute("aria-busy", "true");
+        waits.append(el("span", "spinner late"));
+      }
       if (drag.block.onDrop) drag.block.onDrop();
       return true;
     }

@@ -199,13 +199,14 @@ export function moveGhost(drag) {
   ghost.style.transform = `translate(${at.x - box.left - grab.x}px, ${at.y - box.top - grab.y}px)`;
 }
 
-// A panel row's ghost flies from where it is onto `to` (a page box), or back onto its row, then
-// goes, and the row comes back to full strength. Under reduced motion, and on a hidden page, it
-// lands at once.
+// A panel row's ghost flies from where it is onto `to` (a page box), shrinking to its width and
+// fading as it lands, or back onto its row, then goes, and the row comes back to full strength.
+// Only transform and opacity move. Under reduced motion, and on a hidden page, it lands at once.
 export function flyGhost({ ghost, box, block }, to, { dur, ease }) {
-  const size = (b) => ({ width: `${b.width}px`, height: `${b.height}px` });
-  const end = to ? { transform: `translate(${to.left - box.left}px, ${to.top - box.top}px)`, ...size(to) } : { transform: "none", ...size(box) };
-  animateTo(ghost, [{ transform: ghost.style.transform || "none", ...size(box) }, end], { dur: document.hidden ? 0 : dur, ease, fill: "forwards" }).then(() => {
+  const end = to
+    ? { transform: `translate(${to.left - box.left}px, ${to.top - box.top}px) scale(${to.width / box.width})`, opacity: 0 }
+    : { transform: "none", opacity: 1 };
+  animateTo(ghost, [{ transform: ghost.style.transform || "none", opacity: 1 }, end], { dur: document.hidden ? 0 : dur, ease, fill: "forwards" }).then(() => {
     ghost.remove();
     block.node.classList.remove("dragging");
   });
