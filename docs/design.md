@@ -427,7 +427,8 @@ split into project rules, move/remove and maintenance. Avoid exposing every oper
 a permanent button. Catalog rows use the same grip as the local Add rows and a short hint.
 A free row shows no status word; a server that needs a token says "Needs token" and has no
 grip. Its details say so in one line, and Preview stays off until every required value is
-entered. Credentials are password inputs and never appear in source details. On the Gateway,
+entered. Once they are, the row gets its grip and a drop carries them. A refused token is said
+under the field, with focus back in it, and the row says "Token refused" until it is edited. Credentials are password inputs and never appear in source details. On the Gateway,
 the catalog panel closes once a server is in preview, so its block is seen growing out of the
 gateway. A catalog drag lights the gateway as a server dragged in from outside does; its ghost
 flies onto the slot with transform and opacity only, and the slot shows a late spinner while

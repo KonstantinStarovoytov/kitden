@@ -185,7 +185,12 @@ def server_setup(server: dict) -> tuple[dict | None, str | None, list[dict]]:
                         "field": field,
                         "name": definition["name"],
                         "label": str(definition.get("description") or definition["name"])[:200],
-                        "prefix": "Bearer " if template.startswith("Bearer ") else "",
+                        # Registry entries often declare Authorization with no template
+                        # (7 of 7 seen 2026-10-31); those take a Bearer token too.
+                        "prefix": "Bearer "
+                        if template.startswith("Bearer ")
+                        or (not template and definition["name"].lower() == "authorization")
+                        else "",
                     }
                 )
             if error:

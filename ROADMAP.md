@@ -28,6 +28,7 @@ What Kitden does today and what comes next. Ideas and bugs:
   remains unsupported and is explained in the form. A catalog server in preview shows on the
   map in its group, and the catalog panel closes so it can be seen. The access check names
   itself, so servers behind Cloudflare are no longer mistaken for ones that need sign-in.
+  A row whose token is entered can be dragged; a refused token is shown by its field.
 
 - **Catalog separation:** the MCP picker excludes the built-in plugin catalog.
   Personal GitHub sources still offer MCP servers there. Known unsupported entries

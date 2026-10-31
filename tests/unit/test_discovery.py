@@ -518,3 +518,18 @@ def test_token_preview_apply_and_undo_use_keychain(tmp_path, monkeypatch, fake_k
         assert refused.status_code >= 400
         assert "did not accept this access" in refused.text
         assert "SENTINEL_TEST_TOKEN" not in refused.text
+
+
+def test_a_bare_authorization_header_takes_a_bearer_token():
+    from kitden.discovery import server_setup
+
+    remote = {
+        "type": "streamable-http",
+        "url": "https://example.test/mcp",
+        "headers": [{"name": "Authorization", "isRequired": True, "description": "API key"}],
+    }
+    entry, refusal, fields = server_setup({"remotes": [remote]})
+    assert refusal is None and entry["url"] == "https://example.test/mcp"
+    assert fields == [
+        {"field": "headers", "name": "Authorization", "label": "API key", "prefix": "Bearer "}
+    ]

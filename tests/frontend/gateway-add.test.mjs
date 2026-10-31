@@ -586,3 +586,12 @@ test('an online server gets its kind, so the map shows its preview in that group
   assert.equal(addKind(local.params.server), 'local');
   assert.equal(addKind('online@registry/unknown'), null);
 });
+
+test('a dragged online server carries the access typed in its details', () => {
+  const access = { headers: { Authorization: 'Bearer test-value' } };
+  const body = installBody({ id: 'c', kind: 'mcp', name: 'test.local/token-demo', remote: true, access }, []);
+  assert.deepEqual(body.params, { discovery: 'c', server: 'online@registry/token-demo', headers: access.headers });
+  // The body holds its own copy: a later edit of the row does not change a queued change.
+  access.headers.Authorization = 'Bearer other';
+  assert.equal(body.params.headers.Authorization, 'Bearer test-value');
+});

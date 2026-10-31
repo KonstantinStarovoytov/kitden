@@ -4,6 +4,7 @@ import { button, el, icon } from "./dom.js";
 import { header, openPanel, panelState, review } from "./panel.js";
 import { addFormBody, clientChecks } from "./offer.js";
 import { state } from "./store.js";
+import { cancelTray, inTray, keyFor, tray } from "./tray.js";
 
 const LABELS = { skill: "Skill", plugin: "Plugin", mcp: "MCP server" };
 
@@ -23,6 +24,8 @@ export function installBody(row, clients, project = null) {
   const action = row.kind === "mcp" ? "gateway.add" : `${row.kind}.install`;
   params[row.kind === "mcp" ? "server" : row.kind] = row.kind === "mcp" ? `online@registry/${row.name.split("/").pop()}` : row.name;
   if (row.kind === "mcp") serverKinds.set(params.server, row.remote ? "remote" : "local");
+  // Access values typed in the details (headers, env) go with the change; Preview checks them.
+  if (row.kind === "mcp" && row.access) Object.assign(params, structuredClone(row.access));
   if (project && row.kind !== "mcp") params.project = project;
   return { action, targets: [...clients].map((client) => ({ client })), params };
 }
@@ -108,7 +111,7 @@ export async function openDiscovery(kind = "all", options = {}) {
         for (const sibling of results.children) sibling.setAttribute("aria-pressed", "false");
         line.setAttribute("aria-pressed", "true");
         line.classList.add("catalog-loading"); line.setAttribute("aria-busy", "true");
-        itemDetails(row, answer.clients, kind, options, inspector, (resolved) => { Object.assign(row, resolved); if (row.access_required) needsToken(line); }).finally(() => { line.classList.remove("catalog-loading"); line.removeAttribute("aria-busy"); }).catch(() => { if (inspector.isConnected) fail(inspector, "Could not read this item. Select it to try again."); });
+        itemDetails(row, answer.clients, kind, options, inspector, (resolved) => { Object.assign(row, resolved); paint(); }).finally(() => { line.classList.remove("catalog-loading"); line.removeAttribute("aria-busy"); }).catch(() => { if (inspector.isConnected) fail(inspector, "Could not read this item. Select it to try again."); });
       }, "res");
       const tile = el("span", "itile");
       tile.append(icon(row.kind === "skill" ? "sparkles" : row.kind === "plugin" ? "puzzle" : "server", 14));
@@ -116,21 +119,27 @@ export async function openDiscovery(kind = "all", options = {}) {
       const displayName = row.kind === "mcp" ? row.name.split("/").pop() : row.name;
       const publisher = row.kind === "mcp" ? row.name.split("/").slice(0, -1).join("/").replace(/^io\.github\./, "") : row.repo || row.source;
       text.append(el("b", null, displayName), el("small", null, publisher || row.source));
-      line.append(tile, text, el("span", "st", row.held ? "In gateway" : row.refusal ? "Unavailable" : row.setup?.length ? "Set up" : row.installed.length ? "Installed" : ""));
+      const st = el("span", "st", row.held ? "In gateway" : row.refusal ? "Unavailable" : row.installed.length ? "Installed" : "");
+      line.append(tile, text, st);
       if (Number.isFinite(row.installs)) text.append(el("small", "catalog-popularity", `${new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(row.installs)} installs`));
-      if (!row.held && !row.refusal && !row.setup?.length && !row.installed.length && options.drag) {
-        line.classList.add("drags");
-        line.prepend(icon("grip-vertical", 12, "ic grip"));
-        line.addEventListener("pointerdown", (event) => { if (!row.access_required) options.drag(event, row, answer.clients, line); });
-        line.title = row.kind === "mcp" ? "Drag to the gateway to preview" : "Drag onto a client to preview";
-      }
+      // A free row drags. One that needs access says "Needs token" and drags only once its details
+      // hold every required value (`row.access`); the drop then carries them, and Preview checks them.
+      const free = !row.held && !row.refusal && !row.installed.length && Boolean(options.drag);
+      let grip = null;
+      const paint = () => {
+        if (!free) return;
+        const waits = Boolean((row.access_required || row.setup?.length) && (!row.access || row.refused));
+        line.classList.toggle("drags", !waits);
+        if (waits && grip) { grip.remove(); grip = null; }
+        if (!waits && !grip) { grip = icon("grip-vertical", 12, "ic grip"); line.prepend(grip); }
+        st.textContent = row.refused ? "Token refused" : waits ? "Needs token" : "";
+        line.title = waits ? "Needs a token. Click to review."
+          : row.kind === "mcp" ? "Drag to the gateway to preview" : "Drag onto a client to preview";
+      };
+      if (free) line.addEventListener("pointerdown", (event) => { if (line.classList.contains("drags")) options.drag(event, row, answer.clients, line); });
+      paint();
       results.append(line);
     }
-  };
-  // A server that turned out to need a token cannot be dropped: its row says so and loses its grip.
-  const needsToken = (line) => {
-    line.classList.remove("drags"); line.querySelector(".grip")?.remove();
-    line.querySelector(".st").textContent = "Needs token"; line.title = "Needs a token. Click to review.";
   };
   const paintSources = () => {
     const available = sources.filter((source) => model.kind !== "plugin" || source.kind === "github");
@@ -316,21 +325,41 @@ async function itemDetails(row, clients, kind, options, inspector = null, onReso
       inputs.push({ definition, input });
     }
     if (definitions.length) box.append(el("p", "muted", "Saved in macOS Keychain on Apply."));
-    const requestBody = () => {
-      const request = installBody(row, []);
+    // The values typed so far, as the change's params ({ headers, env }), or null while a required
+    // one is missing or none is typed. The list's row gets them too, so it can be dragged.
+    const access = () => {
+      if (inputs.some(({ definition, input }) => !definition.optional && !input.value.trim())) return null;
+      const out = {};
       for (const { definition: f, input } of inputs) {
         if (!input.value.trim()) continue;
-        request.params[f.field] ||= {};
         // A pasted "Bearer …" keeps one prefix.
         const value = f.prefix ? input.value.trim().replace(/^bearer\s+/i, "") : input.value.trim();
-        request.params[f.field][f.name] = (f.prefix || "") + value;
+        (out[f.field] ||= {})[f.name] = (f.prefix || "") + value;
       }
-      return request;
+      return Object.keys(out).length ? out : null;
     };
-    // Preview waits for every required value; the page's own words say what is missing.
-    const form = addFormBody(fields, chosen, requestBody, (request) => review(request).then(() => options.added?.(request)));
+    // A refusal shows under the fields too, where the token is, and keeps focus there.
+    const said = el("p", "why"); said.setAttribute("role", "alert"); said.hidden = true;
+    fields.append(said);
+    const preview = async (request) => {
+      said.hidden = true;
+      await review(request);
+      if (inTray(keyFor(request))) { options.added?.(request); return; }
+      if (!tray.refused) return;
+      said.textContent = tray.refused.reason; said.hidden = false;
+      onResolved({ refused: true });
+      inputs[0]?.input.focus();
+      // Said here, by the token: an empty tray's own notice would only repeat it.
+      if (!tray.rows.length) cancelTray();
+    };
+    const form = addFormBody(fields, chosen, () => installBody({ ...row, access: access() }, []), preview);
     const submit = form.querySelector('button[type="submit"]');
-    const ready = () => { submit.disabled = inputs.some(({ definition, input }) => !definition.optional && !input.value.trim()); };
+    // Preview waits for every required value; the list's row drags once they are in.
+    const ready = () => {
+      submit.disabled = inputs.some(({ definition, input }) => !definition.optional && !input.value.trim());
+      said.hidden = true;
+      onResolved({ access: access(), refused: false });
+    };
     form.addEventListener("input", ready); ready();
     body.append(form);
   } else {
