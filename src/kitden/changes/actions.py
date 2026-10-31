@@ -502,6 +502,14 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+# A server that signs in through the browser stays where it is. Some also take an API key (Neon
+# declares one in the MCP registry, checked 2026-10-31): adding it from the catalog asks for it.
+OAUTH_MOVE = (
+    "{name} signs in through the browser, which the gateway can't do yet, so it stays direct. "
+    "If {name} gives an API key, add it from + Add with that key."
+)
+
+
 def needs_sign_in(url: str, headers: dict) -> bool:
     """True when the server answers an MCP `initialize` with 401 or 403, as a server that
     signs in with OAuth does (Claude Code reads both that way, checked 2026-10-21). Raises
@@ -807,7 +815,7 @@ def local_move_steps(
         except OSError:
             raise ValueError(f"Kitden could not reach {name}.") from None
         if oauth:
-            raise ValueError(f"{name} signs in with OAuth; it stays direct for now.")
+            raise ValueError(OAUTH_MOVE.format(name=name))
 
     steps = [
         step

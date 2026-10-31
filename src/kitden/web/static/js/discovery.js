@@ -22,7 +22,7 @@ export const onlineKind = (server) => serverKinds.get(server) || null;
 export function installBody(row, clients, project = null) {
   const params = { discovery: row.id };
   const action = row.kind === "mcp" ? "gateway.add" : `${row.kind}.install`;
-  params[row.kind === "mcp" ? "server" : row.kind] = row.kind === "mcp" ? `online@registry/${row.name.split("/").pop()}` : row.name;
+  params[row.kind === "mcp" ? "server" : row.kind] = row.kind === "mcp" ? `online@registry/${row.short || row.name.split("/").pop()}` : row.name;
   if (row.kind === "mcp") serverKinds.set(params.server, row.remote ? "remote" : "local");
   // Access values typed in the details (headers, env) go with the change; Preview checks them.
   if (row.kind === "mcp" && row.access) Object.assign(params, structuredClone(row.access));
@@ -116,7 +116,7 @@ export async function openDiscovery(kind = "all", options = {}) {
       const tile = el("span", "itile");
       tile.append(icon(row.kind === "skill" ? "sparkles" : row.kind === "plugin" ? "puzzle" : "server", 14));
       const text = el("span", "tx");
-      const displayName = row.kind === "mcp" ? row.name.split("/").pop() : row.name;
+      const displayName = row.kind === "mcp" ? row.short || row.name.split("/").pop() : row.name;
       const publisher = row.kind === "mcp" ? row.name.split("/").slice(0, -1).join("/").replace(/^io\.github\./, "") : row.repo || row.source;
       text.append(el("b", null, displayName), el("small", null, publisher || row.source));
       const st = el("span", "st", row.held ? "In gateway" : row.refusal ? "Unavailable" : row.installed.length ? "Installed" : "");
@@ -277,7 +277,7 @@ async function itemDetails(row, clients, kind, options, inspector = null, onReso
   const head = header("Online source", row.name, row.description || LABELS[row.kind]);
   const body = el("div", "body discovery");
   if (!inspector) body.append(button("Back to search", () => openDiscovery(kind, options), "btn ghost small"));
-  else body.append(el("h2", null, row.kind === "mcp" ? row.name.split("/").pop() : row.name));
+  else body.append(el("h2", null, row.kind === "mcp" ? row.short || row.name.split("/").pop() : row.name));
   const description = row.description || LABELS[row.kind];
   body.append(el("p", "muted", description.length > 240 ? description.slice(0, 237).trimEnd() + "…" : description));
   if (description.length > 240) {

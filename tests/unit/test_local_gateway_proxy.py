@@ -550,14 +550,17 @@ def test_a_prefixed_name_never_replaces_another_tool():
 class FailingServer(ThreadingHTTPServer):
     """An MCP address that answers every request with an error, and notes what it got."""
 
-    def __init__(self):
+    def __init__(self, status=500):
         self.headers_seen = []
+        self.agents = []
         server = self
 
         class Handler(BaseHTTPRequestHandler):
             def do_POST(self):
                 server.headers_seen.append(self.headers.get("Authorization"))
-                self.send_response(500)
+                server.agents.append(self.headers.get("User-Agent"))
+                self.send_response(status)
+                self.send_header("Content-Length", "0")
                 self.end_headers()
 
             do_GET = do_DELETE = do_POST
@@ -614,6 +617,27 @@ async def test_secrets_stay_out_of_errors_and_logs(home, tmp_path):
     ):
         assert f"{line}\n" in printed
     assert "SENTINEL" not in printed + json.dumps([text(a) for a in answers])
+
+
+async def test_a_remote_that_turns_down_its_token_says_so(home, tmp_path):
+    remote = FailingServer(401)
+    url = f"http://127.0.0.1:{remote.server_port}/mcp"
+    headers = {"Authorization": "Bearer SENTINEL_SECRET_REFUSED"}
+    write_settings(home, {"remote": {"url": url, "headers": headers}})
+    save_tools(home, "remote", [tool("remote_tool")])
+    try:
+        with (tmp_path / "stderr.txt").open("w") as errlog:
+            async with gateway(home, errlog=errlog) as client:
+                answer = await client.call_tool("remote_tool", {})
+    finally:
+        remote.shutdown()
+    assert (answer.is_error, text(answer)) == (
+        True,
+        "remote turned down its access: its token is wrong, or it needs browser sign-in, "
+        "which Kitden does not support yet.",
+    )
+    # The gateway names itself, as the access check does.
+    assert set(remote.agents) == {"kitden"}
 
 
 async def test_unreadable_projects_give_the_global_set(home, capsys):

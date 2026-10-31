@@ -132,6 +132,23 @@ class UpstreamError(Exception):
     """A server could not start or answer. The message is one plain sentence with no secrets."""
 
 
+# A remote server that answered 401 or 403: the library reports only the server's own words.
+REFUSED = (
+    "{server} turned down its access: its token is wrong, or it needs browser sign-in, "
+    "which Kitden does not support yet."
+)
+
+
+def _turned_down(entry: dict) -> bool:
+    """Whether a remote server that would not start answers 401 or 403 (needs_sign_in)."""
+    from kitden.changes.actions import needs_sign_in
+
+    try:
+        return needs_sign_in(str(entry["url"]), entry.get("headers") or {})
+    except OSError:
+        return False
+
+
 def _say(text: str) -> None:
     """One plain line on stderr, which the client keeps in its log."""
     print(text, file=sys.stderr, flush=True)
@@ -291,6 +308,8 @@ class Upstreams:
                 await anyio.sleep_forever()
         except Exception:
             if not ready:
+                if entry.get("url") and await anyio.to_thread.run_sync(_turned_down, entry):
+                    raise UpstreamError(REFUSED.format(server=server)) from None
                 raise
             _say(f"{server} stopped.")
         finally:
@@ -299,7 +318,9 @@ class Upstreams:
     async def _target(self, entry: dict, stack: AsyncExitStack) -> Any:
         """How to reach a server: streamable HTTP for a `url`, else its command over stdio."""
         if entry.get("url"):
-            headers = {str(k): str(v) for k, v in (entry.get("headers") or {}).items()}
+            # It names itself: Cloudflare turns down Python's default agent (seen 2026-10-31).
+            headers = {"User-Agent": "kitden"}
+            headers.update({str(k): str(v) for k, v in (entry.get("headers") or {}).items()})
             timeout = httpx2.Timeout(START_TIMEOUT, read=CALL_TIMEOUT)
             http = await stack.enter_async_context(
                 httpx2.AsyncClient(headers=headers, timeout=timeout)

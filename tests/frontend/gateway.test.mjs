@@ -1686,10 +1686,17 @@ test("in the zone the gateway lights and the slot opens in the row's group", asy
     // From 16 px left of the Gateway column to 194 px right of the Servers column (the mockup's
     // 180 to 760), and from 20 px over the map's top.
     const [gateway, servers] = ['gateway', 'servers'].map((id) => map.layout.columns.find((c) => c.id === id));
-    const y = map.at('gateway:kitden').y;
+    // Above the gateway's box, where only the zone counts.
+    const box = map.at('gateway:kitden');
+    const y = box.y - 17;
     for (const [x, open] of [[gateway.x - 16, false], [gateway.x - 15, true], [servers.x + servers.w + 193, true], [servers.x + servers.w + 194, false]]) {
       map.move(x, y);
       assert.equal(Boolean(movingOn().drop), open, `x ${x}`);
+    }
+    // The gateway's own box, widened 24 px each side, takes a drop wherever it is.
+    for (const [x, open] of [[box.x - 23, true], [box.x - 25, false]]) {
+      map.move(x, box.y + box.h / 2);
+      assert.equal(Boolean(movingOn().drop), open, `box x ${x}`);
     }
     for (const [top, open] of [[-20, false], [-19, true]]) {
       map.move(servers.x, top);

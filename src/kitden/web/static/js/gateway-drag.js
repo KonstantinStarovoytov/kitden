@@ -79,11 +79,21 @@ export function dropBody(row, view) {
 }
 
 // Whether a block whose centre is at `centre` (map point) is over the gateway: by the Servers
-// column and above `line`, the top of the Outside caption when the drag started.
+// column and above `line`, the top of the Outside caption when the drag started, or on the
+// gateway's own box (onGatewayBox).
 export function inZone(layout, centre, line) {
   const column = layout.columns.find((c) => c.id === "servers");
   if (!column) return false;
-  return centre.x > column.x - ZONE.left && centre.x < column.x + column.w + ZONE.right && centre.y < line - ZONE.above;
+  return (centre.x > column.x - ZONE.left && centre.x < column.x + column.w + ZONE.right && centre.y < line - ZONE.above) || onGatewayBox(layout, centre);
+}
+
+// Whether a map point is on the Kitden gateway's box, widened as for a client's wire
+// (NEAR_GATEWAY). A drop there always counts: an empty gateway has little room above the Outside
+// caption, and its box is where people aim.
+function onGatewayBox(layout, at) {
+  const gateway = onMap.model && kitdenGateway();
+  const place = gateway && layout.blocks.find((b) => b.id === gateway.id);
+  return Boolean(place) && at.x > place.x - NEAR_GATEWAY.side && at.x < place.x + place.w + NEAR_GATEWAY.side && at.y > place.y - NEAR_GATEWAY.up && at.y < place.y + place.h + NEAR_GATEWAY.down;
 }
 
 // The Gateway's drags, by kind, as the engine hears them (map-drag.js: `begin`, `over`, `drop`,
@@ -393,7 +403,7 @@ function inAddZone(layout, point, line) {
   const gateway = layout.columns.find((c) => c.id === "gateway");
   const servers = layout.columns.find((c) => c.id === "servers");
   if (!gateway || !servers) return false;
-  return point.x > gateway.x - ADD_ZONE.left && point.x < servers.x + servers.w + ADD_ZONE.right && point.y > -ADD_ZONE.top && point.y < line - ADD_ZONE.above;
+  return (point.x > gateway.x - ADD_ZONE.left && point.x < servers.x + servers.w + ADD_ZONE.right && point.y > -ADD_ZONE.top && point.y < line - ADD_ZONE.above) || onGatewayBox(layout, point);
 }
 
 // A drop while the slot is open adds the same row as a click on the row: the slot stays while it

@@ -99,7 +99,7 @@ from kitden.clients.base import (
     SKILL_REMOVE,
 )
 from kitden.command import installed_command
-from kitden.discovery import Discovery
+from kitden.discovery import Discovery, short_name
 from kitden.gateway_api import GatewayError, MetaMcpClient, ObotClient
 from kitden.gateways import add_gateway, data_dir, load_gateways
 from kitden.local_gateway.project import project_chain, project_chains
@@ -1219,7 +1219,7 @@ def create_app(
                     raise ValueError("This server needs configuration before it can be added.")
                 from kitden.discovery import configured_entry
 
-                discovered = (row["name"].rsplit("/", 1)[-1], configured_entry(row, params))
+                discovered = (short_name(row["name"]), configured_entry(row, params))
             steps = await asyncio.to_thread(
                 gateway_add_steps,
                 adapters,
@@ -1615,7 +1615,7 @@ def create_app(
                 item_kind = "mcp_server" if row["kind"] == "mcp" else row["kind"]
                 row["held"] = (
                     row["kind"] == "mcp"
-                    and row["name"].rsplit("/", 1)[-1] in load_settings(home)["servers"]
+                    and short_name(row["name"]) in load_settings(home)["servers"]
                 )
                 row["installed"] = sorted(
                     {

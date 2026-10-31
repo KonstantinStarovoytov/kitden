@@ -15,7 +15,7 @@ import pytest
 from starlette.testclient import TestClient
 
 from kitden.changes import json_splice
-from kitden.changes.actions import KITDEN_GATEWAY, local_move_steps, needs_sign_in
+from kitden.changes.actions import KITDEN_GATEWAY, OAUTH_MOVE, local_move_steps, needs_sign_in
 from kitden.changes.backup import ChangeStore
 from kitden.changes.client_cli import CommandResult
 from kitden.changes.engine import Engine
@@ -370,12 +370,12 @@ def test_an_oauth_server_is_refused_after_a_401(home):
     oauth, forbidden, plain = FakeRemote(401), FakeRemote(403), FakeRemote(200)
     try:
         add_claude(home, "linear", {"type": "http", "url": oauth.url})
-        words = "linear signs in with OAuth; it stays direct for now."
+        words = OAUTH_MOVE.format(name="linear")
         refused(home, ("claude_code", "linear"), words)
         assert len(oauth.got) == 1
         assert json.loads(oauth.got[0]["body"])["method"] == "initialize"
         add_claude(home, "closed", {"type": "http", "url": forbidden.url})
-        words = "closed signs in with OAuth; it stays direct for now."
+        words = OAUTH_MOVE.format(name="closed")
         refused(home, ("claude_code", "closed"), words)
 
         # An explicit type wins over the address: this one is streamable HTTP.

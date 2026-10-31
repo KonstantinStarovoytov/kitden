@@ -890,7 +890,8 @@ function heldList(name, detail, picked, folder) {
   const off = offNote(detail, where);
   if (off) section.append(off);
   section.append(switchList([{ ...whole, differs: false }, ...tools.map((t) => ({ ...t, description: null }))], { server: name, project: picked || null }));
-  if (!detail.tools.length) section.append(el("p", "muted", NO_TOOLS));
+  // A known problem already says why the list is empty (the warning above); this would repeat it.
+  if (!detail.tools.length && !detail.problem) section.append(el("p", "muted", NO_TOOLS));
   return section;
 }
 

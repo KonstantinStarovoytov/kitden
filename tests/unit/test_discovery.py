@@ -533,3 +533,11 @@ def test_a_bare_authorization_header_takes_a_bearer_token():
     assert fields == [
         {"field": "headers", "name": "Authorization", "label": "API key", "prefix": "Bearer "}
     ]
+
+
+def test_a_generic_registry_name_takes_the_publishers_name():
+    from kitden.discovery import short_name
+
+    assert short_name("com.neon/mcp") == "neon"
+    assert short_name("io.github.acme/mcp-server") == "acme"
+    assert short_name("ac.tandem/docs-mcp") == "docs-mcp"

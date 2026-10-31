@@ -114,6 +114,16 @@ def words_match(query: str, value: str) -> bool:
     return all(word in normalize(value) for word in normalize(query).split())
 
 
+def short_name(name: str) -> str:
+    """A registry server's name in the gateway: "com.neon/mcp" is "neon", "ac.tandem/docs-mcp"
+    is "docs-mcp". A generic last part takes the publisher's own name instead."""
+    publisher, _, last = name.rpartition("/")
+    if last.lower() in ("mcp", "mcp-server", "server", "remote") and publisher:
+        parts = [p for p in publisher.split(".") if p not in ("com", "io", "ai", "dev", "github")]
+        return (parts[-1] if parts else publisher.split(".")[-1]).lower()
+    return last
+
+
 def row_key(row: dict) -> str:
     return hashlib.sha256(json.dumps(row, sort_keys=True).encode()).hexdigest()[:24]
 
@@ -494,6 +504,7 @@ class Discovery:
     def public(self, row: dict) -> dict:
         out = {k: v for k, v in row.items() if k not in ("entry", "formats")}
         if row["kind"] == "mcp":
+            out["short"] = short_name(row["name"])
             # The map shows a dropped server in its group; the entry itself stays private.
             out["remote"] = bool((row.get("entry") or {}).get("url"))
         return out
