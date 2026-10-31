@@ -417,6 +417,7 @@ def test_the_sign_in_check_sends_the_headers_to_the_servers_own_address_only(hom
             needs_sign_in(moved.url, secret)
         assert len(moved.got) == 1
         assert moved.got[0]["headers"]["Authorization"] == "Bearer SENTINEL_SECRET_PROBE"
+        assert moved.got[0]["headers"]["User-Agent"] == "kitden"
         assert elsewhere.got == [] and proxy.got == []  # no redirect followed, no proxy used
         add_claude(home, "moved", {"type": "http", "url": moved.url})
         refused(home, ("claude_code", "moved"), "Kitden could not reach moved.")

@@ -508,7 +508,8 @@ def needs_sign_in(url: str, headers: dict) -> bool:
     OSError when there is no answer, or only a redirect, which the gateway would not follow.
 
     One POST to the server's own address, within 5 seconds. No redirect is followed and no
-    proxy is used, so the headers go nowhere else; an error never holds them.
+    proxy is used, so the headers go nowhere else; an error never holds them. It names itself:
+    Cloudflare answers Python's default user agent with 403 (error 1010, seen 2026-10-31).
     """
     if urlsplit(url).scheme not in ("http", "https"):
         raise OSError("not a web address")
@@ -527,6 +528,7 @@ def needs_sign_in(url: str, headers: dict) -> bool:
         data=json.dumps(body).encode(),
         method="POST",
         headers={
+            "User-Agent": "kitden",
             **{str(k): str(v) for k, v in headers.items()},
             "Content-Type": "application/json",
             "Accept": "application/json, text/event-stream",
