@@ -2599,7 +2599,9 @@ def test_the_gateway_map_has_its_hint_line_and_the_last_words_and_looks():
         '"Point at a link and press × to remove it · click anything for its Details · several '
         'changes wait in preview, then Apply all · drag a server onto a client"'
     ) in gateway
-    assert 'setHint(mode === "map" ? MAP_HINT : "");' in gateway
+    assert 'setHint(mode === "map" ? mapHint() : "");' in gateway
+    # While servers are picked the hint counts them (gateway-pick.js).
+    assert "return pick.ids.size ? PICK_HINT(pick.ids.size) : MAP_HINT;" in gateway
     assert "flex: none" in rule(".hint-line svg")
     # A client whose settings cannot be read says so, as its panel does; so does a plugin entry
     # that is off.

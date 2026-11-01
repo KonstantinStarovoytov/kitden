@@ -1621,3 +1621,67 @@ test('under reduced motion the count lands at once', async (t) => {
   assert.equal(read.style.opacity, '');
   assert.equal(countOf(box).getAttribute('aria-expanded'), 'true');
 });
+
+// Picking several servers outside the gateway (gateway-pick.js). The document hears the band's
+// pointer here, as it does in a browser.
+const { clearPick, pick, PICK_HINT } = await import('../../src/kitden/web/static/js/gateway-pick.js');
+function hearDocument(t) {
+  const heard = {};
+  const was = [document.addEventListener, document.removeEventListener];
+  document.addEventListener = (type, fn) => { (heard[type] ||= []).push(fn); };
+  document.removeEventListener = (type, fn) => { heard[type] = (heard[type] || []).filter((f) => f !== fn); };
+  t.after(() => { [document.addEventListener, document.removeEventListener] = was; clearPick(); data.gateway = VIEW; });
+  // Two servers outside the gateway, one per client.
+  data.gateway = { ...VIEW, groups: { ...VIEW.groups, move: [...VIEW.groups.move, { name: 'docs', clients: ['codex'], columns: ['codex'], items: ['d'], stays: null }] } };
+  return heard;
+}
+const hintNow = () => (hintLine.hidden ? '' : hintLine.children.at(-1).textContent);
+const outsideNodes = (box) => walk(box).filter((n) => /^block:outside:/.test(n.dataset.focus || ''));
+const fireOn = (target, type, event = {}) => { for (const fn of target.listeners[type] || []) fn({ button: 0, target, preventDefault() {}, stopPropagation() {}, ...event }); };
+
+test('a band from empty map space picks the outside servers it meets, and the hint counts them', async (t) => {
+  const heard = hearDocument(t);
+  const box = freshMap();
+  const area = walk(box).find((n) => n.className === 'map-area');
+  area.getBoundingClientRect = () => ({ left: 0, top: 0 });
+  const [first, second] = outsideNodes(box).map((n) => n.style.translate.split(' ').map(parseFloat));
+  fireOn(box, 'pointerdown', { clientX: first[0] - 30, clientY: first[1] - 4 });
+  for (const fn of heard.pointermove || []) fn({ clientX: first[0] + 20, clientY: second[1] + 10 });
+  settle();
+  assert.equal(pick.ids.size, 2);
+  assert.ok(walk(area).some((n) => n.className === 'map-band'));
+  assert.equal(outsideNodes(box).filter((n) => n.classList.contains('selected')).length, 2);
+  assert.equal(hintNow(), PICK_HINT(2));
+  for (const fn of [...(heard.pointerup || [])]) fn({ type: 'pointerup', clientX: first[0] + 20, clientY: second[1] + 10 });
+  // The click that ends the band is swallowed.
+  assert.ok((heard.click || []).length > 0);
+  assert.equal(pick.ids.size, 2);
+});
+
+test('Shift- or Cmd-click picks and unpicks one server and opens no Details; Escape and an empty click clear', async (t) => {
+  hearDocument(t);
+  const box = freshMap();
+  const [a, b] = outsideNodes(box);
+  fireOn(box, 'pointerdown', { target: a, shiftKey: true });
+  press(box, a.dataset.focus);
+  fireOn(box, 'pointerdown', { target: b, metaKey: true });
+  press(box, b.dataset.focus);
+  await done();
+  settle();
+  assert.equal(pick.ids.size, 2);
+  assert.equal(isPanelOpen(), false);
+  fireOn(box, 'pointerdown', { target: a, shiftKey: true });
+  press(box, a.dataset.focus);
+  settle();
+  assert.deepEqual([...pick.ids], [b.dataset.focus.slice('block:'.length)]);
+  for (const fn of box.listeners.keydown) fn({ key: 'Escape', preventDefault() {}, stopPropagation() {} });
+  settle();
+  assert.equal(pick.ids.size, 0);
+  assert.equal(hintNow(), MAP_HINT_WORDS);
+  fireOn(box, 'pointerdown', { target: b, shiftKey: true });
+  press(box, b.dataset.focus);
+  for (const fn of box.listeners.click) fn({ target: box });
+  settle();
+  assert.equal(pick.ids.size, 0);
+});
+const MAP_HINT_WORDS = 'Point at a link and press × to remove it · click anything for its Details · several changes wait in preview, then Apply all · drag a server onto a client';

@@ -5,6 +5,7 @@ import { setCancelFocus } from "./dock.js";
 import { addKind, addName, onOpenAdd, openAdd, pageRead, wasAdded } from "./gateway-add.js";
 import { addForm, connectAction, connectBody, followProject, heldServer, liveHeld, movesTo, NOT_REACHED, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool, TAKE_OUT } from "./gateway-details.js";
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
+import { clearPick, keepPickable, pick, PICK_HINT, pressBand, togglePick } from "./gateway-pick.js";
 import { findIn, foldable, isNarrow, keepFolded, keepOpen, landOwners, landStage, layoutTree, linkKey, litFor, litFrom, litPath, pagesNow, pagesWith, pressCount, pressOpen, shownFound, toggleOpen, turnPage, turnWords, wideWidth } from "./map.js";
 import { addHeadButton, drawChip, glidePill, modeSwitch, switchedNow } from "./map-page.js";
 import { mapView } from "./map-view.js";
@@ -134,7 +135,7 @@ export function renderGateway(main, { again = false } = {}) {
   const seg = modeSwitch("gateway", mode, { old: () => (mode === "map" ? onMap.view && onMap.view.box : onList.box), letGo: letGoIfSelected, shows: () => gatewayShows.mode });
   head.append(addHeadButton("+ Add servers", "add:servers", pressAdd), seg);
   const model = treeFor(view, mode);
-  setHint(mode === "map" ? MAP_HINT : "");
+  setHint(mode === "map" ? mapHint() : "");
   // The search finds here: matches light up, the rest dims, and what hides a match opens (S.6).
   // It changes nothing in a client and moves no Details.
   const found = state.q.trim() ? findIn(model, state.q) : null;
@@ -1034,8 +1035,11 @@ function newMap() {
     tile,
     onOpen: openBlock,
     onFold: foldBlock,
-    onSelect: (id) => pressBlock(onMap.model, id),
-    onEmpty: letGoIfSelected,
+    onSelect: (id) => (withModifier ? togglePickHere(id) : pressBlock(onMap.model, id)),
+    onEmpty: () => {
+      letGoIfSelected();
+      if (clearPick()) pickChanged();
+    },
     onHover: (id) => view.glance(glanceFor(onMap.model, id)),
     links: LINK_HOOKS,
     enterDelay: afterOldPage(),
@@ -1043,12 +1047,27 @@ function newMap() {
   holdKeys(view.box);
   // Escape clears the selection first; open Details then close too (panel.js).
   view.box.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && clearPick()) {
+      pickChanged();
+      return;
+    }
     if (event.key !== "Escape" || !onMap.selected) return;
     onMap.selected = null;
     if (!isPanelOpen()) setState({ selected: null });
     drawAgain();
   });
-  view.box.addEventListener("pointerdown", (event) => pressGrip(event, letGoIfSelected));
+  view.box.addEventListener("pointerdown", (event) => {
+    withModifier = Boolean(event.shiftKey || event.metaKey);
+    pressGrip(event, letGoIfSelected);
+    // A press on empty map space may draw a band; once it does, the selection lets go.
+    const onSomething = event.target && event.target.closest && event.target.closest("button, .hit");
+    if (!onSomething && !withModifier) {
+      pressBand(event, { map: onMap, onPick: () => {
+        letGoIfSelected();
+        pickChanged();
+      } });
+    }
+  });
   view.box.addEventListener("scroll", () => {
     if (!view.box.scrollLeft && !floatingNow()) view.box.classList.remove("beside");
   }, { passive: true });
@@ -1171,7 +1190,8 @@ function drawOnMap(model, { fresh = false, projectChanged = false, lightLater = 
   const motion = mapMotion({ fresh, projectChanged, narrowChanged: flipped, switched, undo });
   const { view, selected } = onMap;
   const later = lightsLater({ unfolds: lightLater, lit });
-  const drawn = view.draw(model, layout, { selected: lit.size ? selected : null, lit: later ? new Set() : lit, found: onMap.found, open, motion });
+  keepPickable(model);
+  const drawn = view.draw(model, layout, { selected: lit.size ? selected : null, chosen: pick.ids, lit: later ? new Set() : lit, found: onMap.found, open, motion });
   // A block a move took off its place stays where it is shown (gateway-drag.js); a drag draws the
   // map again in place as its slot opens or closes.
   placeMoved({ view, model, layout, redraw: drawRows });
@@ -1204,6 +1224,28 @@ function letGoOnMap() {
 // A click on empty map, or the start of a drag, lets go of what is selected.
 function letGoIfSelected() {
   if (onMap.selected) letGoOnMap();
+}
+
+// Picking several servers outside the gateway (gateway-pick.js): a press with Shift or Cmd held
+// makes the click that follows pick or unpick its block instead of selecting it.
+let withModifier = false;
+function togglePickHere(id) {
+  withModifier = false;
+  if (togglePick(onMap.model, id)) {
+    letGoIfSelected();
+    pickChanged();
+  } else pressBlock(onMap.model, id);
+}
+
+// The pick changed: the map draws it, and the hint counts it.
+function pickChanged() {
+  setHint(mapHint());
+  drawAgain();
+}
+
+// The map's hint: the pick's count while something is picked.
+function mapHint() {
+  return pick.ids.size ? PICK_HINT(pick.ids.size) : MAP_HINT;
 }
 
 // "+ Add servers" in the page header opens the Add a server panel (gateway-add.js). Both its doors,

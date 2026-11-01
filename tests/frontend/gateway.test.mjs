@@ -2836,3 +2836,47 @@ test('the Add a server card is a grey dashed place, never the preview look; it t
   assert.doesNotMatch(css.match(/div\.map \.block\.addslot[^{]*\{[^}]*\}/g).join(' '), /--preview-(line|fill)/);
   assert.match(rule('div.map .block.addslot.lit'), /border-color: var\(--route\)/);
 });
+
+// Picking several outside servers (gateway-pick.js, Part 2 of the 2026-11-01 design).
+const { bandHits, clearPick, keepPickable, pick, pickable, PICK_HINT, togglePick } = await import('../../src/kitden/web/static/js/gateway-pick.js');
+
+test('the band picks only outside servers with a grip, whatever way it is drawn', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+  const layout = layoutTree(tree, { open: new Set(), narrow: false });
+  const outside = layout.blocks.filter((b) => b.id.startsWith('outside:'));
+  assert.ok(outside.length >= 2);
+  const [top, bottom] = [outside[0], outside.at(-1)];
+  const all = bandHits(tree, layout, { x: 0, y: top.y }, { x: 2000, y: bottom.y + bottom.h });
+  assert.deepEqual(all, tree.blocks.filter((b) => pickable(b)).map((b) => b.id));
+  assert.ok(all.length >= 2);
+  assert.deepEqual(bandHits(tree, layout, { x: 2000, y: bottom.y + bottom.h }, { x: 0, y: top.y }), all);
+  assert.deepEqual(bandHits(tree, layout, { x: 0, y: 0 }, { x: 10, y: 10 }), []);
+});
+
+test('a toggle picks and unpicks; a held server or a client cannot be picked', () => {
+  clearPick();
+  const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+  const id = tree.blocks.find((b) => pickable(b)).id;
+  assert.equal(togglePick(tree, id), true);
+  assert.deepEqual([...pick.ids], [id]);
+  assert.equal(togglePick(tree, id), true);
+  assert.deepEqual([...pick.ids], []);
+  assert.equal(togglePick(tree, 'held:kitden:files'), false);
+  assert.equal(togglePick(tree, 'client:codex'), false);
+  assert.deepEqual([...pick.ids], []);
+});
+
+test('a pick drops servers that are no longer outside, and clearing says whether it held any', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, OPTS);
+  const id = tree.blocks.find((b) => pickable(b)).id;
+  pick.ids = new Set([id, 'outside:move:gone', 'held:kitden:files']);
+  keepPickable(tree);
+  assert.deepEqual([...pick.ids], [id]);
+  assert.equal(clearPick(), true);
+  assert.equal(clearPick(), false);
+});
+
+test('the hint counts what is picked', () => {
+  assert.equal(PICK_HINT(3), '3 servers picked · drag one onto the gateway · Esc clears');
+  assert.equal(PICK_HINT(1), '1 server picked · drag one onto the gateway · Esc clears');
+});
