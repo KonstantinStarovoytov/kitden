@@ -365,7 +365,7 @@ export function withLeaving(model, rows, answer) {
 
 // What a block shows before its name: a client's tile, a plugin's puzzle tile, a file's tile, an
 // import's bare icon.
-const TILES = { plugin: ["block-icon", "puzzle", 15], file: ["block-icon", "file-text", 15], import: ["block-icon bare", "scroll-text", 13] };
+const TILES = { plugin: ["block-icon", "puzzle", 15], addslot: ["block-icon", "plus", 15], file: ["block-icon", "file-text", 15], import: ["block-icon bare", "scroll-text", 13] };
 function tile(block) {
   if (block.kind === "client") return mark(block.client);
   if (!TILES[block.kind]) return null;

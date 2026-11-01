@@ -649,6 +649,8 @@ test('the map ends Plugins and skills with an Add a plugin card that opens the c
   const card = node(box, 'block:addslot:plugins');
   assert.ok(card, 'the card is on the map');
   assert.deepEqual([card.className.split(' ').slice(0, 2).join(' '), text(card).includes('Add a plugin'), text(card).includes('From the catalog')], ['block addslot', true, true]);
+  // Its "+" tile, as the Gateway's card has.
+  assert.ok(walk(card).some((n) => n.className === 'block-icon'), 'the card has its + tile');
   // No caption holds a button any more.
   assert.equal(walk(box).some((n) => n.dataset.focus === 'add:plugins'), false);
   try {

@@ -505,7 +505,7 @@ div.map .block.page .block-label { color: var(--ink-4); }
 .btn.add { color: var(--route); border-color: color-mix(in srgb, var(--route) 45%, var(--wire)); background: transparent; }
 .btn.add:hover:not(:disabled), .btn.add[aria-expanded="true"] { background: var(--route-soft); }
 /* The page's add button sits beside Map | List, 8 px from it, as tall as it. */
-.page-head > .btn.add { margin-left: auto; align-self: stretch; }
+.page-head > .btn.add { margin-left: auto; padding-block: 6px; }
 .page-head > .btn.add + .seg { margin-left: -8px; }
 .s-via { color: var(--lamp-off); }
 .s-done { color: var(--lamp-on); } .s-done .dot::after { transform: scale(1); }
