@@ -1383,7 +1383,7 @@ function dragMap({ covers = {}, id = 'outside:move:github', view: shown = MEDIUM
   globalThis.document.documentElement.classList = { add: (name) => grabbing.add(name), remove: (name) => grabbing.delete(name) };
   const map = { asked, captured, heard, view, grabbing, node, tree: null, layout: null };
   const redraw = () => {
-    map.tree = gatewayTree(shown, { ...opts, rows: rowsOnMap(tray), ...movingOn() });
+    map.tree = gatewayTree(shown, { ...opts, rows: rowsOnMap(tray), ...movingOn(), addCard: true });
     map.layout = layoutTree(map.tree, { open: new Set(), narrow: false });
     placeMoved({ view, model: map.tree, layout: map.layout, redraw });
   };
@@ -2016,8 +2016,9 @@ test("the gateway lights and the slot opens over the block's own group", async (
     const map = dragMap();
     map.press();
     map.move(map.home.x + 16, map.home.y + 10);
-    // It lights the block, the gateway and its dotted line, as a glance does.
-    assert.deepEqual(map.asked.find(([what]) => what === 'glance'), ['glance', ['outside:move:github', 'gateway:kitden', 'client:claude_code>outside:move:github']]);
+    // It lights the block, the gateway and its dotted line, as a glance does, and the Add a server
+    // card, a place to drop too.
+    assert.deepEqual(map.asked.find(([what]) => what === 'glance'), ['glance', ['outside:move:github', 'gateway:kitden', 'addslot:servers', 'client:claude_code>outside:move:github']]);
     assert.deepEqual(movingOn(), {}, 'no slot while the block is in its own group');
     // Its centre over the gateway's groups, in the Local group's place too: the slot opens in its
     // own group, Remote, and the gateway lights.
@@ -2798,4 +2799,40 @@ test('an outside block has a grey-ring lamp and a grip only where the gateway ca
   // A move in the tray: its block is the preview look, with a left port and the words of a press.
   const moving = block(gatewayTree(MEDIUM_VIEW, { ...OPTS, rows: [moveRow(GITHUB)] }), 'preview:github');
   assert.deepEqual([moving.lamp, moving.ports, moving.icon, moving.takeOut], ['preview', { left: true }, 'globe', 'In preview. Click to take it out.']);
+});
+
+// The map ends the gateway's groups with a quiet card that opens the add panel (Part 1 of the
+// 2026-11-01 design). It is a place, not a preview: no lamp, no ports, no links.
+test('the map ends the gateway groups with an "Add a server" card, before the Outside group', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, addCard: true });
+  const card = block(tree, 'addslot:servers');
+  assert.deepEqual([card.kind, card.column, card.name, card.meta, card.icon, card.lamp], ['addslot', 'servers', 'Add a server', 'From the catalog', 'plus', undefined]);
+  const ids = tree.blocks.filter((b) => b.column === 'servers').map((b) => b.id);
+  assert.ok(ids.indexOf('addslot:servers') > ids.indexOf('held:kitden:files'));
+  assert.ok(ids.indexOf('addslot:servers') < ids.indexOf('group:outside'));
+  assert.ok(!tree.links.some((l) => l.to === card.id || l.from === card.id));
+  // The List has no card.
+  assert.equal(block(gatewayTree(MEDIUM_VIEW, OPTS), 'addslot:servers'), undefined);
+});
+
+test('no "Add a server" card before the gateway is set up or while it cannot be read', () => {
+  const first = gatewayTree(FIRST_RUN_VIEW, { setup: NO_ENTRIES, clients: FOUND, open: new Set(), held: new Map(), addCard: true });
+  assert.equal(first.blocks.some((b) => b.kind === 'addslot'), false);
+  const broken = { ...MEDIUM_VIEW, gateways: MEDIUM_VIEW.gateways.map((g) => (g.kind === 'kitden' ? { ...g, problem: 'bad file' } : g)) };
+  assert.equal(gatewayTree(broken, { ...OPTS, addCard: true }).blocks.some((b) => b.kind === 'addslot'), false);
+});
+
+test('the search never matches the "Add a server" card', () => {
+  const tree = gatewayTree(MEDIUM_VIEW, { ...OPTS, addCard: true });
+  assert.equal(findIn(tree, 'add').matches.has('addslot:servers'), false);
+});
+
+test('the Add a server card is a grey dashed place, never the preview look; it turns accent when pointed at or lit', async () => {
+  const { readFileSync } = await import('node:fs');
+  const css = readFileSync(new URL('../../src/kitden/web/static/style.css', import.meta.url), 'utf8');
+  const rule = (selector) => (css.match(new RegExp(`${selector.replace(/[.()]/g, '\\$&')}[^{]*\\{([^}]*)\\}`)) || [])[1] || '';
+  assert.match(rule('div.map .block.addslot '), /border: 1px dashed var\(--wire-strong\)/);
+  assert.match(rule('div.map .block.addslot '), /background: transparent/);
+  assert.doesNotMatch(css.match(/div\.map \.block\.addslot[^{]*\{[^}]*\}/g).join(' '), /--preview-(line|fill)/);
+  assert.match(rule('div.map .block.addslot.lit'), /border-color: var\(--route\)/);
 });

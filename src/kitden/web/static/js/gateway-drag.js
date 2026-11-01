@@ -203,7 +203,12 @@ function beginIn(drag) {
   const kitden = model.blocks.find((b) => b.kind === "gateway" && b.gateway.kind === "kitden");
   drag.gateway = kitden ? kitden.id : null;
   const lines = model.links.filter((l) => l.to === drag.id).map(linkKey);
-  view.glance(new Set([drag.id, ...(drag.gateway ? [drag.gateway] : []), ...lines]));
+  view.glance(new Set([drag.id, ...(drag.gateway ? [drag.gateway, ...addCard(model)] : []), ...lines]));
+}
+
+// The Add a server card lights with the gateway while a server is dragged in: a place to drop too.
+function addCard(model) {
+  return model.blocks.filter((b) => b.kind === "addslot").map((b) => b.id);
 }
 
 // Its centre over the gateway (inZone), and not over Details or the dock: the gateway lights and the
@@ -378,7 +383,7 @@ function beginAdd(drag) {
   const caption = onMap.layout.blocks.find((b) => b.id === "group:outside");
   const kitden = kitdenGateway();
   Object.assign(drag, { ghost, box, line: caption ? caption.y : Infinity, group: kind === "local" ? "local" : "remote", gateway: kitden ? kitden.id : null });
-  if (kitden) onMap.view.glance(new Set([kitden.id]));
+  if (kitden) onMap.view.glance(new Set([kitden.id, ...addCard(onMap.model)]));
 }
 
 // The ghost keeps the spot of the press under the pointer. With the pointer in the zone (inAddZone)

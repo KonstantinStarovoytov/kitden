@@ -1438,19 +1438,20 @@ test('Apply fails: the row still says In preview and the preview block stays', a
   assert.equal(node(box, STATUS_HELD), null);
 });
 
-test('the More door lets go of the selection, as + Add does, and an empty click leaves the panel', async (t) => {
+test('the More door and the Add a server card let go of the selection, as + Add does, and an empty click leaves the panel', async (t) => {
   const box = freshMap();
   t.after(addCleanUp);
   const kitden = VIEW.gateways[0];
   const more = gatewayCard(kitden, { view: VIEW, setup: [], clients: [] }).more.find((m) => m.label === ADD_SERVER);
   const selected = () => walk(box).filter((n) => /\bselected\b/.test(n.className)).length;
-  for (const door of ['more', 'plus']) {
+  for (const door of ['more', 'plus', 'card']) {
     press(box, 'block:gateway:kitden');
     settle();
     assert.equal(selected(), 1, door);
     queue('/api/market-servers', { status: 200, json: { servers: MARKET } });
     queue('/api/discovery/sources', { status: 200, json: { sources: [], offline: true } });
     if (door === 'more') await more.run();
+    else if (door === 'card') press(box, 'block:addslot:servers');
     else press(box, 'add:servers');
     await done();
     const local = walk(pages['#drawer']).find((n) => n.tagName === 'BUTTON' && n.textContent === 'On this Mac');

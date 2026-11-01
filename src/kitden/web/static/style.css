@@ -733,6 +733,12 @@ div.map .block-projects.own { color: var(--route); }
 /* Outside the gateway: on the dim fill, the grip where the gateway can take it, its icon with no tile
    (a move out's preview there too), a grey ring for its lamp and a grey port. */
 div.map .block.outside { background: var(--dim); }
+/* The Add a server card: a place, not a preview, so grey dashed with no fill (as .empty). It turns
+   accent when pointed at, and when a drag lights the gateway. */
+div.map .block.addslot { border: 1px dashed var(--wire-strong); background: transparent; }
+div.map .block.addslot:hover, div.map .block.addslot.lit { border-color: var(--route); }
+div.map .block.addslot .block-icon { color: var(--route); }
+div.map .block.addslot .block-meta { color: var(--ink-3); }
 div.map .block-icon.bare { width: auto; height: auto; border: 0; background: none; }
 div.map .block-grip { flex: none; display: grid; margin-right: -4px; color: var(--lamp-off); }
 div.map .block.more { justify-content: center; border-style: dashed; background: transparent; color: var(--ink-2); }

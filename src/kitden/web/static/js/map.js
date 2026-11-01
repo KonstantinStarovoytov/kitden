@@ -725,8 +725,8 @@ export function litPath(model, id) {
 }
 
 // The blocks whose name holds `text` (any case, trimmed), and every block above a match, so a
-// folded parent opens to show it. A group's caption ("Remote") is not a thing to find, so it
-// is never a match. Empty text finds nothing.
+// folded parent opens to show it. A group's caption ("Remote") and an add card are not things to
+// find, so they are never a match. Empty text finds nothing.
 export function findIn(model, text) {
   const words = String(text || "").trim().toLowerCase();
   const matches = new Set();
@@ -734,7 +734,7 @@ export function findIn(model, text) {
   if (!words) return { matches, open };
   const byId = new Map(model.blocks.map((block) => [block.id, block]));
   for (const block of model.blocks) {
-    if (block.kind === "group" || !String(block.name || "").toLowerCase().includes(words)) continue;
+    if (block.kind === "group" || block.kind === "addslot" || !String(block.name || "").toLowerCase().includes(words)) continue;
     matches.add(block.id);
     for (let at = block.parent; at && byId.has(at) && !open.has(at); at = byId.get(at).parent) open.add(at);
   }

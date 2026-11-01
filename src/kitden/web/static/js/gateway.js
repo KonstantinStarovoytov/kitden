@@ -34,6 +34,9 @@ const OUTSIDE_BLOCK_H = 50;
 // The groups of servers outside the gateway in /api/gateway-view, in the order the page lists them.
 // A server's icon on the map is the one its panel shows (SERVER_ICONS, OUTSIDE_ICONS).
 const OUTSIDE_GROUPS = ["move", "local", "plugin"];
+// The card at the end of the gateway's groups that opens the add panel: a place, so no lamp,
+// ports or links.
+const ADD_CARD = { id: "addslot:servers", column: "servers", kind: "addslot", name: "Add a server", meta: "From the catalog", icon: "plus", h: OUTSIDE_BLOCK_H };
 // What a block in preview says under the pointer: a press takes its row out of the tray (D12).
 const IN_PREVIEW = "In preview. Click to take it out.";
 // A server the Add panel adds grows out of the gateway in this long, and shrinks back into it; the
@@ -165,7 +168,7 @@ function switchInPlace(again, scope) {
 // on the map (`mode`) the tray's rows and a drag. The List shows what is set up, so its search
 // finds only that.
 function treeFor(view, mode = "map") {
-  const onMapOnly = mode === "map" ? { rows: rowsOnMap(tray).map(withKind), ...movingOn() } : {};
+  const onMapOnly = mode === "map" ? { rows: rowsOnMap(tray).map(withKind), ...movingOn(), addCard: true } : {};
   return growBack(gatewayTree(view, { setup: data.setupServer, clients: data.clients, held: liveHeld(view), picked: state.project, ...onMapOnly }));
 }
 
@@ -271,7 +274,7 @@ function heldTag(server, on) {
 // line drawn leaving. Each block and link a row draws names it (`row`, its key); rows are drawn
 // once they have their part. While a server is dragged (`drop`, `{ name, kind }`, kind "remote"
 // or "local") the slot opens in that group too.
-export function gatewayTree(view, { setup, clients = [], held = new Map(), picked = "", rows = [], drop = null } = {}) {
+export function gatewayTree(view, { setup, clients = [], held = new Map(), picked = "", rows = [], drop = null, addCard = false } = {}) {
   const { linked, off, known, setup: offers } = kitdenClients(setup);
   const kitden = view.gateways.find((g) => g.kind === "kitden");
   const first = known && !linked.length && !off.length && Boolean(kitden) && !kitden.problem && !(kitden.servers || []).length;
@@ -345,6 +348,9 @@ export function gatewayTree(view, { setup, clients = [], held = new Map(), picke
     };
     addGateway(other, { reaches: WRITABLE.filter((c) => (per[c] || []).length), servers: (answer && answer.servers) || [], kindOf, server, unread });
   }
+  // The map ends the gateway's groups with a card that opens the add panel, once there is a
+  // gateway to add to.
+  if (addCard && kitden && !first && !kitden.problem) blocks.push({ ...ADD_CARD });
   blocks.push(...tools);
   const outside = outsideParts(view, kitden, { picked, first, moved, out, gone: directRemovals(rows) });
   return { columns: GATEWAY_COLUMNS, blocks: [...blocks, ...outside.blocks], links: [...links, ...outside.links] };
@@ -1209,7 +1215,7 @@ function pressAdd(node) {
 }
 
 // A press on a block (a held server opened or folded first, by onOpen). "N more" turns its group's
-// page (turnOnMap). A second press on the selected block lets go. The first run's slot adds the
+// page (turnOnMap). The Add a server card opens the add panel. A second press on the selected block lets go. The first run's slot adds the
 // change that sets every client up; the slot of a drag does nothing. A preview block takes its row
 // out of the tray (D12). Any other block is selected.
 export function pressBlock(model, id) {
@@ -1219,6 +1225,11 @@ export function pressBlock(model, id) {
   }
   const block = model.blocks.find((b) => b.id === id);
   if (!block) return;
+  // The Add a server card opens the add panel; focus comes back to "+ Add servers".
+  if (block.kind === "addslot") {
+    openAdd().catch(reportError);
+    return;
+  }
   if (afterPress({ selected: onMap.selected, id, opened: foldable(model).has(id) && onMap.open.has(id) }) === "letGo") {
     letGoOnMap();
     return;
