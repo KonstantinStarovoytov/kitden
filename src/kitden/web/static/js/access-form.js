@@ -10,7 +10,8 @@ import { giveAccess } from "./tray.js";
 // "Token works" shows a moment before the panel goes.
 const WORKS_MS = 600;
 
-// The form for `waits` ({ server, kind, fields, reason }): `onCheck(values)` runs on Add token.
+// The form for `waits` ({ server, kind, fields, reason }): `onCheck(values)` runs on Add token
+// (Preview when every value is optional; `values` is then null when none is typed).
 // Returns { node, values, focus, checking, works, refuse }.
 export function accessForm(waits, onCheck) {
   const form = el("form", "form access-form");
@@ -44,7 +45,9 @@ export function accessForm(waits, onCheck) {
   why.hidden = true;
   const done = el("p", "access-works");
   done.hidden = true;
-  const submit = el("button", "btn primary", "Add token");
+  // With only optional values (a remote that may take a token), the form previews without one.
+  const label = required.length ? "Add token" : "Preview";
+  const submit = el("button", "btn primary", label);
   submit.type = "submit";
   form.append(rows, why, done, el("p", "muted", "Saved in macOS Keychain on Apply."), names, submit);
 
@@ -65,7 +68,7 @@ export function accessForm(waits, onCheck) {
   // Checking…: the words change at once, and the busy ring comes after 150 ms (busyWhile).
   const checking = (work) => {
     submit.textContent = "Checking…";
-    const back = () => { submit.textContent = "Add token"; };
+    const back = () => { submit.textContent = label; };
     return busyWhile(submit, Promise.resolve(work).finally(back));
   };
   // Token works: the green lamp, and a check drawn in 320 ms.
@@ -90,7 +93,7 @@ export function accessForm(waits, onCheck) {
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     const given = values();
-    if (!given) {
+    if (!given && required.length) {
       focus();
       return;
     }

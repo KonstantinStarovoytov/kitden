@@ -2,9 +2,13 @@
 import { getJson, postJson } from "./api.js";
 import { button, el, icon } from "./dom.js";
 import { header, openPanel, panelState, review } from "./panel.js";
+import { accessForm } from "./access-form.js";
 import { addFormBody, clientChecks } from "./offer.js";
 import { state } from "./store.js";
 import { cancelTray, inTray, keyFor, tray } from "./tray.js";
+
+// The token field a remote server gets when its entry declares none (actions.py TOKEN_FIELD).
+const TOKEN_FIELD = { field: "headers", name: "Authorization", label: "Access token", prefix: "Bearer " };
 
 const LABELS = { skill: "Skill", plugin: "Plugin", mcp: "MCP server" };
 
@@ -122,18 +126,19 @@ export async function openDiscovery(kind = "all", options = {}) {
       const st = el("span", "st", row.held ? "In gateway" : row.refusal ? "Unavailable" : row.installed.length ? "Installed" : "");
       line.append(tile, text, st);
       if (Number.isFinite(row.installs)) text.append(el("small", "catalog-popularity", `${new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(row.installs)} installs`));
-      // A free row drags. One that needs access says "Needs token" and drags only once its details
-      // hold every required value (`row.access`); the drop then carries them, and Preview checks them.
+      // A free row drags. One that needs access says "Needs token" (or "Needs sign-in") in amber
+      // until its details hold values that work (`row.access`); dropped without them, it waits in
+      // preview for its token.
       const free = !row.held && !row.refusal && !row.installed.length && Boolean(options.drag);
       let grip = null;
       const paint = () => {
         if (!free) return;
         const waits = Boolean((row.access_required || row.setup?.length) && (!row.access || row.refused));
-        line.classList.toggle("drags", !waits);
-        if (waits && grip) { grip.remove(); grip = null; }
-        if (!waits && !grip) { grip = icon("grip-vertical", 12, "ic grip"); line.prepend(grip); }
-        st.textContent = row.refused ? "Token refused" : waits ? "Needs token" : "";
-        line.title = waits ? "Needs a token. Click to review."
+        line.classList.add("drags");
+        if (!grip) { grip = icon("grip-vertical", 12, "ic grip"); line.prepend(grip); }
+        st.textContent = waits ? (row.access_kind === "sign-in" ? "Needs sign-in" : "Needs token") : "";
+        st.classList.toggle("warn", waits);
+        line.title = waits ? "Needs a token. Click to add it, or drag it to wait in preview."
           : row.kind === "mcp" ? "Drag to the gateway to preview" : "Drag onto a client to preview";
       };
       if (free) line.addEventListener("pointerdown", (event) => { if (line.classList.contains("drags")) options.drag(event, row, answer.clients, line); });
@@ -229,8 +234,8 @@ export async function openDiscovery(kind = "all", options = {}) {
   more.prepend(el("p", "muted", "Built-in catalogs are available above. Add public GitHub repositories here. Removing a source keeps installed items."), sourceList);
   showSources();
   const hint = el("p", "muted discovery-hint", kind === "mcp"
-    ? "Click to review · drag onto the gateway to preview."
-    : "Click to review · drag onto a client to preview.");
+    ? "Click to review · drag onto the gateway"
+    : "Click to review · drag onto a client");
   body.append(form, filters, sourceLabel, sourceButtons, more, hint, status, workspace);
   if (saved?.answer) draw(saved.answer);
   else runSearch();
@@ -304,64 +309,42 @@ async function itemDetails(row, clients, kind, options, inspector = null, onReso
   else if (row.kind === "mcp") {
     const chosen = new Set(["gateway"]);
     body.append(el("p", "muted", "Adds to the gateway for all projects."));
-    if (row.access_required) body.append(el("p", "why", "Needs an access token. Browser sign-in is not supported yet."));
     if (row.access_note) body.append(el("p", "muted", row.access_note));
-    const fields = el("div", "access-fields");
-    const inputs = [];
     const definitions = [...(row.setup || [])];
     if (row.remote && !definitions.some((f) => f.field === "headers" && f.name === "Authorization")) {
-      definitions.push({ field: "headers", name: "Authorization", label: "Access token", prefix: "Bearer ", optional: !row.access_required });
+      definitions.push({ ...TOKEN_FIELD, optional: !row.access_required });
     }
-    // An optional token and its notes fold under one line; required fields stay open.
-    const optional = definitions.length > 0 && definitions.every((f) => f.optional);
-    const box = optional ? el("details") : fields;
-    if (optional) { box.append(el("summary", null, "Add an access token")); fields.append(box); }
-    for (const definition of definitions) {
-      const label = el("label", "field");
-      const input = el("input"); input.type = "password"; input.autocomplete = "off";
-      input.placeholder = definition.prefix ? "Paste token" : "Enter value";
-      label.append(el("span", null, definition.label), input);
-      box.append(label);
-      inputs.push({ definition, input });
+    const name = row.short || row.name.split("/").pop();
+    const requestOf = (access) => installBody({ ...row, access }, []);
+    if (!definitions.length) {
+      body.append(addFormBody(null, chosen, () => requestOf(null), async (request) => {
+        await review(request);
+        if (inTray(keyFor(request))) options.added?.(request);
+      }));
+    } else {
+      // One form for the values the server needs: Add token previews it, which is the check.
+      const waits = { server: name, kind: row.access_kind === "sign-in" ? "sign-in" : "token", fields: definitions };
+      const form = accessForm(waits, async (access) => {
+        const request = requestOf(access);
+        const before = tray.refused;
+        await review(request);
+        const queued = tray.rows.find((each) => each.key === keyFor(request));
+        if (queued && !queued.waits) {
+          if (access) form.works();
+          onResolved({ access, refused: false });
+          options.added?.(request);
+        } else if (queued && queued.waits.refused) {
+          form.refuse(queued.waits.reason);
+          onResolved({ access: null, refused: true });
+        } else if (queued) options.added?.(request);
+        else if (tray.refused && tray.refused !== before) {
+          form.refuse(tray.refused.reason);
+          // Said here, by the token: an empty tray's own notice would only repeat it.
+          if (!tray.rows.length) cancelTray();
+        }
+      });
+      body.append(form.node);
     }
-    if (definitions.length) box.append(el("p", "muted", "Saved in macOS Keychain on Apply."));
-    // The values typed so far, as the change's params ({ headers, env }), or null while a required
-    // one is missing or none is typed. The list's row gets them too, so it can be dragged.
-    const access = () => {
-      if (inputs.some(({ definition, input }) => !definition.optional && !input.value.trim())) return null;
-      const out = {};
-      for (const { definition: f, input } of inputs) {
-        if (!input.value.trim()) continue;
-        // A pasted "Bearer …" keeps one prefix.
-        const value = f.prefix ? input.value.trim().replace(/^bearer\s+/i, "") : input.value.trim();
-        (out[f.field] ||= {})[f.name] = (f.prefix || "") + value;
-      }
-      return Object.keys(out).length ? out : null;
-    };
-    // A refusal shows under the fields too, where the token is, and keeps focus there.
-    const said = el("p", "why"); said.setAttribute("role", "alert"); said.hidden = true;
-    fields.append(said);
-    const preview = async (request) => {
-      said.hidden = true;
-      await review(request);
-      if (inTray(keyFor(request))) { options.added?.(request); return; }
-      if (!tray.refused) return;
-      said.textContent = tray.refused.reason; said.hidden = false;
-      onResolved({ refused: true });
-      inputs[0]?.input.focus();
-      // Said here, by the token: an empty tray's own notice would only repeat it.
-      if (!tray.rows.length) cancelTray();
-    };
-    const form = addFormBody(fields, chosen, () => installBody({ ...row, access: access() }, []), preview);
-    const submit = form.querySelector('button[type="submit"]');
-    // Preview waits for every required value; the list's row drags once they are in.
-    const ready = () => {
-      submit.disabled = inputs.some(({ definition, input }) => !definition.optional && !input.value.trim());
-      said.hidden = true;
-      onResolved({ access: access(), refused: false });
-    };
-    form.addEventListener("input", ready); ready();
-    body.append(form);
   } else {
     const available = clients.filter((c) => (row.kind !== "plugin" || ["claude_code", "codex"].includes(c)) && !row.installed.includes(c));
     const chosen = new Set();

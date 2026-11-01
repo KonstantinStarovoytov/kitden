@@ -691,3 +691,86 @@ test('a local value says it is checked when the gateway starts it', () => {
   type(inputsOf(form)[0], 'k1');
   assert.deepEqual(form.values(), { env: { NEON_KEY: 'k1' } });
 });
+
+// The catalog's rows and details for a server that needs a token (discovery.js).
+const flush = async () => { for (let i = 0; i < 8; i++) await wait(); };
+const NEON = { id: 'n1', name: 'io.github.x/neon', short: 'neon', kind: 'mcp', remote: true, setup: [TOKEN], installed: [], source: 'mcp-registry' };
+async function catalog(previewAnswer, options = {}) {
+  const original = globalThis.fetch;
+  const asked = [];
+  globalThis.fetch = async (url, init = {}) => {
+    const body = init.body ? JSON.parse(init.body) : {};
+    if (url === '/api/discovery/sources') return { ok: true, json: async () => ({ sources: [{ id: 'mcp-registry', name: 'MCP Registry', kind: 'mcp' }] }) };
+    if (url === '/api/discovery/search') return { ok: true, json: async () => ({ clients: [], results: [{ ...NEON }] }) };
+    if (url === '/api/discovery/details') return { ok: true, json: async () => ({ ...NEON, description: 'Neon databases' }) };
+    if (url === '/api/batch/preview') { asked.push(body); return previewAnswer(body); }
+    return original(url, init);
+  };
+  await cancelTray();
+  const { openDiscovery } = await import('../../src/kitden/web/static/js/discovery.js');
+  await openDiscovery('mcp', options);
+  await flush();
+  return { asked, restore: () => { globalThis.fetch = original; } };
+}
+const neonRow = () => find((n) => n.classList.contains('res') && text(n).includes('neon'))[0];
+const needsAnswer = (refused) => (body) => {
+  const reason = refused ? 'neon did not accept this token.' : 'neon needs a token.';
+  return { ok: false, status: 422, json: async () => ({ detail: reason, row: body.requests.at(-1).id, needs: { server: 'neon', kind: 'token', fields: [TOKEN], reason, refused } }) };
+};
+const okAnswer = (body) => {
+  const rows = body.requests.map((r, at) => ({ id: r.id, kind: r.kind, title: r.title, detail: '', project: null, steps: [at], after: [] }));
+  return { ok: true, status: 200, json: async () => ({ id: 'cn', action: 'batch', state: 'previewed', error: null, undo_note: null, steps: rows.map(() => ({ client: 'kitden', name: 'neon' })), rows }) };
+};
+
+test('a row that needs a token says so in amber and still drags', async () => {
+  let dragged = null;
+  const page = await catalog(needsAnswer(false), { drag: (_event, row) => { dragged = row; } });
+  try {
+    const row = neonRow();
+    const status = row.children.find((n) => n.className.split(' ').includes('st'));
+    assert.deepEqual([status.textContent, status.className], ['Needs token', 'st warn']);
+    assert.equal(row.classList.contains('drags'), true);
+    for (const listener of row.listeners.pointerdown) listener({});
+    assert.equal(dragged.id, 'n1');
+  } finally { page.restore(); await cancelTray(); }
+});
+
+test('a refused token shows its reason under the field', async () => {
+  const page = await catalog(needsAnswer(true));
+  try {
+    await press(neonRow());
+    await flush();
+    const input = find((n) => n.tagName === 'INPUT' && n.type === 'password')[0];
+    input.value = 'bad';
+    fire(find((n) => n.tagName === 'FORM' && n.className.includes('access-form'))[0], 'submit');
+    await flush();
+    assert.deepEqual(page.asked.at(-1).requests.at(-1).params.headers, { Authorization: 'Bearer bad' });
+    const why = find((n) => n.className.split(' ').includes('access-why'))[0];
+    assert.equal(why.hidden, false);
+    assert.equal(text(why), 'neon did not accept this token.');
+  } finally { page.restore(); await cancelTray(); }
+});
+
+test('a working token says Token works and the row is added', async () => {
+  const added = [];
+  const page = await catalog(okAnswer, { added: (request) => added.push(request) });
+  try {
+    await press(neonRow());
+    await flush();
+    find((n) => n.tagName === 'INPUT' && n.type === 'password')[0].value = 'good';
+    fire(find((n) => n.tagName === 'FORM' && n.className.includes('access-form'))[0], 'submit');
+    await flush();
+    const works = find((n) => n.className.split(' ').includes('access-works'))[0];
+    assert.equal(works.hidden, false);
+    assert.equal(added.length, 1);
+    assert.equal(tray.rows[0].waits, null);
+  } finally { page.restore(); await cancelTray(); }
+});
+
+test('the catalog hint has no final period', async () => {
+  const page = await catalog(okAnswer);
+  try {
+    const hint = find((n) => n.className.includes('discovery-hint'))[0];
+    assert.equal(hint.textContent, 'Click to review · drag onto the gateway');
+  } finally { page.restore(); }
+});
