@@ -1191,6 +1191,7 @@ function drawOnMap(model, { fresh = false, projectChanged = false, lightLater = 
   const { view, selected } = onMap;
   const later = lightsLater({ unfolds: lightLater, lit });
   keepPickable(model);
+  setHint(mapHint());
   const drawn = view.draw(model, layout, { selected: lit.size ? selected : null, chosen: pick.ids, lit: later ? new Set() : lit, found: onMap.found, open, motion });
   // A block a move took off its place stays where it is shown (gateway-drag.js); a drag draws the
   // map again in place as its slot opens or closes.

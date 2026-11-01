@@ -2,11 +2,12 @@
 // of them; a drop only adds a row to the tray. Today: a server from outside the gateway into it, a
 // server in the Kitden gateway onto a client, a wire from a client that is not connected onto
 // the gateway, and a row of the Add a server panel onto the map.
-import { el, pageWaits, reportError } from "./dom.js";
+import { el, pageWaits, plural, reportError } from "./dom.js";
 import { foundClients } from "./gateway-details.js";
+import { clearPick, pick } from "./gateway-pick.js";
 import { linkKey } from "./map.js";
 import { areaPoint, clientAt, covered, DRAG_START, flyGhost, follow, goHome, heldAt, liftGhost, mapArea, moveGhost, ON_CLIENT, pageBox, pointOf as pointIn, startDrag as runDrag } from "./map-drag.js";
-import { CALM, shake } from "./motion.js";
+import { animateTo, CALM, shake } from "./motion.js";
 import { moveBody } from "./panel.js";
 import { CLIENT_NAMES } from "./parts.js";
 import { busy, current, data } from "./store.js";
@@ -45,7 +46,7 @@ const onMap = { view: null, model: null, layout: null, redraw: () => {}, drag: n
 // gateway, and while a dropped row of the Add panel is asked.
 export function movingOn() {
   const { drag, adding } = onMap;
-  if (drag && drag.open) return { drop: { name: drag.name, kind: drag.group } };
+  if (drag && drag.open && drag.kind !== "group") return { drop: { name: drag.name, kind: drag.group } };
   return adding && asked(adding.key) ? { drop: { name: adding.name, kind: adding.kind } } : {};
 }
 
@@ -104,6 +105,7 @@ export const DRAGS = {
   out: { begin: beginOut, over: overOut, drop: dropOut },
   client: { still: true, begin: beginClient, over: overClient, drop: dropClient },
   add: { still: true, begin: beginAdd, over: overAdd, drop: dropAdd },
+  group: { still: true, begin: beginGroup, over: overGroup, drop: dropGroup },
 };
 
 // A pointer goes down on the map. A server outside the gateway with a grip starts a drag into it,
@@ -118,7 +120,12 @@ export function pressGrip(event, onStart = () => {}) {
   const node = event.target.closest("button.block, button.block-count");
   const block = node && onMap.model.blocks.find((b) => [`block:${b.id}`, `count:${b.id}`].includes(node.dataset.focus));
   if (!block || (onMap.moving && onMap.moving.id !== block.id) || stillAsked(onMap.adding)) return;
-  if (block.grip) startDrag(event, block, "in", onStart);
+  // A press on a picked server drags the whole pick; a grip press on any other clears the pick.
+  if (block.grip && pick.ids.has(block.id) && pick.ids.size > 1) startDrag(event, block, "group", onStart);
+  else if (block.grip) {
+    clearPick();
+    startDrag(event, block, "in", onStart);
+  }
   else if (leavesGateway(block)) startDrag(event, block, "out", onStart);
   else if (block.drags && kitdenGateway() && !inTray(keyFor(block.connect))) startDrag(event, block, "client", onStart);
   else if (block.kind === "client" && block.viaPlugin) sayWhy(event, block);
@@ -437,4 +444,71 @@ function dropAdd(drag, at) {
   }
   flyGhost(drag, null, BACK_HOME);
   return false;
+}
+
+// A pick of servers outside the gateway (gateway-pick.js) lifts as one ghost of the pressed block,
+// stacked and with its count; the picked blocks fade (`.lifting` on the map) and stay where they
+// are. The gateway and the Add a server card light. No slot opens: each server's preview grows in
+// its own group as its row answers.
+function beginGroup(drag) {
+  const node = onMap.view.node(drag.id);
+  const { ghost, box } = liftGhost(node);
+  // A map block is styled only inside a map, so its ghost rides in a page-wide map of its own; it
+  // keeps its page place (left, top), not its place on the map.
+  ghostHost().append(ghost);
+  Object.assign(ghost.style, { translate: "", scale: "" });
+  ghost.classList.add("stack");
+  const count = el("span", "ghost-count", plural(pick.ids.size, "server", "servers"));
+  ghost.append(count);
+  animateTo(count, [{ opacity: 0 }, { opacity: 1 }], { dur: 120 });
+  const caption = onMap.layout.blocks.find((b) => b.id === "group:outside");
+  const kitden = kitdenGateway();
+  Object.assign(drag, { ghost, box, block: { ...drag.block, node }, line: caption ? caption.y : Infinity, gateway: kitden ? kitden.id : null, ids: [...pick.ids] });
+  onMap.view.box.classList.toggle("lifting", true);
+  if (kitden) onMap.view.glance(new Set([kitden.id, ...addCard(onMap.model)]));
+}
+
+// As a panel row: the ghost follows the pointer, and over the gateway's room (inAddZone) it takes
+// the drop look and the gateway lights.
+function overGroup(drag) {
+  moveGhost(drag);
+  const point = covered(drag.at) ? null : pointOf(drag);
+  const open = Boolean(point && drag.gateway && inAddZone(onMap.layout, point, drag.line));
+  drag.ghost.classList.toggle("over", open);
+  if (open === drag.open) return;
+  drag.open = open;
+  if (open) onMap.view.lightTarget(drag.gateway);
+  else onMap.view.unlightTarget();
+}
+
+// A drop on the gateway flies the ghost onto the gateway's box and adds one move per picked
+// server, one after another, so one the tray refuses stays outside and the rest go in; then the
+// pick clears. Any other let go flies the ghost back and keeps the pick.
+function dropGroup(drag, at) {
+  onMap.view.box.classList.remove("lifting");
+  const view = current("gateway");
+  const rows = drag.ids.map((id) => onMap.model.blocks.find((b) => b.id === id)).filter(Boolean).map((b) => b.row);
+  const bodies = view ? rows.map((row) => dropBody(row, view)).filter(Boolean) : [];
+  if (!drag.open || !at || !bodies.length || busy.change || ["applying", "applied"].includes(tray.phase)) {
+    flyGhost(drag, null, BACK_HOME);
+    return false;
+  }
+  const gateway = onMap.layout.blocks.find((b) => b.id === drag.gateway);
+  flyGhost(drag, gateway && pageBox(onMap, gateway), ONTO_SLOT);
+  clearPick();
+  (async () => {
+    for (const body of bodies) await addToTray(body);
+  })().catch(reportError);
+  return true;
+}
+
+// The page-wide map a pick's ghost rides in, made once.
+let host = null;
+function ghostHost() {
+  if (!host || !host.isConnected) {
+    host = el("div", "map ghost-host");
+    host.setAttribute("aria-hidden", "true");
+    document.body.append(host);
+  }
+  return host;
 }

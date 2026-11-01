@@ -1360,7 +1360,12 @@ function dragMap({ covers = {}, id = 'outside:move:github', view: shown = MEDIUM
     removeEventListener: (type, fn) => { heard[type] = (heard[type] || []).filter((f) => f !== fn); },
     documentElement: { classList: { add() {}, remove() {} } },
     querySelector: (selector) => (covers[selector] ? { getBoundingClientRect: () => covers[selector] } : null),
-    createElement: (tag) => ({ tag }),
+    // An element can hold others (a pick's ghost rides in one, gateway-drag.js).
+    createElement: (tag) => {
+      const made = { tag, kids: [], setAttribute() {}, isConnected: true };
+      made.append = (...nodes) => { for (const n of nodes) { made.kids.push(n); n.parentNode = made; } };
+      return made;
+    },
     body: { append: (n) => { n.parentNode = 'body'; } },
     hidden: false,
   };
@@ -2879,4 +2884,147 @@ test('a pick drops servers that are no longer outside, and clearing says whether
 test('the hint counts what is picked', () => {
   assert.equal(PICK_HINT(3), '3 servers picked · drag one onto the gateway · Esc clears');
   assert.equal(PICK_HINT(1), '1 server picked · drag one onto the gateway · Esc clears');
+});
+
+// A pick dragged onto the gateway (gateway-drag.js `group`). The map's block node can lift a ghost,
+// and the map box records its classes.
+function groupMap(ids = ['outside:move:github', 'outside:move:docs']) {
+  const map = dragMap();
+  const boxNames = new Set();
+  map.view.box.classList = { toggle: (name, on = !boxNames.has(name)) => { if (on) boxNames.add(name); else boxNames.delete(name); return on; }, remove: (name) => boxNames.delete(name) };
+  map.boxNames = boxNames;
+  map.node.ghosts = [];
+  map.node.names = new Set();
+  map.node.classList = { add: (n) => map.node.names.add(n), remove: (n) => map.node.names.delete(n), contains: (n) => map.node.names.has(n) };
+  map.node.getBoundingClientRect = () => ({ left: map.home.x, top: map.home.y, width: map.home.w, height: map.home.h });
+  map.node.cloneNode = () => {
+    const ghost = fakeNode({ classes: ['block'] });
+    ghost.kids = [];
+    ghost.append = (n) => ghost.kids.push(n);
+    map.node.ghosts.push(ghost);
+    return ghost;
+  };
+  pick.ids = new Set(ids);
+  return map;
+}
+const rowOf = (map, id) => block(map.tree, id).row;
+
+test('pressing a picked server drags the whole pick: one ghost with a count, the gateway and the card light', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  try {
+    const map = groupMap();
+    map.press();
+    map.move(map.home.x + 16, map.home.y + 10);
+    const [ghost] = map.node.ghosts;
+    assert.ok(ghost && ghost.names.has('stack'));
+    assert.deepEqual(ghost.kids.map((k) => [k.className, k.textContent]), [['ghost-count', '2 servers']]);
+    assert.ok(map.boxNames.has('lifting'));
+    assert.deepEqual(map.asked.find(([what]) => what === 'glance'), ['glance', ['gateway:kitden', 'addslot:servers']]);
+    // No slot opens for a pick.
+    map.move(...middle(map, 'gateway:kitden'));
+    assert.deepEqual(movingOn(), {});
+    assert.deepEqual(map.asked.filter(([what]) => what === 'light'), [['light', 'gateway:kitden']]);
+    map.up(map.home.x + 10, map.home.y + 10);
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    clearPick();
+    await freshTray();
+  }
+});
+
+test('a drop on the gateway adds one gateway.move per picked server, in pick order, and clears the pick', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  try {
+    queue(PREVIEW, batch('c1'), batch('c2'));
+    const map = groupMap();
+    const bodies = ['outside:move:github', 'outside:move:docs'].map((id) => dropBody(rowOf(map, id), MEDIUM_VIEW));
+    map.press();
+    map.move(...middle(map, 'gateway:kitden'));
+    const [ghost] = map.node.ghosts;
+    map.up(...middle(map, 'gateway:kitden'));
+    await flush();
+    await flush();
+    assert.deepEqual(tray.rows.map((r) => r.body), bodies);
+    assert.equal(pick.ids.size, 0);
+    assert.ok(!map.boxNames.has('lifting'));
+    // The ghost flew onto the gateway's box and faded.
+    assert.equal(ghost.motions[0].keyframes[1].opacity, 0);
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    clearPick();
+    await freshTray();
+  }
+});
+
+test('a miss or Escape flies the ghost back and keeps the pick', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  try {
+    const map = groupMap();
+    map.press();
+    map.move(map.home.x + 16, map.home.y + 10);
+    const [ghost] = map.node.ghosts;
+    map.up(map.home.x + 16, map.home.y + 10);
+    assert.deepEqual(ghost.motions[0].keyframes[1], { transform: 'none', opacity: 1 });
+    assert.deepEqual(tray.rows, []);
+    assert.equal(pick.ids.size, 2);
+    assert.ok(!map.boxNames.has('lifting'));
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    clearPick();
+    await freshTray();
+  }
+});
+
+test('a server the tray refuses stays outside; the others go in', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  try {
+    queue(PREVIEW, batch('c1'), { status: 422, json: { detail: 'docs needs sign-in.' } }, batch('c3'));
+    const map = groupMap();
+    map.press();
+    map.move(...middle(map, 'gateway:kitden'));
+    map.up(...middle(map, 'gateway:kitden'));
+    for (let i = 0; i < 6; i += 1) await flush();
+    assert.deepEqual(tray.rows.map((r) => r.body), [dropBody(rowOf(map, 'outside:move:github'), MEDIUM_VIEW)]);
+    assert.equal(tray.refused && tray.refused.reason, 'docs needs sign-in.');
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    clearPick();
+    await freshTray();
+  }
+});
+
+test('with one server picked, or a press on an unpicked server, the single drag runs and the pick clears', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  try {
+    const one = groupMap(['outside:move:github']);
+    one.press();
+    one.move(one.home.x + 16, one.home.y + 10);
+    assert.equal(one.node.ghosts.length, 0);
+    one.up(one.home.x + 16, one.home.y + 10);
+    const other = groupMap(['outside:move:docs', 'outside:local:docs']);
+    other.press();
+    other.move(other.home.x + 16, other.home.y + 10);
+    assert.equal(other.node.ghosts.length, 0);
+    assert.equal(pick.ids.size, 0);
+    other.up(other.home.x + 16, other.home.y + 10);
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    clearPick();
+    await freshTray();
+  }
 });

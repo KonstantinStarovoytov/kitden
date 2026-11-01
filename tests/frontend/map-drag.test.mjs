@@ -79,7 +79,7 @@ test('a drop over Details or the dock hears no point, and a still kind holds not
 
 test("the Gateway's drags run through the shared engine", () => {
   // The Gateway keeps its own hooks and its own wrapper; the engine is not copied there.
-  assert.deepEqual(Object.keys(gateway.DRAGS), ['in', 'out', 'client', 'add']);
+  assert.deepEqual(Object.keys(gateway.DRAGS), ['in', 'out', 'client', 'add', 'group']);
   assert.equal(typeof gateway.startDrag, 'function');
   assert.equal(gateway.startDrag.length, 3);
 });

@@ -744,6 +744,13 @@ div.map .block-grip { flex: none; display: grid; margin-right: -4px; color: var(
 div.map .block.more { justify-content: center; border-style: dashed; background: transparent; color: var(--ink-2); }
 div.map .block.more .block-text { flex: none; }
 div.map .block.lit { border-color: var(--route); }
+/* A pick dragged as one (gateway-drag.js group): the picked blocks fade; their ghost rides in a
+   page-wide map, a stack of three cards with its count. */
+div.map.lifting .block.selected { opacity: 0.4; }
+div.map.ghost-host { position: fixed; inset: 0; z-index: 60; margin: 0; padding: 0; overflow: visible; pointer-events: none; }
+div.map .block.ghost { position: fixed; z-index: 1; pointer-events: none; cursor: grabbing; transform-origin: 0 0; box-shadow: 4px 4px 0 -1px var(--panel), 4px 4px 0 0 color-mix(in srgb, var(--wire) 70%, transparent), 8px 8px 0 -1px var(--panel), 8px 8px 0 0 color-mix(in srgb, var(--wire) 40%, transparent), var(--shadow); }
+div.map .block.ghost.over { border-color: var(--route); background: var(--route-soft); }
+div.map .ghost-count { position: absolute; top: -9px; right: -9px; padding: 1px 7px; border-radius: 999px; background: var(--action); color: var(--on-action); font-size: 11px; font-weight: 600; line-height: 16px; white-space: nowrap; }
 /* The band that picks several servers outside the gateway (gateway-pick.js): a solid edge, since
    dashed means preview. It follows the pointer with no easing. */
 div.map .map-band { position: absolute; left: 0; top: 0; box-sizing: border-box; border: 1px solid color-mix(in srgb, var(--route) 40%, transparent); border-radius: 4px; background: var(--route-soft); pointer-events: none; z-index: 3; }
