@@ -7,7 +7,7 @@ import { addForm, connectAction, connectBody, followProject, heldServer, liveHel
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { clearPick, keepPickable, pick, PICK_HINT, pressBand, togglePick } from "./gateway-pick.js";
 import { findIn, foldable, isNarrow, keepFolded, keepOpen, landOwners, landStage, layoutTree, linkKey, litFor, litFrom, litPath, pagesNow, pagesWith, pressCount, pressOpen, shownFound, toggleOpen, turnPage, turnWords, wideWidth } from "./map.js";
-import { addHeadButton, drawChip, glidePill, modeSwitch, switchedNow } from "./map-page.js";
+import { addHeadButton, headActions, drawChip, glidePill, modeSwitch, switchedNow } from "./map-page.js";
 import { mapView } from "./map-view.js";
 import { afterOldPage, D, rise, riseHead } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, openInfo, panelState, projectLabel, review } from "./panel.js";
@@ -133,7 +133,7 @@ export function renderGateway(main, { again = false } = {}) {
   const mode = viewMode(state, serverCount(view));
   gatewayShows.mode = mode;
   const seg = modeSwitch("gateway", mode, { old: () => (mode === "map" ? onMap.view && onMap.view.box : onList.box), letGo: letGoIfSelected, shows: () => gatewayShows.mode });
-  head.append(addHeadButton("+ Add servers", "add:servers", pressAdd), seg);
+  head.append(headActions(addHeadButton("+ Add servers", "add:servers", pressAdd), seg));
   const model = treeFor(view, mode);
   setHint(mode === "map" ? mapHint() : "");
   // The search finds here: matches light up, the rest dims, and what hides a match opens (S.6).

@@ -27,6 +27,13 @@ export function addHeadButton(label, key, onPress) {
   return add;
 }
 
+// The add button and Map | List together at the head's end, so a narrow head wraps them as one.
+export function headActions(...nodes) {
+  const actions = el("div", "head-actions");
+  actions.append(...nodes);
+  return actions;
+}
+
 // The mark behind Map | List (or any pill) glides to a choice in 280 ms, under its own `key`.
 export const glidePill = (seg, choice, key) => glide(seg, choice, key, { duration: 280 });
 

@@ -153,7 +153,11 @@ test('the head has the tabs, the lede, the scope bar and Map | List', () => {
   const [head, lede, tabs, scope] = main.children;
   assert.equal(head.className, 'page-head');
   assert.equal(head.children[0].textContent, 'Library');
-  const seg = head.children.at(-1);
+  // The add button and Map | List sit together, so a narrow head wraps them as one.
+  const actions = head.children.at(-1);
+  assert.equal(actions.className, 'head-actions');
+  assert.deepEqual(actions.children.map((n) => n.className), ['btn add', 'seg']);
+  const seg = actions.children.at(-1);
   assert.deepEqual(seg.children.filter((n) => n.tagName === 'BUTTON').map((n) => [n.textContent, n.getAttribute('aria-pressed')]), [['Map', 'true'], ['List', 'false']]);
   assert.equal(lede.textContent, 'Follow the source. Connect only what you need.');
   assert.equal(tabs.className, 'seg sm map-tabs');
@@ -183,7 +187,7 @@ test('List keeps the head and the tabs, and draws no map', () => {
   assert.equal(renderLibrary(main), null);
   const [head, lede, tabs] = main.children;
   assert.equal(head.children[0].textContent, 'Library');
-  assert.equal(head.children.at(-1).children.find((n) => n.textContent === 'List').getAttribute('aria-pressed'), 'true');
+  assert.equal(head.children.at(-1).children.at(-1).children.find((n) => n.textContent === 'List').getAttribute('aria-pressed'), 'true');
   assert.equal(lede.textContent, 'Follow the source. Connect only what you need.');
   assert.deepEqual(tabs.children.filter((n) => n.tagName === 'BUTTON').map((n) => n.textContent), ['Plugins and skills', 'Instructions']);
   assert.equal(map(), null);
