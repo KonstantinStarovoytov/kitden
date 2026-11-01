@@ -3028,3 +3028,48 @@ test('with one server picked, or a press on an unpicked server, the single drag 
     await freshTray();
   }
 });
+
+test('a Shift or Cmd press on an unpicked server keeps the pick and starts no drag', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  try {
+    const map = groupMap(['outside:move:docs']);
+    for (const mods of [{ shiftKey: true }, { metaKey: true }]) {
+      pressGrip({ button: 0, pointerId: 7, target: { closest: () => map.node }, clientX: map.home.x + 10, clientY: map.home.y + 10, ...mods });
+      map.move(map.home.x + 40, map.home.y + 30);
+      assert.deepEqual([...pick.ids], ['outside:move:docs']);
+      assert.ok(!map.asked.some(([what]) => what === 'hold'));
+      map.up(map.home.x + 40, map.home.y + 30);
+    }
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    clearPick();
+    await freshTray();
+  }
+});
+
+test('a Cancel while the pick is still being added stops the rest', async (t) => {
+  await freshTray();
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  Object.assign(data, { gateway: MEDIUM_VIEW });
+  try {
+    let second;
+    queue(PREVIEW, batch('c1'), (sent) => new Promise((resolve) => { second = () => resolve(batch('c2')(sent)); }), batch('c3'), batch('c4'));
+    const map = groupMap(['outside:move:github', 'outside:move:docs', 'outside:local:docs']);
+    map.press();
+    map.move(...middle(map, 'gateway:kitden'));
+    map.up(...middle(map, 'gateway:kitden'));
+    for (let i = 0; i < 4; i += 1) await flush();
+    await cancelTray();
+    second();
+    for (let i = 0; i < 6; i += 1) await flush();
+    assert.deepEqual(tray.rows, []);
+  } finally {
+    delete globalThis.document;
+    Object.assign(data, { gateway: null });
+    clearPick();
+    await freshTray();
+  }
+});

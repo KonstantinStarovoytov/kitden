@@ -1659,7 +1659,7 @@ test('a band from empty map space picks the outside servers it meets, and the hi
 });
 
 test('Shift- or Cmd-click picks and unpicks one server and opens no Details; Escape and an empty click clear', async (t) => {
-  hearDocument(t);
+  const heard = hearDocument(t);
   const box = freshMap();
   const [a, b] = outsideNodes(box);
   fireOn(box, 'pointerdown', { target: a, shiftKey: true });
@@ -1674,7 +1674,7 @@ test('Shift- or Cmd-click picks and unpicks one server and opens no Details; Esc
   press(box, a.dataset.focus);
   settle();
   assert.deepEqual([...pick.ids], [b.dataset.focus.slice('block:'.length)]);
-  for (const fn of box.listeners.keydown) fn({ key: 'Escape', preventDefault() {}, stopPropagation() {} });
+  for (const fn of heard.keydown || []) fn({ key: 'Escape', preventDefault() {}, stopPropagation() {} });
   settle();
   assert.equal(pick.ids.size, 0);
   assert.equal(hintNow(), MAP_HINT_WORDS);
@@ -1685,3 +1685,35 @@ test('Shift- or Cmd-click picks and unpicks one server and opens no Details; Esc
   assert.equal(pick.ids.size, 0);
 });
 const MAP_HINT_WORDS = 'Point at a link and press × to remove it · click anything for its Details · several changes wait in preview, then Apply all · drag a server onto a client';
+
+test('a Shift-click on empty map keeps the pick, and a key press after it opens Details as usual', async (t) => {
+  hearDocument(t);
+  const box = freshMap();
+  const [a, b] = outsideNodes(box);
+  fireOn(box, 'pointerdown', { target: a, shiftKey: true });
+  press(box, a.dataset.focus);
+  settle();
+  fireOn(box, 'pointerdown', { target: box, shiftKey: true });
+  for (const fn of box.listeners.click) fn({ target: box });
+  settle();
+  assert.equal(pick.ids.size, 1);
+  // A key on the map (Enter on a block) is no Shift-click.
+  for (const fn of box.listeners.keydown) fn({ key: 'Enter', preventDefault() {}, stopPropagation() {} });
+  press(box, b.dataset.focus);
+  await done();
+  settle();
+  assert.equal(pick.ids.has(b.dataset.focus.slice('block:'.length)), false);
+});
+
+test('Escape clears the pick wherever focus is', async (t) => {
+  const heard = hearDocument(t);
+  const box = freshMap();
+  const [a] = outsideNodes(box);
+  fireOn(box, 'pointerdown', { target: a, shiftKey: true });
+  press(box, a.dataset.focus);
+  settle();
+  assert.equal(pick.ids.size, 1);
+  for (const fn of heard.keydown || []) fn({ key: 'Escape', preventDefault() {}, stopPropagation() {} });
+  settle();
+  assert.equal(pick.ids.size, 0);
+});

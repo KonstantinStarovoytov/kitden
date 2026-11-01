@@ -1035,10 +1035,17 @@ function newMap() {
     tile,
     onOpen: openBlock,
     onFold: foldBlock,
-    onSelect: (id) => (withModifier ? togglePickHere(id) : pressBlock(onMap.model, id)),
+    onSelect: (id) => {
+      const toggles = withModifier;
+      withModifier = false;
+      if (toggles) togglePickHere(id);
+      else pressBlock(onMap.model, id);
+    },
+    // An empty click clears the pick, but not one with Shift or Cmd held (a pick being built).
     onEmpty: () => {
       letGoIfSelected();
-      if (clearPick()) pickChanged();
+      if (!withModifier && clearPick()) pickChanged();
+      withModifier = false;
     },
     onHover: (id) => view.glance(glanceFor(onMap.model, id)),
     links: LINK_HOOKS,
@@ -1046,11 +1053,12 @@ function newMap() {
   });
   holdKeys(view.box);
   // Escape clears the selection first; open Details then close too (panel.js).
+  // The pick's Escape is heard on the page, wherever focus is (the map box takes none).
+  document.removeEventListener("keydown", escapePick);
+  document.addEventListener("keydown", escapePick);
   view.box.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && clearPick()) {
-      pickChanged();
-      return;
-    }
+    // A key on the map is no Shift-click.
+    withModifier = false;
     if (event.key !== "Escape" || !onMap.selected) return;
     onMap.selected = null;
     if (!isPanelOpen()) setState({ selected: null });
@@ -1231,11 +1239,16 @@ function letGoIfSelected() {
 // makes the click that follows pick or unpick its block instead of selecting it.
 let withModifier = false;
 function togglePickHere(id) {
-  withModifier = false;
   if (togglePick(onMap.model, id)) {
     letGoIfSelected();
     pickChanged();
   } else pressBlock(onMap.model, id);
+}
+
+// Escape on the Gateway map's page clears the pick.
+function escapePick(event) {
+  if (event.key !== "Escape" || state.view !== "gateway" || !onMap.view || !onMap.view.box.isConnected) return;
+  if (clearPick()) pickChanged();
 }
 
 // The pick changed: the map draws it, and the hint counts it.

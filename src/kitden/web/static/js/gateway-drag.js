@@ -10,7 +10,7 @@ import { areaPoint, clientAt, covered, DRAG_START, flyGhost, follow, goHome, hel
 import { animateTo, CALM, shake } from "./motion.js";
 import { moveBody } from "./panel.js";
 import { CLIENT_NAMES } from "./parts.js";
-import { busy, current, data } from "./store.js";
+import { busy, current, data, state } from "./store.js";
 import { addToTray, inTray, keyFor, tray } from "./tray.js";
 
 // A dropped block flies onto its slot.
@@ -120,6 +120,8 @@ export function pressGrip(event, onStart = () => {}) {
   const node = event.target.closest("button.block, button.block-count");
   const block = node && onMap.model.blocks.find((b) => [`block:${b.id}`, `count:${b.id}`].includes(node.dataset.focus));
   if (!block || (onMap.moving && onMap.moving.id !== block.id) || stillAsked(onMap.adding)) return;
+  // A press with Shift or Cmd picks or unpicks (gateway.js): it drags nothing and keeps the pick.
+  if (block.grip && (event.shiftKey || event.metaKey)) return;
   // A press on a picked server drags the whole pick; a grip press on any other clears the pick.
   if (block.grip && pick.ids.has(block.id) && pick.ids.size > 1) startDrag(event, block, "group", onStart);
   else if (block.grip) {
@@ -496,9 +498,7 @@ function dropGroup(drag, at) {
   const gateway = onMap.layout.blocks.find((b) => b.id === drag.gateway);
   flyGhost(drag, gateway && pageBox(onMap, gateway), ONTO_SLOT);
   clearPick();
-  (async () => {
-    for (const body of bodies) await addToTray(body);
-  })().catch(reportError);
+  addInTurn(bodies).catch(reportError);
   return true;
 }
 
@@ -511,4 +511,16 @@ function ghostHost() {
     document.body.append(host);
   }
   return host;
+}
+
+// Add the moves of a pick one by one. It stops once the tray no longer holds what it added (Cancel,
+// a take-out), the tray cannot take more (Apply), another project is picked, or the page is left.
+async function addInTurn(bodies) {
+  const project = state.project;
+  const added = [];
+  for (const body of bodies) {
+    if (!mapArea(onMap) || state.project !== project || added.some((key) => !inTray(key))) return;
+    if (busy.change || ["applying", "applied"].includes(tray.phase)) return;
+    if (await addToTray(body)) added.push(keyFor(body));
+  }
 }
