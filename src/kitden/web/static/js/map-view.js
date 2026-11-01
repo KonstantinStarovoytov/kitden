@@ -283,8 +283,9 @@ export function drawSoon(run, { frame = requestAnimationFrame, wait = 120 } = {}
 // One map. `view.box` (div.map) goes where the page wants it and keeps every node when it is taken
 // out and put back; `view.area` holds the links' SVG, the blocks in reading order, then the hits of
 // the links and the ×.
-// - draw(model, layout, { selected, lit, found, open, motion }): show `layout` (map.js layoutTree)
-//   of `model`. `motion` "move" moves what changed; "project" does too, for another project: a
+// - draw(model, layout, { selected, chosen, lit, found, open, motion }): show `layout` (map.js
+//   layoutTree) of `model`. `chosen` (ids) take the selected look too, several at once.
+//   `motion` "move" moves what changed; "project" does too, for another project: a
 //   tool's link it turns on draws in over 240 ms and every tool's tag pops; "undo" does too, for
 //   what an Undo put back: a link that comes back draws in over 480 ms; "enter" lets every block
 //   rise into its place;
@@ -503,7 +504,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onEmpty, onHover, link
 
   // A block's node as this draw shows it: its look, words, size and what a screen reader hears. The
   // layout's words win (a group that pages names which ones show).
-  function fill(item, place, source, { selected, lit, found, open, motion }) {
+  function fill(item, place, source, { selected, chosen, lit, found, open, motion }) {
     const block = place.name !== undefined && source !== place ? { ...source, name: place.name } : source;
     const { node } = item;
     const name = String(block.name || "");
@@ -526,7 +527,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onEmpty, onHover, link
       const group = place.kind === "group";
       const folding = folds.has(place.id);
       // A block whose removal waits in the tray looks leaving too, and stays a Tab stop.
-      item.look = [group ? "caption" : `block ${place.kind}`, !group && folding && typeof block.count === "number" && "counted", block.leaving && "leaving", block.drags && "drags", place.id === selected && "selected", matched && "found"].filter(Boolean).join(" ");
+      item.look = [group ? "caption" : `block ${place.kind}`, !group && folding && typeof block.count === "number" && "counted", block.leaving && "leaving", block.drags && "drags", (place.id === selected || chosen.has(place.id)) && "selected", matched && "found"].filter(Boolean).join(" ");
       node.dataset.focus = `block:${place.id}`;
       if (block.state) node.dataset.state = block.state;
       else delete node.dataset.state;
@@ -1084,7 +1085,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onEmpty, onHover, link
     if (focused && focused !== document.activeElement && hits.contains(focused)) focused.focus({ preventScroll: true });
   }
 
-  function draw(model, layout, { selected = null, lit = new Set(), found = null, open = new Set(), motion = "move" } = {}) {
+  function draw(model, layout, { selected = null, chosen = new Set(), lit = new Set(), found = null, open = new Set(), motion = "move" } = {}) {
     performance.mark("kitden:map-start");
     const enters = motion === "enter" && canMove();
     const moves = enters || (MOVES.includes(motion) && last !== null && canMove());
@@ -1119,7 +1120,7 @@ export function mapView({ tile, onOpen, onSelect, onFold, onEmpty, onHover, link
         blocks.set(place.id, item);
       } else if (item.div !== isWords(place)) swap(item, place);
       item.leaving = false;
-      fill(item, place, block, { selected, lit: shown, found, open, motion });
+      fill(item, place, block, { selected, chosen, lit: shown, found, open, motion });
       const end = { x: place.x, y: place.y, s: 1, o: 1 };
       if (item.held) continue;
       if (!moves) {

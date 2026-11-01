@@ -2003,3 +2003,11 @@ test('with no frames the clock still steps a motion to its end, and its promise 
   await Promise.resolve();
   assert.ok(done);
 });
+
+test('chosen blocks take the selected look, several at once', async () => {
+  const v = view();
+  await v.draw(TREE, lay(), { chosen: new Set(['s1', 's2']) });
+  assert.ok(v.node('s1').classList.contains('selected'));
+  assert.ok(v.node('s2').classList.contains('selected'));
+  assert.ok(!v.node('c1').classList.contains('selected'));
+});
