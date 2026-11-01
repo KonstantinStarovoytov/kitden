@@ -1347,3 +1347,13 @@ html.map-entrance::view-transition-new(page) { animation: none; }
 .access-fields details[open] { display: grid; gap: 8px; }
 .access-fields summary { cursor: pointer; color: var(--ink-2); font-size: 12px; }
 .access-fields input { width: 100%; box-sizing: border-box; }
+/* The access form (access-form.js): refused is amber words that stay; works is the green lamp
+   and a check drawn in 320 ms. */
+.access-form { display: grid; gap: 10px; }
+.access-form > p { margin: 0; }
+.access-why, .access-works { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); }
+.access-why svg { flex: none; color: var(--lamp-warn); }
+.access-works .access-check { color: var(--lamp-on); }
+.access-works .access-check path { stroke-dasharray: 24; }
+.access-names summary { cursor: pointer; color: var(--ink-3); font-size: 12px; }
+.access-names p { margin: 4px 0 0; }

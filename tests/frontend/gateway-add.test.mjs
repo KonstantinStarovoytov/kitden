@@ -604,3 +604,90 @@ test('the header add button is a soft-accent button with its focus key', async (
   await press(add);
   assert.deepEqual(pressed, [add]);
 });
+
+// The one access form (access-form.js), as the catalog, the map and the dock use it.
+const { accessForm } = await import('../../src/kitden/web/static/js/access-form.js');
+const TOKEN = { field: 'headers', name: 'Authorization', label: 'Access token', prefix: 'Bearer ' };
+const inside = (node) => walk(node);
+const inputsOf = (form) => inside(form.node).filter((n) => n.tagName === 'INPUT');
+const type = (input, value) => { input.value = value; };
+
+test('one Authorization field: only the token is asked', () => {
+  const form = accessForm({ server: 'neon', kind: 'token', fields: [TOKEN] }, () => {});
+  const [input] = inputsOf(form);
+  assert.equal(inputsOf(form).length, 1);
+  assert.equal(input.type, 'password');
+  const label = input.parentNode;
+  assert.equal(text(label).includes('Access token'), true);
+  // The header name shows only inside the Details fold.
+  const details = inside(form.node).filter((n) => n.tagName === 'DETAILS');
+  const outside = inside(form.node).filter((n) => n.textContent.includes('Authorization') && !details.some((d) => d.contains(n)));
+  assert.deepEqual(outside, []);
+  assert.equal(details.some((d) => text(d).includes('Sent as the Authorization header')), true);
+});
+
+test('strips a pasted Bearer and trims', () => {
+  const form = accessForm({ server: 'neon', kind: 'token', fields: [TOKEN] }, () => {});
+  type(inputsOf(form)[0], '  Bearer abc \n');
+  assert.deepEqual(form.values(), { headers: { Authorization: 'Bearer abc' } });
+  type(inputsOf(form)[0], 'bearer   xyz');
+  assert.deepEqual(form.values(), { headers: { Authorization: 'Bearer xyz' } });
+});
+
+test('optional values fold under More values', () => {
+  const fields = [TOKEN, { field: 'headers', name: 'X-Region', label: 'Region', prefix: '', optional: true }];
+  const form = accessForm({ server: 'neon', kind: 'token', fields }, () => {});
+  const more = inside(form.node).find((n) => n.tagName === 'DETAILS' && text(n).startsWith('More values'));
+  assert.ok(more);
+  assert.equal(inputsOf(form).filter((input) => more.contains(input)).length, 1);
+  type(inputsOf(form)[0], 'abc');
+  assert.deepEqual(form.values(), { headers: { Authorization: 'Bearer abc' } });
+});
+
+test('a required empty field gives no values', () => {
+  const form = accessForm({ server: 'neon', kind: 'token', fields: [TOKEN] }, () => {});
+  assert.equal(form.values(), null);
+  type(inputsOf(form)[0], '   ');
+  assert.equal(form.values(), null);
+});
+
+test('Add token sends the values to the check', async () => {
+  const got = [];
+  const form = accessForm({ server: 'neon', kind: 'token', fields: [TOKEN] }, (values) => { got.push(values); });
+  type(inputsOf(form)[0], 'abc');
+  const submit = inside(form.node).find((n) => n.tagName === 'BUTTON' && n.textContent === 'Add token');
+  assert.ok(submit);
+  fire(form.node, 'submit');
+  await wait();
+  assert.deepEqual(got, [{ headers: { Authorization: 'Bearer abc' } }]);
+});
+
+test('refuse shows amber words as an alert and focuses the field', () => {
+  const form = accessForm({ server: 'neon', kind: 'token', fields: [TOKEN] }, () => {});
+  form.refuse('neon did not accept this token.');
+  const why = inside(form.node).find((n) => n.className.split(' ').includes('access-why'));
+  assert.equal(why.getAttribute('role'), 'alert');
+  assert.equal(why.hidden, false);
+  assert.equal(text(why), 'neon did not accept this token.');
+  assert.equal(inside(why).some((n) => n.dataset.icon === 'triangle-alert'), true);
+  assert.equal(document.activeElement, inputsOf(form)[0]);
+});
+
+test('works shows Token works with the green lamp', () => {
+  const form = accessForm({ server: 'neon', kind: 'token', fields: [TOKEN] }, () => {});
+  form.refuse('neon did not accept this token.');
+  form.works();
+  const done = inside(form.node).find((n) => n.className.split(' ').includes('access-works'));
+  assert.equal(done.hidden, false);
+  assert.equal(text(done), 'Token works');
+  assert.equal(inside(done).some((n) => n.className === 'lamp on'), true);
+  assert.equal(inside(form.node).find((n) => n.className.split(' ').includes('access-why')).hidden, true);
+});
+
+test('a local value says it is checked when the gateway starts it', () => {
+  const env = { field: 'env', name: 'NEON_KEY', label: 'Neon API key', prefix: '', later: true };
+  const form = accessForm({ server: 'neon', kind: 'token', fields: [env] }, () => {});
+  assert.equal(text(form.node).includes('Checked when the gateway starts it'), true);
+  type(inputsOf(form)[0], 'k1');
+  assert.deepEqual(form.values(), { env: { NEON_KEY: 'k1' } });
+});
