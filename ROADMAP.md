@@ -1,6 +1,6 @@
 # Kitden roadmap
 
-Last updated: 2026-10-31
+Last updated: 2026-11-01
 
 What Kitden does today and what comes next. Ideas and bugs:
 [open an issue](https://github.com/KonstantinStarovoytov/kitden/issues).
@@ -32,7 +32,9 @@ What Kitden does today and what comes next. Ideas and bugs:
   A drop on the gateway's own box counts, also when the gateway is empty. A server that turns
   down its access says so instead of "could not reach". A server that signs in through the
   browser points to adding it from the catalog with an API key. Generic registry names such
-  as `com.neon/mcp` show as the publisher's name.
+  as `com.neon/mcp` show as the publisher's name. Adding is now a main action: "+ Add servers"
+  and "+ Add plugins" sit in the page header, and an "Add a server" / "Add a plugin" card ends
+  the map's groups.
 
 - **Catalog separation:** the MCP picker excludes the built-in plugin catalog.
   Personal GitHub sources still offer MCP servers there. Known unsupported entries
@@ -289,6 +291,11 @@ The parts, in order:
 - **Part 7, Linux and Windows.**
 
 Part 6, the Instructions tab and tool counts, is done.
+
+The add, group drag and sign-in design of 2026-11-01,
+[docs/superpowers/specs/2026-11-01-add-select-sign-in-design.md](docs/superpowers/specs/2026-11-01-add-select-sign-in-design.md),
+in order: the add button (done), selecting several servers and dragging them together, a token
+step checked before Apply, then browser sign-in.
 
 ## Next
 

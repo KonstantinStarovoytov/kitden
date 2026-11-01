@@ -5,7 +5,7 @@
 // plugin or a skill drags onto a client (map-drag.js), which only adds a row to the tray. Its
 // Instructions tab (library-notes §6) draws the instruction files the clients read and what they
 // pull in, from /api/instructions-map (views/instructions_map.py), in the same map; it only reads.
-import { $, cutName, el, icon, joinWords, pageWaits, plural, reportError, WAITS } from "./dom.js";
+import { $, cutName, el, icon, joinWords, pageWaits, plural, reportError, WAITS, withFocusKey } from "./dom.js";
 import { findIn, layoutTree, linkKey, litFor, litFrom, pagesNow, pagesWith, shownFound, turnPage, turnWords } from "./map.js";
 import { clientAt, covered, flyGhost, follow, liftGhost, mapArea, moveGhost, ON_CLIENT, pointOf, startDrag } from "./map-drag.js";
 import { drawChip, glidePill } from "./map-page.js";
@@ -24,11 +24,13 @@ const MAP_HINT = "Point at a link and press × to remove it · drag a plugin ont
 // holds, and the Inside caption, grow out of the plugin as it opens (map-view.js `grows`).
 export const LIBRARY_COLUMNS = [
   { id: "clients", caption: "Clients", w: 150, h: 54, top: 140, rowGap: 18 },
-  { id: "plugins", caption: "Plugins and skills", add: true, w: 180, h: 60, colGap: 100, top: 37, rowGap: 4 },
+  { id: "plugins", caption: "Plugins and skills", w: 180, h: 60, colGap: 100, top: 37, rowGap: 4 },
   { id: "inside", caption: "Inside", w: 200, h: 34, colGap: 70, top: 26, rowGap: 8, grows: true },
 ];
 const ROW_H = 34; // a skill or hook row in the Plugins and skills column
 const GROUP_BEFORE = 15; // the space before a group caption, after the group above it
+// The card at the end of Plugins and skills that opens the add panel: a place, so no lamp or links.
+const ADD_CARD = { id: "addslot:plugins", column: "plugins", kind: "addslot", name: "Add a plugin", meta: "From the catalog", icon: "plus", before: GROUP_BEFORE };
 const INSIDE_PAGE = 8; // an open plugin's Inside column shows this many a page
 // Its caption names the plugin cut to this many letters, so "<plugin> · 17–20 of 20" ends inside
 // the map.
@@ -519,7 +521,8 @@ function keepWhatShows(answer) {
 // The tab's tree, with what waits in the tray on Plugins and skills. Instructions has none.
 function treeOf(answer, rows) {
   if (onMap.tab === "instructions") return instructionsTree(answer);
-  return withLeaving(withWaiting(libraryTree(answer), rows, state.project || ""), rows, answer);
+  const tree = withLeaving(withWaiting(libraryTree(answer), rows, state.project || ""), rows, answer);
+  return { ...tree, blocks: [...tree.blocks, { ...ADD_CARD }] };
 }
 
 // The blocks of a tree whose add waits in the tray.
@@ -583,7 +586,6 @@ function newMap() {
     onOpen: openPlugin,
     onFold: foldPlugin,
     onSelect: pressBlock,
-    onAdd: (column, node) => addHook && addHook(node),
     onEmpty: () => onMap.selected && letGo(),
     // While nothing is selected, pointing at a client lights what it loads.
     onHover: (id) => view.glance(id && id.startsWith("client:") ? litFrom(onMap.model, id) : null),
@@ -720,9 +722,14 @@ function foldPlugin(id) {
   else drawMap();
 }
 
-// A press on a block. "N more" turns its group's page. A press that folded a plugin, or a second
+// A press on a block. The Add a plugin card opens the add panel. "N more" turns its group's page. A press that folded a plugin, or a second
 // press on the selected block, lets go. Any other block is selected: its path lights.
 function pressBlock(id) {
+  // The Add a plugin card opens the add panel; focus comes back to "+ Add plugins".
+  if (id === ADD_CARD.id) {
+    pressLibraryAdd(withFocusKey($("#main"), "add:plugins"));
+    return;
+  }
   if (id.startsWith("more:")) {
     turnOnMap(id);
     return;

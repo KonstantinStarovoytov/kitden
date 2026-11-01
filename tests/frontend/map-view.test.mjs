@@ -273,22 +273,13 @@ test("a group's caption draws its icon before its words, 13 px; a caption with n
   assert.equal(v.node('g1').children[0].dataset.icon, 'info');
 });
 
-test('"+ Add" beside a column caption tells the page its column and the button itself', async () => {
+test('a column caption holds only its words, even when its column says add', async () => {
   reduce(true);
   const columns = TREE.columns.map((c) => (c.id === 'b' ? { ...c, add: true } : c));
-  const pressed = [];
-  const v = view({ onAdd: (column, node) => pressed.push([column, node]) });
+  const v = view();
   const tree = { ...TREE, columns };
   await v.draw(tree, layoutTree(tree, { open: new Set(), narrow: false }), {});
-  const [, add] = v.node('column:b').children;
-  assert.deepEqual([add.textContent, add.dataset.focus, v.node('column:a').children.length], ['+ Add', 'add:b', 1]);
-  // It opens a panel, so it says it is closed before the first open. It is a plain small button
-  // with its edge and fill, as the mockup's.
-  assert.equal(add.getAttribute('aria-expanded'), 'false');
-  assert.equal(add.className, 'btn small');
-  for (const fn of add.listeners.click) fn({});
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.deepEqual(pressed, [['b', add]]);
+  assert.deepEqual(v.node('column:b').children.map((n) => n.tagName), ['SPAN']);
 });
 
 test('a held block stays where it is put across draws, and glides home in 220 ms OUT3', async () => {

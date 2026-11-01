@@ -221,7 +221,7 @@ function riseUnder(kind, node, again) {
 export const GATEWAY_COLUMNS = [
   { id: "clients", caption: "Clients", w: 150, h: 54, top: 124, rowGap: 18, narrowW: 140 },
   { id: "gateway", caption: "Gateway", w: 150, h: 124, colGap: 46, top: 124, rowGap: 18, narrowW: 56, narrowH: 56 },
-  { id: "servers", caption: "Servers", add: true, w: 170, h: 60, colGap: 50, top: 58, rowGap: 10, narrowW: 220, narrowH: 54 },
+  { id: "servers", caption: "Servers", w: 170, h: 60, colGap: 50, top: 58, rowGap: 10, narrowW: 220, narrowH: 54 },
   { id: "tools", caption: "Tools", w: 200, h: 34, colGap: 70, narrowW: 190, narrowH: 30 },
 ];
 
@@ -1035,7 +1035,6 @@ function newMap() {
     onOpen: openBlock,
     onFold: foldBlock,
     onSelect: (id) => pressBlock(onMap.model, id),
-    onAdd: (column, node) => pressAdd(node),
     onEmpty: letGoIfSelected,
     onHover: (id) => view.glance(glanceFor(onMap.model, id)),
     links: LINK_HOOKS,

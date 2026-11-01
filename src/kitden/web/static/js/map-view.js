@@ -266,15 +266,6 @@ function boxOf({ x, y, w, h, s }) {
   return s === 1 ? { x, y, w, h } : { x: x + (w * (1 - s)) / 2, y: y + (h * (1 - s)) / 2, w: w * s, h: h * s };
 }
 
-// "+ Add" beside a column's caption, a plain small button. It opens a panel, so it says so from
-// the start.
-function addButton(column, onAdd) {
-  const add = button("+ Add", () => onAdd && onAdd(column, add), "btn small");
-  add.dataset.focus = `add:${column}`;
-  add.setAttribute("aria-expanded", "false");
-  return add;
-}
-
 // Runs `run` once on the next frame, or after `wait` ms when no frame comes (a browser may hold
 // frames back), so a draw always lands. Whichever comes first clears the other.
 export function drawSoon(run, { frame = requestAnimationFrame, wait = 120 } = {}) {
@@ -326,7 +317,7 @@ export function drawSoon(run, { frame = requestAnimationFrame, wait = 120 } = {}
 // (`onSelect(id)`). The count of a block that folds is a button of its own, after the block in Tab
 // order and over its right edge (a button cannot sit inside a button): a press on it calls
 // `onFold(id)`, which opens or folds the block and draws again, and nothing else: no select, no
-// Details. It stays while the block is open, to fold it again. "+ Add" beside a column's caption calls `onAdd(column, button)`. `tile(block)` gives
+// Details. It stays while the block is open, to fold it again. `tile(block)` gives
 // what a block shows before its name. An entrance starts `enterDelay` ms late (the Gateway waits for
 // the old page to leave: motion.js afterOldPage).
 // `links` are the page's hooks for the links it acts on: `canHit(link)`, `tip(link)` (what its
@@ -342,7 +333,7 @@ export function drawSoon(run, { frame = requestAnimationFrame, wait = 120 } = {}
 // only while the last draw selected nothing. `onEmpty()` hears a click on the map that is on no
 // block, button or link; `onHover(id | null)` the block under the pointer when it changes (null:
 // the pointer left the map), never while a block is held.
-export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHover, links: pointer = NO_LINKS, enterDelay = 0 } = {}) {
+export function mapView({ tile, onOpen, onSelect, onFold, onEmpty, onHover, links: pointer = NO_LINKS, enterDelay = 0 } = {}) {
   const box = el("div", "map");
   const area = el("div", "map-area");
   const svg = document.createElementNS(SVG, "svg");
@@ -520,14 +511,10 @@ export function mapView({ tile, onOpen, onSelect, onFold, onAdd, onEmpty, onHove
     item.lit = lit.has(place.id);
     if (place.kind === "column") {
       item.look = "map-caption";
-      const words = JSON.stringify([block.caption, Boolean(block.add)]);
+      const words = JSON.stringify([block.caption]);
       if (words !== item.words) {
         item.words = words;
-        const parts = block.caption ? [el("span", null, block.caption)] : [];
-        if (block.add) {
-          parts.push(addButton(block.id, onAdd));
-        }
-        node.replaceChildren(...parts);
+        node.replaceChildren(...(block.caption ? [el("span", null, block.caption)] : []));
       }
     } else if (item.div) {
       item.look = matched ? "caption found" : "caption";

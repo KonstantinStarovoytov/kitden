@@ -1452,7 +1452,7 @@ test('the More door and the Add a server card let go of the selection, as + Add 
     queue('/api/discovery/sources', { status: 200, json: { sources: [], offline: true } });
     if (door === 'more') await more.run();
     else if (door === 'card') press(box, 'block:addslot:servers');
-    else press(box, 'add:servers');
+    else press(pages['#main'], 'add:servers');
     await done();
     const local = walk(pages['#drawer']).find((n) => n.tagName === 'BUTTON' && n.textContent === 'On this Mac');
     local.listeners.click[0]();

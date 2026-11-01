@@ -2779,9 +2779,11 @@ def test_the_library_add_panel_says_the_decided_words():
         for w in ("LIBRARY_STATUS.added, off", "LIBRARY_STATUS.every", "line: row.refusal")
     ]
     assert order == sorted(order)
-    # The map's caption carries "+ Add", and a row of the panel drags onto a client.
+    # The page header carries "+ Add plugins", the map ends with an "Add a plugin" card, and a row
+    # of the panel drags onto a client.
     lib_map = script("library-map.js")
-    assert 'caption: "Plugins and skills", add: true,' in lib_map
+    assert 'addHeadButton("+ Add plugins", "add:plugins", pressLibraryAdd)' in script("library.js")
+    assert 'name: "Add a plugin", meta: "From the catalog"' in lib_map
     assert "row: { still: true, begin: beginRow, over: overRow, drop: dropRow }," in lib_map
     assert "liftGhost" in script("gateway-drag.js") and "export function liftGhost(" in script(
         "map-drag.js"

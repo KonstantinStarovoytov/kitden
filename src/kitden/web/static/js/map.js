@@ -3,9 +3,9 @@
 // page: map-view.js draws it.
 //
 // The tree model:
-// - columns: [{ id, caption, add, w, h, narrowW, narrowH, colGap, top, rowGap }]. Each column has
-//   its blocks' size, wide and narrow (the narrow size is the wide one unless set). `add` puts
-//   "+ Add" beside the caption. Wide only: `colGap` is the space before the column (GAP unless
+// - columns: [{ id, caption, w, h, narrowW, narrowH, colGap, top, rowGap }]. Each column has
+//   its blocks' size, wide and narrow (the narrow size is the wide one unless set).
+//   Wide only: `colGap` is the space before the column (GAP unless
 //   set), `top` the y of its first block (CAPTION_ROW) and `rowGap` the space between its blocks.
 // - blocks: [{ id, column, parent, kind, name, meta, state, tag, count, grip, action, details, h,
 //   icon, before, rowGap, lamp, wait, stats, projects, ports, takeOut, title, leaving, pageName }]. The

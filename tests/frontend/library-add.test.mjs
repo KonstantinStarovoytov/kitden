@@ -642,3 +642,24 @@ test('MCP sources exclude the built-in plugin catalog but keep personal GitHub s
   assert.equal(sourceFitsPage({ id: 'skills.sh', kind: 'skills' }, 'mcp'), false);
   assert.equal(sourceFitsPage({ id: 'owner/servers', kind: 'github' }, 'mcp'), true);
 });
+
+test('the map ends Plugins and skills with an Add a plugin card that opens the catalog', async () => {
+  offers = OFFERS;
+  const box = showMap();
+  const card = node(box, 'block:addslot:plugins');
+  assert.ok(card, 'the card is on the map');
+  assert.deepEqual([card.className.split(' ').slice(0, 2).join(' '), text(card).includes('Add a plugin'), text(card).includes('From the catalog')], ['block addslot', true, true]);
+  // No caption holds a button any more.
+  assert.equal(walk(box).some((n) => n.dataset.focus === 'add:plugins'), false);
+  try {
+    await press(card);
+    await wait(10);
+    assert.equal(panelState.current.type, 'discovery');
+    // The panel it leads to takes the header button as where focus goes back.
+    await press(find((n) => n.tagName === 'BUTTON' && text(n) === 'On this Mac')[0]);
+    await wait(10);
+    assert.equal(node(main.children[0], 'add:plugins').getAttribute('aria-expanded'), 'true');
+  } finally {
+    await done();
+  }
+});
