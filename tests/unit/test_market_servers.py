@@ -212,7 +212,7 @@ def _never(url, headers):
 
 def test_add_steps_write_only_the_gateway_settings(home):
     asked = []
-    steps = _steps(home, TEST_STATUS, lambda url, headers: asked.append((url, headers)) or False)
+    steps = _steps(home, TEST_STATUS, lambda url, headers: asked.append((url, headers)) or "open")
     # One sign-in check, without headers: the entry has none.
     assert asked == [("https://status.example.test/mcp", {})]
     # The demo's settings have a PATH and Codex's kitden entry has its timeouts.
@@ -233,7 +233,7 @@ def test_add_steps_put_secrets_in_the_keychain_and_map_streamable_http(home):
     # Supplied credentials are checked before the server enters preview.
     checked = []
     [step] = _steps(
-        home, f"extra@{MARKET}/odd", lambda url, headers: checked.append(headers) or False
+        home, f"extra@{MARKET}/odd", lambda url, headers: checked.append(headers) or "open"
     )
     assert checked == [{"Authorization": "Bearer DEMO_SECRET_X"}]
     reference = {"keychain": "odd/Authorization"}
@@ -370,14 +370,9 @@ def test_a_wrong_shape_or_a_folder_is_a_422_at_preview(home, entry, why):
     _refused(home, f"extra@{MARKET}/odd", why.format("odd"))
 
 
-def test_an_oauth_server_is_refused_at_preview_and_nothing_is_written(home, monkeypatch):
-    monkeypatch.setattr(kitden.demo, "no_sign_in", lambda url, headers: True)
-    _refused(
-        home,
-        TEST_STATUS,
-        "test-status needs access. If it gives a token, enter it in its catalog details. "
-        "Browser sign-in is not supported yet.",
-    )
+def test_a_server_that_needs_a_token_waits_at_preview_and_nothing_is_written(home, monkeypatch):
+    monkeypatch.setattr(kitden.demo, "no_sign_in", lambda url, headers: "token")
+    _refused(home, TEST_STATUS, "test-status needs a token.")
 
 
 def test_an_unreachable_server_is_refused(home, monkeypatch):
@@ -389,7 +384,7 @@ def test_an_unreachable_server_is_refused(home, monkeypatch):
 
 
 def test_an_add_with_no_client_on_the_gateway_says_so(home):
-    [step] = _steps(home, TEST_STATUS, lambda url, headers: False)
+    [step] = _steps(home, TEST_STATUS, lambda url, headers: "open")
     nobody = SimpleNamespace(clients=[], items=[])
     words = after_words(Change(action="gateway.add", steps=[step]), nobody, home=home)
     assert words == [{"note": "No client uses the Kitden gateway yet."}]

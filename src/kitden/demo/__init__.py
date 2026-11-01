@@ -91,7 +91,7 @@ async def canned_refresh(home: Path, names: Iterable[str] | None = None) -> dict
     return dict.fromkeys(held)
 
 
-def no_sign_in(url: str, headers: dict) -> bool:
-    """`needs_sign_in` in the demo: the sample's remote servers send a header and need no
-    sign-in, and nothing goes online."""
-    return False
+def no_sign_in(url: str, headers: dict) -> str:
+    """`access_needed` in the demo: the sample's remote servers send a header and need no
+    access, and nothing goes online."""
+    return "open"

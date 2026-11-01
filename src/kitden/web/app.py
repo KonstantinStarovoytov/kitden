@@ -43,6 +43,7 @@ from kitden.changes.actions import (
     SETUP_SERVER_UPDATE,
     SKILL_INSTALL,
     SKILL_RULE,
+    NeedsAccess,
     add_server_steps,
     connect_steps,
     disconnect_steps,
@@ -273,13 +274,18 @@ class Built:
 
 
 class _RowRefused(Exception):
-    """A tray request cannot join the change: the words, and the row they come from (None when
-    the engine refuses the whole change)."""
+    """A tray request cannot join the change: the words, the row they come from (None when
+    the engine refuses the whole change), and what access it needs, if that is why."""
 
-    def __init__(self, reason: str, row: str | None) -> None:
+    def __init__(self, reason: str, row: str | None, needs: dict | None = None) -> None:
         super().__init__(reason)
         self.reason = reason
         self.row = row
+        self.needs = needs  # NeedsAccess.answer() when the row waits for access
+
+    def needed(self) -> dict:
+        """`{"needs": …}` for an answer when the row waits for access, else nothing."""
+        return {"needs": self.needs} if self.needs else {}
 
 
 # What the first scan reads, step by step, so the page can say what it still waits for.
@@ -513,6 +519,19 @@ def kept_refusal(item) -> str:
     path = item.source.path
     where = Path(path).name if path else CLIENT_WORDS.get(item.client, "its settings")
     return KEPT_UNREAD.format(where)
+
+
+def _given_headers(params: dict) -> dict | None:
+    """The access headers typed for a move (`params.headers`), as strings, or None."""
+    given = params.get("headers")
+    if given is None:
+        return None
+    if not isinstance(given, dict) or not all(
+        isinstance(k, str) and isinstance(v, str) and v.strip() and "\n" not in v and "\r" not in v
+        for k, v in given.items()
+    ):
+        raise ValueError("Enter a valid access value again.")
+    return {k: v.strip() for k, v in given.items()} or None
 
 
 def refusal_words(error: ValueError) -> str:
@@ -1207,10 +1226,11 @@ def create_app(
                 added_clients=added,
                 sign_in=sign_in,
                 keychain_run=keychain_run,
+                headers=_given_headers(params),
             )
         elif action == GATEWAY_ADD:
             # It may ask a remote server whether it signs in, so not on the event loop.
-            discovered = None
+            discovered, fields = None, None
             if params.get("discovery"):
                 if stand_ins:
                     raise ValueError(stand_ins.NOT_IN_DEMO)
@@ -1219,6 +1239,7 @@ def create_app(
                     raise ValueError("This server needs configuration before it can be added.")
                 from kitden.discovery import configured_entry
 
+                fields = row.get("setup") or None
                 discovered = (short_name(row["name"]), configured_entry(row, params))
             steps = await asyncio.to_thread(
                 gateway_add_steps,
@@ -1229,6 +1250,7 @@ def create_app(
                 discovered=discovered,
                 sign_in=sign_in,
                 keychain_run=keychain_run,
+                fields=fields,
             )
         elif action == GATEWAY_RULE:
             projects = {p["id"]: p["path"] for p in state.data["projects"]}
@@ -1395,6 +1417,8 @@ def create_app(
                 added.add(name)
             try:
                 made = await _steps_for(request["kind"], request["targets"], request["params"])
+            except NeedsAccess as error:
+                raise _RowRefused(str(error), request["id"], error.answer()) from None
             except ValueError as error:
                 raise _RowRefused(refusal_words(error), request["id"]) from None
             if not made.steps:
@@ -1431,7 +1455,8 @@ def create_app(
             return _error(str(error), 422)
         except _RowRefused as refused:
             row = refused.row or requests[-1]["id"]
-            return JSONResponse({"ok": False, "reason": refused.reason, "row": row})
+            answer = {"ok": False, "reason": refused.reason, "row": row}
+            return JSONResponse({**answer, **refused.needed()})
         return JSONResponse({"ok": True})
 
     async def batch_preview(request: Request) -> JSONResponse:
@@ -1448,7 +1473,8 @@ def create_app(
         try:
             change, built, maps = await _batch(requests)
         except _RowRefused as refused:
-            return JSONResponse({"detail": refused.reason, "row": refused.row}, status_code=422)
+            answer = {"detail": refused.reason, "row": refused.row, **refused.needed()}
+            return JSONResponse(answer, status_code=422)
         assert change is not None
         picked = _picked(body)
         rows, answers = [], []

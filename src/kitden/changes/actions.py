@@ -502,18 +502,54 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-# A server that signs in through the browser stays where it is. Some also take an API key (Neon
-# declares one in the MCP registry, checked 2026-10-31): adding it from the catalog asks for it.
-OAUTH_MOVE = (
-    "{name} signs in through the browser, which the gateway can't do yet, so it stays direct. "
-    "If {name} gives an API key, add it from + Add with that key."
-)
+# Where a server that signs in through the browser keeps its sign-in metadata (RFC 9728).
+SIGN_IN_METADATA = "/.well-known/oauth-protected-resource"
+
+# The one field a remote server that needs a plain token gets: the token alone, sent as
+# `Authorization: Bearer`.
+TOKEN_FIELD = {
+    "field": "headers",
+    "name": "Authorization",
+    "label": "Access token",
+    "prefix": "Bearer ",
+}
+SIGN_IN_LATER = "{name} does not let Kitden sign in yet. It may take an API key; see its docs."
 
 
-def needs_sign_in(url: str, headers: dict) -> bool:
-    """True when the server answers an MCP `initialize` with 401 or 403, as a server that
-    signs in with OAuth does (Claude Code reads both that way, checked 2026-10-21). Raises
-    OSError when there is no answer, or only a redirect, which the gateway would not follow.
+class NeedsAccess(ValueError):
+    """A server that needs access before it can join the preview: the kind ("token" or
+    "sign-in"), the fields to ask for, and whether a value given was refused. Its words are
+    the reason the page shows; no value given is ever in them."""
+
+    def __init__(self, server: str, kind: str, fields: list[dict], refused: bool = False):
+        self.server, self.kind, self.fields, self.refused = server, kind, fields, refused
+        if refused:
+            words = f"{server} did not accept this token."
+        elif kind == "sign-in":
+            words = SIGN_IN_LATER.format(name=server)
+        else:
+            words = f"{server} needs a token."
+        super().__init__(words)
+
+    def answer(self) -> dict:
+        return {
+            "server": self.server,
+            "kind": self.kind,
+            "fields": self.fields,
+            "reason": str(self),
+            "refused": self.refused,
+        }
+
+
+def _opener() -> urllib.request.OpenerDirector:
+    """No redirect followed and no proxy used, so a request goes to the server's own address."""
+    return urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect)
+
+
+def _initialize(url: str, headers: dict) -> tuple[int, str]:
+    """The status of one MCP `initialize` POST to `url`, and its WWW-Authenticate header.
+    Raises OSError when there is no answer, or only a redirect, which the gateway would not
+    follow.
 
     One POST to the server's own address, within 5 seconds. No redirect is followed and no
     proxy is used, so the headers go nowhere else; an error never holds them. It names itself:
@@ -542,17 +578,69 @@ def needs_sign_in(url: str, headers: dict) -> bool:
             "Accept": "application/json, text/event-stream",
         },
     )
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect)
     try:
-        with opener.open(request, timeout=SIGN_IN_SECONDS):
-            return False
+        with _opener().open(request, timeout=SIGN_IN_SECONDS) as answer:
+            return answer.status, ""
     except urllib.error.HTTPError as answer:
+        challenge = answer.headers.get("WWW-Authenticate", "") if answer.headers else ""
         answer.close()
         if 300 <= answer.code < 400:
             raise OSError("moved") from None
-        return answer.code in (401, 403)
+        return answer.code, challenge
     except (OSError, ValueError, http.client.HTTPException):
         raise OSError("no answer") from None
+
+
+def needs_sign_in(url: str, headers: dict) -> bool:
+    """True when the server answers an MCP `initialize` with 401 or 403, as a server that
+    needs access does (Claude Code reads both that way, checked 2026-10-21). Raises OSError
+    as `_initialize` does."""
+    return _initialize(url, headers)[0] in (401, 403)
+
+
+def _has_sign_in_metadata(url: str) -> bool:
+    """Whether the server's origin serves sign-in metadata: one GET with no header of the
+    entry, within 5 seconds."""
+    parts = urlsplit(url)
+    request = urllib.request.Request(  # noqa: S310 - the scheme is http or https
+        f"{parts.scheme}://{parts.netloc}{SIGN_IN_METADATA}", headers={"User-Agent": "kitden"}
+    )
+    try:
+        with _opener().open(request, timeout=SIGN_IN_SECONDS) as answer:
+            return answer.status == 200
+    except (OSError, ValueError, http.client.HTTPException):
+        return False
+
+
+def check_access(
+    name: str,
+    server: dict,
+    sign_in: Callable[[str, dict], str] | None,
+    fields: list[dict],
+    refused: bool,
+) -> None:
+    """Ask a remote server once what access it needs, with its headers: NeedsAccess unless it
+    answers as open (`refused`: the headers hold a value typed for it), and the words that it
+    could not be reached when it does not answer."""
+    try:
+        kind = (sign_in or access_needed)(server["url"], server.get("headers") or {})
+    except OSError:
+        raise ValueError(f"Kitden could not reach {name}.") from None
+    if kind != "open":
+        raise NeedsAccess(name, kind, fields, refused=refused)
+
+
+def access_needed(url: str, headers: dict) -> str:
+    """What a remote server needs: "open" (nothing), "token" or "sign-in". A 401 or 403 means
+    it needs access; sign-in is possible when the 401 names its metadata in WWW-Authenticate
+    (`resource_metadata`: MCP authorization spec 2025-06-18, checked 2026-11-01) or its origin
+    serves that metadata. Raises OSError as `_initialize` does."""
+    status, challenge = _initialize(url, headers)
+    if status not in (401, 403):
+        return "open"
+    if "resource_metadata" in challenge or _has_sign_in_metadata(url):
+        return "sign-in"
+    return "token"
 
 
 def _codex_layers(name: str, known_projects: list[str], user_file: str) -> bool:
@@ -761,8 +849,9 @@ def local_move_steps(
     command: str | None,
     *,
     added_clients: set[str],
-    sign_in: Callable[[str, dict], bool] | None = None,
+    sign_in: Callable[[str, dict], str] | None = None,
     keychain_run: Runner | None = None,
+    headers: dict | None = None,
 ) -> list[Step]:
     """Move direct entries into the Kitden gateway, in one change.
 
@@ -776,8 +865,10 @@ def local_move_steps(
     (a new token, say), and the same entry only leaves the clients. A client's removal step is
     marked (`switches_left`) when that client had tools or the server off, which do not carry.
 
-    `sign_in` asks a remote server whether it signs in, and `keychain_run` reads the Keychain;
-    None is `needs_sign_in` and the real Keychain (the demo passes its stand-ins).
+    `sign_in` asks a remote server what access it needs, and `keychain_run` reads the
+    Keychain; None is `access_needed` and the real Keychain (the demo passes its stand-ins).
+    A remote server that needs access raises NeedsAccess. `headers` is the token typed for
+    it (only `Authorization`, for a single remote server), checked before any step.
     """
     if not items:
         raise ValueError("Choose a server to move.")
@@ -807,15 +898,17 @@ def local_move_steps(
     lacking = [c for c in dict.fromkeys(i.client for i in items) if c not in added_clients]
     if lacking and (command is None or not Path(command).is_absolute()):
         raise ValueError(NEEDS_COMMAND)
+    if headers:
+        if set(headers) != {"Authorization"}:
+            raise ValueError("Only the server's declared access fields can be set.")
+        if len(servers) != 1 or "url" not in next(iter(servers.values())):
+            raise ValueError("A token goes with one remote server.")
+        name = next(iter(servers))
+        given = {**(servers[name].get("headers") or {}), **headers}
+        servers[name] = {**servers[name], "headers": given}
     for name, server in servers.items():
-        if "url" not in server:
-            continue
-        try:
-            oauth = (sign_in or needs_sign_in)(server["url"], server.get("headers") or {})
-        except OSError:
-            raise ValueError(f"Kitden could not reach {name}.") from None
-        if oauth:
-            raise ValueError(OAUTH_MOVE.format(name=name))
+        if "url" in server:
+            check_access(name, server, sign_in, [TOKEN_FIELD], refused=bool(headers))
 
     steps = [
         step
@@ -932,17 +1025,19 @@ def gateway_add_steps(
     server_id: str,
     *,
     discovered: tuple[str, dict] | None = None,
-    sign_in: Callable[[str, dict], bool] | None = None,
+    sign_in: Callable[[str, dict], str] | None = None,
     keychain_run: Runner | None = None,
+    fields: list[dict] | None = None,
 ) -> list[Step]:
     """Add one server a marketplace plugin offers (`server_id`, its row in market_servers) to
     the Kitden gateway, in one change: its entry in the gateway settings, with its secrets as
     Keychain items, the PATH when the settings have none, and the timeouts an existing Codex
     `kitden` entry lacks. No client gets a `kitden` entry or any other change.
 
-    A server the gateway cannot take is refused first, with the list's reason. A remote one
-    with no headers of its own is asked once whether it signs in, as a move asks; `sign_in`
-    and `keychain_run` are as in local_move_steps.
+    A server the gateway cannot take is refused first, with the list's reason. A remote one is
+    asked once what access it needs, as a move asks; `fields` are the access values its
+    catalog row declares (else the one token field). `sign_in` and `keychain_run` are as in
+    local_move_steps.
     """
     name = server_id.partition("/")[2]
     if discovered is None:
@@ -955,20 +1050,8 @@ def gateway_add_steps(
         raise ValueError(refusal)
     server = gateway_entry(entry)
     if "url" in server:
-        try:
-            oauth = (sign_in or needs_sign_in)(server["url"], server.get("headers") or {})
-        except OSError:
-            raise ValueError(f"Kitden could not reach {name}.") from None
-        if oauth and server.get("headers"):
-            raise ValueError(
-                f"{name} did not accept this access. Check the token. Some servers accept "
-                "only browser sign-in, which Kitden does not support yet."
-            )
-        if oauth:
-            raise ValueError(
-                f"{name} needs access. If it gives a token, enter it in its catalog details. "
-                "Browser sign-in is not supported yet."
-            )
+        given = bool(server.get("headers"))
+        check_access(name, server, sign_in, fields or [TOKEN_FIELD], refused=given)
     step = _server_step(home, name, server, None, keychain_run)
     assert step is not None  # a new server always has its step
     steps = [step]

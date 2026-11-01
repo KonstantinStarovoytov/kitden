@@ -122,7 +122,7 @@ def test_a_remote_move_says_kitden_asked_the_server_once(tmp_path, monkeypatch):
     from tests.unit.test_local_gateway_move import add_claude, new_home
 
     home = new_home(tmp_path)
-    monkeypatch.setattr("kitden.changes.actions.needs_sign_in", lambda url, headers: False)
+    monkeypatch.setattr("kitden.changes.actions.access_needed", lambda url, headers: "open")
     add_claude(home, "linear", {"type": "http", "url": "https://linear.invalid/mcp"})
     change, inv = _move_change(home, monkeypatch, ("claude_code", "linear"))
     note = after_words(change, inv, home=home)[0]["note"]

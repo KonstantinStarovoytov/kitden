@@ -411,7 +411,9 @@ def test_setup_fields_accept_declared_tokens_and_hide_them():
     )
     row = {"entry": entry, "setup": fields}
     assert refusal is None and fields[0]["prefix"] == "Bearer "
-    with pytest.raises(ValueError, match="Enter Authorization"):
+    from kitden.changes.actions import NeedsAccess
+
+    with pytest.raises(NeedsAccess):
         configured_entry(row, {})
     params = {"headers": {"Authorization": "Bearer example-test-token"}}
     assert configured_entry(row, params)["headers"] == params["headers"]
@@ -447,7 +449,7 @@ def test_token_preview_apply_and_undo_use_keychain(tmp_path, monkeypatch, fake_k
     home = make_home(tmp_path, "codex/0.159.2")
     checked = []
     monkeypatch.setattr(
-        actions, "needs_sign_in", lambda url, headers: checked.append(headers) or False
+        actions, "access_needed", lambda url, headers: checked.append(headers) or "open"
     )
     monkeypatch.setattr(
         discovery,
@@ -513,11 +515,25 @@ def test_token_preview_apply_and_undo_use_keychain(tmp_path, monkeypatch, fake_k
         assert undone.json()["state"] == "undone", undone.text
         assert "SENTINEL_TEST_TOKEN" not in fake_keychain.read_text()
         # A token the server turns down says so, and is not echoed back.
-        monkeypatch.setattr(actions, "needs_sign_in", lambda url, headers: True)
+        monkeypatch.setattr(actions, "access_needed", lambda url, headers: "token")
         refused = page.post("/api/changes/preview", json=request, headers=POST)
         assert refused.status_code >= 400
-        assert "did not accept this access" in refused.text
+        assert "token-server did not accept this token." in refused.text
         assert "SENTINEL_TEST_TOKEN" not in refused.text
+
+
+def test_a_missing_required_value_waits_for_a_token():
+    from kitden.changes.actions import NeedsAccess
+    from kitden.discovery import configured_entry
+
+    setup = [
+        {"field": "headers", "name": "Authorization", "label": "Neon API key", "prefix": "Bearer "}
+    ]
+    row = {"name": "io.github.x/neon", "entry": {"url": "https://x.test/mcp"}, "setup": setup}
+    with pytest.raises(NeedsAccess) as error:
+        configured_entry(row, {})
+    assert (error.value.server, error.value.kind, error.value.fields) == ("neon", "token", setup)
+    assert str(error.value) == "neon needs a token."
 
 
 def test_a_bare_authorization_header_takes_a_bearer_token():

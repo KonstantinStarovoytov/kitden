@@ -235,9 +235,11 @@ def configured_entry(row: dict, params: dict) -> dict:
             ):
                 raise ValueError("Enter a valid access value again.")
             entry.setdefault(field, {})[key] = value.strip()
-    for required in fields:
-        if not entry.get(required["field"], {}).get(required["name"]):
-            raise ValueError(f"Enter {required['name']} before previewing.")
+    missing = [f for f in fields if not entry.get(f["field"], {}).get(f["name"])]
+    if missing:
+        from kitden.changes.actions import NeedsAccess
+
+        raise NeedsAccess(short_name(str(row.get("name", ""))), "token", fields)
     return entry
 
 
@@ -575,10 +577,11 @@ class Discovery:
         elif row["kind"] == "mcp":
             out["content"] = json.dumps(redact(row.get("entry") or {})[0], indent=2)
             if out["remote"] and not row.get("setup"):
-                from kitden.changes.actions import needs_sign_in
+                from kitden.changes.actions import access_needed
 
                 try:
-                    out["access_required"] = needs_sign_in(row["entry"]["url"], {})
+                    out["access_kind"] = access_needed(row["entry"]["url"], {})
+                    out["access_required"] = out["access_kind"] != "open"
                 except OSError:
                     out["access_note"] = "Could not reach this server. Preview will check again."
         else:
