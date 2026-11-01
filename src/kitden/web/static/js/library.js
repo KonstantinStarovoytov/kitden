@@ -6,8 +6,8 @@
 // the map (library-details.js); a cell's "+ Add" only adds a row to the tray.
 import { getJson, query } from "./api.js";
 import { button, el, gridKey, icon, plural } from "./dom.js";
-import { filesGroup, INSTRUCTIONS_HINT, LEDE, leaveLibraryMap, letGoLibraryMap, libraryDetails, libraryMode, libraryThing, renderLibraryMap, setListOnly } from "./library-map.js";
-import { glidePill, modeSwitch, switchedNow } from "./map-page.js";
+import { filesGroup, INSTRUCTIONS_HINT, LEDE, leaveLibraryMap, letGoLibraryMap, libraryDetails, libraryMode, libraryThing, pressLibraryAdd, renderLibraryMap, setListOnly } from "./library-map.js";
+import { addHeadButton, glidePill, modeSwitch, switchedNow } from "./map-page.js";
 import { CALM, afterOldPage, animate, entrance, glide, reducedMotion, rise } from "./motion.js";
 import { projectNote } from "./offer.js";
 import { isPanelOpen, openInfo, panelState, previewButton, projectLabel, review } from "./panel.js";
@@ -326,7 +326,7 @@ export function renderLibrary(main, { again = false } = {}) {
   head.append(el("h1", null, "Library"));
   const letGo = () => { letGoLibraryMap(); letGoList(); };
   const seg = modeSwitch("library", mode, { old: () => main.querySelector(mode === "map" ? ":scope > div.map" : ":scope > .table-scroll"), letGo, shows: () => libraryShows.mode });
-  head.append(seg);
+  head.append(addHeadButton("+ Add plugins", "add:plugins", pressLibraryAdd), seg);
   main.append(head);
   let found = null;
   if (mode === "map") found = renderLibraryMap(main, { head, again, switched });

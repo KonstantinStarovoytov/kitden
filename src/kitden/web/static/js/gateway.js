@@ -6,7 +6,7 @@ import { addKind, addName, onOpenAdd, openAdd, pageRead, wasAdded } from "./gate
 import { addForm, connectAction, connectBody, followProject, heldServer, liveHeld, movesTo, NOT_REACHED, OUTSIDE_ICONS, removalIcon, ruleBody, SERVER_ICONS, SETUP_NOTE, showClient, showGateway, showHeld, showLink, showOutside, showTool, TAKE_OUT } from "./gateway-details.js";
 import { movingOn, placeMoved, pressGrip } from "./gateway-drag.js";
 import { findIn, foldable, isNarrow, keepFolded, keepOpen, landOwners, landStage, layoutTree, linkKey, litFor, litFrom, litPath, pagesNow, pagesWith, pressCount, pressOpen, shownFound, toggleOpen, turnPage, turnWords, wideWidth } from "./map.js";
-import { drawChip, glidePill, modeSwitch, switchedNow } from "./map-page.js";
+import { addHeadButton, drawChip, glidePill, modeSwitch, switchedNow } from "./map-page.js";
 import { mapView } from "./map-view.js";
 import { afterOldPage, D, rise, riseHead } from "./motion.js";
 import { closePanel, isPanelOpen, moveInto, openInfo, panelState, projectLabel, review } from "./panel.js";
@@ -129,7 +129,7 @@ export function renderGateway(main, { again = false } = {}) {
   const mode = viewMode(state, serverCount(view));
   gatewayShows.mode = mode;
   const seg = modeSwitch("gateway", mode, { old: () => (mode === "map" ? onMap.view && onMap.view.box : onList.box), letGo: letGoIfSelected, shows: () => gatewayShows.mode });
-  head.append(seg);
+  head.append(addHeadButton("+ Add servers", "add:servers", pressAdd), seg);
   const model = treeFor(view, mode);
   setHint(mode === "map" ? MAP_HINT : "");
   // The search finds here: matches light up, the rest dims, and what hides a match opens (S.6).
@@ -1029,7 +1029,7 @@ function newMap() {
     onOpen: openBlock,
     onFold: foldBlock,
     onSelect: (id) => pressBlock(onMap.model, id),
-    onAdd: pressAdd,
+    onAdd: (column, node) => pressAdd(node),
     onEmpty: letGoIfSelected,
     onHover: (id) => view.glance(glanceFor(onMap.model, id)),
     links: LINK_HOOKS,
@@ -1201,10 +1201,10 @@ function letGoIfSelected() {
   if (onMap.selected) letGoOnMap();
 }
 
-// "+ Add" beside the Servers caption opens the Add a server panel (gateway-add.js). Both its doors,
+// "+ Add servers" in the page header opens the Add a server panel (gateway-add.js). Both its doors,
 // this and Details' More, let go of what is selected first.
 onOpenAdd(letGoIfSelected);
-function pressAdd(column, node) {
+function pressAdd(node) {
   return openAdd({ from: node });
 }
 

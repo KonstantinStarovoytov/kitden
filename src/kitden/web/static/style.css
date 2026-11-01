@@ -503,7 +503,10 @@ div.map .block.page .block-label { color: var(--ink-4); }
 /* Library */
 .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
 .btn.add { color: var(--route); border-color: color-mix(in srgb, var(--route) 45%, var(--wire)); background: transparent; }
-.btn.add:hover:not(:disabled) { background: var(--route-soft); }
+.btn.add:hover:not(:disabled), .btn.add[aria-expanded="true"] { background: var(--route-soft); }
+/* The page's add button sits beside Map | List, 8 px from it, as tall as it. */
+.page-head > .btn.add { margin-left: auto; align-self: stretch; }
+.page-head > .btn.add + .seg { margin-left: -8px; }
 .s-via { color: var(--lamp-off); }
 .s-done { color: var(--lamp-on); } .s-done .dot::after { transform: scale(1); }
 .btn.toggle[aria-pressed="true"] { background: var(--route-soft); border-color: color-mix(in srgb, var(--route) 40%, var(--wire)); color: var(--route); font-weight: 600; }

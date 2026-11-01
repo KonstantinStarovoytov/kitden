@@ -17,6 +17,16 @@ export function switchedNow() {
   return switched;
 }
 
+// The page's add button, beside Map | List: a soft-accent button that opens the add panel. It keeps
+// the focus key the panel looks for (`add:servers`, `add:plugins`), so it looks pressed while the
+// panel is open and gets focus back when it closes.
+export function addHeadButton(label, key, onPress) {
+  const add = button(label, () => onPress(add), "btn add");
+  add.dataset.focus = key;
+  add.setAttribute("aria-expanded", "false");
+  return add;
+}
+
 // The mark behind Map | List (or any pill) glides to a choice in 280 ms, under its own `key`.
 export const glidePill = (seg, choice, key) => glide(seg, choice, key, { duration: 280 });
 

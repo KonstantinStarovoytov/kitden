@@ -140,7 +140,7 @@ const pointer = (type, x, y) => { for (const fn of [...(docHeard[type] || [])]) 
 // "+ Add" beside the map's Servers caption, as map-view.js draws it.
 function addButton() {
   const node = element('BUTTON');
-  node.className = 'btn small';
+  node.className = 'btn add';
   node.dataset.focus = 'add:servers';
   pages['#main'].replaceChildren(node);
   return node;
@@ -191,7 +191,7 @@ test('+ Add opens the panel, focus goes to the search, and + Add looks pressed',
     assert.deepEqual(pill().map((b) => [b.textContent, b.getAttribute('aria-pressed')]), [['All', 'true'], ['Remote', 'false'], ['Local', 'false']]);
     assert.equal(body.className, 'body add-body');
     assert.deepEqual([foot.className, text(foot)], ['step-foot', 'Click a server or drag it onto the map to preview it.']);
-    assert.deepEqual([from.className, from.getAttribute('aria-expanded')], ['btn small primary', 'true']);
+    assert.deepEqual([from.className, from.getAttribute('aria-expanded')], ['btn add', 'true']);
     // Only the list was read: nothing is written, and the tray is empty.
     assert.deepEqual(sent.map((s) => s.url).filter((u) => u !== '/api/market-servers'), []);
     assert.deepEqual(tray.rows, []);
@@ -208,18 +208,18 @@ test('Close and Escape close it, focus goes back to + Add, and + Add looks plain
     await press(drawer.children[0].children[0].children[1]);
     assert.equal(isPanelOpen(), false);
     assert.equal(document.activeElement, from);
-    assert.deepEqual([from.className, from.getAttribute('aria-expanded')], ['btn small', 'false']);
+    assert.deepEqual([from.className, from.getAttribute('aria-expanded')], ['btn add', 'false']);
     from = await open();
     pressKey('Escape');
     assert.equal(isPanelOpen(), false);
     assert.equal(document.activeElement, from);
-    assert.equal(from.className, 'btn small');
+    assert.equal(from.className, 'btn add');
     // Another selection takes the panel's place: + Add lets go too.
     from = await open();
     panelState.current = { type: 'held', name: 'files' };
     openPanel([element('HEADER')]);
     assert.equal(isPanelOpen(), true);
-    assert.equal(from.className, 'btn small');
+    assert.equal(from.className, 'btn add');
     // So does a selection made while the list is still being read.
     from = addButton();
     servers = SERVERS;
@@ -228,7 +228,7 @@ test('Close and Escape close it, focus goes back to + Add, and + Add looks plain
     openPanel([element('HEADER')]);
     await opening;
     await wait(200);
-    assert.equal(from.className, 'btn small');
+    assert.equal(from.className, 'btn add');
     assert.equal(search(), undefined);
   } finally {
     await done();
@@ -404,7 +404,7 @@ test('+ Add while the panel is open keeps it as it is and gives focus to the sea
     assert.deepEqual(pill().map((b) => b.getAttribute('aria-pressed')), ['false', 'false', 'true']);
     assert.deepEqual(shown().map((r) => rowWords(r)[0]), ['db-query']);
     assert.equal(document.activeElement, search());
-    assert.deepEqual([from.className, from.getAttribute('aria-expanded')], ['btn small primary', 'true']);
+    assert.deepEqual([from.className, from.getAttribute('aria-expanded')], ['btn add', 'true']);
   } finally {
     await done();
   }
@@ -477,10 +477,10 @@ test("the Kitden gateway's More list opens the same panel", async () => {
     assert.equal(rows().length, 4);
     assert.equal(document.activeElement, search());
     // Focus goes back to the map's + Add, which looks pressed meanwhile.
-    assert.equal(from.className, 'btn small primary');
+    assert.equal(from.className, 'btn add');
     pressKey('Escape');
     assert.equal(document.activeElement, from);
-    assert.equal(from.className, 'btn small');
+    assert.equal(from.className, 'btn add');
   } finally {
     await done();
   }
@@ -594,4 +594,13 @@ test('a dragged online server carries the access typed in its details', () => {
   // The body holds its own copy: a later edit of the row does not change a queued change.
   access.headers.Authorization = 'Bearer other';
   assert.equal(body.params.headers.Authorization, 'Bearer test-value');
+});
+
+test('the header add button is a soft-accent button with its focus key', async () => {
+  const { addHeadButton } = await import('../../src/kitden/web/static/js/map-page.js');
+  const pressed = [];
+  const add = addHeadButton('+ Add servers', 'add:servers', (node) => pressed.push(node));
+  assert.deepEqual([add.textContent, add.className, add.dataset.focus, add.getAttribute('aria-expanded')], ['+ Add servers', 'btn add', 'add:servers', 'false']);
+  await press(add);
+  assert.deepEqual(pressed, [add]);
 });

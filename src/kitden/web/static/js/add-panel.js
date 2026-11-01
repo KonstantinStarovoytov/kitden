@@ -34,10 +34,10 @@ function mapAddButton(key) {
   return main && key ? withFocusKey(main, key) : null;
 }
 
-// "+ Add" looks pressed while the panel is open (add-notes §9.5).
+// The add button looks pressed while the panel is open (add-notes §9.5): a soft fill, not the
+// action color.
 function showPressed(node, on) {
   if (!node) return;
-  node.classList.toggle("primary", on);
   node.setAttribute("aria-expanded", String(on));
 }
 

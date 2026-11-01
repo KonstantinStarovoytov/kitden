@@ -203,11 +203,11 @@ function showMap(sample = MAP) {
   return map();
 }
 
-// The map drawn, then "+ Add" beside its Plugins and skills caption pressed, and the offers read.
+// The map drawn, then "+ Add plugins" in the page header pressed, and the offers read.
 async function open(sample = MAP, rows = OFFERS) {
   offers = rows;
   const box = showMap(sample);
-  const add = node(box, 'add:plugins');
+  const add = node(main.children[0], 'add:plugins');
   await press(add);
   await wait(10);
   assert.equal(panelState.current.type, 'discovery', '+ Add opens catalogs first');
@@ -240,7 +240,7 @@ test('+ Add opens Add a plugin or skill; the pill filters Plugins and Skills', a
     assert.deepEqual([search().placeholder, search().getAttribute('aria-label')], ['Search the marketplaces…', 'Search the marketplaces']);
     assert.deepEqual(pill().map((b) => [b.textContent, b.getAttribute('aria-pressed')]), [['All', 'true'], ['Plugins', 'false'], ['Skills', 'false']]);
     assert.deepEqual(text(foot), 'Click to preview, or drag onto a client.');
-    assert.deepEqual([add.className, add.getAttribute('aria-expanded')], ['btn small primary', 'true']);
+    assert.deepEqual([add.className, add.getAttribute('aria-expanded')], ['btn add', 'true']);
     // One group per marketplace, in name order, each with the store icon.
     assert.deepEqual(captions().map(text), ['demo-market', 'team-market']);
     assert.ok(captions().every((c) => c.children[0].dataset.icon === 'store'));

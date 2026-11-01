@@ -381,10 +381,13 @@ function tile(block) {
 // block held off its place, and how to draw again.
 const onMap = { view: null, tabs: null, tab: "plugins", answer: null, model: null, open: new Set(), selected: null, pages: new Map(), tabPages: {}, found: null, searched: "", project: null, unfolds: false, folded: false, layout: null, drag: null, home: null, redraw: () => drawMap() };
 
-// "+ Add" beside the Plugins and skills caption: `fn(button)` opens the add panel (library-add.js).
+// "+ Add plugins" in the page header: `fn(button)` opens the add panel (library-add.js).
 let addHook = null;
 export function onLibraryAdd(fn) {
   addHook = fn;
+}
+export function pressLibraryAdd(node) {
+  if (addHook) addHook(node);
 }
 
 // Details of a selection (library-details.js): `fn(id)` on a select (a block's id or a link's key),
