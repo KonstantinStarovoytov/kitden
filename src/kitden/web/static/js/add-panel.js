@@ -6,7 +6,7 @@
 //
 // `config`:
 // - `type`: what panelState says while it shows; `kicker`, `title`, `foot`, `noMatch`, `none`: its
-//   words; `pill`: [[kind, words]], "all" first; `addKey`: the data-focus key of the map's "+ Add".
+//   words; `pill`: [[kind, words]], "all" first; `addKey`: the data-focus key of the page's add button.
 // - `read()`: the rows ({ id, kind, name, marketplace, … } by marketplace), or null when they cannot
 //   be read; `learn(rows)` hears each read (null too).
 // - `words(row, waiting)`: { status, off, line }; `status`: { added, preview }, the words that look
@@ -28,7 +28,7 @@ export function matchRows(rows, query = "", kind = "all") {
   return rows.filter((row) => (kind === "all" || row.kind === kind) && terms.every((term) => normalize(row.name).includes(term)));
 }
 
-// The map's "+ Add", if the map shows it.
+// The page's add button in its header, if the page shows it.
 function mapAddButton(key) {
   const main = $("#main");
   return main && key ? withFocusKey(main, key) : null;
@@ -51,7 +51,7 @@ export function shownList(config) {
 }
 
 // Open the panel beside the map: its skeleton, then the rows read. `from` is the button that gets
-// focus back when it closes (the map's "+ Add"); it looks pressed until then. Focus goes to the
+// focus back when it closes (the page's add button); it looks pressed until then. Focus goes to the
 // search. Opened again while it shows its list, it stays as it is (its search and its pill too)
 // and focus goes to the search.
 export async function openAddPanel(config, { from = mapAddButton(config.addKey) } = {}) {

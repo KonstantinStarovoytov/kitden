@@ -725,9 +725,9 @@ function foldPlugin(id) {
 // A press on a block. The Add a plugin card opens the add panel. "N more" turns its group's page. A press that folded a plugin, or a second
 // press on the selected block, lets go. Any other block is selected: its path lights.
 function pressBlock(id) {
-  // The Add a plugin card opens the add panel; focus comes back to "+ Add plugins".
+  // The Add a plugin card opens the add panel; focus comes back to the card.
   if (id === ADD_CARD.id) {
-    pressLibraryAdd(withFocusKey($("#main"), "add:plugins"));
+    pressLibraryAdd(withFocusKey($("#main"), `block:${id}`));
     return;
   }
   if (id.startsWith("more:")) {

@@ -22,7 +22,7 @@ export const LIBRARY_STATUS = { added: "Added", every: "In every client", previe
 const PILL = [["all", "All"], ["plugin", "Plugins"], ["skill", "Skills"]];
 const KIND_ICONS = { plugin: "puzzle", skill: "sparkles" };
 const INSTALLS = { plugin: "plugin.install", skill: "skill.install" };
-// The data-focus key of "+ Add" beside the map's Plugins and skills caption (map-view.js).
+// The data-focus key of "+ Add plugins" in the page header (map-page.js addHeadButton).
 const ADD_KEY = "add:plugins";
 
 // The clients a row adds to: those that can take it and lack it, in column order.
@@ -113,8 +113,8 @@ const LIBRARY = {
   after: () => [button(ADD_MARKETPLACE, () => marketplaceForm({ back: ({ queued }) => queued && openLibraryAdd() }), "btn ghost small add-more")],
 };
 
-// Open the panel beside the map. `from` is the button that gets focus back when it closes, the
-// map's "+ Add" unless said.
+// Open the panel beside the map. `from` is the button that gets focus back when it closes,
+// "+ Add plugins" unless said.
 export function openLibraryAdd(options = {}) {
   letGoLibraryMap();
   if (options.from) options.from.focus({ preventScroll: true });
@@ -142,7 +142,7 @@ async function readAgain() {
   list.update(rows);
 }
 
-// "+ Add" beside the map's caption opens the panel. An Apply's adds say Added once the page has
+// "+ Add plugins" in the page header, or the Add a plugin card, opens the panel. An Apply's adds say Added once the page has
 // read the result (the tray empties after it), and an open panel reads again after every Apply
 // or Undo.
 export function initLibraryAdd() {

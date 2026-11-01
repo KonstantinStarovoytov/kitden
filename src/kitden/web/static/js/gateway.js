@@ -1224,9 +1224,9 @@ export function pressBlock(model, id) {
   }
   const block = model.blocks.find((b) => b.id === id);
   if (!block) return;
-  // The Add a server card opens the add panel; focus comes back to "+ Add servers".
+  // The Add a server card opens the add panel; focus comes back to the card.
   if (block.kind === "addslot") {
-    openAdd().catch(reportError);
+    openAdd({ from: withFocusKey($("#main"), `block:${id}`) }).catch(reportError);
     return;
   }
   if (afterPress({ selected: onMap.selected, id, opened: foldable(model).has(id) && onMap.open.has(id) }) === "letGo") {

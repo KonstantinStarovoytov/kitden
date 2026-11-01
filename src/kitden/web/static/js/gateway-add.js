@@ -24,7 +24,7 @@ const NONE = "No marketplace on this computer offers an MCP server.";
 export const STATUS = { added: "Added", held: "In the gateway", preview: "In preview" };
 const KIND_WORDS = { remote: "Remote", local: "Local" };
 const PILL = [["all", "All"], ["remote", "Remote"], ["local", "Local"]];
-// The data-focus key of "+ Add" beside the map's Servers caption (map-view.js).
+// The data-focus key of "+ Add servers" in the page header (map-page.js addHeadButton).
 const ADD_KEY = "add:servers";
 
 // The rows an Apply added since the page loaded, by row id, while the gateway still holds them: a
@@ -72,8 +72,8 @@ async function readServers() {
   }
 }
 
-// Both doors ("+ Add" and Details' More) let go of what the map has selected before the panel
-// opens; the page says how (onOpenAdd).
+// Every door ("+ Add servers", the Add a server card and Details' More) lets go of what the map
+// has selected before the panel opens; the page says how (onOpenAdd).
 let letGo = () => {};
 export const onOpenAdd = (fn) => {
   letGo = fn;
@@ -109,7 +109,7 @@ const GATEWAY = {
 };
 
 // Open the panel beside the map (add-panel.js openAddPanel). `from` is the button that gets focus
-// back when it closes, the map's "+ Add" unless said.
+// back when it closes, "+ Add servers" unless said.
 export function openAdd(options = {}) {
   letGo();
   if (options.from) options.from.focus({ preventScroll: true });

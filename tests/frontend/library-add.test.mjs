@@ -657,10 +657,11 @@ test('the map ends Plugins and skills with an Add a plugin card that opens the c
     await press(card);
     await wait(10);
     assert.equal(panelState.current.type, 'discovery');
-    // The panel it leads to takes the header button as where focus goes back.
     await press(find((n) => n.tagName === 'BUTTON' && text(n) === 'On this Mac')[0]);
     await wait(10);
-    assert.equal(node(main.children[0], 'add:plugins').getAttribute('aria-expanded'), 'true');
+    // Closed, focus goes back to the card that opened it.
+    closePanel({ instant: true });
+    assert.equal(document.activeElement, card);
   } finally {
     await done();
   }

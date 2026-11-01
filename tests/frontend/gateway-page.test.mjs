@@ -1463,7 +1463,11 @@ test('the More door and the Add a server card let go of the selection, as + Add 
     for (const fn of box.listeners.click) fn({ target: box });
     settle();
     assert.deepEqual([isPanelOpen(), panelState.current && panelState.current.type], [true, 'add'], door);
-    closePanel({ instant: true, focus: false });
+    // Closed, focus goes back to the card that opened it.
+    if (door === 'card') {
+      closePanel({ instant: true });
+      assert.equal(document.activeElement, node(box, 'block:addslot:servers'));
+    } else closePanel({ instant: true, focus: false });
   }
 });
 
