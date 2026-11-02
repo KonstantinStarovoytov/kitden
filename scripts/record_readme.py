@@ -1,17 +1,15 @@
-"""Make the README's animations from the real page.
+"""Make the README's pictures from the real page.
 
 Run: uv run --with playwright==1.64.1 python scripts/record_readme.py [--serve]
 
-Each animation starts the real page on a fresh copy of the README sample (scripts/readme_demo.py)
-in a temporary folder: three local servers that need no access (memory in Claude Code,
-playwright in Codex, sequential-thinking in Cursor) and Stripe in Claude Code, which takes an
-API key. Stand-ins keep it local: a fake Keychain, fake client commands, canned tool lists, and a
-local test server that takes one key in place of Stripe's. Only the catalog search goes online
-(Context7, whose remote server needs no key). Nothing of the real home folder is read or
-written.
+Each picture starts the real page on a fresh copy of the README sample (scripts/readme_demo.py)
+in a temporary folder: memory in Claude Code, playwright in Codex and Context7 in Cursor.
+Stand-ins keep it local: a fake Keychain, fake client commands, canned tool lists, and no access
+checks. Nothing goes online, and nothing of the real home folder is read or written.
 
-Each scene is filmed in light and dark, with a drawn cursor, and the part of the page it is
-about is saved as a looping WebP in docs/images/readme/ (scripts/record_scenes.py).
+Each scene is taken in light and dark, with a drawn cursor, and the part of the page it is
+about is saved in docs/images/readme/: a still as a PNG, an animation as a looping WebP
+(scripts/record_scenes.py).
 `--serve` only starts the page and prints its link, to look around. See docs/readme-media.md.
 """
 
@@ -23,7 +21,6 @@ import sys
 import tempfile
 import threading
 import time
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,60 +33,52 @@ import kitden.changes.actions as actions  # noqa: E402
 import kitden.clients.base as base  # noqa: E402
 import kitden.web.app as web  # noqa: E402
 from conftest import install_fake_security  # noqa: E402
-from kitden.demo import DemoRunner, canned_refresh, demo_command  # noqa: E402
+from kitden.demo import DemoRunner, canned_refresh, demo_command, no_sign_in  # noqa: E402
+from kitden.local_gateway.settings import save_tools  # noqa: E402
 from kitden.views.inventory import build_inventory  # noqa: E402
 
 PORT, TOKEN = 47930, "readme"
-TOKEN_PORT = 47929
-SECRET = "sk_test_51ReadmeSampleKey"  # noqa: S105 - the local test server's only token, not a real key
 OUT = ROOT / "docs/images/readme"
-# Servers outside the gateway, as their makers document them (checked 2026-11-02). The sample
+# Servers outside the gateway, as their makers document them (checked 2026-11-02; Context7's
+# address as in the sample). The sample
 # only shows them; nothing starts these commands or calls this address.
 MEMORY = {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-memory"]}
 PLAYWRIGHT = ["npx", "@playwright/mcp@latest"]
-THINKING = {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]}
-STRIPE = "https://mcp.stripe.com"
-
-
-def token_server() -> None:
-    """A local MCP server that takes one token: it stands for Stripe's in the sample."""
-
-    class Handler(BaseHTTPRequestHandler):
-        def log_message(self, *args):
-            pass
-
-        def do_POST(self):
-            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
-            if self.headers.get("Authorization") != f"Bearer {SECRET}":
-                self.send_response(401)
-                self.send_header("WWW-Authenticate", "Bearer")
-                self.send_header("Content-Length", "0")
-                return self.end_headers()
-            if "id" not in body:
-                self.send_response(202)
-                self.send_header("Content-Length", "0")
-                return self.end_headers()
-            info = {"name": "stripe", "version": "1"}
-            result = {"protocolVersion": "2025-06-18", "capabilities": {}, "serverInfo": info}
-            data = json.dumps({"jsonrpc": "2.0", "id": body["id"], "result": result}).encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(data)))
-            self.end_headers()
-            self.wfile.write(data)
-
-    server = ThreadingHTTPServer(("127.0.0.1", TOKEN_PORT), Handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+CONTEXT7 = {"url": "https://mcp.context7.com/mcp"}  # as Cursor writes a remote server
+# memory's tools, as its source lists them (src/memory/index.ts, checked 2026-11-02): the
+# gateway knows these once memory is in it.
+READS = {"readOnlyHint": True, "destructiveHint": False}
+WRITES = {"readOnlyHint": False, "destructiveHint": False}
+DELETES = {"readOnlyHint": False, "destructiveHint": True}
+MEMORY_TOOLS = [
+    {
+        "name": name,
+        "title": title,
+        "description": f"{title}.",
+        "inputSchema": {"type": "object"},
+        "annotations": hints,
+    }
+    for name, title, hints in (
+        ("create_entities", "Create Entities", WRITES),
+        ("create_relations", "Create Relations", WRITES),
+        ("add_observations", "Add Observations", WRITES),
+        ("delete_entities", "Delete Entities", DELETES),
+        ("delete_observations", "Delete Observations", DELETES),
+        ("delete_relations", "Delete Relations", DELETES),
+        ("read_graph", "Read Graph", READS),
+        ("search_nodes", "Search Nodes", READS),
+        ("open_nodes", "Open Nodes", READS),
+    )
+]
 
 
 def sample(root: Path) -> Path:
-    """The README sample with the servers above; Context7 is left to the catalog scene."""
+    """The README sample with the servers above, and memory's tools; Context7 moves to Cursor."""
     home = build_sample(root)
     claude_path = home / ".claude.json"
     claude = json.loads(claude_path.read_text())
     del claude["mcpServers"]["context7"]
     claude["mcpServers"]["memory"] = {"type": "stdio", **MEMORY}
-    claude["mcpServers"]["stripe"] = {"type": "http", "url": STRIPE}
     write_json(claude_path, claude)
     command, *args = PLAYWRIGHT
     with (home / ".codex/config.toml").open("a") as config:
@@ -97,26 +86,19 @@ def sample(root: Path) -> Path:
         config.write(f"command = {json.dumps(command)}\nargs = {json.dumps(args)}\n")
     cursor_path = home / ".cursor/mcp.json"
     cursor = json.loads(cursor_path.read_text())
-    cursor["mcpServers"]["sequential-thinking"] = THINKING
+    cursor["mcpServers"]["context7"] = CONTEXT7
     write_json(cursor_path, cursor)
+    save_tools(home, "memory", MEMORY_TOOLS)
     return home
 
 
 def stand_ins(root: Path) -> None:
-    """Everything but the catalog search stays on this computer, once per run."""
+    """Everything stays on this computer, once per run."""
     install_fake_security(root / "keychain")
     os.environ["KITDEN_SECURITY"] = str(root / "keychain/bin/security")
     base.read_command_version = lambda command: None  # no real client runs
-    real_check = actions.access_needed
-    local = f"http://127.0.0.1:{TOKEN_PORT}/mcp"
-
-    def access_needed(url: str, headers: dict) -> str:
-        # Only stripe needs access, from the local test server; the rest are open.
-        return real_check(local, headers) if url == STRIPE else "open"
-
-    actions.access_needed = access_needed
+    actions.access_needed = no_sign_in  # no server is asked for access
     web.refresh_tools = canned_refresh  # tool lists without starting any server
-    token_server()
 
 
 def start_page(home: Path, port: int = PORT) -> tuple[str, uvicorn.Server]:

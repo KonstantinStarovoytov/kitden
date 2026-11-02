@@ -17,33 +17,71 @@ that <b>Claude Code, Codex and Cursor</b> load.</p>
   <a href="https://github.com/KonstantinStarovoytov/kitden/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
 </p>
 
-### Find it, drop it in
+### See what each agent loads
+
+The plugins, skills and MCP servers of Claude Code, Codex and Cursor on one map. What one
+agent has and another lacks shows at a glance.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/find-dark.webp">
-  <source srcset="docs/images/readme/find-light.webp">
-  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/find-light.webp" width="880" alt="context7, found in the catalog, is dragged onto the Kitden gateway, which lights up to take it.">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/library-dark.png">
+  <source srcset="docs/images/readme/library-light.png">
+  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/library-light.png" width="470" alt="The Library map: Claude Code and Cursor load the superpowers plugin, Codex and Cursor load the frontend-design skill.">
 </picture>
 
-### Move many at once
+### Share servers across all agents
+
+Move a server into the Kitden gateway and every agent you use gets it. Set it up once,
+not once per agent.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/pick-dark.webp">
   <source srcset="docs/images/readme/pick-light.webp">
-  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/pick-light.webp" width="450" alt="Three servers from three clients are picked with a band and dragged onto the lit Kitden gateway together.">
+  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/pick-light.webp" width="450" alt="Context7 from Cursor, memory from Claude Code and playwright from Codex go into the Kitden gateway together, to be shared by all three.">
 </picture>
 
-### One token, every agent
+### Turn tools off
+
+Every tool of a server has a switch, for all projects or one. A tool that is off is refused,
+not just hidden.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/token-dark.webp">
-  <source srcset="docs/images/readme/token-light.webp">
-  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/token-light.webp" width="880" alt="A token is typed for Stripe in the gateway and works at once; it is kept in the macOS Keychain on Apply.">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/tools-dark.webp">
+  <source srcset="docs/images/readme/tools-light.webp">
+  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/tools-light.webp" width="860" alt="memory in the Kitden gateway shows its nine tools; its three delete tools are turned off on the map and applied for every agent.">
 </picture>
+
+## And more
+
+| Feature | What it does |
+| --- | --- |
+| **Find and add** | Search the official MCP Registry, skills.sh, the Claude plugins marketplace and any public GitHub repository. Drag a result onto a client or the gateway. |
+| **Fill the gaps** | A plugin or skill one agent has goes to the others in one step. |
+| **Tokens and sign-in, once** | Checked before Apply, kept in the macOS Keychain, refreshed by the gateway. |
+| **Per project** | Turn a server or a tool on or off for one project only. |
+| **See what runs** | How often each tool is called, and which tools only read. |
+| **Instructions in view** | Which CLAUDE.md, AGENTS.md, rules, hooks, commands and agents each client loads, and where they come from. |
+| **Ask your agent** | "Show my setup" works from any agent, through Kitden's own read-only MCP server. |
+
+## Safe to use
+
+- **Nothing is written until you press Apply.** Every change shows a preview first, with
+  the exact edit under Show changes.
+- **Apply keeps a backup, and Undo puts it back.** If a file changed since, Kitden stops
+  instead of overwriting it.
+- **Everything stays on your Mac.** The page runs at 127.0.0.1 behind a private link. No
+  account, no telemetry. Kitden goes online only for the catalogs you open and the remote
+  servers you add.
+- **Secrets live in the macOS Keychain only.** The page shows no more than their first and
+  last characters.
+- **Kitden's agent tools only read.** Asking an agent to show your setup changes nothing.
+
+Add only servers and plugins you trust: they run with your permissions.
 
 ## Get started
 
-Needs macOS and [uv](https://docs.astral.sh/uv/getting-started/installation/).
+Needs **macOS**, [uv](https://docs.astral.sh/uv/getting-started/installation/) and at least
+one of **Claude Code, Codex or Cursor**.
+
 Try it on a sample first. Your own settings are not read or changed:
 
 <!-- Release checklist: docs/readme-media.md -->
@@ -51,15 +89,13 @@ Try it on a sample first. Your own settings are not read or changed:
 uvx --python 3.13 kitden demo
 ```
 
-Then install it for your own setup and open it:
+Install it and open it for your own setup:
 
 ```bash
 uv tool install --python 3.13 kitden && kitden
 ```
 
-Every change shows a preview first, keeps a backup for Undo, and stays on your Mac.
-Secrets live in the macOS Keychain. Add only servers and plugins you trust: they run with
-your permissions.
+Update later with `uv tool upgrade kitden`.
 
 [Guide](https://github.com/KonstantinStarovoytov/kitden/blob/main/docs/guide.md) ·
 [Roadmap](https://github.com/KonstantinStarovoytov/kitden/blob/main/ROADMAP.md) ·

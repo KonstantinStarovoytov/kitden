@@ -22,12 +22,14 @@ When the page opens, the logo on the rail plays one short gesture, as if the sto
 The README hero (`docs/images/hero.svg`, `hero-dark.svg`) is the same gesture at 120 units with the slogan "Your AI coding tools, under one roof.". `scripts/make_hero.py` writes both files from the logo, the Inter font and logo-motion.md. It loops only there: the gesture, then 6 s of rest; still under reduced motion. GitHub shows it through `<img>` in `<picture>` (`raw.githubusercontent.com` serves it as `image/svg+xml`, its CSS keyframes play, scripts never run); PyPI drops `<source>`, so it shows the light file (checked 2026-10-27: GitHub changelog 2022-08-15 "Specify theme context for images in Markdown", pypa/readme_renderer `clean.py`).
 
 **README presentation (2026-11-02).** The hero sits above the slogan and one line on what
-Kitden does. Three short looping animations of the real page follow, each with a heading of a
-few words and cropped to the part it is about: a catalog find dragged onto the gateway, three
-servers dragged in together, and a token that works. No captions and no invented UI states.
-Each ends on its key moment and fades back to its start. Two commands and one line of
-guarantees close it; the rest lives in the guide. [README media](readme-media.md) records how
-to make them again.
+Kitden does. Three scenes of the real page follow, each with a heading of a few words, one or two
+plain sentences on what it shows, and cropped to the part it is about, and each different in look: a still of the Library map (what
+each agent loads), then two short looping animations (servers of three clients joined in the
+gateway, tools turned off on the map). No captions on the pictures themselves and no invented UI states. Each animation
+ends on its key moment and fades back to its start. Then the other features as a list of benefits, why it is safe to use (preview, backup
+and Undo, local only, the Keychain, read-only agent tools), the trust line, what Kitden needs,
+two commands, one line to update and links; the rest lives in the guide. [README media](readme-media.md)
+records how to make the pictures again.
 
 ## Color roles
 

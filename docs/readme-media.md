@@ -1,21 +1,22 @@
 # README media
 
-The README shows the logo, the slogan and three short animations of the real page, then two
-commands. Steps, privacy and limits live in the [guide](guide.md). No captions on the
-animations.
+The README shows the logo, the slogan and three scenes of the real page, then the other
+features, why it is safe, and how to start. Steps, privacy and limits live in the [guide](guide.md). Each scene has a heading and one or two plain
+sentences; the pictures carry no captions.
 
-## Animations
+## Scenes
 
-Each animation is a looping WebP in `docs/images/readme/`, in light and dark, cropped to the
-part of the page it is about, filmed at 1.5 pixels per CSS pixel and shown at its CSS size (880
-or 450 px wide).
+Each scene is in `docs/images/readme/`, in light and dark, cropped to the part of the page it
+is about, taken at 1.5 pixels per CSS pixel and shown at its CSS size (450 to 860 px wide).
+They differ in look as in subject: one still, then two animations.
 
-- `find`: context7, found in the catalog, is dragged onto the gateway, which lights up.
-- `pick`: memory (Claude Code), playwright (Codex) and sequential-thinking (Cursor) are picked
-  with a band and dragged onto the lit gateway together.
-- `token`: a token is typed for Stripe in the gateway, and it works.
+- `library` (a PNG): the Library map, which agent loads which plugin and skill. No pointer.
+- `pick` (a looping WebP): Context7 (Cursor), memory (Claude Code) and playwright (Codex) are
+  picked with a band and dragged onto the lit gateway together.
+- `tools` (a looping WebP): memory is in the gateway with its nine tools. The three that delete
+  are turned off on the map (each link's ×) and applied for every agent.
 
-Each one ends on its key moment, holds it, and fades back to its start.
+Each animation ends on its key moment, holds it, and fades back to its start.
 
 An earlier screen recording stuttered: frames came at uneven times. Now the page runs on a
 paused clock. Each step moves the page one frame (1/30 s) on, puts every animation at that
@@ -31,30 +32,30 @@ where frames differ a little, and lower settings left grain on warm dark cards.
 uv run --with playwright==1.64.1 python scripts/record_readme.py
 ```
 
-`--only pick-dark` makes one animation; `--serve` only starts the page to look around. It needs
+`--only pick-dark` makes one picture; `--serve` only starts the page to look around. It needs
 `ffmpeg` and `img2webp` (from libwebp) on the PATH.
-Each animation starts the real page on a fresh copy of the sample from
+Each picture starts the real page on a fresh copy of the sample from
 `scripts/readme_demo.py`, in a temporary folder. Stand-ins keep it local: a fake Keychain,
-fake client commands, canned tool lists, and a local test server that takes one key in place
-of Stripe's. Only the catalog search goes online. Nothing of the real home folder is read or
-written. The key in the scene is a made-up test value. `scripts/record_scenes.py` plays each
-scene and films it.
+fake client commands, canned tool lists, and no access checks. Nothing goes online, and nothing
+of the real home folder is read or written. `scripts/record_scenes.py` plays each scene and
+takes it.
 
-Watch every animation before you commit it, and do not retouch the UI.
+Look at every picture before you commit it, and do not retouch the UI.
 
 ## Examples and sources
 
 Checked against their official sources on **2026-11-02**:
 
-- [Context7](https://github.com/upstash/context7): a remote server that needs no key; found in
-  the official MCP Registry under `upstash`.
-- [memory](https://github.com/modelcontextprotocol/servers/tree/main/src/memory) and
-  [sequential-thinking](https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking):
-  local `npx` servers.
+- [Context7](https://context7.com): the remote server `https://mcp.context7.com/mcp`, which
+  needs no key.
+- [memory](https://github.com/modelcontextprotocol/servers/tree/main/src/memory): a local `npx`
+  server; its nine tools and their read-only and destructive hints come from its
+  `src/memory/index.ts`.
 - [Playwright MCP](https://github.com/microsoft/playwright-mcp): `npx @playwright/mcp@latest`.
-- [Stripe MCP](https://docs.stripe.com/mcp): `https://mcp.stripe.com`, which takes an API key.
+- [Superpowers](https://github.com/obra/superpowers) and the
+  [frontend-design](https://github.com/anthropics/skills) skill, as the demo sample has them.
 
-The sample only shows these servers; it starts none of them and never calls Stripe. These
+The sample only shows these; it starts none of them and calls nothing. These
 examples do not imply endorsement.
 
 ## Release checklist
@@ -67,7 +68,7 @@ uv tool install --python 3.13 kitden
 ```
 
 Before promoting a release, verify both commands in temporary uv tool and cache folders.
-The animation sample is not proof of the published package.
+The README sample is not proof of the published package.
 uv [downloads Python if needed](https://docs.astral.sh/uv/guides/install-python/#automatic-python-downloads).
 
 Checked 2026-10-28: GitHub supports relative image sources inside
