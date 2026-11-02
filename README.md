@@ -20,25 +20,25 @@ that <b>Claude Code, Codex and Cursor</b> load.</p>
 ### Find it, drop it in
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/find-dark.webp">
-  <source srcset="docs/images/readme/find-light.webp">
-  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/find-light.webp" width="880" alt="Search the catalog for context7, drag it onto the Kitden gateway, press Apply. Claude Code, Codex and Cursor all get it.">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/find-dark.png">
+  <source srcset="docs/images/readme/find-light.png">
+  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/find-light.png" width="880" alt="context7, found in the catalog, held over the Kitden gateway, which lights up to take it.">
 </picture>
 
 ### Move many at once
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/pick-dark.webp">
-  <source srcset="docs/images/readme/pick-light.webp">
-  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/pick-light.webp" width="880" alt="Draw a band around three servers from different clients, drag them onto the gateway together, Apply all. Every client now has all three.">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/pick-dark.png">
+  <source srcset="docs/images/readme/pick-light.png">
+  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/pick-light.png" width="450" alt="Three servers from three clients, picked together and held over the lit Kitden gateway.">
 </picture>
 
 ### One token, every agent
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/token-dark.webp">
-  <source srcset="docs/images/readme/token-light.webp">
-  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/token-light.webp" width="880" alt="Drag Stripe onto the gateway. It waits for a token; paste it, Kitden checks it works, then Apply. Every client can use Stripe.">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/token-dark.png">
+  <source srcset="docs/images/readme/token-light.png">
+  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/token-light.png" width="880" alt="Stripe in the gateway says Token works; the token is masked and kept in the macOS Keychain on Apply.">
 </picture>
 
 ## Get started

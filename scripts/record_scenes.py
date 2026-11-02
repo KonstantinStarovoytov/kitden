@@ -1,24 +1,18 @@
-"""The README's three scenes, played on the real page with Playwright and saved as animated WebP.
+"""The README's three pictures, played on the real page with Playwright.
 
-Used by scripts/record_readme.py, which starts a fresh page for each recording. Frames come
-from Chromium's screencast; a drawn cursor follows the pointer, since a headless browser shows
-none. ffmpeg turns the frames into one looping WebP per scene and theme.
+Used by scripts/record_readme.py, which starts a fresh page for each picture. Each scene is
+played up to its key moment, and the part of the page it is about is saved as a PNG. A drawn
+cursor shows the pointer, since a headless browser shows none.
 """
 
-import base64
-import shutil
-import subprocess
-import tempfile
 import time
+from functools import partial
 from pathlib import Path
 
 from playwright.sync_api import Page, sync_playwright
 
 VIEW = {"width": 1280, "height": 800}
 SCALE = 2  # device pixels per CSS pixel, so text stays sharp
-FPS = 25
-WIDTH = 1600  # the WebP's width; the README shows it at up to 880 px
-HOLD = 2.2  # seconds the result stays before the loop starts again
 
 # A pointer drawn on the page: it follows the mouse and dips while pressed.
 CURSOR = """
@@ -76,12 +70,15 @@ class Pointer:
         time.sleep(0.09)
         self.page.mouse.up()
 
-    def drag(self, x: float, y: float, seconds: float = 1.0) -> None:
+    def drag(self, x: float, y: float, seconds: float = 1.0, over=None) -> None:
+        """Drag to (x, y) and let go; `over` runs while the pointer is still held there."""
         self.page.mouse.down()
         time.sleep(0.15)
         self.glide(self.x + 8, self.y + 6, 0.15)  # past the drag threshold
         self.glide(x, y, seconds)
         time.sleep(0.25)
+        if over:
+            over()
         self.page.mouse.up()
 
 
@@ -90,77 +87,10 @@ def center(page: Page, selector: str) -> tuple[float, float]:
     return box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
 
 
-class Screencast:
-    """Chromium's screencast frames with their times, written as JPEG files."""
-
-    def __init__(self, page: Page, folder: Path):
-        self.folder, self.frames = folder, []
-        self.cdp = page.context.new_cdp_session(page)
-        self.cdp.on("Page.screencastFrame", self._frame)
-
-    def _frame(self, event: dict) -> None:
-        path = self.folder / f"{len(self.frames):05d}.jpg"
-        path.write_bytes(base64.b64decode(event["data"]))
-        self.frames.append((event["metadata"]["timestamp"], path))
-        self.cdp.send("Page.screencastFrameAck", {"sessionId": event["sessionId"]})
-
-    def start(self) -> None:
-        size = {"maxWidth": VIEW["width"] * SCALE, "maxHeight": VIEW["height"] * SCALE}
-        self.cdp.send(
-            "Page.startScreencast", {"format": "jpeg", "quality": 92, "everyNthFrame": 1, **size}
-        )
-
-    def stop(self) -> None:
-        time.sleep(HOLD)
-        self.frames.append((time.time(), None))  # the last frame lasts until now
-        self.cdp.send("Page.stopScreencast")
-
-
-def encode(frames: list, out: Path, crop: tuple[int, int, int, int] | None) -> None:
-    """One looping WebP from the timed frames, cropped to (x, y, width, height) CSS pixels."""
-    listing = out.with_suffix(".txt")
-    lines = []
-    for (time_a, path), (time_b, _) in zip(frames, frames[1:], strict=False):
-        if path is not None:
-            lines += [f"file '{path}'", f"duration {max(time_b - time_a, 0.001):.4f}"]
-    lines.append(f"file '{frames[-2][1]}'")
-    listing.write_text("\n".join(lines) + "\n")
-    filters = [f"fps={FPS}"]
-    if crop:
-        # As shares of the frame, whatever size the screencast gave it.
-        x, y, w, h = crop
-        vw, vh = VIEW["width"], VIEW["height"]
-        filters.append(f"crop=iw*{w}/{vw}:ih*{h}/{vh}:iw*{x}/{vw}:ih*{y}/{vh}")
-    filters.append(f"scale={WIDTH}:-2:flags=lanczos")
-    subprocess.run(  # noqa: S603 - fixed arguments; ffmpeg from PATH is the point
-        [
-            shutil.which("ffmpeg") or "ffmpeg",
-            "-y",
-            "-loglevel",
-            "error",
-            "-f",
-            "concat",
-            "-safe",
-            "0",
-            "-i",
-            str(listing),
-            "-vf",
-            ",".join(filters),
-            "-c:v",
-            "libwebp_anim",
-            "-loop",
-            "0",
-            "-quality",
-            "82",
-            "-compression_level",
-            "6",
-            "-preset",
-            "picture",
-            str(out),
-        ],
-        check=True,
-    )
-    listing.unlink()
+def low_on_gateway(page: Page) -> tuple[float, float]:
+    """A point low on the gateway: what is held there does not hide its name while it lights."""
+    box = page.locator('[data-focus="block:gateway:kitden"]').bounding_box()
+    return box["x"] + box["width"] * 0.4, box["y"] + box["height"] - 10
 
 
 def open_gateway(page: Page, link: str) -> None:
@@ -170,15 +100,9 @@ def open_gateway(page: Page, link: str) -> None:
     time.sleep(1.2)  # the map has landed
 
 
-def apply_and_wait(page: Page, pointer: Pointer) -> None:
-    """Press Apply in the dock and wait for the toast that says it is done."""
-    pointer.click("#dock button:has-text('Apply')", 0.8)
-    page.locator(".toast").first.wait_for(timeout=20000)
-    time.sleep(0.6)
-
-
-def scene_find(page: Page, pointer: Pointer) -> None:
-    """Search the MCP Registry for Context7, drag it onto the gateway, Apply."""
+def scene_find(page: Page, pointer: Pointer, moment) -> None:
+    """Search the MCP Registry for Context7 and drag it onto the gateway. The moment: Context7
+    held over the lit gateway."""
     time.sleep(0.6)
     pointer.click("button:has-text('+ Add servers')", 0.9)
     page.locator("#drawer .res").first.wait_for(timeout=20000)
@@ -192,13 +116,12 @@ def scene_find(page: Page, pointer: Pointer) -> None:
     box = row.bounding_box()
     pointer.glide(box["x"] + 40, box["y"] + box["height"] / 2, 0.8)
     time.sleep(0.2)
-    pointer.drag(*center(page, '[data-focus="block:gateway:kitden"]'), 1.3)
-    time.sleep(1.0)
-    apply_and_wait(page, pointer)
+    pointer.drag(*low_on_gateway(page), 1.3, over=moment)
 
 
-def scene_pick(page: Page, pointer: Pointer) -> None:
-    """Band-pick the three local servers, drag them onto the gateway together, Apply."""
+def scene_pick(page: Page, pointer: Pointer, moment) -> None:
+    """Band-pick the three local servers and drag them onto the gateway together. The moment: the
+    three held over the lit gateway."""
     first = page.locator('[data-focus="block:outside:local:memory"]').bounding_box()
     last = page.locator('[data-focus="block:outside:local:sequential-thinking"]').bounding_box()
     time.sleep(0.6)
@@ -210,14 +133,12 @@ def scene_pick(page: Page, pointer: Pointer) -> None:
     time.sleep(0.7)
     pointer.glide(first["x"] + 40, first["y"] + first["height"] / 2, 0.7)
     time.sleep(0.2)
-    pointer.drag(*center(page, '[data-focus="block:gateway:kitden"]'), 1.2)
-    page.locator("#dock button:has-text('Apply')").wait_for(timeout=20000)
-    time.sleep(1.4)
-    apply_and_wait(page, pointer)
+    pointer.drag(*low_on_gateway(page), 1.2, over=moment)
 
 
-def scene_token(page: Page, pointer: Pointer) -> None:
-    """Drag Stripe in: it waits for a token; type it, it works, Apply."""
+def scene_token(page: Page, pointer: Pointer, moment) -> None:
+    """Drag Stripe in: it waits for a token; type it. The moment: the token works and the change
+    waits for Apply."""
     time.sleep(0.6)
     pointer.to('[data-focus="block:outside:move:stripe"]', 0.8, dx=0.25)
     time.sleep(0.2)
@@ -233,28 +154,27 @@ def scene_token(page: Page, pointer: Pointer) -> None:
     time.sleep(0.3)
     pointer.click("#drawer button:has-text('Add token')", 0.6)
     page.locator("#drawer .access-works").wait_for(state="visible", timeout=20000)
-    time.sleep(1.4)
-    apply_and_wait(page, pointer)
+    page.evaluate("scrollTo(0, 0)")  # typing scrolled the page a little
+    time.sleep(0.15)  # before the panel closes on its own
+    moment()
 
 
-# Each scene shows the map, the side panel and the dock, without the page's rail: x, y, width,
-# height in CSS pixels.
-STAGE = (160, 90, 1090, 710)
+# The part of the page each picture shows, in CSS pixels: x, y, width, height.
 SCENES = (
-    ("find", scene_find, STAGE),
-    ("pick", scene_pick, STAGE),
-    ("token", scene_token, STAGE),
+    ("find", scene_find, (360, 240, 885, 372)),  # the gateway and the catalog's results
+    ("pick", scene_pick, (355, 318, 450, 300)),  # the gateway and the servers outside it
+    ("token", scene_token, (360, 240, 885, 300)),  # the gateway, Stripe and the token panel
 )
 
 
 def record_all(fresh_page, out: Path, only: str = "") -> None:
-    """Record every scene in light and dark, each on a fresh page; `only` keeps the recordings
-    whose name (as "pick-dark") starts with it."""
+    """Save every scene's picture in light and dark, each on a fresh page; `only` keeps the
+    pictures whose name (as "pick-dark") starts with it."""
     out.mkdir(parents=True, exist_ok=True)
     run = 0
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
-        for name, play, crop in SCENES:
+        for name, play, (x, y, w, h) in SCENES:
             for theme in ("light", "dark"):
                 if not f"{name}-{theme}".startswith(only):
                     continue
@@ -265,23 +185,13 @@ def record_all(fresh_page, out: Path, only: str = "") -> None:
                 )
                 context.add_init_script(CURSOR)
                 page = context.new_page()
-                frames = Path(tempfile.mkdtemp(prefix=f"kitden-{name}-"))
+                target = out / f"{name}-{theme}.png"
+                clip = {"x": x, "y": y, "width": w, "height": h}
                 try:
                     open_gateway(page, link)
-                    cast = Screencast(page, frames)
-                    pointer = Pointer(page)
-                    cast.start()
-                    play(page, pointer)
-                    cast.stop()
-                    target = out / f"{name}-{theme}.webp"
-                    encode(cast.frames, target, crop)
-                    print(
-                        f"{target.name}: {len(cast.frames)} frames, "
-                        f"{target.stat().st_size // 1024} KB",
-                        flush=True,
-                    )
+                    play(page, Pointer(page), partial(page.screenshot, path=target, clip=clip))
+                    print(f"{target.name}: {target.stat().st_size // 1024} KB", flush=True)
                 finally:
                     context.close()
                     server.should_exit = True
-                    shutil.rmtree(frames, ignore_errors=True)
         browser.close()

@@ -1,8 +1,8 @@
-"""Record the README's scenes from the real page.
+"""Take the README's pictures from the real page.
 
 Run: uv run --with playwright==1.64.1 python scripts/record_readme.py [--serve]
 
-Each recording starts the real page on a fresh copy of the README sample (scripts/readme_demo.py)
+Each picture starts the real page on a fresh copy of the README sample (scripts/readme_demo.py)
 in a temporary folder: three local servers that need no access (memory in Claude Code,
 playwright in Codex, sequential-thinking in Cursor) and Stripe in Claude Code, which takes an
 API key. Stand-ins keep it local: a fake Keychain, fake client commands, canned tool lists, and a
@@ -10,9 +10,9 @@ local test server that takes one key in place of Stripe's. Only the catalog sear
 (Context7, whose remote server needs no key). Nothing of the real home folder is read or
 written.
 
-Each scene is recorded in light and dark from Chromium's screencast, with a drawn cursor, and
-saved as an animated WebP in docs/images/readme/ (scripts/record_scenes.py). `--serve` only
-starts the page and prints its link, to look around. See docs/readme-media.md.
+Each scene is played to its key moment, in light and dark, with a drawn cursor, and the part of
+the page it is about is saved as a PNG in docs/images/readme/ (scripts/record_scenes.py).
+`--serve` only starts the page and prints its link, to look around. See docs/readme-media.md.
 """
 
 import argparse
@@ -138,14 +138,14 @@ def start_page(home: Path, port: int = PORT) -> tuple[str, uvicorn.Server]:
 
 
 def fresh_page(root: Path, run: int) -> tuple[str, uvicorn.Server]:
-    """A new sample and page for one recording, so each starts from the same setup."""
+    """A new sample and page for one picture, so each starts from the same setup."""
     return start_page(sample(root / f"run{run}"), PORT + 1 + run)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--serve", action="store_true", help="only start the page")
-    parser.add_argument("--only", default="", help="record only the scenes that start so")
+    parser.add_argument("--only", default="", help="take only the pictures that start so")
     args = parser.parse_args()
     folder = Path(tempfile.mkdtemp(prefix="kitden-record-")).resolve()
     try:

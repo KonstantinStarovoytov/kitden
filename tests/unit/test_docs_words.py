@@ -112,11 +112,11 @@ def test_the_readme_names_no_old_review():
     assert "review.jpg" not in readme
 
 
-def test_the_readme_shows_three_recorded_scenes_in_both_themes():
+def test_the_readme_shows_three_scenes_in_both_themes():
     readme = (ROOT / "README.md").read_text()
     for scene in ("find", "pick", "token"):
         for theme in ("light", "dark"):
-            image = ROOT / f"docs/images/readme/{scene}-{theme}.webp"
-            assert f"docs/images/readme/{scene}-{theme}.webp" in readme, image.name
+            image = ROOT / f"docs/images/readme/{scene}-{theme}.png"
+            assert f"docs/images/readme/{scene}-{theme}.png" in readme, image.name
             # Small enough for a phone on a slow line.
-            assert image.stat().st_size <= 3_000_000, image.name
+            assert image.stat().st_size <= 300_000, image.name

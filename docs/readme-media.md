@@ -1,36 +1,35 @@
 # README media
 
-The README shows the logo, the slogan and three short recordings of the real page, then two
-commands. Steps, privacy and limits live in the [guide](guide.md). No captions on the scenes:
-the motion should explain itself.
+The README shows the logo, the slogan and three pictures of the real page, then two commands.
+Steps, privacy and limits live in the [guide](guide.md). No captions on the pictures, and no
+animations: recorded motion stuttered, so each scene is one sharp key moment, cropped to the
+part of the page it is about.
 
-## Scenes
+## Pictures
 
-Each scene is an animated WebP in `docs/images/readme/`, in light and dark, about 11 seconds,
-under 3 MB. Each ends on the applied state and holds it before the loop starts again.
+Each picture is a PNG in `docs/images/readme/`, in light and dark, taken at twice the page's
+size and shown at about its CSS size (880 or 450 px wide).
 
-- `find`: **+ Add servers**, search for context7, drag it onto the gateway, Apply.
-- `pick`: a band picks memory (Claude Code), playwright (Codex) and sequential-thinking
-  (Cursor); drag them onto the gateway together, Apply all.
-- `token`: drag Stripe onto the gateway; it waits for a token; paste it, it works, Apply.
+- `find`: context7, found in the catalog, held over the lit gateway.
+- `pick`: memory (Claude Code), playwright (Codex) and sequential-thinking (Cursor), picked
+  with a band and held over the lit gateway together.
+- `token`: Stripe in the gateway says Token works; the token is masked and Apply waits.
 
-## Record
-
-Needs ffmpeg with libwebp (`brew install ffmpeg`).
+## Take them again
 
 ```bash
 uv run --with playwright==1.64.1 python scripts/record_readme.py
 ```
 
-`--only pick-dark` records one scene; `--serve` only starts the page to look around.
-Each recording starts the real page on a fresh copy of the sample from
+`--only pick-dark` takes one picture; `--serve` only starts the page to look around.
+Each picture starts the real page on a fresh copy of the sample from
 `scripts/readme_demo.py`, in a temporary folder. Stand-ins keep it local: a fake Keychain,
 fake client commands, canned tool lists, and a local test server that takes one key in place
 of Stripe's. Only the catalog search goes online. Nothing of the real home folder is read or
-written. The key in the scene is a made-up test value.
+written. The key in the scene is a made-up test value. `scripts/record_scenes.py` plays each
+scene and holds the area each picture shows.
 
-Look at every recording before you commit it: the scene shows its whole story and ends on
-the toast. Do not show success before verification or retouch the UI.
+Look at every picture before you commit it, and do not retouch the UI.
 
 ## Examples and sources
 
@@ -57,7 +56,7 @@ uv tool install --python 3.13 kitden
 ```
 
 Before promoting a release, verify both commands in temporary uv tool and cache folders.
-The recording sample is not proof of the published package.
+The picture sample is not proof of the published package.
 uv [downloads Python if needed](https://docs.astral.sh/uv/guides/install-python/#automatic-python-downloads).
 
 Checked 2026-10-28: GitHub supports relative image sources inside
