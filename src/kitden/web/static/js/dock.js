@@ -250,7 +250,7 @@ function setAddToken(item, row) {
   if (row.waits && !item.add) {
     const words = row.waits.kind === "sign-in" && row.waits.sign_in ? "Sign in" : "Add token";
     item.add = button(words, () => {
-      const found = tray.rows.find((candidate) => candidate.key === row.key);
+      const found = trayRow(row.key);
       if (found && found.waits) openAccess(found);
     }, "btn small add-token");
     item.add.dataset.focus = `tray:access:${row.key}`;

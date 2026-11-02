@@ -2,13 +2,10 @@
 // projects carries in a project.
 import { busyWhile, button, el, reportError } from "./dom.js";
 import { closePanel, openPanel, review, showInPreview } from "./panel.js";
-import { clientCheck } from "./parts.js";
+import { clientCheck, INSTALLERS } from "./parts.js";
 import { state } from "./store.js";
 import { inTray, keyFor } from "./tray.js";
 
-// Clients whose own command line installs plugins. Cursor keeps its plugins in the account,
-// and it loads Claude Code's plugins by itself when "Include Third-Party Plugins" is on.
-const INSTALLERS = ["claude_code", "codex"];
 const PROJECT_NOTE = "Adds for all projects.";
 const PREVIEW = "Preview";
 

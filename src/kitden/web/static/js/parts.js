@@ -366,6 +366,9 @@ export const CLIENT_ORDER = ["claude_code", "claude_desktop_code_tab", "codex", 
 export const byClientOrder = (a, b) => CLIENT_ORDER.indexOf(a) - CLIENT_ORDER.indexOf(b);
 // The clients Kitden writes and the Kitden gateway reaches, in client order.
 export const WRITABLE = ["claude_code", "codex", "cursor"];
+// Clients whose own command line installs plugins. Cursor keeps its plugins in the account,
+// and it loads Claude Code's plugins by itself when "Include Third-Party Plugins" is on.
+export const INSTALLERS = ["claude_code", "codex"];
 export const CLIENT_NAMES = {
   claude_code: "Claude Code", codex: "Codex", cursor: "Cursor",
   claude_desktop_code_tab: "Claude Desktop (Code tab)", gateway: "Gateway", kitden: "Kitden gateway",

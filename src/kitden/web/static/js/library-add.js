@@ -9,7 +9,7 @@ import { getJson } from "./api.js";
 import { button, plural, reportError } from "./dom.js";
 import { addsOf, learnOffers, letGoLibraryMap, onLibraryAdd, pressRow } from "./library-map.js";
 import { marketplaceForm } from "./offer.js";
-import { byClientOrder } from "./parts.js";
+import { byClientOrder, INSTALLERS } from "./parts.js";
 import { busy, onBusy } from "./store.js";
 import { addToTray, keyFor, onTray, takeOut, tray } from "./tray.js";
 
@@ -119,7 +119,7 @@ export function openLibraryAdd(options = {}) {
   letGoLibraryMap();
   if (options.from) options.from.focus({ preventScroll: true });
   return openDiscovery("all", { local: () => openLocalLibraryAdd(options), drag: (event, row, clients, node) => {
-    const can = clients.filter((c) => row.kind !== "plugin" || ["claude_code", "codex"].includes(c));
+    const can = clients.filter((c) => row.kind !== "plugin" || INSTALLERS.includes(c));
     const item = { kind: row.kind, name: row.name, [row.kind]: row.name, discovery: row.id, by: {}, can: { add: can } };
     pressRow(event, { item, node });
   } });

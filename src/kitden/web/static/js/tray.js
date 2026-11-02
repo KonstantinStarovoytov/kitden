@@ -344,8 +344,8 @@ export async function takeOut(keys) {
 // row waits as before, with the reason, and the others are asked for again); null when another
 // ask dropped the check, which then said nothing.
 export async function giveAccess(key, values) {
-  const row = tray.rows.find((each) => each.key === key);
-  if (!row || !row.waits || row.waits.checking || tray.phase === "applying" || tray.phase === "applied" || busy.change) return false;
+  const row = trayRow(key);
+  if (!row || !row.waits || row.waits.checking || writing() || busy.change) return false;
   const { body } = row;
   row.body = { ...body, params: { ...(body.params || {}), ...values } };
   // While it is checked the row still waits (its `checking` shows); a needs answer for it gives
