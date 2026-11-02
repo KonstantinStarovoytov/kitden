@@ -137,11 +137,14 @@ function place(on) {
     drawer.removeAttribute("aria-modal");
     drawer.removeAttribute("aria-labelledby");
     placeFloat();
-  } else {
-    drawer.setAttribute("role", "dialog");
-    drawer.setAttribute("aria-modal", "true");
-    drawer.setAttribute("aria-labelledby", "panel-title");
-  }
+  } else asDialog(drawer);
+}
+
+// The drawer is a modal dialog, named by the panel's title.
+function asDialog(drawer) {
+  drawer.setAttribute("role", "dialog");
+  drawer.setAttribute("aria-modal", "true");
+  drawer.setAttribute("aria-labelledby", "panel-title");
 }
 
 // The page's head: its title, lede and scope line, and the Library's tabs. What comes after it is
@@ -476,9 +479,7 @@ function trapFocus(event) {
 
 export function initPanel() {
   const drawer = $("#drawer");
-  drawer.setAttribute("role", "dialog");
-  drawer.setAttribute("aria-modal", "true");
-  drawer.setAttribute("aria-labelledby", "panel-title");
+  asDialog(drawer);
   // A window that grows or shrinks while the panel is open switches the floating panel and the
   // drawer.
   matchMedia(`(min-width: ${FLOAT_MIN}px)`).addEventListener("change", (event) => {
@@ -492,7 +493,6 @@ export function initPanel() {
   $("#content").addEventListener("scroll", placeSoon, { passive: true });
   addEventListener("resize", placeSoon);
   new MutationObserver(placeSoon).observe($("#main"), { childList: true });
-  // A refresh of the gateway's tool lists ended: an open tool list reads them again.
   // The tray changed: switches and buttons in Details show whether their change waits there.
   onTray(syncTray);
   $("#scrim").addEventListener("click", () => closePanel());

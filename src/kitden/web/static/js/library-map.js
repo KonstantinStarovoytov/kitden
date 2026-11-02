@@ -79,7 +79,8 @@ const WAITS_ALREADY = "Already in preview";
 // it adds for all projects when it adds to several clients at once ("+ Add"); a meta too long for
 // the card ends in "…", so its title says it whole.
 const CLICK_OUT = "Click to take it out.";
-const ALL_PROJECTS = "all projects";
+// parts.js ALL_PROJECTS in lower case, as these lines say it after a "·".
+const ALL_PROJECTS_LOWER = "all projects";
 
 // How many blocks the Plugins and skills column holds: plugins, skills and hooks.
 const itemCount = (answer) => answer.groups.reduce((n, group) => n + group.items.length, 0);
@@ -233,7 +234,7 @@ function waitOn(block, adds, project, clients, model) {
 
 // How a block whose add waits looks: "Preview · Codex", or "Preview · all projects".
 function waitLook(wait) {
-  const meta = `Preview · ${wait.all ? ALL_PROJECTS : joinWords(wait.names)}`;
+  const meta = `Preview · ${wait.all ? ALL_PROJECTS_LOWER : joinWords(wait.names)}`;
   return { meta, lamp: "preview", state: "preview", stateInMeta: true, takeOut: `${meta}. ${CLICK_OUT}`, rows: wait.rows };
 }
 
@@ -334,7 +335,7 @@ function fileMeta(file, group) {
   if (FILE_KINDS[file.kind]) return `${who} · ${FILE_KINDS[file.kind]}`;
   if (typeof file.count === "number") return `${who} · ${plural(file.count, "rule", "rules")}`;
   if (pulls) return `${who} · ${plural(pulls, "import", "imports")}`;
-  return `${who} · ${group.key === "project" ? "this project" : ALL_PROJECTS}`;
+  return `${who} · ${group.key === "project" ? "this project" : ALL_PROJECTS_LOWER}`;
 }
 
 // A link whose removal or turning off waits in the tray is drawn leaving, and names its row: a press
