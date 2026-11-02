@@ -19,6 +19,9 @@ that <b>Claude Code, Codex and Cursor</b> load.</p>
 
 ### See what each agent loads
 
+The plugins, skills and MCP servers of Claude Code, Codex and Cursor on one map. What one
+agent has and another lacks shows at a glance.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/library-dark.png">
   <source srcset="docs/images/readme/library-light.png">
@@ -27,6 +30,9 @@ that <b>Claude Code, Codex and Cursor</b> load.</p>
 
 ### Share servers across all agents
 
+Move a server into the Kitden gateway and every agent gets it: one setup and one token
+instead of three.
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/pick-dark.webp">
   <source srcset="docs/images/readme/pick-light.webp">
@@ -34,6 +40,9 @@ that <b>Claude Code, Codex and Cursor</b> load.</p>
 </picture>
 
 ### Turn tools off
+
+Every tool of a server has a switch, for all projects or one. A tool that is off is refused,
+not just hidden.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/tools-dark.webp">

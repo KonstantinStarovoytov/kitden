@@ -10,7 +10,7 @@ What Kitden does today and what comes next. Ideas and bugs:
 ### Not released yet
 
 - **Lean README:** the logo and slogan, then three scenes of the real page in light and dark,
-  each cropped to the part it is about and different in look: a still of what each agent
+  each with a line on what it shows, cropped to the part it is about and different in look: a still of what each agent
   loads, then two short animations, sharing servers across all agents and turning tools off.
   Animations are filmed one frame at a time, so the motion is even. Then what it needs, two
   commands, one line to update, and five facts, the first on the catalogs. Steps, privacy and limits moved to
