@@ -12,9 +12,9 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
-from kitden.clients.base import ClientAdapter
+from kitden.clients.base import ClientAdapter, from_plugin
 from kitden.clients.entries import entry_refusal, gateway_entry
-from kitden.model import CLIENT_WORDS, CLIENTS, ItemKind, Scope, SourceKind
+from kitden.model import CLIENT_WORDS, CLIENTS, ItemKind, Scope
 from kitden.redact import redact
 
 # Clients whose command line installs plugins (Cursor keeps its plugins in the account).
@@ -66,7 +66,7 @@ def _source(raw: Any) -> dict:
     return out
 
 
-def _plugin_dir(root: Path, raw: Any) -> Path | None:
+def plugin_dir(root: Path, raw: Any) -> Path | None:
     """The plugin's folder inside the marketplace clone, for a relative source only."""
     path = raw if isinstance(raw, str) else None
     if isinstance(raw, dict) and raw.get("source") in ("local", None) and "url" not in raw:
@@ -142,29 +142,34 @@ def _signature(folder: Path) -> tuple[int, int]:
     return (max(stamps, default=0), len(stamps))
 
 
+def plugin_folders(adapters: dict[str, ClientAdapter]) -> dict[str, Path]:
+    """Plugin id -> its installed folder, from the first client in CLIENTS order that has it."""
+    out: dict[str, Path] = {}
+    for client in CLIENTS:
+        if client in adapters:
+            for plugin_id, folder in adapters[client].plugin_folders().items():
+                out.setdefault(plugin_id, folder)
+    return out
+
+
 def installed_inside(adapters: dict[str, ClientAdapter]) -> dict[str, dict]:
     """What each installed plugin holds, by plugin id: skills, commands, agents, hooks and MCP
     server names. Read from the installed folder of Claude Code, Codex and Cursor; the first
     client that has the plugin answers. Nothing is read again until a plugin file changes."""
     out: dict[str, dict] = {}
-    for client in CLIENTS:
-        if client not in adapters:
-            continue
-        for plugin_id, folder in adapters[client].plugin_folders().items():
-            if plugin_id in out:
-                continue
-            signature = _signature(folder)
-            kept = _HELD.get(folder)
-            if kept is None or kept[0] != signature:
-                inside = _inside(folder, {})
-                servers = [server["name"] for server in inside["mcp_servers"]]
-                held = {k: inside[k] for k in ("skills", "commands", "agents", "hooks")}
-                kept = _HELD[folder] = (signature, {**held, "mcp_servers": servers})
-            out[plugin_id] = {k: list(v) for k, v in kept[1].items()}
+    for plugin_id, folder in plugin_folders(adapters).items():
+        signature = _signature(folder)
+        kept = _HELD.get(folder)
+        if kept is None or kept[0] != signature:
+            inside = _inside(folder, {})
+            servers = [server["name"] for server in inside["mcp_servers"]]
+            held = {k: inside[k] for k in ("skills", "commands", "agents", "hooks")}
+            kept = _HELD[folder] = (signature, {**held, "mcp_servers": servers})
+        out[plugin_id] = {k: list(v) for k, v in kept[1].items()}
     return out
 
 
-def _category_name(raw: Any) -> str | None:
+def category_name(raw: Any) -> str | None:
     key = category_key(raw)
     return key[:1].upper() + key[1:] if key else None
 
@@ -189,7 +194,7 @@ def _can_add(client: str, marketplace: str, sources: dict[str, dict[str, str | N
     return False
 
 
-def _listed(adapters: dict[str, ClientAdapter]):
+def listed_plugins(adapters: dict[str, ClientAdapter]):
     """Each plugin a client's marketplaces list, as (client, marketplace, root, entry)."""
     for client in INSTALLERS:
         if client not in adapters:
@@ -215,12 +220,12 @@ def catalog(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
             if item.client not in clients:
                 clients.append(item.client)
     offers: dict[str, dict] = {}
-    for client, marketplace, root, entry in _listed(adapters):
+    for client, marketplace, root, entry in listed_plugins(adapters):
         plugin_id = f"{entry['name']}@{marketplace}"
         if plugin_id in offers:
             offers[plugin_id]["routes"][client] = "ready"
             continue
-        folder = _plugin_dir(root, entry.get("source"))
+        folder = plugin_dir(root, entry.get("source"))
         inside = _inside(folder, entry) if folder else None
         description = entry.get("description") or (inside or {}).get("description")
         offers[plugin_id] = {
@@ -229,7 +234,7 @@ def catalog(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
             "name": entry["name"],
             "marketplace": marketplace,
             "description": description if isinstance(description, str) else "",
-            "category": _category_name(entry.get("category")),
+            "category": category_name(entry.get("category")),
             "author": _author(entry.get("author")),
             "homepage": entry.get("homepage") if isinstance(entry.get("homepage"), str) else None,
             "source": _source(entry.get("source")),
@@ -262,9 +267,9 @@ def _offered_servers(adapters: dict[str, ClientAdapter]):
     (plugin, marketplace, name, raw entry). The same plugins as `catalog`, and the entry is
     read as `_inside` reads it, but whole: the page never gets it, only the checks do."""
     seen: set[str] = set()
-    for _, marketplace, root, entry in _listed(adapters):
+    for _, marketplace, root, entry in listed_plugins(adapters):
         plugin_id = f"{entry['name']}@{marketplace}"
-        folder = _plugin_dir(root, entry.get("source"))
+        folder = plugin_dir(root, entry.get("source"))
         if plugin_id in seen or folder is None:
             continue
         seen.add(plugin_id)
@@ -272,10 +277,6 @@ def _offered_servers(adapters: dict[str, ClientAdapter]):
         for name, value in sorted(servers.items()):
             if isinstance(value, dict):
                 yield entry["name"], marketplace, name, value
-
-
-def _from_plugin(item) -> bool:
-    return item.scope is Scope.PLUGIN or item.source.kind is SourceKind.PLUGIN
 
 
 def known_refusal(name: str, entry: dict, inventory, held: set[str]) -> str | None:
@@ -300,7 +301,7 @@ def known_refusal(name: str, entry: dict, inventory, held: set[str]) -> str | No
     ]
     # A server an installed plugin brings is not the client's own entry; it cannot be moved.
     # A project's own entry cannot be moved either, so a copy that can is named first.
-    own = [i for i in same if not _from_plugin(i)]
+    own = [i for i in same if not from_plugin(i)]
     has = next((i for i in own if i.scope is not Scope.PROJECT), own[0] if own else None)
     if has is not None:
         client = CLIENT_WORDS.get(has.client, has.client)
@@ -323,7 +324,7 @@ def known_refusal(name: str, entry: dict, inventory, held: set[str]) -> str | No
         return f"{name} runs a file inside its plugin folder; Kitden can't run it from the gateway."
     # Last, so a plugin's own server says first why the gateway cannot run it: the client
     # would load the plugin's copy and the gateway's.
-    plugin = next((i for i in same if _from_plugin(i)), None)
+    plugin = next((i for i in same if from_plugin(i)), None)
     if plugin is not None:
         client = CLIENT_WORDS.get(plugin.client, plugin.client)
         return f"{client} has {name} from a plugin already."

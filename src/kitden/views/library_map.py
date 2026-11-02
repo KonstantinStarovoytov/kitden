@@ -10,10 +10,16 @@ from pathlib import Path
 
 from kitden.changes.actions import skill_rules_in
 from kitden.changes.engine import writable, writable_roots
-from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, PLUGIN_REMOVE, SKILL_REMOVE
-from kitden.clients.claude_code import _holds, local_files, rule_file
+from kitden.clients.base import (
+    PLUGIN_DISABLE,
+    PLUGIN_ENABLE,
+    PLUGIN_REMOVE,
+    SKILL_REMOVE,
+    found_columns,
+)
+from kitden.clients.claude_code import holds, local_files, rule_file
 from kitden.model import CLIENT_WORDS, CLIENTS, ClientStatus, Enabled, Item, ItemKind, Scope
-from kitden.views.catalog import catalog, installed_inside
+from kitden.views.catalog import catalog, installed_inside, plugin_folders
 from kitden.views.effective import in_project
 from kitden.views.load_map import Row, load_map, row_key
 from kitden.views.setup_server import kitden_on, setup_server_state
@@ -37,7 +43,13 @@ PROJECT = {
 KINDS = {ItemKind.PLUGIN: "plugin", ItemKind.SKILL: "skill", ItemKind.HOOK: "hook"}
 
 
-def _clients(inventory, cursor_imports: bool) -> list[dict]:
+def cursor_imports(adapters, found: list[str]) -> bool:
+    """Cursor and Claude Code are both found, and Cursor loads Claude Code's plugins."""
+    cursor = adapters.get("cursor") if "cursor" in found else None
+    return bool(cursor and cursor.imports_claude_plugins() and "claude_code" in found)
+
+
+def map_clients(inventory, cursor_imports: bool) -> list[dict]:
     """Each client and its state: not installed, not read, Cursor getting Claude Code's plugins,
     or whether its `kitden` entry is on."""
     status = {c.id: c.status for c in inventory.clients}
@@ -288,16 +300,6 @@ def _rule_outside(inventory, adapters, project: str | None) -> bool:
     return target is not None and not _writable(target, adapter.home, inventory)
 
 
-def _plugin_folders(adapters) -> dict[str, str]:
-    """Plugin id -> its installed folder, the first client's that has it (as installed_inside)."""
-    out: dict[str, str] = {}
-    for client in CLIENTS:
-        if client in adapters:
-            for plugin_id, folder in adapters[client].plugin_folders().items():
-                out.setdefault(plugin_id, str(folder))
-    return out
-
-
 def _marketplace_sources(inventory) -> dict[str, str]:
     """Marketplace name -> where it comes from, as its item says it (a folder, or host/path with
     no credentials)."""
@@ -320,7 +322,7 @@ def _local_in(row: Row, project: str, home: Path) -> str | None:
         if row.kind is ItemKind.PLUGIN
         else ("skillOverrides", row.name)
     )
-    holding = [f for f in local_files(Path(project), home) if _holds(f, key)]
+    holding = [f for f in local_files(Path(project), home) if holds(f, key)]
     folder = holding[-1].parent.parent if holding else None
     return folder.name if folder and folder != Path(project) else None
 
@@ -344,16 +346,14 @@ def library_map(inventory, adapters, project: str | None) -> dict:
     the folder whose local settings decide for Claude Code when it is the project's repository
     root, not the project itself. A marketplace group's
     `entries` are each client's marketplace item id, which `/api/commands` takes."""
-    status = {c.id: c.status for c in inventory.clients}
-    found = [c for c in CLIENTS if status.get(c) is ClientStatus.FOUND]
-    cursor = adapters.get("cursor") if "cursor" in found else None
-    cursor_imports = bool(cursor and cursor.imports_claude_plugins() and "claude_code" in found)
+    found = found_columns(inventory)
+    imports = cursor_imports(adapters, found)
     by_id = {i.id: i for i in inventory.items}
     present = _present(inventory, project)
     offers = {o["id"]: o for o in catalog(inventory, adapters)}
     skill_offers = _skill_offers(inventory, adapters)
     held = installed_inside(adapters)
-    folders = _plugin_folders(adapters)
+    folders = plugin_folders(adapters)
     sources = _marketplace_sources(inventory)
     entries = _marketplace_entries(inventory)
     outside = _rule_outside(inventory, adapters, project)
@@ -365,7 +365,7 @@ def library_map(inventory, adapters, project: str | None) -> dict:
         own = [i for i in items if row.kind is ItemKind.PLUGIN or i.scope is not Scope.PLUGIN]
         if not own:
             continue
-        via = _via_claude_code(row, offers, cursor_imports, found)
+        via = _via_claude_code(row, offers, imports, found)
         by, through, ids, deciding = _links(row, {i.id for i in own}, by_id, via)
         if not by:
             continue
@@ -406,7 +406,7 @@ def library_map(inventory, adapters, project: str | None) -> dict:
                 entry["inside"] = held[row.lookup]
                 entry["count"] = sum(len(names) for names in held[row.lookup].values())
             if row.lookup in folders:
-                technical["path"] = folders[row.lookup]
+                technical["path"] = str(folders[row.lookup])
             if row.source in sources:
                 technical["marketplace"] = sources[row.source]
         elif own[0].source.path:
@@ -425,7 +425,7 @@ def library_map(inventory, adapters, project: str | None) -> dict:
     for group in [*markets, *rest]:
         group["items"].sort(key=lambda i: i["name"].lower())
     return {
-        "clients": _clients(inventory, cursor_imports),
+        "clients": map_clients(inventory, imports),
         "groups": [*markets, *rest],
         "skill_rules": _skill_rules(inventory, adapters, found),
     }

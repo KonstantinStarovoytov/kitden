@@ -16,6 +16,7 @@ from kitden.clients.entries import entry_key, entry_refusal
 from kitden.clients.versions import is_supported
 from kitden.local_gateway.settings import as_dict
 from kitden.model import (
+    CLIENTS,
     COPY_FOLDER,
     REMOVE_FOLDER,
     Client,
@@ -547,6 +548,22 @@ def is_own_skill(item: Item, client: str) -> bool:
         and item.source.link_path is None
         and item.source.path is not None
     )
+
+
+def found_clients(inventory) -> list[str]:
+    """The clients found on this computer, the Desktop Code tab too, in scan order."""
+    return [c.id for c in inventory.clients if c.status is ClientStatus.FOUND]
+
+
+def found_columns(inventory) -> list[str]:
+    """The found clients that have a column (CLIENTS), in that order."""
+    found = found_clients(inventory)
+    return [c for c in CLIENTS if c in found]
+
+
+def from_plugin(item: Item) -> bool:
+    """The item comes with a plugin, or from a plugin's folder."""
+    return item.scope is Scope.PLUGIN or item.source.kind is SourceKind.PLUGIN
 
 
 def toggle_action(item: Item) -> tuple[str, ...]:

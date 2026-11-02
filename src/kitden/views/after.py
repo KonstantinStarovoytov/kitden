@@ -54,6 +54,7 @@ from kitden.views.words import (
     REPO_RULE,
     REPO_RULE_OUT,
     STATE_WORDS,
+    join_words,
 )
 
 CURSOR_IMPORT = {
@@ -179,10 +180,6 @@ def _skill_remove_words(change: Change) -> list[dict]:
     return out
 
 
-def _join(words: list[str]) -> str:
-    return words[0] if len(words) == 1 else f"{', '.join(words[:-1])} and {words[-1]}"
-
-
 def _is(words: list[str]) -> str:
     return "is" if len(words) == 1 else "are"
 
@@ -252,7 +249,7 @@ def _server_words(change: Change, name: str, rules: dict) -> tuple[list[str], bo
     so when it turns off what another client had on."""
 
     def who(clients: tuple[str, ...]) -> str:
-        return _join([CLIENT_WORDS[c] for c in CLIENTS if c in clients])
+        return join_words([CLIENT_WORDS[c] for c in CLIENTS if c in clients])
 
     def place(project: str | None) -> str:
         return "in every client" if project is None else f"in {Path(project).name} for every client"
@@ -285,7 +282,7 @@ def _server_words(change: Change, name: str, rules: dict) -> tuple[list[str], bo
         elif tool is not None and changed:
             tools.setdefault((project, source), []).append(tool)
     for (project, source), names in tools.items():
-        off = f"{_join(names)} of {name} will be off {place(project)}"
+        off = f"{join_words(names)} of {name} will be off {place(project)}"
         words.append(f"{off}, as {who(source)} had it.")
     return words, False
 
@@ -293,6 +290,23 @@ def _server_words(change: Change, name: str, rules: dict) -> tuple[list[str], bo
 def _offering(inventory) -> set[str]:
     """The clients whose `kitden` entry is on: they offer the Kitden gateway's tools."""
     return {s["client"] for s in setup_server_state(inventory) if kitden_on(s)}
+
+
+def _offering_clients(inventory, but: str | None = None) -> list[str]:
+    """The clients that offer the Kitden gateway's tools, in CLIENTS order, but `but`."""
+    offering = _offering(inventory)
+    return [c for c in CLIENTS if c in offering and c != but]
+
+
+def _offered_words(inventory, state: str, word: str, line: str, after: str) -> list[dict]:
+    """Each client that offers the gateway's tools gets `state` and `word`; the first one's
+    note is `line` and then `after`. With none, the note says no client offers them."""
+    clients = _offering_clients(inventory)
+    if not clients:
+        return [{"note": f"{line} {NO_GATEWAY_CLIENT}"}]
+    out = [{"client": c, "state": state, "word": word} for c in clients]
+    out[0]["note"] = f"{line} {after}"
+    return out
 
 
 def _kitden_move_words(change: Change, inventory, home: Path | None) -> list[dict]:
@@ -344,20 +358,20 @@ def _kitden_move_words(change: Change, inventory, home: Path | None) -> list[dic
         return out
     line = []
     if offering and offered:
-        who = _join([CLIENT_WORDS[c] for c in CLIENTS if c in offering])
+        who = join_words([CLIENT_WORDS[c] for c in CLIENTS if c in offering])
         whose = "its" if len(servers) == 1 else "their"
-        what = f"{whose} tools" if offered == servers else f"the tools of {_join(offered)}"
+        what = f"{whose} tools" if offered == servers else f"the tools of {join_words(offered)}"
         line.append(f"{who} will offer {what} through Kitden.")
     if updated:
-        line.append(f"{_join(updated)} in the Kitden gateway {_is(updated)} updated.")
+        line.append(f"{join_words(updated)} in the Kitden gateway {_is(updated)} updated.")
     if kept:
-        line.append(f"{_join(kept)} {_is(kept)} in the Kitden gateway already.")
+        line.append(f"{join_words(kept)} {_is(kept)} in the Kitden gateway already.")
     line += said
     new = [name for name in offered if name not in kept]
     if new and "claude_code" in offering and home and claude_allows_kitden(home, known):
         line.append(
             "Claude Code allows every Kitden tool without asking; after the move that includes "
-            f"the tools of {_join(new)}."
+            f"the tools of {join_words(new)}."
         )
     for step in change.steps:
         edit = step.edit
@@ -386,7 +400,7 @@ def _kitden_move_words(change: Change, inventory, home: Path | None) -> list[dic
             notes.append(CURSOR_SWITCHES)
         if left:
             notes.append(
-                f"{CLIENT_WORDS[client]}'s own switches for {_join(left)} do not carry over; "
+                f"{CLIENT_WORDS[client]}'s own switches for {join_words(left)} do not carry over; "
                 "the gateway keeps its rules."
             )
         if any(notes):
@@ -405,9 +419,9 @@ def _held_words(name: str, settings: dict, known: list[str]) -> tuple[list[str],
         if own_state(rules["projects"].get(p), name, None) not in (None, everywhere)
     ]
     if everywhere == "on":
-        return ([f"{name} stays off in {_join(other)}."] if other else []), False
+        return ([f"{name} stays off in {join_words(other)}."] if other else []), False
     if other:
-        return [f"{name} is on only in {_join(other)}."], False
+        return [f"{name} is on only in {join_words(other)}."], False
     return [f"{name} stays off in every client."], True
 
 
@@ -430,11 +444,11 @@ def _kept_words(kept: dict, state: str, with_tools: bool) -> str:
     rule. With `with_tools` it names the tools: on for create_issue in website, …"""
     other = "off" if state == "on" else "on"
     places = [
-        f"{_join(tools)} in {Path(p).name}" if with_tools else Path(p).name
+        f"{join_words(tools)} in {Path(p).name}" if with_tools else Path(p).name
         for p, tools in kept.items()
     ]
     which = "which has its own rule" if len(kept) == 1 else "which have their own rules"
-    return f"{other} {'for ' if with_tools else 'in '}{_join(places)}, {which}"
+    return f"{other} {'for ' if with_tools else 'in '}{join_words(places)}, {which}"
 
 
 # The gateway reads the rules again on each call, but a client keeps the list it was offered.
@@ -475,12 +489,7 @@ def _rule_words(change: Change, inventory, home: Path) -> list[dict]:
         kept = _kept(projects, known, server, [tool], state)
         if kept:
             line += f" It stays {_kept_words(kept, state, with_tools=False)}."
-    clients = [c for c in CLIENTS if c in _offering(inventory)]
-    if not clients:
-        return [{"note": f"{line} {NO_GATEWAY_CLIENT}"}]
-    out = [{"client": c, "state": state, "word": word} for c in clients]
-    out[0]["note"] = f"{line} {AT_ONCE}"
-    return out
+    return _offered_words(inventory, state, word, line, AT_ONCE)
 
 
 def _rules_words(change: Change, inventory, home: Path) -> list[dict]:
@@ -507,12 +516,7 @@ def _rules_words(change: Change, inventory, home: Path) -> list[dict]:
             GUARANTEE.format(server=server),
         )
     )
-    clients = [c for c in CLIENTS if c in _offering(inventory)]
-    if not clients:
-        return [{"note": f"{line} {NO_GATEWAY_CLIENT}"}]
-    out = [{"client": c, "state": state, "word": RULE_WORDS[state]} for c in clients]
-    out[0]["note"] = f"{line} {AT_ONCE}"
-    return out
+    return _offered_words(inventory, state, RULE_WORDS[state], line, AT_ONCE)
 
 
 def _strict_words(change: Change, inventory, home: Path) -> list[dict]:
@@ -528,14 +532,10 @@ def _strict_words(change: Change, inventory, home: Path) -> list[dict]:
     if known is not None:
         kept = [t["name"] for t in known if own_state(rules, server, t["name"]) != "off"]
     line = _strict_line(server, on, kept)
-    clients = [c for c in CLIENTS if c in _offering(inventory)]
-    if not clients:
-        return [{"note": f"{line} {NO_GATEWAY_CLIENT}"}]
     word = "Strict" if on else "Not strict"
-    out = [{"client": c, "state": "gw", "word": word} for c in clients]
     # Strict on turns tools off, so they are refused at once; strict off only adds tools.
-    out[0]["note"] = f"{line} {AT_ONCE if on else 'Applies to new sessions.'}"
-    return out
+    after = AT_ONCE if on else "Applies to new sessions."
+    return _offered_words(inventory, "gw", word, line, after)
 
 
 def home_path(path: str, home: Path) -> str:
@@ -570,11 +570,11 @@ def _gateway_remove_words(change: Change, inventory, into: str | None = None) ->
     other = having(lambda g: g not in (None, KITDEN_GATEWAY))
     lines = []
     if direct:
-        who = _join([CLIENT_WORDS[c] for c in direct])
+        who = join_words([CLIENT_WORDS[c] for c in direct])
         own = "has its own entry" if len(direct) == 1 else "have their own entries"
         lines.append(f"{who} still {own} for {server}.")
     if other:
-        who = _join([CLIENT_WORDS[c] for c in other])
+        who = join_words([CLIENT_WORDS[c] for c in other])
         reach = "reaches" if len(other) == 1 else "reach"
         lines.append(f"{who} still {reach} {server} through another gateway.")
     alone = f"Only {CLIENT_WORDS[into]} then loads {server}." if into else None
@@ -583,7 +583,7 @@ def _gateway_remove_words(change: Change, inventory, into: str | None = None) ->
     held = entries[0] if entries else None
     if isinstance(held, dict) and references_in(held):
         first += " Its secrets stay in your Keychain under kitden."
-    clients = [c for c in CLIENTS if c in _offering(inventory) and c != into]
+    clients = _offering_clients(inventory, but=into)
     if not clients:
         return [{"note": f"{first} Undo brings it back."}]
     out = [{"client": c, "state": "off", "word": "Removed"} for c in clients]
@@ -719,7 +719,7 @@ DISCONNECT_NOTE = (
 def _gateway_add_words(inventory) -> list[dict]:
     """A server added to the Kitden gateway: each client whose `kitden` entry is on offers it.
     No client file changes, so a client without that entry does not get it."""
-    clients = [c for c in CLIENTS if c in _offering(inventory)]
+    clients = _offering_clients(inventory)
     if not clients:
         return [{"note": NO_GATEWAY_CLIENT}]
     state, word = AFTER_WORDS[GATEWAY_ADD]
@@ -762,7 +762,7 @@ def _skill_keepers(inventory, home: Path, name: str) -> str | None:
     notes = []
     if keeps:
         words = KEEPS_ITS_RULE if len(keeps) == 1 else KEEP_THEIR_RULES
-        notes.append(words.format(folders=_join(keeps)))
+        notes.append(words.format(folders=join_words(keeps)))
     notes += [OWN_SKILL_SETTINGS.format(folder=folder) for folder in may]
     return " ".join(notes) or None
 

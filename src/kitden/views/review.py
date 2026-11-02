@@ -20,7 +20,7 @@ from kitden.clients.base import PLUGIN_DISABLE, PLUGIN_ENABLE, PLUGIN_REMOVE
 from kitden.model import Change, Item, Scope, Step
 from kitden.views.affects import affects
 from kitden.views.effective import effective_view
-from kitden.views.words import KEYCHAIN_UNDO, KEYCHAIN_UNDO_MANY, REMOVE_NOTE
+from kitden.views.words import KEYCHAIN_UNDO, KEYCHAIN_UNDO_MANY, REMOVE_NOTE, join_words
 
 
 def _real(path: str) -> Path:
@@ -138,10 +138,6 @@ def change_target(
     return {"scope": "all", "project": None, "others_unchanged": False}
 
 
-def _join(words: list[str]) -> str:
-    return words[0] if len(words) == 1 else f"{', '.join(words[:-1])} and {words[-1]}"
-
-
 def undo_note(change: Change) -> str | None:
     """What Undo cannot bring back, when Kitden knows: a removed Claude Code plugin's saved
     options, and the old value of a Keychain item the change replaced. None when nothing."""
@@ -150,7 +146,8 @@ def undo_note(change: Change) -> str | None:
         notes.append(REMOVE_NOTE)
     kept = [f"{i.server}/{i.key}" for s in change.steps for i in s.keychain if i.existed]
     if kept:
-        notes.append((KEYCHAIN_UNDO if len(kept) == 1 else KEYCHAIN_UNDO_MANY).format(_join(kept)))
+        words = KEYCHAIN_UNDO if len(kept) == 1 else KEYCHAIN_UNDO_MANY
+        notes.append(words.format(join_words(kept)))
     return " ".join(notes) or None
 
 

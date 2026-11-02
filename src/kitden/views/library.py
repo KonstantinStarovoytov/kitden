@@ -18,10 +18,10 @@ from kitden.changes.actions import (
     PLUGIN_SKILLS,
     SKILL_INSTALL,
 )
-from kitden.clients.base import REMOVE_DIRECT, SETUP_NAME, is_direct_entry, is_home
+from kitden.clients.base import REMOVE_DIRECT, SETUP_NAME, found_columns, is_direct_entry, is_home
 from kitden.model import CLIENT_WORDS, CLIENTS, ClientStatus, Item, ItemKind, Scope, _hash
 from kitden.views.catalog import catalog, search
-from kitden.views.gateway_view import group_of
+from kitden.views.findings import group_of
 from kitden.views.instructions_map import instructions_map
 from kitden.views.library_map import OTHER, library_map
 from kitden.views.load_map import MARKS, Row, load_map
@@ -221,12 +221,6 @@ def _map_rows(
     return out
 
 
-def _instruction_rows(map_rows: list[Row], found: list[str]) -> Built:
-    """Instruction files, commands and agents: the load map rows, with the state words of every
-    tab. Details says when each client reads a file. Kitden adds none, so a dash has no reason."""
-    return _map_rows(map_rows, "instructions", found)
-
-
 def _server_add(found: list[str], items: list[Item]) -> Add:
     """A direct user-scope server one client loads: the other clients Kitden writes can add
     it. The source is the first such entry in column order. A row a gateway serves has none."""
@@ -248,7 +242,7 @@ def _server_add(found: list[str], items: list[Item]) -> Add:
         return None
 
     def add(row: Row, client: str) -> dict | None:
-        if client not in CLIENT_WORDS or any(row.cells[c].state == "gw" for c in found):
+        if any(row.cells[c].state == "gw" for c in found):
             return None
         item = source(row)
         return _add(MCP_ADD, "+ Add", item=item) if item else None
@@ -800,7 +794,7 @@ def _tables(
     """The rows of every kind tab, before any finish: `hidden` columns leave out a row only they
     have, and hiding every found client hides none."""
     status = {c.id: c.status for c in inventory.clients}
-    found = [c for c in CLIENTS if status.get(c) is ClientStatus.FOUND]
+    found = found_columns(inventory)
     columns = [c for c in CLIENTS if c in found or status.get(c) is ClientStatus.UNREADABLE]
     if hidden.issuperset(found):
         hidden = frozenset()
@@ -838,7 +832,9 @@ def _tables(
         # Kitden adds no hooks, so a hook's dash has no reason.
         "hook": _map_rows(map_rows, "hook", found),
         "marketplace": _map_rows(map_rows, "marketplace", found, _marketplace_why(offers)),
-        "instructions": _instruction_rows(map_rows, found),
+        # Instruction files, commands and agents: Details says when each client reads a file.
+        # Kitden adds none, so a dash has no reason.
+        "instructions": _map_rows(map_rows, "instructions", found),
     }
     by_key = {r.key: r for r in map_rows}
     # A shown client Kitden could not read makes a row visible only with items kept from its

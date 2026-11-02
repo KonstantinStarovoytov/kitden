@@ -12,10 +12,11 @@ gets the item (its route) for the hover text. The Claude Desktop Code tab has no
 own: its extra items show in the Claude Code column, with the route "from the Desktop app".
 """
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 
 from kitden.changes.actions import KITDEN_GATEWAY
+from kitden.clients.base import PLUGIN_REMOVE, REMOVE_DIRECT, SKILL_REMOVE
 from kitden.model import (
     CLIENT_WORDS,
     CLIENTS,
@@ -27,8 +28,8 @@ from kitden.model import (
     Scope,
     _hash,
 )
-from kitden.views.effective import DESKTOP, effective_view
-from kitden.views.findings import base_name, bypass_kind, find_bypasses, find_findings
+from kitden.views.effective import DESKTOP, column_of, effective_view, overrides
+from kitden.views.findings import base_name, find_bypasses, find_findings, group_of
 from kitden.views.match import Copies, is_compared, odd_sources, plugin_copies, plugin_of
 from kitden.views.words import CLIENT_UNREAD, NOT_SAME, ORIGIN_WORDS, ROUTE_WORDS, STALE
 
@@ -180,9 +181,9 @@ def _review(row: Row, items: dict[str, Item], copies: Copies) -> None:
 
 # What fixes a duplicate, and the action that does it where the page has one.
 DUPLICATE_FIXES = {
-    ItemKind.PLUGIN: ("Remove one copy to keep the other.", "plugin.remove"),
-    ItemKind.MCP_SERVER: ("Remove one entry to keep the other.", "mcp.remove_direct"),
-    ItemKind.SKILL: ("Remove one copy to keep the other.", "skill.remove"),
+    ItemKind.PLUGIN: ("Remove one copy to keep the other.", PLUGIN_REMOVE),
+    ItemKind.MCP_SERVER: ("Remove one entry to keep the other.", REMOVE_DIRECT),
+    ItemKind.SKILL: ("Remove one copy to keep the other.", SKILL_REMOVE),
 }
 
 
@@ -226,13 +227,10 @@ def _flag(finding, item: Item, gateway_registered: bool, copies: list[Item]) -> 
         fix, action = DUPLICATE_FIXES.get(item.kind, ("Remove one copy to keep the other.", None))
         return _warning(text, finding.client, fix, action)
     if finding.type is FindingType.BYPASSES_GATEWAY:
-        kind = bypass_kind(item)
-        if "plugin" in kind:
-            return {"text": "From plugin", "level": "info"}
-        if "local server" in kind:
-            return {"text": "Local server", "level": "info"}
+        text = {"plugin": "From plugin", "local": "Local server"}.get(group_of(item))
         # With a gateway, a direct server is an option to move, not a problem.
-        return {"text": "Direct connection" if gateway_registered else "Direct", "level": "info"}
+        text = text or ("Direct connection" if gateway_registered else "Direct")
+        return {"text": text, "level": "info"}
     return None
 
 
@@ -244,13 +242,7 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
     if desktop:
         loaded["claude_code"] += [i for i in desktop.items if i.client == DESKTOP]
     winners = {w.id for v in views.values() for w, _, _ in v.shadowed}
-    # Project items that win over an all-projects definition of the same name.
-    overrides = {
-        w.id
-        for v in views.values()
-        for w, loser, _ in v.shadowed
-        if w.project is not None and loser.project is None
-    }
+    replacing = set().union(*(overrides(v) for v in views.values()))
 
     rows: dict[str, Row] = {}
 
@@ -280,8 +272,8 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
             by_row_loaded.setdefault((row_for(item).key, column), []).append(item)
     by_row_present: dict[tuple[str, str], list[Item]] = {}
     for item in applies:
-        column = "claude_code" if item.client == DESKTOP else item.client
-        if column in CLIENTS and (item.project is None or item.project == project):
+        column = column_of(item.client)
+        if column in CLIENTS:
             by_row_present.setdefault((row_for(item).key, column), []).append(item)
 
     # The plugin item that decides in each column, by plugin id: its parts follow it.
@@ -304,7 +296,7 @@ def load_map(inventory, project: str | None, gateway_registered: bool = False) -
                 by_row_loaded.get((row.key, column), []),
                 by_row_present.get((row.key, column), []),
                 winners,
-                overrides,
+                replacing,
                 plugins.get(column, {}),
                 project is not None,
             )
@@ -354,19 +346,7 @@ def map_dict(inventory, rows: list[Row]) -> dict:
                 "source": r.source,
                 "lookup": r.lookup,
                 "category": r.category,
-                "cells": {
-                    c: {
-                        "state": cell.state,
-                        "where": cell.where,
-                        "origin": cell.origin,
-                        "route": cell.route,
-                        "reason": cell.reason,
-                        "stale_at": cell.stale_at,
-                        "items": cell.items,
-                        "count": cell.count,
-                    }
-                    for c, cell in r.cells.items()
-                },
+                "cells": {c: asdict(cell) for c, cell in r.cells.items()},
                 "flags": r.flags,
             }
             for r in rows

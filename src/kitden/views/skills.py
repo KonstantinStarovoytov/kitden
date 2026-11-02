@@ -22,17 +22,9 @@ from pathlib import Path
 
 from kitden.changes.actions import folder_readers
 from kitden.changes.copy_folder import CopyRefusedError, digest, list_files
-from kitden.clients.base import ClientAdapter
-from kitden.model import CLIENT_WORDS, CLIENTS, ClientStatus, Enabled, ItemKind, Scope
-from kitden.views.catalog import (
-    INSTALLERS,
-    MARKETPLACE_FILES,
-    _category_name,
-    _first,
-    _plugin_dir,
-    catalog,
-    held_count,
-)
+from kitden.clients.base import ClientAdapter, found_columns
+from kitden.model import CLIENT_WORDS, CLIENTS, Enabled, ItemKind, Scope
+from kitden.views.catalog import catalog, category_name, held_count, listed_plugins, plugin_dir
 
 NEEDS_PLUGIN = "This skill needs the rest of its plugin. Add the plugin instead."
 # Why the Library's add panel cannot offer a plugin: no client found here can take it.
@@ -249,19 +241,11 @@ def plugin_skill_folders(
         for skill_dir in sorted(p.parent for p in folder.glob("skills/*/SKILL.md")):
             found.append((plugin_id, marketplace, skill_dir, category))
 
-    for client in INSTALLERS:
-        if client not in adapters:
-            continue
-        for marketplace, root in adapters[client].marketplace_roots().items():
-            listed = _first(root, MARKETPLACE_FILES) or {}
-            for entry in listed.get("plugins") or []:
-                if not isinstance(entry, dict) or not isinstance(entry.get("name"), str):
-                    continue
-                folder = _plugin_dir(root, entry.get("source"))
-                if folder is None:
-                    continue
-                category = _category_name(entry.get("category"))
-                add(f"{entry['name']}@{marketplace}", marketplace, folder, category)
+    for _, marketplace, root, entry in listed_plugins(adapters):
+        folder = plugin_dir(root, entry.get("source"))
+        if folder is not None:
+            category = category_name(entry.get("category"))
+            add(f"{entry['name']}@{marketplace}", marketplace, folder, category)
     cursor = adapters.get("cursor")
     for plugin_id, folder in (cursor.plugin_folders() if cursor else {}).items():
         add(plugin_id, plugin_id.split("@", 1)[1], folder, None)
@@ -276,7 +260,7 @@ def skill_catalog(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
     plugins); `routes[client]` is "ready" when the client can take a copy. A skill that is not
     self-contained has no routes.
     """
-    found = {c.id for c in inventory.clients if c.status is ClientStatus.FOUND and c.id in CLIENTS}
+    found = set(found_columns(inventory))
     loads: dict[str, dict[str, str]] = {}
     plugins: dict[str, set[str]] = {}
     plugins_on: dict[str, set[str]] = {}  # the same, only where the plugin is not turned off
@@ -373,7 +357,7 @@ def project_skills(inventory, adapters: dict[str, ClientAdapter], project: str) 
     source is the first such folder; a copy goes into the same project. A client that already
     reads a folder of that name there has it, whether the scan lists it or not.
     """
-    found = {c.id for c in inventory.clients if c.status is ClientStatus.FOUND and c.id in CLIENTS}
+    found = set(found_columns(inventory))
     folders: dict[str, Path] = {}
     installed: dict[str, dict[str, str]] = {}
     for item in inventory.items:
@@ -456,7 +440,7 @@ def library_offers(inventory, adapters: dict[str, ClientAdapter]) -> list[dict]:
     """The Library's add panel: each plugin and skill a marketplace on this computer offers, by
     marketplace and name. `routes` names the found clients that can add it, `installed` the ones
     that load it already, and `refusal` why no found client can take it. No paths."""
-    found = {c.id for c in inventory.clients if c.status is ClientStatus.FOUND and c.id in CLIENTS}
+    found = set(found_columns(inventory))
     rows = []
     for offer in catalog(inventory, adapters):
         routes = {c: r for c, r in offer["routes"].items() if c in found}

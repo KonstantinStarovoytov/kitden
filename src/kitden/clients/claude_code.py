@@ -196,7 +196,7 @@ def rule_file(project: Path, home: Path) -> Path | None:
     return next((f for f in reversed(local_files(project, home)) if f.parent.is_dir()), None)
 
 
-def _holds(path: Path, key: tuple[str, str]) -> bool:
+def holds(path: Path, key: tuple[str, str]) -> bool:
     """The settings file has `key`; a file Kitden cannot read may have it."""
     try:
         data = json.loads(path.read_text())
@@ -277,7 +277,7 @@ class ClaudeCodeAdapter(ClientAdapter):
         taken out goes from each local file that holds it."""
         if project is None:
             return [self.home / ".claude/settings.json"]
-        holding = [f for f in local_files(Path(project), self.home) if _holds(f, key)]
+        holding = [f for f in local_files(Path(project), self.home) if holds(f, key)]
         if not off and holding:
             return holding
         # A rule set goes to `rule_file`. So does a removal no local file holds (the key is

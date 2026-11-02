@@ -12,6 +12,7 @@ from collections.abc import Iterable
 from dataclasses import replace
 
 from kitden.changes.actions import KITDEN_GATEWAY
+from kitden.clients.base import REMOVE_DIRECT, from_plugin
 from kitden.model import (
     ClientStatus,
     Enabled,
@@ -20,7 +21,6 @@ from kitden.model import (
     Gateway,
     Item,
     ItemKind,
-    Scope,
     Severity,
     SourceKind,
     normalize_url,
@@ -217,16 +217,28 @@ def mark_gateways(inventory, gateways: list[Gateway]) -> None:
             by_url.get(normalize_url(url)) if item.kind is ItemKind.MCP_SERVER and url else None
         )
         if gateway:
-            actions = tuple(a for a in item.actions if a != "mcp.remove_direct")
+            actions = tuple(a for a in item.actions if a != REMOVE_DIRECT)
             inventory.items[index] = replace(item, via_gateway=gateway.id, actions=actions)
 
 
+# How an MCP server that skips the gateway is set up, by its group (`group_of`).
+BYPASS_WORDS = {
+    "plugin": "comes from a plugin",
+    "local": "is a local server (runs on this computer)",
+    "move": "is a direct entry",
+}
+
+
+def group_of(item: Item) -> str:
+    """An MCP server's group on the Gateway page: "plugin" when it comes with a plugin,
+    "local" when it runs on this computer, else "move"."""
+    if from_plugin(item):
+        return "plugin"
+    return "local" if "command" in dict(item.summary) else "move"
+
+
 def bypass_kind(item: Item) -> str:
-    if item.scope is Scope.PLUGIN or item.source.kind is SourceKind.PLUGIN:
-        return "comes from a plugin"
-    if "command" in dict(item.summary):
-        return "is a local server (runs on this computer)"
-    return "is a direct entry"
+    return BYPASS_WORDS[group_of(item)]
 
 
 def find_bypasses(inventory, project: str | None = None) -> list[Finding]:

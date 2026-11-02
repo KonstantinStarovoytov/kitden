@@ -13,7 +13,7 @@ from kitden.changes.actions import (
     SETUP_SERVER_ENABLE,
     SETUP_SERVER_UPDATE,
 )
-from kitden.clients.base import SETUP_SERVER
+from kitden.clients.base import SETUP_SERVER, found_clients
 from kitden.clients.versions import MINIMUM_VERSIONS
 from kitden.local_gateway.settings import SETTINGS_FILE
 from kitden.model import (
@@ -27,10 +27,12 @@ from kitden.model import (
     UnknownReason,
     _hash,
 )
+from kitden.views.effective import client_order
 from kitden.views.findings import base_name, find_bypasses, find_findings
 from kitden.views.gateway_view import gateway_view
 from kitden.views.library_map import library_map
 from kitden.views.setup_server import ENABLE_KEYS, kitden_on, setup_server_state
+from kitden.views.words import join_words
 
 READ_PROBLEMS = {
     UnknownReason.UNRECOGNIZED_FORMAT: "The file format is not recognized",
@@ -47,14 +49,6 @@ GROUP_WORDS = {"move": "Remote", "local": "Local"}
 SERVER_CARDS = 3
 SKIPS = "Skips the gateway, so Kitden's rules don't reach it."
 NOT_CONNECTED = "Not connected to the gateway yet."
-
-
-def _join(words: list[str]) -> str:
-    return " and ".join([", ".join(words[:-1]), words[-1]] if len(words) > 1 else words)
-
-
-def _client_order(client: str) -> int:
-    return CLIENTS.index(client) if client in CLIENTS else len(CLIENTS)
 
 
 def _card(id, group, icon, name, line, clients, action, block) -> dict:
@@ -128,7 +122,7 @@ def _duplicates(inventory, findings) -> list[dict]:
         group["copies"] = max(group["copies"], len(items))
     cards = []
     for (kind, name), group in groups.items():
-        clients = sorted(group["clients"], key=_client_order)
+        clients = sorted(group["clients"], key=client_order)
         copies = group["copies"]
         text = (
             f"{'Two' if copies == 2 else copies} copies of one "
@@ -141,7 +135,7 @@ def _duplicates(inventory, findings) -> list[dict]:
         icon = KIND_ICONS.get(kind, "puzzle")
         card_id = _hash("duplicate", kind, name)
         cards.append(_card(card_id, "attention", icon, name, text, clients, action, block))
-    return sorted(cards, key=lambda c: (c["name"], [_client_order(x) for x in c["clients"]]))
+    return sorted(cards, key=lambda c: (c["name"], [client_order(x) for x in c["clients"]]))
 
 
 def _old_entries(inventory) -> list[dict]:
@@ -151,7 +145,7 @@ def _old_entries(inventory) -> list[dict]:
     if not old:
         return []
     ids = [s["client"] for s in old]
-    where = _join([CLIENT_WORDS[c] for c in ids])
+    where = join_words([CLIENT_WORDS[c] for c in ids])
     one = len(ids) == 1
     it = "it" if one else "them"
     title = f"Old Kitden {'entry' if one else 'entries'} in {where}"
@@ -197,7 +191,7 @@ def _move_ins(groups: dict) -> list[dict]:
         )
     rest = rows[SERVER_CARDS:]
     if rest:
-        clients = sorted({c for _, row in rest for c in row["columns"]}, key=_client_order)
+        clients = sorted({c for _, row in rest for c in row["columns"]}, key=client_order)
         n = len(rest)
         name = f"{n} more {'server skips' if n == 1 else 'servers skip'} the gateway"
         line = f"Kitden's rules don't reach {'it' if n == 1 else 'them'}."
@@ -255,16 +249,16 @@ def _setup_map(inventory, adapters, project, held, gateway_rules, unread=False) 
     many projects have rules of their own (for the gateway, or for a plugin or skill). While
     the gateway settings cannot be read (`unread`) its counts are not known (None)."""
     clients = [c for c in inventory.clients if c.id in CLIENTS]
-    found = [c for c in clients if str(c.status) == "found"]
+    found = found_clients(inventory)
     shown = library_map(inventory, adapters, project)
     items = [i for g in shown["groups"] for i in g["items"]]
     states = {s["client"]: s for s in setup_server_state(inventory)}
     links = []
-    for client in found:
-        if kitden_on(states[client.id]):
-            links.append({"client": client.id, "to": "gateway"})
-        if any(i["by"].get(client.id) == "on" for i in items):
-            links.append({"client": client.id, "to": "library"})
+    for client in (c.id for c in clients if c.id in found):
+        if kitden_on(states[client]):
+            links.append({"client": client, "to": "gateway"})
+        if any(i["by"].get(client) == "on" for i in items):
+            links.append({"client": client, "to": "library"})
     ruled = _ruled_projects(inventory, adapters) | {
         p.path for p in inventory.projects if p.path in gateway_rules
     }
@@ -275,7 +269,7 @@ def _setup_map(inventory, adapters, project, held, gateway_rules, unread=False) 
                 "name": c.display_name,
                 "version": c.version,
                 "tested": c.version_supported,
-                "on": str(c.status) == "found",
+                "on": c.id in found,
             }
             for c in clients
         ],
