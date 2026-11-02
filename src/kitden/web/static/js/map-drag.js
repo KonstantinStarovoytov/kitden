@@ -62,35 +62,49 @@ export function startDrag(event, block, kind, { hooks, map, onStart = () => {} }
     if (starts) kindHooks.begin(map.drag);
     kindHooks.over(map.drag);
   };
+  listenPointer({
+    move,
+    // A let go where the last move was not lands where it is.
+    done: (e) => {
+      if (!map.drag) return;
+      const up = e && e.type === "pointerup";
+      if (up) move(e);
+      letGo(map, kindHooks, up ? { x: e.clientX, y: e.clientY } : null);
+    },
+    // Escape puts the block back before Details or the map hear it. The pointer is still down: the
+    // click of its release, which the captured block would hear, selects nothing either.
+    held: () => Boolean(map.drag),
+    escaped: () => document.addEventListener("pointerup", swallowClick, { capture: true, once: true }),
+  });
+}
+
+// One press of the pointer, heard on the document until it ends: `move(e)` on each move, then
+// `done(e)` once, with the release or cancel event, or with null for Escape or a window that loses
+// focus (another app, a dialog: nothing stays held). Escape counts only while `held()`, and no
+// one else hears it; `escaped()` runs after its `done`.
+export function listenPointer({ move, done, held, escaped = () => {} }) {
   const stop = () => {
     document.removeEventListener("pointermove", move);
-    document.removeEventListener("pointerup", done);
-    document.removeEventListener("pointercancel", done);
+    document.removeEventListener("pointerup", end);
+    document.removeEventListener("pointercancel", end);
     document.removeEventListener("keydown", escape, true);
     window.removeEventListener("blur", lost);
   };
-  // A let go where the last move was not lands where it is.
-  const done = (e) => {
+  const end = (e) => {
     stop();
-    if (!map.drag) return;
-    const up = e && e.type === "pointerup";
-    if (up) move(e);
-    letGo(map, kindHooks, up ? { x: e.clientX, y: e.clientY } : null);
+    done(e);
   };
-  // Escape puts the block back before Details or the map hear it. The pointer is still down: the
-  // click of its release, which the captured block would hear, selects nothing either.
   const escape = (e) => {
-    if (e.key !== "Escape" || !map.drag) return;
+    if (e.key !== "Escape" || !held()) return;
     e.preventDefault();
     e.stopImmediatePropagation();
-    done(null);
-    document.addEventListener("pointerup", swallowClick, { capture: true, once: true });
+    end(null);
+    escaped();
   };
-  // A window that loses focus (another app, a dialog) ends the drag: nothing stays held.
-  const lost = () => done(null);
+  const lost = () => end(null);
   document.addEventListener("pointermove", move);
-  document.addEventListener("pointerup", done);
-  document.addEventListener("pointercancel", done);
+  document.addEventListener("pointerup", end);
+  document.addEventListener("pointercancel", end);
   document.addEventListener("keydown", escape, true);
   window.addEventListener("blur", lost);
 }

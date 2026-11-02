@@ -3,7 +3,7 @@
 // Cmd-click picks or unpicks one; Escape or a click on empty map clears. Only a server outside the
 // gateway that has a grip can be picked. The drag itself is gateway-drag.js's `group` kind.
 import { el, plural } from "./dom.js";
-import { areaPoint, DRAG_START, swallowClick } from "./map-drag.js";
+import { areaPoint, DRAG_START, listenPointer, swallowClick } from "./map-drag.js";
 import { animateTo } from "./motion.js";
 
 // The ids picked now, in the order they were picked.
@@ -80,33 +80,14 @@ export function pressBand(event, { map, onPick }) {
     pick.ids = new Set([...before, ...bandHits(map.model, map.layout, start, end)]);
     onPick();
   };
-  // The window losing focus (another app, a dialog) ends the band as a let go would.
-  const blur = () => done(null);
-  const stop = () => {
-    document.removeEventListener("pointermove", move);
-    document.removeEventListener("pointerup", done);
-    document.removeEventListener("pointercancel", done);
-    document.removeEventListener("keydown", escape, true);
-    window.removeEventListener("blur", blur);
-  };
+  // A let go, Escape or the window losing focus (another app, a dialog) ends the band.
   const done = (e) => {
-    stop();
     if (!band) return;
     if (e && e.type === "pointerup") swallowClick();
     const gone = band;
     animateTo(gone, [{ opacity: 1 }, { opacity: 0 }], { ...BAND_OUT, fill: "forwards" }).then(() => gone.remove());
   };
-  const escape = (e) => {
-    if (e.key !== "Escape" || !band) return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    done(null);
-  };
-  document.addEventListener("pointermove", move);
-  document.addEventListener("pointerup", done);
-  document.addEventListener("pointercancel", done);
-  document.addEventListener("keydown", escape, true);
-  window.addEventListener("blur", blur);
+  listenPointer({ move, done, held: () => Boolean(band) });
 }
 
 // A press on the map box's own scrollbar, past its content (clientWidth and clientHeight leave the
