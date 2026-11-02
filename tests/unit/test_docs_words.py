@@ -30,7 +30,7 @@ def test_docs_promise_no_undo_they_cannot_keep():
 
 def test_readme_is_short_and_the_guide_names_the_page_words():
     text = (ROOT / "README.md").read_text()
-    # The README shows three scenes, two commands and four facts; the details live in the guide
+    # The README shows three scenes, two commands and five facts; the details live in the guide
     # (2026-11-02).
     assert len(text.splitlines()) <= 80
     assert "docs/guide.md" in text

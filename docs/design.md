@@ -27,7 +27,7 @@ cropped to the part it is about, and each different in look: a still of the Libr
 each agent loads), then two short looping animations (servers of three clients joined in the
 gateway, tools turned off on the map). No captions and no invented UI states. Each animation
 ends on its key moment and fades back to its start. Then what Kitden needs, two commands, one
-line to update, four facts and links; the rest lives in the guide. [README media](readme-media.md)
+line to update, five facts (the catalogs first) and links; the rest lives in the guide. [README media](readme-media.md)
 records how to make the pictures again.
 
 ## Color roles

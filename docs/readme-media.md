@@ -1,7 +1,7 @@
 # README media
 
 The README shows the logo, the slogan and three scenes of the real page, then how to start and
-four facts. Steps, privacy and limits live in the [guide](guide.md). No captions on the scenes.
+five facts. Steps, privacy and limits live in the [guide](guide.md). No captions on the scenes.
 
 ## Scenes
 

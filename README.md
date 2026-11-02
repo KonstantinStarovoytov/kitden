@@ -63,6 +63,8 @@ Update later with `uv tool upgrade kitden`.
 
 ## Good to know
 
+- Find more in the catalogs: the official MCP Registry, skills.sh, the Claude plugins
+  marketplace and any public GitHub repository. Drag a result onto a client or the gateway.
 - Every change shows a preview first. Apply keeps a backup, and Undo puts it back.
 - Everything stays on your Mac: no account, no telemetry.
 - Tokens are checked before Apply and kept in the macOS Keychain only.
