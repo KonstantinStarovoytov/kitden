@@ -42,7 +42,10 @@ supported in this first version. Smithery and Glama are not separate providers y
   version resolution at Apply; Kitden does not claim to pin their transitive dependencies.
 - Standalone Claude plugins get a local marketplace wrapper around a cached snapshot.
 - MCP supports complete streamable HTTP endpoints and npm packages with declared versions.
-  Required credentials, additional arguments, OAuth and other package transports need separate
+  Required credentials are asked for in the panel, checked against a remote server before
+  Apply and kept in the Keychain. A server that signs in through the browser gets Sign in, when
+  its authorization server lets Kitden register (dynamic client registration); otherwise the
+  panel asks for an API key. Additional arguments and other package transports need separate
   setup; the page explains when it cannot add one. Optional credentials can be left out.
 - A new server goes to the Kitden gateway. Connect your clients to that gateway to use it.
 - A matching installed name is shown as Installed; the preview still checks for conflicts and

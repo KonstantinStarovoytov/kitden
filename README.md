@@ -8,8 +8,8 @@
 
 <p align="center"><strong>Your AI coding tools, under one roof.</strong></p>
 
-<p align="center">See and change what <b>Claude Code, Codex and Cursor</b> load.<br>
-MCP servers, plugins and skills, with preview and Undo.</p>
+<p align="center">See, find and share what <b>Claude Code, Codex and Cursor</b> load.<br>
+MCP servers, plugins and skills from the catalogs you already use, with preview and Undo.</p>
 
 <p align="center">
   <a href="https://github.com/KonstantinStarovoytov/kitden/actions/workflows/release.yml"><img src="https://github.com/KonstantinStarovoytov/kitden/actions/workflows/release.yml/badge.svg?branch=main" alt="Checks on main"></a>
@@ -46,10 +46,25 @@ what differs between clients. Click an item for its **Details**.
 The preview names the clients and projects affected. Adds on the map go to all projects;
 the List offers a project scope where supported. Start a new client session to load a change.
 
+## Add from the catalogs
+
+**+ Add plugins** in Library and **+ Add servers** in Gateway open one catalog: **skills.sh**,
+the **official MCP Registry**, the Claude plugins marketplace, any public GitHub repository you
+add, and what is already **On this Mac**. Click a result to preview it, or drag it onto a client
+or the gateway. Skills come from a pinned GitHub commit, plugins use the client's own installer,
+and MCP servers go to the Kitden gateway, so every connected client gets them.
+
+- **Tokens:** a server asks for exactly the value it needs. Kitden checks it against the server
+  before Apply and keeps it in the **macOS Keychain** only.
+- **Browser sign-in:** **Sign in** opens the server's page; Kitden catches the answer itself
+  and refreshes it later. A server that allows no sign-in for Kitden asks for an API key instead.
+- **Not ready yet:** it waits in the preview; Apply writes the rest. **Details** show each secret
+  by name, only its first and last characters, with **Replace** and **Remove**.
+
 ## Share a server between your agents
 
 Open **Gateway** to share MCP servers and turn individual tools on or off for each project.
-Its rules cover the servers you move into it. You can use Library on its own.
+Pick several with a band or Shift-click and drag them in together. Library works on its own.
 
 <p align="center">
   <picture>
@@ -124,12 +139,14 @@ kitden
 
 Your setup opens in the browser. Changes to client settings wait for Apply.
 If the command is not found, run `uv tool update-shell` and open a new Terminal window.
+To update, run `uv tool upgrade kitden`, then restart your clients.
 
 <details>
 <summary>Privacy and backup limits</summary>
 
 - The page runs locally at `127.0.0.1`, with a private access link. No account or telemetry.
-- Credentials go to the server they belong to, or to a gateway you move that server into. Kitden masks secret fields and known token formats in its page and logs. It goes online to reach remote servers and read GitHub marketplaces you add.
+- Credentials go to the server they belong to, or to a gateway you move that server into. Secrets you type or sign in with are kept in the macOS Keychain only; the page never shows more than their first and last characters. Kitden masks secret fields and known token formats in its page and logs.
+- Kitden goes online only to reach remote servers, the catalogs you open and the GitHub sources you add. Nothing from a catalog runs during search or download.
 - Backups stay for 30 days, and the newest 100 changes always keep theirs. Changes also offers **Redo…** and **See it on the map**.
 - Undo of plugin removal installs the plugin again, but does not restore its saved options.
 - Kitden writes to your home folder, its own data folder, known projects and detected client settings folders. The preview shows which files will change. Project settings stay separate from the shared setup.

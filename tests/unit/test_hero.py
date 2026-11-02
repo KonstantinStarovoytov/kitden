@@ -177,7 +177,7 @@ def test_the_hero_colours_follow_the_theme():
 def test_the_readme_shows_the_hero_and_the_slogan():
     readme = (ROOT / "README.md").read_text()
     base = "https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/"
-    top = readme[: readme.index("See and change what")]
+    top = readme[: readme.index("See, find and share what")]
     picture = re.search(r"<picture>.*?</picture>", top, re.S)
     assert picture, "the hero comes first"
     slogan = "Your AI coding tools, under one roof."

@@ -186,7 +186,10 @@ Not run yet for step 24: Part 4 was tested with sandbox files only.
    shipped under Done, and change the "Last updated" date.
 4. Commit, then `git tag vX.Y.Z` and `git push origin main vX.Y.Z`.
 
-The workflow runs the checks and stops if the notes file is missing. Then it publishes to PyPI
+On every push and pull request the workflow runs ruff, the Python tests with a 94% coverage
+floor, the page's tests (`node --test tests/frontend/*.test.mjs`), the start-time budget
+(`scripts/measure-start.py`), a dependency audit (`pip-audit`) and the package build. On a tag
+it also stops if the notes file is missing. Then it publishes to PyPI
 with trusted publishing and creates the GitHub release with the notes file as its text.
 `README.md` is also the PyPI page. Fallback images and links use full `https://` addresses;
 `picture` sources use local paths so GitHub previews follow the branch. See

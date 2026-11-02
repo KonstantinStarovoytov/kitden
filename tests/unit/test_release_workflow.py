@@ -64,3 +64,18 @@ def test_a_tag_without_notes_stops_before_pypi():
     assert "exit 1" in steps[0]
     publish = WORKFLOW.read_text().split("  publish:")[1].split("  release:")[0]
     assert "needs: build" in publish
+
+
+def test_the_build_runs_every_check_the_project_has():
+    """The page's tests, a coverage floor, the start-time budget and a dependency audit run on
+    every push, as the Python tests do; the tools are pinned."""
+    steps = _build_steps()
+    text = "\n".join(steps)
+    assert "actions/setup-node@" in text and 'node-version: "25"' in text
+    assert "node --test tests/frontend/*.test.mjs" in text
+    assert "uv run pytest -q --cov=kitden --cov-fail-under=" in text
+    assert "uv run python scripts/measure-start.py" in text
+    assert "pip-audit==" in text
+    # Pinned to a commit, as the other actions are.
+    node = next(s for s in steps if "actions/setup-node@" in s)
+    assert len(node.split("@")[1].split()[0]) == 40
