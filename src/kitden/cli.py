@@ -16,7 +16,8 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 
 from kitden import __version__, page
-from kitden.clients.version_cache import CLIENTS, refresh_versions
+from kitden.clients.version_cache import refresh_versions
+from kitden.model import CLIENTS
 from kitden.views.inventory import Inventory, build_inventory, inventory_dict
 
 HOST = page.HOST

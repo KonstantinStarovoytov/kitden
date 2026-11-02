@@ -24,7 +24,6 @@ from starlette.staticfiles import StaticFiles
 from kitden import __version__
 from kitden.changes.actions import (
     CLIENT_DISCONNECT,
-    CLIENT_WORDS,
     GATEWAY_ACCESS,
     GATEWAY_ADD,
     GATEWAY_CONNECT,
@@ -134,7 +133,17 @@ from kitden.local_gateway.views import (
     tools_view,
 )
 from kitden.marketplace_link import LinkError, read_marketplace
-from kitden.model import Change, ChangeState, Gateway, GatewayAuth, GatewayEdit, ItemKind, Step
+from kitden.model import (
+    CLIENT_WORDS,
+    CLIENTS,
+    Change,
+    ChangeState,
+    Gateway,
+    GatewayAuth,
+    GatewayEdit,
+    ItemKind,
+    Step,
+)
 from kitden.redact import masked_command, redact_text
 from kitden.sign_in import SIGNED_OUT, SignIn, SignIns
 from kitden.views.after import after_words
@@ -639,7 +648,7 @@ def create_app(
         skill_catalog(inventory, adapters)
 
     def read_versions() -> dict[str, str | None]:
-        stale = version_cache.stale_clients(home, version_cache.CLIENTS)
+        stale = version_cache.stale_clients(home, CLIENTS)
         return version_cache.refresh_versions(home, stale) if stale else {}
 
     if version_refresh is None and home is not None and not demo:
