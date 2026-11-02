@@ -98,22 +98,6 @@ def client_metadata(redirect_uri: str) -> OAuthClientMetadata:
     )
 
 
-def initialize_body() -> dict:
-    """One MCP `initialize` request, as the access check sends it."""
-    from kitden.changes.actions import MCP_VERSION  # the page has it loaded; the gateway not
-
-    return {
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "initialize",
-        "params": {
-            "protocolVersion": MCP_VERSION,
-            "capabilities": {},
-            "clientInfo": {"name": "kitden", "version": "1"},
-        },
-    }
-
-
 async def start(record: SignIn, redirect_uri: str, open_browser) -> None:
     """Start the flow; return once the browser shows the sign-in page. Raises CannotSignIn, or
     ValueError with the reason when it fails before the browser. A second start while one runs
@@ -147,6 +131,8 @@ async def _start(record: SignIn, redirect_uri: str, open_browser) -> None:
 
 async def _run(record: SignIn, redirect_uri: str, open_browser, opened: asyncio.Event):
     """The flow itself, as a task. Returns CannotSignIn when registration fails, else None."""
+    from kitden.changes.actions import initialize_body  # the page has it loaded; the gateway not
+
     storage = MemoryStorage()
 
     async def redirect(url: str) -> None:
