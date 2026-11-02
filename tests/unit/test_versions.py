@@ -19,7 +19,7 @@ from kitden.clients.versions import (
     ],
 )
 def test_parse_version_reads_each_client_format(client, output, want):
-    assert parse_version(client, output) == want
+    assert parse_version(output) == want
 
 
 @pytest.mark.parametrize(

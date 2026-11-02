@@ -17,7 +17,7 @@ from typing import Any
 
 from kitden.changes.atomic import RefusedWriteError, write_atomic
 from kitden.changes.json_splice import ABSENT
-from kitden.gateways import data_dir
+from kitden.gateways import data_dir, private_data_dir
 from kitden.model import Change, FileEdit, Scope, Step
 
 SETTINGS_FILE = "gateway.json"
@@ -29,6 +29,14 @@ STATES = ("on", "off")
 START_TIME = "startup_timeout_sec"
 # Project folders in a local server's arguments; the gateway fills in the project it found.
 PLACEHOLDERS = ("${workspaceFolder}", "${CLAUDE_PROJECT_DIR}", "${CLAUDE_PROJECT_DIR:-.}")
+CHOOSE_SERVER = "Choose a server in the Kitden gateway."
+
+
+def fill_placeholders(arg: str, folder: str) -> str:
+    """An argument with each project folder placeholder (PLACEHOLDERS) filled in."""
+    for placeholder in PLACEHOLDERS:
+        arg = arg.replace(placeholder, folder)
+    return arg
 
 
 def as_dict(value: Any) -> dict:
@@ -87,9 +95,7 @@ def save_tools(home: Path, server: str, tools: list[dict]) -> None:
     and its title and annotations (the read-only and destructive hints) when it has them."""
     # No lock on purpose: the write is atomic, and a list lost in a race is written again on the
     # next start or Rescan.
-    folder = data_dir(home)
-    folder.mkdir(parents=True, exist_ok=True)
-    folder.chmod(0o700)
+    folder = private_data_dir(home)
     cache = load_tools(home)
     cache[server] = [
         {
@@ -117,9 +123,7 @@ def count_call(home: Path, server: str, tool: str, now: datetime | None = None) 
     """Add one call to a tool's count. Only the count and the time are kept, never what was sent
     or answered. Like the tool cache, no lock: the write is atomic and a count lost in a race
     does not matter. Raises OSError only."""
-    folder = data_dir(home)
-    folder.mkdir(parents=True, exist_ok=True)
-    folder.chmod(0o700)
+    folder = private_data_dir(home)
     calls = load_calls(home)
     entry = calls.setdefault(server, {}).get(tool, {})
     count = entry.get("count")
@@ -282,7 +286,7 @@ def remove_server_steps(home: Path, server: str) -> list[Step]:
     are found data."""
     settings = load_settings(home)
     if server not in settings["servers"]:
-        raise ValueError("Choose a server in the Kitden gateway.")
+        raise ValueError(CHOOSE_SERVER)
     rules = settings["rules"]
     steps = [settings_step(home, ("servers", server), ABSENT, server)]
     if server in rules["global"]:

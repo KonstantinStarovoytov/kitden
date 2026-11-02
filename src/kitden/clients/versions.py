@@ -28,7 +28,7 @@ def app_commands(name: str) -> tuple[str, ...]:
     return next((paths for command, paths in _COMMANDS.values() if command == name), ())
 
 
-def parse_version(client: str, output: str) -> str | None:
+def parse_version(output: str) -> str | None:
     """Return the first dotted version number in a client's version output."""
     match = _VERSION.search(output)
     return match.group(1) if match else None

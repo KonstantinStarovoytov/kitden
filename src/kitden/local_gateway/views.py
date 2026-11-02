@@ -18,9 +18,9 @@ from kitden.gateways import data_dir
 from kitden.local_gateway import keychain
 from kitden.local_gateway.project import project_chain
 from kitden.local_gateway.settings import (
+    CHOOSE_SERVER,
     CLIENT,
     SETTINGS_FILE,
-    _scopes,
     deciding_project,
     load_settings,
     load_tools,
@@ -35,6 +35,8 @@ from kitden.local_gateway.settings import (
 from kitden.model import Change, Enabled, Item, Scope, Source, SourceKind, Step
 from kitden.redact import redact_line
 from kitden.views.setup_server import setup_server_state
+
+CHOOSE_STATE = "Choose on or off."
 
 
 def gateway_items(inventory, settings: dict, home: Path) -> list[Item]:
@@ -350,7 +352,6 @@ def tools_view(
     known projects further along its chain, nearest first (`up`): the ones it follows where it
     has no rule of its own."""
     strict = strict_mode(settings, server)
-    scopes = _scopes(settings, chain)
     counted = (calls or {}).get(server, {})
     states = _states(settings, server, None, chain)
     server_on = states["state"] == "on"
@@ -364,7 +365,7 @@ def tools_view(
                 **dict(zip(("hint", "hint_from"), tool_hint(tool), strict=True)),
                 "description": tool.get("description") or "",
                 "calls": counted.get(tool["name"]),
-                "new": strict and all(own_state(r, server, tool["name"]) is None for r in scopes),
+                "new": found["origin"] == "strict",
                 **found,
                 **_effective(found["state"], server_on),
                 "shared": state_in(settings, [], server, tool["name"]),
@@ -407,7 +408,7 @@ def rule_steps(home: Path, params: dict, projects: dict[str, str]) -> list[Step]
     server, tool = params.get("server"), params.get("tool")
     project, state = params.get("project"), params.get("state")
     if not isinstance(server, str) or server not in load_settings(home)["servers"]:
-        raise ValueError("Choose a server in the Kitden gateway.")
+        raise ValueError(CHOOSE_SERVER)
     known = [t["name"] for t in load_tools(home).get(server, [])]
     # A tool the server no longer lists may still have a rule: it can follow all projects.
     if tool is not None and (not isinstance(tool, str) or (tool not in known and state)):
@@ -415,7 +416,7 @@ def rule_steps(home: Path, params: dict, projects: dict[str, str]) -> list[Step]
     if project is not None and (not isinstance(project, str) or project not in projects):
         raise ValueError("Unknown project.")
     if project is None and state is None:
-        raise ValueError("Choose on or off.")
+        raise ValueError(CHOOSE_STATE)
     return [rule_step(home, projects.get(project), server, tool, state)]
 
 
@@ -427,7 +428,7 @@ def rules_steps(home: Path, params: dict, projects: dict[str, str]) -> list[Step
     if not isinstance(tools, list) or not tools or not all(isinstance(t, str) for t in tools):
         raise ValueError("Choose at least one tool.")
     if state not in ("on", "off"):
-        raise ValueError("Choose on or off.")
+        raise ValueError(CHOOSE_STATE)
     names = dict.fromkeys(tools)  # each tool once, in order
     return [s for tool in names for s in rule_steps(home, {**params, "tool": tool}, projects)]
 
@@ -441,9 +442,9 @@ def strict_steps(home: Path, params: dict, tools: dict[str, list[dict]]) -> list
     server, state = params.get("server"), params.get("state")
     settings = load_settings(home)
     if not isinstance(server, str) or server not in settings["servers"]:
-        raise ValueError("Choose a server in the Kitden gateway.")
+        raise ValueError(CHOOSE_SERVER)
     if state not in ("on", "off"):
-        raise ValueError("Choose on or off.")
+        raise ValueError(CHOOSE_STATE)
     if state == "off":
         return [strict_step(home, server, False)]
     return [

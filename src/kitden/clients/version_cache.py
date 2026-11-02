@@ -12,7 +12,7 @@ from pathlib import Path
 
 from kitden.changes.atomic import write_atomic
 from kitden.clients.versions import parse_version, version_command
-from kitden.gateways import data_dir
+from kitden.gateways import data_dir, private_data_dir
 from kitden.model import CLIENTS as CLIENTS  # cli.py and web/app.py read it here
 
 VERSIONS_FILE = "versions.json"
@@ -31,7 +31,7 @@ def run_version_command(client: str) -> str | None:
         )
     except (OSError, subprocess.SubprocessError):
         return None
-    return parse_version(client, done.stdout) if done.returncode == 0 else None
+    return parse_version(done.stdout) if done.returncode == 0 else None
 
 
 def load_versions(home: Path) -> dict[str, dict]:
@@ -92,9 +92,7 @@ def refresh_versions(home: Path, clients: Iterable[str]) -> dict[str, str | None
         if binary and found[client]:
             entries[client] = {"path": binary[0], "mtime_ns": binary[1], "version": found[client]}
     if entries:
-        folder = data_dir(home)
-        folder.mkdir(parents=True, exist_ok=True)
-        folder.chmod(0o700)
+        folder = private_data_dir(home)
         versions = {**load_versions(home), **entries}
         written = write_atomic(folder / VERSIONS_FILE, json.dumps(versions, indent=2).encode())
         written.chmod(0o600)  # write_atomic keeps an old file's mode; this file is always private

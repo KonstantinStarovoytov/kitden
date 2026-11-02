@@ -16,8 +16,8 @@ from kitden.demo.runner import NOT_IN_DEMO, DemoRunner
 from kitden.demo.sample import (
     DEMO_SECRET,
     SIZES,
-    _tool,
     build_demo_home,
+    cached_tool,
     demo_command,
     keychain_file,
 )
@@ -73,9 +73,9 @@ def demo_build(home: Path) -> Callable[..., Inventory]:
 # The tools a server moved in during the demo lists, as no server starts: one that reads, one
 # that may write by its name, and one Kitden cannot tell.
 CANNED_TOOLS: tuple[dict, ...] = (
-    _tool("search", "Search the items.", {"readOnlyHint": True}),
-    _tool("create_item", "Add an item."),
-    _tool("summarize", "Sum up the items."),
+    cached_tool("search", "Search the items.", {"readOnlyHint": True}),
+    cached_tool("create_item", "Add an item."),
+    cached_tool("summarize", "Sum up the items."),
 )
 
 
