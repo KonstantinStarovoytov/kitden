@@ -60,7 +60,8 @@ from mcp_types import (
 )
 
 from kitden.gateways import data_dir
-from kitden.local_gateway.keychain import KeychainError, resolve_entry
+from kitden.local_gateway import oauth
+from kitden.local_gateway.keychain import KeychainError, is_reference, resolve_entry
 from kitden.local_gateway.project import project_chain, session_folder
 from kitden.local_gateway.settings import (
     PLACEHOLDERS,
@@ -133,10 +134,9 @@ class UpstreamError(Exception):
 
 
 # A remote server that answered 401 or 403: the library reports only the server's own words.
-REFUSED = (
-    "{server} turned down its access: its token is wrong, or it needs browser sign-in, "
-    "which Kitden does not support yet."
-)
+REFUSED = "{server} turned down its access: its token is wrong or has ended."
+# A server whose stored browser sign-in no longer works, and could not be refreshed.
+SIGNED_OUT = "{server} needs sign-in again."
 
 
 def _turned_down(entry: dict) -> bool:
@@ -289,41 +289,62 @@ class Upstreams:
         """Open the server's connection and hold it until the `async with` block ends.
 
         It runs in the group's own task: a connection must close in the task that opened it.
+        A server whose browser sign-in ended says so; when another gateway process refreshed
+        it meanwhile (the item changed), it starts once more with the new tokens.
         """
         try:
             # Secrets in env and headers are Keychain references until the server starts.
             entry = await anyio.to_thread.run_sync(resolve_entry, self.settings["servers"][server])
         except KeychainError as problem:
             raise UpstreamError(str(problem)) from None
-        ready = False
-        try:
-            async with AsyncExitStack() as stack:
-                target = await self._target(entry, stack)
-                # The initialize handshake, which every server answers. Mode "auto" first asks
-                # `server/discover`; a server that leaves it unanswered costs 10 s.
-                client = await stack.enter_async_context(Client(target, mode="legacy"))
-                self._clients[server] = client
-                task_status.started(client)
-                ready = True
-                await anyio.sleep_forever()
-        except Exception:
-            if not ready:
-                if entry.get("url") and await anyio.to_thread.run_sync(_turned_down, entry):
-                    raise UpstreamError(REFUSED.format(server=server)) from None
-                raise
-            _say(f"{server} stopped.")
-        finally:
-            self._clients.pop(server, None)
+        for attempt in (1, 2):
+            auth = None
+            if entry.get("url") and is_reference(entry.get("sign_in")):
+                auth = oauth.stored_auth(server, str(entry["url"]), entry["sign_in"])
+            ready = False
+            try:
+                async with AsyncExitStack() as stack:
+                    target = await self._target(entry, stack, auth)
+                    # The initialize handshake, which every server answers. Mode "auto" first
+                    # asks `server/discover`; a server that leaves it unanswered costs 10 s.
+                    client = await stack.enter_async_context(Client(target, mode="legacy"))
+                    self._clients[server] = client
+                    task_status.started(client)
+                    ready = True
+                    await anyio.sleep_forever()
+            except Exception:
+                if not ready:
+                    if auth is not None and auth.signed_out:
+                        if attempt == 1 and await self._refreshed_elsewhere(auth):
+                            continue
+                        raise UpstreamError(SIGNED_OUT.format(server=server)) from None
+                    if entry.get("url") and await anyio.to_thread.run_sync(_turned_down, entry):
+                        raise UpstreamError(REFUSED.format(server=server)) from None
+                    raise
+                _say(f"{server} stopped.")
+            finally:
+                self._clients.pop(server, None)
+            return
 
-    async def _target(self, entry: dict, stack: AsyncExitStack) -> Any:
-        """How to reach a server: streamable HTTP for a `url`, else its command over stdio."""
+    @staticmethod
+    async def _refreshed_elsewhere(auth: oauth.StoredSignIn) -> bool:
+        """Whether the sign-in's Keychain item changed since this process read it."""
+        try:
+            now = await auth.storage.read()
+        except KeychainError:
+            return False
+        return now is not None and now != auth.storage.raw
+
+    async def _target(self, entry: dict, stack: AsyncExitStack, auth: Any = None) -> Any:
+        """How to reach a server: streamable HTTP for a `url` (with `auth`, its stored
+        sign-in), else its command over stdio."""
         if entry.get("url"):
             # It names itself: Cloudflare turns down Python's default agent (seen 2026-10-31).
             headers = {"User-Agent": "kitden"}
             headers.update({str(k): str(v) for k, v in (entry.get("headers") or {}).items()})
             timeout = httpx2.Timeout(START_TIMEOUT, read=CALL_TIMEOUT)
             http = await stack.enter_async_context(
-                httpx2.AsyncClient(headers=headers, timeout=timeout)
+                httpx2.AsyncClient(headers=headers, timeout=timeout, auth=auth)
             )
             return streamable_http_client(str(entry["url"]), http_client=http)
         folder = self.folder or str(self.home)

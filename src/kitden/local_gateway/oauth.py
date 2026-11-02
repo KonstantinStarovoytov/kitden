@@ -16,15 +16,17 @@ The SDK's error text may hold a token response, so it is never passed on: every 
 
 import asyncio
 import json
+import sys
 from urllib.parse import parse_qs, urlsplit
 
+import anyio.to_thread
 import httpx2
 from mcp.client.auth import AuthorizationCodeResult, OAuthClientProvider, OAuthRegistrationError
 from mcp.shared.auth import OAuthClientInformationFull, OAuthClientMetadata, OAuthToken
 from mcp.shared.auth_utils import calculate_token_expiry
 
 from kitden import sign_in
-from kitden.changes.actions import MCP_VERSION, SIGN_IN_LATER
+from kitden.local_gateway import keychain
 from kitden.sign_in import SignIn, SignIns
 
 SECONDS = 10  # for each request of the flow; the person in the browser has sign_in.TIMEOUT
@@ -80,16 +82,20 @@ def client_metadata(redirect_uri: str) -> OAuthClientMetadata:
     )
 
 
-INITIALIZE = {
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "initialize",
-    "params": {
-        "protocolVersion": MCP_VERSION,
-        "capabilities": {},
-        "clientInfo": {"name": "kitden", "version": "1"},
-    },
-}
+def initialize_body() -> dict:
+    """One MCP `initialize` request, as the access check sends it."""
+    from kitden.changes.actions import MCP_VERSION  # the page has it loaded; the gateway not
+
+    return {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": MCP_VERSION,
+            "capabilities": {},
+            "clientInfo": {"name": "kitden", "version": "1"},
+        },
+    }
 
 
 async def start(record: SignIn, redirect_uri: str, open_browser) -> None:
@@ -144,7 +150,7 @@ async def _run(record: SignIn, redirect_uri: str, open_browser, opened: asyncio.
             ) as http:
                 answer = await http.post(
                     record.url,
-                    json=INITIALIZE,
+                    json=initialize_body(),
                     headers={"Accept": "application/json, text/event-stream"},
                 )
         if answer.status_code == 200 and storage.tokens is not None:
@@ -157,6 +163,8 @@ async def _run(record: SignIn, redirect_uri: str, open_browser, opened: asyncio.
     except asyncio.CancelledError:
         fail = sign_in.CANCELLED if record.cancelled else fail
     except OAuthRegistrationError:
+        from kitden.changes.actions import SIGN_IN_LATER
+
         if not opened.is_set():
             record.state, record.reason = "failed", SIGN_IN_LATER.format(name=record.name)
             record.ended.set()
@@ -204,3 +212,89 @@ async def wait(record: SignIn) -> dict:
         "state": state,
         "detail": record.reason or sign_in.NOT_FINISHED.format(name=record.name),
     }
+
+
+# The gateway: a sign-in kept in the Keychain ------------------------------------------------
+
+# Never sent: a stored sign-in has its client already, and the gateway never opens a browser.
+NO_REDIRECT = "http://127.0.0.1/sign-in/done"
+
+
+class SignedOut(Exception):
+    """The stored sign-in no longer works: the server wants the person to sign in again."""
+
+
+class KeychainStorage:
+    """The SDK's token storage for the gateway: the one Keychain item `<server>/sign-in`. A
+    refresh writes the new tokens back; `raw` is the item as it was read."""
+
+    def __init__(self, name: str, ref: dict, run: keychain.Runner | None = None) -> None:
+        self.name, self.ref, self.run = name, ref, run or keychain.run_security
+        self.raw: str | None = None
+        self.expires_at: float | None = None
+        self.tokens: OAuthToken | None = None
+        self.client: OAuthClientInformationFull | None = None
+
+    async def read(self) -> str | None:
+        return await anyio.to_thread.run_sync(keychain.read, self.ref, self.run)
+
+    async def get_tokens(self) -> OAuthToken | None:
+        self.raw = await self.read()
+        data = json.loads(self.raw) if self.raw else {}
+        self.expires_at = data.get("expires_at")
+        self.tokens = OAuthToken.model_validate(data["tokens"]) if data.get("tokens") else None
+        client = data.get("client")
+        self.client = OAuthClientInformationFull.model_validate(client) if client else None
+        return self.tokens
+
+    async def get_client_info(self) -> OAuthClientInformationFull | None:
+        return self.client
+
+    async def set_tokens(self, tokens: OAuthToken) -> None:
+        self.tokens = tokens
+        secret = secret_of(tokens, self.client)
+        try:
+            server, _, key = self.ref["keychain"].rpartition("/")
+            await anyio.to_thread.run_sync(keychain.store, server, key, secret, self.run)
+            self.raw = secret
+        except keychain.KeychainError:
+            print(f"Kitden could not save the new sign-in of {self.name}.", file=sys.stderr)
+
+    async def set_client_info(self, client_info: OAuthClientInformationFull) -> None:
+        self.client = client_info
+
+
+class StoredSignIn(OAuthClientProvider):
+    """The SDK's OAuth client on a stored sign-in. It refreshes before the token ends; when
+    only a new sign-in would help, it sets `signed_out` and raises SignedOut."""
+
+    def __init__(self, name: str, url: str, ref: dict, run: keychain.Runner | None = None):
+        self.storage = KeychainStorage(name, ref, run)
+        self.signed_out = False
+
+        async def redirect(_: str) -> None:
+            self.signed_out = True
+            raise SignedOut()
+
+        async def callback() -> AuthorizationCodeResult:
+            raise SignedOut()
+
+        super().__init__(
+            server_url=url,
+            client_metadata=client_metadata(NO_REDIRECT),
+            storage=self.storage,
+            redirect_handler=redirect,
+            callback_handler=callback,
+        )
+
+    async def _initialize(self) -> None:
+        # The SDK loads the stored tokens but not when they end (mcp 2.3.0, checked
+        # 2026-11-02), so it would send an ended token and start a new sign-in on the 401
+        # instead of refreshing first. test_expiry_restored_on_load pins this.
+        await super()._initialize()
+        self.context.token_expiry_time = self.storage.expires_at
+
+
+def stored_auth(name: str, url: str, ref: dict, run: keychain.Runner | None = None) -> StoredSignIn:
+    """The httpx auth for a server whose entry names a sign-in in the Keychain."""
+    return StoredSignIn(name, url, ref, run)
