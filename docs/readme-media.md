@@ -1,35 +1,42 @@
 # README media
 
-The README shows the logo, the slogan and three pictures of the real page, then two commands.
-Steps, privacy and limits live in the [guide](guide.md). No captions on the pictures, and no
-animations: recorded motion stuttered, so each scene is one sharp key moment, cropped to the
-part of the page it is about.
+The README shows the logo, the slogan and three short animations of the real page, then two
+commands. Steps, privacy and limits live in the [guide](guide.md). No captions on the
+animations.
 
-## Pictures
+## Animations
 
-Each picture is a PNG in `docs/images/readme/`, in light and dark, taken at twice the page's
-size and shown at about its CSS size (880 or 450 px wide).
+Each animation is a looping WebP in `docs/images/readme/`, in light and dark, cropped to the
+part of the page it is about and shown at its CSS size (880 or 450 px wide).
 
-- `find`: context7, found in the catalog, held over the lit gateway.
-- `pick`: memory (Claude Code), playwright (Codex) and sequential-thinking (Cursor), picked
-  with a band and held over the lit gateway together.
-- `token`: Stripe in the gateway says Token works; the token is masked and Apply waits.
+- `find`: context7, found in the catalog, is dragged onto the gateway, which lights up.
+- `pick`: memory (Claude Code), playwright (Codex) and sequential-thinking (Cursor) are picked
+  with a band and dragged onto the lit gateway together.
+- `token`: a token is typed for Stripe in the gateway, and it works.
 
-## Take them again
+Each one ends on its key moment, holds it, and fades back to its start.
+
+An earlier screen recording stuttered: frames came at uneven times. Now the page runs on a
+paused clock. Each step moves the page one frame (1/30 s) on, puts every animation at that
+time, and saves the frame. So the motion is even, however long a frame takes to save.
+Waiting for the network is cut out.
+
+## Make them again
 
 ```bash
 uv run --with playwright==1.64.1 python scripts/record_readme.py
 ```
 
-`--only pick-dark` takes one picture; `--serve` only starts the page to look around.
-Each picture starts the real page on a fresh copy of the sample from
+`--only pick-dark` makes one animation; `--serve` only starts the page to look around. It needs
+`ffmpeg` on the PATH.
+Each animation starts the real page on a fresh copy of the sample from
 `scripts/readme_demo.py`, in a temporary folder. Stand-ins keep it local: a fake Keychain,
 fake client commands, canned tool lists, and a local test server that takes one key in place
 of Stripe's. Only the catalog search goes online. Nothing of the real home folder is read or
 written. The key in the scene is a made-up test value. `scripts/record_scenes.py` plays each
-scene and holds the area each picture shows.
+scene and films it.
 
-Look at every picture before you commit it, and do not retouch the UI.
+Watch every animation before you commit it, and do not retouch the UI.
 
 ## Examples and sources
 
@@ -56,7 +63,7 @@ uv tool install --python 3.13 kitden
 ```
 
 Before promoting a release, verify both commands in temporary uv tool and cache folders.
-The picture sample is not proof of the published package.
+The animation sample is not proof of the published package.
 uv [downloads Python if needed](https://docs.astral.sh/uv/guides/install-python/#automatic-python-downloads).
 
 Checked 2026-10-28: GitHub supports relative image sources inside

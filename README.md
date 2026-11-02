@@ -20,25 +20,25 @@ that <b>Claude Code, Codex and Cursor</b> load.</p>
 ### Find it, drop it in
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/find-dark.png">
-  <source srcset="docs/images/readme/find-light.png">
-  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/find-light.png" width="880" alt="context7, found in the catalog, held over the Kitden gateway, which lights up to take it.">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/find-dark.webp">
+  <source srcset="docs/images/readme/find-light.webp">
+  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/find-light.webp" width="880" alt="context7, found in the catalog, is dragged onto the Kitden gateway, which lights up to take it.">
 </picture>
 
 ### Move many at once
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/pick-dark.png">
-  <source srcset="docs/images/readme/pick-light.png">
-  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/pick-light.png" width="450" alt="Three servers from three clients, picked together and held over the lit Kitden gateway.">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/pick-dark.webp">
+  <source srcset="docs/images/readme/pick-light.webp">
+  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/pick-light.webp" width="450" alt="Three servers from three clients are picked with a band and dragged onto the lit Kitden gateway together.">
 </picture>
 
 ### One token, every agent
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/token-dark.png">
-  <source srcset="docs/images/readme/token-light.png">
-  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/token-light.png" width="880" alt="Stripe in the gateway says Token works; the token is masked and kept in the macOS Keychain on Apply.">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/token-dark.webp">
+  <source srcset="docs/images/readme/token-light.webp">
+  <img src="https://raw.githubusercontent.com/KonstantinStarovoytov/kitden/main/docs/images/readme/token-light.webp" width="880" alt="A token is typed for Stripe in the gateway and works at once; it is kept in the macOS Keychain on Apply.">
 </picture>
 
 ## Get started

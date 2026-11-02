@@ -9,11 +9,11 @@ What Kitden does today and what comes next. Ideas and bugs:
 
 ### Not released yet
 
-- **Lean README:** the logo and slogan, then three pictures of the real page in light and dark,
-  each cropped to its key moment: find a server and drop it in, move several at once, and one
-  token for every agent. Two commands and one line of guarantees follow. Steps, privacy and
-  limits moved to [the guide](docs/guide.md). `scripts/record_readme.py` takes the pictures
-  again.
+- **Lean README:** the logo and slogan, then three short animations of the real page in light
+  and dark, each cropped to the part it is about: find a server and drag it in, move several at
+  once, and one token for every agent. They are filmed one frame at a time, so the motion is
+  even. Two commands and one line of guarantees follow. Steps, privacy and limits moved to
+  [the guide](docs/guide.md). `scripts/record_readme.py` makes the animations again.
 - **Calm Apply:** while a change is written, Apply never narrows and widens with one glide,
   so Cancel beside it no longer jumps as the words change.
 
