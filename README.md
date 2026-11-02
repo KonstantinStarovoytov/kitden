@@ -52,17 +52,15 @@ not just hidden.
 
 ## And more
 
-- **Find and add.** Search the official MCP Registry, skills.sh, the Claude plugins marketplace
-  and any public GitHub repository. Drag a result onto a client or the gateway.
-- **Fill the gaps.** A plugin or skill one agent has goes to the others in one step.
-- **Tokens and sign-in, once.** Checked before Apply, kept in the macOS Keychain, refreshed by
-  the gateway.
-- **Per project.** Turn a server or a tool on or off for one project only.
-- **See what runs.** How often each tool is called, and which tools only read.
-- **Instructions in view.** Which CLAUDE.md, AGENTS.md, rules, hooks, commands and agents each
-  client loads, and where they come from.
-- **Ask your agent.** "Show my setup" works from any agent, through Kitden's own read-only
-  MCP server.
+| | |
+| --- | --- |
+| **Find and add** | Search the official MCP Registry, skills.sh, the Claude plugins marketplace and any public GitHub repository. Drag a result onto a client or the gateway. |
+| **Fill the gaps** | A plugin or skill one agent has goes to the others in one step. |
+| **Tokens and sign-in, once** | Checked before Apply, kept in the macOS Keychain, refreshed by the gateway. |
+| **Per project** | Turn a server or a tool on or off for one project only. |
+| **See what runs** | How often each tool is called, and which tools only read. |
+| **Instructions in view** | Which CLAUDE.md, AGENTS.md, rules, hooks, commands and agents each client loads, and where they come from. |
+| **Ask your agent** | "Show my setup" works from any agent, through Kitden's own read-only MCP server. |
 
 ## Safe to use
 
