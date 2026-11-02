@@ -293,8 +293,8 @@ function listen() {
     document.dispatchEvent(new CustomEvent("kitden:progress", { detail }));
   });
   // A refresh of the Kitden gateway's tool lists ended, also after a failure: an open tool
-  // list reads them again.
-  events.addEventListener("gateway_tools", () => document.dispatchEvent(new CustomEvent("kitden:tools")));
+  // list reads them again, and the page draws again, so a server just applied shows its tools.
+  events.addEventListener("gateway_tools", () => { document.dispatchEvent(new CustomEvent("kitden:tools")); liveRefresh(); });
   // The clients' versions were read in the background, also after a failure: the Clients card
   // reads them again.
   events.addEventListener("versions", () => document.dispatchEvent(new CustomEvent("kitden:versions")));

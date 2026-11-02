@@ -77,5 +77,9 @@ class SignIns:
             return None
         return record
 
+    def kept(self, url: str) -> SignIn | None:
+        """A finished sign-in for this address: a row that comes back uses it again."""
+        return next((r for r in self._all.values() if r.url == url and r.state == "done"), None)
+
     def forget(self, id: str) -> None:
         self._all.pop(id, None)

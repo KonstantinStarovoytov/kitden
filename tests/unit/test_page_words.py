@@ -1488,6 +1488,14 @@ def test_a_held_server_lists_its_tools_with_a_switch_each():
     assert '"gateway_tools"' in script("app.js") and '"kitden:tools"' in script("app.js")
 
 
+def test_tools_read_in_the_background_show_without_a_refresh():
+    # After an Apply that brings a server in, its tools are read in the background; when that
+    # ends, the page draws again, so they show without pressing Refresh tools.
+    app = script("app.js")
+    [handler] = [line for line in app.splitlines() if '"gateway_tools"' in line]
+    assert "liveRefresh()" in handler
+
+
 def test_a_tool_switch_flips_only_after_the_change_is_verified():
     code = panel()
     # Details are drawn again after Apply all, the switch in its new state; the thumb slides once.

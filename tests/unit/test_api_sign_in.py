@@ -338,3 +338,29 @@ def test_sign_in_again_keeps_a_plain_secret_as_it_is(home, fake, fake_keychain):
         held = load_settings(home)["servers"]["signer"]
         assert held["headers"] == {"X-Api-Key": "SENTINEL_PLAIN_KEY"}
         assert held["sign_in"] == {"keychain": "signer/sign-in"}
+
+
+def test_a_sign_in_is_kept_when_the_row_comes_back(home, fake):
+    """Taken out of the tray and dragged in again, the server uses the sign-in it had."""
+    add_claude(home, "signer", {"type": "http", "url": fake.url})
+    opened = Opened()
+    with page_for(home, opened) as page:
+        id = batch_move(page, home, "signer").json()["needs"]["sign_in"]
+        sign_in(page, opened, id)
+        again = batch_move(page, home, "signer")  # no sign_in: the row is new
+        assert again.status_code == 200, again.text
+        assert len(opened) == 1
+
+
+def test_a_kept_sign_in_that_ended_asks_again(home, fake):
+    add_claude(home, "signer", {"type": "http", "url": fake.url})
+    opened = Opened()
+    with page_for(home, opened) as page:
+        id = batch_move(page, home, "signer").json()["needs"]["sign_in"]
+        sign_in(page, opened, id)
+        fake.issued.clear()
+        again = batch_move(page, home, "signer")
+    assert again.status_code == 422
+    needs = again.json()["needs"]
+    assert needs["reason"] == "signer needs sign-in."
+    assert needs["sign_in"] != id

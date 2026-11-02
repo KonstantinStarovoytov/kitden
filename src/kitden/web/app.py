@@ -1499,6 +1499,25 @@ def create_app(
             return frozenset()
         return frozenset(item.name for item in made.items)
 
+    async def _with_kept_sign_in(request: dict) -> Built:
+        """A request's steps. A server that needs sign-in, when this page already signed in to
+        its address (the row was taken out and came back), uses that sign-in; one that no
+        longer works is dropped, so the row asks for a new one."""
+        params = request["params"]
+        try:
+            return await _steps_for(request["kind"], request["targets"], params)
+        except NeedsAccess as error:
+            kept = signins.kept(error.url) if error.kind == "sign-in" and error.url else None
+            if kept is None or "sign_in" in params or stand_ins:
+                raise
+            try:
+                return await _steps_for(
+                    request["kind"], request["targets"], {**params, "sign_in": kept.id}
+                )
+            except NeedsAccess:
+                kept.state = "failed"
+                raise error from None
+
     async def _batch(
         requests: list[dict], keep: bool = True
     ) -> tuple[Change | None, list[Built], list[list[int]]]:
@@ -1516,7 +1535,7 @@ def create_app(
                     raise _RowRefused(f"{name} waits in preview already.", request["id"])
                 added.add(name)
             try:
-                made = await _steps_for(request["kind"], request["targets"], request["params"])
+                made = await _with_kept_sign_in(request)
             except NeedsAccess as error:
                 needs = error.answer()
                 if error.kind == "sign-in" and error.url and not stand_ins:
